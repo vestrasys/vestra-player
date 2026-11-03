@@ -468,7 +468,7 @@ impl Backend {
                                 continue;
                             }
                             // A resolution request the host could not
-                            // deliver to its resolver (supervisor.md §4.6).
+                            // deliver to its resolver (supervisor.md §4).
                             "owner.refuseResolution" => {
                                 if let Some(id) = command.params["requestId"].as_u64() {
                                     let message = command.params["message"]

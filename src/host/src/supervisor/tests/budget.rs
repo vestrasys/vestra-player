@@ -1,8 +1,7 @@
-//! Process budget and memory pressure, design §8 (T30, A13): over budget or
-//! under pressure, idle Normal units get the same `Standby` job as idle
-//! standby, in LRU order; busy, built-in and Resident units are never
-//! selected; recently used units go later. Budget = 3 in the target
-//! profile; B1 has no budget.
+//! Process budget and memory pressure, design over budget or under pressure,
+//! idle Normal units get the same `Standby` job as idle standby, in LRU order;
+//! busy, built-in and Resident units are never selected; recently used units go
+//! later. Budget = 3 in the target profile; `other_timers` has none.
 use super::*;
 
 fn queried(acts: &[Act]) -> Vec<Pid> {
@@ -64,7 +63,7 @@ fn g_busy_answer_keeps_unit_and_budget_overruns() {
     let acts = sim.resources(v[0].1, true);
     assert!(
         terminates(&acts).is_empty(),
-        "busy (live resource) is never put in standby (A13)"
+        "busy (live resource) is never put in standby"
     );
     assert_eq!(sim.st(v[0].0), S::Active(v[0].1));
 }
@@ -129,7 +128,7 @@ fn g_event_wake_never_causes_lru_standby() {
 #[test]
 fn g_low_pressure_standby_for_all_idle_normal_units() {
     let mut p = Profile::target();
-    p.budget = None; // pressure alone, not the budget
+    p.budget = usize::MAX; // pressure alone, not the budget
     let mut sim = Sim::new(&p);
     let v = actives(&mut sim, &["a", "b"]);
     let (_, busy) = sim.in_active(normal("w"));
@@ -147,9 +146,9 @@ fn g_low_pressure_standby_for_all_idle_normal_units() {
     }
 }
 
-// Importance: recently used −100 → go to standby later
-// ANSWERED (supervisor.md §17.2 Q22), was a design question: "recently used" has no window in the design. This
-// only checks the order (older first), which holds under any window.
+// Importance: recently used −100 → go to standby later ANSWERED (supervisor.md), was a design question:
+// "recently used" has no window in the design. This only checks the order (older first), which holds under any
+// window.
 #[test]
 fn g_recently_used_go_later() {
     let mut sim = Sim::new(&Profile::target());
@@ -158,12 +157,4 @@ fn g_recently_used_go_later() {
     sim.after(5_000);
     sim.touch(a); // a used just now, b earlier
     assert_eq!(queried(&sim.pressure_low()), vec![b, a]);
-}
-
-#[test]
-fn g_b1_has_no_budget() {
-    let mut sim = Sim::new(&Profile::b1());
-    actives(&mut sim, &["a", "b", "c", "d", "e", "f"]);
-    let acts = one_more(&mut sim, "g");
-    assert!(queried(&acts).is_empty());
 }

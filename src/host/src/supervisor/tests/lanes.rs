@@ -1,6 +1,6 @@
-//! Running jobs, design §4.4: lanes, priorities, concurrency, Interactive
-//! reserve, bounds. A Start job occupies a slot from `run_jobs` until
-//! `process_ready` (T9 completes it).
+//! Running jobs, design lanes, priorities, concurrency, Interactive reserve,
+//! bounds. A Start job occupies a slot from `run_jobs` until `process_ready`
+//! (completes it).
 use super::*;
 
 /// `n` third-party units started by event wakes and left in
@@ -64,18 +64,6 @@ fn builtins_and_first_runs(sim: &mut Sim) -> [UnitId; 4] {
 }
 
 #[test]
-fn l_builtin_lane_runs_first_in_add_order_b1() {
-    let mut sim = Sim::new(&Profile::b1());
-    let [n1, b1, n2, b2] = builtins_and_first_runs(&mut sim);
-    let acts = sim.run();
-    assert_eq!(
-        spawned_units(&sim, &acts),
-        vec![b1, b2, n1, n2],
-        "legacy: built-ins first in the tick, then third-party first runs"
-    );
-}
-
-#[test]
 fn l_builtin_lane_runs_first_in_add_order_target() {
     let mut sim = Sim::new(&Profile::target());
     let [n1, b1, n2, b2] = builtins_and_first_runs(&mut sim);
@@ -101,8 +89,8 @@ fn l_builtin_lane_runs_first_in_add_order_target() {
     );
 }
 
-// Lanes: the Builtin lane never counts toward the start-job limit (A7)
-both! {
+// Lanes: the Builtin lane never counts toward the start-job limit
+spec! {
     fn l_builtin_lane_outside_max_active(p) {
         let mut sim = Sim::new(p);
         for i in 0..(p.max_active + 6) {
@@ -116,7 +104,7 @@ both! {
 // Built-ins first: Background waits while a built-in is Activating{Verify}
 #[test]
 fn l_verifying_builtin_holds_background_first_runs() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let b = sim.add(builtin("b").shared(1).verify());
     let n = sim.add(first_run("n"));
     let acts = sim.run();
@@ -195,46 +183,9 @@ fn l_max_active_limits_wakes_target() {
     assert_eq!(spawns(&sim.run()).len(), p.max_active);
 }
 
-// B1–B2: 8 for first runs only, wakes unlimited (legacy)
-#[test]
-fn l_b1_wakes_unlimited() {
-    let mut sim = Sim::new(&Profile::b1());
-    let mut held = Vec::new();
-    for i in 0..20 {
-        held.push(sim.in_standby(normal(&format!("u{i}"))));
-    }
-    sim.settle();
-    for (_, h) in &held {
-        sim.wake(*h, event("playback.state", 0));
-    }
-    assert_eq!(spawns(&sim.run()).len(), 20);
-}
-
-#[test]
-fn l_b1_first_runs_limited_to_eight() {
-    let mut sim = Sim::new(&Profile::b1());
-    let us = (0..20)
-        .map(|i| sim.add(first_run(&format!("f{i}"))))
-        .collect::<Vec<_>>();
-    let acts = sim.run();
-    assert_eq!(spawned_units(&sim, &acts), us[..8].to_vec());
-    let pid = sim.pid(us[0]);
-    sim.spawned(pid, true);
-    let acts = sim.ready(pid);
-    assert!(
-        spawned_units(&sim, &acts).is_empty(),
-        "ready keeps the place"
-    );
-    // §17.3 (today's `lazy_first_runs_tick`): the place frees when the
-    // run is classified resident (or its process is gone after standby).
-    let acts = sim.classified(pid, true);
-    assert_eq!(spawned_units(&sim, &acts), vec![us[8]]);
-}
-
-// Interactive reserve: +1 slot for Interactive; if taken, may overrun by 1 more
-// ANSWERED (supervisor.md §17.2 Q17), was a design question: read as "Interactive may run up to max_active + 2
-// Starts in total (reserve + overrun)". The alternative reading — the
-// overrun *is* the reserve — would allow only max_active + 1.
+// Interactive reserve: +1 slot for Interactive; if taken, may overrun by 1 more ANSWERED (supervisor.md), was
+// a design question: read as "Interactive may run up to max_active + 2 Starts in total (reserve + overrun)".
+// The alternative reading — the overrun *is* the reserve — would allow only max_active + 1.
 #[test]
 fn l_interactive_reserve_then_overrun_by_one() {
     let p = Profile::target();
@@ -246,7 +197,7 @@ fn l_interactive_reserve_then_overrun_by_one() {
     assert!(matches!(sim.job(i3), Some(J::Start { running: false, .. })));
 }
 
-// §8: critical pressure → no Interactive overrun (reserve still usable)
+// critical pressure → no Interactive overrun (reserve still usable)
 #[test]
 fn l_critical_pressure_disables_interactive_overrun() {
     let p = Profile::target();
@@ -271,11 +222,11 @@ fn l_event_wake_waits_for_a_slot() {
     assert_eq!(spawned_units(&sim, &acts), vec![e]);
 }
 
-// Event wakes muted during start-up and QUIET_AFTER_START_MS after settle
-// (§17.1: the adapter reports start-up with `set_muted` / `settled`.)
+// Event wakes muted during start-up and QUIET_AFTER_START_MS after settle (the
+// adapter reports start-up with `set_muted` / `settled`.)
 #[test]
 fn l_event_wakes_muted_right_after_start_up() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     sim.mute();
     let (u, holder) = sim.in_standby(normal("a"));
     assert!(matches!(
@@ -310,7 +261,7 @@ fn l_third_party_lane_bounded_at_256() {
     let p = Profile::target();
     let mut sim = Sim::new(&p);
     fill_slots(&mut sim, p.max_active);
-    for i in 0..p.lane_max.unwrap() {
+    for i in 0..p.lane_max {
         let (_, h) = sim.in_standby(normal(&format!("q{i}")));
         assert!(
             matches!(sim.wake(h, event("playback.state", 0)), Delivery::Started),
@@ -325,17 +276,8 @@ fn l_third_party_lane_bounded_at_256() {
     assert_eq!(sim.job(u), None);
 }
 
-#[test]
-fn l_b1_third_party_lane_unbounded() {
-    let mut sim = Sim::new(&Profile::b1());
-    let us = (0..300)
-        .map(|i| sim.add(first_run(&format!("f{i}"))))
-        .collect::<Vec<_>>();
-    assert!(us.iter().all(|u| sim.job(*u).is_some()));
-}
-
 // Stop and Standby jobs are never concurrency-limited
-both! {
+spec! {
     fn l_stop_jobs_not_concurrency_limited(p) {
         let mut sim = Sim::new(p);
         let units = (0..(p.max_active + 4)).map(|i| sim.in_active(normal(&format!("s{i}")))).collect::<Vec<_>>();

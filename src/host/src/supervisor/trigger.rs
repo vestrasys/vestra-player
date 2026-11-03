@@ -1,6 +1,6 @@
-//! Held triggers (systemd socket activation: the listening socket's
-//! backlog). MOVE `lazy::hold_event` (only wake events merge, newest
-//! wins), bounds and explicit answers (A9, §4.6).
+//! Held triggers (systemd socket activation: the listening socket's backlog).
+//! MOVE `lazy::hold_event` (only wake events merge, newest wins), bounds and
+//! explicit answers.
 #![forbid(unsafe_code)]
 
 use std::collections::VecDeque;
@@ -48,7 +48,7 @@ impl<P> Trigger<P> {
             payload,
         }
     }
-    /// The start priority it asks for (§4.4).
+    /// The start priority it asks for.
     pub fn priority(&self) -> Priority {
         match self.kind {
             TriggerKind::Interactive => Priority::Interactive,
@@ -62,7 +62,7 @@ impl<P> Trigger<P> {
     }
 }
 
-/// Result of `wake` (§5).
+/// Result of `wake`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Delivery {
     /// The unit is active with that pid: send it now.
@@ -75,11 +75,11 @@ pub enum Delivery {
     Forward(Pid),
     /// Disabled / failed / removed unit, no entry point, or a muted event.
     Dropped,
-    /// Bounds (backlog, lane) or a hold: answered per §4.6.
+    /// Bounds (backlog, lane) or a hold: answered per.
     Refused,
 }
 
-/// Why an `Answer` replies failed (§4.6, i18n texts in the adapter).
+/// Why an `Answer` replies failed (i18n texts in the adapter).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AnswerReason {
     /// `"<name> is busy"` (backlog or lane full).
@@ -93,9 +93,7 @@ pub enum AnswerReason {
     /// The start was canceled by another stop (reload of a removed image,
     /// quit...).
     Stopped,
-    /// In standby with a restart hold (T20, B4): until then.
-    // B4: a crash hold (T20).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// In standby with a restart hold (B4): until then.
     Held { until: Ms },
 }
 
@@ -117,11 +115,8 @@ pub(super) fn hold<P>(backlog: &mut VecDeque<Trigger<P>>, trigger: Trigger<P>) -
 pub(super) fn would_overflow<P>(
     backlog: &VecDeque<Trigger<P>>,
     trigger: &Trigger<P>,
-    max: Option<usize>,
+    max: usize,
 ) -> bool {
-    let Some(max) = max else {
-        return false;
-    };
     if let TriggerKind::Event(name) = &trigger.kind
         && backlog
             .iter()
@@ -145,9 +140,8 @@ mod tests {
         assert!(hold(&mut backlog, Trigger::event("a", 4)));
         let payloads = backlog.iter().map(|t| t.payload).collect::<Vec<_>>();
         assert_eq!(payloads, [2, 3, 4]);
-        assert!(!would_overflow(&backlog, &Trigger::event("a", 5), Some(3)));
-        assert!(would_overflow(&backlog, &Trigger::interactive(5), Some(3)));
-        assert!(!would_overflow(&backlog, &Trigger::interactive(5), None));
+        assert!(!would_overflow(&backlog, &Trigger::event("a", 5), 3));
+        assert!(would_overflow(&backlog, &Trigger::interactive(5), 3));
     }
     /// The payload of each held trigger, as (event name, data), in order.
     fn order(backlog: &VecDeque<Trigger<serde_json::Value>>) -> Vec<(String, serde_json::Value)> {

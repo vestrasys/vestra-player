@@ -1,22 +1,21 @@
-//! Quit and a device-loss restart (doc/architecture/supervisor.md §7.2,
-//! T31, A2; B4): the core's `shutdown` with one deadline for every plugin
-//! process, 1 s at quit and 300 ms after a GPU device loss. Every
-//! checkpoint is written before the first stop (coordinator ruling R6);
-//! then every process gets its `runtime.stop` at once (the shared runner
-//! one `runner.stop` for all its members), and what is still running at the
-//! deadline is killed. A process left from a stop that landed stuck is
-//! killed at once (§17.7 item 20). Before B4 each plugin was dropped with
-//! the host, one after another, up to 300 ms each.
+//! Quit and a device-loss restart (doc/architecture/supervisor.md; B4): the
+//! core's `shutdown` with one deadline for every plugin process, 1 s at quit
+//! and 300 ms after a GPU device loss. Every checkpoint is written before the
+//! first stop (coordinator ruling); then every process gets its `runtime.stop`
+//! at once (the shared runner one `runner.stop` for all its members), and what
+//! is still running at the deadline is killed. A process left from a stop that
+//! landed stuck is killed at once. Before B4 each plugin was dropped with the
+//! host, one after another, up to 300 ms each.
 use super::*;
 
-/// The quit's deadline for every plugin process (§7.2).
+/// The quit's deadline for every plugin process.
 pub(crate) const QUIT_BUDGET: Duration = Duration::from_secs(1);
 /// After a GPU device loss: the teardown has `EXIT_AFTER_LOOP` in all.
 pub(crate) const DEVICE_LOSS_BUDGET: Duration = Duration::from_millis(300);
 
 impl Host {
-    /// Stops every plugin process within `budget` (T31) and waits for them
-    /// (at most `budget` and the reaper's last poll).
+    /// Stops every plugin process within `budget` and waits for them (at most
+    /// `budget` and the reaper's last poll).
     pub(crate) fn shutdown_plugins(&mut self, budget: Duration) {
         let began = Instant::now();
         let deadline = began + budget;
@@ -40,7 +39,7 @@ impl Host {
         let budget_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX);
         let actions = self.supervisor.shutdown(now, budget_ms);
         let running = self.plugins.len();
-        // Checkpoints first (R6), from the registrations as they are now.
+        // Checkpoints first, from the registrations as they are now.
         let (checkpoints, rest): (Vec<_>, Vec<_>) = actions
             .into_iter()
             .partition(|action| matches!(action, Action::Checkpoint { .. }));
@@ -52,8 +51,8 @@ impl Host {
             })
             .collect::<Vec<_>>();
         runs.sort_unstable();
-        // The recordings the recorder thread was given land first (R6:
-        // every checkpoint before the first stop), within the deadline.
+        // The recordings the recorder thread was given land first (every
+        // checkpoint before the first stop), within the deadline.
         self.recordings_written_by(deadline.saturating_duration_since(Instant::now()));
         for (owner, resident) in runs {
             self.quit_checkpoint(owner, resident);
@@ -94,7 +93,6 @@ impl Host {
             return;
         };
         self.plugins_revision += 1;
-        self.unit_stopped(&plugin.manifest.id.clone(), owner);
         plugin.set_stop_reason(StopReason::Quit);
         plugin.set_stop_wait(Duration::from_millis(grace));
         self.reaper.reap(owner, plugin);

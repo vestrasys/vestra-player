@@ -1,23 +1,19 @@
-//! Per-class policy (systemd unit settings, §3.3) and the tunables (§11).
-//! `Tunables::legacy()` reproduces today's decisions (B1–B2); every later
-//! batch's change is a value here, not a code path of its own.
+//! Per-class policy (systemd unit settings) and the tunables. `Tunables::new`
+//! is the one preset, for this machine's cores and memory; tests change single
+//! values (short timers, small limits).
 #![forbid(unsafe_code)]
 
 use super::unit::{Class, Ms};
 
-/// systemd `Restart=` (§3.3).
+/// systemd `Restart=`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum RestartMode {
-    /// Not restarted; registrations revoked; `Failed` (today, every class).
+    /// Not restarted; registrations revoked; `Failed` (Development).
     No,
-    /// Restarted by the supervisor after `RestartSec` (Builtin, Resident; B4).
-    // Set by `with_b4` (B4).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// Restarted by the supervisor after `RestartSec` (Builtin, Resident).
     OnFailure,
     /// Kept in standby with its entry points; starts again on the next
-    /// trigger after a hold (Normal; B4). Needs a checkpoint, else `No`.
-    // Set by `with_b4` (B4).
-    #[cfg_attr(not(test), allow(dead_code))]
+    /// trigger after a hold (Normal). Needs a checkpoint, else `No`.
     OnNextTrigger,
 }
 
@@ -28,12 +24,12 @@ pub struct Backoff {
     pub cap: Option<Ms>,
     /// The streak resets after this long active.
     pub reset_after: Option<Ms>,
-    /// The first restart is immediate (the runner, A4).
+    /// The first restart is immediate (the runner).
     pub first_immediate: bool,
 }
 
-/// Retry of a failed spawn within one start job (a start timeout is not
-/// retried since the B6 review, §17.15).
+/// Retry of a failed spawn within one start job (a start timeout is not retried
+/// since the B6 review).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Retry {
     pub count: u32,
@@ -59,12 +55,12 @@ pub struct Policy {
     pub start_timeout: Ms,
     /// `TimeoutStopSec` for disable/reload/uninstall/upgrade.
     pub stop_grace: Ms,
-    /// `TimeoutStopSec` for standby (today `PARK_WAIT`).
+    /// `TimeoutStopSec` for standby.
     pub standby_grace: Ms,
     /// `TimeoutStopSec` after a failure.
     pub failure_grace: Ms,
-    /// Goes to standby when idle (never for Resident / Development; a unit
-    /// classified resident only with `Tunables::resident_idle_standby`).
+    /// Goes to standby when idle (never for Resident / Development, nor a
+    /// unit classified resident).
     pub idle_standby: bool,
     /// Request timeout of in-flight work.
     pub request_timeout: Option<Ms>,
@@ -78,13 +74,8 @@ pub struct Policy {
     pub memory_max_mib: Option<u32>,
 }
 
-/// §11.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Tunables {
-    /// On-demand start (`VESTRA_LAZY=1` until B6, always on in the player
-    /// since): replay at `add_unit`, first runs, idle standby. Off (the old
-    /// path, removed in B7): every enabled unit starts at boot.
-    pub on_demand: bool,
     pub builtin: Policy,
     pub resident: Policy,
     pub normal: Policy,
@@ -99,222 +90,29 @@ pub struct Tunables {
     pub starting_notice: Ms,
     /// Wake events wake nothing this long after start-up settled.
     pub quiet_after_start: Ms,
-    /// How long a Standby job waits for the resources answer (`None`: as
-    /// today, until it comes).
-    pub resources_wait: Option<Ms>,
-    /// First runs in flight (`FIRST_RUNS` 8; `None` from B3).
-    pub first_run_limit: Option<usize>,
-    /// Third-party running start jobs (`None` = today's unlimited wakes;
-    /// B3: `min(4, max(2, cores/2))`).
-    pub max_active: Option<usize>,
-    /// Extra slots for `Interactive` (B3: 1) and its overrun (B3: 1, not
-    /// under critical pressure).
+    /// Third-party running start jobs: `min(4, max(2, cores/2))`.
+    pub max_active: usize,
+    /// Extra slots for `Interactive` (1) and its overrun (1, not under
+    /// critical pressure).
     pub interactive_reserve: usize,
     pub interactive_overrun: usize,
-    /// Held triggers per unit (`None` today; B3: 64).
-    pub backlog_max: Option<usize>,
-    /// Waiting third-party start jobs (`None` today; B3: 256).
-    pub lane_max: Option<usize>,
-    /// Third-party process budget (`None` until B5).
-    pub process_budget: Option<usize>,
+    /// Held triggers per unit (64).
+    pub backlog_max: usize,
+    /// Waiting third-party start jobs (256).
+    pub lane_max: usize,
+    /// Third-party process budget.
+    pub process_budget: usize,
     /// "Recently used" for importance (−100).
     pub recent: Ms,
-    /// A failed start (spawn error, start timeout) keeps the entry points
-    /// in standby (T8, B3) instead of revoking (today). Never after a stuck
-    /// stop wait (T18): the old process may still run.
-    pub start_failure_keeps_registrations: bool,
-    /// How third-party starts wait for built-ins (§4.4 "Built-ins first").
-    pub builtins_first: BuiltinsFirst,
     /// Runner fail-open: restarts within the window.
     pub runner_restart_limit: u32,
     pub runner_restart_window: Ms,
-    /// Runner restart backoff (B4: first immediate, then 3 s × 2ⁿ).
-    pub runner_backoff: Option<Backoff>,
-
-    // Switches between today's behaviour (`legacy()`, B1–B2: the core
-    // reproduces today exactly) and the design's (supervisor.md §17.7).
-    /// `"<name> stopped"` / `"…ran out of memory"` after a crash (T25; B4).
-    /// Today a crash only records the failure.
-    pub crash_notice: bool,
-    /// `"<name> could not start"` for every failed start (B3). Today only a
-    /// wake's failure shows it (`wake_failed`); a failed boot, first run,
-    /// enable or reload only records the failure.
-    pub start_failure_notice: bool,
-    /// Held triggers of a start that is canceled or fails are answered one
-    /// by one (§4.6, A9; B3). Today they go silently (`lazy.waking` is
-    /// dropped; `wake_failed` shows one notice).
-    pub answer_held: bool,
-    /// A restart (reload, upgrade, runner restart) carries the triggers held
-    /// for the old run into the new one (§4.3; B3). Today they are lost
-    /// with `lazy.waking`.
-    pub restart_keeps_backlog: bool,
-    /// A `Start{Enable}` that waits for the previous process makes later
-    /// package RPCs and enables `busy`, as today's enable-after-park entry
-    /// in `packages.reloads` does (`package_busy`). Off (B3, job queue):
-    /// the merge table (an enable is the user's, never busy for a later
-    /// enable).
-    pub enable_wait_busy: bool,
-    /// A first run classified lazy while busy keeps its first-run place and
-    /// goes to standby as soon as it is idle, checked every `idle_check`
-    /// (today's `lazy_first_lazy`). Off (B3, job queue): it frees its place
-    /// at once and waits the idle timeout (§17.4).
-    pub first_run_parks_when_idle: bool,
-    /// Poll interval of `first_run_parks_when_idle` (today `CHECK_MS`).
-    pub idle_check: Ms,
-    /// A boot start waiting for its turn (start queue, built-in verify,
-    /// runner restart) lists `stopped`, as today's `StartQueue` entries do.
-    /// Off (B3, job queue): `starting` (§9).
-    pub boot_wait_lists_stopped: bool,
-    /// A unit classified resident goes to standby when idle like the rest
-    /// of its kind (a Resident as a Normal, a resident built-in as a
-    /// Builtin): today's `lazy_idle` does not look at the class, and `park`
-    /// keeps `resident` in the checkpoint, so it starts at boot again. Off
-    /// (B6): a Resident never stands by (§3.3).
-    pub resident_idle_standby: bool,
-    /// Runner restart: members start again only once the playback worker
-    /// cleaned up after them (§7.4; B4). Today `restart_shared` queues them
-    /// at once.
-    pub runner_restart_waits_cleanup: bool,
-    /// An uninstall's `RemoveData` waits for the playback worker's cleanup
-    /// too, not only for the reap (§17.7 item 18; B4). Today
-    /// `data_removals` deletes at `Event::Reaped`.
-    pub remove_data_waits_cleanup: bool,
-    /// A trigger for a unit that is starting, but not woken from standby
-    /// (a boot start, a first run, an enable, a reload, an install, a
-    /// development load), goes to its process at once: today only a unit
-    /// woken from standby holds triggers until its ready (`lazy.waking`).
-    /// Off (B3, job queue): every start holds them for its ready (T9).
-    pub deliver_while_starting: bool,
-    /// A first run of a built-in whose digest is still being checked takes
-    /// its first-run place only once the check is over, and goes back to
-    /// the end of its lane when none is free then: today a verifying
-    /// built-in stays in the start queue, and only once checked asks for a
-    /// first-run place (`start_queued` → `start_installed` → `FirstQueue`).
-    /// Off (B3): the check runs in `Activating{Verify}` on the place (T4).
-    pub verify_before_first_run_place: bool,
-    /// A start that is not a wake (boot, first run, enable, reload, an
-    /// install's target, a restore, a development load) ends `Done` once
-    /// its process is spawned: today the Host's start runs and nothing waits
-    /// on it after (B2b's hand-off ended there), so its triggers go to the
-    /// new process and a package RPC on it is not `busy` while it
-    /// activates; its readiness is the activation's (`packages.list`, an
-    /// operation's commit). Off (B3): a start job ends at its ready (T9).
-    pub start_job_ends_at_spawn: bool,
-    /// A process that ended by itself (an exit, a heap abort) gets no
-    /// `Terminate`: it is gone, so nothing is sent to it, and the adapter
-    /// cleans up after it on the exit (A14; coordinator ruling 2026-11-03,
-    /// §17.13; B4). Today `disable(Failed)` sends its stop line all the same.
-    pub exit_sends_no_stop: bool,
+    /// Runner restart backoff: first immediate, then 3 s × 2ⁿ.
+    pub runner_backoff: Backoff,
 }
 
 impl Policy {
-    fn legacy(class: Class) -> Self {
-        Self {
-            restart: RestartMode::No,
-            restart_sec: None,
-            start_retry: None,
-            start_limit: None,
-            start_timeout: match class {
-                Class::Development => 120_000,
-                _ => 15_000,
-            },
-            stop_grace: 300,
-            standby_grace: 2_000,
-            failure_grace: 300,
-            idle_standby: matches!(class, Class::Builtin | Class::Normal),
-            request_timeout: None,
-            importance: match class {
-                Class::Builtin => -1000,
-                Class::Resident => -500,
-                Class::Normal => 0,
-                Class::Development => -1000,
-            },
-            in_budget: matches!(class, Class::Resident | Class::Normal),
-            reclaimable: class == Class::Normal,
-            memory_max_mib: None,
-        }
-    }
-}
-
-impl Tunables {
-    /// Today's values (B1–B2): the core reproduces today's decisions.
-    pub fn legacy() -> Self {
-        Self {
-            on_demand: true,
-            builtin: Policy::legacy(Class::Builtin),
-            resident: Policy::legacy(Class::Resident),
-            normal: Policy::legacy(Class::Normal),
-            development: Policy::legacy(Class::Development),
-            idle_timeout: 60_000,
-            stop_wait: 20_000,
-            verify_wait: 3_000,
-            classify_wait: 5_000,
-            starting_notice: 400,
-            quiet_after_start: 1_000,
-            resources_wait: None,
-            first_run_limit: Some(8),
-            max_active: None,
-            interactive_reserve: 0,
-            interactive_overrun: 0,
-            backlog_max: None,
-            lane_max: None,
-            process_budget: None,
-            recent: 60_000,
-            start_failure_keeps_registrations: false,
-            builtins_first: BuiltinsFirst::Queued,
-            runner_restart_limit: 3,
-            runner_restart_window: 60_000,
-            runner_backoff: None,
-            crash_notice: false,
-            start_failure_notice: false,
-            answer_held: false,
-            restart_keeps_backlog: false,
-            enable_wait_busy: true,
-            first_run_parks_when_idle: true,
-            idle_check: 250,
-            boot_wait_lists_stopped: true,
-            resident_idle_standby: true,
-            runner_restart_waits_cleanup: false,
-            remove_data_waits_cleanup: false,
-            deliver_while_starting: true,
-            verify_before_first_run_place: true,
-            start_job_ends_at_spawn: true,
-            exit_sends_no_stop: false,
-        }
-    }
-
-    /// B3 values on top of `self`: queue limits live (§17.12). Part of the
-    /// player's preset since B3 (with `VESTRA_LAZY=1` until B6; `target`
-    /// since).
-    pub fn with_b3(mut self, cores: usize) -> Self {
-        self.first_run_limit = None;
-        self.max_active = Some(max_active_for(cores));
-        self.interactive_reserve = 1;
-        self.interactive_overrun = 1;
-        self.backlog_max = Some(64);
-        self.lane_max = Some(256);
-        self.start_failure_keeps_registrations = true;
-        self.builtins_first = BuiltinsFirst::Installed;
-        self.start_failure_notice = true;
-        self.answer_held = true;
-        self.restart_keeps_backlog = true;
-        // Bookkeeping today's code needs only for want of a job queue
-        // (§17.7 D2).
-        self.enable_wait_busy = false;
-        self.first_run_parks_when_idle = false;
-        self.boot_wait_lists_stopped = false;
-        self.deliver_while_starting = false;
-        self.verify_before_first_run_place = false;
-        self.start_job_ends_at_spawn = false;
-        self
-    }
-
-    /// B4 values on top of `self`: restart policy, backoff, start limits,
-    /// heap cap. Part of the player's preset since B4 (`target` since B6).
-    pub fn with_b4(mut self) -> Self {
-        // A start retry (T8; a spawn failure only since the B6 review,
-        // §17.15) is the start job's: it lives to the ready.
-        self.start_job_ends_at_spawn = false;
+    fn for_class(class: Class) -> Self {
         let retry = Some(Retry {
             count: 3,
             base: 250,
@@ -324,76 +122,108 @@ impl Tunables {
             burst: 5,
             interval: 600_000,
         });
-        let third = Backoff {
+        let third = Some(Backoff {
             base: 1_000,
             cap: Some(60_000),
             reset_after: Some(60_000),
             first_immediate: false,
+        });
+        let (restart, restart_sec) = match class {
+            Class::Builtin => (
+                RestartMode::OnFailure,
+                Some(Backoff {
+                    base: 3_000,
+                    cap: None,
+                    reset_after: Some(60_000),
+                    first_immediate: false,
+                }),
+            ),
+            Class::Resident => (RestartMode::OnFailure, third),
+            Class::Normal => (RestartMode::OnNextTrigger, third),
+            Class::Development => (RestartMode::No, None),
         };
-        self.builtin.restart = RestartMode::OnFailure;
-        self.builtin.restart_sec = Some(Backoff {
-            base: 3_000,
-            cap: None,
-            reset_after: Some(60_000),
-            first_immediate: false,
-        });
-        self.builtin.start_retry = retry;
-        self.builtin.start_limit = limit;
-        self.builtin.memory_max_mib = Some(512);
-        self.resident.restart = RestartMode::OnFailure;
-        self.resident.restart_sec = Some(third);
-        self.resident.start_retry = retry;
-        self.resident.start_limit = limit;
-        self.resident.memory_max_mib = Some(512);
-        self.normal.restart = RestartMode::OnNextTrigger;
-        self.normal.restart_sec = Some(third);
-        self.normal.start_retry = retry;
-        self.normal.start_limit = limit;
-        self.normal.memory_max_mib = Some(512);
-        self.development.start_limit = Some(StartLimit {
-            burst: 1,
-            interval: 600_000,
-        });
-        self.runner_backoff = Some(Backoff {
-            base: 3_000,
-            cap: None,
-            reset_after: Some(60_000),
-            first_immediate: true,
-        });
-        self.crash_notice = true;
-        self.exit_sends_no_stop = true;
-        self.runner_restart_waits_cleanup = true;
-        self.remove_data_waits_cleanup = true;
-        self
-    }
-
-    /// B5: the process budget for this machine (§8, §17.2 Q26; §17.14).
-    /// Part of the player's preset since B5 (`target` since B6).
-    pub fn with_b5(mut self, physical_mib: u64) -> Self {
-        self.process_budget = Some(process_budget_for(physical_mib));
-        self
-    }
-
-    /// B6 targets (§11) on top of B3–B5: the player's preset since B6
-    /// (`host/supervisor/mod.rs` `new`, §17.15).
-    pub fn target(cores: usize, physical_mib: u64) -> Self {
-        let mut t = Self::legacy()
-            .with_b3(cores)
-            .with_b4()
-            .with_b5(physical_mib);
-        t.idle_timeout = 30_000;
-        // §3.3 "Resident never stands by" (§17.7 D3).
-        t.resident_idle_standby = false;
-        for policy in [&mut t.builtin, &mut t.resident, &mut t.normal] {
-            policy.start_timeout = 60_000;
-            policy.stop_grace = 5_000;
-            policy.standby_grace = 5_000;
-            policy.request_timeout = Some(300_000);
+        let installed = class != Class::Development;
+        Self {
+            restart,
+            restart_sec,
+            start_retry: retry.filter(|_| installed),
+            start_limit: if installed {
+                limit
+            } else {
+                Some(StartLimit {
+                    burst: 1,
+                    interval: 600_000,
+                })
+            },
+            // A development load's start timeout is its own (1–120 s).
+            start_timeout: if installed { 60_000 } else { 120_000 },
+            stop_grace: 5_000,
+            // `TimeoutStopSec` for standby; a development load never stands
+            // by.
+            standby_grace: if installed { 5_000 } else { 2_000 },
+            failure_grace: 300,
+            idle_standby: matches!(class, Class::Builtin | Class::Normal),
+            request_timeout: installed.then_some(300_000),
+            importance: match class {
+                Class::Builtin => -1000,
+                Class::Resident => -500,
+                Class::Normal => 0,
+                Class::Development => -1000,
+            },
+            in_budget: matches!(class, Class::Resident | Class::Normal),
+            reclaimable: class == Class::Normal,
+            memory_max_mib: installed.then_some(512),
         }
-        // `TimeoutStopSec` 5 s for a development load too (§3.3 "same"; its
-        // start timeout stays 1–120 s, A16).
-        t.development.stop_grace = 5_000;
-        t
+    }
+}
+
+impl Tunables {
+    /// The values for a machine with `cores` logical cores and `physical_mib`
+    /// of memory (`host/supervisor/mod.rs` `new`).
+    pub fn new(cores: usize, physical_mib: u64) -> Self {
+        Self {
+            builtin: Policy::for_class(Class::Builtin),
+            resident: Policy::for_class(Class::Resident),
+            normal: Policy::for_class(Class::Normal),
+            development: Policy::for_class(Class::Development),
+            idle_timeout: 30_000,
+            stop_wait: 20_000,
+            verify_wait: 3_000,
+            classify_wait: 5_000,
+            starting_notice: 400,
+            quiet_after_start: 1_000,
+            max_active: max_active_for(cores),
+            interactive_reserve: 1,
+            interactive_overrun: 1,
+            backlog_max: 64,
+            lane_max: 256,
+            process_budget: process_budget_for(physical_mib),
+            recent: 60_000,
+            runner_restart_limit: 3,
+            runner_restart_window: 60_000,
+            runner_backoff: Backoff {
+                base: 3_000,
+                cap: None,
+                reset_after: Some(60_000),
+                first_immediate: true,
+            },
+        }
+    }
+
+    /// The preset with other timer values, for tests written against them:
+    /// idle 60 s, start 15 s, stop 300 ms, standby 2 s, no request timeout
+    /// and no process budget. The rules are the preset's.
+    #[cfg(test)]
+    pub fn with_other_timers(mut self) -> Self {
+        self.idle_timeout = 60_000;
+        for policy in [&mut self.builtin, &mut self.resident, &mut self.normal] {
+            policy.start_timeout = 15_000;
+            policy.stop_grace = 300;
+            policy.standby_grace = 2_000;
+            policy.request_timeout = None;
+        }
+        self.process_budget = usize::MAX;
+        self
     }
 
     pub fn policy(&self, class: Class) -> &Policy {
@@ -405,32 +235,13 @@ impl Tunables {
         }
     }
 }
-impl Default for Tunables {
-    fn default() -> Self {
-        Self::legacy()
-    }
-}
 
-/// "Built-ins first" (§4.4; coordinator ruling 2026-11-02, §17.2).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum BuiltinsFirst {
-    /// Today (`builtin_first_run_pending`): only third-party *first runs*
-    /// wait, and only while a built-in is still to start — queued for a
-    /// slot or verifying. A built-in that started does not hold them back,
-    /// so in one tick the built-ins start, then the third-party first runs.
-    Queued,
-    /// Design row (B3): third-party `Background` starts (first runs
-    /// included) wait while any built-in has a start job installed — until
-    /// it is active — or is verifying.
-    Installed,
-}
-
-/// `min(4, max(2, cores/2))` (§4.4).
+/// `min(4, max(2, cores/2))`.
 pub fn max_active_for(cores: usize) -> usize {
     (cores / 2).clamp(2, 4)
 }
 
-/// `clamp(physMiB / 2 × 0.30 / 85, 3, 16)` (§8).
+/// `clamp(physMiB / 2 × 0.30 / 85, 3, 16)`.
 pub fn process_budget_for(physical_mib: u64) -> usize {
     let n = physical_mib / 2 * 30 / 100 / 85;
     (n as usize).clamp(3, 16)
@@ -451,45 +262,27 @@ mod tests {
     }
 
     #[test]
-    fn legacy_reproduces_todays_values() {
-        let t = Tunables::legacy();
-        assert_eq!(t.idle_timeout, 60_000);
-        assert_eq!(t.normal.start_timeout, 15_000);
-        assert_eq!(t.normal.stop_grace, 300);
-        assert_eq!(t.normal.standby_grace, 2_000);
-        assert_eq!(t.first_run_limit, Some(8));
-        assert_eq!(t.max_active, None);
-        assert_eq!(t.process_budget, None);
-        assert_eq!(t.backlog_max, None);
-        for class in [
-            Class::Builtin,
-            Class::Resident,
-            Class::Normal,
-            Class::Development,
-        ] {
-            assert_eq!(t.policy(class).restart, RestartMode::No);
-            assert_eq!(t.policy(class).restart_sec, None);
+    fn the_preset_carries_the_design_values() {
+        let t = Tunables::new(8, 16_384);
+        assert_eq!(t.idle_timeout, 30_000);
+        assert_eq!(t.max_active, 4);
+        assert_eq!(t.process_budget, process_budget_for(16_384));
+        assert_eq!((t.backlog_max, t.lane_max), (64, 256));
+        for class in [Class::Builtin, Class::Resident, Class::Normal] {
+            let p = t.policy(class);
+            assert_eq!(p.start_timeout, 60_000);
+            assert_eq!((p.stop_grace, p.standby_grace), (5_000, 5_000));
+            assert_eq!(p.request_timeout, Some(300_000));
+            assert_eq!(p.start_retry.map(|r| r.count), Some(3));
+            assert_eq!(p.memory_max_mib, Some(512));
         }
-        assert!(!t.start_failure_keeps_registrations);
-        assert!(!t.crash_notice && !t.start_failure_notice && !t.answer_held);
-        assert!(!t.restart_keeps_backlog && !t.runner_restart_waits_cleanup);
-        assert!(t.enable_wait_busy && t.first_run_parks_when_idle);
-        assert!(t.boot_wait_lists_stopped && t.resident_idle_standby);
-        assert!(!t.remove_data_waits_cleanup);
-        assert!(t.deliver_while_starting && t.verify_before_first_run_place);
-        assert!(t.start_job_ends_at_spawn);
-        let b3 = Tunables::legacy().with_b3(8);
-        assert!(!b3.enable_wait_busy && !b3.first_run_parks_when_idle);
-        assert!(!b3.boot_wait_lists_stopped);
-        assert!(!b3.deliver_while_starting && !b3.verify_before_first_run_place);
-        assert!(!b3.start_job_ends_at_spawn);
-        assert!(b3.resident_idle_standby);
-        let target = Tunables::target(8, 16_384);
-        assert!(target.crash_notice && target.start_failure_notice && target.answer_held);
-        assert!(target.restart_keeps_backlog && target.runner_restart_waits_cleanup);
-        assert!(!target.enable_wait_busy);
-        assert!(!target.first_run_parks_when_idle && !target.boot_wait_lists_stopped);
-        assert!(!target.resident_idle_standby);
-        assert!(target.remove_data_waits_cleanup);
+        assert_eq!(t.builtin.restart, RestartMode::OnFailure);
+        assert_eq!(t.resident.restart, RestartMode::OnFailure);
+        assert_eq!(t.normal.restart, RestartMode::OnNextTrigger);
+        let d = t.policy(Class::Development);
+        assert_eq!(d.restart, RestartMode::No);
+        assert_eq!((d.start_timeout, d.stop_grace), (120_000, 5_000));
+        assert_eq!(d.start_limit.map(|l| l.burst), Some(1));
+        assert!(!t.resident.idle_standby && !d.idle_standby);
     }
 }

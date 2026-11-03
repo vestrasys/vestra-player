@@ -33,16 +33,15 @@ Out of scope: general file management, cloud sync, an account system, a paid pro
 
 - **Messages**
   - User messages are right-aligned bubbles;
-  - Assistant messages are streamed Markdown, including headings, lists, code blocks and tables;
-  - The thinking process is collapsed by default.
-- **Tool cards**: for example "Wrote main.ts ✓" or "Type check failed ▸ expand"; expanding shows the details.
+  - Assistant messages are streamed Markdown, including headings, lists, code blocks and tables.
+- **Activity record**: one record per turn instead of separate thinking and tool rows. While the assistant works it shows a neutral "Working…" status with the latest step (for example "Write notes.md ✓"); when the turn ends it collapses to a summary such as "Worked for 13 seconds · 1 step", expandable to list the steps. Model thinking and progress notes are not shown.
 - **Result actions**: after a plugin is generated or modified, "Trial Load", "Install", "Open Folder" and "View Files" appear. Installation always goes through host confirmation; on an id conflict the user is asked whether to replace, and it can be rolled back.
 - **Input box**
   - Multi-line; Enter sends, Shift+Enter inserts a newline; Enter does not send while a Chinese input method is showing candidates.
   - Has an attachment button (version 1 only supports choosing files) and a model drop-down.
   - After sending, the "Send" button becomes "■ Stop".
 - **Errors**: shown in an error bar with "Retry", e.g. invalid key, quota exceeded, network error, timeout.
-- **Copy**: every message and every code block has a "Copy" button (Slint cannot select text across messages).
+- **Copy**: text in user bubbles, answers, errors and steps can be selected with the mouse and copied with Ctrl+C (selectable Markdown, SDK 1.6.0). A right-click menu offers Copy and Select All; blocks with links keep the links clickable and add Copy Link. Copy with no selection copies the whole block. Selection works within one block, not across messages.
 
 ### 2.4 BYOK settings page (Options ▸ Plugins ▸ Vestra Player AI)
 
@@ -106,7 +105,7 @@ pi itself has no sandbox and does not restrict paths; its official documentation
 | Rebuilding only the last block while streaming (currently every delta reparses the whole document) | Needs an API extension |
 | Syntax highlighting of code blocks, copy callback for code blocks | Needs an API extension |
 | Dragging attachments into a tool window | Needs an API extension |
-| Continuous text selection across messages, HTML rendering | Slint cannot do this; use each message's "Copy" button, or switch to a read-only TextInput for selection |
+| Continuous text selection across messages, HTML rendering | Slint cannot do this; selection works within one block (selectable Markdown) |
 
 Enter handling while a Chinese input method is showing candidates needs verification on real macOS and Windows machines.
 
@@ -116,7 +115,7 @@ Enter handling while a Chinese input method is showing candidates needs verifica
 - R-b: incremental Markdown updates.
 - R-c: syntax highlighting of code blocks, and a copy callback.
 - R-d: drag and drop into tool windows.
-- R-e (optional): a selectable mode for Markdown.
+- R-e: a selectable mode for Markdown (done in SDK 1.6.0: `MarkdownBlocks.selectable`).
 - R-f (optional): plugins start Node child processes with restricted permissions. Need to confirm whether a plugin can currently spawn a child process with `--permission`.
 - R-g (optional): lightweight in-window notices or system notifications.
 

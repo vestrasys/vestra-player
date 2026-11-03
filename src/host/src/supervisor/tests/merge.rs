@@ -1,15 +1,13 @@
-//! Merge / supersede table, design §4.2: one test per cell
-//! (`m_<installed row>_<new request>`), plus job mode `Fail` ("busy").
-//! The merge rules do not depend on tunables, so these run with B1 values.
+//! Merge / supersede table, design one test per cell (`m_<installed row>_<new
+//! request>`), plus job mode `Fail` ("busy"). The merge rules do not depend on
+//! tunables, so these run with `Profile::other_timers`.
 use super::*;
 
 fn sim() -> Sim {
-    sim_with(&Profile::b1())
+    sim_with(&Profile::other_timers())
 }
 
-/// The cells whose answers per held trigger (A9) or carried backlog (§4.3)
-/// arrive with B3 (§17.7 item 5) run under `Profile::b3()`, with a
-/// `…_legacy` twin under `b1()`.
+/// The merge cells run under `Profile::other_timers`.
 fn sim_with(p: &Profile) -> Sim {
     let mut s = Sim::new(p);
     s.settle();
@@ -142,25 +140,13 @@ fn m_start_waiting_standby_is_dropped() {
 
 #[test]
 fn m_start_waiting_stop_replaces_and_answers_backlog() {
-    let mut sim = sim_with(&Profile::b3());
+    let mut sim = sim_with(&Profile::other_timers());
     let (u, _) = start_waiting(&mut sim);
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
     assert_eq!(sim.job(u).map(|j| j.kind()), Some("Stop"));
     let acts = sim.run();
-    assert_eq!(answers(&acts).len(), 1, "backlog answered (§4.6)");
+    assert_eq!(answers(&acts).len(), 1, "backlog answered");
     assert!(spawns(&acts).is_empty());
-}
-
-#[test]
-fn m_start_waiting_stop_replaces_and_drops_backlog_legacy() {
-    let mut sim = sim();
-    let (u, _) = start_waiting(&mut sim);
-    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
-    assert_eq!(sim.job(u).map(|j| j.kind()), Some("Stop"));
-    let acts = sim.run();
-    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
-    assert!(spawns(&acts).is_empty());
-    assert_eq!(sim.backlog_len(u), 0);
 }
 
 #[test]
@@ -193,7 +179,7 @@ fn m_start_running_standby_is_dropped() {
 
 #[test]
 fn m_start_running_stop_terminates_activating_and_answers() {
-    let mut sim = sim_with(&Profile::b3());
+    let mut sim = sim_with(&Profile::other_timers());
     let (u, _, pid) = start_running(&mut sim);
     sim.spawned(pid, true);
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
@@ -207,23 +193,8 @@ fn m_start_running_stop_terminates_activating_and_answers() {
 }
 
 #[test]
-fn m_start_running_stop_terminates_activating_legacy_answers_nothing() {
-    let mut sim = sim();
-    let (u, _, pid) = start_running(&mut sim);
-    sim.spawned(pid, true);
-    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
-    let acts = sim.run();
-    assert_eq!(sim.job(u).map(|j| j.kind()), Some("Stop"));
-    assert_eq!(
-        terminates(&acts).iter().map(|t| t.3).collect::<Vec<_>>(),
-        vec![pid]
-    );
-    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
-}
-
-#[test]
 fn m_start_running_restart_terminates_then_starts_again_keeping_backlog() {
-    let mut sim = sim_with(&Profile::b3());
+    let mut sim = sim_with(&Profile::other_timers());
     let (u, _, pid) = start_running(&mut sim);
     sim.spawned(pid, true);
     sim.restart(u, true, None).unwrap();
@@ -238,26 +209,6 @@ fn m_start_running_restart_terminates_then_starts_again_keeping_backlog() {
         deliveries(&sim.ready(new[0])),
         vec![1],
         "held trigger carried to the new run"
-    );
-}
-
-#[test]
-fn m_start_running_restart_legacy_drops_backlog_at_the_new_start() {
-    let mut sim = sim();
-    let (u, _, pid) = start_running(&mut sim);
-    sim.spawned(pid, true);
-    sim.restart(u, true, None).unwrap();
-    let acts = sim.run();
-    assert_eq!(terminates(&acts).len(), 1);
-    assert!(answers(&acts).is_empty());
-    let acts = sim.gone(pid);
-    let new = spawns(&acts);
-    assert_eq!(new.len(), 1);
-    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
-    sim.spawned(new[0], true);
-    assert!(
-        deliveries(&sim.ready(new[0])).is_empty(),
-        "today the held trigger is lost with lazy.waking"
     );
 }
 
@@ -330,9 +281,9 @@ fn m_standby_running_standby_stays() {
     ));
 }
 
-// §4.2 cell as amended by the coordinator ruling (§17.7 item 6): the kept
-// registrations are revoked at the stop, not again at reap, in both presets.
-both! {
+// cell as amended by the coordinator ruling: the kept registrations are revoked
+// at the stop, not again at reap, in both presets.
+spec! {
     fn m_standby_running_stop_changes_then_and_revokes_at_once(p) {
         let mut sim = sim_with(p);
         let (u, pid) = standby_running(&mut sim);
@@ -359,9 +310,8 @@ fn m_standby_running_restart_waits_then_applies_fresh() {
 
 // --- Stop [waiting] -------------------------------------------------------
 
-// ANSWERED (supervisor.md §17.2 Q12), was a design question: which Stop reasons are *not* "for disable/uninstall" in
-// this cell (Start replaces the Stop)? Best reading: any other reason, e.g.
-// a `Stop{Failed}` enqueued internally, or a cancel.
+// ANSWERED (supervisor.md), was a design question: which Stop reasons are *not* "for disable/uninstall" in this cell
+// (Start replaces the Stop)? Best reading: any other reason, e.g. a `Stop{Failed}` enqueued internally, or a cancel.
 #[test]
 fn m_stop_waiting_start_replaces_on_active_unit() {
     let mut sim = sim();
@@ -380,7 +330,7 @@ fn m_stop_waiting_start_replaces_on_active_unit() {
 fn m_stop_waiting_disable_refuses_trigger_start() {
     let mut sim = sim();
     let (u, pid) = sim.in_active(normal("a"));
-    // §17.2: the disable RPC sets the unit-file state first.
+    // the disable RPC sets the unit-file state first.
     sim.set_enabled(u, false);
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
     assert!(
@@ -441,7 +391,7 @@ fn m_stop_waiting_restart_on_enabled_unit_becomes_restart() {
     assert!(matches!(sim.job(u), Some(J::Restart { .. })));
 }
 
-// "else refused": §17.2 — a refused request gets its own id, result `Dropped`.
+// "else refused": — a refused request gets its own id, result `Dropped`.
 #[test]
 fn m_stop_waiting_restart_on_disabled_unit_is_refused() {
     let mut sim = sim();
@@ -472,10 +422,9 @@ fn m_stop_running_start_becomes_restart_waiting_for_reap() {
     assert_eq!(spawns(&sim.cleaned(pid)).len(), 1);
 }
 
-// ANSWERED (supervisor.md §17.2 Q14), was a design question: this cell says a Start on a running *disable* Stop is
-// refused, while named case "enable while disabling" says the Start waits
-// for reap. Best reading: a trigger Start is refused (`Dropped`); a
-// `Start{Enable}` after `set_enabled(true)` waits (see named_cases.rs).
+// ANSWERED (supervisor.md), was a design question: this cell says a Start on a running *disable* Stop is refused,
+// while named case "enable while disabling" says the Start waits for reap. Best reading: a trigger Start is
+// refused (`Dropped`); a `Start{Enable}` after `set_enabled(true)` waits (see named_cases.rs).
 #[test]
 fn m_stop_running_disable_refuses_trigger_start() {
     let mut sim = sim();

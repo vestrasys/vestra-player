@@ -159,11 +159,7 @@ pub(crate) struct Host {
     /// Moves when a plugin comes or goes in `plugins` (`add_plugin`, `stop`,
     /// `quit_stop`): a source of `packages.list` (`packages_key`).
     pub(crate) plugins_revision: u64,
-    /// `plugins` by manifest id, kept by `add_plugin` and `stop`, the
-    /// only places a plugin comes and goes. Since B2a `Host::running`
-    /// answers from the unit table (`supervisor`); this map stays one
-    /// release as its `debug_assert` cross-check (removed in B7).
-    pub(crate) plugin_ids: BTreeMap<String, u64>,
+
     pub(crate) views: BTreeMap<(u64, String), view::View>,
     pub(crate) events: mpsc::Sender<Event>,
     pub(crate) headless: bool,
@@ -256,7 +252,7 @@ pub(crate) struct Host {
     pub(crate) warnings: revised::Revised<BTreeMap<u64, Vec<(Value, String)>>>,
     pub(crate) packages: package_manager::Manager,
     /// The `plugin-reaper` thread: every plugin the host stops is waited
-    /// for (and killed after its grace) there (supervisor.md §7.1).
+    /// for (and killed after its grace) there (supervisor.md §1).
     pub(crate) reaper: process::reaper::Reaper,
     pub(crate) power: power::Power,
     /// When the shell last received a video frame (`power` keeps the display awake).
@@ -290,7 +286,7 @@ pub(crate) struct Host {
     /// the error of a spawn that failed while the RPC ran (`spawn_unit`).
     pub(crate) start_error: Option<(String, Option<RpcError>)>,
     /// An uninstall's data directories, resolved at each request, by unit:
-    /// deleted at the core's `RemoveData` (supervisor.md §13 B2d).
+    /// deleted at the core's `RemoveData` (supervisor.md).
     pub(crate) data_removals: BTreeMap<crate::supervisor::UnitId, Vec<PathBuf>>,
     /// The directory of a development load being started (`load`), for its
     /// spawn (`load_development_as`).

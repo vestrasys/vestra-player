@@ -108,7 +108,6 @@ fn run(root: &Path, seconds: u32, env: &[(&str, &str)]) -> String {
         .env("VESTRA_PACKAGE_STORE", root.join("store"))
         .env("VESTRA_PLUGIN_DATA", root.join("data"))
         .env_remove("VESTRA_SHARED")
-        .env_remove("VESTRA_LAZY")
         .env_remove("VESTRA_IDLE_MS")
         .env_remove("VESTRA_TEST_EXECUTE")
         .env_remove("VESTRA_INSTANCE_DIR");
@@ -127,10 +126,7 @@ fn count(log: &str, text: &str) -> usize {
 
 /// First run: started (no recording), parked once idle, recorded. Second
 /// run: replayed without a process, woken by its command, which runs, and
-/// parked again. Both with the shared runner and with own processes. Until
-/// B6 `VESTRA_LAZY=0` started it at launch even with a recording; since B6
-/// (§15 B6: on-demand start for everyone) the variable is not read and a
-/// third run with it set to `0` replays the plugin all the same.
+/// parked again. Both with the shared runner and with own processes.
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
@@ -213,19 +209,6 @@ fn an_idle_plugin_is_parked_replayed_woken_by_its_command_and_parked_again() {
             count(&second, &format!("lazy: {ID} parked")) >= 2,
             "parked twice: {second}"
         );
-
-        // §15 B6: `VESTRA_LAZY=0` no longer starts it at launch (flipped:
-        // it was started there, with no `lazy:` line).
-        let eager = run(
-            root.path(),
-            3,
-            &[("VESTRA_SHARED", shared), ("VESTRA_LAZY", "0")],
-        );
-        assert!(
-            eager.contains(&format!("lazy: {ID} replayed (1 calls)")),
-            "{eager}"
-        );
-        assert!(!eager.contains(&format!("{ID} start")), "{eager}");
     }
 }
 
@@ -320,10 +303,11 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
     }
 }
 
-/// §2.4 pinned at most eight first runs in flight (`FIRST_RUNS`), built-ins
-/// included. Flipped in supervisor batch B3 (supervisor.md §15 B3 "they
-/// start a few at a time", §4.4, §17.12): built-ins' first runs are outside
-/// the start-job limit (A7) and start at once; third-party ones (below,
+/// Lazy activation (record §2.4) pinned at most eight first runs in flight
+/// (`FIRST_RUNS`), built-ins
+/// included. Flipped in supervisor batch B3 (supervisor.md §5: built-ins
+/// start outside every limit): built-ins' first runs are outside
+/// the start-job limit and start at once; third-party ones (below,
 /// `third_party_first_runs_start_a_few_at_a_time`) at most `max_active` at a
 /// time, a place freed at each ready.
 #[test]
@@ -368,7 +352,7 @@ fn b3_built_in_first_runs_start_at_once() {
     assert_eq!(recordings(root.path()).len(), 10);
 }
 
-/// B3 (supervisor.md §4.4, §15 B3, §17.12): ten installed third-party
+/// B3 (supervisor.md §5): ten installed third-party
 /// plugins on a fresh profile start their first runs at most `max_active`
 /// (`min(4, max(2, cores/2))`) at a time: a place frees at each one's
 /// `runtime.ready`. All ten run, none times out, all are parked.
@@ -764,7 +748,6 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
             .env("VESTRA_TEST_REGISTRY", &file);
         for key in [
             "VESTRA_SHARED",
-            "VESTRA_LAZY",
             "VESTRA_IDLE_MS",
             "VESTRA_TEST_EXECUTE",
             "VESTRA_TEST_PARK",
@@ -800,7 +783,7 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
     };
 
     // A: every built-in started at launch (its first run; with lazy
-    // activation off until B6, §15 B6: on-demand start for everyone).
+    // activation off until B6).
     let (normal, _) = probe("normal", 12, &[]);
     // B: first runs, each parked at its ready.
     let park = [("VESTRA_TEST_PARK", "all"), ("VESTRA_IDLE_MS", "600000")];

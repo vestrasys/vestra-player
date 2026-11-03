@@ -1,7 +1,6 @@
-//! Stop, exit, reap, design §7 (and T16–T18, T31): both halves (reaped +
-//! backend cleaned) are required; 20 s stuck; `Kill` after
-//! `TimeoutStopSec`; `kill(u)` escalates at once and is not a job;
-//! shutdown is parallel with one deadline.
+//! Stop, exit, reap: both halves (reaped + backend cleaned) are
+//! required; 20 s stuck; `Kill` after `TimeoutStopSec`; `kill(u)` escalates at
+//! once and is not a job; shutdown is parallel with one deadline.
 use super::*;
 
 fn stopping(p: &Profile) -> (Sim, UnitId, Pid) {
@@ -14,21 +13,21 @@ fn stopping(p: &Profile) -> (Sim, UnitId, Pid) {
 
 #[test]
 fn s_reaped_alone_is_not_enough() {
-    let (mut sim, u, pid) = stopping(&Profile::b1());
+    let (mut sim, u, pid) = stopping(&Profile::other_timers());
     sim.reaped(pid);
     assert!(sim.st(u).is_deactivating(), "{:?}", sim.st(u));
 }
 
 #[test]
 fn s_backend_cleaned_alone_is_not_enough() {
-    let (mut sim, u, pid) = stopping(&Profile::b1());
+    let (mut sim, u, pid) = stopping(&Profile::other_timers());
     sim.cleaned(pid);
     assert!(sim.st(u).is_deactivating(), "{:?}", sim.st(u));
 }
 
 #[test]
 fn s_both_halves_in_either_order() {
-    let (mut sim, u, pid) = stopping(&Profile::b1());
+    let (mut sim, u, pid) = stopping(&Profile::other_timers());
     sim.cleaned(pid);
     sim.reaped(pid);
     assert_eq!(sim.st(u), S::Inactive);
@@ -36,12 +35,12 @@ fn s_both_halves_in_either_order() {
 
 #[test]
 fn s_reaped_moves_to_cleanup_substate() {
-    let (mut sim, u, pid) = stopping(&Profile::b1());
+    let (mut sim, u, pid) = stopping(&Profile::other_timers());
     sim.reaped(pid);
     assert_eq!(sim.st(u), S::Cleanup(Then::Inactive));
 }
 
-both! {
+spec! {
     fn s_stuck_after_20s_without_either_half(p) {
         let (mut sim, u, _) = stopping(p);
         let t = sim.now;
@@ -53,7 +52,7 @@ both! {
     }
 }
 
-both! {
+spec! {
     fn s_kill_after_timeout_stop_sec(p) {
         let (mut sim, u, pid) = stopping(p);
         let t = sim.now;
@@ -64,7 +63,7 @@ both! {
     }
 }
 
-both! {
+spec! {
     fn s_no_kill_when_reaped_within_grace(p) {
         let (mut sim, _, pid) = stopping(p);
         sim.reaped(pid);
@@ -92,7 +91,7 @@ fn s_kill_escalates_now_and_is_not_a_job() {
 
 #[test]
 fn s_kill_on_active_unit_does_nothing() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, pid) = sim.in_active(normal("a"));
     let acts = sim.kill(u);
     assert!(!has(&acts, "Kill"));
@@ -100,16 +99,16 @@ fn s_kill_on_active_unit_does_nothing() {
 }
 
 // Shutdown: checkpoints first (from the recorded state, no round-trip),
-// parallel Terminate{Quit}, one deadline, then Kill
-// RULED (coordinator 2026-11-02): every Checkpoint comes before the first
-// Terminate (§7.2 "checkpoints first").
+// parallel Terminate{Quit}, one deadline, then Kill RULED (coordinator
+// 2026-11-02): every Checkpoint comes before the first Terminate ("checkpoints
+// first").
 #[test]
 fn s_shutdown_checkpoints_before_any_terminate() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (_, a) = sim.in_active(normal("a"));
     let (_, b) = sim.in_active(normal("b"));
-    // Setup only (B1 re-review, §17.7): a run is checkpointed at quit once
-    // its classification answer came back, as today's `lazy_quit`.
+    // Setup only (B1 re-review): a run is checkpointed at quit once its
+    // classification answer came back, as today's `lazy_quit`.
     sim.classified(a, false);
     sim.classified(b, false);
     let acts = sim.shutdown(1_000);
@@ -124,7 +123,7 @@ fn s_shutdown_checkpoints_before_any_terminate() {
 
 #[test]
 fn s_shutdown_kills_only_unreaped_at_deadline() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (_, a) = sim.in_active(normal("a"));
     let (_, b) = sim.in_active(normal("b"));
     let t = sim.now;
@@ -158,7 +157,7 @@ fn s_shutdown_grace_is_the_single_budget() {
 
 #[test]
 fn s_shutdown_does_not_terminate_units_without_a_process() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     sim.in_standby(normal("s"));
     let (_, a) = sim.in_active(normal("a"));
     let acts = sim.shutdown(1_000);

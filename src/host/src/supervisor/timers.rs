@@ -1,7 +1,7 @@
-//! Deadline min-heap (systemd `sd-event` timer sources): `(due, unit,
-//! kind, generation)` with lazy deletion. Arming or canceling bumps the
-//! unit's generation of that kind, so a stale entry is skipped when popped:
-//! `run_jobs` costs O(due), never a scan over all units (A1).
+//! Deadline min-heap (systemd `sd-event` timer sources): `(due, unit, kind,
+//! generation)` with lazy deletion. Arming or canceling bumps the unit's
+//! generation of that kind, so a stale entry is skipped when popped: `run_jobs`
+//! costs O(due), never a scan over all units.
 #![forbid(unsafe_code)]
 
 use std::cmp::Reverse;
@@ -27,12 +27,10 @@ pub(super) enum TimerKind {
     Notice,
     /// `CLASSIFY_WAIT_MS` 5 s.
     Classify,
-    /// The resources answer of a Standby job.
-    Resources,
     /// Request timeout of in-flight work.
     Request,
 }
-const KINDS: usize = 10;
+const KINDS: usize = 9;
 impl TimerKind {
     fn index(self) -> usize {
         self as usize
@@ -56,8 +54,6 @@ impl Gens {
 pub(super) enum Target {
     Unit(UnitId, TimerKind),
     /// The one shutdown deadline.
-    // B4: `shutdown`.
-    #[cfg_attr(not(test), allow(dead_code))]
     Shutdown,
 }
 
@@ -109,14 +105,9 @@ impl Timers {
     /// The earliest due time (`run_jobs` drops stale entries at the top;
     /// one armed after it may still be stale: an early wake-up at most,
     /// never a late one).
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub fn next(&self) -> Option<Ms> {
         self.heap.peek().map(|Reverse(e)| e.due)
-    }
-    // B3's per-tick budget (A1) bounds the heap with it.
-    #[allow(dead_code)]
-    pub fn len(&self) -> usize {
-        self.heap.len()
     }
 }
 

@@ -1,10 +1,10 @@
-//! Transition table, design §3.2: one test per row (T1–T32). Rows whose
-//! expected values differ between today's tunables and the target are
-//! generated for both profiles (`::b1`, `::target`).
+//! Transition table, design one test per row. Rows whose expected values differ
+//! between today's tunables and the target are generated for both profiles
+//! (`::b1`, `::target`).
 use super::*;
 
-// T1 (none) --add_unit, enabled, valid checkpoint, may go to standby--> Standby{holder: new pid, recorded}; Replay
-both! {
+// (none) --add_unit, enabled, valid checkpoint, may go to standby--> Standby{holder: new pid, recorded}; Replay
+spec! {
     fn t01_add_with_checkpoint_goes_to_standby_with_replay(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(normal("a"));
@@ -13,7 +13,7 @@ both! {
         assert_eq!(hold_until, None);
         assert!(has(&acts, "Replay"), "{acts:?}");
         assert!(spawns(&acts).is_empty(), "no process for a unit in standby");
-        assert_eq!(sim.unit_of(holder), Some(u), "holder pid is indexed by_pid (§1)");
+        assert_eq!(sim.unit_of(holder), Some(u), "holder pid is indexed by_pid");
         assert_eq!(sim.by_id("a"), Some(u));
         assert_eq!(sim.job(u), None);
     }
@@ -21,17 +21,17 @@ both! {
 
 #[test]
 fn t01_builtin_with_standby_checkpoint_goes_to_standby() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(builtin_standby("b"));
     let acts = sim.run();
     assert!(matches!(sim.st(u), S::Standby { .. }));
     assert!(has(&acts, "Replay"));
 }
 
-// T2 (none) --add_unit, enabled, no checkpoint / Resident / built-in not going to standby--> Inactive + Start job
+// (none) --add_unit, enabled, no checkpoint / Resident / built-in not going to standby--> Inactive + Start job
 #[test]
 fn t02_add_without_checkpoint_installs_first_run_start() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(first_run("a"));
     assert_eq!(sim.st(u), S::Inactive);
     assert!(
@@ -43,7 +43,7 @@ fn t02_add_without_checkpoint_installs_first_run_start() {
 
 #[test]
 fn t02_add_resident_installs_boot_start() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(resident("r"));
     assert_eq!(sim.st(u), S::Inactive);
     assert!(
@@ -55,7 +55,7 @@ fn t02_add_resident_installs_boot_start() {
 
 #[test]
 fn t02_add_builtin_not_going_to_standby_installs_start() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(builtin("b"));
     assert_eq!(sim.st(u), S::Inactive);
     // A built-in recorded resident starts at boot; one without any
@@ -65,10 +65,10 @@ fn t02_add_builtin_not_going_to_standby_installs_start() {
     );
 }
 
-// T3 (none) --add_unit, disabled--> Inactive, Disabled; no job
+// (none) --add_unit, disabled--> Inactive, Disabled; no job
 #[test]
 fn t03_add_disabled_is_inactive_without_job() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(normal("a").disabled());
     let acts = sim.run();
     assert_eq!(sim.st(u), S::Inactive);
@@ -80,10 +80,10 @@ fn t03_add_disabled_is_inactive_without_job() {
     );
 }
 
-// T4 Inactive/Standby --Start runs, built-in needing digest check--> Activating{Verify}; Verify, deadline VERIFY_WAIT
+// Inactive/Standby --Start runs, built-in needing digest check--> Activating{Verify}; Verify, deadline VERIFY_WAIT
 #[test]
 fn t04_builtin_start_with_digest_check_verifies_first() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(builtin("b").shared(1).verify());
     let acts = sim.run();
     assert_eq!(sim.st(u), S::Verify);
@@ -95,10 +95,10 @@ fn t04_builtin_start_with_digest_check_verifies_first() {
     assert!(sim.next_deadline().is_some_and(|d| d <= T0 + VERIFY_WAIT));
 }
 
-// T5 Activating{Verify} --verify done--> Activating{Spawn}; Spawn
+// Activating{Verify} --verify done--> Activating{Spawn}; Spawn
 #[test]
 fn t05_verify_done_spawns() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(builtin("b").shared(1).verify());
     sim.run();
     let acts = sim.verified(u, true);
@@ -110,10 +110,10 @@ fn t05_verify_done_spawns() {
     );
 }
 
-// T5 Activating{Verify} --3 s passed--> Activating{Spawn}, Placement::Own
+// Activating{Verify} --3 s passed--> Activating{Spawn}, Placement::Own
 #[test]
 fn t05_verify_timeout_spawns_in_own_process() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(builtin("b").shared(1).verify());
     sim.run();
     assert!(spawns(&sim.at(T0 + VERIFY_WAIT - 1)).is_empty());
@@ -123,16 +123,16 @@ fn t05_verify_timeout_spawns_in_own_process() {
     assert!(matches!(sim.st(u), S::Spawn(_)));
     assert!(
         sim.own_process(u),
-        "after 3 s without a verdict the built-in runs in its own process (A6)"
+        "after 3 s without a verdict the built-in runs in its own process"
     );
 }
 
-// ANSWERED (supervisor.md §17.2 Q6), was a design question: T5 says "verify done; or 3 s passed → Placement::Own".
-// Does a *failed* verification also go on in an own process (today's
-// `trust`), or does it fail the start? Best reading: own process.
+// ANSWERED (supervisor.md), was a design question: says "verify done; or 3 s passed → Placement::Own". Does a
+// *failed* verification also go on in an own process (today's `trust`), or does it fail the start? Best reading:
+// own process.
 #[test]
 fn t05_verify_failed_spawns_in_own_process() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(builtin("b").shared(1).verify());
     sim.run();
     let acts = sim.verified(u, false);
@@ -140,10 +140,10 @@ fn t05_verify_failed_spawns_in_own_process() {
     assert!(sim.own_process(u));
 }
 
-// T6 Inactive --Start runs (no verify)--> Activating{Spawn, pid: alloc}; Spawn
+// Inactive --Start runs (no verify)--> Activating{Spawn, pid: alloc}; Spawn
 #[test]
 fn t06_start_from_inactive_spawns_new_pid() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(resident("r"));
     let acts = sim.run();
     let S::Spawn(pid) = sim.st(u) else {
@@ -154,10 +154,10 @@ fn t06_start_from_inactive_spawns_new_pid() {
     assert!(matches!(sim.job(u), Some(J::Start { running: true, .. })));
 }
 
-// T6 Standby --Start runs--> Activating{Spawn}; Spawn, Rekey(holder → pid), forward holder → pid
+// Standby --Start runs--> Activating{Spawn}; Spawn, Rekey(holder → pid), forward holder → pid
 #[test]
 fn t06_start_from_standby_rekeys_holder_to_new_pid() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.start_interactive(u).unwrap();
     let acts = sim.run();
@@ -178,8 +178,8 @@ fn t06_start_from_standby_rekeys_holder_to_new_pid() {
     );
 }
 
-// T7 Activating{Spawn} --process_spawned(Ok)--> Activating{Ready}; arm TimeoutStartSec
-both! {
+// Activating{Spawn} --process_spawned(Ok)--> Activating{Ready}; arm TimeoutStartSec
+spec! {
     fn t07_spawned_ok_waits_for_ready_with_start_timeout(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(resident("r"));
@@ -192,7 +192,7 @@ both! {
     }
 }
 
-// T8 Activating{Spawn} --process_spawned(Err)--> retries left: AutoRestart{until: start backoff}
+// Activating{Spawn} --process_spawned(Err)--> retries left: AutoRestart{until: start backoff}
 #[test]
 fn t08_spawn_error_with_retries_left_waits_start_backoff() {
     let p = Profile::target();
@@ -212,7 +212,7 @@ fn t08_spawn_error_with_retries_left_waits_start_backoff() {
     );
 }
 
-// T8 … else Normal/Resident with recording → Standby{hold_until}; Answer held interactive triggers; Notify
+// … else Normal/Resident with recording → Standby{hold_until}; Answer held interactive triggers; Notify
 #[test]
 fn t08_spawn_error_without_retries_recorded_unit_holds_in_standby() {
     let p = Profile::target();
@@ -245,10 +245,10 @@ fn t08_spawn_error_without_retries_recorded_unit_holds_in_standby() {
     );
     assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
     assert!(has(&acts, "Notify"));
-    assert!(!has(&acts, "Revoke"), "registrations kept (D2 fixed)");
+    assert!(!has(&acts, "Revoke"), "registrations kept");
 }
 
-// T8 … else Failed{spawn}
+// … else Failed{spawn}
 #[test]
 fn t08_spawn_error_without_retries_or_recording_fails() {
     let p = Profile::target();
@@ -269,52 +269,25 @@ fn t08_spawn_error_without_retries_or_recording_fails() {
     assert_eq!(sim.st(u), S::Failed("spawn".into()));
 }
 
-// ANSWERED (supervisor.md §17.2 Q7), was a design question: T8 is "REPLACE in B3/B4"; with B1 tunables (no retry,
-// `Restart=no` + revoke) what is today's outcome — `Failed{spawn}` with
-// `Revoke` (today `wake_failed` → `forget_entries`), or `Inactive`? Best
-// reading: Failed + Revoke + the held interactive trigger answered.
-// §17.7 item 5: today's `wake_failed` shows one "could not start" notice and
-// answers no held trigger (`answer_held` is B3); the answer and the kept
-// registrations (`start_failure_keeps_registrations`) are checked under
-// `b3()` below.
-#[test]
-fn t08_spawn_error_b1_fails_and_revokes() {
-    let mut sim = Sim::new(&Profile::b1());
-    let (u, holder) = sim.in_standby(normal("a"));
-    sim.settle();
-    sim.wake(holder, cmd(1));
-    sim.run();
-    let acts = sim.spawned(sim.pid(u), false);
-    assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
-    assert!(has(&acts, "Revoke"));
-    assert!(answers(&acts).is_empty(), "legacy: no answer per trigger");
-    assert_eq!(
-        acts.iter().filter(|a| is_could_not_start_notice(a)).count(),
-        1,
-        "{:?}",
-        names(&acts)
-    );
-}
-
-// T8 from B3 without B4's retries: a recorded unit keeps its entry points in
+// from B3 without B4's retries: a recorded unit keeps its entry points in
 // Standby (no Revoke) and the held interactive trigger is answered.
 #[test]
-fn t08_spawn_error_b3_answers_and_keeps_registrations() {
-    let mut sim = Sim::new(&Profile::b3());
+fn t08_spawn_error_answers_and_keeps_registrations() {
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
     sim.wake(holder, cmd(1));
     sim.wake(holder, event("playback.state", 2));
     sim.run();
-    let acts = sim.spawned(sim.pid(u), false);
+    let acts = sim.spawn_fails(u);
     assert!(matches!(sim.st(u), S::Standby { .. }), "{:?}", sim.st(u));
     assert!(!has(&acts, "Revoke"), "{:?}", names(&acts));
     assert_eq!(answers(&acts), vec![(1, Why::CouldNotStart)]);
     assert!(acts.iter().any(is_could_not_start_notice));
 }
 
-// T9 Activating{Ready} --process_ready--> Active; Deliver backlog in order; arm idle; job done
-both! {
+// Activating{Ready} --process_ready--> Active; Deliver backlog in order; arm idle; job done
+spec! {
     fn t09_ready_delivers_backlog_in_order_and_arms_idle(p) {
         let mut sim = Sim::new(p);
         let (u, holder) = sim.in_standby(normal("a"));
@@ -336,13 +309,12 @@ both! {
     }
 }
 
-// T9 detail: "process_ready = runtime.ready + UI activation finished".
-// ANSWERED (supervisor.md §17.2 Q8), was a design question: §5 lists `ui_begin`/`ui_finish` and `process_ready`
-// separately; best reading: a unit that began UI activation stays
-// Activating{Ready} until `ui_finish` even after `process_ready`.
+// detail: "process_ready = runtime.ready + UI activation finished". ANSWERED (supervisor.md), was a design
+// question: lists `ui_begin`/`ui_finish` and `process_ready` separately; best reading: a unit that began UI
+// activation stays Activating{Ready} until `ui_finish` even after `process_ready`.
 #[test]
 fn t09_ready_waits_for_ui_activation() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(resident("r"));
     sim.run();
     let pid = sim.pid(u);
@@ -354,8 +326,8 @@ fn t09_ready_waits_for_ui_activation() {
     assert_eq!(sim.st(u), S::Active(pid));
 }
 
-// T10 Activating{Ready} --process_failed (runtime.failed)--> Deactivating{Failed, then: Failed}; Terminate{Failed}; no retry
-both! {
+// Activating{Ready} --process_failed (runtime.failed)--> Deactivating{Failed, then: Failed}; Terminate{Failed}; no retry
+spec! {
     fn t10_runtime_failed_terminates_and_fails_without_retry(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(builtin("b"));
@@ -376,8 +348,8 @@ both! {
     }
 }
 
-// T11 Activating{Spawn|Ready} --TimeoutStartSec--> Deactivating{Failed, then per Restart=}; Terminate{Failed}
-both! {
+// Activating{Spawn|Ready} --TimeoutStartSec--> Deactivating{Failed, then per Restart=}; Terminate{Failed}
+spec! {
     fn t11_start_timeout_terminates(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(resident("r"));
@@ -395,23 +367,6 @@ both! {
 }
 
 #[test]
-fn t11_start_timeout_b1_then_failed() {
-    let p = Profile::b1();
-    let mut sim = Sim::new(&p);
-    let u = sim.add(resident("r"));
-    sim.run();
-    let pid = sim.pid(u);
-    sim.at(T0 + p.start_timeout);
-    assert_eq!(
-        sim.st(u).then(),
-        Some(Then::Failed),
-        "B1: Restart=no for every class"
-    );
-    sim.gone(pid);
-    assert!(sim.st(u).is_failed());
-}
-
-#[test]
 fn t11_start_timeout_target_restarts_by_its_class() {
     let p = Profile::target();
     let mut sim = Sim::new(&p);
@@ -420,13 +375,13 @@ fn t11_start_timeout_target_restarts_by_its_class() {
     let pid = sim.pid(u);
     sim.at(T0 + p.start_timeout);
     sim.gone(pid);
-    // §7.3 StartTimeout, amended in the B6 review (§17.15): no start retry;
-    // a Resident restarts by its `Restart=` (on-failure), so `AutoRestart`.
+    // StartTimeout, amended in the B6 review: no start retry; a Resident
+    // restarts by its `Restart=` (on-failure), so `AutoRestart`.
     assert!(matches!(sim.st(u), S::AutoRestart(_)), "{:?}", sim.st(u));
 }
 
-// T12 Active --classified "can go to standby"--> Deactivating{Idle, then: Standby}; Checkpoint; Terminate{Idle, keep}
-both! {
+// Active --classified "can go to standby"--> Deactivating{Idle, then: Standby}; Checkpoint; Terminate{Idle, keep}
+spec! {
     fn t12_first_run_classified_standby_checkpoints_and_stops(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(first_run("a"));
@@ -443,10 +398,10 @@ both! {
     }
 }
 
-// T13 Active --classified resident--> Active, class Resident; Checkpoint (resident)
+// Active --classified resident--> Active, class Resident; Checkpoint (resident)
 #[test]
 fn t13_first_run_classified_resident_stays_active() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, pid) = sim.in_active(first_run("a"));
     let acts = sim.classified(pid, true);
     assert_eq!(sim.st(u), S::Active(pid));
@@ -455,8 +410,8 @@ fn t13_first_run_classified_resident_stays_active() {
     assert!(terminates(&acts).is_empty());
 }
 
-// T14 Active --idle timer → Standby job → QueryResources → not busy--> Deactivating{Idle, then: Standby}; Checkpoint; Terminate{Idle, keep}
-both! {
+// Active --idle timer → Standby job → QueryResources → not busy--> Deactivating{Idle, then: Standby}; Checkpoint; Terminate{Idle, keep}
+spec! {
     fn t14_idle_not_busy_goes_to_standby(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -473,8 +428,8 @@ both! {
     }
 }
 
-// T15 Active --idle timer, busy--> Active; Standby job cancelled; idle re-armed
-both! {
+// Active --idle timer, busy--> Active; Standby job cancelled; idle re-armed
+spec! {
     fn t15_idle_but_busy_stays_active_and_rearms(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -488,8 +443,8 @@ both! {
     }
 }
 
-// T14/T15: "`work.rs` empty" is part of the busy check.
-both! {
+// "`work.rs` empty" is part of the busy check.
+spec! {
     fn t15_in_flight_work_counts_as_busy(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -501,8 +456,8 @@ both! {
     }
 }
 
-// T16 Deactivating --process_reaped and backend_cleaned both in--> then; waiting job runnable
-both! {
+// Deactivating --process_reaped and backend_cleaned both in--> then; waiting job runnable
+spec! {
     fn t16_both_halves_complete_deactivation(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -515,8 +470,8 @@ both! {
     }
 }
 
-// T17 Deactivating{Term} --TimeoutStopSec--> Deactivating{Kill}; Kill
-both! {
+// Deactivating{Term} --TimeoutStopSec--> Deactivating{Kill}; Kill
+spec! {
     fn t17_stop_grace_expiry_kills(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -531,10 +486,10 @@ both! {
     }
 }
 
-// T18 Deactivating --20 s, not reaped/cleaned--> then, flagged stuck; waiting job fails with today's text
+// Deactivating --20 s, not reaped/cleaned--> then, flagged stuck; waiting job fails with today's text
 #[test]
 fn t18_stuck_stop_fails_waiting_reload_with_text() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, pid) = sim.in_active(normal("a"));
     sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
     sim.run();
@@ -546,17 +501,15 @@ fn t18_stuck_stop_fails_waiting_reload_with_text() {
     sim.at(t + STOP_WAIT);
     assert!(sim.stuck(u));
     assert_eq!(sim.result(job), Some(R::Failed(TEXT_RELOAD_STUCK.into())));
-    // ANSWERED (supervisor.md §17.2 Q9), was a design question: T18 says "`Failed` for a reload" while §4.5 says the
-    // unit "stays where `then` put it". Best reading: a reload whose stop
-    // got stuck leaves the unit Failed.
+    // ANSWERED (supervisor.md), was a design question: says "`Failed` for a reload" while says the unit "stays where
+    // `then` put it". Best reading: a reload whose stop got stuck leaves the unit Failed.
     assert!(sim.st(u).is_failed(), "{:?}", sim.st(u));
 }
 
-// "interactive answered" is A9 (B3, §17.7 item 5): `b3()`, and a `…_legacy`
-// twin with the notice and no answer.
+// The interactive trigger is answered.
 #[test]
 fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
-    let mut sim = Sim::new(&Profile::b3());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, pid) = sim.deactivating_to_standby(normal("a"));
     let t = sim.now;
     sim.wake(pid, cmd(1));
@@ -568,12 +521,12 @@ fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
         spawns(&acts).is_empty(),
         "no second instance while the old one may still run"
     );
-    // §17.2 Q9/Q10: lands at `then`, then the wake's failed Start marks the
-    // unit Failed with the wake text (today `wake_failed`). B3's
-    // `start_failure_keeps_registrations` is for a spawn failure (Q7, §17.6
-    // F1); a stuck stop is not one: the old process may still run, so
-    // keeping its entry points in Standby would let the next trigger start
-    // a second instance on the same data.
+    // lands at `then`, then the wake's failed Start marks the unit Failed with
+    // the wake text (today `wake_failed`). A failed start keeps its entry
+    // points after a spawn failure; a stuck stop
+    // is not one: the old process may still run, so keeping its entry points in
+    // Standby would let the next trigger start a second instance on the same
+    // data.
     assert_eq!(sim.st(u), S::Failed("stuck".into()));
     assert_eq!(sim.failure_text(u).as_deref(), Some(TEXT_WAKE_STUCK));
     assert!(
@@ -583,33 +536,8 @@ fn t18_stuck_standby_stop_fails_waiting_wake_and_answers() {
     );
 }
 
-#[test]
-fn t18_stuck_standby_stop_fails_waiting_wake_legacy() {
-    let mut sim = Sim::new(&Profile::b1());
-    let (u, pid) = sim.deactivating_to_standby(normal("a"));
-    let t = sim.now;
-    sim.wake(pid, cmd(1));
-    sim.cleaned(pid); // never reaped
-    let acts = sim.at(t + STOP_WAIT);
-    assert!(sim.stuck(u));
-    assert_eq!(sim.st(u), S::Failed("stuck".into()));
-    assert_eq!(sim.failure_text(u).as_deref(), Some(TEXT_WAKE_STUCK));
-    assert!(
-        has(&acts, "Revoke"),
-        "entry points revoked: {:?}",
-        names(&acts)
-    );
-    assert!(answers(&acts).is_empty(), "{:?}", answers(&acts));
-    assert!(
-        acts.iter().any(is_could_not_start_notice),
-        "{:?}",
-        names(&acts)
-    );
-    assert!(spawns(&acts).is_empty());
-}
-
-// T19 Standby --wake(pid, trigger)--> Standby + Start job (trigger in backlog)
-both! {
+// Standby --wake(pid, trigger)--> Standby + Start job (trigger in backlog)
+spec! {
     fn t19_wake_in_standby_queues_start(p) {
         let mut sim = Sim::new(p);
         let (u, holder) = sim.in_standby(normal("a"));
@@ -623,7 +551,7 @@ both! {
     }
 }
 
-// T20 Standby{hold_until > now} --wake--> Standby; Start waits until hold_until; interactive answered, event kept
+// Standby{hold_until > now} --wake--> Standby; Start waits until hold_until; interactive answered, event kept
 #[test]
 fn t20_wake_during_hold_waits_and_answers_interactive() {
     let p = Profile::target();
@@ -668,11 +596,10 @@ fn t20_wake_during_hold_waits_and_answers_interactive() {
     );
 }
 
-// T21 Standby --Stop job (disable)--> Inactive, disabled; Revoke; checkpoint kept; backlog answered
-// ("backlog answered" is A9: `b3()`; the `…_legacy` twin drops it silently)
+// Standby --Stop job (disable)--> Inactive, disabled; Revoke; checkpoint kept; backlog answered
 #[test]
 fn t21_disable_in_standby_revokes_keeps_checkpoint() {
-    let mut sim = Sim::new(&Profile::b3());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, holder) = sim.in_standby(normal("a"));
     sim.settle();
     sim.wake(holder, cmd(1));
@@ -687,28 +614,10 @@ fn t21_disable_in_standby_revokes_keeps_checkpoint() {
     assert_eq!(answers(&acts), vec![(1, Why::Disabled)]);
 }
 
-#[test]
-fn t21_disable_in_standby_revokes_keeps_checkpoint_legacy() {
-    let mut sim = Sim::new(&Profile::b1());
-    let (u, holder) = sim.in_standby(normal("a"));
-    sim.settle();
-    sim.wake(holder, cmd(1));
-    sim.set_enabled(u, false);
-    sim.stop(u, StopReason::Disable, Then::Inactive).unwrap();
-    let acts = sim.run();
-    assert_eq!(sim.st(u), S::Inactive);
-    assert!(!sim.enabled(u));
-    assert_eq!(count(&acts, "Revoke"), 1);
-    assert!(!has(&acts, "DropCheckpoint"), "checkpoint kept");
-    assert!(spawns(&acts).is_empty());
-    assert!(answers(&acts).is_empty(), "legacy: dropped silently");
-    assert_eq!(sim.backlog_len(u), 0);
-}
-
-// T22 Standby --Restart fresh (reload, upgrade)--> Inactive + Start part; Revoke; DropCheckpoint
+// Standby --Restart fresh (reload, upgrade)--> Inactive + Start part; Revoke; DropCheckpoint
 #[test]
 fn t22_reload_in_standby_drops_checkpoint_and_starts_fresh() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, _) = sim.in_standby(normal("a"));
     sim.restart(u, true, None).unwrap();
     let acts = sim.run();
@@ -722,10 +631,10 @@ fn t22_reload_in_standby_drops_checkpoint_and_starts_fresh() {
     );
 }
 
-// T23 Standby --Stop then: Removed (uninstall)--> removed after RemoveData; Revoke; DropCheckpoint; RemoveData
+// Standby --Stop then: Removed (uninstall)--> removed after RemoveData; Revoke; DropCheckpoint; RemoveData
 #[test]
 fn t23_uninstall_in_standby_removes_data() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, _) = sim.in_standby(normal("a"));
     sim.stop(u, StopReason::Uninstall, Then::Removed).unwrap();
     let acts = sim.run();
@@ -737,8 +646,8 @@ fn t23_uninstall_in_standby_removes_data() {
     assert_eq!(sim.by_id("a"), None);
 }
 
-// T24 Active/Activating --Stop job--> Deactivating{reason, then}; Terminate{reason, grace: TimeoutStopSec}
-both! {
+// Active/Activating --Stop job--> Deactivating{reason, then}; Terminate{reason, grace: TimeoutStopSec}
+spec! {
     fn t24_stop_active_terminates_with_stop_grace(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -749,7 +658,7 @@ both! {
     }
 }
 
-both! {
+spec! {
     fn t24_stop_activating_terminates(p) {
         let mut sim = Sim::new(p);
         let u = sim.add(resident("r"));
@@ -763,25 +672,7 @@ both! {
     }
 }
 
-// T25 Active --unexpected exit / Fault / Oom / RequestTimeout--> until B4 every class → Failed
-#[test]
-fn t25_crash_b1_fails_every_class() {
-    for spec in [builtin("b"), resident("r"), normal("n")] {
-        let mut sim = Sim::new(&Profile::b1());
-        let (u, pid) = sim.in_active(spec.clone());
-        let acts = sim.exited(pid, ExitCause::Exited);
-        assert_eq!(sim.st(u).then(), Some(Then::Failed), "{spec:?}");
-        sim.gone(pid);
-        assert!(sim.st(u).is_failed(), "{spec:?}: {:?}", sim.st(u));
-        let revoked = has(&sim.log, "Revoke") || terminates(&acts).iter().any(|t| !t.1);
-        assert!(
-            revoked,
-            "{spec:?}: registrations revoked (today's behaviour)"
-        );
-    }
-}
-
-// T25 target: Builtin/Resident → Restart job (→ AutoRestart)
+// target: Builtin/Resident → Restart job (→ AutoRestart)
 #[test]
 fn t25_crash_target_builtin_and_resident_auto_restart() {
     for spec in [builtin("b"), resident("r")] {
@@ -798,7 +689,7 @@ fn t25_crash_target_builtin_and_resident_auto_restart() {
     }
 }
 
-// T25 target: Normal → Standby{hold_until}, registrations kept
+// target: Normal → Standby{hold_until}, registrations kept
 #[test]
 fn t25_crash_target_normal_holds_in_standby_keeping_registrations() {
     let mut sim = Sim::new(&Profile::target());
@@ -821,7 +712,7 @@ fn t25_crash_target_normal_holds_in_standby_keeping_registrations() {
     assert!(has(&acts, "Notify"));
 }
 
-// T25 target: Development → Failed
+// target: Development → Failed
 #[test]
 fn t25_crash_target_development_fails() {
     let mut sim = Sim::new(&Profile::target());
@@ -831,7 +722,7 @@ fn t25_crash_target_development_fails() {
     assert!(sim.st(u).is_failed());
 }
 
-// T25 target: Oom notifies "ran out of memory"
+// target: Oom notifies "ran out of memory"
 #[test]
 fn t25_oom_notifies_out_of_memory() {
     let mut sim = Sim::new(&Profile::target());
@@ -840,7 +731,7 @@ fn t25_oom_notifies_out_of_memory() {
     assert!(acts.iter().any(is_oom_notice), "{acts:?}");
 }
 
-// T25 target: RequestTimeout (B3 timer; Terminate first)
+// target: RequestTimeout (B3 timer; Terminate first)
 #[test]
 fn t25_request_timeout_terminates_then_as_crash() {
     let p = Profile::target();
@@ -864,7 +755,7 @@ fn t25_request_timeout_terminates_then_as_crash() {
     );
 }
 
-// T26 Activating{AutoRestart} --RestartSec timer--> Activating{Verify|Spawn}; Spawn
+// Activating{AutoRestart} --RestartSec timer--> Activating{Verify|Spawn}; Spawn
 #[test]
 fn t26_auto_restart_spawns_when_due() {
     let mut sim = Sim::new(&Profile::target());
@@ -880,7 +771,7 @@ fn t26_auto_restart_spawns_when_due() {
     assert!(matches!(sim.st(u), S::Spawn(_)));
 }
 
-// T27 any start path --start limit exceeded--> Failed{start-limit-hit}; Notify; failures text
+// any start path --start limit exceeded--> Failed{start-limit-hit}; Notify; failures text
 #[test]
 fn t27_start_limit_hit_fails_normal() {
     let mut sim = Sim::new(&Profile::target());
@@ -907,12 +798,13 @@ fn t27_start_limit_hit_fails_normal() {
     assert!(has(&sim.log, "Notify"));
 }
 
-// T28 Failed --reset_failed--> Inactive; failure text cleared
+// Failed --reset_failed--> Inactive; failure text cleared
 #[test]
 fn t28_reset_failed_clears_failure() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, pid) = sim.in_active(normal("n"));
-    sim.exited(pid, ExitCause::Exited);
+    // An own process's transport failure fails it for good.
+    sim.exited(pid, ExitCause::Transport);
     sim.gone(pid);
     assert!(sim.st(u).is_failed());
     sim.reset_failed(u);
@@ -920,10 +812,10 @@ fn t28_reset_failed_clears_failure() {
     assert_eq!(sim.failure_text(u), None);
 }
 
-// T28: reset is implicit in reload (Restart{fresh}).
+// reset is implicit in reload (Restart{fresh}).
 #[test]
 fn t28_reload_of_failed_unit_resets_and_starts() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (u, pid) = sim.in_active(normal("n"));
     sim.exited(pid, ExitCause::Exited);
     sim.gone(pid);
@@ -933,7 +825,7 @@ fn t28_reload_of_failed_unit_resets_and_starts() {
     assert!(matches!(sim.st(u), S::Spawn(_)));
 }
 
-// T29 Active (member) --runner hang--> Deactivating{Failed, Cleanup}, reaped set; KillRunner once; Restart jobs, first immediate
+// Active (member) --runner hang--> Deactivating{Failed, Cleanup}, reaped set; KillRunner once; Restart jobs, first immediate
 #[test]
 fn t29_runner_failure_kills_runner_once_and_restarts_members() {
     let mut sim = Sim::new(&Profile::target());
@@ -945,7 +837,7 @@ fn t29_runner_failure_kills_runner_once_and_restarts_members() {
     assert_eq!(sim.st(b), S::Cleanup(sim.st(b).then().unwrap()));
     sim.cleaned(pa);
     sim.cleaned(pb);
-    // First runner restart: immediate (A4), no time passes.
+    // First runner restart: immediate, no time passes.
     assert!(
         matches!(sim.st(a), S::Spawn(_)) && matches!(sim.st(b), S::Spawn(_)),
         "{:?} {:?}",
@@ -954,7 +846,7 @@ fn t29_runner_failure_kills_runner_once_and_restarts_members() {
     );
 }
 
-// T30 Active --pressure or over budget; selected; not busy--> as T14 (see budget.rs for selection)
+// Active --pressure or over budget; selected; not busy--> as (see budget.rs for selection)
 #[test]
 fn t30_pressure_standby_uses_the_standby_job() {
     let mut sim = Sim::new(&Profile::target());
@@ -971,10 +863,10 @@ fn t30_pressure_standby_uses_the_standby_job() {
     assert!(pos(&acts, "Checkpoint").unwrap() < pos(&acts, "Terminate").unwrap());
 }
 
-// T31 any --shutdown(now, budget)--> Deactivating{Quit}; Checkpoint; Terminate{Quit} all in parallel; one deadline; Kill
+// any --shutdown(now, budget)--> Deactivating{Quit}; Checkpoint; Terminate{Quit} all in parallel; one deadline; Kill
 #[test]
 fn t31_shutdown_terminates_all_in_one_call() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let (_, pa) = sim.in_active(normal("a"));
     let (_, pb) = sim.in_active(builtin("b"));
     let acts = sim.shutdown(1_000);
@@ -985,22 +877,17 @@ fn t31_shutdown_terminates_all_in_one_call() {
     assert!(same_set(&pids, &[pa, pb]), "{pids:?}");
 }
 
-// T32 Inactive, disabled --set_enabled(true)--> Inactive, enabled + Start job
-// ANSWERED (supervisor.md §17.2 Q11), was a design question: §5 says `set_enabled` "does not enqueue by itself", T32
-// says `set_enabled(true)` → "enabled + Start job". Best reading: the
-// caller (package RPC) does `set_enabled(true)` then `start(u, Enable)`.
+// Inactive, disabled --set_enabled(true)--> Inactive, enabled + Start job ANSWERED (supervisor.md), was a design
+// question: says `set_enabled` "does not enqueue by itself", says `set_enabled(true)` → "enabled + Start job". Best
+// reading: the caller (package RPC) does `set_enabled(true)` then `start(u, Enable)`.
 #[test]
 fn t32_enable_then_start_installs_start_job() {
-    let mut sim = Sim::new(&Profile::b1());
+    let mut sim = Sim::new(&Profile::other_timers());
     let u = sim.add(normal("a").disabled());
     sim.run();
     sim.set_enabled(u, true);
     assert!(sim.enabled(u));
-    assert_eq!(
-        sim.job(u),
-        None,
-        "§5: set_enabled does not enqueue by itself"
-    );
+    assert_eq!(sim.job(u), None, "set_enabled does not enqueue by itself");
     sim.start(u, Cause::Enable).unwrap();
     assert!(matches!(sim.job(u), Some(J::Start { ref cause, .. }) if cause == "enable"));
     let acts = sim.run();
@@ -1009,8 +896,8 @@ fn t32_enable_then_start_installs_start_job() {
     assert!(has(&acts, "Spawn") || has(&acts, "Replay"), "{acts:?}");
 }
 
-// T32 "(waits if a previous process is still Deactivating)" — D13 bug fix.
-both! {
+// "(waits if a previous process is still Deactivating)" — bug fix.
+spec! {
     fn t32_enable_while_disabling_waits_for_reap(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(normal("a"));
@@ -1021,7 +908,7 @@ both! {
         sim.start(u, Cause::Enable).unwrap();
         let acts = sim.after(p.stop_grace);
         assert!(spawns(&acts).is_empty(), "no second process on the same data directory");
-        assert!(spawns(&sim.reaped(pid)).is_empty(), "reaped alone is not enough (T16)");
+        assert!(spawns(&sim.reaped(pid)).is_empty(), "reaped alone is not enough");
         let acts = sim.cleaned(pid);
         assert!(has(&acts, "Spawn") || has(&acts, "Replay"), "start runs once the old process is gone: {acts:?}");
     }

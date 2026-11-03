@@ -1158,7 +1158,7 @@ impl Sources {
     }
     /// The host could not deliver resolution request `id` to its resolver
     /// (a plugin starting from standby that could not start, or whose held
-    /// requests overflowed: supervisor.md §4.6): the open fails now with
+    /// requests overflowed: supervisor.md §4): the open fails now with
     /// `message` instead of at its deadline. Nothing goes to the resolver,
     /// which never got the request.
     pub fn refuse_resolution(&mut self, id: u64, message: String) {
@@ -2904,7 +2904,7 @@ mod resolution_tests {
             Some(rom("a.nes").as_str())
         );
     }
-    /// supervisor.md §4.6 (B3): a resolution request the host could not
+    /// supervisor.md §4 (B3): a resolution request the host could not
     /// deliver (its resolver could not start, or held too many) fails the
     /// open at once with the host's text; nothing goes to the resolver, and
     /// its late answer is stale.

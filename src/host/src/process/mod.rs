@@ -135,7 +135,7 @@ pub fn set_app_info(info: &Value) {
 pub enum Placement<'a> {
     /// Its own Node process, its JavaScript heap capped at `heap_mib` MiB
     /// when set (`--max-old-space-size`, the supervisor's `MemoryMax=`,
-    /// supervisor.md §3.3, §8; B4).
+    /// supervisor.md §2, §8; B4).
     Own { heap_mib: Option<u32> },
     /// A member of this shared runner.
     Shared(&'a mut SharedRunner),
@@ -156,7 +156,7 @@ enum Runner {
 /// process until it exits, killed once its grace is over; or its
 /// shared-runner member until the runner reports it gone
 /// ([`MemberStop`]). Polled by the plugin reaper (`reaper.rs`,
-/// supervisor.md §7.1), or waited for where the plugin is dropped.
+/// supervisor.md §1), or waited for where the plugin is dropped.
 pub enum Stop {
     Own {
         child: Child,
@@ -167,7 +167,7 @@ pub enum Stop {
         /// Killed at its deadline; waited for without blocking after that.
         killed: bool,
         /// Its exit code once it is gone (`Event::Reaped`: the supervisor
-        /// tells a heap abort by it, supervisor.md §7.3).
+        /// tells a heap abort by it, supervisor.md §7).
         code: Option<i32>,
         /// When it was seen gone.
         exited: Option<Instant>,
@@ -227,7 +227,7 @@ impl Stop {
         }
     }
     /// Its deadline moves to `deadline` if that is sooner: a quit's one
-    /// deadline, or a kill now (supervisor.md §7.2, T31).
+    /// deadline, or a kill now (supervisor.md §9).
     pub fn hasten(&mut self, deadline: Instant) {
         if let Stop::Own { deadline: own, .. } = self
             && deadline < *own
@@ -288,7 +288,7 @@ pub struct Plugin {
     /// plugin dropped with the host.
     stop_reason: StopReason,
     /// Its process ended by itself (`set_exited`): no `runtime.stop` is
-    /// queued for it (A14).
+    /// queued for it.
     exited: bool,
 }
 impl Plugin {
@@ -462,8 +462,7 @@ impl Plugin {
         self.stop_reason = reason;
     }
     /// Its process ended by itself (its stdout closed): its stop sends no
-    /// `runtime.stop` to the closed pipe; the reaper only waits for it (B4,
-    /// A14).
+    /// `runtime.stop` to the closed pipe; the reaper only waits for it.
     pub fn set_exited(&mut self) {
         self.exited = true;
     }
@@ -479,7 +478,7 @@ impl Plugin {
 /// An own process: `node [--max-old-space-size=<heap_mib>] runner.js
 /// <directory>`, the plugin's data directory, `plugin.app` and the locale
 /// in its environment. A heap past the cap ends the process with V8's heap
-/// abort, which the supervisor reports as "ran out of memory" (§7.3).
+/// abort, which the supervisor reports as "ran out of memory" (supervisor.md §7).
 fn own_process(
     paths: &crate::process::runtime_paths::RuntimePaths,
     directory: &Path,
@@ -509,7 +508,7 @@ fn own_process(
         .spawn()
         .with_context(|| paths.node_failure())?;
     // Its stderr goes on to the player's, as when inherited; read here so
-    // V8's heap abort is seen (supervisor.md §7.3, B4).
+    // V8's heap abort is seen (supervisor.md §7, B4).
     let stderr_done = Arc::new(AtomicBool::new(false));
     if let Some(stderr) = child.stderr.take() {
         let done = stderr_done.clone();

@@ -133,7 +133,7 @@ impl Host {
             Err(error) => json!({"id":reply.id,"error":error}),
         };
         self.send(reply.owner, message);
-        // Its answer first, then what waited for its UI (T9).
+        // Its answer first, then what waited for its UI.
         if activation_ui {
             self.ui_finished(reply.owner);
         }

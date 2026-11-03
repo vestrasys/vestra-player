@@ -1,6 +1,6 @@
-//! Jobs (systemd `job.c`): nothing changes a unit's state except a job;
-//! one installed job per unit; a new request merges with or supersedes it
-//! by the table of doc/architecture/supervisor.md §4.2.
+//! Jobs (systemd `job.c`): nothing changes a unit's state except a job; one
+//! installed job per unit; a new request merges with or supersedes it by the
+//! table of doc/architecture/supervisor.md.
 #![forbid(unsafe_code)]
 
 use super::trigger::AnswerReason;
@@ -10,7 +10,7 @@ use super::{Action, Supervisor};
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct JobId(pub u64);
 
-/// Third-party start priority (§4.4), lowest first so `max` is the higher.
+/// Third-party start priority, lowest first so `max` is the higher.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Priority {
     Background,
@@ -18,7 +18,7 @@ pub enum Priority {
     Interactive,
 }
 
-/// Why a unit is started (§4.1).
+/// Why a unit is started.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Cause {
     Boot,
@@ -38,7 +38,6 @@ impl Cause {
     }
 }
 
-/// §4.1.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum JobKind {
     Start {
@@ -57,7 +56,7 @@ pub enum JobKind {
     Standby,
 }
 
-/// systemd `--job-mode` (§4.2).
+/// systemd `--job-mode`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum JobMode {
     /// The merge table.
@@ -156,8 +155,8 @@ impl Job {
     }
 }
 
-/// The Restart stop reason for a request (§7.3: reload → `Reload`,
-/// image → `Upgrade`).
+/// The Restart stop reason for a request (reload → `Reload`, image →
+/// `Upgrade`).
 fn restart_reason(_fresh: bool, image: &Option<String>) -> StopReason {
     if image.is_some() {
         StopReason::Upgrade
@@ -175,7 +174,7 @@ fn answer_for(then: Then, reason: StopReason) -> AnswerReason {
 }
 
 impl<P: Clone> Supervisor<P> {
-    /// §5 `enqueue_job`: the merge/supersede table (§4.2) and job modes.
+    /// `enqueue_job`: the merge/supersede table and job modes.
     pub fn enqueue_job(
         &mut self,
         u: UnitId,
@@ -237,23 +236,17 @@ impl<P: Clone> Supervisor<P> {
         job.id
     }
 
-    fn merge_start(&mut self, u: UnitId, mut job: Job, cause: Cause) -> JobId {
+    fn merge_start(&mut self, u: UnitId, job: Job, cause: Cause) -> JobId {
         let unit = &self.units[&u];
         if !unit.enabled() || unit.removed {
             return self.settle(u, job, JobResult::Dropped);
         }
-        // A trigger has no entry point left on a failed unit (§4.3).
+        // A trigger has no entry point left on a failed unit.
         if matches!(unit.state, UnitState::Failed { .. }) && matches!(cause, Cause::Trigger(_)) {
             return self.settle(u, job, JobResult::Dropped);
         }
         let active = matches!(unit.state, UnitState::Active { .. });
         let deactivating = unit.state.is_deactivating();
-        // Today an enable that waits for the previous process is an entry
-        // in `packages.reloads`: `package_busy` until it starts; also when
-        // that stop already landed stuck (`parked_process`, §17.7).
-        if cause == Cause::Enable && unit.stopping.is_some() && self.tunables.enable_wait_busy {
-            job.origin = Origin::PackageRpc;
-        }
         let Some(installed) = unit.job.as_ref() else {
             if active {
                 return self.settle(u, job, JobResult::Done);
@@ -268,7 +261,7 @@ impl<P: Clone> Supervisor<P> {
             }
             JobKind::Standby => {
                 if deactivating {
-                    // Waits for reap, then starts from standby (§4.2).
+                    // Waits for reap, then starts from standby.
                     self.finish(u, JobResult::Done);
                     self.install(u, job)
                 } else {
@@ -295,8 +288,7 @@ impl<P: Clone> Supervisor<P> {
                             installed.origin = job.origin;
                         }
                         // It now starts a process: a wait for a stuck stop
-                        // counts from this request (today's `reloads(now)`,
-                        // §17.7).
+                        // counts from this request (today's `reloads(now)`).
                         installed.created = job.created;
                     }
                     installed_id
@@ -389,10 +381,10 @@ impl<P: Clone> Supervisor<P> {
         let deactivating = unit.state.is_deactivating();
         let Some(installed) = unit.job.as_ref() else {
             // A disabled unit is upgraded/reloaded without starting
-            // (`step_restart` ends the job after the stop half, §17.2 Q15).
+            // (`step_restart` ends the job after the stop half).
             let id = self.install(u, job);
             if deactivating {
-                // Stopping for standby (B4 crash hold): revoked now (§17.7).
+                // Stopping for standby (B4 crash hold): revoked now.
                 self.set_then(u, Then::Inactive);
             }
             return id;
@@ -444,10 +436,10 @@ impl<P: Clone> Supervisor<P> {
         }
         installed.mode = job.mode;
         // A wait for a stuck stop counts from this request (today's
-        // `packages.reloads` entry is written with `now`, §17.7).
+        // `packages.reloads` entry is written with `now`).
         installed.created = job.created;
-        // A unit stopping for standby does not land there any more: its
-        // kept registrations go now (§17.7).
+        // A unit stopping for standby does not land there any more: its kept
+        // registrations go now.
         if deactivating {
             self.set_then(u, Then::Inactive);
         }
@@ -518,11 +510,11 @@ impl<P: Clone> Supervisor<P> {
         self.arm_idle(u);
     }
 
-    /// A deactivating unit lands somewhere else (stronger stop merged).
-    /// Leaving `then: Standby` (disable, uninstall, reload, upgrade of a
-    /// unit stopping for standby) revokes the kept registrations at once,
-    /// not at reap, as today's `forget_parked` does (coordinator ruling,
-    /// §17.7): a trigger to them would be refused anyway.
+    /// A deactivating unit lands somewhere else (stronger stop merged). Leaving
+    /// `then: Standby` (disable, uninstall, reload, upgrade of a unit stopping
+    /// for standby) revokes the kept registrations at once, not at reap, as
+    /// today's `forget_parked` does (coordinator ruling): a trigger to them
+    /// would be refused anyway.
     pub(super) fn set_then(&mut self, u: UnitId, new: Then) {
         let Some(unit) = self.units.get_mut(&u) else {
             return;
@@ -555,7 +547,7 @@ impl<P: Clone> Supervisor<P> {
             stopping.kept = false;
             self.pending.push(Action::Revoke { unit: u, pid });
         }
-        // An uninstall after the reap: the data goes now (§17.7).
+        // An uninstall after the reap: the data goes now.
         self.flush_data_removal(u);
     }
 }

@@ -25,7 +25,7 @@ use std::{
 /// Validated candidates kept at once (each is a staged copy on disk).
 const MAX_CANDIDATES: usize = 32;
 /// At start-up, how long one tick may spend loading installed plugins into
-/// the supervisor and starting them (`load_queued`; §6.1).
+/// the supervisor and starting them (`load_queued`).
 const START_BUDGET: std::time::Duration = std::time::Duration::from_millis(25);
 pub struct Manager {
     store: Store,
@@ -43,7 +43,7 @@ pub struct Manager {
     /// Installed plugins still to load into the supervisor at start-up, in
     /// start order (built-ins first, then the others, each in id order;
     /// `start_order`), a few per tick (`load_queued`); their starts wait in
-    /// the supervisor's lanes (supervisor.md §4.4).
+    /// the supervisor's lanes (supervisor.md §5).
     to_load: VecDeque<String>,
     /// Starts that wait for a built-in's digest check (`Action::Verify`),
     /// by id (`verify_tick`).
@@ -143,7 +143,7 @@ struct Operation {
     enabled: bool,
     phase: String,
     owner: Option<u64>,
-    /// The supervisor's job the operation waits on (§4.7): its target's
+    /// The supervisor's job the operation waits on: its target's
     /// start (`Restart{fresh, image}`, which stops the running or parked
     /// version first), the old version's (`restoring`), or its target's
     /// stop when nothing is restored.
@@ -335,8 +335,8 @@ impl Host {
         )
     }
     /// The shared runner at a host tick: the heartbeat (a hang restarts
-    /// every member), and an idle runner let go (A17: after the runner idle
-    /// exit, B6).
+    /// every member), and an idle runner let go (after the runner idle
+    /// exit, at least 30 s; supervisor.md §6).
     fn shared_tick(&mut self) {
         let now = self.now_ms();
         let after = crate::host::supervisor::runner_idle_exit(&self.supervisor);
@@ -404,10 +404,10 @@ impl Host {
         );
         runner.retire(false, &self.reaper);
         // The Host's trust check counts the restart too: fail-open after
-        // the third in a minute (A4, `Policy::restart`), as the core does.
+        // the third in a minute (`Policy::restart`), as the core does.
         let now = self.now_ms();
         self.shared_policy.restart(now);
-        // The core's runner group restart (T29, §7.4; B4): every member
+        // The core's runner group restart (supervisor.md §7): every member
         // stops at once (no member gets its `runtime.stop`: the runner is
         // killed), goes back to standby by replay when it has a standby
         // recording, else starts again in the built-in lane: the first
@@ -440,7 +440,7 @@ impl Host {
             id: id.clone(),
             ..manifest.clone()
         };
-        // A spawn that fails gives its activation back (A18 leak 1, fixed
+        // A spawn that fails gives its activation back (a leak fixed
         // in B2a: before, the place stayed taken for the rest of the run).
         let plugin = match self.spawn_package(owner, &id, directory, manifest, key) {
             Ok(Some(plugin)) => plugin,
@@ -462,7 +462,7 @@ impl Host {
     }
     /// `load_package`'s process: in the shared runner (started if none
     /// runs) when trusted, else its own, its heap capped by its class
-    /// (`MemoryMax=`, B4: 512 MB; §3.3). `None`: its own process is created
+    /// (`MemoryMax=`, 512 MB; supervisor.md §8). `None`: its own process is created
     /// on the spawn thread (`Event::Spawned`).
     fn spawn_package(
         &mut self,
@@ -807,7 +807,7 @@ impl Host {
         // that runs on: an update, a reinstall of the same version, and a
         // `replace` from another source (`fresh` data) alike; the target
         // starts once that version's process is gone (any process of it
-        // still going, the D13 fix). An install that leaves it off
+        // still going: never two processes on its data). An install that leaves it off
         // (`enabled: false`; a running package is never disabled, so only the
         // installer's option does this) switches the plugin off: a
         // `Disable` stop, as `packages.setEnabled(false)` (its session values
@@ -868,7 +868,7 @@ impl Host {
     /// (`runs_from`); nothing is copied. The supervisor replays a valid
     /// recording of a plugin that was lazy at its ready (on-demand start:
     /// it starts on its first use), starts one that was resident, and
-    /// queues a first run without one (§3.2 T1–T3).
+    /// queues a first run without one (supervisor.md §4).
     pub(crate) fn load_installed(&mut self, id: &str) {
         if self.running(id).is_some() || self.parked_id(id).is_some() {
             return;
@@ -906,7 +906,6 @@ impl Host {
         }
         if !disabled
             && startable
-            && self.on_demand.enabled
             && let Some(key) = self.checkpoint_key(id)
         {
             self.recordings_written();
@@ -963,7 +962,7 @@ impl Host {
     }
     /// The unit a package operation on `id` starts and stops: loaded (a
     /// first install), or brought back by `add_unit` when it is being
-    /// removed (a reinstall, §17.7 item 19: it keeps waiting for the
+    /// removed (a reinstall: it keeps waiting for the
     /// uninstalled process); loaded disabled, the operation enables it when
     /// it starts its target.
     fn operation_unit(&mut self, id: &str) -> UnitId {
@@ -1132,7 +1131,7 @@ impl Host {
             .filter(|key| runs && key.guid == *guid)
     }
     /// A package RPC on `id` is answered `busy`: an operation runs on it
-    /// (its phases are the package transaction's, §2.3), or the supervisor
+    /// (its phases are the package transaction's), or the supervisor
     /// has a package-RPC job of it installed (`JobMode::Fail`: a reload, an
     /// enable or an operation waiting for the previous process; today's
     /// `packages.reloads` entry).
@@ -1327,7 +1326,7 @@ impl Host {
                 .runs_from(&id, &stored)
                 .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
             let warnings = self.warnings_of(owner);
-            // The supervisor's state of its unit, its activation read (§9).
+            // The supervisor's state of its unit, its activation read (supervisor.md §10).
             let listed = self
                 .supervisor
                 .by_id(&id)
@@ -1373,7 +1372,7 @@ impl Host {
             }
         };
         // The catalog's records as they are (not a copy of it: `notify_tick`
-        // builds this list while plugins come and go, supervisor.md §6.1).
+        // builds this list while plugins come and go, supervisor.md).
         for (id, record) in self.packages.store.installed_records() {
             if list.contains_key(id) {
                 continue;
@@ -1382,7 +1381,7 @@ impl Host {
             let Some(package) = self.packages.runs_from(&id, record) else {
                 continue;
             };
-            // The supervisor's state of its unit (§9): a start it waits for
+            // The supervisor's state of its unit (supervisor.md §10): a start it waits for
             // (a first run waiting for a place, a reload or an enable
             // waiting for the previous process) and a package operation
             // count as starting; one waiting at start-up lists `stopped`.
@@ -1404,7 +1403,7 @@ impl Host {
                     ("running", parked.warning.clone())
                 } else if matches!(listed, Some(ListState::Running { .. })) {
                     // Waiting to start again by itself after a crash (B4,
-                    // `Activating{AutoRestart}`): running, no process (§9).
+                    // `Activating{AutoRestart}`): running, no process.
                     ("running", None)
                 } else {
                     stopped(disabled, self.failures.get(&id))
@@ -1497,7 +1496,7 @@ impl Host {
     /// `packages.setEnabled`: disabling stops it (and keeps it stopped across
     /// launches when installed); enabling starts it again. Both are the
     /// supervisor's jobs (`disable`, `enable`: `Stop{Disable}`,
-    /// `Start{Enable}`, which waits for the plugin's previous process, D13).
+    /// `Start{Enable}`, which waits for the plugin's previous process).
     fn set_enabled(
         &mut self,
         caller: u64,
@@ -1566,7 +1565,7 @@ impl Host {
         }
         // Its previous process (parked, disabled or failed just now) still
         // going: it starts once that is gone, never beside it on the same
-        // data (D13), and is `busy` meanwhile; checked when it starts.
+        // data, and is `busy` meanwhile; checked when it starts.
         let waits = self
             .supervisor
             .unit(unit)
@@ -2057,7 +2056,7 @@ impl Host {
                 // Cancelled: the version it replaced comes back (an
                 // `upgrade` in reverse), or, a first install, it goes (an
                 // uninstall), which stops it (`restoring`); else its
-                // activation failed and the supervisor stops it already (T10).
+                // activation failed and the supervisor stops it already.
                 op.owner = None;
                 op.phase = "restoring".into();
                 op.job = None;
@@ -3781,7 +3780,7 @@ mod tests {
         }
     }
 
-    /// B0 (supervisor.md §10, §11): start-up and wait tunables as they are
+    /// B0 (supervisor.md): start-up and wait tunables as they are
     /// today (the 15 s activation deadline and the install wait of 20 s are
     /// literals in `load_package` and `advance_package`).
     #[test]
@@ -3790,7 +3789,10 @@ mod tests {
         assert_eq!(VERIFY_WAIT, std::time::Duration::from_secs(3));
         // The reload's and the install's wait (`RELOAD_WAIT_MS` and a
         // literal until B2b): the supervisor's `STOP_WAIT`.
-        assert_eq!(crate::supervisor::Tunables::legacy().stop_wait, 20_000);
+        assert_eq!(
+            crate::supervisor::Tunables::new(8, 16_384).stop_wait,
+            20_000
+        );
     }
 
     /// B0: the plugins behind a held built-in start while it keeps its

@@ -1,6 +1,6 @@
-//! Units (systemd `Unit` + service settings): one plugin each, its
-//! identities, its state (doc/architecture/supervisor.md §3.1) and the
-//! static facts `add_unit` is given.
+//! Units (systemd `Unit` + service settings): one plugin each, its identities,
+//! its state (doc/architecture/supervisor.md) and the static facts `add_unit`
+//! is given.
 #![forbid(unsafe_code)]
 
 use std::collections::VecDeque;
@@ -20,8 +20,8 @@ pub type Ms = u64;
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct UnitId(pub u64);
 
-/// One process run: today's owner generation, the identity on the wire and
-/// in every registry (A10). New on every start.
+/// One process run: today's owner generation, the identity on the wire and in
+/// every registry. New on every start.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Pid(pub u64);
 
@@ -29,8 +29,8 @@ pub struct Pid(pub u64);
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct RunnerId(pub u64);
 
-/// §3.3. `Resident` is observed at a ready (`classified` at every ready of a
-/// recordable unit, supervisor.md §17.7 D2), never declared.
+/// A unit's class (supervisor.md §2). `Resident` is observed at a ready
+/// (`classified` at every ready of a recordable unit), never declared.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Class {
     Builtin,
@@ -53,7 +53,7 @@ pub enum Enablement {
     Disabled,
 }
 
-/// The 7 wire stop reasons (`process::StopReason`, A14).
+/// The 7 wire stop reasons (`process::StopReason`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum StopReason {
     Quit,
@@ -65,7 +65,7 @@ pub enum StopReason {
     Failed,
 }
 
-/// Where a `Deactivating` unit lands when its process is gone (§3.1).
+/// Where a `Deactivating` unit lands when its process is gone.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Then {
     Inactive,
@@ -74,8 +74,8 @@ pub enum Then {
     Removed,
 }
 impl Then {
-    /// Merge order of two stops (§4.2): `Removed` > `Failed` > `Inactive`
-    /// (> `Standby`, which keeps the most).
+    /// Merge order of two stops: `Removed` > `Failed` > `Inactive` (>
+    /// `Standby`, which keeps the most).
     pub fn strength(self) -> u8 {
         match self {
             Then::Standby => 0,
@@ -93,7 +93,7 @@ impl Then {
     }
 }
 
-/// `Activating` sub-states (§3.1).
+/// `Activating` sub-states.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ActivatingSub {
     /// Built-in digest check, no process yet (systemd `start-pre`).
@@ -106,7 +106,7 @@ pub enum ActivatingSub {
     AutoRestart { until: Ms },
 }
 
-/// `Deactivating` sub-states (§3.1).
+/// `Deactivating` sub-states.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum DeactivatingSub {
     /// Grace running (systemd `stop-sigterm`).
@@ -122,15 +122,14 @@ pub enum DeactivatingSub {
 pub enum FailResult {
     /// The process could not be created (`process_spawned(Err)`).
     Spawn,
-    /// The process ended or was ended (§7.3).
+    /// The process ended or was ended.
     Exit(ExitCause),
-    /// `StartLimitBurst` hit (T27).
+    /// `StartLimitBurst` hit.
     StartLimitHit,
-    /// The previous process did not go within `STOP_WAIT` (T18).
+    /// The previous process did not go within `STOP_WAIT`.
     Stuck,
 }
 
-/// §3.1.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum UnitState {
     Inactive,
@@ -172,25 +171,12 @@ impl UnitState {
             _ => None,
         }
     }
-    /// systemd's `ActiveState` word.
-    // The adapter's diagnostics (B3 logs a unit's state with its job).
-    #[allow(dead_code)]
-    pub fn name(&self) -> &'static str {
-        match self {
-            UnitState::Inactive => "inactive",
-            UnitState::Activating { .. } => "activating",
-            UnitState::Active { .. } => "active",
-            UnitState::Deactivating { .. } => "deactivating",
-            UnitState::Failed { .. } => "failed",
-            UnitState::Standby { .. } => "standby",
-        }
-    }
     pub fn is_deactivating(&self) -> bool {
         matches!(self, UnitState::Deactivating { .. })
     }
 }
 
-/// `packages.list` per unit (§9; output kept, `process` excluded from the
+/// `packages.list` per unit (output kept, `process` excluded from the
 /// `packages.changed` comparison).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum ListState {
@@ -203,7 +189,7 @@ pub enum ListState {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ProcessState {
     Running,
-    /// Standby (wire value `idle`, §3.1 "Naming").
+    /// Standby (wire value `idle`, "Naming").
     Idle,
 }
 impl ListState {
@@ -228,13 +214,11 @@ pub struct Checkpoint {
 pub struct UnitSpec {
     /// Manifest id.
     pub id: String,
-    /// Display name for answers and notices.
-    pub name: String,
     pub class: Class,
     pub enabled: bool,
     /// Trusted for the shared runner (a built-in member).
     pub shared: bool,
-    /// A built-in whose digest is checked before its first start (T4).
+    /// A built-in whose digest is checked before its first start.
     pub verify: bool,
     pub checkpoint: Option<Checkpoint>,
     /// Development `--plugin` start timeout (1–120 s); `None`: the class's.
@@ -247,10 +231,8 @@ pub struct UnitSpec {
 }
 impl UnitSpec {
     pub fn new(id: impl Into<String>, class: Class) -> Self {
-        let id = id.into();
         Self {
-            name: id.clone(),
-            id,
+            id: id.into(),
             class,
             enabled: true,
             shared: false,
@@ -260,13 +242,7 @@ impl UnitSpec {
             recordable: class != Class::Development,
         }
     }
-    // B3: the answers name the plugin (§4.6); the adapter keeps the names
-    // it shows until then.
-    #[allow(dead_code)]
-    pub fn name(mut self, name: impl Into<String>) -> Self {
-        self.name = name.into();
-        self
-    }
+
     pub fn disabled(mut self) -> Self {
         self.enabled = false;
         self
@@ -315,26 +291,22 @@ impl Stopping {
     }
 }
 
-/// One plugin (§3). Read through `Supervisor::unit`; only the supervisor
-/// changes it.
+/// One plugin. Read through `Supervisor::unit`; only the supervisor changes it.
 #[derive(Debug)]
 pub struct Unit<P> {
     pub id: String,
-    // The adapter keeps the names it shows (its catalogs); B3's answers
-    // read this one.
-    #[allow(dead_code)]
-    pub name: String,
+
     pub class: Class,
     pub enablement: Enablement,
     pub state: UnitState,
-    /// At most one installed job (§4).
+    /// At most one installed job.
     pub job: Option<Job>,
     /// Held triggers (the listening socket's backlog).
     pub backlog: VecDeque<Trigger<P>>,
     /// It has a valid checkpoint (its entry points are known).
     pub recorded: bool,
     /// Classified resident (at its ready, or by its checkpoint): no idle
-    /// standby (unless `Tunables::resident_idle_standby`, today).
+    /// standby.
     pub resident: bool,
     /// It can have a checkpoint (`UnitSpec::recordable`).
     pub recordable: bool,
@@ -342,24 +314,21 @@ pub struct Unit<P> {
     pub placement: Placement,
     /// `packages.list` error text of `Failed` (today's `failures`).
     pub failure: Option<String>,
-    /// Landed after `STOP_WAIT` without reap/cleanup (T18); `stopping`
-    /// keeps tracking that process until it goes.
+    /// Landed after `STOP_WAIT` without reap/cleanup; `stopping` keeps tracking
+    /// that process until it goes.
     pub stuck: bool,
     /// Stopped with `then: Removed`; waiting for `remove_unit` (or brought
     /// back by `add_unit`, a reinstall).
     pub removed: bool,
     pub stopping: Option<Stopping>,
-    /// An uninstall's `RemoveData` is owed: emitted once the process that
-    /// may still write the data is reaped (and cleaned up after, with
-    /// `Tunables::remove_data_waits_cleanup`), at once without one (§17.7).
+    /// An uninstall's `RemoveData` is owed: emitted once the process that may
+    /// still write the data is reaped and cleaned up after, at once without
+    /// one.
     pub(super) remove_data: bool,
     pub(super) shared: bool,
     pub(super) verify: bool,
     pub(super) verifiable: bool,
-    /// A first run whose digest check runs before it takes a first-run
-    /// place (`Tunables::verify_before_first_run_place`): back in its lane
-    /// after the check when no place is free.
-    pub(super) place_after_verify: bool,
+
     pub(super) own_this_run: bool,
     pub(super) quarantined: bool,
     pub(super) start_timeout: Option<Ms>,
@@ -374,23 +343,20 @@ pub struct Unit<P> {
     pub(super) runtime_ready: bool,
     pub(super) pending_ui: u32,
     pub(super) classifying: bool,
-    /// Holds a first-run place until classified resident or landed.
-    pub(super) first_run: bool,
+
     /// The current run was started as a first run (`Start{FirstRun}`): only
-    /// such a run goes to standby at once when classified lazy (T12).
+    /// such a run goes to standby at once when classified lazy.
     pub(super) run_is_first: bool,
     /// The current run was classified (or its class is known from the
     /// checkpoint): it is checkpointed at shutdown (today's `lazy.classes`).
     pub(super) classified_run: bool,
-    /// A ready run with a checkpoint that `classified` may still classify
-    /// (once per run, §17.7 D2).
+    /// A ready run with a checkpoint that `classified` may still classify (once
+    /// per run).
     pub(super) may_reclassify: bool,
     /// The checkpoint on disk says resident (today's `resident_at_ready`):
     /// a resident classification writes it only when it does not.
     pub(super) recorded_resident: bool,
-    /// A first run classified lazy while busy: standby as soon as it is
-    /// idle (`Tunables::first_run_parks_when_idle`).
-    pub(super) park_when_idle: bool,
+
     /// The run came from `Standby` (`Prune` at ready).
     pub(super) from_standby: bool,
     pub(super) asked_at: Option<Ms>,
@@ -400,10 +366,10 @@ pub struct Unit<P> {
     /// Delay of the next automatic start (backoff, retry), from the reap
     /// (systemd starts `RestartSec` once the stop finished).
     pub(super) after_reap: Option<Ms>,
-    /// After a runner restart: back to standby by replay at reap (A4).
+    /// After a runner restart: back to standby by replay at reap.
     pub(super) replay_after: bool,
-    /// The run that ended by itself (`ExitCause::Exited`) whose crash
-    /// notice waits for its reap: its exit code tells a heap abort (§7.3).
+    /// The run that ended by itself (`ExitCause::Exited`) whose crash notice
+    /// waits for its reap: its exit code tells a heap abort.
     pub(super) exit_notice: Option<Pid>,
     /// The run whose stderr carried V8's heap abort line
     /// (`process_out_of_memory`).
@@ -422,7 +388,7 @@ impl<P> Unit<P> {
         let recordable = spec.recordable && spec.class != Class::Development;
         Self {
             id: spec.id.clone(),
-            name: spec.name.clone(),
+
             class: spec.class,
             enablement: if spec.enabled {
                 Enablement::Enabled
@@ -444,7 +410,7 @@ impl<P> Unit<P> {
             shared: spec.shared,
             verify: spec.verify,
             verifiable: spec.verify,
-            place_after_verify: false,
+
             own_this_run: false,
             quarantined: false,
             start_timeout: spec.start_timeout,
@@ -455,12 +421,12 @@ impl<P> Unit<P> {
             runtime_ready: false,
             pending_ui: 0,
             classifying: false,
-            first_run: false,
+
             run_is_first: false,
             classified_run: false,
             may_reclassify: false,
             recorded_resident: recordable && spec.checkpoint.is_some_and(|c| c.resident),
-            park_when_idle: false,
+
             from_standby: false,
             asked_at: None,
             failing: None,
@@ -484,12 +450,7 @@ impl<P> Unit<P> {
     pub fn enabled(&self) -> bool {
         self.enablement == Enablement::Enabled
     }
-    /// In-flight work (`begin_work` without `end_work`).
-    // B3: the one "busy" (`work.rs`).
-    #[allow(dead_code)]
-    pub fn busy(&self) -> bool {
-        self.work.busy()
-    }
+
     pub fn last_active(&self) -> Option<Ms> {
         match self.state {
             UnitState::Active { last_active, .. } => Some(last_active),

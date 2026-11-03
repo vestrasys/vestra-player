@@ -1,4 +1,4 @@
-//! Test switches (doc/architecture/supervisor.md §2.2; MOVE of
+//! Test switches (doc/architecture/supervisor.md; MOVE of
 //! `lazy/probe.rs` and `lazy.rs`'s `VESTRA_TEST_EXECUTE`, B2c), read in any
 //! build and not passed on to a player restarted after a device loss:
 //!

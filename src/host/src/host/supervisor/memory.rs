@@ -1,12 +1,11 @@
-//! B5 (doc/architecture/supervisor.md §8, §17.14): the process budget's
-//! input and the memory pressure source, with on-demand start on (for everyone since B6). The
-//! budget is the core's (`Tunables::with_b5` from the physical memory read
-//! once at start-up); the pressure level is read from the system every
+//! The process budget's input and the memory pressure source
+//! (doc/architecture/supervisor.md). The budget is the core's
+//! (`Tunables::new` from the physical memory read once at start-up); the pressure level is read from the system every
 //! `POLL_MS` (Windows: Chrome's thresholds on available physical memory and
 //! the system's low-memory notification; Linux: PSI; macOS: none yet,
 //! `platform::PressureSource`) and given to the core when it changes
-//! (`memory_pressure`, §17.2 Q26). Both put idle third-party plugins in
-//! standby through the same Standby job as the idle timer (A13).
+//! (`memory_pressure`). Both put idle third-party plugins in
+//! standby through the same Standby job as the idle timer.
 //!
 //! Test switches (any build; isolated profile, like `probe.rs`'s):
 //!
@@ -27,7 +26,7 @@ pub(super) const POLL_MS: u64 = 5_000;
 /// The pressure source and the level the core has.
 #[derive(Default)]
 pub(crate) struct Memory {
-    /// Opened at the first poll (on-demand start on only).
+    /// Opened at the first poll.
     source: Option<platform::PressureSource>,
     /// What the core was last told.
     level: Pressure,
@@ -87,7 +86,7 @@ fn test_pressures(text: &str) -> Vec<(u64, Pressure)> {
 }
 
 impl Host {
-    /// Every host tick with on-demand start on: every `POLL_MS` the
+    /// Every host tick: every `POLL_MS` the
     /// system's pressure level (or the test switch's); a change goes to
     /// the core, which puts idle third-party plugins in standby for Low and
     /// Critical.
@@ -142,10 +141,7 @@ impl Host {
             Some(crate::supervisor::Origin::Budget) => format!(
                 "over the process budget ({} of {} third-party processes)",
                 self.supervisor.budget_count(),
-                self.supervisor
-                    .tunables()
-                    .process_budget
-                    .unwrap_or_default()
+                self.supervisor.tunables().process_budget
             ),
             Some(crate::supervisor::Origin::Pressure) => {
                 format!("memory pressure {:?}", self.supervisor.pressure())

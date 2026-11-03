@@ -72,7 +72,7 @@ pub(super) fn retry_delay(retry: Retry, n: u32, rng: &mut Rng) -> Ms {
 }
 
 /// Runner restarts within the window (`shared_runner::Policy::restart`):
-/// fail-open when the limit is reached; not reset by stability (A4).
+/// fail-open when the limit is reached; not reset by stability.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(super) struct RunnerPolicy {
     restarts: VecDeque<Ms>,
