@@ -52,7 +52,6 @@ export global PlaybackBridge {
     in-out property <bool> can-pause;
     in-out property <bool> playing;
     in-out property <bool> can-stop;
-    in-out property <bool> can-step;
     in-out property <bool> can-previous;
     in-out property <bool> can-next;
     in-out property <bool> can-open: true;
@@ -64,17 +63,14 @@ export global PlaybackBridge {
     // fullscreen button shows `exit-fullscreen` then, `fullscreen` otherwise.
     in-out property <bool> fullscreen;
     // G-07: tooltips (600 ms, ToolTipArea) name the keys the user has bound
-    // (the menu text, "" for none), the first seek step and the volume.
+    // (the menu text, "" for none) and the volume.
     in-out property <string> key-play-pause;
     in-out property <string> key-stop;
-    in-out property <string> key-back;
-    in-out property <string> key-forward;
     in-out property <string> key-previous;
     in-out property <string> key-next;
     in-out property <string> key-open;
     in-out property <string> key-mute;
     in-out property <string> key-fullscreen;
-    in-out property <string> step-text: "5";
     in-out property <int> volume-percent: 100;
     // G-14: the time label shows the remaining time.
     in-out property <bool> remaining-time;
@@ -85,9 +81,9 @@ export global PlaybackBridge {
     }
     out property <string> tip-play-pause: with-key(playing ? @tr("Pause") : @tr("Play"), key-play-pause);
     out property <string> tip-stop: with-key(@tr("Stop"), key-stop);
-    // TRANSLATORS: a tooltip of two lines: the click's action, then the right click's.
-    out property <string> tip-back: @tr("{}\nRight-click: {}", with-key(@tr("Back {} seconds", step-text), key-back), with-key(@tr("Play previous"), key-previous));
-    out property <string> tip-forward: @tr("{}\nRight-click: {}", with-key(@tr("Forward {} seconds", step-text), key-forward), with-key(@tr("Play next"), key-next));
+    // 0.2.14: the playlist's previous and next item, as PgUp / PgDn.
+    out property <string> tip-previous: with-key(@tr("Previous"), key-previous);
+    out property <string> tip-next: with-key(@tr("Next"), key-next);
     out property <string> tip-open: with-key(@tr("Open file"), key-open);
     out property <string> tip-fullscreen: with-key(fullscreen ? @tr("Leave fullscreen") : @tr("Fullscreen"), key-fullscreen);
     out property <string> tip-time: remaining-time ? @tr("Click to show the elapsed time") : @tr("Click to show the remaining time");
@@ -110,17 +106,27 @@ export global PlaybackBridge {
     callback toggle-time();
 }
 
+// 0.2.14: the previous / next icons (⏮ ⏭), which @vestra/icons.slint does not
+// have, drawn in its V-Line style: a bar beside the double V of back / forward,
+// round-capped 1.5px lines in a 14×10 box, never filled. Other names: "".
+global BarIcons {
+    public pure function commands(name: string) -> string {
+        if name == "previous" { return "M 1.75 1.25 V 8.75 M 8 1.25 L 4.25 5 L 8 8.75 M 12.5 1.25 L 8.75 5 L 12.5 8.75"; }
+        if name == "next" { return "M 12.25 1.25 V 8.75 M 6 1.25 L 9.75 5 L 6 8.75 M 1.5 1.25 L 5.25 5 L 1.5 8.75"; }
+        return "";
+    }
+}
+
 // 41×40 icon button; hover and press light a 32×32 rounded plate in the
-// middle of the cell (no dividers between the buttons). Right click runs
-// `right-clicked` when `right-enabled` (back/forward: previous/next). `tip`
-// is the tooltip (G-07).
+// middle of the cell (no dividers between the buttons). `tip` is the tooltip
+// (G-07).
 component BarButton inherits Rectangle {
     in property <string> icon;
     in property <string> tip;
     in property <bool> enabled: true;
-    in property <bool> right-enabled;
+    // The bar's own icon (BarIcons), "" for one of @vestra/icons.slint.
+    private property <string> own-icon: BarIcons.commands(root.icon);
     callback clicked();
-    callback right-clicked();
     width: 41px;
     height: 40px;
     accessible-role: button;
@@ -138,23 +144,33 @@ component BarButton inherits Rectangle {
             : touch.has-hover ? Theme.hover-bg : transparent;
     }
     Icon {
+        visible: root.own-icon == "";
         x: (root.width - 1px - self.width) / 2;
         y: (root.height - self.height) / 2;
         name: root.icon;
         color: root.enabled ? Theme.text : Theme.icon-disabled;
+    }
+    Path {
+        visible: root.own-icon != "";
+        x: (root.width - 1px - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        width: 14px;
+        height: 10px;
+        viewbox-width: 14;
+        viewbox-height: 10;
+        commands: root.own-icon;
+        stroke: root.enabled ? Theme.text : Theme.icon-disabled;
+        stroke-width: 1.5px;
+        stroke-line-cap: round;
+        stroke-line-join: round;
     }
     ToolTipArea {
         width: 100%;
         height: 100%;
         text: root.tip;
         touch := TouchArea {
-            enabled: root.enabled || root.right-enabled;
+            enabled: root.enabled;
             clicked => { if root.enabled { root.clicked(); } }
-            pointer-event(event) => {
-                if event.button == PointerEventButton.right && event.kind == PointerEventKind.up && root.right-enabled {
-                    root.right-clicked();
-                }
-            }
         }
     }
 }
@@ -465,7 +481,7 @@ export component PlaybackBar inherits Rectangle {
         }
     }
 
-    // Button row: play/pause, stop, back 5s, forward 5s, open, fullscreen, time;
+    // Button row: play/pause, stop, previous, next, open, fullscreen, time;
     // on the right the player's strip of command buttons (BarButtons, player
     // 0.5.10): other plugins' buttons and its sidebar toggle, rightmost.
     row := Rectangle {
@@ -511,21 +527,20 @@ export component PlaybackBar inherits Rectangle {
                 enabled: PlaybackBridge.can-stop;
                 clicked => { PlaybackBridge.action("stop"); }
             }
+            // 0.2.14: the playlist's previous / next item, the core Previous / Next
+            // actions (PgUp / PgDn), enabled as they are (the playlist decides,
+            // with repeat and shuffle).
             BarButton {
-                icon: "back";
-                tip: PlaybackBridge.tip-back;
-                enabled: PlaybackBridge.can-step;
-                right-enabled: PlaybackBridge.can-previous;
-                clicked => { PlaybackBridge.action("seek-backward"); }
-                right-clicked => { PlaybackBridge.action("previous"); }
+                icon: "previous";
+                tip: PlaybackBridge.tip-previous;
+                enabled: PlaybackBridge.can-previous;
+                clicked => { PlaybackBridge.action("previous"); }
             }
             BarButton {
-                icon: "forward";
-                tip: PlaybackBridge.tip-forward;
-                enabled: PlaybackBridge.can-step;
-                right-enabled: PlaybackBridge.can-next;
-                clicked => { PlaybackBridge.action("seek-forward"); }
-                right-clicked => { PlaybackBridge.action("next"); }
+                icon: "next";
+                tip: PlaybackBridge.tip-next;
+                enabled: PlaybackBridge.can-next;
+                clicked => { PlaybackBridge.action("next"); }
             }
             BarButton {
                 icon: "open";

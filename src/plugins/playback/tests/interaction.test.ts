@@ -23,14 +23,8 @@ function tips(host: TestHost, props: Record<string, unknown>) {
   return {
     playPause: withKey(props.playing ? t("Pause") : t("Play"), props["key-play-pause"]),
     stop: withKey(t("Stop"), props["key-stop"]),
-    back: t("{}\nRight-click: {}", [
-      withKey(t("Back {} seconds", [String(props["step-text"])]), props["key-back"]),
-      withKey(t("Play previous"), props["key-previous"]),
-    ]),
-    forward: t("{}\nRight-click: {}", [
-      withKey(t("Forward {} seconds", [String(props["step-text"])]), props["key-forward"]),
-      withKey(t("Play next"), props["key-next"]),
-    ]),
+    previous: withKey(t("Previous"), props["key-previous"]),
+    next: withKey(t("Next"), props["key-next"]),
     open: withKey(t("Open file"), props["key-open"]),
     time: props["remaining-time"] ? t("Click to show the elapsed time") : t("Click to show the remaining time"),
     mute: withKey(props.muted ? t("Unmute") : t("Mute"), props["key-mute"]),
@@ -42,8 +36,8 @@ test("G-07 bar.slint words the tooltips from the data this test mirrors", async 
   const slint = await readFile(new URL("../ui/bar.slint", import.meta.url), "utf8");
   for (const text of [
     '@tr("{} ({})", title, key)',
-    '@tr("{}\\nRight-click: {}", with-key(@tr("Back {} seconds", step-text), key-back), with-key(@tr("Play previous"), key-previous))',
-    '@tr("{}\\nRight-click: {}", with-key(@tr("Forward {} seconds", step-text), key-forward), with-key(@tr("Play next"), key-next))',
+    'with-key(@tr("Previous"), key-previous)',
+    'with-key(@tr("Next"), key-next)',
     'with-key(playing ? @tr("Pause") : @tr("Play"), key-play-pause)',
     'with-key(muted ? @tr("Unmute") : @tr("Mute"), key-mute)',
     '@tr("Volume: {}%", volume-percent)',
@@ -72,7 +66,7 @@ const settingsFile = async (data: string) => {
 
 // ------------------------------------------------------------------ G-07
 
-test("G-07 every bar element has a tooltip naming its key; back/forward explain the right click", async () => {
+test("G-07 every bar element has a tooltip naming its key; Previous/Next name PgUp/PgDn", async () => {
   const { host, stop } = await start(withMedia());
   const bar = host.mounted();
   // The player announces the table after the plugin's commands are declared.
@@ -83,8 +77,8 @@ test("G-07 every bar element has a tooltip naming its key; back/forward explain 
   let tip = tips(host, bar.props);
   assert.equal(tip.playPause, "暂停 (Space)");
   assert.equal(tip.stop, "停止 (F4)");
-  assert.equal(tip.back, "后退 5 秒 (ArrowLeft)\n右键：播放上一个 (PageUp)");
-  assert.equal(tip.forward, "前进 5 秒 (ArrowRight)\n右键：播放下一个 (PageDown)");
+  assert.equal(tip.previous, "上一个 (PageUp)");
+  assert.equal(tip.next, "下一个 (PageDown)");
   assert.equal(tip.open, "打开文件 (Ctrl+O)");
   assert.equal(tip.time, "点击切换剩余时间");
   assert.equal(tip.mute, "静音 (M)");
@@ -106,7 +100,7 @@ test("G-07 every bar element has a tooltip naming its key; back/forward explain 
   // Each overlay change may announce the table on its own: wait for both.
   await until(() => bar.props["key-play-pause"] === "K" && bar.props["key-previous"] === "");
   assert.equal(tips(host, bar.props).playPause, "播放 (K)");
-  assert.equal(tips(host, bar.props).back, "后退 5 秒 (ArrowLeft)\n右键：播放上一个");
+  assert.equal(tips(host, bar.props).previous, "上一个");
   await stop();
 });
 
@@ -117,7 +111,8 @@ test("G-07 in English the tooltips are the source texts", async () => {
   await until(() => bar.props["key-open"] === "Ctrl+O");
   const tip = tips(host, bar.props);
   assert.equal(tip.playPause, "Pause (Space)");
-  assert.equal(tip.back, "Back 5 seconds (ArrowLeft)\nRight-click: Play previous (PageUp)");
+  assert.equal(tip.previous, "Previous (PageUp)");
+  assert.equal(tip.next, "Next (PageDown)");
   assert.equal(tip.volume, "Volume: 100%");
   await stop();
 });
@@ -183,9 +178,6 @@ test("IA-PB-01 the hover time is off by default; a saved choice is kept", async 
     const second = await start(new TestHost(), data);
     assert.equal(second.host.command("hover-time").state.checked, true);
     assert.equal(second.host.mounted().props["hover-time"], true);
-    // G-07: the back/forward tooltips follow the first seek tier (B06).
-    assert.equal(second.host.mounted().props["step-text"], "0.5");
-    assert.match(tips(second.host, second.host.mounted().props).forward, /^前进 0\.5 秒 /);
     await second.stop();
   } finally {
     rmSync(data, { recursive: true, force: true });

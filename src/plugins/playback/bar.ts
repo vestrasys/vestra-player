@@ -157,8 +157,6 @@ export function previewProps(active: boolean, preview: Preview | null, pointing:
 const CORE: ReadonlySet<string> = new Set<HostAction>([
   "play-pause",
   "stop",
-  "seek-backward",
-  "seek-forward",
   "previous",
   "next",
   "mute",
@@ -256,7 +254,6 @@ export function wireBar(
       canPause: p.canToggle(),
       playing: state.phase === "ready" && !state.paused,
       canStop: p.can("close"),
-      canStep: p.canStep(),
       canPrevious: state.can.previous,
       canNext: state.can.next,
       canOpen: !p.selecting,
@@ -269,7 +266,7 @@ export function wireBar(
       fullscreen: scope.window.state.fullscreen,
       // G-14: which time the label shows (the tooltip offers the other).
       remainingTime: remaining,
-      ...barTips(keys, { volume, step: settings.value.seekSteps[0] }),
+      ...barTips(keys, { volume }),
     };
   });
   // 0.2.11: the pointer on the seek band holds the bar too (`popupOpen`: its time

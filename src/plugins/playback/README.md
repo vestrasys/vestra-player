@@ -4,7 +4,7 @@ The main window's control bar, and playback commands such as open, seek and spee
 
 ## Features
 
-- **Control bar**: seek bar, play/pause, stop, back, forward, open, fullscreen (hidden when the bar is narrow), mute and volume, and at the right end the player's strip of command buttons (other plugins' buttons and Toggle Sidebar; it narrows first); click the current time to switch between elapsed and remaining time. Button tooltips show the current shortcut.
+- **Control bar**: seek bar, play/pause, stop, previous and next (the playlist's previous and next item, as PgUp/PgDn; off at the ends of the list, from 0.2.14), open, fullscreen (hidden when the bar is narrow), mute and volume, and at the right end the player's strip of command buttons (other plugins' buttons and Toggle Sidebar; it narrows first); click the current time to switch between elapsed and remaining time. Button tooltips show the current shortcut.
 - **Volume and mute are remembered**: the last volume and mute (set with the bar, the keys or anything else) come back when the player starts again.
 - **Open**: open a file, open a link (can fill in a link from the clipboard automatically), reopen the current or last played file; copy the file name or path.
 - **Seek**: four seek steps (change them in Seek Steps…), previous/next keyframe, jump to the start, jump to a given time.

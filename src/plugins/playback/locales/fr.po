@@ -203,7 +203,7 @@ msgstr "Déjà à la dernière image clé"
 msgid "Speed: {}x"
 msgstr "Vitesse : {}x"
 
-#: main.ts:30 ui/bar.slint:88
+#: main.ts:30 ui/bar.slint:91
 #, x-machine
 msgid "Volume: {}%"
 msgstr "Volume : {} %"
@@ -324,94 +324,72 @@ msgid "speed"
 msgstr "vitesse"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:77
+#: ui/bar.slint:80
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:82
 #, x-machine
 msgid "Pause"
 msgstr "Pause"
 
-#: ui/bar.slint:79
+#: ui/bar.slint:82
 #, x-machine
 msgid "Play"
 msgstr "Lire"
 
-#: ui/bar.slint:80
+#: ui/bar.slint:83
 #, x-machine
 msgid "Stop"
 msgstr "Arrêter"
 
-#. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82 ui/bar.slint:83
+#: ui/bar.slint:85
 #, x-machine
-msgid ""
-"{}\n"
-"Right-click: {}"
-msgstr ""
-"{}\n"
-"Clic droit : {}"
+msgid "Previous"
+msgstr "Précédent"
 
-#. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 #, x-machine
-msgid "Back {} seconds"
-msgstr "Reculer de {} secondes"
+msgid "Next"
+msgstr "Suivant"
 
-#. a tooltip of two lines: the click's action, then the right click's.
-#: ui/bar.slint:82
-#, x-machine
-msgid "Play previous"
-msgstr "Lire l'élément précédent"
-
-#: ui/bar.slint:83
-#, x-machine
-msgid "Forward {} seconds"
-msgstr "Avancer de {} secondes"
-
-#: ui/bar.slint:83
-#, x-machine
-msgid "Play next"
-msgstr "Lire l'élément suivant"
-
-#: ui/bar.slint:84
+#: ui/bar.slint:87
 #, x-machine
 msgid "Open file"
 msgstr "Ouvrir un fichier"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:88
 #, x-machine
 msgid "Leave fullscreen"
 msgstr "Quitter le plein écran"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:88
 #, x-machine
 msgid "Fullscreen"
 msgstr "Plein écran"
 
-#: ui/bar.slint:86
+#: ui/bar.slint:89
 #, x-machine
 msgid "Click to show the elapsed time"
 msgstr "Cliquez pour afficher le temps écoulé"
 
-#: ui/bar.slint:86
+#: ui/bar.slint:89
 #, x-machine
 msgid "Click to show the remaining time"
 msgstr "Cliquez pour afficher le temps restant"
 
-#: ui/bar.slint:87
+#: ui/bar.slint:90
 #, x-machine
 msgid "Unmute"
 msgstr "Rétablir le son"
 
-#: ui/bar.slint:87 ui/bar.slint:304
+#: ui/bar.slint:90 ui/bar.slint:420
 #, x-machine
 msgid "Mute"
 msgstr "Couper le son"
 
-#: ui/bar.slint:304
+#: ui/bar.slint:420
 #, x-machine
 msgctxt "accessibility"
 msgid "Unmute"

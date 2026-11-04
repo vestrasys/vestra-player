@@ -155,11 +155,12 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   assert.equal(host.sent("ui.mount")[0]!.component, "PlaybackBar");
   assert.equal(host.sent("ui.mount")[0]!.global, "PlaybackBridge");
   assert.equal(bar.slot, "bottom");
-  for (const removed of ["source-label", "status", "rate-label", "editor", "can-retry", "volume-label"])
+  // 0.2.14: the seek buttons' data went with them (the bar's arrows are previous/next).
+  for (const removed of ["source-label", "status", "rate-label", "editor", "can-retry", "volume-label", "can-step", "key-back", "key-forward", "step-text"])
     assert.equal(removed in bar.props, false, removed);
   assert.equal(bar.props["elapsed-label"], "--:--");
   assert.equal(bar.props["total-label"], "--:--");
-  for (const flag of ["can-pause", "can-stop", "can-step", "can-previous", "can-next", "playing"])
+  for (const flag of ["can-pause", "can-stop", "can-previous", "can-next", "playing"])
     assert.equal(bar.props[flag], false, flag);
   assert.equal(bar.props["can-open"], true);
   assert.equal(bar.props.duration, 0);
@@ -589,12 +590,16 @@ test("exact mode: relative seeks accumulate from the pending target, clamp to th
   await host.press("Ctrl+Alt+ArrowRight");
   await host.settle(80);
   assert.equal(host.source.position, 100);
-  // ← / → and the bar's back/forward buttons are the core's first tier.
-  host.mounted().emit("action", "seek-backward");
+  // ← / → are the core's first tier (0.2.14: the bar's buttons no longer seek).
+  await host.press("ArrowLeft");
   await host.settle(80);
   assert.equal(host.source.position, 95);
   assert.equal(lastOsd(host), "后退 5秒: 01:35 / 01:40");
-  host.mounted().emit("action", "seek-forward");
+  // The bar no longer sends seeks; one that arrives anyway is ignored.
+  host.mounted().emit("action", "seek-backward");
+  await host.settle(80);
+  assert.equal(host.source.position, 95);
+  await host.press("ArrowRight");
   await host.settle(80);
   assert.deepEqual(host.coreRuns, ["seek-backward", "seek-forward"]);
   // Tiers 2–4 went through the plugin's own seeks, never the core's.
@@ -605,7 +610,7 @@ test("exact mode: relative seeks accumulate from the pending target, clamp to th
   await stop();
 });
 
-test("previous/next are the core's: PageUp/PageDown and right-click on back/forward", async () => {
+test("previous/next are the core's: PageUp/PageDown and the bar's Previous/Next buttons", async () => {
   const { host, stop } = await start(withMedia());
   const bar = host.mounted();
   // no next item: 下一个 is disabled, so PageDown shows why and runs nothing (SDK 1.5.12, as the player)
@@ -619,8 +624,8 @@ test("previous/next are the core's: PageUp/PageDown and right-click on back/forw
   assert.equal(bar.props["can-previous"], true);
   await host.press("PageDown");
   await host.press("Mouse:X1"); // next from player 0.6.0 (SDK 1.5.47)
-  bar.emit("action", "previous"); // right-click on 后退
-  bar.emit("action", "next"); // right-click on 前进
+  bar.emit("action", "previous"); // a click on 上一个
+  bar.emit("action", "next"); // a click on 下一个
   await host.settle();
   assert.deepEqual(host.coreRuns, ["next", "next", "previous", "next"]);
   // No sequence any more: the core refuses, the bar says nothing.
@@ -630,6 +635,51 @@ test("previous/next are the core's: PageUp/PageDown and right-click on back/forw
   await host.settle();
   assert.equal(host.coreRuns.length, 4);
   assert.equal(host.osd.length, shown);
+  await stop();
+});
+
+test("0.2.14 the Previous/Next buttons follow the playlist: off at its ends, each click one step", async () => {
+  const { host, stop } = await start(withMedia());
+  const bar = host.mounted();
+  // The sequence provider (the playlist) says what is there; the bar shows it as the menu does.
+  const at = async (previous: boolean, next: boolean) => {
+    host.sequence = previous || next ? { canNext: next, canPrevious: previous } : null;
+    host.setSource({ sequence: { next, previous } } as never);
+    await host.settle();
+    assert.equal(bar.props["can-previous"], previous);
+    assert.equal(bar.props["can-next"], next);
+    // The same as the menu items Previous / Next (the core actions).
+    assert.equal(host.coreCommands.get("host/previous")?.state.enabled, previous);
+    assert.equal(host.coreCommands.get("host/next")?.state.enabled, next);
+  };
+  // First item of three: Previous off, Next on.
+  await at(false, true);
+  bar.emit("action", "next");
+  await host.settle();
+  assert.deepEqual(host.coreRuns, ["next"]);
+  // Middle item: both on, each click is one step.
+  await at(true, true);
+  bar.emit("action", "previous");
+  bar.emit("action", "next");
+  await host.settle();
+  assert.deepEqual(host.coreRuns, ["next", "previous", "next"]);
+  // Last item: Next off; a click that slips through runs nothing and shows nothing.
+  await at(true, false);
+  const shown = host.osd.length;
+  bar.emit("action", "next");
+  await host.settle();
+  assert.deepEqual(host.coreRuns, ["next", "previous", "next"]);
+  assert.equal(host.osd.length, shown);
+  bar.emit("action", "previous");
+  await host.settle();
+  assert.deepEqual(host.coreRuns, ["next", "previous", "next", "previous"]);
+  // Repeat all wraps: both stay on at the ends (the playlist reports it).
+  await at(true, true);
+  // A single item, no repeat: both off.
+  await at(false, false);
+  bar.emit("action", "previous");
+  await host.settle();
+  assert.equal(host.coreRuns.length, 4);
   await stop();
 });
 

@@ -1,6 +1,6 @@
 {
   "id": "vestra.playback",
-  "version": "0.2.13",
+  "version": "0.2.14",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
