@@ -463,6 +463,7 @@ fn main() -> Result<()> {
         shell_refresh: false,
         refresh_failed: None,
         tab_woken: None,
+        tabs_failed: Default::default(),
         bottom_shown: true,
         native_window: None,
         native_before: None,

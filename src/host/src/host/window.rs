@@ -277,10 +277,9 @@ impl Host {
                 .and_then(|owner| self.mounts.get(&owner))
                 .map(|m| m.manifest.clone());
         }
-        for owner in self.policy.sidebar_panels() {
-            if let Some(mount) = self.mounts.get(&owner) {
-                slot.remember(&mount.manifest);
-            }
+        let current = manifests.iter().map(String::as_str).collect::<Vec<_>>();
+        for manifest in &current {
+            slot.remember_among(manifest, &current);
         }
         if self.ui_state.state.sidebar_slot.as_ref() != Some(&slot) {
             self.ui_state.state.sidebar_slot = Some(slot);
@@ -342,7 +341,7 @@ impl Host {
             }
             sidebar_tabs::Need::Compile => {
                 self.tab_woken = None;
-                if self.refresh_failed != Some(owner) {
+                if self.refresh_failed != Some(owner) && !self.tabs_failed.contains(&owner) {
                     self.shell_refresh = true;
                 }
             }
@@ -354,13 +353,14 @@ impl Host {
             }
         }
     }
-    /// The sidebar's compiled tabs under their current owners (the floating
-    /// window compiles the same ones).
+    /// The sidebar's compiled tabs, in tab order, by the owner each branch was
+    /// compiled under (`shell_compiled`; a woken plugin's tab keeps its old
+    /// branch until its new mount): the floating window compiles the same
+    /// ones, so a wake does not reopen it.
     pub(crate) fn compiled_tabs(&self) -> Vec<u64> {
         self.shell_tabs
             .iter()
-            .copied()
-            .filter(|owner| self.shell_compiled.get(owner) == Some(owner))
+            .filter_map(|owner| self.shell_compiled.get(owner).copied())
             .collect()
     }
     /// The current tab everywhere it matters: the panel keys' owner, the
@@ -396,12 +396,14 @@ impl Host {
         set_shown(shell, sidebar_tabs::shown(active, &self.shell_compiled));
         if let Some(floating) = &self.floating {
             set_index(&floating.instance, &floating.owners);
-            let compiled = floating
-                .compiled
-                .iter()
-                .map(|&owner| (owner, owner))
-                .collect::<BTreeMap<_, _>>();
-            set_shown(&floating.instance, sidebar_tabs::shown(active, &compiled));
+            // Its branches are the shell's (`compiled_tabs`), by the same owners.
+            let shown = sidebar_tabs::shown(active, &self.shell_compiled);
+            let shown = if floating.compiled.iter().any(|&alias| alias as i64 == shown) {
+                shown
+            } else {
+                -1
+            };
+            set_shown(&floating.instance, shown);
             if let Some(mount) = active.and_then(|owner| self.mounts.get(&owner)) {
                 let title = SValue::String(mount.title.as_str().into());
                 if floating.instance.get_property("panel-title").ok().as_ref() != Some(&title) {
@@ -415,6 +417,9 @@ impl Host {
                 let _ = shell.invoke("focus-video", &[]);
             }
             self.sidebar_active = active;
+            if let Some(owner) = active {
+                self.tab_work(owner);
+            }
         }
         self.tab_clicked = false;
         self.tab_demand(active);
@@ -501,10 +506,15 @@ impl Host {
             })
             .collect::<Result<Vec<_>>>()?;
         let compiled = self.compiled_tabs();
+        // Each under the owner its shell branch was compiled under.
         let mounts = tabs
             .iter()
-            .filter(|m| compiled.contains(&m.spec.owner))
-            .cloned()
+            .filter_map(|m| {
+                let alias = *self.shell_compiled.get(&m.spec.owner)?;
+                let mut mount = m.clone();
+                mount.spec.owner = alias;
+                Some(mount)
+            })
             .collect::<Vec<_>>();
         let specs = mounts.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
         let active = self.policy.sidebar_active();
@@ -524,12 +534,20 @@ impl Host {
             self.mount_events.clone(),
             generation,
         )?;
+        // A value a panel cannot take is reported, never a failure of the
+        // whole window (`report_value_failures`).
+        let mut failures = Vec::new();
         for mount in &mounts {
             for (name, value) in self.mount_values(mount) {
-                composition::set_global_value(&instance, &mount.spec, &name, value)?;
+                if let Err(error) =
+                    composition::set_global_value(&instance, &mount.spec, &name, value)
+                {
+                    failures.push((mount.spec.owner, format!("{name}: {error:#}")));
+                }
             }
             composition::set_tabbed(&instance, &mount.spec, tabbed)?;
         }
+        self.report_value_failures(failures);
         instance.set_property("sidebar-titles", self.tab_titles(owners)?)?;
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);

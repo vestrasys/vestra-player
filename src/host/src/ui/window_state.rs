@@ -159,6 +159,7 @@ struct Overlay {
     left_at: Option<u64>,
 }
 
+#[derive(Clone)]
 pub struct Policy {
     bottom: Option<Attachment>,
     sidebar: Option<Tabs>,

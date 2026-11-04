@@ -39,7 +39,7 @@ impl Host {
             if std::mem::take(&mut self.shell_refresh) && self.shell.is_some() {
                 let active = self.policy.sidebar_active();
                 let started = Instant::now();
-                let result = self.apply_mounts(self.mounts.clone());
+                let result = self.apply_mounts(self.mounts.clone(), &[]);
                 if let Err(error) = &result {
                     diag!("sidebar tab {active:?}: {}", error.message);
                     self.refresh_failed = active;
@@ -104,7 +104,8 @@ impl Host {
                 next.remove(&owner);
             }
         }
-        let result = self.apply_mounts(next);
+        let batch = changes.iter().map(|c| c.reply.owner).collect::<Vec<_>>();
+        let result = self.apply_mounts(next, &batch);
         self.log_prepared(changes.len(), started, result.is_ok());
         if result.is_err() && changes.len() > 1 {
             // Again one at a time, from the next tick on (each still one
@@ -152,43 +153,62 @@ impl Host {
             );
         }
     }
-    /// Make `next` the mounted panels (sidebar-tabs.md). The shell is
-    /// compiled again only when what it compiles changes: the bottom bar,
-    /// the backdrop, the sidebar's compiled tabs (`sidebar_tabs::compiled`:
-    /// the front tabs and the current one) or whether it draws the tab
-    /// strip. Otherwise (a placeholder came or went, a tab beyond the front
-    /// ones) only the strip's titles change. The policy, the panel keys and
-    /// the remembered state follow either way.
-    pub(crate) fn apply_mounts(&mut self, next: BTreeMap<u64, Mount>) -> Result<Value, RpcError> {
+    /// Make `next` the mounted panels (sidebar-tabs.md); `batch`: the owners
+    /// whose mount or unmount this applies (empty for a host-initiated
+    /// compile). The shell is compiled again only when what it compiles
+    /// changes: the bottom bar, the backdrop, the sidebar's compiled tabs
+    /// (`sidebar_tabs::compiled`: the front tabs) or whether it draws the tab
+    /// strip. Otherwise only the strip's titles change, and a batch owner's
+    /// compiled panel gets its new values. A sidebar panel that joins the
+    /// compiled set without a mount of its own in the batch (a switch to its
+    /// tab) and breaks the compile is left out and reported to its plugin,
+    /// so it never fails the other plugins' mounts. The policy, the panel
+    /// keys and the remembered state follow either way.
+    pub(crate) fn apply_mounts(
+        &mut self,
+        next: BTreeMap<u64, Mount>,
+        batch: &[u64],
+    ) -> Result<Value, RpcError> {
         let started = Instant::now();
+        // A new mount gets a new chance to compile.
+        for owner in batch {
+            self.tabs_failed.remove(owner);
+        }
+        self.tabs_failed.retain(|owner| next.contains_key(owner));
         let order = self.tab_order(&next);
         let slot = self.sidebar_slot();
-        // The tab that will be current, so the first frame shows it.
-        let policy_active = self.policy.sidebar_active();
-        let active = order
+        // Gone, or moved to another slot (no tab left behind).
+        let leaving = self
+            .mounts
             .iter()
-            .copied()
-            .find(|&o| Some(o) == policy_active)
-            .or_else(|| {
-                order
-                    .iter()
-                    .copied()
-                    .find(|o| next.get(o).map(|m| m.manifest.as_str()) == slot.active.as_deref())
+            .filter(|(owner, mount)| {
+                next.get(owner)
+                    .is_none_or(|m| m.spec.slot != mount.spec.slot)
             })
-            .or_else(|| order.first().copied());
-        let compiled_tabs = sidebar_tabs::compiled(
-            &order,
-            active,
-            |owner| next.get(&owner).is_some_and(|m| m.recorded),
-            &self.shell_compiled,
-        );
-        let shown = next
-            .values()
-            .filter(|m| m.spec.slot != composition::Slot::Sidebar)
-            .chain(compiled_tabs.iter().filter_map(|owner| next.get(owner)))
-            .cloned()
+            .map(|(owner, _)| *owner)
             .collect::<Vec<_>>();
-        let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
+        // The tab that will be current, so the first frame shows it and the
+        // shell compiles once: the policy's after the leaving tabs went (the
+        // next one takes over a removed current tab). A placeholder that
+        // would take over that way is passed over for a running plugin's
+        // tab, so that removing a tab never wakes a neighbour unasked.
+        let mut planned = self.policy.clone();
+        for owner in &leaving {
+            planned.remove_owner(*owner);
+        }
+        let current_left = self
+            .policy
+            .sidebar_active()
+            .is_some_and(|owner| leaving.contains(&owner));
+        let recorded = |owner: u64| next.get(&owner).is_some_and(|m| m.recorded);
+        let active =
+            sidebar_tabs::next_active(&order, planned.sidebar_active(), current_left, recorded)
+                .or_else(|| {
+                    order.iter().copied().find(|o| {
+                        next.get(o).map(|m| m.manifest.as_str()) == slot.active.as_deref()
+                    })
+                })
+                .or_else(|| order.first().copied());
         let tabbed = order.len() > 1;
         let titles = ui_values::from_json(&json!(
             order
@@ -197,9 +217,27 @@ impl Host {
                 .collect::<Vec<_>>()
         ))
         .map_err(|error| RpcError::new("ui-prepare", error.to_string()))?;
-        let recompile =
-            self.shell.is_none() || specs != self.shell_specs || tabbed != self.shell_tabbed;
-        if recompile {
+        let mut recompiled = false;
+        let mut shown;
+        loop {
+            let failed = self.tabs_failed.clone();
+            let compiled_tabs = sidebar_tabs::compiled(
+                &order,
+                active,
+                recorded,
+                |owner| failed.contains(&owner),
+                &self.shell_compiled,
+            );
+            shown = next
+                .values()
+                .filter(|m| m.spec.slot != composition::Slot::Sidebar)
+                .chain(compiled_tabs.iter().filter_map(|owner| next.get(owner)))
+                .cloned()
+                .collect::<Vec<_>>();
+            let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
+            if self.shell.is_some() && specs == self.shell_specs && tabbed == self.shell_tabbed {
+                break;
+            }
             let compiled = compiled_tabs
                 .iter()
                 .map(|&owner| (owner, owner))
@@ -207,17 +245,38 @@ impl Host {
             let active_index = active
                 .and_then(|a| order.iter().position(|&o| o == a))
                 .unwrap_or(0);
-            self.compile_shell(
+            match self.compile_shell(
                 &shown,
                 tabbed,
-                titles,
+                titles.clone(),
                 active_index,
                 sidebar_tabs::shown(active, &compiled),
-            )
-            .map_err(|error| RpcError::new("ui-prepare", error.to_string()))?;
-            self.shell_specs = specs;
-            self.shell_tabbed = tabbed;
-            self.shell_compiled = compiled;
+            ) {
+                Ok(failures) => {
+                    self.report_value_failures(failures);
+                    self.shell_specs = specs;
+                    self.shell_tabbed = tabbed;
+                    self.shell_compiled = compiled;
+                    recompiled = true;
+                    break;
+                }
+                Err(error) => {
+                    // Sidebar panels this compile added without a mount of
+                    // their own in the batch: left out, once.
+                    let added = sidebar_tabs::blamed(&compiled_tabs, batch, &self.shell_compiled);
+                    if added.is_empty() || added.iter().any(|o| self.tabs_failed.contains(o)) {
+                        return Err(RpcError::new("ui-prepare", error.to_string()));
+                    }
+                    for owner in added {
+                        diag!("sidebar tab {owner}: its panel does not compile: {error:#}");
+                        self.tabs_failed.insert(owner);
+                        let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
+                        self.send(owner, ui_error(&refusal));
+                    }
+                }
+            }
+        }
+        if recompiled {
             for (id, mount) in &next {
                 let Some(slot) = policy_slot(mount.spec.slot) else {
                     continue;
@@ -230,7 +289,9 @@ impl Host {
                 }
             }
         } else if let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) {
-            // The same shell: the strip's titles (a tab came or went).
+            // The same shell: the strip's titles (a tab came or went), and
+            // the new values of a batch owner's compiled panel (an unmount
+            // and a mount of the same panel in one batch).
             let error = |error: anyhow::Error| RpcError::new("ui-prepare", error.to_string());
             shell
                 .set_property("sidebar-titles", titles)
@@ -241,19 +302,43 @@ impl Host {
             {
                 composition::set_tabbed(&shell, &mount.spec, tabbed).map_err(error)?;
             }
+            let rewritten = shown
+                .iter()
+                .filter(|m| batch.contains(&m.spec.owner))
+                .cloned()
+                .collect::<Vec<_>>();
+            let mut failures = Vec::new();
+            for mount in &rewritten {
+                for (name, value) in self.mount_values(mount) {
+                    if let Err(error) =
+                        composition::set_global_value(&shell, &mount.spec, &name, value)
+                    {
+                        failures.push((mount.spec.owner, format!("{name}: {error:#}")));
+                    }
+                }
+                if let Some(slot) = policy_slot(mount.spec.slot)
+                    && let Err(error) = self.policy.set_locks(
+                        slot,
+                        mount.spec.owner,
+                        window_state::Locks::default(),
+                    )
+                {
+                    diag!("mount policy reset: {error}");
+                }
+            }
+            self.report_value_failures(failures);
         }
-        let old_owners = self.mounts.keys().copied().collect::<Vec<_>>();
-        for old in old_owners {
-            if !next.contains_key(&old) {
-                self.policy.remove_owner(old);
-                self.images.release_view(old, "$mount");
+        for old in &leaving {
+            self.policy.remove_owner(*old);
+            if !next.contains_key(old) {
+                self.images.release_view(*old, "$mount");
             }
         }
         let attach = next
             .values()
             .filter(|m| m.spec.slot != composition::Slot::Sidebar)
             .chain(order.iter().filter_map(|owner| next.get(owner)))
-            .filter(|m| !self.mounts.contains_key(&m.spec.owner))
+            .filter(|m| !self.mounts.contains_key(&m.spec.owner) || leaving.contains(&m.spec.owner))
             .map(|m| (m.spec.owner, m.spec.slot, m.visible, m.manifest.clone()))
             .collect::<Vec<_>>();
         for (id, mount_slot, mount_visible, manifest) in attach {
@@ -272,6 +357,10 @@ impl Host {
                 let _ = self.policy.set_active(id);
             }
         }
+        // The tab chosen above, when the current one left.
+        if current_left && let Some(active) = active {
+            let _ = self.policy.set_active(active);
+        }
         self.policy.order_sidebar(&order);
         self.policy.activity(self.now_ms());
         {
@@ -289,9 +378,21 @@ impl Host {
             json!({"status":"ready","shellGeneration":self.shell_generation,"prepareMs":started.elapsed().as_secs_f64()*1000.}),
         )
     }
+    /// Values a new instance could not take (a property the panel does not
+    /// declare, a value of the wrong type): logged and reported to their
+    /// plugin (`ui.error`, its `onError`), as `mount_values` does; the panel
+    /// is drawn with its defaults for them.
+    pub(crate) fn report_value_failures(&mut self, failures: Vec<(u64, String)>) {
+        for (owner, message) in failures {
+            diag!("mount property {owner}/{message}");
+            self.send(owner, ui_error(&RpcError::new("ui", message)));
+        }
+    }
     /// Compile the shell with `shown` (every panel it draws: the bottom bar,
     /// the backdrop, the sidebar's compiled tabs) inside the main window,
-    /// with their values, and make it current.
+    /// with their values, and make it current. The values a panel could not
+    /// take are returned (owner, what), for `report_value_failures`: one
+    /// bad value never fails the compile.
     fn compile_shell(
         &mut self,
         shown: &[Mount],
@@ -299,7 +400,8 @@ impl Host {
         titles: SValue,
         active_index: usize,
         shown_owner: i64,
-    ) -> Result<()> {
+    ) -> Result<Vec<(u64, String)>> {
+        let failures = RefCell::new(Vec::new());
         self.next_shell_generation += 1;
         let candidate_generation = self.next_shell_generation;
         let native_before = platform::capture_windows().ok();
@@ -324,7 +426,13 @@ impl Host {
                 )?;
                 for (mount, values) in shown.iter().zip(values) {
                     for (name, value) in values {
-                        composition::set_global_value(&shell, &mount.spec, &name, value)?;
+                        if let Err(error) =
+                            composition::set_global_value(&shell, &mount.spec, &name, value)
+                        {
+                            failures
+                                .borrow_mut()
+                                .push((mount.spec.owner, format!("{name}: {error:#}")));
+                        }
                     }
                     let visible = match mount.spec.slot {
                         composition::Slot::Sidebar => {
@@ -381,7 +489,7 @@ impl Host {
             self.menu_mode = MenuMode::Main;
         }
         self.shell_generation = candidate_generation;
-        Ok(())
+        Ok(failures.into_inner())
     }
 
     /// Initial properties `refuse_initial` left out: logged and reported

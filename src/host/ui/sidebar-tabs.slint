@@ -125,8 +125,10 @@ export component SidebarTabs inherits Rectangle {
     // fit go into the `»` menu, which takes 25px of the room.
     // `overflowing`, `shown` (the places for tabs) and `last` (the tab in the
     // last place) are out properties for the tests.
-    out property <bool> overflowing: root.titles.length > max(1, floor(root.room / 72px));
-    out property <int> shown: root.overflowing ? max(1, floor((root.room - 25px) / 72px)) : root.titles.length;
+    // At most 4 places: the host compiles the first three tabs and the
+    // current one (`sidebar_tabs::front`), so every tab shown has its panel.
+    out property <bool> overflowing: root.titles.length > min(4, max(1, floor(root.room / 72px)));
+    out property <int> shown: root.overflowing ? min(4, max(1, floor((root.room - 25px) / 72px))) : root.titles.length;
     // 105px tabs while they fit, narrower down to 72px.
     private property <length> tab-width: min(105px, max(0px, (root.room - (root.overflowing ? 25px : 0px)) / max(1, root.shown)));
     // The last place shows the current tab when it would not fit, so the

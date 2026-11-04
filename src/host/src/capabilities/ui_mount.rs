@@ -41,19 +41,18 @@ impl Capability for UiMount {
     fn methods(&self) -> &'static [Method] {
         METHODS
     }
-    /// A panel keeps its plugin running, except a background sidebar tab
-    /// (sidebar-tabs.md, user ruling 2026-11-03: only the current tab does):
-    /// its `ui.mount` is recorded, and the tab stays as a placeholder while
-    /// the plugin stands by.
+    /// A panel in the bottom bar or the backdrop keeps its plugin running
+    /// (Resident). A sidebar tab is recorded, current or not (sidebar-tabs.md,
+    /// user ruling 2026-11-03): its plugin is Normal, the current tab keeps
+    /// it running as declared work (`Busy::ShownTab`), and a background tab
+    /// stays as a placeholder while the plugin stands by.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
         if pending(host, owner) {
             return Recorded::Live("a panel");
         }
         match host.mounts.get(&owner) {
             None => Recorded::Nothing,
-            Some(mount)
-                if !sidebar_tabs::live(mount.spec.slot, owner, host.policy.sidebar_active()) =>
-            {
+            Some(mount) if !sidebar_tabs::live(mount.spec.slot) => {
                 Recorded::Calls(vec![Call::new("ui.mount", mount.call.clone())])
             }
             Some(_) => Recorded::Live("a panel"),
@@ -186,6 +185,18 @@ fn mount(
             "unavailable",
             "mounts require a native shell",
         ));
+    }
+    // The host's removal of this plugin's placeholder (`prune` at its
+    // ready, an id 0 unmount) gives way to the plugin's own mount: a plugin
+    // that mounts a little after its ready keeps its tab.
+    if method == "ui.mount" {
+        let removal = |c: &MountChange| {
+            c.reply.owner == reply.owner && c.reply.id == 0 && c.contribution.is_none()
+        };
+        host.mount_queue.retain(|c| !removal(c));
+        if host.preparing.as_ref().is_some_and(|(_, c)| removal(c)) {
+            host.preparing = None;
+        }
     }
     if host
         .mount_queue
@@ -369,7 +380,11 @@ fn set_mount(
     let floating = host
         .floating
         .as_ref()
-        .filter(|f| f.compiled.contains(&reply.owner))
+        .filter(|f| {
+            f.compiled.contains(&reply.owner)
+                && (spec.slot != composition::Slot::Sidebar
+                    || host.shell_compiled.get(&reply.owner) == Some(&reply.owner))
+        })
         .map(|f| f.instance.clone_strong());
     // A part of a whole value sent in parts: held until the last (P3).
     let parted = host.parts(reply.owner, "$mount", property, params, prepared.as_deref())?;

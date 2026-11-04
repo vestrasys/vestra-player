@@ -118,6 +118,10 @@ enum Busy {
     /// Its standby recording could not be written ahead (today's `park`
     /// does not park then): busy until the next sync.
     Recording,
+    /// Its sidebar tab is the current one (sidebar-tabs.md): a sidebar
+    /// panel is never live, so its plugin stays Normal, and this keeps it
+    /// running only while the tab is shown.
+    ShownTab,
 }
 
 /// The Host's side of on-demand start (formerly `lazy.rs`'s `Lazy`): what the
@@ -650,6 +654,14 @@ impl Host {
     pub(crate) fn panel_shown(&mut self, owner: u64) {
         self.page_shown(owner);
     }
+    /// The current sidebar tab changed: its running plugin's declared work
+    /// (`Busy::ShownTab`) starts now, not at its next idle check; the
+    /// previous one's ends at the next `CHECK_MS` poll.
+    pub(crate) fn tab_work(&mut self, owner: u64) {
+        if self.plugins.contains_key(&owner) && self.checkpoint_key_of(owner).is_some() {
+            self.sync_work(owner, false);
+        }
+    }
     /// Start-up is over: every installed plugin started, replayed or
     /// queued has run its first activation (as files opened at launch wait,
     /// `open_files_tick`).
@@ -1040,6 +1052,11 @@ impl Host {
         }
         if self.source_state_replies.iter().any(|(o, _)| *o == owner) {
             busy.insert(Busy::SourceState);
+        }
+        if self.mounts.get(&owner).is_some_and(|m| {
+            crate::ui::sidebar_tabs::shown_tab(m.spec.slot, owner, self.policy.sidebar_active())
+        }) {
+            busy.insert(Busy::ShownTab);
         }
         busy
     }

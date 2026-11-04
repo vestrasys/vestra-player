@@ -1837,7 +1837,8 @@ export component W inherits Window {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
         let order = (1..=20).map(|n| 100 + n).collect::<Vec<u64>>();
         let active = Some(117);
-        let compiled = sidebar_tabs::compiled(&order, active, |_| false, &Default::default());
+        let compiled =
+            sidebar_tabs::compiled(&order, active, |_| false, |_| false, &Default::default());
         assert_eq!(compiled, [101, 102, 103, 117]);
         let mut specs = vec![bar_and_sidebar()[0].clone()];
         for owner in &compiled {
@@ -1936,9 +1937,13 @@ export component T inherits Window {
         window.set_property("active", 7.0.into()).unwrap();
         assert_eq!(number("shown"), 1.);
         assert_eq!(number("last"), 7.);
-        // A wide one: more places.
+        // A wide one: four places at most, the panels the host compiles
+        // (`sidebar_tabs::front`): the first three and the current tab.
         window.set_property("strip-width", 600.0.into()).unwrap();
-        assert_eq!(number("shown"), 7.);
+        assert_eq!(number("shown"), 4.);
+        assert_eq!(number("last"), 7.);
+        window.set_property("active", 1.0.into()).unwrap();
+        assert_eq!(number("last"), 3.);
     }
 
     thread_local! {

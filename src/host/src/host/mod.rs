@@ -237,6 +237,9 @@ pub(crate) struct Host {
     pub(crate) refresh_failed: Option<u64>,
     /// The placeholder tab whose plugin was woken for being shown.
     pub(crate) tab_woken: Option<u64>,
+    /// Sidebar panels whose compile failed when their tab joined the compiled
+    /// set (reported to their plugin): left out until they mount again.
+    pub(crate) tabs_failed: std::collections::BTreeSet<u64>,
     /// The bottom bar was shown at the last tick.
     pub(crate) bottom_shown: bool,
     pub(crate) native_window: Option<platform::HostWindowId>,

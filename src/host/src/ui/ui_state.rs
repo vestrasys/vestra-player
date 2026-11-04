@@ -91,6 +91,24 @@ impl SidebarSlot {
         }
     }
 
+    /// [`Self::remember`], evicting past [`ORDER_LIMIT`] the oldest ids not
+    /// in `current` (plugins with no tab now, uninstalled ones among them)
+    /// before any that has one.
+    pub fn remember_among(&mut self, id: &str, current: &[&str]) {
+        if self.order.iter().any(|known| known == id) {
+            return;
+        }
+        self.order.push(id.into());
+        while self.order.len() > ORDER_LIMIT {
+            let gone = self
+                .order
+                .iter()
+                .position(|known| !current.contains(&known.as_str()))
+                .unwrap_or(0);
+            self.order.remove(gone);
+        }
+    }
+
     /// Where `id` sorts among the tabs: its place in the order, new ones last.
     pub fn position(&self, id: &str) -> usize {
         self.order
@@ -483,6 +501,20 @@ mod tests {
             Some("b.x")
         );
         assert_eq!(SidebarSlot::migrate(&BTreeMap::new()), None);
+    }
+
+    #[test]
+    fn a_full_tab_order_evicts_ids_without_a_tab_first() {
+        let mut slot = SidebarSlot::default();
+        for n in 0..ORDER_LIMIT {
+            slot.remember(&format!("p{n}"));
+        }
+        // p0 and p1 have tabs now; p2 is the oldest without one.
+        slot.remember_among("new", &["p0", "p1", "new"]);
+        assert_eq!(slot.order.len(), ORDER_LIMIT);
+        assert_eq!(slot.order[..2], ["p0", "p1"]);
+        assert_eq!(slot.position("p2"), usize::MAX);
+        assert_eq!(slot.order.last().unwrap(), "new");
     }
 
     #[test]
