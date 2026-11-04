@@ -176,12 +176,12 @@ Kept so that old commits and comments make sense:
 | 1 | **Release/host version split** | Merged #166; follow-ups (verify job import fix, `check-bump` in release verify, explicit reuse errors) merged #167 | — (for 0.7.3: bump the `Cargo.toml` host version by hand; no release has `host.json` yet) |
 | 2 | **Store 0.2.12 row controls** | Merged #164 | — |
 | 3 | **Local build after 1 + 2** | Skipped: the hero take used the 0.7.1 stage (the shot needs no new feature) | — |
-| 4 | **Recordings** (download page, `redesign`) | (a) hero centre done: page 0c9e6ba (`hero-menus-2`, full-width player, standard frame), pushed, not deployed. (b) store clip open | (b) on the final 0.7.3 build, same flow and camera timing as the earlier store edit; commit, push |
-| 5 | **Sidebar tabs on demand** | Implemented on `sidebar-tabs-design` (rebased on #168): no cap, at most 4 compiled panels, background tabs on standby, `»` menu; 1226 tests and real-node suites pass. The SDK test host still caps tabs | Independent review and SDK 1.6.2 (no cap) running → publish → player on ^1.6.2 → merge `[skip ci]` → isolated GUI check |
+| 4 | **Recordings** (download page, `redesign`) | Done: hero centre (`hero-menus-2`) and store clip (`store-2`, recorded on the 0.7.3 build, same camera timing); credits for Big Buck Bunny (CC BY 3.0) and Spring (CC BY 4.0) and a YouTube trademark line in the footer. Pushed, not deployed | — |
+| 5 | **Sidebar tabs on demand** | Merged #171 after three review rounds; SDK 1.6.2 published (no tab cap); GUI-checked with 20 test plugins (strip and », wake, current tab stays up, background tabs stand by, detached window, restart) | Fullscreen overlay not checked by hand |
 | 6 | **Shader Upscale status text truncated** (plugin repo) | Done | — |
 | 7 | **SDK 1.6.1 docs patch** | Published; player and Workshop 2.2.32 on 1.6.1 (#168) | — |
-| 8 | **Release 0.7.3** | **Approved by the user**: publish once, after item 5, as the final build (host and release version bumped as needed; 0.7.2 is local only) | Release notes v0.7.3 (folds 0.7.2 changes); tag `v0.7.3` → `release.yml` (approved remote CI for this release) → verify latest.json vs SHA256SUMS → publish → README badge |
-| 9 | **Cleanup** | 22 merged clean worktrees removed; wt-store-all and the SDK worktree wt-sdk161 are locked by a process (retry) | Unmerged or dirty worktrees (probes, wgpu spikes, docdrift, font, perfreg, thumbidx, videoreset) left for the user; typos allowlist for commit hashes |
+| 8 | **Release** | **Published v0.7.4** (release 0.7.4, host 0.7.3). v0.7.3 was tagged but its run stopped at typos (a short hash in this file); tags are not moved, so the same build shipped as 0.7.4 (#173). latest.json checked against SHA256SUMS | — |
+| 9 | **Cleanup** | 22 merged worktrees removed; typos ignores short hashes (#173); main CI back on: first run hung in test:packaging (process.exit stall), fixed in #174 | Unmerged or dirty worktrees left for the user; other scripts still call process.exit (follow-up) |
 
 Done earlier this round: 0.7.1 published; #160–#162 (records, README, Options window fix); plugin repo #26 (security scan) and #27 (Shader Upscale 0.2.0).
 
@@ -193,6 +193,10 @@ Decisions this round:
 - **Plugin repository security** (user, 2026-11-03): no runtime sandbox for plugins; scan at PR time in the plugin repository and review flagged plugins by hand.
 
 Log (newest first):
+
+- 2026-11-04 (overnight result): #171 sidebar tabs on demand, #172–#173 release, #174 packaging exit fix; SDK 1.6.2; Workshop 2.2.33; v0.7.4 published; README badge v0.7.4; main remote CI switched back on. Lessons: `[skip ci]` in a tagged commit also suppresses the tag-push release run (dispatch release.yml on the tag instead); a branch head commit without `[skip ci]` starts remote CI on push (two runs were cancelled).
+
+- Needs the user: (1) the player repository is private, so the update check gets 404 and installed players are never told about a release; make the repository public, or publish latest.json and installers somewhere public (code change). (2) Whether a hidden sidebar should also put the current tab's plugin on standby (now: it stays up; at most one process). (3) macOS signing ($99/year), the window compile cache experiment, Windows code signing (unchanged).
 
 - 2026-11-04: #167 host version guard, #168 SDK 1.6.1 + Workshop 2.2.32 merged without remote CI. Hero centre re-recorded (first take lost the Picture Adjustments window behind the main window) and pushed to the page. Sidebar on demand implemented; review and SDK 1.6.2 in progress.
 
