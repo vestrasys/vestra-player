@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.12
+
+- Code only: the window handles are named `aboutToolWindow` (About, `ui/about.slint`) and `propertiesToolWindow` (Playback Properties, `ui/properties.slint`) (were `window`). Who must change: nobody. No behaviour change.
+
 ## 0.1.11
 
 - J10 Check for updates (restored by the user's ruling of 2026-11-01): the player looks for a newer release of itself. Who must change: nobody. What users see: a top-level **Check for Updates…** item right after About Vestra Player… (order 881, group `windows`, no default key), an **Updates** row in About Vestra Player (current state, the latest version and its date, a Release Notes link and one action button: Check Now, Download, Cancel, Run Installer or Open Release Page; a newer version is drawn in the accent colour), and the settings page Options ▸ General ▸ Updates (automatic check, on by default).

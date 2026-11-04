@@ -159,7 +159,7 @@ export default async function activate(plugin: Plugin) {
 
   const filter = plugin.video.filter("picture");
   const view = plugin.video.view();
-  const window = plugin.windows.create("picture.slint");
+  const pictureWindow = plugin.windows.create("picture.slint");
   const aspectWindow = plugin.windows.create("ui/aspect.slint");
   const shadersWindow = plugin.windows.create("ui/shaders.slint");
   const persist = () => store.save(serialize(look, tab));
@@ -328,7 +328,7 @@ export default async function activate(plugin: Plugin) {
     field === "denoise" ? effects.denoise[effects.denoise.shown] : effects[field];
 
   // ---------------------------------------------------------------- window
-  window.bind(() => {
+  pictureWindow.bind(() => {
     const denoise = effects.denoise[effects.denoise.shown];
     return {
       ...look.picture,
@@ -385,19 +385,19 @@ export default async function activate(plugin: Plugin) {
   // Zoom (a display property) and 目标亮度 (a render option) follow the drag. The first move away
   // from the defaults adds the eq node (one rebuild); from then on the drag updates it in place,
   // also through 0, and the release removes it when every colour is back at its default.
-  window.on("adjust", (field: string, value: number) => {
+  pictureWindow.on("adjust", (field: string, value: number) => {
     const kind = storeValue(field, value);
     if (kind === "view") showView();
     else if (kind === "render") renderChanged();
     else if (kind === "live") change(true);
   });
-  window.on("commit", (field: string, value: number) => {
+  pictureWindow.on("commit", (field: string, value: number) => {
     const kind = storeValue(field, value);
     if (kind === "view") showView();
     else if (kind === "render") renderChanged();
     else if (kind) change();
   });
-  window.on("resetField", (field: string) => {
+  pictureWindow.on("resetField", (field: string) => {
     if (field === "zoom") {
       frame = centred();
       showView();
@@ -411,18 +411,18 @@ export default async function activate(plugin: Plugin) {
     else return;
     change();
   });
-  window.on("preset", (name: string) => {
+  pictureWindow.on("preset", (name: string) => {
     const preset = presets[name];
     if (!preset) return;
     look.picture = { ...preset };
     change();
   });
-  window.on("toggleEffect", (on: boolean) => {
+  pictureWindow.on("toggleEffect", (on: boolean) => {
     enabled = on === true;
     apply();
     if (wantsMeasure()) void measure();
   });
-  window.on("toggle", (field: string, on: boolean) => {
+  pictureWindow.on("toggle", (field: string, on: boolean) => {
     const value = on === true;
     if (field === "blur") look.picture.blurEnabled = value;
     else if (field === "frameBlend") return setBlend(value, false);
@@ -433,7 +433,7 @@ export default async function activate(plugin: Plugin) {
     else return;
     change();
   });
-  window.on("choose", (field: string, index: number) => {
+  pictureWindow.on("choose", (field: string, index: number) => {
     if (!Number.isInteger(index) || index < 0) return;
     if (field === "denoiseMode" && index < DENOISE_MODES.length) {
       effects.denoise.shown = DENOISE_MODES[index]!;
@@ -457,14 +457,14 @@ export default async function activate(plugin: Plugin) {
     } else return;
     change();
   });
-  window.on("customAspect", () => openCustom());
-  window.on("shaderList", () => openShaders());
-  window.on("tabChanged", (index: number) => {
+  pictureWindow.on("customAspect", () => openCustom());
+  pictureWindow.on("shaderList", () => openShaders());
+  pictureWindow.on("tabChanged", (index: number) => {
     if (!Number.isInteger(index) || index < 0 || index >= TABS || index === tab) return;
     tab = index;
     persist();
   });
-  window.on("retry", () => {
+  pictureWindow.on("retry", () => {
     if (filter.status.state === "failed") filter.retry();
     if (view.status.state === "failed") showView();
     if (render.status.state === "failed" && gpuReady()) applyRender(true, true);
@@ -552,7 +552,7 @@ export default async function activate(plugin: Plugin) {
       persist();
       plugin.update();
     }
-    return window.show();
+    return pictureWindow.show();
   };
 
   // ---------------------------------------------------------------- actions (menu and keys)

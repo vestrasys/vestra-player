@@ -147,8 +147,8 @@ export function aboutWindow(plugin: Plugin, updater: Updater) {
   }
   // Starts, stops, failures, installs and uninstalls arrive here; the open window follows at once.
   plugin.packages.onChange((list) => void (plugins = pluginRows(list)));
-  const window = plugin.windows.create("ui/about.slint");
-  window.bind(() => ({
+  const aboutToolWindow = plugin.windows.create("ui/about.slint");
+  aboutToolWindow.bind(() => ({
     version: plugin.app.version,
     build: plugin.app.build ?? "",
     ...versions(plugin.app, node),
@@ -159,9 +159,9 @@ export function aboutWindow(plugin: Plugin, updater: Updater) {
     status,
     ...updater.props(),
   }));
-  window.on("updateAction", () => updater.action());
-  window.on("releaseNotes", () => updater.releaseNotes());
-  window.on("copyInfo", async () => {
+  aboutToolWindow.on("updateAction", () => updater.action());
+  aboutToolWindow.on("releaseNotes", () => updater.releaseNotes());
+  aboutToolWindow.on("copyInfo", async () => {
     try {
       await plugin.clipboard.writeText(aboutText(plugin.i18n, plugin.app, node, plugins, rendering));
       status = "";
@@ -171,12 +171,12 @@ export function aboutWindow(plugin: Plugin, updater: Updater) {
       status = "copy-failed";
     }
   });
-  window.on("closeWindow", () => window.close());
+  aboutToolWindow.on("closeWindow", () => aboutToolWindow.close());
   // Nothing polls while the window is open; a title-bar close only clears the status line.
-  window.onClose(() => void (status = ""));
+  aboutToolWindow.onClose(() => void (status = ""));
   return async function show() {
     status = "";
-    if (!window.opened) await Promise.all([readPlugins(), readRendering()]);
-    await window.show();
+    if (!aboutToolWindow.opened) await Promise.all([readPlugins(), readRendering()]);
+    await aboutToolWindow.show();
   };
 }

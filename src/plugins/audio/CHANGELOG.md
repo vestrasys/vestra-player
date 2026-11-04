@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.8
+
+- Code only: the Audio Workbench window handle is named `workbenchWindow` (was `window`). Who must change: nobody. No behaviour change.
+
 ## 1.5.7
 
 - The audio resets moved to the player's **Reset** menu (below Settings, player 0.6.3; user ruling 2026-11-01): **Reset ▸ Audio Sync** (was Audio ▸ Audio Sync ▸ Reset, `?`) and **Reset ▸ Audio Processing** (was Audio ▸ Reset). The command ids (`audio.sync.reset`, `audio.reset`) and the default key are the same, so keys a user bound to them keep working.

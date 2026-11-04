@@ -168,7 +168,7 @@ export class Store {
   readonly deps: Deps;
   readonly repos: Repos;
   readonly settings: JsonStore<Settings>;
-  readonly window: Window;
+  readonly storeWindow: Window;
   readonly icons: Icons;
   readonly revocations: Revocations;
   readonly version: string;
@@ -229,80 +229,80 @@ export class Store {
     // Downloads left over from a crash.
     rmSync(join(plugin.dataDirectory, "downloads"), { recursive: true, force: true });
 
-    const window = (this.window = plugin.windows.create("ui/store.slint"));
+    const storeWindow = (this.storeWindow = plugin.windows.create("ui/store.slint"));
     // The details follow the list: a tab, search or tag that hides the selected plugin selects the list's first row.
-    window.on("search", (text: string) => {
+    storeWindow.on("search", (text: string) => {
       this.search = text;
       this.#listChanged();
     });
-    window.on("setCategory", (index: number) => {
+    storeWindow.on("setCategory", (index: number) => {
       this.#setCategory(Math.max(ALL, Math.min(UPDATES, Math.trunc(Number(index) || 0))));
       // A tag the new tab has no plugin for would empty its list under "Tags: All".
       const tag = this.tag?.toLowerCase();
       if (tag !== undefined && !this.#tags().some((each) => each.toLowerCase() === tag)) this.tag = null;
       this.#listChanged();
     });
-    window.on("setTag", (index: number) => {
+    storeWindow.on("setTag", (index: number) => {
       this.tag = index <= 0 ? null : (this.#tags()[index - 1] ?? null);
       this.#listChanged();
     });
-    window.on("setSort", (index: number) => {
+    storeWindow.on("setSort", (index: number) => {
       this.sort = index === 1 ? 1 : 0;
       this.#listChanged();
     });
     // The check box's new state (not a flip), kept in settings.json.
-    window.on("setHideBuiltins", (on: boolean) => {
+    storeWindow.on("setHideBuiltins", (on: boolean) => {
       this.#setHideBuiltins(on === true);
       this.changed();
     });
-    window.on("select", (key: string) => {
+    storeWindow.on("select", (key: string) => {
       if (this.selected === key) return;
       this.#pending = null;
       this.selected = key;
       void this.#loadDoc();
     });
-    window.on("setTab", (index: number) => {
+    storeWindow.on("setTab", (index: number) => {
       this.tab = Math.max(0, Math.min(2, index));
       void this.#loadDoc();
     });
-    window.on("act", (action: string) => this.#act(action));
-    window.on("rowAct", (key: string, action: string) => {
+    storeWindow.on("act", (action: string) => this.#act(action));
+    storeWindow.on("rowAct", (key: string, action: string) => {
       if (this.selected !== key) this.select(key);
       return this.#act(action);
     });
-    window.on("bannerAct", (action: string) => this.#bannerAct(action));
-    window.on("installVersion", (version: string) => {
+    storeWindow.on("bannerAct", (action: string) => this.#bannerAct(action));
+    storeWindow.on("installVersion", (version: string) => {
       const item = this.selectedItem();
       const v = item?.entry?.versions.find((each) => each.version === version);
       if (item && v) return installer.installFromRepository(this, item, v);
     });
-    window.on("openLink", (url: string) => this.#openLink(url));
-    window.on("factLink", (index: number) => {
+    storeWindow.on("openLink", (url: string) => this.#openLink(url));
+    storeWindow.on("factLink", (index: number) => {
       const item = this.selectedItem();
       const fact = this.#facts(item)[index];
       if (fact?.action === "openData" && item) return this.#openData(item);
       if (fact?.url) return this.#openLink(fact.url);
     });
-    window.on("fromFile", () => this.#fromFile());
-    window.on("fromLink", () => {
+    storeWindow.on("fromFile", () => this.#fromFile());
+    storeWindow.on("fromLink", () => {
       this.linkOpen = !this.linkOpen;
     });
-    window.on("linkAccepted", async (url: string) => {
+    storeWindow.on("linkAccepted", async (url: string) => {
       const text = url.trim();
       if (!text) return;
       this.linkOpen = false;
       this.linkText = "";
       await installer.installFromLink(this, text);
     });
-    window.on("linkCancelled", () => {
+    storeWindow.on("linkCancelled", () => {
       this.linkOpen = false;
     });
-    window.on("repos", () => plugin.settings.show(SettingsPage.ID));
-    window.on("settings", () => plugin.settings.show(SettingsPage.ID));
-    window.on("refresh", () => this.refreshAll(true));
-    window.on("cancel", () => this.#operation?.cancel?.());
-    window.onClose(() => this.#docAbort?.abort());
-    window.bind(() => this.props());
+    storeWindow.on("repos", () => plugin.settings.show(SettingsPage.ID));
+    storeWindow.on("settings", () => plugin.settings.show(SettingsPage.ID));
+    storeWindow.on("refresh", () => this.refreshAll(true));
+    storeWindow.on("cancel", () => this.#operation?.cancel?.());
+    storeWindow.onClose(() => this.#docAbort?.abort());
+    storeWindow.bind(() => this.props());
 
     plugin.packages.onChange((list) => this.#accept(list));
     plugin.drops.provide({
@@ -353,7 +353,7 @@ export class Store {
   /** The menu command (and the window button): show the window, refresh stale repositories. */
   async open(refresh = true) {
     this.#sizes.clear();
-    await this.window.show();
+    await this.storeWindow.show();
     // A short wait for the headers: offline, the Installed tab never waits for the network anyway.
     if (refresh && this.repos.list.some((repo) => this.repos.stale(repo))) void this.refreshAll(false, timing.openHeaders);
     this.#listChanged();

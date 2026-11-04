@@ -279,7 +279,7 @@ test("an SDK call whose capability the manifest lacks: typecheck and check say w
   if (!checksCapabilities(toolchain.sdkVersion)) return t.skip(`the vendored SDK ${toolchain.sdkVersion} predates the capability check (1.5.26)`);
   await toolchain.scaffold(session, { name: "demo" }, "");
   const main = path.join(session.work, "local.demo", "main.ts");
-  await fs.writeFile(main, (await fs.readFile(main, "utf8")).replace("run: () => window.show(),", "run: () => { window.show(); void plugin.player.seek(0); },"));
+  await fs.writeFile(main, (await fs.readFile(main, "utf8")).replace("run: () => mainWindow.show(),", "run: () => { mainWindow.show(); void plugin.player.seek(0); },"));
   for (const run of [await toolchain.typecheck(session, "local.demo"), await toolchain.check(session, "local.demo", "")]) {
     assert.equal(run.ok, false, run.text);
     assert.match(run.text.split("\n")[0], /1 SDK use\(s\) need a capability manifest\.json does not declare/);

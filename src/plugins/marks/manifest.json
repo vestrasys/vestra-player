@@ -1,6 +1,6 @@
 {
   "id": "vestra.marks",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [

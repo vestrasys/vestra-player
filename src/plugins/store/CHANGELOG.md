@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.13
+
+- Code only: the store window handle is named `storeWindow` (was `window`). Who must change: nobody. No behaviour change.
+
 ## 0.2.12
 
 Needs Vestra Player 0.6.0.
