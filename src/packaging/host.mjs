@@ -76,7 +76,6 @@ import {
   compareVersions,
   copy,
   exists,
-  fail,
   hostVersion,
   matchesAny,
   parseArgs,
@@ -332,17 +331,28 @@ function parseSums(text) {
  */
 export function githubReleases(repoName, limit = 30) {
   repoName = repository(repoName);
+  // gh never waits on CI: no stdin, no prompts, and a time limit (killed,
+  // then retried and reported like any other failed lookup).
+  const gh = (timeout) => ({
+    env: { ...process.env, GH_PROMPT_DISABLED: "1" },
+    timeout,
+    killSignal: "SIGKILL",
+  });
   return {
     name: repoName,
     releases: () =>
       retry(`gh api ${repoName} releases`, () =>
         JSON.parse(
-          capture("gh", [
-            "api",
-            `repos/${repoName}/releases?per_page=${limit}`,
-            "--jq",
-            "[.[] | select(.draft | not) | {tag: .tag_name, assets: [.assets[].name]}]",
-          ]),
+          capture(
+            "gh",
+            [
+              "api",
+              `repos/${repoName}/releases?per_page=${limit}`,
+              "--jq",
+              "[.[] | select(.draft | not) | {tag: .tag_name, assets: [.assets[].name]}]",
+            ],
+            gh(60_000),
+          ),
         ),
       ),
     download: (tag, names, dir) =>
@@ -360,7 +370,11 @@ export function githubReleases(repoName, limit = 30) {
             dir,
             "--clobber",
           ],
-          { quiet: true },
+          {
+            quiet: true,
+            stdio: ["ignore", "inherit", "inherit"],
+            ...gh(600_000),
+          },
         ),
       ),
   };
@@ -791,7 +805,7 @@ if (
       console.log(`release=${release}\nhost=${host}`);
       await output({ release, host });
     } else if (command === "fetch") {
-      if (!options.out) fail("fetch needs --out <dir>");
+      if (!options.out) throw new Error("fetch needs --out <dir>");
       const out = resolve(options.out);
       await mkdir(out, { recursive: true });
       const hash = await hostInputHash(target());
@@ -815,7 +829,7 @@ if (
       );
     } else if (command === "record") {
       if (!options.archive || !options.out)
-        fail("record needs --archive <zip> --out <json>");
+        throw new Error("record needs --archive <zip> --out <json>");
       const reused = options.reused
         ? await readJson(options.reused)
         : undefined;
@@ -831,10 +845,16 @@ if (
       );
       console.log(JSON.stringify(record, null, 2));
     } else
-      fail(
+      throw new Error(
         "usage: host.mjs hash|versions|check-bump|fetch|record [--target <triple>] … (see the header)",
       );
   } catch (error) {
-    fail(error.message);
+    // Not fail(): process.exit() right after hashing the host inputs can
+    // deadlock Node 26 (the main thread waits for a V8 worker stuck in a
+    // concurrent GC job), so the error is printed and the process never
+    // ends; that hung main.yml for 20 minutes. Nothing is left running
+    // here, so a normal exit with exitCode is immediate.
+    console.error(`error: ${error.message}`);
+    process.exitCode = 1;
   }
 }

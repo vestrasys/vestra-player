@@ -472,12 +472,28 @@ test("versions and check-bump run where there is no packaged host (Linux)", asyn
     preload,
     'Object.defineProperty(process, "platform", { value: "linux" });\n',
   );
-  const cli = (...args) =>
-    spawnSync(
+  // Each run is killed after 30 s and fails the test instead of hanging the
+  // job (spawnSync blocks the test runner, so its own timeout cannot fire).
+  // No stdin, no gh, and not the CI step's GITHUB_OUTPUT (`versions` writes
+  // to it).
+  const env = { ...process.env, GH_PROMPT_DISABLED: "1" };
+  for (const name of ["GITHUB_OUTPUT", "GH_TOKEN", "GITHUB_TOKEN"])
+    delete env[name];
+  const cli = (...args) => {
+    const result = spawnSync(
       process.execPath,
       ["--require", preload, join(packaging, "host.mjs"), ...args],
-      { encoding: "utf8" },
+      {
+        encoding: "utf8",
+        env,
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 30_000,
+        killSignal: "SIGKILL",
+      },
     );
+    assert.ifError(result.error);
+    return result;
+  };
   const version = await hostVersion();
   const hashes = {
     windows: (await hostInputs(WINDOWS)).hash,
