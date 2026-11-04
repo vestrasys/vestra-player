@@ -3,7 +3,6 @@
 // this host. A mismatch means: change the SDK repository, release it and
 // upgrade the dependency here (agentic-workflow/agentic-workflow.md §1.6).
 import assert from "node:assert/strict";
-import { spawnSync } from "node:child_process";
 import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -46,6 +45,7 @@ import {
 } from "@vestra-player/sdk/runtime";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { CAPABILITIES as STORE_CAPABILITIES } from "../../plugins/store/labels.ts";
+import { runNode } from "./children.ts";
 
 const host = (file: string) =>
   readFileSync(new URL(`../../host/${file}`, import.meta.url), "utf8");
@@ -237,16 +237,10 @@ test("the installed SDK's Slint library copy matches the player's", () => {
   );
   for (const file of library)
     assert.ok(script.includes(`"vestra/${file}"`), `${file} is synced`);
-  const result = spawnSync(
-    process.execPath,
-    [
-      fileURLToPath(
-        new URL("../../scripts/sync-sdk-slint.mjs", import.meta.url),
-      ),
-      "--check",
-    ],
-    { encoding: "utf8" },
-  );
+  const result = runNode([
+    fileURLToPath(new URL("../../scripts/sync-sdk-slint.mjs", import.meta.url)),
+    "--check",
+  ]);
   assert.equal(result.status, 0, result.stderr);
 });
 

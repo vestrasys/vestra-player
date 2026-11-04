@@ -2,15 +2,17 @@
 // process, one envelope `g` per line (doc/architecture/README.md §2, §5).
 // These tests answer like the host does.
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
 import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 // @ts-expect-error: a plain .mjs script without types
 import { stripTypes } from "../../scripts/stage-runtime.mjs";
+import { closed, killChildren, runNode, spawnNode } from "./children.ts";
+
+afterEach(killChildren);
 
 const runtime = resolve(import.meta.dirname, "../../runtime");
 const plugins = resolve(import.meta.dirname, "../../plugins");
@@ -56,8 +58,13 @@ class Host {
   readonly child: ChildProcessWithoutNullStreams;
   readonly lines: Line[] = [];
   readonly raw: string[] = [];
+  /**
+   * What the runner wrote to stderr so far. stderr is its own pipe: a log
+   * line written before a stdout line can arrive after it, so a log the test
+   * expects while the runner runs is waited for (`logged`), and all of it is
+   * here once `exited` resolved.
+   */
   stderr = "";
-  readonly exited: Promise<number | null>;
   readonly reply: Reply;
   #waiters = new Set<() => void>();
   constructor(
@@ -66,8 +73,7 @@ class Host {
     env: Record<string, string> = {},
   ) {
     this.reply = reply;
-    this.child = spawn(
-      process.execPath,
+    this.child = spawnNode<ChildProcessWithoutNullStreams>(
       ["--no-experimental-webstorage", ...args],
       { stdio: ["pipe", "pipe", "pipe"], env: { ...process.env, ...env } },
     );
@@ -75,8 +81,7 @@ class Host {
       this.stderr += String(chunk);
       this.#wake();
     });
-    this.exited = new Promise((done) => this.child.once("exit", done));
-    void this.exited.then(() => this.#wake());
+    this.child.once("close", () => this.#wake());
     createInterface({ input: this.child.stdout }).on("line", (text) => {
       this.raw.push(text);
       const line = JSON.parse(text) as Line;
@@ -123,6 +128,17 @@ class Host {
       this.#waiters.add(poll);
       poll();
     });
+  }
+  /** The exit code, with stdout and stderr read to the end; fails after 30 s. */
+  get exited() {
+    return closed(this.child, "the runner");
+  }
+  /** Resolves once stderr matches `pattern`. */
+  logged(pattern: RegExp) {
+    return this.wait(
+      () => (pattern.test(this.stderr) ? true : undefined),
+      `stderr matching ${pattern}`,
+    );
   }
   line(match: (line: Line) => boolean, what: string) {
     return this.wait(() => this.lines.find(match), what);
@@ -238,7 +254,7 @@ test("one plugin failing to activate leaves the other running and the process al
   const pong = await host.ping(7);
   const stats = pong.data?.stats as { plugins: Record<string, unknown> };
   assert.deepEqual(Object.keys(stats.plugins), ["2"]);
-  assert.match(host.stderr, /\[test\.bad\] Error: nope/);
+  await host.logged(/\[test\.bad\] Error: nope/);
   host.child.stdin.end();
   assert.equal(await host.exited, 0);
 });
@@ -267,7 +283,9 @@ test("stopping one plugin runs its cleanup and keeps the other answering", async
     g: 4,
     timedOut: false,
   });
-  assert.match(host.stderr, /\[test\.first\] first disposed/);
+  // Logged before `runner.stopped` was written, but on the other pipe: it
+  // can arrive after it.
+  await host.logged(/\[test\.first\] first disposed/);
   // Events for the stopped plugin reach nobody; the other still runs commands.
   host.send({ g: 4, event: "commands.execute", data: { id: "a" } });
   host.send({ g: 5, event: "commands.execute", data: { id: "a" } });
@@ -322,19 +340,16 @@ test("logs carry the plugin's id, stdout writes go to stderr, oversize requests 
     ),
   );
   await host.event(1, "runtime.ready");
-  assert.match(host.stderr, /^\[test\.loud\] hello log$/m);
-  assert.match(host.stderr, /^\[test\.loud\] careful$/m);
-  // Once, not twice: the SDK starts its own error lines with the id.
-  assert.match(
-    host.stderr,
+  for (const pattern of [
+    /^\[test\.loud\] hello log$/m,
+    /^\[test\.loud\] careful$/m,
+    // Once, not twice: the SDK starts its own error lines with the id.
     /^\[test\.loud\] already prefixed, as the SDK writes$/m,
-  );
-  assert.match(host.stderr, /^\[test\.loud\] \[test\.loudly\] another id$/m);
-  assert.match(host.stderr, /^\[test\.loud\] junk without newline$/m);
-  assert.match(
-    host.stderr,
+    /^\[test\.loud\] \[test\.loudly\] another id$/m,
+    /^\[test\.loud\] junk without newline$/m,
     /^\[test\.loud\] unhandled rejection: Error: forgotten/m,
-  );
+  ])
+    await host.logged(pattern);
   assert.deepEqual(
     host
       .of(1)
@@ -384,14 +399,8 @@ test("an uncaught exception in a plugin's own callback stops that plugin only", 
     plugins: Record<string, unknown>;
   };
   assert.deepEqual(Object.keys(stats.plugins), ["2"]);
-  assert.match(
-    host.stderr,
-    /\[test\.thrower\] uncaught exception: Error: late/,
-  );
-  await host.wait(
-    () => (/Error: later/.test(host.stderr) ? true : undefined),
-    "the second throw",
-  );
+  await host.logged(/\[test\.thrower\] uncaught exception: Error: late/);
+  await host.logged(/Error: later/);
   await host.ping(4);
   assert.equal(host.lines.filter((l) => l.event === "runner.fault").length, 1);
   host.send({ g: 0, event: "runner.stop" });
@@ -420,11 +429,10 @@ test("an uncaught exception no plugin owns ends the shared runner", async () => 
 
 test("the staged shared runner runs without TypeScript", async () => {
   const staged = join(scratch("runtime-"), "runtime");
-  const stage = spawnSync(
-    process.execPath,
-    [resolve(import.meta.dirname, "../../scripts/stage-runtime.mjs"), staged],
-    { encoding: "utf8" },
-  );
+  const stage = runNode([
+    resolve(import.meta.dirname, "../../scripts/stage-runtime.mjs"),
+    staged,
+  ]);
   assert.equal(stage.status, 0, stage.stderr);
   assert.doesNotMatch(stage.stderr, /ExperimentalWarning/);
   const host = new Host([join(staged, "shared-runner.js")]);
@@ -578,7 +586,7 @@ test("requests sent during cleanup are refused, not written: shared runner", asy
     timedOut: false,
   });
   assert.equal(host.of(1).length, written);
-  assert.match(host.stderr, /\[test\.cleanup\] cleanup disabled/);
+  await host.logged(/\[test\.cleanup\] cleanup disabled/);
   host.send({ g: 0, event: "runner.stop" });
   assert.equal(await host.exited, 0);
 });
@@ -649,16 +657,10 @@ test("shared runner: each stop carries its reason, a closed stdin is host-lost",
   for (const g of [1, 2, 3, 4]) await host.event(g, "runtime.ready");
   host.send({ g: 1, event: "runtime.stop", data: { reason: "reload" } });
   await host.control("runner.stopped", 1);
-  assert.match(
-    host.stderr,
-    /\[test\.reloaded\] reloaded stopped reload reload true/,
-  );
+  await host.logged(/\[test\.reloaded\] reloaded stopped reload reload true/);
   // An uncaught exception retires its plugin with `failed`.
   await host.control("runner.fault", 2);
-  await host.wait(
-    () => (/faulty stopped/.test(host.stderr) ? true : undefined),
-    "the faulty plugin's cleanup",
-  );
+  await host.logged(/faulty stopped/);
   assert.match(
     host.stderr,
     /\[test\.faulty\] faulty stopped failed failed true/,

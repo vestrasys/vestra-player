@@ -93,11 +93,15 @@ jobs:
         run: npm run licenses
       - name: Windows icon matches the logo
         run: node packaging/icon.mjs --check
+      # Step deadlines: both take 3-11 s; a stuck child process must fail the
+      # step, not wait for the job's 20 minutes (main.yml run 41824920594).
       - run: npm run test:packaging
+        timeout-minutes: 5
       # The host half of `portability` (cargo check for Windows) is covered by
       # the real Windows build-test job; here only the system-command scan.
       - run: npm run portability -- --skip-host
       - run: npm run test:sdk
+        timeout-minutes: 5
       - run: npm run plugins:build
       # VESTRA_UI_RECORD: the tests also record every property value sent to
       # a window, panel or settings page (scripts/ui-record.mjs); the Windows

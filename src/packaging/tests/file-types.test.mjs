@@ -76,9 +76,14 @@ test(
     try {
       const file = join(directory, "Info.plist");
       await writeFile(file, infoPlist("1.2.3", "14.0"));
+      // Killed after 30 s: spawnSync blocks the test runner's own timeouts.
       const read = spawnSync("plutil", ["-convert", "json", "-o", "-", file], {
         encoding: "utf8",
+        stdio: ["ignore", "pipe", "pipe"],
+        timeout: 30_000,
+        killSignal: "SIGKILL",
       });
+      assert.ifError(read.error);
       assert.equal(read.status, 0, read.stderr);
       assert.deepEqual(
         JSON.parse(read.stdout),
