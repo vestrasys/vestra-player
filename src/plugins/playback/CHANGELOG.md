@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.13
+
+- Code only: the tool window handles are named `openUrlWindow`, `promptWindow` and `timeJumpWindow` (were `window`). Who must change: nobody. No behaviour change.
+
 ## 0.2.12
 
 - Seek-bar preview cache: a sprite's `index.json` is written atomically, as a temporary file in the same folder (`index.json.<pid>.<n>.tmp`) renamed over it. Before, it was written in place, so another source's cache clean-up could read half of it, take the folder for a broken one and delete it (the sprite was made again on the next open). A rename refused for a moment on Windows (a reader such as a clean-up, a virus scanner or the indexer has the file open) is tried again a few times; a write that fails removes its temporary file. Readers only read `index.json`. A clean-up no longer deletes a folder whose index cannot be read just then (a sharing violation, too many open files) or that has a temporary index less than a minute old (a write in progress); one left over from a crash is removed once it is older.

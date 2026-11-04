@@ -56,7 +56,7 @@ export class Resume {
   readonly #osd: Osd;
   readonly #update: () => void;
   readonly #store: JsonStore<Saved>;
-  readonly #window: Window;
+  readonly #resumeWindow: Window;
   readonly #listeners: (() => void)[] = [];
   #track: Track | null = null;
   #ask: { track: Track; memo: Memo; timer: ReturnType<typeof setTimeout> } | null = null;
@@ -86,10 +86,10 @@ export class Resume {
         .slice(-CAPACITY)
         .forEach(([key, memo]) => this.items.set(key, memo));
 
-    this.#window = plugin.windows.create("ui/resume.slint");
-    this.#window.bind(() => ({ position: this.#position }));
-    this.#window.on("resume", () => this.#answer(true));
-    this.#window.on("restart", () => this.#answer(false));
+    this.#resumeWindow = plugin.windows.create("ui/resume.slint");
+    this.#resumeWindow.bind(() => ({ position: this.#position }));
+    this.#resumeWindow.on("resume", () => this.#answer(true));
+    this.#resumeWindow.on("restart", () => this.#answer(false));
 
     const tick = setInterval(() => {
       const track = this.#track;
@@ -258,7 +258,7 @@ export class Resume {
     const timer = setTimeout(() => this.#answer(false), timing.askTimeout);
     this.#ask = { track, memo, timer };
     this.#update();
-    void this.#window.show();
+    void this.#resumeWindow.show();
   }
 
   #answer(resume: boolean) {
@@ -275,7 +275,7 @@ export class Resume {
     clearTimeout(ask.timer);
     this.#ask = null;
     ask.track.holding = false;
-    void this.#window.hide().catch(() => {});
+    void this.#resumeWindow.hide().catch(() => {});
   }
 
   /** Remember (or, near the start or the end, forget) where `track` is. `settled`: a pause, a change of source, the end. */

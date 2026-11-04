@@ -68,7 +68,7 @@ export function propertiesWindow(plugin: Plugin) {
     return file?.sourceId === state.sourceId ? file.rows : message(plugin.i18n.text("Reading…"));
   };
 
-  const window = plugin.windows.create("ui/properties.slint");
+  const propertiesToolWindow = plugin.windows.create("ui/properties.slint");
 
   async function readStats() {
     try {
@@ -143,13 +143,13 @@ export function propertiesWindow(plugin: Plugin) {
     if (open) return;
     const scope = (open = plugin.scope());
     sourceChanged(player.state);
-    scope.add(window.bind(() => {
+    scope.add(propertiesToolWindow.bind(() => {
       const rows = page();
       // The label column's width: the host lays out this one label, not every row's.
       return { tabIndex: tab, rows: rows as unknown as Record<string, string | boolean>[], labelSample: widestLabel(plugin.i18n, rows), status, statusDetail, canRefresh: tab !== 0 };
     }));
     scope.player.onChange((state) => {
-      if (!sourceChanged(state) || !window.opened) return;
+      if (!sourceChanged(state) || !propertiesToolWindow.opened) return;
       probe?.abort();
       probe = null;
       void readStats();
@@ -170,18 +170,18 @@ export function propertiesWindow(plugin: Plugin) {
     await following?.dispose();
   }
 
-  window.on("tabChanged", (index: number) => {
+  propertiesToolWindow.on("tabChanged", (index: number) => {
     tab = Math.min(TABS - 1, Math.max(0, Math.round(Number(index))));
     status = "";
     if (prefs.value.propertiesTab !== tab) prefs.save({ propertiesTab: tab });
     load();
   });
-  window.on("refresh", () => {
+  propertiesToolWindow.on("refresh", () => {
     status = "";
     if (tab === 1) void readFile(true);
     if (tab === 2) void readSystem(true);
   });
-  window.on("copyPage", async () => {
+  propertiesToolWindow.on("copyPage", async () => {
     try {
       await plugin.clipboard.writeText(pageText(plugin.i18n, page()));
       status = "";
@@ -191,7 +191,7 @@ export function propertiesWindow(plugin: Plugin) {
       status = "copy-failed";
     }
   });
-  window.on("savePage", async () => {
+  propertiesToolWindow.on("savePage", async () => {
     const text = pageText(plugin.i18n, page()); // what the user saw when asking
     const chosen = await plugin.dialogs.saveFile({ title: "Save As", fileName: saveName(plugin.i18n, player.state.source) });
     if (!chosen) return;
@@ -207,14 +207,14 @@ export function propertiesWindow(plugin: Plugin) {
       statusDetail = reason(error); // the system's message
     }
   });
-  window.on("closeWindow", async () => {
+  propertiesToolWindow.on("closeWindow", async () => {
     // Stop at once, so that no show() lands between stopping and closing.
     const stopping = stop();
-    await window.close();
+    await propertiesToolWindow.close();
     await stopping;
   });
   // Closed with the title bar: stop the 1-second stats polling and any read (reopening starts them again).
-  window.onClose(stop);
+  propertiesToolWindow.onClose(stop);
 
   plugin.onDispose(stop);
 
@@ -228,9 +228,9 @@ export function propertiesWindow(plugin: Plugin) {
     }
     load();
     try {
-      await window.show();
+      await propertiesToolWindow.show();
     } catch (error) {
-      if (!window.opened) await stop(); // it did not open: nothing to follow or poll
+      if (!propertiesToolWindow.opened) await stop(); // it did not open: nothing to follow or poll
       throw error;
     }
   };

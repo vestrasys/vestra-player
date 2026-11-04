@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.9
+
+- Code only: the window parameter of the open/bind/release helpers is named `toolWindow` (was `window`). Who must change: nobody. No behaviour change.
+
 ## 1.0.8
 
 - Export Tasks: the list no longer lags while a video plays. With SDK 1.5.45's precise invalidation, state changed outside SDK-invoked code is drawn only at the next update (up to about a second later while playing), and three task-row changes happened after an `await`: the history trim (beyond 20 tasks, each further old task is removed after the previous one's snapshot is released), a task's first job state once the export call returns (`Preparing` becoming `Exporting`), and a burst frame's output once its job finishes (`Exporting · 3/10` counting up). All three now call `plugin.update()`. Who must change: nobody. What users see: the rows change at once.

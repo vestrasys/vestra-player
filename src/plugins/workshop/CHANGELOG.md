@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.34
+
+- Code only: the AI window handle (`ai.slint`) is named `aiWindow` (was `window`), and the window handle in a new project's `main.ts` (`scaffold_plugin`) is named `mainWindow` (was `window`). Who must change: nobody. The plugin behaves the same; a newly scaffolded project differs only in that name.
+
 ## 2.2.33
 
 - The vendored SDK is 1.6.2 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The AI's documentation now describes sidebar tabs from player 0.7.3: no limit on tabs, a » menu for the ones that do not fit, and a plugin whose tab is in the background goes to standby until the tab is shown (session storage survives). No change to the plugin's own behaviour; `minPlayerVersion` stays 0.6.8.

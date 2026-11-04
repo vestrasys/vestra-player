@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.7
+
+- Code only: the resume window handle is named `#resumeWindow` (was `#window`). Who must change: nobody. No behaviour change.
+
 ## 0.1.6
 
 - The plugin no longer fails to start ("invalid command: path segment requires 1..=80 bytes, no controls or surrounding whitespace") when a recently played file has a long non-Latin name, so Open ▸ Recently Played and the resume points come back for those users. The player limits a menu line to 80 UTF-8 bytes, while the plugin shortened a name to 80 characters: a Chinese or Japanese name (3 bytes a character) with the point in brackets went far past it, and the refusal of that one line failed the whole activation. Each line is now shortened in the middle by bytes, leaving room for the number, the point, the longest translation of its brackets (`{}（{}）`, 6 bytes) and a duplicate's ` (n)`, which is now given whenever a line would read like another line or a fixed item of the submenu as the player keys them (in English, with the point: `X (1:02:03)` and `X` at 1:02:03; a file named `Clear Entries`); only whole characters are cut (no half CJK character, split emoji or detached accent). Controls in a name become spaces and surrounding whitespace is trimmed, both of which the player also refuses; a name of whitespace only shows its path. A line that still would not pass is left out and logged instead of failing the plugin.

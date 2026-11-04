@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.4
+
+- Code only: the Add Link window handle is named `linkWindow` (was `window`). Who must change: nobody. No behaviour change.
+
 ## 0.2.3
 
 Who must change: nobody. What users see: with long lists a click shows a little sooner (20,000 rows: about 40 to 21 ms in the plugin with SDK 1.5.47). Needs player 0.6.0.

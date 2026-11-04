@@ -20,30 +20,30 @@ export function parseStep(text: string): number | null {
  * source: it works with nothing open.
  */
 export class TimeJump {
-  readonly window: Window;
+  readonly timeJumpWindow: Window;
   invalid = [false, false, false, false];
   outOfRange = false;
   readonly #settings: SettingsStore;
 
   constructor(scope: Scope, settings: SettingsStore, apply: (steps: SeekSteps) => Promise<void>) {
     this.#settings = settings;
-    this.window = scope.windows.create("ui/time-jump.slint", { id: "playback-time-jump" });
-    this.window.bind(() => ({
+    this.timeJumpWindow = scope.windows.create("ui/time-jump.slint", { id: "playback-time-jump" });
+    this.timeJumpWindow.bind(() => ({
       outOfRange: this.outOfRange,
       invalid1: this.invalid[0],
       invalid2: this.invalid[1],
       invalid3: this.invalid[2],
       invalid4: this.invalid[3],
     }));
-    this.window.on("cancel", () => this.#hide());
+    this.timeJumpWindow.on("cancel", () => this.#hide());
     // Default restores only its own row.
-    this.window.on("reset", (row: number) => {
+    this.timeJumpWindow.on("reset", (row: number) => {
       if (!(row >= 0 && row < 4)) return;
-      this.window.set({ [`value${row + 1}`]: stepText(DEFAULT_STEPS[row]!) });
+      this.timeJumpWindow.set({ [`value${row + 1}`]: stepText(DEFAULT_STEPS[row]!) });
       this.invalid[row] = false;
       if (!this.invalid.includes(true)) this.outOfRange = false;
     });
-    this.window.on("confirm", async (...args: unknown[]) => {
+    this.timeJumpWindow.on("confirm", async (...args: unknown[]) => {
       const steps = args.slice(0, 4).map((row) => parseStep(String(row ?? "")));
       this.invalid = steps.map((step) => step === null);
       if (steps.length !== 4 || this.invalid.includes(true)) {
@@ -67,23 +67,23 @@ export class TimeJump {
   #visible = false;
   #hide() {
     this.#visible = false;
-    return this.window.hide();
+    return this.timeJumpWindow.hide();
   }
 
   /** Brings an open window to the front as it is; otherwise shows the saved values (a cancelled edit is gone). */
   async show() {
-    if (this.#visible && this.window.opened) return this.window.show();
+    if (this.#visible && this.timeJumpWindow.opened) return this.timeJumpWindow.show();
     this.#visible = true;
     const steps = this.#settings.value.seekSteps;
     this.invalid = [false, false, false, false];
     this.outOfRange = false;
-    this.window.set({
+    this.timeJumpWindow.set({
       value1: stepText(steps[0]),
       value2: stepText(steps[1]),
       value3: stepText(steps[2]),
       value4: stepText(steps[3]),
       keyframes: this.#settings.value.seekKeyframes,
     });
-    await this.window.show();
+    await this.timeJumpWindow.show();
   }
 }

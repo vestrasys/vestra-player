@@ -88,20 +88,20 @@ export default async function activate(plugin: Plugin) {
    */
   const liveProps = new Map<Window, () => Props>();
   const live = new Map<Window, Scope>();
-  function whileOpen(window: Window, props: () => Props) {
-    liveProps.set(window, props);
-    window.onClose(() => release(window));
+  function whileOpen(toolWindow: Window, props: () => Props) {
+    liveProps.set(toolWindow, props);
+    toolWindow.onClose(() => release(toolWindow));
   }
-  function bindLive(window: Window) {
-    const props = liveProps.get(window);
-    if (!props || live.has(window)) return;
+  function bindLive(toolWindow: Window) {
+    const props = liveProps.get(toolWindow);
+    if (!props || live.has(toolWindow)) return;
     const scope = plugin.scope();
-    scope.add(window.bind(props));
-    live.set(window, scope);
+    scope.add(toolWindow.bind(props));
+    live.set(toolWindow, scope);
   }
-  async function release(window: Window) {
-    const scope = live.get(window);
-    live.delete(window);
+  async function release(toolWindow: Window) {
+    const scope = live.get(toolWindow);
+    live.delete(toolWindow);
     await scope?.dispose();
   }
 
@@ -344,14 +344,14 @@ export default async function activate(plugin: Plugin) {
   });
 
   // ---------------------------------------------------------------- windows and menu
-  async function show(window: Window, first?: () => Promise<void>) {
+  async function show(toolWindow: Window, first?: () => Promise<void>) {
     try {
-      if (!window.opened) await first?.();
-      bindLive(window);
-      await window.show();
+      if (!toolWindow.opened) await first?.();
+      bindLive(toolWindow);
+      await toolWindow.show();
       if (errorWindow.opened) await errorWindow.close();
     } catch (error) {
-      if (!window.opened) await release(window);
+      if (!toolWindow.opened) await release(toolWindow);
       console.error(`[capture] window failed to open: ${message(error)}`);
       try {
         await errorWindow.show(); // its text is in ui/error.slint
@@ -362,9 +362,9 @@ export default async function activate(plugin: Plugin) {
     }
   }
   // A fresh dialog starts its times at the current position.
-  const startAtNow = (window: Window, withEnd: boolean) => async () => {
+  const startAtNow = (toolWindow: Window, withEnd: boolean) => async () => {
     const { position, duration } = await player.refresh();
-    window.set({
+    toolWindow.set({
       startTime: String(position ?? 0),
       ...(withEnd ? { endTime: String(Math.min((position ?? 0) + 10, duration ?? Infinity)), audioIndex: 1 } : {}),
     });

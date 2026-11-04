@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.10
+
+- Code only: the Picture window handle (`picture.slint`) is named `pictureWindow` (was `window`). Who must change: nobody. No behaviour change.
+
 ## 1.1.9
 
 - **Reset ▸ Picture (Q)** (was Video ▸ Reset) now returns the picture to normal: besides the colours and the Gaussian blur it already reset, it turns off every image-processing switch of this plugin (sharpen, edge sharpen, 3D/gradual/temporal denoise, deblock, deband, frame doubling, motion interpolation). Before, 3D Denoise and the other effects stayed on after Reset. Strengths are kept, as when a switch is turned off by hand, so turning one back on brings its strength back; a row's **Default** button in the window still resets that row's strength only, and the colour page's presets still replace colour and blur only. Flip, rotation, crop/stretch, aspect, framing, deinterlace and the pixel shaders / HDR options have their own items and are left alone, as are other plugins' filters. With nothing left on, the plugin's chain holds no filter, so zero-copy decoding resumes (deinterlace Auto is the player's own deinterlacer, not a filter). The reset is saved like any other change.

@@ -797,13 +797,13 @@ export function template(id: string, name: string, title: string, sdkVersion: st
 
 /** ${title}: a menu command opens a tool window. */
 export default async function activate(plugin: Plugin) {
-  const window = plugin.windows.create("ui/main.slint");
-  window.bind(() => ({ message: "Hello" }));
+  const mainWindow = plugin.windows.create("ui/main.slint");
+  mainWindow.bind(() => ({ message: "Hello" }));
 
   plugin.commands.add({
     id: "${name}.open",
     path: ["${title}…"],
-    run: () => window.show(),
+    run: () => mainWindow.show(),
   });
 }
 `,

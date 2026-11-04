@@ -37,7 +37,7 @@ export class ListWindow {
   readonly #chapters: Chapters;
   readonly #bookmarks: Bookmarks;
   readonly #actions: Actions;
-  readonly #window;
+  readonly #marksWindow;
   #selected: string | null = null;
   #filter = "";
   /** How the window names an untitled chapter / bookmark, `{}` for the number (it sends them with the search). */
@@ -50,21 +50,21 @@ export class ListWindow {
     this.#chapters = chapters;
     this.#bookmarks = bookmarks;
     this.#actions = actions;
-    const window = (this.#window = plugin.windows.create("ui/marks.slint"));
-    window.on("select", (rowId: string) => this.#select(rowId));
-    window.on("activate", (rowId: string) => this.#activate(rowId));
-    window.on("search", (text: string, chapter: string, bookmark: string) => {
+    const marksWindow = (this.#marksWindow = plugin.windows.create("ui/marks.slint"));
+    marksWindow.on("select", (rowId: string) => this.#select(rowId));
+    marksWindow.on("activate", (rowId: string) => this.#activate(rowId));
+    marksWindow.on("search", (text: string, chapter: string, bookmark: string) => {
       this.#filter = text.trim().toLowerCase();
       // The window's translated names for an untitled row (`@tr` in marks.slint).
       if (typeof chapter === "string" && chapter.includes("{}")) this.#names.chapter = chapter;
       if (typeof bookmark === "string" && bookmark.includes("{}")) this.#names.bookmark = bookmark;
     });
-    window.on("commitTitle", (text: string) => this.#commitTitle(text));
-    window.on("commitTime", (text: string) => this.#commitTime(text));
-    window.on("add", () => this.#add());
-    window.on("remove", () => this.#remove());
-    window.on("clear", () => this.#clear());
-    window.bind(() => {
+    marksWindow.on("commitTitle", (text: string) => this.#commitTitle(text));
+    marksWindow.on("commitTime", (text: string) => this.#commitTime(text));
+    marksWindow.on("add", () => this.#add());
+    marksWindow.on("remove", () => this.#remove());
+    marksWindow.on("clear", () => this.#clear());
+    marksWindow.bind(() => {
       const bookmark = this.#bookmark();
       const state = plugin.player.state;
       const media = hasMedia(state);
@@ -98,7 +98,7 @@ export class ListWindow {
 
   /** H: open, or bring the open window to the front. */
   async show() {
-    await this.#window.show();
+    await this.#marksWindow.show();
   }
 
   #bookmark() {
@@ -153,7 +153,7 @@ export class ListWindow {
   /** Put the selected bookmark's values into the two inputs (always sent: they may hold typing). */
   #loadEdit() {
     const bookmark = this.#bookmark();
-    this.#window.set({
+    this.#marksWindow.set({
       editTime: bookmark ? precise(bookmark.time, true) : "",
       editTitle: bookmark ? bookmark.title : "",
       editNumber: bookmark && !bookmark.title ? bookmark.number : 0,
@@ -199,7 +199,7 @@ export class ListWindow {
     const bookmark = this.#actions.add();
     if (!bookmark) return;
     this.#filter = "";
-    this.#window.set({ searchText: "" });
+    this.#marksWindow.set({ searchText: "" });
     this.#selected = `b${bookmark.id}`;
     this.#status = NO_STATUS;
     this.#loadEdit();

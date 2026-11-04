@@ -62,7 +62,7 @@ export default async function activate(plugin: Plugin) {
     return row.external ? text("Track {} (external)", [row.n]) : text("Track {}", [row.n]);
   };
   const filter = plugin.audio.filter("workbench");
-  const window = plugin.windows.create("ui/workbench.slint", { id: "audio-workbench" });
+  const workbenchWindow = plugin.windows.create("ui/workbench.slint", { id: "audio-workbench" });
   const store = settingsStore(plugin);
   const stored = parse(store.value);
   let settings = stored.settings;
@@ -432,7 +432,7 @@ export default async function activate(plugin: Plugin) {
   plugin.onDispose(() => clearInterval(devicePoll));
 
   // ---------------------------------------------------------------- window
-  window.bind(() => {
+  workbenchWindow.bind(() => {
     const list = tracks();
     return {
       status: describe(),
@@ -460,47 +460,47 @@ export default async function activate(plugin: Plugin) {
       ...deviceProps(),
     };
   });
-  window.on("tabChanged", (index: number) => {
+  workbenchWindow.on("tabChanged", (index: number) => {
     if (!Number.isInteger(index) || index < 0 || index >= TABS || index === tab) return;
     tab = index;
     persist();
   });
-  window.on("gainChanged", (index: number, value: number) => {
+  workbenchWindow.on("gainChanged", (index: number, value: number) => {
     if (!Number.isInteger(index) || index < 0 || index >= settings.gains.length) return;
     const gains = [...settings.gains];
     gains[index] = tenth(value, -6, 6);
     edit({ ...settings, equalizer: true, gains });
   });
-  window.on("equalizerChanged", (on: boolean) => edit({ ...settings, equalizer: on === true }));
-  window.on("delayChanged", (value: number) => edit({ ...settings, delayMs: delay(value) }));
-  window.on("delayReset", () => edit({ ...settings, delayMs: 0 }));
-  window.on("normalizeChanged", (on: boolean) => edit({ ...settings, normalize: on === true }));
-  window.on("clarityToggled", (on: boolean) => edit({ ...settings, clarity: { ...settings.clarity, on: on === true } }));
-  window.on("clarityChanged", (value: number) => {
+  workbenchWindow.on("equalizerChanged", (on: boolean) => edit({ ...settings, equalizer: on === true }));
+  workbenchWindow.on("delayChanged", (value: number) => edit({ ...settings, delayMs: delay(value) }));
+  workbenchWindow.on("delayReset", () => edit({ ...settings, delayMs: 0 }));
+  workbenchWindow.on("normalizeChanged", (on: boolean) => edit({ ...settings, normalize: on === true }));
+  workbenchWindow.on("clarityToggled", (on: boolean) => edit({ ...settings, clarity: { ...settings.clarity, on: on === true } }));
+  workbenchWindow.on("clarityChanged", (value: number) => {
     if (settings.clarity.on) edit({ ...settings, clarity: { on: true, db: tenth(value, 0, 6) } });
   });
-  window.on("clarityReset", () => edit({ ...settings, clarity: neutralClarity() }));
-  window.on("syncKeepSelected", (index: number) => {
+  workbenchWindow.on("clarityReset", () => edit({ ...settings, clarity: neutralClarity() }));
+  workbenchWindow.on("syncKeepSelected", (index: number) => {
     const keep = Number.isInteger(index) ? syncKeeps[index] : undefined;
     if (keep) setKeep(keep.id);
   });
-  window.on("presetSelected", (index: number) => preset(index));
-  window.on("resetRequested", () => edit(neutral()));
-  window.on("retryRequested", () => {
+  workbenchWindow.on("presetSelected", (index: number) => preset(index));
+  workbenchWindow.on("resetRequested", () => edit(neutral()));
+  workbenchWindow.on("retryRequested", () => {
     if (ready() && !busy()) filter.retry();
   });
-  window.on("trackSelected", (index: number) => {
+  workbenchWindow.on("trackSelected", (index: number) => {
     const chosen = Number.isInteger(index) ? tracks()[index] : undefined;
     if (chosen) void selectTrack(chosen.id);
   });
-  window.on("loadRequested", () => loadExternal());
-  window.on("channelSelected", (index: number) => {
+  workbenchWindow.on("loadRequested", () => loadExternal());
+  workbenchWindow.on("channelSelected", (index: number) => {
     const mode = Number.isInteger(index) ? channelModes[index] : undefined;
     // The window gives no on-screen text; only the menu does.
     if (mode && !mono()) edit({ ...settings, channels: mode.id });
   });
-  window.on("autoLoadChanged", (on: boolean) => setAutoLoad(on === true));
-  window.on("deviceSelected", (index: number) => {
+  workbenchWindow.on("autoLoadChanged", (on: boolean) => setAutoLoad(on === true));
+  workbenchWindow.on("deviceSelected", (index: number) => {
     const entry = Number.isInteger(index) ? deviceEntries()?.[index] : undefined;
     if (entry?.connected) void chooseDevice(entry.id);
   });
@@ -551,7 +551,7 @@ export default async function activate(plugin: Plugin) {
     path: [AUDIO, "Audio Workbench…"],
     order: 510,
     group: "audio-tools",
-    run: () => window.show(),
+    run: () => workbenchWindow.show(),
   });
   plugin.commands.add({
     id: "audio.track.cycle",

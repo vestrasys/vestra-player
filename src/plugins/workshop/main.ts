@@ -296,8 +296,8 @@ export default async function activate(plugin: Plugin) {
     }
   };
 
-  const window = plugin.windows.create("ai.slint");
-  window.bind(() => {
+  const aiWindow = plugin.windows.create("ai.slint");
+  aiWindow.bind(() => {
     const busy = !!(active && runs.get(active.id)?.running);
     const last = shown.rows.at(-1);
     const p = project();
@@ -463,7 +463,7 @@ export default async function activate(plugin: Plugin) {
     const meta = active;
     const chat = shown;
     draft = "";
-    window.set({ draft: "" }); // clears the field even if the user typed the same text again
+    aiWindow.set({ draft: "" }); // clears the field even if the user typed the same text again
     chat.user(message);
     chat.model = model();
     chat.begin();
@@ -503,17 +503,17 @@ export default async function activate(plugin: Plugin) {
     settings.save({ ...settings.value, lastSession: meta?.id ?? null });
   };
 
-  window.on("send", send);
-  window.on("draftChanged", (text: string) => {
+  aiWindow.on("send", send);
+  aiWindow.on("draftChanged", (text: string) => {
     draft = text;
   });
-  window.on("stop", () => {
+  aiWindow.on("stop", () => {
     const run = active && runs.get(active.id);
     if (run?.running) run.worker.abort();
   });
-  window.on("retry", () => send(shown.lastPrompt));
-  window.on("newChat", () => select(null));
-  window.on("selectSession", (id: string) => select(metas.find((m) => m.id === id) ?? null));
+  aiWindow.on("retry", () => send(shown.lastPrompt));
+  aiWindow.on("newChat", () => select(null));
+  aiWindow.on("selectSession", (id: string) => select(metas.find((m) => m.id === id) ?? null));
 
   /**
    * Deletes a conversation after the user confirmed: its record, its plugin
@@ -571,26 +571,26 @@ export default async function activate(plugin: Plugin) {
       plugin.update();
     }
   };
-  window.on("deleteSession", (id: string) => removeSession(id));
-  window.on("deleteChat", () => active && removeSession(active.id));
-  window.on("toggle", (id: string) => shown.toggle(id));
-  window.on("copy", (id: string) => {
+  aiWindow.on("deleteSession", (id: string) => removeSession(id));
+  aiWindow.on("deleteChat", () => active && removeSession(active.id));
+  aiWindow.on("toggle", (id: string) => shown.toggle(id));
+  aiWindow.on("copy", (id: string) => {
     const row = shown.rows.find((r) => r.id === id);
     if (row) return plugin.clipboard.writeText(cut(row.text, 1000 * 1000));
   });
-  window.on("copyCode", (code: string) => plugin.clipboard.writeText(cut(code, 1000 * 1000)));
-  window.on("openLink", (url: string) => {
+  aiWindow.on("copyCode", (code: string) => plugin.clipboard.writeText(cut(code, 1000 * 1000)));
+  aiWindow.on("openLink", (url: string) => {
     // Only web links; the player refuses other schemes too.
     if (/^https?:\/\//i.test(url)) return plugin.system.openUrl(url);
   });
-  window.on("openSettings", () => plugin.settings.show("byok"));
-  window.on("openFolder", () => active && plugin.system.openPath(sessions.work(active.id)));
-  window.on("chooseProject", (index: number) => {
+  aiWindow.on("openSettings", () => plugin.settings.show("byok"));
+  aiWindow.on("openFolder", () => active && plugin.system.openPath(sessions.work(active.id)));
+  aiWindow.on("chooseProject", (index: number) => {
     chosen = projects[index]?.id ?? chosen;
     delivering.say("");
   });
-  window.on("install", action((meta, p) => installFrom(pathsOf(meta.id), p.id, false)));
-  window.on(
+  aiWindow.on("install", action((meta, p) => installFrom(pathsOf(meta.id), p.id, false)));
+  aiWindow.on(
     "exportVxp",
     action(async (meta, p) => {
       exporting = true;
@@ -607,7 +607,7 @@ export default async function activate(plugin: Plugin) {
       }
     }),
   );
-  window.on(
+  aiWindow.on(
     "exportSource",
     action(async (meta, p) => {
       exporting = true;
@@ -623,8 +623,8 @@ export default async function activate(plugin: Plugin) {
       }
     }),
   );
-  window.on("openProject", action((_meta, p) => plugin.system.openPath(p.directory)));
-  window.on("openPi", () => plugin.system.openUrl(PI_URL));
+  aiWindow.on("openProject", action((_meta, p) => plugin.system.openPath(p.directory)));
+  aiWindow.on("openPi", () => plugin.system.openUrl(PI_URL));
 
   // ---- settings page (Options ▸ Plugins ▸ Vestra Player AI)
   /** A provider list entry: pi's providers by their own name (data), the custom endpoints in words. */
@@ -872,7 +872,7 @@ export default async function activate(plugin: Plugin) {
     button: { icon: "ai", order: 100 },
     run: () => {
       loadKey(); // not awaited: a keychain dialog must not hold the window
-      return window.show();
+      return aiWindow.show();
     },
   });
 }

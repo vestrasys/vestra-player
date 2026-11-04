@@ -8,10 +8,10 @@ import { server } from "./fixture.mjs";
 
 const BROKEN = `import type { Plugin } from "@vestra-player/sdk";
 export default async function activate(plugin: Plugin) {
-  const window = plugin.windows.create("ui/main.slint");
+  const mainWindow = plugin.windows.create("ui/main.slint");
   const count: number = "zero";
-  window.bind(() => ({ message: String(count) }));
-  plugin.commands.add({ id: "demo.open", path: ["演示…"], run: () => window.show() });
+  mainWindow.bind(() => ({ message: String(count) }));
+  plugin.commands.add({ id: "demo.open", path: ["演示…"], run: () => mainWindow.show() });
 }
 `;
 const FIXED = BROKEN.replace(`const count: number = "zero";`, "const count = 0;").replace("String(count)", `"Hello"`);

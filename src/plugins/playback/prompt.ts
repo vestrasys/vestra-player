@@ -16,7 +16,7 @@ export type Notice = "" | "stale" | FailureKind | "other";
  * confirm is refused. Within that source the action applies to the current state.
  */
 export class Prompt {
-  readonly window: Window;
+  readonly promptWindow: Window;
   notice: Notice = "";
   detail = "";
   #sourceId: number | null = null;
@@ -32,10 +32,10 @@ export class Prompt {
   ) {
     this.#player = scope.player;
     this.#initial = initial;
-    this.window = scope.windows.create("ui/prompt.slint", { id });
-    this.window.bind(() => ({ kind, notice: this.notice, detail: this.detail }));
-    this.window.on("cancel", () => this.hide());
-    this.window.on("confirm", async (value: string) => {
+    this.promptWindow = scope.windows.create("ui/prompt.slint", { id });
+    this.promptWindow.bind(() => ({ kind, notice: this.notice, detail: this.detail }));
+    this.promptWindow.on("cancel", () => this.hide());
+    this.promptWindow.on("confirm", async (value: string) => {
       if (this.#sourceId !== this.#player.state.sourceId) {
         this.#tell("stale");
         return;
@@ -59,13 +59,13 @@ export class Prompt {
   async show() {
     this.#sourceId = this.#player.state.sourceId;
     this.#tell("");
-    this.window.set({ value: this.#initial() });
-    await this.window.show();
+    this.promptWindow.set({ value: this.#initial() });
+    await this.promptWindow.show();
   }
   async hide() {
     this.#sourceId = null;
     this.#tell("");
-    if (this.window.opened) await this.window.hide();
+    if (this.promptWindow.opened) await this.promptWindow.hide();
   }
   /** Another source replaced the one this window was opened for. */
   invalidate() {

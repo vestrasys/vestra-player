@@ -46,7 +46,7 @@ const lines = (text: string) =>
  * the user's open goes ahead even if something else changed the source.
  */
 export class OpenUrl {
-  readonly window: Window;
+  readonly openUrlWindow: Window;
   busy = false;
   notice: UrlNotice = "";
   detail = "";
@@ -60,25 +60,25 @@ export class OpenUrl {
   constructor(scope: Scope, settings: SettingsStore, osd: Osd) {
     this.#scope = scope;
     this.#settings = settings;
-    this.window = scope.windows.create("ui/open-url.slint", { id: "playback-open-url" });
-    this.window.bind(() => ({
+    this.openUrlWindow = scope.windows.create("ui/open-url.slint", { id: "playback-open-url" });
+    this.openUrlWindow.bind(() => ({
       notice: this.notice,
       detail: this.detail,
       busy: this.busy,
       selectAll: this.#selectAll,
       pasteFromClipboard: this.#settings.value.openUrl.pasteFromClipboard,
     }));
-    this.window.on("pasteChanged", (on: boolean) =>
+    this.openUrlWindow.on("pasteChanged", (on: boolean) =>
       this.#settings.update((s) => {
         s.openUrl.pasteFromClipboard = on;
       }),
     );
-    this.window.on("cancel", async (value: string) => {
+    this.openUrlWindow.on("cancel", async (value: string) => {
       // A running open goes ahead; closing only stops waiting for it here.
       this.lastInput = value;
-      await this.window.close();
+      await this.openUrlWindow.close();
     });
-    this.window.on("confirm", async (value: string) => {
+    this.openUrlWindow.on("confirm", async (value: string) => {
       if (this.busy) return;
       this.lastInput = value;
       const all = lines(value);
@@ -95,12 +95,12 @@ export class OpenUrl {
       } catch (error) {
         this.busy = false;
         this.#tell("failed", errorMessage(error));
-        if (!this.window.opened) osd("Open failed: {}", [this.detail]); // cancelled while opening
+        if (!this.openUrlWindow.opened) osd("Open failed: {}", [this.detail]); // cancelled while opening
         return;
       }
       this.busy = false;
       this.#tell("");
-      await this.window.close();
+      await this.openUrlWindow.close();
       if (note) osd(FIRST_LINE_ONLY); // the window is gone, so the note goes on the video
     });
   }
@@ -112,7 +112,7 @@ export class OpenUrl {
 
   /** Ctrl+U: open the window, or bring the open one forward unchanged. */
   show() {
-    if (this.window.opened) return this.window.show();
+    if (this.openUrlWindow.opened) return this.openUrlWindow.show();
     this.#showing ??= this.#open().finally(() => (this.#showing = null));
     return this.#showing;
   }
@@ -128,7 +128,7 @@ export class OpenUrl {
     }
     this.#tell("");
     this.#selectAll = selectAll;
-    this.window.set({ value, selectAll });
-    await this.window.show();
+    this.openUrlWindow.set({ value, selectAll });
+    await this.openUrlWindow.show();
   }
 }
