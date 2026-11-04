@@ -15,7 +15,8 @@ flowchart TB
     R3["Oct 25–28 · Windows and plugins at scale<br/>60 fps on Windows, keyframe seeks and thumbnails,<br/>plugin management, shared runner, session storage,<br/>render modes, full UI test · 0.5.1–0.5.13"]
     R4["Oct 27 – Nov 1 · On-demand plugins and GPU<br/>lazy activation (behind a flag), Windows GPU path (off by default),<br/>AI upscaling, video primitives, large lists · 0.5.14–0.6.3"]
     R5["Nov 2–3 · Plugin process supervisor<br/>one supervisor for every plugin process, on-demand for everyone,<br/>restart policy, memory limits · 0.6.4–0.7.0, SDK 1.6.0"]
-    R1 --> R2 --> R3 --> R4 --> R5
+    R6["Nov 3–4 · Release pipeline and sidebar<br/>release/host version split, sidebar tabs on demand,<br/>CI back on main · 0.7.1–0.7.4, SDK 1.6.1–1.6.3"]
+    R1 --> R2 --> R3 --> R4 --> R5 --> R6
 ```
 
 | Dates | Work | Result |
@@ -37,6 +38,14 @@ flowchart TB
 | 10-31 → 11-02 | 0.6.0–0.6.5 | ListView and large lists, widget library, update check, Reset submenu, shader crash guard, stop reasons, keep-disabled on update |
 | 11-02/03 | Plugin process supervisor B0–B7 | Pure core plus adapter; on-demand start for everyone; restart and backoff; 512 MB heap cap; process budget and memory pressure; old start/stop logic removed (0.7.0) |
 | 11-03 | AI chat, perf, download page | One activity record per turn, selectable text (SDK 1.6.0); revision-gated list updates; AI feature video |
+| 11-03 | 0.7.1, store, Options window | v0.7.1 published; store tabs All · Installed · Updates (0.2.11) and one control per row (0.2.12, #164); a woken plugin no longer rebuilds the Options window (#162) |
+| 11-03/04 | Release and host versions | Release version split from the host version; a published host is reused by input hash (`host.json`) (#166/#167) |
+| 11-04 | Sidebar tabs on demand | No tab cap, » overflow menu; only the current tab keeps its plugin running (#171; SDK 1.6.2, Workshop 2.2.33) |
+| 11-04 | v0.7.4 | v0.7.3 tagged, run stopped at typos; tags are not moved, so it shipped as v0.7.4 (release 0.7.4, host 0.7.3; #172/#173); main remote CI back on |
+| 11-03/04 | SDK 1.6.1–1.6.3 | 1.6.1 docs (player and Workshop 2.2.32, #168); 1.6.2 no tab cap, TestHost `keepsRunning` reports the current tab; 1.6.3 docs, examples name window handles after their window; built-ins do the same (#176) |
+| 11-04 | CI fixes | `host.mjs` exits via `exitCode` (Node 26 `process.exit` deadlock with a GC worker, #174); runtime tests without stdout/stderr race or leftover children, with step timeouts (#177) |
+| 11-03/04 | Download page (separate repo, not deployed) | Hero centre and store clip re-recorded on the final build, AI clip re-cut; NES footage is Twin Dragons (open-source homebrew) instead of Concentration Room; Blender films kept (CC BY) |
+| 11-04 | Download page text | Credits and a YouTube trademark line in the footer; "All downloads" in the header; player card text rewritten |
 
 ## 2. Decisions in force
 
@@ -48,7 +57,7 @@ Grouped by area. "User" marks a user ruling; the rest are coordinator or maintai
 - **One public API** `vestra/1` for built-in and third-party plugins. SDK releases are patch bumps by default, removals included (deprecate, then remove); `apiVersion` stays `vestra/1` (user, 10-26). SDK 1.6.0 was a minor bump for selectable Markdown (user, 11-03).
 - **First-party Rust forbids `unsafe`**, except isolated crates under `src/host/unsafe/` with SAFETY comments, checked by the unsafe-policy script (user, 10-21).
 - **The player repository stays private until release; the SDK and plugin repositories are public** (user, 10-22, 11-01).
-- **No remote CI for the player** (paid budget set to 0, 11-02): merge on local checks. SDK releases never wait on macOS runner capacity (user, 11-02).
+- **Remote CI for the player runs on main and tags only** (back on after v0.7.4, 11-04); branches merge on local checks. SDK releases never wait on macOS runner capacity (user, 11-02).
 - **Follow established practice** (mpv and mainstream players; Chrome, VS Code and similar for plugin models) without asking; ask only real trade-offs (user, 10-27).
 - **Round records are condensed here and deleted at the end of each round** (user, 11-03).
 
@@ -63,6 +72,8 @@ Grouped by area. "User" marks a user ruling; the rest are coordinator or maintai
 - **Declarative command state** (`plugin.when`) and wake on low-frequency events; no API to run another plugin's commands (user, 10-31).
 - **A rejected command declaration is skipped, not fatal**; TestHost stays strict (user, 11-01).
 - **Large lists**: the whole list lives in the host and is shown with ListView; no sparse rows or placeholders (user, 10-31).
+- **Sidebar tabs on demand**: no tab cap, extra tabs in a » menu; only the current tab keeps its plugin running, background tabs stand by (11-04).
+- **No OS sandbox for plugins** (user, 11-03, confirmed 11-04). No plugin ecosystem with full Node sandboxes meaningfully (Electron's sandbox and VS Code web extensions drop Node; Figma has its own API); Windows AppContainer is blocked by libuv #5178 (spawn with pipes hangs; fixed in libuv 1.53, in no Node release yet) and by blocked loopback for `openStream`. Security comes from store PR scanning, transparency at install, and revocation.
 
 ### Interface
 
@@ -73,6 +84,9 @@ Grouped by area. "User" marks a user ruling; the rest are coordinator or maintai
 - **Fonts**: system UI fonts with a per-script CJK fallback ending in bundled Noto Sans CJK SC (user, 10-22/24).
 - **Mouse**: a click on the video plays or pauses, double click unbound (user, 10-26). Full screen leaves with Escape only (user, 11-01). Volume up stops at 100.
 - **Own visual identity**: two themes, vestra and vestra-light; menu layout and geometry unchanged (user, 10-22).
+- **No compile cache for plugin windows yet**; a brief stall on open is acceptable. Any cache first needs an experiment measuring memory per definition with a hard bound, then a user decision (user, 11-03).
+- **No hide-instead-of-destroy for windows**: it hides the problem rather than fixing it (user, 11-03).
+- **The Options window is not special** in how it compiles and updates; only its composition of many plugins' pages is (user, 11-03).
 
 ### Playback and media
 
@@ -102,6 +116,8 @@ Grouped by area. "User" marks a user ruling; the rest are coordinator or maintai
 - Bundled Node 26 (only going up during `vestra/1`); installers on this repository's GitHub Releases; macOS arm64 from 15.0; Windows per-user installer plus portable zip; release notes at `doc/releases/v<version>.md` (user, 10-22).
 - **0.x releases need no question**; the update check is on by default (download and verify; the user runs the installer) (user, 11-01).
 - Internal versions that were never published are combined into the next public one (0.6.6–0.6.8 and 0.7.0 → 0.7.1, user, 11-03).
+- **The release version is separate from the host version**; a release reuses a published host whose inputs hash the same (`host.json`) (11-03).
+- **Tags are never moved**; a tag whose run fails ships as the next patch (v0.7.3 → v0.7.4).
 
 ## 3. Lessons that changed how we work
 
@@ -117,15 +133,18 @@ Most lessons are already rules in agentic-workflow.md, with their evidence. Thes
 - **Staging**: `builtin.json` must list each plugin's current version (no BOM); the bundled runtime SDK and the Workshop vendored SDK must match the player's SDK.
 - **Windows PowerShell 5.1 reads UTF-8 files as ANSI** and mangles `§` and CJK text; edit records with UTF-8 tools only.
 - **Removing an unmerged worktree loses work**; check status and merge state first.
+- **`[skip ci]` in a tagged commit also suppresses the tag-push release run**; dispatch `release.yml` on the tag instead. A branch head without `[skip ci]` starts remote CI on push.
+- **Node 26 can deadlock in `process.exit` with a GC worker**; scripts set `process.exitCode` and return.
 - **A clean history rewrite needs**: a mirror backup and bundle, a dry run proving zero matches across all refs, paused Actions and rulesets, then rebuilt worktrees. npm unpublish works only within 72 h.
 
 ## 4. Open topics
 
 | Area | Topic | Evidence / next step |
 | --- | --- | --- |
-| Release | **Publish 0.7.1** through `release.yml` (remote CI re-enabled for main and tags, 2026-11-03) | In progress |
-| Release | macOS signing and notarization; Windows code signing | `release.yml` "TODO(S7)"; Intel macOS build on demand |
-| SDK | 1.6.1 docs patch: "player 0.6.x (planned)" labels → 0.7.1; `platforms.md` and `how-to/gpu-rendering.md` still say Windows has no GPU renderer | SDK repo |
+| Release | **macOS signing and notarization; Windows code signing**: the user's top priority, before publishing the download page or making the repo public (user, 11-04) | `release.yml` "TODO(S7)"; Intel macOS build on demand |
+| Release | The player repo is private, so the update check and the download links get 404 | User decides on making it public; signing comes first |
+| Interface | Whether a hidden sidebar should also stand by the current tab's plugin (today it stays up) | User decision pending |
+| Interface | Sidebar tabs on demand: fullscreen overlay not checked by hand | GUI check |
 | Supervisor | Store shows "Running" for a plugin in standby | `store.ts` has no `idle` state |
 | Supervisor | Hang attribution inside the shared runner (today a hang restarts all members) | `shared-runner.ts` attributes only exceptions |
 | Platform | Install records do not keep the repository index signature evidence; third-party plugins in the shared runner | `package_store` `Source::Repository` |
@@ -148,8 +167,8 @@ Most lessons are already rules in agentic-workflow.md, with their evidence. Thes
 | AI | Web search for Vestra Player AI | Research only; needs rulings (paid, default off, security) |
 | macOS | Checks owed: ⌥ + named keys and the panel menu after them; deinterlace auto; seek-bar click test; playlist thumbnails; the full-UI-test list | [mac-verification.md](../mac-verification.md) |
 | Repository | Old pre-rewrite commit hashes in docs no longer resolve; SDK `refs/pull` still point at pre-rewrite commits (GitHub Support only) | Leave, or map from the backup |
-| Repository | Typos allowlist for commit hashes; worktree cleanup on this machine | Coordinator |
-| Security | Plugin processes run unsandboxed (only the Vestra AI worker uses Node's permission model). User ruling 2026-11-03: no runtime restriction now (it would push every capability into host APIs); strengthen the official repository instead: automated scan in the plugin repository's PR CI → human review of flagged items. Candidate tools (verify cost/setup first): CodeQL default setup, Dependency Review, secret scanning with push protection (free on public repos); Semgrep CE with our own rules (child processes, eval/new Function, files outside the plugin's dirs, hard-coded hosts, native modules) that label a PR for security review; GuardDog on the packed plugin (fails on malicious-package heuristics); OSV-Scanner for dependencies. The private player repo gets only the free CLI tools until it is public; registered publishers; revocation as today. Optional later: manifest-declared Node permission flags shown at install | Infrastructure maintainer, after 0.7.1 |
+| Repository | Worktree cleanup on this machine: unmerged or dirty worktrees left for the user | Coordinator |
+| Security | Strengthen the official repository (no OS sandbox, see Decisions; only the Vestra AI worker uses Node's permission model): automated scan in the plugin repository's PR CI → human review of flagged items. Candidate tools (verify cost/setup first): CodeQL default setup, Dependency Review, secret scanning with push protection (free on public repos); Semgrep CE with our own rules (child processes, eval/new Function, files outside the plugin's dirs, hard-coded hosts, native modules) that label a PR for security review; GuardDog on the packed plugin (fails on malicious-package heuristics); OSV-Scanner for dependencies. The private player repo gets only the free CLI tools until it is public; registered publishers; revocation as today. Optional later: manifest-declared Node permission flags shown at install | Infrastructure maintainer, after 0.7.1 |
 | Repository | The store's own files were never prettier-formatted (no prettier config for `plugins/`); decide a printWidth before formatting them in one commit | — |
 | Platform | Command limit 160 per plugin is no longer twice the largest built-in (video registers 83; all built-ins 318) | `commands.rs` `limits_leave_room_for_real_plugins` still uses 71 |
 
@@ -166,42 +185,17 @@ Kept so that old commits and comments make sense:
 - **Gapless playback (preload)** → "fast advance"; reopening needs recorded-waveform evidence.
 - **The "classic" theme** → removed.
 - **About 3 000 host lines per round** as a size budget → not applied since.
+- **No remote CI for the player** (11-02) → main and tags run remote CI again after v0.7.4.
+- **A sidebar tab cap** → no cap, » overflow menu.
+- **Concentration Room NES footage** on the download page → Twin Dragons (the former's author is publicly anti-AI).
 
 ## Current round
 
-**Overnight loop, 2026-11-03/04** (user asked to finish this list tonight; procedure: [agentic-workflow-loop.md](../../../agentic-workflow/agentic-workflow-loop.md)). Main-repo CI: do not run remote CI without asking the user (merges to main use `[skip ci]`); plugin and SDK repos are public, their CI runs as usual.
+In progress (2026-11-04). If a loop is used, the procedure is [agentic-workflow-loop.md](../../../agentic-workflow/agentic-workflow-loop.md).
 
-| # | Item | State | Next step |
-| --- | --- | --- | --- |
-| 1 | **Release/host version split** | Merged #166; follow-ups (verify job import fix, `check-bump` in release verify, explicit reuse errors) merged #167 | — (for 0.7.3: bump the `Cargo.toml` host version by hand; no release has `host.json` yet) |
-| 2 | **Store 0.2.12 row controls** | Merged #164 | — |
-| 3 | **Local build after 1 + 2** | Skipped: the hero take used the 0.7.1 stage (the shot needs no new feature) | — |
-| 4 | **Recordings** (download page, `redesign`) | Done: hero centre (`hero-menus-2`) and store clip (`store-2`, recorded on the 0.7.3 build, same camera timing); credits for Big Buck Bunny (CC BY 3.0) and Spring (CC BY 4.0) and a YouTube trademark line in the footer. Pushed, not deployed | — |
-| 5 | **Sidebar tabs on demand** | Merged #171 after three review rounds; SDK 1.6.2 published (no tab cap); GUI-checked with 20 test plugins (strip and », wake, current tab stays up, background tabs stand by, detached window, restart) | Fullscreen overlay not checked by hand |
-| 6 | **Shader Upscale status text truncated** (plugin repo) | Done | — |
-| 7 | **SDK 1.6.1 docs patch** | Published; player and Workshop 2.2.32 on 1.6.1 (#168) | — |
-| 8 | **Release** | **Published v0.7.4** (release 0.7.4, host 0.7.3). v0.7.3 was tagged but its run stopped at typos (a short hash in this file); tags are not moved, so the same build shipped as 0.7.4 (#173). latest.json checked against SHA256SUMS | — |
-| 9 | **Cleanup** | 22 merged worktrees removed; typos ignores short hashes (#173); main CI back on: first run hung in test:packaging (process.exit stall), fixed in #174 | Unmerged or dirty worktrees left for the user; other scripts still call process.exit (follow-up) |
-
-Done earlier this round: 0.7.1 published; #160–#162 (records, README, Options window fix); plugin repo #26 (security scan) and #27 (Shader Upscale 0.2.0).
-
-Decisions this round:
-
-- **No compile cache for windows yet** (user, 2026-11-03). A brief stall when a window opens is acceptable for now. A cache keeps compiled definitions in memory and could become a new unbounded consumer, which the supervisor work (2000-plugin stress test) set out to prevent. Before any cache: an experiment that measures memory per cached definition and the total under many plugins, with a hard bound (entries and bytes), cache only on open, eviction with the owning plugin and under memory pressure; then a user decision.
-- **No hide-instead-of-destroy for windows** (user, 2026-11-03): it hides the problem rather than fixing it.
-- **The Options window is not special** in how it compiles and updates (user, 2026-11-03); only its composition of many plugins' pages is.
-- **Plugin repository security** (user, 2026-11-03): no runtime sandbox for plugins; scan at PR time in the plugin repository and review flagged plugins by hand.
-
-Log (newest first):
-
-- 2026-11-04 (overnight result): #171 sidebar tabs on demand, #172–#173 release, #174 packaging exit fix; SDK 1.6.2; Workshop 2.2.33; v0.7.4 published; README badge v0.7.4; main remote CI switched back on. Lessons: `[skip ci]` in a tagged commit also suppresses the tag-push release run (dispatch release.yml on the tag instead); a branch head commit without `[skip ci]` starts remote CI on push (two runs were cancelled).
-
-- Needs the user: (1) the player repository is private, so the update check gets 404 and installed players are never told about a release; make the repository public, or publish latest.json and installers somewhere public (code change). (2) Whether a hidden sidebar should also put the current tab's plugin on standby (now: it stays up; at most one process). (3) macOS signing ($99/year), the window compile cache experiment, Windows code signing (unchanged).
-
-- 2026-11-04: #167 host version guard, #168 SDK 1.6.1 + Workshop 2.2.32 merged without remote CI. Hero centre re-recorded (first take lost the Picture Adjustments window behind the main window) and pushed to the page. Sidebar on demand implemented; review and SDK 1.6.2 in progress.
-
-- 2026-11-03: #157 (history, workflow folder) and #158 (store tabs, 0.7.1) merged; v0.7.1 tagged. #159 README Architecture shortened (current design only, simpler diagram). Vestra AI recordings: a one-line colour-picker prompt produced a plugin whose first version wrote invalid `.cube` files; told only the error text, Vestra AI found and fixed it. Final demo uses a colour-wheels prompt with a DaVinci Resolve example; it worked first time.
-
-- 2026-11-03: store tabs All · Installed · Updates (store 0.2.11; user ruling, GNOME Software / JetBrains / VS Code practice); host 0.7.1; release note v0.7.0 → v0.7.1.
-
-- 2026-11-03: round records condensed into this file; workflow moved to `agentic-workflow/` with the loop branch; code comments no longer cite rounds.
+| # | Item | State |
+| --- | --- | --- |
+| 1 | **Release 0.7.5**: bottom-bar arrows become Previous/Next; a plugin-only change that verifies host reuse | In progress |
+| 2 | **Design doc consolidation**: one English design doc plus the kept detailed specs; code comments stop depending on docs | In progress; merges after 0.7.5 |
+| 3 | **Exit-code fix for the remaining scripts** (`process.exitCode` instead of `process.exit`), plus step timeouts | In progress |
+| 4 | **Signing**: macOS Developer ID and notarization; Windows code signing | Discussion with the user |
