@@ -29,7 +29,7 @@
  */
 import { readFile, writeFile } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { fail, packaging, parseArgs } from "./lib.mjs";
+import { fail, packaging, parseArgs, reportErrors } from "./lib.mjs";
 
 export const VIDEO = [
   ..."mp4 m4v mkv webm mov avi wmv asf flv f4v ts m2ts mts mpg mpeg vob ogv 3gp rm rmvb".split(
@@ -220,6 +220,7 @@ export function windowsRegistry() {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
+  reportErrors();
   const options = parseArgs(process.argv.slice(2), ["check", "write"]);
   const fresh = windowsRegistry();
   if (options.write) await writeFile(WINDOWS_INCLUDE, fresh);

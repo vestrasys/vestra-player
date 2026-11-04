@@ -104,4 +104,4 @@ console.log(
   `\nci:local: ${steps.length - failed.length}/${steps.length} passed`,
 );
 for (const command of failed) console.log(`  failed: ${command}`);
-process.exit(failed.length ? 1 : 0);
+process.exitCode = failed.length ? 1 : 0;

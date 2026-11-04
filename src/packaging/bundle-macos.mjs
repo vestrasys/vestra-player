@@ -61,6 +61,7 @@ import {
   packaging,
   parseArgs,
   readJson,
+  reportErrors,
   run,
   source,
   versions,
@@ -75,6 +76,7 @@ import {
 /** Floor for LSMinimumSystemVersion (picture in picture needs 14). */
 const MIN_MACOS = "14.0";
 
+reportErrors();
 const options = parseArgs(process.argv.slice(2), [
   "no-dmg",
   "zip",

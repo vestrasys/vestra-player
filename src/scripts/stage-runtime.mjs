@@ -105,8 +105,9 @@ if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
   const destination = process.argv[2];
   if (!destination) {
     console.error("usage: node scripts/stage-runtime.mjs <destination>");
-    process.exit(2);
+    process.exitCode = 2;
+  } else {
+    await stageRuntime(resolve(destination));
+    console.log(`Plugin runtime staged in ${resolve(destination)}`);
   }
-  await stageRuntime(resolve(destination));
-  console.log(`Plugin runtime staged in ${resolve(destination)}`);
 }

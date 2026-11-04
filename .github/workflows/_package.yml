@@ -61,6 +61,11 @@ jobs:
       - name: Reuse a released host
         id: reuse
         if: inputs.reuse-host
+        # Step deadlines on the Node scripts here (normally: fetch 2-5 s,
+        # record 1 s; Bundle 150 s on macOS, 415 s on Windows with
+        # cargo about): a script that does not exit fails its step instead
+        # of running to the job's 90 minutes.
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -80,6 +85,7 @@ jobs:
         working-directory: src/host
         run: cargo build --release --locked
       - name: Bundle
+        timeout-minutes: 30
         env:
           OS: ${{ inputs.os }}
           FOUND: ${{ steps.reuse.outputs.found }}
@@ -112,6 +118,7 @@ jobs:
       # with the same inputs can reuse it.
       # TODO(S7 signing): record from the signed archive.
       - name: host.json entry
+        timeout-minutes: 5
         env:
           OS: ${{ inputs.os }}
           FOUND: ${{ steps.reuse.outputs.found }}

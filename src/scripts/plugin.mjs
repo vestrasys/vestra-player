@@ -21,6 +21,9 @@ import { readdir, readFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
+import { reportErrors, stop } from "../packaging/lib.mjs";
+
+reportErrors();
 
 const source = resolve(import.meta.dirname, "..");
 const pluginsRoot = join(source, "plugins");
@@ -36,7 +39,7 @@ if (!command || !args.length) {
   console.error(
     "usage: node scripts/plugin.mjs <check|build|test|pack> <name...|--all> [--version x.y.z] [--out dir]",
   );
-  process.exit(2);
+  stop(2);
 }
 const names = args.includes("--all")
   ? (await readdir(pluginsRoot, { withFileTypes: true }))
@@ -72,4 +75,4 @@ const result = spawnSync(
   [cli, command, ...directories, ...options],
   { stdio: "inherit", cwd: source, env },
 );
-process.exit(result.status ?? 1);
+process.exitCode = result.status ?? 1;

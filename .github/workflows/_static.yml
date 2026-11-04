@@ -68,6 +68,7 @@ jobs:
         working-directory: src/host
         run: cargo shear
       - name: unsafe policy
+        timeout-minutes: 5
         run: node src/scripts/check-unsafe-policy.mjs
 
   ts:
@@ -89,20 +90,26 @@ jobs:
       - run: npm run check
       - run: npm run format:check
       - run: npm run boundaries
+      # Step deadlines on the Node scripts: each takes 0-15 s (plugins:build
+      # about 70 s); a stuck child process or a process that does not exit
+      # must fail the step, not wait for the job's 20 minutes (main.yml run
+      # 41824920594). The plugin tests (about 450 s) have the job's limit.
       - name: third-party licenses (config, deny.toml/about.toml, plugin licenses)
+        timeout-minutes: 5
         run: npm run licenses
       - name: Windows icon matches the logo
+        timeout-minutes: 5
         run: node packaging/icon.mjs --check
-      # Step deadlines: both take 3-11 s; a stuck child process must fail the
-      # step, not wait for the job's 20 minutes (main.yml run 41824920594).
       - run: npm run test:packaging
         timeout-minutes: 5
       # The host half of `portability` (cargo check for Windows) is covered by
       # the real Windows build-test job; here only the system-command scan.
       - run: npm run portability -- --skip-host
+        timeout-minutes: 5
       - run: npm run test:sdk
         timeout-minutes: 5
       - run: npm run plugins:build
+        timeout-minutes: 5
       # VESTRA_UI_RECORD: the tests also record every property value sent to
       # a window, panel or settings page (scripts/ui-record.mjs); the Windows
       # build-test sets each on the compiled Slint (ui-record below).
@@ -122,6 +129,7 @@ jobs:
           esac
       - name: recorded plugin props
         id: ui-record
+        timeout-minutes: 5
         env:
           RECORD: ${{ runner.temp }}/ui-record
         run: |
@@ -140,6 +148,7 @@ jobs:
           retention-days: 1
           if-no-files-found: error
       - name: SDK Slint copy matches host/ui
+        timeout-minutes: 5
         run: npm run sdk:sync-slint
       - name: nothing generated differs from git
         run: |

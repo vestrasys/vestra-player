@@ -759,12 +759,12 @@ if (
   pathToFileURL(resolve(process.argv[1])).href === import.meta.url
 ) {
   const [command, ...rest] = process.argv.slice(2);
-  const options = parseArgs(rest, ["list"]);
-  // Not computed up front: `versions` and `check-bump` run on Linux too,
-  // where there is no default target.
-  const target = () => options.target ?? defaultTarget();
-  const limit = Number(options.releases ?? 30);
   try {
+    const options = parseArgs(rest, ["list"]);
+    // Not computed up front: `versions` and `check-bump` run on Linux too,
+    // where there is no default target.
+    const target = () => options.target ?? defaultTarget();
+    const limit = Number(options.releases ?? 30);
     if (command === "check-bump") {
       const targets = options.target ? [options.target] : Object.keys(TARGETS);
       const scratch = await mkdtemp(join(tmpdir(), "vestra-check-bump-"));
@@ -849,11 +849,11 @@ if (
         "usage: host.mjs hash|versions|check-bump|fetch|record [--target <triple>] … (see the header)",
       );
   } catch (error) {
-    // Not fail(): process.exit() right after hashing the host inputs can
+    // Every error ends here (fail() throws too): printed, exit code 1, and
+    // never process.exit(), which right after hashing the host inputs can
     // deadlock Node 26 (the main thread waits for a V8 worker stuck in a
-    // concurrent GC job), so the error is printed and the process never
-    // ends; that hung main.yml for 20 minutes. Nothing is left running
-    // here, so a normal exit with exitCode is immediate.
+    // concurrent GC job); that hung main.yml for 20 minutes. Nothing is
+    // left running here, so a normal exit with exitCode is immediate.
     console.error(`error: ${error.message}`);
     process.exitCode = 1;
   }

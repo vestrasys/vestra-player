@@ -24,9 +24,45 @@ export const packaging = dirname(fileURLToPath(import.meta.url));
 export const source = resolve(packaging, "..");
 export const repo = resolve(source, "..");
 
+/**
+ * An expected failure: fail() and stop() throw it, and the handler that
+ * reportErrors() installs prints it and sets process.exitCode.
+ */
+export class Failure extends Error {
+  constructor(message, exitCode = 1) {
+    super(message);
+    this.name = "Failure";
+    this.exitCode = exitCode;
+  }
+}
+
+/** Ends the script with `error: <message>` and exit code 1. */
 export function fail(message) {
-  console.error(`error: ${message}`);
-  process.exit(1);
+  throw new Failure(message);
+}
+
+/** Ends the script with `exitCode`; the caller has printed the message. */
+export function stop(exitCode) {
+  throw new Failure("", exitCode);
+}
+
+/**
+ * Called once at a command-line entry point: an error (fail(), stop() or
+ * anything else uncaught) is printed and sets process.exitCode, and the
+ * process ends when its event loop is empty. Never process.exit(): on
+ * Node 26 it can deadlock while a V8 worker runs a GC task (the main thread
+ * waits for it forever); that hung main.yml for 20 minutes (#174). Nor an
+ * uncaught error, whose exit takes the same path. A script must end the work
+ * it has pending (a child process, a timer) on its error path, or the
+ * process stays alive.
+ */
+export function reportErrors() {
+  process.on("uncaughtException", (error) => {
+    const failure = error instanceof Failure;
+    if (!failure) console.error(error);
+    else if (error.message) console.error(`error: ${error.message}`);
+    process.exitCode = failure ? error.exitCode : 1;
+  });
 }
 
 /** Parses `--name value` and `--flag` arguments; the rest are positional. */

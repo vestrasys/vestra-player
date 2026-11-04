@@ -283,6 +283,5 @@ checkSources();
 if (problems.length) {
   console.error(`unsafe policy: ${problems.length} problem(s)`);
   for (const problem of problems) console.error(`  ${problem}`);
-  process.exit(1);
-}
-console.log("unsafe policy: ok");
+  process.exitCode = 1;
+} else console.log("unsafe policy: ok");

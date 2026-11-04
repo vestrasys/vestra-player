@@ -29,6 +29,7 @@ import {
   packaging,
   parseArgs,
   readJson,
+  reportErrors,
   run,
   sha256File,
   verifySha256,
@@ -36,6 +37,7 @@ import {
   zipRead,
 } from "./lib.mjs";
 
+reportErrors();
 const options = parseArgs(process.argv.slice(2));
 if (!options.out)
   fail("usage: collect-windows-deps.mjs --out <dir> [--cache <dir>]");

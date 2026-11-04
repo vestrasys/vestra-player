@@ -34,6 +34,7 @@ import {
   parseToml,
   readJson,
   repo,
+  reportErrors,
   source,
   walk,
 } from "./lib.mjs";
@@ -562,6 +563,7 @@ async function checkNode(root, platform) {
 // ------------------------------------------------------------ main
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
+  reportErrors();
   const options = parseArgs(process.argv.slice(2), ["static"]);
   if (options.static) await checkStatic();
   else if (options.bundle && ["macos", "windows"].includes(options.platform))
@@ -573,7 +575,6 @@ if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
   if (problems.length) {
     for (const message of problems) console.error(`license check: ${message}`);
     console.error(`${problems.length} license problem(s)`);
-    process.exit(1);
-  }
-  console.log("license check passed");
+    process.exitCode = 1;
+  } else console.log("license check passed");
 }

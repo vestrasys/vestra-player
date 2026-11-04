@@ -40,10 +40,12 @@ import {
   exists,
   fail,
   parseArgs,
+  reportErrors,
   run,
   sha256File,
 } from "./lib.mjs";
 
+reportErrors();
 const options = parseArgs(process.argv.slice(2));
 if (!options.out)
   fail("usage: collect-macos-deps.mjs --out <dir> [--sources <dir>]");
