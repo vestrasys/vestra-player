@@ -14,6 +14,8 @@ extend-exclude = [
 extend-ignore-re = [
   # Hex digests and evidence ids.
   "[0-9a-f]{16,}",
+  # Short commit hashes in records and release notes (`0c9e6ba`).
+  '\b[0-9a-f]{7,15}\b',
 ]
 
 [default.extend-words]
