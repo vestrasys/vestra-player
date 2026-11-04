@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.14
+
+Who must change: nobody. What users see: the two arrow buttons next to Stop are now **Previous** and **Next** (developer request; mpv, VLC and PotPlayer bars work the same way): a click plays the previous or next item of the playlist, the same as Playback ▸ Previous / Next and PgUp / PgDn, instead of seeking 5 s. Seeking with the keys (← / →, the Ctrl, Shift and Ctrl+Alt steps) and the seek bar is unchanged.
+
+- The buttons run the core actions `previous` and `next` (`host.run`), which ask the playlist (the sequence provider) for the item, and are enabled exactly when those menu items are (`player.state.can.previous` / `next`): off at the first or last item, on at both ends with Repeat All, Next on under shuffle while an unplayed item is left; both off without a playlist. A click on a button the player has just disabled does nothing and shows nothing.
+- Icons: a bar beside the double V of the old back / forward icons (⏮ ⏭), in the V-Line style of the player's icon set (round-capped 1.5px lines, never filled), drawn by the bar since the icon set has no previous / next icon. Tooltips: "Previous (PgUp)" and "Next (PgDn)" with the key bound to the command, translated in all six languages.
+- The right click on the old back / forward buttons (previous / next) is gone: the left click does it now. The bar no longer sends seeks, and its seek-only data is gone (`can-step`, `key-back`, `key-forward`, `step-text`, and the `right-enabled` / `right-clicked` of the bar's button).
+
 ## 0.2.13
 
 - Code only: the tool window handles are named `openUrlWindow`, `promptWindow` and `timeJumpWindow` (were `window`). Who must change: nobody. No behaviour change.

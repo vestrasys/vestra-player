@@ -1,7 +1,7 @@
 import type { BindingInfo, Plugin } from "@vestra-player/sdk";
 
 /** The bar elements whose tooltip names a key (G-07). */
-export type TipKey = "play-pause" | "stop" | "seek-backward" | "seek-forward" | "previous" | "next" | "mute" | "open" | "fullscreen";
+export type TipKey = "play-pause" | "stop" | "previous" | "next" | "mute" | "open" | "fullscreen";
 
 /**
  * The commands' default keys as the menu labels them, used until (or when) the
@@ -10,8 +10,6 @@ export type TipKey = "play-pause" | "stop" | "seek-backward" | "seek-forward" | 
 export const DEFAULT_KEYS: Record<TipKey, string> = {
   "play-pause": "Space",
   stop: "F4",
-  "seek-backward": "←",
-  "seek-forward": "→",
   previous: "PgUp",
   next: "PgDn",
   mute: "M",
@@ -62,8 +60,6 @@ export class Keys {
     this.#keys = {
       "play-pause": host("play-pause"),
       stop: host("stop"),
-      "seek-backward": host("seek-backward"),
-      "seek-forward": host("seek-forward"),
       previous: host("previous"),
       next: host("next"),
       mute: host("mute"),
@@ -79,25 +75,19 @@ export class Keys {
   }
 }
 
-/** Seconds as typed in Seek Steps (5, 0.5, 300). */
-const seconds = (value: number) => String(Math.round(value * 10) / 10);
-
 /**
- * G-07: what the bar's tooltips show, as data: the keys ("" for none), the
- * first seek tier and the volume. `ui/bar.slint` words the tooltips.
+ * G-07: what the bar's tooltips show, as data: the keys ("" for none) and the
+ * volume. `ui/bar.slint` words the tooltips.
  */
-export function barTips(keys: Keys, state: { volume: number; step: number }) {
+export function barTips(keys: Keys, state: { volume: number }) {
   return {
     keyPlayPause: keys.key("play-pause"),
     keyStop: keys.key("stop"),
-    keyBack: keys.key("seek-backward"),
-    keyForward: keys.key("seek-forward"),
     keyPrevious: keys.key("previous"),
     keyNext: keys.key("next"),
     keyOpen: keys.key("open"),
     keyMute: keys.key("mute"),
     keyFullscreen: keys.key("fullscreen"),
-    stepText: seconds(state.step),
     volumePercent: Math.round(state.volume),
   };
 }
