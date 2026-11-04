@@ -15,7 +15,7 @@
     "plugin": "node scripts/plugin.mjs",
     "plugins:build": "node scripts/plugin.mjs build --all",
     "ui:shots": "node scripts/ui-shots.mjs",
-    "test:sdk": "node --test tests/sdk/",
+    "test:sdk": "node --test --test-timeout=60000 tests/sdk/",
     "test:packaging": "node --test packaging/tests/",
     "portability": "node scripts/check-portability.mjs",
     "docs:check": "node scripts/check-docs.mjs",

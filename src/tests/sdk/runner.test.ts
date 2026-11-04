@@ -1,14 +1,51 @@
 import assert from "node:assert/strict";
-import { spawn, spawnSync } from "node:child_process";
+import type { ChildProcessWithoutNullStreams } from "node:child_process";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { createInterface } from "node:readline";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 import { startPlugin } from "@vestra-player/sdk/testing";
 import type { Plugin } from "@vestra-player/sdk";
+import {
+  CHILD_TIMEOUT_MS,
+  closed,
+  killChildren,
+  runNode,
+  spawnNode,
+} from "./children.ts";
+
+afterEach(killChildren);
 
 const runner = resolve(import.meta.dirname, "../../runtime/runner.ts");
+
+/**
+ * The runner's first event (`runtime.ready` or `runtime.failed`), answering
+ * its requests until then; `"exited"` if it exits first. Fails after
+ * `CHILD_TIMEOUT_MS`.
+ */
+function firstEvent(
+  child: ChildProcessWithoutNullStreams,
+  answer: (message: { id: number; method: string }) => void,
+) {
+  return new Promise<string>((done, fail) => {
+    const timer = setTimeout(
+      () => fail(new Error("the runner sent no event")),
+      CHILD_TIMEOUT_MS,
+    );
+    const settle = (event: string) => {
+      clearTimeout(timer);
+      done(event);
+    };
+    // A runner that exits (or is killed) before its event never reports.
+    child.once("close", () => settle("exited"));
+    createInterface({ input: child.stdout }).on("line", (line) => {
+      const message = JSON.parse(line);
+      if (message.event) return settle(message.event);
+      answer(message);
+    });
+  });
+}
 
 /** Run a plugin in the real runner and answer its requests like the host. */
 async function run(
@@ -27,23 +64,19 @@ async function run(
     }),
   );
   writeFileSync(join(directory, "main.mjs"), source);
-  const child = spawn(process.execPath, [runnerPath, directory], {
-    stdio: ["pipe", "pipe", "inherit"],
-  });
+  const child = spawnNode<ChildProcessWithoutNullStreams>(
+    [runnerPath, directory],
+    { stdio: ["pipe", "pipe", "inherit"] },
+  );
   const methods: string[] = [];
-  const lines = createInterface({ input: child.stdout });
-  const event = await new Promise<string>((done) => {
-    lines.on("line", (line) => {
-      const message = JSON.parse(line);
-      if (message.event) return done(message.event);
-      methods.push(message.method);
-      child.stdin.write(
-        `${JSON.stringify({ id: message.id, ...reply(message.method) })}\n`,
-      );
-    });
+  const event = await firstEvent(child, (message) => {
+    methods.push(message.method);
+    child.stdin.write(
+      `${JSON.stringify({ id: message.id, ...reply(message.method) })}\n`,
+    );
   });
   child.stdin.end();
-  await new Promise((done) => child.once("exit", done));
+  await closed(child, "the runner");
   return { event, methods };
 }
 
@@ -66,11 +99,10 @@ test("the packaged runtime layout (runner + SDK package) runs a plugin", async (
   // What a packaged player ships as Resources/runtime (scripts/stage-runtime.mjs),
   // outside the workspace: the runner resolves the SDK from its own node_modules.
   const staged = join(mkdtempSync(join(tmpdir(), "runtime-")), "runtime");
-  const stage = spawnSync(
-    process.execPath,
-    [resolve(import.meta.dirname, "../../scripts/stage-runtime.mjs"), staged],
-    { encoding: "utf8" },
-  );
+  const stage = runNode([
+    resolve(import.meta.dirname, "../../scripts/stage-runtime.mjs"),
+    staged,
+  ]);
   assert.equal(stage.status, 0, stage.stderr);
   // The SDK's Apache-2.0 license ships with its code (S7 decision 12).
   assert.match(
@@ -275,25 +307,18 @@ test("a plugin that logs to a closed stderr keeps running", async () => {
       }
     }`,
   );
-  const child = spawn(process.execPath, [runner, directory], {
+  const child = spawnNode<ChildProcessWithoutNullStreams>([runner, directory], {
     stdio: ["pipe", "pipe", "pipe"],
   });
   child.stderr.destroy();
-  const exited = new Promise((done) => child.once("exit", done));
-  const lines = createInterface({ input: child.stdout });
-  const event = await new Promise<string>((done) => {
-    // A runner stopped by a failed log write never reports.
-    void exited.then(() => done("exited"));
-    lines.on("line", (line) => {
-      const message = JSON.parse(line);
-      if (message.event) return done(message.event);
-      child.stdin.write(
-        `${JSON.stringify({ id: message.id, result: { revision: 1 } })}\n`,
-      );
-    });
-  });
+  // A runner stopped by a failed log write never reports.
+  const event = await firstEvent(child, (message) =>
+    child.stdin.write(
+      `${JSON.stringify({ id: message.id, result: { revision: 1 } })}\n`,
+    ),
+  );
   child.stdin.end();
-  const code = await exited;
+  const code = await closed(child, "the runner");
   assert.deepEqual({ event, code }, { event: "runtime.ready", code: 0 });
   rmSync(directory, { recursive: true, force: true });
 });
