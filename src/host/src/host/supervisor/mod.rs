@@ -654,10 +654,21 @@ impl Host {
     pub(crate) fn panel_shown(&mut self, owner: u64) {
         self.page_shown(owner);
     }
-    /// The current sidebar tab changed: its running plugin's declared work
-    /// (`Busy::ShownTab`) starts now, not at its next idle check; the
-    /// previous one's ends at the next `CHECK_MS` poll.
+    /// The current sidebar tab's running plugin (called every window tick,
+    /// `tab_demand`): its declared work (`Busy::ShownTab`) is registered with
+    /// the core at once, not at its next idle check, so neither the budget
+    /// nor memory pressure (`pressure::reclaimable`) stops it while the tab is
+    /// shown, also after it woke under a new owner. Already registered: a
+    /// map lookup. The previous tab's work ends at the next `CHECK_MS` poll.
     pub(crate) fn tab_work(&mut self, owner: u64) {
+        if self
+            .on_demand
+            .work
+            .get(&owner)
+            .is_some_and(|busy| busy.contains(&Busy::ShownTab))
+        {
+            return;
+        }
         if self.plugins.contains_key(&owner) && self.checkpoint_key_of(owner).is_some() {
             self.sync_work(owner, false);
         }

@@ -95,6 +95,14 @@ impl<T> Gate<T> {
         self.held.iter().any(|(o, _)| *o == owner)
     }
 
+    /// The requests of `owner` waiting here, oldest first.
+    pub fn held_of(&self, owner: u64) -> impl Iterator<Item = &T> {
+        self.held
+            .iter()
+            .filter(move |(o, _)| *o == owner)
+            .map(|(_, request)| request)
+    }
+
     /// A stopped plugin's requests are dropped (it is no longer answered).
     pub fn forget(&mut self, owner: u64) {
         self.held.retain(|(o, _)| *o != owner);

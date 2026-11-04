@@ -140,6 +140,16 @@ pub fn live(slot: Slot) -> bool {
     slot != Slot::Sidebar
 }
 
+/// Whether mount changes still waiting for a plugin (`Some(slot)` a mount,
+/// `None` an unmount) make it Resident at its classification: only a
+/// waiting bottom bar or backdrop does. A woken run is classified after
+/// its placeholder's prune (an unmount) is queued, and a plugin that mounts
+/// late or speaks the raw protocol may have its sidebar mount still queued:
+/// neither is live.
+pub fn pending_live(pending: impl IntoIterator<Item = Option<Slot>>) -> bool {
+    pending.into_iter().flatten().any(live)
+}
+
 /// Whether `owner`'s panel is the current sidebar tab: the host's declared
 /// work (`Busy::ShownTab`) keeps its plugin running, never parked, while the
 /// tab is current; once another tab is, it idles like any Normal plugin.
@@ -262,6 +272,17 @@ mod tests {
         assert_eq!(shown, 1);
         assert!(live(Slot::Bottom) && live(Slot::Backdrop));
         assert!(!shown_tab(Slot::Bottom, 1, active));
+    }
+
+    #[test]
+    fn only_a_waiting_bottom_bar_or_backdrop_mount_is_live() {
+        // The prune of a woken run's placeholder, a late sidebar mount.
+        assert!(!pending_live([None]));
+        assert!(!pending_live([Some(Slot::Sidebar)]));
+        assert!(!pending_live([None, Some(Slot::Sidebar)]));
+        assert!(!pending_live(std::iter::empty()));
+        assert!(pending_live([Some(Slot::Bottom)]));
+        assert!(pending_live([None, Some(Slot::Backdrop)]));
     }
 
     #[test]

@@ -2782,12 +2782,18 @@ export declare class TestHost implements Transport {
     close(): void;
     /**
      * Why the player would keep this plugin running while nothing uses it
-     * (lazy activation, player 0.5.21), one line per reason, as the player's
-     * log says it: an event it listens to that is not one the player wakes
-     * it for (with what listens and where it was added), its mounted panel,
-     * its open windows. Empty: the player may stop it while idle and start
-     * it again on its next use. Filter chains, streams, jobs and the like
-     * (which also keep a plugin running) are not listed.
+     * (lazy activation, player 0.5.21), one line per reason: an event it
+     * listens to that is not one the player wakes it for (with what listens
+     * and where it was added), its panel in the bottom bar or the backdrop,
+     * its open windows (these as the player's log says them), and, from
+     * player 0.7.3, its sidebar tab while that is the current tab. The
+     * player counts the current tab as busy work, not as something live: it
+     * keeps the plugin running only while the tab is shown, and a sidebar
+     * panel in a background tab is no reason at all (the plugin may go to
+     * standby; showing the tab starts it again). Empty: the player may stop
+     * it while idle and start it again on its next use. Filter chains,
+     * streams, jobs and the like (which also keep a plugin running) are not
+     * listed.
      *
      * @capability None.
      * @since 1.5.40

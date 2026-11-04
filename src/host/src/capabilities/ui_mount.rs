@@ -47,8 +47,19 @@ impl Capability for UiMount {
     /// it running as declared work (`Busy::ShownTab`), and a background tab
     /// stays as a placeholder while the plugin stands by.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if pending(host, owner) {
+        // A waiting change: live only for the bottom bar or the backdrop
+        // (`sidebar_tabs::pending_live`); a waiting sidebar mount is what the
+        // recording keeps.
+        let waiting = waiting_mounts(host, owner);
+        if sidebar_tabs::pending_live(waiting.iter().map(|(slot, _)| *slot)) {
             return Recorded::Live("a panel");
+        }
+        if let Some((_, call)) = waiting.iter().rev().find(|(slot, _)| slot.is_some()) {
+            return Recorded::Calls(vec![Call::new("ui.mount", call.clone())]);
+        }
+        if !waiting.is_empty() {
+            // Its last waiting change is an unmount: nothing to keep.
+            return Recorded::Nothing;
         }
         match host.mounts.get(&owner) {
             None => Recorded::Nothing,
@@ -291,6 +302,44 @@ fn pending(host: &Host, owner: u64) -> bool {
             .as_ref()
             .is_some_and(|(_, c)| c.reply.owner == owner)
         || host.held_mounts.waiting(owner)
+}
+
+/// The mount changes of `owner` not applied yet, oldest first: its slot
+/// (`None`: an unmount) and, for a mount, the call a recording keeps. Held
+/// requests (non-built-ins while built-ins start) are read from their
+/// parameters; an unknown slot counts as the bottom bar (live, the safe
+/// side).
+fn waiting_mounts(host: &Host, owner: u64) -> Vec<(Option<composition::Slot>, Value)> {
+    let name = host
+        .plugins
+        .get(&owner)
+        .and_then(|plugin| plugin.manifest.name.clone())
+        .unwrap_or_default();
+    let mut waiting = host
+        .preparing
+        .as_ref()
+        .map(|(_, change)| change)
+        .into_iter()
+        .chain(host.mount_queue.iter())
+        .filter(|change| change.reply.owner == owner)
+        .map(|change| match &change.contribution {
+            Some(mount) => (Some(mount.spec.slot), mount.call.clone()),
+            None => (None, Value::Null),
+        })
+        .collect::<Vec<_>>();
+    for (_, method, params) in host.held_mounts.held_of(owner) {
+        waiting.push(if method == "ui.mount" {
+            let slot = match params["slot"].as_str() {
+                Some("sidebar") => composition::Slot::Sidebar,
+                Some("backdrop") => composition::Slot::Backdrop,
+                _ => composition::Slot::Bottom,
+            };
+            (Some(slot), sidebar_tabs::recorded_call(params, &name))
+        } else {
+            (None, Value::Null)
+        });
+    }
+    waiting
 }
 
 /// A panel from `ui.mount`'s `params` (or a recorded call's, which has no

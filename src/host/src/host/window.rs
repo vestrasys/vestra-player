@@ -325,6 +325,15 @@ impl Host {
         if mount.spec.slot != composition::Slot::Sidebar {
             return;
         }
+        // Its running plugin is kept up while the tab is current (declared
+        // work, `Busy::ShownTab`), also when it woke under a new owner after
+        // the tab was shown: registered here, every tick, not only on a change.
+        if !mount.recorded {
+            self.tab_work(owner);
+        }
+        let Some(mount) = self.mounts.get(&owner) else {
+            return;
+        };
         let pending = self.mount_queue.iter().any(|c| c.reply.owner == owner)
             || self
                 .preparing
@@ -417,9 +426,6 @@ impl Host {
                 let _ = shell.invoke("focus-video", &[]);
             }
             self.sidebar_active = active;
-            if let Some(owner) = active {
-                self.tab_work(owner);
-            }
         }
         self.tab_clicked = false;
         self.tab_demand(active);
