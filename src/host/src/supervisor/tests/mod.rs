@@ -1072,6 +1072,10 @@ impl Sim {
         self.sup.set_now(self.now);
         self.sup.begin_work(pid, DECLARED_BUSY, self.now)
     }
+    pub fn end_declared_busy(&mut self, pid: Pid) {
+        self.sup.set_now(self.now);
+        self.sup.end_work(pid, DECLARED_BUSY)
+    }
     /// The identity input `activation_begin` for `n` fresh units, each with
     /// a new pid: how many were accepted (no limit of 64).
     pub fn activations_accepted(&mut self, n: usize) -> usize {

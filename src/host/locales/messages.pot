@@ -192,8 +192,8 @@ msgstr ""
 msgid "Previous frame: {}"
 msgstr ""
 
-#: src/main.rs:140
-msgid "The sidebar holds at most {} tabs"
+#: ui/sidebar-tabs.slint:150
+msgid "All tabs"
 msgstr ""
 
 #: src/main.rs:150

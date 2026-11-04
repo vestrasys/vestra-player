@@ -193,9 +193,9 @@ msgstr "定位: 下一帧 {}"
 msgid "Previous frame: {}"
 msgstr "定位: 上一帧 {}"
 
-#: src/main.rs:140
-msgid "The sidebar holds at most {} tabs"
-msgstr "侧栏最多 {} 个页签"
+#: ui/sidebar-tabs.slint:150
+msgid "All tabs"
+msgstr "全部页签"
 
 #: src/main.rs:150
 msgid "Previous/Next is provided by {}"

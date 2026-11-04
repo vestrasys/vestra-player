@@ -48,8 +48,9 @@ pub struct Sidebar {
     pub width: f64,
 }
 
-/// At most this many plugin ids are kept in [`SidebarSlot::order`].
-pub const ORDER_LIMIT: usize = 64;
+/// At most this many plugin ids are kept in [`SidebarSlot::order`] (sidebar
+/// tabs have no cap, sidebar-tabs.md; the oldest go first past it).
+pub const ORDER_LIMIT: usize = 512;
 
 /// The sidebar slot, whichever panels it holds (panel-slots.md step 1):
 /// shown and floating as a whole, its current tab and the tab order (plugin
@@ -87,6 +88,24 @@ impl SidebarSlot {
             self.order.push(id.into());
             let excess = self.order.len().saturating_sub(ORDER_LIMIT);
             self.order.drain(..excess);
+        }
+    }
+
+    /// [`Self::remember`], evicting past [`ORDER_LIMIT`] the oldest ids not
+    /// in `current` (plugins with no tab now, uninstalled ones among them)
+    /// before any that has one.
+    pub fn remember_among(&mut self, id: &str, current: &[&str]) {
+        if self.order.iter().any(|known| known == id) {
+            return;
+        }
+        self.order.push(id.into());
+        while self.order.len() > ORDER_LIMIT {
+            let gone = self
+                .order
+                .iter()
+                .position(|known| !current.contains(&known.as_str()))
+                .unwrap_or(0);
+            self.order.remove(gone);
         }
     }
 
@@ -485,6 +504,20 @@ mod tests {
     }
 
     #[test]
+    fn a_full_tab_order_evicts_ids_without_a_tab_first() {
+        let mut slot = SidebarSlot::default();
+        for n in 0..ORDER_LIMIT {
+            slot.remember(&format!("p{n}"));
+        }
+        // p0 and p1 have tabs now; p2 is the oldest without one.
+        slot.remember_among("new", &["p0", "p1", "new"]);
+        assert_eq!(slot.order.len(), ORDER_LIMIT);
+        assert_eq!(slot.order[..2], ["p0", "p1"]);
+        assert_eq!(slot.position("p2"), usize::MAX);
+        assert_eq!(slot.order.last().unwrap(), "new");
+    }
+
+    #[test]
     fn the_tab_order_remembers_new_ids_last_and_stays_bounded() {
         let mut slot = SidebarSlot::default();
         assert!(slot.visible && !slot.detached);
@@ -494,10 +527,10 @@ mod tests {
         assert_eq!(slot.order, ["vestra.playlist", "examples.panel-menu"]);
         assert_eq!(slot.position("examples.panel-menu"), 1);
         assert_eq!(slot.position("new.one"), usize::MAX);
-        for n in 0..100 {
+        for n in 0..ORDER_LIMIT + 10 {
             slot.remember(&format!("p{n}"));
         }
         assert_eq!(slot.order.len(), ORDER_LIMIT);
-        assert_eq!(slot.order.last().unwrap(), "p99");
+        assert_eq!(slot.order.last().unwrap(), &format!("p{}", ORDER_LIMIT + 9));
     }
 }

@@ -277,10 +277,9 @@ impl Host {
                 .and_then(|owner| self.mounts.get(&owner))
                 .map(|m| m.manifest.clone());
         }
-        for owner in self.policy.sidebar_panels() {
-            if let Some(mount) = self.mounts.get(&owner) {
-                slot.remember(&mount.manifest);
-            }
+        let current = manifests.iter().map(String::as_str).collect::<Vec<_>>();
+        for manifest in &current {
+            slot.remember_among(manifest, &current);
         }
         if self.ui_state.state.sidebar_slot.as_ref() != Some(&slot) {
             self.ui_state.state.sidebar_slot = Some(slot);
@@ -300,27 +299,78 @@ impl Host {
     /// The sidebar's panels in tab order: the playlist's, other built-in plugins', then as
     /// remembered (`SidebarSlot::order`), new ones last in mount order.
     pub(crate) fn tab_order(&self, mounts: &BTreeMap<u64, Mount>) -> Vec<u64> {
-        let slot = self.sidebar_slot();
-        let mut tabs = mounts
+        let tabs = mounts
             .values()
             .filter(|m| m.spec.slot == composition::Slot::Sidebar)
-            .map(|m| {
-                // The playlist is always first (also as a development load).
-                let rank = if m.manifest == "vestra.playlist" {
-                    0
-                } else if m.builtin {
-                    1
-                } else {
-                    2
-                };
-                (
-                    (rank, slot.position(&m.manifest), m.spec.owner),
-                    m.spec.owner,
-                )
+            .map(|m| sidebar_tabs::Tab {
+                owner: m.spec.owner,
+                manifest: &m.manifest,
+                builtin: m.builtin,
             })
             .collect::<Vec<_>>();
-        tabs.sort();
-        tabs.into_iter().map(|(_, owner)| owner).collect()
+        sidebar_tabs::order(&tabs, &self.sidebar_slot())
+    }
+    /// What the current tab needs (sidebar-tabs.md): a placeholder's plugin
+    /// is woken once (its activation mounts the panel again); a running
+    /// plugin's panel that is not in the shell is compiled into it
+    /// (`prepare_mount_tick`), unless that just failed for this tab.
+    fn tab_demand(&mut self, active: Option<u64>) {
+        let Some(owner) = active else {
+            self.tab_woken = None;
+            return;
+        };
+        let Some(mount) = self.mounts.get(&owner) else {
+            return;
+        };
+        if mount.spec.slot != composition::Slot::Sidebar {
+            return;
+        }
+        // Its running plugin is kept up while the tab is current (declared
+        // work, `Busy::ShownTab`), also when it woke under a new owner after
+        // the tab was shown: registered here, every tick, not only on a change.
+        if !mount.recorded {
+            self.tab_work(owner);
+        }
+        let Some(mount) = self.mounts.get(&owner) else {
+            return;
+        };
+        let pending = self.mount_queue.iter().any(|c| c.reply.owner == owner)
+            || self
+                .preparing
+                .as_ref()
+                .is_some_and(|(_, c)| c.reply.owner == owner);
+        let compiled = self.shell_compiled.get(&owner) == Some(&owner);
+        match sidebar_tabs::need(mount.recorded, compiled, pending) {
+            sidebar_tabs::Need::Wake => {
+                if self.tab_woken != Some(owner) {
+                    self.tab_woken = Some(owner);
+                    diag!("sidebar: tab of {} shown, waking it", mount.manifest);
+                    self.panel_shown(owner);
+                }
+            }
+            sidebar_tabs::Need::Compile => {
+                self.tab_woken = None;
+                if self.refresh_failed != Some(owner) && !self.tabs_failed.contains(&owner) {
+                    self.shell_refresh = true;
+                }
+            }
+            sidebar_tabs::Need::Nothing => {
+                self.tab_woken = None;
+                if compiled {
+                    self.refresh_failed = None;
+                }
+            }
+        }
+    }
+    /// The sidebar's compiled tabs, in tab order, by the owner each branch was
+    /// compiled under (`shell_compiled`; a woken plugin's tab keeps its old
+    /// branch until its new mount): the floating window compiles the same
+    /// ones, so a wake does not reopen it.
+    pub(crate) fn compiled_tabs(&self) -> Vec<u64> {
+        self.shell_tabs
+            .iter()
+            .filter_map(|owner| self.shell_compiled.get(owner).copied())
+            .collect()
     }
     /// The current tab everywhere it matters: the panel keys' owner, the
     /// shell's and the floating window's `sidebar-active` (and the floating
@@ -344,9 +394,25 @@ impl Host {
                 let _ = window.set_property("sidebar-active", SValue::Number(index));
             }
         };
+        let set_shown = |window: &slint_interpreter::ComponentInstance, owner: i64| {
+            let owner = owner as f64;
+            if !matches!(window.get_property("sidebar-shown"), Ok(SValue::Number(n)) if n == owner)
+            {
+                let _ = window.set_property("sidebar-shown", SValue::Number(owner));
+            }
+        };
         set_index(shell, &self.shell_tabs);
+        set_shown(shell, sidebar_tabs::shown(active, &self.shell_compiled));
         if let Some(floating) = &self.floating {
             set_index(&floating.instance, &floating.owners);
+            // Its branches are the shell's (`compiled_tabs`), by the same owners.
+            let shown = sidebar_tabs::shown(active, &self.shell_compiled);
+            let shown = if floating.compiled.iter().any(|&alias| alias as i64 == shown) {
+                shown
+            } else {
+                -1
+            };
+            set_shown(&floating.instance, shown);
             if let Some(mount) = active.and_then(|owner| self.mounts.get(&owner)) {
                 let title = SValue::String(mount.title.as_str().into());
                 if floating.instance.get_property("panel-title").ok().as_ref() != Some(&title) {
@@ -362,6 +428,7 @@ impl Host {
             self.sidebar_active = active;
         }
         self.tab_clicked = false;
+        self.tab_demand(active);
     }
     /// The titles of the sidebar's tabs, in tab order.
     pub(crate) fn tab_titles(&self, owners: &[u64]) -> Result<SValue> {
@@ -387,6 +454,13 @@ impl Host {
             SValue::Void
         })?;
         let events = self.events.clone();
+        window.set_callback("sidebar-overflow", move |args| {
+            if let [SValue::Number(x), SValue::Number(y)] = args {
+                let _ = events.send(Event::SidebarOverflow(generation, *x, *y));
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
         window.set_callback("sidebar-detach", move |_| {
             let _ = events.send(Event::SidebarDetach(generation));
             SValue::Void
@@ -402,8 +476,11 @@ impl Host {
     /// with other panels than the sidebar's now opens again.
     pub(crate) fn sync_floating(&mut self, want: bool) {
         let owners = self.policy.sidebar_panels();
+        let compiled = self.compiled_tabs();
         match (&self.floating, want) {
-            (Some(floating), true) if floating.owners == owners => {
+            (Some(floating), true)
+                if floating.owners == owners && floating.compiled == compiled =>
+            {
                 self.remember_floating();
             }
             (None, true) if !owners.is_empty() => {
@@ -422,8 +499,10 @@ impl Host {
             _ => {}
         }
     }
+    /// The floating window with every tab in its strip and the shell's
+    /// compiled panels (sidebar-tabs.md); it opens again when they change.
     pub(crate) fn open_floating(&mut self, owners: &[u64]) -> Result<()> {
-        let mounts = owners
+        let tabs = owners
             .iter()
             .map(|owner| {
                 self.mounts
@@ -432,24 +511,49 @@ impl Host {
                     .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))
             })
             .collect::<Result<Vec<_>>>()?;
+        let compiled = self.compiled_tabs();
+        // Each under the owner its shell branch was compiled under.
+        let mounts = tabs
+            .iter()
+            .filter_map(|m| {
+                let alias = *self.shell_compiled.get(&m.spec.owner)?;
+                let mut mount = m.clone();
+                mount.spec.owner = alias;
+                Some(mount)
+            })
+            .collect::<Vec<_>>();
         let specs = mounts.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
         let active = self.policy.sidebar_active();
-        let title = mounts
+        let title = tabs
             .iter()
             .find(|m| Some(m.spec.owner) == active)
-            .unwrap_or(&mounts[0])
+            .unwrap_or(&tabs[0])
             .title
             .clone();
+        let tabbed = tabs.len() > 1;
         self.next_shell_generation += 1;
         let generation = self.next_shell_generation;
-        let instance =
-            composition::compile_floating(&specs, &title, self.mount_events.clone(), generation)?;
+        let instance = composition::compile_floating(
+            &specs,
+            &title,
+            tabbed,
+            self.mount_events.clone(),
+            generation,
+        )?;
+        // A value a panel cannot take is reported, never a failure of the
+        // whole window (`report_value_failures`).
+        let mut failures = Vec::new();
         for mount in &mounts {
             for (name, value) in self.mount_values(mount) {
-                composition::set_global_value(&instance, &mount.spec, &name, value)?;
+                if let Err(error) =
+                    composition::set_global_value(&instance, &mount.spec, &name, value)
+                {
+                    failures.push((mount.spec.owner, format!("{name}: {error:#}")));
+                }
             }
-            composition::set_tabbed(&instance, &mount.spec, mounts.len() > 1)?;
+            composition::set_tabbed(&instance, &mount.spec, tabbed)?;
         }
+        self.report_value_failures(failures);
         instance.set_property("sidebar-titles", self.tab_titles(owners)?)?;
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);
@@ -481,6 +585,7 @@ impl Host {
         self.floating = Some(Floating {
             instance,
             owners: owners.to_vec(),
+            compiled,
             generation,
             native,
         });

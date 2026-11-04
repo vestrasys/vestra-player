@@ -1,11 +1,10 @@
 //! Who holds a shell slot, and who claims one first.
 //!
 //! The bottom bar and the backdrop hold one component each; the sidebar
-//! holds up to [`MAX_SIDEBAR_TABS`] panels as tabs (`composition::shell_source`).
-//! A second plugin asking for a taken bottom bar or backdrop (or a full
-//! sidebar) is refused at `ui.mount` with `conflict` (not later, as a
-//! compile failure), and the refusal does not
-//! fail its activation (nor does `sequence.set` refused for another
+//! holds any number of panels as tabs (doc/architecture/sidebar-tabs.md).
+//! A second plugin asking for a taken bottom bar or backdrop is refused at
+//! `ui.mount` with `conflict` (not later, as a compile failure), and the
+//! refusal does not fail its activation (nor does `sequence.set` refused for another
 //! provider). While the built-in plugins start, other plugins' mount and
 //! sequence requests wait, so a built-in panel (the playlist's sidebar) keeps
 //! its slot, and the playlist the sequence, whatever order the processes
@@ -43,32 +42,6 @@ pub fn occupant(
                 .find(|&&(owner, change)| change == Some(slot) && owner != claimant)
                 .map(|&(owner, _)| owner)
         })
-}
-
-/// At most this many sidebar panels (tabs).
-pub const MAX_SIDEBAR_TABS: usize = 8;
-
-/// The sidebar panels a claim by `claimant` would join: shown ones whose
-/// unmount is not queued, and queued or preparing ones.
-pub fn tabs(
-    claimant: u64,
-    mounted: impl IntoIterator<Item = (u64, Slot)>,
-    pending: &[Pending],
-) -> usize {
-    let leaving = |owner: u64| {
-        pending
-            .iter()
-            .any(|&(o, change)| o == owner && change.is_none())
-    };
-    let shown = mounted
-        .into_iter()
-        .filter(|&(owner, slot)| slot == Slot::Sidebar && owner != claimant && !leaving(owner))
-        .count();
-    shown
-        + pending
-            .iter()
-            .filter(|&&(owner, change)| change == Some(Slot::Sidebar) && owner != claimant)
-            .count()
 }
 
 /// The message of the `conflict` refusal: "The sidebar is used by
@@ -122,6 +95,14 @@ impl<T> Gate<T> {
         self.held.iter().any(|(o, _)| *o == owner)
     }
 
+    /// The requests of `owner` waiting here, oldest first.
+    pub fn held_of(&self, owner: u64) -> impl Iterator<Item = &T> {
+        self.held
+            .iter()
+            .filter(move |(o, _)| *o == owner)
+            .map(|(_, request)| request)
+    }
+
     /// A stopped plugin's requests are dropped (it is no longer answered).
     pub fn forget(&mut self, owner: u64) {
         self.held.retain(|(o, _)| *o != owner);
@@ -149,15 +130,6 @@ mod tests {
             occupant(Slot::Bottom, 4, [], &[(4, Some(Slot::Bottom))]),
             None
         );
-    }
-
-    #[test]
-    fn sidebar_claims_count_shown_and_queued_tabs_but_not_leaving_ones() {
-        let shown = [(1, Slot::Sidebar), (2, Slot::Bottom), (5, Slot::Sidebar)];
-        assert_eq!(tabs(3, shown, &[]), 2);
-        assert_eq!(tabs(1, shown, &[]), 1, "the claimant's own panel");
-        assert_eq!(tabs(3, shown, &[(1, None), (4, Some(Slot::Sidebar))]), 2);
-        assert_eq!(tabs(3, [], &[(4, Some(Slot::Bottom))]), 0);
     }
 
     #[test]

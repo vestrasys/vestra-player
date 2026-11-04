@@ -159,6 +159,7 @@ struct Overlay {
     left_at: Option<u64>,
 }
 
+#[derive(Clone)]
 pub struct Policy {
     bottom: Option<Attachment>,
     sidebar: Option<Tabs>,
@@ -290,6 +291,21 @@ impl Policy {
     pub fn set_active(&mut self, owner: u64) -> Result<()> {
         self.tabs_mut(owner)?.active = owner;
         Ok(())
+    }
+
+    /// A sidebar tab's plugin woke from standby as `to` (sidebar-tabs.md):
+    /// the tab keeps its place, locks and current state.
+    pub fn rekey(&mut self, from: u64, to: u64) {
+        if let Some(tabs) = &mut self.sidebar {
+            for (owner, _) in &mut tabs.panels {
+                if *owner == from {
+                    *owner = to;
+                }
+            }
+            if tabs.active == from {
+                tabs.active = to;
+            }
+        }
     }
 
     /// The sidebar's panels in tab order (empty without a sidebar).
@@ -1244,6 +1260,21 @@ mod tests {
         assert!(!policy.bar.band);
         policy.set_fullscreen(false, u64::MAX);
         assert!(!policy.evaluate(roomy(), u64::MAX).unwrap().fullscreen);
+    }
+
+    #[test]
+    fn a_tab_whose_plugin_woke_under_a_new_owner_keeps_its_place_and_state() {
+        let mut policy = attached();
+        policy.attach(Slot::Sidebar, 3, true, false).unwrap();
+        policy.attach(Slot::Sidebar, 4, true, false).unwrap();
+        policy.set_active(3).unwrap();
+        policy.rekey(3, 30);
+        assert_eq!(policy.sidebar_panels(), [2, 30, 4]);
+        assert_eq!(policy.sidebar_active(), Some(30));
+        // A background tab moves alike.
+        policy.rekey(4, 40);
+        assert_eq!(policy.sidebar_panels(), [2, 30, 40]);
+        assert_eq!(policy.sidebar_active(), Some(30));
     }
 
     #[test]

@@ -1814,12 +1814,136 @@ export component W inherits Window {
             slint_interpreter::Value::Number(n) => n,
             other => panic!("{name}: {other:?}"),
         };
-        for active in [0., 1., 0.] {
+        for (active, owner) in [(0., 20.), (1., 30.), (0., 20.)] {
             shell.set_property("sidebar-active", active.into()).unwrap();
+            shell.set_property("sidebar-shown", owner.into()).unwrap();
             settle_layout(shell.window());
             assert_eq!(read("video-width"), 1470. - 320., "tab {active}");
         }
         shell.hide().unwrap();
+    }
+
+    /// sidebar-tabs.md: twenty sidebar tabs, four panels compiled (the
+    /// front tabs and the current one, `sidebar_tabs::compiled`); a switch
+    /// between compiled tabs is a property change, a placeholder shows no
+    /// panel, and the strip moves the current tab into its last place with
+    /// the `»` button beside it.
+    #[test]
+    fn twenty_tabs_compile_four_panels_and_the_strip_overflows() {
+        use crate::ui::composition::{CompileSpec, Slot};
+        use crate::ui::sidebar_tabs;
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let order = (1..=20).map(|n| 100 + n).collect::<Vec<u64>>();
+        let active = Some(117);
+        let compiled =
+            sidebar_tabs::compiled(&order, active, |_| false, |_| false, &Default::default());
+        assert_eq!(compiled, [101, 102, 103, 117]);
+        let mut specs = vec![bar_and_sidebar()[0].clone()];
+        for owner in &compiled {
+            // Each owner its own file (independent packages).
+            let file = dir.path().join(format!("tab{owner}.slint"));
+            std::fs::copy(base.join("tab.slint"), &file).unwrap();
+            specs.push(CompileSpec {
+                owner: *owner,
+                file,
+                component: "NoteTab".into(),
+                global: Some("Bridge".into()),
+                slot: Slot::Sidebar,
+            });
+        }
+        let source = crate::ui::composition::shell_source_tabbed(&specs, true).unwrap();
+        // Two columns (docked and fullscreen overlay), four branches each.
+        assert_eq!(source.matches(": Owner1").count(), 2 * compiled.len());
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::ui::composition::compile_json_in(&specs, true, sender, 1, None).unwrap();
+        let titles = order
+            .iter()
+            .map(|owner| format!("Tab {owner}"))
+            .collect::<Vec<_>>();
+        shell
+            .set_property(
+                "sidebar-titles",
+                crate::ui::ui_values::from_json(&serde_json::json!(titles)).unwrap(),
+            )
+            .unwrap();
+        shell
+            .window()
+            .set_size(slint::LogicalSize::new(1470., 956.));
+        shell.show().unwrap();
+        for (index, owner) in [(16., 117.), (0., 101.), (19., -1.)] {
+            shell.set_property("sidebar-active", index.into()).unwrap();
+            shell.set_property("sidebar-shown", owner.into()).unwrap();
+            settle_layout(shell.window());
+        }
+        shell.hide().unwrap();
+    }
+
+    /// The strip's overflow (sidebar-tabs.md): tabs stay at least 72 px; the
+    /// rest go into `»`, and the current tab takes the last place when it
+    /// would not fit.
+    #[test]
+    fn the_tab_strip_overflows_and_keeps_the_current_tab_visible() {
+        headless();
+        let source = r#"import { SidebarTabs } from "sidebar-tabs.slint";
+export component T inherits Window {
+    in property <length> strip-width: 317px;
+    in property <int> count: 2;
+    in property <int> active: 0;
+    width: 900px; height: 40px;
+    strip := SidebarTabs {
+        x: 0px; y: 0px; width: root.strip-width;
+        titles: [ "1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15", "16", "17", "18", "19", "20" ];
+        active: root.active; detached: false;
+    }
+    narrow := SidebarTabs {
+        x: 0px; y: 0px; width: root.strip-width;
+        titles: [ "1", "2" ];
+        active: root.active; detached: false;
+    }
+    out property <bool> overflowing: strip.overflowing;
+    out property <int> shown: strip.shown;
+    out property <int> last: strip.last;
+    out property <bool> two-overflowing: narrow.overflowing;
+    out property <int> two-shown: narrow.shown;
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let window = result
+            .component("T")
+            .unwrap_or_else(|| panic!("{:?}", result.diagnostics().collect::<Vec<_>>()))
+            .create()
+            .unwrap();
+        let number = |name: &str| match window.get_property(name).unwrap() {
+            Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        };
+        let flag = |name: &str| window.get_property(name).unwrap() == Value::Bool(true);
+        // The default sidebar width (317 px, 264 px of room): 3 tabs, `»`.
+        window.set_property("active", 16.0.into()).unwrap();
+        assert!(flag("overflowing"));
+        assert_eq!(number("shown"), 3.);
+        // Tabs 1 and 2, then the current 17th in the last place.
+        assert_eq!(number("last"), 16.);
+        window.set_property("active", 1.0.into()).unwrap();
+        assert_eq!(number("last"), 2.);
+        // Two tabs fit at the default width, as before (no `»`).
+        assert!(!flag("two-overflowing"));
+        assert_eq!(number("two-shown"), 2.);
+        // A narrow sidebar: one place, the current tab in it.
+        window.set_property("strip-width", 150.0.into()).unwrap();
+        window.set_property("active", 7.0.into()).unwrap();
+        assert_eq!(number("shown"), 1.);
+        assert_eq!(number("last"), 7.);
+        // A wide one: four places at most, the panels the host compiles
+        // (`sidebar_tabs::front`): the first three and the current tab.
+        window.set_property("strip-width", 600.0.into()).unwrap();
+        assert_eq!(number("shown"), 4.);
+        assert_eq!(number("last"), 7.);
+        window.set_property("active", 1.0.into()).unwrap();
+        assert_eq!(number("last"), 3.);
     }
 
     thread_local! {
@@ -1962,6 +2086,7 @@ export component W inherits Window {
         let new = replace_shell(Some(&old), focus_video, |window| {
             let shell = crate::ui::composition::compile_json_in(
                 &bar_and_sidebar(),
+                false,
                 sender.clone(),
                 2,
                 window,
@@ -1989,7 +2114,7 @@ export component W inherits Window {
         new.window().set_fullscreen(true);
         native_calls();
         let last = replace_shell(Some(&new), focus_video, |window| {
-            crate::ui::composition::compile_json_in(&[], sender.clone(), 3, window)
+            crate::ui::composition::compile_json_in(&[], false, sender.clone(), 3, window)
         })
         .unwrap();
         drop(new);
@@ -2023,6 +2148,7 @@ export component W inherits Window {
         let failed = replace_shell(Some(&old), focus_video, |window| {
             let _shell = crate::ui::composition::compile_json_in(
                 &bar_and_sidebar(),
+                false,
                 sender.clone(),
                 2,
                 window,
