@@ -32,6 +32,7 @@ import {
   packaging,
   parseArgs,
   readJson,
+  reportErrors,
   run,
   sha256File,
   verifySha256,
@@ -146,6 +147,7 @@ async function fetchNode(platform, out, cache) {
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
+  reportErrors();
   const options = parseArgs(process.argv.slice(2));
   const cache = resolve(options.cache ?? join(tmpdir(), "vestra-node-cache"));
   if (options.pin) await pin(options.pin, cache);

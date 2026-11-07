@@ -133,6 +133,5 @@ for (const file of walk(doc)) check(file, readFileSync(file, "utf8"));
 
 if (problems.length) {
   console.error(problems.join("\n"));
-  process.exit(1);
-}
-console.log("doc/: no copies of the SDK site's author documentation");
+  process.exitCode = 1;
+} else console.log("doc/: no copies of the SDK site's author documentation");

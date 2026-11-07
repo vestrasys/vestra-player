@@ -20,7 +20,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { deflateSync, inflateSync } from "node:zlib";
-import { fail, parseArgs, source } from "./lib.mjs";
+import { fail, parseArgs, reportErrors, source } from "./lib.mjs";
 
 const LOGO = join(source, "assets/brand/logo.png");
 export const COMMITTED_ICO = join(source, "host/windows/vestra.ico");
@@ -413,6 +413,7 @@ export async function writeIcons({
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
+  reportErrors();
   const options = parseArgs(process.argv.slice(2), ["check"]);
   if (options.check) {
     const committed = await readFile(COMMITTED_ICO);
@@ -423,13 +424,12 @@ if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
         `src/host/windows/vestra.ico is out of date (${difference}): node packaging/icon.mjs --ico host/windows/vestra.ico`,
       );
     console.log("src/host/windows/vestra.ico matches the logo");
-    process.exit(0);
-  }
-  if (!options.icns && !options.ico && !options.png)
+  } else if (!options.icns && !options.ico && !options.png)
     fail("usage: icon.mjs [--icns <file>] [--ico <file>] [--png <file>]");
-  await writeIcons({
-    icns: options.icns && resolve(options.icns),
-    ico: options.ico && resolve(options.ico),
-    png: options.png && resolve(options.png),
-  });
+  else
+    await writeIcons({
+      icns: options.icns && resolve(options.icns),
+      ico: options.ico && resolve(options.ico),
+      png: options.png && resolve(options.png),
+    });
 }

@@ -186,11 +186,12 @@ if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
     console.error(
       "usage: node scripts/stage-plugins.mjs <destination>/plugins [name...]",
     );
-    process.exit(2);
+    process.exitCode = 2;
+  } else {
+    const plugins = await stagePlugins(
+      resolve(destination),
+      names.length ? names : undefined,
+    );
+    console.log(`staged ${plugins.length} built-in plugins in ${destination}`);
   }
-  const plugins = await stagePlugins(
-    resolve(destination),
-    names.length ? names : undefined,
-  );
-  console.log(`staged ${plugins.length} built-in plugins in ${destination}`);
 }

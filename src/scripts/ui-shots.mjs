@@ -37,6 +37,9 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, relative, resolve, sep } from "node:path";
+import { reportErrors, stop } from "../packaging/lib.mjs";
+
+reportErrors();
 
 const source = resolve(import.meta.dirname, "..");
 const hostDir = join(source, "host");
@@ -46,7 +49,7 @@ const usage = () => {
   console.error(
     "usage: npm run ui:shots -- <plugin...> [--lang en,zh-Hans,de] [--out <dir>] [--state <text>] [--max <n>] [--theme vestra|vestra-light] [--scale <factor>] [--states <dir>]",
   );
-  process.exit(2);
+  stop(2);
 };
 
 const args = process.argv.slice(2);
@@ -69,7 +72,7 @@ if (args.some((a) => a.startsWith("--")) || !args.length) usage();
 for (const lang of langs)
   if (!LOCALES.includes(lang)) {
     console.error(`unknown language ${lang} (${LOCALES.join(", ")})`);
-    process.exit(2);
+    stop(2);
   }
 if (!(scale > 0) || !(max >= 0)) usage();
 
@@ -80,7 +83,7 @@ const directories = names.map((name) =>
 for (const dir of directories)
   if (!existsSync(join(dir, "manifest.json"))) {
     console.error(`not a plugin directory: ${dir}`);
-    process.exit(2);
+    stop(2);
   }
 const pluginName = (dir) => basename(dir);
 const same = (a, b) =>
@@ -94,7 +97,7 @@ const out = resolve(
 const inRepo = relative(resolve(source, ".."), out);
 if (!inRepo.startsWith("..") && !isAbsolute(inRepo)) {
   console.error(`the output must be outside the repository: ${out}`);
-  process.exit(2);
+  stop(2);
 }
 if (!outOption) rmSync(out, { recursive: true, force: true });
 mkdirSync(out, { recursive: true });
@@ -273,7 +276,7 @@ if (!shots.length) {
   console.error(
     "ui-shots: no window or settings page to show (no test opened one, and no .slint file declares a Window)",
   );
-  process.exit(1);
+  stop(1);
 }
 console.log(`ui-shots: ${shots.length} views in ${langs.length} languages`);
 
@@ -310,7 +313,7 @@ const executable = (build.stdout ?? "")
   )?.executable;
 if (build.status !== 0 || !executable) {
   console.error("ui-shots: building the host's test program failed");
-  process.exit(1);
+  stop(1);
 }
 
 const results = [];
@@ -355,7 +358,7 @@ for (const lang of langs) {
   if (run.status !== 0 || !existsSync(resultFile)) {
     console.error(run.stdout, run.stderr);
     console.error(`ui-shots: rendering ${lang} failed`);
-    process.exit(1);
+    stop(1);
   }
   const byId = new Map(shots.map((s) => [`${s.id}-${lang}`, s]));
   /** Identical pictures of one view: one PNG, its states listed together. */

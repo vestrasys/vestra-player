@@ -19,6 +19,9 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import { dirname, join, resolve } from "node:path";
+import { reportErrors, stop } from "../packaging/lib.mjs";
+
+reportErrors();
 
 const source = resolve(import.meta.dirname, "..");
 /** Path under host/ui/ = path under the SDK's slint/. */
@@ -37,7 +40,7 @@ const writeAt = args.indexOf("--write");
 const write = writeAt >= 0;
 if (write && !args[writeAt + 1]) {
   console.error("usage: node scripts/sync-sdk-slint.mjs [--write <sdk-repo>]");
-  process.exit(2);
+  stop(2);
 }
 const to = write
   ? join(resolve(args[writeAt + 1]), "slint")
@@ -68,12 +71,12 @@ if (!write && drift.length) {
       "Copy host/ui into the SDK repository (node scripts/sync-sdk-slint.mjs --write <sdk-repo>), " +
       "release it and upgrade @vestra-player/sdk here.",
   );
-  process.exit(1);
-}
-console.log(
-  !write
-    ? "The installed SDK's Slint copy matches host/ui."
-    : drift.length
-      ? `Copied ${drift.join(", ")} into ${to}.`
-      : `${to} already matches host/ui.`,
-);
+  process.exitCode = 1;
+} else
+  console.log(
+    !write
+      ? "The installed SDK's Slint copy matches host/ui."
+      : drift.length
+        ? `Copied ${drift.join(", ")} into ${to}.`
+        : `${to} already matches host/ui.`,
+  );

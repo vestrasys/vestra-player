@@ -14,8 +14,16 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { delimiter, dirname, join, resolve } from "node:path";
-import { exists, fail, parseArgs, readJson, walk } from "./lib.mjs";
+import {
+  exists,
+  fail,
+  parseArgs,
+  readJson,
+  reportErrors,
+  walk,
+} from "./lib.mjs";
 
+reportErrors();
 const options = parseArgs(process.argv.slice(2));
 if (!options.exe || !options.plugins)
   fail("usage: smoke.mjs --exe <file> --plugins <dir> [--seconds N]");

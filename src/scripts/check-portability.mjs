@@ -384,4 +384,4 @@ async function scan() {
 if (!args.has("--skip-host")) await checkHost();
 if (!args.has("--skip-scan")) await scan();
 console.log(failed ? "\nportability: problems found" : "\nportability: clean");
-process.exit(failed ? 1 : 0);
+process.exitCode = failed ? 1 : 0;

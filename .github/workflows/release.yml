@@ -74,7 +74,10 @@ jobs:
       # the files; the host version (src/host/Cargo.toml) stays lower while
       # the host does not change, and is never higher. `host.mjs versions`
       # checks both are x.y.z and release ≥ host (Node built-ins only).
+      # Step deadlines: host.mjs takes 0-2 s here; one that does not exit
+      # fails its step instead of running to the job's 40 minutes.
       - id: version
+        timeout-minutes: 5
         env:
           REF_TYPE: ${{ github.ref_type }}
           TAG: ${{ github.ref_name }}
@@ -104,6 +107,7 @@ jobs:
       # when the host version is below a released one. Both platforms, even
       # on a one-platform dry run.
       - name: host version raised when the host changed (check-bump)
+        timeout-minutes: 5
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}

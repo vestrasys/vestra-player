@@ -52,6 +52,7 @@ import {
   megabytes,
   packaging,
   parseArgs,
+  reportErrors,
   run,
   source,
   versions,
@@ -66,6 +67,7 @@ import {
 /** Inno Setup AppId, derived from the macOS bundle id. */
 export const APP_ID = "com.vestraplayer.player";
 
+reportErrors();
 const options = parseArgs(process.argv.slice(2), [
   "no-installer",
   "reuse-host",
