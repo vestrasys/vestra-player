@@ -213,6 +213,10 @@ msgstr "定位: 上一帧 {}"
 msgid "All tabs"
 msgstr "全部页签"
 
+#: ui/bar-strip.slint:98
+msgid "More buttons"
+msgstr "更多按钮"
+
 #: src/main.rs:150
 msgid "Previous/Next is provided by {}"
 msgstr "上一个/下一个已由 {} 提供"

@@ -4,10 +4,12 @@ import { MenuView, MenuLevel } from "menu-view.slint";
 import { PaletteView, PaletteRow } from "command-palette.slint";
 import { Theme } from "@vestra/theme.slint";
 import { TitleStrip } from "title-strip.slint";
+// The bottom-bar button strip (bar_buttons.rs; composition.rs places it).
+import { HostBarStrip } from "bar-strip.slint";
 // Exported so the player can set the colours (R-H6).
 export { VestraPalette } from "palette.slint";
 export { MenuChrome } from "menu-view.slint";
-// Bottom-bar command buttons (bar_buttons.rs fills it; a bar places BarButtons).
+// Bottom-bar command buttons (bar_buttons.rs fills it; HostBarStrip draws it).
 export { BarButtonsHost } from "@vestra/bar-buttons.slint";
 export component HostWindow inherits Window {
     in property <string> window-title: "Vestra Player";
@@ -87,6 +89,8 @@ export component HostWindow inherits Window {
     out property <float> pointer-y: mouse.mouse-y / 1px;
     callback wheel-input(float, float, bool, bool, bool, bool) -> bool;
     callback sidebar-resized(float);
+    // The bottom-bar strip's `»` (bar_buttons.rs): the cell's top-left corner.
+    callback bar-more(float, float);
     callback close-menu();
     close-menu => { canvas.focus(); }
     // G-01: the fullscreen sidebar collapsed; keys go back to the video.

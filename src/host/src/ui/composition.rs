@@ -222,6 +222,83 @@ pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
 /// [`shell_source`] with the tab strip drawn when `tabbed`, also over one
 /// compiled panel (the other tabs are placeholders).
 pub fn shell_source_tabbed(specs: &[CompileSpec], tabbed: bool) -> Result<String> {
+    shell_source_with(specs, tabbed, bar_reports_min(specs))
+}
+
+/// The property a bottom bar reports the least width of its own controls
+/// in (menu redesign step 3a): the player's button strip gets the rest.
+pub const BAR_MIN_WIDTH: &str = "content-min-width";
+
+/// Whether the mounted bottom bar's component has a public `length`
+/// property [`BAR_MIN_WIDTH`], its own or one it inherits from a base
+/// component in another file. The Slint compiler answers, not a text scan:
+/// `ComponentDefinition::properties()` lists only the properties a
+/// component declares itself (Slint 1.18.1 lowers `public_properties` from
+/// the root element's own declarations), so an inherited one would be
+/// missed. Instead a probe component that reads the property from an
+/// instance of the bar into a `length` property is compiled: it compiles
+/// exactly when the property exists, is readable from outside and is a
+/// length. Kept per file, component and modification time, so the shell's
+/// later compiles (a tab switch, a mount elsewhere) do not repeat it. A bar
+/// that does not compile has no property here; the shell's compile then
+/// reports its real error.
+fn bar_reports_min(specs: &[CompileSpec]) -> bool {
+    specs
+        .iter()
+        .find(|spec| spec.slot == Slot::Bottom)
+        .is_some_and(|spec| declares_length(&spec.file, &spec.component, BAR_MIN_WIDTH))
+}
+
+/// [`bar_reports_min`] for any file, component and `length` property.
+fn declares_length(file: &std::path::Path, component: &str, property: &str) -> bool {
+    type Key = (PathBuf, String, String, Option<std::time::SystemTime>);
+    thread_local! {
+        static SEEN: std::cell::RefCell<std::collections::BTreeMap<Key, bool>> =
+            const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+    }
+    let modified = std::fs::metadata(file).and_then(|m| m.modified()).ok();
+    let key = (
+        file.to_path_buf(),
+        component.to_owned(),
+        property.to_owned(),
+        modified,
+    );
+    if let Some(known) = SEEN.with(|seen| seen.borrow().get(&key).copied()) {
+        return known;
+    }
+    let found = (|| {
+        identifier(component).ok()?;
+        identifier(property).ok()?;
+        let path = import_path(file).ok()?;
+        let probe = format!(
+            "import {{ {component} as ProbedBar }} from \"{path}\";\n\
+             export component VestraProbe {{ bar := ProbedBar {{}} \
+             out property <length> probed: bar.{property}; }}\n"
+        );
+        let base = file.with_file_name("vestra-property-probe.slint");
+        let result = pollster::block_on(crate::ui::view::compiler().build_from_source(probe, base));
+        let failed = result
+            .diagnostics()
+            .any(|d| d.level() == slint_interpreter::DiagnosticLevel::Error);
+        Some(!failed && result.component("VestraProbe").is_some())
+    })()
+    .unwrap_or(false);
+    SEEN.with(|seen| seen.borrow_mut().insert(key, found));
+    found
+}
+
+/// The player's bottom-bar strip (bar-strip.slint) at the right end of its
+/// parent, its cells on the parent's bottom edge; `min`: what the bar
+/// keeps for its own controls.
+fn bar_strip(min: &str) -> String {
+    format!(
+        "bar-strip := HostBarStrip {{ x: parent.width - self.width - 4px; y: parent.height - self.height; \
+         room: max(0px, parent.width - {min} - 4px); more(x, y) => {{ root.bar-more(x, y); }} }}"
+    )
+}
+
+/// [`shell_source_tabbed`], the bottom bar's [`BAR_MIN_WIDTH`] read when `bar_min`.
+fn shell_source_with(specs: &[CompileSpec], tabbed: bool, bar_min: bool) -> Result<String> {
     let mut owners = BTreeSet::new();
     let mut slots = BTreeSet::new();
     let mut files = BTreeSet::new();
@@ -308,12 +385,27 @@ pub fn shell_source_tabbed(specs: &[CompileSpec], tabbed: bool) -> Result<String
                  TouchArea {{ changed has-hover => {{ root.bottom-hover = self.has-hover; }} \
                  changed mouse-x => {{ root.window-input(\"activity\"); }} \
                  changed mouse-y => {{ root.window-input(\"activity\"); }} \
-                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} }} }} }}",
+                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} {} }} }} }}",
                 key_forward("panel:bottom"),
-                spec.owner
+                spec.owner,
+                bar_strip(if bar_min {
+                    "bottom-content.content-min-width"
+                } else {
+                    "0px"
+                })
             )
         })
-        .unwrap_or_default();
+        // Step 3a: without a bottom bar the player's strip still shows, in a
+        // band of the bar's colour (hidden in fullscreen).
+        .unwrap_or_else(|| {
+            format!(
+                "Rectangle {{ height: root.host-fullscreen ? 0px : 40px; vertical-stretch: 0; \
+                 visible: !root.host-fullscreen; background: Theme.bg-bar; \
+                 Rectangle {{ x: 0px; y: 0px; width: parent.width; height: 1px; background: Theme.line; }} \
+                 {} }}",
+                bar_strip("0px")
+            )
+        });
     replace_marker(&mut shell, "// VESTRA-MOUNT-BOTTOM", &bottom)?;
     // Under the video input layer, the OSD and the information blocks; it
     // never receives the pointer (the TouchArea above covers it) or focus.
@@ -462,7 +554,7 @@ pub(crate) fn build(source: String, component: &str) -> Result<ComponentDefiniti
 }
 
 fn compile_definition(specs: &[CompileSpec]) -> Result<ComponentDefinition> {
-    build(shell_source(specs)?, "HostWindow")
+    compile_definition_tabbed(specs, default_tabbed(specs))
 }
 
 fn compile_definition_tabbed(specs: &[CompileSpec], tabbed: bool) -> Result<ComponentDefinition> {
@@ -736,6 +828,82 @@ pub fn set_global_value(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Step 3a: a bar's `content-min-width` is read only where its file
+    /// declares it (comments do not count), and a shell without a bottom
+    /// bar holds the player's strip in a band of its own.
+    #[test]
+    fn the_bar_minimum_is_read_where_declared_and_the_band_holds_the_strip() {
+        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let has = |file: &std::path::Path, component: &str| {
+            declares_length(file, component, BAR_MIN_WIDTH)
+        };
+        // Declared on the component, or inherited from a base component in
+        // another file (the interpreter's view, not the text).
+        assert!(has(&fixtures.join("min-bar.slint"), "MinBar"));
+        assert!(has(&fixtures.join("min-derived.slint"), "DerivedBar"));
+        assert!(!has(&fixtures.join("strip-bar.slint"), "StripBar"));
+        let dir = tempfile::tempdir().unwrap();
+        let write = |name: &str, text: &str| {
+            let path = dir.path().join(name);
+            std::fs::write(&path, text).unwrap();
+            path
+        };
+        // Only in a comment, on another component of the file, of another
+        // type, a private property, or a file that does not compile: no.
+        let comment = write(
+            "comment.slint",
+            "// out property <length> content-min-width: 3px;\nexport component B inherits Rectangle {}\n",
+        );
+        assert!(!has(&comment, "B"));
+        let other = write(
+            "other.slint",
+            "component Part inherits Rectangle { out property <length> content-min-width: 3px; }\n\
+             export component B inherits Rectangle { Part {} }\n",
+        );
+        assert!(!has(&other, "B"));
+        let typed = write(
+            "typed.slint",
+            "export component B inherits Rectangle { out property <int> content-min-width: 3; }\n",
+        );
+        assert!(!has(&typed, "B"));
+        let private = write(
+            "private.slint",
+            "export component B inherits Rectangle { property <length> content-min-width: 3px; }\n",
+        );
+        assert!(!has(&private, "B"));
+        let broken = write(
+            "broken.slint",
+            "export component B inherits Rectangle { nonsense: 3px; }\n",
+        );
+        assert!(!has(&broken, "B"));
+        // The shell reads it from the inherited declaration too.
+        let derived = shell_source(&[CompileSpec {
+            owner: 2,
+            file: fixtures.join("min-derived.slint"),
+            component: "DerivedBar".into(),
+            global: Some("DerivedBridge".into()),
+            slot: Slot::Bottom,
+        }])
+        .unwrap();
+        assert!(derived.contains("bottom-content.content-min-width"));
+        build(derived, "HostWindow").unwrap();
+        let empty = shell_source(&[]).unwrap();
+        assert_eq!(empty.matches("HostBarStrip {").count(), 1, "{empty}");
+        assert!(empty.contains("background: Theme.bg-bar"));
+        let old = shell_source(&[CompileSpec {
+            owner: 1,
+            file: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+                .join("tests/fixtures/mount/strip-bar.slint"),
+            component: "StripBar".into(),
+            global: Some("StripBridge".into()),
+            slot: Slot::Bottom,
+        }])
+        .unwrap();
+        assert_eq!(old.matches("HostBarStrip {").count(), 1);
+        assert!(!old.contains("content-min-width"));
+        assert!(old.contains("room: max(0px, parent.width - 0px - 4px)"));
+    }
 
     #[test]
     fn backdrop_follows_the_source_without_flicker() {

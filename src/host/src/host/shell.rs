@@ -283,6 +283,13 @@ impl Host {
             SValue::Bool(true)
         })?;
         let events = self.events.clone();
+        window.set_callback("bar-more", move |args| {
+            if let [SValue::Number(x), SValue::Number(y)] = args {
+                let _ = events.send(Event::BarMore(generation, *x, *y));
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
         window.set_callback("sidebar-resized", move |args| {
             if let Some(SValue::Number(width)) = args.first() {
                 let _ = events.send(Event::SidebarResized(generation, *width));
