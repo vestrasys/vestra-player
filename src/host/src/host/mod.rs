@@ -340,6 +340,10 @@ pub(crate) struct Host {
     /// is built again only once they moved (`packages_key`).
     pub(crate) packages_seen: Option<crate::binding_manager::PackagesKey>,
     pub(crate) notified_at: u64,
+    /// `commands.keys` (player 0.7.6): the binding table revision it was
+    /// last checked at, and what each plugin (by manifest id) last got.
+    pub(crate) keys_checked: u64,
+    pub(crate) keys_sent: BTreeMap<String, Value>,
     /// `plugin.timeline` layers (R-M3).
     pub(crate) timeline: timeline::Timeline,
     /// Decoded `plugin.ui.image` files (R-U1).

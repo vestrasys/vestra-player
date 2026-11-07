@@ -530,6 +530,8 @@ fn main() -> Result<()> {
         packages_sent: Value::Null,
         packages_seen: None,
         notified_at: 0,
+        keys_checked: 0,
+        keys_sent: BTreeMap::new(),
         timeline: Default::default(),
         images: Default::default(),
         no_video: true,

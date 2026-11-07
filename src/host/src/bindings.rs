@@ -583,6 +583,31 @@ pub fn label_in(input: &Input, style: KeyLabels) -> String {
     text + named
 }
 
+/// A command's active `keys` as menus show them: keyboard bindings only
+/// ([`label_shown`]), in the order of its own default list (others after,
+/// in table order), each text once.
+fn shown_labels<'a>(declared: &Declared, keys: impl Iterator<Item = &'a Input>) -> Vec<String> {
+    let mut keys: Vec<&Input> = keys
+        .filter(|input| label_shown(input, crate::platform::MENU_SHOWS_CMD))
+        .collect();
+    // Keep the declaration order of the command's own list.
+    keys.sort_by_key(|input| {
+        declared
+            .defaults
+            .iter()
+            .position(|each| each == *input)
+            .unwrap_or(usize::MAX)
+    });
+    let mut labels: Vec<String> = Vec::with_capacity(keys.len());
+    for input in keys {
+        let text = label(input);
+        if !labels.contains(&text) {
+            labels.push(text);
+        }
+    }
+    labels
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Scope {
     Global,
@@ -1206,24 +1231,48 @@ impl Table {
 
     /// First active keyboard binding of a command, as menu text.
     pub fn label(&self, owner: Owner, id: &str) -> Option<String> {
-        let declared = self.declared.get(&(owner, id.to_owned()))?;
-        let mut keys: Vec<_> = self
+        self.labels(owner, id).into_iter().next()
+    }
+
+    /// Every active keyboard binding of a command, as menu text, in the
+    /// order menus pick from (the first is [`Table::label`]); a text shown
+    /// twice (`Cmd+O` and `Ctrl+O` are both ⌘O on macOS) once. Empty for an
+    /// unbound command, one whose keys another command holds, and an
+    /// undeclared one. `plugin.commands.keys` (player 0.7.6).
+    pub fn labels(&self, owner: Owner, id: &str) -> Vec<String> {
+        let Some(declared) = self.declared.get(&(owner, id.to_owned())) else {
+            return Vec::new();
+        };
+        let keys = self
             .active
             .iter()
             .filter(|(_, target)| target.owner == owner && target.id == id)
-            .map(|((_, input), _)| input)
-            .filter(|input| label_shown(input, crate::platform::MENU_SHOWS_CMD))
+            .map(|((_, input), _)| input);
+        shown_labels(declared, keys)
+    }
+
+    /// The labels of each command `owner` declared ([`Table::labels`]),
+    /// unbound ones as `[]`, by id, in one pass over the active bindings;
+    /// and the manifest id that declared them.
+    pub fn labels_of(&self, owner: Owner) -> (Option<&str>, BTreeMap<String, Vec<String>>) {
+        let mut inputs: BTreeMap<&str, Vec<&Input>> = BTreeMap::new();
+        for ((_, input), target) in &self.active {
+            if target.owner == owner {
+                inputs.entry(target.id.as_str()).or_default().push(input);
+            }
+        }
+        let mut manifest = None;
+        let labels = self
+            .declared
+            .range((owner, String::new())..)
+            .take_while(|((each, _), _)| *each == owner)
+            .map(|((_, id), declared)| {
+                manifest = Some(declared.manifest.as_str());
+                let keys = inputs.remove(id.as_str()).unwrap_or_default();
+                (id.clone(), shown_labels(declared, keys.into_iter()))
+            })
             .collect();
-        // Keep the declaration order of the command's own list.
-        let order = |input: &Input| {
-            declared
-                .defaults
-                .iter()
-                .position(|each| each == input)
-                .unwrap_or(usize::MAX)
-        };
-        keys.sort_by_key(|input| order(input));
-        keys.first().map(|input| label(input))
+        (manifest, labels)
     }
 
     /// Keys bound to the host's own commands (the producer capture lets them through).
@@ -1718,6 +1767,70 @@ mod tests {
         assert!(table.resolve(&key("Tab"), None).is_none());
         assert!(table.conflicts().is_empty());
         assert_eq!(table.label(1, "pause"), None);
+    }
+
+    /// `plugin.commands.keys`: every shown key of each of one owner's
+    /// commands, the menu's label first; what the user changed or cleared,
+    /// keys another command holds and mouse bindings left out.
+    #[test]
+    fn labels_of_an_owner_follow_the_current_bindings() {
+        let mut table = Table::default();
+        table
+            .declare(HOST, "mute", "host", &["M".into()], false, false)
+            .unwrap();
+        table
+            .declare(
+                4,
+                "up",
+                "p.video",
+                &["E".into(), "Mouse:WheelUp".into(), "Ctrl+ArrowUp".into()],
+                false,
+                false,
+            )
+            .unwrap();
+        table
+            .declare(4, "down", "p.video", &["W".into()], false, false)
+            .unwrap();
+        table
+            .declare(4, "mute-too", "p.video", &["M".into()], false, false)
+            .unwrap();
+        table
+            .declare(4, "plain", "p.video", &[], false, false)
+            .unwrap();
+        let ctrl_up = if cfg!(target_os = "macos") {
+            "⌘↑"
+        } else {
+            "Ctrl+↑"
+        };
+        let of = |table: &Table| {
+            let (manifest, labels) = table.labels_of(4);
+            assert_eq!(manifest, Some("p.video"));
+            labels
+        };
+        let labels = of(&table);
+        assert_eq!(labels["up"], ["E", ctrl_up]);
+        assert_eq!(labels["up"][0], table.label(4, "up").unwrap());
+        assert_eq!(labels["down"], ["W"]);
+        // The player's own M wins: the plugin's command shows no key.
+        assert!(labels["mute-too"].is_empty());
+        assert!(labels["plain"].is_empty());
+        assert_eq!(labels.len(), 4);
+        assert_eq!(table.labels(4, "up"), labels["up"]);
+        // The user moves Up to U and clears Down (as Ignore Default
+        // Shortcuts does for every default).
+        table.set_overlay(
+            [
+                ("p.video/up".to_owned(), vec!["U".to_owned()]),
+                ("p.video/down".to_owned(), vec![]),
+            ]
+            .into_iter()
+            .collect(),
+        );
+        let labels = of(&table);
+        assert_eq!(labels["up"], ["U"]);
+        assert!(labels["down"].is_empty());
+        assert_eq!(table.labels_of(9), (None, BTreeMap::new()));
+        assert!(table.labels(4, "gone").is_empty());
     }
 
     #[test]

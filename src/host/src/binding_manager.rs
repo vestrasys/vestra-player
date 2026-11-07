@@ -166,6 +166,10 @@ impl Host {
                 }
             }
         }
+        if revision != self.keys_checked {
+            self.keys_checked = revision;
+            self.push_command_keys();
+        }
         if self.listened("packages.changed") {
             // Built and compared only once a source moved (supervisor.md
             // §10): a list of about 200 packages took 4–12 ms to build, every
@@ -221,6 +225,95 @@ impl Host {
             ],
             units: self.supervisor.list_key(),
         })
+    }
+    /// `commands.keys` (`plugin.commands.keys`, player 0.7.6): the current
+    /// key labels of each of `owner`'s own commands, as menus and the
+    /// command palette show them (`bindings::label`: the user's keys, none
+    /// when cleared, ⌘ on macOS). Noted as what it has, so `notify_tick`
+    /// pushes only a later change.
+    pub(crate) fn command_keys(&mut self, owner: u64) -> Value {
+        let (manifest, keys) = self.keys_of(owner);
+        if let Some(manifest) = manifest {
+            self.keys_sent.insert(manifest, keys.clone());
+        }
+        self.keys_data(keys)
+    }
+    /// The answer and event data: the labels by command id, and the table
+    /// revision they are of (a larger one is newer: the SDK keeps the
+    /// newest of an answer and an event that cross).
+    fn keys_data(&self, keys: Value) -> Value {
+        json!({"keys":keys,"revision":self.input.borrow().table.revision()})
+    }
+    /// `owner`'s manifest id (running or in standby) and its key labels.
+    fn keys_of(&self, owner: u64) -> (Option<String>, Value) {
+        let input = self.input.borrow();
+        let (declared_by, labels) = input.table.labels_of(owner);
+        let manifest = self
+            .plugins
+            .get(&owner)
+            .map(|plugin| plugin.manifest.id.clone())
+            .or_else(|| self.held_id(owner).map(str::to_owned))
+            .or_else(|| declared_by.map(str::to_owned));
+        (manifest, json!(labels))
+    }
+    /// The binding table changed: each plugin that subscribed to
+    /// `commands.keys` and whose labels are not what it last got receives
+    /// its own (never another plugin's). One in standby that listens is
+    /// woken for it (a key edit is a deliberate change, as for
+    /// `bindings.changed`), unless it never got any in this run: it reads
+    /// them when it starts.
+    fn push_command_keys(&mut self) {
+        const EVENT: &str = "commands.keys";
+        let running = self
+            .plugins
+            .iter()
+            .filter(|(_, plugin)| plugin.subscriptions.contains_key(EVENT))
+            .map(|(owner, _)| *owner)
+            .collect::<Vec<_>>();
+        for owner in running {
+            let (Some(manifest), keys) = self.keys_of(owner) else {
+                continue;
+            };
+            if self.keys_sent.get(&manifest) == Some(&keys) {
+                continue;
+            }
+            self.keys_sent.insert(manifest, keys.clone());
+            let data = self.keys_data(keys);
+            // A plugin waking for a wake event gets the held one first; a
+            // newer one waits behind it (as `broadcast`).
+            let pid = crate::supervisor::Pid(owner);
+            if self.supervisor.waking(pid).is_some() {
+                let now = self.now_ms();
+                self.supervisor.set_now(now);
+                let trigger =
+                    crate::supervisor::Trigger::event(EVENT, json!({"event":EVENT,"data":data}));
+                self.supervisor.wake(pid, &trigger);
+                continue;
+            }
+            self.send(owner, json!({"event":EVENT,"data":data}));
+        }
+        let parked = self
+            .on_demand
+            .wakes
+            .iter()
+            .filter(|(_, events)| events.contains(EVENT))
+            .map(|(owner, _)| *owner)
+            .collect::<Vec<_>>();
+        for owner in parked {
+            let (Some(manifest), keys) = self.keys_of(owner) else {
+                continue;
+            };
+            let Some(sent) = self.keys_sent.get(&manifest) else {
+                self.keys_sent.insert(manifest, keys);
+                continue;
+            };
+            if *sent == keys {
+                continue;
+            }
+            self.keys_sent.insert(manifest, keys.clone());
+            let data = self.keys_data(keys);
+            self.wake_listener(owner, EVENT, &data);
+        }
     }
     /// Broadcast `event`; `first` (the first of a run) wakes no parked plugin.
     fn announce(&mut self, event: &str, data: Value, first: bool) {

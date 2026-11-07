@@ -23,6 +23,8 @@ static METHODS: &[Method] = &[
     Method::this("commands.update"),
     Method::this("commands.unregister"),
     Method::this("host.run"),
+    // Player 0.7.6: the key labels of the plugin's own commands.
+    Method::this("commands.keys"),
 ];
 impl Capability for Commands {
     fn info(&self) -> &'static Info {
@@ -102,6 +104,9 @@ impl Capability for Commands {
                 }
                 Ok(Some(Value::Null))
             }
+            // Player 0.7.6 (`plugin.commands.keys`): only the caller's own
+            // commands; changes come as the `commands.keys` event.
+            "commands.keys" => Ok(Some(host.command_keys(reply.owner))),
             "commands.unregister" => {
                 let id = string(params, "id")?;
                 host.commands

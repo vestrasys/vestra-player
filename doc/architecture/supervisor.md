@@ -67,7 +67,7 @@ A unit leaves `Deactivating` only when its process is reaped **and** the playbac
 | `commands.execute` (menu item, key, bar button) | interactive | notice "*name* is busy" / "… could not start" / "… is disabled" |
 | `source.resolveRequest` | interactive | the open fails at once with that text |
 | `drops.drop`, `ui.callback`, a settings page shown, a sidebar tab shown | interactive | dropped, with a diagnostic line |
-| `packages.changed`, `bindings.changed`, `appearance.changed`, `resolvers.fileTypes` (wake events) | event | dropped silently: a woken plugin reads the current state anyway |
+| `packages.changed`, `bindings.changed`, `commands.keys` (only to the plugin whose own command keys changed, player 0.7.6), `appearance.changed`, `resolvers.fileTypes` (wake events) | event | dropped silently: a woken plugin reads the current state anyway |
 
 Other events (`source.state`, `window.state`, playback events, …) never wake a plugin: they come too often, and a listener of one makes its plugin Resident. Wake events merge by name (the newest wins); a backlog holds at most 64 triggers. Wake events wake nothing during start-up and for 1 s after it settles. A start that takes longer than 400 ms shows "Starting *name*…".
 

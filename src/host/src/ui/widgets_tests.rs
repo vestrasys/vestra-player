@@ -149,6 +149,81 @@ export component W inherits Window {
     );
 }
 
+/// `KeyHint` (SDK 1.6.6) sizes to its label and takes no space with an
+/// empty one (a cleared key); a `ToolTipArea` with `keys` and `detail`
+/// compiles without a warning and still shows its tip on hover; changing
+/// the keys while it shows keeps it showing.
+#[test]
+fn key_hints_size_to_their_label_and_vanish_when_empty() {
+    let w = build(
+        r#"
+import { Theme } from "@vestra/theme.slint";
+import { KeyHint, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
+export component W inherits Window {
+    in-out property <string> down: "W";
+    in-out property <string> up: "Ctrl+Shift+E";
+    in-out property <[ToolTipKey]> keys: [{ key: "W", text: "−" }, { key: "", text: "+" }];
+    out property <float> down-width: d.width / 1px;
+    out property <float> up-width: u.width / 1px;
+    out property <float> down-height: d.height / 1px;
+    out property <bool> tip-showing: tip.showing;
+    background: Theme.bg-panel;
+    HorizontalLayout {
+        alignment: start;
+        padding: 4px;
+        spacing: 2px;
+        VerticalLayout { alignment: start;
+            HorizontalLayout { alignment: start; spacing: 2px;
+                d := KeyHint { text: root.down; }
+                u := KeyHint { text: root.up; } }
+            tip := ToolTipArea {
+                width: 100px; height: 30px;
+                text: "Brightness"; keys: root.keys; detail: "· double-click: Default";
+                Rectangle { background: Theme.bg-list; }
+            }
+        }
+    }
+}"#,
+        300.,
+        200.,
+    );
+    let down = number(&w, "down-width");
+    assert!(
+        down >= 16.,
+        "a one-letter cap is at least 16px wide: {down}"
+    );
+    assert!(
+        number(&w, "up-width") > down,
+        "a longer label widens the cap"
+    );
+    assert_eq!(number(&w, "down-height"), 15.);
+    w.set_property("down", Value::String("".into())).unwrap();
+    settle();
+    assert_eq!(number(&w, "down-width"), 0.);
+    assert_eq!(number(&w, "down-height"), 0.);
+    // Hover the tooltip area (below the caps): the tip shows after its delay.
+    let position = LogicalPosition::new(40., 40.);
+    w.window()
+        .dispatch_event(WindowEvent::PointerMoved { position });
+    settle();
+    std::thread::sleep(std::time::Duration::from_millis(650));
+    settle();
+    assert!(boolean(&w, "tip-showing"));
+    let keys: Vec<Value> = [("Shift+W", "−"), ("E", "+")]
+        .into_iter()
+        .map(|(key, text)| {
+            let mut entry = slint_interpreter::Struct::default();
+            entry.set_field("key".into(), Value::String(key.into()));
+            entry.set_field("text".into(), Value::String(text.into()));
+            Value::Struct(entry)
+        })
+        .collect();
+    let model = slint::ModelRc::new(slint::VecModel::from(keys));
+    w.set_property("keys", Value::Model(model)).unwrap();
+    settle();
+    assert!(boolean(&w, "tip-showing"));
+}
+
 #[test]
 fn check_flips_on_click_and_space_never_takes_focus_by_click_and_wraps_its_label() {
     let w = build(
@@ -672,7 +747,7 @@ fn render(w: &ComponentInstance, scale: f32, width: f32, height: f32) -> image::
 
 const GALLERY: &str = r#"
 import { Theme } from "@vestra/theme.slint";
-import { Check, Choice, Radio, RadioGroup, Slider, Tab, Tabs } from "@vestra/widgets.slint";
+import { Check, Choice, KeyHint, Radio, RadioGroup, Slider, Tab, Tabs } from "@vestra/widgets.slint";
 component Caption inherits Text { width: 110px; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: center; }
 export component W inherits Window {
     background: Theme.bg-panel;
@@ -708,6 +783,8 @@ export component W inherits Window {
                 Tab { text: "All"; selected: true; } Tab { text: "Installed"; }
                 Tab { text: "Updates (2)"; emphasis: true; } Tab { text: "Focused"; focused: true; }
                 Rectangle { horizontal-stretch: 1; } }
+            HorizontalLayout { spacing: 4px; alignment: start; Caption { text: "KeyHint"; }
+                KeyHint { text: "W"; } KeyHint { text: "E"; } KeyHint { text: "Ctrl+B"; } KeyHint { text: "⇧⌘S"; } KeyHint { text: ""; } }
             Rectangle { vertical-stretch: 1; }
         }
     }

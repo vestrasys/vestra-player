@@ -17,6 +17,9 @@ const BY_EVENT: Needs = Needs::Param {
     cases: &[
         ("packages.changed", None),
         ("bindings.changed", Some("bindings.manage")),
+        // Player 0.7.6: the key labels of the plugin's own commands
+        // (`commands.keys`), with the capability that declares them.
+        ("commands.keys", Some("commands")),
         // Player 0.5.25: the upscaler's state as it changes (playback/upscaling.rs).
         ("video.upscaling.changed", Some("video.upscaling")),
     ],
@@ -38,6 +41,7 @@ const EVENTS: &[&str] = &[
     "window.state",
     "packages.changed",
     "bindings.changed",
+    "commands.keys",
     "timeline.changed",
     "appearance.changed",
     "resolvers.fileTypes",
@@ -53,6 +57,9 @@ const EVENTS: &[&str] = &[
 pub(crate) const WAKE_EVENTS: &[&str] = &[
     "packages.changed",
     "bindings.changed",
+    // Sent to one plugin only, when its own keys changed
+    // (`Host::push_command_keys`).
+    "commands.keys",
     "appearance.changed",
     "resolvers.fileTypes",
 ];

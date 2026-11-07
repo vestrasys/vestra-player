@@ -613,6 +613,9 @@ mod tests {
         let event = |name: &str| needs("events.subscribe", json!({"event": name}));
         assert_eq!(event("packages.changed"), None);
         assert_eq!(event("bindings.changed"), Some("bindings.manage"));
+        // A plugin's own key labels need only `commands`.
+        assert_eq!(event("commands.keys"), Some("commands"));
+        assert_eq!(needs("commands.keys", json!({})), Some("commands"));
         assert_eq!(event("source.state"), Some("events"));
         assert_eq!(needs("events.unsubscribe", json!({})), Some("events"));
         let stage = |stage: Value| needs("processing.replace", json!({"stage": stage}));
