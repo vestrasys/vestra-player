@@ -4,8 +4,9 @@
 //! SDK 1.6.8) the player places the strip itself (`HostBarStrip`,
 //! ui/bar-strip.slint) at the right end of the bottom slot, or in a band of
 //! its own without a bottom bar: `[plugin buttons…][»][Command Palette]
-//! [Toggle Sidebar]`. The bar says how wide its own controls must stay
-//! (`content-min-width`, composition.rs) and reads the strip's width
+//! [Toggle Sidebar]`. The bar says how wide its row is with every control
+//! (`content-full-width`; plugin buttons get only the room beyond it) or at
+//! least (`content-min-width`, a 3a bar; composition.rs) and reads the strip's width
 //! (`BarButtonsHost.width`). A bar that still places the deprecated
 //! `BarButtons` gets that one instead (the player's hides itself).
 //!

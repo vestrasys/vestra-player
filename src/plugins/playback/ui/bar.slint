@@ -441,6 +441,11 @@ export component PlaybackBar inherits Rectangle {
     // UI-BAR-10 (SDK 1.6.8): what the button row needs left of the player's
     // strip; the player gives the strip the rest of the width, less 4px.
     out property <length> content-min-width: row.left-width;
+    // Its row with every control shown (Play / Pause, Stop, Previous, Next,
+    // Open, Fullscreen), the gap, the time and 8px to spare: the player gives
+    // plugin buttons only the width beyond this, so they all go to » before
+    // the bar drops a control of its own. Must not depend on the bar's width.
+    out property <length> content-full-width: 6 * 41px + 10px + row.time-width + 8px;
 
     // Seek row: padding 0 10px 0 5px; seek line with 10px margins; mute 13×10; volume 70×10.
     // One hairline separates the bar from the video above.
@@ -515,7 +520,7 @@ export component PlaybackBar inherits Rectangle {
         // (a source without a duration) widens it. Hidden is `visible: false`
         // with no width, a persistent element, never `if`.
         // None of this reads `BarButtonsHost.width`: the player sizes its
-        // strip from `content-min-width`.
+        // strip from `content-full-width`.
         property <length> time-width: max(elapsed.preferred-width, widest-elapsed.preferred-width) + total.preferred-width;
         property <bool> fullscreen-fits: root.width >= 6 * 41px + 10px + row.time-width + 8px + BarButtonsHost.fixed * 41px + 4px;
         property <bool> stop-fits: root.width >= 5 * 41px + 10px + row.time-width + 8px + BarButtonsHost.fixed * 41px + 4px;

@@ -229,9 +229,19 @@ pub fn shell_source_tabbed(specs: &[CompileSpec], tabbed: bool) -> Result<String
 /// in (menu redesign step 3a): the player's button strip gets the rest.
 pub const BAR_MIN_WIDTH: &str = "content-min-width";
 
-/// Whether the mounted bottom bar's component has a public `length`
-/// property [`BAR_MIN_WIDTH`], its own or one it inherits from a base
-/// component in another file. The Slint compiler answers, not a text scan:
+/// The property a bottom bar reports the width of its row with every one
+/// of its controls shown in (coordinator ruling after the GUI check of
+/// step 3a): plugin buttons get only the room beyond it, so the bar drops
+/// its own controls only after every plugin button is in `»`, and the
+/// strip's overflow follows the window's width monotonically. A bar that
+/// reports only [`BAR_MIN_WIDTH`] keeps the 3a behaviour (the room beyond
+/// its least width).
+pub const BAR_FULL_WIDTH: &str = "content-full-width";
+
+/// The mounted bottom bar's width property the strip's room is measured
+/// beyond: [`BAR_FULL_WIDTH`] when its component has that public `length`
+/// property, else [`BAR_MIN_WIDTH`], else none (the whole bar); its own or
+/// one it inherits from a base component in another file. The Slint compiler answers, not a text scan:
 /// `ComponentDefinition::properties()` lists only the properties a
 /// component declares itself (Slint 1.18.1 lowers `public_properties` from
 /// the root element's own declarations), so an inherited one would be
@@ -251,19 +261,20 @@ pub const BAR_MIN_WIDTH: &str = "content-min-width";
 /// modification time would miss a base component or an import in another
 /// file; hashing the closure would need the import resolution the compiler
 /// already does.
-fn bar_reports_min(specs: &[CompileSpec]) -> bool {
-    specs
-        .iter()
-        .find(|spec| spec.slot == Slot::Bottom)
-        .is_some_and(|spec| declares_length(spec.owner, &spec.file, &spec.component, BAR_MIN_WIDTH))
+fn bar_reports_min(specs: &[CompileSpec]) -> Option<&'static str> {
+    let spec = specs.iter().find(|spec| spec.slot == Slot::Bottom)?;
+    [BAR_FULL_WIDTH, BAR_MIN_WIDTH]
+        .into_iter()
+        .find(|property| declares_length(spec.owner, &spec.file, &spec.component, property))
 }
 
 /// [`bar_reports_min`] for any run (`owner`), file, component and `length`
-/// property. One bottom bar is mounted at a time, so one answer is kept.
+/// property. One bottom bar is mounted at a time, so only its answers are
+/// kept (both properties).
 fn declares_length(owner: u64, file: &std::path::Path, component: &str, property: &str) -> bool {
     type Key = (u64, PathBuf, String, String);
     thread_local! {
-        static LAST: std::cell::RefCell<Option<(Key, bool)>> = const { std::cell::RefCell::new(None) };
+        static LAST: std::cell::RefCell<Vec<(Key, bool)>> = const { std::cell::RefCell::new(Vec::new()) };
     }
     let key = (
         owner,
@@ -273,14 +284,19 @@ fn declares_length(owner: u64, file: &std::path::Path, component: &str, property
     );
     if let Some(known) = LAST.with(|last| {
         last.borrow()
-            .as_ref()
-            .filter(|(seen, _)| *seen == key)
+            .iter()
+            .find(|(seen, _)| *seen == key)
             .map(|(_, found)| *found)
     }) {
         return known;
     }
     let found = probe_length(file, component, property);
-    LAST.with(|last| *last.borrow_mut() = Some((key, found)));
+    LAST.with(|last| {
+        let mut last = last.borrow_mut();
+        // Another bar or another run: its answers go.
+        last.retain(|(seen, _)| seen.0 == key.0 && seen.1 == key.1 && seen.2 == key.2);
+        last.push((key, found));
+    });
     found
 }
 
@@ -315,8 +331,14 @@ fn bar_strip(min: &str) -> String {
     )
 }
 
-/// [`shell_source_tabbed`], the bottom bar's [`BAR_MIN_WIDTH`] read when `bar_min`.
-fn shell_source_with(specs: &[CompileSpec], tabbed: bool, bar_min: bool) -> Result<String> {
+/// [`shell_source_tabbed`]; `bar_room`: the bar's property the strip's room
+/// is measured beyond ([`BAR_FULL_WIDTH`], else [`BAR_MIN_WIDTH`]), `None`:
+/// the whole bar.
+fn shell_source_with(
+    specs: &[CompileSpec],
+    tabbed: bool,
+    bar_room: Option<&str>,
+) -> Result<String> {
     let mut owners = BTreeSet::new();
     let mut slots = BTreeSet::new();
     let mut files = BTreeSet::new();
@@ -406,11 +428,9 @@ fn shell_source_with(specs: &[CompileSpec], tabbed: bool, bar_min: bool) -> Resu
                  bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} {} }} }} }}",
                 key_forward("panel:bottom"),
                 spec.owner,
-                bar_strip(if bar_min {
-                    "bottom-content.content-min-width"
-                } else {
-                    "0px"
-                })
+                bar_strip(
+                    &bar_room.map_or_else(|| "0px".to_owned(), |p| format!("bottom-content.{p}"))
+                )
             )
         })
         // Step 3a: without a bottom bar the player's strip still shows, in a

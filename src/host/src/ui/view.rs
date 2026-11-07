@@ -2910,6 +2910,132 @@ export component W inherits Window {
         shell.hide().unwrap();
     }
 
+    /// GUI check of step 3a (coordinator ruling): narrowing the window step
+    /// by step moves plugin buttons into `»` and never back, and the bar
+    /// drops its own controls only once every plugin button is in `»`. The
+    /// strip's room is measured beyond the bar's `content-full-width`. A bar
+    /// that reports only its least width (the 3a rule) is not monotonic:
+    /// dropping a control widens the room and brings the buttons back.
+    #[test]
+    fn overflow_follows_a_narrowing_window_monotonically() {
+        use crate::commands::ButtonIcon;
+        use crate::ui::bar_buttons::{GLOBAL, Item, cell};
+        use slint_interpreter::Value;
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let specs = [crate::ui::composition::CompileSpec {
+            owner: 12,
+            file: base.join("full-bar.slint"),
+            component: "FullBar".into(),
+            global: Some("FullBridge".into()),
+            slot: crate::ui::composition::Slot::Bottom,
+        }];
+        let source = crate::ui::composition::shell_source(&specs).unwrap();
+        assert!(source.contains("bottom-content.content-full-width"));
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
+        let item = |id: &str, icon: &str| Item {
+            owner: 3,
+            id: id.into(),
+            icon: ButtonIcon::Name(icon.into()),
+            label: id.into(),
+            tip: id.into(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        // The built-ins: AI (100) and Store (200).
+        let cells = vec![
+            cell(Some(&item("ai", "ai")), None),
+            cell(Some(&item("store", "store")), None),
+        ];
+        shell
+            .set_global_property(
+                GLOBAL,
+                "buttons",
+                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+            )
+            .unwrap();
+        for (name, id, icon) in [
+            ("toggle", "sidebar", "playlist"),
+            ("palette", "palette", "search"),
+        ] {
+            shell
+                .set_global_property(GLOBAL, name, cell(Some(&item(id, icon)), None))
+                .unwrap();
+        }
+        shell
+            .window()
+            .set_size(slint::LogicalSize::new(1100., 600.));
+        shell.show().unwrap();
+        // (window width, plugin buttons in the strip, the bar's controls)
+        let sweep = |full: bool| {
+            shell
+                .set_global_property("Owner12Bridge", "full", Value::Bool(full))
+                .unwrap();
+            (320..=1100)
+                .rev()
+                .step_by(5)
+                .map(|width| {
+                    shell
+                        .window()
+                        .set_size(slint::LogicalSize::new(width as f32, 600.));
+                    for _ in 0..4 {
+                        settle_layout(shell.window());
+                        slint::platform::update_timers_and_animations();
+                    }
+                    let number =
+                        |global: &str, name| match shell.get_global_property(global, name).unwrap()
+                        {
+                            Value::Number(n) => n as usize,
+                            other => panic!("{other:?}"),
+                        };
+                    (
+                        width,
+                        number(GLOBAL, "shown"),
+                        number("Owner12Bridge", "controls"),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let rows = sweep(true);
+        assert_eq!(
+            rows.first().map(|r| (r.1, r.2)),
+            Some((2, 7)),
+            "wide: everything"
+        );
+        for pair in rows.windows(2) {
+            let (wider, narrower) = (pair[0], pair[1]);
+            assert!(
+                narrower.1 <= wider.1,
+                "a button came back from » at {}px: {wider:?} → {narrower:?}",
+                narrower.0
+            );
+            assert!(
+                narrower.2 <= wider.2,
+                "the bar's controls came back: {wider:?} → {narrower:?}"
+            );
+        }
+        for (width, shown, controls) in &rows {
+            if *controls < 7 {
+                assert_eq!(
+                    *shown, 0,
+                    "{width}px: the bar dropped a control before the plugins"
+                );
+            }
+        }
+        assert_eq!(rows.last().map(|r| r.2), Some(2));
+        // The 3a rule (least width only): not monotonic, the bug the GUI
+        // check found.
+        let old = sweep(false);
+        assert!(
+            old.windows(2).any(|pair| pair[1].1 > pair[0].1),
+            "the least-width rule brings buttons back: {old:?}"
+        );
+        shell.hide().unwrap();
+    }
+
     /// Step 3a: without a bottom bar the player still draws its strip, in a
     /// 40px band of the bar's colour under the video (hidden in fullscreen).
     #[test]
