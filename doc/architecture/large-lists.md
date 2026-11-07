@@ -26,7 +26,7 @@ The host costs are O(n) because `reconcile_settled` converts both the current mo
 
 The limits `MAX_ARRAY = 4096` rows and `MAX_NODES = 16384` values per write (`ui_values.rs`) bound the cost of one write. They also force any long list to be windowed by hand. The playlist (up to `ROW_LIMIT = 20_000`, `queue.ts`) sends `WINDOW_ROWS = 200` rows (`scroll.ts`), placed with `first-row` and `row-count`, re-centred by `windowStart`, and drawn with a hand-written `for` inside a `ScrollView` (`sidebar.slint`). So:
 
-- 200 row elements stay instantiated in the item tree, and AccessKit sees them all.
+- 200 row elements stay instantiated in the item tree, laid out and kept in memory whether in view or not.
 - A window shift rewrites all 200 rows (the ~22 ms case).
 - Each plugin re-implements this. VestraTube pads its array to 200 rows to dodge an old host behaviour (obsolete since host 0.5.2) and avoids `ListView`.
 

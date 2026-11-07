@@ -1278,9 +1278,9 @@ mod tests {
 
     /// A new video picture must not touch the
     /// window's layout. When the picture's size fed it, every frame redid the
-    /// layout and everything that depends on it (with a UI Automation client,
-    /// Slint's accessibility nodes: about 30 ms a frame with VestraTube's
-    /// 200 rows on the Radeon 780M laptop).
+    /// layout and everything that depends on it (with a UI Automation client
+    /// and Slint's former accessibility support, about 30 ms a frame with
+    /// VestraTube's 200 rows on the Radeon 780M laptop).
     #[test]
     fn a_new_video_picture_leaves_the_window_layout_alone() {
         use slint::ComponentHandle as _;
