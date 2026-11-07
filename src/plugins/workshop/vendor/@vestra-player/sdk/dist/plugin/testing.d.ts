@@ -115,7 +115,7 @@ type Call = {
  * import assert from "node:assert/strict";
  * declare const host: TestHost;
  * // ---cut---
- * await host.command("open-picture").run(); // the plugin calls window.show()
+ * await host.command("open-picture").run(); // the plugin calls pictureWindow.show()
  * const picture = host.window("picture");
  * assert.equal(picture.visible, true);
  * picture.emit("adjust", "brightness", 40); // fire a Slint callback
@@ -270,6 +270,14 @@ export interface FakeCommand {
          * @since 1.5.11
          */
         reason?: string | null;
+        /**
+         * The category as shown (`CommandOptions.category`, translated with
+         * the plugin's catalog), `null` without one. Not enumerable, like
+         * `reason`.
+         *
+         * @since 1.6.4
+         */
+        category?: string | null;
     };
     /**
      * The conditions the plugin sent for `enabled` and `checked`
@@ -2746,11 +2754,11 @@ export declare class TestHost implements Transport {
      * declare const host: TestHost;
      * declare const expected: string;
      * // ---cut---
-     * const window = host.window("import");
-     * window.emit("load-file"); // the plugin reads and parses the file itself
-     * for (let i = 0; i < 100 && window.props["status-text"] !== expected; i++)
+     * const importWindow = host.window("import");
+     * importWindow.emit("load-file"); // the plugin reads and parses the file itself
+     * for (let i = 0; i < 100 && importWindow.props["status-text"] !== expected; i++)
      *   await host.settle(20);
-     * assert.equal(window.props["status-text"], expected);
+     * assert.equal(importWindow.props["status-text"], expected);
      * ```
      *
      * @capability None.

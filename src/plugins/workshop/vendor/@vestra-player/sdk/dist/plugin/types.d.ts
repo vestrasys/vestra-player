@@ -367,10 +367,10 @@ export interface Scope extends Disposable {
      *       return;
      *     }
      *     live = plugin.scope();
-     *     const window = live.windows.create("ui/stats.slint");
+     *     const statsWindow = live.windows.create("ui/stats.slint");
      *     const timer = setInterval(() => live?.update(), 1000);
      *     live.onDispose(() => clearInterval(timer));
-     *     await window.show();
+     *     await statsWindow.show();
      *   },
      * });
      * ```
@@ -487,12 +487,12 @@ export interface Scope extends Disposable {
      * promise settles; state changed between the awaits of a long handler
      * shows only after an explicit `update()`.
      * ```ts
-     * declare const window: Window;
+     * declare const downloadWindow: Window;
      * declare function downloadPart(part: number): Promise<void>;
      * // ---cut---
      * let done = 0;
-     * window.bind(() => ({ progress: done }));
-     * window.on("start", async () => {
+     * downloadWindow.bind(() => ({ progress: done }));
+     * downloadWindow.on("start", async () => {
      *   for (let part = 0; part < 10; part++) {
      *     await downloadPart(part);
      *     done = part + 1;
@@ -1113,6 +1113,87 @@ export interface CommandOptions {
      */
     title?: string | Text;
     /**
+     * What the command is about, in a word or two (`"Subtitle Sync"`,
+     * `"Picture"`): English source text, shown translated like `title`, or a
+     * {@link Text}. The player's command palette (Ctrl+Shift+P, ⌘⇧P on macOS)
+     * and lists of commands name a command `Category: Title`, so a short title
+     * such as "Earlier 0.5 s", "Off" or "90°" still says what it changes once
+     * it is out of the menu. Without it the player uses the menu path above
+     * the item, then the plugin's name.
+     *
+     * 1–80 UTF-8 bytes (a text value counted by its English rendering), no
+     * control characters, no whitespace at either end
+     * (`COMMAND_LIMITS.categoryBytes`); the player refuses anything else with
+     * `invalid`. Sent only when set: players before 0.7.6 refuse the field
+     * with `invalid`, so declare `"minPlayerVersion": "0.7.6"` when you set
+     * it.
+     *
+     * @example Name commands that have no menu path
+     * The palette lists "Subtitle Sync: Earlier 0.5 s" and "Subtitle Sync:
+     * Later 0.5 s"; without a category both would read as a bare "Earlier
+     * 0.5 s", indistinguishable from an audio delay command of the same name.
+     * ```ts
+     * declare function shift(seconds: number): void;
+     * // ---cut---
+     * for (const [id, title, seconds] of [
+     *   ["sync-earlier", "Earlier 0.5 s", -0.5],
+     *   ["sync-later", "Later 0.5 s", 0.5],
+     * ] as const)
+     *   plugin.commands.add({
+     *     id,
+     *     title,
+     *     category: "Subtitle Sync", // the palette reads "Subtitle Sync: Earlier 0.5 s"
+     *     bindings: [id === "sync-earlier" ? "." : ","],
+     *     run: () => shift(seconds),
+     *   });
+     * ```
+     *
+     * @player 0.7.6 (declare `"minPlayerVersion": "0.7.6"`; older players
+     * refuse the declaration with `invalid`).
+     * @since 1.6.4
+     */
+    category?: string | Text;
+    /**
+     * The id of this plugin's command that opens the window or panel where
+     * this command's control lives (`"tune"` for a Subtitle Tuning… command
+     * whose window has the sync slider). The player's command palette shows
+     * that place next to the command. A local id, like `id`: ASCII letters,
+     * digits, `.`, `_` and `-`, 1–128 bytes; the player refuses anything else
+     * with `invalid`. The command it names need not be registered yet; while
+     * it is not, the palette shows the place it would show without `home`:
+     * the menu path above the item, "Menu" for a top-level item, nothing for
+     * a command outside the menu. Sent only when set: players
+     * before 0.7.6 refuse the field with `invalid`, so declare
+     * `"minPlayerVersion": "0.7.6"` when you set it.
+     *
+     * @example Point a key command at its window
+     * The palette row for "Subtitle Sync: Earlier 0.5 s" also says where the
+     * same setting can be changed by hand: the Subtitle Tuning window that the
+     * `tune` command opens.
+     * ```ts
+     * declare const tuning: { show(): void };
+     * declare function shift(seconds: number): void;
+     * // ---cut---
+     * plugin.commands.add({
+     *   id: "tune",
+     *   path: ["@subtitles", "Subtitle Tuning…"],
+     *   run: () => tuning.show(),
+     * });
+     * plugin.commands.add({
+     *   id: "sync-earlier",
+     *   title: "Earlier 0.5 s",
+     *   category: "Subtitle Sync",
+     *   home: "tune", // the palette shows "Subtitle Tuning" as its place
+     *   run: () => shift(-0.5),
+     * });
+     * ```
+     *
+     * @player 0.7.6 (declare `"minPlayerVersion": "0.7.6"`; older players
+     * refuse the declaration with `invalid`).
+     * @since 1.6.4
+     */
+    home?: string;
+    /**
      * Sibling order in the menu, ascending (integer, default 0). A submenu sits
      * where its first command sits, except a built-in menu, which keeps its
      * fixed place. Directly inside a built-in menu, 0 (the default) sorts last.
@@ -1682,11 +1763,11 @@ export interface Ui {
      * calls `image()` again after rewriting it, because the SDK does not send
      * a value that did not change.
      * ```ts
-     * const window = plugin.windows.create("ui/thumbnail.slint");
+     * const thumbnailWindow = plugin.windows.create("ui/thumbnail.slint");
      * const file = `${plugin.dataDirectory}/thumbnail.png`;
      * // … write the PNG to `file` (for example with plugin.tools.run("ffmpeg", …)) …
-     * window.set({ thumbnail: plugin.ui.image(file) });
-     * await window.show();
+     * thumbnailWindow.set({ thumbnail: plugin.ui.image(file) });
+     * await thumbnailWindow.show();
      * ```
      *
      * @since 1.0.0
@@ -1850,11 +1931,11 @@ export interface Ui {
      * const response = await fetch(readmeUrl);
      * if (!response.ok) throw new Error(`README: HTTP ${response.status}`);
      * const text = await response.text();
-     * const window = plugin.windows.create("ui/readme.slint");
+     * const readmeWindow = plugin.windows.create("ui/readme.slint");
      * // Bound before the first `show`, as a tool window requires.
-     * window.on("openLink", (url: string) => plugin.system.openUrl(url));
-     * window.set({ doc: await plugin.ui.markdown(text, { base: readmeUrl }) });
-     * await window.show();
+     * readmeWindow.on("openLink", (url: string) => plugin.system.openUrl(url));
+     * readmeWindow.set({ doc: await plugin.ui.markdown(text, { base: readmeUrl }) });
+     * await readmeWindow.show();
      * ```
      *
      * @since 1.1.0
@@ -1999,10 +2080,10 @@ export interface View {
      * sends the value even though it equals the one sent before, which is
      * what pulls a control the user moved back to the plugin's value.
      * ```ts
-     * const window = plugin.windows.create("ui/presets.slint");
+     * const presetsWindow = plugin.windows.create("ui/presets.slint");
      * let presetIndex = 0;
-     * window.on("presetChosen", (index: number) => {
-     *   if (index > 2) window.set({ presetIndex }); // "Custom" is not a preset
+     * presetsWindow.on("presetChosen", (index: number) => {
+     *   if (index > 2) presetsWindow.set({ presetIndex }); // "Custom" is not a preset
      *   else presetIndex = index;
      * });
      * ```
@@ -2165,9 +2246,9 @@ export interface Window extends View, Disposable {
      * window; it rejects with a code, such as `host` for a Slint file that
      * does not compile or `unavailable` without a user interface.
      * ```ts
-     * const window = plugin.windows.create("ui/inspector.slint");
+     * const inspectorWindow = plugin.windows.create("ui/inspector.slint");
      * try {
-     *   await window.show();
+     *   await inspectorWindow.show();
      * } catch (error) {
      *   // The code is data; `message` has the details for the log.
      *   await plugin.osd.show("Cannot open the inspector ({})", [(error as PluginError).code]);
@@ -2276,8 +2357,8 @@ export interface Window extends View, Disposable {
      * store writes the change to `window.json` shortly after.
      * ```ts
      * const store = plugin.storage.json("window", { defaults: { open: false } });
-     * const window = plugin.windows.create("ui/notes.slint");
-     * window.onClose(() => store.save({ open: false }));
+     * const notesWindow = plugin.windows.create("ui/notes.slint");
+     * notesWindow.onClose(() => store.save({ open: false }));
      * ```
      *
      * @see [Remember a window's state between runs](../../docs/how-to/window-state.md)
@@ -5390,9 +5471,9 @@ export interface Stream extends Disposable {
      * connection; it resolves once both are closed.
      * ```ts
      * declare const stream: Stream;
-     * declare const window: Window;
+     * declare const generatorWindow: Window;
      * // ---cut---
-     * window.onClose(() => stream.stop());
+     * generatorWindow.onClose(() => stream.stop());
      * ```
      *
      * @since 1.0.0
@@ -9201,6 +9282,16 @@ export interface BindingInfo extends BindingRef {
      * @since 1.5.11
      */
     key?: string[] | null;
+    /**
+     * The command's category as shown ({@link CommandOptions.category},
+     * translated), `null` when it declares none (and always from players
+     * before 0.7.6). Always set by `list()`; optional so that test fakes
+     * written for older SDKs still type-check. A list of commands names one `Category: Title`; without a
+     * category, use the menu path (`path`) as before.
+     *
+     * @since 1.6.4
+     */
+    category?: string | null;
     /** Global, or only while the plugin's panel has focus. */
     scope: "global" | "panel";
     /** The command's own bindings. */
@@ -9660,10 +9751,10 @@ export interface JsonStore<T> extends Disposable {
      * writes the file only once the user stops for 300 ms. Each `save`
      * replaces the value and restarts the debounce timer.
      * ```ts
-     * declare const window: Window;
+     * declare const volumeWindow: Window;
      * // ---cut---
      * const store = plugin.storage.json("prefs", { defaults: { volume: 100 } });
-     * window.on("volumeChanged", (volume: number) => store.save({ ...store.value, volume }));
+     * volumeWindow.on("volumeChanged", (volume: number) => store.save({ ...store.value, volume }));
      * ```
      *
      * @since 1.0.0

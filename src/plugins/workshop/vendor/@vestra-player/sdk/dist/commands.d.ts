@@ -79,6 +79,13 @@ export declare const COMMAND_LIMITS: {
      */
     readonly groupBytes: 80;
     /**
+     * UTF-8 bytes of a category (`CommandOptions.category`), a text value
+     * counted by its English rendering.
+     *
+     * @since 1.6.4
+     */
+    readonly categoryBytes: 80;
+    /**
      * UTF-8 bytes of a state's reason, as shown in the player's
      * language.
      *
@@ -327,6 +334,16 @@ export type CommandDeclaration = {
         icon: string | Json;
         order: number;
     };
+    /**
+     * The command's category, source text or a text value (player 0.7.6).
+     * Sent only when set: older players refuse unknown declaration fields.
+     */
+    category?: string | TextJson;
+    /**
+     * The local id of the command that opens where this one lives (player
+     * 0.7.6). Sent only when set, like `category`.
+     */
+    home?: string;
 };
 export declare function commandClient(transport: Transport): {
     register: (id: string, revision: number, declaration: CommandDeclaration, state: CommandState, when?: CommandWhen) => Promise<{
