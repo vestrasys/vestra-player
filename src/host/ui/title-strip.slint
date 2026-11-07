@@ -22,6 +22,9 @@ component CaptionButton inherits Rectangle {
     in property <string> label;
     in property <string> tip;
     in property <bool> close;
+    // The strip is out: the tooltip exists only then, so hiding the strip
+    // (or leaving fullscreen) closes an open tip.
+    in property <bool> live;
     callback clicked();
     width: 46px;
     background: touch.pressed ? (root.close ? #c42b1ce6 : Theme.press-bg)
@@ -39,7 +42,7 @@ component CaptionButton inherits Rectangle {
     ToolTipArea {
         width: 100%;
         height: 100%;
-        text: root.tip;
+        text: root.live ? root.tip : "";
         touch := TouchArea {
             clicked => { root.clicked(); }
         }
@@ -111,18 +114,21 @@ export component TitleStrip {
                 HorizontalLayout {
                     spacing: 0px;
                     CaptionButton {
+                        live: root.enabled && root.shown;
                         icon: "remove";
                         label: root.minimize-label;
                         tip: root.minimize-label;
                         clicked => { root.action("minimize"); }
                     }
                     CaptionButton {
+                        live: root.enabled && root.shown;
                         icon: "exit-fullscreen";
                         label: root.exit-label;
                         tip: root.exit-key == "" ? root.exit-label : @tr("{} ({})", root.exit-label, root.exit-key);
                         clicked => { root.action("exit-fullscreen"); }
                     }
                     CaptionButton {
+                        live: root.enabled && root.shown;
                         icon: "close";
                         close: true;
                         label: root.close-label;

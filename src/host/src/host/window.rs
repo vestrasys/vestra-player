@@ -312,7 +312,7 @@ impl Host {
         match action {
             "minimize" => {
                 if let Some(shell) = &self.shell {
-                    shell.window().set_minimized(true);
+                    platform::minimize_window(shell.window());
                 }
             }
             "exit-fullscreen" => self.host_command("exit-fullscreen"),

@@ -52,6 +52,11 @@ pub fn app_in_foreground() -> bool {
 
 /// Bring `window` to the front with the focus while the player is the
 /// active application: winit's `focus_window` (key window, ordered front).
+/// Minimize `window` (Slint's own minimize: no winit fullscreen quirk here).
+pub fn minimize_window(window: &slint::Window) {
+    window.set_minimized(true);
+}
+
 pub fn focus_own_window(window: &slint::Window) {
     use slint::winit_030::WinitWindowAccessor;
     window.with_winit_window(|native| native.focus_window());

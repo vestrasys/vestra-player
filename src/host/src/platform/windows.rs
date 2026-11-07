@@ -142,6 +142,21 @@ pub fn focus_own_window(window: &slint::Window) {
     }
 }
 
+/// Minimize `window` the way the system does (`vestra_win32::minimize`),
+/// also from fullscreen: Slint's and winit's minimized state follow from the
+/// window's state events, as after the taskbar's minimize.
+pub fn minimize_window(window: &slint::Window) {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let hwnd =
+        native_of(window).and_then(|native| match native.window_handle().map(|h| h.as_raw()) {
+            Ok(RawWindowHandle::Win32(handle)) => Some(handle.hwnd.get()),
+            _ => None,
+        });
+    if !hwnd.is_some_and(vestra_win32::minimize) {
+        diag!("platform: no native window to minimize");
+    }
+}
+
 /// How long `shown` waits for a window's native window (ticks of
 /// [`PENDING_TICK`]): 5 s.
 const PENDING_TRIES: u32 = 300;
