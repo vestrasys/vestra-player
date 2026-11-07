@@ -830,6 +830,10 @@ mod tests {
                     .unwrap()
         );
         assert!(overlay < source.find("if root.menu-open: Rectangle").unwrap());
+        // The fullscreen title strip: above the video and the sidebar
+        // overlay, below the menu layer; one instance, not an `if`.
+        let strip = source.find("title-strip := TitleStrip {").unwrap();
+        assert!(overlay < strip && strip < source.find("if root.menu-open: Rectangle").unwrap());
         assert_eq!(source.matches("Owner20View {").count(), 2);
         // Reference §6.3: bottom-bar content may draw above its slot (negative
         // y) over the video; nothing between it and the window clips it.

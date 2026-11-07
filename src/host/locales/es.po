@@ -258,6 +258,16 @@ msgstr "Activar/desactivar pantalla completa"
 msgid "Leave Fullscreen"
 msgstr "Salir de pantalla completa"
 
+#: ui/title-strip.slint
+#, x-machine
+msgid "Exit Fullscreen"
+msgstr "Salir de pantalla completa"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Minimize"
+msgstr "Minimizar"
+
 #: src/host/actions.rs
 #, x-machine
 msgid "Enter Fullscreen"

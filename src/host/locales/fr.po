@@ -260,6 +260,16 @@ msgstr "Plein écran"
 msgid "Leave Fullscreen"
 msgstr "Quitter le plein écran"
 
+#: ui/title-strip.slint
+#, x-machine
+msgid "Exit Fullscreen"
+msgstr "Quitter le plein écran"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Minimize"
+msgstr "Réduire"
+
 #: src/host/actions.rs
 #, x-machine
 msgid "Enter Fullscreen"

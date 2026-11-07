@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { test } from "node:test";
 import {
   COMMITTED_ICO,
+  COMMITTED_STRIP_ICON,
   decodePng,
   encodePng,
   icns,
@@ -12,7 +13,9 @@ import {
   iconContents,
   iconDifference,
   macosMaster,
+  pngDifference,
   resize,
+  stripIcon,
 } from "../icon.mjs";
 import { source } from "../lib.mjs";
 
@@ -20,6 +23,15 @@ const logo = decodePng(await readFile(join(source, "assets/brand/logo.png")));
 
 test("the committed vestra.ico matches the logo", async () => {
   assert.equal(iconDifference(await readFile(COMMITTED_ICO), ico(logo)), null);
+});
+
+test("the committed title strip icon matches the logo", async () => {
+  const committed = await readFile(COMMITTED_STRIP_ICON);
+  assert.equal(pngDifference(committed, stripIcon(logo, { level: 1 })), null);
+  assert.match(
+    pngDifference(committed, encodePng(resize(logo, 32, 32))),
+    /width 64 vs 32/,
+  );
 });
 
 test("other PNG compression is the same icon", () => {

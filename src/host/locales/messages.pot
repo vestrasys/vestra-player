@@ -208,6 +208,14 @@ msgstr ""
 msgid "Leave Fullscreen"
 msgstr ""
 
+#: ui/title-strip.slint
+msgid "Exit Fullscreen"
+msgstr ""
+
+#: ui/title-strip.slint
+msgid "Minimize"
+msgstr ""
+
 #: src/host/actions.rs
 msgid "Enter Fullscreen"
 msgstr ""

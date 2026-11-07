@@ -28,6 +28,9 @@ pub const SLINT_CONTROL_IS_COMMAND: bool = true;
 pub const CTRL_ACCEPTS_CMD: bool = true;
 /// Menus show ⌘ bindings (`bindings::label_shown`).
 pub const MENU_SHOWS_CMD: bool = true;
+/// No fullscreen title strip: a fullscreen space shows the system menu
+/// bar and the window title bar when the pointer reaches the top.
+pub const FULLSCREEN_TITLE_STRIP: bool = false;
 
 // ------------------------------------------------------------------ windows
 
@@ -45,6 +48,11 @@ pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
 /// its windows).
 pub fn app_in_foreground() -> bool {
     app().is_ok_and(|app| app.isActive())
+}
+
+/// Minimize `window` (Slint's own minimize: no winit fullscreen quirk here).
+pub fn minimize_window(window: &slint::Window) {
+    window.set_minimized(true);
 }
 
 /// Bring `window` to the front with the focus while the player is the
