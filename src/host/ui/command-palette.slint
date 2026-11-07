@@ -104,11 +104,13 @@ component PaletteItem inherits Rectangle {
             }
         }
         // The label, clipped: its runs are placed (x, y) so their widths
-        // do not size the row.
+        // do not size the row. It keeps up to 55% of the row before the
+        // plugin's name (or a disabled command's reason) is elided.
         Rectangle {
             horizontal-stretch: 1;
+            min-width: min(runs.preferred-width, root.width * 0.55);
             clip: true;
-            HorizontalLayout {
+            runs := HorizontalLayout {
                 x: 0; y: 0;
                 height: parent.height;
                 width: self.preferred-width;
@@ -124,31 +126,25 @@ component PaletteItem inherits Rectangle {
                 }
             }
         }
+        // Elided first when the row is short: never under the place.
         Text {
             horizontal-stretch: 0;
-            max-width: 160px;
+            min-width: 0px;
+            max-width: 200px;
             text: root.item.plugin;
             font-size: 11px;
             color: Theme.text-dim;
             vertical-alignment: center;
             overflow: elide;
         }
-        Rectangle {
-            visible: root.item.place != "";
-            width: root.item.place == "" ? 0px : min(place.preferred-width + 12px, 150px);
-            height: 18px;
-            border-radius: 9px;
-            border-width: 1px;
-            border-color: Theme.line;
-            place := Text {
-                x: 6px;
-                width: parent.width - 12px;
-                text: root.item.place;
-                font-size: 11px;
-                color: Theme.text-dim;
-                vertical-alignment: center;
-                overflow: elide;
-            }
+        // Where it lives, as plain secondary text: only keys get a cap.
+        Text {
+            width: min(self.preferred-width, 140px);
+            text: root.item.place;
+            font-size: 11px;
+            color: Theme.text-dim;
+            vertical-alignment: center;
+            overflow: elide;
         }
         KeyCap {
             text: root.item.keys;
@@ -206,11 +202,12 @@ export component PaletteView inherits Rectangle {
                 accept
             }
         }
-        // The field, 6px from the top.
+        // The field, and the count to its right in a column of its own,
+        // clear of the field's ✕ button.
         field := LineEdit {
             x: 8px;
             y: 6px;
-            width: parent.width - 16px;
+            width: parent.width - 24px - count.width;
             height: 32px;
             font-size: 13px;
             placeholder-text: @tr("Type a command name");
@@ -234,9 +231,10 @@ export component PaletteView inherits Rectangle {
                 reject
             }
         }
-        Text {
-            x: parent.width - self.width - 20px;
+        count := Text {
+            x: parent.width - self.width - 8px;
             y: 6px;
+            width: self.preferred-width;
             height: 32px;
             text: root.count;
             font-size: 11px;
