@@ -162,19 +162,26 @@ pub fn seek_title(forward: bool, step: f64) -> (String, String) {
 /// had. Paths are the keys (English); each item's menu text is the player's
 /// translation.
 pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
-    let make =
-        |path: &[&str], shown: String, order: i32, group: &str, bindings: &[&str], repeat: bool| {
-            let mut declaration = Declaration::new(path.last().unwrap(), path);
-            declaration.order = order;
-            declaration.group = group.into();
-            declaration.bindings = bindings.iter().map(|b| b.to_string()).collect();
-            declaration.repeat = repeat;
-            declaration.localize(|_| shown.clone());
-            declaration
-        };
+    let make = |category: &str,
+                path: &[&str],
+                shown: String,
+                order: i32,
+                group: &str,
+                bindings: &[&str],
+                repeat: bool| {
+        let mut declaration = Declaration::new(path.last().unwrap(), path);
+        declaration.order = order;
+        declaration.group = group.into();
+        declaration.bindings = bindings.iter().map(|b| b.to_string()).collect();
+        declaration.repeat = repeat;
+        declaration.localize(|_| shown.clone());
+        categorize(&mut declaration, category);
+        declaration
+    };
     let (backward, backward_shown) = seek_title(false, step);
     let (forward, forward_shown) = seek_title(true, step);
     let mut normal = make(
+        "Speed",
         &["Playback", "Speed", "Normal"],
         tr("Normal"),
         220,
@@ -186,11 +193,20 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
     vec![
         (
             "stop",
-            make(&["Close"], tr("Close"), 120, "open", &["F4"], false),
+            make(
+                "Playback",
+                &["Close"],
+                tr("Close"),
+                120,
+                "open",
+                &["F4"],
+                false,
+            ),
         ),
         (
             "play-pause",
             make(
+                "Playback",
                 &["Playback", "Play/Pause"],
                 tr("Play/Pause"),
                 201,
@@ -204,6 +220,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "previous",
             make(
+                "Playback",
                 &["Playback", "Previous"],
                 tr("Previous"),
                 202,
@@ -215,6 +232,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "next",
             make(
+                "Playback",
                 &["Playback", "Next"],
                 tr("Next"),
                 203,
@@ -226,6 +244,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "frame-back",
             make(
+                "Seek",
                 &["Playback", "Seek", "Previous Frame"],
                 tr("Previous Frame"),
                 204,
@@ -237,6 +256,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "frame-forward",
             make(
+                "Seek",
                 &["Playback", "Seek", "Next Frame"],
                 tr("Next Frame"),
                 205,
@@ -248,6 +268,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "seek-backward",
             make(
+                "Seek",
                 &["Playback", "Seek", &backward],
                 backward_shown,
                 210,
@@ -259,6 +280,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "seek-forward",
             make(
+                "Seek",
                 &["Playback", "Seek", &forward],
                 forward_shown,
                 211,
@@ -271,6 +293,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "rate-down",
             make(
+                "Speed",
                 &["Playback", "Speed", "Slower 0.1"],
                 tr("Slower 0.1"),
                 221,
@@ -282,6 +305,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "rate-up",
             make(
+                "Speed",
                 &["Playback", "Speed", "Faster 0.1"],
                 tr("Faster 0.1"),
                 222,
@@ -293,6 +317,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "volume-up",
             make(
+                "Audio",
                 &["Audio", "Volume +"],
                 tr("Volume +"),
                 501,
@@ -304,6 +329,7 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         (
             "volume-down",
             make(
+                "Audio",
                 &["Audio", "Volume −"],
                 tr("Volume −"),
                 502,
@@ -314,9 +340,47 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         ),
         (
             "mute",
-            make(&["Audio", "Mute"], tr("Mute"), 503, "domain", &["M"], false),
+            make(
+                "Audio",
+                &["Audio", "Mute"],
+                tr("Mute"),
+                503,
+                "domain",
+                &["M"],
+                false,
+            ),
         ),
     ]
+}
+
+/// The categories of the player's own commands: the command palette and
+/// Keyboard Shortcuts name a command `Category: Title` in the built-in
+/// plugins' words ("Seek: Back 5 s", "Window: Toggle Fullscreen").
+pub const CATEGORIES: [&str; 7] = [
+    "Playback", "Seek", "Speed", "Audio", "Window", "File", "Help",
+];
+
+/// A category of [`CATEGORIES`] in the interface language.
+fn category_text(key: &str) -> String {
+    match key {
+        "Playback" => tr("Playback"),
+        "Seek" => tr("Seek"),
+        "Speed" => tr("Speed"),
+        "Audio" => tr("Audio"),
+        "Window" => tr("Window"),
+        "File" => tr("File"),
+        "Help" => tr("Help"),
+        _ => key.to_owned(),
+    }
+}
+
+/// Give a player command its category (one of [`CATEGORIES`]): the key and
+/// its shown text. Call after [`Declaration::localize`], which fills the
+/// shown category from the title's text.
+pub fn categorize(declaration: &mut Declaration, key: &str) {
+    debug_assert!(CATEGORIES.contains(&key), "{key}");
+    declaration.category = Some(key.into());
+    declaration.display.category = category_text(key);
 }
 
 /// Busy implies disabled; the reason is shown only when it cannot be done.
@@ -843,6 +907,48 @@ mod tests {
             }
         }
     }
+    /// Each action names its category in the built-in plugins' words
+    /// (Seek: Back 30 s, Speed: 2×, Audio: …): the key, and the shown text
+    /// from the player's catalog, not the title `localize` gave it.
+    #[test]
+    fn every_action_has_its_category() {
+        let expected = [
+            ("stop", "Playback"),
+            ("play-pause", "Playback"),
+            ("previous", "Playback"),
+            ("next", "Playback"),
+            ("frame-back", "Seek"),
+            ("frame-forward", "Seek"),
+            ("seek-backward", "Seek"),
+            ("seek-forward", "Seek"),
+            ("rate-normal", "Speed"),
+            ("rate-down", "Speed"),
+            ("rate-up", "Speed"),
+            ("volume-up", "Audio"),
+            ("volume-down", "Audio"),
+            ("mute", "Audio"),
+        ];
+        let all = declarations(5.0);
+        let actual: Vec<(&str, Option<&str>, Option<&str>)> = all
+            .iter()
+            .map(|(id, declaration)| {
+                (
+                    *id,
+                    declaration.category.as_deref(),
+                    declaration.shown_category(),
+                )
+            })
+            .collect();
+        let wanted: Vec<_> = expected
+            .iter()
+            .map(|(id, category)| (*id, Some(*category), Some(*category)))
+            .collect();
+        assert_eq!(actual, wanted);
+        for category in CATEGORIES {
+            assert_eq!(category_text(category), category, "{category}");
+        }
+    }
+
     fn declarations_titles(step: f64) -> (String, String) {
         let all = declarations(step);
         let title = |id: &str| {

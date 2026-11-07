@@ -57,7 +57,8 @@ impl Host {
         Ok(())
     }
     /// The host's own commands (owner 0): toggle, enter and leave
-    /// fullscreen, quit, the sidebar toggle, the command palette, with their first states
+    /// fullscreen, quit, the sidebar toggle, the command palette, each with
+    /// its category (`core_actions::CATEGORIES`), with their first states
     /// (tests/sdk/host-agreement.test.ts reads this function).
     pub(crate) fn host_declarations()
     -> Vec<(&'static str, commands::Declaration, commands::CommandState)> {
@@ -79,15 +80,20 @@ impl Host {
         // double click does nothing unless the user binds it.
         fullscreen.bindings = vec!["Escape".into()];
         fullscreen.localize(|_| i18n::tr("Toggle Fullscreen"));
+        core_actions::categorize(&mut fullscreen, "Window");
         // Enter and Leave Fullscreen (user ruling 2026-11-01): outside the
         // menu, no default key, each enabled only where it does something;
         // bindable in Keyboard Shortcuts.
         let mut enter = commands::Declaration::new("Enter Fullscreen", &[]);
         enter.localize(|_| i18n::tr("Enter Fullscreen"));
+        core_actions::categorize(&mut enter, "Window");
         let mut exit = commands::Declaration::new("Leave Fullscreen", &[]);
         exit.localize(|_| i18n::tr("Leave Fullscreen"));
+        core_actions::categorize(&mut exit, "Window");
         let mut quit = commands::Declaration::new("Quit", &["Quit"]);
         quit.localize(|_| i18n::tr("Quit"));
+        // With Open File and Reopen, as File > Exit in most desktop programs.
+        core_actions::categorize(&mut quit, "File");
         quit.group = "exit".into();
         quit.order = 990;
         // Windows and Linux menus show no `Cmd` binding (`label_shown`).
@@ -97,10 +103,13 @@ impl Host {
         // (F6 is the playlist's), bindable in Keyboard Shortcuts.
         let mut sidebar = commands::Declaration::new("Toggle Sidebar", &[]);
         sidebar.localize(|_| i18n::tr("Toggle Sidebar"));
+        core_actions::categorize(&mut sidebar, "Window");
         // Host 0.7.4 (menu redesign §6): the command palette, outside the
         // menu for now; Ctrl+Shift+P (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD).
         let mut palette = commands::Declaration::new("Command Palette", &[]);
         palette.localize(|_| i18n::tr("Command Palette"));
+        // The way to find every other command, next to About and Check for Updates.
+        core_actions::categorize(&mut palette, "Help");
         palette.bindings = vec!["Ctrl+Shift+P".into()];
         vec![
             ("fullscreen", fullscreen, state(true, Some(false))),
@@ -532,6 +541,37 @@ mod tests {
         match table.lookup(&key("Escape"), Some(4)) {
             Lookup::Fire(target) => assert_eq!(target.id, "close"),
             other => panic!("{other:?}"),
+        }
+    }
+
+    /// Every command the player registers itself has a category of
+    /// `core_actions::CATEGORIES`, so the command palette and Keyboard
+    /// Shortcuts never fall back to "Vestra Player" or the menu path.
+    #[test]
+    fn every_player_command_has_a_category() {
+        let own: Vec<(&str, Option<String>)> = Host::host_declarations()
+            .into_iter()
+            .map(|(id, declaration, _)| (id, declaration.category))
+            .collect();
+        let category = |name: &str| Some(name.to_owned());
+        assert_eq!(
+            own,
+            [
+                ("fullscreen", category("Window")),
+                ("enter-fullscreen", category("Window")),
+                ("exit-fullscreen", category("Window")),
+                ("quit", category("File")),
+                ("sidebar", category("Window")),
+                ("palette", category("Help")),
+            ]
+        );
+        let own = Host::host_declarations()
+            .into_iter()
+            .map(|(id, declaration, _)| (id, declaration));
+        for (id, declaration) in own.chain(core_actions::declarations(5.)) {
+            let key = declaration.category.as_deref().unwrap_or_default();
+            assert!(core_actions::CATEGORIES.contains(&key), "{id}: {key:?}");
+            assert_eq!(declaration.shown_category(), Some(key), "{id}");
         }
     }
 

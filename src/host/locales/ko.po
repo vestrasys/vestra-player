@@ -58,6 +58,23 @@ msgstr "속도"
 msgid "Seek"
 msgstr "탐색"
 
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Window"
+msgstr "창"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "File"
+msgstr "파일"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Help"
+msgstr "도움말"
+
 #: src/composition.rs:39
 #, x-machine
 msgid "bottom bar"
