@@ -253,12 +253,18 @@ impl Control {
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
+    /// Never moves back for the same `total` (FFmpeg's `out_time` can dip,
+    /// for example around B-frame reordering at the start).
     pub(super) fn set_progress(&self, done: f64, total: f64) {
-        *self
+        let mut progress = self
             .progress
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner) =
-            Some((done.clamp(0., total), total));
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let done = match *progress {
+            Some((old, t)) if t == total => old.max(done),
+            _ => done,
+        };
+        *progress = Some((done.clamp(0., total), total));
     }
     pub fn facts(&self) -> serde_json::Value {
         self.facts
@@ -749,7 +755,7 @@ pub(super) fn decode_check(
     control: &Control,
 ) -> Result<Option<()>> {
     let threads = threads.to_string();
-    let mut command = crate::platform::tool_command(ffmpeg);
+    let mut command = crate::platform::background_tool_command(ffmpeg);
     command.args(["-nostdin", "-v", "error", "-threads", &threads]);
     if let Some(limit) = limit {
         command.args(["-t", &limit.to_string()]);
@@ -929,6 +935,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                 container: *container,
                 origin: origin.unwrap_or(request.source_origin),
                 streams: &probed["streams"],
+                destination: &destination,
             },
             &mut reader,
             temp.path(),
@@ -1024,7 +1031,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         _ => 1,
     }
     .to_string();
-    let mut command = crate::platform::tool_command(&request.ffmpeg);
+    let mut command = crate::platform::background_tool_command(&request.ffmpeg);
     command.args([
         "-nostdin",
         "-v",
@@ -1500,6 +1507,14 @@ mod tests {
         // Clamped to the clip's length.
         assert_eq!(control.progress(), Some((5., 5.)));
         assert_eq!(Control::new().progress(), None);
+        // Never backwards for the same clip.
+        let dips = Control::new();
+        read_progress(
+            io::Cursor::new(b"out_time_us=2000000\nout_time_us=1500000\n".to_vec()),
+            &dips,
+            5.,
+        );
+        assert_eq!(dips.progress(), Some((2., 5.)));
     }
 
     #[test]

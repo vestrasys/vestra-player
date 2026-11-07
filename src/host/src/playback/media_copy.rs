@@ -29,6 +29,13 @@ const MP4_AUDIO: &[&str] = &["aac", "mp3", "ac3", "eac3", "alac"];
 /// How far before the start the keyframe search looks, in turn; then from the
 /// beginning of the file.
 const KEYFRAME_WINDOWS: [f64; 3] = [10., 60., 300.];
+/// A video that starts after the requested start: its first keyframe is
+/// searched forward in 10 s steps, at most 5 minutes in.
+const FIRST_KEYFRAME_STEP: f64 = 10.;
+const FIRST_KEYFRAME_STEPS: u32 = 30;
+/// Packets read at the head of the copy for its first presented frame: open
+/// GOPs write leading frames (earlier presentation times) after the keyframe.
+const HEAD_PACKETS: u32 = 64;
 /// The copied file's first seconds are decoded before publication.
 const DECODE_CHECK_SECONDS: f64 = 3.;
 /// FFmpeg's refusals of a codec in a container.
@@ -50,6 +57,9 @@ pub struct Job<'a> {
     pub origin: f64,
     /// ffprobe's `streams` of the held file.
     pub streams: &'a Value,
+    /// The asked destination (canonical directory); the copy is published
+    /// under [`named`] for its container.
+    pub destination: &'a Path,
 }
 
 #[derive(Debug)]
@@ -109,30 +119,61 @@ fn time_base(stream: &Value) -> Option<(i128, i128)> {
     (n > 0 && d > 0).then_some((n, d))
 }
 
-/// The last keyframe at or before `start` from ffprobe's `pts,flags` lines (a
-/// bounded tail: a cut first line does not parse and is skipped).
+/// A keyframe ffprobe shows as presented: `K` first and no `D` (a packet an
+/// MP4 edit list discards, such as the pre-roll of an `-ss … -c copy` cut).
+fn presented_keyframe(flags: &str) -> bool {
+    let mut flags = flags.chars();
+    flags.next() == Some('K') && flags.next() != Some('D')
+}
+
+/// The last presented keyframe at or before `start` from ffprobe's
+/// `pts,flags` lines (a bounded tail: a cut first line does not parse and is
+/// skipped).
 fn last_keyframe(lines: &str, time_base: (i128, i128), start_abs: f64) -> Option<i64> {
     lines
         .lines()
         .filter_map(|line| {
             let (pts, flags) = line.trim().split_once(',')?;
             let pts = pts.parse::<i64>().ok()?;
-            (flags.starts_with('K')
+            (presented_keyframe(flags)
                 && (pts as f64 * time_base.0 as f64 / time_base.1 as f64) <= start_abs + 1e-6)
                 .then_some(pts)
         })
         .max()
 }
 
-/// The earliest keyframe among ffprobe's first `pts,flags` lines.
+/// The earliest presented keyframe among ffprobe's `pts,flags` lines.
 fn first_keyframe(lines: &str) -> Option<i64> {
     lines
         .lines()
         .filter_map(|line| {
             let (pts, flags) = line.trim().split_once(',')?;
-            flags.starts_with('K').then(|| pts.parse::<i64>().ok())?
+            presented_keyframe(flags).then(|| pts.parse::<i64>().ok())?
         })
         .min()
+}
+
+/// From the copy's first packets (decode order): the first packet's time,
+/// which must be a presented keyframe, and the earliest presented time
+/// (edit-list `D` packets are not presented).
+fn head_times(lines: &str) -> Result<(f64, f64)> {
+    let packets: Vec<(f64, &str)> = lines
+        .lines()
+        .filter_map(|line| {
+            let (pts, flags) = line.trim().split_once(',')?;
+            Some((pts.parse::<f64>().ok()?, flags))
+        })
+        .collect();
+    let &(first, flags) = packets.first().context("copied clip has no video packet")?;
+    if !presented_keyframe(flags) {
+        bail!("copied clip does not start on a presented keyframe");
+    }
+    let earliest = packets
+        .iter()
+        .filter(|(_, flags)| flags.chars().nth(1) != Some('D'))
+        .map(|(pts, _)| *pts)
+        .fold(first, f64::min);
+    Ok((first, earliest))
 }
 
 /// The copy's input seek in whole microseconds: the keyframe's time rounded
@@ -200,6 +241,12 @@ pub fn write(
         }
         other => other,
     };
+    // Fail fast when the container's name is taken (publication is still
+    // no-clobber; this only saves copying a file that cannot be published).
+    let destination = named(job.destination, container);
+    if destination.exists() {
+        bail!("no-clobber: {} already exists", destination.display());
+    }
     let time_base = time_base(video).context("source video time base unavailable")?;
 
     // The keyframe at or before the start: packet flags only, nothing decoded.
@@ -215,7 +262,13 @@ pub fn write(
         .map(|from| (format!("{from}%{}", start_abs + 0.001), false))
         .collect();
     searches.push((format!("%{}", start_abs + 0.001), false));
-    searches.push(("%+#32".into(), true));
+    // Then forward from the file's start, in steps short enough that every
+    // packet line fits the bounded output (a TS cut mid-GOP starts on
+    // non-keyframes; its first keyframe can be seconds in).
+    for step in 0..FIRST_KEYFRAME_STEPS {
+        let from = job.origin + f64::from(step) * FIRST_KEYFRAME_STEP;
+        searches.push((format!("{from}%{}", from + FIRST_KEYFRAME_STEP), true));
+    }
     for (interval, first) in searches {
         let mut command = crate::platform::tool_command(&probe);
         command.args([
@@ -256,7 +309,7 @@ pub fn write(
         bail!("invalid stream-copy range");
     }
 
-    let mut command = crate::platform::tool_command(job.ffmpeg);
+    let mut command = crate::platform::background_tool_command(job.ffmpeg);
     command.args([
         "-nostdin",
         "-v",
@@ -353,11 +406,11 @@ pub fn write(
         .and_then(|s| s.iter().find(|s| s["codec_type"] == "video"))
         .and_then(|v| rate(&v["avg_frame_rate"]).or(rate(&v["r_frame_rate"])))
         .map_or(0., |rate| 1. / rate);
-    let Some(first) = probe_output(&[
+    let Some(head) = probe_output(&[
         "-select_streams",
         "v:0",
         "-read_intervals",
-        "%+#1",
+        &format!("%+#{HEAD_PACKETS}"),
         "-show_entries",
         "packet=pts_time,flags",
         "-of",
@@ -366,16 +419,7 @@ pub fn write(
     else {
         return Ok(None);
     };
-    let (first, flags) = first
-        .trim()
-        .split_once(',')
-        .context("copied clip has no video packet")?;
-    if !flags.starts_with('K') {
-        bail!("copied clip does not start on a keyframe");
-    }
-    let first = first
-        .parse::<f64>()
-        .context("copied clip start time unavailable")?;
+    let (first, earliest) = head_times(&head)?;
     let Some(tail) = probe_output(&[
         "-select_streams",
         "v:0",
@@ -400,9 +444,13 @@ pub fn write(
             Some(max.map_or(end, |m| m.max(end)))
         })
         .context("copied clip has no final video packet")?;
+    // The output's first packet is the source keyframe (`-copypriorss 0`):
+    // it maps output times to source times. Leading frames of an open GOP
+    // present before it, so the start is the earliest presented frame.
+    let start = keyframe + (earliest - first);
     let end = keyframe + (last - first);
     let mut facts = control.facts();
-    facts["copy"] = json!({"container":if container == Container::Mkv {"mkv"} else {"mp4"},"videoCodec":video_codec,"audioCodec":audio.map(|(_, codec)| codec),"keyframe":keyframe,"seek":seek as f64 / 1_000_000.,"written":{"start":keyframe,"end":end}});
+    facts["copy"] = json!({"container":if container == Container::Mkv {"mkv"} else {"mp4"},"videoCodec":video_codec,"audioCodec":audio.map(|(_, codec)| codec),"keyframe":keyframe,"seek":seek as f64 / 1_000_000.,"written":{"start":start,"end":end}});
     control.record_facts(facts);
     let tolerance = frame + 0.0001;
     if end + tolerance < job.end {
@@ -413,7 +461,7 @@ pub fn write(
     }
     Ok(Some(Copied {
         container,
-        start: keyframe,
+        start,
         end,
     }))
 }
@@ -634,6 +682,271 @@ mod tests {
         assert_eq!(control.facts()["copy"]["audioCodec"], "mp3");
     }
 
+    /// `ffmpeg -y <args>`; panics on failure.
+    fn make(args: &[&str]) {
+        let made = std::process::Command::new(real::ffmpeg())
+            .args(["-loglevel", "error", "-y"])
+            .args(args)
+            .status()
+            .unwrap();
+        assert!(made.success(), "{args:?}");
+    }
+
+    /// 8 s of 25 fps H.264 with B-frames, a keyframe every 2 s (extra x264
+    /// parameters, e.g. an open GOP), into `name`.
+    fn source(dir: &Path, name: &str, x264: &str) -> PathBuf {
+        let path = dir.join(name);
+        let params = format!("keyint=50:min-keyint=50:scenecut=0{x264}");
+        make(&[
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=25",
+            "-t",
+            "8",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "ultrafast",
+            "-bf",
+            "3",
+            "-x264-params",
+            &params,
+            "-pix_fmt",
+            "yuv420p",
+            path.to_str().unwrap(),
+        ]);
+        path
+    }
+
+    fn copy(source: &Path, start: f64, end: f64, destination: PathBuf) -> Arc<Control> {
+        real::run_job(real::request(
+            source,
+            start,
+            destination,
+            Output::Copy {
+                end,
+                audio: None,
+                container: Container::Auto,
+            },
+        ))
+        .0
+    }
+
+    /// The video packets of a file, decode order: time and flags.
+    fn packets(file: &Path) -> Vec<(f64, String)> {
+        real::probe(
+            file,
+            &[
+                "-select_streams",
+                "v:0",
+                "-show_entries",
+                "packet=pts_time,flags",
+            ],
+        )["packets"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|p| {
+                Some((
+                    p["pts_time"].as_str()?.parse().ok()?,
+                    p["flags"].as_str()?.to_owned(),
+                ))
+            })
+            .collect()
+    }
+
+    /// The earliest decoded frame time of a file.
+    fn decoded_first(file: &Path) -> f64 {
+        real::probe(
+            file,
+            &["-select_streams", "v:0", "-show_entries", "frame=pts_time"],
+        )["frames"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter_map(|f| f["pts_time"].as_str()?.parse::<f64>().ok())
+            .fold(f64::MAX, f64::min)
+    }
+
+    /// An edit-list MP4 (any `ffmpeg -ss … -c copy` output) begins with a
+    /// discarded pre-roll keyframe (`D`, negative time), which is never a
+    /// start: 0–3 s starts on the first presented keyframe, 0.48 s here, and
+    /// the job completes.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn an_edit_list_pre_roll_is_not_a_start() {
+        let dir = tempfile::tempdir().unwrap();
+        let closed = source(dir.path(), "closed.mp4", "");
+        let edited = dir.path().join("edited.mp4");
+        make(&[
+            "-ss",
+            "1.52",
+            "-i",
+            closed.to_str().unwrap(),
+            "-c",
+            "copy",
+            edited.to_str().unwrap(),
+        ]);
+        let edited_packets = packets(&edited);
+        assert_eq!(edited_packets[0].1, "KD_", "the sample has an edit list");
+        let presented = edited_packets
+            .iter()
+            .find(|(_, f)| f == "K__")
+            .map(|(t, _)| *t)
+            .unwrap();
+        assert!((presented - 0.48).abs() < 0.001, "{presented}");
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        let control = copy(&edited, 0., 3., out.join("cut.mp4"));
+        let (destination, start, end) = completed(&control);
+        assert!((start - presented).abs() < 0.001, "start {start}");
+        assert!((3.0 - 0.04..3.5).contains(&end), "end {end}");
+        // The output decodes from its first frame.
+        assert!(decoded_first(&destination).abs() < 0.001);
+    }
+
+    /// An open GOP copied into MKV with its audio writes leading frames
+    /// that present before the keyframe (with timestamps, at 2 s minus a
+    /// frame or two): the reported start is the earliest written frame, as
+    /// the whole output's packets show, not the keyframe.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn an_open_gop_start_counts_its_leading_frames() {
+        let dir = tempfile::tempdir().unwrap();
+        let open = dir.path().join("open.mkv");
+        make(&[
+            "-f",
+            "lavfi",
+            "-i",
+            "testsrc2=size=320x240:rate=24",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=sample_rate=48000",
+            "-t",
+            "8",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-bf",
+            "3",
+            "-x264-params",
+            "keyint=48:min-keyint=25:scenecut=0:open-gop=1",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-shortest",
+            open.to_str().unwrap(),
+        ]);
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        let (control, _) = real::run_job(real::request(
+            &open,
+            3.,
+            out.join("cut.mkv"),
+            Output::Copy {
+                end: 5.,
+                audio: Some(real::audio(1)),
+                container: Container::Mkv,
+            },
+        ));
+        let (destination, start, _) = completed(&control);
+        let keyframe = control.facts()["copy"]["keyframe"].as_f64().unwrap();
+        assert!((keyframe - 2.0).abs() < 0.001, "{keyframe}");
+        // Independently: every video packet of the output, mapped through
+        // its first one (the keyframe).
+        let written = packets(&destination);
+        let first = written[0].0;
+        let earliest = written.iter().map(|(t, _)| *t).fold(first, f64::min);
+        assert!(earliest < first, "the copy has leading frames");
+        let expected = keyframe + (earliest - first);
+        assert!(
+            (start - expected).abs() < 0.001,
+            "start {start} vs {expected}"
+        );
+        assert!(start < keyframe);
+    }
+
+    /// A TS cut mid-GOP starts on non-keyframes (its first keyframe is
+    /// about 1 s in): a copy from its start begins on that first keyframe.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_ts_cut_mid_gop_starts_on_its_first_keyframe() {
+        let dir = tempfile::tempdir().unwrap();
+        let closed = source(dir.path(), "closed.mp4", "");
+        let mid = dir.path().join("mid.ts");
+        make(&[
+            "-i",
+            closed.to_str().unwrap(),
+            "-ss",
+            "1",
+            "-c",
+            "copy",
+            "-copyinkf",
+            "-f",
+            "mpegts",
+            mid.to_str().unwrap(),
+        ]);
+        let origin: f64 =
+            real::probe(&mid, &["-show_entries", "format=start_time"])["format"]["start_time"]
+                .as_str()
+                .unwrap()
+                .parse()
+                .unwrap();
+        let mid_packets = packets(&mid);
+        assert!(
+            !mid_packets[0].1.starts_with('K'),
+            "the sample starts mid-GOP"
+        );
+        let first = mid_packets
+            .iter()
+            .find(|(_, f)| f.starts_with('K'))
+            .map(|(t, _)| *t - origin)
+            .unwrap();
+        assert!(first > 0.5, "{first}");
+        let mut request = real::request(
+            &mid,
+            0.,
+            dir.path().join("cut.mp4"),
+            Output::Copy {
+                end: 3.,
+                audio: None,
+                container: Container::Auto,
+            },
+        );
+        request.source_origin = origin;
+        let (control, _) = real::run_job(request);
+        let (_, start, _) = completed(&control);
+        assert!((start - first).abs() < 0.001, "start {start} vs {first}");
+    }
+
+    /// When `auto` renames `clip.mkv` to `clip.mp4` and that name is taken,
+    /// the job fails before copying; the existing file is untouched and
+    /// nothing else is left.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_taken_container_name_fails_before_copying() {
+        let dir = tempfile::tempdir().unwrap();
+        let closed = source(dir.path(), "closed.mp4", "");
+        let out = dir.path().join("out");
+        std::fs::create_dir(&out).unwrap();
+        std::fs::write(out.join("clip.mp4"), b"mine").unwrap();
+        let control = copy(&closed, 1., 3., out.join("clip.mkv"));
+        match control.snapshot().1 {
+            Some(Outcome::Failed { code, message }) => {
+                assert_eq!(code, "export-failed");
+                assert!(message.contains("already exists"), "{message}");
+            }
+            other => panic!("{other:?}"),
+        }
+        assert_eq!(control.progress(), None, "nothing was copied");
+        assert_eq!(std::fs::read(out.join("clip.mp4")).unwrap(), b"mine");
+        assert_eq!(std::fs::read_dir(&out).unwrap().count(), 1);
+    }
+
     /// Cancelling a copy of the 4K60 clip (about 640 MB from 0 to 10:00)
     /// right after it starts ends it cancelled, with no file left.
     #[test]
@@ -705,6 +1018,36 @@ mod tests {
         // A video that starts late: its first keyframe.
         assert_eq!(first_keyframe("2000,K__\n3000,___\n"), Some(2000));
         assert_eq!(first_keyframe("3000,___\n"), None);
+    }
+
+    #[test]
+    fn edit_list_discards_are_never_keyframes_to_start_on() {
+        // An `-ss … -c copy` MP4: the pre-roll keyframe is flagged D and has
+        // a negative time; the first presented keyframe is at 0.48 s.
+        let lines = "-19456,KD_\n-17920,_D_\n6144,K__\n31744,K__\n";
+        let tb = (1, 12800);
+        assert_eq!(last_keyframe(lines, tb, 0.0), None);
+        assert_eq!(last_keyframe(lines, tb, 1.0), Some(6144));
+        assert_eq!(first_keyframe(lines), Some(6144));
+        // TS lines end with a comma.
+        assert_eq!(first_keyframe("129600,___,\n216000,K__,\n"), Some(216000));
+        assert!(presented_keyframe("K__") && presented_keyframe("K__,"));
+        assert!(!presented_keyframe("KD_") && !presented_keyframe("_D_"));
+    }
+
+    #[test]
+    fn the_start_is_the_earliest_presented_frame_of_the_head() {
+        // Open GOP: leading frames after the keyframe present before it.
+        let head = "2.000000,K__\n2.120000,___\n1.880000,___\n1.920000,___\n";
+        assert_eq!(head_times(head).unwrap(), (2.0, 1.88));
+        // Discarded packets do not count.
+        assert_eq!(
+            head_times("0.000000,K__\n-0.040000,_D_\n").unwrap(),
+            (0.0, 0.0)
+        );
+        assert!(head_times("0.040000,___\n").is_err());
+        assert!(head_times("-1.0,KD_\n").is_err());
+        assert!(head_times("").is_err());
     }
 
     #[test]
