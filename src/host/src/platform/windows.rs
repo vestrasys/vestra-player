@@ -1860,6 +1860,24 @@ pub fn hide_console(command: &mut std::process::Command) {
     }
 }
 
+/// A console tool doing background work (an export's FFmpeg): no console
+/// window, and `BELOW_NORMAL_PRIORITY_CLASS`, so playback and the UI keep
+/// their rate while it runs (as HandBrake and OBS run their encoders).
+pub fn background_tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    use std::io::IsTerminal;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    const BELOW_NORMAL_PRIORITY_CLASS: u32 = 0x0000_4000;
+    let mut command = std::process::Command::new(program);
+    let console = if std::io::stderr().is_terminal() {
+        0
+    } else {
+        CREATE_NO_WINDOW
+    };
+    command.creation_flags(console | BELOW_NORMAL_PRIORITY_CLASS);
+    command
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,6 +1,31 @@
 import { failure, sleep, uncertain } from "./runtime.js";
 import { playerOf } from "./player.js";
 const TERMINAL = ["completed", "failed", "cancelled"];
+/** The player's sets for each {@link ExportEncoding} field. */
+const ENCODING = {
+    crf: Array.from({ length: 17 }, (_, i) => i + 14),
+    speed: ["faster", "balanced", "smaller"],
+    maxHeight: [1080, 720, 480],
+    fps: [60, 30],
+    audioBitrate: [128, 192, 256],
+    threads: ["single", "auto"],
+    videoBitrate: ["source"],
+};
+/** Refuse what the player would refuse, with the field named. */
+function checkEncoding(encoding) {
+    if (typeof encoding !== "object" || encoding === null)
+        throw failure("invalid", "encoding must be an object");
+    for (const [key, value] of Object.entries(encoding)) {
+        const allowed = ENCODING[key];
+        if (!allowed)
+            throw failure("invalid", `unknown encoding option ${key}`);
+        if (value !== undefined && !allowed.includes(value))
+            throw failure("invalid", `encoding.${key} must be one of ${allowed.join(", ")}`);
+    }
+    if (encoding.crf !== undefined && encoding.videoBitrate !== undefined)
+        throw failure("invalid", "encoding takes crf or videoBitrate, not both");
+    return Object.fromEntries(Object.entries(encoding).filter(([, value]) => value !== undefined));
+}
 /** One counter for snapshot and job operations, as the host's book expects. */
 class MediaService {
     runtime;
@@ -159,8 +184,28 @@ class SnapshotHandle {
         let job;
         switch (options.format) {
             case "mp4":
-                job = { kind: `${mode}Mp4`, end: options.end };
+                job = {
+                    kind: `${mode}Mp4`,
+                    end: options.end,
+                    ...(options.encoding === undefined
+                        ? {}
+                        : { encoding: checkEncoding(options.encoding) }),
+                };
                 break;
+            case "copy": {
+                if (processed)
+                    throw failure("invalid", "a stream copy needs a raw snapshot: effects need a re-encode");
+                const container = options.container;
+                if (container !== undefined &&
+                    !["auto", "mp4", "mkv"].includes(container))
+                    throw failure("invalid", "container must be auto, mp4 or mkv");
+                job = {
+                    kind: "rawCopy",
+                    end: options.end,
+                    ...(container === undefined ? {} : { container }),
+                };
+                break;
+            }
             case "jpeg": {
                 const quality = options.quality;
                 if (quality !== undefined &&
