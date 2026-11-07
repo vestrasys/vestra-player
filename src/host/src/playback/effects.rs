@@ -351,6 +351,14 @@ struct Parameter {
     name: &'static str,
     value: String,
     runtime: bool,
+    /// The value as a runtime command (`vf-command`) argument when it differs
+    /// from the graph form: a command takes the bare value, the graph quoted.
+    command: Option<String>,
+}
+impl Parameter {
+    fn command_value(&self) -> String {
+        self.command.clone().unwrap_or_else(|| self.value.clone())
+    }
 }
 
 fn parameter(name: &'static str, value: impl ToString, runtime: bool) -> Parameter {
@@ -358,6 +366,17 @@ fn parameter(name: &'static str, value: impl ToString, runtime: bool) -> Paramet
         name,
         value: value.to_string(),
         runtime,
+        command: None,
+    }
+}
+
+/// A runtime parameter whose graph form is `'{bare}'` and whose command form is `bare`.
+fn quoted_live(name: &'static str, bare: String) -> Parameter {
+    Parameter {
+        name,
+        value: format!("'{bare}'"),
+        runtime: true,
+        command: Some(bare),
     }
 }
 
@@ -587,6 +606,10 @@ impl Node for VideoNode {
                     ReframeMode::Crop => ("crop", "min", "trunc", "(iw-ow)", "(ih-oh)"),
                     ReframeMode::Pad => ("pad", "max", "ceil", "(ow-iw)", "(oh-ih)"),
                 };
+                let place = |name: &'static str, bare: String| match mode {
+                    ReframeMode::Crop => quoted_live(name, bare),
+                    ReframeMode::Pad => parameter(name, format!("'{bare}'"), false),
+                };
                 vec![filter(
                     name,
                     vec![
@@ -600,8 +623,9 @@ impl Node for VideoNode {
                             format!("'2*{round}({pick}(ih,iw*sar/{aspect})/2)'"),
                             false,
                         ),
-                        parameter("x", format!("'{dx}*(1+({x}))/2'"), false),
-                        parameter("y", format!("'{dy}*(1+({y}))/2'"), false),
+                        // crop moves its window live (`x`, `y`); pad has no commands.
+                        place("x", format!("{dx}*(1+({x}))/2")),
+                        place("y", format!("{dy}*(1+({y}))/2")),
                     ],
                 )]
             }
@@ -644,10 +668,10 @@ impl Node for VideoNode {
                 luma_temporal,
                 chroma_temporal,
             } => vec![
-                parameter("luma_spatial", strength(*luma_spatial), false),
-                parameter("chroma_spatial", strength(*chroma_spatial), false),
-                parameter("luma_tmp", strength(*luma_temporal), false),
-                parameter("chroma_tmp", strength(*chroma_temporal), false),
+                parameter("luma_spatial", strength(*luma_spatial), true),
+                parameter("chroma_spatial", strength(*chroma_spatial), true),
+                parameter("luma_tmp", strength(*luma_temporal), true),
+                parameter("chroma_tmp", strength(*chroma_temporal), true),
             ],
             Self::Deblock { strength } => vec![parameter(
                 "filter",
@@ -655,14 +679,14 @@ impl Node for VideoNode {
                     DeblockStrength::Weak => "weak",
                     DeblockStrength::Strong => "strong",
                 },
-                false,
+                true,
             )],
             Self::Deband { threshold, range } => vec![
-                parameter("1thr", threshold, false),
-                parameter("2thr", threshold, false),
-                parameter("3thr", threshold, false),
-                parameter("4thr", threshold, false),
-                parameter("r", range, false),
+                parameter("1thr", threshold, true),
+                parameter("2thr", threshold, true),
+                parameter("3thr", threshold, true),
+                parameter("4thr", threshold, true),
+                parameter("r", range, true),
             ],
             Self::Deinterlace { when, output } => vec![
                 parameter(
@@ -704,10 +728,10 @@ impl Node for VideoNode {
                             .collect::<Vec<_>>()
                             .join(" ");
                         [
-                            parameter(m, format!("'{matrix}'"), false),
-                            parameter(rdiv, plane.rdiv, false),
-                            parameter(bias, plane.bias, false),
-                            parameter(mode, plane.mode(), false),
+                            quoted_live(m, matrix),
+                            parameter(rdiv, plane.rdiv, true),
+                            parameter(bias, plane.bias, true),
+                            parameter(mode, plane.mode(), true),
                         ]
                     })
                     .collect()
@@ -726,7 +750,7 @@ impl Node for VideoNode {
                         Lut3dInterpolation::Pyramid => "pyramid",
                         Lut3dInterpolation::Prism => "prism",
                     },
-                    false,
+                    true,
                 ),
             ],
             Self::Transform { .. } | Self::Reframe { .. } => Vec::new(),
@@ -1048,6 +1072,9 @@ fn updates<N: Node>(old: &[Resource<N>], new: &[Resource<N>], prefix: &str) -> R
             return Ok(UpdatePlan::NeedsReconfigure);
         }
         for (part, (old, new)) in old.into_iter().zip(new).enumerate() {
+            if !same_options(&old, &new) {
+                return Ok(UpdatePlan::NeedsReconfigure);
+            }
             for (old, parameter) in old.parameters.into_iter().zip(new.parameters) {
                 if old.value != parameter.value {
                     if !parameter.runtime {
@@ -1056,7 +1083,7 @@ fn updates<N: Node>(old: &[Resource<N>], new: &[Resource<N>], prefix: &str) -> R
                     commands.push(RuntimeCommand {
                         target: label(new.name, prefix, index, part),
                         option: parameter.name,
-                        value: parameter.value,
+                        value: parameter.command_value(),
                     });
                 }
             }
@@ -1079,6 +1106,494 @@ pub fn runtime_commands(old: &Descriptors, new: &Descriptors) -> Result<UpdatePl
             validate(new)?;
             Ok(UpdatePlan::NeedsReconfigure)
         }
+    }
+}
+
+/// The same filter with the same option names in the same order: only its
+/// values can differ, so a runtime update can apply.
+fn same_options(old: &Filter, new: &Filter) -> bool {
+    old.name == new.name
+        && old.parameters.len() == new.parameters.len()
+        && old
+            .parameters
+            .iter()
+            .zip(&new.parameters)
+            .all(|(a, b)| a.name == b.name)
+}
+
+// ---------------------------------------------------------------------------
+// The player's graph: neutral nodes, pass-through slots, processing size.
+//
+// Plugins describe chains (`Resource`s); the host decides what stands in
+// mpv's `@vestra-owned` graph (`PlayerGraph`). A change that keeps the
+// graph's structure is sent live (`vf-command`), including switching a node
+// to pass-through (FFmpeg's timeline option, `enable=0`) when a plugin sets
+// it neutral or leaves it out, so a slider moving through 0 or a plugin
+// writing `[]` does not rebuild the graph during a drag. The graph runs at
+// the size it is shown at (`PlayerGraph::factor`), with the spatial
+// parameters scaled along so it looks as at full size. Offline graphs
+// (snapshots, exports) use none of this: they render the plugins' chains at
+// full size (`render_lavfi`).
+// ---------------------------------------------------------------------------
+
+impl ConvolutionPlane {
+    /// The matrix keeps every sample: one non-zero centre entry that the
+    /// divisor turns into 1, no bias.
+    fn identity(&self) -> bool {
+        let centre = self.matrix.len() / 2;
+        let Some(&weight) = self.matrix.get(centre) else {
+            return false;
+        };
+        // rdiv 0 is 1 / (sum of the matrix) in FFmpeg: here the centre.
+        let rdiv = if self.rdiv == 0.0 {
+            1.0 / weight
+        } else {
+            self.rdiv
+        };
+        weight != 0.0
+            && self.bias == 0.0
+            && self
+                .matrix
+                .iter()
+                .enumerate()
+                .all(|(index, value)| index == centre || *value == 0.0)
+            && (rdiv * weight - 1.0).abs() < 1e-9
+    }
+}
+
+impl VideoNode {
+    /// The node leaves every frame as it is: eq at its defaults, hue 0,
+    /// gblur sigma 0, sharpen amount 0, denoise all 0, transform without a
+    /// turn or flip, convolution with identity matrices. The kinds without
+    /// such a value (deblock, deband, deinterlace, reframe, frameBlend,
+    /// lut3d) are never neutral.
+    pub fn neutral(&self) -> bool {
+        match self {
+            Self::Eq {
+                brightness,
+                contrast,
+                saturation,
+                gamma,
+            } => *brightness == 0.0 && *contrast == 1.0 && *saturation == 1.0 && *gamma == 1.0,
+            Self::Gblur { sigma, .. } => *sigma == 0.0,
+            Self::Hue { degrees } => *degrees == 0.0,
+            Self::Sharpen { amount, .. } => *amount == 0.0,
+            Self::Denoise {
+                luma_spatial,
+                chroma_spatial,
+                luma_temporal,
+                chroma_temporal,
+            } => [luma_spatial, chroma_spatial, luma_temporal, chroma_temporal]
+                .iter()
+                .all(|value| **value == 0.0),
+            Self::Transform {
+                rotate,
+                flip_h,
+                flip_v,
+            } => *rotate == 0 && !flip_h && !flip_v,
+            Self::Convolution { planes } => planes.iter().flatten().all(ConvolutionPlane::identity),
+            Self::Deblock { .. }
+            | Self::Deband { .. }
+            | Self::Deinterlace { .. }
+            | Self::Reframe { .. }
+            | Self::FrameBlend { .. }
+            | Self::Lut3d { .. } => false,
+        }
+    }
+    /// The node is a filter in the player's graph (not one the player does
+    /// itself, `deinterlace` `auto`).
+    pub fn in_player_graph(&self) -> bool {
+        !self.by_player()
+    }
+    /// One FFmpeg filter with timeline support that keeps the frame size and
+    /// rate: the player can switch it to pass-through live (`enable=0`).
+    fn switchable(&self) -> bool {
+        matches!(
+            self,
+            Self::Eq { .. }
+                | Self::Gblur { .. }
+                | Self::Hue { .. }
+                | Self::Sharpen { .. }
+                | Self::Denoise { .. }
+                | Self::Deblock { .. }
+                | Self::Deband { .. }
+                | Self::Convolution { .. }
+                | Self::Lut3d { .. }
+        )
+    }
+    /// The node's filters for frames scaled by `factor` (at most 1): the
+    /// distances in pixels shrink with the picture, so the result looks as
+    /// at full size. gblur's sigma, unsharp's matrix size (odd, at least
+    /// 3), deband's range (at least 1) and deblock's block size (8 at full
+    /// size, at least 4). Strengths, colours and convolution matrices stay.
+    fn filters_at(&self, factor: f64) -> Vec<Filter> {
+        let mut filters = self.filters();
+        if factor >= 1.0 {
+            return filters;
+        }
+        let Some(filter) = filters.first_mut() else {
+            return filters;
+        };
+        let set = |filter: &mut Filter, name: &str, value: String| {
+            if let Some(parameter) = filter.parameters.iter_mut().find(|p| p.name == name) {
+                parameter.value = value;
+            }
+        };
+        match self {
+            Self::Gblur { sigma, .. } => {
+                let scaled = fraction(sigma * factor);
+                set(filter, "sigma", scaled.to_string());
+                set(filter, "sigmaV", scaled.to_string());
+            }
+            Self::Sharpen { size, .. } => {
+                let matrix = match size {
+                    SharpenSize::Small => 3.0,
+                    SharpenSize::Large => 7.0,
+                };
+                let scaled = odd_matrix(matrix * factor);
+                set(filter, "lx", scaled.to_string());
+                set(filter, "ly", scaled.to_string());
+            }
+            Self::Deband { range, .. } => {
+                set(filter, "r", (range * factor).round().max(1.0).to_string());
+            }
+            Self::Deblock { .. } => {
+                filter
+                    .parameters
+                    .push(parameter("block", (8.0 * factor).round().max(4.0), true))
+            }
+            _ => {}
+        }
+        filters
+    }
+}
+
+/// Four decimals, as the plugins' own values (a scaled sigma stays short).
+fn fraction(value: f64) -> f64 {
+    (value * 10_000.0).round() / 10_000.0
+}
+
+/// The nearest odd matrix size, at least 3 (unsharp's minimum).
+fn odd_matrix(size: f64) -> u32 {
+    let odd = ((size - 1.0) / 2.0).round() * 2.0 + 1.0;
+    odd.max(3.0) as u32
+}
+
+/// The player's video nodes in graph order (`sequence`), without the ones
+/// the player does itself.
+fn player_nodes(resources: &[Resource<VideoNode>]) -> Result<Vec<VideoNode>> {
+    let ordered = ordered(resources)?;
+    Ok(sequence(&ordered, Target::Player)
+        .into_iter()
+        .cloned()
+        .collect())
+}
+
+/// One node of the player's graph: the values its filter has now and
+/// whether it acts (`enable`) or passes frames through unchanged.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Slot {
+    pub node: VideoNode,
+    pub enabled: bool,
+}
+
+/// What stands in mpv's `@vestra-owned` video graph: the slots in graph
+/// order (slot `i`'s filters are labelled `name@n{i}`) and the processing
+/// size, `factor` of the frames that come in (1: full size, no scaler).
+/// Empty: the `null` graph.
+#[derive(Clone, Debug, PartialEq)]
+pub struct PlayerGraph {
+    pub slots: Vec<Slot>,
+    pub factor: f64,
+}
+
+impl Default for PlayerGraph {
+    fn default() -> Self {
+        Self {
+            slots: Vec::new(),
+            factor: 1.0,
+        }
+    }
+}
+
+/// The processing-size scaler's label: outside the slots' labels, so it
+/// never renumbers them.
+pub const SCALER: &str = "scale@vs";
+
+/// swscale's method for the processing-size scaler (`PlayerGraph::render`).
+pub const SCALE_FLAGS: &str = "bilinear";
+
+impl PlayerGraph {
+    /// The graph for these chains, built from scratch: every node in graph
+    /// order, a neutral switchable node as a pass-through slot (it costs no
+    /// processing, and a later move updates it live). Only neutral nodes:
+    /// no graph at all, so a neutral chain costs nothing (no copy-back
+    /// decoding either).
+    pub fn build(resources: &[Resource<VideoNode>], factor: f64) -> Result<Self> {
+        let nodes = player_nodes(resources)?;
+        if nodes.iter().all(VideoNode::neutral) {
+            return Ok(Self::default());
+        }
+        Ok(Self {
+            slots: nodes
+                .into_iter()
+                .map(|node| Slot {
+                    enabled: !(node.neutral() && node.switchable()),
+                    node,
+                })
+                .collect(),
+            factor: clamp_factor(factor),
+        })
+    }
+    /// The same slots at another processing size.
+    pub fn at(&self, factor: f64) -> Self {
+        Self {
+            slots: self.slots.clone(),
+            factor: if self.slots.is_empty() {
+                1.0
+            } else {
+                clamp_factor(factor)
+            },
+        }
+    }
+    pub fn is_empty(&self) -> bool {
+        self.slots.is_empty()
+    }
+    /// Some slot changes frames: the graph is more than pass-through.
+    pub fn acts(&self) -> bool {
+        self.slots
+            .iter()
+            .any(|slot| slot.enabled && !slot.node.neutral())
+    }
+    /// Where the scaler goes: after the last deinterlacer (its fields must
+    /// be whole), otherwise first.
+    fn scaler_at(&self) -> usize {
+        self.slots
+            .iter()
+            .rposition(|slot| matches!(slot.node, VideoNode::Deinterlace { .. }))
+            .map_or(0, |index| index + 1)
+    }
+    /// The factor slot `index` runs at: the graph's after the scaler.
+    fn factor_at(&self, index: usize) -> f64 {
+        if index >= self.scaler_at() {
+            self.factor
+        } else {
+            1.0
+        }
+    }
+    /// The graph text for mpv's lavfi wrapper; `null` when empty.
+    pub fn render(&self) -> String {
+        let f = self.factor;
+        let scaler = (f < 1.0 && !self.slots.is_empty()).then(|| {
+            format!("{SCALER}=w='2*trunc(iw*{f}/2)':h='2*trunc(ih*{f}/2)':flags={SCALE_FLAGS}")
+        });
+        let at = self.scaler_at();
+        let mut filters = Vec::new();
+        for (index, slot) in self.slots.iter().enumerate() {
+            if index == at
+                && let Some(scaler) = &scaler
+            {
+                filters.push(scaler.clone());
+            }
+            let parts = slot.node.filters_at(self.factor_at(index));
+            for (part, mut filter) in parts.into_iter().enumerate() {
+                if part == 0 && !slot.enabled {
+                    filter.parameters.push(parameter("enable", 0, true));
+                }
+                let parameters = filter
+                    .parameters
+                    .iter()
+                    .map(|p| {
+                        if p.name.is_empty() {
+                            p.value.clone()
+                        } else {
+                            format!("{}={}", p.name, p.value)
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(":");
+                let label = label(filter.name, "n", index, part);
+                filters.push(if parameters.is_empty() {
+                    label
+                } else {
+                    format!("{label}={parameters}")
+                });
+            }
+        }
+        if at >= self.slots.len()
+            && let Some(scaler) = scaler
+        {
+            filters.push(scaler);
+        }
+        if filters.is_empty() {
+            "null".into()
+        } else {
+            filters.join(",")
+        }
+    }
+    /// How to reach `resources` from this graph without rebuilding it: the
+    /// graph afterwards and the runtime commands, or `None` when it has to
+    /// be rebuilt (`build`). Each wanted node takes the next slot with the
+    /// same filters and options whose differing values are all live; the
+    /// slots it passes over, and those left at the end, switch to
+    /// pass-through, which only switchable or neutral ones can. A neutral
+    /// wanted node without a slot is left out (it would change nothing). A
+    /// neutral switchable node switches its slot to pass-through (values
+    /// that are not live then keep their old value in the filter).
+    pub fn plan(
+        &self,
+        resources: &[Resource<VideoNode>],
+    ) -> Result<Option<(Self, Vec<RuntimeCommand>)>> {
+        let wanted = player_nodes(resources)?;
+        let mut next = self.clone();
+        let mut commands = Vec::new();
+        let mut from = 0;
+        for node in &wanted {
+            let mut found = None;
+            for index in from..next.slots.len() {
+                if let Some(update) = next.update(index, node) {
+                    found = Some((index, update));
+                    break;
+                }
+                if !next.can_pass(index) {
+                    break;
+                }
+            }
+            match found {
+                Some((index, (update, store))) => {
+                    for skipped in from..index {
+                        commands.extend(next.pass(skipped));
+                    }
+                    commands.extend(update);
+                    next.slots[index].enabled = !(node.neutral() && node.switchable());
+                    if store {
+                        next.slots[index].node = node.clone();
+                    }
+                    from = index + 1;
+                }
+                None if node.neutral() => {}
+                None => return Ok(None),
+            }
+        }
+        for rest in from..next.slots.len() {
+            if !next.can_pass(rest) {
+                return Ok(None);
+            }
+            commands.extend(next.pass(rest));
+        }
+        Ok(Some((next, commands)))
+    }
+    /// Slot `index` can stop acting: it already passes frames through, it
+    /// is neutral (an identity transform's `null`), or it is switchable.
+    fn can_pass(&self, index: usize) -> bool {
+        let slot = &self.slots[index];
+        !slot.enabled || slot.node.neutral() || slot.node.switchable()
+    }
+    /// Switch slot `index` to pass-through (`can_pass` holds).
+    fn pass(&mut self, index: usize) -> Option<RuntimeCommand> {
+        let slot = &self.slots[index];
+        if !slot.enabled || !slot.node.switchable() {
+            return None;
+        }
+        self.slots[index].enabled = false;
+        Some(self.enable(index, false))
+    }
+    /// `enable` on slot `index`'s (single) filter.
+    fn enable(&self, index: usize, on: bool) -> RuntimeCommand {
+        RuntimeCommand {
+            target: label(self.slots[index].node.name(), "n", index, 0),
+            option: "enable",
+            value: if on { "1" } else { "0" }.into(),
+        }
+    }
+    /// The commands that make slot `index` hold `node`, and whether the
+    /// slot then holds its values; `None` when it cannot: other filters or
+    /// options, or a value that is not live on a node that has to act. A
+    /// neutral switchable node only switches the slot to pass-through when
+    /// some value is not live (the filter keeps its old values).
+    fn update(&self, index: usize, node: &VideoNode) -> Option<(Vec<RuntimeCommand>, bool)> {
+        let slot = &self.slots[index];
+        let factor = self.factor_at(index);
+        let (old, new) = (slot.node.filters_at(factor), node.filters_at(factor));
+        if old.len() != new.len() || old.iter().zip(&new).any(|(a, b)| !same_options(a, b)) {
+            return None;
+        }
+        let acts = !(node.neutral() && node.switchable());
+        let mut values = Vec::new();
+        let mut live = true;
+        for (part, (old, new)) in old.iter().zip(&new).enumerate() {
+            for (before, after) in old.parameters.iter().zip(&new.parameters) {
+                if before.value != after.value {
+                    live &= after.runtime;
+                    values.push(RuntimeCommand {
+                        target: label(new.name, "n", index, part),
+                        option: after.name,
+                        value: after.command_value(),
+                    });
+                }
+            }
+        }
+        if !live && acts {
+            return None;
+        }
+        let mut commands = Vec::new();
+        if !acts && slot.enabled {
+            commands.push(self.enable(index, false));
+        }
+        if live {
+            commands.extend(values);
+        }
+        if acts && !slot.enabled {
+            commands.push(self.enable(index, true));
+        }
+        Some((commands, live))
+    }
+    /// The display size of the graph's output for frames of display size
+    /// `input` at full size (`display_size`).
+    pub fn display_size(&self, input: (f64, f64)) -> (f64, f64) {
+        display_size(self.slots.iter().map(|slot| &slot.node), input)
+    }
+}
+
+/// The display size after `nodes` for frames of display size `input`:
+/// quarter turns swap the sides, crop and pad change the aspect; the other
+/// nodes keep it.
+pub fn display_size<'a>(
+    nodes: impl Iterator<Item = &'a VideoNode>,
+    input: (f64, f64),
+) -> (f64, f64) {
+    nodes.fold(input, |(w, h), node| match node {
+        VideoNode::Transform {
+            rotate: 90 | 270, ..
+        } => (h, w),
+        VideoNode::Reframe {
+            mode: ReframeMode::Crop,
+            aspect,
+            ..
+        } => (w.min(h * aspect), h.min(w / aspect)),
+        VideoNode::Reframe {
+            mode: ReframeMode::Pad,
+            aspect,
+            ..
+        } => (w.max(h * aspect), h.max(w / aspect)),
+        _ => (w, h),
+    })
+}
+
+/// The chains' output display size (`display_size`) in player order.
+pub fn chain_display_size(
+    resources: &[Resource<VideoNode>],
+    input: (f64, f64),
+) -> Result<(f64, f64)> {
+    Ok(display_size(player_nodes(resources)?.iter(), input))
+}
+
+/// A processing factor in (0, 1]; anything else is 1.
+fn clamp_factor(factor: f64) -> f64 {
+    if factor.is_finite() && factor > 0.0 {
+        factor.min(1.0)
+    } else {
+        1.0
     }
 }
 
@@ -1848,5 +2363,430 @@ mod tests {
         }]);
         let inverted = run("color=0x202020:s=16x16", &lut);
         assert!(inverted.iter().all(|v| *v > 200), "{:?}", &inverted[..4]);
+    }
+
+    // ---- The player's graph (neutral nodes, pass-through, live, size) ----
+
+    fn chain(nodes: Vec<VideoNode>) -> Vec<Resource<VideoNode>> {
+        if nodes.is_empty() {
+            Vec::new()
+        } else {
+            vec![resource("a", "r", nodes)]
+        }
+    }
+    fn hue(degrees: f64) -> VideoNode {
+        VideoNode::Hue { degrees }
+    }
+    fn sharpen(amount: f64) -> VideoNode {
+        VideoNode::Sharpen {
+            amount,
+            size: SharpenSize::Large,
+        }
+    }
+    fn denoise(strength: f64) -> VideoNode {
+        VideoNode::Denoise {
+            luma_spatial: strength,
+            chroma_spatial: strength,
+            luma_temporal: strength,
+            chroma_temporal: strength,
+        }
+    }
+    fn deband(threshold: f64, range: f64) -> VideoNode {
+        VideoNode::Deband { threshold, range }
+    }
+    /// The commands as `target option value` lines.
+    fn lines(commands: &[RuntimeCommand]) -> Vec<String> {
+        commands
+            .iter()
+            .map(|c| format!("{} {} {}", c.target, c.option, c.value))
+            .collect()
+    }
+    fn plan(graph: &PlayerGraph, nodes: Vec<VideoNode>) -> Option<(PlayerGraph, Vec<String>)> {
+        graph
+            .plan(&chain(nodes))
+            .unwrap()
+            .map(|(graph, commands)| (graph, lines(&commands)))
+    }
+
+    #[test]
+    fn neutral_nodes_are_the_ones_that_change_nothing() {
+        let identity = |rdiv| ConvolutionPlane {
+            mode: ConvolutionMode::Square,
+            matrix: vec![0.0, 0.0, 0.0, 0.0, 2.0, 0.0, 0.0, 0.0, 0.0],
+            rdiv,
+            bias: 0.0,
+        };
+        let neutral = [
+            tone(0.0),
+            blur(0.0),
+            hue(0.0),
+            hue(-0.0),
+            sharpen(0.0),
+            denoise(0.0),
+            VideoNode::Transform {
+                rotate: 0,
+                flip_h: false,
+                flip_v: false,
+            },
+            VideoNode::Convolution {
+                planes: vec![Some(identity(0.5)), None, Some(identity(0.0))],
+            },
+        ];
+        for node in &neutral {
+            assert!(node.neutral(), "{node:?}");
+        }
+        let acting = [
+            tone(0.01),
+            VideoNode::Eq {
+                brightness: 0.0,
+                contrast: 1.0,
+                saturation: 1.0,
+                gamma: 1.1,
+            },
+            blur(0.5),
+            hue(1.8),
+            sharpen(0.1),
+            VideoNode::Denoise {
+                luma_spatial: 0.0,
+                chroma_spatial: 0.0,
+                luma_temporal: 1.0,
+                chroma_temporal: 0.0,
+            },
+            VideoNode::Transform {
+                rotate: 0,
+                flip_h: true,
+                flip_v: false,
+            },
+            VideoNode::Convolution {
+                planes: vec![Some(identity(1.0))],
+            },
+            // No neutral value: never neutral.
+            deband(0.003, 1.0),
+            VideoNode::Deblock {
+                strength: DeblockStrength::Weak,
+            },
+            VideoNode::FrameBlend { fps: 60.0 },
+        ];
+        for node in &acting {
+            assert!(!node.neutral(), "{node:?}");
+        }
+    }
+
+    #[test]
+    fn more_options_change_live_with_bare_command_values() {
+        let commands = |old: VideoNode, new: VideoNode| {
+            let (old, new) = (
+                Descriptors::Video(chain(vec![old])),
+                Descriptors::Video(chain(vec![new])),
+            );
+            match runtime_commands(&old, &new).unwrap() {
+                UpdatePlan::Commands(commands) => lines(&commands),
+                UpdatePlan::NeedsReconfigure => vec!["rebuild".into()],
+            }
+        };
+        assert_eq!(
+            commands(denoise(1.0), denoise(2.0)),
+            [
+                "hqdn3d@n0 luma_spatial 2",
+                "hqdn3d@n0 chroma_spatial 2",
+                "hqdn3d@n0 luma_tmp 2",
+                "hqdn3d@n0 chroma_tmp 2"
+            ]
+        );
+        assert_eq!(
+            commands(deband(0.02, 16.0), deband(0.03, 8.0)),
+            [
+                "deband@n0 1thr 0.03",
+                "deband@n0 2thr 0.03",
+                "deband@n0 3thr 0.03",
+                "deband@n0 4thr 0.03",
+                "deband@n0 r 8"
+            ]
+        );
+        assert_eq!(
+            commands(
+                VideoNode::Deblock {
+                    strength: DeblockStrength::Weak
+                },
+                VideoNode::Deblock {
+                    strength: DeblockStrength::Strong
+                }
+            ),
+            ["deblock@n0 filter strong"]
+        );
+        let convolution = |centre: f64| VideoNode::Convolution {
+            planes: vec![Some(plane(
+                ConvolutionMode::Square,
+                &[0.0, -1.0, 0.0, -1.0, centre, -1.0, 0.0, -1.0, 0.0],
+                1.0,
+                0.0,
+            ))],
+        };
+        // The graph quotes the matrix; the command takes it bare.
+        assert_eq!(
+            commands(convolution(5.0), convolution(6.0)),
+            ["convolution@n0 0m 0 -1 0 -1 6 -1 0 -1 0"]
+        );
+        // Another set of planes is another set of options: rebuilt.
+        let other = VideoNode::Convolution {
+            planes: vec![None, Some(plane(ConvolutionMode::Row, &[1.0; 3], 0.0, 0.0))],
+        };
+        assert_eq!(commands(convolution(5.0), other), ["rebuild"]);
+        let crop = |x: f64, aspect: f64| VideoNode::Reframe {
+            mode: ReframeMode::Crop,
+            aspect,
+            x,
+            y: 0.0,
+        };
+        assert_eq!(
+            commands(crop(0.0, 1.0), crop(0.5, 1.0)),
+            ["crop@n0 x (iw-ow)*(1+(0.5))/2"]
+        );
+        assert_eq!(commands(crop(0.0, 1.0), crop(0.0, 2.0)), ["rebuild"]);
+        let pad = |x: f64| VideoNode::Reframe {
+            mode: ReframeMode::Pad,
+            aspect: 2.0,
+            x,
+            y: 0.0,
+        };
+        assert_eq!(commands(pad(0.0), pad(0.5)), ["rebuild"]);
+        let lut = |interpolation| VideoNode::Lut3d {
+            file: std::env::temp_dir()
+                .join("a.cube")
+                .to_string_lossy()
+                .into_owned(),
+            interpolation,
+        };
+        assert_eq!(
+            commands(
+                lut(Lut3dInterpolation::Trilinear),
+                lut(Lut3dInterpolation::Nearest)
+            ),
+            ["lut3d@n0 interp nearest"]
+        );
+        // unsharp has no commands.
+        assert_eq!(commands(sharpen(0.5), sharpen(1.0)), ["rebuild"]);
+    }
+
+    #[test]
+    fn a_neutral_or_missing_node_passes_through_live_instead_of_rebuilding() {
+        let start = PlayerGraph::build(&chain(vec![tone(0.2), hue(1.8)]), 1.0).unwrap();
+        assert_eq!(
+            start.render(),
+            "eq@n0=brightness=0.2:contrast=1:saturation=1:gamma=1,hue@n1=h=1.8"
+        );
+        // Hue dragged through 0: the plugin leaves the node out.
+        let (gone, commands) = plan(&start, vec![tone(0.2)]).unwrap();
+        assert_eq!(commands, ["hue@n1 enable 0"]);
+        assert!(!gone.slots[1].enabled);
+        // ... and on the other side: the same slot, live.
+        let (back, commands) = plan(&gone, vec![tone(0.2), hue(-1.8)]).unwrap();
+        assert_eq!(commands, ["hue@n1 h -1.8", "hue@n1 enable 1"]);
+        assert!(back.slots[1].enabled);
+        // A neutral node instead of none (`keepEq`): the same.
+        let (neutral, commands) = plan(&back, vec![tone(0.0), hue(-1.8)]).unwrap();
+        assert_eq!(commands, ["eq@n0 enable 0", "eq@n0 brightness 0"]);
+        assert!(!neutral.slots[0].enabled && neutral.slots[1].enabled);
+        // `[]`: everything passes through; nothing acts any more.
+        let (empty, commands) = plan(&neutral, vec![]).unwrap();
+        assert_eq!(commands, ["hue@n1 enable 0"]);
+        assert!(!empty.acts());
+        assert_eq!(empty.slots.len(), 2);
+        // A new neutral node without a slot is left out, not added.
+        let (same, commands) = plan(&start, vec![tone(0.2), blur(0.0), hue(1.8)]).unwrap();
+        assert!(commands.is_empty());
+        assert_eq!(same, start);
+    }
+
+    #[test]
+    fn values_that_are_not_live_and_new_nodes_rebuild() {
+        let start = PlayerGraph::build(&chain(vec![sharpen(0.5), hue(10.0)]), 1.0).unwrap();
+        // unsharp's amount is not live ...
+        assert!(plan(&start, vec![sharpen(1.0), hue(10.0)]).is_none());
+        // ... but switching it off is (its old amount stays in the filter).
+        let (off, commands) = plan(&start, vec![sharpen(0.0), hue(10.0)]).unwrap();
+        assert_eq!(commands, ["unsharp@n0 enable 0"]);
+        assert_eq!(off.slots[0].node, sharpen(0.5));
+        // Back to the same amount: switched on; another amount: rebuilt.
+        let (on, commands) = plan(&off, vec![sharpen(0.5), hue(10.0)]).unwrap();
+        assert_eq!(commands, ["unsharp@n0 enable 1"]);
+        assert_eq!(on, start);
+        assert!(plan(&off, vec![sharpen(0.7), hue(10.0)]).is_none());
+        // A node that acts and has no slot: rebuilt.
+        assert!(plan(&start, vec![sharpen(0.5), hue(10.0), blur(2.0)]).is_none());
+        // Another order: rebuilt.
+        assert!(plan(&start, vec![hue(10.0), sharpen(0.5)]).is_none());
+        // A slot that cannot pass frames through cannot be skipped.
+        let quarter = || VideoNode::Transform {
+            rotate: 90,
+            flip_h: false,
+            flip_v: false,
+        };
+        let turned = PlayerGraph::build(&chain(vec![quarter(), hue(10.0)]), 1.0).unwrap();
+        assert!(plan(&turned, vec![hue(20.0)]).is_none());
+        let (kept, commands) = plan(&turned, vec![quarter(), hue(20.0)]).unwrap();
+        assert_eq!(commands, ["hue@n1 h 20"]);
+        assert_eq!(kept.slots.len(), 2);
+    }
+
+    #[test]
+    fn a_neutral_chain_builds_no_graph_and_neutral_anchors_cost_nothing() {
+        assert!(
+            PlayerGraph::build(&chain(vec![tone(0.0), hue(0.0)]), 0.5)
+                .unwrap()
+                .is_empty()
+        );
+        assert_eq!(PlayerGraph::default().render(), "null");
+        // With an acting node, neutral ones are pass-through slots.
+        let graph = PlayerGraph::build(&chain(vec![tone(0.0), hue(0.0), blur(3.0)]), 1.0).unwrap();
+        assert_eq!(
+            graph.render(),
+            "eq@n0=brightness=0:contrast=1:saturation=1:gamma=1:enable=0,hue@n1=h=0:enable=0,\
+             gblur@n2=sigma=3:sigmaV=3:steps=3"
+        );
+        assert!(graph.acts());
+        // The first move of a slider then updates the anchor live.
+        let (_, commands) = plan(&graph, vec![tone(0.1), hue(0.0), blur(3.0)]).unwrap();
+        assert_eq!(commands, ["eq@n0 brightness 0.1", "eq@n0 enable 1"]);
+    }
+
+    #[test]
+    fn the_processing_size_scales_spatial_options() {
+        let nodes = vec![
+            tone(0.1),
+            blur(3.0),
+            sharpen(1.0),
+            VideoNode::Sharpen {
+                amount: 1.0,
+                size: SharpenSize::Small,
+            },
+            deband(0.02, 16.0),
+            VideoNode::Deblock {
+                strength: DeblockStrength::Weak,
+            },
+            denoise(4.0),
+        ];
+        let graph = PlayerGraph::build(&chain(nodes.clone()), 0.75).unwrap();
+        assert_eq!(
+            graph.render(),
+            "scale@vs=w='2*trunc(iw*0.75/2)':h='2*trunc(ih*0.75/2)':flags=bilinear,\
+             eq@n0=brightness=0.1:contrast=1:saturation=1:gamma=1,\
+             gblur@n1=sigma=2.25:sigmaV=2.25:steps=3,\
+             unsharp@n2=lx=5:ly=5:la=1,unsharp@n3=lx=3:ly=3:la=1,\
+             deband@n4=1thr=0.02:2thr=0.02:3thr=0.02:4thr=0.02:r=12,\
+             deblock@n5=filter=weak:block=6,\
+             hqdn3d@n6=luma_spatial=4:chroma_spatial=4:luma_tmp=4:chroma_tmp=4"
+        );
+        let text = graph.at(0.5).render();
+        assert!(text.contains("gblur@n1=sigma=1.5:sigmaV=1.5"), "{text}");
+        assert!(text.contains("unsharp@n2=lx=3:ly=3"), "{text}");
+        assert!(text.contains("r=8"), "{text}");
+        assert!(text.contains("block=4"), "{text}");
+        // Full size: no scaler, the plugins' own values.
+        let full = graph.at(1.0).render();
+        assert!(!full.contains("scale@vs"));
+        assert_eq!(
+            full,
+            render_player(&Descriptors::Video(chain(nodes))).unwrap()
+        );
+        // A live sigma at a scaled size is scaled too.
+        let half = PlayerGraph::build(&chain(vec![blur(2.0)]), 0.5).unwrap();
+        let (_, commands) = plan(&half, vec![blur(4.0)]).unwrap();
+        assert_eq!(commands, ["gblur@n0 sigma 2", "gblur@n0 sigmaV 2"]);
+        assert_eq!(odd_matrix(7.0 * 2.0 / 3.0), 5);
+        assert_eq!(odd_matrix(1.0), 3);
+    }
+
+    #[test]
+    fn the_scaler_follows_the_deinterlacer_and_the_shape_follows_the_nodes() {
+        let bwdif = VideoNode::Deinterlace {
+            when: DeinterlaceWhen::All,
+            output: DeinterlaceOutput::Frame,
+        };
+        let graph = PlayerGraph::build(&chain(vec![bwdif, blur(4.0)]), 0.5).unwrap();
+        let text = graph.render();
+        assert!(
+            text.starts_with("bwdif@n0=mode=send_frame:deint=all,scale@vs="),
+            "{text}"
+        );
+        assert!(
+            text.ends_with("gblur@n1=sigma=2:sigmaV=2:steps=3"),
+            "{text}"
+        );
+        let crop = VideoNode::Reframe {
+            mode: ReframeMode::Crop,
+            aspect: 1.0,
+            x: 0.0,
+            y: 0.0,
+        };
+        let turn = VideoNode::Transform {
+            rotate: 90,
+            flip_h: false,
+            flip_v: false,
+        };
+        let pad = VideoNode::Reframe {
+            mode: ReframeMode::Pad,
+            aspect: 2.0,
+            x: 0.0,
+            y: 0.0,
+        };
+        assert_eq!(
+            display_size([crop].iter(), (3840.0, 2160.0)),
+            (2160.0, 2160.0)
+        );
+        assert_eq!(
+            display_size([turn].iter(), (3840.0, 2160.0)),
+            (2160.0, 3840.0)
+        );
+        assert_eq!(
+            display_size([pad].iter(), (1920.0, 1080.0)),
+            (2160.0, 1080.0)
+        );
+    }
+
+    /// The player graphs FFmpeg must accept: pass-through slots, the
+    /// scaler, scaled options; pass-through gives the input back.
+    /// `cargo test --locked -- --ignored ffmpeg_runs_player`.
+    #[test]
+    #[ignore = "needs ffmpeg"]
+    fn ffmpeg_runs_player_graphs() {
+        let ffmpeg = std::env::var("VESTRA_FFMPEG").unwrap_or_else(|_| "ffmpeg".into());
+        let run = |graph: &str| -> Vec<u8> {
+            let output = std::process::Command::new(&ffmpeg)
+                .args(["-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i"])
+                .arg("testsrc2=s=96x64")
+                .arg("-vf")
+                .arg(format!("{graph},format=rgb24"))
+                .args(["-frames:v", "1", "-f", "rawvideo", "-"])
+                .output()
+                .unwrap();
+            assert!(
+                output.status.success(),
+                "{graph}: {}",
+                String::from_utf8_lossy(&output.stderr)
+            );
+            output.stdout
+        };
+        let all = chain(vec![
+            tone(0.2),
+            hue(30.0),
+            blur(3.0),
+            sharpen(1.0),
+            denoise(4.0),
+            VideoNode::Deblock {
+                strength: DeblockStrength::Strong,
+            },
+            deband(0.02, 16.0),
+        ]);
+        let source = run("null");
+        let full = PlayerGraph::build(&all, 1.0).unwrap();
+        assert_ne!(run(&full.render()), source);
+        // Every slot switched to pass-through: the input, byte for byte.
+        let (passing, _) = full.plan(&[]).unwrap().unwrap();
+        assert!(!passing.acts());
+        assert_eq!(run(&passing.render()), source);
+        // Half size: a 48x32 picture.
+        let half = run(&full.at(0.5).render());
+        assert_eq!(half.len(), 48 * 32 * 3);
     }
 }

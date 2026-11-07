@@ -13,6 +13,7 @@ pub(crate) mod offline_audio;
 pub(crate) mod offline_descriptor;
 pub(crate) mod plugin_files;
 pub(crate) mod processing;
+pub(crate) mod processing_live;
 pub mod processing_operations;
 #[cfg(feature = "producer-audio")]
 pub(crate) mod producer;

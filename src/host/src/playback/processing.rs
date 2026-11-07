@@ -1,13 +1,17 @@
 //! Finite owner-aware runtime candidate. Not a general filter graph API.
+use crate::playback::processing_live::{self as live, Due, Live, ViewFacts};
 use crate::playback::processing_operations::{self as operations, Admission, Key, Stage};
 use crate::{
     host::RpcError,
-    playback::effects::{self, AudioNode, Descriptors, Resource, UpdatePlan, VideoNode},
+    playback::effects::{
+        self, AudioNode, Descriptors, PlayerGraph, Resource, RuntimeCommand, UpdatePlan, VideoNode,
+    },
 };
 use rsmpv::Mpv;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use std::collections::BTreeMap;
+use std::time::{Duration, Instant};
 #[derive(Clone, Deserialize, Serialize)]
 #[serde(
     tag = "stage",
@@ -73,6 +77,19 @@ pub struct Processing {
     /// some owned video chain has a `deinterlace` `auto` node (`no` otherwise).
     /// The host is the option's only writer.
     deinterlace: bool,
+    /// What stands in mpv's owned video graph (`effects::PlayerGraph`):
+    /// the plugins' chains as slots, pass-through slots a drag left, the
+    /// processing size. `video` is what the plugins asked for.
+    installed: PlayerGraph,
+    /// The live-change clock: paused preview, settling, teardown, size.
+    live: Live,
+    /// mpv's `framedrop` before an owned graph turned on decoder dropping.
+    framedrop: Option<String>,
+    /// When the processing size was last looked at (`tick`).
+    sized: Option<Instant>,
+    /// The user asked to play during a preview step (`pause_request`):
+    /// applied once the step is over.
+    resume: bool,
     /// Retries made, for the hardware tests.
     #[cfg(test)]
     hwdec_retries: u32,
@@ -98,12 +115,28 @@ impl Processing {
         if self.hwdec.is_none() {
             return Vec::new();
         }
-        let mut owners: Vec<u64> = self
-            .video
-            .iter()
-            .filter(|(_, (_, resource))| effects::needs_frames_in_memory(std::iter::once(resource)))
-            .map(|((owner, _), _)| *owner)
-            .collect();
+        // The chains that act; while only pass-through slots are left (a
+        // drag through 0, `TEARDOWN`), the chains that are there at all.
+        let acting = |neutral_too: bool| -> Vec<u64> {
+            self.video
+                .iter()
+                .filter(|(_, (_, resource))| {
+                    if neutral_too {
+                        effects::needs_frames_in_memory(std::iter::once(resource))
+                    } else {
+                        resource
+                            .nodes
+                            .iter()
+                            .any(|n| !n.neutral() && n.in_player_graph())
+                    }
+                })
+                .map(|((owner, _), _)| *owner)
+                .collect()
+        };
+        let mut owners = acting(false);
+        if owners.is_empty() {
+            owners = acting(true);
+        }
         owners.dedup();
         owners
             .into_iter()
@@ -123,7 +156,7 @@ impl Processing {
             .collect()
     }
     pub fn state(&self) -> Value {
-        json!({"configurationRevision":self.config_revision,"audioOffsetMs":self.audio_offsets.values().sum::<i32>(),"source":{"generation":self.source_generation,"phase":self.source_phase,"load":self.load.map(|(entry,t)|json!({"entry":entry,"generation":t.stamp.generation,"cycle":t.cycle})),"stages":self.confirmations},"backendUncertain":self.uncertain,"video":self.video.iter().map(|((owner,_),(revision,resource))|json!({"owner":owner,"revision":revision,"resource":resource})).collect::<Vec<_>>(),"audio":self.audio.iter().map(|((owner,_),(revision,resource))|json!({"owner":owner,"revision":revision,"resource":resource,"offsetMs":self.audio_offsets.get(&(*owner,resource.resource_id.clone())).copied().unwrap_or(0)})).collect::<Vec<_>>()})
+        json!({"configurationRevision":self.config_revision,"audioOffsetMs":self.audio_offsets.values().sum::<i32>(),"source":{"generation":self.source_generation,"phase":self.source_phase,"load":self.load.map(|(entry,t)|json!({"entry":entry,"generation":t.stamp.generation,"cycle":t.cycle})),"stages":self.confirmations},"backendUncertain":self.uncertain,"videoScale":{"factor":self.installed.factor,"budgetSteps":self.live.budget.steps},"video":self.video.iter().map(|((owner,_),(revision,resource))|json!({"owner":owner,"revision":revision,"resource":resource})).collect::<Vec<_>>(),"audio":self.audio.iter().map(|((owner,_),(revision,resource))|json!({"owner":owner,"revision":revision,"resource":resource,"offsetMs":self.audio_offsets.get(&(*owner,resource.resource_id.clone())).copied().unwrap_or(0)})).collect::<Vec<_>>()})
     }
     pub fn freeze(
         &self,
@@ -175,6 +208,13 @@ impl Processing {
             )
         {
             self.load = None;
+            // Another picture: no preview position, full budget.
+            self.live.forget_position();
+            self.live.stepping = None;
+            self.resume = false;
+            if generation != self.source_generation {
+                self.live.budget.reset();
+            }
             for stage in ["video", "audio"] {
                 self.confirmations
                     .insert(stage.into(), json!({"status":"waiting","error":null}));
@@ -211,16 +251,25 @@ impl Processing {
             };
             let mut result = if let Some(reason) = self.uncertain.get(stage) {
                 Err(RpcError::new("backend-uncertain", reason.clone()))
+            } else if empty && stage == "video" && !self.installed.is_empty() {
+                // Pass-through slots left from the previous file: gone
+                // before this one decodes (no decoder switch mid-file).
+                self.install(mpv, PlayerGraph::default())
             } else if empty {
                 Ok(())
             } else {
                 // mpv's `deinterlace` is a global option and outlives the
-                // file; only the FFmpeg graph is replayed.
-                if let Descriptors::Video(resources) = &graph {
-                    let needed = effects::needs_frames_in_memory(resources.iter());
-                    self.frames_in_memory(mpv, needed);
+                // file; only the FFmpeg graph is replayed, at the processing
+                // size for this file (its container's size until it decodes).
+                match &graph {
+                    Descriptors::Video(resources) => {
+                        self.live.forget_position();
+                        PlayerGraph::build(resources, self.factor_for(mpv, resources))
+                            .map_err(|e| RpcError::invalid(e.to_string()))
+                            .and_then(|graph| self.install(mpv, graph))
+                    }
+                    Descriptors::Audio(_) => set_graph(mpv, &graph),
                 }
-                set_graph(mpv, &graph)
             };
             if stage == "audio" && result.is_ok() {
                 result = set_offset(mpv, combined_offset(&self.audio_offsets)?);
@@ -510,7 +559,6 @@ impl Processing {
                 {
                     return Err(RpcError::new("stale", "resource revision must increase"));
                 }
-                let before = self.video_graph();
                 let mut next = self.video.clone();
                 if nodes.is_empty() {
                     next.remove(&key);
@@ -527,21 +575,21 @@ impl Processing {
                         ),
                     );
                 }
-                let after = Descriptors::Video(next.values().map(|(_, r)| r.clone()).collect());
-                if effects::needs_frames_in_memory(next.values().map(|(_, r)| r)) {
-                    self.frames_in_memory(mpv, true);
-                }
+                let after: Vec<Resource<VideoNode>> =
+                    next.values().map(|(_, r)| r.clone()).collect();
                 let wanted = effects::player_deinterlace(next.values().map(|(_, r)| r));
-                let applied = self.deinterlace_then(mpv, wanted, || {
-                    if before == after {
-                        Ok(())
+                // A generated stream never reaches mpv's graph: the change is
+                // for the next decoded media, rebuilt at once (no pass-through).
+                let applied = self.deinterlace_then(mpv, wanted, |this| {
+                    if source == Source::Generated {
+                        PlayerGraph::build(&after, 1.)
+                            .map_err(|e| RpcError::invalid(e.to_string()))
+                            .and_then(|graph| this.install(mpv, graph))
                     } else {
-                        apply(mpv, &before, &after)
+                        this.apply_video(mpv, &after)
                     }
                 });
                 if let Err(error) = applied {
-                    let keep = effects::needs_frames_in_memory(self.video.values().map(|(_, r)| r));
-                    self.frames_in_memory(mpv, keep);
                     if error.code == "backend-uncertain" {
                         self.uncertain.insert(stage.into(), error.message.clone());
                         self.confirmations.insert(
@@ -552,9 +600,6 @@ impl Processing {
                     return Err(error);
                 }
                 self.video = next;
-                if !effects::needs_frames_in_memory(self.video.values().map(|(_, r)| r)) {
-                    self.frames_in_memory(mpv, false);
-                }
                 self.confirmations
                     .insert("video".into(), json!({"status":"applied","error":null}));
                 json!({"stage":"video","revision":revision,"generation":generation,"status":"applied"})
@@ -676,10 +721,16 @@ impl Processing {
             } else {
                 Ok(())
             };
-            let result = if stage == "audio" && (before != after || old_offset != next_offset) {
+            let result = if stage == "video" {
+                // Rebuilt at once, without pass-through slots: the
+                // chain is no longer this owner's.
+                if before != after {
+                    self.rebuild_video(mpv)
+                } else {
+                    Ok(())
+                }
+            } else if before != after || old_offset != next_offset {
                 apply_audio(mpv, &before, &after, old_offset, next_offset)
-            } else if before != after {
-                apply(mpv, &before, &after)
             } else {
                 Ok(())
             }
@@ -692,8 +743,9 @@ impl Processing {
                 failures.push(format!("{stage}: {reason}"));
             }
         }
-        if !effects::needs_frames_in_memory(self.video.values().map(|(_, r)| r)) {
+        if self.installed.is_empty() {
             self.frames_in_memory(mpv, false);
+            self.decoder_drops(mpv, false);
         }
         if !failures.is_empty() {
             return Err(RpcError::new("backend-uncertain", failures.join("; ")));
@@ -706,6 +758,9 @@ impl Processing {
     pub fn renderer_changed(&mut self) {
         self.hwdec = None;
         self.hwdec_watch = None;
+        // Another renderer: a play asked for during a step is not carried
+        // over (the renderer switch decides what plays).
+        self.resume = false;
     }
     /// mpv's own deinterlacer (`deinterlace=auto`) for the `deinterlace`
     /// `auto` nodes, one switch shared by every owner: on while any owned
@@ -734,11 +789,11 @@ impl Processing {
         &mut self,
         mpv: &Mpv,
         wanted: bool,
-        graph: impl FnOnce() -> Result<(), RpcError>,
+        graph: impl FnOnce(&mut Self) -> Result<(), RpcError>,
     ) -> Result<(), RpcError> {
         let previous = self.deinterlace;
         self.set_deinterlace(mpv, wanted)?;
-        let result = graph();
+        let result = graph(self);
         if let Err(error) = &result
             && let Err(restore) = self.set_deinterlace(mpv, previous)
         {
@@ -751,6 +806,354 @@ impl Processing {
             ));
         }
         result
+    }
+    /// The video chains `after` into mpv's graph: live when the installed
+    /// graph can reach them (`PlayerGraph::plan`: values and pass-through
+    /// switches as `vf-command`s), otherwise a rebuild (`install`), which
+    /// while paused waits for the changes to settle when one was made
+    /// within `SETTLE` (`Live::defer`). Live updates while paused are shown
+    /// by the preview (`tick`).
+    fn apply_video(&mut self, mpv: &Mpv, after: &[Resource<VideoNode>]) -> Result<(), RpcError> {
+        let now = Instant::now();
+        // A preview step has mpv unpaused for a moment: still paused.
+        let paused = paused(mpv) || self.live.stepping.is_some();
+        let invalid = |e: effects::ValidationError| RpcError::invalid(e.to_string());
+        if let Some((graph, commands)) = self.installed.plan(after).map_err(invalid)? {
+            if let Err(error) = send(mpv, &commands) {
+                // No filter instance to take them (no video decoded yet,
+                // audio only): the graph text is all there is to change.
+                diag!("processing: live update refused ({error}); rebuilding the graph");
+                return self.install(mpv, graph);
+            }
+            self.installed = graph;
+            if commands.is_empty() {
+                // Reached without commands: nothing waits any more.
+                self.live.pending = false;
+            } else {
+                self.live.updated(now, paused);
+            }
+            return Ok(());
+        }
+        let graph = PlayerGraph::build(after, self.factor_for(mpv, after)).map_err(invalid)?;
+        if paused && self.live.defer(now) {
+            return Ok(());
+        }
+        self.install(mpv, graph)
+    }
+    /// Rebuild mpv's owned graph as `graph` (`vf add` with the label, in
+    /// place). A graph with filters needs frames in memory and decoder frame
+    /// dropping, switched before; an empty one (`null`) switches both back
+    /// after. A failure puts the previous graph back.
+    fn install(&mut self, mpv: &Mpv, graph: PlayerGraph) -> Result<(), RpcError> {
+        let filters = !graph.is_empty();
+        if filters {
+            self.frames_in_memory(mpv, true);
+            self.decoder_drops(mpv, true);
+        }
+        let text = graph.render();
+        let result = mpv.command(&["vf", "add", &format!("@vestra-owned:lavfi=[{text}]")]);
+        self.live.rebuilt(Instant::now());
+        if let Err(error) = result {
+            let old = self.installed.render();
+            let restored = mpv.command(&["vf", "add", &format!("@vestra-owned:lavfi=[{old}]")]);
+            let keep = !self.installed.is_empty();
+            self.frames_in_memory(mpv, keep);
+            self.decoder_drops(mpv, keep);
+            return Err(match restored {
+                Ok(()) => RpcError::new("backend", format!("{error}; restored prior graph")),
+                Err(restore) => RpcError::new(
+                    "backend-uncertain",
+                    format!("apply {error}; restoring prior graph failed: {restore}"),
+                ),
+            });
+        }
+        self.installed = graph;
+        if !filters {
+            self.frames_in_memory(mpv, false);
+            self.decoder_drops(mpv, false);
+        }
+        Ok(())
+    }
+    /// Rebuild from the chains as they are (no pass-through slots left).
+    fn rebuild_video(&mut self, mpv: &Mpv) -> Result<(), RpcError> {
+        let resources = self.video_resources();
+        let graph = PlayerGraph::build(&resources, self.factor_for(mpv, &resources))
+            .map_err(|e| RpcError::invalid(e.to_string()))?;
+        self.install(mpv, graph)
+    }
+    fn video_resources(&self) -> Vec<Resource<VideoNode>> {
+        self.video.values().map(|(_, r)| r.clone()).collect()
+    }
+    /// mpv's `framedrop` while an owned graph is in place: `decoder+vo`,
+    /// so a chain that cannot keep up makes the decoder skip frames before
+    /// they are filtered, instead of filtering every frame and dropping
+    /// most at the output (4K60 with a 20 ms chain: 8.6 fps shown before,
+    /// 53 after). mpv drops in the decoder only while the video is late
+    /// against the audio (`check_framedrop`), so a chain that keeps up
+    /// plays every frame. Without an owned graph the option is mpv's
+    /// default again (`vo`), as it was, unless someone else changed it.
+    fn decoder_drops(&mut self, mpv: &Mpv, on: bool) {
+        if on {
+            if self.framedrop.is_some() {
+                return;
+            }
+            let current = mpv
+                .get_property::<String>("framedrop")
+                .unwrap_or_else(|_| "vo".into());
+            if current.contains("decoder") {
+                return;
+            }
+            match mpv.set_property("framedrop", FRAMEDROP) {
+                Ok(()) => self.framedrop = Some(current),
+                Err(error) => diag!("processing: framedrop={FRAMEDROP} refused: {error}"),
+            }
+        } else if let Some(original) = self.framedrop.take()
+            && mpv.get_property::<String>("framedrop").ok().as_deref() == Some(FRAMEDROP)
+            && let Err(error) = mpv.set_property("framedrop", original.as_str())
+        {
+            diag!("processing: restoring framedrop={original} failed: {error}");
+        }
+    }
+    /// The processing factor for `resources` now (`processing_live::factor`):
+    /// 1 while the view or the source is unknown.
+    fn factor_for(&self, mpv: &Mpv, resources: &[Resource<VideoNode>]) -> f64 {
+        let (Some(view), Some(source)) = (self.live.view, source_display(mpv)) else {
+            return 1.;
+        };
+        let output =
+            effects::chain_display_size(resources, source.display).unwrap_or(source.display);
+        live::factor(output, &view, self.live.budget.steps, source.anamorphic)
+    }
+    /// A paused preview step is in flight: mpv's `pause` reads `no` until
+    /// it is over, which is not the user's (`StatePush` waits).
+    pub fn stepping(&self) -> bool {
+        self.live.stepping.is_some()
+    }
+    /// A pause control (`source.submit` `pause`) reached the worker. During
+    /// a preview step mpv is unpaused already, so "play" changes nothing and
+    /// the step's end would pause again: it is remembered and applied when
+    /// the step is over (`tick`). "Pause" needs nothing (mpv pauses, which
+    /// ends the step) and drops a remembered "play".
+    pub fn pause_request(&mut self, paused: bool) {
+        if self.live.stepping.is_some() {
+            self.resume = !paused;
+        }
+    }
+    /// How long the control worker may wait before `tick` has something to
+    /// do (`None`: only a command or an event).
+    pub fn due_in(&self, mpv: &Mpv, now: Instant) -> Option<Duration> {
+        let installed = !self.installed.is_empty();
+        if let Some(since) = self.live.stepping {
+            // Polled until it is over (mpv's pause event also wakes).
+            return Some(
+                Duration::from_millis(10)
+                    .min((since + live::STEP_TIMEOUT).saturating_duration_since(now)),
+            );
+        }
+        // An uncertain video stage takes no more changes: nothing to wait for.
+        if self.uncertain.contains_key("video")
+            || (!installed && !self.live.pending && self.live.anchor.is_none())
+        {
+            return None;
+        }
+        let due = self
+            .live
+            .due_in(now, paused(mpv), installed, self.installed.acts());
+        // The processing size is looked at every `SIZE_LOOK` while a graph acts.
+        if installed && self.installed.acts() {
+            return Some(due.map_or(SIZE_LOOK, |due| due.min(SIZE_LOOK)));
+        }
+        due
+    }
+    /// Each turn of the control worker (`processing_live`): the paused
+    /// preview, settling, the pass-through teardown, the processing size
+    /// and its budget fallback. `view`: the video area and display layer,
+    /// `None` when unknown (the graph then runs at full size).
+    pub fn tick(&mut self, mpv: &Mpv, now: Instant, view: Option<ViewFacts>) {
+        self.live.view = view;
+        // A step in flight ends whatever else holds (an uncertain backend
+        // too): until then the state pushes wait (`stepping`).
+        if self.live.stepping.is_some() {
+            if !self.live.step_over(paused(mpv), now) {
+                return;
+            }
+            // Where the step left the picture: a seek elsewhere since then
+            // is someone else's, and the preview's way back no longer holds.
+            self.live.stepped_to = mpv.get_property::<f64>("time-pos").ok();
+            if std::mem::take(&mut self.resume) {
+                // Play pressed during the step: mpv was already unpaused,
+                // so it took no effect, and the step paused again.
+                self.live.forget_position();
+                if let Err(error) = mpv.set_property("pause", false) {
+                    diag!("processing: resuming after a preview step failed: {error}");
+                }
+            }
+        }
+        let installed = !self.installed.is_empty();
+        if self.uncertain.contains_key("video")
+            || (!installed && !self.live.pending && self.live.anchor.is_none())
+        {
+            return;
+        }
+        let paused = paused(mpv);
+        if !paused {
+            // Playing: the picture moves on, nothing to step or go back to.
+            self.live.forget_position();
+        }
+        match self.live.due(now, paused, installed, self.installed.acts()) {
+            Due::Nothing => {}
+            Due::Step => self.preview_step(mpv, now),
+            Due::Settle { rebuild } => self.settle(mpv, rebuild, paused),
+            Due::Teardown => {
+                let result = self.install(mpv, PlayerGraph::default());
+                self.tick_failed(result);
+            }
+        }
+        if self.installed.acts()
+            && self.live.stepping.is_none()
+            && self
+                .sized
+                .is_none_or(|at| now.duration_since(at) >= SIZE_LOOK)
+        {
+            self.sized = Some(now);
+            self.follow_size(mpv, now, paused);
+        } else if !self.installed.acts() {
+            self.live.budget.pause();
+        }
+    }
+    /// Show the live updates while paused: two frames forward (the first
+    /// was filtered before them; three on the first step after pausing),
+    /// muted; the first step remembers where the picture was. At the end of the file mpv cannot step: the settle's
+    /// rebuild redraws the picture instead.
+    fn preview_step(&mut self, mpv: &Mpv, now: Instant) {
+        if mpv.get_property::<bool>("eof-reached").unwrap_or(false) {
+            self.live.unseen = false;
+            return;
+        }
+        // Moved since the last step (the user seeked or stepped during the
+        // drag): the preview starts over from here, and the settle comes
+        // back here, not to where the drag began.
+        if let (Some(_), Some(stepped_to), Some(here)) = (
+            self.live.anchor,
+            self.live.stepped_to,
+            mpv.get_property::<f64>("time-pos").ok(),
+        ) && (here - stepped_to).abs() >= PREVIEW_MOVED
+        {
+            self.live.anchor = None;
+        }
+        let frames = if self.live.anchor.is_none() {
+            self.live.anchor = mpv.get_property::<f64>("time-pos").ok();
+            self.live.stepped_to = self.live.anchor;
+            PREVIEW_FIRST_FRAMES
+        } else {
+            PREVIEW_FRAMES
+        };
+        match mpv.command(&["frame-step", frames, "mute"]) {
+            Ok(()) => self.live.step(now),
+            Err(error) => {
+                diag!("processing: preview frame-step refused: {error}");
+                self.live.unseen = false;
+            }
+        }
+    }
+    /// The changes settled: paused after preview steps, back to where the
+    /// picture was (an exact seek) unless someone moved it meanwhile; then
+    /// the rebuild (a deferred one from the chains, or the installed graph
+    /// with its live values written into its text). In that order: mpv
+    /// makes no refresh seek of its own for a graph change while a seek is
+    /// queued (`issue_refresh_seek`), so the picture goes back once; the
+    /// other way round the refresh seek would take it to where it is.
+    fn settle(&mut self, mpv: &Mpv, rebuild: bool, paused: bool) {
+        let anchor = self.live.anchor;
+        let stepped_to = self.live.stepped_to;
+        self.live.forget_position();
+        let here = mpv.get_property::<f64>("time-pos").ok();
+        if paused
+            && let (Some(anchor), Some(here), Some(stepped_to)) = (anchor, here, stepped_to)
+            && (here - stepped_to).abs() < PREVIEW_MOVED
+            && (here - anchor).abs() >= 0.0005
+            && let Err(error) = mpv.command(&["seek", &anchor.to_string(), "absolute+exact"])
+        {
+            diag!("processing: preview seek back to {anchor} refused: {error}");
+        }
+        if rebuild {
+            let result = if self.live.pending {
+                self.rebuild_video(mpv)
+            } else {
+                self.install(mpv, self.installed.clone())
+            };
+            self.tick_failed(result);
+        }
+    }
+    /// The processing size follows the view (debounced, `Retarget`) and the
+    /// budget fallback (at once).
+    fn follow_size(&mut self, mpv: &Mpv, now: Instant, paused: bool) {
+        let (Some(view), Some(source)) = (self.live.view, source_display(mpv)) else {
+            return;
+        };
+        let mut stepped = false;
+        if paused {
+            self.live.budget.pause();
+        } else {
+            let number = |name: &str| mpv.get_property::<f64>(name).ok();
+            if let (Some(position), Some(fps)) = (
+                number("time-pos"),
+                number("container-fps").or_else(|| number("estimated-vf-fps")),
+            ) {
+                let dropped = number("decoder-frame-drop-count").unwrap_or(0.);
+                let moved = self.live.budget.sample(now, dropped, position, fps);
+                stepped = moved != live::BudgetMove::Stay;
+                if stepped {
+                    diag!(
+                        "processing: the video chain {}; processing size one step {} ({} below the shown size)",
+                        if moved == live::BudgetMove::Down {
+                            "drops frames"
+                        } else {
+                            "keeps up"
+                        },
+                        if moved == live::BudgetMove::Down {
+                            "smaller"
+                        } else {
+                            "larger"
+                        },
+                        self.live.budget.steps
+                    );
+                }
+            }
+        }
+        let (width, height) = source.display;
+        let inputs = live::Inputs {
+            view,
+            source: (width.round() as u32, height.round() as u32),
+        };
+        let settled = self.live.retarget.settled(inputs, now);
+        let wanted = live::factor(
+            self.installed.display_size(source.display),
+            &view,
+            self.live.budget.steps,
+            source.anamorphic,
+        );
+        let busy = self.live.pending || (paused && self.live.anchor.is_some());
+        if wanted != self.installed.factor && (settled || stepped) && !busy {
+            let result = self.install(mpv, self.installed.at(wanted));
+            self.tick_failed(result);
+        }
+    }
+    /// A rebuild `tick` made failed: logged; an uncertain backend blocks
+    /// further video updates as any other. `true` when it failed.
+    fn tick_failed(&mut self, result: Result<(), RpcError>) -> bool {
+        let Err(error) = result else {
+            return false;
+        };
+        diag!("processing: video graph update failed: {}", error.message);
+        if error.code == "backend-uncertain" {
+            self.uncertain.insert("video".into(), error.message.clone());
+            self.confirmations.insert(
+                "video".into(),
+                json!({"status":"uncertain","error":error.message}),
+            );
+        }
+        true
     }
     /// The owned video nodes are FFmpeg software filters: they need decoded
     /// frames in memory. With zero-copy hardware decoding (GPU rendering's
@@ -1048,6 +1451,88 @@ pub(crate) fn copy_back(mode: &str) -> Option<String> {
     let copy = items.join(",");
     (!items.is_empty() && copy != mode && items.iter().any(|item| item != "no")).then_some(copy)
 }
+/// mpv's `framedrop` while an owned video graph is in place
+/// (`Processing::decoder_drops`).
+pub(crate) const FRAMEDROP: &str = "decoder+vo";
+/// Frames one paused preview step moves (`Processing::preview_step`): mpv
+/// has filtered one frame ahead of the picture before the live update ...
+const PREVIEW_FRAMES: &str = "2";
+/// ... and right after pausing up to two (measured with light chains at
+/// 4K: two frames showed no change 4 times in 6, three every time).
+const PREVIEW_FIRST_FRAMES: &str = "3";
+/// The picture is still where the preview steps left it within this many
+/// seconds (`time-pos` can lag the step by a frame); farther, someone else
+/// moved it and the settle does not take it back.
+const PREVIEW_MOVED: f64 = 0.25;
+/// How often `tick` looks at the processing size while a graph acts.
+const SIZE_LOOK: Duration = Duration::from_millis(200);
+/// The runtime commands of a live change to the owned video graph, in
+/// order; the first failure ends them.
+fn send(mpv: &Mpv, commands: &[RuntimeCommand]) -> rsmpv::Result<()> {
+    for command in commands {
+        mpv.command(&[
+            "vf-command",
+            "vestra-owned",
+            command.option,
+            &command.value,
+            &command.target,
+        ])?;
+    }
+    Ok(())
+}
+fn paused(mpv: &Mpv) -> bool {
+    mpv.get_property::<bool>("pause").unwrap_or(false)
+}
+/// The frames that reach the owned graph: their display size and how much
+/// larger it is than the stored size (`processing_live::factor`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SourceSize {
+    display: (f64, f64),
+    /// max(dw / w, dh / h), at least 1: 4/3 for HDV's 1440x1080 shown
+    /// 1920 wide.
+    anamorphic: f64,
+}
+/// mpv's `video-params` (after the decoder, aspect applied; a quarter
+/// `rotate` swapped, as the orientation stage turns the picture before the
+/// graph), before the decoder runs the container's (`current-tracks/video`,
+/// its pixel aspect `demux-par`).
+fn source_display(mpv: &Mpv) -> Option<SourceSize> {
+    let int = |name: &str| mpv.get_property::<i64>(name).ok().filter(|v| *v > 0);
+    let (width, height, stored, rotate) = match (int("video-params/dw"), int("video-params/dh")) {
+        (Some(w), Some(h)) => (
+            w as f64,
+            h as f64,
+            int("video-params/w").zip(int("video-params/h")),
+            mpv.get_property::<i64>("video-params/rotate").unwrap_or(0),
+        ),
+        _ => {
+            let w = int("current-tracks/video/demux-w")?;
+            let h = int("current-tracks/video/demux-h")?;
+            let par = mpv
+                .get_property::<f64>("current-tracks/video/demux-par")
+                .ok()
+                .filter(|p| p.is_finite() && *p > 0.)
+                .unwrap_or(1.);
+            let rotate = mpv
+                .get_property::<i64>("current-tracks/video/demux-rotation")
+                .unwrap_or(0);
+            (w as f64 * par, h as f64, Some((w, h)), rotate)
+        }
+    };
+    let anamorphic = stored.map_or(1., |(w, h)| {
+        (width / w as f64).max(height / h as f64).max(1.)
+    });
+    let display = if rotate.rem_euclid(180) == 90 {
+        (height, width)
+    } else {
+        (width, height)
+    };
+    Some(SourceSize {
+        display,
+        anamorphic,
+    })
+}
+
 fn combined_offset(offsets: &BTreeMap<(u64, String), i32>) -> Result<i32, RpcError> {
     let positive: i64 = offsets
         .values()
@@ -1163,10 +1648,6 @@ fn apply(mpv: &Mpv, before: &Descriptors, after: &Descriptors) -> Result<(), Rpc
                     break;
                 }
             }
-            if result.is_ok() && stage == "vf" && mpv.get_property::<bool>("pause").unwrap_or(false)
-            {
-                result = set(&next);
-            }
             result
         }
     };
@@ -1261,6 +1742,12 @@ mod tests {
     }
     fn vf(mpv: &Mpv) -> String {
         mpv.get_property::<String>("vf").unwrap()
+    }
+    /// `tick` once the changes settled and a pass-through graph's
+    /// teardown time passed.
+    fn settled(processing: &mut Processing, mpv: &Mpv) {
+        let later = Instant::now() + live::TEARDOWN + Duration::from_millis(10);
+        processing.tick(mpv, later, None);
     }
 
     #[test]
@@ -1432,6 +1919,243 @@ mod tests {
         assert!(errors.is_empty(), "{errors:#?}");
     }
 
+    /// Loads a generated 1920x1080 clip and waits until mpv decodes it.
+    fn playing(mpv: &Mpv) {
+        mpv.command(&["loadfile", "av://lavfi:testsrc2=s=1920x1080:r=30:d=60"])
+            .unwrap();
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(10)
+            && mpv.get_property::<f64>("time-pos").unwrap_or(0.) < 0.3
+        {
+            while mpv.poll_event().is_some() {}
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(mpv.get_property::<i64>("video-params/dw").unwrap_or(0) > 0);
+    }
+    fn view(width: u32, height: u32) -> ViewFacts {
+        ViewFacts {
+            area: (width, height),
+            zoom: 1.,
+            fit: crate::playback::video_view::Fit::Keep,
+            aspect: None,
+        }
+    }
+    fn eq(brightness: f64) -> Value {
+        json!([{"kind":"eq","brightness":brightness,"contrast":1,"saturation":1,"gamma":1}])
+    }
+
+    /// A chain of neutral nodes builds no graph: no copy-back decoding, no
+    /// decoder frame dropping. A chain that acts turns both on, and they
+    /// go back with it.
+    #[test]
+    fn neutral_chains_cost_nothing_and_a_chain_drops_frames_in_the_decoder() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("auto-safe");
+        let mut processing = ready();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, eq(0.)))
+            .unwrap();
+        assert_eq!(processing.state()["video"].as_array().unwrap().len(), 1);
+        assert!(!vf(&mpv).contains("eq@"), "{}", vf(&mpv));
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert_eq!(mpv.get_property::<String>("framedrop").unwrap(), "vo");
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, eq(0.2)))
+            .unwrap();
+        assert!(vf(&mpv).contains("eq@n0=brightness=0.2"), "{}", vf(&mpv));
+        assert_eq!(hwdec(&mpv), "auto-copy-safe");
+        assert_eq!(mpv.get_property::<String>("framedrop").unwrap(), FRAMEDROP);
+        processing.disable(&mpv, OWNER).unwrap();
+        assert_eq!(hwdec(&mpv), "auto-safe");
+        assert_eq!(mpv.get_property::<String>("framedrop").unwrap(), "vo");
+    }
+
+    /// The graph runs at the shown size: half of a 1080p source in a
+    /// 960x540 area, with the blur's sigma halved; a larger area is
+    /// followed once it held (`Retarget`).
+    #[test]
+    fn the_processing_size_follows_the_shown_size() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("no");
+        let mut processing = ready();
+        let t = Instant::now();
+        processing.tick(&mpv, t, Some(view(960, 540)));
+        playing(&mpv);
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, gblur(4.0)))
+            .unwrap();
+        let text = vf(&mpv);
+        assert!(text.contains("scale@vs=w='2*trunc(iw*0.5/2)'"), "{text}");
+        assert!(text.contains("gblur@n0=sigma=2:sigmaV=2"), "{text}");
+        assert_eq!(processing.state()["videoScale"]["factor"], 0.5);
+        // Snapshots and exports keep the plugins' chain at full size.
+        let frozen = Descriptors::Video(processing.video_resources());
+        assert_eq!(
+            effects::render_lavfi(&frozen).unwrap(),
+            "gblur@n0=sigma=4:sigmaV=4:steps=3"
+        );
+        // The same view: nothing changes.
+        processing.tick(&mpv, t, Some(view(960, 540)));
+        assert!(vf(&mpv).contains("iw*0.5"), "{}", vf(&mpv));
+        // Maximized: after the jump's wait, full size.
+        let at = |ms: u64| t + Duration::from_millis(ms);
+        processing.tick(&mpv, at(300), Some(view(1920, 1080)));
+        assert!(vf(&mpv).contains("iw*0.5"), "waits: {}", vf(&mpv));
+        processing.tick(&mpv, at(600), Some(view(1920, 1080)));
+        let text = vf(&mpv);
+        assert!(!text.contains("scale@vs"), "{text}");
+        assert!(text.contains("gblur@n0=sigma=4:sigmaV=4"), "{text}");
+        assert_eq!(processing.state()["videoScale"]["factor"], 1.0);
+    }
+
+    /// A step in flight ends even when the video stage turned uncertain
+    /// meanwhile: otherwise `stepping` would hold the state pushes and the
+    /// worker would poll forever.
+    #[test]
+    fn a_preview_step_ends_although_the_video_stage_is_uncertain() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("no");
+        let mut processing = ready();
+        let t = Instant::now();
+        processing.live.stepping = Some(t);
+        processing
+            .uncertain
+            .insert("video".into(), "test: backend lost".into());
+        assert_eq!(
+            processing.due_in(&mpv, t),
+            Some(Duration::from_millis(10)),
+            "polled while it lasts"
+        );
+        // mpv never paused again (no file): the timeout ends it.
+        processing.tick(&mpv, t + live::STEP_TIMEOUT, None);
+        assert!(!processing.stepping());
+        assert_eq!(processing.due_in(&mpv, t + live::STEP_TIMEOUT), None);
+    }
+
+    /// "Play" during a step is applied once the step is over; a new source
+    /// or another renderer drops it, and "pause" cancels it.
+    #[test]
+    fn play_pressed_during_a_preview_step_is_applied_after_it() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("no");
+        let mut processing = ready();
+        let t = Instant::now();
+        // Outside a step a request is mpv's alone.
+        processing.pause_request(false);
+        assert!(!processing.resume);
+        mpv.set_property("pause", true).unwrap();
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.tick(&mpv, t, None);
+        assert!(!processing.stepping());
+        assert!(!mpv.get_property::<bool>("pause").unwrap(), "playing");
+        // Pause after play: nothing to apply.
+        mpv.set_property("pause", true).unwrap();
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.pause_request(true);
+        processing.tick(&mpv, t, None);
+        assert!(mpv.get_property::<bool>("pause").unwrap());
+        // Another source or renderer meanwhile: stays paused.
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.renderer_changed();
+        processing.tick(&mpv, t, None);
+        assert!(mpv.get_property::<bool>("pause").unwrap());
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.note_source(2, Phase::Loading);
+        assert!(!processing.stepping() && !processing.resume);
+        processing.tick(&mpv, t, None);
+        assert!(mpv.get_property::<bool>("pause").unwrap());
+    }
+
+    /// Paused, a live update is shown by stepping two frames; once the
+    /// changes settle, the graph text is rewritten with the live value (a
+    /// seek would otherwise rebuild the old one) and the picture goes back
+    /// to where it was paused.
+    #[test]
+    fn a_paused_live_update_previews_then_settles_back_where_it_was() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("no");
+        let mut processing = ready();
+        playing(&mpv);
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(1, eq(0.1)))
+            .unwrap();
+        mpv.set_property("pause", true).unwrap();
+        std::thread::sleep(Duration::from_millis(300));
+        let paused_at = mpv.get_property::<f64>("time-pos").unwrap();
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, eq(0.3)))
+            .unwrap();
+        // Live: the graph text still has the old value.
+        assert!(vf(&mpv).contains("brightness=0.1"), "{}", vf(&mpv));
+        processing.tick(&mpv, Instant::now(), None);
+        assert!(processing.stepping(), "a preview step");
+        let start = Instant::now();
+        while processing.stepping() && start.elapsed() < Duration::from_secs(5) {
+            std::thread::sleep(Duration::from_millis(10));
+            processing.tick(&mpv, Instant::now(), None);
+        }
+        assert!(mpv.get_property::<bool>("pause").unwrap(), "paused again");
+        let stepped = mpv.get_property::<f64>("time-pos").unwrap();
+        assert!(stepped > paused_at, "{stepped} after {paused_at}");
+        // Settled: rewritten and back.
+        processing.tick(&mpv, Instant::now() + live::SETTLE, None);
+        assert!(vf(&mpv).contains("brightness=0.3"), "{}", vf(&mpv));
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5)
+            && (mpv.get_property::<f64>("time-pos").unwrap() - paused_at).abs() > 0.001
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            (mpv.get_property::<f64>("time-pos").unwrap() - paused_at).abs() <= 0.001,
+            "back at {paused_at}"
+        );
+        assert!(mpv.get_property::<bool>("pause").unwrap());
+        // The user moves the picture during a drag (a seek): the next step
+        // starts over there, and the settle comes back there.
+        let wait_steps = |processing: &mut Processing| {
+            let start = Instant::now();
+            processing.tick(&mpv, Instant::now(), None);
+            while processing.stepping() && start.elapsed() < Duration::from_secs(5) {
+                std::thread::sleep(Duration::from_millis(10));
+                processing.tick(&mpv, Instant::now(), None);
+            }
+        };
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(3, eq(0.2)))
+            .unwrap();
+        wait_steps(&mut processing);
+        mpv.command(&["seek", "5", "absolute+exact"]).unwrap();
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5)
+            && (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() > 0.001
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(4, eq(0.4)))
+            .unwrap();
+        wait_steps(&mut processing);
+        let anchor = processing.live.anchor.unwrap();
+        assert!((anchor - 5.).abs() < 0.001, "re-anchored at {anchor}");
+        processing.tick(&mpv, Instant::now() + live::SETTLE, None);
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5)
+            && (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() > 0.001
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() <= 0.001,
+            "back at 5, not at {paused_at}"
+        );
+    }
+
     #[test]
     fn an_empty_video_chain_removes_the_resource_and_hwdec_follows_the_chain() {
         let _one = one_mpv_at_a_time();
@@ -1456,6 +2180,16 @@ mod tests {
             .replace(&mpv, OWNER, 1, source, &video(3, json!([])))
             .unwrap();
         assert!(processing.state()["video"].as_array().unwrap().is_empty());
+        // The node passes frames through until the changes settle (a drag
+        // through 0 neither rebuilds nor switches decoding) ...
+        assert!(
+            vf(&mpv).contains("gblur@n0=sigma=4:sigmaV=4:steps=3:enable=0"),
+            "{}",
+            vf(&mpv)
+        );
+        assert_eq!(hwdec(&mpv), "auto-copy-safe");
+        // ... then it goes, and zero-copy decoding comes back.
+        settled(&mut processing, &mpv);
         assert!(!vf(&mpv).contains("gblur"), "{}", vf(&mpv));
         assert_eq!(mpv.get_property::<String>("hwdec").unwrap(), "auto-safe");
         // Removing what is not there is a no-op, not an error.
@@ -1577,10 +2311,11 @@ mod tests {
         assert!(vf(&mpv).contains("gblur@n0="), "{}", vf(&mpv));
         assert!(!vf(&mpv).contains("bwdif"), "{}", vf(&mpv));
 
-        // Back to the deinterlacer alone: zero-copy again.
+        // Back to the deinterlacer alone: zero-copy again once settled.
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(3, json!([auto()])))
             .unwrap();
+        settled(&mut processing, &mpv);
         assert_eq!(hwdec(&mpv), "auto-safe");
         assert_eq!(deinterlace(&mpv), "auto");
         assert!(!vf(&mpv).contains("gblur"), "{}", vf(&mpv));
@@ -1737,7 +2472,7 @@ mod tests {
         let mut processing = ready();
         let seen = std::cell::Cell::new(String::new());
         let error = processing
-            .deinterlace_then(&mpv, true, || {
+            .deinterlace_then(&mpv, true, |_| {
                 // The graph change runs with the new deinterlacer.
                 seen.set(deinterlace(&mpv));
                 Err(RpcError::new("backend", "vf refused"))
@@ -1748,10 +2483,10 @@ mod tests {
         assert_eq!(deinterlace(&mpv), "no");
         assert!(!processing.deinterlace);
         // And the other way: on, then a failed change that would turn it off.
-        processing.deinterlace_then(&mpv, true, || Ok(())).unwrap();
+        processing.deinterlace_then(&mpv, true, |_| Ok(())).unwrap();
         assert_eq!(deinterlace(&mpv), "auto");
         processing
-            .deinterlace_then(&mpv, false, || Err(RpcError::new("backend", "vf refused")))
+            .deinterlace_then(&mpv, false, |_| Err(RpcError::new("backend", "vf refused")))
             .unwrap_err();
         assert_eq!(deinterlace(&mpv), "auto");
         assert!(processing.deinterlace);
@@ -2141,6 +2876,8 @@ mod tests {
         processing
             .replace(&mpv, OWNER, 1, Source::Decoded, &video(2, json!([])))
             .unwrap();
+        // Pass-through until the changes settle (`TEARDOWN`), then gone.
+        settled(&mut processing, &mpv);
         until(&|| position() >= 4.);
         assert_eq!(format(), "videotoolbox", "zero-copy again without a chain");
         assert_eq!(current(), "videotoolbox");
@@ -2288,6 +3025,11 @@ mod tests {
                             &video(revision, nodes),
                         )
                         .unwrap();
+                    if !chain {
+                        // The pass-through graph goes once the changes
+                        // settled: the switch back to zero-copy.
+                        settled(&mut processing, &playback.mpv);
+                    }
                     let end = playback.position() + 0.6;
                     playback.pump(
                         &mut |event| {
