@@ -1,0 +1,178 @@
+// The player's strip of bottom-bar command buttons (menu redesign step 3a,
+// bar_buttons.rs): `[plugin buttons…][»][Command Palette][Toggle Sidebar]`
+// at the right end of the bottom slot. The layout numbers (`shown`, `more`,
+// `width`) live in `BarButtonsHost` (@vestra/bar-buttons.slint), so a
+// bottom bar reads the same width the strip takes. Host-only: plugins do
+// not import this file.
+//
+// The cells are the bar's 41×40 icon buttons (the deprecated `BarButtons`
+// draws the same): persistent elements shown with `visible:`, nothing made
+// on hover or resize (menu-view.slint's AccessKit rule).
+import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
+import { ToolTipArea } from "@vestra/widgets.slint";
+import { BarButtonsHost, BarButtonItem } from "@vestra/bar-buttons.slint";
+
+// One button cell. `shown`: on screen; a hidden cell is not actionable from
+// the accessibility tree either.
+component Cell inherits Rectangle {
+    in property <BarButtonItem> item;
+    in property <bool> shown;
+    private property <bool> live: root.shown && root.item.enabled;
+    private property <brush> tint: !root.item.enabled ? Theme.icon-disabled
+        : touch.pressed ? Theme.accent-press : Theme.accent;
+    // The on dot: its diameter and top edge, between the icon box (y 14–26)
+    // and the hover plate's lower edge (y 36).
+    private property <length> dot-size: 4px;
+    private property <length> dot-y: 29px;
+    width: 41px;
+    height: 40px;
+    visible: root.shown;
+    opacity: root.item.dimmed ? 0.5 : 1;
+    accessible-role: button;
+    accessible-label: root.item.label;
+    accessible-description: root.item.tip;
+    accessible-enabled: root.live;
+    accessible-checkable: root.item.checkable;
+    accessible-checked: root.item.checked;
+    accessible-action-default => { if root.live { BarButtonsHost.clicked(root.item.token); } }
+    Rectangle {
+        x: 4px;
+        y: 4px;
+        width: parent.width - 9px;
+        height: parent.height - 8px;
+        border-radius: Theme.radius-panel;
+        background: !root.live ? transparent
+            : touch.pressed ? Theme.press-bg
+            : touch.has-hover ? Theme.hover-bg : transparent;
+    }
+    Icon {
+        visible: root.item.icon != "";
+        x: (root.width - 1px - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        name: root.item.icon;
+        color: root.tint;
+    }
+    // A plugin's image in the icon box (14×12), aspect kept, coloured like the icons.
+    Image {
+        visible: root.item.icon == "";
+        x: (root.width - 1px - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        width: 14px;
+        height: 12px;
+        source: root.item.image;
+        image-fit: contain;
+        colorize: root.tint;
+    }
+    // On (`checked`): the dot under the icon, in the icon's colour.
+    Rectangle {
+        visible: root.item.checked;
+        x: (root.width - 1px - self.width) / 2;
+        y: root.dot-y;
+        width: root.dot-size;
+        height: root.dot-size;
+        border-radius: self.width / 2;
+        background: root.tint;
+    }
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.shown ? root.item.tip : "";
+        touch := TouchArea {
+            enabled: root.live;
+            clicked => { BarButtonsHost.clicked(root.item.token); }
+        }
+    }
+}
+
+// `»`: the buttons that are not in the strip, in the host's menu layer
+// (like the sidebar tabs' `»`). `clicked` gives the cell's top-left corner
+// in window coordinates; the menu opens above it.
+component MoreCell inherits Rectangle {
+    in property <bool> shown;
+    callback clicked(length, length);
+    width: 41px;
+    height: 40px;
+    visible: root.shown;
+    accessible-role: button;
+    accessible-label: @tr("More buttons");
+    accessible-enabled: root.shown;
+    accessible-action-default => { if root.shown { root.clicked(self.absolute-position.x, self.absolute-position.y); } }
+    Rectangle {
+        x: 4px;
+        y: 4px;
+        width: parent.width - 9px;
+        height: parent.height - 8px;
+        border-radius: Theme.radius-panel;
+        background: !root.shown ? transparent
+            : touch.pressed ? Theme.press-bg
+            : touch.has-hover ? Theme.hover-bg : transparent;
+    }
+    Text {
+        x: 0px;
+        y: 0px;
+        width: root.width - 1px;
+        height: root.height;
+        text: "»";
+        font-size: 15px;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        color: touch.pressed ? Theme.accent-press : Theme.accent;
+    }
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.shown ? @tr("More buttons") : "";
+        touch := TouchArea {
+            enabled: root.shown;
+            clicked => { root.clicked(root.absolute-position.x, root.absolute-position.y); }
+        }
+    }
+}
+
+// The strip: as wide as its cells (`BarButtonsHost.width`), 40px high. The
+// shell places it and gives it `room`; it hides itself while a bottom bar
+// still places the deprecated `BarButtons`.
+export component HostBarStrip {
+    // The width the shell can give it; the player's own cells show even past it.
+    in property <length> room;
+    // `»` was clicked: the cell's top-left corner, logical px in the window.
+    callback more(float, float);
+    private property <bool> live: !BarButtonsHost.placed;
+    // Bound to its own `room` through the global's pure functions, not to
+    // the global's `shown` / `more` / `width`: those follow `room` only
+    // after the `changed` handler below (a frame later), and a strip drawn
+    // from them could be a frame too wide while the window narrows.
+    private property <int> shown: BarButtonsHost.shown-in(root.room);
+    private property <bool> overflowing: BarButtonsHost.more-in(root.room);
+    private property <int> after-more: root.shown + (root.overflowing ? 1 : 0);
+    private property <bool> palette: BarButtonsHost.palette.token != "";
+    // Publishes the room to the global, for the player (`shown` at a `»`
+    // click) and for bars that read `width`.
+    changed room => { BarButtonsHost.room = self.room; }
+    init => { BarButtonsHost.room = self.room; }
+    width: BarButtonsHost.width-in(root.room);
+    height: 40px;
+    visible: root.live;
+    Cell { x: 0 * 41px; shown: root.live && 0 < root.shown; item: BarButtonsHost.buttons[0]; }
+    Cell { x: 1 * 41px; shown: root.live && 1 < root.shown; item: BarButtonsHost.buttons[1]; }
+    Cell { x: 2 * 41px; shown: root.live && 2 < root.shown; item: BarButtonsHost.buttons[2]; }
+    Cell { x: 3 * 41px; shown: root.live && 3 < root.shown; item: BarButtonsHost.buttons[3]; }
+    Cell { x: 4 * 41px; shown: root.live && 4 < root.shown; item: BarButtonsHost.buttons[4]; }
+    Cell { x: 5 * 41px; shown: root.live && 5 < root.shown; item: BarButtonsHost.buttons[5]; }
+    Cell { x: 6 * 41px; shown: root.live && 6 < root.shown; item: BarButtonsHost.buttons[6]; }
+    Cell { x: 7 * 41px; shown: root.live && 7 < root.shown; item: BarButtonsHost.buttons[7]; }
+    MoreCell {
+        x: root.shown * 41px;
+        shown: root.live && root.overflowing;
+        clicked(x, y) => { root.more(x / 1px, y / 1px); }
+    }
+    Cell { x: root.after-more * 41px; shown: root.live && root.palette; item: BarButtonsHost.palette; }
+    // Step 3b: the Adjust cell (`host/adjust`) goes here, between the
+    // palette and the sidebar toggle; it takes no room until then.
+    Cell {
+        x: (root.after-more + (root.palette ? 1 : 0)) * 41px;
+        shown: root.live && BarButtonsHost.toggle.token != "";
+        item: BarButtonsHost.toggle;
+    }
+}

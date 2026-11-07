@@ -1,0 +1,34 @@
+// A bottom bar shaped like the built-in one (player 0.7.6): seven 41px
+// controls, the time and gaps; it drops its own controls as the window
+// narrows (down to two, two at once at one step), keeping
+// `BarButtonsHost.fixed` cells free, and
+// reports both widths: `content-min-width` (what it shows now) and
+// `content-full-width` (every control). bar_buttons.rs: plugin buttons get
+// only the room beyond the full width.
+import { BarButtonsHost } from "@vestra/bar-buttons.slint";
+
+export global FullBridge {
+    in-out property <length> time: 85px;
+    // Whether the bar reports `content-full-width` (off: a 3a bar).
+    in-out property <bool> full: true;
+    // How many of its controls the bar shows, for the test.
+    in-out property <int> controls;
+}
+
+export component FullBar inherits Rectangle {
+    private property <length> base: 10px + FullBridge.time + 8px;
+    private property <length> reserve: BarButtonsHost.fixed * 41px + 4px;
+    // Like the built-in bar: Fullscreen goes first, then Stop, then Previous
+    // and Next together (two at once), then Open.
+    private property <int> shown: root.width >= 7 * 41px + root.base + root.reserve ? 7
+        : root.width >= 6 * 41px + root.base + root.reserve ? 6
+        : root.width >= 5 * 41px + root.base + root.reserve ? 5
+        : root.width >= 3 * 41px + root.base + root.reserve ? 3 : 2;
+    changed shown => { FullBridge.controls = self.shown; }
+    init => { FullBridge.controls = self.shown; }
+    out property <length> content-min-width: root.shown * 41px + root.base;
+    // A 3a bar has no full width: it reports its least one there too.
+    out property <length> content-full-width: FullBridge.full ? 7 * 41px + root.base : root.content-min-width;
+    min-height: 62px;
+    max-height: 62px;
+}

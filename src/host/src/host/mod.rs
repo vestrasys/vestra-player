@@ -15,7 +15,7 @@ mod input;
 mod lifecycle;
 mod menus;
 mod mounts;
-mod palette;
+pub(crate) mod palette;
 mod rendering;
 mod restart;
 pub(crate) mod revised;
@@ -147,6 +147,9 @@ pub(crate) enum MenuMode {
     Tabs,
     /// The command palette (`host/palette`), in the main window.
     Palette,
+    /// The bottom-bar strip's `»` (bar_buttons.rs): the plugin buttons not
+    /// in the strip, in strip order (owner, command id).
+    Bar(Vec<(u64, String)>),
 }
 /// One wheel step per this many logical pixels of accumulated scroll.
 pub(crate) const WHEEL_STEP: f64 = 40.;

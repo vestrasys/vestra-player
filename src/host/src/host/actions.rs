@@ -99,13 +99,14 @@ impl Host {
         // Windows and Linux menus show no `Cmd` binding (`label_shown`).
         quit.bindings = vec!["Cmd+Q".into()];
         // Player 0.5.10: the bottom bar's sidebar toggle (the rightmost cell
-        // of `BarButtons`, bar_buttons.rs); outside the menu, no default key
+        // of the player's strip, bar_buttons.rs); outside the menu, no default key
         // (F6 is the playlist's), bindable in Keyboard Shortcuts.
         let mut sidebar = commands::Declaration::new("Toggle Sidebar", &[]);
         sidebar.localize(|_| i18n::tr("Toggle Sidebar"));
         core_actions::categorize(&mut sidebar, "Window");
         // Host 0.7.4 (menu redesign §6): the command palette, outside the
-        // menu for now; Ctrl+Shift+P (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD).
+        // menu for now; Ctrl+Shift+P (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD), and
+        // the magnifier of the bottom-bar strip (step 3a, bar_buttons.rs).
         let mut palette = commands::Declaration::new("Command Palette", &[]);
         palette.localize(|_| i18n::tr("Command Palette"));
         // The way to find every other command, next to About and Check for Updates.
