@@ -117,7 +117,8 @@ export function parseTime(value: unknown): number | null {
   const text = String(value ?? "").trim();
   const parts = text.split(":");
   if (!text || parts.length > 3) return null;
-  if (!parts.every((part, index) => (index === parts.length - 1 ? /^\d+(\.\d+)?$/ : /^\d+$/).test(part))) return null;
+  // The seconds may be `5`, `5.25`, `.5` or `5.`; the parts before them are whole numbers.
+  if (!parts.every((part, index) => (index === parts.length - 1 ? /^(\d+\.?\d*|\.\d+)$/ : /^\d+$/).test(part))) return null;
   const numbers = parts.map(Number);
   if (numbers.slice(1).some((n) => n >= 60)) return null;
   const seconds = numbers.reduce((total, n) => total * 60 + n, 0);

@@ -41,11 +41,16 @@ export function abRange(state: Pick<PlayerState, "loop">): { start: number; end:
   return { start: loop.a, end: loop.b };
 }
 
-/** Export Clip… on a fresh tab: from the position, 10 s (shorter at the end of the media). */
+/**
+ * Export Clip… on a fresh tab: 10 s from the position; within the last 10 s of
+ * the media, its last 10 s (all of a shorter one), never past the end.
+ */
 export function defaultRange(position: number | null, duration: number | null) {
-  const start = position ?? 0;
-  const end = Math.min(start + 10, duration ?? Infinity);
-  return { start, end: end > start ? end : start + 10 };
+  const length = 10;
+  const known = duration !== null && Number.isFinite(duration) && duration > 0;
+  const at = Math.max(0, position ?? 0);
+  if (!known || at + length <= duration) return { start: at, end: at + length };
+  return { start: Math.max(0, duration - length), end: duration };
 }
 
 // ---------------------------------------------------------------- keyframes (Fast)

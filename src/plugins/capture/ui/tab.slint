@@ -7,7 +7,8 @@ import { Icon } from "@vestra/icons.slint";
 import { Button, Check, Choice, KeyHint, RadioGroup, Slider, Tabs, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
 import { Note, Status, Words } from "parts.slint";
 
-// The first key of each command (`plugin.commands.keys`), "" without one.
+// The first key of each command (`plugin.commands.keys`), "" without one. `clip` is
+// Export Clip Range's (the Export button), not Export Clip…'s.
 export struct Keys {
     save: string,
     copy: string,
@@ -553,9 +554,9 @@ component TemplateRow {
 
 // One Results row: thumbnail with its kind and badge, name, state, buttons.
 component ResultItem inherits Rectangle {
-    in property <ResultRow> row;
-    private property <bool> running: root.row.state == "preparing" || root.row.state == "running" || root.row.state == "cancelling";
-    private property <bool> bad: root.row.state == "failed" || root.row.state == "gone";
+    in property <ResultRow> entry;
+    private property <bool> running: root.entry.state == "preparing" || root.entry.state == "running" || root.entry.state == "cancelling";
+    private property <bool> bad: root.entry.state == "failed" || root.entry.state == "gone";
     height: 46px;
     background: area.has-hover ? Theme.hover-bg : transparent;
     area := TouchArea {}
@@ -571,15 +572,15 @@ component ResultItem inherits Rectangle {
                 border-radius: 3px;
                 clip: true;
                 background: Theme.bg-video;
-                opacity: root.row.state == "queued" || root.bad ? 0.55 : 1;
-                Image { width: 100%; height: 100%; source: root.row.thumb; image-fit: cover; }
+                opacity: root.entry.state == "queued" || root.bad ? 0.55 : 1;
+                Image { width: 100%; height: 100%; source: root.entry.thumb; image-fit: cover; }
                 Glyph {
                     x: 3px;
                     y: 3px;
-                    glyph: root.row.kind == "clip" ? Glyphs.film : root.row.kind == "burst" ? Glyphs.burst : Glyphs.camera;
+                    glyph: root.entry.kind == "clip" ? Glyphs.film : root.entry.kind == "burst" ? Glyphs.burst : Glyphs.camera;
                     color: Theme.text;
                 }
-                if root.row.badge != "": Rectangle {
+                if root.entry.badge != "": Rectangle {
                     x: parent.width - self.width - 2px;
                     y: parent.height - self.height - 2px;
                     width: badge.preferred-width + 6px;
@@ -587,7 +588,8 @@ component ResultItem inherits Rectangle {
                     border-radius: 2px;
                     background: Theme.bg-bar;
                     badge := Text {
-                        text: root.row.badge;
+                        // TRANSLATORS: {} is a clip's length in seconds ("3.5") or a burst's number of frames.
+                        text: root.entry.kind == "clip" ? @tr("{} s", root.entry.badge) : root.entry.kind == "burst" ? @tr("×{}", root.entry.badge) : root.entry.badge;
                         color: Theme.text;
                         font-size: Theme.font-xs;
                         horizontal-alignment: center;
@@ -600,35 +602,35 @@ component ResultItem inherits Rectangle {
             alignment: center;
             spacing: 2px;
             horizontal-stretch: 1;
-            Text { text: root.row.name; color: Theme.text; font-size: Theme.font-body; overflow: elide; }
+            Text { text: root.entry.name; color: Theme.text; font-size: Theme.font-body; overflow: elide; }
             ToolTipArea {
-                text: root.row.state == "failed" && root.row.raw != "" ? root.row.raw : "";
+                text: root.entry.state == "failed" && root.entry.raw != "" ? root.entry.raw : "";
                 height: line.preferred-height;
                 line := Text {
                     width: 100%;
                     color: root.bad ? Theme.danger : Theme.text-dim;
                     font-size: Theme.font-xs;
                     overflow: elide;
-                    text: root.row.state == "gone" ? @tr("File moved or deleted")
-                        : root.row.state == "failed" ? @tr("Failed: {}", Words.reason(root.row.reason, root.row.raw))
-                        : root.row.state == "cancelled" ? Words.state("cancelled")
+                    text: root.entry.state == "gone" ? @tr("File moved or deleted")
+                        : root.entry.state == "failed" ? @tr("Failed: {}", Words.reason(root.entry.reason, root.entry.raw))
+                        : root.entry.state == "cancelled" ? Words.state("cancelled")
                         // TRANSLATORS: {0} is the number of frames (2–20), {1} the time of the first.
-                        : root.row.state == "queued" ? (root.row.kind == "burst" ? @tr("Queued · {0} frames from {1}", root.row.total, root.row.range)
+                        : root.entry.state == "queued" ? (root.entry.kind == "burst" ? @tr("Queued · {0} frames from {1}", root.entry.total, root.entry.range)
                             // TRANSLATORS: {} is a time or a time range.
-                            : @tr("Queued · {}", root.row.range))
-                        : root.running ? (root.row.total > 1 ? @tr("{0} · {1}/{2}", Words.state(root.row.state), root.row.done, root.row.total)
-                            : root.row.percent >= 0 ? (root.row.left >= 0
+                            : @tr("Queued · {}", root.entry.range))
+                        : root.running ? (root.entry.total > 1 ? @tr("{0} · {1}/{2}", Words.state(root.entry.state), root.entry.done, root.entry.total)
+                            : root.entry.percent >= 0 ? (root.entry.left >= 0
                                 // TRANSLATORS: {0} is a percentage, {1} seconds.
-                                ? @tr("Exporting · {0} % · about {1} s left", root.row.percent, root.row.left)
+                                ? @tr("Exporting · {0} % · about {1} s left", root.entry.percent, root.entry.left)
                                 // TRANSLATORS: {} is a percentage.
-                                : @tr("Exporting · {} %", root.row.percent))
+                                : @tr("Exporting · {} %", root.entry.percent))
                             // TRANSLATORS: {0} is a task state (Exporting), {1} the time spent (0:12).
-                            : @tr("{0} · {1}", Words.state(root.row.state), root.row.elapsed))
+                            : @tr("{0} · {1}", Words.state(root.entry.state), root.entry.elapsed))
                         // A finished result: "Fast · 71 MB · 1 min ago", "8.1 MB · 2 min ago", "Burst · 10 frames · 34 MB · 9 min ago".
-                        : root.row.kind == "clip" ? (Words.method(root.row.method) + (root.row.size != "" ? " · " + root.row.size : "") + " · " + Words.ago(root.row.ago))
+                        : root.entry.kind == "clip" ? (Words.method(root.entry.method) + (root.entry.size != "" ? " · " + @tr("{} MB", root.entry.size) : "") + " · " + Words.ago(root.entry.ago))
                         // TRANSLATORS: {} is the number of frames (2–20).
-                        : root.row.kind == "burst" ? (@tr("Burst · {} frames", root.row.total) + (root.row.size != "" ? " · " + root.row.size : "") + " · " + Words.ago(root.row.ago))
-                        : ((root.row.size != "" ? root.row.size + " · " : "") + Words.ago(root.row.ago));
+                        : root.entry.kind == "burst" ? (@tr("Burst · {} frames", root.entry.total) + (root.entry.size != "" ? " · " + @tr("{} MB", root.entry.size) : "") + " · " + Words.ago(root.entry.ago))
+                        : ((root.entry.size != "" ? @tr("{} MB", root.entry.size) + " · " : "") + Words.ago(root.entry.ago));
                 }
             }
             if root.running: Rectangle {
@@ -636,48 +638,48 @@ component ResultItem inherits Rectangle {
                 background: Theme.line;
                 Rectangle {
                     x: 0px;
-                    width: root.row.percent >= 0 ? parent.width * root.row.percent / 100 : parent.width;
-                    background: root.row.percent >= 0 ? Theme.accent-fill : Theme.accent-disabled;
+                    width: root.entry.percent >= 0 ? parent.width * root.entry.percent / 100 : parent.width;
+                    background: root.entry.percent >= 0 ? Theme.accent-fill : Theme.accent-disabled;
                 }
             }
         }
         HorizontalLayout {
             alignment: center;
             spacing: 1px;
-            if root.row.cancellable: IconAction {
+            if root.entry.cancellable: IconAction {
                 glyph: Glyphs.close;
                 tip: @tr("Cancel");
-                clicked => { CaptureBridge.cancel-task(root.row.id); }
+                clicked => { CaptureBridge.cancel-task(root.entry.id); }
             }
-            if root.row.retryable && root.row.state != "cancelling": IconAction {
+            if root.entry.retryable && root.entry.state != "cancelling": IconAction {
                 glyph: Glyphs.retry;
                 tip: @tr("Retry");
-                clicked => { CaptureBridge.retry-task(root.row.id); }
+                clicked => { CaptureBridge.retry-task(root.entry.id); }
             }
-            if root.row.openable && root.row.kind == "clip": IconAction {
+            if root.entry.openable && root.entry.kind == "clip": IconAction {
                 glyph: Glyphs.open;
                 tip: @tr("Open");
-                clicked => { CaptureBridge.open-result(root.row.id); }
+                clicked => { CaptureBridge.open-result(root.entry.id); }
             }
-            if root.row.copyable: IconAction {
+            if root.entry.copyable: IconAction {
                 glyph: Glyphs.copy;
                 tip: @tr("Copy");
-                clicked => { CaptureBridge.copy-result(root.row.id); }
+                clicked => { CaptureBridge.copy-result(root.entry.id); }
             }
-            if root.row.openable && root.row.kind != "clip": IconAction {
+            if root.entry.openable && root.entry.kind != "clip": IconAction {
                 glyph: Glyphs.open;
-                tip: root.row.kind == "burst" ? @tr("Open Folder") : @tr("Open");
-                clicked => { CaptureBridge.open-result(root.row.id); }
+                tip: root.entry.kind == "burst" ? @tr("Open Folder") : @tr("Open");
+                clicked => { CaptureBridge.open-result(root.entry.id); }
             }
-            if root.row.revealable: IconAction {
+            if root.entry.revealable: IconAction {
                 glyph: Glyphs.folder;
                 tip: @tr("Show in Folder");
-                clicked => { CaptureBridge.reveal-result(root.row.id); }
+                clicked => { CaptureBridge.reveal-result(root.entry.id); }
             }
-            if !root.row.cancellable: IconAction {
+            if !root.entry.cancellable: IconAction {
                 glyph: Glyphs.close;
                 tip: @tr("Remove from List");
-                clicked => { CaptureBridge.remove-result(root.row.id); }
+                clicked => { CaptureBridge.remove-result(root.entry.id); }
             }
         }
     }
@@ -702,10 +704,28 @@ export component CaptureTab inherits Rectangle {
     function clip-export() { CaptureBridge.export-clip(CaptureBridge.clip-start, CaptureBridge.clip-end); }
 
     VerticalLayout {
-        strip := Tabs {
-            model: [@tr("Snapshot"), @tr("Clip"),
-                CaptureBridge.result-count > 0 ? @tr("Results ({})", CaptureBridge.result-count) : @tr("Results"), @tr("Settings")];
-            selected(index) => { root.jump-to(index); }
+        // The jump strip, and the tab's own key (Alt+S) at its end (design §3.8): the player's tab strip shows titles only.
+        Rectangle {
+            background: Theme.bg-bar;
+            HorizontalLayout {
+                strip := Tabs {
+                    horizontal-stretch: 1;
+                    model: [@tr("Snapshot"), @tr("Clip"),
+                        CaptureBridge.result-count > 0 ? @tr("Results ({})", CaptureBridge.result-count) : @tr("Results"), @tr("Settings")];
+                    selected(index) => { root.jump-to(index); }
+                }
+                if CaptureBridge.keys.panel != "" && !root.narrow: VerticalLayout {
+                    alignment: center;
+                    padding-right: 6px;
+                    ToolTipArea {
+                        width: panel-key.preferred-width;
+                        height: 15px;
+                        text: @tr("Show or hide this tab");
+                        keys: [{ key: CaptureBridge.keys.panel, text: "" }];
+                        panel-key := KeyHint { text: CaptureBridge.keys.panel; }
+                    }
+                }
+            }
         }
         // The progress card: stays at the top while the column scrolls (proposal §3.2 ①).
         if CaptureBridge.card.shown: Rectangle {
@@ -1163,7 +1183,8 @@ export component CaptureTab inherits Rectangle {
                                     spacing: 4px;
                                     Label { width: 64px; text: @tr("Frame rate"); }
                                     Choice {
-                                        model: [@tr("Source"), "60 fps", "30 fps"];
+                                        // TRANSLATORS: {} is frames per second.
+                                        model: [@tr("Source"), @tr("{} fps", 60), @tr("{} fps", 30)];
                                         current-index <=> CaptureBridge.enc-fps;
                                         selected(index) => { CaptureBridge.set-encode("fps", index); }
                                     }
@@ -1193,7 +1214,8 @@ export component CaptureTab inherits Rectangle {
                                     spacing: 4px;
                                     Label { width: 64px; text: @tr("Audio"); }
                                     Choice {
-                                        model: ["AAC 128 kb/s", "AAC 192 kb/s", "AAC 256 kb/s"];
+                                        // TRANSLATORS: {} is the audio bit rate in kilobits per second.
+                                        model: [@tr("AAC {} kb/s", 128), @tr("AAC {} kb/s", 192), @tr("AAC {} kb/s", 256)];
                                         current-index <=> CaptureBridge.enc-audio;
                                         selected(index) => { CaptureBridge.set-encode("audio", index); }
                                     }
@@ -1286,7 +1308,7 @@ export component CaptureTab inherits Rectangle {
                     // Slint's ListView: only the rows in view are built; at most six rows tall, it scrolls beyond.
                     if CaptureBridge.results.length > 0: ListView {
                         height: min(CaptureBridge.results.length, 6) * 46px;
-                        for row in CaptureBridge.results: ResultItem { row: row; }
+                        for row in CaptureBridge.results: ResultItem { entry: row; }
                     }
                     HorizontalLayout {
                         spacing: 4px;
@@ -1370,7 +1392,7 @@ export component CaptureTab inherits Rectangle {
                             Label { width: 96px; text: @tr("Last clip length"); }
                             Choice {
                                 width: 74px;
-                                model: ["10 s", "30 s", "60 s", "120 s"];
+                                model: [@tr("{} s", 10), @tr("{} s", 30), @tr("{} s", 60), @tr("{} s", 120)];
                                 current-index <=> CaptureBridge.last-index;
                                 selected(index) => { CaptureBridge.set-last-seconds(index); }
                             }

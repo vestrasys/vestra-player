@@ -58,6 +58,7 @@ const TITLE = {
   "capture.openFolder": "Open Snapshot Folder",
   "capture.clipStart": "Set Clip Start",
   "capture.clipEnd": "Set Clip End",
+  "capture.clipExport": "Export Clip Range",
 } as const;
 type CommandId = keyof typeof TITLE;
 /** The commands shown in the right-click menu's Snapshot ▸; the rest are in the command palette only. */
@@ -72,6 +73,9 @@ type Section = (typeof SECTIONS)[number];
 interface Form {
   start: string;
   end: string;
+  /** The range the plugin itself last filled in (Export Clip…, Last N s): a range still equal to it was not typed by the user. */
+  autoStart: string;
+  autoEnd: string;
   audioIndex: number;
   processed: boolean;
   burn: boolean;
@@ -85,7 +89,8 @@ export interface Options {
   support: Partial<HostSupport>;
 }
 
-const mb = (bytes: number) => (bytes <= 0 ? "" : bytes < 10e6 ? `${(bytes / 1e6).toFixed(1)} MB` : `${Math.round(bytes / 1e6)} MB`);
+/** Megabytes as a number for the tab ("8.1", "71"); the tab adds the unit in the user's language. "" when unknown. */
+const mb = (bytes: number) => (bytes <= 0 ? "" : bytes < 10e6 ? (bytes / 1e6).toFixed(1) : String(Math.round(bytes / 1e6)));
 const minutesSince = (time: number) => Math.max(0, Math.floor((Date.now() - time) / 60_000));
 const elapsed = (from: number | undefined) => {
   const seconds = from ? Math.max(0, Math.floor((Date.now() - from) / 1000)) : 0;
@@ -114,7 +119,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   }
   const ui = { stillBusy: false, burstBusy: false, clipBusy: false, burstStatus: status(), clipStatus: status(), resultsStatus: status() };
   const form: Form = {
-    start: "", end: "", audioIndex: 1, processed: false, burn: false,
+    start: "", end: "", autoStart: "", autoEnd: "", audioIndex: 1, processed: false, burn: false,
     burstStart: "0", burstCount: String(settings.burst.count), burstStep: String(settings.burst.step),
   };
   let jump = { section: "snapshot" as Section, request: 0 };
@@ -211,7 +216,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
           total: progress.total,
           method: spec.kind === "clip" ? (spec.method ?? "precise") : "",
           size: "",
-          badge: spec.kind === "clip" ? `${(spec.end! - spec.start).toFixed(1)} s` : spec.kind === "burst" ? `×${spec.count}` : FORMAT_LABEL[spec.format ?? "png"],
+          // A number for the tab (its words add "s" or "×"), or the format's name.
+          badge: spec.kind === "clip" ? (spec.end! - spec.start).toFixed(1) : spec.kind === "burst" ? String(spec.count) : FORMAT_LABEL[spec.format ?? "png"],
           ago: -1,
           percent: share === null ? -1 : Math.round(share * 100),
           left,
@@ -239,7 +245,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         total: item.count,
         method: item.method,
         size: mb(item.bytes),
-        badge: item.kind === "clip" ? `${(item.end - item.start).toFixed(1)} s` : item.kind === "burst" ? `×${item.count}` : extension.slice(1).toUpperCase(),
+        badge: item.kind === "clip" ? (item.end - item.start).toFixed(1) : item.kind === "burst" ? String(item.count) : extension.slice(1).toUpperCase(),
         ago: minutesSince(item.finished),
         percent: -1,
         left: -1,
@@ -542,7 +548,11 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     await exporter.start(spec, seen, destination);
     ui.clipStatus = status("clip-started");
   }
-  async function exportClip(start: string, end: string, ask: boolean) {
+  /** The fields hold a range the user chose: not empty and not what the plugin last filled in. */
+  const typedByUser = () =>
+    !!(form.start.trim() || form.end.trim()) && !(form.start === form.autoStart && form.end === form.autoEnd);
+  /** Export the typed range; `say`: a failure also goes on screen (a key, not the tab's button). */
+  async function exportClip(start: string, end: string, ask: boolean, say = false) {
     if (ui.clipBusy) return;
     ui.clipBusy = true; // exclusion before the first await
     try {
@@ -550,6 +560,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       await exportRange(parseRange(start, end) as { start: number; end: number }, ask);
     } catch (error) {
       ui.clipStatus = errorStatus(error);
+      if (say) sayFailed("clip", problemOf(error));
     } finally {
       ui.clipBusy = false;
     }
@@ -562,7 +573,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       const seen = await player.refresh();
       if (!clippable(seen)) throw new Failure(tabMode(seen) === "network" ? "needLocal" : "unexportable");
       const range = lastRange(seen.position, settings.lastSeconds);
-      setRange(range);
+      // A range the user typed (or set with Now or A-B) stays; empty or filled in by the plugin, it shows what was exported.
+      if (!typedByUser()) setRange(range, true);
       await exportRange(range, false);
       if (ui.clipStatus.kind === "clip-started") shown(osd.show("Exporting the last {} seconds", [settings.lastSeconds]));
     } catch (error) {
@@ -572,10 +584,15 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       ui.clipBusy = false;
     }
   }
-  /** Put a range into the tab's fields (Now, A-B, Last N s, Export Clip…). */
-  function setRange(range: { start?: number; end?: number }) {
+  /**
+   * Put a range into the tab's fields: the user's own (Now, A-B), or one the
+   * plugin fills in (`automatic`: Export Clip… on an untouched range, Last N s),
+   * which a later automatic fill may replace.
+   */
+  function setRange(range: { start?: number; end?: number }, automatic = false) {
     if (range.start !== undefined) form.start = clock(range.start);
     if (range.end !== undefined) form.end = clock(range.end);
+    if (automatic) Object.assign(form, { autoStart: form.start, autoEnd: form.end });
     panel.set({ clipStart: form.start, clipEnd: form.end });
     rememberForm();
     probeSoon();
@@ -625,7 +642,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       ...view,
       keys: {
         save: keyOf("capture.save"), copy: keyOf("capture.copy"), savescreen: keyOf("capture.saveScreen"), copyscreen: keyOf("capture.copyScreen"),
-        burst: keyOf("capture.burst"), clip: keyOf("capture.clip"), panel: keyOf("capture.panel"), last: lastKey(),
+        burst: keyOf("capture.burst"), clip: keyOf("capture.clipExport"), panel: keyOf("capture.panel"), last: lastKey(),
       },
       support: { fast: support.fastCut, encode: support.encodeOptions, progress: support.progress },
       formatIndex: FORMATS.indexOf(settings.format),
@@ -749,7 +766,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   void plugin.storage.session.get<Partial<Form>>("form").then(
     (kept) => {
       if (!kept || typeof kept !== "object") return;
-      for (const key of ["start", "end", "burstStart", "burstCount", "burstStep"] as const) if (typeof kept[key] === "string") form[key] = kept[key];
+      for (const key of ["start", "end", "autoStart", "autoEnd", "burstStart", "burstCount", "burstStep"] as const) if (typeof kept[key] === "string") form[key] = kept[key];
       if (Number.isInteger(kept.audioIndex)) form.audioIndex = kept.audioIndex!;
       for (const key of ["processed", "burn"] as const) if (typeof kept[key] === "boolean") form[key] = kept[key];
       panel.set({ clipStart: form.start, clipEnd: form.end, burstStart: form.burstStart, burstCount: form.burstCount, burstStep: form.burstStep });
@@ -965,16 +982,27 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     await showTab("snapshot");
   }, { bindings: ["Ctrl+G"], ...quick, checked: () => tabShown() && settings.burstOpen });
   /**
-   * Export Clip… (Ctrl+Shift+E): opens the tab's Clip section with the
-   * position → +10 s, as the dialog did; pressed again while the tab shows,
-   * it exports the tab's range (the Export button's key, proposal §3.2).
+   * Export Clip…: opens the tab at its Clip section (or scrolls there) and
+   * never exports. A range the user has not typed is set to the position →
+   * +10 s, as the dialog did.
    */
-  entry("capture.clip", 428, async () => {
-    if (tabShown()) return exportClip(form.start, form.end, false);
-    const { position, duration } = await player.refresh();
-    setRange(defaultRange(position, duration));
+  async function openClip() {
+    if (!typedByUser()) {
+      const { position, duration } = await player.refresh();
+      setRange(defaultRange(position, duration), true);
+    }
     await showTab("clip");
-  }, { bindings: ["Ctrl+Shift+E"], ...quick, ...exporting });
+  }
+  entry("capture.clip", 428, openClip, { ...quick, ...exporting });
+  /**
+   * Export Clip Range (Ctrl+Shift+E, the Export button's key): exports the
+   * tab's range into the snapshot folder; a failure is said on screen. With
+   * no range yet it opens the Clip section instead.
+   */
+  entry("capture.clipExport", 427, async () => {
+    if (!form.start.trim() && !form.end.trim()) return openClip();
+    await exportClip(form.start, form.end, false, true);
+  }, { bindings: ["Ctrl+Shift+E"], ...exporting, ...inTab, ...canCapture });
   // Alt+S: shows the tab, or hides the sidebar when the tab is in front (as F6 does for the playlist).
   entry("capture.panel", 440, async () => {
     try {

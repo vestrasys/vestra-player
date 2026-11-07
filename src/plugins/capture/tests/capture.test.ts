@@ -77,11 +77,12 @@ test("Snapshot ▸ keeps five items; every other command is in the command palet
       ["视频 > 截图 > 保存当前画面", 420, "capture-quick", "Ctrl+E"],
       ["视频 > 截图 > 复制当前画面", 422, "capture-quick", "Ctrl+C"],
       ["视频 > 截图 > 连拍…", 426, "capture-quick", "Ctrl+G"],
-      ["视频 > 截图 > 导出片段…", 428, "capture-quick", "Ctrl+Shift+E"],
+      ["视频 > 截图 > 导出片段…", 428, "capture-quick", ""],
       ["视频 > 截图 > 截图与片段…", 440, "capture-tab", "Alt+S"],
     ]);
     const palette = [...host.commands.entries()].filter(([, c]) => !c.declaration.path?.length).map(([id, { declaration: d }]) => [id, d.bindings.join(","), d.home ?? ""]);
     assert.deepEqual(palette, [
+      ["capture.clipExport", "Ctrl+Shift+E", "capture.panel"],
       ["capture.saveAs", "", "capture.panel"],
       ["capture.saveScreen", "Ctrl+Alt+E", "capture.panel"],
       ["capture.saveScreenAs", "", "capture.panel"],
@@ -117,7 +118,7 @@ test("every command has a category for the command palette, and every home is on
     ready(host);
     const { stop } = await start(host, locale);
     try {
-      assert.equal(host.commands.size, 20);
+      assert.equal(host.commands.size, 21);
       for (const [id, command] of host.commands) {
         assert.ok(command.declaration.category, `${id}: declares a category`);
         assert.ok(command.display.category?.trim(), `${id}: shows a category in ${locale}`);
@@ -127,7 +128,7 @@ test("every command has a category for the command palette, and every home is on
       }
       if (locale === "en") {
         assert.equal(host.command("capture.save").display.category, "Snapshot");
-        for (const id of ["capture.clip", "capture.tasks", "capture.last30", "capture.clipStart", "capture.clipEnd"]) assert.equal(host.command(id).display.category, "Export", id);
+        for (const id of ["capture.clip", "capture.clipExport", "capture.tasks", "capture.last30", "capture.clipStart", "capture.clipEnd"]) assert.equal(host.command(id).display.category, "Export", id);
         for (const id of ["capture.panel", "capture.settings", "capture.folder", "capture.openFolder"]) assert.equal(host.command(id).display.category, "Snapshot", id);
       }
     } finally {
@@ -389,8 +390,8 @@ test("lazy activation: the Snapshot items are player conditions; a background ta
     await host.settle();
     assert.equal(tab(host).mode, "none", "followed while it shows");
     host.selectTab("vestra.playlist");
-
-    await until(() => !host.listening.has("source.state")); // the scope is disposed past the layout read
+    // The layout is read after the event; the binding then runs again without reading the player's state.
+    await until(() => !host.listening.has("source.state"));
     assert.deepEqual(host.keepsRunning, []);
   } finally {
     await stop();
@@ -483,7 +484,7 @@ test("clip: Export saves into the folder with the template's name; the snapshot 
     await until(() => host.osd.at(-1) === `片段已导出为 ${destination}` && statusOf(host, "clip-status") === "已导出 source-one_00.01.000-00.04.500.mp4");
     await until(() => rows(host).length === 1 && rows(host)[0]!.state === "completed");
     assert.equal((tab(host).card as { shown: boolean }).shown, false);
-    assert.deepEqual([rows(host)[0]!.kind, (rows(host)[0] as unknown as { method: string; badge: string }).method, (rows(host)[0] as unknown as { badge: string }).badge], ["clip", "precise", "3.5 s"]);
+    assert.deepEqual([rows(host)[0]!.kind, (rows(host)[0] as unknown as { method: string; badge: string }).method, (rows(host)[0] as unknown as { badge: string }).badge], ["clip", "precise", "3.5"]);
     host.mounted().emit("reveal-result", rows(host)[0]!.id);
     await until(() => host.system.revealed.length === 1);
     assert.deepEqual(host.system.revealed, [destination]);
@@ -493,7 +494,7 @@ test("clip: Export saves into the folder with the template's name; the snapshot 
   }
 });
 
-test("Export Clip… opens the tab at Clip with the position → +10 s; pressed again while the tab shows it exports", async () => {
+test("Export Clip… only opens the Clip section; Export Clip Range (Ctrl+Shift+E) exports, or opens it when there is no range", async () => {
   const host = new TestHost();
   ready(host);
   host.mountOther("sidebar", "vestra.playlist", { title: "Playlist" });
@@ -501,16 +502,34 @@ test("Export Clip… opens the tab at Clip with the position → +10 s; pressed 
   const { stop } = await start(host);
   const { cleanup } = await withFolder(host);
   try {
+    await host.settle();
+    assert.equal((tab(host).keys as { clip: string }).clip, "⇧⌘E", "the Export button shows Export Clip Range's key");
+    // No range yet: the key opens the Clip section with the position → +10 s, and exports nothing.
     await host.press("Ctrl+Shift+E");
     await host.settle();
     assert.equal(host.layout.sidebar?.owner, 1, "the tab is in front");
     assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:02.000", "00:12.000"]);
     assert.deepEqual([tab(host)["jump-section"], tab(host)["jump-request"]], [1, 1]);
     assert.equal(host.sent("jobs.start").length, 0);
+    // Export Clip… never exports, also while the tab shows.
+    await host.command("capture.clip").run();
+    await host.settle();
+    assert.equal(host.sent("jobs.start").length, 0);
+    assert.equal(tab(host)["jump-request"], 2);
+    // With a range, the key exports it.
     await host.press("Ctrl+Shift+E");
     await until(() => host.sent("jobs.start").length === 1);
     assert.equal(host.sent("jobs.start")[0]!.end, 12);
     setJob(1, { status: "cancelled", outcome: { cancelled: true } });
+    // A range the user typed: Export Clip… keeps it; a bad one is said on screen by the key.
+    host.mounted().emit("clip-edited", "0:05", "0:03");
+    const sets = host.sent("ui.setMount").length;
+    await host.command("capture.clip").run();
+    await host.settle();
+    assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:02.000", "00:12.000"], "nothing written over the typed fields");
+    assert.ok(host.sent("ui.setMount").length > sets && host.sent("ui.setMount").slice(sets).every((p) => !/clip-?start/i.test(JSON.stringify(p))));
+    await host.press("Ctrl+Shift+E");
+    await until(() => host.osd.at(-1) === "导出失败：结束时间必须晚于开始时间。");
   } finally {
     await stop();
     await cleanup();
@@ -579,15 +598,26 @@ test("Last N s (Ctrl+Shift+R): the seconds before the position into the folder; 
     assert.equal(host.sent("snapshot.capture")[0]!.time, 0, "max(0, 20 − 30)");
     assert.equal(host.sent("jobs.start")[0]!.end, 20);
     assert.equal(host.osd.at(-1), "Exporting the last 30 seconds");
+    assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:00.000", "00:20.000"], "empty fields show what was exported");
     setJob(1, { status: "cancelled", outcome: { cancelled: true } });
+    // A range the user typed is kept; Last N s exports its own range all the same.
+    host.mounted().emit("clip-edited", "0:03", "0:07");
+    host.setSource({ position: 25 });
+    host.mounted().emit("last");
+    await until(() => host.sent("jobs.start").length === 2);
+    assert.deepEqual([host.sent("snapshot.capture")[1]!.time, host.sent("jobs.start")[1]!.end], [0, 25]);
+    assert.equal(tab(host)["clip-end"], "00:20.000", "the typed fields were not written over (00:25.000 would be)");
+    host.setSource({ position: 20 });
+    setJob(2, { status: "cancelled", outcome: { cancelled: true } });
+    host.mounted().emit("clip-edited", "", "");
     host.mounted().emit("set-last-seconds", 0);
     await host.settle();
     assert.equal(host.command("capture.last30").display.title, "Export Last 10 Seconds");
     assert.deepEqual(host.command("capture.last30").declaration.bindings, ["Ctrl+Shift+R"]);
     await until(() => host.sent("source.state").length > 0);
     host.mounted().emit("last");
-    await until(() => host.sent("jobs.start").length === 2);
-    assert.equal(host.sent("snapshot.capture")[1]!.time, 10);
+    await until(() => host.sent("jobs.start").length === 3);
+    assert.equal(host.sent("snapshot.capture")[2]!.time, 10);
     // Network sources and too little played: refused with a reason.
     host.setSource({ position: 0.05 });
     host.mounted().emit("last");

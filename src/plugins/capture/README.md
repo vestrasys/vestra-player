@@ -18,10 +18,10 @@ Saves and copies the current frame, captures bursts, exports video clips. Everyt
 Right-click menu: Video ▸ Snapshot.
 
 - Save Current Frame (Ctrl+E), Copy Current Frame (Ctrl+C)
-- Burst… (Ctrl+G) and Export Clip… (Ctrl+Shift+E) open the tab at their place
+- Burst… (Ctrl+G) and Export Clip… open the tab at their place
 - Snapshots & Clips… (Alt+S) shows or hides the tab
 
-In the command palette (Ctrl+Shift+P): Save Rendered Frame (Ctrl+Alt+E), Copy Rendered Frame (Ctrl+Alt+C), the Save As… commands, Export Last N Seconds (Ctrl+Shift+R), Set Clip Start / End, Export Tasks…, Snapshot Settings…, Snapshot Folder…, Open Snapshot Folder, Capture as PNG / JPEG / BMP, Include Subtitles in Rendered Frame.
+In the command palette (Ctrl+Shift+P): Save Rendered Frame (Ctrl+Alt+E), Copy Rendered Frame (Ctrl+Alt+C), the Save As… commands, Export Clip Range (Ctrl+Shift+E, the Export button), Export Last N Seconds (Ctrl+Shift+R), Set Clip Start / End, Export Tasks…, Snapshot Settings…, Snapshot Folder…, Open Snapshot Folder, Capture as PNG / JPEG / BMP, Include Subtitles in Rendered Frame.
 
 ## Limits
 

@@ -8,7 +8,7 @@ import {
   snapStart, timeline, timelineWindow,
 } from "../clip.ts";
 import { clippable, Failure, frameName, parseRange, parseTime, tabMode, uniqueFolder } from "../model.ts";
-import { DEFAULT_TEMPLATES, insertVariable, normalTemplate, renderName, safeName, TEMPLATE_LIMIT } from "../names.ts";
+import { DEFAULT_TEMPLATES, insertVariable, NAME_LIMIT, normalTemplate, renderName, safeName, TEMPLATE_LIMIT } from "../names.ts";
 import { RESULT_LIMIT, savedOf } from "../results.ts";
 import { clipExport, hostSupport } from "../seams.ts";
 import { settingsOf } from "../settings.ts";
@@ -29,7 +29,10 @@ test("time fields: 1:02:03.450, 02:03.450 and seconds; anything else is no time"
   assert.equal(parseTime(" 62.5 "), 62.5);
   assert.equal(parseTime("90:00"), 5400, "minutes before the first colon may pass 59");
   assert.equal(parseTime("0"), 0);
-  for (const bad of ["", " ", "-1", "1:60", "1:02:60.5", "1.5:00", "1:2:3:4", "abc", "1e3", "NaN", "Infinity", "1:", ":5"]) assert.equal(parseTime(bad), null, bad);
+  assert.equal(parseTime(".5"), 0.5);
+  assert.equal(parseTime("5."), 5);
+  assert.equal(parseTime("1:02:.25"), 3720.25);
+  for (const bad of ["", " ", "-1", "1:60", "1:02:60.5", "1.5:00", "1:2:3:4", "abc", "1e3", "NaN", "Infinity", "1:", ":5", ".", "5..1", "1.:00"]) assert.equal(parseTime(bad), null, bad);
 });
 
 test("range parsing: field reasons, the end after the start", () => {
@@ -58,9 +61,11 @@ test("Last N s: from N seconds before the position (not before 0); lengths 10/30
   assert.deepEqual([10, 30, 60, 120, 45, "x", undefined].map(lastSeconds), [10, 30, 60, 120, 30, 30, 30]);
 });
 
-test("Export Clip… starts at the position for 10 s, shorter at the end of the media", () => {
+test("Export Clip… starts at the position for 10 s; near the end it takes the last 10 s", () => {
   assert.deepEqual(defaultRange(2, 30), { start: 2, end: 12 });
-  assert.deepEqual(defaultRange(25, 30), { start: 25, end: 30 });
+  assert.deepEqual(defaultRange(25, 30), { start: 20, end: 30 }, "near the end: the last 10 s, never past the duration");
+  assert.deepEqual(defaultRange(20, 30), { start: 20, end: 30 });
+  assert.deepEqual(defaultRange(3, 6), { start: 0, end: 6 }, "a short file: all of it");
   assert.deepEqual(defaultRange(null, null), { start: 0, end: 10 });
 });
 
@@ -143,6 +148,17 @@ test("file-name templates: the defaults name files as before; variables, illegal
   assert.equal(renderName("image", "{name}", { ...values, source: null }), "capture");
   assert.equal(renderName("image", "{name}", { ...values, source: "https://x.test/v/clip.m3u8?token=1" }), "clip");
   assert.equal(safeName("a\u0001b. "), "a_b");
+  // Windows device names, whatever follows the first dot and in any case.
+  const devices = [["CON", "CON_"], ["nul", "nul_"], ["Aux.png", "Aux_.png"], ["com1.tar.gz", "com1_.tar.gz"], ["LPT9", "LPT9_"], ["COM¹", "COM¹_"], ["conin$", "conin$_"], ["CONOUT$.txt", "CONOUT$_.txt"], ["console", "console"], ["com10", "com10"], ["prn_1", "prn_1"]];
+  for (const [name, safe] of devices) assert.equal(safeName(name!), safe, name);
+  assert.equal(renderName("image", "{name}", { ...values, source: "/m/aux.mp4" }), "aux_", "a device name from the source");
+  assert.equal(renderName("burst", "NUL", values), "NUL_");
+  // Long names: the source's name gives way, the times stay; never over the limit.
+  const long = renderName("clip", DEFAULT_TEMPLATES.clip, { ...values, source: `/m/${"x".repeat(400)}.mp4`, start: 1, end: 2 });
+  assert.equal(long.length, NAME_LIMIT);
+  assert.match(long, /^x+_00\.01\.000-00\.02\.000$/);
+  assert.ok(renderName("image", "{date}".repeat(40), values).length <= NAME_LIMIT, "no {name} to shorten: cut at the limit");
+  assert.ok(NAME_LIMIT + ".jpeg".length + " (999)".length <= 180);
   assert.equal(normalTemplate("clip", ""), DEFAULT_TEMPLATES.clip);
   assert.equal(normalTemplate("clip", 5), DEFAULT_TEMPLATES.clip);
   assert.equal(normalTemplate("clip", "x".repeat(500)).length, TEMPLATE_LIMIT);
