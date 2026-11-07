@@ -1,6 +1,6 @@
 {
   "id": "vestra.capture",
-  "version": "1.0.10",
+  "version": "1.0.11",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [

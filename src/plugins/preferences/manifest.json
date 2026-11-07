@@ -1,6 +1,6 @@
 {
   "id": "vestra.preferences",
-  "version": "0.3.3",
+  "version": "0.3.4",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [

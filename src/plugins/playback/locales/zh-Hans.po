@@ -98,6 +98,7 @@ msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "进度条悬停显示缩略图"
 
 #: commands.ts:247
+#, x-machine
 msgid "File"
 msgstr "文件"
 

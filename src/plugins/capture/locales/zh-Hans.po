@@ -182,79 +182,79 @@ msgstr "导出片段"
 msgid "The snapshot window could not open."
 msgstr "截图窗口无法打开。"
 
-#: main.ts:388
-msgid "Video"
-msgstr "视频"
+#: main.ts:389
+msgid "Export"
+msgstr "导出"
 
-#: main.ts:393 manifest.json ui/error.slint:5
+#: main.ts:394 manifest.json ui/error.slint:5
 msgid "Snapshot"
 msgstr "截图"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Current Frame"
 msgstr "保存当前画面"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Current Frame As…"
 msgstr "当前画面另存为…"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Copy Current Frame"
 msgstr "复制当前画面"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Rendered Frame"
 msgstr "保存实际画面"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Rendered Frame As…"
 msgstr "实际画面另存为…"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Copy Rendered Frame"
 msgstr "复制实际画面"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Burst…"
 msgstr "连拍…"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Export Clip…"
 msgstr "导出片段…"
 
-#: main.ts:393 ui/clip.slint:85
+#: main.ts:394 ui/clip.slint:85
 msgid "Export Tasks…"
 msgstr "导出任务…"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Capture as PNG"
 msgstr "截取为 PNG"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Capture as JPEG"
 msgstr "截取为 JPEG"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Capture as BMP"
 msgstr "截取为 BMP"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Include Subtitles in Rendered Frame"
 msgstr "实际画面包含字幕"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Snapshot Settings…"
 msgstr "截图设置…"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Snapshot Folder…"
 msgstr "截图文件夹…"
 
-#: main.ts:393
+#: main.ts:394
 msgid "Open Snapshot Folder"
 msgstr "打开截图文件夹"
 
-#: main.ts:393
+#: main.ts:394
 msgid "No frame to capture"
 msgstr "没有可截取的画面"
 

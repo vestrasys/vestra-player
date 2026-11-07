@@ -39,6 +39,7 @@ msgid "Language"
 msgstr "Langue"
 
 #: main.ts:94
+#, x-machine
 msgid "Settings"
 msgstr "Paramètres"
 

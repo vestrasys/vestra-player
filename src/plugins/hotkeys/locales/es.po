@@ -46,7 +46,7 @@ msgstr "En panel"
 msgid "Global"
 msgstr "Global"
 
-#: export.ts:22 keys-page.ts:195
+#: export.ts:22 keys-page.ts:203
 #, x-machine
 msgid "Player"
 msgstr "Reproductor"
@@ -106,59 +106,64 @@ msgstr "Ignorar atajos predeterminados: activado"
 msgid "Ignore default shortcuts: Off"
 msgstr "Ignorar atajos predeterminados: desactivado"
 
-#: keys-page.ts:118
+#: keys-page.ts:126
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "Atajos de teclado"
 
-#: keys-page.ts:194
+#: keys-page.ts:202
 #, x-machine
 msgid "All sources"
 msgstr "Todos los orígenes"
 
-#: keys-page.ts:197
+#: keys-page.ts:205
 #, x-machine
 msgid "Plugins not loaded"
 msgstr "Complementos no cargados"
 
-#: keys-page.ts:419
+#: keys-page.ts:274
+#, x-machine
+msgid "{} (in panel)"
+msgstr "{} (en panel)"
+
+#: keys-page.ts:432
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "Atajo actualizado: {0} = {1}"
 
-#: keys-page.ts:422
+#: keys-page.ts:435
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "Atajo actualizado: {} = (ninguno)"
 
-#: keys-page.ts:474
+#: keys-page.ts:487
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "¿Restaurar todos los atajos predeterminados?"
 
-#: keys-page.ts:475
+#: keys-page.ts:488
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "Se borrarán tus cambios en los atajos y acciones del mouse de todos los comandos, incluidos los de complementos que no están cargados."
 
-#: keys-page.ts:476
+#: keys-page.ts:489
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "Restaurar valores predeterminados"
 
-#: keys-page.ts:488
+#: keys-page.ts:501
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "Se restauraron los atajos predeterminados"
 
 #. only the part before the extension.
-#: keys-page.ts:499
+#: keys-page.ts:512
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "Exportar lista de atajos"
 
 #. only the part before the extension.
-#: keys-page.ts:499
+#: keys-page.ts:512
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Atajos de Vestra Player.csv"

@@ -561,6 +561,7 @@ msgid "Rotation"
 msgstr "Rotation"
 
 #: main.ts:869
+#, x-machine
 msgid "Reset"
 msgstr "Réinitialiser"
 

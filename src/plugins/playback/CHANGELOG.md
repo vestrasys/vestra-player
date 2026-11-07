@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.16
+
+- Command palette: Jump to Time… is in the **Seek** category (was Playback), with the other seek commands. The category texts "File" (all languages, zh-Hans included) and "Playback" (de, es, fr, ja, ko) are now marked `x-machine`. Who must change: nobody. What users see: "Seek: Jump to Time…" in the palette. Titles, ids, menu paths, keys and order are unchanged.
+
 ## 0.2.15
 
 Who must change: nobody. Needs player 0.7.6 (`minPlayerVersion` raised from 0.5.10; older players refuse the new field). What users see: in the player's command palette (Ctrl+Shift+P) every command of this plugin reads **Category: Title**, so a title such as "Back 30 s" or "2×" says what it changes outside its menu. Titles, ids, menu paths, keys and order are unchanged.

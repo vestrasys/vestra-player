@@ -37,6 +37,7 @@ msgid "Track {} (external)"
 msgstr "トラック {}（外部）"
 
 #: main.ts:70
+#, x-machine
 msgid "Audio"
 msgstr "オーディオ"
 
@@ -56,6 +57,7 @@ msgid "Output Device"
 msgstr "出力デバイス"
 
 #: main.ts:74
+#, x-machine
 msgid "Equalizer Preset"
 msgstr "イコライザのプリセット"
 

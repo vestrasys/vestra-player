@@ -227,96 +227,97 @@ msgstr "Clip exportieren"
 msgid "The snapshot window could not open."
 msgstr "Das Schnappschuss-Fenster konnte nicht geöffnet werden."
 
-#: main.ts:388
-msgid "Video"
-msgstr "Video"
+#: main.ts:389
+#, x-machine
+msgid "Export"
+msgstr "Export"
 
-#: main.ts:393 manifest.json ui/error.slint:5
+#: main.ts:394 manifest.json ui/error.slint:5
 #, x-machine
 msgid "Snapshot"
 msgstr "Schnappschuss"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame"
 msgstr "Aktuelles Bild speichern"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "Aktuelles Bild speichern unter…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "Aktuelles Bild kopieren"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "Gerendertes Bild speichern"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "Gerendertes Bild speichern unter…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "Gerendertes Bild kopieren"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Burst…"
 msgstr "Serienaufnahme…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Export Clip…"
 msgstr "Clip exportieren…"
 
-#: main.ts:393 ui/clip.slint:85
+#: main.ts:394 ui/clip.slint:85
 #, x-machine
 msgid "Export Tasks…"
 msgstr "Exportaufgaben…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as PNG"
 msgstr "Als PNG aufnehmen"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "Als JPEG aufnehmen"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as BMP"
 msgstr "Als BMP aufnehmen"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "Untertitel im gerenderten Bild einbeziehen"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "Schnappschuss-Einstellungen…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "Schnappschuss-Ordner…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "Schnappschuss-Ordner öffnen"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "No frame to capture"
 msgstr "Kein Bild zum Aufnehmen"

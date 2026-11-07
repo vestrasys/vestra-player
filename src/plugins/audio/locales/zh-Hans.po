@@ -46,6 +46,7 @@ msgid "Output Device"
 msgstr "输出设备"
 
 #: main.ts:74
+#, x-machine
 msgid "Equalizer Preset"
 msgstr "均衡器预设"
 

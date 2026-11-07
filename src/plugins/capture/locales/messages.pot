@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.capture 1.0.10\n"
+"Project-Id-Version: vestra.capture 1.0.11\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -181,79 +181,79 @@ msgstr ""
 msgid "The snapshot window could not open."
 msgstr ""
 
-#: main.ts:388
-msgid "Video"
+#: main.ts:389
+msgid "Export"
 msgstr ""
 
-#: main.ts:393 manifest.json ui/error.slint:5
+#: main.ts:394 manifest.json ui/error.slint:5
 msgid "Snapshot"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Current Frame"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Current Frame As…"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Copy Current Frame"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Rendered Frame"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Save Rendered Frame As…"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Copy Rendered Frame"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Burst…"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Export Clip…"
 msgstr ""
 
-#: main.ts:393 ui/clip.slint:85
+#: main.ts:394 ui/clip.slint:85
 msgid "Export Tasks…"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Capture as PNG"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Capture as JPEG"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Capture as BMP"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Include Subtitles in Rendered Frame"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Snapshot Settings…"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Snapshot Folder…"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "Open Snapshot Folder"
 msgstr ""
 
-#: main.ts:393
+#: main.ts:394
 msgid "No frame to capture"
 msgstr ""
 

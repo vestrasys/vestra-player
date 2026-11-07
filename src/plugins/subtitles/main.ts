@@ -135,7 +135,9 @@ export default async function activate(plugin: Plugin) {
    */
   const CATEGORY = {
     subtitles: text("Subtitles"),
-    track: text("Subtitle Track"),
+    // Its own text, not the submenu's "Subtitle Track": a category is a noun, and some
+    // languages word the menu as a verb phrase ("选择字幕轨"). TS texts have no msgctxt.
+    track: text("Subtitle Tracks"),
     secondary: text("Secondary Subtitle"),
     secondaryPosition: text("Secondary Subtitle Position"),
     style: text("Subtitle Style"),
