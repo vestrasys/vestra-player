@@ -139,13 +139,19 @@ export component HostBarStrip {
     // `»` was clicked: the cell's top-left corner, logical px in the window.
     callback more(float, float);
     private property <bool> live: !BarButtonsHost.placed;
-    private property <int> shown: BarButtonsHost.shown;
-    private property <int> after-more: root.shown + (BarButtonsHost.more ? 1 : 0);
+    // Bound to its own `room` through the global's pure functions, not to
+    // the global's `shown` / `more` / `width`: those follow `room` only
+    // after the `changed` handler below (a frame later), and a strip drawn
+    // from them could be a frame too wide while the window narrows.
+    private property <int> shown: BarButtonsHost.shown-in(root.room);
+    private property <bool> overflowing: BarButtonsHost.more-in(root.room);
+    private property <int> after-more: root.shown + (root.overflowing ? 1 : 0);
     private property <bool> palette: BarButtonsHost.palette.token != "";
-    // Publishes the room to the global, which works out the layout.
+    // Publishes the room to the global, for the player (`shown` at a `»`
+    // click) and for bars that read `width`.
     changed room => { BarButtonsHost.room = self.room; }
     init => { BarButtonsHost.room = self.room; }
-    width: BarButtonsHost.width;
+    width: BarButtonsHost.width-in(root.room);
     height: 40px;
     visible: root.live;
     Cell { x: 0 * 41px; shown: root.live && 0 < root.shown; item: BarButtonsHost.buttons[0]; }
@@ -158,7 +164,7 @@ export component HostBarStrip {
     Cell { x: 7 * 41px; shown: root.live && 7 < root.shown; item: BarButtonsHost.buttons[7]; }
     MoreCell {
         x: root.shown * 41px;
-        shown: root.live && BarButtonsHost.more;
+        shown: root.live && root.overflowing;
         clicked(x, y) => { root.more(x / 1px, y / 1px); }
     }
     Cell { x: root.after-more * 41px; shown: root.live && root.palette; item: BarButtonsHost.palette; }

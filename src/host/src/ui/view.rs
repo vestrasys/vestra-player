@@ -2883,6 +2883,16 @@ export component W inherits Window {
         };
         // 800 - 300 - 4 = 496px: 12 cells, all five fit beside the two fixed.
         assert_eq!(strip(300., 0.), (5, false, 7. * 41.));
+        // The strip draws from the pure functions at its own room (no frame
+        // behind a resize); they agree with the published properties.
+        let width_in = |room: f64| {
+            shell
+                .invoke_global(GLOBAL, "width-in", &[Value::Number(room)])
+                .unwrap()
+        };
+        assert_eq!(width_in(496.), Value::Number(7. * 41.));
+        assert_eq!(width_in(196.), Value::Number(4. * 41.));
+        assert_eq!(width_in(6.), Value::Number(3. * 41.));
         // What a bar must leave free: the two own cells and the `»` cell,
         // reserved while any plugin button exists (drawn or not).
         assert_eq!(

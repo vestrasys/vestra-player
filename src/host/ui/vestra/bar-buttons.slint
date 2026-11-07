@@ -78,15 +78,32 @@ export global BarButtonsHost {
     // plugins' buttons counts it in `content-min-width` while it fits
     // beside these.
     out property <int> fixed: root.own + (root.buttons.length > 0 || root.overflow > 0 ? 1 : 0);
-    // Cells left in `room` for plugin buttons and `»`.
-    private property <int> free: Math.max(0, Math.floor(root.room / 41px) - root.own);
-    // The plugin buttons in the strip (the first `shown` of `buttons`), and
-    // whether `»` shows (a button past 8 or past the room).
-    out property <int> shown: root.overflow == 0 && root.buttons.length <= root.free
-        ? root.buttons.length : Math.max(0, Math.min(root.buttons.length, root.free - 1));
-    out property <bool> more: root.shown < root.buttons.length || root.overflow > 0;
-    // The player's strip's width (0 while a bar places `BarButtons`).
-    out property <length> width: root.placed ? 0px : (root.shown + (root.more ? 1 : 0) + root.own) * 41px;
+    // The strip's layout for a room, as pure functions, so the player's
+    // strip binds them to its own `room` (no frame behind the shell's
+    // layout) and the properties below give the same numbers for `room`.
+    // The plugin buttons in the strip (the first of `buttons`) at `room`.
+    public pure function shown-in(room: length) -> int {
+        // Cells left for plugin buttons and `»`.
+        let free = Math.max(0, Math.floor(room / 41px) - root.own);
+        if root.overflow == 0 && root.buttons.length <= free {
+            return root.buttons.length;
+        }
+        return Math.max(0, Math.min(root.buttons.length, free - 1));
+    }
+    // Whether `»` shows at `room` (a button past 8 or past the room).
+    public pure function more-in(room: length) -> bool {
+        return root.shown-in(room) < root.buttons.length || root.overflow > 0;
+    }
+    // The strip's width at `room` (0 while a bar places `BarButtons`).
+    public pure function width-in(room: length) -> length {
+        if root.placed {
+            return 0px;
+        }
+        return (root.shown-in(room) + (root.more-in(room) ? 1 : 0) + root.own) * 41px;
+    }
+    out property <int> shown: root.shown-in(root.room);
+    out property <bool> more: root.more-in(root.room);
+    out property <length> width: root.width-in(root.room);
     // A click on the cell with this token.
     callback clicked(string);
 }

@@ -238,35 +238,55 @@ pub const BAR_MIN_WIDTH: &str = "content-min-width";
 /// missed. Instead a probe component that reads the property from an
 /// instance of the bar into a `length` property is compiled: it compiles
 /// exactly when the property exists, is readable from outside and is a
-/// length. Kept per file, component and modification time, so the shell's
-/// later compiles (a tab switch, a mount elsewhere) do not repeat it. A bar
-/// that does not compile has no property here; the shell's compile then
-/// reports its real error.
+/// length. A bar that does not compile has no property here; the shell's
+/// compile then reports its real error.
+///
+/// The answer is kept for the bar's run: its owner generation, file and
+/// component. Owner generations are never reused (`Supervisor::alloc_pid`),
+/// and the files of a plugin change only between runs: an install, update
+/// or reload restarts it (`JobKind::Restart`), a woken plugin is a new
+/// run too. So the shell's later compiles in the same run (a tab switch, a
+/// mount elsewhere) do not repeat the probe, and a changed file anywhere in
+/// the bar's import closure is probed again at its next run. A
+/// modification time would miss a base component or an import in another
+/// file; hashing the closure would need the import resolution the compiler
+/// already does.
 fn bar_reports_min(specs: &[CompileSpec]) -> bool {
     specs
         .iter()
         .find(|spec| spec.slot == Slot::Bottom)
-        .is_some_and(|spec| declares_length(&spec.file, &spec.component, BAR_MIN_WIDTH))
+        .is_some_and(|spec| declares_length(spec.owner, &spec.file, &spec.component, BAR_MIN_WIDTH))
 }
 
-/// [`bar_reports_min`] for any file, component and `length` property.
-fn declares_length(file: &std::path::Path, component: &str, property: &str) -> bool {
-    type Key = (PathBuf, String, String, Option<std::time::SystemTime>);
+/// [`bar_reports_min`] for any run (`owner`), file, component and `length`
+/// property. One bottom bar is mounted at a time, so one answer is kept.
+fn declares_length(owner: u64, file: &std::path::Path, component: &str, property: &str) -> bool {
+    type Key = (u64, PathBuf, String, String);
     thread_local! {
-        static SEEN: std::cell::RefCell<std::collections::BTreeMap<Key, bool>> =
-            const { std::cell::RefCell::new(std::collections::BTreeMap::new()) };
+        static LAST: std::cell::RefCell<Option<(Key, bool)>> = const { std::cell::RefCell::new(None) };
     }
-    let modified = std::fs::metadata(file).and_then(|m| m.modified()).ok();
     let key = (
+        owner,
         file.to_path_buf(),
         component.to_owned(),
         property.to_owned(),
-        modified,
     );
-    if let Some(known) = SEEN.with(|seen| seen.borrow().get(&key).copied()) {
+    if let Some(known) = LAST.with(|last| {
+        last.borrow()
+            .as_ref()
+            .filter(|(seen, _)| *seen == key)
+            .map(|(_, found)| *found)
+    }) {
         return known;
     }
-    let found = (|| {
+    let found = probe_length(file, component, property);
+    LAST.with(|last| *last.borrow_mut() = Some((key, found)));
+    found
+}
+
+/// The probe of [`bar_reports_min`], uncached.
+fn probe_length(file: &std::path::Path, component: &str, property: &str) -> bool {
+    (|| {
         identifier(component).ok()?;
         identifier(property).ok()?;
         let path = import_path(file).ok()?;
@@ -282,9 +302,7 @@ fn declares_length(file: &std::path::Path, component: &str, property: &str) -> b
             .any(|d| d.level() == slint_interpreter::DiagnosticLevel::Error);
         Some(!failed && result.component("VestraProbe").is_some())
     })()
-    .unwrap_or(false);
-    SEEN.with(|seen| seen.borrow_mut().insert(key, found));
-    found
+    .unwrap_or(false)
 }
 
 /// The player's bottom-bar strip (bar-strip.slint) at the right end of its
@@ -835,9 +853,8 @@ mod tests {
     #[test]
     fn the_bar_minimum_is_read_where_declared_and_the_band_holds_the_strip() {
         let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        let has = |file: &std::path::Path, component: &str| {
-            declares_length(file, component, BAR_MIN_WIDTH)
-        };
+        let has =
+            |file: &std::path::Path, component: &str| probe_length(file, component, BAR_MIN_WIDTH);
         // Declared on the component, or inherited from a base component in
         // another file (the interpreter's view, not the text).
         assert!(has(&fixtures.join("min-bar.slint"), "MinBar"));
@@ -888,6 +905,43 @@ mod tests {
         .unwrap();
         assert!(derived.contains("bottom-content.content-min-width"));
         build(derived, "HostWindow").unwrap();
+    }
+
+    /// The probe's answer lasts one run of the bar (its owner generation):
+    /// a base component in another file that changes (an update, a reload:
+    /// a new run) is probed again, though the bar's own file did not change.
+    #[test]
+    fn the_bar_minimum_is_probed_again_for_each_run_of_the_bar() {
+        let dir = tempfile::tempdir().unwrap();
+        let base = dir.path().join("base.slint");
+        let bar = dir.path().join("bar.slint");
+        std::fs::write(
+            &base,
+            "export component Base inherits Rectangle { out property <length> content-min-width: 9px; }\n",
+        )
+        .unwrap();
+        std::fs::write(
+            &bar,
+            "import { Base } from \"base.slint\";\nexport component Bar inherits Base {}\n",
+        )
+        .unwrap();
+        assert!(declares_length(41, &bar, "Bar", BAR_MIN_WIDTH));
+        // The next version's base drops the property; bar.slint is untouched.
+        std::fs::write(&base, "export component Base inherits Rectangle {}\n").unwrap();
+        assert!(
+            declares_length(41, &bar, "Bar", BAR_MIN_WIDTH),
+            "the same run keeps its answer"
+        );
+        assert!(
+            !declares_length(42, &bar, "Bar", BAR_MIN_WIDTH),
+            "the next run (new owner generation) probes again"
+        );
+        std::fs::write(
+            &base,
+            "export component Base inherits Rectangle { out property <length> content-min-width: 9px; }\n",
+        )
+        .unwrap();
+        assert!(declares_length(43, &bar, "Bar", BAR_MIN_WIDTH));
         let empty = shell_source(&[]).unwrap();
         assert_eq!(empty.matches("HostBarStrip {").count(), 1, "{empty}");
         assert!(empty.contains("background: Theme.bg-bar"));
