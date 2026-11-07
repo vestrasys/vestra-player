@@ -2,6 +2,7 @@
 
 ## 2.2.36
 
+- The vendored SDK is 1.6.7 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The AI's documentation now describes `plugin.commands.keys` and `onKeysChange` (the current keys of a plugin's own commands, as the menus write them) and the `KeyHint` key cap and `ToolTipArea.keys` of `@vestra/widgets.slint` (a plugin that uses them needs `"minPlayerVersion": "0.7.6"`). No change to the plugin's own behaviour.
 - Vestra Player AI… has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Plugins**, so the palette reads "Plugins: Vestra Player AI…", next to the Plugin Store. Translated like the player's word for plugins (machine, marked `x-machine`). No `home`: the command opens its own window. Who must change: nobody. Title, id, menu path, button and order are unchanged.
 - Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
 - The vendored SDK is 1.6.5 (`npm run vendor:sdk`), the version the player now uses: `vestra-plugin i18n extract` now finds string-literal command categories. Who must change: nobody.

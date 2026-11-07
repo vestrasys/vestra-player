@@ -78,7 +78,7 @@ import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.js";
 import { OSD_LIMITS } from "./osd.js";
 import { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./services.js";
 import { SUBTITLE_LIMITS } from "./subtitles.js";
-import { BINDING_INPUTS, canonical } from "./bindings.js";
+import { BINDING_INPUTS, canonical, keyLabel } from "./bindings.js";
 import { THEME_PALETTES } from "../palettes.js";
 import { IMAGE_LIMITS, UI_VALUE_LIMITS, valueLimitProblem } from "./values.js";
 import { validStep } from "./player.js";
@@ -3080,7 +3080,7 @@ export class TestHost {
             const scope = declaration.focus ? "panel" : "global";
             // The user overlay (`bindings.set`) replaces a command's own bindings.
             const overridden = this.bindings.overlay.get(this.#bindingKey(id));
-            for (const binding of overridden ?? declaration.bindings) {
+            for (const binding of overridden ?? declaration.bindings ?? []) {
                 const key = `${scope} ${binding}`;
                 claims.set(key, [...(claims.get(key) ?? []), id]);
             }
@@ -3090,6 +3090,87 @@ export class TestHost {
     /** `host/<id>` for core commands, `<manifest id>/<id>` for the plugin's. */
     #bindingKey(id) {
         return this.coreCommands.has(id) ? id : `${this.manifestId}/${id}`;
+    }
+    /**
+     * Change the keys of one of the plugin's commands as the user does in
+     * Keyboard Shortcuts (SDK 1.6.6): `inputs` replaces its keys (`[]`
+     * clears them, as Ignore Default Shortcuts does for every default),
+     * `null` gives it its own defaults back. It writes
+     * {@link TestHost.bindings | bindings.overlay}, and the plugin hears it
+     * as from the player: `bindings.changed` and, when what
+     * `plugin.commands.keys` reads changed, `commands.keys`.
+     *
+     * @example Check that a key hint follows a rebinding
+     * The view showed W for Brightness −; after the user moves it to
+     * Shift+W, it shows the new key. `rebind` changes the overlay and
+     * pushes the new labels, and `settle` lets the binding run again. The
+     * test host is a Mac unless `systemInfo.os` says otherwise, hence ⇧W.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.rebind("brightness.down", ["Shift+W"]);
+     * await host.settle();
+     * assert.equal(host.window("picture").props["brightness-down"], "⇧W");
+     * ```
+     *
+     * @capability None.
+     * @throws `Error` `command` is not a command of the plugin.
+     * @since 1.6.6
+     */
+    rebind(command, inputs) {
+        if (!this.commands.has(command))
+            throw new Error(`test host: no command ${command}`);
+        const key = this.#bindingKey(command);
+        if (inputs === null)
+            this.bindings.overlay.delete(key);
+        else
+            this.bindings.overlay.set(key, inputs.map(canonical));
+        this.emit("bindings.changed", null);
+        this.#keysChanged();
+    }
+    /** The labels `commands.keys` last answered or pushed, as JSON. */
+    #keysSent = "";
+    /** The binding table revision of `commands.keys` (a counter here). */
+    #keysRevision = 0;
+    /**
+     * `commands.keys` as the player answers it: each of the plugin's own
+     * commands with the labels of the keys it holds now (the overlay, else
+     * its defaults; not a key an earlier command holds), as menus write
+     * them on `systemInfo.os`.
+     */
+    #keys() {
+        const claims = this.#claims();
+        const mac = this.systemInfo.os === "macos";
+        const keys = {};
+        for (const [id, { declaration }] of this.commands) {
+            const scope = declaration.focus ? "panel" : "global";
+            const current = this.bindings.overlay.get(this.#bindingKey(id)) ??
+                declaration.bindings ??
+                [];
+            const labels = [];
+            for (const input of current) {
+                if (claims.get(`${scope} ${input}`)?.[0] !== id)
+                    continue;
+                const label = keyLabel(input, mac);
+                if (label !== null && !labels.includes(label))
+                    labels.push(label);
+            }
+            keys[id] = labels;
+        }
+        return { keys, revision: this.#keysRevision };
+    }
+    /** Push `commands.keys` when the labels changed and the plugin listens. */
+    #keysChanged() {
+        this.#keysRevision++;
+        if (!this.subscriptions.has("commands.keys"))
+            return;
+        const now = this.#keys();
+        const text = JSON.stringify(now.keys);
+        if (text === this.#keysSent)
+            return;
+        this.#keysSent = text;
+        this.emit("commands.keys", now);
     }
     /**
      * The binding overlay `plugin.bindings.set` writes (`"<plugin>/<command>"`
@@ -4182,11 +4263,20 @@ export class TestHost {
                     await host.settle();
                 },
             });
+            // The player pushes the new command's keys after the answer.
+            queueMicrotask(() => this.#keysChanged());
             return { revision: 1 };
         },
         "commands.unregister": (p) => {
             if (!this.commands.delete(String(p.id)))
                 throw new HostError("missing", `command ${p.id} is not registered`);
+            queueMicrotask(() => this.#keysChanged());
+        },
+        // Player 0.7.6: the labels of the plugin's own commands.
+        "commands.keys": () => {
+            const now = this.#keys();
+            this.#keysSent = JSON.stringify(now.keys);
+            return now;
         },
         "commands.update": (p) => {
             // The request itself, as the player reads it (capabilities/commands.rs
@@ -5102,6 +5192,7 @@ export class TestHost {
                 throw new HostError("missing", `no command ${key}`);
             this.bindings.overlay.set(key, [...p.inputs]);
             this.emit("bindings.changed", null);
+            this.#keysChanged();
         },
         "bindings.reset": (p) => {
             if (p.plugin === undefined)
@@ -5109,6 +5200,7 @@ export class TestHost {
             else
                 this.bindings.overlay.delete(`${p.plugin}/${p.command}`);
             this.emit("bindings.changed", null);
+            this.#keysChanged();
         },
         "packages.list": () => structuredClone(this.packages),
         "packages.setEnabled": (p) => {

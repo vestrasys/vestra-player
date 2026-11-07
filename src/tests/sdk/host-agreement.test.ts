@@ -662,6 +662,9 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "commands.update",
     "commands.unregister",
   ],
+  // SDK 1.6.7, player 0.7.6: the labels of the plugin's own commands.
+  "Commands.keys": ["commands.keys", "event:commands.keys"],
+  "Commands.onKeysChange": ["event:commands.keys"],
   "Host.run": ["host.run", "source.state?"],
   "Windows.create": ["ui.open", "ui.set", "ui.show", "ui.close"],
   "Panels.mount": [
@@ -1569,4 +1572,24 @@ test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, p
     { ...runtime.SESSION_STORAGE_LIMITS },
     "SESSION_STORAGE_LIMITS differ from the player's session storage limits",
   );
+});
+
+test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS; commands.keys from SDK 1.6.7)", async () => {
+  const rust = host("src/capabilities/events.rs");
+  const block =
+    /pub\(crate\) const WAKE_EVENTS: &\[&str\] = &\[([\s\S]*?)\];/.exec(
+      rust,
+    )?.[1];
+  assert.ok(block, "WAKE_EVENTS in capabilities/events.rs");
+  const player = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]);
+  // Internal to the SDK: TestHost and `vestra-plugin test` use it to say
+  // what keeps a plugin running while idle.
+  const runtime = new URL(
+    "../../node_modules/@vestra-player/sdk/dist/plugin/runtime.js",
+    import.meta.url,
+  );
+  const { WAKE_EVENTS } = (await import(runtime.href)) as {
+    WAKE_EVENTS: readonly string[];
+  };
+  assert.deepEqual([...WAKE_EVENTS].sort(), [...player].sort());
 });

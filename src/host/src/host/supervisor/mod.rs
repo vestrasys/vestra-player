@@ -623,17 +623,28 @@ impl Host {
         if owners.is_empty() {
             return;
         }
+        for owner in owners {
+            self.wake_listener(owner, event, data);
+        }
+    }
+    /// A plugin in standby that listens to the wake event `event` is woken
+    /// to receive it (`data`) at its ready; nothing for one not in standby.
+    /// `commands.keys` (player 0.7.6) wakes only the plugin whose keys
+    /// changed, through this.
+    pub(crate) fn wake_listener(&mut self, owner: u64, event: &str, data: &Value) {
+        if !self.on_demand.held.contains_key(&owner) {
+            return;
+        }
         let now = self.now_ms();
         self.supervisor.set_now(now);
-        for owner in owners {
-            if !self.on_demand.held.contains_key(&owner) {
-                continue;
-            }
-            let trigger = Trigger::event(event, json!({"event":event,"data":data}));
-            if self.supervisor.wake(Pid(owner), &trigger) == Delivery::Started {
-                self.wake_started(owner);
-            }
+        let trigger = Trigger::event(event, json!({"event":event,"data":data}));
+        if self.supervisor.wake(Pid(owner), &trigger) == Delivery::Started {
+            self.wake_started(owner);
         }
+    }
+    /// The manifest id of a plugin in standby.
+    pub(crate) fn held_id(&self, owner: u64) -> Option<&str> {
+        self.on_demand.held.get(&owner).map(|held| held.id.as_str())
     }
     /// A settings page of `owner` is shown: a unit in standby starts, so the
     /// page shows its current values and its callbacks have a receiver (nothing

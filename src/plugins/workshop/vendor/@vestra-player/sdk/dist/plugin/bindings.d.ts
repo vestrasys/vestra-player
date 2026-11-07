@@ -79,3 +79,12 @@ export declare function canonical(text: string): string;
 export declare function checkBindings(bindings: readonly string[]): string[];
 /** `plugin.bindings` (`bindings.manage`): the table and the user overlay. */
 export declare const bindingsApi: (scope: ScopeImpl) => Bindings;
+/**
+ * How the player's menus write a canonical binding (`bindings.rs`
+ * `label_in`), for `TestHost`'s `commands.keys`: `Ctrl+O` and arrows as
+ * ← → ↑ ↓ (`Esc`, `PgUp`, `Num5`); on macOS (`mac`) symbols in Apple's
+ * order ⌃⌥⇧⌘, a `Ctrl` binding as ⌘ (it answers to ⌘ there) and ⌃ only
+ * next to ⌘. `null` for a binding menus do not show: a mouse binding, and
+ * a `Cmd` one outside macOS.
+ */
+export declare function keyLabel(binding: string, mac: boolean): string | null;

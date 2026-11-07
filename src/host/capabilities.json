@@ -164,6 +164,7 @@
           "needs": {
             "cases": {
               "bindings.changed": "bindings.manage",
+              "commands.keys": "commands",
               "packages.changed": null,
               "video.upscaling.changed": "video.upscaling"
             },
@@ -176,6 +177,7 @@
           "needs": {
             "cases": {
               "bindings.changed": "bindings.manage",
+              "commands.keys": "commands",
               "packages.changed": null,
               "video.upscaling.changed": "video.upscaling"
             },
@@ -206,6 +208,10 @@
         },
         {
           "name": "host.run",
+          "needs": "commands"
+        },
+        {
+          "name": "commands.keys",
           "needs": "commands"
         }
       ],
