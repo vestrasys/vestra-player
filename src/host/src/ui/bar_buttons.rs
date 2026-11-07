@@ -211,13 +211,15 @@ impl Host {
             return;
         };
         let now = self.now_ms();
+        // Collapsed at the fullscreen edge: slides out, as Adjust does.
+        let show = !preferred || self.policy.collapsed(window_state::Slot::Sidebar);
         if self
             .policy
-            .set_preferred(window_state::Slot::Sidebar, owner, !preferred, now)
+            .set_preferred(window_state::Slot::Sidebar, owner, show, now)
             .is_ok()
         {
             if let Some(mount) = self.mounts.get_mut(&owner) {
-                mount.visible = !preferred;
+                mount.visible = show;
             }
             self.remember_sidebar(false);
             self.window_tick();
@@ -226,9 +228,12 @@ impl Host {
 
     /// Adjust (`host/adjust`): show or hide the adjust column, showing its
     /// last tab, as `panels.adjust.toggle()` does.
+    /// In fullscreen, a column wanted shown but collapsed at the right edge
+    /// slides out instead of being turned off (GUI check of 3b).
     pub(crate) fn toggle_adjust(&mut self) {
-        if let Some((preferred, _)) = self.policy.column_state(window_state::Slot::Adjust) {
-            self.set_adjust_visible(!preferred);
+        let slot = window_state::Slot::Adjust;
+        if let Some((preferred, _)) = self.policy.column_state(slot) {
+            self.set_adjust_visible(!preferred || self.policy.collapsed(slot));
         }
     }
 

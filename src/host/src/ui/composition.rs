@@ -238,7 +238,7 @@ fn column_content(
          tab(index) => {{ root.{p}-active = index; {keys}.focus(); root.{p}-tab(index); }} \
          overflow(x, y) => {{ root.{p}-overflow(x, y); }} }} \
          Rectangle {{ x: 0px; y: {TAB_STRIP_HEIGHT}px; width: parent.width; \
-         height: parent.height - {TAB_STRIP_HEIGHT}px; background: {background}; {views} }}"
+         height: parent.height - {TAB_STRIP_HEIGHT}px; background: {background}; clip: true; {views} }}"
     )
 }
 
@@ -1459,6 +1459,14 @@ mod tests {
             2
         );
         assert!(source.contains("key-input(\"panel:adjust\""));
+        // GUI check of 3b: a panel wider than its column is clipped to it
+        // (docked and in the overlay), never drawn over the sidebar.
+        assert_eq!(
+            source
+                .matches("clip: true; if root.adjust-shown == 40")
+                .count(),
+            2
+        );
         assert!(source.contains("keys: root.adjust-keys; detachable: false;"));
         assert!(!source.contains("root.adjust-detach"));
         // The overlay comes after the sidebar's (G-01), before the title

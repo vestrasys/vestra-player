@@ -429,6 +429,13 @@ impl Policy {
             .map(|tabs| (tabs.preferred, tabs.detached))
     }
 
+    /// A column wanted shown but collapsed at the right edge of fullscreen
+    /// (G-01): a toggle shows it (pops it out) rather than hiding it.
+    pub fn collapsed(&self, slot: Slot) -> bool {
+        slot.column()
+            .is_some_and(|c| self.overlay_ready(c) && !self.overlay.open[c])
+    }
+
     /// A column's current tab.
     pub fn active(&self, slot: Slot) -> Option<u64> {
         slot.column()
@@ -498,14 +505,15 @@ impl Policy {
             return Ok(());
         };
         let tabs = self.column_tabs_mut(slot, owner)?;
-        let shown = !tabs.preferred && preferred;
         tabs.preferred = preferred;
         if !preferred {
             self.overlay.open[column] = false;
             if !self.overlay.any() {
                 self.overlay = Overlay::default();
             }
-        } else if shown && self.overlay_ready(column) {
+        } else if !self.overlay.open[column] && self.overlay_ready(column) {
+            // Shown on purpose (its toggle, `setVisible(true)`, `show()`):
+            // pops out, also when it was wanted shown but collapsed.
             self.overlay.open[column] = true;
             self.overlay.entered = false;
             self.overlay.left_at = None;
@@ -1763,6 +1771,41 @@ mod tests {
         assert!(docked.adjust.unwrap().effective && !docked.adjust.unwrap().overlay);
         assert_eq!(adjust_overlay_width(1000.0, 317.0, 400.0), 282.0);
         assert_eq!(adjust_overlay_width(700.0, 317.0, 400.0), 0.0);
+    }
+
+    /// GUI check of 3b: in fullscreen a column left open is collapsed at the
+    /// edge; its toggle then slides it out (showing it again pops it out)
+    /// instead of turning it off, and only a popped-out one is turned off.
+    #[test]
+    fn a_collapsed_fullscreen_column_slides_out_when_shown_again() {
+        let mut policy = both_columns();
+        policy.set_fullscreen(true, 0);
+        assert!(policy.collapsed(Slot::Adjust) && policy.collapsed(Slot::Sidebar));
+        assert!(!policy.collapsed(Slot::Bottom));
+        // What the toggle does while collapsed: show it on purpose.
+        policy.set_preferred(Slot::Adjust, 5, true, 100).unwrap();
+        let shown = policy.evaluate(screen(), 100).unwrap();
+        assert!(shown.adjust.unwrap().effective, "slid out at once");
+        assert!(
+            !shown.sidebar.unwrap().effective,
+            "the other column stays in"
+        );
+        assert!(!policy.collapsed(Slot::Adjust));
+        // Popped out: the toggle turns it off.
+        policy.set_preferred(Slot::Adjust, 5, false, 200).unwrap();
+        assert_eq!(
+            policy
+                .evaluate(screen(), 200)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .reason,
+            Some(Reason::UserHidden)
+        );
+        assert!(!policy.collapsed(Slot::Adjust), "hidden is not collapsed");
+        // Windowed, nothing is collapsed.
+        policy.set_fullscreen(false, 300);
+        assert!(!policy.collapsed(Slot::Sidebar));
     }
 
     #[test]
