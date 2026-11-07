@@ -3,6 +3,7 @@
 //! picture-in-picture, drops, dialogs and the bottom-bar buttons.
 
 pub(crate) mod bar_buttons;
+pub(crate) mod command_palette;
 pub mod composition;
 pub(crate) mod confirm;
 pub(crate) mod drops;

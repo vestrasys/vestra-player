@@ -724,13 +724,13 @@ mod tests {
     fn group_changes_insert_separators_and_key_labels_come_from_bindings() {
         let nodes = vec![
             MenuNode::Command {
-                entry: command("a", "open"),
+                entry: Box::new(command("a", "open")),
             },
             MenuNode::Command {
-                entry: command("b", "open"),
+                entry: Box::new(command("b", "open")),
             },
             MenuNode::Command {
-                entry: command("c", "screen"),
+                entry: Box::new(command("c", "screen")),
             },
         ];
         let labels = |_: u64, id: &str| (id == "c").then(|| "Enter".to_owned());
@@ -765,7 +765,7 @@ mod tests {
     fn commands(count: usize) -> Vec<MenuNode> {
         (0..count)
             .map(|index| MenuNode::Command {
-                entry: command(&format!("c{index}"), "g"),
+                entry: Box::new(command(&format!("c{index}"), "g")),
             })
             .collect()
     }

@@ -195,6 +195,11 @@ pub(crate) struct OnDemand {
     memory: memory::Memory,
 }
 impl OnDemand {
+    /// A plugin's shown name by manifest id, as held (the command palette
+    /// names the commands of a plugin in standby with it).
+    pub fn name_of(&self, id: &str) -> Option<&str> {
+        self.names.get(id).map(String::as_str)
+    }
     pub fn from_env() -> Self {
         let tests = probe::test_executes(&std::env::var("VESTRA_TEST_EXECUTE").unwrap_or_default());
         Self {

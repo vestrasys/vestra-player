@@ -15,6 +15,7 @@ mod input;
 mod lifecycle;
 mod menus;
 mod mounts;
+mod palette;
 mod rendering;
 mod restart;
 pub(crate) mod revised;
@@ -144,6 +145,8 @@ pub(crate) enum MenuMode {
     Panel(u64, Vec<Option<String>>),
     /// The sidebar's overflow menu (`»`, sidebar-tabs.md): every tab.
     Tabs,
+    /// The command palette (`host/palette`), in the main window.
+    Palette,
 }
 /// One wheel step per this many logical pixels of accumulated scroll.
 pub(crate) const WHEEL_STEP: f64 = 40.;
@@ -209,6 +212,8 @@ pub(crate) struct Host {
     /// What the menu's window shows (`apply_menu_levels`); a cell, as
     /// `bind_shell` (which takes `&self`) writes it too.
     pub(crate) menu_shown: RefCell<menus::ShownMenu>,
+    /// The open command palette (`MenuMode::Palette`).
+    pub(crate) palette: palette::PaletteState,
     pub(crate) policy: window_state::Policy,
     pub(crate) clock: Instant,
     pub(crate) window_facts: Value,

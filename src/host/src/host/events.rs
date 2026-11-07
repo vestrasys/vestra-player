@@ -11,6 +11,8 @@ pub(crate) enum MenuAction {
     Reset,
     Back,
     Dismiss,
+    /// The command palette's field, cursor, wheel and runs.
+    Palette(super::palette::PaletteAction),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

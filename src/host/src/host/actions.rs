@@ -57,7 +57,7 @@ impl Host {
         Ok(())
     }
     /// The host's own commands (owner 0): toggle, enter and leave
-    /// fullscreen, quit, the sidebar toggle, with their first states
+    /// fullscreen, quit, the sidebar toggle, the command palette, with their first states
     /// (tests/sdk/host-agreement.test.ts reads this function).
     pub(crate) fn host_declarations()
     -> Vec<(&'static str, commands::Declaration, commands::CommandState)> {
@@ -97,6 +97,11 @@ impl Host {
         // (F6 is the playlist's), bindable in Keyboard Shortcuts.
         let mut sidebar = commands::Declaration::new("Toggle Sidebar", &[]);
         sidebar.localize(|_| i18n::tr("Toggle Sidebar"));
+        // Host 0.7.4 (menu redesign §6): the command palette, outside the
+        // menu for now; Ctrl+Shift+P (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD).
+        let mut palette = commands::Declaration::new("Command Palette", &[]);
+        palette.localize(|_| i18n::tr("Command Palette"));
+        palette.bindings = vec!["Ctrl+Shift+P".into()];
         vec![
             ("fullscreen", fullscreen, state(true, Some(false))),
             ("enter-fullscreen", enter, state(true, None)),
@@ -104,6 +109,8 @@ impl Host {
             ("quit", quit, state(true, None)),
             // `bar_buttons::SIDEBAR` (a literal: tests/sdk/host-agreement.test.ts reads it).
             ("sidebar", sidebar, state(false, Some(false))),
+            // `palette::PALETTE` (a literal: tests/sdk/host-agreement.test.ts reads it).
+            ("palette", palette, state(true, None)),
         ]
     }
     pub(crate) fn register_core_action(
@@ -345,6 +352,10 @@ impl Host {
             self.toggle_sidebar();
             return;
         }
+        if id == palette::PALETTE {
+            self.open_palette();
+            return;
+        }
         if id == "quit" {
             // Before anything waits on the GPU.
             platform::release_gpu_waits();
@@ -522,6 +533,27 @@ mod tests {
             Lookup::Fire(target) => assert_eq!(target.id, "close"),
             other => panic!("{other:?}"),
         }
+    }
+
+    /// Menu redesign §6: Ctrl+Shift+P opens the command palette, and no
+    /// other command of the player holds it by default.
+    #[test]
+    fn ctrl_shift_p_opens_the_command_palette() {
+        let table = host_table();
+        assert_eq!(
+            table.default_holders(&key("Ctrl+Shift+P")),
+            ["host/palette"]
+        );
+        match table.lookup(&key("Ctrl+Shift+P"), None) {
+            Lookup::Fire(target) => assert_eq!(target.id, palette::PALETTE),
+            other => panic!("{other:?}"),
+        }
+        let (_, declaration, state) = Host::host_declarations()
+            .into_iter()
+            .find(|(id, ..)| *id == palette::PALETTE)
+            .unwrap();
+        assert!(declaration.path.is_empty(), "outside the menu for now");
+        assert!(state.enabled);
     }
 
     /// M1 (coordinator decision 2026-11-01): the user's own profile has

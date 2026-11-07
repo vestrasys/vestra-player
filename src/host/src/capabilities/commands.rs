@@ -219,6 +219,11 @@ fn register(
             shown_path.push(menu_text(segment)?);
         }
     }
+    // Player 0.7.6 (SDK 1.6.4): the category, a menu text too.
+    let mut shown_category = None;
+    if let Some(category) = raw.get_mut("category") {
+        shown_category = menu_text(category)?;
+    }
     let mut declaration: commands::Declaration =
         serde_json::from_value(raw).map_err(|e| RpcError::invalid(e.to_string()))?;
     declaration.button = button;
@@ -229,6 +234,7 @@ fn register(
         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
     declaration.localize_declared(&declared, |text| origin.text(text));
     declaration.show_texts(shown_title, &shown_path);
+    declaration.show_category(shown_category);
     let bindings = declaration.bindings.clone();
     let panel = declaration.focus == Some(commands::Focus::Panel);
     let repeat = declaration.repeat;

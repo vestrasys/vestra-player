@@ -1,6 +1,7 @@
 // Main window shell (core-ui-design.md §1). composition.rs replaces the
 // insertion markers with the mounted panels; without mounts it is the bare shell.
 import { MenuView, MenuLevel } from "menu-view.slint";
+import { PaletteView, PaletteRow } from "command-palette.slint";
 import { Theme } from "@vestra/theme.slint";
 // Exported so the player can set the colours (R-H6).
 export { VestraPalette } from "palette.slint";
@@ -26,6 +27,18 @@ export component HostWindow inherits Window {
     callback menu-dismiss();
     in property <bool> host-fullscreen: false;
     in property <bool> menu-open: false;
+    // The command palette (command_palette.rs) on the menu layer: shown
+    // instead of the menu while `menu-open`.
+    in property <bool> palette-open: false;
+    in property <[PaletteRow]> palette-rows;
+    in property <int> palette-current: -1;
+    in property <int> palette-shown: 0;
+    in property <string> palette-count;
+    in-out property <string> palette-query;
+    callback palette-edited(string);
+    callback palette-moved(int);
+    callback palette-scrolled(int);
+    callback palette-run(int, bool);
     in property <bool> input-blocked: false;
     in property <bool> cursor-hidden: false;
     // No video frame to show (R-U3): the backdrop panel, if any, is drawn instead.
@@ -285,13 +298,26 @@ export component HostWindow inherits Window {
                 if event.kind == PointerEventKind.down { root.menu-dismiss(); }
             }
         }
-        MenuView {
+        if !root.palette-open: MenuView {
             width: root.width; height: root.height;
             levels: root.menu-levels;
             hovered(level, token, now) => { root.menu-hover(level, token, now); }
             scrolled(level, offset) => { root.menu-scroll(level, offset); }
             activated(token) => { root.menu-invoke(token); }
             back => { root.menu-back(); }
+            dismissed => { root.menu-dismiss(); }
+        }
+        if root.palette-open: PaletteView {
+            width: root.width; height: root.height;
+            rows: root.palette-rows;
+            current: root.palette-current;
+            shown: root.palette-shown;
+            count: root.palette-count;
+            query <=> root.palette-query;
+            edited(text) => { root.palette-edited(text); }
+            moved(by) => { root.palette-moved(by); }
+            scrolled(by) => { root.palette-scrolled(by); }
+            run(slot, keep) => { root.palette-run(slot, keep); }
             dismissed => { root.menu-dismiss(); }
         }
     }

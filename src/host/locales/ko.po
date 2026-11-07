@@ -552,3 +552,69 @@ msgstr "{}이(가) 오류로 중지되었습니다. 잠시 후 다시 시도하�
 #, x-machine
 msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
 msgstr "플러그인 셰이더가 꺼졌습니다: 셰이더가 켜져 있는 동안 플레이어가 예기치 않게 종료되었습니다"
+
+#. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
+#: src/host/host/actions.rs
+#, x-machine
+msgid "Command Palette"
+msgstr "명령 팔레트"
+
+#. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "{category}: {title}"
+msgstr "{category}: {title}"
+
+#. Command palette: where a command lives when it is in the right-click menu.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "Menu"
+msgstr "메뉴"
+
+#. Command palette: why a disabled command that gives no reason of its own cannot run.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "Not available now"
+msgstr "지금은 사용할 수 없음"
+
+#. Command palette: how many commands match what is typed.
+#: src/host/host/palette.rs
+#, x-machine
+msgid "Results: {}"
+msgstr "결과: {}"
+
+#. Command palette: the empty field's placeholder.
+#: ui/command-palette.slint
+#, x-machine
+msgid "Type a command name"
+msgstr "명령 이름 입력"
+
+#. Command palette: nothing matches what is typed.
+#: ui/command-palette.slint
+#, x-machine
+msgid "No matching commands"
+msgstr "일치하는 명령 없음"
+
+#. Command palette footer, after the ↑↓ keys: move between commands.
+#: ui/command-palette.slint
+#, x-machine
+msgid "choose"
+msgstr "선택"
+
+#. Command palette footer, after the Enter key: run the command and close.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run"
+msgstr "실행"
+
+#. Command palette footer, after Shift+Enter: run the command and keep the palette open.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run, keep open"
+msgstr "실행 후 열어 두기"
+
+#. Command palette footer, after the Esc key: close the palette.
+#: ui/command-palette.slint
+#, x-machine
+msgid "close"
+msgstr "닫기"
