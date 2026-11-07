@@ -798,6 +798,11 @@ export declare function createWire(transport: Transport): {
         } | {
             kind: "rawMp4" | "processedMp4";
             end: number;
+            encoding?: import("./media.ts").WireEncoding;
+        } | {
+            kind: "rawCopy";
+            end: number;
+            container?: "auto" | "mp4" | "mkv";
         })) => Promise<{
             jobId: number;
             status: "queued";

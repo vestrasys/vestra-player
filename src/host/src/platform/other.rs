@@ -179,3 +179,17 @@ pub const HELD_FILE_INPUT: &str = "/dev/fd/0";
 
 /// Child processes share the host's session; nothing to hide.
 pub fn hide_console(_command: &mut std::process::Command) {}
+
+/// A console tool doing background work (an export's FFmpeg), started
+/// through `nice -n 10` so playback and the UI keep their rate while it runs
+/// (as HandBrake and OBS run their encoders); directly when `nice` is missing.
+pub fn background_tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::process::Command {
+    let nice = std::path::Path::new("/usr/bin/nice");
+    if nice.is_file() {
+        let mut command = std::process::Command::new(nice);
+        command.args(["-n", "10"]).arg(program);
+        command
+    } else {
+        std::process::Command::new(program)
+    }
+}

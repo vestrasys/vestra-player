@@ -92,6 +92,12 @@ enum Mutation {
         sample_time: Option<f64>,
         /// JPEG quality 1–100 (`rawJpeg` / `processedJpeg` only; default 90).
         quality: Option<u8>,
+        /// Re-encoded clips (`rawMp4` / `processedMp4`) only.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        encoding: Option<media_worker::Encoding>,
+        /// Stream copies (`rawCopy`) only; default `auto`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        container: Option<media_worker::Container>,
     },
     #[serde(rename = "jobs.cancel")]
     Cancel { operation_id: u64, job_id: u64 },
@@ -108,10 +114,48 @@ fn still(kind: &str) -> Option<media_worker::Still> {
         _ => None,
     }
 }
+/// A clip kind: re-encoded (`rawMp4`, `processedMp4`) or stream-copied
+/// (`rawCopy`; a copy cannot carry effects, so there is no processed one).
+fn clip(kind: &str) -> bool {
+    matches!(kind, "rawMp4" | "processedMp4" | "rawCopy")
+}
 fn include_subtitles_default() -> bool {
     true
 }
 impl Mutation {
+    /// `jobs.start`'s parameters fit its kind (true for other methods).
+    fn start_valid(&self) -> bool {
+        let Self::Start {
+            snapshot_id,
+            kind,
+            destination,
+            end,
+            sample_time,
+            quality,
+            encoding,
+            container,
+            ..
+        } = self
+        else {
+            return true;
+        };
+        let clip = clip(kind);
+        safe(*snapshot_id)
+            && (still(kind).is_some() || clip)
+            && (quality.is_none() || kind.ends_with("Jpeg"))
+            && quality.is_none_or(|quality| (1..=100).contains(&quality))
+            && (encoding.is_none() || kind.ends_with("Mp4"))
+            && encoding.is_none_or(|encoding| encoding.valid())
+            && (container.is_none() || kind == "rawCopy")
+            && (!clip || end.is_some_and(|v| v.is_finite() && v > 0. && v <= 86400.))
+            && (clip || end.is_none())
+            && (!clip || sample_time.is_none())
+            && sample_time.is_none_or(|time| (0. ..=86400.).contains(&time))
+            && !destination.is_empty()
+            && destination.len() <= 4096
+            && !destination.contains('\0')
+            && PathBuf::from(destination).is_absolute()
+    }
     fn id(&self) -> u64 {
         match self {
             Self::Capture { operation_id, .. }
@@ -201,16 +245,25 @@ impl Jobs {
         let (phase, outcome, publication_started) = job.control.snapshot();
         let outcome = match outcome {
             None => Value::Null,
-            Some(media_worker::Outcome::Completed { destination }) => {
-                json!({"destination":destination})
-            }
-            Some(media_worker::Outcome::Failed { message }) => {
-                json!({"error":{"code":"export-failed","message":message}})
+            Some(media_worker::Outcome::Completed {
+                destination,
+                range: None,
+            }) => json!({"destination":destination}),
+            Some(media_worker::Outcome::Completed {
+                destination,
+                range: Some((start, end)),
+            }) => json!({"destination":destination,"start":start,"end":end}),
+            Some(media_worker::Outcome::Failed { code, message }) => {
+                json!({"error":{"code":code,"message":message}})
             }
             Some(media_worker::Outcome::Cancelled) => json!({"cancelled":true}),
         };
+        let progress = job
+            .control
+            .progress()
+            .map(|(done, total)| json!({"done":done,"total":total}));
         Ok(
-            json!({"jobId":id,"status":status(phase),"publicationStarted":publication_started,"outcome":outcome,"facts":job.control.facts()}),
+            json!({"jobId":id,"status":status(phase),"publicationStarted":publication_started,"outcome":outcome,"facts":job.control.facts(),"progress":progress}),
         )
     }
     pub fn dispatch(
@@ -296,35 +349,10 @@ impl Jobs {
             Mutation::Release { snapshot_id, .. } if !safe(*snapshot_id) => {
                 return Err(RpcError::invalid("snapshotId required"));
             }
-            Mutation::Start {
-                snapshot_id,
-                kind,
-                destination,
-                end,
-                sample_time,
-                quality,
-                ..
-            } => {
-                if !safe(*snapshot_id)
-                    || (still(kind).is_none()
-                        && !matches!(kind.as_str(), "rawMp4" | "processedMp4"))
-                    || (quality.is_some() && !kind.ends_with("Jpeg"))
-                    || quality.is_some_and(|quality| !(1..=100).contains(&quality))
-                    || (kind.ends_with("Mp4")
-                        && end.is_none_or(|v| !v.is_finite() || v <= 0. || v > 86400.))
-                    || (!kind.ends_with("Mp4") && end.is_some())
-                    || (kind.ends_with("Mp4") && sample_time.is_some())
-                    || sample_time
-                        .is_some_and(|time| !time.is_finite() || time < 0. || time > 86400.)
-                    || destination.is_empty()
-                    || destination.len() > 4096
-                    || destination.contains('\0')
-                    || !PathBuf::from(destination).is_absolute()
-                {
-                    return Err(RpcError::invalid(
-                        "frame or MP4 kind, snapshotId, bounded absolute destination and JPEG quality 1–100 required",
-                    ));
-                }
+            Mutation::Start { .. } if !mutation.start_valid() => {
+                return Err(RpcError::invalid(
+                    "frame, MP4 or rawCopy kind, snapshotId, bounded absolute destination, JPEG quality 1–100 and clip options of the kind required",
+                ));
             }
             Mutation::Cancel { job_id, .. } if !safe(*job_id) => {
                 return Err(RpcError::invalid("jobId required"));
@@ -541,6 +569,8 @@ impl Jobs {
                 end,
                 sample_time,
                 quality,
+                encoding,
+                container,
                 ..
             } => {
                 let snapshot = self
@@ -564,13 +594,20 @@ impl Jobs {
                     && (end <= snapshot.time || end > snapshot.duration)
                 {
                     return Err(RpcError::invalid(
-                        "MP4 end must be after frozen start and within frozen duration",
+                        "clip end must be after frozen start and within frozen duration",
                     ));
                 }
-                let output = if kind.ends_with("Mp4") {
+                let output = if kind == "rawCopy" {
+                    media_worker::Output::Copy {
+                        end: end.ok_or_else(|| RpcError::invalid("clip end required"))?,
+                        audio: snapshot.audio.clone(),
+                        container: container.unwrap_or_default(),
+                    }
+                } else if kind.ends_with("Mp4") {
                     media_worker::Output::Mp4 {
                         end: end.ok_or_else(|| RpcError::invalid("MP4 end required"))?,
                         audio: snapshot.audio.clone(),
+                        encoding: encoding.unwrap_or_default(),
                     }
                 } else {
                     let format = still(&kind).ok_or_else(|| RpcError::invalid("unknown kind"))?;
@@ -694,8 +731,100 @@ mod tests {
             still("rawJpeg"),
             Some(media_worker::Still::Jpeg { quality: 90 })
         );
-        for other in ["rawMp4", "rawGif", "Png", "processedpng"] {
+        for other in ["rawMp4", "rawCopy", "rawGif", "Png", "processedpng"] {
             assert_eq!(still(other), None, "{other}");
         }
+    }
+
+    fn start(fields: Value) -> Result<Mutation, serde_json::Error> {
+        let destination = if cfg!(windows) {
+            r"C:\clips\clip.mp4"
+        } else {
+            "/clips/clip.mp4"
+        };
+        let mut params =
+            json!({"method":"jobs.start","operationId":1,"snapshotId":1,"destination":destination});
+        params
+            .as_object_mut()
+            .unwrap()
+            .extend(fields.as_object().unwrap().clone());
+        serde_json::from_value(params)
+    }
+    fn valid(fields: Value) -> bool {
+        start(fields).is_ok_and(|m| m.start_valid())
+    }
+
+    #[test]
+    fn clip_kinds_take_only_their_own_options() {
+        assert!(valid(json!({"kind":"rawCopy","end":5})));
+        assert!(valid(json!({"kind":"rawCopy","end":5,"container":"mkv"})));
+        assert!(valid(json!({"kind":"rawCopy","end":5,"container":"auto"})));
+        assert!(valid(json!({"kind":"processedMp4","end":5,"encoding":{}})));
+        assert!(valid(
+            json!({"kind":"rawMp4","end":5,"encoding":{"crf":14,"speed":"smaller","maxHeight":480,"fps":30,"audioBitrate":256,"threads":"auto"}})
+        ));
+        assert!(valid(
+            json!({"kind":"rawMp4","end":5,"encoding":{"videoBitrate":"source","maxHeight":720}})
+        ));
+        // A copy cannot carry effects, so there is no processed one.
+        assert!(!valid(json!({"kind":"processedCopy","end":5})));
+        // Each option belongs to one kind.
+        assert!(!valid(json!({"kind":"rawCopy","end":5,"encoding":{}})));
+        assert!(!valid(json!({"kind":"rawMp4","end":5,"container":"mkv"})));
+        assert!(!valid(json!({"kind":"rawPng","encoding":{}})));
+        assert!(!valid(json!({"kind":"rawCopy"})));
+        assert!(!valid(json!({"kind":"rawCopy","end":5,"sampleTime":1})));
+        assert!(!valid(json!({"kind":"rawCopy","end":5,"quality":80})));
+    }
+
+    #[test]
+    fn encoding_options_are_a_closed_set() {
+        for bad in [
+            json!({"crf":13}),
+            json!({"crf":31}),
+            json!({"maxHeight":1081}),
+            json!({"maxHeight":2160}),
+            json!({"fps":24}),
+            json!({"audioBitrate":320}),
+            // A bitrate target replaces the CRF; both is a contradiction.
+            json!({"crf":18,"videoBitrate":"source"}),
+        ] {
+            assert!(
+                !valid(json!({"kind":"rawMp4","end":5,"encoding":bad})),
+                "{bad}"
+            );
+        }
+        // Unknown fields, unknown names and FFmpeg strings do not even parse.
+        for bad in [
+            json!({"preset":"ultrafast"}),
+            json!({"speed":"ultrafast"}),
+            json!({"threads":4}),
+            json!({"crf":"18 -vf evil"}),
+            json!({"x264opts":"keyint=1"}),
+            json!({"videoBitrate":"5000k"}),
+            json!({"videoBitrate":5000000}),
+        ] {
+            assert!(
+                start(json!({"kind":"rawMp4","end":5,"encoding":bad})).is_err(),
+                "{bad}"
+            );
+        }
+        assert!(start(json!({"kind":"rawCopy","end":5,"container":"mov"})).is_err());
+        let encoding: media_worker::Encoding = serde_json::from_value(json!({})).unwrap();
+        assert_eq!(encoding, media_worker::Encoding::default());
+        assert_eq!(encoding.threads(), 1);
+        let auto: media_worker::Encoding =
+            serde_json::from_value(json!({"threads":"auto"})).unwrap();
+        assert!((1..=8).contains(&auto.threads()));
+    }
+
+    #[test]
+    fn earlier_requests_keep_their_operation_payload() {
+        // The operation book compares payloads: a request without the new
+        // fields serializes exactly as before them.
+        let payload =
+            serde_json::to_value(start(json!({"kind":"rawMp4","end":5})).unwrap()).unwrap();
+        assert!(payload.get("encoding").is_none());
+        assert!(payload.get("container").is_none());
     }
 }

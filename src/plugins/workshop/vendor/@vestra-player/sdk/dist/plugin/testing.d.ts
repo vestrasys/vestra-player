@@ -1654,9 +1654,27 @@ export declare class TestHost implements Transport {
     /**
      * Export jobs by job id. Each state query advances a job one step
      * (`queued` → `running` → `completed`; `cancelling` → `cancelled`).
-     * Wire-level.
+     * A running clip reports half its `progress`; a finished clip's
+     * `outcome` has `start` and `end` (a stream copy starts 1 s before the
+     * snapshot time, as if snapped to a keyframe, and its destination gets
+     * the extension of its container: `.mkv` for `container: "mkv"`, else
+     * `.mp4`). Wire-level.
      */
     readonly jobs: Map<number, MediaJob>;
+    /**
+     * Set it to make every running export end `failed` with this error on
+     * its next state query, as the player reports one (`unsupported` for a
+     * stream copy it cannot make, `export-failed` otherwise); `null` (the
+     * default) completes them.
+     *
+     * @since 1.6.10
+     */
+    exportFailure: {
+        /** The `outcome.error.code`. */
+        code: string;
+        /** The `outcome.error.message`. */
+        message: string;
+    } | null;
     /**
      * `openStream`'s transport: a local stream (a Unix socket on macOS and
      * Linux, a named pipe on Windows) or, with `"tcp"`, loopback TCP where the
