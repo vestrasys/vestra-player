@@ -19,6 +19,7 @@ use std::{
 
 use crate::playback::source_lease::{Lease, Reader};
 use anyhow::{Context, Result, bail};
+use serde::{Deserialize, Serialize};
 
 // Distinguish queued cancellation from an active worker cancelling, so a
 // duplicate runner cannot report terminal cancellation before the owner reaps.
@@ -41,11 +42,131 @@ pub enum Still {
 
 pub enum Output {
     Still(Still),
+    /// Re-encoded H.264 + AAC from the exact frame (`media_jobs` "Precise").
     Mp4 {
         end: f64,
         audio: Option<crate::playback::media_tracks::AudioTrack>,
+        encoding: Encoding,
+    },
+    /// Stream copy from the keyframe at or before the start (`media_copy.rs`).
+    Copy {
+        end: f64,
+        audio: Option<crate::playback::media_tracks::AudioTrack>,
+        container: Container,
     },
 }
+impl Output {
+    fn end(&self) -> Option<f64> {
+        match self {
+            Self::Still(_) => None,
+            Self::Mp4 { end, .. } | Self::Copy { end, .. } => Some(*end),
+        }
+    }
+    fn has_audio(&self) -> bool {
+        matches!(
+            self,
+            Self::Mp4 { audio: Some(_), .. } | Self::Copy { audio: Some(_), .. }
+        )
+    }
+}
+
+/// The typed options of a re-encoded clip: a closed set, never FFmpeg
+/// strings. Every field is optional; the defaults are the encoder's settings
+/// before these options existed (CRF 18, x264 `veryfast`, the source's size
+/// and rate, AAC 192 kb/s, one thread).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct Encoding {
+    /// x264 CRF 14–30 (lower: better picture, bigger file).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crf: Option<u8>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub speed: Option<Speed>,
+    /// A ceiling: 1080, 720 or 480; a shorter picture is left as it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_height: Option<u32>,
+    /// A ceiling: 60 or 30 frames per second; a slower source is left as it is.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub fps: Option<u32>,
+    /// AAC kb/s: 128, 192 or 256.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub audio_bitrate: Option<u32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub threads: Option<Threads>,
+}
+/// x264 presets by name: `veryfast`, `medium`, `slow`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Speed {
+    Faster,
+    Balanced,
+    Smaller,
+}
+/// `single` (the default) or `auto`: the host picks the count
+/// ([`auto_threads`]), leaving the other half of the cores to playback.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Threads {
+    Single,
+    Auto,
+}
+/// A stream copy's container. `auto`: MP4 when the streams fit
+/// ([`media_copy::fits_mp4`](crate::playback::media_copy::fits_mp4)), else MKV.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Container {
+    #[default]
+    Auto,
+    Mp4,
+    Mkv,
+}
+impl Encoding {
+    pub fn valid(&self) -> bool {
+        self.crf.is_none_or(|crf| (14..=30).contains(&crf))
+            && self
+                .max_height
+                .is_none_or(|h| matches!(h, 1080 | 720 | 480))
+            && self.fps.is_none_or(|fps| matches!(fps, 60 | 30))
+            && self
+                .audio_bitrate
+                .is_none_or(|rate| matches!(rate, 128 | 192 | 256))
+    }
+    fn crf(&self) -> u8 {
+        self.crf.unwrap_or(18)
+    }
+    fn preset(&self) -> &'static str {
+        match self.speed {
+            None | Some(Speed::Faster) => "veryfast",
+            Some(Speed::Balanced) => "medium",
+            Some(Speed::Smaller) => "slow",
+        }
+    }
+    fn audio_bitrate(&self) -> u32 {
+        self.audio_bitrate.unwrap_or(192)
+    }
+    pub fn threads(&self) -> usize {
+        match self.threads {
+            None | Some(Threads::Single) => 1,
+            Some(Threads::Auto) => auto_threads(),
+        }
+    }
+}
+/// Half the logical processors, 1–8: the rest stay with playback and the UI,
+/// which must keep the display rate while an export runs.
+pub fn auto_threads() -> usize {
+    thread::available_parallelism().map_or(1, |n| (n.get() / 2).clamp(1, 8))
+}
+
+/// A request the export cannot do as asked (a stream that cannot be copied,
+/// or not into the asked container): the job fails with code `unsupported`.
+#[derive(Debug)]
+pub struct Refused(pub String);
+impl std::fmt::Display for Refused {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+impl std::error::Error for Refused {}
 pub struct RenderRequest {
     pub lease: Arc<Lease>,
     pub time: f64,
@@ -68,10 +189,18 @@ pub enum Status {
     Failed,
     Cancelled,
 }
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq)]
 pub enum Outcome {
-    Completed { destination: PathBuf },
-    Failed { message: String },
+    Completed {
+        destination: PathBuf,
+        /// A clip's first and last-frame-end source times as written.
+        range: Option<(f64, f64)>,
+    },
+    Failed {
+        /// `export-failed`, or `unsupported` for a [`Refused`] request.
+        code: &'static str,
+        message: String,
+    },
     Cancelled,
 }
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -86,6 +215,8 @@ pub struct Control {
     publication_started: AtomicBool,
     result: Mutex<Option<Outcome>>,
     facts: Mutex<serde_json::Value>,
+    /// Seconds written and to write, from FFmpeg's `-progress` (clips only).
+    progress: Mutex<Option<(f64, f64)>>,
 }
 impl Default for Control {
     fn default() -> Self {
@@ -99,7 +230,23 @@ impl Control {
             publication_started: AtomicBool::new(false),
             result: Mutex::new(None),
             facts: Mutex::new(serde_json::Value::Null),
+            progress: Mutex::new(None),
         }
+    }
+    /// `(done, total)` seconds of a clip being written; `None` while unknown
+    /// (a frame, or before the encoder starts).
+    pub fn progress(&self) -> Option<(f64, f64)> {
+        *self
+            .progress
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+    }
+    pub(super) fn set_progress(&self, done: f64, total: f64) {
+        *self
+            .progress
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner) =
+            Some((done.clamp(0., total), total));
     }
     pub fn facts(&self) -> serde_json::Value {
         self.facts
@@ -107,7 +254,7 @@ impl Control {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
             .clone()
     }
-    fn record_facts(&self, facts: serde_json::Value) {
+    pub(super) fn record_facts(&self, facts: serde_json::Value) {
         *self
             .facts
             .lock()
@@ -171,7 +318,10 @@ impl Control {
     /// and its child/lease cleanup has unwound. Never overwrite a terminal result.
     #[cfg(test)]
     fn fail(&self, message: String) {
-        self.finish(Outcome::Failed { message });
+        self.finish(Outcome::Failed {
+            code: "export-failed",
+            message,
+        });
     }
     fn start(&self) -> bool {
         self.state
@@ -229,10 +379,16 @@ pub fn run(request: RenderRequest, control: Arc<Control>) {
     match std::panic::catch_unwind(|| encode(&request, &control)) {
         Ok(Ok(outcome)) => control.finish(outcome),
         Ok(Err(error)) => control.finish(Outcome::Failed {
+            code: if error.downcast_ref::<Refused>().is_some() {
+                "unsupported"
+            } else {
+                "export-failed"
+            },
             message: format!("{error:#}"),
         }),
         Err(_) => control.finish(Outcome::Failed {
-            message: "offline PNG worker panicked".into(),
+            code: "export-failed",
+            message: "offline media worker panicked".into(),
         }),
     }
 }
@@ -249,17 +405,17 @@ fn acquire_reader<'a>(lease: &'a Lease, control: &Control) -> Result<Option<Read
     }
 }
 
-struct ReapedChild {
-    child: Child,
-    reaped: bool,
+pub(super) struct ReapedChild {
+    pub(super) child: Child,
+    pub(super) reaped: bool,
 }
 impl ReapedChild {
-    fn wait(&mut self) -> io::Result<ExitStatus> {
+    pub(super) fn wait(&mut self) -> io::Result<ExitStatus> {
         let status = self.child.wait()?;
         self.reaped = true;
         Ok(status)
     }
-    fn kill_wait(&mut self) -> io::Result<ExitStatus> {
+    pub(super) fn kill_wait(&mut self) -> io::Result<ExitStatus> {
         // It may have exited between the cancellation check and kill(). wait()
         // still reaps it; no early return on the benign already-exited kill error.
         let _ = self.child.kill();
@@ -276,11 +432,11 @@ impl Drop for ReapedChild {
     }
 }
 
-enum ChildResult {
+pub(super) enum ChildResult {
     Exited(ExitStatus),
     Cancelled,
 }
-fn poll_child(child: &mut ReapedChild, control: &Control) -> Result<ChildResult> {
+pub(super) fn poll_child(child: &mut ReapedChild, control: &Control) -> Result<ChildResult> {
     loop {
         if control.status() == Status::Cancelling {
             child
@@ -305,7 +461,7 @@ fn poll_child(child: &mut ReapedChild, control: &Control) -> Result<ChildResult>
     }
 }
 
-fn drain_tail(mut reader: impl Read) -> io::Result<Vec<u8>> {
+pub(super) fn drain_tail(mut reader: impl Read) -> io::Result<Vec<u8>> {
     let mut tail = Vec::new();
     let mut chunk = [0; 4096];
     loop {
@@ -380,10 +536,13 @@ fn validate_png(temp: &tempfile::NamedTempFile) -> Result<()> {
     Ok(())
 }
 
-fn capture_command(command: &mut Command, control: &Control) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
+pub(super) fn capture_command(
+    command: &mut Command,
+    control: &Control,
+) -> Result<Option<(Vec<u8>, Vec<u8>)>> {
     capture_input_command(command, Stdio::null(), control)
 }
-fn capture_input_command(
+pub(super) fn capture_input_command(
     command: &mut Command,
     stdin: Stdio,
     control: &Control,
@@ -452,25 +611,29 @@ fn capture_input_command(
     }
 }
 
-fn validate_mp4(
-    request: &RenderRequest,
-    temp: &tempfile::NamedTempFile,
+/// Run an FFmpeg child to its end on this worker, reaped on every path. Its
+/// stderr keeps a bounded tail. With `total`, the command writes `-progress
+/// pipe:1` (FFmpeg's `key=value` lines) to stdout and each `out_time_us` moves
+/// [`Control::progress`] toward `total` seconds. `Ok(None)`: cancelled.
+pub(super) fn run_tool(
+    command: &mut Command,
+    stdin: Stdio,
     control: &Control,
-) -> Result<bool> {
-    // Decode every encoded stream to completion before publication, on this
-    // cancellable background worker. Encoder success/header bytes alone do not
-    // establish a readable MP4. ffprobe/independent consumers verify codec/time.
-    let child = crate::platform::tool_command(&request.ffmpeg)
-        .args(["-nostdin", "-v", "error", "-threads", "1", "-i"])
-        .arg(temp.path())
-        .args([
-            "-map", "0:v:0", "-map", "0:a?", "-threads", "1", "-f", "null", "-",
-        ])
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
+    total: Option<f64>,
+) -> Result<Option<(ExitStatus, Vec<u8>)>> {
+    if control.status() == Status::Cancelling {
+        return Ok(None);
+    }
+    let child = command
+        .stdin(stdin)
+        .stdout(if total.is_some() {
+            Stdio::piped()
+        } else {
+            Stdio::null()
+        })
         .stderr(Stdio::piped())
         .spawn()
-        .context("MP4 validation decoder could not start")?;
+        .context("FFmpeg could not be started")?;
     let mut child = ReapedChild {
         child,
         reaped: false,
@@ -479,74 +642,176 @@ fn validate_mp4(
         .child
         .stderr
         .take()
-        .context("MP4 validation stderr unavailable")?;
-    let drain = thread::Builder::new()
-        .name("mp4-validation-stderr".into())
-        .spawn(move || drain_tail(stderr));
-    let drain = match drain {
-        Ok(value) => value,
+        .context("FFmpeg stderr pipe is unavailable")?;
+    let drain = match thread::Builder::new()
+        .name("media-stderr".into())
+        .spawn(move || drain_tail(stderr))
+    {
+        Ok(drain) => drain,
         Err(error) => {
-            child.kill_wait()?;
-            return Err(error).context("MP4 validation drain could not start");
+            child
+                .kill_wait()
+                .context("FFmpeg cleanup after stderr worker failure failed")?;
+            return Err(error).context("FFmpeg stderr drain could not be started");
         }
     };
-    let result = poll_child(&mut child, control);
-    if !child.reaped {
-        child.kill_wait()?;
-    }
-    let stderr = drain
-        .join()
-        .map_err(|_| anyhow::anyhow!("MP4 validation drain panicked"))??;
-    match result? {
-        ChildResult::Cancelled => Ok(false),
-        ChildResult::Exited(status) if status.success() => {
-            let probe = sibling(&request.ffmpeg, "ffprobe")?;
-            let mut command = crate::platform::tool_command(probe);
-            command.args(["-v","error","-show_entries","stream=index,codec_name,codec_type,width,height,sample_rate,channels,channel_layout,duration,r_frame_rate:format=duration","-of","json"]).arg(temp.path());
-            let Some((stdout, _)) = capture_command(&mut command, control)? else {
-                return Ok(false);
-            };
-            let output: serde_json::Value =
-                serde_json::from_slice(&stdout).context("encoded MP4 probe metadata invalid")?;
-            // Retain actual video/audio track facts even when coverage rejects publication.
-            let mut facts = control.facts();
-            facts["output"] = output.clone();
-            control.record_facts(facts);
-            if let Output::Mp4 { end, .. } = &request.output {
-                let video = output["streams"]
-                    .as_array()
-                    .and_then(|streams| streams.iter().find(|s| s["codec_type"] == "video"))
-                    .context("encoded MP4 video stream missing")?;
-                let actual = video["duration"]
-                    .as_str()
-                    .and_then(|s| s.parse::<f64>().ok())
-                    .filter(|v| v.is_finite() && *v > 0.)
-                    .context("encoded MP4 video duration unavailable")?;
-                let rate = video["r_frame_rate"]
-                    .as_str()
-                    .and_then(|r| r.split_once('/'))
-                    .and_then(|(n, d)| Some(n.parse::<f64>().ok()? / d.parse::<f64>().ok()?))
-                    .filter(|r| r.is_finite() && *r > 0.)
-                    .context("encoded MP4 video frame interval unavailable")?;
-                let tolerance = 1. / rate + 0.0001;
-                if actual + tolerance < end - request.time {
-                    bail!(
-                        "source-unavailable: encoded video covers {actual}s, shorter than requested {}s beyond one frame ({tolerance}s)",
-                        end - request.time
-                    );
+    let stdout = child.child.stdout.take();
+    let waited = thread::scope(|scope| {
+        let reader = match (stdout, total) {
+            (Some(stdout), Some(total)) => {
+                control.set_progress(0., total);
+                match thread::Builder::new()
+                    .name("media-progress".into())
+                    .spawn_scoped(scope, move || read_progress(stdout, control, total))
+                {
+                    Ok(reader) => Some(reader),
+                    Err(error) => {
+                        let _ = child.kill_wait();
+                        return Err(error).context("FFmpeg progress reader could not be started");
+                    }
                 }
             }
-            Ok(true)
+            _ => None,
+        };
+        let waited = poll_child(&mut child, control);
+        // Keep the child guard (and the caller's source Reader) until it is
+        // reaped, on cancellation and error paths too.
+        let reaped = if child.reaped {
+            Ok(())
+        } else {
+            child.kill_wait().map(|_| ())
+        };
+        if let Some(reader) = reader {
+            let _ = reader.join();
         }
-        ChildResult::Exited(status) => bail!(
-            "MP4 validation decode failed ({status}): {}",
+        reaped.context("FFmpeg cleanup could not reap the child")?;
+        waited
+    });
+    let stderr = drain
+        .join()
+        .map_err(|_| anyhow::anyhow!("FFmpeg stderr drain panicked"))?
+        .context("FFmpeg stderr drain failed")?;
+    match waited? {
+        ChildResult::Cancelled => Ok(None),
+        ChildResult::Exited(status) => Ok(Some((status, stderr))),
+    }
+}
+
+/// Read FFmpeg's `-progress` stream to its end (stopping early would close the
+/// pipe under FFmpeg). Only `out_time_us` is used; `N/A` and negative values
+/// are skipped.
+fn read_progress(stdout: impl Read, control: &Control, total: f64) {
+    use std::io::BufRead;
+    let mut reader = BufReader::new(stdout);
+    let mut line = Vec::new();
+    loop {
+        line.clear();
+        match reader.read_until(b'\n', &mut line) {
+            Ok(0) | Err(_) => return,
+            Ok(_) => {}
+        }
+        if let Some(done) = progress_seconds(&String::from_utf8_lossy(&line)) {
+            control.set_progress(done, total);
+        }
+    }
+}
+fn progress_seconds(line: &str) -> Option<f64> {
+    let micros = line
+        .trim()
+        .strip_prefix("out_time_us=")?
+        .parse::<i64>()
+        .ok()
+        .filter(|us| *us >= 0)?;
+    Some(micros as f64 / 1_000_000.)
+}
+
+/// Decode the written clip before publication, on this cancellable worker:
+/// encoder success and header bytes alone do not establish a readable file.
+/// `limit`: decode only the first seconds (a stream copy of decodable source
+/// packets; its muxing is what is checked). `Ok(None)`: cancelled.
+pub(super) fn decode_check(
+    ffmpeg: &std::path::Path,
+    path: &std::path::Path,
+    threads: usize,
+    limit: Option<f64>,
+    control: &Control,
+) -> Result<Option<()>> {
+    let threads = threads.to_string();
+    let mut command = crate::platform::tool_command(ffmpeg);
+    command.args(["-nostdin", "-v", "error", "-threads", &threads]);
+    if let Some(limit) = limit {
+        command.args(["-t", &limit.to_string()]);
+    }
+    command.arg("-i").arg(path).args([
+        "-map", "0:v:0", "-map", "0:a?", "-threads", &threads, "-f", "null", "-",
+    ]);
+    match run_tool(&mut command, Stdio::null(), control, None)? {
+        None => Ok(None),
+        Some((status, _)) if status.success() => Ok(Some(())),
+        Some((status, stderr)) => bail!(
+            "validation decode failed ({status}): {}",
             String::from_utf8_lossy(&stderr)
         ),
     }
 }
 
+/// Returns the encoded video's duration; `None`: cancelled.
+fn validate_mp4(
+    request: &RenderRequest,
+    temp: &tempfile::NamedTempFile,
+    threads: usize,
+    control: &Control,
+) -> Result<Option<f64>> {
+    // Decode every encoded stream to completion before publication.
+    // ffprobe/independent consumers verify codec/time.
+    if decode_check(&request.ffmpeg, temp.path(), threads, None, control)?.is_none() {
+        return Ok(None);
+    }
+    let probe = sibling(&request.ffmpeg, "ffprobe")?;
+    let mut command = crate::platform::tool_command(probe);
+    command.args(["-v","error","-show_entries","stream=index,codec_name,codec_type,width,height,sample_rate,channels,channel_layout,duration,r_frame_rate:format=duration","-of","json"]).arg(temp.path());
+    let Some((stdout, _)) = capture_command(&mut command, control)? else {
+        return Ok(None);
+    };
+    let output: serde_json::Value =
+        serde_json::from_slice(&stdout).context("encoded MP4 probe metadata invalid")?;
+    // Retain actual video/audio track facts even when coverage rejects publication.
+    let mut facts = control.facts();
+    facts["output"] = output.clone();
+    control.record_facts(facts);
+    let end = request.output.end().context("MP4 end missing")?;
+    let video = output["streams"]
+        .as_array()
+        .and_then(|streams| streams.iter().find(|s| s["codec_type"] == "video"))
+        .context("encoded MP4 video stream missing")?;
+    let actual = video["duration"]
+        .as_str()
+        .and_then(|s| s.parse::<f64>().ok())
+        .filter(|v| v.is_finite() && *v > 0.)
+        .context("encoded MP4 video duration unavailable")?;
+    let rate =
+        rate(&video["r_frame_rate"]).context("encoded MP4 video frame interval unavailable")?;
+    let tolerance = 1. / rate + 0.0001;
+    if actual + tolerance < end - request.time {
+        bail!(
+            "source-unavailable: encoded video covers {actual}s, shorter than requested {}s beyond one frame ({tolerance}s)",
+            end - request.time
+        );
+    }
+    Ok(Some(actual))
+}
+
+/// A positive frame rate from ffprobe's `"n/d"`.
+pub(super) fn rate(value: &serde_json::Value) -> Option<f64> {
+    value
+        .as_str()
+        .and_then(|r| r.split_once('/'))
+        .and_then(|(n, d)| Some(n.parse::<f64>().ok()? / d.parse::<f64>().ok()?))
+        .filter(|r| r.is_finite() && *r > 0.)
+}
+
 /// FFmpeg's sibling tool (`ffprobe`, with `.exe` on Windows).
-fn sibling(ffmpeg: &std::path::Path, tool: &str) -> Result<std::path::PathBuf> {
+pub(super) fn sibling(ffmpeg: &std::path::Path, tool: &str) -> Result<std::path::PathBuf> {
     let directory = ffmpeg.parent().context("FFmpeg directory missing")?;
     Ok(directory.join(format!("{tool}{}", std::env::consts::EXE_SUFFIX)))
 }
@@ -574,7 +839,8 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         .lines()
         .find(|s| s.trim_start().starts_with("libavfilter"))
         .context("libavfilter version missing")?;
-    control.record_facts(serde_json::json!({"descriptorVersion":"vestra-finite/1","ffmpegVersion":ffmpeg_version,"libavfilterVersion":libavfilter.trim(),"videoStreamIndex":request.video_stream,"range":{"start":request.time,"end":match &request.output{Output::Still(_)=>None,Output::Mp4{end,..}=>Some(*end)},"interval":"half-open; first video PTS >= start"},"preroll":if request.processed.is_some() || matches!(&request.output,Output::Mp4{..}) {Some(crate::playback::offline_audio::PREROLL)}else{None},"hasAudio":matches!(&request.output,Output::Mp4{audio:Some(_),..}),"audioTiming":if matches!(&request.output,Output::Mp4{audio:Some(_),..}) {"DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded"}else{"not applicable: no audio output"},"processed":request.processed.is_some()}));
+    let copy = matches!(&request.output, Output::Copy { .. });
+    control.record_facts(serde_json::json!({"descriptorVersion":"vestra-finite/1","ffmpegVersion":ffmpeg_version,"libavfilterVersion":libavfilter.trim(),"videoStreamIndex":request.video_stream,"range":{"start":request.time,"end":request.output.end(),"interval":if copy {"stream copy; first video packet is the keyframe at or before start"} else {"half-open; first video PTS >= start"}},"preroll":if !copy && (request.processed.is_some() || matches!(&request.output,Output::Mp4{..})) {Some(crate::playback::offline_audio::PREROLL)}else{None},"hasAudio":request.output.has_audio(),"audioTiming":if copy && request.output.has_audio() {"stream copy: source packets from the video start, unchanged"} else if request.output.has_audio() {"DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded"}else{"not applicable: no audio output"},"processed":request.processed.is_some()}));
     reader
         .validate()
         .context("source-unavailable before encoding")?;
@@ -587,18 +853,24 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         "-v",
         "error",
         "-show_entries",
-        "format=start_time",
+        if matches!(&request.output, Output::Still(_)) {
+            "format=start_time"
+        } else {
+            // Clips also need the streams: the codecs and time bases of a
+            // copy, the frame rate of a capped re-encode.
+            "format=start_time:stream=index,codec_type,codec_name,time_base,avg_frame_rate,r_frame_rate:stream_disposition=attached_pic"
+        },
         "-of",
         "json",
         crate::platform::HELD_FILE_INPUT,
     ]);
-    let Some((origin, _)) = capture_input_command(&mut origin_command, reader.stdin()?, control)?
+    let Some((probed, _)) = capture_input_command(&mut origin_command, reader.stdin()?, control)?
     else {
         return Ok(Outcome::Cancelled);
     };
-    let origin: serde_json::Value =
-        serde_json::from_slice(&origin).context("source origin probe JSON invalid")?;
-    let origin = origin["format"]["start_time"]
+    let probed: serde_json::Value =
+        serde_json::from_slice(&probed).context("source origin probe JSON invalid")?;
+    let origin = probed["format"]["start_time"]
         .as_str()
         .and_then(|s| s.parse::<f64>().ok())
         .filter(|v| v.is_finite());
@@ -629,6 +901,39 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     let destination = parent.join(filename);
     let temp = tempfile::NamedTempFile::new_in(&parent)
         .context("owned PNG temporary output could not be created")?;
+    if let Output::Copy {
+        end,
+        audio,
+        container,
+    } = &request.output
+    {
+        let Some(copied) = crate::playback::media_copy::write(
+            &crate::playback::media_copy::Job {
+                ffmpeg: &request.ffmpeg,
+                video_stream: request.video_stream,
+                start: request.time,
+                end: *end,
+                audio: audio.as_ref(),
+                container: *container,
+                origin: origin.unwrap_or(request.source_origin),
+                streams: &probed["streams"],
+            },
+            &mut reader,
+            temp.path(),
+            control,
+        )?
+        else {
+            return Ok(Outcome::Cancelled);
+        };
+        let destination = crate::playback::media_copy::named(&destination, copied.container);
+        return publish(
+            &reader,
+            control,
+            temp,
+            destination,
+            Some((copied.start, copied.end)),
+        );
+    }
     // Native extraction and video decoding share this OFFLINE reader only in
     // sequence. Each stdin rewind occurs after the earlier child is reaped.
     let native = if let Some(frozen) = &request.processed
@@ -690,32 +995,40 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                 subtitle,
                 request.time,
             )?,
-            Output::Mp4 { end, .. } => crate::playback::offline_descriptor::video_range(
-                &frozen.processing.video,
-                subtitle,
-                request.time,
-                Some(*end),
-            )?,
+            Output::Mp4 { end, .. } | Output::Copy { end, .. } => {
+                crate::playback::offline_descriptor::video_range(
+                    &frozen.processing.video,
+                    subtitle,
+                    request.time,
+                    Some(*end),
+                )?
+            }
         }
     } else {
         "scale=w='max(1,round(iw*sar))':h=ih,setsar=1,settb=AVTB".into()
     };
+    let threads = match &request.output {
+        Output::Mp4 { encoding, .. } => encoding.threads(),
+        _ => 1,
+    }
+    .to_string();
     let mut command = crate::platform::tool_command(&request.ffmpeg);
     command.args([
         "-nostdin",
         "-v",
         "error",
         "-threads",
-        "1",
+        &threads,
         "-filter_threads",
-        "1",
+        &threads,
         "-filter_complex_threads",
-        "1",
+        &threads,
     ]);
     if request.processed.is_none() && matches!(&request.output, Output::Still(_)) {
         command.args(["-ss", &request.time.to_string()]);
     }
     command.args(["-i", crate::platform::HELD_FILE_INPUT]);
+    let mut total = None;
     match &request.output {
         Output::Still(_) => {
             command.args(["-map", &format!("0:{}", request.video_stream)]);
@@ -738,7 +1051,12 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                 "-y",
             ]);
         }
-        Output::Mp4 { end, audio } => {
+        Output::Copy { .. } => unreachable!("stream copies return above"),
+        Output::Mp4 {
+            end,
+            audio,
+            encoding,
+        } => {
             let duration = end - request.time;
             if !end.is_finite() || duration <= 0. || *end > 86400. {
                 bail!("invalid frozen MP4 range");
@@ -749,6 +1067,15 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                     request.time
                 ));
             }
+            let source_rate = probed["streams"]
+                .as_array()
+                .and_then(|streams| {
+                    streams
+                        .iter()
+                        .find(|s| s["index"].as_u64() == Some(u64::from(request.video_stream)))
+                })
+                .and_then(|video| rate(&video["avg_frame_rate"]).or(rate(&video["r_frame_rate"])));
+            filter.push_str(&caps(encoding, source_rate));
             // H.264 yuv420 output needs even dimensions. Preserve the complete
             // presented image and pad only an odd last row/column with black.
             filter.push_str(",pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black");
@@ -768,7 +1095,16 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
             }
             command.args(["-filter_complex", &graph, "-map", "[v]"]);
             if audio.is_some() {
-                command.args(["-map", "[a]", "-c:a", "aac", "-ar", "48000", "-b:a", "192k"]);
+                command.args([
+                    "-map",
+                    "[a]",
+                    "-c:a",
+                    "aac",
+                    "-ar",
+                    "48000",
+                    "-b:a",
+                    &format!("{}k", encoding.audio_bitrate()),
+                ]);
             } else {
                 command.arg("-an");
             }
@@ -778,98 +1114,97 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                 "-c:v",
                 "libx264",
                 "-preset",
-                "veryfast",
+                encoding.preset(),
                 "-crf",
-                "18",
+                &encoding.crf().to_string(),
                 "-pix_fmt",
                 "yuv420p",
                 "-threads",
-                "1",
+                &threads,
                 "-movflags",
                 "+faststart",
+                "-progress",
+                "pipe:1",
+                "-stats_period",
+                "0.25",
                 "-f",
                 "mp4",
                 "-y",
             ]);
+            total = Some(duration);
         }
     }
-    let child = command
-        .arg(temp.path())
-        .stdin(stdin)
-        .stdout(Stdio::null())
-        .stderr(Stdio::piped())
-        .spawn()
-        .context("offline PNG encoder could not be started")?;
-    let mut child = ReapedChild {
-        child,
-        reaped: false,
-    };
-    let stderr = child
-        .child
-        .stderr
-        .take()
-        .context("encoder stderr pipe is unavailable")?;
-    let drain = match thread::Builder::new()
-        .name("png-stderr".into())
-        .spawn(move || drain_tail(stderr))
-    {
-        Ok(drain) => drain,
-        Err(error) => {
-            child
-                .kill_wait()
-                .context("encoder cleanup after stderr worker failure failed")?;
-            return Err(error).context("encoder stderr drain could not be started");
-        }
-    };
-    let waited = poll_child(&mut child, control);
-    // Keep both child guard and source Reader until reaping and stderr drain
-    // complete, including cancellation/error paths. FFmpeg is the trusted binary
-    // and must not delegate stderr ownership to an unbounded-lived grandchild.
-    if !child.reaped {
-        child
-            .kill_wait()
-            .context("encoder cleanup could not reap child")?;
-    }
-    let stderr = drain
-        .join()
-        .map_err(|_| anyhow::anyhow!("encoder stderr drain panicked"))?
-        .context("encoder stderr drain failed")?;
-    match waited? {
-        ChildResult::Cancelled => return Ok(Outcome::Cancelled),
-        ChildResult::Exited(status) if !status.success() => bail!(
-            "PNG encoder failed ({status}): {}",
+    command.arg(temp.path());
+    // The source Reader stays held until the child is reaped (run_tool).
+    match run_tool(&mut command, stdin, control, total)? {
+        None => return Ok(Outcome::Cancelled),
+        Some((status, stderr)) if !status.success() => bail!(
+            "encoder failed ({status}): {}",
             String::from_utf8_lossy(&stderr)
         ),
-        ChildResult::Exited(_) => {}
+        Some(_) => {}
     }
     if control.status() == Status::Cancelling {
         return Ok(Outcome::Cancelled);
     }
-    let temp = match &request.output {
+    let (temp, range) = match &request.output {
         Output::Still(still) => {
             validate_png(&temp)?;
             if *still == Still::Png {
-                temp
+                (temp, None)
             } else {
                 // The converted file replaces the PNG (removed when dropped).
                 let converted = tempfile::NamedTempFile::new_in(&parent)
                     .context("owned temporary output could not be created")?;
                 convert_still(temp.path(), *still, converted.as_file())?;
-                converted
+                (converted, None)
             }
         }
-        Output::Mp4 { .. } => {
-            if !validate_mp4(request, &temp, control)? {
+        Output::Mp4 { encoding, .. } => {
+            let Some(actual) = validate_mp4(request, &temp, encoding.threads(), control)? else {
                 return Ok(Outcome::Cancelled);
-            }
-            temp
+            };
+            (temp, Some((request.time, request.time + actual)))
         }
+        Output::Copy { .. } => unreachable!("stream copies return above"),
     };
+    publish(&reader, control, temp, destination, range)
+}
+
+/// The R6 ceilings as filters after the range trim: a frame-rate cap only
+/// when the source is faster, and a height cap that leaves a shorter picture
+/// alone (the width follows the aspect, kept even).
+fn caps(encoding: &Encoding, source_rate: Option<f64>) -> String {
+    let mut filter = String::new();
+    if let Some(fps) = encoding.fps
+        && source_rate.is_none_or(|rate| rate > f64::from(fps) * 1.001)
+    {
+        filter.push_str(&format!(",fps={fps}"));
+    }
+    if let Some(height) = encoding.max_height {
+        filter.push_str(&format!(
+            ",scale=w='if(gt(ih,{height}),-2,iw)':h='min(ih,{height})'"
+        ));
+    }
+    filter
+}
+
+/// Publish the validated temporary output under `destination`, never over an
+/// existing file. The CAS is the publication/cancellation boundary: no
+/// filesystem publish is attempted if a cancellation request has already won.
+fn publish(
+    reader: &Reader<'_>,
+    control: &Control,
+    temp: tempfile::NamedTempFile,
+    destination: PathBuf,
+    range: Option<(f64, f64)>,
+) -> Result<Outcome> {
+    if control.status() == Status::Cancelling {
+        return Ok(Outcome::Cancelled);
+    }
     reader
         .validate()
         .context("source-unavailable after encoding")?;
-    // This CAS is the publication/cancellation boundary. No filesystem publish
-    // is attempted if a cancellation request has already won.
     if !control.publish() {
         return Ok(Outcome::Cancelled);
     }
@@ -878,7 +1213,122 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         .context("temporary output could not be flushed")?;
     temp.persist_noclobber(&destination)
         .map_err(|error| anyhow::anyhow!("no-clobber publication failed: {}", error.error))?;
-    Ok(Outcome::Completed { destination })
+    if let Some((_, total)) = control.progress() {
+        // FFmpeg's last report may stop short of the clip's nominal length.
+        control.set_progress(total, total);
+    }
+    Ok(Outcome::Completed { destination, range })
+}
+
+/// Helpers of the real-FFmpeg export tests (`#[ignore]`d; `ci:local` runs
+/// them with `--include-ignored`).
+#[cfg(test)]
+pub(super) mod real {
+    use super::*;
+    use std::time::Instant;
+
+    /// `VESTRA_FFMPEG` (`env.ps1 -Ffmpeg`), else `ffmpeg` on PATH; FFprobe beside it.
+    pub fn ffmpeg() -> PathBuf {
+        std::env::var_os("VESTRA_FFMPEG").map_or_else(
+            || {
+                let name = if cfg!(windows) {
+                    "ffmpeg.exe"
+                } else {
+                    "ffmpeg"
+                };
+                std::env::split_paths(&std::env::var_os("PATH").unwrap())
+                    .map(|dir| dir.join(name))
+                    .find(|path| path.is_file())
+                    .expect("ffmpeg on PATH")
+            },
+            PathBuf::from,
+        )
+    }
+
+    /// A clip of the test-media folder: `VESTRA_TEST_MEDIA`, else
+    /// `C:\vestra\testmedia` (the Windows test machine). `None` (the test is
+    /// skipped with a note) where the folder does not exist.
+    pub fn clip(name: &str) -> Option<PathBuf> {
+        let dir = std::env::var_os("VESTRA_TEST_MEDIA")
+            .map_or_else(|| PathBuf::from(r"C:\vestra\testmedia"), PathBuf::from);
+        let path = dir.join(name);
+        if path.is_file() {
+            Some(path)
+        } else {
+            diag!(
+                "skipped: {} is missing (set VESTRA_TEST_MEDIA)",
+                path.display()
+            );
+            None
+        }
+    }
+
+    /// ffprobe's JSON for `entries` of `file`.
+    pub fn probe(file: &std::path::Path, args: &[&str]) -> serde_json::Value {
+        let out = Command::new(sibling(&ffmpeg(), "ffprobe").unwrap())
+            .args(["-v", "error"])
+            .args(args)
+            .args(["-of", "json"])
+            .arg(file)
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        serde_json::from_slice(&out.stdout).unwrap()
+    }
+
+    pub fn audio(stream_index: u32) -> crate::playback::media_tracks::AudioTrack {
+        crate::playback::media_tracks::AudioTrack {
+            track_id: 1,
+            stream_index: Some(stream_index),
+            selected: true,
+            external: false,
+            codec: None,
+            title: None,
+            language: None,
+        }
+    }
+
+    pub fn request(
+        source: &std::path::Path,
+        time: f64,
+        destination: PathBuf,
+        output: Output,
+    ) -> RenderRequest {
+        RenderRequest {
+            lease: Arc::new(Lease::open(source).unwrap()),
+            time,
+            destination,
+            ffmpeg: ffmpeg(),
+            processed: None,
+            output,
+            video_stream: 0,
+            source_origin: 0.,
+        }
+    }
+
+    /// Run a job on a worker thread as `media_jobs` does; the highest
+    /// progress seen while it ran comes back with the control.
+    pub fn run_job(request: RenderRequest) -> (Arc<Control>, Option<(f64, f64)>) {
+        let control = Arc::new(Control::new());
+        let worker = control.clone();
+        let thread = thread::spawn(move || run(request, worker));
+        let mut seen: Option<(f64, f64)> = None;
+        let deadline = Instant::now() + Duration::from_secs(600);
+        while !thread.is_finished() && Instant::now() < deadline {
+            if let Some((done, total)) = control.progress()
+                && seen.is_none_or(|(d, _)| done > d)
+            {
+                seen = Some((done, total));
+            }
+            thread::sleep(Duration::from_millis(5));
+        }
+        thread.join().unwrap();
+        (control, seen)
+    }
 }
 
 #[cfg(test)]
@@ -888,6 +1338,146 @@ mod tests {
         sync::{Barrier, mpsc},
         time::Instant,
     };
+
+    /// Precise options: a 720p60 source capped to 480p and 30 fps, CRF 26,
+    /// AAC 128 kb/s, with threads chosen by the host. The range written and
+    /// the progress (seconds of the 2 s clip) are reported.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn precise_options_cap_size_and_rate_and_report_the_range() {
+        let ffmpeg = real::ffmpeg();
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source.mp4");
+        let made = Command::new(&ffmpeg)
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("testsrc2=size=1280x720:rate=60")
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000"])
+            .args(["-t", "4", "-c:v", "libx264", "-preset", "ultrafast"])
+            .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest"])
+            .arg(&source)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let destination = dir.path().join("out").join("precise.mp4");
+        std::fs::create_dir(destination.parent().unwrap()).unwrap();
+        let encoding: Encoding = serde_json::from_value(serde_json::json!({"crf":26,"speed":"balanced","maxHeight":480,"fps":30,"audioBitrate":128,"threads":"auto"})).unwrap();
+        let (control, progress) = real::run_job(real::request(
+            &source,
+            1.0,
+            destination.clone(),
+            Output::Mp4 {
+                end: 3.0,
+                audio: Some(real::audio(1)),
+                encoding,
+            },
+        ));
+        let Some(Outcome::Completed {
+            destination: written,
+            range: Some((start, end)),
+        }) = control.snapshot().1
+        else {
+            panic!("{:?}", control.snapshot().1);
+        };
+        assert_eq!(written, dunce::canonicalize(&destination).unwrap());
+        assert_eq!(start, 1.0);
+        assert!((end - 3.0).abs() < 0.05, "end {end}");
+        let (done, total) = progress.expect("progress while encoding");
+        assert_eq!(total, 2.0);
+        assert!(done > 0. && done <= total, "{done}/{total}");
+        let output = real::probe(
+            &destination,
+            &[
+                "-show_entries",
+                "stream=codec_type,width,height,r_frame_rate,bit_rate",
+            ],
+        );
+        let video = &output["streams"][0];
+        assert_eq!(
+            (video["width"].as_u64(), video["height"].as_u64()),
+            (Some(854), Some(480))
+        );
+        assert_eq!(video["r_frame_rate"], "30/1");
+        assert_eq!(output["streams"][1]["codec_type"], "audio");
+    }
+
+    /// Cancelling a running re-encode stops FFmpeg: the job ends cancelled,
+    /// after progress was reported, and leaves no file behind.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264 and the testmedia clips"]
+    fn cancelling_a_running_encode_leaves_nothing() {
+        let Some(source) = real::clip("bbb-480p-web.mp4") else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let destination = dir.path().join("whole.mp4");
+        let control = Arc::new(Control::new());
+        let worker = control.clone();
+        let request = real::request(
+            &source,
+            0.,
+            destination.clone(),
+            Output::Mp4 {
+                end: 90.,
+                audio: None,
+                encoding: Encoding::default(),
+            },
+        );
+        let thread = thread::spawn(move || run(request, worker));
+        let deadline = Instant::now() + Duration::from_secs(60);
+        while control.progress().is_none_or(|(done, _)| done <= 0.) {
+            assert!(Instant::now() < deadline, "no progress");
+            assert!(!thread.is_finished(), "{:?}", control.snapshot());
+            thread::sleep(Duration::from_millis(10));
+        }
+        assert_eq!(control.progress().unwrap().1, 90.);
+        assert_eq!(control.cancel(), CancelResult::Requested);
+        thread.join().unwrap();
+        assert_eq!(control.snapshot().1, Some(Outcome::Cancelled));
+        assert_eq!(std::fs::read_dir(dir.path()).unwrap().count(), 0);
+    }
+
+    #[test]
+    fn progress_reads_out_time_in_microseconds() {
+        assert_eq!(progress_seconds("out_time_us=1500000\n"), Some(1.5));
+        assert_eq!(progress_seconds("out_time_us=N/A"), None);
+        assert_eq!(progress_seconds("out_time_us=-23"), None);
+        assert_eq!(progress_seconds("out_time=00:00:01.500000"), None);
+        let control = Control::new();
+        read_progress(
+            io::Cursor::new(b"frame=1\nout_time_us=N/A\nout_time_us=2000000\nprogress=continue\nout_time_us=9000000\nprogress=end\n".to_vec()),
+            &control,
+            5.,
+        );
+        // Clamped to the clip's length.
+        assert_eq!(control.progress(), Some((5., 5.)));
+        assert_eq!(Control::new().progress(), None);
+    }
+
+    #[test]
+    fn caps_apply_only_where_the_source_exceeds_them() {
+        let encoding = |value| serde_json::from_value::<Encoding>(value).unwrap();
+        assert_eq!(caps(&Encoding::default(), Some(60.)), "");
+        assert_eq!(
+            caps(&encoding(serde_json::json!({"fps":30})), Some(60.)),
+            ",fps=30"
+        );
+        assert_eq!(
+            caps(&encoding(serde_json::json!({"fps":30})), Some(29.97)),
+            ""
+        );
+        assert_eq!(
+            caps(&encoding(serde_json::json!({"fps":30})), Some(30.)),
+            ""
+        );
+        assert_eq!(
+            caps(&encoding(serde_json::json!({"fps":60})), None),
+            ",fps=60"
+        );
+        assert_eq!(
+            caps(&encoding(serde_json::json!({"maxHeight":720})), Some(24.)),
+            ",scale=w='if(gt(ih,720),-2,iw)':h='min(ih,720)'"
+        );
+    }
 
     #[test]
     fn cancellation_and_publication_have_one_atomic_winner() {
@@ -921,6 +1511,7 @@ mod tests {
         assert_eq!(control.snapshot().1, Some(Outcome::Cancelled));
         assert_eq!(control.cancel(), CancelResult::Terminal);
         control.finish(Outcome::Failed {
+            code: "export-failed",
             message: "late".into(),
         });
         assert_eq!(control.snapshot().1, Some(Outcome::Cancelled));
@@ -930,12 +1521,14 @@ mod tests {
         assert_eq!(publishing.cancel(), CancelResult::TooLate);
         publishing.finish(Outcome::Completed {
             destination: "published.png".into(),
+            range: None,
         });
         assert_eq!(publishing.cancel(), CancelResult::Terminal);
         let failed_publish = Control::new();
         assert!(failed_publish.start());
         assert!(failed_publish.publish());
         failed_publish.finish(Outcome::Failed {
+            code: "export-failed",
             message: "destination already exists".into(),
         });
         let (status, outcome, publication_started) = failed_publish.snapshot();
@@ -1022,20 +1615,7 @@ mod tests {
     #[test]
     #[ignore = "needs ffmpeg with libx264"]
     fn a_still_is_rendered_from_the_held_lease() {
-        let ffmpeg = std::env::var_os("VESTRA_FFMPEG").map_or_else(
-            || {
-                let names = if cfg!(windows) {
-                    "ffmpeg.exe"
-                } else {
-                    "ffmpeg"
-                };
-                std::env::split_paths(&std::env::var_os("PATH").unwrap())
-                    .map(|dir| dir.join(names))
-                    .find(|path| path.is_file())
-                    .expect("ffmpeg on PATH")
-            },
-            PathBuf::from,
-        );
+        let ffmpeg = real::ffmpeg();
         let dir = tempfile::tempdir().unwrap();
         let source = dir.path().join("clip.mp4");
         let made = Command::new(&ffmpeg)
@@ -1066,7 +1646,8 @@ mod tests {
         assert_eq!(
             control.snapshot().1,
             Some(Outcome::Completed {
-                destination: destination.clone()
+                destination: destination.clone(),
+                range: None,
             })
         );
         let still = image::open(&destination).unwrap();
