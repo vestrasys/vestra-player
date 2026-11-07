@@ -601,7 +601,7 @@ export declare class TestHost implements Transport {
      * See {@link TestHost.mounted}.
      */
     panel: (Omit<FakeWindow, "callbacks" | "userClose"> & {
-        /** `"bottom"`, `"sidebar"` or `"backdrop"`. */
+        /** `"bottom"`, `"sidebar"`, `"adjust"` or `"backdrop"`. */
         slot: string;
         /** The exported component the SDK found in the file. */
         component: string;
@@ -643,6 +643,12 @@ export declare class TestHost implements Transport {
          * the current tab's (the plugin under test is owner 1).
          */
         sidebar: LayoutSlot | null;
+        /**
+         * The adjust column (SDK 1.6.11, player 0.7.6), like the sidebar but
+         * never `detached`. It starts hidden (`preferred: false`, `reason:
+         * "userHidden"`), as the player's does until the user opens it.
+         */
+        adjust: LayoutSlot | null;
     };
     /**
      * Every `osd.show` text as the player shows it (translated with the
@@ -1331,7 +1337,7 @@ export declare class TestHost implements Transport {
      *
      * @capability None.
      */
-    mountOther(slot: "bottom" | "sidebar" | "backdrop", plugin: string, options?: {
+    mountOther(slot: "bottom" | "sidebar" | "adjust" | "backdrop", plugin: string, options?: {
         title?: string;
     }): void;
     /**
@@ -2829,7 +2835,7 @@ export declare class TestHost implements Transport {
      * @since 1.0.0
      */
     mounted(): Omit<FakeWindow, "callbacks" | "userClose"> & {
-        /** `"bottom"`, `"sidebar"` or `"backdrop"`. */
+        /** `"bottom"`, `"sidebar"`, `"adjust"` or `"backdrop"`. */
         slot: string;
         /** The exported component the SDK found in the file. */
         component: string;

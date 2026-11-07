@@ -991,7 +991,8 @@ class LayoutService {
     state = {
         bottom: null,
         sidebar: null,
-        tabs: { bottom: null, sidebar: null },
+        adjust: null,
+        tabs: { bottom: null, sidebar: null, adjust: null },
         backdrop: null,
     };
     #listeners = new Set();
@@ -1051,10 +1052,16 @@ class LayoutService {
                         active: panel.owner === slot.owner,
                     })))
                     : null;
+                const adjust = raw.adjust ?? null;
                 const next = {
                     bottom: view(raw.bottom),
                     sidebar: view(raw.sidebar),
-                    tabs: { bottom: tabs(raw.bottom), sidebar: tabs(raw.sidebar) },
+                    adjust: view(adjust),
+                    tabs: {
+                        bottom: tabs(raw.bottom),
+                        sidebar: tabs(raw.sidebar),
+                        adjust: tabs(adjust),
+                    },
                     backdrop: raw.backdrop
                         ? Object.freeze({ effective: raw.backdrop.effective === true })
                         : null,
@@ -1145,6 +1152,7 @@ export const panels = (scope) => ({
     mount: (position, file, options = {}) => new PanelHandle(scope, position, file, options),
     bottom: slot(scope, "bottom"),
     sidebar: slot(scope, "sidebar"),
+    adjust: slot(scope, "adjust"),
     backdrop: backdrop(scope),
 });
 export const dialogs = (scope) => {
