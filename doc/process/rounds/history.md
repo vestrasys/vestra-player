@@ -191,11 +191,45 @@ Kept so that old commits and comments make sense:
 
 ## Current round
 
-In progress (2026-11-04). If a loop is used, the procedure is [agentic-workflow-loop.md](../../../agentic-workflow/agentic-workflow-loop.md).
+In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-loop.md](../../../agentic-workflow/agentic-workflow-loop.md).
+
+**Goal:** a calmer UI after a week of real use: task panels in a new adjust slot, a host-owned bottom button strip, a command palette, visible shortcuts and a slim right-click menu. The in-flight fixes go first. After that come the SDK review, the download page touch-ups and the launch video, in that order. **Done when** B6 is merged and released, and C and D are reviewed by the user. E is not part of the done criteria.
+
+**Design:** `C:\vestra\design\menu-redesign\PROPOSAL.md` v2 (local, uncommitted), with its inventory and mockups 02–09. It moves into `doc/specs/` with B1.
+
+### User rulings (2026-11-07)
+
+- **Menus:** the built-in menus copied PotPlayer and are cluttered. Replace them with graphical task panels, show shortcuts in the GUI and cut the menus drastically. Rejected: sidebar groups (plugins would have to know their group), icon tabs (authors will not draw icons), button-style docking.
+- **Adjust slot:** a new panel slot `adjust`, next to `sidebar`, `bottom` and `backdrop`. A plugin only declares the slot, and the SDK docs say what the slot does in the GUI today. The host may change how a slot is presented at any time. Layout: `[video][adjust][sidebar]`. Both columns can be open at once, and the sidebar is always rightmost.
+- **Bottom button strip:** owned by the host, at the right end of the bottom slot, in today's style. It no longer depends on the bottom-bar plugin to place it. One button per plugin. Buttons past the cap or the width go to a » menu and are never dropped silently. Layout: `[plugin buttons…][»][🔍][Adjust][Sidebar]`. The last three are host commands and always visible. 🔍 opens the command palette, which the host draws.
+- **Window:** remember size, position and maximized. Fullscreen is not restored and has no option. The sidebar header's ✕ is removed.
+- **Filters:** host-side fixes 1–4 are approved, generalised: process at the displayed resolution, and neutral nodes pass through.
+- **Order after the menu work:** first the SDK review (some features may fit a sidebar or panel better and need rewriting), then the download page (re-record the affected clips, small copy fixes), and the launch video last (re-made for the new UI).
+- **Authority while the user is away:** the coordinator assigns, reviews, commits, merges on local checks and releases SDK patches (agentic-workflow.md §8). It stops for the user on: workflow-file changes, player release tags (CI is left alone for now), paid services, deploys, using the screen without consent, and new trade-offs (agentic-workflow.md §7).
+
+### State
 
 | # | Item | State |
 | --- | --- | --- |
-| 1 | **Release 0.7.5**: bottom-bar arrows become Previous/Next; a plugin-only change that verifies host reuse | In progress |
-| 2 | **Design doc consolidation**: one English design doc plus the kept detailed specs; code comments stop depending on docs | In progress; merges after 0.7.5 |
-| 3 | **Exit-code fix for the remaining scripts** (`process.exitCode` instead of `process.exit`), plus step timeouts | In progress |
-| 4 | **Signing**: macOS Developer ID and notarization; Windows code signing | Discussion with the user |
+| A1 | **Window state and sidebar ✕** (branch `window-state-sidebar-close`) | Re-review passed. Next: GUI check in an isolated profile (needs the screen), then merge. Follow-up: minimized-start shortcut (`IsIconic`), macOS title-bar drift on restore, a placement round-trip test |
+| A2 | **Filter performance** (branch `filter-performance`) | Maintainer at work. Next: review, measurement under quiet.flag, GUI drag test, merge |
+| A3 | **Exit-code fix for the remaining scripts** (`exit-code-scripts`, bb81a11e) | Reviewed. Merge |
+| A4 | **Nightly advisories**: `pin-utils` unmaintained (RUSTSEC-2026-0441), `pulldown-cmark` 0.13.5 (RUSTSEC-2026-0433). Nightly red since 11-05 | Maintainer: update or ignore with a reason in `deny.toml`. Review, merge |
+| A5 | **Design doc consolidation** (`design-doc-consolidation`) | Needs the user: approve 3 agentic-workflow.md edits. Then SDK 1.6.4 (doc links), review, rebase, merge |
+| A6 | **Release 0.7.5**: macOS job cancelled on 11-04 | Needs the user (CI left alone for now) |
+| B1 | **Command palette** (host, menu layer, Ctrl+Shift+P) plus a command category field; the 28 superseded single-choice commands become palette-only | After A1–A3. Design spec into `doc/specs/` |
+| B2 | **Shortcut hints** in tabs, sliders and buttons | After B1 |
+| B3a | **Host-owned button strip**, » overflow, 🔍 button; host and playback in one release | After B2 |
+| B3b | **Adjust slot**: adjust column, narrow-window overlay, fullscreen slide-out, Adjust button; SDK patch (`adjust` slot value, docs) | After B3a |
+| B4 | **Panels**: Picture (its effects part after A2), Audio, Subtitles, Playback. One plugin author each | After B3b |
+| B5 | **Slim right-click menu**, `menus.md` refreshed | After B4 |
+| B6 | Full GUI test, then a release | Release tag needs the user |
+| C | **SDK review**: examples, docs and built-in plugins whose features fit a sidebar or an adjust panel better. A proposal goes to the user before any rewrite | After B3b |
+| D | **Download page**: re-record the clips that show menus, fix copy for the panels and the palette. Push only, no deploy | After B6 |
+| E | **Signing** (Apple enrolment, Windows choice), page deploy and SEO | Needs the user |
+| F | **Launch video v4**, re-made for the new UI; music decision | Last; needs the user |
+| G | Restore the GPU test clip default (`C:\vestra\clips` is gone; use `testmedia`) | Small, any time |
+
+### Log (newest first)
+
+- 11-07: menu redesign proposal v2 approved, with the host-owned strip and the 🔍 button. A1 re-review passed. A2 in progress. Nightly advisory failure found (A4).
