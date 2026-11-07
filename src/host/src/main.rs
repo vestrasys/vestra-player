@@ -700,8 +700,15 @@ fn main() -> Result<()> {
         match position {
             Some(position) => {
                 platform::hold_next_shown();
+                let mut position = position;
                 if cfg!(target_os = "macos") && restore.maximized {
                     window.window().set_maximized(true);
+                    // Zoomed at its creation, the window is never moved
+                    // again (`view::place`), and Restore returns it to its
+                    // creation frame: that frame must be the saved one, not
+                    // one title bar higher (winit creates it with the
+                    // content, not the frame, at the position).
+                    position = platform::creation_position(position);
                 }
                 host.placements.show_restored(&window, position, restore)?;
             }

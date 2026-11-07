@@ -558,6 +558,30 @@ impl PressureSource {
     }
 }
 
+/// Where to put a window before its native window exists so that its
+/// frame's top-left corner lands at `frame` (logical points, as
+/// `ui_state` saves it). winit takes a creation position as the top-left
+/// corner of the *content* (`initWithContentRect:`), so the title bar goes
+/// above it: the position moves down by the title bar's height, which AppKit
+/// gives for the style winit uses for a decorated window (titled, closable,
+/// miniaturizable, resizable; about 28 points). Unchanged off the
+/// main thread.
+pub fn creation_position(frame: slint::LogicalPosition) -> slint::LogicalPosition {
+    use objc2_app_kit::{NSWindow, NSWindowStyleMask};
+    use objc2_foundation::{NSPoint, NSRect, NSSize};
+    let Some(marker) = MainThreadMarker::new() else {
+        return frame;
+    };
+    let style = NSWindowStyleMask::Titled
+        | NSWindowStyleMask::Closable
+        | NSWindowStyleMask::Miniaturizable
+        | NSWindowStyleMask::Resizable;
+    let content = NSRect::new(NSPoint::new(0., 0.), NSSize::new(800., 600.));
+    let outer = NSWindow::frameRectForContentRect_styleMask(content, style, marker);
+    let title_bar = (outer.size.height - content.size.height).max(0.);
+    slint::LogicalPosition::new(frame.x, frame.y + title_bar as f32)
+}
+
 /// NSScreen's list (the menu-bar screen first) with the names System
 /// Settings shows. Main thread only; empty elsewhere.
 pub fn displays() -> Vec<Display> {
