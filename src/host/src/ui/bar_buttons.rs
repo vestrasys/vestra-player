@@ -4,7 +4,7 @@
 //! SDK 1.6.8) the player places the strip itself (`HostBarStrip`,
 //! ui/bar-strip.slint) at the right end of the bottom slot, or in a band of
 //! its own without a bottom bar: `[plugin buttons…][»][Command Palette]
-//! [Toggle Sidebar]`. The bar says how wide its row is with every control
+//! [Adjust][Toggle Sidebar]` (Adjust: step 3b). The bar says how wide its row is with every control
 //! (`content-full-width`; plugin buttons get only the room beyond it) or at
 //! least (`content-min-width`, a 3a bar; composition.rs) and reads the strip's width
 //! (`BarButtonsHost.width`). A bar that still places the deprecated
@@ -31,6 +31,9 @@ use std::collections::BTreeSet;
 pub const GLOBAL: &str = "BarButtonsHost";
 /// The player's Toggle Sidebar command (owner `bindings::HOST`).
 pub const SIDEBAR: &str = "sidebar";
+/// The player's Adjust command (owner `bindings::HOST`, menu redesign step
+/// 3b): shows or hides the adjust column.
+pub const ADJUST: &str = "adjust";
 
 /// `VESTRA_DEBUG_BAR=1`: the strip's debug lines (buttons in `»`, a
 /// plugin's buttons after its first, a bar placing `BarButtons`).
@@ -76,6 +79,8 @@ pub struct Inputs {
     pub bindings: u64,
     pub sidebar: Option<window_state::Visibility>,
     pub slot: Option<(bool, bool)>,
+    /// The adjust column's state (its toggle's dot).
+    pub adjust: Option<(bool, bool)>,
     pub locale: &'static str,
     pub windows: (u64, Option<u64>),
 }
@@ -92,7 +97,9 @@ pub struct Strip {
     overflow: Vec<Item>,
     toggle: Option<Item>,
     palette: Option<Item>,
-    /// Window generations that show `buttons`, `overflow`, `toggle`, `palette`.
+    adjust: Option<Item>,
+    /// Window generations that show `buttons`, `overflow`, `toggle`,
+    /// `palette`, `adjust`.
     applied: BTreeSet<u64>,
     /// Buttons not in the strip, logged once each (debug).
     logged: BTreeSet<(u64, String)>,
@@ -128,6 +135,7 @@ impl Strip {
             .iter()
             .chain(self.toggle.as_ref())
             .chain(self.palette.as_ref())
+            .chain(self.adjust.as_ref())
             .find(|item| item.token() == token)
             .map(|item| (item.owner, item.id.clone()))
     }
@@ -216,27 +224,57 @@ impl Host {
         }
     }
 
-    /// Toggle Sidebar's state: available while a panel is in the sidebar,
-    /// checked while it is wanted shown.
-    fn sidebar_command_state(&mut self) {
-        let preferred = self.policy.sidebar_state().map(|(preferred, _)| preferred);
-        let state = commands::CommandState {
-            enabled: preferred.is_some(),
-            checked: Some(preferred.unwrap_or(false)),
-            busy: false,
-            reason: preferred
-                .is_none()
-                .then(|| i18n::tr("No panel is in the sidebar")),
+    /// Adjust (`host/adjust`): show or hide the adjust column, showing its
+    /// last tab, as `panels.adjust.toggle()` does.
+    pub(crate) fn toggle_adjust(&mut self) {
+        if let Some((preferred, _)) = self.policy.column_state(window_state::Slot::Adjust) {
+            self.set_adjust_visible(!preferred);
+        }
+    }
+
+    /// Show or hide the adjust column (the preference of its current panel).
+    pub(crate) fn set_adjust_visible(&mut self, visible: bool) {
+        let Some(owner) = self.policy.active(window_state::Slot::Adjust) else {
+            return;
         };
+        let now = self.now_ms();
         if self
-            .commands
-            .get(bindings::HOST, SIDEBAR)
-            .is_some_and(|entry| entry.state != state)
+            .policy
+            .set_preferred(window_state::Slot::Adjust, owner, visible, now)
+            .is_ok()
         {
-            self.host_revision += 1;
-            let _ = self
+            self.remember_column(crate::ui::sidebar_tabs::Column::Adjust, false);
+            self.window_tick();
+        }
+    }
+
+    /// Toggle Sidebar's and Adjust's states: available while a panel is in
+    /// their column, checked while it is wanted shown.
+    fn sidebar_command_state(&mut self) {
+        for (id, slot) in [
+            (SIDEBAR, window_state::Slot::Sidebar),
+            (ADJUST, window_state::Slot::Adjust),
+        ] {
+            let preferred = self.policy.column_state(slot).map(|(preferred, _)| preferred);
+            let state = commands::CommandState {
+                enabled: preferred.is_some(),
+                checked: Some(preferred.unwrap_or(false)),
+                busy: false,
+                reason: preferred.is_none().then(|| match slot {
+                    window_state::Slot::Sidebar => i18n::tr("No panel is in the sidebar"),
+                    _ => i18n::tr("No panel is in the adjust column"),
+                }),
+            };
+            if self
                 .commands
-                .update(bindings::HOST, SIDEBAR, self.host_revision, state);
+                .get(bindings::HOST, id)
+                .is_some_and(|entry| entry.state != state)
+            {
+                self.host_revision += 1;
+                let _ = self
+                    .commands
+                    .update(bindings::HOST, id, self.host_revision, state);
+            }
         }
     }
 
@@ -342,13 +380,38 @@ impl Host {
         })
     }
 
+    /// The adjust column's cell (`host/adjust`, menu redesign step 3b): the
+    /// sliders icon, its on dot while the column is wanted shown; disabled
+    /// while no panel is in it.
+    fn adjust_item(&self) -> Option<Item> {
+        let entry = self.commands.get(bindings::HOST, ADJUST)?;
+        let label = label(entry.declaration.shown_title());
+        let key = self.input.borrow().table.label(bindings::HOST, ADJUST);
+        Some(Item {
+            owner: bindings::HOST,
+            id: ADJUST.into(),
+            icon: commands::ButtonIcon::Name("sliders".into()),
+            tip: tip(&label, key.as_deref(), &entry.state),
+            label,
+            enabled: entry.state.enabled,
+            checkable: true,
+            checked: entry.state.checked == Some(true),
+            dimmed: false,
+        })
+    }
+
     /// Each window tick: bring the strip of every composed window up to
-    /// date (`sidebar`: the sidebar's state at this tick).
+    /// date (`columns`: the sidebar's and the adjust column's states at
+    /// this tick).
     pub(crate) fn bar_tick(
         &mut self,
         shell: &slint_interpreter::ComponentInstance,
-        sidebar: Option<window_state::Visibility>,
+        columns: (
+            Option<window_state::Visibility>,
+            Option<window_state::Visibility>,
+        ),
     ) {
+        let sidebar = columns.0;
         if !self.bar.begin(&self.bar_inputs(sidebar)) {
             return;
         }
@@ -361,10 +424,12 @@ impl Host {
         }
         let toggle = self.sidebar_item(sidebar);
         let palette = self.palette_item();
+        let adjust = self.adjust_item();
         if buttons != self.bar.buttons
             || overflow != self.bar.overflow
             || toggle != self.bar.toggle
             || palette != self.bar.palette
+            || adjust != self.bar.adjust
         {
             for item in &self.bar.buttons {
                 self.images.release_view(item.owner, "$bar");
@@ -373,6 +438,7 @@ impl Host {
             self.bar.overflow = overflow;
             self.bar.toggle = toggle;
             self.bar.palette = palette;
+            self.bar.adjust = adjust;
             self.bar.applied.clear();
         }
         let mut windows = vec![(self.shell_generation, shell.clone_strong())];
@@ -401,6 +467,7 @@ impl Host {
             bindings: self.input.borrow().table.revision(),
             sidebar,
             slot: self.policy.sidebar_state(),
+            adjust: self.policy.column_state(window_state::Slot::Adjust),
             locale: i18n::locale(),
             windows: (
                 self.shell_generation,
@@ -463,6 +530,7 @@ impl Host {
         )?;
         window.set_global_property(GLOBAL, "toggle", cell(self.bar.toggle.as_ref(), None))?;
         window.set_global_property(GLOBAL, "palette", cell(self.bar.palette.as_ref(), None))?;
+        window.set_global_property(GLOBAL, "adjust", cell(self.bar.adjust.as_ref(), None))?;
         window.set_global_property(
             GLOBAL,
             "overflow",
@@ -596,6 +664,12 @@ mod tests {
             ..strip
         };
         assert_eq!(strip.target("0/palette"), Some((0, "palette".into())));
+        // Step 3b: and the adjust column's toggle.
+        let strip = Strip {
+            adjust: Some(item(bindings::HOST, ADJUST)),
+            ..strip
+        };
+        assert_eq!(strip.target("0/adjust"), Some((0, ADJUST.into())));
     }
 
     /// Step 3a: `»` lists the strip's buttons the room left out, then the
@@ -646,6 +720,7 @@ mod tests {
             bindings: 3,
             sidebar: None,
             slot: Some((true, false)),
+            adjust: None,
             locale: "en",
             windows: (2, None),
         };
@@ -674,12 +749,17 @@ mod tests {
                 windows: (2, Some(5)),
                 ..inputs.clone()
             },
+            // Step 3b: the adjust column opened (its toggle's dot).
+            Inputs {
+                adjust: Some((true, false)),
+                ..inputs.clone()
+            },
         ] {
             assert!(strip.begin(&changed));
             strip.inputs = Some(changed.clone());
             assert!(!strip.begin(&changed));
         }
-        assert_eq!(strip.rebuilds, 5);
+        assert_eq!(strip.rebuilds, 6);
     }
 
     #[test]

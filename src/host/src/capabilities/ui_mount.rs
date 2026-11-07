@@ -87,17 +87,20 @@ impl Capability for UiMount {
                 *owner = to;
             }
         };
-        host.shell_tabs.iter_mut().for_each(swap);
         if let Some(floating) = &mut host.floating {
             floating.owners.iter_mut().for_each(swap);
         }
-        for owner in [
-            &mut host.sidebar_active,
-            &mut host.tab_woken,
-            &mut host.input.borrow_mut().sidebar,
-        ]
-        .into_iter()
-        .flatten()
+        for state in &mut host.columns {
+            state.tabs.iter_mut().for_each(swap);
+            for owner in [&mut state.active, &mut state.woken].into_iter().flatten() {
+                swap(owner);
+            }
+        }
+        let mut shared = host.input.borrow_mut();
+        let input = &mut *shared;
+        for owner in [&mut input.sidebar, &mut input.adjust]
+            .into_iter()
+            .flatten()
         {
             swap(owner);
         }
@@ -116,7 +119,7 @@ impl Capability for UiMount {
             return;
         };
         if keep_recorded {
-            if mount.spec.slot == composition::Slot::Sidebar {
+            if mount.spec.slot.tabbed() {
                 mount.recorded = true;
             }
         } else if mount.recorded {
@@ -146,8 +149,14 @@ impl Capability for UiMount {
             return Ok(None);
         }
         let params = &call.params;
-        if params["slot"] != "sidebar" {
-            return Err(RpcError::invalid("only a sidebar tab is recorded"));
+        if !params["slot"]
+            .as_str()
+            .and_then(composition::Slot::parse)
+            .is_some_and(composition::Slot::tabbed)
+        {
+            return Err(RpcError::invalid(
+                "only a tab of the sidebar or the adjust column is recorded",
+            ));
         }
         let builtin = host.is_builtin_package(&origin.id, &origin.directory);
         let (mut mount, _) = new_mount(
@@ -240,16 +249,13 @@ fn mount(
         if host.mounts.get(&reply.owner).is_some_and(|m| !m.recorded) {
             return Err(RpcError::new("conflict", "owner already mounted"));
         }
-        let slot = match string(params, "slot")? {
-            "bottom" => composition::Slot::Bottom,
-            "sidebar" => composition::Slot::Sidebar,
-            "backdrop" => composition::Slot::Backdrop,
-            _ => return Err(RpcError::invalid("unknown mount slot")),
-        };
+        let slot = composition::Slot::parse(string(params, "slot")?)
+            .ok_or_else(|| RpcError::invalid("unknown mount slot"))?;
         // One component in the bottom bar and the backdrop (R-U3),
         // whoever mounted it: refused here, not when the shell
-        // compiles. The sidebar takes any number of tabs (sidebar-tabs.md).
-        if slot != composition::Slot::Sidebar {
+        // compiles. The sidebar and the adjust column take any number of
+        // tabs (sidebar-tabs.md).
+        if !slot.tabbed() {
             let pending = host
                 .mount_queue
                 .iter()
@@ -329,11 +335,10 @@ fn waiting_mounts(host: &Host, owner: u64) -> Vec<(Option<composition::Slot>, Va
         .collect::<Vec<_>>();
     for (_, method, params) in host.held_mounts.held_of(owner) {
         waiting.push(if method == "ui.mount" {
-            let slot = match params["slot"].as_str() {
-                Some("sidebar") => composition::Slot::Sidebar,
-                Some("backdrop") => composition::Slot::Backdrop,
-                _ => composition::Slot::Bottom,
-            };
+            let slot = params["slot"]
+                .as_str()
+                .and_then(composition::Slot::parse)
+                .unwrap_or(composition::Slot::Bottom);
             (Some(slot), sidebar_tabs::recorded_call(params, &name))
         } else {
             (None, Value::Null)
@@ -355,12 +360,8 @@ fn new_mount(
     builtin: bool,
     params: &Value,
 ) -> std::result::Result<(Mount, Vec<RpcError>), RpcError> {
-    let slot = match string(params, "slot")? {
-        "bottom" => composition::Slot::Bottom,
-        "sidebar" => composition::Slot::Sidebar,
-        "backdrop" => composition::Slot::Backdrop,
-        _ => return Err(RpcError::invalid("unknown mount slot")),
-    };
+    let slot = composition::Slot::parse(string(params, "slot")?)
+        .ok_or_else(|| RpcError::invalid("unknown mount slot"))?;
     let file = process::package_file(directory, string(params, "file")?)?;
     let mut properties: BTreeMap<String, Value> =
         serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
@@ -420,9 +421,9 @@ fn set_mount(
         .as_ref()
         .map(ComponentHandle::clone_strong)
         .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
-    // A sidebar tab beyond the front tabs is not in the shell (sidebar-tabs.md):
+    // A tab beyond the front tabs is not in the shell (sidebar-tabs.md):
     // its values are only stored, and written when it is compiled.
-    let shell = (spec.slot != composition::Slot::Sidebar
+    let shell = (!spec.slot.tabbed()
         || host.shell_compiled.get(&reply.owner) == Some(&reply.owner))
     .then_some(shell);
     let property = string(params, "property")?;
@@ -431,7 +432,7 @@ fn set_mount(
         .as_ref()
         .filter(|f| {
             f.compiled.contains(&reply.owner)
-                && (spec.slot != composition::Slot::Sidebar
+                && (!spec.slot.tabbed()
                     || host.shell_compiled.get(&reply.owner) == Some(&reply.owner))
         })
         .map(|f| f.instance.clone_strong());
@@ -654,27 +655,28 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             .ok_or_else(|| RpcError::invalid(format!("{key} requires a finite number")))
     };
     let (x, y) = (number("x")?, number("y")?);
-    let slot = match mount.spec.slot {
-        composition::Slot::Bottom => "bottom",
-        composition::Slot::Sidebar => "sidebar",
-        composition::Slot::Backdrop => {
-            return Err(RpcError::new(
-                "unavailable",
-                "the backdrop takes no pointer input",
-            ));
-        }
-    };
-    // A panel in a background tab is not shown (sidebar tabs).
-    if slot == "sidebar" && host.policy.sidebar_active() != Some(reply.owner) {
+    let mount_slot = mount.spec.slot;
+    if mount_slot == composition::Slot::Backdrop {
+        return Err(RpcError::new(
+            "unavailable",
+            "the backdrop takes no pointer input",
+        ));
+    }
+    let slot = mount_slot.name();
+    // A panel in a background tab is not shown (the columns' tabs).
+    if let Some(policy) = policy_slot(mount_slot).filter(|_| mount_slot.tabbed())
+        && host.policy.active(policy) != Some(reply.owner)
+    {
         return Err(RpcError::new(
             "unavailable",
             "the panel's tab is not the current one",
         ));
     }
-    let generation = if host
-        .floating
-        .as_ref()
-        .is_some_and(|f| f.owners.contains(&reply.owner))
+    let generation = if mount_slot == composition::Slot::Sidebar
+        && host
+            .floating
+            .as_ref()
+            .is_some_and(|f| f.owners.contains(&reply.owner))
     {
         host.floating.as_ref().unwrap().generation
     } else if host.window_facts["slots"][slot]["effective"] == true {
@@ -701,11 +703,9 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
             "layout requires a native shell",
         ));
     }
-    let slot = match string(params, "slot")? {
-        "bottom" => composition::Slot::Bottom,
-        "sidebar" => composition::Slot::Sidebar,
-        _ => return Err(RpcError::invalid("unknown slot")),
-    };
+    let slot = composition::Slot::parse(string(params, "slot")?)
+        .filter(|slot| *slot != composition::Slot::Backdrop)
+        .ok_or_else(|| RpcError::invalid("unknown slot"))?;
     let panels = host
         .mounts
         .values()
@@ -723,13 +723,13 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
         active,
     } = layout_change(params, slot, &panels)?;
     // The slot's state goes through its current panel (any tab's would do).
-    let owner = match slot {
-        composition::Slot::Sidebar => host.policy.sidebar_active(),
-        _ => None,
-    }
-    .unwrap_or(panels[0].0);
+    let owner = slot
+        .tabbed()
+        .then(|| host.policy.active(policy_slot))
+        .flatten()
+        .unwrap_or(panels[0].0);
     if let Some(active) = active
-        && slot == composition::Slot::Sidebar
+        && slot.tabbed()
     {
         host.policy
             .set_active(active)
@@ -749,7 +749,9 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
             mount.visible = visible;
         }
     }
-    host.remember_sidebar(active.is_some());
+    if let Some(column) = sidebar_tabs::Column::of(slot) {
+        host.remember_column(column, active.is_some());
+    }
     // Answer after the next layout pass so a following layout.state sees it.
     host.window_tick();
     Ok(Value::Null)

@@ -29,12 +29,17 @@ pub(crate) enum Event {
     /// A bound input fired: (window generation, owner, command id).
     Binding(u64, u64, String),
     SidebarResized(u64, f64),
-    /// The host's sidebar tab strip (shell or floating window generation): a
-    /// tab clicked (its index), the detach/attach button.
-    SidebarTab(u64, usize),
-    /// The strip's `»` (sidebar-tabs.md): the overflow menu's origin, logical px.
-    SidebarOverflow(u64, f64, f64),
+    /// The adjust column's splitter was released at this width.
+    AdjustResized(u64, f64),
+    /// A column's tab strip (shell or floating window generation): a tab
+    /// clicked (its index in that window's tab order).
+    Tab(u64, crate::ui::sidebar_tabs::Column, usize),
+    /// A strip's `»` (sidebar-tabs.md): the overflow menu's origin, logical px.
+    TabOverflow(u64, crate::ui::sidebar_tabs::Column, f64, f64),
+    /// The sidebar strip's detach/attach button.
     SidebarDetach(u64),
+    /// Esc inside the adjust column floating over a narrow window's video.
+    AdjustDismiss(u64),
     /// IA-CORE-12: a double click on the video during picture-in-picture.
     PipReturn(u64),
     FloatingClosed(u64),

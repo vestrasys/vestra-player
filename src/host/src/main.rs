@@ -454,17 +454,11 @@ fn main() -> Result<()> {
         window_facts: Value::Null,
         measured_shell: None,
         menu_open: false,
-        sidebar_popped: false,
         title_strip: Default::default(),
-        sidebar_active: None,
-        tab_clicked: false,
-        shell_tabs: Vec::new(),
+        columns: Default::default(),
         shell_specs: Vec::new(),
-        shell_tabbed: false,
         shell_compiled: BTreeMap::new(),
         shell_refresh: false,
-        refresh_failed: None,
-        tab_woken: None,
         tabs_failed: Default::default(),
         bottom_shown: true,
         native_window: None,
@@ -601,6 +595,9 @@ fn main() -> Result<()> {
         host.input.borrow_mut().table.set_overlay(overlay);
         if let Some(sidebar) = &host.ui_state.state.sidebar {
             host.policy.set_sidebar_width(sidebar.width);
+        }
+        if let Some(adjust) = &host.ui_state.state.adjust_slot {
+            host.policy.set_adjust_width(adjust.width);
         }
     }
     for directory in &directories {

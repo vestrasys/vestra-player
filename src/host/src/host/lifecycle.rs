@@ -289,8 +289,16 @@ impl Host {
             if input.sidebar == Some(owner) {
                 input.sidebar = None;
             }
+            if input.adjust == Some(owner) {
+                input.adjust = None;
+            }
         }
-        let tabs_before = self.policy.sidebar_panels();
+        let column_of = self
+            .mounts
+            .get(&owner)
+            .filter(|m| m.spec.slot.tabbed())
+            .and_then(|m| policy_slot(m.spec.slot));
+        let tabs_before = column_of.map(|slot| self.policy.panels(slot)).unwrap_or_default();
         if self
             .sequence
             .is_some_and(|(provider, ..)| provider == owner)
@@ -335,11 +343,11 @@ impl Host {
             self.preparing = None;
         }
         if let Some(mount) = (!kept_tab).then(|| self.mounts.remove(&owner)).flatten() {
-            // Another sidebar tab stays shown until the shell is rebuilt.
+            // Another tab of its column stays shown until the shell is rebuilt.
             let last_tab = tabs_before.iter().all(|&o| o == owner);
             if let Some(shell) = &self.shell
                 && let Some(property) = mount.spec.slot.visible_property()
-                && (mount.spec.slot != composition::Slot::Sidebar || last_tab)
+                && (!mount.spec.slot.tabbed() || last_tab)
             {
                 let _ = shell.set_property(property, false.into());
             }

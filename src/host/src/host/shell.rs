@@ -297,6 +297,14 @@ impl Host {
             SValue::Void
         })?;
         window.set_property("sidebar-width", self.policy.sidebar_user_width().into())?;
+        let events = self.events.clone();
+        window.set_callback("adjust-resized", move |args| {
+            if let Some(SValue::Number(width)) = args.first() {
+                let _ = events.send(Event::AdjustResized(generation, *width));
+            }
+            SValue::Void
+        })?;
+        window.set_property("adjust-width", self.policy.adjust_user_width().into())?;
         window.set_property(
             "window-title",
             SValue::String(self.window_title.as_str().into()),

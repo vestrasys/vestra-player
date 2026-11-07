@@ -225,18 +225,27 @@ impl Drops {
 }
 
 /// Where a drop at `(x, y)` in the main window lands: a docked panel (with
-/// panel coordinates) or the video column.
+/// panel coordinates) or the video column. `adjust`: the docked adjust
+/// column's current panel and its width, between the video and the sidebar.
 pub fn hit(
     point: (f64, f64),
     video: (f64, f64),
     bottom: Option<u64>,
+    adjust: Option<(u64, f64)>,
     sidebar: Option<u64>,
 ) -> Option<(u64, (f64, f64))> {
     let (x, y) = point;
+    let mut left = video.0 + 3.;
+    if let Some((owner, width)) = adjust {
+        if x > left && x <= left + width {
+            return Some((owner, (x - left, y)));
+        }
+        left += width + 3.;
+    }
     if let Some(owner) = sidebar
-        && x > video.0 + 3.
+        && x > left
     {
-        return Some((owner, (x - video.0 - 3., y)));
+        return Some((owner, (x - left, y)));
     }
     if let Some(owner) = bottom
         && x <= video.0
@@ -331,15 +340,26 @@ impl Host {
                 .and_then(|id| platform::pointer_in(id).ok());
             let input = self.input.borrow();
             // G-01: in fullscreen only the popped-out sidebar takes drops.
-            let overlay = self.sidebar_popped.then(|| {
-                let width = number("logical-width");
-                width - number("sidebar-pop-width")
-            });
+            let overlay = self.columns[crate::ui::sidebar_tabs::Column::Sidebar.index()]
+                .popped
+                .then(|| {
+                    let width = number("logical-width");
+                    width - number("sidebar-pop-width")
+                });
+            // The docked adjust column (not its overlay over a narrow video).
+            let adjust_width = self.window_facts["slots"]["adjustWidth"]
+                .as_f64()
+                .unwrap_or(0.);
+            let adjust = input
+                .adjust
+                .filter(|_| adjust_width > 0.)
+                .map(|owner| (owner, adjust_width));
             point.and_then(|point| match (fullscreen, overlay) {
                 (false, _) => hit(
                     point,
                     (number("video-width"), number("video-height")),
                     input.bottom,
+                    adjust,
                     input.sidebar,
                 ),
                 (true, Some(left)) if point.0 > left => input
@@ -351,10 +371,12 @@ impl Host {
             // A tool window or the options window: ignored.
             return;
         };
-        // Sidebar tabs: the current panel starts below the host's tab strip.
+        // Tabs: the current panel starts below the host's tab strip (the
+        // adjust column always draws its strip).
         let tabbed = self.policy.sidebar_panels().len() > 1;
+        let adjust = self.policy.active(crate::ui::window_state::Slot::Adjust);
         let panel = panel.map(|(owner, (x, y))| {
-            if tabbed && Some(owner) == self.policy.sidebar_active() {
+            if (tabbed && Some(owner) == self.policy.sidebar_active()) || Some(owner) == adjust {
                 (owner, (x, y - crate::ui::composition::TAB_STRIP_HEIGHT))
             } else {
                 (owner, (x, y))
@@ -486,15 +508,29 @@ mod tests {
         assert_eq!((generation, paths.len()), (1, 2));
         assert!(drops.due().is_none());
         // Video 400×300, bottom bar under it, sidebar right of the splitter.
-        assert_eq!(hit((100., 100.), (400., 300.), Some(1), Some(2)), None);
+        assert_eq!(hit((100., 100.), (400., 300.), Some(1), None, Some(2)), None);
         assert_eq!(
-            hit((100., 320.), (400., 300.), Some(1), Some(2)),
+            hit((100., 320.), (400., 300.), Some(1), None, Some(2)),
             Some((1, (100., 20.)))
         );
         assert_eq!(
-            hit((413., 50.), (400., 300.), Some(1), Some(2)),
+            hit((413., 50.), (400., 300.), Some(1), None, Some(2)),
             Some((2, (10., 50.)))
         );
-        assert_eq!(hit((413., 50.), (400., 300.), Some(1), None), None);
+        assert_eq!(hit((413., 50.), (400., 300.), Some(1), None, None), None);
+        // Step 3b: the docked adjust column (317 wide) lies between them.
+        let adjust = Some((5, 317.));
+        assert_eq!(
+            hit((413., 50.), (400., 300.), Some(1), adjust, Some(2)),
+            Some((5, (10., 50.)))
+        );
+        assert_eq!(
+            hit((733., 50.), (400., 300.), Some(1), adjust, Some(2)),
+            Some((2, (10., 50.)))
+        );
+        assert_eq!(
+            hit((733., 50.), (400., 300.), Some(1), adjust, None),
+            None
+        );
     }
 }

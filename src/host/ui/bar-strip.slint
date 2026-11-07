@@ -1,5 +1,5 @@
 // The player's strip of bottom-bar command buttons (menu redesign step 3a,
-// bar_buttons.rs): `[plugin buttons…][»][Command Palette][Toggle Sidebar]`
+// bar_buttons.rs): `[plugin buttons…][»][Command Palette][Adjust][Toggle Sidebar]`
 // at the right end of the bottom slot. The layout numbers (`shown`, `more`,
 // `width`) live in `BarButtonsHost` (@vestra/bar-buttons.slint), so a
 // bottom bar reads the same width the strip takes. Host-only: plugins do
@@ -147,6 +147,7 @@ export component HostBarStrip {
     private property <bool> overflowing: BarButtonsHost.more-in(root.room);
     private property <int> after-more: root.shown + (root.overflowing ? 1 : 0);
     private property <bool> palette: BarButtonsHost.palette.token != "";
+    private property <bool> adjust: BarButtonsHost.adjust.token != "";
     // Publishes the room to the global, for the player (`shown` at a `»`
     // click) and for bars that read `width`.
     changed room => { BarButtonsHost.room = self.room; }
@@ -168,10 +169,15 @@ export component HostBarStrip {
         clicked(x, y) => { root.more(x / 1px, y / 1px); }
     }
     Cell { x: root.after-more * 41px; shown: root.live && root.palette; item: BarButtonsHost.palette; }
-    // Step 3b: the Adjust cell (`host/adjust`) goes here, between the
-    // palette and the sidebar toggle; it takes no room until then.
+    // Step 3b: the adjust column's toggle (`host/adjust`), between the
+    // palette and the sidebar toggle.
     Cell {
         x: (root.after-more + (root.palette ? 1 : 0)) * 41px;
+        shown: root.live && root.adjust;
+        item: BarButtonsHost.adjust;
+    }
+    Cell {
+        x: (root.after-more + (root.palette ? 1 : 0) + (root.adjust ? 1 : 0)) * 41px;
         shown: root.live && BarButtonsHost.toggle.token != "";
         item: BarButtonsHost.toggle;
     }

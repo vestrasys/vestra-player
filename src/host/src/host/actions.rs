@@ -112,6 +112,13 @@ impl Host {
         // The way to find every other command, next to About and Check for Updates.
         core_actions::categorize(&mut palette, "Help");
         palette.bindings = vec!["Ctrl+Shift+P".into()];
+        // Host 0.7.6 (menu redesign step 3b): the adjust column's toggle, the
+        // sliders cell of the bottom-bar strip between the palette and the
+        // sidebar toggle; outside the menu, no default key (the panels'
+        // own commands have Alt+1…4), bindable in Keyboard Shortcuts.
+        let mut adjust = commands::Declaration::new("Adjust", &[]);
+        adjust.localize(|_| i18n::tr("Adjust"));
+        core_actions::categorize(&mut adjust, "Window");
         vec![
             ("fullscreen", fullscreen, state(true, Some(false))),
             ("enter-fullscreen", enter, state(true, None)),
@@ -121,6 +128,8 @@ impl Host {
             ("sidebar", sidebar, state(false, Some(false))),
             // `palette::PALETTE` (a literal: tests/sdk/host-agreement.test.ts reads it).
             ("palette", palette, state(true, None)),
+            // `bar_buttons::ADJUST` (a literal: tests/sdk/host-agreement.test.ts reads it).
+            ("adjust", adjust, state(false, Some(false))),
         ]
     }
     pub(crate) fn register_core_action(
@@ -362,6 +371,10 @@ impl Host {
             self.toggle_sidebar();
             return;
         }
+        if id == bar_buttons::ADJUST {
+            self.toggle_adjust();
+            return;
+        }
         if id == palette::PALETTE {
             self.open_palette();
             return;
@@ -564,6 +577,7 @@ mod tests {
                 ("quit", category("File")),
                 ("sidebar", category("Window")),
                 ("palette", category("Help")),
+                ("adjust", category("Window")),
             ]
         );
         let own = Host::host_declarations()
@@ -595,6 +609,21 @@ mod tests {
             .unwrap();
         assert!(declaration.path.is_empty(), "outside the menu for now");
         assert!(state.enabled);
+    }
+
+    /// Menu redesign step 3b: Adjust (`host/adjust`) toggles the adjust
+    /// column; outside the menu, no default key, checkable (its dot), and
+    /// disabled until a panel is in the column.
+    #[test]
+    fn adjust_is_a_checkable_host_command_without_a_key() {
+        let (_, declaration, state) = Host::host_declarations()
+            .into_iter()
+            .find(|(id, ..)| *id == bar_buttons::ADJUST)
+            .unwrap();
+        assert!(declaration.path.is_empty() && declaration.bindings.is_empty());
+        assert_eq!(state.checked, Some(false));
+        assert!(!state.enabled);
+        assert_eq!(declaration.shown_title(), "Adjust");
     }
 
     /// M1 (coordinator decision 2026-11-01): the user's own profile has

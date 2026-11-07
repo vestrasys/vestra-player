@@ -81,6 +81,66 @@ impl Default for SidebarSlot {
     }
 }
 
+/// Remember `id` in a column's tab order (appended when new), evicting past
+/// [`ORDER_LIMIT`] the oldest ids not in `current` (plugins with no tab now,
+/// uninstalled ones among them) before any that has one.
+fn remember_in(order: &mut Vec<String>, id: &str, current: &[&str]) {
+    if order.iter().any(|known| known == id) {
+        return;
+    }
+    order.push(id.into());
+    while order.len() > ORDER_LIMIT {
+        let gone = order
+            .iter()
+            .position(|known| !current.contains(&known.as_str()))
+            .unwrap_or(0);
+        order.remove(gone);
+    }
+}
+
+/// The default and least width of the adjust column (menu redesign §3.3).
+pub const ADJUST_WIDTH: f64 = 317.0;
+
+/// The adjust column (menu redesign step 3b), whichever panels it holds:
+/// shown or not, its width, its current tab and its tab order (plugin
+/// manifest ids, including plugins not running now). The same shape as
+/// [`SidebarSlot`], without floating (the adjust column does not detach);
+/// closed until the user opens it.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AdjustSlot {
+    #[serde(default)]
+    pub visible: bool,
+    #[serde(default = "adjust_width")]
+    pub width: f64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub active: Option<String>,
+    #[serde(default)]
+    pub order: Vec<String>,
+}
+
+fn adjust_width() -> f64 {
+    ADJUST_WIDTH
+}
+
+impl Default for AdjustSlot {
+    fn default() -> Self {
+        Self {
+            visible: false,
+            width: ADJUST_WIDTH,
+            active: None,
+            order: Vec::new(),
+        }
+    }
+}
+
+impl AdjustSlot {
+    /// [`SidebarSlot::remember_among`] for the adjust column's order.
+    pub fn remember_among(&mut self, id: &str, current: &[&str]) {
+        remember_in(&mut self.order, id, current);
+    }
+}
+
 impl SidebarSlot {
     /// Remember `id` in the tab order (appended when new).
     pub fn remember(&mut self, id: &str) {
@@ -95,21 +155,11 @@ impl SidebarSlot {
     /// in `current` (plugins with no tab now, uninstalled ones among them)
     /// before any that has one.
     pub fn remember_among(&mut self, id: &str, current: &[&str]) {
-        if self.order.iter().any(|known| known == id) {
-            return;
-        }
-        self.order.push(id.into());
-        while self.order.len() > ORDER_LIMIT {
-            let gone = self
-                .order
-                .iter()
-                .position(|known| !current.contains(&known.as_str()))
-                .unwrap_or(0);
-            self.order.remove(gone);
-        }
+        remember_in(&mut self.order, id, current);
     }
 
     /// Where `id` sorts among the tabs: its place in the order, new ones last.
+    #[cfg(test)]
     pub fn position(&self, id: &str) -> usize {
         self.order
             .iter()
@@ -178,6 +228,9 @@ pub struct UiState {
     pub sidebar: Option<Sidebar>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidebar_slot: Option<SidebarSlot>,
+    /// The adjust column (menu redesign step 3b): `adjustSlot`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjust_slot: Option<AdjustSlot>,
     /// `"<manifest id>/<command id>"` → bindings; read only, kept on save.
     #[serde(default)]
     pub bindings: BTreeMap<String, Vec<String>>,
@@ -275,12 +328,22 @@ impl UiState {
                 slot
             })
             .or_else(|| SidebarSlot::migrate(&panels));
+        let adjust_slot = serde_json::from_value::<AdjustSlot>(field("adjustSlot"))
+            .ok()
+            .map(|mut slot| {
+                if !slot.width.is_finite() || slot.width <= 0. || slot.width > 100_000. {
+                    slot.width = ADJUST_WIDTH;
+                }
+                slot.order.truncate(ORDER_LIMIT);
+                slot
+            });
         Self {
             window,
             window_maximized,
             window_physical,
             sidebar,
             sidebar_slot,
+            adjust_slot,
             bindings,
             bindings_migrated,
             appearance,
@@ -435,6 +498,13 @@ mod tests {
             last_page: Some("vestra.preferences/appearance".into()),
         });
         store.state.palette_recent = vec!["host/mute".into(), "vestra.video/video.reset".into()];
+        // Menu redesign step 3b: the adjust column's own state.
+        store.state.adjust_slot = Some(AdjustSlot {
+            visible: true,
+            width: 340.,
+            active: Some("vestra.audio".into()),
+            order: vec!["examples.adjust-panel".into()],
+        });
         store.touch(0);
         store.save_if_due(999);
         assert!(!path.exists(), "debounced");
@@ -442,10 +512,36 @@ mod tests {
         let reopened = Store::open(&path);
         assert_eq!(reopened.state, store.state);
         let text = std::fs::read_to_string(&path).unwrap();
+        assert!(text.contains("\"adjustSlot\""), "{text}");
         assert!(text.contains("\"version\": 1"));
         assert!(text.contains("\"bindingsMigrated\""), "{text}");
         assert!(text.contains("\"windowMaximized\": true"), "{text}");
         assert!(text.contains("\"paletteRecent\""), "{text}");
+    }
+
+    /// The adjust column starts closed at the default width; a bad width
+    /// falls back to it, missing fields take their defaults.
+    #[test]
+    fn the_adjust_slot_reads_leniently_and_starts_closed() {
+        let default = AdjustSlot::default();
+        assert!(!default.visible && default.width == ADJUST_WIDTH);
+        let read = |text: &str| UiState::from_value(serde_json::from_str(text).unwrap()).adjust_slot;
+        assert_eq!(
+            read(r#"{"adjustSlot":{"visible":true}}"#),
+            Some(AdjustSlot {
+                visible: true,
+                ..AdjustSlot::default()
+            })
+        );
+        assert_eq!(
+            read(r#"{"adjustSlot":{"width":-4,"active":"a.b"}}"#),
+            Some(AdjustSlot {
+                active: Some("a.b".into()),
+                ..AdjustSlot::default()
+            })
+        );
+        assert_eq!(read(r#"{"adjustSlot":7}"#), None);
+        assert_eq!(read("{}"), None);
     }
 
     #[test]
