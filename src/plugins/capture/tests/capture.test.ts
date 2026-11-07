@@ -82,7 +82,7 @@ test("Snapshot ▸ keeps five items; every other command is in the command palet
       ["视频 > 截图 > 复制当前画面", 422, "capture-quick", "Ctrl+C"],
       ["视频 > 截图 > 连拍…", 426, "capture-quick", "Ctrl+G"],
       ["视频 > 截图 > 导出片段…", 428, "capture-quick", ""],
-      ["视频 > 截图 > 截图与片段…", 440, "capture-tab", "Alt+S"],
+      ["视频 > 截图 > 截取…", 440, "capture-tab", "Alt+S"],
     ]);
     const palette = [...host.commands.entries()].filter(([, c]) => !c.declaration.path?.length).map(([id, { declaration: d }]) => [id, d.bindings.join(","), d.home ?? ""]);
     assert.deepEqual(palette, [
@@ -91,10 +91,12 @@ test("Snapshot ▸ keeps five items; every other command is in the command palet
       ["capture.saveScreen", "Ctrl+Alt+E", "capture.panel"],
       ["capture.saveScreenAs", "", "capture.panel"],
       ["capture.copyScreen", "Ctrl+Alt+C", "capture.panel"],
+      ["capture.saveVideo", "", "capture.panel"],
+      ["capture.copyVideo", "", "capture.panel"],
       ["capture.tasks", "", ""],
-      ["capture.format.png", "", "capture.panel"],
-      ["capture.format.jpeg", "", "capture.panel"],
-      ["capture.format.bmp", "", "capture.panel"],
+      ["capture.format.png", "", "capture.settings"],
+      ["capture.format.jpeg", "", "capture.settings"],
+      ["capture.format.bmp", "", "capture.settings"],
       ["capture.screenSubtitles", "", "capture.panel"],
       ["capture.settings", "", ""],
       ["capture.folder", "", "capture.settings"],
@@ -112,7 +114,7 @@ test("Snapshot ▸ keeps five items; every other command is in the command palet
     assert.equal(host.sent("ui.open").length, 0, "no windows any more");
     assert.equal(host.mounted().slot, "sidebar");
     assert.equal(host.mounted().component, "CaptureTab");
-    assert.equal(host.layout.sidebar?.panels?.[0]?.title, "截图与片段");
+    assert.equal(host.layout.sidebar?.panels?.[0]?.title, "截取", "a short title that fits the default sidebar");
   } finally {
     await stop();
   }
@@ -124,7 +126,7 @@ test("every command has a category for the command palette, and every home is on
     ready(host);
     const { stop } = await start(host, locale);
     try {
-      assert.equal(host.commands.size, 23);
+      assert.equal(host.commands.size, 25);
       for (const [id, command] of host.commands) {
         assert.ok(command.declaration.category, `${id}: declares a category`);
         assert.ok(command.display.category?.trim(), `${id}: shows a category in ${locale}`);
@@ -150,7 +152,7 @@ test("English by default: menus, the tab's title, OSD and the clip's dialog are 
   const { stop } = await start(host, "en");
   try {
     assert.deepEqual(host.command("capture.save").declaration.path, ["@video", "Snapshot", "Save Current Frame"]);
-    assert.deepEqual(host.command("capture.panel").display.path, ["Video", "Snapshot", "Snapshots & Clips…"]);
+    assert.deepEqual(host.command("capture.panel").display.path, ["Video", "Snapshot", "Capture…"]);
     assert.equal(host.command("capture.last30").display.title, "Export Last 30 Seconds");
     await host.command("capture.format.jpeg").run();
     await host.settle();
@@ -190,7 +192,13 @@ test("the reasons in model.ts and Words.reason in ui/parts.slint are the same te
 test("the tab's Slint: a ListView for Results, library widgets, key caps, Theme tokens, every label in @tr", async () => {
   const slint = await readFile(new URL("../ui/tab.slint", import.meta.url), "utf8");
   const parts = await readFile(new URL("../ui/parts.slint", import.meta.url), "utf8");
-  assert.match(slint, /ListView \{\s*height: min\(CaptureBridge\.results\.length, 6\) \* 46px;\s*for row in CaptureBridge\.results: ResultItem/);
+  assert.match(slint, /ListView \{\s*vertical-stretch: 1;\s*for row in CaptureBridge\.results: ResultItem/);
+  // Real pages (user ruling 2026-11-07): four persistent pages, one shown, switched with `visible`.
+  for (const page of [0, 1, 2, 3]) assert.equal(slint.split(`visible: CaptureBridge.page == ${page};`).length - 1, 1, `page ${page}`);
+  assert.match(slint, /current-index <=> CaptureBridge\.page;/);
+  // No wrapped text: a wrapped line is laid out one line tall and overlapped the rows below it (GUI check).
+  assert.doesNotMatch(slint, /wrap:\s*word-wrap/);
+  assert.doesNotMatch(slint, /jump-|viewport-y =/, "no anchors scrolled to");
   assert.doesNotMatch(slint, /ComboBox|CheckBox|StandardListView/);
   assert.match(slint, /import \{ Button, Check, Choice, KeyHint, RadioGroup, Slider, Tabs, ToolTipArea, ToolTipKey \} from "@vestra\/widgets\.slint";/);
   assert.match(slint, /KeyHint \{ text: root\.key; \}/);
@@ -211,6 +219,7 @@ test("the tab's Slint: a ListView for Results, library widgets, key caps, Theme 
   const bridge = slint.slice(slint.indexOf("export global CaptureBridge"), slint.indexOf("// Glyphs of this tab"));
   const declared = [...bridge.matchAll(/callback ([\w-]+)\(/g)].map((m) => camel(m[1]!));
   assert.deepEqual(declared.filter((name) => !handled.has(name)), [], "every bridge callback has a handler");
+  assert.deepEqual([...handled].filter((name) => !declared.includes(name!)), [], "every handler has a bridge callback");
   assert.ok(callbacks.length >= declared.length);
 });
 
@@ -234,7 +243,10 @@ test("Ctrl+E saves the raw current frame into the capture folder with no dialog 
     await until(() => rows(host).length === 1 && rows(host)[0]!.state !== "running");
     const [row] = rows(host);
     assert.deepEqual([row!.kind, row!.name, row!.id.startsWith("r"), row!.openable], ["image", basename(outcome.destination), true, true], "the file the host confirmed");
-    assert.equal(tab(host)["result-count"], 1);
+    assert.equal(tab(host).unseen, 1, "the Results sub-tab counts it while another page shows");
+    host.mounted().emit("set-page", 2);
+    await host.settle();
+    assert.equal(tab(host).unseen, 0);
   } finally {
     await stop();
     await cleanup();
@@ -286,7 +298,7 @@ test("while playing, Save Current / Rendered Frame capture the frame at the pres
     // The tab's buttons do the same as the keys.
     host.reset("source.state");
     host.setSource({ position: 7.25 });
-    host.mounted().emit("save", false);
+    host.mounted().emit("save");
     await until(() => host.sent("jobs.start").at(-1)!.destination === join(folder, "source-one_00.07.250.png"));
     assert.equal(host.sent("snapshot.capture").at(-1)!.time, 7.25);
   } finally {
@@ -443,7 +455,7 @@ test("Save As asks for a file; a source change while it is open captures nothing
     host.reset("dialogs.open");
     host.setSource({ position: 5, duration: 30 });
     host.dialogAnswers.push([join(folder, "named")]);
-    host.mounted().emit("save-as", false);
+    await host.command("capture.saveAs").run();
     await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
     assert.equal(host.sent("snapshot.capture")[0]!.time, 5, "the frame shown when the command ran");
     assert.equal(host.sent("jobs.start")[0]!.destination, join(folder, "named.png"));
@@ -484,7 +496,7 @@ test("clip, Precise: Export saves into the folder with the template's name and t
     const job = host.sent("jobs.start")[0]!;
     assert.deepEqual([job.kind, job.end, job.destination], ["processedMp4", 4.5, join(folder, "source-one_00.01.000-00.04.500.mp4")]);
     // Small file; the test host's source plays, so one thread.
-    assert.deepEqual(job.encoding, { crf: 26, speed: "balanced", maxHeight: 1080, audioBitrate: 128, threads: host.source.paused ? "auto" : "single" });
+    assert.deepEqual(job.encoding, { crf: 26, speed: "balanced", maxHeight: 1080, audioBitrate: 128, threads: "auto" });
     // The progress card and the row while it runs.
     await until(() => (tab(host).card as { shown: boolean }).shown);
     assert.equal((tab(host).card as { name: string }).name, "source-one_00.01.000-00.04.500.mp4");
@@ -529,13 +541,13 @@ test("Export Clip… only opens the Clip section; Export Clip Range (Ctrl+Shift+
     await host.settle();
     assert.equal(host.layout.sidebar?.owner, 1, "the tab is in front");
     assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:02.000", "00:12.000"]);
-    assert.deepEqual([tab(host)["jump-section"], tab(host)["jump-request"]], [1, 1]);
+    assert.equal(tab(host).page, 1, "the Clip page");
     assert.equal(host.sent("jobs.start").length, 0);
     // Export Clip… never exports, also while the tab shows.
     await host.command("capture.clip").run();
     await host.settle();
     assert.equal(host.sent("jobs.start").length, 0);
-    assert.equal(tab(host)["jump-request"], 2);
+    assert.equal(tab(host).page, 1);
     // With a range, the key exports it.
     await host.press("Ctrl+Shift+E");
     await until(() => host.sent("jobs.start").length === 1);
@@ -772,7 +784,7 @@ test("when the tab cannot be shown, its commands say so on screen; the keys keep
       throw new HostError("unavailable", "no interface");
     });
     await host.command("capture.tasks").run();
-    await until(() => host.osd.at(-1) === "无法打开“截图与片段”页签。");
+    await until(() => host.osd.at(-1) === "无法打开“截取”页签。");
     await host.press("Ctrl+E");
     await until(() => host.osd.at(-1)?.startsWith("帧已保存为") ?? false);
   } finally {
@@ -1066,3 +1078,77 @@ test("SDK 1.5.45: each finished frame of a burst calls plugin.update(), so the r
 });
 
 
+
+test("Save and Copy take the frame as mpv does: the subtitles shown, the effects when Settings says so; Video Frame Only is the source frame", async () => {
+  const host = new TestHost();
+  ready(host);
+  const { stop } = await start(host);
+  const { cleanup } = await withFolder(host);
+  const saved = async (run: () => Promise<unknown>) => {
+    const before = host.sent("jobs.start").length;
+    await run();
+    await until(() => host.sent("jobs.start").length === before + 1);
+    const capture = host.sent("snapshot.capture").at(-1)!;
+    return [capture.mode, capture.mode === "processed" ? capture.includeSubtitles !== false : false];
+  };
+  try {
+    assert.deepEqual(await saved(() => host.press("Ctrl+E")), ["raw", false], "no subtitles shown: the source frame");
+    host.subtitles.tracks.push({ target: { kind: "embedded", id: 1 }, title: "English", language: "eng", styleSupported: true, styleReason: null } as never);
+    host.subtitles.selection.target = { kind: "embedded", id: 1 } as never;
+    assert.deepEqual(await saved(() => host.press("Ctrl+E")), ["processed", true], "the subtitles shown are in the frame");
+    assert.deepEqual(await saved(() => host.mounted().emit("save") as unknown as Promise<void>), ["processed", true], "the tab's Save is the same");
+    assert.deepEqual(await saved(() => host.command("capture.saveVideo").run()), ["raw", false], "Save Video Frame Only");
+    // Subtitles the player cannot draw into a frame (only plain text can be): the frame without them, not a failure.
+    host.handle("snapshot.capture", async (p) => {
+      if (p.mode === "processed") throw new HostError("unsupported", "styled subtitles cannot be flattened");
+      // The retry without subtitles: the test host's own answer.
+      host.reset("snapshot.capture");
+      return await host.request("snapshot.capture", p);
+    });
+    assert.deepEqual(await saved(() => host.press("Ctrl+E")), ["raw", false]);
+    host.reset("snapshot.capture");
+    // Settings: Include video effects, no subtitles shown.
+    host.subtitles.selection.target = null;
+    host.mounted().emit("set-snapshot-effects", true);
+    await host.settle();
+    assert.deepEqual(await saved(() => host.press("Ctrl+E")), ["processed", false], "the effects without subtitles");
+    assert.equal(tab(host)["snapshot-effects"], true);
+  } finally {
+    await stop();
+    await cleanup();
+  }
+});
+
+test("real pages: the last sub-tab is remembered; commands select their page; Burst lives in Settings", async () => {
+  const data = await mkdtemp(join(tmpdir(), "capture-data-"));
+  const host = new TestHost();
+  ready(host);
+  const first = await start(host, "en", data);
+  try {
+    await host.settle();
+    assert.equal(tab(host).page, 0, "Snapshot first");
+    await host.command("capture.tasks").run();
+    await host.settle();
+    assert.equal(tab(host).page, 2, "Export Tasks… shows Results");
+    await host.press("Ctrl+G");
+    await host.settle();
+    assert.deepEqual([tab(host).page, tab(host)["burst-open"]], [3, true], "Burst… shows Settings with its row open");
+    assert.equal(host.command("capture.burst").state.checked, true);
+    host.mounted().emit("set-page", 1);
+    await host.settle();
+    assert.equal(host.command("capture.burst").state.checked, false);
+    await jsonFile(join(data, "settings.json"), (v) => v.page === 1);
+    await first.stop();
+    const again = new TestHost();
+    ready(again);
+    const second = await startPlugin(activate, { directory, host: again, dataDirectory: data, locale: "en" });
+    await again.settle();
+    assert.equal(tab(again).page, 1, "the Clip page again after a restart");
+    await again.command("capture.settings").run();
+    await again.settle();
+    assert.equal(tab(again).page, 3);
+    await second.stop();
+  } finally {
+    await rm(data, { recursive: true, force: true });
+  }
+});

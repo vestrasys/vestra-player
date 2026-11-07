@@ -25,8 +25,6 @@ export interface Spec {
   method?: Method;
   /** Clips: the encode options of a Precise cut (R6); the encoding clips always had when absent. */
   encode?: Encode;
-  /** Clips: playback was paused when it was asked for (a Precise cut may then use more cores). */
-  paused?: boolean;
 }
 
 /** F07: the image formats a frame can be saved as. */
@@ -85,7 +83,7 @@ export const REASON = {
   fastImpossible: "Fast cut is not possible for this file. Use Precise.",
   noSourceBitrate: "The bitrate of this file is unknown. Choose another quality.",
   folderGone: "The file or folder was moved or deleted.",
-  noTab: "The Snapshots & Clips tab could not open.",
+  noTab: "The Capture tab could not open.",
 } as const;
 export type Reason = keyof typeof REASON;
 

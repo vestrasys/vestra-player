@@ -19,7 +19,7 @@
   "name": "Snapshot",
   "author": "Vestra Player",
   "punchline": "Save or copy the current frame, capture bursts, export clips",
-  "description": "Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4. One sidebar tab, Snapshots & Clips, holds the controls, the running exports and the finished results.\nRight-click menu: Video ▸ Snapshot; Alt+S opens the tab.",
+  "description": "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as a lossless stream copy or a re-encoded MP4. One sidebar tab, Capture, holds the controls, the running exports and the finished results.\nRight-click menu: Video ▸ Snapshot; Alt+S opens the tab.",
   "tags": [
     "video",
     "snapshot",

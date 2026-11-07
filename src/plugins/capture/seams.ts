@@ -45,9 +45,9 @@ export function hostSupport(_plugin: Plugin, overrides: Partial<HostSupport> = {
  * that extension. Precise: a re-encode with the tab's encoder settings
  * (`encode`; without them, the settings clips always had).
  */
-export function clipExport(destination: string, end: number, method: Method, encode: Encode | undefined, paused: boolean): ExportOptions {
+export function clipExport(destination: string, end: number, method: Method, encode: Encode | undefined): ExportOptions {
   if (method === "fast") return { format: "copy", destination, end, container: "auto" };
-  return encode ? { format: "mp4", destination, end, encoding: exportEncoding(encode, paused) } : { format: "mp4", destination, end };
+  return encode ? { format: "mp4", destination, end, encoding: exportEncoding(encode) } : { format: "mp4", destination, end };
 }
 
 /** The times the finished file holds (R2): the player's `outcome.start` / `end`, the range asked for when it gives none. */

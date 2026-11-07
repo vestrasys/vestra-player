@@ -206,7 +206,7 @@ export class Tasks {
     // F07: the player converts JPEG/BMP from its checked PNG and publishes only the converted file.
     const job = await task.snapshot.export(
       spec.kind === "clip"
-        ? clipExport(destination, spec.end!, spec.method ?? "precise", spec.encode, spec.paused ?? false)
+        ? clipExport(destination, spec.end!, spec.method ?? "precise", spec.encode)
         : format === "jpeg"
           ? { format: "jpeg", destination, sampleTime, quality: spec.quality ?? 90 }
           : { format, destination, sampleTime },

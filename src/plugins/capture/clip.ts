@@ -2,7 +2,7 @@ import type { ExportEncoding, PlayerState } from "@vestra-player/sdk";
 import { Failure } from "./model.ts";
 
 /**
- * Pure clip rules of the Snapshots & Clips tab (proposal §3.3–§3.6): the two
+ * Pure clip rules of the Capture tab (Snapshots & Clips design §3.3–§3.6): the two
  * cutting methods, A-B and "Last N s" ranges, keyframe snapping, the small
  * timeline, Precise presets and the estimates. No host calls here; the parts
  * that wait for host requests R1–R7 are in seams.ts.
@@ -215,19 +215,20 @@ export function presetOf(encode: Encode): Preset {
 /**
  * The player's encoder settings for a Precise cut (`ExportEncoding`, SDK
  * 1.6.10): a closed set, never encoder arguments. A source bitrate replaces
- * the CRF; the source's height and rate (0) are left out. `threads`: more
- * cores while paused, one while playing, so playback keeps its rate
- * (design open question 3; the player still caps it and runs exports below
- * normal priority).
+ * the CRF; the source's height and rate (0) are left out. `threads: "auto"`
+ * always (coordinator ruling 2026-11-07, measured: one thread encodes 4K
+ * about 10x slower than real time, `auto` 4–5x faster; the player caps it at
+ * half the logical processors and runs exports below normal priority, and
+ * playback held its rate during a Precise export in the GUI check).
  */
-export function exportEncoding(encode: Encode, paused: boolean): ExportEncoding {
+export function exportEncoding(encode: Encode): ExportEncoding {
   return {
     ...(encode.rate === "source" ? { videoBitrate: "source" as const } : { crf: encode.crf }),
     speed: encode.speed,
     ...(encode.height ? { maxHeight: encode.height } : {}),
     ...(encode.fps ? { fps: encode.fps } : {}),
     audioBitrate: encode.audio,
-    threads: paused ? "auto" : "single",
+    threads: "auto",
   };
 }
 

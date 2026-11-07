@@ -43,7 +43,7 @@ const TITLE = {
   "capture.copy": "Copy Current Frame",
   "capture.burst": "Burst…",
   "capture.clip": "Export Clip…",
-  "capture.panel": "Snapshots & Clips…",
+  "capture.panel": "Capture…",
   "capture.saveAs": "Save Current Frame As…",
   "capture.saveScreen": "Save Rendered Frame",
   "capture.saveScreenAs": "Save Rendered Frame As…",
@@ -61,13 +61,15 @@ const TITLE = {
   "capture.clipExport": "Export Clip Range",
   "capture.revealLast": "Show Last Capture in Folder",
   "capture.copyLast": "Copy Last Snapshot",
+  "capture.saveVideo": "Save Video Frame Only",
+  "capture.copyVideo": "Copy Video Frame Only",
 } as const;
 type CommandId = keyof typeof TITLE;
 /** The commands shown in the right-click menu's Snapshot ▸; the rest are in the command palette only. */
 const IN_MENU: readonly CommandId[] = ["capture.save", "capture.copy", "capture.burst", "capture.clip", "capture.panel"];
 /** The OSD prefix of a failed capture; the reason (or the player's or system's own message) goes after it. */
 const FAILED = { image: "Snapshot failed: {}", burst: "Burst failed: {}", clip: "Export failed: {}" } as const;
-/** The tab's sections, as its jump strip orders them. */
+/** The tab's pages, as its sub-tab strip orders them. */
 const SECTIONS = ["snapshot", "clip", "results", "settings"] as const;
 type Section = (typeof SECTIONS)[number];
 
@@ -100,7 +102,7 @@ const elapsed = (from: number | undefined) => {
 };
 
 /**
- * Snapshots & Clips (proposal of 2026-11-07): one sidebar tab beside Playlist
+ * The Capture tab (the Snapshots & Clips design of 2026-11-07): one sidebar tab beside Playlist
  * and Chapters with Snapshot, Clip, Results and Settings sections, replacing
  * the Burst, Export Clip, Export Tasks and Snapshot Settings windows. Every
  * command id stays; the right-click Snapshot ▸ keeps five items. Every text is
@@ -124,7 +126,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     start: "", end: "", autoStart: "", autoEnd: "", audioIndex: 1, processed: false, burn: false,
     burstStart: "0", burstCount: String(settings.burst.count), burstStep: String(settings.burst.step),
   };
-  let jump = { section: "snapshot" as Section, request: 0 };
+  /** Finished results since the Results page was last on screen: the badge on its sub-tab. */
+  let unseen = 0;
   // Headless hosts refuse the display; that never fails the action itself.
   const shown = (showing: Promise<void>) => void showing.catch(() => {});
   /** A reason on its own, or the player's or system's own message as it is. */
@@ -178,6 +181,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         bytes: await sizeOf(path, kind), count: task.outputs.length, start: actual.start, end: actual.end, finished: task.ended ?? Date.now(), thumb: "",
       });
       dropped.forEach(dropThumb);
+      // The Results sub-tab counts what finished while it was not in front (its badge), instead of pushing a line into the page shown.
+      if (!(tabShown() && settings.page === 2)) unseen++;
       // R5: the buttons run commands that act on the newest result, which this now is.
       const actions: OsdAction[] = [
         { title: text("Show in Folder"), command: "capture.revealLast" },
@@ -314,7 +319,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     settings.quality = next;
     store();
   }
-  type Flag = "screenSubtitles" | "besideMedia" | "burstOpen" | "advancedOpen" | "settingsOpen";
+  type Flag = "screenSubtitles" | "besideMedia" | "burstOpen" | "advancedOpen" | "snapshotEffects";
   const setFlag = (field: Flag, value: boolean) => {
     if (settings[field] === value) return;
     settings[field] = value;
@@ -339,15 +344,46 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
 
   // ---------------------------------------------------------------- single frames
   /**
-   * `screen`: the rendered frame (F04) — plugin effects and, when ticked, the
-   * subtitles. The frame at the position read when the command ran (mpv
-   * `screenshot`, PotPlayer), sent as the capture time; the host's current
-   * frame only when no position is known.
+   * What a frame holds (user ruling 2026-11-07, as mpv's screenshot modes):
+   * - `frame` (Save / Copy Current Frame, the tab's Save and Copy; mpv
+   *   `subtitles`): the source's size with the subtitles shown, and the
+   *   video effects when Settings says so;
+   * - `video` (Save / Copy Video Frame Only; mpv `video`): the source frame alone;
+   * - `screen` (Save / Copy Rendered Frame): the video effects and, as set,
+   *   the subtitles.
    */
-  const frameSpec = (seen: { position: number | null }, screen: boolean, format: Format): Spec => ({
-    kind: "image", start: seen.position ?? 0, count: 1, step: 1, processed: screen, subtitles: screen && settings.screenSubtitles,
+  type FrameMode = "frame" | "video" | "screen";
+  /** Whether the frame takes the effects (`processed`) and the subtitles. Subtitles come with `processed` (the player draws them into the processed frame). */
+  async function frameContent(mode: FrameMode) {
+    if (mode === "video") return { processed: false, subtitles: false };
+    if (mode === "screen") return { processed: true, subtitles: settings.screenSubtitles };
+    const shownSubtitles = await plugin.subtitles.refresh().then((state) => state.selected !== null, () => false);
+    return { processed: settings.snapshotEffects || shownSubtitles, subtitles: shownSubtitles };
+  }
+  /**
+   * The frame at the position read when the command ran (mpv `screenshot`,
+   * PotPlayer), sent as the capture time; the host's current frame only when
+   * no position is known.
+   */
+  const frameSpec = (seen: { position: number | null }, content: { processed: boolean; subtitles: boolean }, format: Format): Spec => ({
+    kind: "image", start: seen.position ?? 0, count: 1, step: 1, processed: content.processed, subtitles: content.processed && content.subtitles,
     track: "none", current: seen.position === null, format, quality: settings.quality,
   });
+  /**
+   * Run a capture with the mode's content. A frame that has the subtitles only
+   * because they are shown, and whose subtitles the player cannot draw into a
+   * frame (only plain text can be), is taken without them rather than failing.
+   */
+  async function withContent(mode: FrameMode, run: (content: { processed: boolean; subtitles: boolean }) => Promise<void>) {
+    const content = await frameContent(mode);
+    try {
+      await run(content);
+    } catch (error) {
+      const onlySubtitles = mode === "frame" && content.subtitles && !settings.snapshotEffects;
+      if (!onlySubtitles || !(error instanceof Failure && error.code === "unavailable")) throw error;
+      await run({ processed: false, subtitles: false });
+    }
+  }
   const imageName = (source: string | null, time: number, format: Format) =>
     `${renderName("image", settings.templates.image, { source, start: time, now: new Date(), n: nextNumber() })}${extensionOf(format)}`;
   /** One single frame at a time (save, save as, copy); a second press is refused, not queued here. */
@@ -369,31 +405,31 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
    * folder, no dialogs. The name states the time the host reports for the
    * frame it froze (mpv `screenshot-template` `%P`), so name and picture agree.
    */
-  const saveFrame = (screen: boolean) =>
+  const saveFrame = (mode: FrameMode) =>
     single(async () => {
       const seen = await player.refresh();
       const folder = await targetFolder(seen.source);
       const format = settings.format;
-      await exporter.start(frameSpec(seen, screen, format), seen, (time) => join(folder, imageName(seen.source, time, format)));
+      await withContent(mode, (content) => exporter.start(frameSpec(seen, content, format), seen, (time) => join(folder, imageName(seen.source, time, format))).then(() => {}));
       if (tasks.active().length > 1) shown(osd.show("Snapshot queued"));
     });
   /** The frame shown when the command ran, into a file the user picks; a typed extension picks the format once. */
-  const saveFrameAs = (screen: boolean) =>
+  const saveFrameAs = (mode: FrameMode) =>
     single(async () => {
       const seen = await player.refresh();
       if (!usable(seen)) throw new Failure("unusable");
       const start = seen.position ?? 0;
-      const chosen = await plugin.dialogs.saveFile({ title: screen ? "Save Rendered Frame As" : "Save Current Frame As", fileName: imageName(seen.source, start, settings.format) });
+      const chosen = await plugin.dialogs.saveFile({ title: mode === "screen" ? "Save Rendered Frame As" : "Save Current Frame As", fileName: imageName(seen.source, start, settings.format) });
       if (!chosen) return;
       const typed = formatOfName(chosen);
       const format = typed ?? settings.format;
-      await exporter.start(frameSpec(seen, screen, format), seen, typed ? chosen : `${chosen}${extensionOf(format)}`);
+      await withContent(mode, (content) => exporter.start(frameSpec(seen, content, format), seen, typed ? chosen : `${chosen}${extensionOf(format)}`).then(() => {}));
     });
   /** Ctrl+C / Ctrl+Alt+C (F03): always PNG, original resolution. */
-  const copyFrame = (screen: boolean) =>
+  const copyFrame = (mode: FrameMode) =>
     single(async () => {
       const seen = await player.refresh();
-      await copier.copy(seen, screen, settings.screenSubtitles);
+      await withContent(mode, (content) => copier.copy(seen, content.processed, content.subtitles));
       shown(osd.show("Frame copied to the clipboard"));
     });
 
@@ -537,7 +573,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     const chosen = method();
     const precise = chosen === "precise";
     const spec: Spec = {
-      kind: "clip", start: range.start, end: range.end, count: 1, step: 1, paused: seen.paused,
+      kind: "clip", start: range.start, end: range.end, count: 1, step: 1,
       processed: precise && form.processed, subtitles: precise && form.processed && form.burn,
       track: audioChoices(seen, text).values[form.audioIndex] ?? "none", current: false,
       method: chosen,
@@ -618,7 +654,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
 
   // ---------------------------------------------------------------- the tab
   const templateProps = () => ({ templateImage: settings.templates.image, templateClip: settings.templates.clip, templateBurst: settings.templates.burst });
-  const panel: Panel = plugin.panels.mount("sidebar", "ui/tab.slint", { title: "Snapshots & Clips" });
+  // A short title: the default sidebar width shows it whole beside Playlist and Chapters.
+  const panel: Panel = plugin.panels.mount("sidebar", "ui/tab.slint", { title: "Capture" });
   const keyOf = (id: CommandId) => plugin.commands.keys(id)[0] ?? "";
   const lastKey = () => plugin.commands.keys("capture.last30")[0] ?? "";
   /** The source the examples use: the playing file while the tab shows (read then only), else a sample name. */
@@ -650,7 +687,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       support: { fast: support.fastCut, encode: support.encodeOptions, progress: support.progress },
       formatIndex: FORMATS.indexOf(settings.format),
       quality: settings.quality,
-      screenSubtitles: settings.screenSubtitles,
       burstOpen: settings.burstOpen,
       burstFromNow: settings.burst.fromNow,
       burstProcessed: settings.burst.processed,
@@ -679,14 +715,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       clipStatus: ui.clipStatus,
       card: card(),
       results: rows,
-      resultCount: rows.length,
       resultsStatus: ui.resultsStatus,
       folder: settings.folder,
       besideMedia: settings.besideMedia,
-      settingsOpen: settings.settingsOpen,
       previews: previews(),
-      jumpSection: SECTIONS.indexOf(jump.section),
-      jumpRequest: jump.request,
+      page: settings.page,
+      unseen,
+      snapshotEffects: settings.snapshotEffects,
     };
   });
   /** The examples under the templates: today's date and time, the playing file's name. */
@@ -730,6 +765,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     live = on;
     clearInterval(ticker);
     if (on) {
+      if (settings.page === 2) unseen = 0;
       // Rows say "1 min ago" and the card counts seconds: refresh them while the tab shows.
       ticker = setInterval(() => plugin.update(), 1000);
       ticker.unref?.();
@@ -748,13 +784,22 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     (error) => console.error(`[capture] the tab did not mount: ${message(error)}`),
   );
   /** Show the tab at a section; when it cannot open, the keys and Snapshot ▸'s direct items keep working. */
+  /** The sub-tab shown, remembered; showing Results clears its badge. */
+  function setPage(index: number) {
+    if (!Number.isInteger(index) || index < 0 || index >= SECTIONS.length) return;
+    if (index === 2) unseen = 0;
+    if (settings.page === index) return;
+    settings.page = index;
+    store();
+  }
+  /** Show the tab at a page; when it cannot open, the keys and Snapshot ▸'s direct items keep working. */
   async function showTab(section: Section) {
-    jump = { section, request: jump.request + 1 };
+    setPage(SECTIONS.indexOf(section));
     try {
       await panel.show();
     } catch (error) {
       console.error(`[capture] the tab could not open: ${message(error)}`);
-      shown(osd.show("The Snapshots & Clips tab could not open."));
+      shown(osd.show("The Capture tab could not open."));
     }
   }
   const tabShown = () => !!panel.state?.effective;
@@ -783,10 +828,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
 
   const on = (name: string, run: (...args: never[]) => unknown) => panel.on(name, run as (...args: unknown[]) => unknown);
   // Snapshot
-  on("save", (screen: boolean) => saveFrame(screen === true));
-  on("saveAs", (screen: boolean) => saveFrameAs(screen === true));
-  on("copy", (screen: boolean) => copyFrame(screen === true));
-  on("setScreenSubtitles", (value: boolean) => setFlag("screenSubtitles", value === true));
+  on("setPage", (index: number) => setPage(Number(index)));
+  on("save", () => saveFrame("frame"));
+  on("copy", () => copyFrame("frame"));
+  on("setSnapshotEffects", (value: boolean) => setFlag("snapshotEffects", value === true));
   on("chooseFormat", (index: number) => setFormat(FORMATS[Number(index)]!));
   on("setQuality", (value: number) => setQuality(value));
   // Burst
@@ -850,10 +895,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   on("setAdvancedOpen", (open: boolean) => setFlag("advancedOpen", open === true));
   on("exportClip", (start: string, end: string) => exportClip(String(start), String(end), false));
   on("exportAs", (start: string, end: string) => exportClip(String(start), String(end), true));
-  on("editName", () => {
-    setFlag("settingsOpen", true);
-    jump = { section: "settings", request: jump.request + 1 };
-  });
   // Results
   const onRow = (name: string, action: (id: string) => unknown) =>
     on(name, async (id: string) => {
@@ -917,7 +958,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   // Settings
   on("pickFolder", chooseFolder);
   on("setBesideMedia", (value: boolean) => setFlag("besideMedia", value === true));
-  on("setSettingsOpen", (open: boolean) => setFlag("settingsOpen", open === true));
   on("templateEdited", (kind: string, value: string) => {
     if (!(kind in DEFAULT_TEMPLATES)) return;
     // An empty template is kept empty in the field while typing; names use the default meanwhile.
@@ -976,8 +1016,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       ? plugin.commands.add({ id, path: ["@video", "Snapshot", TITLE[id]], order, run, category: "Snapshot", ...extra })
       : plugin.commands.add({ id, title: TITLE[id], order, run, category: "Snapshot", ...extra });
   const quick = { group: "capture-quick" };
-  entry("capture.save", 420, () => saveFrame(false), { bindings: ["Ctrl+E"], ...quick, ...canCapture });
-  entry("capture.copy", 422, () => copyFrame(false), { bindings: ["Ctrl+C"], ...quick, ...canCapture });
+  entry("capture.save", 420, () => saveFrame("frame"), { bindings: ["Ctrl+E"], ...quick, ...canCapture });
+  entry("capture.copy", 422, () => copyFrame("frame"), { bindings: ["Ctrl+C"], ...quick, ...canCapture });
   // Ctrl+G: the tab's Burst row, open; checked while it shows.
   entry("capture.burst", 426, async () => {
     const fresh = !tabShown() || !settings.burstOpen;
@@ -986,8 +1026,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       form.burstStart = clock((await player.refresh()).position ?? 0);
       panel.set({ burstStart: form.burstStart });
     }
-    await showTab("snapshot");
-  }, { bindings: ["Ctrl+G"], ...quick, checked: () => tabShown() && settings.burstOpen });
+    // Burst lives on the Settings page now (user ruling 2026-11-07); Ctrl+G shows it there, open.
+    await showTab("settings");
+  }, { bindings: ["Ctrl+G"], ...quick, checked: () => tabShown() && settings.page === 3 && settings.burstOpen });
   /**
    * Export Clip…: opens the tab at its Clip section (or scrolls there) and
    * never exports. A range the user has not typed is set to the position →
@@ -1016,23 +1057,23 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       await panel.toggle();
     } catch (error) {
       console.error(`[capture] the tab could not open: ${message(error)}`);
-      shown(osd.show("The Snapshots & Clips tab could not open."));
+      shown(osd.show("The Capture tab could not open."));
     }
   }, { bindings: ["Alt+S"], group: "capture-tab", checked: () => (panel.state?.preferred ?? false) && (panel.state?.active ?? false) });
   // Palette only (keys unchanged).
-  entry("capture.saveAs", 421, () => saveFrameAs(false), { ...inTab, ...canCapture });
-  entry("capture.saveScreen", 423, () => saveFrame(true), { bindings: ["Ctrl+Alt+E"], ...inTab, ...canCapture });
-  entry("capture.saveScreenAs", 424, () => saveFrameAs(true), { ...inTab, ...canCapture });
-  entry("capture.copyScreen", 425, () => copyFrame(true), { bindings: ["Ctrl+Alt+C"], ...inTab, ...canCapture });
+  entry("capture.saveAs", 421, () => saveFrameAs("frame"), { ...inTab, ...canCapture });
+  entry("capture.saveScreen", 423, () => saveFrame("screen"), { bindings: ["Ctrl+Alt+E"], ...inTab, ...canCapture });
+  entry("capture.saveScreenAs", 424, () => saveFrameAs("screen"), { ...inTab, ...canCapture });
+  entry("capture.copyScreen", 425, () => copyFrame("screen"), { bindings: ["Ctrl+Alt+C"], ...inTab, ...canCapture });
+  // The source frame alone (mpv's `screenshot video`), now that Save / Copy Current Frame take the subtitles shown.
+  entry("capture.saveVideo", 446, () => saveFrame("video"), { ...inTab, ...canCapture });
+  entry("capture.copyVideo", 447, () => copyFrame("video"), { ...inTab, ...canCapture });
   entry("capture.tasks", 429, () => showTab("results"), exporting);
   FORMATS.forEach((format, index) =>
-    entry(`capture.format.${format}`, 430 + index, () => setFormat(format), { group: "capture-format", radio: true, checked: () => settings.format === format, ...inTab }),
+    entry(`capture.format.${format}`, 430 + index, () => setFormat(format), { group: "capture-format", radio: true, checked: () => settings.format === format, ...inSettings }),
   );
   entry("capture.screenSubtitles", 435, () => setFlag("screenSubtitles", !settings.screenSubtitles), { checked: () => settings.screenSubtitles, ...inTab });
-  entry("capture.settings", 436, () => {
-    setFlag("settingsOpen", true);
-    return showTab("settings");
-  });
+  entry("capture.settings", 436, () => showTab("settings"));
   entry("capture.folder", 437, chooseFolder, inSettings);
   entry("capture.openFolder", 438, openFolderSaying);
   /**

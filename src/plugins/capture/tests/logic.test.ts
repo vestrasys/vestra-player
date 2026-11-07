@@ -103,19 +103,19 @@ test("the method: Fast only while the player can copy streams (R1); Precise othe
   assert.deepEqual(Object.values(support), [true, true, true, true, true, true], "player 0.7.6 (minPlayerVersion) has R1–R6");
   assert.equal(hostSupport({} as never, { fastCut: false }).fastCut, false);
   // R1: Fast is a stream copy, the player picks the container.
-  assert.deepEqual(clipExport("/o/a.mp4", 9, "fast", PRESET_ENCODE.small, true), { format: "copy", destination: "/o/a.mp4", end: 9, container: "auto" });
+  assert.deepEqual(clipExport("/o/a.mp4", 9, "fast", PRESET_ENCODE.small), { format: "copy", destination: "/o/a.mp4", end: 9, container: "auto" });
   // R6: Precise with the tab's settings; without them, as clips always were.
-  assert.deepEqual(clipExport("/o/a.mp4", 9, "precise", PRESET_ENCODE.small, false), {
-    format: "mp4", destination: "/o/a.mp4", end: 9, encoding: { crf: 26, speed: "balanced", maxHeight: 1080, audioBitrate: 128, threads: "single" },
+  assert.deepEqual(clipExport("/o/a.mp4", 9, "precise", PRESET_ENCODE.small), {
+    format: "mp4", destination: "/o/a.mp4", end: 9, encoding: { crf: 26, speed: "balanced", maxHeight: 1080, audioBitrate: 128, threads: "auto" },
   });
-  assert.deepEqual(clipExport("/o/a.mp4", 9, "precise", undefined, false), { format: "mp4", destination: "/o/a.mp4", end: 9 });
+  assert.deepEqual(clipExport("/o/a.mp4", 9, "precise", undefined), { format: "mp4", destination: "/o/a.mp4", end: 9 });
 });
 
-test("R6 encoder settings: a closed set; Same as source is the source bitrate; more threads only while paused", () => {
-  assert.deepEqual(exportEncoding(PRESET_ENCODE.high, false), { crf: 18, speed: "faster", audioBitrate: 192, threads: "single" }, "the encoding clips always had");
-  assert.deepEqual(exportEncoding(PRESET_ENCODE.source, true), { videoBitrate: "source", speed: "balanced", audioBitrate: 256, threads: "auto" }, "no CRF with a source bitrate");
-  assert.deepEqual(exportEncoding({ ...PRESET_ENCODE.high, height: 720, fps: 30 }, false).maxHeight, 720);
-  assert.deepEqual(exportEncoding({ ...PRESET_ENCODE.high, height: 720, fps: 30 }, false).fps, 30);
+test("R6 encoder settings: a closed set; Same as source is the source bitrate; the cores the player can spare (threads auto)", () => {
+  assert.deepEqual(exportEncoding(PRESET_ENCODE.high), { crf: 18, speed: "faster", audioBitrate: 192, threads: "auto" }, "the quality clips always had, on more cores");
+  assert.deepEqual(exportEncoding(PRESET_ENCODE.source), { videoBitrate: "source", speed: "balanced", audioBitrate: 256, threads: "auto" }, "no CRF with a source bitrate");
+  assert.deepEqual(exportEncoding({ ...PRESET_ENCODE.high, height: 720, fps: 30 }).maxHeight, 720);
+  assert.deepEqual(exportEncoding({ ...PRESET_ENCODE.high, height: 720, fps: 30 }).fps, 30);
 });
 
 test("R2 and R4: the range the file holds and the progress, from the job's state", () => {
@@ -233,7 +233,7 @@ test("settings fall back field by field; new fields have their defaults", () => 
   assert.equal(s.lastSeconds, 30);
   assert.equal(s.preciseSpeed, null);
   assert.equal(s.folder, "/pictures");
-  assert.deepEqual([s.burstOpen, s.advancedOpen, s.settingsOpen], [false, false, false]);
+  assert.deepEqual([s.burstOpen, s.advancedOpen, s.page, s.snapshotEffects], [false, false, 0, false]);
 });
 
 test("stored results: valid ones only, newest first, at most twenty", () => {

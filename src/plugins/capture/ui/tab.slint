@@ -1,6 +1,7 @@
-// Snapshots & Clips: the capture plugin's sidebar tab (proposal of 2026-11-07, mockups 01–05).
-// One scrolling column: a jump strip (Snapshot | Clip | Results | Settings), the progress card
-// while an export runs, then the four sections. Key caps come from `plugin.commands.keys`.
+// The capture plugin's sidebar tab (design of 2026-11-07, reworked after the GUI check of the same day).
+// Four pages behind a sub-tab strip (Snapshot | Clip | Results | Settings), each a persistent element
+// shown with `visible`; every row is in a layout and every text is one line (elided, the full text in a
+// tooltip), so nothing overlaps when a row's content changes. Key caps come from `plugin.commands.keys`.
 import { LineEdit, ListView, ScrollView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
@@ -34,7 +35,7 @@ export struct Ab {
     b: string,
 }
 
-// The explanation under the range: the method and the range it will write.
+// The range a clip will write: the method and its times (the ⓘ tip and the small timeline).
 export struct ClipNote {
     method: string,
     start: string,
@@ -66,7 +67,7 @@ export struct Estimate {
     timehigh: int,
 }
 
-// The running task (the progress card).
+// The running task (the progress card on the Clip page).
 export struct Card {
     shown: bool,
     id: string,
@@ -121,10 +122,14 @@ export global CaptureBridge {
     in property <bool> can-last;
     in property <Keys> keys;
     in property <Support> support;
-    // Snapshot
+    // The sub-tab shown (0 Snapshot, 1 Clip, 2 Results, 3 Settings), remembered; the plugin sets it for commands.
+    in-out property <int> page;
+    // Results finished since the Results page was last shown (its badge).
+    in property <int> unseen;
+    // Settings: the Snapshot page's Save and Copy include the video effects.
+    in-out property <bool> snapshot-effects;
     in-out property <int> format-index;
     in-out property <float> quality: 90;
-    in-out property <bool> screen-subtitles: true;
     // Burst (the fields are the tab's while it shows; the plugin writes them on Now and on restore)
     in-out property <bool> burst-open;
     in-out property <string> burst-count: "10";
@@ -156,6 +161,7 @@ export global CaptureBridge {
     in-out property <int> enc-height;
     in-out property <int> enc-fps;
     in-out property <int> enc-audio: 1;
+    // The Clip page's Advanced rows (closed by default).
     in-out property <bool> advanced-open;
     in property <ClipNote> note;
     in property <Timeline> timeline;
@@ -169,25 +175,20 @@ export global CaptureBridge {
     // Results
     in property <Card> card;
     in property <[ResultRow]> results;
-    in property <int> result-count;
     in property <Status> results-status;
     // Settings
     in property <string> folder;
     in property <string> folder-shown;
     in-out property <bool> beside-media;
-    in-out property <bool> settings-open;
     in-out property <string> template-image;
     in-out property <string> template-clip;
     in-out property <string> template-burst;
     in property <Previews> previews;
-    // Each increment of `jump-request` scrolls to section `jump-section` (0–3).
-    in property <int> jump-section;
-    in property <int> jump-request;
 
-    callback save(bool);
-    callback save-as(bool);
-    callback copy(bool);
-    callback set-screen-subtitles(bool);
+    callback set-page(int);
+    callback save();
+    callback copy();
+    callback set-snapshot-effects(bool);
     callback choose-format(int);
     callback set-quality(int);
     callback set-burst-open(bool);
@@ -211,7 +212,6 @@ export global CaptureBridge {
     callback set-advanced-open(bool);
     callback export-clip(string, string);
     callback export-as(string, string);
-    callback edit-name();
     callback cancel-task(string);
     callback retry-task(string);
     callback open-result(string);
@@ -222,7 +222,6 @@ export global CaptureBridge {
     callback open-folder();
     callback pick-folder();
     callback set-beside-media(bool);
-    callback set-settings-open(bool);
     // ("image" | "clip" | "burst", text)
     callback template-edited(string, string);
     callback insert-variable(string, string);
@@ -352,33 +351,12 @@ component IconAction {
     }
 }
 
-component SectionTitle inherits Text {
-    color: Theme.text-dim;
-    font-size: Theme.font-body;
-    font-weight: 600;
-    height: 26px;
-    vertical-alignment: bottom;
-}
-
 component Label inherits Text {
     width: 52px;
     color: Theme.text;
     font-size: Theme.font-body;
     vertical-alignment: center;
     overflow: elide;
-}
-
-component Dim inherits Text {
-    color: Theme.text-dim;
-    font-size: Theme.font-body;
-    vertical-alignment: center;
-    wrap: word-wrap;
-}
-
-component ErrorText inherits Text {
-    color: Theme.danger;
-    font-size: Theme.font-body;
-    wrap: word-wrap;
 }
 
 // A time or number field (the std LineEdit); reports its focus so that the fullscreen sidebar stays.
@@ -450,6 +428,8 @@ component MethodChoice inherits Rectangle {
 component MiniTimeline inherits Rectangle {
     in property <Timeline> line;
     in property <string> start;
+    // Seconds the cut starts before the typed start ("2.3"), "" when none.
+    in property <string> early;
     in property <string> end;
     height: 34px;
     Rectangle { y: 11px; height: 1px; background: Theme.line; }
@@ -497,7 +477,8 @@ component MiniTimeline inherits Rectangle {
     Text {
         x: max(0px, min(root.width - self.width, root.line.gota * root.width - self.width / 2));
         y: 22px;
-        text: root.start;
+        // TRANSLATORS: {0} is the time a Fast cut starts at (the keyframe), {1} how many seconds before the typed start.
+        text: root.early != "" ? @tr("{0} (−{1} s)", root.start, root.early) : root.start;
         color: root.line.key >= 0 ? Theme.playing : Theme.text-dim;
         font-family: Theme.font-mono;
         font-size: Theme.font-xs;
@@ -688,217 +669,514 @@ component ResultItem inherits Rectangle {
     Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
 }
 
+
+// A heading inside a page.
+component Heading inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-body;
+    font-weight: 600;
+    height: 24px;
+    vertical-alignment: bottom;
+    overflow: elide;
+}
+
+// One line of text with its full wording in a tooltip when it does not fit.
+component Line {
+    in property <string> text;
+    in property <brush> color: Theme.text-dim;
+    in property <TextHorizontalAlignment> align: left;
+    min-height: 16px;
+    preferred-height: 16px;
+    ToolTipArea {
+        text: label.width > root.width ? root.text : "";
+        label := Text {
+            width: max(root.width, self.preferred-width);
+            text: root.text;
+            color: root.color;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            horizontal-alignment: root.align;
+            overflow: elide;
+        }
+    }
+}
+
 export component CaptureTab inherits Rectangle {
     background: Theme.bg-panel;
-    // The width classes of proposal §5: wide ≥ 400 px; narrow < 317 px (key caps move to the tooltips).
+    // The width classes of design §5: wide ≥ 400 px; narrow < 317 px (key caps move to the tooltips).
     private property <bool> wide: root.width >= 400px;
     private property <bool> narrow: root.width < 317px;
     private property <bool> fast: CaptureBridge.support.fast && CaptureBridge.method-index == 0;
     private property <string> chip-target: "image";
-    private property <int> request: CaptureBridge.jump-request;
-    changed request => { root.jump-to(CaptureBridge.jump-section); }
+    // What the ⓘ beside Fast / Precise explains: the method, and where this clip will start.
+    private property <string> method-tip: root.fast
+        ? @tr("Fast cut copies the streams: lossless and done in seconds, but a clip can only start on a keyframe.")
+            + (CaptureBridge.note.start == "" ? ""
+                : " " + (CaptureBridge.note.snapped
+                    // TRANSLATORS: {0} and {2} are times, {1} seconds.
+                    ? (CaptureBridge.note.early != "" ? @tr("It will start at {0}, {1} s before your start, and end at {2}.", CaptureBridge.note.start, CaptureBridge.note.early, CaptureBridge.note.end)
+                        // TRANSLATORS: {0} and {1} are times.
+                        : @tr("It will start at {0} and end at {1}.", CaptureBridge.note.start, CaptureBridge.note.end))
+                    : @tr("It starts on the keyframe at or before your start.")))
+            + (CaptureBridge.note.container == "mkv" ? " " + @tr("Its streams do not fit in MP4, so it is saved as MKV.") : "")
+            + " " + @tr("Pick Precise to start on the exact frame.")
+        : CaptureBridge.note.start == "" ? @tr("Precise re-encodes from the exact frame, and can include video effects and subtitles.")
+        // TRANSLATORS: {0} and {1} are times.
+        : @tr("Precise re-encodes from the exact frame {0} to {1}, and can include video effects and subtitles.", CaptureBridge.note.start, CaptureBridge.note.end);
+    // The estimate in the Export button's tip (length, size and time, each approximate).
+    private property <string> estimate-text: CaptureBridge.estimate.length == "" ? ""
+        : CaptureBridge.estimate.size != ""
+            // TRANSLATORS: {0} seconds of media, {1} megabytes ("46" or "55–80"), {2} a time span ("2 s", "about 1–3 min").
+            ? @tr("Length {0} s · ≈ {1} MB · ≈ {2}", CaptureBridge.estimate.length, CaptureBridge.estimate.size, Words.span(CaptureBridge.estimate.timelow, CaptureBridge.estimate.timehigh))
+            // TRANSLATORS: {0} seconds of media, {1} a time span ("2 s", "about 1–3 min").
+            : @tr("Length {0} s · ≈ {1}", CaptureBridge.estimate.length, Words.span(CaptureBridge.estimate.timelow, CaptureBridge.estimate.timehigh));
+    // A clip's problem worth a line on the Clip page (a started or finished export shows in Results instead).
+    private property <bool> clip-problem: CaptureBridge.clip-status.kind == "error" || CaptureBridge.clip-status.kind == "clip-failed" || CaptureBridge.clip-status.kind == "no-destination";
 
-    function jump-to(index: int) {
-        scroll.viewport-y = max(scroll.visible-height - scroll.viewport-height,
-            min(0px, -(index == 0 ? snapshot-part.y : index == 1 ? clip-part.y : index == 2 ? results-part.y : settings-part.y)));
-        strip.current-index = index;
+    function show-page(index: int) {
+        CaptureBridge.page = index;
+        CaptureBridge.set-page(index);
     }
     function clip-export() { CaptureBridge.export-clip(CaptureBridge.clip-start, CaptureBridge.clip-end); }
 
     VerticalLayout {
-        // The jump strip, and the tab's own key (Alt+S) at its end (design §3.8): the player's tab strip shows titles only.
+        // The sub-tabs, and the tab's own key (Alt+S) at the end where it fits (design §3.8).
         Rectangle {
+            vertical-stretch: 0;
             background: Theme.bg-bar;
             HorizontalLayout {
                 strip := Tabs {
                     horizontal-stretch: 1;
                     model: [@tr("Snapshot"), @tr("Clip"),
-                        CaptureBridge.result-count > 0 ? @tr("Results ({})", CaptureBridge.result-count) : @tr("Results"), @tr("Settings")];
-                    selected(index) => { root.jump-to(index); }
-                }
-                if CaptureBridge.keys.panel != "" && !root.narrow: VerticalLayout {
-                    alignment: center;
-                    padding-right: 6px;
-                    ToolTipArea {
-                        width: panel-key.preferred-width;
-                        height: 15px;
-                        text: @tr("Show or hide this tab");
-                        keys: [{ key: CaptureBridge.keys.panel, text: "" }];
-                        panel-key := KeyHint { text: CaptureBridge.keys.panel; }
-                    }
-                }
-            }
-        }
-        // The progress card: stays at the top while the column scrolls (proposal §3.2 ①).
-        if CaptureBridge.card.shown: Rectangle {
-            background: Theme.bg-list;
-            border-width: 1px;
-            border-color: Theme.line;
-            VerticalLayout {
-                padding: 6px;
-                spacing: 4px;
-                HorizontalLayout {
-                    spacing: 5px;
-                    VerticalLayout {
-                        alignment: center;
-                        Glyph { glyph: CaptureBridge.card.kind == "clip" ? Glyphs.film : CaptureBridge.card.kind == "burst" ? Glyphs.burst : Glyphs.camera; }
-                    }
-                    Text {
-                        horizontal-stretch: 1;
-                        // TRANSLATORS: {} is the file or folder name.
-                        text: @tr("Exporting {}", CaptureBridge.card.name);
-                        color: Theme.text;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        overflow: elide;
-                    }
-                    IconAction {
-                        glyph: Glyphs.close;
-                        tip: @tr("Cancel");
-                        clicked => { CaptureBridge.cancel-task("t" + CaptureBridge.card.id); }
-                    }
+                        CaptureBridge.unseen > 0 ? @tr("Results ({})", CaptureBridge.unseen) : @tr("Results"), @tr("Settings")];
+                    emphasis: [false, false, CaptureBridge.unseen > 0, false];
+                    current-index <=> CaptureBridge.page;
+                    selected(index) => { root.show-page(index); }
                 }
                 Rectangle {
-                    height: 3px;
-                    border-radius: 1px;
-                    background: Theme.line;
-                    Rectangle {
-                        x: 0px;
-                        width: CaptureBridge.card.percent >= 0 ? parent.width * CaptureBridge.card.percent / 100 : parent.width;
-                        border-radius: 1px;
-                        background: CaptureBridge.card.percent >= 0 ? Theme.accent-fill : Theme.accent-disabled;
+                    // Dropped, not cut, when the strip needs the room.
+                    width: CaptureBridge.keys.panel != "" && root.width >= strip.min-width + 60px ? panel-key.preferred-width + 12px : 0px;
+                    visible: self.width > 0;
+                    ToolTipArea {
+                        text: @tr("Show or hide this tab");
+                        keys: [{ key: CaptureBridge.keys.panel, text: "" }];
+                        VerticalLayout {
+                            alignment: center;
+                            padding-right: 8px;
+                            panel-key := KeyHint { text: CaptureBridge.keys.panel; }
+                        }
                     }
-                }
-                Text {
-                    color: Theme.text-dim;
-                    font-size: Theme.font-xs;
-                    overflow: elide;
-                    text: (CaptureBridge.card.method != "" ? Words.method(CaptureBridge.card.method)
-                            + (CaptureBridge.card.preset != "" ? " · " + Words.preset(CaptureBridge.card.preset) : "") + " · " : "")
-                        // TRANSLATORS: {} is a percentage.
-                        + (CaptureBridge.card.percent >= 0 ? @tr("{} %", CaptureBridge.card.percent)
-                            // TRANSLATORS: {} is a number of seconds.
-                            + (CaptureBridge.card.left >= 0 ? " · " + @tr("about {} s left", CaptureBridge.card.left) : "")
-                            : CaptureBridge.card.elapsed)
-                        // TRANSLATORS: {} is the number of exports waiting (1–4).
-                        + (CaptureBridge.card.queued > 0 ? " · " + @tr("+{} queued", CaptureBridge.card.queued) : "");
                 }
             }
         }
-        scroll := ScrollView {
-            vertical-stretch: 1;
-            viewport-width: content.width;
-            viewport-height: content.preferred-height;
-            changed viewport-y => {
-                strip.current-index = -self.viewport-y + 12px >= settings-part.y ? 3
-                    : -self.viewport-y + 12px >= results-part.y ? 2
-                    : -self.viewport-y + 12px >= clip-part.y ? 1 : 0;
-            }
-            content := VerticalLayout {
-                width: scroll.width - 12px;
-                padding-left: 10px;
-                padding-right: 2px;
-                padding-bottom: 10px;
-                spacing: 5px;
 
-                // ---------------------------------------------------------------- Snapshot
-                snapshot-part := VerticalLayout {
+        // The pages: always there, one shown (switching creates nothing).
+        Rectangle {
+            vertical-stretch: 1;
+
+            // ---------------------------------------------------------------- Snapshot
+            VerticalLayout {
+                visible: CaptureBridge.page == 0;
+                padding: 10px;
+                spacing: 8px;
+                alignment: start;
+                HorizontalLayout {
+                    spacing: 6px;
+                    alignment: start;
+                    Action {
+                        text: @tr("Save");
+                        glyph: Glyphs.camera;
+                        key: CaptureBridge.keys.save;
+                        show-key: !root.narrow;
+                        enabled: CaptureBridge.can-capture;
+                        tip: CaptureBridge.can-capture ? @tr("Save Current Frame") : @tr("No frame to capture");
+                        tip-keys: [{ key: CaptureBridge.keys.save, text: "" }];
+                        clicked => { CaptureBridge.save(); }
+                    }
+                    Action {
+                        text: @tr("Copy");
+                        glyph: Glyphs.copy;
+                        key: CaptureBridge.keys.copy;
+                        show-key: !root.narrow;
+                        enabled: CaptureBridge.can-capture;
+                        tip: CaptureBridge.can-capture ? @tr("Copy Current Frame") : @tr("No frame to capture");
+                        tip-keys: [{ key: CaptureBridge.keys.copy, text: "" }];
+                        clicked => { CaptureBridge.copy(); }
+                    }
+                }
+                // What a frame holds, in one line: the source's size, the subtitles shown (and the effects, per Settings).
+                Line {
+                    text: CaptureBridge.mode == "stream" ? @tr("This picture is made by a plugin")
+                        : !CaptureBridge.can-capture ? @tr("No frame to capture")
+                        : CaptureBridge.snapshot-effects ? @tr("Source size, with the subtitles shown and the video effects")
+                        : @tr("Source size, with the subtitles shown");
+                }
+            }
+
+            // ---------------------------------------------------------------- Clip
+            clip-page := ScrollView {
+                visible: CaptureBridge.page == 1;
+                viewport-width: clip-content.width;
+                viewport-height: clip-content.preferred-height;
+                clip-content := VerticalLayout {
+                    width: clip-page.width - 12px;
+                    padding: 10px;
+                    padding-right: 4px;
+                    spacing: 6px;
+                    alignment: start;
+                    // The running export (Results has its row too).
+                    if CaptureBridge.card.shown: Rectangle {
+                        background: Theme.bg-list;
+                        border-width: 1px;
+                        border-color: Theme.line;
+                        border-radius: Theme.radius-control;
+                        VerticalLayout {
+                            padding: 6px;
+                            spacing: 4px;
+                            HorizontalLayout {
+                                spacing: 5px;
+                                VerticalLayout {
+                                    alignment: center;
+                                    Glyph { glyph: CaptureBridge.card.kind == "clip" ? Glyphs.film : CaptureBridge.card.kind == "burst" ? Glyphs.burst : Glyphs.camera; }
+                                }
+                                // TRANSLATORS: {} is the file or folder name.
+                                Line { horizontal-stretch: 1; text: @tr("Exporting {}", CaptureBridge.card.name); color: Theme.text; }
+                                IconAction {
+                                    glyph: Glyphs.close;
+                                    tip: @tr("Cancel");
+                                    clicked => { CaptureBridge.cancel-task("t" + CaptureBridge.card.id); }
+                                }
+                            }
+                            Rectangle {
+                                height: 3px;
+                                border-radius: 1px;
+                                background: Theme.line;
+                                Rectangle {
+                                    x: 0px;
+                                    width: CaptureBridge.card.percent >= 0 ? parent.width * CaptureBridge.card.percent / 100 : parent.width;
+                                    border-radius: 1px;
+                                    background: CaptureBridge.card.percent >= 0 ? Theme.accent-fill : Theme.accent-disabled;
+                                }
+                            }
+                            Line {
+                                text: (CaptureBridge.card.method != "" ? Words.method(CaptureBridge.card.method)
+                                        + (CaptureBridge.card.preset != "" ? " · " + Words.preset(CaptureBridge.card.preset) : "") + " · " : "")
+                                    // TRANSLATORS: {} is a percentage.
+                                    + (CaptureBridge.card.percent >= 0 ? @tr("{} %", CaptureBridge.card.percent)
+                                        // TRANSLATORS: {} is a number of seconds.
+                                        + (CaptureBridge.card.left >= 0 ? " · " + @tr("about {} s left", CaptureBridge.card.left) : "")
+                                        : CaptureBridge.card.elapsed)
+                                    // TRANSLATORS: {} is the number of exports waiting (1–4).
+                                    + (CaptureBridge.card.queued > 0 ? " · " + @tr("+{} queued", CaptureBridge.card.queued) : "");
+                            }
+                        }
+                    }
+                    if !CaptureBridge.can-clip: VerticalLayout {
+                        spacing: 4px;
+                        padding-top: 6px;
+                        Line {
+                            align: center;
+                            color: Theme.text;
+                            text: CaptureBridge.mode == "stream" ? @tr("This picture is made by a plugin")
+                                : CaptureBridge.mode == "network" ? Words.reason("needLocal", "") : @tr("No frame to capture");
+                        }
+                        Line {
+                            align: center;
+                            text: CaptureBridge.mode == "stream" ? @tr("There is no file to cut.")
+                                : CaptureBridge.mode == "network" ? @tr("Frames can still be saved; open a local file to cut clips.")
+                                : @tr("Open a local video file to save frames, bursts and clips.");
+                        }
+                    }
+                    if CaptureBridge.can-clip: VerticalLayout {
+                        spacing: 6px;
+                        // Fast / Precise, and what they mean in the ⓘ tip.
+                        HorizontalLayout {
+                            spacing: 2px;
+                            if CaptureBridge.support.fast: MethodChoice {
+                                horizontal-stretch: 1;
+                                glyph: Glyphs.fast;
+                                title: @tr("Fast");
+                                detail: root.narrow ? @tr("lossless") : @tr("no re-encode · lossless");
+                                selected: CaptureBridge.method-index == 0;
+                                clicked => { CaptureBridge.method-index = 0; CaptureBridge.set-method(0); }
+                            }
+                            if CaptureBridge.support.fast: MethodChoice {
+                                horizontal-stretch: 1;
+                                glyph: Glyphs.precise;
+                                title: @tr("Precise");
+                                detail: root.narrow ? @tr("re-encode") : @tr("re-encode · any frame");
+                                selected: CaptureBridge.method-index == 1;
+                                clicked => { CaptureBridge.method-index = 1; CaptureBridge.set-method(1); }
+                            }
+                            VerticalLayout {
+                                alignment: center;
+                                ToolTipArea {
+                                    width: 18px;
+                                    height: 18px;
+                                    text: root.method-tip;
+                                    Glyph { x: 2px; y: 3px; glyph: Glyphs.info; }
+                                }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Label { text: @tr("Start"); }
+                            Field {
+                                font-family: Theme.font-mono;
+                                placeholder-text: "0:00.000";
+                                text <=> CaptureBridge.clip-start;
+                                edited => { CaptureBridge.clip-edited(CaptureBridge.clip-start, CaptureBridge.clip-end); }
+                                accepted => { root.clip-export(); }
+                            }
+                            Action { text: @tr("Now"); glyph: Glyphs.target; tip: @tr("Set Clip Start"); clicked => { CaptureBridge.clip-now("start"); } }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Label { text: @tr("End"); }
+                            Field {
+                                font-family: Theme.font-mono;
+                                placeholder-text: "0:10.000";
+                                text <=> CaptureBridge.clip-end;
+                                edited => { CaptureBridge.clip-edited(CaptureBridge.clip-start, CaptureBridge.clip-end); }
+                                accepted => { root.clip-export(); }
+                            }
+                            Action { text: @tr("Now"); glyph: Glyphs.target; tip: @tr("Set Clip End"); clicked => { CaptureBridge.clip-now("end"); } }
+                        }
+                        // A typing problem: one line that is always there, empty without one.
+                        Line { color: Theme.danger; text: CaptureBridge.field-error == "" ? "" : Words.reason(CaptureBridge.field-error, ""); }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Action {
+                                text: @tr("Use A-B range");
+                                glyph: Glyphs.ab;
+                                enabled: CaptureBridge.ab.shown;
+                                tip: CaptureBridge.ab.shown ? @tr("Copy the A-B loop into Start and End") : Words.reason("noLoop", "");
+                                // TRANSLATORS: {0} and {1} are the A and B times of the loop.
+                                tip-detail: CaptureBridge.ab.shown ? @tr("A {0} · B {1}", CaptureBridge.ab.a, CaptureBridge.ab.b) : "";
+                                clicked => { CaptureBridge.use-ab(); }
+                            }
+                            Rectangle { horizontal-stretch: 1; }
+                            Action {
+                                // TRANSLATORS: {} is 10, 30, 60 or 120.
+                                text: @tr("Last {} s", CaptureBridge.last-seconds);
+                                glyph: Glyphs.back;
+                                key: CaptureBridge.keys.last;
+                                show-key: !root.narrow;
+                                enabled: CaptureBridge.can-last && !CaptureBridge.queue-full;
+                                // TRANSLATORS: {} is 10, 30, 60 or 120.
+                                tip: @tr("Export Last {} Seconds", CaptureBridge.last-seconds);
+                                tip-keys: [{ key: CaptureBridge.keys.last, text: "" }];
+                                clicked => { CaptureBridge.last(); }
+                            }
+                        }
+                        // The small timeline: the keyframe a Fast cut starts on is marked, with its time.
+                        if CaptureBridge.timeline.shown: MiniTimeline {
+                            line: CaptureBridge.timeline;
+                            start: CaptureBridge.note.start;
+                            early: CaptureBridge.note.early;
+                            end: CaptureBridge.note.end;
+                        }
+                        Fold {
+                            title: @tr("Advanced");
+                            open: CaptureBridge.advanced-open;
+                            // TRANSLATORS: what the closed Advanced rows hold now: an audio choice and a quality.
+                            summary: @tr("{0} · {1}", CaptureBridge.audio-labels[CaptureBridge.audio-index],
+                                root.fast ? @tr("Same as source (stream copy)") : CaptureBridge.support.encode ? Words.preset(CaptureBridge.preset-index == 0 ? "source" : CaptureBridge.preset-index == 1 ? "high" : CaptureBridge.preset-index == 2 ? "small" : "custom") : @tr("High quality"));
+                            toggled(open) => {
+                                CaptureBridge.advanced-open = open;
+                                CaptureBridge.set-advanced-open(open);
+                            }
+                        }
+                        if CaptureBridge.advanced-open: VerticalLayout {
+                            padding-left: 12px;
+                            spacing: 5px;
+                            HorizontalLayout {
+                                spacing: 4px;
+                                Label { width: 64px; text: @tr("Audio"); }
+                                Choice {
+                                    model: CaptureBridge.audio-labels;
+                                    current-index <=> CaptureBridge.audio-index;
+                                    selected(index) => { CaptureBridge.set-audio(index); }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 4px;
+                                Label { width: 64px; text: @tr("Quality"); }
+                                if root.fast: Line { text: @tr("Same as source (stream copy)"); }
+                                if !root.fast && CaptureBridge.support.encode: Choice {
+                                    model: CaptureBridge.preset-index == 3
+                                        ? [@tr("Same as source"), @tr("High quality"), @tr("Small file"), @tr("Custom")]
+                                        : [@tr("Same as source"), @tr("High quality"), @tr("Small file")];
+                                    current-index <=> CaptureBridge.preset-index;
+                                    selected(index) => { CaptureBridge.set-preset(index); }
+                                }
+                                if !root.fast && !CaptureBridge.support.encode: Line { text: @tr("High quality (H.264 + AAC in MP4)"); }
+                            }
+                            if !root.fast && CaptureBridge.support.encode: VerticalLayout {
+                                spacing: 5px;
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Label { width: 64px; text: @tr("Resolution"); }
+                                    Choice {
+                                        model: [@tr("Source"), "1080p", "720p", "480p"];
+                                        current-index <=> CaptureBridge.enc-height;
+                                        selected(index) => { CaptureBridge.set-encode("height", index); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Label { width: 64px; text: @tr("Frame rate"); }
+                                    // TRANSLATORS: {} is frames per second.
+                                    Choice {
+                                        model: [@tr("Source"), @tr("{} fps", 60), @tr("{} fps", 30)];
+                                        current-index <=> CaptureBridge.enc-fps;
+                                        selected(index) => { CaptureBridge.set-encode("fps", index); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Label { width: 64px; text: CaptureBridge.enc-source ? @tr("Source bitrate") : @tr("Quality number {}", round(CaptureBridge.enc-crf)); }
+                                    Slider {
+                                        minimum: 14;
+                                        maximum: 30;
+                                        step: 1;
+                                        value <=> CaptureBridge.enc-crf;
+                                        released(v) => { CaptureBridge.set-encode("crf", round(v)); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Label { width: 64px; text: @tr("Speed"); }
+                                    RadioGroup {
+                                        model: [@tr("Faster"), @tr("Balanced"), @tr("Smaller")];
+                                        current-index <=> CaptureBridge.enc-speed;
+                                        selected(index) => { CaptureBridge.set-encode("speed", index); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    spacing: 4px;
+                                    Label { width: 64px; text: @tr("Audio"); }
+                                    // TRANSLATORS: {} is the audio bit rate in kilobits per second.
+                                    Choice {
+                                        model: [@tr("AAC {} kb/s", 128), @tr("AAC {} kb/s", 192), @tr("AAC {} kb/s", 256)];
+                                        current-index <=> CaptureBridge.enc-audio;
+                                        selected(index) => { CaptureBridge.set-encode("audio", index); }
+                                    }
+                                }
+                                HorizontalLayout {
+                                    alignment: start;
+                                    Button {
+                                        small: true;
+                                        text: @tr("Reset");
+                                        clicked => { CaptureBridge.reset-encode(); }
+                                    }
+                                }
+                            }
+                            Check {
+                                text: @tr("Include video effects");
+                                checked <=> CaptureBridge.processed;
+                                enabled: !root.fast;
+                                toggled(on) => { CaptureBridge.set-processed(on); }
+                            }
+                            Check {
+                                text: @tr("Burn in subtitles");
+                                checked <=> CaptureBridge.burn;
+                                enabled: !root.fast && CaptureBridge.processed;
+                                toggled(on) => { CaptureBridge.set-burn(on); }
+                            }
+                            if root.fast: Line { text: @tr("Effects and subtitles: Precise only"); }
+                        }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Action {
+                                horizontal-stretch: 1;
+                                primary: true;
+                                text: @tr("Export");
+                                glyph: Glyphs.film;
+                                key: CaptureBridge.keys.clip;
+                                show-key: !root.narrow;
+                                enabled: !CaptureBridge.clip-busy && !CaptureBridge.queue-full && CaptureBridge.field-error == "";
+                                // TRANSLATORS: {} is the clip's file name.
+                                tip: CaptureBridge.queue-full ? Words.reason("queueFull", "")
+                                    : CaptureBridge.clip-name != "" ? @tr("Export as {} into the snapshot folder", CaptureBridge.clip-name)
+                                    : @tr("Export the range into the snapshot folder");
+                                tip-keys: [{ key: CaptureBridge.keys.clip, text: "" }];
+                                tip-detail: root.estimate-text;
+                                clicked => { root.clip-export(); }
+                            }
+                            Action {
+                                text: @tr("Export As…");
+                                enabled: !CaptureBridge.clip-busy && !CaptureBridge.queue-full && CaptureBridge.field-error == "";
+                                tip: @tr("Export the range into a file you choose");
+                                clicked => { CaptureBridge.export-as(CaptureBridge.clip-start, CaptureBridge.clip-end); }
+                            }
+                        }
+                        // A problem of the last export: one line (the full text in its tip); a finished export shows in Results.
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Line {
+                                horizontal-stretch: 1;
+                                color: Theme.danger;
+                                text: root.clip-problem ? Words.status(CaptureBridge.clip-status) : "";
+                            }
+                            if root.fast && CaptureBridge.clip-status.reason == "fastImpossible": Action {
+                                text: @tr("Use Precise");
+                                glyph: Glyphs.precise;
+                                clicked => {
+                                    CaptureBridge.method-index = 1;
+                                    CaptureBridge.set-method(1);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // ---------------------------------------------------------------- Results
+            VerticalLayout {
+                visible: CaptureBridge.page == 2;
+                padding: 8px;
+                spacing: 6px;
+                if CaptureBridge.results.length == 0: Line { text: @tr("No snapshots or clips yet."); }
+                // Slint's ListView: only the rows in view are built.
+                ListView {
+                    vertical-stretch: 1;
+                    for row in CaptureBridge.results: ResultItem { entry: row; }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    Action { text: @tr("Open Snapshot Folder"); glyph: Glyphs.folder; clicked => { CaptureBridge.open-folder(); } }
+                    Rectangle { horizontal-stretch: 1; }
+                    Action { text: @tr("Clear Finished"); enabled: CaptureBridge.results.length > 0; clicked => { CaptureBridge.clear-finished(); } }
+                }
+                Line { text: Words.status(CaptureBridge.results-status); }
+            }
+
+            // ---------------------------------------------------------------- Settings
+            settings-page := ScrollView {
+                visible: CaptureBridge.page == 3;
+                viewport-width: settings-content.width;
+                viewport-height: settings-content.preferred-height;
+                settings-content := VerticalLayout {
+                    width: settings-page.width - 12px;
+                    padding: 10px;
+                    padding-top: 2px;
+                    padding-right: 4px;
                     spacing: 5px;
-                    SectionTitle { text: @tr("Snapshot"); }
-                    if CaptureBridge.mode == "stream": Dim {
-                        text: @tr("This picture is made by a plugin. The source is generated live (a game, a visualiser), so there is no file to cut and no frame the player can save.");
-                    }
-                    Text { text: @tr("Source frame"); color: Theme.text-dim; font-size: Theme.font-body; }
+                    alignment: start;
+                    Heading { text: @tr("Save to"); }
                     HorizontalLayout {
                         spacing: 4px;
-                        alignment: start;
-                        Action {
-                            text: @tr("Save");
-                            glyph: Glyphs.camera;
-                            key: CaptureBridge.keys.save;
-                            show-key: !root.narrow;
-                            enabled: CaptureBridge.can-capture;
-                            tip: CaptureBridge.can-capture ? @tr("Save Current Frame") : @tr("No frame to capture");
-                            tip-keys: [{ key: CaptureBridge.keys.save, text: "" }];
-                            tip-detail: root.wide ? "" : @tr("⌄ Save As…");
-                            clicked => { CaptureBridge.save(false); }
-                        }
-                        if !root.wide: Action {
-                            glyph: Glyphs.caret;
-                            enabled: CaptureBridge.can-capture;
-                            tip: @tr("Save Current Frame As…");
-                            clicked => { CaptureBridge.save-as(false); }
-                        }
-                        Action {
-                            text: @tr("Copy");
-                            glyph: Glyphs.copy;
-                            key: CaptureBridge.keys.copy;
-                            show-key: !root.narrow;
-                            enabled: CaptureBridge.can-capture;
-                            tip: CaptureBridge.can-capture ? @tr("Copy Current Frame") : @tr("No frame to capture");
-                            tip-keys: [{ key: CaptureBridge.keys.copy, text: "" }];
-                            clicked => { CaptureBridge.copy(false); }
-                        }
-                        if root.wide: Action {
-                            text: @tr("Save As…");
-                            enabled: CaptureBridge.can-capture;
-                            tip: @tr("Save Current Frame As…");
-                            clicked => { CaptureBridge.save-as(false); }
-                        }
+                        LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: CaptureBridge.folder; read-only: true; }
+                        Button { width: 30px; height: Theme.input-height; text: "…"; clicked => { CaptureBridge.pick-folder(); } }
                     }
-                    HorizontalLayout {
-                        spacing: 5px;
-                        Text { text: @tr("Rendered frame"); color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
-                        ToolTipArea {
-                            width: 14px;
-                            height: 14px;
-                            text: @tr("The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included.");
-                            Glyph { y: 1px; glyph: Glyphs.info; }
-                        }
-                        Rectangle { horizontal-stretch: 1; }
-                        Check {
-                            text: @tr("Subtitles");
-                            checked <=> CaptureBridge.screen-subtitles;
-                            toggled(on) => { CaptureBridge.set-screen-subtitles(on); }
-                        }
+                    Check {
+                        text: @tr("Save to the media folder when possible");
+                        checked <=> CaptureBridge.beside-media;
+                        toggled(on) => { CaptureBridge.set-beside-media(on); }
                     }
-                    HorizontalLayout {
-                        spacing: 4px;
-                        alignment: start;
-                        Action {
-                            text: @tr("Save");
-                            glyph: Glyphs.camera;
-                            key: CaptureBridge.keys.savescreen;
-                            show-key: !root.narrow;
-                            enabled: CaptureBridge.can-capture;
-                            tip: CaptureBridge.can-capture ? @tr("Save Rendered Frame") : @tr("No frame to capture");
-                            tip-keys: [{ key: CaptureBridge.keys.savescreen, text: "" }];
-                            tip-detail: root.wide ? "" : @tr("⌄ Save As…");
-                            clicked => { CaptureBridge.save(true); }
-                        }
-                        if !root.wide: Action {
-                            glyph: Glyphs.caret;
-                            enabled: CaptureBridge.can-capture;
-                            tip: @tr("Save Rendered Frame As…");
-                            clicked => { CaptureBridge.save-as(true); }
-                        }
-                        Action {
-                            text: @tr("Copy");
-                            glyph: Glyphs.copy;
-                            key: CaptureBridge.keys.copyscreen;
-                            show-key: !root.narrow;
-                            enabled: CaptureBridge.can-capture;
-                            tip: CaptureBridge.can-capture ? @tr("Copy Rendered Frame") : @tr("No frame to capture");
-                            tip-keys: [{ key: CaptureBridge.keys.copyscreen, text: "" }];
-                            clicked => { CaptureBridge.copy(true); }
-                        }
-                        if root.wide: Action {
-                            text: @tr("Save As…");
-                            enabled: CaptureBridge.can-capture;
-                            tip: @tr("Save Rendered Frame As…");
-                            clicked => { CaptureBridge.save-as(true); }
-                        }
-                    }
+
+                    Heading { text: @tr("Snapshots"); }
                     HorizontalLayout {
                         spacing: 4px;
                         Label { text: @tr("Format"); }
@@ -916,502 +1194,142 @@ export component CaptureTab inherits Rectangle {
                             released(v) => { CaptureBridge.set-quality(round(v)); }
                         }
                         if CaptureBridge.format-index == 1: Note { width: 26px; text: round(CaptureBridge.quality); horizontal-alignment: right; }
-                        if CaptureBridge.format-index != 1: Dim { text: @tr("Quality: JPEG only"); wrap: no-wrap; overflow: elide; }
+                        if CaptureBridge.format-index != 1: Line { text: @tr("Quality: JPEG only"); }
                     }
-                    // Burst (Ctrl+G opens this row).
-                    Rectangle {
-                        border-width: 1px;
-                        border-color: Theme.line;
-                        border-radius: Theme.radius-control;
-                        VerticalLayout {
-                            padding: 6px;
-                            spacing: 5px;
-                            HorizontalLayout {
-                                spacing: 5px;
-                                Fold {
-                                    horizontal-stretch: 1;
-                                    title: @tr("Burst");
-                                    open: CaptureBridge.burst-open;
-                                    summary: CaptureBridge.burst-from-now
-                                        // TRANSLATORS: {0} is the number of frames, {1} the interval in seconds.
-                                        ? @tr("{0} frames · every {1} s · from now", CaptureBridge.burst-count, CaptureBridge.burst-step)
-                                        // TRANSLATORS: {0} is the number of frames, {1} the interval in seconds, {2} the start time.
-                                        : @tr("{0} frames · every {1} s · from {2}", CaptureBridge.burst-count, CaptureBridge.burst-step, CaptureBridge.burst-start);
-                                    toggled(open) => {
-                                        CaptureBridge.burst-open = open;
-                                        CaptureBridge.set-burst-open(open);
-                                    }
-                                }
-                                Action {
-                                    text: @tr("Start");
-                                    glyph: Glyphs.burst;
-                                    key: CaptureBridge.keys.burst;
-                                    show-key: !root.narrow && !CaptureBridge.burst-open;
-                                    enabled: CaptureBridge.can-capture && !CaptureBridge.burst-busy && !CaptureBridge.queue-full;
-                                    tip: CaptureBridge.queue-full ? Words.reason("queueFull", "") : @tr("Start the burst");
-                                    clicked => {
-                                        CaptureBridge.start-burst(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step,
-                                            CaptureBridge.burst-from-now, CaptureBridge.burst-processed, CaptureBridge.burst-subtitles);
-                                    }
-                                }
-                            }
-                            if CaptureBridge.burst-open: VerticalLayout {
-                                spacing: 5px;
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { text: @tr("Count"); }
-                                    Field {
-                                        width: 56px;
-                                        text <=> CaptureBridge.burst-count;
-                                        edited => { CaptureBridge.burst-edited(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step); }
-                                    }
-                                    Dim { text: @tr("frames (2–20)"); wrap: no-wrap; }
-                                }
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { text: @tr("Interval"); }
-                                    Field {
-                                        width: 56px;
-                                        text <=> CaptureBridge.burst-step;
-                                        edited => { CaptureBridge.burst-edited(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step); }
-                                    }
-                                    Dim { text: @tr("s (0.1–10)"); wrap: no-wrap; }
-                                }
-                                Check { text: @tr("Start at the current position"); checked <=> CaptureBridge.burst-from-now; }
-                                if !CaptureBridge.burst-from-now: HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { text: @tr("Start"); }
-                                    Field {
-                                        text <=> CaptureBridge.burst-start;
-                                        edited => { CaptureBridge.burst-edited(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step); }
-                                    }
-                                    Action { text: @tr("Now"); glyph: Glyphs.target; clicked => { CaptureBridge.burst-now(); } }
-                                }
-                                Check { text: @tr("Include video effects"); checked <=> CaptureBridge.burst-processed; }
-                                Check { text: @tr("Capture subtitles too"); checked <=> CaptureBridge.burst-subtitles; enabled: CaptureBridge.burst-processed; }
-                                if Words.status(CaptureBridge.burst-status) != "": Dim { text: Words.status(CaptureBridge.burst-status); }
-                            }
-                        }
+                    Check {
+                        text: @tr("Include video effects");
+                        checked <=> CaptureBridge.snapshot-effects;
+                        toggled(on) => { CaptureBridge.set-snapshot-effects(on); }
                     }
-                }
 
-                // ---------------------------------------------------------------- Clip
-                clip-part := VerticalLayout {
-                    spacing: 5px;
-                    SectionTitle { text: @tr("Clip"); }
-                    if !CaptureBridge.can-clip: Rectangle {
-                        border-width: 1px;
-                        border-color: Theme.line;
-                        border-radius: Theme.radius-control;
-                        VerticalLayout {
-                            padding: 10px;
-                            spacing: 4px;
-                            Text {
-                                text: CaptureBridge.mode == "stream" ? @tr("This picture is made by a plugin")
-                                    : CaptureBridge.mode == "network" ? Words.reason("needLocal", "") : @tr("No frame to capture");
-                                color: Theme.text;
-                                font-size: Theme.font-body;
-                                horizontal-alignment: center;
-                                wrap: word-wrap;
+                    // Burst (Ctrl+G opens this page with the row open).
+                    HorizontalLayout {
+                        spacing: 5px;
+                        Fold {
+                            horizontal-stretch: 1;
+                            title: @tr("Burst");
+                            open: CaptureBridge.burst-open;
+                            summary: CaptureBridge.burst-from-now
+                                // TRANSLATORS: {0} is the number of frames, {1} the interval in seconds.
+                                ? @tr("{0} frames · every {1} s · from now", CaptureBridge.burst-count, CaptureBridge.burst-step)
+                                // TRANSLATORS: {0} is the number of frames, {1} the interval in seconds, {2} the start time.
+                                : @tr("{0} frames · every {1} s · from {2}", CaptureBridge.burst-count, CaptureBridge.burst-step, CaptureBridge.burst-start);
+                            toggled(open) => {
+                                CaptureBridge.burst-open = open;
+                                CaptureBridge.set-burst-open(open);
                             }
-                            Dim {
-                                horizontal-alignment: center;
-                                text: CaptureBridge.mode == "stream" ? @tr("There is no file to cut.")
-                                    : CaptureBridge.mode == "network" ? @tr("Frames can still be saved; open a local file to cut clips.")
-                                    : @tr("Open a local video file to save frames, bursts and clips.");
+                        }
+                        Action {
+                            text: @tr("Start");
+                            glyph: Glyphs.burst;
+                            key: CaptureBridge.keys.burst;
+                            show-key: !root.narrow;
+                            enabled: CaptureBridge.can-capture && !CaptureBridge.burst-busy && !CaptureBridge.queue-full;
+                            tip: CaptureBridge.queue-full ? Words.reason("queueFull", "") : @tr("Start the burst");
+                            clicked => {
+                                CaptureBridge.start-burst(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step,
+                                    CaptureBridge.burst-from-now, CaptureBridge.burst-processed, CaptureBridge.burst-subtitles);
                             }
                         }
                     }
-                    if CaptureBridge.can-clip: VerticalLayout {
+                    if CaptureBridge.burst-open: VerticalLayout {
+                        padding-left: 12px;
                         spacing: 5px;
-                        if CaptureBridge.support.fast: HorizontalLayout {
-                            spacing: 2px;
-                            MethodChoice {
-                                horizontal-stretch: 1;
-                                glyph: Glyphs.fast;
-                                title: @tr("Fast");
-                                detail: root.narrow ? @tr("lossless") : @tr("no re-encode · lossless");
-                                selected: CaptureBridge.method-index == 0;
-                                clicked => { CaptureBridge.method-index = 0; CaptureBridge.set-method(0); }
+                        HorizontalLayout {
+                            spacing: 4px;
+                            Label { text: @tr("Count"); }
+                            Field {
+                                width: 56px;
+                                text <=> CaptureBridge.burst-count;
+                                edited => { CaptureBridge.burst-edited(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step); }
                             }
-                            MethodChoice {
-                                horizontal-stretch: 1;
-                                glyph: Glyphs.precise;
-                                title: @tr("Precise");
-                                detail: root.narrow ? @tr("re-encode") : @tr("re-encode · any frame");
-                                selected: CaptureBridge.method-index == 1;
-                                clicked => { CaptureBridge.method-index = 1; CaptureBridge.set-method(1); }
-                            }
+                            Line { text: @tr("frames (2–20)"); }
                         }
                         HorizontalLayout {
+                            spacing: 4px;
+                            Label { text: @tr("Interval"); }
+                            Field {
+                                width: 56px;
+                                text <=> CaptureBridge.burst-step;
+                                edited => { CaptureBridge.burst-edited(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step); }
+                            }
+                            Line { text: @tr("s (0.1–10)"); }
+                        }
+                        Check { text: @tr("Start at the current position"); checked <=> CaptureBridge.burst-from-now; }
+                        if !CaptureBridge.burst-from-now: HorizontalLayout {
                             spacing: 4px;
                             Label { text: @tr("Start"); }
                             Field {
-                                font-family: Theme.font-mono;
-                                placeholder-text: "0:00.000";
-                                text <=> CaptureBridge.clip-start;
-                                edited => { CaptureBridge.clip-edited(CaptureBridge.clip-start, CaptureBridge.clip-end); }
-                                accepted => { root.clip-export(); }
+                                text <=> CaptureBridge.burst-start;
+                                edited => { CaptureBridge.burst-edited(CaptureBridge.burst-start, CaptureBridge.burst-count, CaptureBridge.burst-step); }
                             }
-                            Action { text: @tr("Now"); glyph: Glyphs.target; tip: @tr("Set Clip Start"); clicked => { CaptureBridge.clip-now("start"); } }
+                            Action { text: @tr("Now"); glyph: Glyphs.target; clicked => { CaptureBridge.burst-now(); } }
                         }
-                        if CaptureBridge.error-field == "start": ErrorText { text: Words.reason(CaptureBridge.field-error, ""); }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Label { text: @tr("End"); }
-                            Field {
-                                font-family: Theme.font-mono;
-                                placeholder-text: "0:10.000";
-                                text <=> CaptureBridge.clip-end;
-                                edited => { CaptureBridge.clip-edited(CaptureBridge.clip-start, CaptureBridge.clip-end); }
-                                accepted => { root.clip-export(); }
-                            }
-                            Action { text: @tr("Now"); glyph: Glyphs.target; tip: @tr("Set Clip End"); clicked => { CaptureBridge.clip-now("end"); } }
-                        }
-                        if CaptureBridge.error-field == "end": ErrorText { text: Words.reason(CaptureBridge.field-error, ""); }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Action {
-                                text: @tr("Use A-B range");
-                                glyph: Glyphs.ab;
-                                enabled: CaptureBridge.ab.shown;
-                                tip: CaptureBridge.ab.shown ? @tr("Copy the A-B loop into Start and End") : Words.reason("noLoop", "");
-                                clicked => { CaptureBridge.use-ab(); }
-                            }
-                            Text {
-                                horizontal-stretch: 1;
-                                // TRANSLATORS: {0} and {1} are the A and B times of the loop.
-                                text: root.wide && CaptureBridge.ab.shown ? @tr("A {0} · B {1}", CaptureBridge.ab.a, CaptureBridge.ab.b) : "";
-                                color: Theme.text-dim;
-                                font-size: Theme.font-xs;
-                                vertical-alignment: center;
-                                overflow: elide;
-                            }
-                            Action {
-                                // TRANSLATORS: {} is 10, 30, 60 or 120.
-                                text: @tr("Last {} s", CaptureBridge.last-seconds);
-                                glyph: Glyphs.back;
-                                key: CaptureBridge.keys.last;
-                                show-key: !root.narrow;
-                                enabled: CaptureBridge.can-last && !CaptureBridge.queue-full;
-                                // TRANSLATORS: {} is 10, 30, 60 or 120.
-                                tip: @tr("Export Last {} Seconds", CaptureBridge.last-seconds);
-                                tip-keys: [{ key: CaptureBridge.keys.last, text: "" }];
-                                clicked => { CaptureBridge.last(); }
-                            }
-                        }
-                        if CaptureBridge.timeline.shown: MiniTimeline {
-                            line: CaptureBridge.timeline;
-                            start: CaptureBridge.note.start;
-                            end: CaptureBridge.note.end;
-                        }
-                        if CaptureBridge.note.start != "": Rectangle {
-                            background: Theme.bg-list;
-                            border-radius: Theme.radius-control;
-                            Rectangle { x: 0px; width: 2px; background: root.fast ? Theme.playing : Theme.accent; }
-                            HorizontalLayout {
-                                padding: 7px;
-                                padding-left: 10px;
-                                Text {
-                                    color: Theme.text-list;
-                                    font-size: Theme.font-body;
-                                    wrap: word-wrap;
-                                    text: root.fast
-                                        ? @tr("Fast cut copies the streams: lossless and done in seconds, but a clip can only start on a keyframe.")
-                                            + " " + (CaptureBridge.note.snapped
-                                                // TRANSLATORS: {0} and {2} are times, {1} seconds.
-                                                ? (CaptureBridge.note.early != "" ? @tr("It will start at {0}, {1} s before your start, and end at {2}.", CaptureBridge.note.start, CaptureBridge.note.early, CaptureBridge.note.end)
-                                                    // TRANSLATORS: {0} and {1} are times.
-                                                    : @tr("It will start at {0} and end at {1}.", CaptureBridge.note.start, CaptureBridge.note.end))
-                                                : @tr("It starts on the keyframe at or before your start."))
-                                            + (CaptureBridge.note.container == "mkv" ? " " + @tr("Its streams do not fit in MP4, so it is saved as MKV.") : "")
-                                            + (root.narrow ? "" : " " + @tr("Pick Precise to start on the exact frame."))
-                                        // TRANSLATORS: {0} and {1} are times.
-                                        : @tr("Precise re-encodes from the exact frame {0} to {1}, and can include video effects and subtitles.", CaptureBridge.note.start, CaptureBridge.note.end);
-                                }
-                            }
-                        }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Label { text: @tr("Audio"); }
-                            Choice {
-                                model: CaptureBridge.audio-labels;
-                                current-index <=> CaptureBridge.audio-index;
-                                selected(index) => { CaptureBridge.set-audio(index); }
-                            }
-                        }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Label { text: @tr("Quality"); }
-                            if root.fast: Dim { text: @tr("Same as source (stream copy)"); wrap: no-wrap; overflow: elide; }
-                            if !root.fast && CaptureBridge.support.encode: Choice {
-                                model: CaptureBridge.preset-index == 3
-                                    ? [@tr("Same as source"), @tr("High quality"), @tr("Small file"), @tr("Custom")]
-                                    : [@tr("Same as source"), @tr("High quality"), @tr("Small file")];
-                                current-index <=> CaptureBridge.preset-index;
-                                selected(index) => { CaptureBridge.set-preset(index); }
-                            }
-                            if !root.fast && !CaptureBridge.support.encode: Dim { text: @tr("High quality (H.264 + AAC in MP4)"); wrap: no-wrap; overflow: elide; }
-                        }
-                        if !root.fast && CaptureBridge.support.encode: VerticalLayout {
-                            spacing: 5px;
-                            HorizontalLayout {
-                                Fold {
-                                    horizontal-stretch: 1;
-                                    title: @tr("Advanced");
-                                    open: CaptureBridge.advanced-open;
-                                    // TRANSLATORS: {} is the quality number (14–30).
-                                    summary: CaptureBridge.enc-source ? @tr("Source bitrate") : @tr("Quality number {}", round(CaptureBridge.enc-crf));
-                                    toggled(open) => {
-                                        CaptureBridge.advanced-open = open;
-                                        CaptureBridge.set-advanced-open(open);
-                                    }
-                                }
-                                if CaptureBridge.advanced-open: Button { small: true; text: @tr("Reset"); clicked => { CaptureBridge.reset-encode(); } }
-                            }
-                            if CaptureBridge.advanced-open: VerticalLayout {
-                                padding-left: 12px;
-                                spacing: 5px;
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { width: 64px; text: @tr("Resolution"); }
-                                    Choice {
-                                        model: [@tr("Source"), "1080p", "720p", "480p"];
-                                        current-index <=> CaptureBridge.enc-height;
-                                        selected(index) => { CaptureBridge.set-encode("height", index); }
-                                    }
-                                }
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { width: 64px; text: @tr("Frame rate"); }
-                                    Choice {
-                                        // TRANSLATORS: {} is frames per second.
-                                        model: [@tr("Source"), @tr("{} fps", 60), @tr("{} fps", 30)];
-                                        current-index <=> CaptureBridge.enc-fps;
-                                        selected(index) => { CaptureBridge.set-encode("fps", index); }
-                                    }
-                                }
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { width: 64px; text: @tr("Quality"); }
-                                    Slider {
-                                        minimum: 14;
-                                        maximum: 30;
-                                        step: 1;
-                                        value <=> CaptureBridge.enc-crf;
-                                        released(v) => { CaptureBridge.set-encode("crf", round(v)); }
-                                    }
-                                    Note { width: 22px; text: CaptureBridge.enc-source ? "—" : round(CaptureBridge.enc-crf); horizontal-alignment: right; }
-                                }
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { width: 64px; text: @tr("Speed"); }
-                                    RadioGroup {
-                                        model: [@tr("Faster"), @tr("Balanced"), @tr("Smaller")];
-                                        current-index <=> CaptureBridge.enc-speed;
-                                        selected(index) => { CaptureBridge.set-encode("speed", index); }
-                                    }
-                                }
-                                HorizontalLayout {
-                                    spacing: 4px;
-                                    Label { width: 64px; text: @tr("Audio"); }
-                                    Choice {
-                                        // TRANSLATORS: {} is the audio bit rate in kilobits per second.
-                                        model: [@tr("AAC {} kb/s", 128), @tr("AAC {} kb/s", 192), @tr("AAC {} kb/s", 256)];
-                                        current-index <=> CaptureBridge.enc-audio;
-                                        selected(index) => { CaptureBridge.set-encode("audio", index); }
-                                    }
-                                }
-                                Dim { text: @tr("H.264 + AAC in MP4. Lower quality number = better picture, bigger file."); }
-                            }
-                        }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Check {
-                                horizontal-stretch: 1;
-                                text: @tr("Include video effects");
-                                checked <=> CaptureBridge.processed;
-                                enabled: !root.fast;
-                                toggled(on) => { CaptureBridge.set-processed(on); }
-                            }
-                            if root.fast: Dim { text: @tr("Precise only"); wrap: no-wrap; }
-                        }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Check {
-                                horizontal-stretch: 1;
-                                text: @tr("Burn in subtitles");
-                                checked <=> CaptureBridge.burn;
-                                enabled: !root.fast && CaptureBridge.processed;
-                                toggled(on) => { CaptureBridge.set-burn(on); }
-                            }
-                            if root.fast: Dim { text: @tr("Precise only"); wrap: no-wrap; }
-                        }
-                        if CaptureBridge.estimate.length != "": HorizontalLayout {
-                            spacing: 5px;
-                            VerticalLayout { alignment: center; Glyph { glyph: Glyphs.info; } }
-                            Dim {
-                                text: CaptureBridge.estimate.size != ""
-                                    // TRANSLATORS: {0} seconds of media, {1} megabytes ("46" or "55–80"), {2} a time span ("2 s", "about 1–3 min").
-                                    ? @tr("Length {0} s · ≈ {1} MB · ≈ {2}", CaptureBridge.estimate.length, CaptureBridge.estimate.size, Words.span(CaptureBridge.estimate.timelow, CaptureBridge.estimate.timehigh))
-                                    // TRANSLATORS: {0} seconds of media, {1} a time span ("2 s", "about 1–3 min").
-                                    : @tr("Length {0} s · ≈ {1}", CaptureBridge.estimate.length, Words.span(CaptureBridge.estimate.timelow, CaptureBridge.estimate.timehigh));
-                            }
-                        }
-                        if CaptureBridge.clip-name != "": Rectangle {
-                            background: Theme.bg-list;
-                            border-radius: Theme.radius-control;
-                            HorizontalLayout {
-                                padding-left: 6px;
-                                padding-right: 2px;
-                                spacing: 4px;
-                                Text {
-                                    horizontal-stretch: 1;
-                                    text: CaptureBridge.clip-name;
-                                    color: Theme.text-list;
-                                    font-family: Theme.font-mono;
-                                    font-size: Theme.font-xs;
-                                    vertical-alignment: center;
-                                    overflow: elide;
-                                }
-                                IconAction { glyph: Glyphs.edit; tip: @tr("Change the file names"); clicked => { CaptureBridge.edit-name(); } }
-                            }
-                        }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Action {
-                                horizontal-stretch: 1;
-                                primary: true;
-                                text: @tr("Export");
-                                glyph: Glyphs.film;
-                                key: CaptureBridge.keys.clip;
-                                show-key: !root.narrow;
-                                enabled: !CaptureBridge.clip-busy && !CaptureBridge.queue-full && CaptureBridge.field-error == "";
-                                tip: CaptureBridge.queue-full ? Words.reason("queueFull", "") : @tr("Export the range into the snapshot folder");
-                                tip-keys: [{ key: CaptureBridge.keys.clip, text: "" }];
-                                clicked => { root.clip-export(); }
-                            }
-                            Action {
-                                text: @tr("Export As…");
-                                enabled: !CaptureBridge.clip-busy && !CaptureBridge.queue-full && CaptureBridge.field-error == "";
-                                tip: @tr("Export the range into a file you choose");
-                                clicked => { CaptureBridge.export-as(CaptureBridge.clip-start, CaptureBridge.clip-end); }
-                            }
-                        }
-                        if Words.status(CaptureBridge.clip-status) != "": Dim { text: Words.status(CaptureBridge.clip-status); }
-                        // A Fast cut the player could not make: one click to cut precisely instead (design §4, mockup 04-C).
-                        if root.fast && CaptureBridge.clip-status.reason == "fastImpossible": HorizontalLayout {
-                            alignment: start;
-                            Action {
-                                text: @tr("Use Precise");
-                                glyph: Glyphs.precise;
-                                clicked => {
-                                    CaptureBridge.method-index = 1;
-                                    CaptureBridge.set-method(1);
-                                }
-                            }
-                        }
+                        Check { text: @tr("Include video effects"); checked <=> CaptureBridge.burst-processed; }
+                        Check { text: @tr("Capture subtitles too"); checked <=> CaptureBridge.burst-subtitles; enabled: CaptureBridge.burst-processed; }
+                        Line { text: Words.status(CaptureBridge.burst-status); }
                     }
-                }
 
-                // ---------------------------------------------------------------- Results
-                results-part := VerticalLayout {
-                    spacing: 5px;
-                    SectionTitle { text: @tr("Results"); }
-                    if CaptureBridge.results.length == 0: Dim { text: @tr("No snapshots or clips yet."); }
-                    // Slint's ListView: only the rows in view are built; at most six rows tall, it scrolls beyond.
-                    if CaptureBridge.results.length > 0: ListView {
-                        height: min(CaptureBridge.results.length, 6) * 46px;
-                        for row in CaptureBridge.results: ResultItem { entry: row; }
+                    Heading { text: @tr("File names"); }
+                    TemplateRow {
+                        label: @tr("Snapshot");
+                        kind: "image";
+                        preview: CaptureBridge.previews.image;
+                        value <=> CaptureBridge.template-image;
+                        focused(kind) => { root.chip-target = kind; }
                     }
+                    TemplateRow {
+                        label: @tr("Clip");
+                        kind: "clip";
+                        preview: CaptureBridge.previews.clip;
+                        value <=> CaptureBridge.template-clip;
+                        focused(kind) => { root.chip-target = kind; }
+                    }
+                    TemplateRow {
+                        label: @tr("Burst");
+                        kind: "burst";
+                        preview: CaptureBridge.previews.burst;
+                        value <=> CaptureBridge.template-burst;
+                        focused(kind) => { root.chip-target = kind; }
+                    }
+                    // Variable chips: a click adds the variable to the template last focused (the hint is in the tip).
+                    ToolTipArea {
+                        height: chips.preferred-height;
+                        text: @tr("Click a variable to add it to the template you edited last. Existing files are never overwritten: a number is added.");
+                        chips := VerticalLayout {
+                            spacing: 3px;
+                            HorizontalLayout {
+                                spacing: 3px;
+                                alignment: start;
+                                for variable in ["{name}", "{pos}", "{start}", "{end}"]: Button {
+                                    small: true;
+                                    text: variable;
+                                    clicked => { CaptureBridge.insert-variable(root.chip-target, variable); }
+                                }
+                            }
+                            HorizontalLayout {
+                                spacing: 3px;
+                                alignment: start;
+                                for variable in ["{date}", "{time}", "{n}"]: Button {
+                                    small: true;
+                                    text: variable;
+                                    clicked => { CaptureBridge.insert-variable(root.chip-target, variable); }
+                                }
+                            }
+                        }
+                    }
+
+                    Heading { text: @tr("Clips"); }
                     HorizontalLayout {
                         spacing: 4px;
-                        Action { text: @tr("Open Snapshot Folder"); glyph: Glyphs.folder; clicked => { CaptureBridge.open-folder(); } }
+                        Label { width: 96px; text: @tr("Last clip length"); }
+                        Choice {
+                            width: 74px;
+                            model: [@tr("{} s", 10), @tr("{} s", 30), @tr("{} s", 60), @tr("{} s", 120)];
+                            current-index <=> CaptureBridge.last-index;
+                            selected(index) => { CaptureBridge.set-last-seconds(index); }
+                        }
                         Rectangle { horizontal-stretch: 1; }
-                        Action { text: @tr("Clear Finished"); enabled: CaptureBridge.results.length > 0; clicked => { CaptureBridge.clear-finished(); } }
-                    }
-                    if Words.status(CaptureBridge.results-status) != "": Dim { text: Words.status(CaptureBridge.results-status); }
-                }
-
-                // ---------------------------------------------------------------- Settings
-                settings-part := VerticalLayout {
-                    spacing: 5px;
-                    SectionTitle { text: @tr("Settings"); }
-                    Fold {
-                        title: @tr("Save to");
-                        open: CaptureBridge.settings-open;
-                        // TRANSLATORS: {0} is the folder, {1} the snapshot name template.
-                        summary: @tr("{0} · names: {1}", CaptureBridge.folder-shown, CaptureBridge.template-image);
-                        toggled(open) => {
-                            CaptureBridge.settings-open = open;
-                            CaptureBridge.set-settings-open(open);
-                        }
-                    }
-                    if CaptureBridge.settings-open: VerticalLayout {
-                        spacing: 5px;
-                        HorizontalLayout {
-                            spacing: 4px;
-                            LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: CaptureBridge.folder; read-only: true; }
-                            Button { width: 30px; height: Theme.input-height; text: "…"; clicked => { CaptureBridge.pick-folder(); } }
-                        }
-                        Check {
-                            text: @tr("Save to the media folder when possible");
-                            checked <=> CaptureBridge.beside-media;
-                            toggled(on) => { CaptureBridge.set-beside-media(on); }
-                        }
-                        Text { text: @tr("File names"); color: Theme.text-dim; font-size: Theme.font-body; }
-                        TemplateRow {
-                            label: @tr("Snapshot");
-                            kind: "image";
-                            preview: CaptureBridge.previews.image;
-                            value <=> CaptureBridge.template-image;
-                            focused(kind) => { root.chip-target = kind; }
-                        }
-                        TemplateRow {
-                            label: @tr("Clip");
-                            kind: "clip";
-                            preview: CaptureBridge.previews.clip;
-                            value <=> CaptureBridge.template-clip;
-                            focused(kind) => { root.chip-target = kind; }
-                        }
-                        TemplateRow {
-                            label: @tr("Burst");
-                            kind: "burst";
-                            preview: CaptureBridge.previews.burst;
-                            value <=> CaptureBridge.template-burst;
-                            focused(kind) => { root.chip-target = kind; }
-                        }
-                        // Variable chips: a click adds the variable to the template last focused.
-                        HorizontalLayout {
-                            spacing: 3px;
-                            alignment: start;
-                            for variable in ["{name}", "{pos}", "{start}", "{end}"]: Button {
-                                small: true;
-                                text: variable;
-                                clicked => { CaptureBridge.insert-variable(root.chip-target, variable); }
-                            }
-                        }
-                        HorizontalLayout {
-                            spacing: 3px;
-                            alignment: start;
-                            for variable in ["{date}", "{time}", "{n}"]: Button {
-                                small: true;
-                                text: variable;
-                                clicked => { CaptureBridge.insert-variable(root.chip-target, variable); }
-                            }
-                        }
-                        Dim { text: @tr("Click a variable to add it to the template you edited last. Existing files are never overwritten: a number is added."); }
-                        HorizontalLayout {
-                            spacing: 4px;
-                            Label { width: 96px; text: @tr("Last clip length"); }
-                            Choice {
-                                width: 74px;
-                                model: [@tr("{} s", 10), @tr("{} s", 30), @tr("{} s", 60), @tr("{} s", 120)];
-                                current-index <=> CaptureBridge.last-index;
-                                selected(index) => { CaptureBridge.set-last-seconds(index); }
-                            }
-                            Rectangle { horizontal-stretch: 1; }
-                        }
                     }
                 }
             }

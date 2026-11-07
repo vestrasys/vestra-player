@@ -39,10 +39,13 @@ export interface Settings {
   templates: Record<TemplateKind, string>;
   /** "Last N s" length. */
   lastSeconds: number;
-  /** Rows of the tab the user opened: the burst row, Advanced, the settings section. */
+  /** Rows of the tab the user opened: the burst row (Settings page), Advanced (Clip page). */
   burstOpen: boolean;
   advancedOpen: boolean;
-  settingsOpen: boolean;
+  /** The sub-tab shown last: 0 Snapshot, 1 Clip, 2 Results, 3 Settings. */
+  page: number;
+  /** Save / Copy Current Frame (the Snapshot page) include the video effects. */
+  snapshotEffects: boolean;
   /** Seconds of work per second of media of the last Precise export on this machine (the time estimate); null before one. */
   preciseSpeed: number | null;
 }
@@ -96,7 +99,8 @@ export function settingsOf(stored: unknown, folder = defaultFolder()): Settings 
     lastSeconds: lastSeconds(s.lastSeconds),
     burstOpen: flag(s.burstOpen, false),
     advancedOpen: flag(s.advancedOpen, false),
-    settingsOpen: flag(s.settingsOpen, false),
+    page: Number.isInteger(s.page) ? inRange(s.page, 0, 3, 0) : 0,
+    snapshotEffects: flag(s.snapshotEffects, false),
     preciseSpeed: s.preciseSpeed === null || s.preciseSpeed === undefined ? null : inRange(s.preciseSpeed, 0.01, 1000, 0) || null,
   };
 }
