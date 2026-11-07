@@ -775,6 +775,15 @@ pub fn normal_frame(_window: &slint::Window) -> Option<DesktopRect> {
     None
 }
 
+/// Where to put a window before its native window exists so that its
+/// frame's top-left corner lands at `frame`: macOS moves it down by the
+/// title bar (`macos.rs`); unchanged elsewhere (Windows takes it as the
+/// frame's).
+#[cfg(not(target_os = "macos"))]
+pub fn creation_position(frame: slint::LogicalPosition) -> slint::LogicalPosition {
+    frame
+}
+
 /// Put `window` at the normal frame `frame` (desktop pixels), maximized
 /// over it when `maximized`: Windows only (`windows.rs`); false elsewhere.
 #[cfg(not(target_os = "windows"))]

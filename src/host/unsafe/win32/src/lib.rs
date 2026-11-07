@@ -1280,33 +1280,79 @@ pub fn normal_placement(hwnd: isize) -> Option<NormalPlacement> {
 /// (`SetWindowPlacement`, as Chromium and Firefox restore a window). Set
 /// twice: a frame on a display of another scale first moves the window
 /// there, and the window's DPI change resizes it by the scales' ratio; the
-/// second call, on that display, gives the exact frame. False when the
-/// system refused.
+/// second call, on that display, gives the exact frame.
+///
+/// A window already minimized (the shortcut's "Run: Minimized": the
+/// process's first `ShowWindow` takes the `STARTUPINFO` show state)
+/// stays minimized and inactive, as Chromium and Firefox keep it; it
+/// restores at `frame`, maximized when `maximized`
+/// (`WPF_RESTORETOMAXIMIZED`). The first call is then made only for a frame
+/// on another display, without activating the window (the main window is
+/// still cloaked then, `cloak_on_show`). False when the system refused.
 pub fn set_normal_placement(hwnd: isize, frame: ScreenRect, maximized: bool) -> bool {
-    use windows_sys::Win32::UI::WindowsAndMessaging::{
-        SW_SHOWMAXIMIZED, SW_SHOWNORMAL, SetWindowPlacement,
-    };
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsIconic, SetWindowPlacement};
     let (dx, dy) = workspace_offset();
     let (left, top, right, bottom) = frame;
-    let mut placement = empty_placement();
-    placement.rcNormalPosition = RECT {
+    let normal = RECT {
         left: left - dx,
         top: top - dy,
         right: right - dx,
         bottom: bottom - dy,
     };
-    let mut set = |show: i32| {
+    // SAFETY: IsIconic takes the handle by value; an invalid HWND answers
+    // false.
+    let minimized = unsafe { IsIconic(hwnd as HWND) } != 0;
+    let other_display = minimized && {
+        let screen = RECT {
+            left,
+            top,
+            right,
+            bottom,
+        };
+        // SAFETY: plain values; MonitorFromWindow uses a minimized window's
+        // restored frame, and an invalid HWND answers no monitor.
+        let (now, there) = unsafe {
+            (
+                MonitorFromWindow(hwnd as HWND, MONITOR_DEFAULTTONEAREST),
+                MonitorFromRect(&screen, MONITOR_DEFAULTTONEAREST),
+            )
+        };
+        now != there
+    };
+    let (flags, steps) = placement_steps(maximized, minimized, other_display);
+    let mut placement = empty_placement();
+    placement.rcNormalPosition = normal;
+    placement.flags = flags;
+    steps.into_iter().flatten().all(|show| {
         placement.showCmd = show as u32;
         // SAFETY: `placement` is a filled WINDOWPLACEMENT whose length says
         // so, read during the call; an invalid HWND makes it fail.
         unsafe { SetWindowPlacement(hwnd as HWND, &placement) != 0 }
+    })
+}
+
+/// [`set_normal_placement`]'s `WINDOWPLACEMENT` flags and show commands, in
+/// order, for a window `minimized` now whose frame is on `other_display`.
+fn placement_steps(
+    maximized: bool,
+    minimized: bool,
+    other_display: bool,
+) -> (u32, [Option<i32>; 2]) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNOACTIVATE, SW_SHOWNORMAL,
+        WPF_RESTORETOMAXIMIZED,
     };
-    set(SW_SHOWNORMAL)
-        && set(if maximized {
-            SW_SHOWMAXIMIZED
-        } else {
-            SW_SHOWNORMAL
-        })
+    if minimized {
+        let flags = if maximized { WPF_RESTORETOMAXIMIZED } else { 0 };
+        let first = other_display.then_some(SW_SHOWNOACTIVATE);
+        return (flags, [first, Some(SW_SHOWMINNOACTIVE)]);
+    }
+    let last = if maximized {
+        SW_SHOWMAXIMIZED
+    } else {
+        SW_SHOWNORMAL
+    };
+    (0, [Some(SW_SHOWNORMAL), Some(last)])
 }
 
 #[cfg(test)]
@@ -1590,6 +1636,127 @@ mod tests {
             let (m_left, m_top, m_right, m_bottom) = area.monitor;
             assert!(left >= m_left && top >= m_top && right <= m_right && bottom <= m_bottom);
             assert!(right > left && bottom > top, "{area:?}");
+        }
+    }
+
+    /// `set_normal_placement`'s show commands: a shown window gets its frame
+    /// on its display first, then its state; a minimized one stays
+    /// minimized and inactive, restoring maximized when it was, and moves
+    /// to another display (without activation) only when it must.
+    #[test]
+    fn a_minimized_window_is_placed_without_restoring_it() {
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            SW_SHOWMAXIMIZED, SW_SHOWMINNOACTIVE, SW_SHOWNOACTIVATE, SW_SHOWNORMAL,
+            WPF_RESTORETOMAXIMIZED,
+        };
+        let steps = super::placement_steps;
+        assert_eq!(
+            steps(false, false, false),
+            (0, [Some(SW_SHOWNORMAL), Some(SW_SHOWNORMAL)])
+        );
+        assert_eq!(
+            steps(true, false, true),
+            (0, [Some(SW_SHOWNORMAL), Some(SW_SHOWMAXIMIZED)])
+        );
+        assert_eq!(
+            steps(false, true, false),
+            (0, [None, Some(SW_SHOWMINNOACTIVE)])
+        );
+        assert_eq!(
+            steps(true, true, false),
+            (WPF_RESTORETOMAXIMIZED, [None, Some(SW_SHOWMINNOACTIVE)])
+        );
+        assert_eq!(
+            steps(true, true, true),
+            (
+                WPF_RESTORETOMAXIMIZED,
+                [Some(SW_SHOWNOACTIVATE), Some(SW_SHOWMINNOACTIVE)]
+            )
+        );
+    }
+
+    /// A top-level window of the test thread that nobody sees: created
+    /// hidden, cloaked, destroyed on drop.
+    struct UnseenWindow(isize);
+
+    impl UnseenWindow {
+        fn new() -> Self {
+            use windows_sys::Win32::UI::WindowsAndMessaging::{
+                CW_USEDEFAULT, CreateWindowExW, WS_OVERLAPPEDWINDOW,
+            };
+            // SAFETY: the class and title are static NUL-terminated UTF-16
+            // strings (a system class: no registration, no instance); no
+            // parent, menu or creation data. The handle is owned by this
+            // value and destroyed on this thread in `drop`.
+            let hwnd = unsafe {
+                CreateWindowExW(
+                    0,
+                    windows_sys::w!("STATIC"),
+                    windows_sys::w!("vestra-win32 placement test"),
+                    WS_OVERLAPPEDWINDOW,
+                    CW_USEDEFAULT,
+                    CW_USEDEFAULT,
+                    CW_USEDEFAULT,
+                    CW_USEDEFAULT,
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null_mut(),
+                    std::ptr::null(),
+                )
+            };
+            assert!(!hwnd.is_null(), "CreateWindowExW failed");
+            let window = Self(hwnd as isize);
+            assert!(super::set_cloaked(window.0, true));
+            window
+        }
+    }
+
+    impl Drop for UnseenWindow {
+        fn drop(&mut self) {
+            use windows_sys::Win32::UI::WindowsAndMessaging::DestroyWindow;
+            // SAFETY: the window was created on this thread by `new` and is
+            // destroyed once.
+            unsafe { DestroyWindow(self.0 as _) };
+        }
+    }
+
+    /// Real window round trip: what `set_normal_placement` sets,
+    /// `normal_placement` reads back (frame in screen coordinates, the
+    /// workspace offset undone both ways; maximized). The window is
+    /// cloaked and minimized without activation first, so the test never
+    /// shows a window nor takes the focus (a shown, not minimized window
+    /// would be activated by `SW_SHOWNORMAL`); placing it also checks that
+    /// a minimized window stays so ("Run: Minimized").
+    #[test]
+    fn a_placement_set_reads_back_the_same() {
+        use super::{NormalPlacement, normal_placement, set_normal_placement};
+        use windows_sys::Win32::UI::WindowsAndMessaging::{SW_SHOWMINNOACTIVE, ShowWindow};
+        let window = UnseenWindow::new();
+        // Twice: a process's first ShowWindow may take its STARTUPINFO's
+        // show state instead.
+        for _ in 0..2 {
+            // SAFETY: a window of this thread, alive; a plain show command.
+            unsafe { ShowWindow(window.0 as _, SW_SHOWMINNOACTIVE) };
+        }
+        let (left, top, ..) = display_areas()
+            .into_iter()
+            .find(|area| area.primary)
+            .expect("a primary display")
+            .work;
+        for (frame, maximized) in [
+            ((left + 100, top + 80, left + 740, top + 560), false),
+            ((left + 120, top + 90, left + 900, top + 610), true),
+            ((left + 60, top + 40, left + 700, top + 520), false),
+        ] {
+            assert!(set_normal_placement(window.0, frame, maximized));
+            assert_eq!(
+                normal_placement(window.0),
+                Some(NormalPlacement {
+                    frame,
+                    maximized,
+                    minimized: true,
+                })
+            );
         }
     }
 }
