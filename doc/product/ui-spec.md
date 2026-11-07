@@ -100,7 +100,7 @@ The widget library `@vestra/widgets.slint` provides `Button`, `Slider`, `ToolTip
 - **`ToolTipArea.keys` and `.detail`**: the tip reads `Title  [K1] −  [K2] +  · detail`.
   - Caps are drawn as KeyHint, with 10px between entries and 4px between a cap and its text; `detail` is in `Theme.text-dim`.
   - An entry with an empty key is left out.
-  - Tip elements change only with the properties, never on hover (the AccessKit rule).
+  - Tip elements change only with the properties, never on hover (the no-churn rule).
 
 ### 2.4 Theme provided by the host
 
