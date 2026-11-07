@@ -153,6 +153,22 @@ pub fn compiled(
         .collect()
 }
 
+/// The adjust column's compiled panels among its front tabs (`front`, from
+/// [`compiled`]): the current tab and the ones the shell already has, so a
+/// tab is compiled the first time it is shown (its first opening costs one
+/// panel) and then stays, as the front tabs do; switching to a front tab not
+/// shown yet compiles it then (`Need::Compile`). Never more than `front`.
+pub fn shown_or_compiled(
+    front: Vec<u64>,
+    active: Option<u64>,
+    compiled_now: &BTreeMap<u64, u64>,
+) -> Vec<u64> {
+    front
+        .into_iter()
+        .filter(|&owner| Some(owner) == active || compiled_now.contains_key(&owner))
+        .collect()
+}
+
 /// When a compile of `compiled` failed: the sidebar panels it added without
 /// a mount of their own in the `batch` (a switch to their tab, a tab moving
 /// into the front). They are left out and reported to their plugin, so a
@@ -365,6 +381,28 @@ mod tests {
             assert_eq!(Column::of(column.slot()), Some(column));
         }
         assert_eq!(Column::of(Slot::Bottom), None);
+    }
+
+    /// Review of step 3b: the adjust column's first opening compiles the
+    /// current tab only; a tab joins when it is shown and then stays.
+    #[test]
+    fn the_adjust_column_compiles_a_tab_when_it_is_first_shown() {
+        let order = [1, 2, 3, 4, 5];
+        let mut now = BTreeMap::new();
+        let front = |active, now: &BTreeMap<u64, u64>| {
+            shown_or_compiled(
+                compiled(&order, active, |_| false, |_| false, now),
+                active,
+                now,
+            )
+        };
+        assert_eq!(front(Some(2), &now), [2]);
+        now.insert(2, 2);
+        assert_eq!(front(Some(5), &now), [2, 5]);
+        now.insert(5, 5);
+        // Back to tab 2: tab 5 is no front tab any more, tab 2 stays.
+        assert_eq!(front(Some(2), &now), [2]);
+        assert_eq!(front(None, &BTreeMap::new()), Vec::<u64>::new());
     }
 
     #[test]

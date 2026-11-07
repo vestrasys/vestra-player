@@ -298,14 +298,23 @@ impl Host {
                 .zip(&plans)
                 // The adjust column's panels compile at its first opening.
                 .filter(|(column, _)| self.compiles(*column))
-                .flat_map(|(_, plan)| {
-                    sidebar_tabs::compiled(
+                .flat_map(|(column, plan)| {
+                    let front = sidebar_tabs::compiled(
                         &plan.order,
                         plan.active,
                         recorded,
                         |owner| failed.contains(&owner),
                         &self.shell_compiled,
-                    )
+                    );
+                    // The adjust column compiles a front tab once it is
+                    // shown: the current one and those already compiled
+                    // (`sidebar_tabs::shown_or_compiled`), so its first
+                    // opening compiles one panel, not four.
+                    if column == Column::Adjust {
+                        sidebar_tabs::shown_or_compiled(front, plan.active, &self.shell_compiled)
+                    } else {
+                        front
+                    }
                 })
                 .collect::<Vec<_>>();
             shown = next
