@@ -34,6 +34,7 @@ export component HostWindow inherits Window {
     in property <int> palette-current: -1;
     in property <int> palette-shown: 0;
     in property <string> palette-count;
+    in property <[string]> palette-keys: ["Enter", "Shift+Enter", "Esc"];
     in-out property <string> palette-query;
     callback palette-edited(string);
     callback palette-moved(int);
@@ -313,6 +314,9 @@ export component HostWindow inherits Window {
             current: root.palette-current;
             shown: root.palette-shown;
             count: root.palette-count;
+            run-key: root.palette-keys[0];
+            keep-key: root.palette-keys[1];
+            close-key: root.palette-keys[2];
             query <=> root.palette-query;
             edited(text) => { root.palette-edited(text); }
             moved(by) => { root.palette-moved(by); }

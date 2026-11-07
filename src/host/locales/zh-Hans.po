@@ -477,11 +477,6 @@ msgstr "{category}：{title}"
 msgid "Menu"
 msgstr "菜单"
 
-#. Command palette: why a disabled command that gives no reason of its own cannot run.
-#: src/host/ui/command_palette.rs
-#, x-machine
-msgid "Not available now"
-msgstr "当前不可用"
 
 #. Command palette: how many commands match what is typed.
 #: src/host/host/palette.rs

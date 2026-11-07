@@ -571,11 +571,6 @@ msgstr "{category}: {title}"
 msgid "Menu"
 msgstr "메뉴"
 
-#. Command palette: why a disabled command that gives no reason of its own cannot run.
-#: src/host/ui/command_palette.rs
-#, x-machine
-msgid "Not available now"
-msgstr "지금은 사용할 수 없음"
 
 #. Command palette: how many commands match what is typed.
 #: src/host/host/palette.rs

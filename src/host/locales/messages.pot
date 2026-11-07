@@ -463,10 +463,6 @@ msgstr ""
 msgid "Menu"
 msgstr ""
 
-#. Command palette: why a disabled command that gives no reason of its own cannot run.
-#: src/host/ui/command_palette.rs
-msgid "Not available now"
-msgstr ""
 
 #. Command palette: how many commands match what is typed.
 #: src/host/host/palette.rs

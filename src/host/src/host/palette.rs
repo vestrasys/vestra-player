@@ -16,6 +16,10 @@ pub(crate) struct PaletteState {
     pub(crate) hits: Vec<Hit>,
     /// Rows in view at the last projection.
     pub(crate) visible: usize,
+    /// The command the cursor goes to at the next projection (its global
+    /// id): after Shift+Enter it moves up the recent list, and the cursor
+    /// goes with it.
+    pub(crate) follow: Option<String>,
 }
 
 /// What the palette view asks for.
@@ -48,6 +52,11 @@ impl Host {
         self.palette = PaletteState::default();
         let result = (|| -> Result<()> {
             shell.set_property("palette-query", SValue::String("".into()))?;
+            // The footer's keys as the menus write them on this system.
+            shell.set_property(
+                "palette-keys",
+                ui_values::from_json(&json!(command_palette::footer_keys()))?,
+            )?;
             shell.set_property("palette-open", true.into())?;
             shell.set_property("menu-open", true.into())?;
             Ok(())
@@ -93,6 +102,11 @@ impl Host {
         let (_, size) = super::menus::menu_frame(window);
         let visible = command_palette::visible(size.y);
         let palette = &mut self.palette;
+        if let Some(global) = palette.follow.take()
+            && let Some(at) = command_palette::position(&items, &hits, &global)
+        {
+            palette.cursor = at;
+        }
         palette.cursor = palette.cursor.min(hits.len().saturating_sub(1));
         palette.offset =
             command_palette::reveal(palette.offset, palette.cursor, visible, hits.len());
@@ -174,12 +188,19 @@ impl Host {
                 if !item.enabled || item.busy {
                     return;
                 }
-                self.palette.cursor = index;
+                // The palette's own command run from the palette just
+                // closes it (running it would open the palette again).
+                if item.owner == bindings::HOST && item.id == PALETTE {
+                    self.close_menu();
+                    return;
+                }
                 command_palette::remember(&mut self.ui_state.state.palette_recent, &item.global);
                 let now = self.now_ms();
                 self.ui_state.touch(now);
-                // The palette's own command closes it.
-                let keep = keep && !(item.owner == bindings::HOST && item.id == PALETTE);
+                // Kept open: the cursor stays on this command wherever it
+                // now sorts (the recent list reorders an empty query).
+                self.palette.cursor = index;
+                self.palette.follow = Some(item.global.clone());
                 if !keep {
                     self.close_menu();
                 }

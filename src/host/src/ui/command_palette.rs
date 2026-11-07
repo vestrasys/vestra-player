@@ -89,10 +89,12 @@ fn place_name(title: &str) -> String {
 
 /// The commands the palette lists, from the registry's shown entries.
 /// Left out: commands with `focus: "panel"` (their keys work only in their
-/// panel) and placeholders: a command that is disabled, gives no reason
-/// and has no key (a greyed "No Audio Tracks" item); a disabled command
-/// with a reason or a key is listed greyed. `name` gives a plugin's shown
-/// name by manifest id, `keys` a command's current keys.
+/// panel) and disabled commands that give no reason, whatever their keys
+/// (a greyed "No Audio Tracks" placeholder; VS Code hides a command whose
+/// `when` is false the same way), so unbinding a key never hides a
+/// command. A disabled command with a reason is listed greyed, with it.
+/// `name` gives a plugin's shown name by manifest id, `keys` a command's
+/// current keys.
 pub fn items(
     entries: &[CommandSnapshot],
     name: &dyn Fn(&str) -> String,
@@ -110,7 +112,7 @@ pub fn items(
             let state = &entry.state;
             let keys = keys(entry.key.owner, &entry.key.local_id).unwrap_or_default();
             let reason = state.reason.clone().unwrap_or_default();
-            if !state.enabled && reason.is_empty() && keys.is_empty() {
+            if !state.enabled && reason.is_empty() {
                 return None;
             }
             let player = entry.manifest == "host";
@@ -421,11 +423,7 @@ pub fn rows(items: &[Item], hits: &[Hit], offset: usize, visible: usize) -> Valu
                     "radio":false,"checkable":false,"busy":false,"reason":"","shown":false});
             };
             let item = &items[hit.index];
-            let reason = if item.enabled || !item.reason.is_empty() {
-                item.reason.clone()
-            } else {
-                tr("Not available now")
-            };
+            let reason = item.reason.clone();
             let mut segments = segments(&item.label, &hit.marks);
             if item.busy {
                 // After the last run, plain or not: a busy item's ellipsis.
@@ -446,6 +444,26 @@ pub fn rows(items: &[Item], hits: &[Hit], offset: usize, visible: usize) -> Valu
         })
         .collect();
     Value::Array(rows)
+}
+
+/// The footer's Enter, Shift+Enter and Escape as the menus write keys on
+/// this system (`bindings::label`: `Shift+Enter`, `⇧Enter` on macOS).
+pub fn footer_keys() -> [String; 3] {
+    ["Enter", "Shift+Enter", "Escape"].map(|key| {
+        crate::bindings::parse(key)
+            .map(|input| crate::bindings::label(&input))
+            .unwrap_or_else(|_| key.to_owned())
+    })
+}
+
+/// Where the command with this global id is among `hits`, if listed: the
+/// cursor follows a command run with Shift+Enter there.
+pub fn position(items: &[Item], hits: &[Hit], global: &str) -> Option<usize> {
+    hits.iter().position(|hit| {
+        items
+            .get(hit.index)
+            .is_some_and(|item| item.global == global)
+    })
 }
 
 /// The recent list after running `global`: it first, at most
@@ -588,18 +606,27 @@ mod tests {
             entry.state.enabled = false;
         }
         entries[1].state.reason = Some("Needs a file".into());
+        // A key does not keep a disabled command without a reason listed;
+        // unbinding one never hides a command (coordinator ruling,
+        // following VS Code's `when`).
         let keys = |_: u64, id: &str| (id == "keyed").then(|| "L".to_owned());
         let items = items(&entries, &names, &keys);
         let ids: Vec<_> = items.iter().map(|item| item.id.as_str()).collect();
-        assert_eq!(ids, ["why", "keyed"]);
+        assert_eq!(ids, ["why"]);
         let hits = search(&items, "", &[]);
         let rows = rows(&items, &hits, 0, 3);
-        assert_eq!(rows[0]["label"], "Audio: Louder");
+        assert_eq!(rows[0]["label"], "Audio: Mono");
         assert_eq!(rows[0]["enabled"], false);
-        assert_eq!(rows[0]["plugin"], "Not available now");
-        assert_eq!(rows[1]["reason"], "Needs a file");
-        assert_eq!(rows[1]["plugin"], "Needs a file");
-        assert_eq!(rows[2]["shown"], false);
+        assert_eq!(rows[0]["reason"], "Needs a file");
+        assert_eq!(rows[0]["plugin"], "Needs a file");
+        assert_eq!(rows[1]["shown"], false);
+        // With a reason it is listed whether or not it has a key.
+        let mut keyed = entries.clone();
+        keyed[2].state.reason = Some("Nothing to raise".into());
+        let listed = super::items(&keyed, &names, &keys);
+        assert_eq!(listed.len(), 2);
+        let none = |_: u64, _: &str| None;
+        assert_eq!(super::items(&keyed, &names, &none).len(), 2);
         assert_eq!(rows.as_array().unwrap().len(), SLOTS);
     }
 
@@ -656,6 +683,58 @@ mod tests {
             segments(&items[hits[0].index].label, &hits[0].marks)[..3],
             ["Audio ▸ Audio Sync: ", "Later", ""]
         );
+    }
+
+    /// Shift+Enter: the run command moves to the top of an empty query's
+    /// list, and `position` finds it there for the cursor (the review of
+    /// host 0.7.4: the cursor stayed on the old index, now another command).
+    #[test]
+    fn the_footer_keys_are_the_menus_labels() {
+        use crate::bindings::{label_in, parse};
+        use crate::platform::KeyLabels;
+        let shift_enter = parse("Shift+Enter").unwrap();
+        assert_eq!(label_in(&shift_enter, KeyLabels::Text), "Shift+Enter");
+        assert_eq!(label_in(&shift_enter, KeyLabels::Symbols), "⇧Enter");
+        let keys = footer_keys();
+        let expected = match crate::platform::KEY_LABELS {
+            KeyLabels::Text => ["Enter", "Shift+Enter", "Esc"],
+            KeyLabels::Symbols => ["Enter", "⇧Enter", "Esc"],
+        };
+        assert_eq!(keys, expected);
+    }
+
+    #[test]
+    fn the_cursor_follows_a_command_run_and_kept_open() {
+        let entries = vec![
+            entry(
+                2,
+                "vestra.audio",
+                "louder",
+                Declaration::new("Louder", &["Audio", "Louder"]),
+            ),
+            entry(
+                2,
+                "vestra.audio",
+                "mono",
+                Declaration::new("Mono", &["Audio", "Mono"]),
+            ),
+            entry(
+                2,
+                "vestra.audio",
+                "quieter",
+                Declaration::new("Quieter", &["Audio", "Quieter"]),
+            ),
+        ];
+        let items = items(&entries, &names, &none);
+        let mut recent = Vec::new();
+        let before = search(&items, "", &recent);
+        assert_eq!(position(&items, &before, "vestra.audio/quieter"), Some(2));
+        remember(&mut recent, "vestra.audio/quieter");
+        let after = search(&items, "", &recent);
+        assert_eq!(position(&items, &after, "vestra.audio/quieter"), Some(0));
+        // The old index now holds another command.
+        assert_eq!(items[after[2].index].id, "mono");
+        assert_eq!(position(&items, &after, "nobody/gone"), None);
     }
 
     #[test]

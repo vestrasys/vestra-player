@@ -167,6 +167,11 @@ export component PaletteView inherits Rectangle {
     // Rows shown (the rest of `rows` are hidden).
     in property <int> shown: 0;
     in property <string> count;
+    // The footer's keys as this system's menus write them (the host's
+    // binding labels: `Shift+Enter`, `⇧Enter` on macOS).
+    in property <string> run-key: "Enter";
+    in property <string> keep-key: "Shift+Enter";
+    in property <string> close-key: "Esc";
     in-out property <string> query;
     callback edited(string);
     // Move the cursor by rows (the host clamps; ±1 wraps around).
@@ -286,11 +291,11 @@ export component PaletteView inherits Rectangle {
             alignment: start;
             KeyCap { text: "↑↓"; }
             Text { text: @tr("choose"); font-size: 11px; color: Theme.text-dim; vertical-alignment: center; }
-            KeyCap { text: "Enter"; }
+            KeyCap { text: root.run-key; }
             Text { text: @tr("run"); font-size: 11px; color: Theme.text-dim; vertical-alignment: center; }
-            KeyCap { text: "Shift+Enter"; }
+            KeyCap { text: root.keep-key; }
             Text { text: @tr("run, keep open"); font-size: 11px; color: Theme.text-dim; vertical-alignment: center; overflow: elide; }
-            KeyCap { text: "Esc"; }
+            KeyCap { text: root.close-key; }
             Text { text: @tr("close"); font-size: 11px; color: Theme.text-dim; vertical-alignment: center; }
         }
     }
