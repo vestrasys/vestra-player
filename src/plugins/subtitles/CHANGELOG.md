@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.10
+
+- Command palette: the subtitle track commands (Off, the tracks, Cycle) have their own category text, **Subtitle Tracks**, instead of reusing the submenu's "Subtitle Track", whose Chinese is the verb phrase 选择字幕轨; the category is a noun in every language (zh-Hans 字幕轨). TS texts have no `msgctxt`, so it is a separate msgid; the menu text is unchanged. New text translated in all six languages and marked `x-machine`. The category texts "Secondary Subtitle Position" (all languages) and "Reset" (de, es, fr, ja, ko) are now marked `x-machine` too. Who must change: nobody. What users see: "字幕轨：依次切换" instead of "选择字幕轨：依次切换"; in English "Subtitle Tracks: Cycle". Titles, ids, menu paths, keys and order are unchanged.
+
 ## 0.4.9
 
 - Every command has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title", so short titles such as "Off", "Top" or "Earlier 0.5 s" still say what they change outside the menu: **Subtitles** (Open Subtitle…, Add Secondary Subtitle…, Show Subtitles, Original ASS/SSA Styles, Reload Subtitles, Refresh Subtitle Tracks, Subtitle Tuning…, Subtitle Settings…), **Subtitle Track** (Off, the tracks, Cycle), **Secondary Subtitle** (Off, the tracks), **Secondary Subtitle Position** (Top, Above Main Subtitle), **Subtitle Style** (Size +/−, Move Up/Down, Bold, Shadow, Opaque Box), **Subtitle Sync** (Earlier, Later, Adjust Sync…), **Seek** (Previous Dialogue, Next Dialogue, Current Subtitle Start) and **Reset** (Subtitle Position, Subtitle Sync). The categories are translated in every language of the plugin.

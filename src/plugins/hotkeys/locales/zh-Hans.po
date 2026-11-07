@@ -37,7 +37,7 @@ msgstr "面板内"
 msgid "Global"
 msgstr "全局"
 
-#: export.ts:22 keys-page.ts:195
+#: export.ts:22 keys-page.ts:203
 msgid "Player"
 msgstr "宿主"
 
@@ -85,49 +85,54 @@ msgstr "忽略默认快捷键：开"
 msgid "Ignore default shortcuts: Off"
 msgstr "忽略默认快捷键：关"
 
-#: keys-page.ts:118
+#: keys-page.ts:126
 msgid "Keyboard Shortcuts"
 msgstr "快捷键"
 
-#: keys-page.ts:194
+#: keys-page.ts:202
 msgid "All sources"
 msgstr "全部来源"
 
-#: keys-page.ts:197
+#: keys-page.ts:205
 msgid "Plugins not loaded"
 msgstr "未加载的插件"
 
-#: keys-page.ts:419
+#: keys-page.ts:274
+#, x-machine
+msgid "{} (in panel)"
+msgstr "{}（面板内）"
+
+#: keys-page.ts:432
 msgid "Shortcut updated: {0} = {1}"
 msgstr "快捷键已更新：{0} = {1}"
 
-#: keys-page.ts:422
+#: keys-page.ts:435
 msgid "Shortcut updated: {} = (none)"
 msgstr "快捷键已更新：{} = （无）"
 
-#: keys-page.ts:474
+#: keys-page.ts:487
 msgid "Restore all default shortcuts?"
 msgstr "恢复全部默认快捷键？"
 
-#: keys-page.ts:475
+#: keys-page.ts:488
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "将清除你对所有命令（包括未加载插件）的快捷键与鼠标动作修改。"
 
-#: keys-page.ts:476
+#: keys-page.ts:489
 msgid "Restore All Defaults"
 msgstr "恢复全部默认"
 
-#: keys-page.ts:488
+#: keys-page.ts:501
 msgid "Shortcuts restored to defaults"
 msgstr "快捷键已恢复默认"
 
 #. only the part before the extension.
-#: keys-page.ts:499
+#: keys-page.ts:512
 msgid "Export Shortcut List"
 msgstr "导出快捷键列表"
 
 #. only the part before the extension.
-#: keys-page.ts:499
+#: keys-page.ts:512
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Vestra Player 快捷键.csv"
 

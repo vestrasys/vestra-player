@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.4
+
+- Translations only: the category text "Settings" added in 0.3.3 is now marked `x-machine` in de, es, fr, ja and ko. Who must change: nobody. No text or behaviour change.
+
 ## 0.3.3
 
 - Command palette categories (player 0.7.6, SDK 1.6.4). Who must change: nobody. What users see: in the command palette (Ctrl+Shift+P) the commands read "Settings: Options…", "Appearance: Vestra Dark" and "Language: 日本語" instead of falling back to the menu path, translated like the menus. The palette and language radios name Options… as their home, since the options window has the Appearance and Language pages with the same choices. Menus, titles, ids and keys are unchanged.

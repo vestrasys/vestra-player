@@ -122,10 +122,12 @@ msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "탐색 막대에 마우스를 올리면 썸네일 표시"
 
 #: commands.ts:247
+#, x-machine
 msgid "File"
 msgstr "파일"
 
 #: commands.ts:247
+#, x-machine
 msgid "Playback"
 msgstr "재생"
 

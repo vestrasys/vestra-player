@@ -439,6 +439,43 @@ test("J01: commands with a category are named \"Category: Title\", in the interf
   }
 });
 
+test("J01: search matches the menu path and the category too; a panel's command says so in its row", async () => {
+  const command = (id: string, path: string[] | null, scope: "global" | "panel", key: string) => ({
+    plugin: "vestra.playlist", command: id, title: "Add Files…", path, category: "Playlist", scope,
+    defaults: [key], current: [key], overridden: false, shadowed: [], labels: [key],
+  });
+  for (const [locale, panel] of [
+    ["en", "Playlist: Add Files… (in panel)"],
+    ["zh-Hans", "Playlist：Add Files…（面板内）"],
+  ] as const) {
+    const host = new TestHost();
+    host.handle("bindings.list", () => ({
+      commands: [
+        command("playlist.add", ["Playback", "Playlist", "Add Files…"], "global", "F7"),
+        command("playlist.list-add", null, "panel", "Ctrl+I"),
+        { plugin: "vestra.capture", command: "capture.save", title: "Save Current Frame", path: ["Video", "Snapshot", "Save Current Frame"], category: "Snapshot", scope: "global", defaults: ["Ctrl+E"], current: ["Ctrl+E"], overridden: false, shadowed: [], labels: ["Ctrl+E"] },
+      ],
+      orphans: [],
+    }));
+    await start(host, undefined, locale);
+    const window = await openKeys(host);
+    const colon = locale === "en" ? ": " : "：";
+    // The two "Playlist: Add Files…" no longer look the same.
+    assert.ok(row(host, `Playlist${colon}Add Files…`), `${locale}: the menu item keeps its name`);
+    assert.ok(row(host, panel), `${locale}: ${rows(host).map((r) => r.command).join(" | ")}`);
+    // "Video" is only in the menu path; "playlist" only in the category (and the path).
+    window.emit("search", "video");
+    await host.settle(WAIT);
+    assert.deepEqual(rows(host).map((r) => r.command), [`Snapshot${colon}Save Current Frame`]);
+    window.emit("search", "Playback");
+    await host.settle(WAIT);
+    assert.deepEqual(rows(host).map((r) => r.command), [`Playlist${colon}Add Files…`]);
+    window.emit("search", "playlist");
+    await host.settle(WAIT);
+    assert.equal(rows(host).length, 2);
+  }
+});
+
 test("J01: keys bound now read as the player labels them (macOS ⌘ style)", async () => {
   const host = new TestHost();
   host.handle("bindings.list", () => ({

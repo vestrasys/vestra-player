@@ -11,7 +11,7 @@ msgstr ""
 msgid "External subtitle"
 msgstr "외부 자막"
 
-#: main.ts:120 main.ts:955
+#: main.ts:120 main.ts:957
 #, x-machine
 msgid "Track {}"
 msgstr "트랙 {}"
@@ -21,7 +21,7 @@ msgstr "트랙 {}"
 msgid "Embedded {}"
 msgstr "내장 {}"
 
-#: main.ts:128 main.ts:962
+#: main.ts:128 main.ts:964
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
@@ -31,425 +31,432 @@ msgstr "{} · {}"
 msgid "Subtitles"
 msgstr "자막"
 
-#: main.ts:138 main.ts:919 main.ts:1002 main.ts:1011
+#: main.ts:140
 #, x-machine
-msgid "Subtitle Track"
+msgid "Subtitle Tracks"
 msgstr "자막 트랙"
 
-#: main.ts:139 main.ts:926 main.ts:933 main.ts:992
+#: main.ts:141 main.ts:928 main.ts:935 main.ts:994
 #, x-machine
 msgid "Secondary Subtitle"
 msgstr "보조 자막"
 
-#: main.ts:140
+#: main.ts:142
+#, x-machine
 msgid "Secondary Subtitle Position"
 msgstr "보조 자막 위치"
 
-#: main.ts:141 main.ts:1031 main.ts:1036 main.ts:1041 main.ts:1046 main.ts:1060 main.ts:1069 main.ts:1078
+#: main.ts:143 main.ts:1033 main.ts:1038 main.ts:1043 main.ts:1048 main.ts:1062 main.ts:1071 main.ts:1080
 #, x-machine
 msgid "Subtitle Style"
 msgstr "자막 스타일"
 
-#: main.ts:142 main.ts:1273
+#: main.ts:144 main.ts:1275
 #, x-machine
 msgid "Subtitle Sync"
 msgstr "자막 싱크"
 
-#: main.ts:143 main.ts:1234 main.ts:1238 main.ts:1242
+#: main.ts:145 main.ts:1236 main.ts:1240 main.ts:1244
 #, x-machine
 msgid "Seek"
 msgstr "탐색"
 
-#: main.ts:144
+#: main.ts:146
+#, x-machine
 msgid "Reset"
 msgstr "재설정"
 
-#: main.ts:185
+#: main.ts:187
 #, x-machine
 msgid "Subtitle sync: 0 s"
 msgstr "자막 싱크: 0초"
 
-#: main.ts:186
+#: main.ts:188
 #, x-machine
 msgid "Subtitle sync: {} s earlier"
 msgstr "자막 싱크: {}초 빠르게"
 
-#: main.ts:186
+#: main.ts:188
 #, x-machine
 msgid "Subtitle sync: {} s later"
 msgstr "자막 싱크: {}초 느리게"
 
-#: main.ts:311
+#: main.ts:313
 #, x-machine
 msgid "Add Secondary Subtitle"
 msgstr "보조 자막 추가"
 
-#: main.ts:311
+#: main.ts:313
 #, x-machine
 msgid "Open Subtitle"
 msgstr "자막 열기"
 
-#: main.ts:725
+#: main.ts:727
 #, x-machine
 msgid "Subtitles Off"
 msgstr "자막 끄기"
 
-#: main.ts:728
+#: main.ts:730
 #, x-machine
 msgid "Secondary Off"
 msgstr "보조 자막 끄기"
 
-#: main.ts:902
+#: main.ts:904
 #, x-machine
 msgid "Open Subtitle…"
 msgstr "자막 열기…"
 
-#: main.ts:902 main.ts:910 main.ts:914 main.ts:919 main.ts:926 main.ts:995 main.ts:1003 main.ts:1288
+#: main.ts:904 main.ts:912 main.ts:916 main.ts:921 main.ts:928 main.ts:997 main.ts:1005 main.ts:1290
 #, x-machine
 msgid "Subtitle operation in progress"
 msgstr "자막 작업 진행 중"
 
-#: main.ts:908
+#: main.ts:910
 #, x-machine
 msgid "Add Secondary Subtitle…"
 msgstr "보조 자막 추가…"
 
-#: main.ts:910
+#: main.ts:912
 #, x-machine
 msgid "No media to play"
 msgstr "재생할 미디어가 없습니다"
 
-#: main.ts:914
+#: main.ts:916
 #, x-machine
 msgid "Show Subtitles"
 msgstr "자막 표시"
 
-#: main.ts:919 main.ts:926
+#: main.ts:921 main.ts:1004 main.ts:1013
+#, x-machine
+msgid "Subtitle Track"
+msgstr "자막 트랙"
+
+#: main.ts:921 main.ts:928
 #, x-machine
 msgid "Off"
 msgstr "끔"
 
-#: main.ts:933
+#: main.ts:935
 #, x-machine
 msgid "Position"
 msgstr "위치"
 
-#: main.ts:933
+#: main.ts:935
 #, x-machine
 msgid "Top"
 msgstr "위쪽"
 
-#: main.ts:933
+#: main.ts:935
 #, x-machine
 msgid "Above Main Subtitle"
 msgstr "주 자막 위"
 
-#: main.ts:969
+#: main.ts:971
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: main.ts:995
+#: main.ts:997
 #, x-machine
 msgid "Only text subtitles can be secondary"
 msgstr "텍스트 자막만 보조 자막으로 쓸 수 있습니다"
 
-#: main.ts:995
+#: main.ts:997
 #, x-machine
 msgid "Already the primary subtitle"
 msgstr "이미 주 자막입니다"
 
-#: main.ts:1011
+#: main.ts:1013
 #, x-machine
 msgid "Cycle"
 msgstr "순환"
 
-#: main.ts:1014
+#: main.ts:1016
 #, x-machine
 msgid "No subtitle tracks"
 msgstr "자막 트랙이 없습니다"
 
-#: main.ts:1031
+#: main.ts:1033
 #, x-machine
 msgid "Size +"
 msgstr "크기 +"
 
-#: main.ts:1033
+#: main.ts:1035
 #, x-machine
 msgid "Subtitle size: larger ({})"
 msgstr "자막 크기: 크게 ({})"
 
-#: main.ts:1036
+#: main.ts:1038
 #, x-machine
 msgid "Size −"
 msgstr "크기 −"
 
-#: main.ts:1038
+#: main.ts:1040
 #, x-machine
 msgid "Subtitle size: smaller ({})"
 msgstr "자막 크기: 작게 ({})"
 
-#: main.ts:1041
+#: main.ts:1043
 #, x-machine
 msgid "Move Up"
 msgstr "위로 이동"
 
-#: main.ts:1043
+#: main.ts:1045
 #, x-machine
 msgid "Subtitle position: up ({}%)"
 msgstr "자막 위치: 위로 ({}%)"
 
-#: main.ts:1046
+#: main.ts:1048
 #, x-machine
 msgid "Move Down"
 msgstr "아래로 이동"
 
-#: main.ts:1048
+#: main.ts:1050
 #, x-machine
 msgid "Subtitle position: down ({}%)"
 msgstr "자막 위치: 아래로 ({}%)"
 
-#: main.ts:1051
+#: main.ts:1053
 #, x-machine
 msgid "Subtitle Position"
 msgstr "자막 위치"
 
-#: main.ts:1055
+#: main.ts:1057
 #, x-machine
 msgid "Subtitle position: default ({}%)"
 msgstr "자막 위치: 기본값 ({}%)"
 
-#: main.ts:1060 ui/settings.slint:119
+#: main.ts:1062 ui/settings.slint:119
 #, x-machine
 msgid "Bold"
 msgstr "굵게"
 
-#: main.ts:1065
+#: main.ts:1067
 #, x-machine
 msgid "Bold subtitles"
 msgstr "자막 굵게"
 
-#: main.ts:1065
+#: main.ts:1067
 #, x-machine
 msgid "Bold subtitles off"
 msgstr "자막 굵게 끔"
 
-#: main.ts:1069
+#: main.ts:1071
 #, x-machine
 msgid "Shadow"
 msgstr "그림자"
 
-#: main.ts:1074
+#: main.ts:1076
 #, x-machine
 msgid "Subtitle shadow: on ({})"
 msgstr "자막 그림자: 켬 ({})"
 
-#: main.ts:1074
+#: main.ts:1076
 #, x-machine
 msgid "Subtitle shadow: off"
 msgstr "자막 그림자: 끔"
 
-#: main.ts:1078
+#: main.ts:1080
 #, x-machine
 msgid "Opaque Box"
 msgstr "불투명 배경"
 
-#: main.ts:1083
+#: main.ts:1085
 #, x-machine
 msgid "Opaque subtitle box: on"
 msgstr "자막 불투명 배경: 켬"
 
-#: main.ts:1083
+#: main.ts:1085
 #, x-machine
 msgid "Opaque subtitle box: off"
 msgstr "자막 불투명 배경: 끔"
 
-#: main.ts:1093
+#: main.ts:1095
 #, x-machine
 msgid "ASS/SSA animated subtitles: on"
 msgstr "ASS/SSA 애니메이션 자막: 켬"
 
-#: main.ts:1093
+#: main.ts:1095
 #, x-machine
 msgid "ASS/SSA animated subtitles: off"
 msgstr "ASS/SSA 애니메이션 자막: 끔"
 
-#: main.ts:1099
+#: main.ts:1101
 #, x-machine
 msgid "Original ASS/SSA Styles"
 msgstr "ASS/SSA 원본 스타일"
 
-#: main.ts:1134
+#: main.ts:1136
 #, x-machine
 msgid "Secondary subtitle position: top"
 msgstr "보조 자막 위치: 위쪽"
 
-#: main.ts:1134
+#: main.ts:1136
 #, x-machine
 msgid "Secondary subtitle position: above the main subtitle"
 msgstr "보조 자막 위치: 주 자막 위"
 
-#: main.ts:1170 main.ts:1235 main.ts:1239 main.ts:1243
+#: main.ts:1172 main.ts:1237 main.ts:1241 main.ts:1245
 #, x-machine
 msgid "Reading subtitles…"
 msgstr "자막 읽는 중…"
 
-#: main.ts:1208 main.ts:1235 main.ts:1239 main.ts:1243
+#: main.ts:1210 main.ts:1237 main.ts:1241 main.ts:1245
 #, x-machine
 msgid "The current media cannot seek"
 msgstr "현재 미디어에서는 탐색할 수 없습니다"
 
-#: main.ts:1208 main.ts:1219 main.ts:1235 main.ts:1239 main.ts:1243
+#: main.ts:1210 main.ts:1221 main.ts:1237 main.ts:1241 main.ts:1245
 #, x-machine
 msgid "No text subtitles available"
 msgstr "사용할 수 있는 텍스트 자막이 없습니다"
 
-#: main.ts:1215
+#: main.ts:1217
 #, x-machine
 msgid "ffmpeg is needed to read embedded subtitles"
 msgstr "내장 자막을 읽으려면 ffmpeg가 필요합니다"
 
-#: main.ts:1215
+#: main.ts:1217
 #, x-machine
 msgid "Reading embedded subtitles timed out"
 msgstr "내장 자막을 읽는 동안 시간이 초과되었습니다"
 
-#: main.ts:1215
+#: main.ts:1217
 #, x-machine
 msgid "Cannot read embedded subtitles"
 msgstr "내장 자막을 읽을 수 없습니다"
 
-#: main.ts:1225
+#: main.ts:1227
 #, x-machine
 msgid "No previous dialogue"
 msgstr "이전 대사가 없습니다"
 
-#: main.ts:1225
+#: main.ts:1227
 #, x-machine
 msgid "No next dialogue"
 msgstr "다음 대사가 없습니다"
 
-#: main.ts:1225
+#: main.ts:1227
 #, x-machine
 msgid "No dialogue to jump to"
 msgstr "이동할 대사가 없습니다"
 
-#: main.ts:1226
+#: main.ts:1228
 #, x-machine
 msgid "Seek: previous dialogue {}"
 msgstr "탐색: 이전 대사 {}"
 
-#: main.ts:1226
+#: main.ts:1228
 #, x-machine
 msgid "Seek: next dialogue {}"
 msgstr "탐색: 다음 대사 {}"
 
-#: main.ts:1226
+#: main.ts:1228
 #, x-machine
 msgid "Seek: start of current dialogue {}"
 msgstr "탐색: 현재 대사 시작 {}"
 
-#: main.ts:1234
+#: main.ts:1236
 #, x-machine
 msgid "Previous Dialogue"
 msgstr "이전 대사"
 
-#: main.ts:1238
+#: main.ts:1240
 #, x-machine
 msgid "Next Dialogue"
 msgstr "다음 대사"
 
-#: main.ts:1242
+#: main.ts:1244
 #, x-machine
 msgid "Current Subtitle Start"
 msgstr "현재 자막 시작"
 
-#: main.ts:1262 main.ts:1266 main.ts:1277
+#: main.ts:1264 main.ts:1268 main.ts:1279
 #, x-machine
 msgid "Sync"
 msgstr "싱크"
 
-#: main.ts:1262
+#: main.ts:1264
 #, x-machine
 msgid "Earlier 0.05 s"
 msgstr "0.05초 빠르게"
 
-#: main.ts:1262
+#: main.ts:1264
 #, x-machine
 msgid "Earlier 0.1 s"
 msgstr "0.1초 빠르게"
 
-#: main.ts:1262
+#: main.ts:1264
 #, x-machine
 msgid "Earlier 0.25 s"
 msgstr "0.25초 빠르게"
 
-#: main.ts:1262
+#: main.ts:1264
 #, x-machine
 msgid "Earlier 0.5 s"
 msgstr "0.5초 빠르게"
 
-#: main.ts:1262
+#: main.ts:1264
 #, x-machine
 msgid "Earlier 1 s"
 msgstr "1초 빠르게"
 
-#: main.ts:1262
+#: main.ts:1264
 #, x-machine
 msgid "Earlier 5 s"
 msgstr "5초 빠르게"
 
-#: main.ts:1266
+#: main.ts:1268
 #, x-machine
 msgid "Later 0.05 s"
 msgstr "0.05초 느리게"
 
-#: main.ts:1266
+#: main.ts:1268
 #, x-machine
 msgid "Later 0.1 s"
 msgstr "0.1초 느리게"
 
-#: main.ts:1266
+#: main.ts:1268
 #, x-machine
 msgid "Later 0.25 s"
 msgstr "0.25초 느리게"
 
-#: main.ts:1266
+#: main.ts:1268
 #, x-machine
 msgid "Later 0.5 s"
 msgstr "0.5초 느리게"
 
-#: main.ts:1266
+#: main.ts:1268
 #, x-machine
 msgid "Later 1 s"
 msgstr "1초 느리게"
 
-#: main.ts:1266
+#: main.ts:1268
 #, x-machine
 msgid "Later 5 s"
 msgstr "5초 느리게"
 
-#: main.ts:1277
+#: main.ts:1279
 #, x-machine
 msgid "Adjust Sync…"
 msgstr "싱크 조정…"
 
-#: main.ts:1288
+#: main.ts:1290
 #, x-machine
 msgid "Reload Subtitles"
 msgstr "자막 다시 불러오기"
 
-#: main.ts:1288
+#: main.ts:1290
 #, x-machine
 msgid "Refresh Subtitle Tracks"
 msgstr "자막 트랙 새로 고침"
 
-#: main.ts:1288
+#: main.ts:1290
 #, x-machine
 msgid "Subtitle Tuning…"
 msgstr "자막 미세 조정…"
 
-#: main.ts:1288
+#: main.ts:1290
 #, x-machine
 msgid "Subtitle Settings…"
 msgstr "자막 설정…"

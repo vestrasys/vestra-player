@@ -209,7 +209,7 @@ test("the basic actions are the core's: the keys reach it with or without this p
       ["copy-path", "复制到剪贴板"],
       ["keyframe-back", "跳转"],
       ["keyframe-forward", "跳转"],
-      ["jump", "播放"],
+      ["jump", "跳转"],
       ["jump-start", "跳转"],
       ["time-jump", "跳转"],
       ["rate-05", "速度"],
@@ -249,7 +249,7 @@ test("every command has a non-empty category (the command palette's Category: Ti
     counts.set(category, (counts.get(category) ?? 0) + 1);
   }
   // The seek steps (text-valued titles) are "Seek" too.
-  assert.deepEqual(Object.fromEntries(counts), { File: 3, "Copy to Clipboard": 3, Seek: 10, Playback: 4, Speed: 4 });
+  assert.deepEqual(Object.fromEntries(counts), { File: 3, "Copy to Clipboard": 3, Seek: 11, Playback: 3, Speed: 4 });
   await stop();
 });
 

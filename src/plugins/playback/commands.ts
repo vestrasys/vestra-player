@@ -163,7 +163,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "jump",
       path: ["@playback", "Jump to Time…"],
-      category: "Playback",
+      category: "Seek",
       order: 218,
       bindings: ["G"],
       action: () => jump.show(),

@@ -120,15 +120,15 @@ test("menu per the allocation table; each dialog binds exactly its Slint callbac
     ["Save Rendered Frame As…", "截图", ""],
     ["Copy Rendered Frame", "截图", ""],
     ["Burst…", "截图", ""],
-    ["Export Clip…", "视频", ""],
-    ["Export Tasks…", "视频", ""],
+    ["Export Clip…", "导出", ""],
+    ["Export Tasks…", "导出", ""],
     ["Capture as PNG", "截图", "capture.settings"],
     ["Capture as JPEG", "截图", "capture.settings"],
     ["Capture as BMP", "截图", "capture.settings"],
     ["Include Subtitles in Rendered Frame", "截图", "capture.settings"],
-    ["Snapshot Settings…", "视频", ""],
-    ["Snapshot Folder…", "视频", "capture.settings"],
-    ["Open Snapshot Folder", "视频", ""],
+    ["Snapshot Settings…", "截图", ""],
+    ["Snapshot Folder…", "截图", "capture.settings"],
+    ["Open Snapshot Folder", "截图", ""],
   ]);
   await host.press("Ctrl+G");
   await host.command("capture.clip").run();
@@ -163,7 +163,11 @@ test("every command has a category for the command palette, and every home is on
       }
       if (locale === "en") {
         assert.equal(host.command("capture.save").display.category, "Snapshot");
-        assert.equal(host.command("capture.clip").display.category, "Video");
+        // One submenu, its own categories: never the menu's "Video".
+        for (const id of ["capture.clip", "capture.tasks"]) assert.equal(host.command(id).display.category, "Export", id);
+        for (const id of ["capture.settings", "capture.folder", "capture.openFolder"]) {
+          assert.equal(host.command(id).display.category, "Snapshot", id);
+        }
       }
     } finally {
       await stop();

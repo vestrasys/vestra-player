@@ -91,9 +91,9 @@ test("every command has a category for the command palette, translated, and cont
     "load": ["Subtitles", "tune"],
     "load-secondary": ["Subtitles", null],
     "show": ["Subtitles", null],
-    "track-off": ["Subtitle Track", "tune"],
-    "track-1": ["Subtitle Track", "tune"],
-    "track-cycle": ["Subtitle Track", null],
+    "track-off": ["Subtitle Tracks", "tune"],
+    "track-1": ["Subtitle Tracks", "tune"],
+    "track-cycle": ["Subtitle Tracks", null],
     "second-off": ["Secondary Subtitle", "tune"],
     "second-1": ["Secondary Subtitle", "tune"],
     "second-position-top": ["Secondary Subtitle Position", null],
@@ -131,6 +131,8 @@ test("every command has a category for the command palette, translated, and cont
       assert.equal(shown["second-position-top"]![0], "次字幕位置");
       assert.equal(shown["sync-reset"]![0], "复位");
       assert.equal(shown["dialogue-next"]![0], "跳转");
+      // A noun, not the menu's verb phrase "选择字幕轨".
+      for (const id of ["track-off", "track-1", "track-cycle"]) assert.equal(shown[id]![0], "字幕轨", id);
       for (const [id, [category]] of Object.entries(expected)) assert.notEqual(shown[id]![0], category, `${id} is translated`);
     }
     // Every home is a command of this plugin that opens a window.

@@ -37,6 +37,7 @@ msgid "Track {} (external)"
 msgstr "Pista {} (externa)"
 
 #: main.ts:70
+#, x-machine
 msgid "Audio"
 msgstr "Audio"
 
@@ -56,6 +57,7 @@ msgid "Output Device"
 msgstr "Dispositivo de salida"
 
 #: main.ts:74
+#, x-machine
 msgid "Equalizer Preset"
 msgstr "Preajuste del ecualizador"
 

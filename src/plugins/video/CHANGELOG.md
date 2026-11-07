@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.12
+
+- Translations only: the category text "Reset" added in 1.1.11 is now marked `x-machine` in de, es, fr, ja and ko. Who must change: nobody. No text or behaviour change.
+
 ## 1.1.11
 
 - Every command has a **category** for the player's command palette (Ctrl+Shift+P, SDK 1.6.4), which names a command "Category: Title": the item's submenu label (**Pixel Shaders**, **HDR Tone Mapping**, **Deinterlace** (its Output items too), **Aspect**, **Crop/Stretch**, **Framing**, **Image Processing**, **Rotation**), **Reset** for the items in the Reset menu, and **Picture** for the items directly under Video (Picture Adjustments…, the colour keys, GPU Rendering). The categories use the menu's translations; "Reset" uses the player's own word for its menu in every language.

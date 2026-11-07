@@ -124,10 +124,12 @@ msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "Afficher une miniature au survol de la barre de progression"
 
 #: commands.ts:247
+#, x-machine
 msgid "File"
 msgstr "Fichier"
 
 #: commands.ts:247
+#, x-machine
 msgid "Playback"
 msgstr "Lecture"
 

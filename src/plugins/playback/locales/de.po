@@ -122,10 +122,12 @@ msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "Vorschaubild beim Überfahren der Zeitleiste anzeigen"
 
 #: commands.ts:247
+#, x-machine
 msgid "File"
 msgstr "Datei"
 
 #: commands.ts:247
+#, x-machine
 msgid "Playback"
 msgstr "Wiedergabe"
 

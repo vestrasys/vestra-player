@@ -227,96 +227,97 @@ msgstr "클립 내보내기"
 msgid "The snapshot window could not open."
 msgstr "스냅샷 창을 열 수 없습니다."
 
-#: main.ts:388
-msgid "Video"
-msgstr "비디오"
+#: main.ts:389
+#, x-machine
+msgid "Export"
+msgstr "내보내기"
 
-#: main.ts:393 manifest.json ui/error.slint:5
+#: main.ts:394 manifest.json ui/error.slint:5
 #, x-machine
 msgid "Snapshot"
 msgstr "스냅샷"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame"
 msgstr "현재 프레임 저장"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "현재 프레임을 다른 이름으로 저장…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "현재 프레임 복사"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "렌더링된 프레임 저장"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "렌더링된 프레임을 다른 이름으로 저장…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "렌더링된 프레임 복사"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Burst…"
 msgstr "연속 캡처…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Export Clip…"
 msgstr "클립 내보내기…"
 
-#: main.ts:393 ui/clip.slint:85
+#: main.ts:394 ui/clip.slint:85
 #, x-machine
 msgid "Export Tasks…"
 msgstr "내보내기 작업…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as PNG"
 msgstr "PNG로 캡처"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "JPEG로 캡처"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as BMP"
 msgstr "BMP로 캡처"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "렌더링된 프레임에 자막 포함"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "스냅샷 설정…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "스냅샷 폴더…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "스냅샷 폴더 열기"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "No frame to capture"
 msgstr "캡처할 프레임이 없습니다"

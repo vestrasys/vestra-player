@@ -122,10 +122,12 @@ msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "シークバーにポインタを置くとサムネールを表示"
 
 #: commands.ts:247
+#, x-machine
 msgid "File"
 msgstr "ファイル"
 
 #: commands.ts:247
+#, x-machine
 msgid "Playback"
 msgstr "再生"
 

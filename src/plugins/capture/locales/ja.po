@@ -227,96 +227,97 @@ msgstr "クリップを書き出す"
 msgid "The snapshot window could not open."
 msgstr "スナップショットのウインドウを開けませんでした。"
 
-#: main.ts:388
-msgid "Video"
-msgstr "ビデオ"
+#: main.ts:389
+#, x-machine
+msgid "Export"
+msgstr "エクスポート"
 
-#: main.ts:393 manifest.json ui/error.slint:5
+#: main.ts:394 manifest.json ui/error.slint:5
 #, x-machine
 msgid "Snapshot"
 msgstr "スナップショット"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame"
 msgstr "現在のフレームを保存"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "現在のフレームを別名で保存…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "現在のフレームをコピー"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "レンダリング後のフレームを保存"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "レンダリング後のフレームを別名で保存…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "レンダリング後のフレームをコピー"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Burst…"
 msgstr "連写…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Export Clip…"
 msgstr "クリップを書き出す…"
 
-#: main.ts:393 ui/clip.slint:85
+#: main.ts:394 ui/clip.slint:85
 #, x-machine
 msgid "Export Tasks…"
 msgstr "書き出しタスク…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as PNG"
 msgstr "PNG でキャプチャ"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "JPEG でキャプチャ"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Capture as BMP"
 msgstr "BMP でキャプチャ"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "レンダリング後のフレームに字幕を含める"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "スナップショットの設定…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "スナップショットのフォルダ…"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "スナップショットのフォルダを開く"
 
-#: main.ts:393
+#: main.ts:394
 #, x-machine
 msgid "No frame to capture"
 msgstr "キャプチャできるフレームがありません"
