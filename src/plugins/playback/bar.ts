@@ -1,4 +1,4 @@
-import type { HostAction, Json, Panel, Plugin, TimelineMark } from "@vestra-player/sdk";
+import type { HostAction, Json, Panel, Plugin, TimelineMark, TimelineRange } from "@vestra-player/sdk";
 import type { Playback } from "./controller.ts";
 import { time } from "./format.ts";
 import type { OutputMemory } from "./output-memory.ts";
@@ -132,6 +132,39 @@ export function seekMarks(marks: readonly TimelineMark[], duration: number | nul
   };
 }
 
+export interface SeekRanges {
+  /** One Path's commands per style: a filled rectangle `M<x0> 0H<x1>V1H<x0>Z` per run of physical px columns. */
+  selectionRanges: string;
+  regionRanges: string;
+}
+
+const NO_RANGES: SeekRanges = { selectionRanges: "", regionRanges: "" };
+
+/**
+ * `timeline.ranges` (player 0.7.6) as the seek line shows them: one filled
+ * Path per style (no element per range), in the ticks' view box (`span`
+ * physical px wide, 1 high). A range covers the columns `floor(start * span)`
+ * up to `ceil(end * span)` (at least one, inside the line); the ranges of a
+ * style that overlap or touch are drawn as one rectangle, so a column is
+ * filled once whatever the overlap. Nothing without a known duration or
+ * before the bar reports its span (as the ticks).
+ */
+export function seekRanges(ranges: readonly TimelineRange[], duration: number | null, span = 0): SeekRanges {
+  if (!duration || duration <= 0 || !(span > 0) || ranges.length === 0) return NO_RANGES;
+  const runs: Record<string, [number, number][]> = { selection: [], region: [] };
+  for (const range of [...ranges].sort((a, b) => a.start - b.start)) {
+    const style = runs[range.style];
+    if (!style) continue; // a style a later player may add: not drawn
+    const x0 = Math.min(Math.floor(clamp01(range.start / duration) * span), span - 1);
+    const x1 = Math.max(x0 + 1, Math.min(span, Math.ceil(clamp01(range.end / duration) * span)));
+    const last = style.at(-1);
+    if (last && x0 <= last[1]) last[1] = Math.max(last[1], x1);
+    else style.push([x0, x1]);
+  }
+  const path = (list: [number, number][]) => list.map(([x0, x1]) => `M${x0} 0H${x1}V1H${x0}Z`).join("");
+  return { selectionRanges: path(runs.selection!), regionRanges: path(runs.region!) };
+}
+
 /**
  * I07: the preview box (`hoverThumbnail`) and the sprite the bar crops the
  * pointer's cell from: `previewMap[cell]` is the made cell to show there (-1:
@@ -215,6 +248,15 @@ export function wireBar(
       drawn = { marks: current, duration, span, shown: seekMarks(current, duration, span) };
     return drawn.shown;
   };
+  // Timeline ranges, read in the binding: a change of anyone's ranges rebinds.
+  type Ranged = { ranges: readonly TimelineRange[]; duration: number | null; span: number; shown: SeekRanges };
+  let ranged: Ranged | null = null;
+  const ranges = (duration: number | null) => {
+    const current = scope.timeline.ranges;
+    if (ranged?.ranges !== current || ranged.duration !== duration || ranged.span !== span)
+      ranged = { ranges: current, duration, span, shown: seekRanges(current, duration, span) };
+    return ranged.shown;
+  };
   const p = playback;
   let volumeDragging = false;
   // I07: the pointer is on the seek line (hover or drag): the preview's sheets go out.
@@ -232,6 +274,7 @@ export function wireBar(
     const remaining = settings.value.remainingTime;
     const left = remaining && position !== null && state.duration !== null;
     const shown = marks(state.duration);
+    const spans = ranges(state.duration);
     return {
       elapsedLabel: left ? `-${time(state.duration! - position!)}` : time(position),
       totalLabel: time(state.duration),
@@ -248,6 +291,9 @@ export function wireBar(
       bookmarkTicks: shown.bookmarkTicks,
       markerTicks: shown.markerTicks,
       tickSpan: shown.tickSpan,
+      // Timeline ranges (player 0.7.6), in the ticks' view box: one Path per style.
+      selectionRanges: spans.selectionRanges,
+      regionRanges: spans.regionRanges,
       hasLoop: Boolean(state.loop && state.duration),
       loopA: state.loop && state.duration ? clamp01(state.loop.a / state.duration) : 0,
       loopB: state.loop && state.duration ? clamp01(state.loop.b / state.duration) : 0,

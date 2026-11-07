@@ -173,6 +173,7 @@ impl Host {
                 | "settings.register"
                 | "settings.set"
                 | "timeline.set"
+                | "timeline.setRanges"
                 | "subtitles.commit"
         ) && i18n::text::contains(params))
             || (method == "sourceResolvers.respond" && i18n::text::is_text(&params["error"]))

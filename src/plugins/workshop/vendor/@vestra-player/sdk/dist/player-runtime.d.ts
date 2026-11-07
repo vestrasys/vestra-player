@@ -16,6 +16,7 @@ export { HOST_CAPABILITIES } from "./host-capabilities.ts";
 export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "./commands.ts";
 export { BINDING_INPUTS } from "./plugin/bindings.ts";
 export { OSD_LIMITS } from "./plugin/osd.ts";
+export { TIMELINE_LIMITS } from "./plugin/timeline.ts";
 export { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./plugin/services.ts";
 export { SUBTITLE_LIMITS } from "./plugin/subtitles.ts";
 export { VIDEO_PROCESSING_LIMITS } from "./processing.ts";

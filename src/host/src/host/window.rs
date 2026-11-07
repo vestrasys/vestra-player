@@ -60,8 +60,26 @@ impl Host {
             diag!("host.error physical-input bridge: {error}");
         }
         if self.osd_until.is_some_and(|until| now >= until) {
-            self.osd_until = None;
-            let _ = shell.set_property("osd-visible", false.into());
+            // A message with actions does not fade while the active pointer
+            // is on it (at most `OSD_HOLD_MS`); it goes 2 s after the
+            // pointer leaves or rests.
+            let hover = matches!(
+                shell.get_property("osd-hover"),
+                Ok(slint_interpreter::Value::Bool(true))
+            );
+            match osd_hold(
+                now,
+                self.osd_shown_at,
+                self.osd_actions.is_some(),
+                hover,
+                self.policy.idle(now),
+            ) {
+                Some(until) => self.osd_until = Some(until),
+                None => self.hide_osd(),
+            }
+        }
+        if self.osd_clear_at.is_some_and(|at| now >= at) {
+            self.clear_osd_titles();
         }
         self.host_command_states(fullscreen);
         // The sidebar and plugin panels show and hide `if` elements.

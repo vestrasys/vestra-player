@@ -46,6 +46,10 @@ export declare const OSD_LIMITS: Readonly<{
     readonly minColumns: 8;
     /** The largest `OsdPanelOptions.maxColumns` (1000). */
     readonly maxColumns: 1000;
+    /** Action buttons of one `osd.show` message (`OsdShowOptions.actions`; player 0.7.6) (2). */
+    readonly actions: 2;
+    /** Characters of an action's title, as shown (40; at least 1 that is not white space). */
+    readonly actionChars: 40;
 }>;
 /**
  * Copy and check template arguments: an array or object of at most 16
