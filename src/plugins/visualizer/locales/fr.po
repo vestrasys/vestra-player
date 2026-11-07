@@ -68,37 +68,47 @@ msgstr "Logo sur l'écran d'attente : désactivé"
 msgid "Cover cache cleared"
 msgstr "Cache des pochettes vidé"
 
-#: main.ts:229
+#: main.ts:232
 #, x-machine
-msgid "Show Album Cover for Audio Only"
-msgstr "Afficher la pochette d'album pour l'audio seul"
+msgid "Audio"
+msgstr "Audio"
 
-#: main.ts:237 main.ts:245
+#: main.ts:232 main.ts:245 main.ts:254
 #, x-machine
 msgid "Appearance"
 msgstr "Apparence"
 
-#: main.ts:237
+#: main.ts:232
+#, x-machine
+msgid "Reset"
+msgstr "Réinitialiser"
+
+#: main.ts:236
+#, x-machine
+msgid "Show Album Cover for Audio Only"
+msgstr "Afficher la pochette d'album pour l'audio seul"
+
+#: main.ts:245
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "Afficher le logo sur l'écran d'attente"
 
-#: main.ts:245
+#: main.ts:254
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "Choisir l'image du logo…"
 
-#: main.ts:253
+#: main.ts:263
 #, x-machine
 msgid "Idle Logo"
 msgstr "Logo de l'écran d'attente"
 
-#: main.ts:257
+#: main.ts:267
 #, x-machine
 msgid "Using the default logo"
 msgstr "Utilisation du logo par défaut"
 
-#: main.ts:265 ui/page.slint:40
+#: main.ts:275 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "Logo et pochette d'album"

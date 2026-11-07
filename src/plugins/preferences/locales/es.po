@@ -26,32 +26,36 @@ msgstr "Idioma: el del sistema. Se aplicará al reiniciar"
 msgid "Language: {}. Takes effect after restart"
 msgstr "Idioma: {}. Se aplicará al reiniciar"
 
-#: main.ts:59 main.ts:93 ui/appearance.slint:98
+#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
 #, x-machine
 msgid "Appearance"
 msgstr "Apariencia"
 
-#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
 #, x-machine
 msgid "Language"
 msgstr "Idioma"
 
-#: main.ts:84
+#: main.ts:94
+msgid "Settings"
+msgstr "Configuración"
+
+#: main.ts:101
 #, x-machine
 msgid "Options…"
 msgstr "Opciones…"
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Dark"
 msgstr "Vestra Dark"
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Light"
 msgstr "Vestra Light"
 
-#: main.ts:103 ui/language.slint:66
+#: main.ts:123 ui/language.slint:59
 #, x-machine
 msgid "Follow System"
 msgstr "Idioma del sistema"
@@ -91,32 +95,32 @@ msgstr "paleta"
 msgid "language"
 msgstr "idioma"
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 #, x-machine
 msgid "For bright rooms; the video area stays dark"
 msgstr "Para espacios luminosos; la zona del video sigue oscura"
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 #, x-machine
 msgid "Default, from the logo's aurora colours"
 msgstr "Predeterminada, con los colores de aurora del logotipo"
 
-#: ui/appearance.slint:106
+#: ui/appearance.slint:91
 #, x-machine
 msgid "Palette"
 msgstr "Paleta"
 
-#: ui/appearance.slint:152
+#: ui/appearance.slint:144
 #, x-machine
 msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
 msgstr "Los cambios se aplican a todas las ventanas a la vez. Los radios de las esquinas, los tamaños de letra y los tamaños de los controles son iguales en todas las paletas."
 
-#: ui/appearance.slint:162
+#: ui/appearance.slint:154
 #, x-machine
 msgid "Restore Defaults"
 msgstr "Restaurar predeterminados"
 
-#: ui/language.slint:77
+#: ui/language.slint:70
 #, x-machine
 msgid "Takes effect after restart."
 msgstr "Se aplicará al reiniciar."

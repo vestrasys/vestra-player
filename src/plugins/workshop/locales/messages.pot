@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.30\n"
+"Project-Id-Version: vestra.workshop 2.2.36\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -484,7 +484,11 @@ msgstr ""
 msgid "{} (no longer offered)"
 msgstr ""
 
-#: main.ts:868
+#: main.ts:870
+msgid "Plugins"
+msgstr ""
+
+#: main.ts:871
 msgid "Vestra Player AI…"
 msgstr ""
 

@@ -1,5 +1,5 @@
 import type { BindingInfo, Plugin } from "@vestra-player/sdk";
-import { commandText, inputOf, type Message, type Modifier, MODIFIERS, MOUSE, message, refKey, winner } from "./keys.ts";
+import { inputOf, type Message, type Modifier, MODIFIERS, MOUSE, message, refKey, winner } from "./keys.ts";
 import type { Osd } from "./main.ts";
 import { type BindingsModel, failure } from "./model.ts";
 
@@ -112,7 +112,7 @@ export class MousePage {
       const owner = winner(this.#model.commands, input, "global");
       return {
         input: index,
-        command: owner ? commandText(owner) : "",
+        command: owner ? this.#model.commandText(owner) : "",
         bound: !!owner,
         resettable: !this.#isDefault(input),
       };
@@ -131,7 +131,7 @@ export class MousePage {
         : [
             { key: "", text: "", selected: !owner },
             ...this.#global()
-              .map((c) => ({ key: refKey(c), text: commandText(c), selected: !!owner && refKey(owner) === refKey(c) }))
+              .map((c) => ({ key: refKey(c), text: this.#model.commandText(c), selected: !!owner && refKey(owner) === refKey(c) }))
               .sort((a, b) => a.text.localeCompare(b.text, "zh-Hans-CN")),
           ].filter((item) => !filter || item.key === "" || item.text.toLowerCase().includes(filter));
     return {
@@ -190,7 +190,7 @@ export class MousePage {
 
   #updated(row: number, input: string) {
     const owner = winner(this.#model.commands, input, "global");
-    const command = owner ? commandText(owner) : "";
+    const command = owner ? this.#model.commandText(owner) : "";
     this.#say(message(owner ? "mouse-updated" : "mouse-updated-none", { input: inputOf(input), text: command }));
     const { text } = this.#plugin.i18n;
     const modifier = this.#modifier;

@@ -5,7 +5,6 @@ import type { IgnoreDefaults } from "./ignore.ts";
 import type { Osd } from "./main.ts";
 import {
   type Conflict,
-  commandText,
   fromSlintKey,
   inputOf,
   isMouse,
@@ -72,7 +71,7 @@ export function lineOf(info: BindingInfo, ignored: boolean, model: BindingsModel
     ref: { plugin: info.plugin, command: info.command },
     info,
     inputs: info.current,
-    command: commandText(info),
+    command: model.commandText(info),
     keys,
     sortKeys,
     scope: info.scope,
@@ -370,7 +369,7 @@ export class KeysPage {
       (c) => c.scope !== info.scope && c.current.some((each) => sameKey(each, input)),
     );
     if (other && !this.#message.warn) {
-      const text = commandText(other);
+      const text = this.#model.commandText(other);
       if (info.scope !== "global") this.#say(message("outside-use", { text }));
       else if (other.plugin === "host") this.#say(message("player-panel-use", { text }));
       else this.#say(message("panel-use", { text, other: other.plugin }));
@@ -385,7 +384,7 @@ export class KeysPage {
       return { pendingKind: "quit", pendingKey: "", pendingCommand: this.#model.text(pending.target) };
     const first =
       pending.owners.find((o) => !o.shadowed.some((s) => sameKey(s.input, pending.input))) ?? pending.owners[0]!;
-    return { pendingKind: "used", pendingKey: this.#model.labelOf(pending.input), pendingCommand: commandText(first) };
+    return { pendingKind: "used", pendingKey: this.#model.labelOf(pending.input), pendingCommand: this.#model.commandText(first) };
   }
 
   async #replace() {
@@ -417,10 +416,10 @@ export class KeysPage {
     const keys = info.labels.filter((_, i) => !isMouse(info.current[i] ?? "")).join(", ");
     if (keys) {
       this.#say(message("updated", { text: keys }));
-      this.#osd(this.#plugin.osd.show("Shortcut updated: {0} = {1}", [commandText(info), keys]));
+      this.#osd(this.#plugin.osd.show("Shortcut updated: {0} = {1}", [this.#model.commandText(info), keys]));
     } else {
       this.#say(message("updated-none"));
-      this.#osd(this.#plugin.osd.show("Shortcut updated: {} = (none)", [commandText(info)]));
+      this.#osd(this.#plugin.osd.show("Shortcut updated: {} = (none)", [this.#model.commandText(info)]));
     }
   }
 

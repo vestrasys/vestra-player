@@ -5,307 +5,307 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Searching sends the file name keywords and the file hash to the chosen service."
 msgstr "搜索会把文件名关键字与文件哈希发送给所选服务。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "First enter an API key for OpenSubtitles under Services (free at opensubtitles.com), or turn on Assrt and enter its token."
 msgstr "请先在「服务」中为 OpenSubtitles 填写 API 密钥（在 opensubtitles.com 免费申请），或启用并填写射手网(伪) token。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "No media to load subtitles into"
 msgstr "没有可载入字幕的媒体"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "No media to load subtitles into; you can search by title."
 msgstr "没有可载入字幕的媒体，可按标题搜索。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The media changed; no subtitle was loaded."
 msgstr "媒体已切换，未载入字幕。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Cancelled."
 msgstr "已取消。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The player refused the subtitle (file too large or invalid)."
 msgstr "播放器拒绝了该字幕（文件过大或内容无效）。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Subtitles cannot be loaded into the current media."
 msgstr "当前媒体不能载入字幕。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Loading the subtitle failed."
 msgstr "字幕载入失败。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Enter a title, then search."
 msgstr "请输入标题后再搜索。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Searching…"
 msgstr "正在搜索…"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Subtitles found: {}"
 msgstr "找到 {} 条字幕"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "No subtitles found; change the title and search again"
 msgstr "没有找到字幕，可修改标题后再搜索"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Downloading subtitle…"
 msgstr "正在下载字幕…"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Downloading subtitles ({}/{})…"
 msgstr "正在下载字幕（{}/{}）…"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Opened subtitle: {}"
 msgstr "打开字幕：{}"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Subtitle loaded, but it could not be saved in the video's folder"
 msgstr "字幕已载入，但无法保存到视频所在文件夹"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Saved to {}"
 msgstr "已保存到 {}"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Subtitles added: {}"
 msgstr "已添加 {} 条字幕"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Subtitles saved: {} (in {})"
 msgstr "已保存 {} 个字幕到 {}"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "No place to save to."
 msgstr "没有可保存的位置。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Not saved."
 msgstr "未保存。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Resets at {}"
 msgstr "将于 {} 重置"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Online subtitle loaded automatically: {}"
 msgstr "已自动载入在线字幕：{}"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "This archive format (rar, 7z) is not supported yet; download a zip or a single subtitle file."
 msgstr "此压缩格式暂不支持（rar、7z），请下载 zip 或单个字幕文件。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The archive has no subtitle files."
 msgstr "压缩包里没有字幕文件。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The archive is damaged"
 msgstr "压缩包已损坏"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Write preferred languages like zh-CN, zh-TW, en (at most 5)"
 msgstr "首选语言写法如 zh-CN, zh-TW, en（最多 5 个）"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Testing…"
 msgstr "正在测试…"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Testing OpenSubtitles…"
 msgstr "正在测试 OpenSubtitles…"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Testing Assrt…"
 msgstr "正在测试 射手网(伪)…"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Saved ({})"
 msgstr "已保存（{}）"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Could not save: {}"
 msgstr "无法保存：{}"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Key entered"
 msgstr "已填写密钥"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Token entered"
 msgstr "已填写 token"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "No key"
 msgstr "未填写密钥"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "No token"
 msgstr "未填写 token"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Enter the API key first"
 msgstr "请先填写 API 密钥"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Key and account are valid"
 msgstr "密钥与账号有效"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Key and account are valid; downloads left today: {}"
 msgstr "密钥与账号有效，今日剩余下载 {} 次"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Key is valid (not logged in: fewer anonymous downloads)"
 msgstr "密钥有效（未登录，匿名下载次数较少）"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Enter the token first"
 msgstr "请先填写 token"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Token is valid"
 msgstr "token 有效"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Token is valid; calls left: {}"
 msgstr "token 有效，剩余调用 {} 次"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Cancelled"
 msgstr "已取消"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Cannot connect to OpenSubtitles"
 msgstr "无法连接 OpenSubtitles"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Cannot connect to Assrt"
 msgstr "无法连接 射手网(伪)"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "OpenSubtitles returned an unreadable response"
 msgstr "OpenSubtitles 返回了无法识别的内容"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Assrt returned an unreadable response"
 msgstr "射手网(伪) 返回了无法识别的内容"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Invalid API key; check it in Online Subtitle Settings"
 msgstr "API 密钥无效，请在在线字幕设置中检查"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "No downloads left today (OpenSubtitles). Log in for more downloads"
 msgstr "今日下载次数已用完（OpenSubtitles）。登录账号可获得更多次数"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Too many requests to OpenSubtitles; try again later"
 msgstr "OpenSubtitles 请求过于频繁，请稍后再试"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "OpenSubtitles error ({})"
 msgstr "OpenSubtitles 出错（{}）"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Wrong OpenSubtitles user name or password"
 msgstr "OpenSubtitles 用户名或密码不正确"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "OpenSubtitles login failed"
 msgstr "OpenSubtitles 登录失败"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "OpenSubtitles gave no download link"
 msgstr "OpenSubtitles 没有给出下载地址"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Cannot download the subtitle ({})"
 msgstr "无法下载字幕（{}）"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Invalid Assrt token; check it in Online Subtitle Settings"
 msgstr "射手网(伪) token 无效，请在在线字幕设置中检查"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Assrt call limit reached; try again later"
 msgstr "射手网(伪) 调用次数已达上限，请稍后再试"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Assrt error ({})"
 msgstr "射手网(伪) 出错（{}）"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Assrt gave no download link"
 msgstr "射手网(伪) 没有给出下载地址"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Cannot read the subtitle file."
 msgstr "无法读取字幕文件。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "字幕文件须为 1 字节至 8 MiB 的普通文件。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The subtitle file is empty or larger than 8 MiB."
 msgstr "字幕文件为空或超过 8 MiB。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Image subtitle files are not supported yet"
 msgstr "暂不支持图形字幕文件"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Unknown subtitle format"
 msgstr "无法识别的字幕格式"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The subtitle file has no subtitles."
 msgstr "字幕文件里没有字幕。"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The subtitle file is larger than 2 MiB"
 msgstr "字幕文件超过 2 MiB"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
 msgstr "字幕编码可能不正确，可在字幕设置中更改默认编码"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Fonts embedded in the subtitle were ignored"
 msgstr "已忽略字幕内嵌字体"
 
-#: main.ts:44 messages.ts:141
+#: main.ts:53 messages.ts:141
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "视频帧率未知，已按 23.976 换算 MicroDVD 字幕"
 
-#: main.ts:333 model.ts:130
+#: main.ts:342 model.ts:130
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:392
+#: main.ts:401
 msgid "Save Subtitle As"
 msgstr "另存字幕"
 
-#: main.ts:550 main.ts:554 manifest.json
+#: main.ts:560 main.ts:562 main.ts:566 manifest.json
 msgid "Online Subtitles"
 msgstr "在线字幕"
 
-#: main.ts:550
+#: main.ts:562
 msgid "Search and Download Subtitles…"
 msgstr "搜索与下载字幕…"
 
-#: main.ts:554
+#: main.ts:566
 msgid "Online Subtitle Settings…"
 msgstr "在线字幕设置…"
 

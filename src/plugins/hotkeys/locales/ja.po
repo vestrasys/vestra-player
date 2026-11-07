@@ -46,7 +46,7 @@ msgstr "パネル内"
 msgid "Global"
 msgstr "グローバル"
 
-#: export.ts:22 keys-page.ts:192
+#: export.ts:22 keys-page.ts:195
 #, x-machine
 msgid "Player"
 msgstr "プレーヤー"
@@ -106,74 +106,84 @@ msgstr "デフォルトのショートカットを無視：オン"
 msgid "Ignore default shortcuts: Off"
 msgstr "デフォルトのショートカットを無視：オフ"
 
-#: keys-page.ts:119
+#: keys-page.ts:118
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "キーボードショートカット"
 
-#: keys-page.ts:191
+#: keys-page.ts:194
 #, x-machine
 msgid "All sources"
 msgstr "すべての提供元"
 
-#: keys-page.ts:194
+#: keys-page.ts:197
 #, x-machine
 msgid "Plugins not loaded"
 msgstr "読み込まれていないプラグイン"
 
-#: keys-page.ts:416
+#: keys-page.ts:419
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "ショートカットを更新しました：{0} = {1}"
 
-#: keys-page.ts:419
+#: keys-page.ts:422
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "ショートカットを更新しました：{} = （なし）"
 
-#: keys-page.ts:471
+#: keys-page.ts:474
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "すべてのショートカットをデフォルトに戻しますか？"
 
-#: keys-page.ts:472
+#: keys-page.ts:475
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "すべてのコマンド（読み込まれていないプラグインのものも含む）のショートカットとマウス操作への変更が消去されます。"
 
-#: keys-page.ts:473
+#: keys-page.ts:476
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "すべてデフォルトに戻す"
 
-#: keys-page.ts:485
+#: keys-page.ts:488
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "ショートカットをデフォルトに戻しました"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "ショートカット一覧を書き出す"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Vestra Player ショートカット.csv"
 
+#: keys.ts:241
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0}：{1}"
+
 #: main.ts:36
+#, x-machine
+msgid "Settings"
+msgstr "設定"
+
+#: main.ts:40
 #, x-machine
 msgid "Keyboard Shortcuts…"
 msgstr "キーボードショートカット…"
 
-#: main.ts:43
+#: main.ts:48
 #, x-machine
 msgid "Mouse…"
 msgstr "マウス…"
 
-#: main.ts:50
+#: main.ts:57
 #, x-machine
 msgid "Ignore Default Shortcuts"
 msgstr "デフォルトのショートカットを無視"
@@ -417,7 +427,7 @@ msgstr "すべてデフォルトに戻す…"
 msgid "Export List…"
 msgstr "一覧を書き出す…"
 
-#: ui/keys.slint:450
+#: ui/keys.slint:452
 #, x-machine
 msgid "Ignore default shortcuts"
 msgstr "デフォルトのショートカットを無視"

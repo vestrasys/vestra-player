@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.capture 1.0.3\n"
+"Project-Id-Version: vestra.capture 1.0.10\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -124,132 +124,136 @@ msgstr ""
 msgid "Export failed: {}"
 msgstr ""
 
-#: main.ts:88
+#: main.ts:113
 msgid "Frame saved as {}"
 msgstr ""
 
 #. {0} is the number of frames (2–20), {1} the folder.
-#: main.ts:93
+#: main.ts:118
 msgid "Burst of {0} frames saved to {1}"
 msgstr ""
 
-#: main.ts:97
+#: main.ts:122
 msgid "Clip exported as {}"
 msgstr ""
 
-#: main.ts:127
+#: main.ts:152
 msgid "Snapshot format: {}"
 msgstr ""
 
-#: main.ts:149
+#: main.ts:179
 msgid "The previous snapshot is still being processed"
 msgstr ""
 
-#: main.ts:168
+#: main.ts:202
 msgid "Snapshot queued"
 msgstr ""
 
-#: main.ts:176
+#: main.ts:210
 msgid "Save Rendered Frame As"
 msgstr ""
 
-#: main.ts:176
+#: main.ts:210
 msgid "Save Current Frame As"
 msgstr ""
 
-#: main.ts:187
+#: main.ts:221
 msgid "Frame copied to the clipboard"
 msgstr ""
 
-#: main.ts:190
+#: main.ts:224
 msgid "Choose Snapshot Folder"
 msgstr ""
 
-#: main.ts:192
+#: main.ts:226
 msgid "Please choose an existing folder."
 msgstr ""
 
-#: main.ts:195
+#: main.ts:229
 msgid "Snapshot folder: {}"
 msgstr ""
 
-#: main.ts:280 ui/clip.slint:8
+#: main.ts:309 ui/clip.slint:8
 msgid "Export Clip"
 msgstr ""
 
-#: main.ts:329
+#: main.ts:360
 msgid "The snapshot window could not open."
 msgstr ""
 
-#: main.ts:346 manifest.json ui/error.slint:5
+#: main.ts:388
+msgid "Video"
+msgstr ""
+
+#: main.ts:393 manifest.json ui/error.slint:5
 msgid "Snapshot"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Save Current Frame"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Save Current Frame As…"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Copy Current Frame"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Save Rendered Frame"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Save Rendered Frame As…"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Copy Rendered Frame"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Burst…"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Export Clip…"
 msgstr ""
 
-#: main.ts:346 ui/clip.slint:85
+#: main.ts:393 ui/clip.slint:85
 msgid "Export Tasks…"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Capture as PNG"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Capture as JPEG"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Capture as BMP"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Include Subtitles in Rendered Frame"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Snapshot Settings…"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Snapshot Folder…"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "Open Snapshot Folder"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:393
 msgid "No frame to capture"
 msgstr ""
 
@@ -295,79 +299,79 @@ msgstr ""
 msgid "Burst"
 msgstr ""
 
-#: ui/burst.slint:41 ui/burst.slint:65
+#: ui/burst.slint:39 ui/burst.slint:63
 msgid "Count:"
 msgstr ""
 
-#: ui/burst.slint:41 ui/burst.slint:71
+#: ui/burst.slint:39 ui/burst.slint:69
 msgid "Interval:"
 msgstr ""
 
-#: ui/burst.slint:41 ui/burst.slint:78
+#: ui/burst.slint:39 ui/burst.slint:76
 msgid "Start:"
 msgstr ""
 
-#: ui/burst.slint:44 ui/burst.slint:105
+#: ui/burst.slint:42 ui/burst.slint:102
 msgid "Progress:"
 msgstr ""
 
-#: ui/burst.slint:44 ui/burst.slint:110 ui/clip.slint:32 ui/clip.slint:77
+#: ui/burst.slint:42 ui/burst.slint:107 ui/clip.slint:32 ui/clip.slint:77
 msgid "Status:"
 msgstr ""
 
-#: ui/burst.slint:52
+#: ui/burst.slint:50
 msgid "Save to"
 msgstr ""
 
-#: ui/burst.slint:62
+#: ui/burst.slint:60
 msgid "Snapshot settings"
 msgstr ""
 
-#: ui/burst.slint:67
+#: ui/burst.slint:65
 msgid "frames (2–20)"
 msgstr ""
 
-#: ui/burst.slint:73
+#: ui/burst.slint:71
 msgid "s (0.1–10)"
 msgstr ""
 
-#: ui/burst.slint:75
+#: ui/burst.slint:73
 msgid "Start at the current position"
 msgstr ""
 
-#: ui/burst.slint:80 ui/clip.slint:45 ui/clip.slint:51
+#: ui/burst.slint:78 ui/clip.slint:45 ui/clip.slint:51
 msgid "Current"
 msgstr ""
 
-#: ui/burst.slint:84
+#: ui/burst.slint:82
 msgid "Other settings"
 msgstr ""
 
-#: ui/burst.slint:87 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
+#: ui/burst.slint:85 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
 msgid "Format:"
 msgstr ""
 
-#: ui/burst.slint:96 ui/clip.slint:69
+#: ui/burst.slint:93 ui/clip.slint:69
 msgid "Include video effects"
 msgstr ""
 
-#: ui/burst.slint:97
+#: ui/burst.slint:94
 msgid "Capture subtitles too"
 msgstr ""
 
-#: ui/burst.slint:102 ui/clip.slint:74
+#: ui/burst.slint:99 ui/clip.slint:74
 msgid "Information"
 msgstr ""
 
-#: ui/burst.slint:117 ui/tasks.slint:80
+#: ui/burst.slint:114 ui/tasks.slint:80
 msgid "Open Save Folder"
 msgstr ""
 
-#: ui/burst.slint:118
+#: ui/burst.slint:115
 msgid "Capture Current Frame"
 msgstr ""
 
-#: ui/burst.slint:121
+#: ui/burst.slint:118
 msgid "Start"
 msgstr ""
 
@@ -474,7 +478,7 @@ msgstr ""
 msgid "Snapshot Settings"
 msgstr ""
 
-#: ui/settings.slint:29 ui/settings.slint:50
+#: ui/settings.slint:29 ui/settings.slint:49
 msgid "Quality:"
 msgstr ""
 
@@ -482,27 +486,27 @@ msgstr ""
 msgid "Format"
 msgstr ""
 
-#: ui/settings.slint:61
+#: ui/settings.slint:60
 msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
 msgstr ""
 
-#: ui/settings.slint:64
+#: ui/settings.slint:63
 msgid "Save location"
 msgstr ""
 
-#: ui/settings.slint:72
+#: ui/settings.slint:70
 msgid "Save to the media folder when possible"
 msgstr ""
 
-#: ui/settings.slint:78
+#: ui/settings.slint:76
 msgid "Rendered frame"
 msgstr ""
 
-#: ui/settings.slint:81
+#: ui/settings.slint:78
 msgid "Include subtitles"
 msgstr ""
 
-#: ui/settings.slint:86
+#: ui/settings.slint:83
 msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
 msgstr ""
 
@@ -514,31 +518,31 @@ msgstr ""
 msgid "No export tasks yet."
 msgstr ""
 
-#: ui/tasks.slint:56
+#: ui/tasks.slint:57
 msgid "Burst · {}"
 msgstr ""
 
-#: ui/tasks.slint:56
+#: ui/tasks.slint:57
 msgid "Clip · {}"
 msgstr ""
 
-#: ui/tasks.slint:56
+#: ui/tasks.slint:57
 msgid "Snapshot · {}"
 msgstr ""
 
 #. {0} is the time or time range, {1} the progress (Completed).
-#: ui/tasks.slint:60
+#: ui/tasks.slint:61
 msgid "{0} · {1}"
 msgstr ""
 
-#: ui/tasks.slint:66
+#: ui/tasks.slint:67
 msgid "Cancel"
 msgstr ""
 
-#: ui/tasks.slint:67
+#: ui/tasks.slint:68
 msgid "Open"
 msgstr ""
 
-#: ui/tasks.slint:68
+#: ui/tasks.slint:69
 msgid "Retry"
 msgstr ""

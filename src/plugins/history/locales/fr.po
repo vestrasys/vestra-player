@@ -38,97 +38,102 @@ msgstr "historique"
 msgid "resume"
 msgstr "reprise"
 
-#: menu.ts:36
+#: menu.ts:60
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+#: menu.ts:123 menu.ts:128 menu.ts:164 menu.ts:174 menu.ts:187
 #, x-machine
 msgid "Recently Played"
 msgstr "Lus récemment"
 
-#: menu.ts:94
+#: menu.ts:128
 #, x-machine
 msgid "(No Entries)"
 msgstr "(Aucune entrée)"
 
-#: menu.ts:114
+#: menu.ts:161
+#, x-machine
+msgid "No recently played items"
+msgstr "Aucun élément lu récemment"
+
+#: menu.ts:164
 #, x-machine
 msgid "Remove Invalid Entries"
 msgstr "Supprimer les entrées invalides"
 
-#: menu.ts:118
+#: menu.ts:170
 #, x-machine
 msgid "Removed {} invalid entries"
 msgstr "{} entrées invalides supprimées"
 
-#: menu.ts:122
+#: menu.ts:174
 #, x-machine
 msgid "Clear Entries"
 msgstr "Effacer les entrées"
 
-#: menu.ts:128
+#: menu.ts:182
 #, x-machine
 msgid "Playback history cleared"
 msgstr "Historique de lecture effacé"
 
-#: menu.ts:133
+#: menu.ts:187
 #, x-machine
 msgid "Record Playback History"
 msgstr "Conserver l'historique de lecture"
 
-#: menu.ts:144
+#: menu.ts:199
 #, x-machine
 msgid "File not found: {}"
 msgstr "Fichier introuvable : {}"
 
-#: menu.ts:153 menu.ts:156
+#: menu.ts:208 menu.ts:211
 #, x-machine
 msgid "Cannot open: {}"
 msgstr "Impossible d'ouvrir : {}"
 
-#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+#: menu.ts:220 menu.ts:229 menu.ts:240 menu.ts:249 ui/resume.slint:6
 #, x-machine
 msgid "Resume Playback"
 msgstr "Reprise de la lecture"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Don't Resume"
 msgstr "Ne pas reprendre"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Resume Automatically"
 msgstr "Reprendre automatiquement"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Ask Every Time"
 msgstr "Toujours demander"
 
-#: menu.ts:182
+#: menu.ts:240
 #, x-machine
 msgid "Also Remember Audio Files"
 msgstr "Mémoriser aussi les fichiers audio"
 
-#: menu.ts:190
+#: menu.ts:249
 #, x-machine
 msgid "Clear All Saved Positions"
 msgstr "Effacer toutes les positions enregistrées"
 
-#: menu.ts:195
+#: menu.ts:255
 #, x-machine
 msgid "All saved positions cleared"
 msgstr "Toutes les positions enregistrées ont été effacées"
 
-#: resume.ts:226
+#: resume.ts:248
 #, x-machine
 msgid "Resuming from {}"
 msgstr "Reprise à {}"
 
-#: resume.ts:229
+#: resume.ts:251
 #, x-machine
 msgid "Cannot resume: {}"
 msgstr "Impossible de reprendre : {}"

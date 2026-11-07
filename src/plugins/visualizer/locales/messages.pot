@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.visualizer 0.1.7\n"
+"Project-Id-Version: vestra.visualizer 0.1.9\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -52,31 +52,39 @@ msgstr ""
 msgid "Cover cache cleared"
 msgstr ""
 
-#: main.ts:229
-msgid "Show Album Cover for Audio Only"
+#: main.ts:232
+msgid "Audio"
 msgstr ""
 
-#: main.ts:237 main.ts:245
+#: main.ts:232 main.ts:245 main.ts:254
 msgid "Appearance"
 msgstr ""
 
-#: main.ts:237
-msgid "Show Logo When Idle"
+#: main.ts:232
+msgid "Reset"
+msgstr ""
+
+#: main.ts:236
+msgid "Show Album Cover for Audio Only"
 msgstr ""
 
 #: main.ts:245
+msgid "Show Logo When Idle"
+msgstr ""
+
+#: main.ts:254
 msgid "Choose Logo Image…"
 msgstr ""
 
-#: main.ts:253
+#: main.ts:263
 msgid "Idle Logo"
 msgstr ""
 
-#: main.ts:257
+#: main.ts:267
 msgid "Using the default logo"
 msgstr ""
 
-#: main.ts:265 ui/page.slint:40
+#: main.ts:275 ui/page.slint:40
 msgid "Logo and Album Cover"
 msgstr ""
 

@@ -8,147 +8,155 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: commands.ts:67
+#: commands.ts:69
 #, x-machine
 msgid "Back {} s"
 msgstr "Reculer de {} s"
 
-#: commands.ts:67
+#: commands.ts:69
 #, x-machine
 msgid "Forward {} s"
 msgstr "Avancer de {} s"
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 #, x-machine
 msgid "Seek"
 msgstr "Navigation"
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 #, x-machine
 msgid "Speed"
 msgstr "Vitesse"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Open File…"
 msgstr "Ouvrir un fichier…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Open URL…"
 msgstr "Ouvrir une URL…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Reopen Current/Last File"
 msgstr "Rouvrir le fichier actuel ou le dernier fichier"
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 #, x-machine
 msgid "Copy to Clipboard"
 msgstr "Copier dans le presse-papiers"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "File Name"
 msgstr "Nom du fichier"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Folder Path"
 msgstr "Chemin du dossier"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Full Path"
 msgstr "Chemin complet"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Previous Keyframe"
 msgstr "Image clé précédente"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Next Keyframe"
 msgstr "Image clé suivante"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Jump to Time…"
 msgstr "Aller à…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Jump to Start"
 msgstr "Aller au début"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Seek Steps…"
 msgstr "Durées de déplacement…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "0.5×"
 msgstr "0,5×"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "1.5×"
 msgstr "1,5×"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Custom…"
 msgstr "Personnalisée…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Disable Screen Saver While Playing"
 msgstr "Désactiver l'économiseur d'écran pendant la lecture"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Show Time on Seek Bar Hover"
 msgstr "Afficher le temps au survol de la barre de progression"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "Afficher une miniature au survol de la barre de progression"
 
-#: commands.ts:240
+#: commands.ts:247
+msgid "File"
+msgstr "Fichier"
+
+#: commands.ts:247
+msgid "Playback"
+msgstr "Lecture"
+
+#: commands.ts:256
 #, x-machine
 msgid "Not supported by the current source"
 msgstr "Non pris en charge par la source actuelle"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "No file to reopen"
 msgstr "Aucun fichier à rouvrir"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "No open file"
 msgstr "Aucun fichier ouvert"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "A network source has no file name"
 msgstr "Une source réseau n'a pas de nom de fichier"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "No video"
 msgstr "Aucune vidéo"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "Needs ffmpeg"
 msgstr "Nécessite ffmpeg"

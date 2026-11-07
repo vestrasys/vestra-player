@@ -851,6 +851,28 @@ export default async function activate(plugin: Plugin) {
 
   // ---------------------------------------------------------------- menu 视频 ▸ (@video)
   const { commands } = plugin;
+  /**
+   * Command categories (player 0.7.6): the command palette names a command "Category: Title".
+   * Each is the item's submenu label (the same text and translation), "Reset" for the Reset
+   * menu (the player's own label) and "Picture" for the items directly under Video. Text
+   * values, so the catalog keeps them once the menu paths go.
+   */
+  const category = {
+    shaders: plugin.i18n.text("Pixel Shaders"),
+    hdr: plugin.i18n.text("HDR Tone Mapping"),
+    deinterlace: plugin.i18n.text("Deinterlace"),
+    aspect: plugin.i18n.text("Aspect"),
+    crop: plugin.i18n.text("Crop/Stretch"),
+    framing: plugin.i18n.text("Framing"),
+    processing: plugin.i18n.text("Image Processing"),
+    rotation: plugin.i18n.text("Rotation"),
+    reset: plugin.i18n.text("Reset"),
+    picture: plugin.i18n.text("Picture"),
+  };
+  /** `home`: the command that opens the window holding this command's control. */
+  const inPicture = { home: "video.picture" } as const;
+  /** Picture Adjustments… on the Advanced page (tone mapping, the shader switch). */
+  const inAdvanced = { home: "video.hdr.settings" } as const;
   // 402 像素着色 (E17, E16): GPU render options, disabled with the reason under software rendering.
   // The list and the folder stay usable, so shaders can be arranged beforehand.
   const gpu = { enabled: gpuReady, reason: gpuReason };
@@ -858,6 +880,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.shader.use",
     path: ["@video", "Pixel Shaders", "Use Shaders"],
+    category: category.shaders,
+    ...inAdvanced,
     ...pixel,
     group: "video-source",
     bindings: ["Shift+P"],
@@ -865,13 +889,16 @@ export default async function activate(plugin: Plugin) {
     ...gpu,
     run: () => setShaders(!look.render.shadersEnabled, true),
   });
-  commands.add({ id: "video.shader.list", path: ["@video", "Pixel Shaders", "Shader List…"], ...pixel, group: "video-source", run: openShaders });
-  commands.add({ id: "video.shader.folder", path: ["@video", "Pixel Shaders", "Open Shader Folder"], ...pixel, group: "video-source", run: openShaderFolder });
-  commands.add({ id: "video.shader.reload", path: ["@video", "Pixel Shaders", "Reload Shaders"], ...pixel, group: "video-source", ...gpu, run: reloadShaders });
+  const shaders = { category: category.shaders, ...pixel, group: "video-source" } as const;
+  commands.add({ id: "video.shader.list", path: ["@video", "Pixel Shaders", "Shader List…"], ...shaders, run: openShaders });
+  commands.add({ id: "video.shader.folder", path: ["@video", "Pixel Shaders", "Open Shader Folder"], ...shaders, home: "video.shader.list", run: openShaderFolder });
+  commands.add({ id: "video.shader.reload", path: ["@video", "Pixel Shaders", "Reload Shaders"], ...shaders, ...gpu, run: reloadShaders });
   for (const { id, label } of TONE_MAPPINGS)
     commands.add({
       id: `video.hdr.${id}`,
       path: ["@video", "Pixel Shaders", "HDR Tone Mapping", label],
+      category: category.hdr,
+      ...inAdvanced,
       ...pixel,
       group: "video-hdr",
       radio: true,
@@ -882,18 +909,29 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.hdr.peak",
     path: ["@video", "Pixel Shaders", "HDR Tone Mapping", "Dynamic Peak Detection"],
+    category: category.hdr,
     ...pixel,
     group: "video-hdr-peak",
     checked: () => look.render.peakDetect,
     ...gpu,
     run: switchPeak,
   });
-  commands.add({ id: "video.hdr.settings", path: ["@video", "Pixel Shaders", "HDR Settings…"], ...pixel, group: "video-hdr", ...gpu, run: () => showWindow(3) });
+  commands.add({
+    id: "video.hdr.settings",
+    path: ["@video", "Pixel Shaders", "HDR Settings…"],
+    category: category.shaders,
+    ...pixel,
+    group: "video-hdr",
+    ...gpu,
+    run: () => showWindow(3),
+  });
   // 403 反交错 (E10): Auto is the player's per-frame deinterlacer at field rate, Always is BWDIF
   // with the Output setting (greyed under Auto).
   commands.add({
     id: "video.deinterlace.cycle",
     path: ["@video", "Deinterlace", "Cycle"],
+    category: category.deinterlace,
+    ...inPicture,
     order: 403,
     group: "video-source",
     bindings: ["Ctrl+I"],
@@ -906,6 +944,8 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: `video.deinterlace.${id}`,
       path: ["@video", "Deinterlace", label],
+      category: category.deinterlace,
+      ...inPicture,
       order: 403,
       group: "video-source",
       radio: true,
@@ -916,6 +956,8 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: `video.deinterlace.output.${id}`,
       path: ["@video", "Deinterlace", "Output", label],
+      category: category.deinterlace,
+      ...inPicture,
       order: 403,
       group: "video-deinterlace-output",
       radio: true,
@@ -929,6 +971,8 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: `video.fit.${id}`,
       path: ["@video", "Aspect", menu],
+      category: category.aspect,
+      ...inPicture,
       order: 404,
       group: "video-display",
       radio: true,
@@ -938,6 +982,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.aspect.cycle",
     path: ["@video", "Aspect", "Cycle Aspect Ratio"],
+    category: category.aspect,
+    ...inPicture,
     order: 404,
     group: "video-aspect",
     bindings: ["Shift+F6"],
@@ -946,6 +992,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.aspect.default",
     path: ["@video", "Aspect", "Default (Source)"],
+    category: category.aspect,
+    ...inPicture,
     order: 404,
     group: "video-aspect",
     radio: true,
@@ -957,6 +1005,8 @@ export default async function activate(plugin: Plugin) {
       id: `video.aspect.${i}`,
       // i18n-ignore: a ratio (4:3), the same in every language
       path: ["@video", "Aspect", label],
+      category: category.aspect,
+      ...inPicture,
       order: 404,
       group: "video-aspect",
       radio: true,
@@ -980,6 +1030,8 @@ export default async function activate(plugin: Plugin) {
     const text = look.display.customAspect;
     const item = {
       id: "video.aspect.custom",
+      category: category.aspect,
+      ...inPicture,
       order: 404,
       group: "video-aspect",
       radio: true,
@@ -992,13 +1044,23 @@ export default async function activate(plugin: Plugin) {
         path: ["@video", "Aspect", plugin.i18n.text("Custom ({})", [text])],
       });
     else custom.commands.add({ ...item, path: ["@video", "Aspect", "Custom (x:y)"], enabled: false, reason: "Enter one with Custom Aspect Ratio… first" });
-    custom.commands.add({ id: "video.aspect.edit", path: ["@video", "Aspect", "Custom Aspect Ratio…"], order: 404, group: "video-aspect", run: openCustom });
+    custom.commands.add({
+      id: "video.aspect.edit",
+      path: ["@video", "Aspect", "Custom Aspect Ratio…"],
+      category: category.aspect,
+      ...inPicture,
+      order: 404,
+      group: "video-aspect",
+      run: openCustom,
+    });
   };
   addCustom();
   // 405 裁剪/拉伸 (E12).
   commands.add({
     id: "video.reframe.none",
     path: ["@video", "Crop/Stretch", "None"],
+    category: category.crop,
+    ...inPicture,
     order: 405,
     group: "video-display",
     radio: true,
@@ -1010,6 +1072,8 @@ export default async function activate(plugin: Plugin) {
       commands.add({
         id: `video.reframe.${mode}.${ratio}`,
         path: ["@video", "Crop/Stretch", mode === "pad" ? row.pad : row.crop],
+        category: category.crop,
+        ...inPicture,
         order: 405,
         group: "video-display",
         radio: true,
@@ -1027,13 +1091,22 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: `video.reframe.${id}`,
       path: ["@video", "Crop/Stretch", title],
+      category: category.crop,
       order: 405,
       group: "video-reframe-position",
       repeat: true,
       run: () => move(dx, dy),
     });
   // Resets live in the Reset menu (user ruling 2026-11-01); the ids stay, so keys keep working.
-  commands.add({ id: "video.reframe.reset", path: ["@reset", "Crop Position"], order: 442, group: "reset-video", repeat: false, run: () => move(0, 0) });
+  commands.add({
+    id: "video.reframe.reset",
+    path: ["@reset", "Crop Position"],
+    category: category.reset,
+    order: 442,
+    group: "reset-video",
+    repeat: false,
+    run: () => move(0, 0),
+  });
   // 406 帧位 (E13): keypad keys plus mpv-style Alt keys for keyboards without one.
   const frames = [
     { id: "zoom-in", title: "Zoom In", group: "video-display", bindings: ["Numpad9", "Alt+Plus"], run: () => zoomBy(ZOOM_STEP), repeat: true },
@@ -1045,10 +1118,24 @@ export default async function activate(plugin: Plugin) {
     { id: "centre", title: "Center Frame", group: "video-frame-pan", bindings: ["Ctrl+Numpad5"], run: () => resetFrame(true), repeat: false },
   ] as const;
   for (const { id, title, group, bindings, run, repeat } of frames)
-    commands.add({ id: `video.frame.${id}`, path: ["@video", "Framing", title], order: 406, group, bindings: [...bindings], repeat, run });
+    commands.add({
+      id: `video.frame.${id}`,
+      path: ["@video", "Framing", title],
+      category: category.framing,
+      // The window's Zoom slider; it has no pan control.
+      ...(id === "zoom-in" || id === "zoom-out" ? inPicture : {}),
+      order: 406,
+      group,
+      bindings: [...bindings],
+      repeat,
+      run,
+    });
   commands.add({
     id: "video.frame.reset",
     path: ["@reset", "Framing"],
+    category: category.reset,
+    // The Zoom row's Default button resets the framing the same way.
+    ...inPicture,
     order: 441,
     group: "reset-video",
     bindings: ["Numpad5", "Alt+Backspace"],
@@ -1059,6 +1146,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.flip.vertical",
     path: ["@video", "Image Processing", "Flip Vertically"],
+    category: category.processing,
+    ...inPicture,
     order: 408,
     group: "video-effects",
     bindings: ["Ctrl+P"],
@@ -1068,6 +1157,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.flip.horizontal",
     path: ["@video", "Image Processing", "Flip Horizontally"],
+    category: category.processing,
+    ...inPicture,
     order: 408,
     group: "video-effects",
     bindings: ["Ctrl+Z"],
@@ -1077,6 +1168,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.gaussian",
     path: ["@video", "Image Processing", "Gaussian Blur"],
+    category: category.processing,
+    ...inPicture,
     order: 408,
     group: "video-sharpness",
     bindings: ["Ctrl+B"],
@@ -1101,6 +1194,8 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: row.id,
       path: ["@video", "Image Processing", row.title],
+      category: category.processing,
+      ...inPicture,
       order: 408,
       group: row.group,
       bindings: [...row.bindings],
@@ -1112,6 +1207,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.frame-blend",
     path: ["@video", "Image Processing", "Frame Doubling"],
+    category: category.processing,
+    ...inPicture,
     order: 408,
     group: "video-frames",
     checked: () => effects.frameBlend,
@@ -1120,6 +1217,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.interpolation",
     path: ["@video", "Image Processing", "Motion Interpolation"],
+    category: category.processing,
+    ...inPicture,
     order: 408,
     group: "video-frames",
     checked: () => look.render.interpolation,
@@ -1130,6 +1229,8 @@ export default async function activate(plugin: Plugin) {
   commands.add({
     id: "video.rotate.cycle",
     path: ["@video", "Rotation", "Cycle"],
+    category: category.rotation,
+    ...inPicture,
     order: 409,
     group: "video-effects",
     bindings: ["Alt+K"],
@@ -1139,6 +1240,8 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: `video.rotate.${degrees}`,
       path: ["@video", "Rotation", title],
+      category: category.rotation,
+      ...inPicture,
       order: 409,
       group: "video-effects",
       radio: true,
@@ -1146,13 +1249,30 @@ export default async function activate(plugin: Plugin) {
       run: () => rotate(degrees),
     });
   // 440–449 the window and the colour keys.
-  commands.add({ id: "video.picture", path: ["@video", "Picture Adjustments…"], order: 440, group: "video-color", run: () => showWindow() });
-  commands.add({ id: "video.reset", path: ["@reset", "Picture"], order: 440, group: "reset-video", bindings: ["Q"], run: reset });
+  commands.add({
+    id: "video.picture",
+    path: ["@video", "Picture Adjustments…"],
+    category: category.picture,
+    order: 440,
+    group: "video-color",
+    run: () => showWindow(),
+  });
+  commands.add({
+    id: "video.reset",
+    path: ["@reset", "Picture"],
+    category: category.reset,
+    order: 440,
+    group: "reset-video",
+    bindings: ["Q"],
+    run: reset,
+  });
   for (const { field, keys, order, down, up } of steps) {
     // All colour steps repeat while held.
     commands.add({
       id: `video.${field}.down`,
       path: ["@video", down.title],
+      category: category.picture,
+      ...inPicture,
       order,
       group: "video-color",
       bindings: [keys[0]],
@@ -1162,6 +1282,8 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: `video.${field}.up`,
       path: ["@video", up.title],
+      category: category.picture,
+      ...inPicture,
       order: order + 1,
       group: "video-color",
       bindings: [keys[1]],
@@ -1197,6 +1319,7 @@ export default async function activate(plugin: Plugin) {
     renderingMenu.commands.add({
       id: "video.gpu-rendering",
       path: ["@video", title],
+      category: category.picture,
       order: 460,
       group: "video-rendering",
       checked: () => rendering !== null && gpuChosen(rendering),
@@ -1214,6 +1337,7 @@ export default async function activate(plugin: Plugin) {
       renderingMenu.commands.add({
         id: "video.gpu-rendering.restart",
         path: ["@video", "Restart Player to Apply"],
+        category: category.picture,
         order: 460,
         group: "video-rendering",
         busy: () => restarting || switching,

@@ -433,6 +433,9 @@ test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 reti
     assert.deepEqual(titles(),["后退2.5秒", "前进2.5秒", "后退90秒", "前进90秒", "后退300秒", "前进300秒"]);
     assert.deepEqual(host.command("forward-3").declaration.bindings, ["Shift+ArrowRight"]);
     assert.equal(host.command("forward-3").declaration.order, 215);
+    // Registered again with their category.
+    for (const id of ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"])
+      assert.equal(host.command(id).display.category, "跳转", id);
     assert.deepEqual(host.conflicts, []);
     await saved(join(data, "settings.json"), (value) => JSON.stringify(value.seekSteps) === "[10,2.5,90,300]" && value.seekKeyframes === false);
 

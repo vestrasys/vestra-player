@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.14
+
+- Plugin Store… has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Plugins**, so the palette reads "Plugins: Plugin Store…" (or "Plugins: Plugin Store (2 updates)…"), next to Vestra Player AI…. Translated like the player's word for plugins (machine, marked `x-machine`). No `home`: the command opens its own window. Who must change: nobody. Title, id, menu path, button and order are unchanged.
+- Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
+
 ## 0.2.13
 
 - Code only: the store window handle is named `storeWindow` (was `window`). Who must change: nobody. No behaviour change.

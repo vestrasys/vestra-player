@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.preferences 0.3.0\n"
+"Project-Id-Version: vestra.preferences 0.3.3\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -20,27 +20,31 @@ msgstr ""
 msgid "Language: {}. Takes effect after restart"
 msgstr ""
 
-#: main.ts:59 main.ts:93 ui/appearance.slint:98
+#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
 msgid "Appearance"
 msgstr ""
 
-#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
 msgid "Language"
 msgstr ""
 
-#: main.ts:84
+#: main.ts:94
+msgid "Settings"
+msgstr ""
+
+#: main.ts:101
 msgid "Options…"
 msgstr ""
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 msgid "Vestra Dark"
 msgstr ""
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 msgid "Vestra Light"
 msgstr ""
 
-#: main.ts:103 ui/language.slint:66
+#: main.ts:123 ui/language.slint:59
 msgid "Follow System"
 msgstr ""
 
@@ -72,26 +76,26 @@ msgstr ""
 msgid "language"
 msgstr ""
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 msgid "For bright rooms; the video area stays dark"
 msgstr ""
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 msgid "Default, from the logo's aurora colours"
 msgstr ""
 
-#: ui/appearance.slint:106
+#: ui/appearance.slint:91
 msgid "Palette"
 msgstr ""
 
-#: ui/appearance.slint:152
+#: ui/appearance.slint:144
 msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
 msgstr ""
 
-#: ui/appearance.slint:162
+#: ui/appearance.slint:154
 msgid "Restore Defaults"
 msgstr ""
 
-#: ui/language.slint:77
+#: ui/language.slint:70
 msgid "Takes effect after restart."
 msgstr ""

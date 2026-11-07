@@ -31,8 +31,12 @@ export default async function activate(plugin: Plugin) {
   const keys = new KeysPage(plugin, model, ignore, osd, mac);
   const mouse = new MousePage(plugin, model, osd, mac);
 
+  // Command palette category (player 0.7.6): the Settings menu the three live in. A text
+  // value, so `i18n extract` finds it; translated like the player's Settings menu.
+  const category = plugin.i18n.text("Settings");
   plugin.commands.add({
     id: "keys",
+    category,
     path: [SETTINGS, "Keyboard Shortcuts…"],
     order: 832,
     group: "settings-input",
@@ -40,6 +44,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "mouse",
+    category,
     path: [SETTINGS, "Mouse…"],
     order: 833,
     group: "settings-input",
@@ -47,6 +52,8 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "ignore-defaults",
+    category,
+    home: "keys", // the Keyboard Shortcuts page has the same switch
     path: [SETTINGS, "Ignore Default Shortcuts"],
     order: 834,
     group: "settings-input",

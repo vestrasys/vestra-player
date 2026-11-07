@@ -89,7 +89,11 @@ export class BindingsModel {
   }
   text(ref: BindingRef): string {
     const info = this.find(ref);
-    return info ? commandText(info) : refKey(ref);
+    return info ? this.commandText(info) : refKey(ref);
+  }
+  /** A command as the pages name it (`commandText` in the interface language). */
+  commandText(info: Pick<BindingInfo, "path" | "title" | "category">): string {
+    return commandText(info, this.#plugin.i18n);
   }
 
   /** A user's change: `inputs` for one command (`[]` unbinds it). */

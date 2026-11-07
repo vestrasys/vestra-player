@@ -66,37 +66,47 @@ msgstr "Logotipo en reposo: desactivado"
 msgid "Cover cache cleared"
 msgstr "Se vació la caché de portadas"
 
-#: main.ts:229
+#: main.ts:232
 #, x-machine
-msgid "Show Album Cover for Audio Only"
-msgstr "Mostrar portada del álbum para solo audio"
+msgid "Audio"
+msgstr "Audio"
 
-#: main.ts:237 main.ts:245
+#: main.ts:232 main.ts:245 main.ts:254
 #, x-machine
 msgid "Appearance"
 msgstr "Apariencia"
 
-#: main.ts:237
+#: main.ts:232
+#, x-machine
+msgid "Reset"
+msgstr "Restablecer"
+
+#: main.ts:236
+#, x-machine
+msgid "Show Album Cover for Audio Only"
+msgstr "Mostrar portada del álbum para solo audio"
+
+#: main.ts:245
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "Mostrar logotipo en reposo"
 
-#: main.ts:245
+#: main.ts:254
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "Elegir imagen del logotipo…"
 
-#: main.ts:253
+#: main.ts:263
 #, x-machine
 msgid "Idle Logo"
 msgstr "Logotipo en reposo"
 
-#: main.ts:257
+#: main.ts:267
 #, x-machine
 msgid "Using the default logo"
 msgstr "Se usa el logotipo predeterminado"
 
-#: main.ts:265 ui/page.slint:40
+#: main.ts:275 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "Logotipo y portada del álbum"

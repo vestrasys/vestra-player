@@ -118,6 +118,14 @@ test("menu: two items under Subtitles ▸ Online Subtitles without shortcuts; wi
       ["@subtitles > Online Subtitles > Search and Download Subtitles…", 360, "subtitle-online", ""],
       ["@subtitles > Online Subtitles > Online Subtitle Settings…", 361, "subtitle-online", ""],
     ]);
+    // Command palette (player 0.7.6): the submenu's name as the category; no home.
+    assert.deepEqual(
+      [...t.host.commands.values()].map(({ declaration: d, display }) => [display.category, d.home ?? null]),
+      [
+        ["Online Subtitles", null],
+        ["Online Subtitles", null],
+      ],
+    );
     await t.host.command("search").run();
     await waitFor(
       () => t.host.window("subtitle-online-settings").visible && /^First enter an API key for OpenSubtitles/.test(shown(t.host, "subtitle-online-settings")),

@@ -66,37 +66,47 @@ msgstr "待機中にロゴを表示：オフ"
 msgid "Cover cache cleared"
 msgstr "カバーのキャッシュを消去しました"
 
-#: main.ts:229
+#: main.ts:232
 #, x-machine
-msgid "Show Album Cover for Audio Only"
-msgstr "オーディオのみのときアルバムカバーを表示"
+msgid "Audio"
+msgstr "オーディオ"
 
-#: main.ts:237 main.ts:245
+#: main.ts:232 main.ts:245 main.ts:254
 #, x-machine
 msgid "Appearance"
 msgstr "外観"
 
-#: main.ts:237
+#: main.ts:232
+#, x-machine
+msgid "Reset"
+msgstr "リセット"
+
+#: main.ts:236
+#, x-machine
+msgid "Show Album Cover for Audio Only"
+msgstr "オーディオのみのときアルバムカバーを表示"
+
+#: main.ts:245
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "待機中にロゴを表示"
 
-#: main.ts:245
+#: main.ts:254
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "ロゴ画像を選択…"
 
-#: main.ts:253
+#: main.ts:263
 #, x-machine
 msgid "Idle Logo"
 msgstr "待機画面のロゴ"
 
-#: main.ts:257
+#: main.ts:267
 #, x-machine
 msgid "Using the default logo"
 msgstr "デフォルトのロゴを使用中"
 
-#: main.ts:265 ui/page.slint:40
+#: main.ts:275 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "ロゴとアルバムカバー"

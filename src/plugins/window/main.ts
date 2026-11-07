@@ -40,6 +40,18 @@ export const PAGE_ID = "window";
  */
 export default async function activate(plugin: Plugin) {
   const { player, window } = plugin;
+  const { text } = plugin.i18n;
+  /**
+   * Command categories (command palette, player 0.7.6): "Category: Title" must
+   * read on its own once the menu path is gone. Text values, so `i18n extract`
+   * finds them; "Window" and "Always on Top" reuse the page and submenu labels.
+   */
+  const category = {
+    window: text("Window"),
+    size: text("Window Size"),
+    auto: text("Size on Open"),
+    top: text("Always on Top"),
+  };
   plugin.onError((error) => {
     // i18n-ignore: the player's (or the SDK's) own message
     quiet(plugin.osd.show(error.message));
@@ -63,6 +75,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "mini",
     path: [SCREEN, "Mini Size"],
+    category: category.window,
     order: 710,
     group: "screen",
     bindings: ["`"],
@@ -91,6 +104,7 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: "pip",
       path: [SCREEN, "Picture-in-Picture"],
+      category: category.window,
       order: 709,
       group: "screen",
       checked: () => pip.active,
@@ -118,6 +132,7 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `size.${scale}`,
       path: [SCREEN, title],
+      category: category.size,
       order: 711 + index,
       group: "screen-size",
       radio: true,
@@ -132,6 +147,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "fit",
     path: [SCREEN, "Fit to Video Aspect Ratio"],
+    category: category.size,
     order: 715,
     group: "screen-size",
     bindings: ["8"],
@@ -157,6 +173,7 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `auto.${choice}`,
       path: [SCREEN, "When Playback Starts", AUTO_TITLES[index]!],
+      category: category.auto,
       order: 716 + index,
       group: "screen-auto",
       radio: true,
@@ -167,6 +184,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "auto.once",
     path: [SCREEN, "When Playback Starts", "Only Once"],
+    category: category.auto,
     order: 722,
     group: "screen-auto-once",
     checked: () => preferences.value.autoSizeOnce,
@@ -182,6 +200,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "top.cycle",
     path: [SCREEN, "Always on Top", "Cycle Mode"],
+    category: category.top,
     order: 725,
     group: "screen-top",
     bindings: ["Ctrl+T"],
@@ -191,6 +210,7 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `top.${mode}`,
       path: [SCREEN, "Always on Top", MODE_TITLES[mode]],
+      category: category.top,
       order: 726 + index,
       group: "screen-top-mode",
       radio: true,
@@ -209,6 +229,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "hide-cursor",
     path: [PLAYBACK, "Hide Pointer While Playing"],
+    category: category.window,
     order: 241,
     group: "playback-options",
     checked: () => preferences.value.hideCursorWhilePlaying,

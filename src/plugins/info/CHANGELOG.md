@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.13
+
+- Every command has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Info** (Playback Info, Brief Info, Playback Properties…) and **Help** (About Vestra Player…, Check for Updates…), so the palette reads "Help: Check for Updates…" like other players' Help menus. "Info" uses the translations of the plugin's tag; "Help" is new, machine translated in all six languages (`x-machine`). Check for Updates… names About Vestra Player… as its place (`home`): the About window's Updates row has the same action. Who must change: nobody. Titles, ids, menu paths, keys and order are unchanged.
+- Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
+
 ## 0.1.12
 
 - Code only: the window handles are named `aboutToolWindow` (About, `ui/about.slint`) and `propertiesToolWindow` (Playback Properties, `ui/properties.slint`) (were `window`). Who must change: nobody. No behaviour change.

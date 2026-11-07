@@ -520,6 +520,9 @@ export class Store {
       const scope = (this.#menuScope = this.plugin.scope());
       scope.commands.add({
         id: "open",
+        // Command palette category (player 0.7.6): "Plugins: Plugin Store…", next to Vestra
+        // Player AI…. A text value, so `i18n extract` finds it; the player's word for plugins.
+        category: this.plugin.i18n.text("Plugins"),
         path: [count > 0 ? this.plugin.i18n.text("Plugin Store ({} updates)…", [count]) : "Plugin Store…"],
         order: MENU_ORDER,
         group: "windows",

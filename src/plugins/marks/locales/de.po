@@ -6,32 +6,32 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:183
+#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 #, x-machine
 msgid "Bookmark {}"
 msgstr "Lesezeichen {}"
 
-#: chapters.ts:12 menu.ts:51 ui/marks.slint:55
+#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
 #, x-machine
 msgid "Chapter {}"
 msgstr "Kapitel {}"
 
-#: list.ts:218
+#: list.ts:226
 #, x-machine
 msgid "Clear all bookmarks of this file?"
 msgstr "Alle Lesezeichen dieser Datei löschen?"
 
-#: list.ts:220
+#: list.ts:228
 #, x-machine
 msgid "{} bookmark will be removed. This can't be undone."
 msgstr "{} Lesezeichen wird entfernt. Dies kann nicht rückgängig gemacht werden."
 
-#: list.ts:220
+#: list.ts:228
 #, x-machine
 msgid "{} bookmarks will be removed. This can't be undone."
 msgstr "{} Lesezeichen werden entfernt. Dies kann nicht rückgängig gemacht werden."
 
-#: list.ts:223 ui/marks.slint:207
+#: list.ts:231 ui/marks.slint:210
 #, x-machine
 msgid "Clear Bookmarks"
 msgstr "Lesezeichen löschen"
@@ -76,193 +76,193 @@ msgid "Loop"
 msgstr "Wiederholung"
 
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:50
+#: menu.ts:59
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:53
+#: menu.ts:62
 #, x-machine
 msgid "{}{}{}"
 msgstr "{}{}{}"
 
-#: menu.ts:101 menu.ts:109 menu.ts:120 menu.ts:158 menu.ts:171 menu.ts:179 menu.ts:190 seekbar.ts:147 ui/marks.slint:70
+#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
 #, x-machine
 msgid "Chapters and Bookmarks"
 msgstr "Kapitel und Lesezeichen"
 
-#: menu.ts:101
+#: menu.ts:110
 #, x-machine
 msgid "Chapter and Bookmark List…"
 msgstr "Kapitel- und Lesezeichenliste…"
 
-#: menu.ts:109 ui/marks.slint:205
+#: menu.ts:119 ui/marks.slint:208
 #, x-machine
 msgid "Add Bookmark"
 msgstr "Lesezeichen hinzufügen"
 
-#: menu.ts:114 osd.ts:51
+#: menu.ts:126 osd.ts:51
 #, x-machine
 msgid "Can't add bookmarks to this source"
 msgstr "Für diese Quelle können keine Lesezeichen hinzugefügt werden"
 
-#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:154
+#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
 #, x-machine
 msgid "No media open"
 msgstr "Keine Medien geöffnet"
 
-#: menu.ts:120
+#: menu.ts:132
 #, x-machine
 msgid "Previous Bookmark or Chapter"
 msgstr "Vorheriges Lesezeichen/Kapitel"
 
-#: menu.ts:120
+#: menu.ts:132
 #, x-machine
 msgid "Next Bookmark or Chapter"
 msgstr "Nächstes Lesezeichen/Kapitel"
 
-#: menu.ts:120
+#: menu.ts:132
 #, x-machine
 msgid "Previous Chapter"
 msgstr "Vorheriges Kapitel"
 
-#: menu.ts:120
+#: menu.ts:132
 #, x-machine
 msgid "Next Chapter"
 msgstr "Nächstes Kapitel"
 
-#: menu.ts:125 menu.ts:164 menu.ts:183
+#: menu.ts:138 menu.ts:179 menu.ts:201
 #, x-machine
 msgid "This source can't seek"
 msgstr "Diese Quelle unterstützt keine Sprünge"
 
-#: menu.ts:171
+#: menu.ts:186
 #, x-machine
 msgid "More Chapters… ({} in all)"
 msgstr "Weitere Kapitel… ({} insgesamt)"
 
-#: menu.ts:190
+#: menu.ts:208
 #, x-machine
 msgid "More Bookmarks… ({} in all)"
 msgstr "Weitere Lesezeichen… ({} insgesamt)"
 
-#: menu.ts:231 menu.ts:245 menu.ts:257
+#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
 #, x-machine
 msgid "A-B Loop"
 msgstr "A-B-Wiederholung"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Set Start Point"
 msgstr "Startpunkt setzen"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Clear Start Point"
 msgstr "Startpunkt entfernen"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Start Point Back 0.1 s"
 msgstr "Startpunkt 0,1 s früher"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Start Point Forward 0.1 s"
 msgstr "Startpunkt 0,1 s später"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Set End Point"
 msgstr "Endpunkt setzen"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Clear End Point"
 msgstr "Endpunkt entfernen"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "End Point Back 0.1 s"
 msgstr "Endpunkt 0,1 s früher"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "End Point Forward 0.1 s"
 msgstr "Endpunkt 0,1 s später"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Move Range Back 0.1 s"
 msgstr "Bereich 0,1 s früher"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Move Range Forward 0.1 s"
 msgstr "Bereich 0,1 s später"
 
-#: menu.ts:231
+#: menu.ts:250
 #, x-machine
 msgid "Loop Current Chapter or Bookmark Range"
 msgstr "Aktuelles Kapitel/Lesezeichen wiederholen"
 
-#: menu.ts:237 menu.ts:250 osd.ts:51
+#: menu.ts:257 menu.ts:271 osd.ts:51
 #, x-machine
 msgid "This source doesn't support A-B loop"
 msgstr "Diese Quelle unterstützt keine A-B-Wiederholung"
 
-#: menu.ts:237
+#: menu.ts:257
 #, x-machine
 msgid "Start point not set"
 msgstr "Kein Startpunkt gesetzt"
 
-#: menu.ts:237
+#: menu.ts:257
 #, x-machine
 msgid "End point not set"
 msgstr "Kein Endpunkt gesetzt"
 
-#: menu.ts:237 menu.ts:250
+#: menu.ts:257 menu.ts:271
 #, x-machine
 msgid "A-B range not set"
 msgstr "Kein A-B-Bereich gesetzt"
 
-#: menu.ts:245
+#: menu.ts:265
 #, x-machine
 msgid "A-B Loop On/Off"
 msgstr "A-B-Wiederholung ein/aus"
 
-#: menu.ts:257
+#: menu.ts:278 menu.ts:279
 #, x-machine
 msgid "Loop Count"
 msgstr "Anzahl Wiederholungen"
 
-#: menu.ts:257
+#: menu.ts:278
 #, x-machine
 msgid "Endless"
 msgstr "Endlos"
 
-#: menu.ts:257
+#: menu.ts:278
 #, x-machine
 msgid "Once"
 msgstr "1-mal"
 
-#: menu.ts:257
+#: menu.ts:278
 #, x-machine
 msgid "2 Times"
 msgstr "2-mal"
 
-#: menu.ts:257
+#: menu.ts:278
 #, x-machine
 msgid "3 Times"
 msgstr "3-mal"
 
-#: menu.ts:257
+#: menu.ts:278
 #, x-machine
 msgid "5 Times"
 msgstr "5-mal"
 
-#: menu.ts:257
+#: menu.ts:278
 #, x-machine
 msgid "10 Times"
 msgstr "10-mal"
@@ -422,69 +422,69 @@ msgstr "A-B-Wiederholung fehlgeschlagen: {}"
 msgid "Show Marks on Seek Bar"
 msgstr "Markierungen auf der Zeitleiste anzeigen"
 
-#: ui/marks.slint:114 ui/marks.slint:161
+#: ui/marks.slint:117 ui/marks.slint:164
 #, x-machine
 msgid "Time"
 msgstr "Zeit"
 
-#: ui/marks.slint:114 ui/marks.slint:177
+#: ui/marks.slint:117 ui/marks.slint:180
 #, x-machine
 msgid "Title"
 msgstr "Titel"
 
-#: ui/marks.slint:124
+#: ui/marks.slint:127
 #, x-machine
 msgid "Search by title"
 msgstr "Nach Titel suchen"
 
-#: ui/marks.slint:130
+#: ui/marks.slint:133
 #, x-machine
 msgid "The file has changed; bookmark times may be off"
 msgstr "Die Datei wurde geändert; Lesezeichenzeiten stimmen möglicherweise nicht"
 
-#: ui/marks.slint:154
+#: ui/marks.slint:157
 #, x-machine
 msgid "No matches"
 msgstr "Keine Treffer"
 
-#: ui/marks.slint:154
+#: ui/marks.slint:157
 #, x-machine
 msgid "No chapters or bookmarks"
 msgstr "Keine Kapitel oder Lesezeichen"
 
-#: ui/marks.slint:193
+#: ui/marks.slint:196
 #, x-machine
 msgid "Title can't be empty"
 msgstr "Der Titel darf nicht leer sein"
 
-#: ui/marks.slint:194
+#: ui/marks.slint:197
 #, x-machine
 msgid "Time format is h:mm:ss.d"
 msgstr "Zeitformat: h:mm:ss.d"
 
-#: ui/marks.slint:195
+#: ui/marks.slint:198
 #, x-machine
 msgid "Time exceeds the duration ({})"
 msgstr "Zeit überschreitet die Dauer ({})"
 
-#: ui/marks.slint:196
+#: ui/marks.slint:199
 #, x-machine
 msgid "Removed: {}"
 msgstr "Entfernt: {}"
 
-#: ui/marks.slint:197
+#: ui/marks.slint:200
 #, x-machine
 msgid "Can't confirm: {}"
 msgstr "Bestätigen nicht möglich: {}"
 
-#: ui/marks.slint:198
+#: ui/marks.slint:201
 #, x-machine
 msgid "{n} bookmark cleared"
 msgid_plural "{n} bookmarks cleared"
 msgstr[0] "{n} Lesezeichen gelöscht"
 msgstr[1] "{n} Lesezeichen gelöscht"
 
-#: ui/marks.slint:206
+#: ui/marks.slint:209
 #, x-machine
 msgid "Remove"
 msgstr "Entfernen"

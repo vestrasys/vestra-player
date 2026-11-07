@@ -31,1126 +31,1131 @@ msgstr "プラグイン"
 msgid "store"
 msgstr "ストア"
 
-#: store.ts:523
+#: store.ts:525
+#, x-machine
+msgid "Plugins"
+msgstr "プラグイン"
+
+#: store.ts:526
 #, x-machine
 msgid "Plugin Store…"
 msgstr "プラグインストア…"
 
-#: store.ts:523
+#: store.ts:526
 #, x-machine
 msgid "Plugin Store ({} updates)…"
 msgstr "プラグインストア（アップデート {} 件）…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Another install is in progress; wait for it to finish"
 msgstr "別のインストールが進行中です。終わるまでお待ちください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This system does not support confirmation dialogs; cannot continue"
 msgstr "このシステムは確認ダイアログに対応していないため、続行できません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Another dialog is open; close it first"
 msgstr "別のダイアログが開いています。先に閉じてください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't open the link: {}"
 msgstr "リンクを開けませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This kind of link cannot be opened"
 msgstr "この種類のリンクは開けません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The downloaded file does not match the repository's description (size); deleted"
 msgstr "ダウンロードしたファイルがリポジトリの記述（サイズ）と一致しないため、削除しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The downloaded file does not match the repository's description (checksum); deleted"
 msgstr "ダウンロードしたファイルがリポジトリの記述（チェックサム）と一致しないため、削除しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package exceeds 64 MB; download stopped"
 msgstr "プラグインパッケージが 64 MB を超えているため、ダウンロードを中止しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The download address is insecure or redirects too often; stopped"
 msgstr "ダウンロードアドレスが安全でないか、リダイレクトが多すぎるため、中止しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Download cancelled"
 msgstr "ダウンロードをキャンセルしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't write the download file: {}"
 msgstr "ダウンロードファイルを書き込めませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Download failed: {}"
 msgstr "ダウンロードに失敗しました：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This is not a valid plugin package: {}"
 msgstr "有効なプラグインパッケージではありません：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin needs Vestra Player ≥ {} (current {})"
 msgstr "このプラグインには Vestra Player ≥ {} が必要です（現在 {}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin needs a newer Vestra Player (current {})"
 msgstr "このプラグインには新しい Vestra Player が必要です（現在 {}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}” has the same id as a built-in plugin and cannot be installed"
 msgstr "「{}」は内蔵プラグインと同じ ID のため、インストールできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin has the same id as a built-in plugin and cannot be installed"
 msgstr "このプラグインは内蔵プラグインと同じ ID のため、インストールできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Plugins are being installed or cleaned up; try again later"
 msgstr "プラグインのインストールまたは整理中です。しばらくしてからもう一度お試しください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The Plugin Store lacks the “Manage plugins” permission"
 msgstr "プラグインストアに「プラグインの管理」権限がありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin no longer exists"
 msgstr "このプラグインはもう存在しません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package does not match the repository's description (id); not installed"
 msgstr "プラグインパッケージがリポジトリの記述（ID）と一致しないため、インストールしませんでした"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package does not match the repository's description (version); not installed"
 msgstr "プラグインパッケージがリポジトリの記述（バージョン）と一致しないため、インストールしませんでした"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package does not match the repository's description (permissions); not installed"
 msgstr "プラグインパッケージがリポジトリの記述（権限）と一致しないため、インストールしませんでした"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "You can only install from https:// links"
 msgstr "インストールできるのは https:// のリンクからのみです"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Not installed"
 msgstr "未インストール"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {} {}"
 msgstr "{} {} をインストールしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated {} to {}"
 msgstr "{} を {} にアップデートしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {} {} (still disabled)"
 msgstr "{} {} をインストールしました（無効のまま）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated {} to {} (still disabled)"
 msgstr "{} を {} にアップデートしました（無効のまま）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {} {}, but couldn't keep it disabled: {}"
 msgstr "{} {} をインストールしましたが、無効のままにできませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated {} to {}, but couldn't keep it disabled: {}"
 msgstr "{} を {} にアップデートしましたが、無効のままにできませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Installed {} {}, but couldn't enable it: {}"
 msgstr "{} {} をインストールしましたが、有効にできませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Updated {} to {}, but couldn't enable it: {}"
 msgstr "{} を {} にアップデートしましたが、有効にできませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalled {} (data deleted)"
 msgstr "{} をアンインストールしました（データは削除）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalled {} (data kept)"
 msgstr "{} をアンインストールしました（データは保持）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Built-in plugins cannot be uninstalled"
 msgstr "内蔵プラグインはアンインストールできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enabled “{}” again"
 msgstr "「{}」を再び有効にしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't enable “{}”: {}"
 msgstr "「{}」を有効にできませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can no longer cancel; the installation continues"
 msgstr "キャンセルできなくなりました。インストールを続行します"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can no longer cancel; the uninstallation continues"
 msgstr "キャンセルできなくなりました。アンインストールを続行します"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installation failed; the previous version was restored"
 msgstr "インストールに失敗したため、以前のバージョンを復元しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installation cancelled"
 msgstr "インストールをキャンセルしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstallation cancelled"
 msgstr "アンインストールをキャンセルしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installation failed: {}"
 msgstr "インストールに失敗しました：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstallation failed: {}"
 msgstr "アンインストールに失敗しました：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading {} {}"
 msgstr "{} {} をダウンロード中"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading {} {} ({}%)"
 msgstr "{} {} をダウンロード中（{}%）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading the plugin package"
 msgstr "プラグインパッケージをダウンロード中"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading the plugin package ({}%)"
 msgstr "プラグインパッケージをダウンロード中（{}%）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Checking {}…"
 msgstr "{} を確認中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Checking the plugin package…"
 msgstr "プラグインパッケージを確認中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installing {}…"
 msgstr "{} をインストール中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalling {}…"
 msgstr "{} をアンインストール中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installing… (preparing)"
 msgstr "インストール中…（準備中）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installing… (activating)"
 msgstr "インストール中…（有効化中）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalling… (preparing)"
 msgstr "アンインストール中…（準備中）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalling… (activating)"
 msgstr "アンインストール中…（有効化中）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updating {}…"
 msgstr "{} をアップデート中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: up to date at {1}"
 msgstr "{0}：{1} の時点で最新"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: updated at {1}"
 msgstr "{0}：{1} に更新"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: data from {1}"
 msgstr "{0}：{1} のデータ"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The official repository has no signature file; this update was ignored"
 msgstr "公式リポジトリに署名ファイルがないため、今回の更新は無視しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The official repository's signature check failed (it may have been tampered with); this update was ignored"
 msgstr "公式リポジトリの署名の検証に失敗しました（改ざんされている可能性があります）。今回の更新は無視しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The official repository returned an old index; this update was ignored"
 msgstr "公式リポジトリが古いインデックスを返したため、今回の更新は無視しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} uses a newer format; please update Vestra Player"
 msgstr "{} は新しい形式を使用しています。Vestra Player をアップデートしてください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{}'s index is malformed"
 msgstr "{} のインデックスの形式が正しくありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}'s index is malformed; showing the data from {1}"
 msgstr "{0} のインデックスの形式が正しくありません。{1} のデータを表示しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0} returned error {1}"
 msgstr "{0} がエラー {1} を返しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0} returned error {1}; showing the data from {2}"
 msgstr "{0} がエラー {1} を返しました。{2} のデータを表示しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{}'s index exceeds 4 MB; refused"
 msgstr "{} のインデックスが 4 MB を超えているため、拒否しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr "{0} のインデックスが 4 MB を超えているため、拒否しました。{1} のデータを表示しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0}：{1}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: {1}; showing the data from {2}"
 msgstr "{0}：{1}。{2} のデータを表示しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can't connect to {0} ({1}); its plugins are not available for now"
 msgstr "{0} に接続できません（{1}）。そのプラグインは現在利用できません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can't connect to {0} ({1}); showing the cache from {2}"
 msgstr "{0} に接続できません（{1}）。{2} のキャッシュを表示しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This repository has already been added"
 msgstr "このリポジトリはすでに追加されています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "At most {} repositories can be added"
 msgstr "追加できるリポジトリは最大 {} 個です"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Reading {}…"
 msgstr "{} を読み取り中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)"
 msgstr "このリポジトリを読み取れませんでした：{}。アドレス（リポジトリのルートアドレス、または index.json の完全なアドレス）を確認してください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Added {}"
 msgstr "{} を追加しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Removed {}"
 msgstr "{} を削除しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "No plugins match"
 msgstr "一致するプラグインはありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "All plugins are up to date"
 msgstr "すべてのプラグインは最新です"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "No plugins installed yet"
 msgstr "インストールされているプラグインはまだありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "No plugins installed besides the built-in ones, which are hidden"
 msgstr "内蔵プラグイン以外はインストールされていません（内蔵プラグインは非表示）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Reading repositories…"
 msgstr "リポジトリを読み取り中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry."
 msgstr "リポジトリに接続できません。オンラインになるまで何も表示されません。「更新」をクリックして再試行してください。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The repositories have no plugins yet"
 msgstr "リポジトリにはまだプラグインがありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry."
 msgstr "リポジトリに接続できないため、インストール済みのプラグインだけを表示しています。「更新」をクリックして再試行してください。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed"
 msgstr "インストール済み"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update → {}"
 msgstr "アップデート → {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Revoked"
 msgstr "取り消し済み"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed from {}"
 msgstr "{} からインストール済み"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Incompatible"
 msgstr "互換性なし"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Cannot be installed"
 msgstr "インストール不可"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Disabled"
 msgstr "無効"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Failed"
 msgstr "失敗"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Dev"
 msgstr "開発"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Warning"
 msgstr "警告"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Development load"
 msgstr "開発用読み込み"
 
-#: store.ts:578 store.ts:593 store.ts:594 store.ts:595 store.ts:596 store.ts:598 text.ts:409 ui/store.slint:312 ui/store.slint:417 ui/store.slint:611
+#: store.ts:581 store.ts:596 store.ts:597 store.ts:598 store.ts:599 store.ts:601 text.ts:409 ui/store.slint:312 ui/store.slint:417 ui/store.slint:611
 #, x-machine
 msgid "Install"
 msgstr "インストール"
 
-#: store.ts:578 store.ts:593 store.ts:594 store.ts:595 store.ts:596 store.ts:598 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 store.ts:598 store.ts:599 store.ts:601 text.ts:409
 #, x-machine
 msgid "Update"
 msgstr "アップデート"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Enable"
 msgstr "有効にする"
 
-#: store.ts:578 store.ts:593 store.ts:594 store.ts:595 store.ts:596 store.ts:598 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 store.ts:598 store.ts:599 store.ts:601 text.ts:409
 #, x-machine
 msgid "Disable"
 msgstr "無効にする"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Reload"
 msgstr "再読み込み"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Open Data Folder"
 msgstr "データフォルダを開く"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Working…"
 msgstr "処理中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Enabled “{}”"
 msgstr "「{}」を有効にしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Disabled “{}”"
 msgstr "「{}」を無効にしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Reloaded “{}”"
 msgstr "「{}」を再読み込みしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Couldn't disable “{}”: {}"
 msgstr "「{}」を無効にできませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Couldn't reload “{}”: {}"
 msgstr "「{}」を再読み込みできませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Built-in plugins cannot be disabled"
 msgstr "内蔵プラグインは無効にできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Disabled “{}” until the player quits"
 msgstr "「{}」をプレーヤーの終了まで無効にしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "“{}” is being installed or reloaded; try again later"
 msgstr "「{}」はインストール中または再読み込み中です。しばらくしてからもう一度お試しください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "“{}” is disabled; enable it instead of reloading it"
 msgstr "「{}」は無効です。再読み込みではなく有効にしてください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its data folder does not exist yet"
 msgstr "データフォルダはまだありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Couldn't open the data folder: {}"
 msgstr "データフォルダを開けませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install {}"
 msgstr "{} をインストール"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update to {}"
 msgstr "{} にアップデート"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enable Anyway…"
 msgstr "それでも有効にする…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Replace…"
 msgstr "置き換える…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Replace with {0} from {1}…"
 msgstr "{1}の {0} に置き換える…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstall…"
 msgstr "アンインストール…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Load"
 msgstr "読み込む"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show Images"
 msgstr "画像を表示"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Retry"
 msgstr "再試行"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This version has been revoked: {}."
 msgstr "このバージョンは取り消されました：{}。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again."
 msgstr "このバージョンは取り消されました：{}。リスクを確認したうえで再び有効にしたため、ストアが再び無効にすることはありません。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This version has been revoked: {}. The store has disabled it."
 msgstr "このバージョンは取り消されました：{}。ストアによって無効にされました。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"
 msgstr "非公式リポジトリ：Vestra Player の審査を受けていません。プラグインがファイルを読み取ったりネットワークを使用したりする可能性があります"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This is a test repository on this machine, without encryption"
 msgstr "これはこのコンピュータ上のテスト用リポジトリで、暗号化されていません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Also in {}"
 msgstr "{}にもあります"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
 msgstr "{0} から {1} をインストール済みです。置き換えると、以前にこの提供元からインストールしたことがあればそのときのデータを、なければ新しい空のデータを使用します。現在のデータは保持されます"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Same id as a built-in plugin of the player; cannot be installed from here"
 msgstr "プレーヤーの内蔵プラグインと同じ ID のため、ここからはインストールできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
 msgstr "内蔵プラグインはプレーヤーと一緒にアップデートされ、アンインストールも無効化もできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
 msgstr "リポジトリはこのプラグインの提供を終了しました。ストアはアップデートを確認しなくなります（取り消しの確認は続けます）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Its repository was removed from the store; the store no longer checks it for updates or revocations"
 msgstr "リポジトリがストアから削除されました。ストアはアップデートも取り消しも確認しなくなります"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Sideloaded plugin: not reviewed; the store does not check it for updates"
 msgstr "サイドロードしたプラグイン：審査を受けていません。ストアはアップデートを確認しません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This run uses the development-loaded version"
 msgstr "今回の起動では開発用に読み込んだバージョンを使用しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Loaded for development (--plugin) in this run: disabling it lasts until the player quits, and it cannot be uninstalled here"
 msgstr "今回の起動では開発用に読み込まれています（--plugin）。無効化はプレーヤーの終了までで、ここではアンインストールできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its bottom bar is not shown: “{}” holds the bottom bar"
 msgstr "下部バーは表示されていません：下部バーは「{}」が使用しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its sidebar tab is not shown: “{}” holds that place"
 msgstr "サイドバーのタブは表示されていません：この場所は「{}」が使用しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its sidebar tab is not shown: the sidebar is full"
 msgstr "サイドバーのタブは表示されていません：サイドバーがいっぱいです"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its backdrop is not shown: “{}” holds the backdrop"
 msgstr "背景は表示されていません：背景は「{}」が使用しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its panel is not shown: “{}” holds that place"
 msgstr "パネルは表示されていません：この場所は「{}」が使用しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its panel is not shown: that place is full"
 msgstr "パネルは表示されていません：この場所はいっぱいです"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its Previous/Next is not used: “{}” provides them"
 msgstr "前へ/次へは使われていません：「{}」が提供しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "It does not open {}: “{}” does"
 msgstr "{}は開きません：「{}」が開きます"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Part of it was refused because another plugin holds it ({})"
 msgstr "一部は別のプラグインが使用しているため拒否されました（{}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The description is on another website ({}); not loaded automatically"
 msgstr "説明は別の Web サイト（{}）にあるため、自動では読み込みません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Remote images blocked (unofficial source): {}"
 msgstr "リモート画像をブロックしました（非公式の提供元）：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "From the installed version"
 msgstr "インストール済みのバージョンから"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Loading…"
 msgstr "読み込み中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Loading the description…"
 msgstr "説明を読み込み中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Loading the changelog…"
 msgstr "変更履歴を読み込み中…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The author provided no description"
 msgstr "作成者は説明を提供していません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The author provided no changelog"
 msgstr "作成者は変更履歴を提供していません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The description is on another website; not loaded automatically"
 msgstr "説明は別の Web サイトにあるため、自動では読み込みません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The changelog is on another website; not loaded automatically"
 msgstr "変更履歴は別の Web サイトにあるため、自動では読み込みません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't load the description: {}"
 msgstr "説明を読み込めませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't load the changelog: {}"
 msgstr "変更履歴を読み込めませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't show the description: {}"
 msgstr "説明を表示できませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't show the changelog: {}"
 msgstr "変更履歴を表示できませんでした：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Current"
 msgstr "現在"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Current, {}"
 msgstr "現在、{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Incompatible: {}"
 msgstr "互換性なし：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Latest"
 msgstr "最新"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409 ui/store.slint:310 ui/store.slint:586
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409 ui/store.slint:310 ui/store.slint:586
 #, x-machine
 msgid "Version"
 msgstr "バージョン"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated"
 msgstr "更新日"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Source"
 msgstr "提供元"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "License"
 msgstr "ライセンス"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Code"
 msgstr "ソースコード"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Open ↗"
 msgstr "開く ↗"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Status"
 msgstr "状態"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Running"
 msgstr "実行中"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Starting"
 msgstr "起動中"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Stopped"
 msgstr "停止"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Failed: {}"
 msgstr "失敗：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Package"
 msgstr "パッケージ"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Data folder"
 msgstr "データフォルダ"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Data size"
 msgstr "データサイズ"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409 ui/store.slint:306
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409 ui/store.slint:306
 #, x-machine
 msgid "Tags: All"
 msgstr "タグ：すべて"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The new version needs new permissions: {}"
 msgstr "新しいバージョンには新しい権限が必要です：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Official repository"
 msgstr "公式リポジトリ"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unnamed repository ({})"
 msgstr "名前のないリポジトリ（{}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unofficial: {} ({})"
 msgstr "非公式：{}（{}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unofficial: Unnamed repository ({})"
 msgstr "非公式：名前のないリポジトリ（{}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Vestra Player official repository"
 msgstr "Vestra Player 公式リポジトリ"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Built-in"
 msgstr "内蔵"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Local file"
 msgstr "ローカルファイル"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Link"
 msgstr "リンク"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Plugin Workshop"
 msgstr "プラグインワークショップ"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Repository {}"
 msgstr "リポジトリ {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown source"
 msgstr "不明な提供元"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown author"
 msgstr "不明な作成者"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Cancelled"
 msgstr "キャンセル済み"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Only https:// addresses are supported"
 msgstr "https:// のアドレスにのみ対応しています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Redirected to an insecure address"
 msgstr "安全でないアドレスにリダイレクトされました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Redirect without a target address ({})"
 msgstr "リダイレクト先のアドレスがありません（{}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Too many redirects"
 msgstr "リダイレクトが多すぎます"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Size does not match the description"
 msgstr "サイズが記述と一致しません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "File exceeds the size limit"
 msgstr "ファイルがサイズの上限を超えています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Checksum does not match the description"
 msgstr "チェックサムが記述と一致しません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Connection timed out"
 msgstr "接続がタイムアウトしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Server not found"
 msgstr "サーバーが見つかりません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Connection refused"
 msgstr "接続が拒否されました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Connection reset"
 msgstr "接続がリセットされました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Secure connection failed"
 msgstr "安全な接続に失敗しました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "File exceeds 256 KB"
 msgstr "ファイルが 256 KB を超えています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Not JSON"
 msgstr "JSON ではありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The top level is not an object"
 msgstr "最上位がオブジェクトではありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Wrong schema"
 msgstr "スキーマが正しくありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "plugins is not an array"
 msgstr "plugins が配列ではありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "revoked is not an array"
 msgstr "revoked が配列ではありません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "revoked has more than {} entries"
 msgstr "revoked の項目が {} 件を超えています"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Needs a newer plugin API ({})"
 msgstr "新しいプラグイン API（{}）が必要です"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Needs Vestra Player ≥ {} (current {})"
 msgstr "Vestra Player ≥ {} が必要です（現在 {}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Revoked: {}"
 msgstr "取り消し済み：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin has been revoked: {}"
 msgstr "このプラグインは取り消されました：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "「{}」：vestra. で始まる ID はプレーヤー内蔵プラグイン用に予約されているため、インストールもテスト読み込みもできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "このプラグイン：vestra. で始まる ID はプレーヤー内蔵プラグイン用に予約されているため、インストールもテスト読み込みもできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enter a repository address starting with https://"
 msgstr "https:// で始まるリポジトリのアドレスを入力してください"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The address cannot contain a user name or password"
 msgstr "アドレスにユーザー名やパスワードを含めることはできません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The repository address is too long"
 msgstr "リポジトリのアドレスが長すぎます"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown permission: {}"
 msgstr "不明な権限：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Plugin Store: plugin updates available ({})"
 msgstr "プラグインストア：プラグインのアップデートがあります（{}）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Disabled the revoked plugin “{}”"
 msgstr "取り消されたプラグイン「{}」を無効にしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Replace the installed “{}”?"
 msgstr "インストール済みの「{}」を置き換えますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{1}\n"
@@ -1165,7 +1170,7 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{1}\n"
@@ -1184,12 +1189,12 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update “{}” to {}? The new version needs more permissions"
 msgstr "「{}」を {} にアップデートしますか？新しいバージョンには追加の権限が必要です"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Added:\n"
@@ -1206,22 +1211,22 @@ msgstr ""
 "\n"
 "プラグインは完全なプログラムです。上記の権限はプレーヤーの機能の使用を制限するだけで、ファイルの読み書きやネットワークの使用は制限しません。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update “{}” to {}?"
 msgstr "「{}」を {} にアップデートしますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Current: {2}."
 msgstr "現在：{2}。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install “{}” {} (reinstall)?"
 msgstr "「{}」{} を再インストールしますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Current: {2}.\n"
@@ -1234,12 +1239,12 @@ msgstr ""
 "このバージョンには追加の権限が必要です：\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install “{}” {}?"
 msgstr "「{}」{} をインストールしますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "From the Vestra Player official repository, author {2}.\n"
@@ -1250,12 +1255,12 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install “{}” {} from an unofficial repository?"
 msgstr "非公式リポジトリから「{}」{} をインストールしますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1266,32 +1271,32 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{1}"
 msgstr "{1}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "このプラグインはすでに別の提供元からインストールされています。置き換えると、以前にこの提供元からインストールしたことがあればそのときのデータを、なければ新しい空のデータを使用します。元のプラグインのデータは保持され、元の提供元から再インストールしたときに再び使用されます。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "現在の「{}」{} は {} から提供されています。置き換えると、以前にこの提供元からインストールしたことがあればそのときのデータを、なければ新しい空のデータを使用します。元のプラグインのデータは保持され、元の提供元から再インストールしたときに再び使用されます。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust."
 msgstr "リポジトリ：{}（{}）。このリポジトリは Vestra Player の審査を受けていません。プラグインがファイルを読み取ったりネットワークを使用したりする可能性があります。信頼できる作成者のプラグインだけをインストールしてください。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption."
 msgstr "リポジトリ：{}（{}）。このリポジトリは Vestra Player の審査を受けていません。プラグインがファイルを読み取ったりネットワークを使用したりする可能性があります。信頼できる作成者のプラグインだけをインストールしてください。これはこのコンピュータ上のテスト用リポジトリで、暗号化されていません。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "It will be able to:\n"
@@ -1304,32 +1309,32 @@ msgstr ""
 "\n"
 "プラグインは完全なプログラムです。上記の権限はプレーヤーの機能の使用を制限するだけで、ファイルの読み書きやネットワークの使用は制限しません。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown"
 msgstr "不明"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "· {}"
 msgstr "· {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "· Uses none of the player's features"
 msgstr "· プレーヤーの機能を使用しません"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} in total"
 msgstr "合計 {} 項目"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Replace the installed version with the plugin package “{}” {}?"
 msgstr "インストール済みのバージョンをプラグインパッケージ「{}」{} で置き換えますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1344,12 +1349,12 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install the plugin package “{}” {}?"
 msgstr "プラグインパッケージ「{}」{} をインストールしますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1364,37 +1369,37 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "ファイル {} から。どのリポジトリの審査も受けておらず、自動ではアップデートされません。信頼できる作成者のプラグインだけをインストールしてください。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "リンク {} から。どのリポジトリの審査も受けておらず、自動ではアップデートされません。信頼できる作成者のプラグインだけをインストールしてください。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstall “{}”?"
 msgstr "「{}」をアンインストールしますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Its menus, windows and processing effects are removed immediately."
 msgstr "メニュー、ウインドウ、処理エフェクトはすぐに取り除かれます。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add the unofficial repository “{}”?"
 msgstr "非公式リポジトリ「{}」を追加しますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add the unofficial repository “Unnamed repository”?"
 msgstr "非公式リポジトリ「名前のないリポジトリ」を追加しますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Address: {1}\n"
@@ -1405,7 +1410,7 @@ msgstr ""
 "\n"
 "このリポジトリのプラグインは Vestra Player の審査を受けておらず、ファイルを読み取ったりネットワークを使用したりする可能性があります。ストアはこのリポジトリのプラグインを表示しますが、信頼できるかどうかを代わりに判断することはありません。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Address: {1}\n"
@@ -1420,32 +1425,32 @@ msgstr ""
 "\n"
 "これはこのコンピュータ上のテスト用リポジトリで、暗号化されていません。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Remove the repository “{} ({})”?"
 msgstr "リポジトリ「{}（{}）」を削除しますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Remove the repository “Unnamed repository ({1})”?"
 msgstr "リポジトリ「名前のないリポジトリ（{1}）」を削除しますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations."
 msgstr "ストアはこのリポジトリを読み取らなくなります。このリポジトリからインストールしたプラグインは残りますが、ストアはそれらのアップデートと取り消しを確認しなくなります。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Disabled the revoked plugin “{}” {}"
 msgstr "取り消されたプラグイン「{}」{} を無効にしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Disabled {} revoked plugins"
 msgstr "取り消された {} 個のプラグインを無効にしました"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "The repository revoked these versions. Reasons:\n"
@@ -1460,12 +1465,12 @@ msgstr ""
 "\n"
 "それでも使い続けるには、プラグインストアの詳細ページで「それでも有効にする…」を選択してください。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}” {}: {}"
 msgstr "「{}」{}：{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "“{}” {}: {}\n"
@@ -1474,7 +1479,7 @@ msgstr ""
 "「{}」{}：{}\n"
 "プラグインストアで {} にアップデートできます。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{}\n"
@@ -1485,12 +1490,12 @@ msgstr ""
 "\n"
 "{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enable the revoked “{}” {} anyway?"
 msgstr "取り消された「{}」{} をそれでも有効にしますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
@@ -1501,7 +1506,7 @@ msgstr ""
 "\n"
 "使用にはリスクが伴う可能性があります。確認すると、ストアが自動で再び無効にすることはなくなり、詳細ページには警告が表示され続けます。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
@@ -1516,12 +1521,12 @@ msgstr ""
 "\n"
 "代わりに {3} へのアップデートをお勧めします。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}” {} has been revoked. Keep using it?"
 msgstr "「{}」{} は取り消されています。使い続けますか？"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
@@ -1532,7 +1537,7 @@ msgstr ""
 "\n"
 "使用にはリスクが伴う可能性があります。確認すると、ストアが自動で再び無効にすることはなくなり、詳細ページには警告が表示され続けます。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
@@ -1547,187 +1552,187 @@ msgstr ""
 "\n"
 "代わりに {3} へのアップデートをお勧めします。"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add menu commands and shortcuts"
 msgstr "メニューコマンドとショートカットの追加"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Open tool windows"
 msgstr "ツールウインドウの表示"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show panels in the bottom bar, the sidebar or behind the video"
 msgstr "下部バー、サイドバー、ビデオ背景へのパネルの表示"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show file pickers and confirmations"
 msgstr "ファイル選択と確認のダイアログの表示"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show messages on the video"
 msgstr "ビデオ上へのメッセージの表示"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Receive files dropped on the player"
 msgstr "プレーヤーにドロップされたファイルの受け取り"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Change the player's palette"
 msgstr "プレーヤーのパレットの変更"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add pages to the Options window"
 msgstr "オプションウインドウへのページの追加"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Read what is playing and the position"
 msgstr "再生中の内容と再生位置の読み取り"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Receive playback changes as they happen"
 msgstr "再生の変化のリアルタイム受信"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Open media, control playback, keep the computer awake"
 msgstr "メディアの読み込み、再生の操作、スリープの防止"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Provide audio and video it generates itself"
 msgstr "自身で生成したオーディオとビデオの提供"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Process the picture (filters, shaders)"
 msgstr "映像の処理（フィルタ、シェーダ）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Process the sound"
 msgstr "音声の処理"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Read subtitles"
 msgstr "字幕の読み取り"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Load and change subtitles"
 msgstr "字幕の読み込みと変更"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Take snapshots and export clips"
 msgstr "スナップショットとクリップの書き出し"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Resolve online video addresses"
 msgstr "オンラインビデオのアドレスの解決"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show marks on the progress bar"
 msgstr "シークバーへのマークの表示"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Adjust the main window (size, on top, picture-in-picture)"
 msgstr "メインウインドウの調整（サイズ、常に手前、ピクチャ・イン・ピクチャ）"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Read and write the clipboard"
 msgstr "クリップボードの読み書き"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Change all shortcuts"
 msgstr "すべてのショートカットの変更"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Store sign-in details in the system keychain"
 msgstr "システムのキーチェーンへのサインイン情報の保存"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install, uninstall and disable other plugins"
 msgstr "他のプラグインのインストール、アンインストール、無効化"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Choose GPU or software rendering and restart the player"
 msgstr "GPU レンダリングとソフトウェアレンダリングの切り替え、プレーヤーの再起動"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "GPU のビデオアップスケーラーによる映像のアップスケール"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Replace"
 msgstr "置き換える"
 
-#: store.ts:595 store.ts:596 store.ts:598 ui/settings.slint:45 ui/settings.slint:134
+#: store.ts:598 store.ts:599 store.ts:601 ui/settings.slint:45 ui/settings.slint:134
 #, x-machine
 msgid "Add"
 msgstr "追加"
 
-#: store.ts:595 store.ts:596 store.ts:598 ui/settings.slint:44 ui/settings.slint:92
+#: store.ts:598 store.ts:599 store.ts:601 ui/settings.slint:44 ui/settings.slint:92
 #, x-machine
 msgid "Remove"
 msgstr "削除"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Install Anyway"
 msgstr "それでもインストール"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Uninstall"
 msgstr "アンインストール"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Also delete its settings and data?"
 msgstr "設定とデータも削除しますか？"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Open Plugin Store"
 msgstr "プラグインストアを開く"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "OK"
 msgstr "OK"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Enable Anyway"
 msgstr "それでも有効にする"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Keep Using"
 msgstr "使い続ける"
 
-#: store.ts:1406
+#: store.ts:1416
 #, x-machine
 msgid "Choose a plugin package (.vxp)"
 msgstr "プラグインパッケージ（.vxp）を選択"

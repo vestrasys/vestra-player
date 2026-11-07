@@ -224,8 +224,15 @@ export default async function activate(plugin: Plugin) {
     }
   }
 
+  /**
+   * Command palette categories ("Category: Title", player 0.7.6): the menu each command sits in.
+   * Text values, so `i18n extract` finds them; "Appearance" reuses the submenu's translation,
+   * "Audio" and "Reset" the player's words for those menus.
+   */
+  const category = { audio: plugin.i18n.text("Audio"), appearance: plugin.i18n.text("Appearance"), reset: plugin.i18n.text("Reset") };
   plugin.commands.add({
     id: "audio-cover",
+    category: category.audio,
     path: ["@audio", "Show Album Cover for Audio Only"],
     order: 530,
     group: "visual",
@@ -234,6 +241,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "idle-logo",
+    category: category.appearance,
     path: [...LOOK, "Show Logo When Idle"],
     order: 845,
     group: "settings-logo",
@@ -242,6 +250,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "choose-logo",
+    category: category.appearance,
     path: [...LOOK, "Choose Logo Image…"],
     order: 846,
     group: "settings-logo",
@@ -250,6 +259,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "reset-logo",
+    category: category.reset,
     path: ["@reset", "Idle Logo"],
     order: 850,
     group: "reset-appearance",
