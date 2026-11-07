@@ -1586,7 +1586,10 @@ mod tests {
         assert!(narrow.adjust_over_video && narrow.adjust.unwrap().overlay);
         assert!(narrow.adjust.unwrap().effective);
         assert_eq!(narrow.adjust_width, 0.0, "the overlay takes no width");
-        assert!(narrow.sidebar.unwrap().effective, "the sidebar stays docked");
+        assert!(
+            narrow.sidebar.unwrap().effective,
+            "the sidebar stays docked"
+        );
         // Without the sidebar the adjust column has more room.
         policy.set_preferred(Slot::Sidebar, 2, false, 0).unwrap();
         let alone = policy.evaluate(viewport(1116.0, 800.0), 0).unwrap();
@@ -1635,7 +1638,11 @@ mod tests {
         );
         policy.set_active(6).unwrap();
         assert_eq!(policy.active(Slot::Adjust), Some(6));
-        assert_eq!(policy.sidebar_active(), Some(2), "the sidebar keeps its tab");
+        assert_eq!(
+            policy.sidebar_active(),
+            Some(2),
+            "the sidebar keeps its tab"
+        );
         assert_eq!(policy.set_detached(5, true), Err(Error::Docked));
         assert_eq!(policy.column_state(Slot::Adjust), Some((true, false)));
         policy.order_column(Slot::Adjust, &[6, 5]);
@@ -1676,13 +1683,25 @@ mod tests {
         // Over the adjust overlay: it stays; then left of both: the delay.
         policy.set_hover(Slot::Adjust, true);
         policy.tick(9000);
-        assert!(policy.evaluate(screen(), 9000).unwrap().adjust.unwrap().effective);
+        assert!(
+            policy
+                .evaluate(screen(), 9000)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective
+        );
         policy.set_hover(Slot::Adjust, false);
         policy.pointer(1400.0, 1920.0, 9000);
         policy.activity(9000);
         policy.tick(9600);
         assert!(
-            policy.evaluate(screen(), 9600).unwrap().adjust.unwrap().effective,
+            policy
+                .evaluate(screen(), 9600)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective,
             "still over the adjust column"
         );
         policy.pointer(1200.0, 1920.0, 9600);
@@ -1692,7 +1711,9 @@ mod tests {
         assert!(!gone.adjust.unwrap().effective && !gone.sidebar.unwrap().effective);
         // Its toggle (Alt+n, the Adjust button) pops out the adjust column
         // alone, at once.
-        policy.set_preferred(Slot::Adjust, 5, false, 11_000).unwrap();
+        policy
+            .set_preferred(Slot::Adjust, 5, false, 11_000)
+            .unwrap();
         policy.set_preferred(Slot::Adjust, 5, true, 11_000).unwrap();
         let alone = policy.evaluate(screen(), 11_000).unwrap();
         assert!(alone.adjust.unwrap().effective);
@@ -1700,9 +1721,18 @@ mod tests {
         assert_eq!(policy.overlay_extent(1920.0), 317.0);
         // The edge then brings the sidebar out too.
         policy.pointer(1919.0, 1920.0, 11_100);
-        assert!(policy.evaluate(screen(), 11_100).unwrap().sidebar.unwrap().effective);
+        assert!(
+            policy
+                .evaluate(screen(), 11_100)
+                .unwrap()
+                .sidebar
+                .unwrap()
+                .effective
+        );
         // Turning the adjust column off collapses only it.
-        policy.set_preferred(Slot::Adjust, 5, false, 11_200).unwrap();
+        policy
+            .set_preferred(Slot::Adjust, 5, false, 11_200)
+            .unwrap();
         let left = policy.evaluate(screen(), 11_200).unwrap();
         assert!(left.sidebar.unwrap().effective);
         assert_eq!(left.adjust.unwrap().reason, Some(Reason::UserHidden));
@@ -1719,7 +1749,14 @@ mod tests {
             )
             .unwrap();
         policy.tick(40_000);
-        assert!(policy.evaluate(screen(), 40_000).unwrap().adjust.unwrap().effective);
+        assert!(
+            policy
+                .evaluate(screen(), 40_000)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective
+        );
         // Leaving fullscreen: docked again.
         policy.set_fullscreen(false, 41_000);
         let docked = policy.evaluate(screen(), 41_000).unwrap();

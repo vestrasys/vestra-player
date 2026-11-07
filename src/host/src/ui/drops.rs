@@ -508,7 +508,10 @@ mod tests {
         assert_eq!((generation, paths.len()), (1, 2));
         assert!(drops.due().is_none());
         // Video 400×300, bottom bar under it, sidebar right of the splitter.
-        assert_eq!(hit((100., 100.), (400., 300.), Some(1), None, Some(2)), None);
+        assert_eq!(
+            hit((100., 100.), (400., 300.), Some(1), None, Some(2)),
+            None
+        );
         assert_eq!(
             hit((100., 320.), (400., 300.), Some(1), None, Some(2)),
             Some((1, (100., 20.)))
@@ -528,9 +531,6 @@ mod tests {
             hit((733., 50.), (400., 300.), Some(1), adjust, Some(2)),
             Some((2, (10., 50.)))
         );
-        assert_eq!(
-            hit((733., 50.), (400., 300.), Some(1), adjust, None),
-            None
-        );
+        assert_eq!(hit((733., 50.), (400., 300.), Some(1), adjust, None), None);
     }
 }

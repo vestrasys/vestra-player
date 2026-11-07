@@ -255,7 +255,10 @@ impl Host {
             (SIDEBAR, window_state::Slot::Sidebar),
             (ADJUST, window_state::Slot::Adjust),
         ] {
-            let preferred = self.policy.column_state(slot).map(|(preferred, _)| preferred);
+            let preferred = self
+                .policy
+                .column_state(slot)
+                .map(|(preferred, _)| preferred);
             let state = commands::CommandState {
                 enabled: preferred.is_some(),
                 checked: Some(preferred.unwrap_or(false)),

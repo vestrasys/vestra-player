@@ -525,7 +525,8 @@ mod tests {
     fn the_adjust_slot_reads_leniently_and_starts_closed() {
         let default = AdjustSlot::default();
         assert!(!default.visible && default.width == ADJUST_WIDTH);
-        let read = |text: &str| UiState::from_value(serde_json::from_str(text).unwrap()).adjust_slot;
+        let read =
+            |text: &str| UiState::from_value(serde_json::from_str(text).unwrap()).adjust_slot;
         assert_eq!(
             read(r#"{"adjustSlot":{"visible":true}}"#),
             Some(AdjustSlot {

@@ -74,7 +74,9 @@ impl Host {
                     diag!("current tabs {active:?}: {}", error.message);
                     for (state, active) in self.columns.iter_mut().zip(active) {
                         // Only the tab that needed the compile is held back.
-                        if active.is_some_and(|owner| self.shell_compiled.get(&owner) != Some(&owner)) {
+                        if active
+                            .is_some_and(|owner| self.shell_compiled.get(&owner) != Some(&owner))
+                        {
                             state.refresh_failed = active;
                         }
                     }
@@ -245,9 +247,10 @@ impl Host {
                 recorded,
             )
             .or_else(|| {
-                order.iter().copied().find(|o| {
-                    next.get(o).map(|m| m.manifest.as_str()) == remembered.as_deref()
-                })
+                order
+                    .iter()
+                    .copied()
+                    .find(|o| next.get(o).map(|m| m.manifest.as_str()) == remembered.as_deref())
             })
             .or_else(|| order.first().copied());
             let tabbed = if column.always_tabbed() {
@@ -461,8 +464,7 @@ impl Host {
             {
                 let _ = self.policy.set_active(active);
             }
-            self.policy
-                .order_column(policy_column(column), &plan.order);
+            self.policy.order_column(policy_column(column), &plan.order);
         }
         self.policy.activity(self.now_ms());
         {
@@ -584,7 +586,8 @@ impl Host {
                         &format!("{p}-active"),
                         SValue::Number(strip.active as f64),
                     )?;
-                    shell.set_property(&format!("{p}-shown"), SValue::Number(strip.shown as f64))?;
+                    shell
+                        .set_property(&format!("{p}-shown"), SValue::Number(strip.shown as f64))?;
                 }
                 self.bind_shell(&shell, candidate_generation)?;
                 self.bind_tabs(&shell, candidate_generation)?;

@@ -298,7 +298,9 @@ impl Host {
             .get(&owner)
             .filter(|m| m.spec.slot.tabbed())
             .and_then(|m| policy_slot(m.spec.slot));
-        let tabs_before = column_of.map(|slot| self.policy.panels(slot)).unwrap_or_default();
+        let tabs_before = column_of
+            .map(|slot| self.policy.panels(slot))
+            .unwrap_or_default();
         if self
             .sequence
             .is_some_and(|(provider, ..)| provider == owner)

@@ -434,9 +434,13 @@ mod tests {
         // Menu redesign step 3b: the adjust column does not detach.
         assert_eq!(code(json!({"detached":true}), Slot::Adjust), "invalid");
         assert_eq!(
-            layout_change(&json!({"detached":false,"visible":true}), Slot::Adjust, &panels)
-                .unwrap()
-                .visible,
+            layout_change(
+                &json!({"detached":false,"visible":true}),
+                Slot::Adjust,
+                &panels
+            )
+            .unwrap()
+            .visible,
             Some(true)
         );
         assert_eq!(policy_slot(Slot::Adjust), Some(window_state::Slot::Adjust));

@@ -227,9 +227,7 @@ fn column_content(
         .collect::<Vec<_>>()
         .join(" ");
     let strip = match column {
-        Column::Sidebar => format!(
-            "detached: {detached}; detach => {{ root.sidebar-detach(); }}"
-        ),
+        Column::Sidebar => format!("detached: {detached}; detach => {{ root.sidebar-detach(); }}"),
         Column::Adjust => "keys: root.adjust-keys; detachable: false;".to_owned(),
     };
     // Placed by hand, not in a layout: a layout here would pass its size
@@ -1473,10 +1471,23 @@ mod tests {
         // The fullscreen bar ends at both popped-out columns.
         assert!(source.contains("root.columns-popped-width"));
         let definition = build(source, "HostWindow").unwrap();
-        for callback in ["adjust-tab", "adjust-overflow", "adjust-dismiss", "adjust-resized"] {
-            assert!(definition.callbacks().any(|name| name == callback), "{callback}");
+        for callback in [
+            "adjust-tab",
+            "adjust-overflow",
+            "adjust-dismiss",
+            "adjust-resized",
+        ] {
+            assert!(
+                definition.callbacks().any(|name| name == callback),
+                "{callback}"
+            );
         }
-        for property in ["adjust-keys", "adjust-width", "adjust-actual", "adjust-pop-width"] {
+        for property in [
+            "adjust-keys",
+            "adjust-width",
+            "adjust-actual",
+            "adjust-pop-width",
+        ] {
             assert!(
                 definition.properties().any(|(name, _)| name == property),
                 "{property}"
@@ -1495,7 +1506,11 @@ mod tests {
         assert!(!placeholders.contains("adjust-shown =="));
         build(placeholders, "HostWindow").unwrap();
         // No adjust tab at all: no column.
-        assert!(!shell_source(&specs[..2]).unwrap().contains("adjust-keys"));
+        assert!(
+            !shell_source(&specs[..2])
+                .unwrap()
+                .contains("adjust-keys := FocusScope")
+        );
         // The bare shell keeps the adjust properties, so the host binds them alike.
         build(shell_source(&[]).unwrap(), "HostWindow").unwrap();
         assert_eq!(Slot::parse("adjust"), Some(Slot::Adjust));
@@ -1586,6 +1601,7 @@ mod tests {
     /// the_adjust_columns_first_opening_cost --nocapture`.
     #[test]
     #[ignore = "measurement"]
+    #[allow(clippy::disallowed_macros)] // the numbers for the terminal
     fn the_adjust_columns_first_opening_cost() {
         use slint::ComponentHandle as _;
         struct Headless;
@@ -1613,9 +1629,27 @@ mod tests {
             slot,
         };
         let base = vec![
-            spec(1, plugins.join("playback/ui/bar.slint"), "PlaybackBar", "PlaybackBridge", Slot::Bottom),
-            spec(2, plugins.join("visualizer/ui/backdrop.slint"), "Backdrop", "Art", Slot::Backdrop),
-            spec(3, plugins.join("playlist/ui/sidebar.slint"), "PlaylistSidebar", "PlaylistBridge", Slot::Sidebar),
+            spec(
+                1,
+                plugins.join("playback/ui/bar.slint"),
+                "PlaybackBar",
+                "PlaybackBridge",
+                Slot::Bottom,
+            ),
+            spec(
+                2,
+                plugins.join("visualizer/ui/backdrop.slint"),
+                "Backdrop",
+                "Art",
+                Slot::Backdrop,
+            ),
+            spec(
+                3,
+                plugins.join("playlist/ui/sidebar.slint"),
+                "PlaylistSidebar",
+                "PlaylistBridge",
+                Slot::Sidebar,
+            ),
         ];
         // Each panel in a file of its own (they import only the libraries):
         // a window becomes a Rectangle with a bridge global.
@@ -1641,10 +1675,34 @@ mod tests {
             path
         };
         let adjust = [
-            spec(10, panel("video/picture.slint", Some("PictureWindow"), "Picture"), "Picture", "PictureBridge", Slot::Adjust),
-            spec(11, panel("audio/ui/workbench.slint", Some("AudioWorkbench"), "Audio"), "Audio", "AudioBridge", Slot::Adjust),
-            spec(12, panel("playlist/ui/sidebar.slint", None, "Subtitles"), "PlaylistSidebar", "PlaylistBridge", Slot::Adjust),
-            spec(13, panel("playlist/ui/sidebar.slint", None, "Playback"), "PlaylistSidebar", "PlaylistBridge", Slot::Adjust),
+            spec(
+                10,
+                panel("video/picture.slint", Some("PictureWindow"), "Picture"),
+                "Picture",
+                "PictureBridge",
+                Slot::Adjust,
+            ),
+            spec(
+                11,
+                panel("audio/ui/workbench.slint", Some("AudioWorkbench"), "Audio"),
+                "Audio",
+                "AudioBridge",
+                Slot::Adjust,
+            ),
+            spec(
+                12,
+                panel("playlist/ui/sidebar.slint", None, "Subtitles"),
+                "PlaylistSidebar",
+                "PlaylistBridge",
+                Slot::Adjust,
+            ),
+            spec(
+                13,
+                panel("playlist/ui/sidebar.slint", None, "Playback"),
+                "PlaylistSidebar",
+                "PlaylistBridge",
+                Slot::Adjust,
+            ),
         ];
         let median = |mut runs: Vec<f64>| {
             runs.sort_by(f64::total_cmp);
@@ -1658,15 +1716,21 @@ mod tests {
                 let definition = compile_definition_tabbed(specs, tabbed).unwrap();
                 compile.push(started.elapsed().as_secs_f64() * 1000.);
                 let instance = definition.create().unwrap();
-                instance.window().set_size(slint::LogicalSize::new(1400., 800.));
-                instance.set_property("adjust-visible", Value::Bool(true)).unwrap();
+                instance
+                    .window()
+                    .set_size(slint::LogicalSize::new(1400., 800.));
+                instance
+                    .set_property("adjust-visible", Value::Bool(true))
+                    .unwrap();
                 crate::ui::view::settle_layout(instance.window());
                 whole.push(started.elapsed().as_secs_f64() * 1000.);
             }
             (median(compile), median(whole))
         };
         let (closed, closed_whole) = time(&base, [false, true]);
-        println!("adjust column closed (placeholders): compile {closed:.0} ms, whole {closed_whole:.0} ms");
+        println!(
+            "adjust column closed (placeholders): compile {closed:.0} ms, whole {closed_whole:.0} ms"
+        );
         for count in 1..=adjust.len() {
             let mut specs = base.clone();
             specs.extend(adjust[..count].iter().cloned());

@@ -2050,7 +2050,8 @@ export component W inherits Window {
         // Two columns (docked and fullscreen overlay), four branches each.
         assert_eq!(source.matches(": Owner1").count(), 2 * compiled.len());
         let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json_in(&specs, [true, false], sender, 1, None).unwrap();
+        let shell = crate::ui::composition::compile_json_in(&specs, [true, false], sender, 1, None)
+            .unwrap();
         let titles = order
             .iter()
             .map(|owner| format!("Tab {owner}"))

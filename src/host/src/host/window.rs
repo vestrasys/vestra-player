@@ -551,7 +551,11 @@ impl Host {
             sidebar_tabs::Need::Wake => {
                 if self.columns[index].woken != Some(owner) {
                     self.columns[index].woken = Some(owner);
-                    diag!("{}: tab of {} shown, waking it", column.prefix(), mount.manifest);
+                    diag!(
+                        "{}: tab of {} shown, waking it",
+                        column.prefix(),
+                        mount.manifest
+                    );
                     self.panel_shown(owner);
                 }
             }
@@ -612,8 +616,7 @@ impl Host {
                 return;
             };
             let index = index as f64;
-            if !matches!(window.get_property(&active_name), Ok(SValue::Number(n)) if n == index)
-            {
+            if !matches!(window.get_property(&active_name), Ok(SValue::Number(n)) if n == index) {
                 let _ = window.set_property(&active_name, SValue::Number(index));
             }
         };

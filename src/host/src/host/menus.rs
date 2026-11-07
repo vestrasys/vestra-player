@@ -524,8 +524,7 @@ impl Host {
                 let (origin, size) = menu_frame(window);
                 let value = menu::tabs_level(
                     &tabs,
-                    self.policy
-                        .active(super::mounts::policy_column(column)),
+                    self.policy.active(super::mounts::policy_column(column)),
                     origin,
                     size,
                     self.menu_scroll.first().copied().unwrap_or(0.),
