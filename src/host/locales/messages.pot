@@ -211,6 +211,10 @@ msgstr ""
 msgid "All tabs"
 msgstr ""
 
+#: ui/bar-strip.slint:98
+msgid "More buttons"
+msgstr ""
+
 #: src/main.rs:150
 msgid "Previous/Next is provided by {}"
 msgstr ""

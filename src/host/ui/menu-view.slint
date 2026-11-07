@@ -13,13 +13,19 @@
 // columns (font size, paddings, check, spacing, submenu arrow) in sync with
 // menu.rs, which sizes each panel to its widest row.
 //
-// RULE (2026-10-27): nothing under the pointer may toggle an
+// RULE (no churn, 2026-10-27): nothing under the pointer may toggle an
 // `if` as the pointer moves (hover, the lit or current row, a tip that
-// follows the cursor). Creating or destroying an element rebuilds the whole
-// window's accessibility tree in Slint 1.18 (`unregister_item_tree` →
-// `reload_tree`), 120–160 ms on a 4K render target, which dropped the video
-// to 10–14 fps during a menu sweep. Use `visible:` or `opacity:` on a
-// persistent element; `if` only for state that changes by click, key or model.
+// follows the cursor). An `if` that flips builds or tears down a sub-tree
+// each time: allocations, every binding of it evaluated again, the parent's
+// layout redone, the renderer's cached text and textures of it dropped and
+// made again (an image is uploaded again), all on the UI thread that also
+// presents the video. A persistent element shown with `visible:` or
+// `opacity:` costs none of that. Use those; `if` only for state that changes
+// by click, key or model. (The rule was found when Slint 1.18's AccessKit
+// integration also rebuilt the whole accessibility tree per change,
+// 120–160 ms on a 4K render target, video at 10–14 fps during a menu sweep;
+// the host is built without Slint's `accessibility` feature since
+// 2026-11-07, Cargo.toml.)
 // A hover that switches a submenu rewrites the rows and levels in place
 // (host 0.5.26), so nothing a row or level shows depends on an `if` either:
 // the check, radio, key and arrow columns, the separator, the scroll bars
@@ -46,6 +52,9 @@ export struct MenuRow {
     has-children: bool,
     open: bool,
     keys: string,
+    // An icon of @vestra/icons.slint before the title ("" for none; only
+    // the bottom-bar strip's `»` menu has them).
+    icon: string,
     // A separator line is drawn above this row.
     separator: bool,
     // Row top inside its panel, in logical px.
@@ -87,8 +96,8 @@ component MenuItem inherits Rectangle {
     border-radius: Theme.radius-control;
     background: root.lit ? Theme.selected-bg : transparent;
     // The accent bar at the left edge, of the lit and the open row (always
-    // present, hidden by `visible`: creating and destroying an element per
-    // hover rebuilt the window's accessibility tree, 2026-10-27).
+    // present, hidden by `visible`: no element made or dropped per hover,
+    // the rule above).
     Rectangle {
         visible: root.marked;
         x: 0;
@@ -127,26 +136,41 @@ component MenuItem inherits Rectangle {
                 Rectangle { width: 6px; height: 6px; border-radius: 3px; background: Theme.accent; }
             }
         }
-        // Title and keys: without keys the empty key text is 0px wide and
-        // the gap before it is 0, as if it were not there.
+        // The icon (the strip's `»`), 0px wide without one, then the title
+        // and keys: without keys the empty key text is 0px wide and the gap
+        // before it is 0, as if it were not there.
         HorizontalLayout {
             horizontal-stretch: 1;
-            spacing: root.item.keys != "" ? 4px : 0px;
-            Text {
-                horizontal-stretch: 1;
-                text: root.item.title + (root.item.busy ? " …" : "");
-                color: !root.active ? Theme.text-dim : root.lit ? Theme.text : Theme.text-list;
-                font-size: 12px;
-                vertical-alignment: center;
-                overflow: elide;
+            spacing: 0px;
+            Rectangle {
+                width: root.item.icon != "" ? 18px : 0px;
+                Icon {
+                    visible: root.item.icon != "";
+                    x: 0px;
+                    y: (parent.height - self.height) / 2;
+                    name: root.item.icon;
+                    color: !root.active ? Theme.icon-disabled : Theme.accent;
+                }
             }
-            Text {
-                visible: root.item.keys != "";
-                text: root.item.keys;
-                color: Theme.text-dim;
-                font-size: 12px;
-                vertical-alignment: center;
-                horizontal-alignment: right;
+            HorizontalLayout {
+                horizontal-stretch: 1;
+                spacing: root.item.keys != "" ? 4px : 0px;
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.item.title + (root.item.busy ? " …" : "");
+                    color: !root.active ? Theme.text-dim : root.lit ? Theme.text : Theme.text-list;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Text {
+                    visible: root.item.keys != "";
+                    text: root.item.keys;
+                    color: Theme.text-dim;
+                    font-size: 12px;
+                    vertical-alignment: center;
+                    horizontal-alignment: right;
+                }
             }
         }
         Rectangle {

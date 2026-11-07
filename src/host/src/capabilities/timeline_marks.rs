@@ -1,5 +1,5 @@
-//! `timeline.marks`: a plugin's layer of marks on the progress bar
-//! (timeline.rs). Reading the marks is `playback.read` (playback_read.rs).
+//! `timeline.marks`: a plugin's layer of marks and ranges on the progress
+//! bar (timeline.rs). Reading them is `playback.read` (playback_read.rs).
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply};
 use serde_json::Value;
@@ -12,7 +12,10 @@ static INFO: Info = Info {
     requires: &[],
     residency: Residency::Live,
 };
-static METHODS: &[Method] = &[Method::this("timeline.set")];
+static METHODS: &[Method] = &[
+    Method::this("timeline.set"),
+    Method::this("timeline.setRanges"),
+];
 impl Capability for TimelineMarks {
     fn info(&self) -> &'static Info {
         &INFO

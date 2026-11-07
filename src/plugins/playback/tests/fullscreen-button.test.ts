@@ -127,125 +127,230 @@ function toJs(expression: string, names: [string, string][]) {
   return js;
 }
 
+/** What the row shows at a bar width, as `bar.slint` works it out. */
+interface Row {
+  fullscreen: boolean;
+  stop: boolean;
+  skip: boolean;
+  open: boolean;
+  /** How many of the bar's buttons show (`row.buttons`). */
+  buttons: number;
+  /** What the bar reports to the player (`content-min-width`). */
+  content: number;
+}
+
 /**
- * The fit rule exactly as `bar.slint` states it: `timeWidth(elapsed, widest,
- * total)` from the texts' preferred widths, `fits(width, timeWidth)` for the
- * bar's width (all px), so the test follows the source.
+ * The fit rules exactly as `bar.slint` states them: `timeWidth(elapsed,
+ * widest, total)` from the texts' preferred widths, `row(width, timeWidth,
+ * fixed)` for the bar's width and the player's own cells
+ * (`BarButtonsHost.fixed`), all px, so the test follows the source.
  */
 function rules() {
-  const time = /property <length> time-width: ([^;]+);/.exec(slint);
-  const fits = /property <bool> fullscreen-fits: ([^;]+);/.exec(slint);
-  const left = /property <length> left-width: ([^;]+);/.exec(slint);
-  const room = /strip := BarButtons \{[^}]*?\broom: ([^;]+);/.exec(slint);
-  assert.ok(time && fits && left && room, "bar.slint states the rule");
+  const property = (name: string, type: string) => {
+    const match = new RegExp(`property <${type}> ${name}: ([^;]+);`).exec(slint);
+    assert.ok(match, `bar.slint states ${name}`);
+    return match[1]!;
+  };
   // The widest elapsed text is "-" + the total (the remaining time), in the body font.
   assert.match(
     slint,
     /widest-elapsed := Text \{\s+visible: false;\s+text: "-" \+ PlaybackBridge\.total-label;\s+font-size: Theme\.font-body;/,
   );
-  const timeJs = toJs(time[1], [
+  const timeJs = toJs(property("time-width", "length"), [
     ["widest-elapsed.preferred-width", "widest"],
     ["elapsed.preferred-width", "elapsed"],
     ["total.preferred-width", "total"],
   ]);
-  const fitsJs = toJs(fits[1], [
+  const fitNames: [string, string][] = [
     ["root.width", "width"],
     ["row.time-width", "timeWidth"],
-  ]);
-  const leftJs = toJs(left[1], [
-    ["row.fullscreen-fits", "fits"],
-    ["row.time-width", "timeWidth"],
-  ]);
-  const roomJs = toJs(room[1], [
-    ["root.width", "width"],
-    ["row.left-width", "leftWidth"],
-  ]);
-  const fitsFn = new Function("width", "timeWidth", `return ${fitsJs};`) as (width: number, timeWidth: number) => boolean;
-  const leftFn = new Function("fits", "timeWidth", `return ${leftJs};`) as (fits: boolean, timeWidth: number) => number;
-  const roomFn = new Function("width", "leftWidth", `return ${roomJs};`) as (width: number, leftWidth: number) => number;
+    ["BarButtonsHost.fixed", "fixed"],
+  ];
+  const fit = (name: string) =>
+    new Function("width", "timeWidth", "fixed", `return ${toJs(property(name, "bool"), fitNames)};`) as (
+      width: number,
+      timeWidth: number,
+      fixed: number,
+    ) => boolean;
+  const fullscreenFits = fit("fullscreen-fits");
+  const stopFits = fit("stop-fits");
+  const skipFits = fit("skip-fits");
+  const openFits = fit("open-fits");
+  const flags: [string, string][] = [
+    ["row.fullscreen-fits", "fullscreen"],
+    ["row.stop-fits", "stop"],
+    ["row.skip-fits", "skip"],
+    ["row.open-fits", "open"],
+  ];
+  const buttonsFn = new Function(
+    "fullscreen",
+    "stop",
+    "skip",
+    "open",
+    `return ${toJs(property("buttons", "int"), flags)};`,
+  ) as (fullscreen: boolean, stop: boolean, skip: boolean, open: boolean) => number;
+  const leftFn = new Function(
+    "buttons",
+    "timeWidth",
+    `return ${toJs(property("left-width", "length"), [
+      ["row.buttons", "buttons"],
+      ["row.time-width", "timeWidth"],
+    ])};`,
+  ) as (buttons: number, timeWidth: number) => number;
+  // The bar reports its row's width, never the strip's (no loop through the player).
+  assert.equal(property("content-min-width", "length"), "row.left-width");
   return {
     timeWidth: new Function("elapsed", "widest", "total", `return ${timeJs};`) as (
       elapsed: number,
       widest: number,
       total: number,
     ) => number,
-    fits: fitsFn,
-    /** What the bar gives the BarButtons strip (`room`). */
-    room: (width: number, timeWidth: number) => roomFn(width, leftFn(fitsFn(width, timeWidth), timeWidth)),
+    row(width: number, timeWidth: number, fixed = 2): Row {
+      const fullscreen = fullscreenFits(width, timeWidth, fixed);
+      const stop = stopFits(width, timeWidth, fixed);
+      const skip = skipFits(width, timeWidth, fixed);
+      const open = openFits(width, timeWidth, fixed);
+      const buttons = buttonsFn(fullscreen, stop, skip, open);
+      return { fullscreen, stop, skip, open, buttons, content: leftFn(buttons, timeWidth) };
+    },
   };
+}
+
+/**
+ * The player's strip for a bar (bar-buttons.slint, `BarButtonsHost`): the
+ * room is the bar's width less `content-min-width` and 4px; the player's
+ * own cells always show, plugin buttons take the cells left, `»` one of
+ * them when some do not fit. Returns the strip's width.
+ */
+function strip(width: number, content: number, fixed: number, plugins: number) {
+  const room = Math.max(0, width - content - 4);
+  const free = Math.max(0, Math.floor(room / 41) - fixed);
+  const shown = plugins <= free ? plugins : Math.max(0, Math.min(plugins, free - 1));
+  const more = shown < plugins;
+  return (shown + (more ? 1 : 0) + fixed) * 41;
 }
 
 /** A proportional 11px body font, roughly: digits 6.2px, `:` and space 3px, `-` and `/` 4px. */
 const textWidth = (text: string) =>
   [...text].reduce((sum, ch) => sum + (/\d/.test(ch) ? 6.2 : ch === "-" || ch === "/" ? 4 : 3), 0);
 
-test("UI-BAR-10 the fullscreen button hides before the sidebar toggle: below 6×41 + 10 + time + 8 + 41 + 4 px", () => {
-  const { fits } = rules();
-  // About 85px for `0:00:00 / 0:00:00` in the 11px body font: from 394px.
-  assert.equal(fits(394, 85), true);
-  assert.equal(fits(393, 85), false);
-  // The threshold moves with the measured time, it is not a constant.
-  assert.equal(fits(394, 100), false);
-  assert.equal(fits(409, 100), true);
-  assert.equal(fits(374, 65), true);
-
-  for (const timeWidth of [40, 65, 85, 100, 140]) {
-    let threshold = 0;
-    while (!fits(threshold, timeWidth)) threshold++;
-    // At the last width that hides the button, the five other buttons, the
-    // 10px gap, the whole time and the 8px spare still fit left of the
-    // toggle's 41px cell and its 4px margin: the time is never cut while the
-    // fullscreen button shows, and the button goes before the time does.
-    const hiddenAt = threshold - 1;
-    assert.ok(5 * 41 + 10 + timeWidth + 8 + 41 + 4 <= hiddenAt, `time ${timeWidth}: hidden at ${hiddenAt}`);
-    // With the button shown, the row needs exactly the threshold.
-    assert.equal(threshold, 6 * 41 + 10 + timeWidth + 8 + 41 + 4);
+test("UI-BAR-10 Fullscreen shows from 6×41 + 10 + time + 8 + fixed×41 + 4 px (about 435px)", () => {
+  const { row } = rules();
+  // About 85px for `0:00:00 / 0:00:00` in the 11px body font, 🔍 and Sidebar: from 435px.
+  assert.equal(row(435, 85).fullscreen, true);
+  assert.equal(row(434, 85).fullscreen, false);
+  // The threshold moves with the measured time and the player's own cells, it is not a constant.
+  assert.equal(row(435, 100).fullscreen, false);
+  assert.equal(row(450, 100).fullscreen, true);
+  assert.equal(row(415, 65).fullscreen, true);
+  assert.equal(row(394, 85, 1).fullscreen, true);
+  assert.equal(row(476, 85, 3).fullscreen, true);
+  assert.equal(row(475, 85, 3).fullscreen, false);
+  for (const fixed of [0, 1, 2, 3]) {
+    for (const timeWidth of [40, 65, 85, 100, 140]) {
+      let threshold = 0;
+      while (!row(threshold, timeWidth, fixed).fullscreen) threshold++;
+      assert.equal(threshold, 6 * 41 + 10 + timeWidth + 8 + fixed * 41 + 4, `time ${timeWidth}, fixed ${fixed}`);
+      // With it the row needs all six buttons; one px narrower it needs five.
+      assert.equal(row(threshold, timeWidth, fixed).content, 6 * 41 + 10 + timeWidth + 8);
+      assert.equal(row(threshold - 1, timeWidth, fixed).content, 5 * 41 + 10 + timeWidth + 8);
+    }
   }
 });
 
-test("UI-BAR-10 the BarButtons strip narrows first, never reaches the time, and gets nothing below 320px", () => {
-  const { fits, room } = rules();
-  // What BarButtons shows for a room: whole 41px cells (bar-buttons.slint).
-  const cells = (width: number, timeWidth: number) => Math.max(0, Math.floor(room(width, timeWidth) / 41));
-  for (const timeWidth of [40, 65, 85, 100, 140]) {
-    const fullscreenAt = 6 * 41 + 10 + timeWidth + 8 + 41 + 4;
-    let previous = Infinity;
-    for (let width = 1200; width >= 0; width--) {
-      const shown = cells(width, timeWidth);
-      const left = (fits(width, timeWidth) ? 6 : 5) * 41 + 10 + timeWidth + 8;
-      // The strip (x = width - cells × 41 - 4) never overlaps the buttons, the time or its 8px spare.
-      if (shown > 0) assert.ok(width - shown * 41 - 4 >= left, `time ${timeWidth}, width ${width}`);
-      // Narrowing never brings a cell back.
-      assert.ok(shown <= previous, `time ${timeWidth}, width ${width}`);
-      previous = shown;
-      // While Fullscreen shows, the strip has at least the toggle's cell.
-      if (fits(width, timeWidth)) assert.ok(shown >= 1, `time ${timeWidth}, width ${width}`);
-      if (width < 320) assert.equal(shown, 0, `width ${width}`);
-    }
-    // The strip loses all its plugin cells before Fullscreen goes: at the
-    // threshold only the toggle's cell is left; below it Fullscreen hides and
-    // the toggle stays until five buttons, the time and its cell no longer fit.
-    assert.equal(cells(fullscreenAt, timeWidth), 1);
-    assert.equal(cells(fullscreenAt + 40, timeWidth), 1);
-    assert.equal(cells(fullscreenAt + 41, timeWidth), 2);
-    const toggleAt = 5 * 41 + 10 + timeWidth + 8 + 41 + 4;
-    assert.equal(cells(fullscreenAt - 1, timeWidth), 1);
-    if (toggleAt >= 320) {
-      assert.equal(cells(toggleAt, timeWidth), 1);
-      assert.equal(cells(toggleAt - 1, timeWidth), 0);
+test("UI-BAR-10 narrowing drops Fullscreen, then Stop, then Previous / Next, then Open; Play / Pause stays", () => {
+  const { row } = rules();
+  const at = (width: number) => {
+    const r = row(width, 85);
+    return [r.fullscreen, r.stop, r.skip, r.open, r.buttons];
+  };
+  // An 85px time with 🔍 and Sidebar: each step at its threshold and one px below.
+  assert.deepEqual(at(435), [true, true, true, true, 6]);
+  assert.deepEqual(at(434), [false, true, true, true, 5]);
+  assert.deepEqual(at(394), [false, true, true, true, 5]);
+  assert.deepEqual(at(393), [false, false, true, true, 4]);
+  assert.deepEqual(at(353), [false, false, true, true, 4]);
+  assert.deepEqual(at(352), [false, false, false, true, 2]);
+  assert.deepEqual(at(320), [false, false, false, true, 2]);
+  assert.deepEqual(at(271), [false, false, false, true, 2]);
+  assert.deepEqual(at(270), [false, false, false, false, 1]);
+  assert.deepEqual(at(0), [false, false, false, false, 1]);
+  for (const fixed of [0, 1, 2, 3]) {
+    for (const timeWidth of [40, 65, 85, 100, 140]) {
+      const spare = 10 + timeWidth + 8 + fixed * 41 + 4;
+      const label = `time ${timeWidth}, fixed ${fixed}`;
+      // The thresholds: Stop at five buttons, Previous / Next at four, Open at two.
+      for (const [step, count] of [
+        ["stop", 5],
+        ["skip", 4],
+        ["open", 2],
+      ] as const) {
+        assert.equal(row(count * 41 + spare, timeWidth, fixed)[step], true, `${step}, ${label}`);
+        assert.equal(row(count * 41 + spare - 1, timeWidth, fixed)[step], false, `${step}, ${label}`);
+      }
+      let previous = row(1200, timeWidth, fixed);
+      for (let width = 1199; width >= 0; width--) {
+        const r = row(width, timeWidth, fixed);
+        // In that order: a control never shows while a less important one is gone.
+        if (r.skip) assert.ok(r.open, `${label}, width ${width}`);
+        if (r.stop) assert.ok(r.skip && r.open, `${label}, width ${width}`);
+        if (r.fullscreen) assert.ok(r.stop && r.skip && r.open, `${label}, width ${width}`);
+        // The count is the controls that show, Play / Pause always one of them.
+        assert.equal(r.buttons, 1 + +r.stop + 2 * +r.skip + +r.open + +r.fullscreen, `${label}, width ${width}`);
+        // Narrowing never brings a control back, and `content-min-width` only shrinks.
+        assert.ok(r.buttons <= previous.buttons && r.content <= previous.content, `${label}, width ${width}`);
+        assert.equal(r.content, r.buttons * 41 + 10 + timeWidth + 8, `${label}, width ${width}`);
+        previous = r;
+      }
     }
   }
-  // Three cells (two plugins' buttons and the toggle) next to Fullscreen and an 85px time: from 476px.
-  assert.equal(cells(476, 85), 3);
-  assert.equal(cells(475, 85), 2);
 });
 
-test("UI-BAR-10 bar.slint places the player's BarButtons at the right end and draws no sidebar toggle of its own", () => {
-  assert.ok(slint.includes('import { BarButtons } from "@vestra/bar-buttons.slint";'));
-  assert.match(slint, /strip := BarButtons \{\s+x: root\.width - self\.width - 4px;\s+y: 0px;\s+room: /);
-  // A persistent element: the player sees it placed only if it exists.
-  assert.doesNotMatch(slint, /if [^\n]*:\s*BarButtons/);
+test("UI-BAR-10 the player's strip never reaches the time while the bar's controls can make room", () => {
+  const { row } = rules();
+  for (const fixed of [0, 1, 2, 3]) {
+    for (const timeWidth of [40, 65, 85, 100, 140]) {
+      // Below this even Play / Pause, the time and the player's own cells do not fit.
+      const floor = 41 + 10 + timeWidth + 8 + fixed * 41 + 4;
+      for (let width = 1200; width >= floor; width--) {
+        const r = row(width, timeWidth, fixed);
+        // The player's own cells (no plugin buttons) start right of the row.
+        assert.ok(width - strip(width, r.content, fixed, 0) - 4 >= r.content, `time ${timeWidth}, width ${width}`);
+        // Plugin buttons get only what the row leaves: they never push the row's controls out.
+        for (const plugins of [1, 2, 8]) {
+          const room = width - r.content - 4;
+          const cells = Math.floor(room / 41);
+          if (cells > fixed) assert.ok(strip(width, r.content, fixed, plugins) <= room, `plugins ${plugins}, width ${width}`);
+        }
+      }
+    }
+  }
+  // An 85px time with 🔍, Sidebar and Fullscreen: a plugin's button fits beside them from 476px.
+  assert.equal(Math.floor((476 - row(476, 85).content - 4) / 41), 3);
+  assert.equal(strip(476, row(476, 85).content, 2, 1), 3 * 41);
+  assert.equal(Math.floor((475 - row(475, 85).content - 4) / 41), 2);
+});
+
+test("UI-BAR-10 bar.slint leaves the strip to the player and draws no sidebar toggle of its own", () => {
+  assert.ok(slint.includes('import { BarButtonsHost } from "@vestra/bar-buttons.slint";'));
+  assert.doesNotMatch(slint, /\bBarButtons\s*\{|import \{[^}]*\bBarButtons\b[^}]*\}/);
+  assert.match(slint, /out property <length> content-min-width: row\.left-width;/);
+  // `content-min-width` never reads the strip's width (the player sizes the strip from it).
+  assert.doesNotMatch(slint.replace(/\/\/.*$/gm, ""), /BarButtonsHost\.(width|room|shown|more)/);
   assert.doesNotMatch(slint, /SidebarToggle|has-sidebar|sidebar-on|sidebar-hidden|key-sidebar|tip-sidebar|toggle-sidebar/);
+  // A dropped control is a persistent element with no width, not actionable either.
+  for (const [icon, flag] of [
+    ["stop", "stop-fits"],
+    ["previous", "skip-fits"],
+    ["next", "skip-fits"],
+    ["open", "open-fits"],
+  ]) {
+    const button = new RegExp(
+      `BarButton \\{\\s+visible: row\\.${flag};\\s+width: row\\.${flag} \\? 41px : 0px;\\s+icon: "${icon}";\\s+tip: [^;]+;\\s+enabled: row\\.${flag} && `,
+    );
+    assert.match(slint, button, icon);
+  }
+  assert.doesNotMatch(slint, /if [^\n]*:\s*BarButton\b/);
 });
 
 test("UI-BAR-10 the threshold stays put while the time runs and when it shows the remaining time", () => {

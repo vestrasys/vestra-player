@@ -83,7 +83,7 @@ test("G-07 every bar element has a tooltip naming its key; Previous/Next name Pg
   assert.equal(tip.time, "点击切换剩余时间");
   assert.equal(tip.mute, "静音 (M)");
   assert.equal(tip.volume, "音量: 100%");
-  // The sidebar toggle is the player's (BarButtons, Toggle Sidebar): the bar sends no key for it.
+  // The sidebar toggle is the player's (its button strip, Toggle Sidebar): the bar sends no key for it.
   assert.equal("key-sidebar" in bar.props, false);
 
   host.setSource({ paused: true, output: { volume: 35, muted: true } });

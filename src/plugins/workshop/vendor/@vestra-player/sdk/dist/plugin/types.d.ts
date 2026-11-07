@@ -954,17 +954,17 @@ export type BarButtonIcon = "play" | "pause" | "stop" | "back" | "forward" | "op
  * A command's button on the bottom bar: {@link CommandOptions.button}.
  *
  * @remarks
- * **Where it shows.** The bottom bar places the player's strip of command
- * buttons, `BarButtons` from `@vestra/bar-buttons.slint`, at its right end;
- * the player fills it with the buttons of every plugin, left to right by
- * `order`, and its own sidebar toggle rightmost. When the window is narrow
- * the strip loses cells from its outer (left) end inward: the lowest order
- * goes first, the sidebar toggle last. A
- * bottom bar that does not place `BarButtons` shows no buttons: the
- * command's menu entry stays, and the player logs the buttons it cannot
- * show and whose bar hides them. The built-in bar (`vestra.playback`) places
- * it; see
- * [Writing a bottom bar](../../docs/guidelines/interface.md#writing-a-bottom-bar).
+ * **Where it shows.** The player draws the bottom bar's button strip and
+ * decides where it goes: today at the right end of the bottom bar; this may
+ * change (older players let the bar place `BarButtons` itself). Buttons
+ * are ordered by `order`, then by plugin id; lower `order` comes first and
+ * stays visible longest. When the strip runs out of room, or more than 8
+ * plugin buttons are declared, the remaining buttons move to the strip's »
+ * menu, in the same order. A button is never dropped: it is either in the
+ * strip or in the » menu, and its command keeps its menu entry, its key and
+ * its place in the command palette. Users may pin and unpin buttons later;
+ * do not rely on a position. See
+ * [Bottom-bar buttons](../../docs/explanation/commands.md#bottom-bar-buttons).
  *
  * **What it shows.** The icon, the command's title (translated, a trailing
  * "…" removed) and its first key as the tooltip ("Plugin Store (F9)"),
@@ -974,9 +974,9 @@ export type BarButtonIcon = "play" | "pause" | "stop" | "back" | "forward" | "op
  * a command with `checked` shows a small dot under its icon while checked.
  * A click runs the command exactly like a click on its menu item.
  *
- * **Limits.** One button per plugin and eight in the player
- * (`BAR_BUTTON_LIMITS`): a button past them is left out (its command and
- * menu entry stay) and the player logs it with `limit`. The button goes
+ * **Limits.** One button per plugin, the first it declares (a later one
+ * stays a menu item only), and eight in the strip (`BAR_BUTTON_LIMITS`); the
+ * rest are in the » menu. The button goes
  * with its command: disposing the command, or disabling, stopping or
  * uninstalling the plugin, removes it.
  *
@@ -984,8 +984,7 @@ export type BarButtonIcon = "play" | "pause" | "stop" | "back" | "forward" | "op
  * A Store icon appears in the bottom bar's button strip; a click opens
  * the store window, exactly like the menu item. The player draws the
  * button from the command's title, keys and state, and places it by
- * `order` (200 is where the player's own Plugin Store button sits); a
- * bar that does not place `BarButtons` shows only the menu item.
+ * `order` (200 is where the player's own Plugin Store button sits).
  * ```ts
  * const store = plugin.windows.create("ui/store.slint");
  * plugin.commands.add({
@@ -1238,8 +1237,8 @@ export interface CommandOptions {
     /**
      * A button for this command on the bottom bar (SDK 1.5.29, player 0.5.10):
      * an icon and a place, `{ icon: "store", order: 200 }`. Needs a `path`: the
-     * menu entry is where the command stays reachable when the bar shows no
-     * button (a bar without `BarButtons`, a narrow window, a limit). See
+     * menu entry is where the command stays reachable wherever the button
+     * is (the strip or its » menu). See
      * {@link CommandButton} for where it shows, what it shows and the limits.
      * Fails with `invalid` for an unknown icon name, an order outside 0–999 or
      * a button without a path.
@@ -4218,6 +4217,36 @@ export interface TimelineMark {
     readonly plugin: string;
 }
 /**
+ * How a timeline range is drawn; readers choose colours by it.
+ *
+ * - `"selection"`: a span the user picked to act on, such as a clip to
+ *   export. The player's seek bar draws it in the accent colour.
+ * - `"region"`: a part of the media the plugin describes, such as an intro
+ *   or a chapter's span. Drawn dimmer, under selections.
+ *
+ * @since 1.6.9
+ * @category Playback
+ */
+export type RangeStyle = "selection" | "region";
+/**
+ * One range on the seek bar (player 0.7.6).
+ *
+ * @since 1.6.9
+ * @category Playback
+ */
+export interface TimelineRange {
+    /** Seconds from the start. */
+    readonly start: number;
+    /** Seconds from the start, after `start`. */
+    readonly end: number;
+    /** How it is drawn. */
+    readonly style: RangeStyle;
+    /** Label, `null` without one. */
+    readonly title: string | null;
+    /** The manifest id of the plugin that published it. */
+    readonly plugin: string;
+}
+/**
  * This plugin's own marks; disposing it removes them.
  *
  * @remarks
@@ -4274,6 +4303,54 @@ export interface TimelineLayer extends Disposable {
     }[], options?: {
         ifCurrent?: PlayerState;
     }): void;
+    /**
+     * Replace the layer's ranges (last write wins; `[]` clears them), spans of
+     * the media drawn on the seek bar (player 0.7.6). The marks and the ranges
+     * of a layer are replaced on their own: `set` keeps the ranges and
+     * `setRanges` keeps the marks. Disposing the layer, its scope or stopping
+     * the plugin removes both, and a new source clears every layer.
+     *
+     * At most 100 ranges (`TIMELINE_LIMITS.ranges`), `0 ≤ start < end`, `end`
+     * within the media while its duration is known, titles ≤ 100 characters.
+     * Ranges may overlap. Failures go to `onError`; with `ifCurrent`, a
+     * write for another source is dropped silently. A title is data or a
+     * {@link Text} the player translates, as in `set`.
+     *
+     * Players before 0.7.6 build `plugin` from an SDK without `setRanges`, so
+     * the call throws a `TypeError` there: declare
+     * `"minPlayerVersion": "0.7.6"`.
+     *
+     * @example Show the clip range on the seek bar while a panel is open
+     * The span the user picked shows on the seek bar in the accent colour
+     * while the plugin's tab is showing, and goes when it is not. Two point
+     * marks would show the ends but not the span between them.
+     * ```ts
+     * declare const panel: Panel;
+     * declare const clip: { start: number; end: number };
+     * // ---cut---
+     * const layer = plugin.timeline.layer();
+     * // Only while the tab is on screen; [] takes the range away.
+     * const show = () =>
+     *   layer.setRanges(
+     *     panel.state?.effective
+     *       ? [{ start: clip.start, end: clip.end, style: "selection", title: "Clip" }]
+     *       : [],
+     *     { ifCurrent: plugin.player.state },
+     *   );
+     * panel.onChange(show);
+     * ```
+     *
+     * @capability timeline.marks
+     * @since 1.6.9
+     */
+    setRanges(ranges: {
+        start: number;
+        end: number;
+        style: RangeStyle;
+        title?: string | Text;
+    }[], options?: {
+        ifCurrent?: PlayerState;
+    }): void;
 }
 /**
  * `plugin.timeline`: marks on the seek bar. Every plugin publishes one
@@ -4304,6 +4381,38 @@ export interface TimelineLayer extends Disposable {
 export interface Timeline {
     /** Every layer merged, by time (`playback.read`). Empty on a new source. */
     readonly marks: readonly TimelineMark[];
+    /**
+     * Every layer's ranges merged, by start (`playback.read`; player 0.7.6:
+     * on older players `ranges` does not exist and reads `undefined`). Empty
+     * on a new source. Kept current like `marks` (with `events`): read it in
+     * a {@link View.bind} function and the view follows it. `onChange` runs
+     * only when the marks change.
+     *
+     * @example Draw the published ranges in a seek bar of your own
+     * A bottom bar draws a band for every range on the seek bar, whoever
+     * published it, as fractions of the duration.
+     * ```ts
+     * declare const bar: View;
+     * // ---cut---
+     * bar.bind(() => {
+     *   // Reading `ranges` here runs the binding again when they change.
+     *   const duration = plugin.player.state.duration ?? 0;
+     *   return {
+     *     ranges: duration
+     *       ? plugin.timeline.ranges.map((range) => ({
+     *           from: range.start / duration,
+     *           to: range.end / duration,
+     *           selection: range.style === "selection",
+     *         }))
+     *       : [],
+     *   };
+     * });
+     * ```
+     *
+     * @capability playback.read
+     * @since 1.6.9
+     */
+    readonly ranges: readonly TimelineRange[];
     /**
      * The merged list changed (needs `events`; at most every 100 ms).
      *
@@ -6701,12 +6810,19 @@ export interface Osd {
      *
      * @param text - The template, 1–200 characters once translated and
      *   formatted; line breaks become spaces.
+     * With `options.actions` (player 0.7.6) the message ends in up to two
+     * buttons, each running one of the plugin's own commands
+     * ({@link OsdShowOptions}). Older players show the message without them.
+     *
      * @param args - Values for its placeholders (player 0.4.3; older players
-     *   show the template as it is).
+     *   show the template as it is). Pass `null` with a `Text` and options.
+     * @param options - Action buttons after the text (SDK 1.6.9).
      * @returns Resolves once the message is on screen.
      *
      * @throws `invalid` (rejects) The shown text is empty, only white space,
-     *   or longer than 200 characters, or `args` is not a {@link TemplateArgs}.
+     *   or longer than 200 characters, or `args` is not a {@link TemplateArgs};
+     *   or there are more than 2 actions, a title is empty or longer than 40
+     *   characters once translated, or a command is not one of the plugin's.
      * @throws `unavailable` (rejects) The player runs without a user interface.
      * @throws `capability` (rejects) The manifest does not declare `ui.osd`.
      *
@@ -6720,9 +6836,28 @@ export interface Osd {
      * await plugin.osd.show("Speed {}×", [plugin.player.state.rate]);
      * ```
      *
+     * @example Offer "Show in Folder" after saving a file
+     * The OSD reads "Saved clip.mp4 [Show in Folder]" for about 4 seconds,
+     * longer while the pointer is on it. A click runs the plugin's own
+     * `reveal` command, which knows the last saved file; the message goes.
+     * ```ts
+     * declare const path: string;
+     * // ---cut---
+     * let saved = path; // the command acts on the last saved file
+     * plugin.commands.add({
+     *   id: "reveal",
+     *   title: "Show Last Saved File in Folder",
+     *   enabled: () => saved !== "",
+     *   run: () => plugin.system.reveal(saved),
+     * });
+     * await plugin.osd.show("Saved {}", [saved.split(/[\\/]/).pop() ?? saved], {
+     *   actions: [{ title: "Show in Folder", command: "reveal" }], // one button
+     * });
+     * ```
+     *
      * @since 1.0.0
      */
-    show(text: TextValue, args?: TemplateArgs): Promise<void>;
+    show(text: TextValue, args?: TemplateArgs | null, options?: OsdShowOptions): Promise<void>;
     /**
      * Create this plugin's information block.
      *
@@ -6748,6 +6883,54 @@ export interface Osd {
      * @since 1.0.0
      */
     panel(): OsdPanel;
+}
+/**
+ * One button at the end of an OSD message ({@link Osd.show}, player 0.7.6).
+ *
+ * @since 1.6.9
+ * @category UI
+ */
+export interface OsdAction {
+    /**
+     * The button's label: English source text the player translates with the
+     * plugin's catalog, or a {@link Text}; 1–40 characters once translated
+     * (`OSD_LIMITS.actionChars`). A verb, as on a menu item: "Show in
+     * Folder", "Copy", "Undo".
+     */
+    title: TextValue;
+    /**
+     * The local id of one of this plugin's own commands
+     * ({@link CommandOptions.id}), declared when the message is shown. A
+     * click runs it as if the user picked it from a menu: a disabled command
+     * does nothing. The command takes no arguments, so it acts on what the
+     * plugin remembers (the file it just saved).
+     */
+    command: string;
+}
+/**
+ * Options of {@link Osd.show} (SDK 1.6.9).
+ *
+ * @remarks
+ * A message with actions stays about 4 seconds instead of 2, and does not
+ * fade while the pointer is on it and moving: it goes 2 seconds after the
+ * pointer leaves or rests (the player's idle time), and at the latest 30
+ * seconds after it showed, hovered or not. A click on a button runs its
+ * command and removes the message.
+ * It is still one line: the buttons follow the text. Buttons take no
+ * keyboard focus; screen readers can press them. A newer message, from any
+ * plugin or the player, replaces the message with its buttons, and the
+ * buttons go when the plugin stops. While its buttons show, the plugin is
+ * not stopped for being idle.
+ *
+ * Players before 0.7.6 ignore `actions` and show the text alone for 2
+ * seconds, so do not make an action the only way to reach something.
+ *
+ * @since 1.6.9
+ * @category UI
+ */
+export interface OsdShowOptions {
+    /** At most 2 buttons (`OSD_LIMITS.actions`), in order after the text. */
+    actions?: readonly OsdAction[];
 }
 /**
  * The state of a filter, display layer or render options handle.

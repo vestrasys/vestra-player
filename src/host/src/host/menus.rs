@@ -488,6 +488,23 @@ impl Host {
                 value
             }
             MenuMode::Palette => return self.refresh_palette(window),
+            MenuMode::Bar(items) => {
+                // A button whose command went while `»` is open drops out.
+                let entries: Vec<_> = items
+                    .iter()
+                    .filter_map(|(owner, id)| self.commands.get(*owner, id))
+                    .collect();
+                let (origin, size) = menu_frame(window);
+                let value = menu::bar_level(
+                    &entries,
+                    origin,
+                    size,
+                    self.menu_scroll.first().copied().unwrap_or(0.),
+                    &labels,
+                );
+                self.menu_panels = menu::panels(&value);
+                value
+            }
             MenuMode::Tabs => {
                 // Every tab, in that window's tab order (sidebar-tabs.md).
                 let owners = match &self.floating {

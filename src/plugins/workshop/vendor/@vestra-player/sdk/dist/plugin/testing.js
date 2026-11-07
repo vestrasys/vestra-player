@@ -76,6 +76,7 @@ import { localSocketPath } from "./local.js";
 import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "../commands.js";
 import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.js";
 import { OSD_LIMITS } from "./osd.js";
+import { TIMELINE_LIMITS } from "./timeline.js";
 import { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./services.js";
 import { SUBTITLE_LIMITS } from "./subtitles.js";
 import { BINDING_INPUTS, canonical, keyLabel } from "./bindings.js";
@@ -105,6 +106,8 @@ export { CAPABILITY_INFO };
 export { MESSAGE_LIMIT };
 /** The player's limits on the on-screen display. */
 export { OSD_LIMITS };
+/** The player's limits on a timeline layer. */
+export { TIMELINE_LIMITS };
 /** The player's limits on stored secrets. */
 export { SECRET_LIMITS };
 /** The player's limits on `plugin.storage.session`. */
@@ -536,6 +539,46 @@ export class TestHost {
      * template and args the plugin sent are in `host.sent("osd.show")`.
      */
     osd = [];
+    /**
+     * The action buttons of each `osd.show` message, in step with `osd`
+     * (index for index): each button's title as shown and its command; `[]`
+     * for a message without actions (SDK 1.6.9).
+     */
+    osdActions = [];
+    /**
+     * Press button `index` of the newest OSD message, as the user does
+     * (player 0.7.6): its command runs as if picked from a menu, and settles.
+     * A disabled or busy command does nothing, as in the player.
+     *
+     * @param index - 0 or 1.
+     *
+     * @throws `Error` (rejects) The newest message has no button `index`.
+     *
+     * @example Press "Show in Folder" on the saved message
+     * The test checks the button the plugin put on its newest message, then
+     * presses it as the user would: the plugin's `reveal` command runs.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * assert.deepEqual(host.osdActions.at(-1), [
+     *   { title: "Show in Folder", command: "reveal" },
+     * ]);
+     * await host.pressOsdAction(0); // runs the plugin's `reveal` command
+     * ```
+     *
+     * @capability None.
+     * @since 1.6.9
+     */
+    async pressOsdAction(index) {
+        const action = this.osdActions.at(-1)?.[index];
+        if (!action)
+            throw new Error(`the newest OSD message has no button ${index}`);
+        const command = this.commands.get(action.command);
+        if (!command || command.state.busy || !command.state.enabled)
+            return;
+        await command.run();
+    }
     /** The text of this plugin's osd panel as shown, `null` when hidden. */
     osdPanel = null;
     #locale;
@@ -900,7 +943,59 @@ export class TestHost {
             })))
                 .sort((a, b) => a.time - b.time);
         },
+        /**
+         * Each plugin's ranges by plugin id; layers without ranges are absent
+         * (SDK 1.6.9).
+         */
+        rangeLayers: new Map(),
+        /** Every layer's ranges merged, sorted by start, with the plugin's id. */
+        get ranges() {
+            return [...this.rangeLayers]
+                .flatMap(([plugin, ranges]) => ranges.map((range) => ({
+                ...range,
+                /** The manifest id of the plugin that published the range. */
+                plugin,
+            })))
+                .sort((a, b) => a.start - b.start);
+        },
     };
+    /**
+     * Simulate another plugin publishing its timeline ranges (or clearing
+     * them with `[]`); pushes `timeline.changed` when the plugin subscribed.
+     *
+     * @param pluginId - The other plugin's manifest id.
+     * @param ranges - All its ranges.
+     *
+     * @example Let another plugin publish a clip range
+     * The plugin under test sees a range another plugin put on the seek bar:
+     * `setTimelineRanges` stores that plugin's ranges and pushes
+     * `timeline.changed`, and `settle()` lets it arrive.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.setTimelineRanges("community.clips", [
+     *   { start: 40, end: 52.5, style: "selection", title: "Clip" },
+     * ]);
+     * await host.settle();
+     * assert.equal(plugin.timeline.ranges[0]?.plugin, "community.clips");
+     * ```
+     *
+     * @capability None.
+     * @since 1.6.9
+     */
+    setTimelineRanges(pluginId, ranges) {
+        if (ranges.length)
+            this.timeline.rangeLayers.set(pluginId, ranges.map((r) => ({
+                start: r.start,
+                end: r.end,
+                style: r.style,
+                title: r.title ?? null,
+            })));
+        else
+            this.timeline.rangeLayers.delete(pluginId);
+        this.#timelineChanged();
+    }
     /**
      * Simulate another plugin publishing its timeline layer (or clearing it
      * with `[]`); pushes `timeline.changed` when the plugin subscribed.
@@ -941,7 +1036,10 @@ export class TestHost {
         this.#timelineChanged();
     }
     #timelineChanged() {
-        this.emit("timeline.changed", { marks: this.timeline.marks });
+        this.emit("timeline.changed", {
+            marks: this.timeline.marks,
+            ranges: this.timeline.ranges,
+        });
     }
     /**
      * Runtime images written to views (`plugin.ui.image`,
@@ -3405,8 +3503,8 @@ export class TestHost {
      * The plugin's bottom-bar buttons (`CommandOptions.button`) as the player
      * shows them: at most one, the first declared (`BAR_BUTTON_LIMITS`; a
      * later one stays a menu item only). Empty once the command is disposed.
-     * Whether the bar places them is the bar's business: the list is what
-     * the player hands to `BarButtons`.
+     * Whether one is in the strip or its » menu is the player's business
+     * (the room and the other plugins' buttons).
      *
      * @example Click the plugin's bottom-bar button in a test
      * The test finds the plugin's Store button, clicks it and checks that the
@@ -3663,8 +3761,9 @@ export class TestHost {
             next.terminalReason = null;
             next.capabilities = { ...readyCapabilities };
             next.loop = null; // a new source clears the A-B loop
-            if (this.timeline.layers.size) {
+            if (this.timeline.layers.size || this.timeline.rangeLayers.size) {
                 this.timeline.layers.clear(); // and every timeline layer
+                this.timeline.rangeLayers.clear();
                 queueMicrotask(() => this.#timelineChanged());
             }
         }
@@ -4452,7 +4551,22 @@ export class TestHost {
             const text = this.#shown(p.text, p.args, "text").replace(/[\n\r]/g, " ");
             if (!text.trim() || [...text].length > OSD_LIMITS.messageChars)
                 throw new HostError("invalid", `osd text needs 1..${OSD_LIMITS.messageChars} characters`);
+            // Player 0.7.6: up to 2 buttons, each a command of this plugin.
+            const sent = p.actions;
+            if (sent !== undefined &&
+                (!Array.isArray(sent) || sent.length > OSD_LIMITS.actions))
+                throw new HostError("invalid", `actions is a list of at most ${OSD_LIMITS.actions}`);
+            const actions = (sent ?? []).map((action) => {
+                const title = this.#shown(action.title, undefined, "title").replace(/[\n\r]/g, " ");
+                if (!title.trim() || [...title].length > OSD_LIMITS.actionChars)
+                    throw new HostError("invalid", `an action title needs 1..=${OSD_LIMITS.actionChars} characters`);
+                const command = String(action.command);
+                if (!this.commands.has(command))
+                    throw new HostError("invalid", `${command} is not a command of this plugin`);
+                return { title, command };
+            });
             this.osd.push(text);
+            this.osdActions.push(actions);
         },
         "osd.panel": (p) => {
             if (p.text === null)
@@ -4701,7 +4815,10 @@ export class TestHost {
             if (next !== undefined)
                 panel.props[property] = next;
         },
-        "timeline.marks": () => ({ marks: this.timeline.marks }),
+        "timeline.marks": () => ({
+            marks: this.timeline.marks,
+            ranges: this.timeline.ranges,
+        }),
         "drops.provide": (p) => {
             const id = String(p.id);
             const index = this.dropProviders.findIndex((d) => d.id === id);
@@ -4892,6 +5009,44 @@ export class TestHost {
                 time: m.time,
                 kind: String(m.kind),
                 title: m.title ?? null,
+            })));
+            return { applied: true };
+        },
+        // Player 0.7.6: the layer's ranges, replaced on their own.
+        "timeline.setRanges": (p) => {
+            if (p.sourceId !== undefined &&
+                p.sourceId !== this.source.stamp.generation)
+                return { applied: false };
+            const sent = p.ranges;
+            const duration = this.source.duration;
+            if (!Array.isArray(sent) || sent.length > TIMELINE_LIMITS.ranges)
+                throw new HostError("invalid", `a layer holds at most ${TIMELINE_LIMITS.ranges} ranges`);
+            const ranges = sent.map((range) => ({ ...range }));
+            for (const range of ranges) {
+                const { start, end } = range;
+                const time = (t) => typeof t === "number" && Number.isFinite(t) && t >= 0;
+                if (!time(start) || !time(end))
+                    throw new HostError("invalid", "start and end must be numbers ≥ 0");
+                if (end <= start)
+                    throw new HostError("invalid", `end ${end} must be after start ${start}`);
+                // As the player (timeline.rs): 1e-6 s of rounding past the end is allowed.
+                if (duration !== null && end > duration + 1e-6)
+                    throw new HostError("invalid", `end ${end} is after the end of the media`);
+                if (!["selection", "region"].includes(String(range.style)))
+                    throw new HostError("invalid", "style is selection or region");
+                if (isTextValue(range.title))
+                    range.title = this.#declared(range.title, "title");
+                if (range.title !== undefined &&
+                    range.title !== null &&
+                    (typeof range.title !== "string" ||
+                        [...range.title].length > TIMELINE_LIMITS.titleChars))
+                    throw new HostError("invalid", `title must be ≤ ${TIMELINE_LIMITS.titleChars} characters`);
+            }
+            this.setTimelineRanges(this.manifestId, ranges.map((r) => ({
+                start: r.start,
+                end: r.end,
+                style: String(r.style),
+                title: r.title ?? null,
             })));
             return { applied: true };
         },

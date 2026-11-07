@@ -1,13 +1,22 @@
 //! Bottom-bar command buttons (player 0.5.10, SDK 1.5.29). A command declared
 //! with a `button` (`CommandOptions.button`: an icon and an order) and a menu
-//! path gets a cell in the strip `BarButtons` (`@vestra/bar-buttons.slint`)
-//! that the bottom bar places in its own layout; the player's own Toggle
-//! Sidebar command is the rightmost cell. The player fills the strip's
-//! global (`BarButtonsHost`) in every window it composes (the main window and
-//! the floating sidebar) and runs a click like a click on the command's menu
-//! item (`execute_command`). One button per plugin, eight in the player
-//! (`commands::Registry::buttons`); a button left out is logged once, and so
-//! is a bottom bar that does not place `BarButtons` while buttons exist.
+//! path gets a cell in the player's strip. Since the menu redesign (step 3a,
+//! SDK 1.6.8) the player places the strip itself (`HostBarStrip`,
+//! ui/bar-strip.slint) at the right end of the bottom slot, or in a band of
+//! its own without a bottom bar: `[plugin buttons…][»][Command Palette]
+//! [Toggle Sidebar]`. The bar says how wide its row is with every control
+//! (`content-full-width`; plugin buttons get only the room beyond it) or at
+//! least (`content-min-width`, a 3a bar; composition.rs) and reads the strip's width
+//! (`BarButtonsHost.width`). A bar that still places the deprecated
+//! `BarButtons` gets that one instead (the player's hides itself).
+//!
+//! The player fills the strip's global (`BarButtonsHost`) in every window it
+//! composes and runs a click like a click on the command's menu item
+//! (`execute_command`). One button per plugin, eight in the strip
+//! (`commands::Registry::buttons`); the rest, and the ones the width leaves
+//! out, are in the strip's `»` menu (the host menu layer, `MenuMode::Bar`).
+//! Nothing is left out silently, so the remaining log lines are debug
+//! (`VESTRA_DEBUG_BAR=1`).
 #![forbid(unsafe_code)]
 use crate::host::*;
 use crate::ui::{composition, window_state};
@@ -22,6 +31,13 @@ use std::collections::BTreeSet;
 pub const GLOBAL: &str = "BarButtonsHost";
 /// The player's Toggle Sidebar command (owner `bindings::HOST`).
 pub const SIDEBAR: &str = "sidebar";
+
+/// `VESTRA_DEBUG_BAR=1`: the strip's debug lines (buttons in `»`, a
+/// plugin's buttons after its first, a bar placing `BarButtons`).
+fn debug_bar() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VESTRA_DEBUG_BAR").is_some_and(|v| v == "1"))
+}
 
 /// One cell as the player fills it.
 #[derive(Clone, Debug, PartialEq)]
@@ -45,7 +61,7 @@ impl Item {
     }
 }
 
-/// A button left out past a limit: owner, command id, plugin id, the limit.
+/// A button not in the strip: owner, command id, plugin id, where it went.
 type Dropped = (u64, String, String, &'static str);
 
 /// What the strip is computed from. The window tick compares it (a few
@@ -72,17 +88,29 @@ pub struct Strip {
     /// Rebuilds so far (a test counts them).
     rebuilds: u64,
     buttons: Vec<Item>,
+    /// Past [`commands::Registry::MAX_BUTTONS`]: always in `»`.
+    overflow: Vec<Item>,
     toggle: Option<Item>,
-    /// Window generations that show `buttons` and `toggle`.
+    palette: Option<Item>,
+    /// Window generations that show `buttons`, `overflow`, `toggle`, `palette`.
     applied: BTreeSet<u64>,
-    /// Buttons left out past a limit, logged once each.
+    /// Buttons not in the strip, logged once each (debug).
     logged: BTreeSet<(u64, String)>,
-    /// The last warning about a bar without `BarButtons`: its owner and the
-    /// buttons it hides.
-    warned: Option<(u64, Vec<String>)>,
+    /// The shell generation whose bar was seen placing `BarButtons` (debug).
+    placed: Option<u64>,
 }
 
 impl Strip {
+    /// What `»` lists, in strip order: the plugin buttons from `shown` on
+    /// (the ones the room leaves out), then the ones past eight.
+    pub fn more(&self, shown: usize) -> Vec<(u64, String)> {
+        self.buttons
+            .iter()
+            .skip(shown)
+            .chain(&self.overflow)
+            .map(|item| (item.owner, item.id.clone()))
+            .collect()
+    }
     /// Whether the strip must be rebuilt for `inputs`; counts the rebuilds.
     fn begin(&mut self, inputs: &Inputs) -> bool {
         if self.inputs.as_ref() == Some(inputs) {
@@ -99,6 +127,7 @@ impl Strip {
         self.buttons
             .iter()
             .chain(self.toggle.as_ref())
+            .chain(self.palette.as_ref())
             .find(|item| item.token() == token)
             .map(|item| (item.owner, item.id.clone()))
     }
@@ -211,44 +240,76 @@ impl Host {
         }
     }
 
-    /// The plugins' cells, and the buttons left out (owner, id, plugin id, limit).
-    fn bar_items(&self) -> (Vec<Item>, Vec<Dropped>) {
+    /// The plugins' cells (the strip's, then the ones past eight), and the
+    /// buttons not in the strip (owner, id, plugin id, where they went).
+    fn bar_items(&self) -> (Vec<Item>, Vec<Item>, Vec<Dropped>) {
         let buttons = self.commands.buttons();
         let input = self.input.borrow();
-        let shown = buttons
-            .shown
-            .iter()
-            .filter_map(|entry| {
-                let button = entry.declaration.button.as_ref()?;
-                let (owner, id) = (entry.key.owner, entry.key.local_id.clone());
-                let label = label(entry.declaration.shown_title());
-                let key = input.table.label(owner, &id);
-                Some(Item {
-                    tip: tip(&label, key.as_deref(), &entry.state),
-                    owner,
-                    id,
-                    icon: button.icon.clone(),
-                    label,
-                    enabled: entry.state.enabled && !entry.state.busy,
-                    checkable: entry.state.checked.is_some(),
-                    checked: entry.state.checked == Some(true),
-                    dimmed: false,
+        let items = |list: &[&commands::CommandSnapshot]| -> Vec<Item> {
+            list.iter()
+                .filter_map(|entry| {
+                    let button = entry.declaration.button.as_ref()?;
+                    let (owner, id) = (entry.key.owner, entry.key.local_id.clone());
+                    let label = label(entry.declaration.shown_title());
+                    let key = input.table.label(owner, &id);
+                    Some(Item {
+                        tip: tip(&label, key.as_deref(), &entry.state),
+                        owner,
+                        id,
+                        icon: button.icon.clone(),
+                        label,
+                        enabled: entry.state.enabled && !entry.state.busy,
+                        checkable: entry.state.checked.is_some(),
+                        checked: entry.state.checked == Some(true),
+                        dimmed: false,
+                    })
                 })
-            })
-            .collect();
+                .collect()
+        };
+        let (shown, overflow) = (items(&buttons.shown), items(&buttons.overflow));
         let dropped = buttons
             .dropped
             .iter()
+            .copied()
+            .chain(
+                buttons
+                    .overflow
+                    .iter()
+                    .map(|entry| (*entry, "past 8 in the strip: in its » menu")),
+            )
             .map(|(entry, limit)| {
                 (
                     entry.key.owner,
                     entry.key.local_id.clone(),
                     entry.manifest.clone(),
-                    *limit,
+                    limit,
                 )
             })
             .collect();
-        (shown, dropped)
+        (shown, overflow, dropped)
+    }
+
+    /// The command palette's cell (`host/palette`): the magnifier, always
+    /// shown, right of `»`.
+    fn palette_item(&self) -> Option<Item> {
+        let entry = self.commands.get(bindings::HOST, palette::PALETTE)?;
+        let label = label(entry.declaration.shown_title());
+        let key = self
+            .input
+            .borrow()
+            .table
+            .label(bindings::HOST, palette::PALETTE);
+        Some(Item {
+            owner: bindings::HOST,
+            id: palette::PALETTE.into(),
+            icon: commands::ButtonIcon::Name("search".into()),
+            tip: tip(&label, key.as_deref(), &entry.state),
+            label,
+            enabled: entry.state.enabled && !entry.state.busy,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        })
     }
 
     /// The sidebar toggle's cell: the Toggle Sidebar command, the playlist
@@ -292,21 +353,26 @@ impl Host {
             return;
         }
         self.sidebar_command_state();
-        let (buttons, dropped) = self.bar_items();
+        let (buttons, overflow, dropped) = self.bar_items();
         for (owner, id, manifest, limit) in dropped {
-            if self.bar.logged.insert((owner, id.clone())) {
-                diag!(
-                    "bar buttons: {manifest}/{id} shows no button ({limit}, code limit); its menu entry stays"
-                );
+            if self.bar.logged.insert((owner, id.clone())) && debug_bar() {
+                diag!("bar buttons: {manifest}/{id}: {limit}; its menu entry stays");
             }
         }
         let toggle = self.sidebar_item(sidebar);
-        if buttons != self.bar.buttons || toggle != self.bar.toggle {
+        let palette = self.palette_item();
+        if buttons != self.bar.buttons
+            || overflow != self.bar.overflow
+            || toggle != self.bar.toggle
+            || palette != self.bar.palette
+        {
             for item in &self.bar.buttons {
                 self.images.release_view(item.owner, "$bar");
             }
             self.bar.buttons = buttons;
+            self.bar.overflow = overflow;
             self.bar.toggle = toggle;
+            self.bar.palette = palette;
             self.bar.applied.clear();
         }
         let mut windows = vec![(self.shell_generation, shell.clone_strong())];
@@ -396,50 +462,64 @@ impl Host {
             SValue::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
         )?;
         window.set_global_property(GLOBAL, "toggle", cell(self.bar.toggle.as_ref(), None))?;
+        window.set_global_property(GLOBAL, "palette", cell(self.bar.palette.as_ref(), None))?;
+        window.set_global_property(
+            GLOBAL,
+            "overflow",
+            SValue::Number(self.bar.overflow.len() as f64),
+        )?;
         Ok(())
     }
 
-    /// Log once when the plugins have buttons and the mounted bottom bar
-    /// places no `BarButtons`: they show only as menu items then.
+    /// A bottom bar that still places the deprecated `BarButtons`: the
+    /// player's strip hides itself (no second strip); said once per shell
+    /// (debug).
     fn bar_placement(&mut self, shell: &slint_interpreter::ComponentInstance) {
-        let bottom = self
-            .mounts
-            .values()
-            .find(|mount| mount.spec.slot == composition::Slot::Bottom);
         let placed = matches!(
             shell.get_global_property(GLOBAL, "placed"),
             Ok(SValue::Bool(true))
         );
-        let warning = bottom
-            .filter(|_| !placed && !self.bar.buttons.is_empty())
-            .map(|mount| {
-                let hidden = self
-                    .bar
-                    .buttons
-                    .iter()
-                    .map(|item| {
-                        let plugin = self
-                            .plugins
-                            .get(&item.owner)
-                            .map_or_else(|| item.owner.to_string(), |p| p.manifest.id.clone());
-                        format!("{plugin}/{}", item.id)
-                    })
-                    .collect::<Vec<_>>();
-                (mount.spec.owner, mount.manifest.clone(), hidden)
-            });
-        match warning {
-            Some((owner, manifest, hidden)) => {
-                let seen = Some((owner, hidden.clone()));
-                if self.bar.warned != seen {
-                    diag!(
-                        "bar buttons: the bottom bar of {manifest} does not place BarButtons (@vestra/bar-buttons.slint); not shown, menu entries only: {}",
-                        hidden.join(", ")
-                    );
-                    self.bar.warned = seen;
-                }
+        if placed && self.bar.placed != Some(self.shell_generation) {
+            self.bar.placed = Some(self.shell_generation);
+            if debug_bar() {
+                let bar = self
+                    .mounts
+                    .values()
+                    .find(|mount| mount.spec.slot == composition::Slot::Bottom)
+                    .map_or("?", |mount| mount.manifest.as_str());
+                diag!(
+                    "bar buttons: the bottom bar of {bar} places BarButtons (deprecated); the player's strip stays hidden"
+                );
             }
-            None => self.bar.warned = None,
         }
+    }
+
+    /// `»` in the strip of window `generation`, its top-left corner at
+    /// (`x`, `y`): the plugin buttons not in the strip, as a host menu
+    /// above it.
+    pub(crate) fn bar_more(&mut self, generation: u64, x: f64, y: f64) {
+        if !self.window_generation_live(generation) || !x.is_finite() || !y.is_finite() {
+            return;
+        }
+        let Some(window) = self
+            .window_for(generation)
+            .map(ComponentHandle::clone_strong)
+        else {
+            return;
+        };
+        let shown = match window.get_global_property(GLOBAL, "shown") {
+            Ok(SValue::Number(shown)) if shown >= 0. => shown as usize,
+            _ => 0,
+        };
+        let items = self.bar.more(shown);
+        if items.is_empty() {
+            return;
+        }
+        input_trace::mark("host loop: bar button »");
+        self.policy.activity(self.now_ms());
+        let _ = window.set_property("menu-origin-x", x.into());
+        let _ = window.set_property("menu-origin-y", y.into());
+        self.open_menu(generation, MenuMode::Bar(items));
     }
 
     /// A click on a cell: run the command as its menu item would.
@@ -510,6 +590,51 @@ mod tests {
         // Another command of the same plugin, or of the player, is not a cell.
         assert_eq!(strip.target("7/secret"), None);
         assert_eq!(strip.target("0/quit"), None);
+        // Step 3a: the palette cell is one.
+        let strip = Strip {
+            palette: Some(item(bindings::HOST, palette::PALETTE)),
+            ..strip
+        };
+        assert_eq!(strip.target("0/palette"), Some((0, "palette".into())));
+    }
+
+    /// Step 3a: `»` lists the strip's buttons the room left out, then the
+    /// ones past eight, in strip order; nothing is left out.
+    #[test]
+    fn more_lists_what_the_room_left_out_then_what_is_past_eight() {
+        let item = |owner, id: &str| Item {
+            owner,
+            id: id.into(),
+            icon: commands::ButtonIcon::Name("ai".into()),
+            label: String::new(),
+            tip: String::new(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        let strip = Strip {
+            buttons: (1..=8).map(|owner| item(owner, "b")).collect(),
+            overflow: vec![item(9, "b"), item(10, "b")],
+            ..Strip::default()
+        };
+        let owners = |shown| {
+            strip
+                .more(shown)
+                .into_iter()
+                .map(|(owner, _)| owner)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(owners(8), [9, 10]);
+        assert_eq!(owners(6), [7, 8, 9, 10]);
+        assert_eq!(owners(0), (1..=10).collect::<Vec<_>>());
+        let few = Strip {
+            buttons: vec![item(1, "b")],
+            ..Strip::default()
+        };
+        assert!(few.more(1).is_empty());
+        // `shown` past the list (a stale read) lists only the overflow.
+        assert_eq!(strip.more(20).len(), 2);
     }
 
     /// The window tick rebuilds the strip only when what it is made from

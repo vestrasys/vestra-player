@@ -1,7 +1,7 @@
 //! Projection of the shared command tree into the compact cascading context menu.
 //! Pure data and geometry; the Slint view in ui/menu-view.slint only draws it.
 
-use crate::commands::{CommandSnapshot, MenuNode};
+use crate::commands::{ButtonIcon, CommandSnapshot, MenuNode};
 use serde_json::{Value, json};
 
 /// Must match MenuItem height, separator height and panel padding in ui/menu-view.slint.
@@ -18,6 +18,9 @@ const ITEM_PAD_RIGHT: f64 = 8.;
 const CHECK: f64 = 18.;
 const SPACING: f64 = 4.;
 const SUBMENU: f64 = 10.;
+/// The icon column of a row with an icon (the bar strip's `»`): 14px and
+/// 4px to the title.
+const ICON: f64 = 18.;
 /// Space between a title and its key text (one layout spacing included).
 const KEY_GAP: f64 = 24.;
 /// Neighbouring panels overlap slightly so the pointer can cross between them.
@@ -131,7 +134,12 @@ pub(crate) fn panel_width(rows: &[Value]) -> f64 {
             let title = row["title"].as_str().unwrap_or_default();
             let title = text_width(title) + if busy { text_width(" …") } else { 0. };
             let keys = text_width(row["keys"].as_str().unwrap_or_default());
-            title + if keys > 0. { KEY_GAP + keys } else { 0. }
+            let icon = if row["icon"].as_str().is_some_and(|icon| !icon.is_empty()) {
+                ICON
+            } else {
+                0.
+            };
+            icon + title + if keys > 0. { KEY_GAP + keys } else { 0. }
         })
         .fold(0., f64::max);
     let chrome = 2. * PAD + ITEM_PAD_LEFT + CHECK + SPACING + SPACING + SUBMENU + ITEM_PAD_RIGHT;
@@ -168,6 +176,10 @@ fn row(node: &MenuNode, path: &[String], open: bool, labels: Labels<'_>) -> Valu
 fn panel(mut rows: Vec<Value>, separators: Vec<bool>) -> (Vec<Value>, f64, f64) {
     let mut y = PAD;
     for (row, separator) in rows.iter_mut().zip(separators) {
+        // Only the bar strip's `»` rows have icons (`MenuRow.icon`).
+        if row.get("icon").is_none() {
+            row["icon"] = "".into();
+        }
         if separator {
             y += SEPARATOR;
         }
@@ -326,6 +338,38 @@ pub fn context_level(
     let (rows, width, content) = panel(rows, separators);
     let (height, scrolling, offset) = fit(content, window.y, scroll);
     let (x, y) = place(origin, width, height, window);
+    json!([{"rows":rows,"x":x,"y":y,"width":width,"height":height,"open":-1,
+        "scroll":scrolling,"viewport-y":offset}])
+}
+
+/// The bottom-bar strip's `»` (bar_buttons.rs): the plugin buttons not in
+/// the strip, in strip order, each with its icon (a name of the icon set;
+/// none for a plugin image), title, key and check state; one context level
+/// opening above `origin` (the `»` cell's top-left corner), so it never
+/// covers the strip.
+pub fn bar_level(
+    items: &[&CommandSnapshot],
+    origin: Point,
+    window: Point,
+    scroll: f64,
+    labels: Labels<'_>,
+) -> Value {
+    let rows = items
+        .iter()
+        .map(|entry| {
+            let mut row = command_row(entry, labels);
+            row["icon"] = match entry.declaration.button.as_ref().map(|b| &b.icon) {
+                Some(ButtonIcon::Name(name)) => name.as_str().into(),
+                _ => "".into(),
+            };
+            row
+        })
+        .collect::<Vec<_>>();
+    let separators = vec![false; rows.len()];
+    let (rows, width, content) = panel(rows, separators);
+    let (height, scrolling, offset) = fit(content, window.y, scroll);
+    let x = origin.x.min(window.x - width).max(0.);
+    let y = (origin.y - height).min(window.y - height).max(0.);
     json!([{"rows":rows,"x":x,"y":y,"width":width,"height":height,"open":-1,
         "scroll":scrolling,"viewport-y":offset}])
 }
@@ -718,6 +762,64 @@ mod tests {
             }
         }
         assert_eq!(hover_target(&["x".to_owned()], 0, "t:3"), Some(Vec::new()));
+    }
+
+    /// Step 3a: the bar strip's `»` lists its commands with their icons
+    /// (none for a plugin image), titles, keys and check state, above the
+    /// `»` cell; other menus' rows have an empty icon and the same width.
+    #[test]
+    fn the_bar_overflow_menu_has_icons_and_opens_above_the_strip() {
+        use crate::commands::{Button, ButtonIcon};
+        let with = |id: &str, icon: ButtonIcon| {
+            let mut entry = command(id, "g");
+            entry.declaration.button = Some(Button { icon, order: 1 });
+            entry
+        };
+        let store = with("store", ButtonIcon::Name("store".into()));
+        let image = with(
+            "image",
+            ButtonIcon::Image {
+                path: "a.png".into(),
+                max_side: 0,
+            },
+        );
+        let keys = |_: u64, id: &str| (id == "store").then(|| "F9".to_owned());
+        let origin = Point { x: 600., y: 660. };
+        let value = bar_level(&[&store, &image], origin, WINDOW, 0., &keys);
+        let level = &value[0];
+        let rows = level["rows"].as_array().unwrap();
+        assert_eq!(rows[0]["icon"], "store");
+        assert_eq!(rows[0]["keys"], "F9");
+        assert_eq!(rows[0]["checked"], true);
+        assert_eq!(rows[1]["icon"], "");
+        assert!(matches!(
+            parse_token(rows[0]["token"].as_str().unwrap()),
+            Some(Token::Command { owner: 3, .. })
+        ));
+        let (y, height) = (
+            level["y"].as_f64().unwrap(),
+            level["height"].as_f64().unwrap(),
+        );
+        assert_eq!(y + height, 660., "its bottom edge on the cell's top");
+        assert_eq!(level["x"], 600.);
+        // The same commands without icons: 18px narrower (above the minimum).
+        let long = |id: &str| {
+            let mut entry = with(id, ButtonIcon::Name("ai".into()));
+            entry.declaration.title = "A much longer command title for the width".into();
+            entry
+        };
+        let (a, b) = (long("a"), long("b"));
+        let iconic = bar_level(&[&a, &b], origin, WINDOW, 0., &none)[0]["width"]
+            .as_f64()
+            .unwrap();
+        let plain = context_level(&[Some(&a), Some(&b)], origin, WINDOW, 0., &none)[0]["width"]
+            .as_f64()
+            .unwrap();
+        assert_eq!(iconic - plain, ICON);
+        assert_eq!(
+            context_level(&[Some(&a)], origin, WINDOW, 0., &none)[0]["rows"][0]["icon"],
+            ""
+        );
     }
 
     #[test]

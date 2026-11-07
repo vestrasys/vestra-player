@@ -6,8 +6,7 @@
 //
 // Rows: always SLOTS (12) of them, written in place, unused ones hidden by
 // `visible`. Moving through the list or typing never creates or destroys
-// an element, which would rebuild the window's accessibility tree (the
-// rule in menu-view.slint). Keep ROW (28px), TOP (16px) and CHROME (92px:
+// an element (the no-churn rule in menu-view.slint). Keep ROW (28px), TOP (16px) and CHROME (92px:
 // field, separator, footer and padding) in sync with command_palette.rs.
 import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";

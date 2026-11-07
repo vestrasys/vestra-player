@@ -4,7 +4,7 @@
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Slider, ToolTipArea } from "@vestra/widgets.slint";
-import { BarButtons } from "@vestra/bar-buttons.slint";
+import { BarButtonsHost } from "@vestra/bar-buttons.slint";
 
 // B22: one mark of `timeline.marks` for the hover search; `at` is the fraction
 // of the duration, `tip` the hover text ("Title  01:23", or the time alone).
@@ -46,6 +46,10 @@ export global PlaybackBridge {
     // The line's span in physical px the plugin built the ticks for (0: none
     // yet); it answers `span-changed`.
     in-out property <float> tick-span;
+    // Timeline ranges (player 0.7.6): each style's filled rectangles
+    // `M<x0> 0H<x1>V1H<x0>Z` in the ticks' view box (0…tick-span): one Path per style.
+    in-out property <string> selection-ranges;
+    in-out property <string> region-ranges;
     in-out property <bool> has-loop;
     in-out property <float> loop-a;
     in-out property <float> loop-b;
@@ -184,6 +188,8 @@ component BarButton inherits Rectangle {
 // B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
 // marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
 // line with 1×8 ends. Marks take no input: a click seeks as before.
+// Timeline ranges (0.2.17): semi-transparent 6px bands where the ticks are
+// (region Theme.text-dim, selection Theme.accent), RangeBand below.
 // The marks are one Path per kind (a 1 physical px stroke from the plugin's
 // commands), never an element per mark. Each tick fills one whole physical
 // pixel column and whole pixels top to bottom at any scale factor (125%,
@@ -219,6 +225,27 @@ component MarkTicks inherits Path {
     stroke-width: 1phx;
 }
 
+// Timeline ranges (player 0.7.6): one filled Path per style over the ticks'
+// 6px band, never an element per range. No stroke, so Slint fits the viewbox
+// into the whole element with no offset: the element `columns` physical px
+// wide over a viewbox `columns` wide (scale 1phx a unit), its left edge and
+// top on a physical pixel, so a rectangle x0…x1 fills whole columns and rows.
+component RangeBand inherits Path {
+    in property <length> origin-x;
+    in property <length> origin-y;
+    in property <length> inset-x;
+    in property <length> inset-y;
+    in property <int> columns;
+    private property <int> rows: Math.round(6px / 1phx);
+    x: Math.round((self.origin-x + self.inset-x + 4px) / 1phx) * 1phx - self.origin-x;
+    y: Math.round((self.origin-y + self.inset-y + 2px) / 1phx) * 1phx - self.origin-y;
+    width: max(1, self.columns) * 1phx;
+    height: self.rows * 1phx;
+    viewbox-width: PlaybackBridge.tick-span > 0 ? PlaybackBridge.tick-span : max(1, self.columns);
+    viewbox-height: 1;
+    fit: fill;
+}
+
 component SeekBar inherits Rectangle {
     // 0.2.10: the pointer band around the line's 10px box (which the drawing
     // keeps): `lead` left of it, `trail` right of it, `line-top` above it; the band
@@ -248,7 +275,8 @@ component SeekBar inherits Rectangle {
     init => { PlaybackBridge.span-changed(root.columns); }
     changed columns => { PlaybackBridge.span-changed(self.columns); }
     // Again when marks come for another span (a report the plugin never got).
-    private property <bool> stale-ticks: PlaybackBridge.marks.length > 0 && PlaybackBridge.tick-span != root.columns;
+    private property <bool> stale-ticks: (PlaybackBridge.marks.length > 0 || PlaybackBridge.selection-ranges != "" || PlaybackBridge.region-ranges != "")
+        && PlaybackBridge.tick-span != root.columns;
     changed stale-ticks => { if self.stale-ticks { PlaybackBridge.span-changed(root.columns); } }
     height: 22px;
     // The line's fraction under `x` (the band's own x), clamped to the ends.
@@ -325,6 +353,26 @@ component SeekBar inherits Rectangle {
         height: 2px;
         border-radius: 1px;
         background: PlaybackBridge.can-seek ? Theme.accent-fill : Theme.icon-disabled;
+    }
+    // Timeline ranges over the line and under the loop and the ticks:
+    // regions dim, the selection (such as a clip to export) in the accent.
+    RangeBand {
+        origin-x: root.absolute-position.x;
+        origin-y: root.absolute-position.y;
+        inset-x: root.lead;
+        inset-y: root.line-top;
+        columns: root.columns;
+        commands: PlaybackBridge.region-ranges;
+        fill: Theme.text-dim.with-alpha(0.35);
+    }
+    RangeBand {
+        origin-x: root.absolute-position.x;
+        origin-y: root.absolute-position.y;
+        inset-x: root.lead;
+        inset-y: root.line-top;
+        columns: root.columns;
+        commands: PlaybackBridge.selection-ranges;
+        fill: Theme.accent.with-alpha(0.45);
     }
     if PlaybackBridge.has-loop: Rectangle {
         x: root.lead + 4px + PlaybackBridge.loop-a * root.span;
@@ -438,6 +486,14 @@ export component PlaybackBar inherits Rectangle {
     min-height: 62px;
     max-height: 62px;
     background: Theme.bg-bar;
+    // UI-BAR-10 (SDK 1.6.8): what the button row needs left of the player's
+    // strip; the player gives the strip the rest of the width, less 4px.
+    out property <length> content-min-width: row.left-width;
+    // Its row with every control shown (Play / Pause, Stop, Previous, Next,
+    // Open, Fullscreen), the gap, the time and 8px to spare: the player gives
+    // plugin buttons only the width beyond this, so they all go to » before
+    // the bar drops a control of its own. Must not depend on the bar's width.
+    out property <length> content-full-width: 6 * 41px + 10px + row.time-width + 8px;
 
     // Seek row: padding 0 10px 0 5px; seek line with 10px margins; mute 13×10; volume 70×10.
     // One hairline separates the bar from the video above.
@@ -481,31 +537,48 @@ export component PlaybackBar inherits Rectangle {
         }
     }
 
-    // Button row: play/pause, stop, previous, next, open, fullscreen, time;
-    // on the right the player's strip of command buttons (BarButtons, player
-    // 0.5.10): other plugins' buttons and its sidebar toggle, rightmost.
+    // Button row: play/pause, stop, previous, next, open, fullscreen, time.
+    // The player draws its strip of command buttons at the bar's right end
+    // (SDK 1.6.8, menu redesign step 3a): `[plugin buttons…][»][🔍][Sidebar]`,
+    // its own cells (`BarButtonsHost.fixed`, 41px each, 4px from the edge)
+    // always shown. The bar ends its row left of it and reports what the row
+    // needs (`content-min-width`); the strip gets the rest, so plugin buttons
+    // never cover the time.
     row := Rectangle {
         y: 22px;
         height: 40px;
-        // UI-BAR-10: the strip gets what the buttons and the time leave; it hides
-        // its lowest order first (left end inward) and the sidebar toggle last;
-        // Fullscreen shows while the toggle's 41px cell still fits beside it; the
-        // time is never cut.
-        // In numbers: Fullscreen from 6 × 41 + 10 + time + 8 + 41 + 4 px, the
-        // toggle from 5 × 41 + 10 + time + 8 + 41 + 4 px, no strip below 320px.
-        // The time is measured, not a constant (`0:00:00 / 0:00:00` in the 11px
-        // body font is about 85px, so Fullscreen shows from about 394px and the
-        // toggle from about 353px), at its widest for this file:
+        // UI-BAR-10: the time is never covered. As the bar narrows, plugin
+        // buttons go to the player's » first; then the bar drops its own less
+        // important controls, one step at a time, so the time stays clear of
+        // the player's own cells (as responsive players' bars shed controls):
+        // Fullscreen, then Stop, then Previous and Next, then Open. Each shows
+        // while the controls up to it, the 10px gap, the time, 8px to spare and
+        // the player's own cells fit:
+        //   Fullscreen from 6 × 41 + 10 + time + 8 + fixed × 41 + 4 px,
+        //   Stop from 5 × 41 + …, Previous / Next from 4 × 41 + …,
+        //   Open from 2 × 41 + … (Play / Pause always shows).
+        // With 🔍 and Sidebar (fixed = 2) and the time measured, not a constant
+        // (`0:00:00 / 0:00:00` in the 11px body font is about 85px): Fullscreen
+        // from about 435px, Stop from about 394px, Previous / Next from about
+        // 353px, Open from about 271px; the time stays clear down to about
+        // 230px. The time is at its widest for this file:
         // the elapsed part as wide as "-" + the total (the remaining time), so the
-        // threshold does not move while the time runs (9:59 → 10:00) or when it
+        // thresholds do not move while the time runs (9:59 → 10:00) or when it
         // switches to the remaining time; only an elapsed text wider than that
         // (a source without a duration) widens it. Hidden is `visible: false`
         // with no width, a persistent element, never `if`.
+        // None of this reads `BarButtonsHost.width`: the player sizes its
+        // strip from `content-full-width`.
         property <length> time-width: max(elapsed.preferred-width, widest-elapsed.preferred-width) + total.preferred-width;
-        property <bool> fullscreen-fits: root.width >= 6 * 41px + 10px + row.time-width + 8px + 41px + 4px;
-        // What the left side takes: the five buttons that always show, Fullscreen
-        // when it fits, the gap, the time and 8px to spare.
-        property <length> left-width: (row.fullscreen-fits ? 6 : 5) * 41px + 10px + row.time-width + 8px;
+        property <bool> fullscreen-fits: root.width >= 6 * 41px + 10px + row.time-width + 8px + BarButtonsHost.fixed * 41px + 4px;
+        property <bool> stop-fits: root.width >= 5 * 41px + 10px + row.time-width + 8px + BarButtonsHost.fixed * 41px + 4px;
+        property <bool> skip-fits: root.width >= 4 * 41px + 10px + row.time-width + 8px + BarButtonsHost.fixed * 41px + 4px;
+        property <bool> open-fits: root.width >= 2 * 41px + 10px + row.time-width + 8px + BarButtonsHost.fixed * 41px + 4px;
+        // The bar's buttons that show: Play / Pause and those that fit.
+        property <int> buttons: 1 + (row.stop-fits ? 1 : 0) + (row.skip-fits ? 2 : 0) + (row.open-fits ? 1 : 0) + (row.fullscreen-fits ? 1 : 0);
+        // What the left side takes: the buttons that show, the gap, the time
+        // and 8px to spare.
+        property <length> left-width: row.buttons * 41px + 10px + row.time-width + 8px;
         // Measures the widest elapsed text (never drawn, outside the layout).
         widest-elapsed := Text {
             visible: false;
@@ -522,30 +595,38 @@ export component PlaybackBar inherits Rectangle {
                 clicked => { PlaybackBridge.action("play-pause"); }
             }
             BarButton {
+                visible: row.stop-fits;
+                width: row.stop-fits ? 41px : 0px;
                 icon: "stop";
                 tip: PlaybackBridge.tip-stop;
-                enabled: PlaybackBridge.can-stop;
+                enabled: row.stop-fits && PlaybackBridge.can-stop;
                 clicked => { PlaybackBridge.action("stop"); }
             }
             // 0.2.14: the playlist's previous / next item, the core Previous / Next
             // actions (PgUp / PgDn), enabled as they are (the playlist decides,
             // with repeat and shuffle).
             BarButton {
+                visible: row.skip-fits;
+                width: row.skip-fits ? 41px : 0px;
                 icon: "previous";
                 tip: PlaybackBridge.tip-previous;
-                enabled: PlaybackBridge.can-previous;
+                enabled: row.skip-fits && PlaybackBridge.can-previous;
                 clicked => { PlaybackBridge.action("previous"); }
             }
             BarButton {
+                visible: row.skip-fits;
+                width: row.skip-fits ? 41px : 0px;
                 icon: "next";
                 tip: PlaybackBridge.tip-next;
-                enabled: PlaybackBridge.can-next;
+                enabled: row.skip-fits && PlaybackBridge.can-next;
                 clicked => { PlaybackBridge.action("next"); }
             }
             BarButton {
+                visible: row.open-fits;
+                width: row.open-fits ? 41px : 0px;
                 icon: "open";
                 tip: PlaybackBridge.tip-open;
-                enabled: PlaybackBridge.can-open;
+                enabled: row.open-fits && PlaybackBridge.can-open;
                 clicked => { PlaybackBridge.action("open"); }
             }
             // UI-BAR-05 (0.2.4): toggles fullscreen like the Toggle Fullscreen key, Escape by default (`host.run("fullscreen")`).
@@ -583,14 +664,6 @@ export component PlaybackBar inherits Rectangle {
                     vertical-alignment: center;
                 }
             }
-        }
-        // The player's strip, at the right end with a 4px margin. A persistent
-        // element (never `if`), so the player sees it placed; it is as wide as the
-        // cells it shows, never more than `room`, so it stays clear of the time.
-        strip := BarButtons {
-            x: root.width - self.width - 4px;
-            y: 0px;
-            room: root.width >= 320px ? max(0px, root.width - row.left-width - 4px) : 0px;
         }
     }
 

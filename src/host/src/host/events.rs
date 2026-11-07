@@ -56,6 +56,8 @@ pub(crate) enum Event {
     /// A button of the fullscreen title strip: (shell generation,
     /// `minimize`, `exit-fullscreen` or `close`).
     TitleStrip(u64, String),
+    /// A button of the OSD message: (shell generation, its index).
+    OsdAction(u64, usize),
     PluginMessage(u64, String, Value),
     Exited(u64),
     /// A control line of the shared runner (`g` 0): (runner, message).
@@ -98,6 +100,9 @@ pub(crate) enum Event {
     RuntimeFault(u64, String),
     /// A bottom-bar button clicked: (window generation, its token).
     BarButton(u64, String),
+    /// The bottom-bar strip's `»`: (window generation, the cell's top-left
+    /// corner, logical px).
+    BarMore(u64, f64, f64),
     /// The playback worker's answer to `owner.resources` (lazy activation):
     /// (owner, `{ live, resolvers }`).
     OwnerResources(u64, Value),
