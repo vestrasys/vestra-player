@@ -1,0 +1,9 @@
+// A bottom bar whose content-min-width comes from its base component in
+// another file (composition tests).
+import { MinBase } from "min-base.slint";
+
+export global DerivedBridge {
+    in-out property <int> unused;
+}
+
+export component DerivedBar inherits MinBase {}

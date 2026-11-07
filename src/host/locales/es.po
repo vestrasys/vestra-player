@@ -260,6 +260,10 @@ msgstr "Fotograma anterior: {}"
 msgid "All tabs"
 msgstr "Todas las pestañas"
 
+#: ui/bar-strip.slint:98
+msgid "More buttons"
+msgstr "Más botones"
+
 #: src/main.rs:150
 #, x-machine
 msgid "Previous/Next is provided by {}"

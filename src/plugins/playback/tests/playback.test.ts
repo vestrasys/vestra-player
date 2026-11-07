@@ -932,15 +932,17 @@ test("the time label toggles between elapsed and remaining", async () => {
   await stop();
 });
 
-test("0.2.5 the bar mounts with the player's BarButtons strip and leaves the sidebar toggle to it", async () => {
+test("0.2.5 the bar mounts beside the player's button strip and leaves the sidebar toggle to it", async () => {
   const { host, stop } = await start(withMedia());
   try {
     const bar = host.mounted();
     assert.equal(bar.slot, "bottom");
-    // The mounted file places BarButtons (vestra-plugin check warns otherwise).
+    // SDK 1.6.8: the player places the strip; the mounted file reports what
+    // its row needs (`content-min-width`) and places no deprecated BarButtons.
     const slint = await readFile(new URL(`../${bar.file}`, import.meta.url), "utf8");
-    assert.ok(slint.includes('import { BarButtons } from "@vestra/bar-buttons.slint";'));
-    assert.match(slint, /strip := BarButtons \{/);
+    assert.ok(slint.includes('import { BarButtonsHost } from "@vestra/bar-buttons.slint";'));
+    assert.match(slint, /out property <length> content-min-width: /);
+    assert.doesNotMatch(slint, /\bBarButtons\s*\{/);
     // Playback contributes no button of its own: the strip holds other
     // plugins' buttons and the player's Toggle Sidebar (host/sidebar).
     assert.deepEqual(host.barButtons, []);

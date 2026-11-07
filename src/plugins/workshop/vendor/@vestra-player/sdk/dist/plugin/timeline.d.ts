@@ -1,7 +1,43 @@
 import type { Runtime } from "./runtime.ts";
 import type { ScopeImpl } from "./scope.ts";
-import type { WireMark } from "../wire.ts";
-import type { Timeline, TimelineMark } from "./types.ts";
+import type { WireTimeline } from "../wire.ts";
+import type { Timeline, TimelineMark, TimelineRange } from "./types.ts";
+/**
+ * The player's limits on one plugin's timeline layer
+ * ({@link TimelineLayer}). A list over them fails with code `invalid`,
+ * reported to `Scope.onError` (`set` and `setRanges` never throw). The
+ * player's tests check that these agree with the player.
+ *
+ * @example Keep a long list of ranges inside the limit
+ * The plugin publishes the first 100 of its ranges; the player refuses a
+ * longer list whole.
+ * ```ts
+ * import type { Plugin } from "@vestra-player/sdk";
+ * declare const plugin: Plugin;
+ * declare const segments: { start: number; end: number }[];
+ * // ---cut---
+ * import { TIMELINE_LIMITS } from "@vestra-player/sdk/testing";
+ *
+ * // A longer list would be refused whole.
+ * plugin.timeline.layer().setRanges(
+ *   segments
+ *     .slice(0, TIMELINE_LIMITS.ranges)
+ *     .map((s) => ({ ...s, style: "region" as const })),
+ * );
+ * ```
+ *
+ * @since 1.6.9
+ *
+ * @category Testing
+ */
+export declare const TIMELINE_LIMITS: Readonly<{
+    /** Marks in one layer (`TimelineLayer.set`) (1000). */
+    readonly marks: 1000;
+    /** Ranges in one layer (`TimelineLayer.setRanges`; player 0.7.6) (100). */
+    readonly ranges: 100;
+    /** Characters of a mark's or a range's title, as shown (100). */
+    readonly titleChars: 100;
+}>;
 /**
  * One per plugin: read before activation (with `playback.read`), then kept
  * current from `timeline.changed` (with `events`) once the plugin uses it.
@@ -9,11 +45,12 @@ import type { Timeline, TimelineMark } from "./types.ts";
 export declare class TimelineService {
     #private;
     marks: readonly TimelineMark[];
+    ranges: readonly TimelineRange[];
     layer: boolean;
     constructor(runtime: Runtime);
     init(): Promise<void>;
     start(): void;
-    accept(marks: WireMark[]): void;
+    accept(lists: WireTimeline): void;
     read(): Promise<void>;
     watch(listener: (marks: readonly TimelineMark[]) => void): {
         dispose: () => Promise<void>;

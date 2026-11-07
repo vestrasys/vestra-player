@@ -275,6 +275,7 @@ impl Host {
                 self.ui_state.touch(self.now_ms());
             }
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
+            Event::BarMore(generation, x, y) => self.bar_more(generation, x, y),
             Event::OwnerResources(owner, answer) => self.resources_answer(owner, &answer),
             Event::PipReturn(generation) => {
                 if generation == self.shell_generation {
@@ -340,6 +341,11 @@ impl Host {
             Event::TitleStrip(generation, action) => {
                 if generation == self.shell_generation {
                     self.title_strip_action(&action);
+                }
+            }
+            Event::OsdAction(generation, index) => {
+                if generation == self.shell_generation {
+                    self.osd_action(index);
                 }
             }
             Event::ViewClosed(owner, id) => {

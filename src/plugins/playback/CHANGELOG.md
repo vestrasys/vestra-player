@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.17
+
+Who must change: nobody. Needs player 0.7.6 (`minPlayerVersion` already 0.7.6). What users see: the command buttons at the right end of the bar (other plugins' buttons, `»`, the command palette 🔍 and Toggle Sidebar) are now placed by the player (menu redesign step 3a, SDK 1.6.8); the bar keeps its own controls left of them and never lets them cover the time.
+
+- The bar no longer places the deprecated `BarButtons` strip. It imports `BarButtonsHost` and reports what its button row needs as `content-min-width` (its buttons, the 10px gap, the time and 8px to spare); the player gives its strip the rest of the width. `content-min-width` does not read the strip's width.
+- It also reports `content-full-width`, its row with every control shown: the player gives plugin buttons only the width beyond it, so while the window narrows every plugin button goes to `»` before the bar drops a control of its own, and none comes back.
+- UI-BAR-10: Fullscreen shows while it fits beside the player's own cells (`BarButtonsHost.fixed`, 41px each): from 6 × 41 + 10 + time + 8 + fixed × 41 + 4 px, about 435px with 🔍 and Sidebar and an 85px time (was 394px beside the sidebar toggle alone).
+- Narrow windows (responsive-player practice): after Fullscreen the bar drops its less important controls one step at a time, so the time stays clear of the player's cells: **Stop** below about 394px, **Previous / Next** below about 353px, **Open** below about 271px (85px time, 🔍 and Sidebar; each threshold is measured like Fullscreen's). Play / Pause always shows. `content-min-width` shrinks with them. A dropped button is hidden with no width and is not actionable from the accessibility tree; its command, menu item and key are unchanged.
+- Timeline ranges (SDK 1.6.9, player 0.7.6): the seek bar draws every plugin's `timeline.ranges` as semi-transparent bands where the mark ticks are, over the line and under the A-B loop and the ticks: `region` in the dim text colour, `selection` (such as the clip Capture will export) in the accent colour. Each style is one Path of whole physical px rectangles in the ticks' view box (no element per range); overlapping ranges of a style are drawn once. They follow every change, the window's width and scale, and go with the source. A range's title is not shown on hover yet.
+
 ## 0.2.16
 
 - Command palette: Jump to Time… is in the **Seek** category (was Playback), with the other seek commands. The category texts "File" (all languages, zh-Hans included) and "Playback" (de, es, fr, ja, ko) are now marked `x-machine`. Who must change: nobody. What users see: "Seek: Jump to Time…" in the palette. Titles, ids, menu paths, keys and order are unchanged.

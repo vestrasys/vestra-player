@@ -300,7 +300,10 @@ export const HOST_CAPABILITIES = {
         },
         {
             label: "Show marks on the progress bar",
-            methods: [{ name: "timeline.set", needs: "timeline.marks" }],
+            methods: [
+                { name: "timeline.set", needs: "timeline.marks" },
+                { name: "timeline.setRanges", needs: "timeline.marks" },
+            ],
             name: "timeline.marks",
             requires: [],
             residency: "live",

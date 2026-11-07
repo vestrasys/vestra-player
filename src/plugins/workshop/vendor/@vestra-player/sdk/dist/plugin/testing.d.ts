@@ -7,6 +7,7 @@ import type { BuiltinCommand, BuiltinSubmenu } from "../commands.ts";
 import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../capabilities.ts";
 import type { CapabilityInfo } from "../capabilities.ts";
 import { OSD_LIMITS } from "./osd.ts";
+import { TIMELINE_LIMITS } from "./timeline.ts";
 import { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./services.ts";
 import { SUBTITLE_LIMITS } from "./subtitles.ts";
 import { BINDING_INPUTS } from "./bindings.ts";
@@ -36,6 +37,8 @@ export type { CapabilityInfo };
 export { MESSAGE_LIMIT };
 /** The player's limits on the on-screen display. */
 export { OSD_LIMITS };
+/** The player's limits on a timeline layer. */
+export { TIMELINE_LIMITS };
 /** The player's limits on stored secrets. */
 export { SECRET_LIMITS };
 /** The player's limits on `plugin.storage.session`. */
@@ -647,6 +650,43 @@ export declare class TestHost implements Transport {
      * template and args the plugin sent are in `host.sent("osd.show")`.
      */
     readonly osd: string[];
+    /**
+     * The action buttons of each `osd.show` message, in step with `osd`
+     * (index for index): each button's title as shown and its command; `[]`
+     * for a message without actions (SDK 1.6.9).
+     */
+    readonly osdActions: {
+        /** The button title as shown, in the plugin's locale. */
+        title: string;
+        /** The local id of the plugin's command the button runs. */
+        command: string;
+    }[][];
+    /**
+     * Press button `index` of the newest OSD message, as the user does
+     * (player 0.7.6): its command runs as if picked from a menu, and settles.
+     * A disabled or busy command does nothing, as in the player.
+     *
+     * @param index - 0 or 1.
+     *
+     * @throws `Error` (rejects) The newest message has no button `index`.
+     *
+     * @example Press "Show in Folder" on the saved message
+     * The test checks the button the plugin put on its newest message, then
+     * presses it as the user would: the plugin's `reveal` command runs.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * assert.deepEqual(host.osdActions.at(-1), [
+     *   { title: "Show in Folder", command: "reveal" },
+     * ]);
+     * await host.pressOsdAction(0); // runs the plugin's `reveal` command
+     * ```
+     *
+     * @capability None.
+     * @since 1.6.9
+     */
+    pressOsdAction(index: number): Promise<void>;
     /** The text of this plugin's osd panel as shown, `null` when hidden. */
     osdPanel: string | null;
     /**
@@ -948,7 +988,65 @@ export declare class TestHost implements Transport {
             /** The mark's title, `null` without one. */
             title: string | null;
         }[];
+        /**
+         * Each plugin's ranges by plugin id; layers without ranges are absent
+         * (SDK 1.6.9).
+         */
+        rangeLayers: Map<string, {
+            /** Seconds from the start. */
+            start: number;
+            /** Seconds from the start, after `start`. */
+            end: number;
+            /** `"selection"` or `"region"`. */
+            style: string;
+            /** The range's title, `null` without one. */
+            title: string | null;
+        }[]>;
+        /** Every layer's ranges merged, sorted by start, with the plugin's id. */
+        readonly ranges: {
+            /** The manifest id of the plugin that published the range. */
+            plugin: string;
+            /** Seconds from the start. */
+            start: number;
+            /** Seconds from the start, after `start`. */
+            end: number;
+            /** `"selection"` or `"region"`. */
+            style: string;
+            /** The range's title, `null` without one. */
+            title: string | null;
+        }[];
     };
+    /**
+     * Simulate another plugin publishing its timeline ranges (or clearing
+     * them with `[]`); pushes `timeline.changed` when the plugin subscribed.
+     *
+     * @param pluginId - The other plugin's manifest id.
+     * @param ranges - All its ranges.
+     *
+     * @example Let another plugin publish a clip range
+     * The plugin under test sees a range another plugin put on the seek bar:
+     * `setTimelineRanges` stores that plugin's ranges and pushes
+     * `timeline.changed`, and `settle()` lets it arrive.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.setTimelineRanges("community.clips", [
+     *   { start: 40, end: 52.5, style: "selection", title: "Clip" },
+     * ]);
+     * await host.settle();
+     * assert.equal(plugin.timeline.ranges[0]?.plugin, "community.clips");
+     * ```
+     *
+     * @capability None.
+     * @since 1.6.9
+     */
+    setTimelineRanges(pluginId: string, ranges: {
+        start: number;
+        end: number;
+        style: string;
+        title?: string | null;
+    }[]): void;
     /**
      * Simulate another plugin publishing its timeline layer (or clearing it
      * with `[]`); pushes `timeline.changed` when the plugin subscribed.
@@ -2645,8 +2743,8 @@ export declare class TestHost implements Transport {
      * The plugin's bottom-bar buttons (`CommandOptions.button`) as the player
      * shows them: at most one, the first declared (`BAR_BUTTON_LIMITS`; a
      * later one stays a menu item only). Empty once the command is disposed.
-     * Whether the bar places them is the bar's business: the list is what
-     * the player hands to `BarButtons`.
+     * Whether one is in the strip or its » menu is the player's business
+     * (the room and the other plugins' buttons).
      *
      * @example Click the plugin's bottom-bar button in a test
      * The test finds the plugin's Store button, clicks it and checks that the

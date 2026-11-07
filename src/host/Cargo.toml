@@ -15,14 +15,24 @@ image = { version = "=0.25.10", default-features = false, features = ["png", "jp
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 rsmpv = { version = "=0.2.1", features = ["render", "stream-cb"] }
+# No accessibility tree (developer ruling 2026-11-07): Slint's default features
+# minus `accessibility`, so AccessKit is not built in. Slint 1.18 rebuilds the
+# whole AccessKit tree whenever an element is created or destroyed (120–160 ms
+# per menu hover on a 4K render target); the player does not offer screen-reader
+# support. The list is Slint 1.18.1's `default` without `accessibility`: recheck
+# it on every Slint upgrade, here, in slint-interpreter below and in the
+# Windows entry further down (every entry of a crate must say
+# `default-features = false`, or Cargo turns the defaults back on).
 # `unstable-fontique-011`: `slint::fontique_011::shared_collection()`, the
 # per-script CJK fallback chains of `ui_fonts.rs`.
-slint = { version = "=1.18.1", features = ["unstable-winit-030", "unstable-fontique-011"] }
+slint = { version = "=1.18.1", default-features = false, features = ["std", "backend-default", "renderer-femtovg", "renderer-software", "compat-1-2", "system-tray", "unstable-winit-030", "unstable-fontique-011"] }
 # `internal`: `ComponentDefinition::create_with_existing_window`, so that a new
 # main-window composition replaces the component tree inside the same native
 # window, as Slint's live preview does (`ui::composition::compile_json_in`).
 # Not covered by semver: recheck on every Slint upgrade (the version is pinned).
-slint-interpreter = { version = "=1.18.1", features = ["internal"] }
+# The other features are slint-interpreter 1.18.1's `default` without
+# `accessibility` (see `slint` above).
+slint-interpreter = { version = "=1.18.1", default-features = false, features = ["backend-default", "renderer-femtovg", "renderer-software", "compat-1-2", "system-tray", "internal"] }
 rfd = "0.17.2"
 base64 = "=0.22.1"
 sha2 = "=0.10.9"
@@ -108,7 +118,7 @@ vestra-win32 = { path = "unsafe/win32" }
 # (doc/architecture/README.md §4.3); the `unsafe` stays in
 # unsafe/render. Windows only: macOS keeps femtovg on OpenGL. `femtovg` (GL)
 # and the software renderer stay as the fallbacks (platform/windows.rs).
-slint = { version = "=1.18.1", features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }
+slint = { version = "=1.18.1", default-features = false, features = ["renderer-femtovg-wgpu", "unstable-wgpu-30"] }
 vestra-gpu-render = { path = "unsafe/render" }
 # File identity (volume serial + file index) of the handle libmpv reads a leased
 # local file through (source_lease.rs `matches_file`, lease_stream.rs).

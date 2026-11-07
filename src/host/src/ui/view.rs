@@ -1949,6 +1949,8 @@ export component W inherits Window {
             slint_interpreter::Value::Number(n) => n,
             other => panic!("{other:?}"),
         };
+        // The video area's height: the bare shell keeps 40px under it for
+        // the band holding the bottom-bar strip (step 3a).
         for (width, height, osd, info) in [
             (780., 609., 18., 12.375),
             (1920., 1080., 32., 22.),
@@ -1957,7 +1959,8 @@ export component W inherits Window {
         ] {
             shell
                 .window()
-                .set_size(slint::LogicalSize::new(width, height));
+                .set_size(slint::LogicalSize::new(width, height + 40.));
+            assert_eq!(size("video-height"), f64::from(height), "{width}x{height}");
             assert_eq!(size("osd-size"), osd, "{width}x{height}");
             assert_eq!(size("info-size"), info, "{width}x{height}");
         }
@@ -2776,6 +2779,328 @@ export component W inherits Window {
         assert_eq!(strip(1000., false), (82., vec!["ai", "store"]));
         assert_eq!(strip(60., false), (41., vec!["store"]));
         assert_eq!(strip(0., false), (0., vec![]));
+        // Step 3a: while the bar places the deprecated strip, the player's
+        // own strip (HostBarStrip) stays hidden and takes no width, even
+        // with its palette cell filled: no second strip.
+        shell
+            .set_global_property(
+                GLOBAL,
+                "palette",
+                cell(Some(&item("palette", "search")), None),
+            )
+            .unwrap();
+        settle_layout(shell.window());
+        slint::platform::update_timers_and_animations();
+        assert_eq!(
+            shell.get_global_property(GLOBAL, "width").unwrap(),
+            Value::Number(0.)
+        );
+        shell.hide().unwrap();
+    }
+
+    /// Step 3a: the player's strip in the bottom slot of a bar that reports
+    /// `content-min-width`. The strip gets the rest of the bar (less 4px);
+    /// plugin buttons that do not fit go to `»`, the lowest order staying
+    /// longest; the palette and the sidebar toggle always show; buttons
+    /// past eight are always in `»`; the bar reads the strip's width.
+    #[test]
+    fn host_strip_overflows_by_width_and_keeps_its_own_cells() {
+        use crate::commands::ButtonIcon;
+        use crate::ui::bar_buttons::{GLOBAL, Item, cell};
+        use slint_interpreter::Value;
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let specs = [crate::ui::composition::CompileSpec {
+            owner: 11,
+            file: base.join("min-bar.slint"),
+            component: "MinBar".into(),
+            global: Some("MinBridge".into()),
+            slot: crate::ui::composition::Slot::Bottom,
+        }];
+        let source = crate::ui::composition::shell_source(&specs).unwrap();
+        assert!(
+            source.contains("bottom-content.content-min-width"),
+            "{source}"
+        );
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
+        let item = |id: &str, icon: &str| Item {
+            owner: 3,
+            id: id.into(),
+            icon: ButtonIcon::Name(icon.into()),
+            label: id.into(),
+            tip: id.into(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        let cells = ["a", "b", "c", "d", "e"]
+            .map(|id| cell(Some(&item(id, "ai")), None))
+            .to_vec();
+        shell
+            .set_global_property(
+                GLOBAL,
+                "buttons",
+                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+            )
+            .unwrap();
+        for (name, id, icon) in [
+            ("toggle", "sidebar", "playlist"),
+            ("palette", "palette", "search"),
+        ] {
+            shell
+                .set_global_property(GLOBAL, name, cell(Some(&item(id, icon)), None))
+                .unwrap();
+        }
+        shell.window().set_size(slint::LogicalSize::new(800., 600.));
+        shell.show().unwrap();
+        assert_eq!(
+            shell.get_global_property(GLOBAL, "placed").unwrap(),
+            Value::Bool(false)
+        );
+        // (plugin cells shown, `»` shown, strip width, the width the bar reads)
+        let strip = |least: f64, overflow: f64| {
+            shell
+                .set_global_property("Owner11Bridge", "least", Value::Number(least))
+                .unwrap();
+            shell
+                .set_global_property(GLOBAL, "overflow", Value::Number(overflow))
+                .unwrap();
+            for _ in 0..3 {
+                settle_layout(shell.window());
+                slint::platform::update_timers_and_animations();
+            }
+            let number = |global: &str, name| match shell.get_global_property(global, name).unwrap()
+            {
+                Value::Number(n) => n,
+                other => panic!("{other:?}"),
+            };
+            let more = shell.get_global_property(GLOBAL, "more").unwrap() == Value::Bool(true);
+            let width = number(GLOBAL, "width");
+            assert_eq!(number("Owner11Bridge", "strip"), width, "the bar reads it");
+            (number(GLOBAL, "shown") as usize, more, width)
+        };
+        // 800 - 300 - 4 = 496px: 12 cells, all five fit beside the two fixed.
+        assert_eq!(strip(300., 0.), (5, false, 7. * 41.));
+        // The strip draws from the pure functions at its own room (no frame
+        // behind a resize); they agree with the published properties.
+        let width_in = |room: f64| {
+            shell
+                .invoke_global(GLOBAL, "width-in", &[Value::Number(room)])
+                .unwrap()
+        };
+        assert_eq!(width_in(496.), Value::Number(7. * 41.));
+        assert_eq!(width_in(196.), Value::Number(4. * 41.));
+        assert_eq!(width_in(6.), Value::Number(3. * 41.));
+        // What a bar must leave free: the two own cells and the `»` cell,
+        // reserved while any plugin button exists (drawn or not).
+        assert_eq!(
+            shell.get_global_property(GLOBAL, "fixed").unwrap(),
+            Value::Number(3.)
+        );
+        // 800 - 600 - 4 = 196px: 4 cells, two fixed, `»`, one button (the
+        // lowest order: the strip keeps its first).
+        assert_eq!(strip(600., 0.), (1, true, 4. * 41.));
+        // No room at all: the fixed cells and `»` still show (UI-BAR-10 is
+        // the bar's; the player's own cells are never hidden).
+        assert_eq!(strip(790., 0.), (0, true, 3. * 41.));
+        // Buttons past eight: `»` shows though every strip button fits.
+        assert_eq!(strip(300., 3.), (5, true, 8. * 41.));
+        shell.hide().unwrap();
+    }
+
+    /// GUI check of step 3a (coordinator ruling): narrowing the window step
+    /// by step moves plugin buttons into `»` and never back, and the bar
+    /// drops its own controls only once every plugin button is in `»`. The
+    /// strip's room is measured beyond the bar's `content-full-width`. A bar
+    /// that reports only its least width (the 3a rule) is not monotonic:
+    /// dropping a control widens the room and brings the buttons back.
+    #[test]
+    fn overflow_follows_a_narrowing_window_monotonically() {
+        use crate::commands::ButtonIcon;
+        use crate::ui::bar_buttons::{GLOBAL, Item, cell};
+        use slint_interpreter::Value;
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let specs = [crate::ui::composition::CompileSpec {
+            owner: 12,
+            file: base.join("full-bar.slint"),
+            component: "FullBar".into(),
+            global: Some("FullBridge".into()),
+            slot: crate::ui::composition::Slot::Bottom,
+        }];
+        let source = crate::ui::composition::shell_source(&specs).unwrap();
+        assert!(source.contains("bottom-content.content-full-width"));
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
+        let item = |id: &str, icon: &str| Item {
+            owner: 3,
+            id: id.into(),
+            icon: ButtonIcon::Name(icon.into()),
+            label: id.into(),
+            tip: id.into(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        // The built-ins: AI (100) and Store (200).
+        let cells = vec![
+            cell(Some(&item("ai", "ai")), None),
+            cell(Some(&item("store", "store")), None),
+        ];
+        shell
+            .set_global_property(
+                GLOBAL,
+                "buttons",
+                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+            )
+            .unwrap();
+        for (name, id, icon) in [
+            ("toggle", "sidebar", "playlist"),
+            ("palette", "palette", "search"),
+        ] {
+            shell
+                .set_global_property(GLOBAL, name, cell(Some(&item(id, icon)), None))
+                .unwrap();
+        }
+        shell
+            .window()
+            .set_size(slint::LogicalSize::new(1100., 600.));
+        shell.show().unwrap();
+        // (window width, plugin buttons in the strip, the bar's controls)
+        let sweep = |full: bool| {
+            shell
+                .set_global_property("Owner12Bridge", "full", Value::Bool(full))
+                .unwrap();
+            (320..=1100)
+                .rev()
+                .step_by(5)
+                .map(|width| {
+                    shell
+                        .window()
+                        .set_size(slint::LogicalSize::new(width as f32, 600.));
+                    for _ in 0..4 {
+                        settle_layout(shell.window());
+                        slint::platform::update_timers_and_animations();
+                    }
+                    let number =
+                        |global: &str, name| match shell.get_global_property(global, name).unwrap()
+                        {
+                            Value::Number(n) => n as usize,
+                            other => panic!("{other:?}"),
+                        };
+                    (
+                        width,
+                        number(GLOBAL, "shown"),
+                        number("Owner12Bridge", "controls"),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+        let rows = sweep(true);
+        assert_eq!(
+            rows.first().map(|r| (r.1, r.2)),
+            Some((2, 7)),
+            "wide: everything"
+        );
+        for pair in rows.windows(2) {
+            let (wider, narrower) = (pair[0], pair[1]);
+            assert!(
+                narrower.1 <= wider.1,
+                "a button came back from » at {}px: {wider:?} → {narrower:?}",
+                narrower.0
+            );
+            assert!(
+                narrower.2 <= wider.2,
+                "the bar's controls came back: {wider:?} → {narrower:?}"
+            );
+        }
+        for (width, shown, controls) in &rows {
+            if *controls < 7 {
+                assert_eq!(
+                    *shown, 0,
+                    "{width}px: the bar dropped a control before the plugins"
+                );
+            }
+        }
+        assert_eq!(rows.last().map(|r| r.2), Some(2));
+        // The 3a rule (least width only): not monotonic, the bug the GUI
+        // check found.
+        let old = sweep(false);
+        assert!(
+            old.windows(2).any(|pair| pair[1].1 > pair[0].1),
+            "the least-width rule brings buttons back: {old:?}"
+        );
+        shell.hide().unwrap();
+    }
+
+    /// Step 3a: without a bottom bar the player still draws its strip, in a
+    /// 40px band of the bar's colour under the video (hidden in fullscreen).
+    #[test]
+    fn without_a_bottom_bar_a_band_holds_the_strip() {
+        use crate::commands::ButtonIcon;
+        use crate::ui::bar_buttons::{GLOBAL, Item, cell};
+        use slint_interpreter::Value;
+        headless();
+        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
+        let shell = crate::ui::composition::compile_json(&[], sender, 1).unwrap();
+        let item = |id: &str, icon: &str| Item {
+            owner: 0,
+            id: id.into(),
+            icon: ButtonIcon::Name(icon.into()),
+            label: id.into(),
+            tip: id.into(),
+            enabled: true,
+            checkable: false,
+            checked: false,
+            dimmed: false,
+        };
+        shell
+            .set_global_property(
+                GLOBAL,
+                "palette",
+                cell(Some(&item("palette", "search")), None),
+            )
+            .unwrap();
+        shell
+            .set_global_property(
+                GLOBAL,
+                "toggle",
+                cell(Some(&item("sidebar", "playlist")), None),
+            )
+            .unwrap();
+        shell.window().set_size(slint::LogicalSize::new(800., 600.));
+        shell.show().unwrap();
+        let settle = || {
+            for _ in 0..3 {
+                settle_layout(shell.window());
+                slint::platform::update_timers_and_animations();
+            }
+        };
+        settle();
+        assert_eq!(
+            shell.get_global_property(GLOBAL, "width").unwrap(),
+            Value::Number(82.)
+        );
+        // No plugin button: no `»` cell to reserve.
+        assert_eq!(
+            shell.get_global_property(GLOBAL, "fixed").unwrap(),
+            Value::Number(2.)
+        );
+        assert_eq!(
+            shell.get_property("video-height").unwrap(),
+            Value::Number(560.)
+        );
+        shell
+            .set_property("host-fullscreen", Value::Bool(true))
+            .unwrap();
+        settle();
+        assert_eq!(
+            shell.get_property("video-height").unwrap(),
+            Value::Number(600.)
+        );
         shell.hide().unwrap();
     }
 

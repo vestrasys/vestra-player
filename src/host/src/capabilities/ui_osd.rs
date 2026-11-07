@@ -1,20 +1,22 @@
 //! `ui.osd`: messages on the video and the information panel.
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
-    host::{Host, OSD_MS, Reply, RpcError},
+    host::{Host, OsdActions, Reply, RpcError},
     i18n,
 };
 use serde_json::Value;
-use slint_interpreter::Value as SValue;
 
 /// On-screen display limits: a message's characters, the information
-/// block's lines and bytes, and its `maxColumns` range. The SDK repeats them
+/// block's lines and bytes, its `maxColumns` range, and a message's action
+/// buttons and their titles' characters. The SDK repeats them
 /// (`OSD_LIMITS`); src/tests/sdk/host-agreement.test.ts checks they agree.
 pub const OSD_MESSAGE_CHARS: usize = 200;
 pub const OSD_PANEL_LINES: usize = 32;
 pub const OSD_PANEL_BYTES: usize = 4096;
 pub const OSD_MIN_COLUMNS: u64 = 8;
 pub const OSD_MAX_COLUMNS: u64 = 1000;
+pub const OSD_ACTIONS: usize = 2;
+pub const OSD_ACTION_CHARS: usize = 40;
 
 pub struct UiOsd;
 static INFO: Info = Info {
@@ -35,6 +37,10 @@ impl Capability for UiOsd {
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
         if host.info_panels.contains_key(&owner) {
             return Recorded::Live("an OSD panel");
+        }
+        // Its buttons run its commands while the message shows.
+        if host.osd_actions.as_ref().is_some_and(|a| a.owner == owner) {
+            return Recorded::Live("an OSD message with actions");
         }
         Recorded::Nothing
     }
@@ -60,18 +66,60 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
             "osd text needs 1..={OSD_MESSAGE_CHARS} characters"
         )));
     }
-    let shell = host
-        .shell
-        .as_ref()
-        .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
-    shell
-        .set_property("osd-text", SValue::String(text.as_str().into()))
-        .map_err(anyhow::Error::from)?;
-    shell
-        .set_property("osd-visible", true.into())
-        .map_err(anyhow::Error::from)?;
-    host.osd_until = Some(host.now_ms() + OSD_MS);
+    let owner = reply.owner;
+    let actions = parse_actions(
+        &params["actions"],
+        |title| host.plugin_sentence(owner, title, &Value::Null),
+        |id| host.commands.get(owner, id).is_some(),
+    )?;
+    if host.shell.is_none() {
+        return Err(RpcError::new("unavailable", "native shell unavailable"));
+    }
+    let actions = (!actions.is_empty()).then(|| {
+        let (titles, commands) = actions.into_iter().unzip();
+        (OsdActions { owner, commands }, titles)
+    });
+    host.put_osd(&text, actions);
     Ok(())
+}
+
+/// `osd.show`'s `actions` (player 0.7.6): absent or a list of at most
+/// [`OSD_ACTIONS`] `{ title, command }`, each title 1–[`OSD_ACTION_CHARS`]
+/// characters once translated (line breaks shown as spaces), each command
+/// one of the plugin's own (`known`). Returns (title, command) pairs.
+fn parse_actions(
+    actions: &Value,
+    title: impl Fn(&Value) -> std::result::Result<String, RpcError>,
+    known: impl Fn(&str) -> bool,
+) -> std::result::Result<Vec<(String, String)>, RpcError> {
+    let list = match actions {
+        Value::Null => return Ok(Vec::new()),
+        Value::Array(list) if list.len() <= OSD_ACTIONS => list,
+        _ => {
+            return Err(RpcError::invalid(format!(
+                "actions is a list of at most {OSD_ACTIONS}"
+            )));
+        }
+    };
+    list.iter()
+        .map(|action| {
+            let shown = title(&action["title"])?.replace(['\n', '\r'], " ");
+            if shown.trim().is_empty() || shown.chars().count() > OSD_ACTION_CHARS {
+                return Err(RpcError::invalid(format!(
+                    "an action title needs 1..={OSD_ACTION_CHARS} characters"
+                )));
+            }
+            let command = action["command"]
+                .as_str()
+                .ok_or_else(|| RpcError::invalid("an action's command is a command id"))?;
+            if !known(command) {
+                return Err(RpcError::invalid(format!(
+                    "{command} is not a command of this plugin"
+                )));
+            }
+            Ok((shown, command.to_string()))
+        })
+        .collect()
 }
 
 fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
@@ -111,4 +159,57 @@ fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<
     }
     host.show_info_panels();
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    fn title(value: &Value) -> std::result::Result<String, RpcError> {
+        value
+            .as_str()
+            .map(str::to_string)
+            .ok_or_else(|| RpcError::invalid("title is text"))
+    }
+
+    fn parse(actions: Value) -> std::result::Result<Vec<(String, String)>, RpcError> {
+        parse_actions(&actions, title, |id| id == "reveal" || id == "copy")
+    }
+
+    #[test]
+    fn actions_are_at_most_two_known_commands_with_short_titles() {
+        assert!(parse(Value::Null).unwrap().is_empty());
+        assert!(parse(json!([])).unwrap().is_empty());
+        assert_eq!(
+            parse(json!([
+                {"title":"Show in\nFolder","command":"reveal"},
+                {"title":"Copy","command":"copy"},
+            ]))
+            .unwrap(),
+            [
+                ("Show in Folder".to_string(), "reveal".to_string()),
+                ("Copy".to_string(), "copy".to_string()),
+            ]
+        );
+        let long = "x".repeat(OSD_ACTION_CHARS + 1);
+        let most = "字".repeat(OSD_ACTION_CHARS);
+        assert!(parse(json!([{"title":most,"command":"copy"}])).is_ok());
+        for bad in [
+            json!([
+                {"title":"A","command":"copy"},
+                {"title":"B","command":"copy"},
+                {"title":"C","command":"copy"},
+            ]),
+            json!({"title":"Copy","command":"copy"}),
+            json!([{"title":"Copy","command":"vestra.other/copy"}]),
+            json!([{"title":"Copy"}]),
+            json!([{"title":" ","command":"copy"}]),
+            json!([{"title":long,"command":"copy"}]),
+            json!([{"command":"copy"}]),
+        ] {
+            let error = parse(bad.clone()).unwrap_err();
+            assert_eq!(error.code, "invalid", "{bad}");
+        }
+    }
 }
