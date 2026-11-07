@@ -21,8 +21,7 @@ use serde_json::{Value, json};
 pub const RECENT_LIMIT: usize = 8;
 /// Row elements the view keeps: never more rows than this in view. A fixed
 /// count, written in place, so moving through the list never creates or
-/// destroys an element (each one rebuilds the window's accessibility tree,
-/// ui/menu-view.slint's rule).
+/// destroys an element (ui/menu-view.slint's no-churn rule).
 pub const SLOTS: usize = 12;
 /// Text runs of a row's label, alternately plain and matched (plain first).
 pub const SEGMENTS: usize = 8;

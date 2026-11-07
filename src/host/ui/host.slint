@@ -138,7 +138,7 @@ export component HostWindow inherits Window {
                         // Placed (x, y): Slint takes the size constraints of a child without
                         // them into the parent's, so the picture's size fed the window's layout
                         // and every new picture redid the layout and everything that depends
-                        // on it, the accessibility nodes too.
+                        // on it.
                         Image { x: 0px; y: 0px; visible: !root.no-video && !root.picture-in-picture; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
                         if root.picture-in-picture: Text {
                             width: parent.width;
