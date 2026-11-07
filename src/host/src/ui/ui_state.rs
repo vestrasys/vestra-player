@@ -169,6 +169,11 @@ pub struct UiState {
     /// it); it opens maximized again over [`Self::window`] (IA-CORE-03).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub window_maximized: bool,
+    /// Windows: the normal frame in desktop pixels (the window placement),
+    /// restored in preference to [`Self::window`]: logical pixels convert
+    /// with the scale of whichever display the window is on.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub window_physical: Option<crate::platform::DesktopRect>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidebar: Option<Sidebar>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -201,6 +206,17 @@ impl UiState {
             .ok()
             .filter(Frame::valid);
         let window_maximized = field("windowMaximized").as_bool().unwrap_or(false);
+        let window_physical =
+            serde_json::from_value::<crate::platform::DesktopRect>(field("windowPhysical"))
+                .ok()
+                .filter(|r| {
+                    r.width > 0
+                        && r.height > 0
+                        && r.width < 100_000
+                        && r.height < 100_000
+                        && r.x.abs() < 100_000
+                        && r.y.abs() < 100_000
+                });
         let sidebar = serde_json::from_value::<Sidebar>(field("sidebar"))
             .ok()
             .filter(|s| s.width.is_finite() && s.width > 0.);
@@ -255,6 +271,7 @@ impl UiState {
         Self {
             window,
             window_maximized,
+            window_physical,
             sidebar,
             sidebar_slot,
             bindings,
@@ -377,6 +394,12 @@ mod tests {
             height: 671.,
         });
         store.state.window_maximized = true;
+        store.state.window_physical = Some(crate::platform::DesktopRect {
+            x: -1920,
+            y: 40,
+            width: 1365,
+            height: 1174,
+        });
         store.state.sidebar = Some(Sidebar { width: 400. });
         store.state.sidebar_slot = Some(SidebarSlot {
             visible: false,
@@ -447,12 +470,13 @@ mod tests {
         assert!(dir.path().join("ui-state.json.bad").exists());
         std::fs::write(
             &path,
-            r#"{"version":1,"appearance":{"theme":"pink"},"window":{"x":"left"},"windowMaximized":"yes","sidebar":{"width":350},"panels":{"a":{"visible":true},"b":7},"bindings":{"x/y":["F6"],"z":3}}"#,
+            r#"{"version":1,"appearance":{"theme":"pink"},"window":{"x":"left"},"windowMaximized":"yes","windowPhysical":{"x":0,"y":0,"width":0,"height":5},"sidebar":{"width":350},"panels":{"a":{"visible":true},"b":7},"bindings":{"x/y":["F6"],"z":3}}"#,
         )
         .unwrap();
         let state = Store::open(&path).state;
         assert_eq!(state.window, None);
         assert!(!state.window_maximized);
+        assert_eq!(state.window_physical, None, "an empty frame");
         assert_eq!(state.appearance.unwrap().theme, "vestra");
         assert_eq!(state.sidebar, Some(Sidebar { width: 350. }));
         // The one readable panel entry ("a") became the slot's state.

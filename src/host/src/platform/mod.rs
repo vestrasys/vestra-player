@@ -182,6 +182,16 @@ pub struct NativeSnapshot {
     pub(crate) ids: BTreeSet<i64>,
 }
 
+/// A rectangle in desktop pixels (physical, as the system and winit report
+/// window frames and displays).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub struct DesktopRect {
+    pub x: i32,
+    pub y: i32,
+    pub width: u32,
+    pub height: u32,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Rect {
     pub x: f64,
@@ -748,6 +758,40 @@ pub fn cloak_until_drawn() {}
 /// here; on Windows a window hidden until its first draw shows after it.
 #[cfg(not(target_os = "windows"))]
 pub fn window_drawing(_id: u64) {}
+
+/// The displays' work areas (without the taskbar or the Dock), the primary
+/// one marked: only Windows lists them (`windows.rs`); elsewhere none, and
+/// a restored frame is checked against winit's displays.
+#[cfg(not(target_os = "windows"))]
+pub fn work_areas() -> Vec<(DesktopRect, bool)> {
+    Vec::new()
+}
+
+/// The main window's normal frame in desktop pixels (also while it is
+/// maximized): only Windows saves it (`windows.rs`, the window placement);
+/// elsewhere the logical frame is saved.
+#[cfg(not(target_os = "windows"))]
+pub fn normal_frame(_window: &slint::Window) -> Option<DesktopRect> {
+    None
+}
+
+/// Put `window` at the normal frame `frame` (desktop pixels), maximized
+/// over it when `maximized`: Windows only (`windows.rs`); false elsewhere.
+#[cfg(not(target_os = "windows"))]
+pub fn set_normal_frame(_window: &slint::Window, _frame: DesktopRect, _maximized: bool) -> bool {
+    false
+}
+
+/// Keep the next window shown hidden past its first draw, until
+/// [`placed`]: Windows only (`windows.rs`, the main window kept cloaked
+/// until its restored frame and maximized state are set); nothing here.
+#[cfg(not(target_os = "windows"))]
+pub fn hold_next_shown() {}
+
+/// `window` has its restored frame: show it at its next draw (Windows,
+/// `windows.rs`); nothing here.
+#[cfg(not(target_os = "windows"))]
+pub fn placed(_window: &slint::Window) {}
 
 /// Durability barrier for the entries of `directory`: after it returns, the
 /// names created, renamed or removed in it survive a crash (the package

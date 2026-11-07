@@ -688,14 +688,25 @@ fn main() -> Result<()> {
         let texture = host.attach_gpu(&window);
         // Title bars follow the palette from the first window on.
         platform::set_dark_title_bars(!theme::is_light(host.theme()));
-        // IA-CORE-03: maximized again if it was, never in fullscreen.
-        let maximized = host.ui_state.state.window_maximized;
+        // IA-CORE-03: the saved frame (Windows: in desktop pixels) and
+        // maximized state, never fullscreen. The user never sees the window
+        // at another frame first: Windows keeps it cloaked until it is placed
+        // (after Slint's first draw), macOS zooms it at its creation, before
+        // it is visible (`view::Placements`).
+        let restore = view::Restore {
+            maximized: host.ui_state.state.window_maximized,
+            physical: host.ui_state.state.window_physical,
+        };
         match position {
-            Some(position) => host
-                .placements
-                .show_restored(&window, position, maximized)?,
+            Some(position) => {
+                platform::hold_next_shown();
+                if cfg!(target_os = "macos") && restore.maximized {
+                    window.window().set_maximized(true);
+                }
+                host.placements.show_restored(&window, position, restore)?;
+            }
             None => {
-                window.window().set_maximized(maximized);
+                window.window().set_maximized(restore.maximized);
                 window.show()?;
             }
         }

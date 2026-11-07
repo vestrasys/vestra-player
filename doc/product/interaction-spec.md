@@ -303,9 +303,10 @@ Without an API change: the host takes the first Latin letter of the title automa
 **Requirements**:
 
 1. The window position and size are saved only when the window is neither fullscreen, maximised nor minimised (`ui-state.json` `window`).
-2. Whether the window is maximised is saved too (`windowMaximized`); on startup the window opens at the saved normal frame and is then maximised on the display it is on, so restoring it returns to that frame.
+2. Whether the window is maximised is saved too (`windowMaximized`); on startup the window opens at the saved normal frame, maximised on that frame's display, so restoring it returns to that frame. The user never sees it at another frame first: Windows keeps it cloaked until it is placed, macOS zooms it at its creation, before it shows.
+   - Windows also saves the normal frame in desktop pixels (`windowPhysical`, the window placement, also while maximised) and restores it with `SetWindowPlacement`, so a display of another scale restores it exactly; logical pixels convert with the scale of whichever display the window is on.
 3. Fullscreen is never restored and has no option (Chrome, VLC and mpv do not either; fullscreen at launch without a video is a black screen). Quitting in fullscreen keeps what was under it: the normal frame and the maximised flag from before fullscreen.
-4. A saved frame that is not reachable (less than 100 × 30 px of its title bar on any display, for example a display that is gone) opens centred on the primary display, shrunk to fit it, as Chrome and Firefox do.
+4. A saved frame that is not reachable (less than 100 × 30 px of its title bar on any display's work area, the taskbar excluded on Windows; for example a display that is gone) opens centred on the primary display, shrunk to fit it, as Chrome and Firefox do.
 5. Restoring from maximised returns to the normal size from before maximising (system behaviour).
 6. After closing a file the window keeps its current size.
 

@@ -175,24 +175,45 @@ pub fn replace_shell(
 /// the native window exists a position is the frame's everywhere, so
 /// [`Placements::tick`] sets it again then.
 ///
-/// A saved frame on a display that is gone (or no longer reaches that far)
-/// moves onto the primary display ([`reachable`]), and a main window saved
-/// maximized is maximized after its frame is placed: winit un-maximizes a
-/// window it moves, and Windows maximizes a window on the display it is on
-/// and restores it to the frame it had before.
+/// The main window ([`Restore`]) also gets back its maximized state and, on
+/// Windows, its frame in desktop pixels; a saved frame on a display that is
+/// gone (or no longer reaches that far) moves onto the primary display
+/// ([`reachable`]). It is never seen at the wrong frame: Windows keeps it
+/// cloaked until it is placed (`platform::hold_next_shown`, `placed`), and
+/// macOS zooms it at its creation, before it is visible (`main.rs`).
+///
+/// A placement follows the window, not its component tree: it is tracked
+/// by Slint's window adapter, which a shell built in the same window by a
+/// composition change shares (`replace_shell`).
 #[derive(Default)]
 pub struct Placements(Vec<Placement>);
 
 struct Placement {
-    window: slint::Weak<ComponentInstance>,
+    window: std::rc::Weak<dyn slint::platform::WindowAdapter>,
     position: slint::WindowPosition,
-    maximize: bool,
+    restore: Restore,
     /// Ticks waited for the native window.
     waited: u32,
+    /// Placed at the last tick: kept one more, so a frame the system has
+    /// not reported yet is not taken for the user's (`placing`).
+    placed: bool,
+}
+
+/// What the main window gets back beyond its position.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Restore {
+    pub maximized: bool,
+    /// The normal frame in desktop pixels (Windows: the window placement).
+    pub physical: Option<Rect>,
 }
 
 /// Give up on a window that never gets a native one (about 2 s of ticks).
 const PLACEMENT_TICKS: u32 = 120;
+
+fn adapter_of(window: &slint::Window) -> std::rc::Weak<dyn slint::platform::WindowAdapter> {
+    use slint::private_unstable_api::re_exports::WindowInner;
+    std::rc::Rc::downgrade(&WindowInner::from_pub(window).window_adapter())
+}
 
 impl Placements {
     /// Show `component` with its frame at `position`.
@@ -201,70 +222,66 @@ impl Placements {
         component: &ComponentInstance,
         position: impl Into<slint::WindowPosition>,
     ) -> Result<(), slint::PlatformError> {
-        self.show_restored(component, position, false)
+        self.show_restored(component, position, Restore::default())
     }
 
-    /// [`Self::show_at`], then maximized there when `maximize`.
+    /// [`Self::show_at`], with the main window's `restore`.
     pub fn show_restored(
         &mut self,
         component: &ComponentInstance,
         position: impl Into<slint::WindowPosition>,
-        maximize: bool,
+        restore: Restore,
     ) -> Result<(), slint::PlatformError> {
         let position = position.into();
         component.window().set_position(position.clone());
         component.show()?;
-        self.track(component, position, maximize);
+        self.track(component.window(), position, restore);
         Ok(())
     }
 
-    /// Put an already shown `component`'s frame at `position` once its
-    /// native window exists.
-    fn track(
-        &mut self,
-        component: &ComponentInstance,
-        position: slint::WindowPosition,
-        maximize: bool,
-    ) {
+    /// Put an already shown `window`'s frame at `position` once its native
+    /// window exists.
+    fn track(&mut self, window: &slint::Window, position: slint::WindowPosition, restore: Restore) {
         self.0.push(Placement {
-            window: component.as_weak(),
+            window: adapter_of(window),
             position,
-            maximize,
+            restore,
             waited: 0,
+            placed: false,
         });
     }
 
-    /// Whether `window` still waits for its frame to be placed (its size and
-    /// position are not the restored ones yet).
+    /// Whether `window` still waits for its frame to be placed (its size,
+    /// position and maximized state are not the restored ones yet).
     pub fn placing(&self, window: &slint::Window) -> bool {
         self.0.iter().any(|placement| {
             placement
                 .window
                 .upgrade()
-                .is_some_and(|component| std::ptr::eq(component.window(), window))
+                .is_some_and(|adapter| std::ptr::eq(adapter.window(), window))
         })
     }
 
-    /// Set the frame position of each window whose native window now exists
-    /// (not in fullscreen, where it has no frame of its own), keep it
-    /// reachable and maximize it if asked; windows closed meanwhile are
+    /// Place each window whose native window now exists (not in fullscreen,
+    /// where it has no frame of its own); windows closed meanwhile are
     /// forgotten.
     pub fn tick(&mut self) {
         use slint::winit_030::WinitWindowAccessor;
         self.0.retain_mut(|placement| {
-            let Some(component) = placement.window.upgrade() else {
+            let Some(adapter) = placement.window.upgrade() else {
                 return false;
             };
-            let window = component.window();
+            if placement.placed {
+                return false;
+            }
+            let window = adapter.window();
             if window.has_winit_window() {
                 if !window.is_fullscreen() {
-                    window.set_position(placement.position.clone());
-                    keep_reachable(window);
-                    if placement.maximize {
-                        window.set_maximized(true);
-                    }
+                    place(window, &placement.position, placement.restore);
                 }
-                return false;
+                crate::platform::placed(window);
+                placement.placed = true;
+                return true;
             }
             placement.waited += 1;
             placement.waited < PLACEMENT_TICKS
@@ -277,14 +294,60 @@ impl Placements {
     }
 }
 
-/// A rectangle in desktop pixels (physical, as winit reports frames and
-/// displays).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct Rect {
-    pub x: i32,
-    pub y: i32,
-    pub width: u32,
-    pub height: u32,
+/// Put `window` (its native window exists) at its saved frame.
+fn place(window: &slint::Window, position: &slint::WindowPosition, restore: Restore) {
+    if let Some(frame) = restore.physical {
+        let (displays, primary) = displays(window);
+        let target = reachable(frame, &displays, primary).unwrap_or(frame);
+        if target != frame {
+            diag!("ui: the saved window frame {frame:?} is off every display; moved to {target:?}");
+        }
+        if crate::platform::set_normal_frame(window, target, restore.maximized) {
+            return;
+        }
+    }
+    // macOS: zoomed at its creation (`main.rs`); moving it would end that.
+    if restore.maximized && cfg!(target_os = "macos") {
+        return;
+    }
+    window.set_position(position.clone());
+    keep_reachable(window);
+    if restore.maximized {
+        window.set_maximized(true);
+    }
+}
+
+/// A rectangle in desktop pixels (physical, as the system and winit report
+/// frames and displays).
+pub type Rect = crate::platform::DesktopRect;
+
+/// The displays a frame must reach and the primary one: their work areas
+/// where the system lists them (Windows: without the taskbar), else
+/// winit's whole displays.
+fn displays(window: &slint::Window) -> (Vec<Rect>, Option<Rect>) {
+    use slint::winit_030::{WinitWindowAccessor, winit::monitor::MonitorHandle};
+    let work = crate::platform::work_areas();
+    if !work.is_empty() {
+        let primary = work.iter().find(|(_, primary)| *primary).map(|(r, _)| *r);
+        return (work.into_iter().map(|(r, _)| r).collect(), primary);
+    }
+    let rect = |display: &MonitorHandle| {
+        let (position, size) = (display.position(), display.size());
+        Rect {
+            x: position.x,
+            y: position.y,
+            width: size.width,
+            height: size.height,
+        }
+    };
+    window
+        .with_winit_window(|native| {
+            (
+                native.available_monitors().map(|d| rect(&d)).collect(),
+                native.primary_monitor().map(|d| rect(&d)),
+            )
+        })
+        .unwrap_or_default()
 }
 
 /// The part of a frame's top edge that must lie on a display for the frame
@@ -329,26 +392,17 @@ pub fn reachable(frame: Rect, displays: &[Rect], fallback: Option<Rect>) -> Opti
 /// Move a window whose frame is out of reach ([`reachable`]) onto the primary
 /// display.
 fn keep_reachable(window: &slint::Window) {
-    use slint::winit_030::{
-        WinitWindowAccessor,
-        winit::dpi::{PhysicalPosition, PhysicalSize},
-    };
-    let rect = |position: PhysicalPosition<i32>, size: PhysicalSize<u32>| Rect {
-        x: position.x,
-        y: position.y,
-        width: size.width,
-        height: size.height,
-    };
+    use slint::winit_030::WinitWindowAccessor;
+    let (displays, primary) = displays(window);
     let moved = window
         .with_winit_window(|native| {
-            let frame = rect(native.outer_position().ok()?, native.outer_size());
-            let displays = native
-                .available_monitors()
-                .map(|display| rect(display.position(), display.size()))
-                .collect::<Vec<_>>();
-            let primary = native
-                .primary_monitor()
-                .map(|display| rect(display.position(), display.size()));
+            let (position, size) = (native.outer_position().ok()?, native.outer_size());
+            let frame = Rect {
+                x: position.x,
+                y: position.y,
+                width: size.width,
+                height: size.height,
+            };
             let target = reachable(frame, &displays, primary)?;
             // The content shrinks by what the frame does.
             let inner = native.inner_size();
@@ -2362,8 +2416,21 @@ export component T inherits Window {
         placements
             .show_at(&kept, slint::LogicalPosition::new(40., 65.))
             .unwrap();
-        let closed = make();
-        placements.track(&closed, slint::LogicalPosition::new(1., 2.).into(), true);
+        // A window of its own (the headless platform shows every component
+        // in one), closed: its adapter is gone.
+        use slint::platform::WindowAdapter as _;
+        let closed = slint::platform::software_renderer::MinimalSoftwareWindow::new(
+            slint::platform::software_renderer::RepaintBufferType::NewBuffer,
+        );
+        let restore = Restore {
+            maximized: true,
+            physical: None,
+        };
+        placements.track(
+            closed.window(),
+            slint::LogicalPosition::new(1., 2.).into(),
+            restore,
+        );
         assert!(placements.placing(closed.window()));
         drop(closed);
         placements.tick();
@@ -2377,6 +2444,32 @@ export component T inherits Window {
         assert_eq!(placements.pending(), 0);
         assert!(!placements.placing(kept.window()));
         kept.hide().unwrap();
+    }
+
+    /// A placement follows the window, not its tree: the shell a composition
+    /// change builds in the same window (`replace_shell`) before the native
+    /// window exists still gets the restored frame.
+    #[test]
+    fn a_placement_follows_the_window_into_a_new_tree() {
+        headless();
+        let source = r#"export component W inherits Window { width: 100px; height: 80px; }"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let definition = result.component("W").unwrap();
+        let first = definition.create().unwrap();
+        let mut placements = Placements::default();
+        placements
+            .show_at(&first, slint::LogicalPosition::new(40., 65.))
+            .unwrap();
+        let second = definition
+            .create_with_existing_window(first.window())
+            .unwrap();
+        second.show().unwrap();
+        drop(first);
+        placements.tick();
+        assert!(placements.placing(second.window()));
+        second.hide().unwrap();
     }
 
     /// A restored frame stays while a grip of its title bar is on a display;

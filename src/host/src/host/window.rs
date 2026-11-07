@@ -131,9 +131,9 @@ impl Host {
             match record(fullscreen, maximized, minimized) {
                 Record::Normal => {
                     self.remember_window(&shell);
-                    self.remember_maximized(false);
+                    self.remember_maximized(false, shell.window());
                 }
-                Record::Maximized => self.remember_maximized(true),
+                Record::Maximized => self.remember_maximized(true, shell.window()),
                 Record::Nothing => {}
             }
         }
@@ -254,10 +254,15 @@ impl Host {
             self.ui_state.touch(self.now_ms());
         }
     }
-    /// Record whether the main window is maximized, for the next launch.
-    fn remember_maximized(&mut self, maximized: bool) {
-        if self.ui_state.state.window_maximized != maximized {
-            self.ui_state.state.window_maximized = maximized;
+    /// Record whether the main window is maximized and, where the system
+    /// gives it (Windows), its normal frame in desktop pixels, also while
+    /// maximized, for the next launch.
+    fn remember_maximized(&mut self, maximized: bool, window: &slint::Window) {
+        let physical = platform::normal_frame(window).or(self.ui_state.state.window_physical);
+        let state = &mut self.ui_state.state;
+        if state.window_maximized != maximized || state.window_physical != physical {
+            state.window_maximized = maximized;
+            state.window_physical = physical;
             self.ui_state.touch(self.now_ms());
         }
     }

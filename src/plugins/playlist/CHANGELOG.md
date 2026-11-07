@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.5
+
+Who must change: nobody. What users see: the list's header has no close button (✕) any more; right below the window's own close button, a missed click closed the player. Hide the sidebar with F6, the bottom bar's sidebar button or Close List in the list menu. Needs player 0.6.0.
+
+- The header keeps only the detach/attach button, at its right end; the `hide` callback and its "Close list" text are gone.
+
 ## 0.2.4
 
 - Code only: the Add Link window handle is named `linkWindow` (was `window`). Who must change: nobody. No behaviour change.
