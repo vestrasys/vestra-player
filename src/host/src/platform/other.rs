@@ -33,12 +33,12 @@ pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
 pub fn app_in_foreground() -> bool {
     true
 }
-/// winit's `focus_window` (a request the window manager may refuse).
 /// Minimize `window` (Slint's own minimize: no winit fullscreen quirk here).
 pub fn minimize_window(window: &slint::Window) {
     window.set_minimized(true);
 }
 
+/// winit's `focus_window` (a request the window manager may refuse).
 pub fn focus_own_window(window: &slint::Window) {
     use slint::winit_030::WinitWindowAccessor;
     window.with_winit_window(|native| native.focus_window());
