@@ -97,6 +97,8 @@ impl Host {
                     "path":(!declaration.path.is_empty()).then(|| declaration.shown_path()),
                     // The keys menus merge by: the same in every language.
                     "key":(!declaration.path.is_empty()).then(|| declaration.path.clone()),
+                    // Player 0.7.6: the category as shown, null without one.
+                    "category":declaration.shown_category(),
                     "scope":if info.panel {"panel"} else {"global"},
                     "defaults":texts(&info.defaults),"current":texts(&info.current),
                     "overridden":info.overridden,

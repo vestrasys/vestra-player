@@ -552,3 +552,64 @@ msgstr "{} は異常のため停止しました。しばらくしてからもう
 #, x-machine
 msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
 msgstr "プラグインのシェーダーはオフです: 有効中にプレーヤーが予期せず終了しました"
+
+#. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
+#: src/host/host/actions.rs
+#, x-machine
+msgid "Command Palette"
+msgstr "コマンドパレット"
+
+#. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "{category}: {title}"
+msgstr "{category}：{title}"
+
+#. Command palette: where a command lives when it is in the right-click menu.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "Menu"
+msgstr "メニュー"
+
+
+#. Command palette: how many commands match what is typed.
+#: src/host/host/palette.rs
+#, x-machine
+msgid "Results: {}"
+msgstr "結果: {}"
+
+#. Command palette: the empty field's placeholder.
+#: ui/command-palette.slint
+#, x-machine
+msgid "Type a command name"
+msgstr "コマンド名を入力"
+
+#. Command palette: nothing matches what is typed.
+#: ui/command-palette.slint
+#, x-machine
+msgid "No matching commands"
+msgstr "一致するコマンドはありません"
+
+#. Command palette footer, after the ↑↓ keys: move between commands.
+#: ui/command-palette.slint
+#, x-machine
+msgid "choose"
+msgstr "選択"
+
+#. Command palette footer, after the Enter key: run the command and close.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run"
+msgstr "実行"
+
+#. Command palette footer, after Shift+Enter: run the command and keep the palette open.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run, keep open"
+msgstr "実行して開いたまま"
+
+#. Command palette footer, after the Esc key: close the palette.
+#: ui/command-palette.slint
+#, x-machine
+msgid "close"
+msgstr "閉じる"

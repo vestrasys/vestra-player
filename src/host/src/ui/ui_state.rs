@@ -189,6 +189,10 @@ pub struct UiState {
     pub appearance: Option<Appearance>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub settings: Option<Settings>,
+    /// The command palette's recently run commands, newest first
+    /// (`<manifest id>/<command id>`, at most `command_palette::RECENT_LIMIT`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub palette_recent: Vec<String>,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -258,6 +262,9 @@ impl UiState {
                     .filter(|l| crate::i18n::valid_preference(l) && l != crate::i18n::SYSTEM),
             });
         let settings = serde_json::from_value::<Settings>(field("settings")).ok();
+        let mut palette_recent: Vec<String> =
+            serde_json::from_value(field("paletteRecent")).unwrap_or_default();
+        palette_recent.truncate(crate::ui::command_palette::RECENT_LIMIT);
         // The per-panel entries of older players become the slot's state;
         // they are not written again.
         let sidebar_slot = serde_json::from_value::<SidebarSlot>(field("sidebarSlot"))
@@ -278,6 +285,7 @@ impl UiState {
             bindings_migrated,
             appearance,
             settings,
+            palette_recent,
         }
     }
 }
@@ -426,6 +434,7 @@ mod tests {
         store.state.settings = Some(Settings {
             last_page: Some("vestra.preferences/appearance".into()),
         });
+        store.state.palette_recent = vec!["host/mute".into(), "vestra.video/video.reset".into()];
         store.touch(0);
         store.save_if_due(999);
         assert!(!path.exists(), "debounced");
@@ -436,6 +445,7 @@ mod tests {
         assert!(text.contains("\"version\": 1"));
         assert!(text.contains("\"bindingsMigrated\""), "{text}");
         assert!(text.contains("\"windowMaximized\": true"), "{text}");
+        assert!(text.contains("\"paletteRecent\""), "{text}");
     }
 
     #[test]

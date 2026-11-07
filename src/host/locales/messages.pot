@@ -447,3 +447,54 @@ msgstr ""
 #: src/host/diagnostics.rs
 msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
 msgstr ""
+
+#. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
+#: src/host/host/actions.rs
+msgid "Command Palette"
+msgstr ""
+
+#. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
+#: src/host/ui/command_palette.rs
+msgid "{category}: {title}"
+msgstr ""
+
+#. Command palette: where a command lives when it is in the right-click menu.
+#: src/host/ui/command_palette.rs
+msgid "Menu"
+msgstr ""
+
+
+#. Command palette: how many commands match what is typed.
+#: src/host/host/palette.rs
+msgid "Results: {}"
+msgstr ""
+
+#. Command palette: the empty field's placeholder.
+#: ui/command-palette.slint
+msgid "Type a command name"
+msgstr ""
+
+#. Command palette: nothing matches what is typed.
+#: ui/command-palette.slint
+msgid "No matching commands"
+msgstr ""
+
+#. Command palette footer, after the ↑↓ keys: move between commands.
+#: ui/command-palette.slint
+msgid "choose"
+msgstr ""
+
+#. Command palette footer, after the Enter key: run the command and close.
+#: ui/command-palette.slint
+msgid "run"
+msgstr ""
+
+#. Command palette footer, after Shift+Enter: run the command and keep the palette open.
+#: ui/command-palette.slint
+msgid "run, keep open"
+msgstr ""
+
+#. Command palette footer, after the Esc key: close the palette.
+#: ui/command-palette.slint
+msgid "close"
+msgstr ""

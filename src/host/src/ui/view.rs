@@ -1296,7 +1296,7 @@ export component W inherits Window {
             let mut declaration = Declaration::new(&title, &[title.as_str()]);
             declaration.group = group.into();
             MenuNode::Command {
-                entry: CommandSnapshot {
+                entry: Box::new(CommandSnapshot {
                     key: CommandKey {
                         owner: 1,
                         local_id: title.clone(),
@@ -1311,7 +1311,7 @@ export component W inherits Window {
                     },
                     manifest: "m".into(),
                     sequence: 1,
-                },
+                }),
             }
         };
         let none = |_: u64, _: &str| None;
@@ -1518,7 +1518,7 @@ export component W inherits Window {
             let mut declaration = Declaration::new(title, &[title]);
             declaration.group = "g".into();
             MenuNode::Command {
-                entry: CommandSnapshot {
+                entry: Box::new(CommandSnapshot {
                     key: CommandKey {
                         owner: 1,
                         local_id: title.into(),
@@ -1533,7 +1533,7 @@ export component W inherits Window {
                     },
                     manifest: "m".into(),
                     sequence: 1,
-                },
+                }),
             }
         };
         let group = |title: &str, children| MenuNode::Group {

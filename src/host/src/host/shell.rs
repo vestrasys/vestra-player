@@ -135,6 +135,7 @@ impl Host {
             slint_interpreter::Value::Void
         })?;
         self.bind_menu(window, generation, true)?;
+        self.bind_palette(window, generation)?;
         self.bind_keys(window, generation)?;
         let input = self.input.clone();
         let events = self.events.clone();

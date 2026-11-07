@@ -75,6 +75,13 @@ export const COMMAND_LIMITS = {
      */
     groupBytes: 80,
     /**
+     * UTF-8 bytes of a category (`CommandOptions.category`), a text value
+     * counted by its English rendering.
+     *
+     * @since 1.6.4
+     */
+    categoryBytes: 80,
+    /**
      * UTF-8 bytes of a state's reason, as shown in the player's
      * language.
      *
@@ -594,6 +601,7 @@ host | quit | Quit | Cmd+Q
 host | enter-fullscreen | (Enter Fullscreen)
 host | exit-fullscreen | (Leave Fullscreen)
 host | sidebar | (Toggle Sidebar)
+host | palette | (Command Palette) | Ctrl+Shift+P
 vestra.info | info.brief | (Brief Info) | Shift+Tab
 vestra.playlist | playlist.play | (Play) | Enter, P | panel
 vestra.playlist | playlist.list-add | (Add Files…) | Ctrl+I | panel

@@ -458,3 +458,64 @@ msgstr "{} 因出错已停止，请稍后再试"
 #, x-machine
 msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
 msgstr "插件着色器已关闭：播放器在其开启时意外退出"
+
+#. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
+#: src/host/host/actions.rs
+#, x-machine
+msgid "Command Palette"
+msgstr "命令面板"
+
+#. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "{category}: {title}"
+msgstr "{category}：{title}"
+
+#. Command palette: where a command lives when it is in the right-click menu.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "Menu"
+msgstr "菜单"
+
+
+#. Command palette: how many commands match what is typed.
+#: src/host/host/palette.rs
+#, x-machine
+msgid "Results: {}"
+msgstr "结果：{}"
+
+#. Command palette: the empty field's placeholder.
+#: ui/command-palette.slint
+#, x-machine
+msgid "Type a command name"
+msgstr "输入命令名称"
+
+#. Command palette: nothing matches what is typed.
+#: ui/command-palette.slint
+#, x-machine
+msgid "No matching commands"
+msgstr "没有匹配的命令"
+
+#. Command palette footer, after the ↑↓ keys: move between commands.
+#: ui/command-palette.slint
+#, x-machine
+msgid "choose"
+msgstr "选择"
+
+#. Command palette footer, after the Enter key: run the command and close.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run"
+msgstr "运行"
+
+#. Command palette footer, after Shift+Enter: run the command and keep the palette open.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run, keep open"
+msgstr "运行并保持打开"
+
+#. Command palette footer, after the Esc key: close the palette.
+#: ui/command-palette.slint
+#, x-machine
+msgid "close"
+msgstr "关闭"

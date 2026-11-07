@@ -401,6 +401,8 @@ impl Host {
         self.menu_aim.clear();
         if let Some(window) = self.window_for(generation) {
             let _ = window.set_property("menu-open", true.into());
+            // A menu replaces an open palette (the floating window has none).
+            let _ = window.set_property("palette-open", false.into());
         }
         let result = self.refresh_menu();
         self.report_menu(result);
@@ -485,6 +487,7 @@ impl Host {
                 self.menu_panels = menu::panels(&value);
                 value
             }
+            MenuMode::Palette => return self.refresh_palette(window),
             MenuMode::Tabs => {
                 // Every tab, in that window's tab order (sidebar-tabs.md).
                 let owners = match &self.floating {
@@ -521,6 +524,7 @@ impl Host {
         self.menu_scroll.clear();
         self.menu_aim.clear();
         self.menu_mode = MenuMode::Main;
+        self.palette = palette::PaletteState::default();
         for window in [
             self.shell.as_ref(),
             self.floating.as_ref().map(|f| &f.instance),
@@ -529,6 +533,8 @@ impl Host {
         .flatten()
         {
             let _ = window.set_property("menu-open", false.into());
+            // The floating window has no palette: its refusal is nothing.
+            let _ = window.set_property("palette-open", false.into());
         }
         if let Some(shell) = &self.shell {
             let result = shell

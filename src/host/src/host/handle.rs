@@ -150,6 +150,7 @@ impl Host {
                         self.set_menu_path(path);
                     }
                     MenuAction::Dismiss => self.close_menu(),
+                    MenuAction::Palette(action) => self.palette_action(action),
                     MenuAction::Hover(level, token, now) => {
                         if debug_menu() {
                             diag!(

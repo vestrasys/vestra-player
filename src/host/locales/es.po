@@ -552,3 +552,64 @@ msgstr "{} se detuvo tras un fallo; inténtalo de nuevo en un momento"
 #, x-machine
 msgid "Plugin shaders are off: the player ended unexpectedly while they were on"
 msgstr "Los shaders de complementos están desactivados: el reproductor se cerró inesperadamente mientras estaban activos"
+
+#. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
+#: src/host/host/actions.rs
+#, x-machine
+msgid "Command Palette"
+msgstr "Paleta de comandos"
+
+#. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "{category}: {title}"
+msgstr "{category}: {title}"
+
+#. Command palette: where a command lives when it is in the right-click menu.
+#: src/host/ui/command_palette.rs
+#, x-machine
+msgid "Menu"
+msgstr "Menú"
+
+
+#. Command palette: how many commands match what is typed.
+#: src/host/host/palette.rs
+#, x-machine
+msgid "Results: {}"
+msgstr "Resultados: {}"
+
+#. Command palette: the empty field's placeholder.
+#: ui/command-palette.slint
+#, x-machine
+msgid "Type a command name"
+msgstr "Escribe el nombre de un comando"
+
+#. Command palette: nothing matches what is typed.
+#: ui/command-palette.slint
+#, x-machine
+msgid "No matching commands"
+msgstr "No hay comandos que coincidan"
+
+#. Command palette footer, after the ↑↓ keys: move between commands.
+#: ui/command-palette.slint
+#, x-machine
+msgid "choose"
+msgstr "elegir"
+
+#. Command palette footer, after the Enter key: run the command and close.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run"
+msgstr "ejecutar"
+
+#. Command palette footer, after Shift+Enter: run the command and keep the palette open.
+#: ui/command-palette.slint
+#, x-machine
+msgid "run, keep open"
+msgstr "ejecutar sin cerrar"
+
+#. Command palette footer, after the Esc key: close the palette.
+#: ui/command-palette.slint
+#, x-machine
+msgid "close"
+msgstr "cerrar"

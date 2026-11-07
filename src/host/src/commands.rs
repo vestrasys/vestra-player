@@ -55,6 +55,15 @@ pub struct Declaration {
     pub focus: Option<Focus>,
     #[serde(default)]
     pub repeat: bool,
+    /// What the command is about (`CommandOptions.category`, SDK 1.6.4):
+    /// English source text, the key; the command palette names a command
+    /// `Category: Title` (`display.category` translated).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    /// The local id of the owner's command that opens where this one lives
+    /// (`CommandOptions.home`, SDK 1.6.4): the palette shows that place.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub home: Option<String>,
     /// What the menu shows (doc/architecture/i18n.md §5), in the interface
     /// language; `title` and `path` stay as declared (English source text),
     /// the keys menus merge by. Filled by the player (`localize`), never by
@@ -136,6 +145,8 @@ pub struct Display {
     pub title: String,
     /// One per path segment.
     pub path: Vec<String>,
+    /// The category; empty without one (or untranslated: the key shows).
+    pub category: String,
 }
 
 impl Declaration {
@@ -149,6 +160,8 @@ impl Declaration {
             bindings: Vec::new(),
             focus: None,
             repeat: false,
+            category: None,
+            home: None,
             display: Display::default(),
             button: None,
         }
@@ -166,6 +179,15 @@ impl Declaration {
         (0..self.path.len())
             .map(|i| self.shown_segment(i).to_owned())
             .collect()
+    }
+    /// The shown category, `None` without one.
+    pub fn shown_category(&self) -> Option<&str> {
+        let key = self.category.as_deref()?;
+        Some(if self.display.category.is_empty() {
+            key
+        } else {
+            &self.display.category
+        })
     }
     fn shown_segment(&self, index: usize) -> &str {
         self.display
@@ -196,6 +218,14 @@ impl Declaration {
             })
             .collect();
         self.display.title = text(&self.title);
+        self.display.category = self.category.as_deref().map(&text).unwrap_or_default();
+    }
+    /// Overwrite the shown category when it was a text value (its key is
+    /// the English rendering). Call after [`Declaration::localize_declared`].
+    pub fn show_category(&mut self, category: Option<String>) {
+        if let Some(category) = category {
+            self.display.category = category;
+        }
     }
     /// Overwrite the shown title and segments that were text values (their
     /// keys are the English renderings): `title`, and `path` by index.
@@ -204,6 +234,7 @@ impl Declaration {
         if let Some(title) = title {
             self.display.title = title;
         }
+
         for (index, shown) in path.iter().enumerate() {
             if let (Some(shown), Some(slot)) = (shown, self.display.path.get_mut(index)) {
                 *slot = shown.clone();
@@ -248,7 +279,8 @@ pub enum MenuNode {
         children: Vec<MenuNode>,
     },
     Command {
-        entry: CommandSnapshot,
+        /// Boxed: a snapshot is far larger than a group.
+        entry: Box<CommandSnapshot>,
     },
 }
 
@@ -623,6 +655,20 @@ impl Registry {
             text(segment, "path segment", 80)?;
         }
         text(&declaration.group, "group", 80)?;
+        if let Some(category) = &declaration.category {
+            text(category, "category", 80)?;
+        }
+        if let Some(home) = &declaration.home {
+            text(home, "home", 128)?;
+            if !home
+                .bytes()
+                .all(|ch| ch.is_ascii_alphanumeric() || matches!(ch, b'.' | b'_' | b'-'))
+            {
+                return Err(CommandError::Invalid(
+                    "home permits ASCII letters, digits, '.', '_' and '-'".into(),
+                ));
+            }
+        }
         if declaration.order.unsigned_abs() > 1_000_000 {
             return Err(CommandError::Invalid(
                 "order must be within ±1000000".into(),
@@ -1111,6 +1157,21 @@ impl Registry {
         self.listed
     }
 
+    /// Every command as menus show it (a held owner's disabled with its
+    /// reason), in registry order: what the command palette lists from.
+    pub fn shown_entries(&self) -> Vec<CommandSnapshot> {
+        self.commands
+            .values()
+            .map(|entry| match self.shown_state(entry) {
+                Some(state) => CommandSnapshot {
+                    state,
+                    ..entry.clone()
+                },
+                None => entry.clone(),
+            })
+            .collect()
+    }
+
     /// Disabled commands (owner, id → reason), for the key bindings to skip.
     pub fn disabled(&self) -> BTreeMap<(OwnerGeneration, String), Option<String>> {
         self.commands
@@ -1269,7 +1330,7 @@ fn tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuN
             nodes.push((
                 rank(entry, appended),
                 MenuNode::Command {
-                    entry: (*entry).clone(),
+                    entry: Box::new((*entry).clone()),
                 },
             ));
         } else if let Some(&index) = found.get(path[depth].as_str()) {
@@ -2895,7 +2956,7 @@ mod index_tests {
                 nodes.push((
                     rank(entry, appended),
                     MenuNode::Command {
-                        entry: (*entry).clone(),
+                        entry: Box::new((*entry).clone()),
                     },
                 ));
             } else if let Some((_, members)) =

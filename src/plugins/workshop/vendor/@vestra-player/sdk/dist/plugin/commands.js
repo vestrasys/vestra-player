@@ -26,13 +26,18 @@ function declare(options) {
         throw failure("invalid", `command ${options.id}: title or path required`);
     if (path.length > 8)
         throw failure("invalid", `command ${options.id}: path has 1–8 segments`);
-    for (const segment of [title, ...path])
+    const category = options.category;
+    for (const segment of [
+        title,
+        ...path,
+        ...(category === undefined ? [] : [category]),
+    ])
         if (typeof segment !== "string") {
             const problem = isTextValue(segment)
                 ? "$vestraList" in segment
                     ? "a menu text is a string or a text, not a list"
                     : textProblem(segment)
-                : "title and path segments are strings or texts";
+                : "title, path segments and category are strings or texts";
             if (problem)
                 throw failure("invalid", `command ${options.id}: ${problem}`);
         }
@@ -59,6 +64,14 @@ function declare(options) {
     // Only when set: players before 0.5.10 refuse the field.
     if (options.button !== undefined)
         declaration.button = button(options.id, options.button, path.length > 0);
+    // Only when set: players before 0.7.6 refuse the fields.
+    if (category !== undefined)
+        declaration.category = category;
+    if (options.home !== undefined) {
+        if (typeof options.home !== "string")
+            throw failure("invalid", `command ${options.id}: home is a command id`);
+        declaration.home = options.home;
+    }
     return declaration;
 }
 /** `CommandOptions.button`, checked as the player checks it, in wire form. */

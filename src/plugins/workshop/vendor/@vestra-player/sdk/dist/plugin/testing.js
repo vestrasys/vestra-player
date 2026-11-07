@@ -354,7 +354,7 @@ function menuTextKey(value) {
  * The declaration checks of the player's `Registry::register`, in its
  * order, on the keyed title and path (`@<id>` already replaced).
  */
-function checkDeclaration(id, title, path, declaration) {
+function checkDeclaration(id, title, path, declaration, category = null) {
     commandText(id, "localId", COMMAND_LIMITS.idBytes);
     if (!/^[A-Za-z0-9._-]+$/.test(id))
         throw commandInvalid("localId permits ASCII letters, digits, '.', '_' and '-'");
@@ -367,6 +367,17 @@ function checkDeclaration(id, title, path, declaration) {
     if (typeof group !== "string")
         throw new HostError("invalid", "group is a string");
     commandText(group, "group", COMMAND_LIMITS.groupBytes);
+    // Player 0.7.6: the category and the home command's local id.
+    if (category !== null)
+        commandText(category, "category", COMMAND_LIMITS.categoryBytes);
+    const home = declaration.home;
+    if (home !== undefined && home !== null) {
+        if (typeof home !== "string")
+            throw new HostError("invalid", "home is a command id");
+        commandText(home, "home", COMMAND_LIMITS.idBytes);
+        if (!/^[A-Za-z0-9._-]+$/.test(home))
+            throw commandInvalid("home permits ASCII letters, digits, '.', '_' and '-'");
+    }
     const order = declaration.order ?? 0;
     if (!Number.isInteger(order) ||
         Math.abs(order) > COMMAND_LIMITS.order)
@@ -669,7 +680,7 @@ export class TestHost {
             : formatTemplate(shown, args);
     }
     /** A declared menu path and title as the player shows them. */
-    #display(path, title, reason = null) {
+    #display(path, title, reason = null, category = null) {
         const keys = menuKeys(path.map((segment) => typeof segment === "string" ? segment : textKey(segment)));
         const display = {
             title: this.translate(title),
@@ -682,6 +693,10 @@ export class TestHost {
         // Not enumerable: `deepEqual(display, { title, path })` keeps passing.
         Object.defineProperty(display, "reason", {
             value: reason === null ? null : this.translate(reason),
+            enumerable: false,
+        });
+        Object.defineProperty(display, "category", {
+            value: category === null ? null : this.translate(category),
             enumerable: false,
         });
         return display;
@@ -3230,6 +3245,8 @@ export class TestHost {
                 key: declaration.path?.length
                     ? menuKeys(declaration.path.map((segment) => typeof segment === "string" ? segment : textKey(segment)))
                     : null,
+                // Player 0.7.6: the category as shown, `null` without one.
+                category: shown?.display.category ?? null,
                 scope: scope,
                 defaults: declaration.bindings,
                 current,
@@ -3479,11 +3496,11 @@ export class TestHost {
      * declare const host: TestHost;
      * declare const expected: string;
      * // ---cut---
-     * const window = host.window("import");
-     * window.emit("load-file"); // the plugin reads and parses the file itself
-     * for (let i = 0; i < 100 && window.props["status-text"] !== expected; i++)
+     * const importWindow = host.window("import");
+     * importWindow.emit("load-file"); // the plugin reads and parses the file itself
+     * for (let i = 0; i < 100 && importWindow.props["status-text"] !== expected; i++)
      *   await host.settle(20);
-     * assert.equal(window.props["status-text"], expected);
+     * assert.equal(importWindow.props["status-text"], expected);
      * ```
      *
      * @capability None.
@@ -4086,7 +4103,11 @@ export class TestHost {
             if (menu !== null && keys.length < 2)
                 throw commandInvalid(`menu id @${menu} needs an item after it`);
             const path = menuKeys(keys);
-            checkDeclaration(id, title, path, declaration);
+            // Player 0.7.6: the category, keyed like a menu text.
+            const category = declaration.category === undefined || declaration.category === null
+                ? null
+                : menuTextKey(declaration.category);
+            checkDeclaration(id, title, path, declaration, category);
             if (button !== undefined && button !== null) {
                 if (path.length === 0)
                     throw commandInvalid("button needs a menu path: a bar button is also a menu item");
@@ -4144,7 +4165,7 @@ export class TestHost {
             this.commands.set(id, {
                 declaration,
                 get display() {
-                    return host.#display(declaration.path ?? [], declaration.title, this.state.reason);
+                    return host.#display(declaration.path ?? [], declaration.title, this.state.reason, declaration.category ?? null);
                 },
                 ...(p.when ? { when: p.when } : {}),
                 get state() {

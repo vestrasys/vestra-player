@@ -448,6 +448,7 @@ fn main() -> Result<()> {
         menu_aim: menu::HoverAim::default(),
         menu_panels: Vec::new(),
         menu_shown: Default::default(),
+        palette: Default::default(),
         policy: window_state::Policy::new(0),
         clock: Instant::now(),
         window_facts: Value::Null,
