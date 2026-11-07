@@ -58,6 +58,23 @@ msgstr "Velocidad"
 msgid "Seek"
 msgstr "Saltar"
 
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Window"
+msgstr "Ventana"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "File"
+msgstr "Archivo"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Help"
+msgstr "Ayuda"
+
 #: src/composition.rs:39
 #, x-machine
 msgid "bottom bar"

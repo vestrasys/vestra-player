@@ -47,6 +47,21 @@ msgstr ""
 msgid "Seek"
 msgstr ""
 
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "Window"
+msgstr ""
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "File"
+msgstr ""
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "Help"
+msgstr ""
+
 #: src/composition.rs:39
 msgid "bottom bar"
 msgstr ""

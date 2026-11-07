@@ -577,6 +577,37 @@ mod tests {
         assert_eq!(row("fullscreen").global, "host/fullscreen");
     }
 
+    /// The player's own commands and the core actions read like the
+    /// plugins' rows: "Seek: Back 5 s", not "Vestra Player: …" or the path.
+    #[test]
+    fn the_player_commands_read_category_colon_title() {
+        let own = crate::host::Host::host_declarations()
+            .into_iter()
+            .map(|(id, declaration, _)| (id, declaration));
+        let entries: Vec<CommandSnapshot> = own
+            .chain(crate::core_actions::declarations(5.))
+            .map(|(id, declaration)| entry(0, "host", id, declaration))
+            .collect();
+        let items = items(&entries, &names, &none);
+        let row = |id: &str| items.iter().find(|item| item.id == id).unwrap();
+        assert_eq!(items.len(), entries.len());
+        for item in &items {
+            assert!(!item.label.starts_with("Vestra Player:"), "{}", item.label);
+        }
+        assert_eq!(row("play-pause").label, "Playback: Play/Pause");
+        assert_eq!(row("stop").label, "Playback: Close");
+        assert_eq!(row("stop").place, "Menu");
+        assert_eq!(row("seek-backward").label, "Seek: Back 5 s");
+        assert_eq!(row("seek-backward").place, "Playback ▸ Seek ▸");
+        assert_eq!(row("rate-normal").label, "Speed: Normal");
+        assert_eq!(row("volume-up").label, "Audio: Volume +");
+        assert_eq!(row("fullscreen").label, "Window: Toggle Fullscreen");
+        assert_eq!(row("quit").label, "File: Quit");
+        assert_eq!(row("palette").label, "Help: Command Palette");
+        assert_eq!(row("palette").place, "");
+        assert_eq!(row("sidebar").global, "host/sidebar");
+    }
+
     #[test]
     fn placeholders_are_left_out_and_disabled_commands_say_why() {
         let mut entries = vec![
