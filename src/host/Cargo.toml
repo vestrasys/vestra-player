@@ -34,7 +34,7 @@ uuid = { version = "=1.28.0", default-features = false, features = ["v4", "std"]
 # `.vxp` plugin packages (zip): stored and deflate only, no encryption.
 zip = { version = "=9.0.5", default-features = false, features = ["deflate-flate2"] }
 # `plugin.ui.markdown`: CommonMark + GFM tables (already in the tree via Slint).
-pulldown-cmark = { version = "=0.13.5", default-features = false }
+pulldown-cmark = { version = "=0.13.6", default-features = false }
 # Cmap check of the bundled subtitle font (font_asset.rs); the same version
 # Slint already uses (ttf-parser is unmaintained, RUSTSEC-2026-0192).
 skrifa = { version = "=0.44.0", default-features = false, features = ["std"] }

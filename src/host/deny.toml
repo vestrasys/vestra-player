@@ -8,6 +8,10 @@ all-features = true
 
 [advisories]
 yanked = "deny"
+ignore = [
+  # pin-utils unmaintained: only via spin_on 0.1.1 (Slint 1.18.1 skia renderer and macros); no newer spin_on or Slint drops it. Remove on the next Slint upgrade that does.
+  { id = "RUSTSEC-2026-0441", reason = "pin-utils via spin_on 0.1.1 in Slint 1.18.1; no upstream release without it" },
+]
 
 [licenses]
 # vestra-host is GPL-3.0-or-later: only GPLv3-compatible licenses are allowed.
