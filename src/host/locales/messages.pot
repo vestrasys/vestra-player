@@ -368,10 +368,6 @@ msgstr ""
 msgid "Detach as a floating window"
 msgstr ""
 
-#: ui/sidebar-tabs.slint:113
-msgid "Close the sidebar"
-msgstr ""
-
 #: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 msgid "Copy"
 msgstr ""

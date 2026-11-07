@@ -174,18 +174,46 @@ pub fn replace_shell(
 /// floating sidebar and the main window at each launch). Once
 /// the native window exists a position is the frame's everywhere, so
 /// [`Placements::tick`] sets it again then.
+///
+/// The main window ([`Restore`]) also gets back its maximized state and, on
+/// Windows, its frame in desktop pixels; a saved frame on a display that is
+/// gone (or no longer reaches that far) moves onto the primary display
+/// ([`reachable`]). It is never seen at the wrong frame: Windows keeps it
+/// cloaked until it is placed (`platform::hold_next_shown`, `placed`), and
+/// macOS zooms it at its creation, before it is visible (`main.rs`).
+///
+/// A placement follows the window, not its component tree: it is tracked
+/// by Slint's window adapter, which a shell built in the same window by a
+/// composition change shares (`replace_shell`).
 #[derive(Default)]
 pub struct Placements(Vec<Placement>);
 
 struct Placement {
-    window: slint::Weak<ComponentInstance>,
+    window: std::rc::Weak<dyn slint::platform::WindowAdapter>,
     position: slint::WindowPosition,
+    restore: Restore,
     /// Ticks waited for the native window.
     waited: u32,
+    /// Placed at the last tick: kept one more, so a frame the system has
+    /// not reported yet is not taken for the user's (`placing`).
+    placed: bool,
+}
+
+/// What the main window gets back beyond its position.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Restore {
+    pub maximized: bool,
+    /// The normal frame in desktop pixels (Windows: the window placement).
+    pub physical: Option<Rect>,
 }
 
 /// Give up on a window that never gets a native one (about 2 s of ticks).
 const PLACEMENT_TICKS: u32 = 120;
+
+fn adapter_of(window: &slint::Window) -> std::rc::Weak<dyn slint::platform::WindowAdapter> {
+    use slint::private_unstable_api::re_exports::WindowInner;
+    std::rc::Rc::downgrade(&WindowInner::from_pub(window).window_adapter())
+}
 
 impl Placements {
     /// Show `component` with its frame at `position`.
@@ -194,38 +222,66 @@ impl Placements {
         component: &ComponentInstance,
         position: impl Into<slint::WindowPosition>,
     ) -> Result<(), slint::PlatformError> {
+        self.show_restored(component, position, Restore::default())
+    }
+
+    /// [`Self::show_at`], with the main window's `restore`.
+    pub fn show_restored(
+        &mut self,
+        component: &ComponentInstance,
+        position: impl Into<slint::WindowPosition>,
+        restore: Restore,
+    ) -> Result<(), slint::PlatformError> {
         let position = position.into();
         component.window().set_position(position.clone());
         component.show()?;
-        self.track(component, position);
+        self.track(component.window(), position, restore);
         Ok(())
     }
 
-    /// Put an already shown `component`'s frame at `position` once its
-    /// native window exists.
-    pub fn track(&mut self, component: &ComponentInstance, position: slint::WindowPosition) {
+    /// Put an already shown `window`'s frame at `position` once its native
+    /// window exists.
+    fn track(&mut self, window: &slint::Window, position: slint::WindowPosition, restore: Restore) {
         self.0.push(Placement {
-            window: component.as_weak(),
+            window: adapter_of(window),
             position,
+            restore,
             waited: 0,
+            placed: false,
         });
     }
 
-    /// Set the frame position of each window whose native window now exists
-    /// (not in fullscreen, where it has no frame of its own); windows closed
-    /// meanwhile are forgotten.
+    /// Whether `window` still waits for its frame to be placed (its size,
+    /// position and maximized state are not the restored ones yet).
+    pub fn placing(&self, window: &slint::Window) -> bool {
+        self.0.iter().any(|placement| {
+            placement
+                .window
+                .upgrade()
+                .is_some_and(|adapter| std::ptr::eq(adapter.window(), window))
+        })
+    }
+
+    /// Place each window whose native window now exists (not in fullscreen,
+    /// where it has no frame of its own); windows closed meanwhile are
+    /// forgotten.
     pub fn tick(&mut self) {
         use slint::winit_030::WinitWindowAccessor;
         self.0.retain_mut(|placement| {
-            let Some(component) = placement.window.upgrade() else {
+            let Some(adapter) = placement.window.upgrade() else {
                 return false;
             };
-            let window = component.window();
+            if placement.placed {
+                return false;
+            }
+            let window = adapter.window();
             if window.has_winit_window() {
                 if !window.is_fullscreen() {
-                    window.set_position(placement.position.clone());
+                    place(window, &placement.position, placement.restore);
                 }
-                return false;
+                crate::platform::placed(window);
+                placement.placed = true;
+                return true;
             }
             placement.waited += 1;
             placement.waited < PLACEMENT_TICKS
@@ -235,6 +291,140 @@ impl Placements {
     #[cfg(test)]
     fn pending(&self) -> usize {
         self.0.len()
+    }
+}
+
+/// Put `window` (its native window exists) at its saved frame.
+fn place(window: &slint::Window, position: &slint::WindowPosition, restore: Restore) {
+    if let Some(frame) = restore.physical {
+        let (displays, primary) = displays(window);
+        let target = reachable(frame, &displays, primary).unwrap_or(frame);
+        if target != frame {
+            diag!("ui: the saved window frame {frame:?} is off every display; moved to {target:?}");
+        }
+        if crate::platform::set_normal_frame(window, target, restore.maximized) {
+            return;
+        }
+    }
+    // macOS: zoomed at its creation (`main.rs`); moving it would end that.
+    if restore.maximized && cfg!(target_os = "macos") {
+        return;
+    }
+    window.set_position(position.clone());
+    keep_reachable(window);
+    if restore.maximized {
+        window.set_maximized(true);
+    }
+}
+
+/// A rectangle in desktop pixels (physical, as the system and winit report
+/// frames and displays).
+pub type Rect = crate::platform::DesktopRect;
+
+/// The displays a frame must reach and the primary one: their work areas
+/// where the system lists them (Windows: without the taskbar), else
+/// winit's whole displays.
+fn displays(window: &slint::Window) -> (Vec<Rect>, Option<Rect>) {
+    use slint::winit_030::{WinitWindowAccessor, winit::monitor::MonitorHandle};
+    let work = crate::platform::work_areas();
+    if !work.is_empty() {
+        let primary = work.iter().find(|(_, primary)| *primary).map(|(r, _)| *r);
+        return (work.into_iter().map(|(r, _)| r).collect(), primary);
+    }
+    let rect = |display: &MonitorHandle| {
+        let (position, size) = (display.position(), display.size());
+        Rect {
+            x: position.x,
+            y: position.y,
+            width: size.width,
+            height: size.height,
+        }
+    };
+    window
+        .with_winit_window(|native| {
+            (
+                native.available_monitors().map(|d| rect(&d)).collect(),
+                native.primary_monitor().map(|d| rect(&d)),
+            )
+        })
+        .unwrap_or_default()
+}
+
+/// The part of a frame's top edge that must lie on a display for the frame
+/// to be reachable: this many pixels of its height …
+const GRIP_HEIGHT: i64 = 30;
+/// … across this many of its width (all of a narrower frame).
+const GRIP_WIDTH: i64 = 100;
+
+/// Where a restored `frame` goes: `None` while it can be reached where it is
+/// (a grip of its title bar lies on one of `displays`), else centred on
+/// `fallback` (the primary display), shrunk to fit it. Chrome and Firefox
+/// do the same with a window saved on a display that is gone. Without
+/// displays (a system that does not list them) the frame stays.
+pub fn reachable(frame: Rect, displays: &[Rect], fallback: Option<Rect>) -> Option<Rect> {
+    let (width, height) = (i64::from(frame.width), i64::from(frame.height));
+    let need_x = width.clamp(1, GRIP_WIDTH);
+    let need_y = height.clamp(1, GRIP_HEIGHT);
+    let (left, top) = (i64::from(frame.x), i64::from(frame.y));
+    let grip_on = |display: &Rect| {
+        let (dx, dy) = (i64::from(display.x), i64::from(display.y));
+        let across = (left + width).min(dx + i64::from(display.width)) - left.max(dx);
+        let down = (top + need_y).min(dy + i64::from(display.height)) - top.max(dy);
+        across >= need_x && down >= need_y
+    };
+    if displays.is_empty() || displays.iter().any(grip_on) {
+        return None;
+    }
+    let display = fallback.or_else(|| displays.first().copied())?;
+    let (width, height) = (
+        frame.width.min(display.width),
+        frame.height.min(display.height),
+    );
+    let centred = |start: i32, room: u32, size: u32| start + ((room - size) / 2) as i32;
+    Some(Rect {
+        x: centred(display.x, display.width, width),
+        y: centred(display.y, display.height, height),
+        width,
+        height,
+    })
+}
+
+/// Move a window whose frame is out of reach ([`reachable`]) onto the primary
+/// display.
+fn keep_reachable(window: &slint::Window) {
+    use slint::winit_030::WinitWindowAccessor;
+    let (displays, primary) = displays(window);
+    let moved = window
+        .with_winit_window(|native| {
+            let (position, size) = (native.outer_position().ok()?, native.outer_size());
+            let frame = Rect {
+                x: position.x,
+                y: position.y,
+                width: size.width,
+                height: size.height,
+            };
+            let target = reachable(frame, &displays, primary)?;
+            // The content shrinks by what the frame does.
+            let inner = native.inner_size();
+            let content = slint::PhysicalSize::new(
+                inner
+                    .width
+                    .saturating_sub(frame.width - target.width)
+                    .max(1),
+                inner
+                    .height
+                    .saturating_sub(frame.height - target.height)
+                    .max(1),
+            );
+            Some((frame, target, content))
+        })
+        .flatten();
+    if let Some((frame, target, content)) = moved {
+        diag!("ui: a window at {frame:?} is off every display; moved to {target:?}");
+        if (target.width, target.height) != (frame.width, frame.height) {
+            window.set_size(content);
+        }
+        window.set_position(slint::PhysicalPosition::new(target.x, target.y));
     }
 }
 
@@ -1921,7 +2111,7 @@ export component T inherits Window {
             other => panic!("{name}: {other:?}"),
         };
         let flag = |name: &str| window.get_property(name).unwrap() == Value::Bool(true);
-        // The default sidebar width (317 px, 264 px of room): 3 tabs, `»`.
+        // The default sidebar width (317 px, 289 px of room): 3 tabs, `»`.
         window.set_property("active", 16.0.into()).unwrap();
         assert!(flag("overflowing"));
         assert_eq!(number("shown"), 3.);
@@ -2226,18 +2416,124 @@ export component T inherits Window {
         placements
             .show_at(&kept, slint::LogicalPosition::new(40., 65.))
             .unwrap();
-        let closed = make();
-        placements.track(&closed, slint::LogicalPosition::new(1., 2.).into());
+        // A window of its own (the headless platform shows every component
+        // in one), closed: its adapter is gone.
+        use slint::platform::WindowAdapter as _;
+        let closed = slint::platform::software_renderer::MinimalSoftwareWindow::new(
+            slint::platform::software_renderer::RepaintBufferType::NewBuffer,
+        );
+        let restore = Restore {
+            maximized: true,
+            physical: None,
+        };
+        placements.track(
+            closed.window(),
+            slint::LogicalPosition::new(1., 2.).into(),
+            restore,
+        );
+        assert!(placements.placing(closed.window()));
         drop(closed);
         placements.tick();
         assert_eq!(placements.pending(), 1);
+        assert!(placements.placing(kept.window()));
         for _ in 1..PLACEMENT_TICKS - 1 {
             placements.tick();
         }
         assert_eq!(placements.pending(), 1);
         placements.tick();
         assert_eq!(placements.pending(), 0);
+        assert!(!placements.placing(kept.window()));
         kept.hide().unwrap();
+    }
+
+    /// A placement follows the window, not its tree: the shell a composition
+    /// change builds in the same window (`replace_shell`) before the native
+    /// window exists still gets the restored frame.
+    #[test]
+    fn a_placement_follows_the_window_into_a_new_tree() {
+        headless();
+        let source = r#"export component W inherits Window { width: 100px; height: 80px; }"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let definition = result.component("W").unwrap();
+        let first = definition.create().unwrap();
+        let mut placements = Placements::default();
+        placements
+            .show_at(&first, slint::LogicalPosition::new(40., 65.))
+            .unwrap();
+        let second = definition
+            .create_with_existing_window(first.window())
+            .unwrap();
+        second.show().unwrap();
+        drop(first);
+        placements.tick();
+        assert!(placements.placing(second.window()));
+        second.hide().unwrap();
+    }
+
+    /// A restored frame stays while a grip of its title bar is on a display;
+    /// one on a display that is gone, above the top or too far off an edge
+    /// moves onto the primary display, centred and shrunk to fit it.
+    #[test]
+    fn a_frame_off_every_display_moves_onto_the_primary_one() {
+        let rect = |x, y, width, height| Rect {
+            x,
+            y,
+            width,
+            height,
+        };
+        let primary = rect(0, 0, 2560, 1600);
+        // A second display left of the primary one.
+        let left = rect(-1920, 200, 1920, 1080);
+        let displays = [primary, left];
+        let at = |x, y| rect(x, y, 1200, 700);
+        assert_eq!(reachable(at(100, 100), &displays, Some(primary)), None);
+        assert_eq!(
+            reachable(at(-1500, 300), &displays, Some(primary)),
+            None,
+            "on the left display"
+        );
+        assert_eq!(
+            reachable(at(-600, 50), &displays, Some(primary)),
+            None,
+            "across both"
+        );
+        // Partly off the right edge, 100 px of the title bar still on.
+        assert_eq!(reachable(at(2460, 100), &displays, Some(primary)), None);
+        assert_eq!(reachable(at(100, 1570), &displays, Some(primary)), None);
+        let centred = Some(rect(680, 450, 1200, 700));
+        // The display it was on is gone (only the primary one now).
+        assert_eq!(
+            reachable(at(-1500, 300), &[primary], Some(primary)),
+            centred
+        );
+        // 99 px of the title bar on: not enough.
+        assert_eq!(reachable(at(2461, 100), &displays, Some(primary)), centred);
+        // The title bar above every display, or below it.
+        assert_eq!(reachable(at(100, -40), &displays, Some(primary)), centred);
+        assert_eq!(reachable(at(100, 1571), &displays, Some(primary)), centred);
+        // In the gap above the left display.
+        assert_eq!(reachable(at(-1500, 0), &displays, Some(primary)), centred);
+        // The minimized position Windows reports.
+        assert_eq!(
+            reachable(at(-32000, -32000), &displays, Some(primary)),
+            centred
+        );
+        // Larger than the display it lands on: shrunk to it.
+        assert_eq!(
+            reachable(rect(5000, 0, 3000, 2000), &displays, Some(primary)),
+            Some(primary)
+        );
+        // No primary display known: the first one.
+        assert_eq!(
+            reachable(at(9000, 0), &[left], None),
+            Some(rect(-1560, 390, 1200, 700))
+        );
+        // A narrow frame needs only its own width on a display.
+        assert_eq!(reachable(rect(2500, 0, 60, 20), &displays, None), None);
+        // Displays not listed: the frame stays.
+        assert_eq!(reachable(at(-32000, -32000), &[], None), None);
     }
 
     /// The sources the host generates (main window with panels, floating

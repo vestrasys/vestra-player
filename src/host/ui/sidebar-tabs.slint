@@ -1,7 +1,10 @@
 // The sidebar's tab strip (panel-slots.md step 1), drawn by the host above
 // the current panel while the sidebar holds two or more: the playlist's tab
-// strip (ui-spec §5.2) with one tab per panel. The detach/attach and close
-// buttons at its right end act on the whole sidebar.
+// strip (ui-spec §5.2) with one tab per panel. The detach/attach button at
+// its right end acts on the whole sidebar. There is no close button: next
+// to the window's own close button it closed the player when missed (user
+// ruling 2026-11-07); the bottom bar's sidebar button, F6 and the menus
+// hide the sidebar.
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { ToolTipArea } from "@vestra/widgets.slint";
@@ -111,16 +114,15 @@ export component SidebarTabs inherits Rectangle {
     in property <int> active;
     in property <bool> detached;
     // A tab was clicked (its index), the overflow button (the menu's
-    // origin, window coordinates), the detach/attach or the close button.
+    // origin, window coordinates), the detach/attach button.
     callback tab(int);
     callback overflow(float, float);
     callback detach();
-    callback close();
     height: 31px;
     background: Theme.bg-bar;
     accessible-role: tab-list;
-    // The room beside the detach and close buttons (25px each and 3px).
-    private property <length> room: max(0px, self.width - 53px);
+    // The room beside the detach button (25px and 3px).
+    private property <length> room: max(0px, self.width - 28px);
     // Tabs stay at least 72px wide (sidebar-tabs.md); the ones that do not
     // fit go into the `»` menu, which takes 25px of the room.
     // `overflowing`, `shown` (the places for tabs) and `last` (the tab in the
@@ -156,20 +158,12 @@ export component SidebarTabs inherits Rectangle {
         clicked(x, y) => { root.overflow(x / 1px, y / 1px); }
     }
     StripButton {
-        x: root.width - 53px;
+        x: root.width - 28px;
         y: 0px;
         height: root.height;
         tip: root.detached ? @tr("Attach to the main window") : @tr("Detach as a floating window");
         // Detached: arrow into the frame; attached: arrow out of it.
         icon: root.detached ? "attach" : "detach";
         clicked => { root.detach(); }
-    }
-    StripButton {
-        x: root.width - 28px;
-        y: 0px;
-        height: root.height;
-        tip: @tr("Close the sidebar");
-        icon: "close";
-        clicked => { root.close(); }
     }
 }

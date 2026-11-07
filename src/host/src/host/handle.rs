@@ -332,12 +332,6 @@ impl Host {
                     self.window_tick();
                 }
             }
-            Event::SidebarClose(generation) => {
-                if self.window_generation_live(generation) {
-                    self.close_sidebar();
-                    self.window_tick();
-                }
-            }
             Event::PluginMessage(owner, event, data) => {
                 self.send(owner, json!({"event":event,"data":data}))
             }

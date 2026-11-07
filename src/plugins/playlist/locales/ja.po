@@ -775,11 +775,6 @@ msgstr "メインウインドウに戻す"
 msgid "Detach as floating window"
 msgstr "フローティングウインドウとして切り離す"
 
-#: ui/sidebar.slint:307
-#, x-machine
-msgid "Close list"
-msgstr "リストを閉じる"
-
 #: ui/sidebar.slint:371
 #, x-machine
 msgid ""

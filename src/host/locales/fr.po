@@ -458,11 +458,6 @@ msgstr "Rattacher à la fenêtre principale"
 msgid "Detach as a floating window"
 msgstr "Détacher en fenêtre flottante"
 
-#: ui/sidebar-tabs.slint:113
-#, x-machine
-msgid "Close the sidebar"
-msgstr "Fermer la barre latérale"
-
 #: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 #, x-machine
 msgid "Copy"

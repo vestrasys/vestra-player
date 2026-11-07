@@ -9,7 +9,10 @@
 //! letting the running player take the foreground for a
 //! second launch's files, whether this process owns the foreground window
 //! and bringing one of its windows to the front (`foreground_is_ours`,
-//! `set_foreground`), waiting for a display's vertical blank
+//! `set_foreground`), the displays' work areas and a window's normal frame
+//! in physical pixels (`display_areas`, `normal_placement`,
+//! `set_normal_placement`: the main window restored across launches),
+//! waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
 //! matching its display exactly (`unmatch_display`), whether an open
 //! file is on a network file system (`file_is_remote`), waiting for a
@@ -51,7 +54,7 @@ use windows_sys::Win32::UI::Input::KeyboardAndMouse::{
 };
 use windows_sys::Win32::UI::WindowsAndMessaging::{
     ASFW_ANY, AllowSetForegroundWindow, GetCursorPos, GetWindowRect, SWP_NOACTIVATE,
-    SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos,
+    SWP_NOOWNERZORDER, SWP_NOZORDER, SetWindowPos, WINDOWPLACEMENT,
 };
 
 /// The pointer in screen coordinates (physical pixels), `None` when the
@@ -1141,11 +1144,176 @@ pub fn video_super_resolution(luid: u64) -> Result<SuperResolution, String> {
     Ok(SuperResolution { result, value })
 }
 
+/// A rectangle in screen coordinates (physical pixels): left, top, right,
+/// bottom.
+pub type ScreenRect = (i32, i32, i32, i32);
+
+/// One display: its whole area and its work area (without the taskbar and
+/// docked toolbars), screen coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct DisplayArea {
+    pub monitor: ScreenRect,
+    pub work: ScreenRect,
+    pub primary: bool,
+}
+
+const EMPTY_RECT: RECT = RECT {
+    left: 0,
+    top: 0,
+    right: 0,
+    bottom: 0,
+};
+
+fn edges(rect: RECT) -> ScreenRect {
+    (rect.left, rect.top, rect.right, rect.bottom)
+}
+
+fn monitor_area(monitor: HMONITOR) -> Option<DisplayArea> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::MONITORINFOF_PRIMARY;
+    let mut info = MONITORINFO {
+        cbSize: size_of::<MONITORINFO>() as u32,
+        rcMonitor: EMPTY_RECT,
+        rcWork: EMPTY_RECT,
+        dwFlags: 0,
+    };
+    // SAFETY: `info` is a writable MONITORINFO whose cbSize says so; an
+    // invalid monitor handle makes the call fail without touching it.
+    if unsafe { GetMonitorInfoW(monitor, &mut info) } == 0 {
+        return None;
+    }
+    Some(DisplayArea {
+        monitor: edges(info.rcMonitor),
+        work: edges(info.rcWork),
+        primary: info.dwFlags & MONITORINFOF_PRIMARY != 0,
+    })
+}
+
+/// Every display attached to the desktop now.
+pub fn display_areas() -> Vec<DisplayArea> {
+    use windows_sys::Win32::Foundation::LPARAM;
+    use windows_sys::Win32::Graphics::Gdi::{EnumDisplayMonitors, HDC};
+    unsafe extern "system" fn each(
+        monitor: HMONITOR,
+        _dc: HDC,
+        _clip: *mut RECT,
+        found: LPARAM,
+    ) -> windows_sys::core::BOOL {
+        // SAFETY: `found` is the address of the `Vec` below, alive and not
+        // otherwise borrowed while EnumDisplayMonitors runs (synchronously,
+        // on this thread).
+        let found = unsafe { &mut *(found as *mut Vec<HMONITOR>) };
+        found.push(monitor);
+        1
+    }
+    let mut monitors: Vec<HMONITOR> = Vec::new();
+    // SAFETY: no device context and no clip rectangle (every display); the
+    // callback is a plain function of this crate and `monitors` outlives the
+    // call, which returns only after the last callback.
+    unsafe {
+        EnumDisplayMonitors(
+            std::ptr::null_mut(),
+            std::ptr::null(),
+            Some(each),
+            &mut monitors as *mut Vec<HMONITOR> as LPARAM,
+        )
+    };
+    monitors.into_iter().filter_map(monitor_area).collect()
+}
+
+/// Workspace coordinates (`WINDOWPLACEMENT`'s) are relative to the primary
+/// display's work area: what to add to them for screen coordinates.
+fn workspace_offset() -> (i32, i32) {
+    use windows_sys::Win32::Graphics::Gdi::MonitorFromPoint;
+    // SAFETY: plain values; the primary display is always answered.
+    let primary = unsafe { MonitorFromPoint(POINT { x: 0, y: 0 }, MONITOR_DEFAULTTOPRIMARY) };
+    monitor_area(primary).map_or((0, 0), |area| {
+        (area.work.0 - area.monitor.0, area.work.1 - area.monitor.1)
+    })
+}
+
+/// Where window `hwnd` is when not maximized or minimized (its normal frame,
+/// also while it is maximized or minimized), screen coordinates.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct NormalPlacement {
+    pub frame: ScreenRect,
+    /// Maximized, or minimized from maximized.
+    pub maximized: bool,
+    pub minimized: bool,
+}
+
+fn empty_placement() -> WINDOWPLACEMENT {
+    WINDOWPLACEMENT {
+        length: size_of::<WINDOWPLACEMENT>() as u32,
+        flags: 0,
+        showCmd: 0,
+        ptMinPosition: POINT { x: -1, y: -1 },
+        ptMaxPosition: POINT { x: -1, y: -1 },
+        rcNormalPosition: EMPTY_RECT,
+    }
+}
+
+/// [`NormalPlacement`] of window `hwnd` (`GetWindowPlacement`); `None` when
+/// it is no longer a window.
+pub fn normal_placement(hwnd: isize) -> Option<NormalPlacement> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        GetWindowPlacement, SW_SHOWMAXIMIZED, SW_SHOWMINIMIZED, WPF_RESTORETOMAXIMIZED,
+    };
+    let mut placement = empty_placement();
+    // SAFETY: `placement` is a writable WINDOWPLACEMENT whose length says so;
+    // an invalid HWND makes the call fail without touching memory through it.
+    if unsafe { GetWindowPlacement(hwnd as HWND, &mut placement) } == 0 {
+        return None;
+    }
+    let (dx, dy) = workspace_offset();
+    let (left, top, right, bottom) = edges(placement.rcNormalPosition);
+    let minimized = placement.showCmd == SW_SHOWMINIMIZED as u32;
+    Some(NormalPlacement {
+        frame: (left + dx, top + dy, right + dx, bottom + dy),
+        maximized: placement.showCmd == SW_SHOWMAXIMIZED as u32
+            || (minimized && placement.flags & WPF_RESTORETOMAXIMIZED != 0),
+        minimized,
+    })
+}
+
+/// Give window `hwnd` the normal frame `frame` (screen coordinates) and
+/// show it there, or maximized on the display it is on when `maximized`
+/// (`SetWindowPlacement`, as Chromium and Firefox restore a window). Set
+/// twice: a frame on a display of another scale first moves the window
+/// there, and the window's DPI change resizes it by the scales' ratio; the
+/// second call, on that display, gives the exact frame. False when the
+/// system refused.
+pub fn set_normal_placement(hwnd: isize, frame: ScreenRect, maximized: bool) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SW_SHOWMAXIMIZED, SW_SHOWNORMAL, SetWindowPlacement,
+    };
+    let (dx, dy) = workspace_offset();
+    let (left, top, right, bottom) = frame;
+    let mut placement = empty_placement();
+    placement.rcNormalPosition = RECT {
+        left: left - dx,
+        top: top - dy,
+        right: right - dx,
+        bottom: bottom - dy,
+    };
+    let mut set = |show: i32| {
+        placement.showCmd = show as u32;
+        // SAFETY: `placement` is a filled WINDOWPLACEMENT whose length says
+        // so, read during the call; an invalid HWND makes it fail.
+        unsafe { SetWindowPlacement(hwnd as HWND, &placement) != 0 }
+    };
+    set(SW_SHOWNORMAL)
+        && set(if maximized {
+            SW_SHOWMAXIMIZED
+        } else {
+            SW_SHOWNORMAL
+        })
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
-        Edges, SuperResolution, VBlank, dxgi_adapters, file_is_remote, hidden_top_level,
-        is_own_show, unmatched, version_parts, video_super_resolution,
+        Edges, SuperResolution, VBlank, display_areas, dxgi_adapters, file_is_remote,
+        hidden_top_level, is_own_show, unmatched, version_parts, video_super_resolution,
     };
     use std::time::{Duration, Instant};
 
@@ -1405,5 +1573,23 @@ mod tests {
         // Between 24 Hz and 500 Hz.
         assert!(mean > Duration::from_millis(2) && mean < Duration::from_millis(42));
         assert!(!clock.moved(0));
+    }
+
+    /// The desktop has one primary display, and each work area lies inside
+    /// its display.
+    #[test]
+    fn display_areas_have_one_primary_and_work_areas_inside() {
+        let areas = display_areas();
+        assert_eq!(
+            areas.iter().filter(|area| area.primary).count(),
+            1,
+            "{areas:?}"
+        );
+        for area in &areas {
+            let (left, top, right, bottom) = area.work;
+            let (m_left, m_top, m_right, m_bottom) = area.monitor;
+            assert!(left >= m_left && top >= m_top && right <= m_right && bottom <= m_bottom);
+            assert!(right > left && bottom > top, "{area:?}");
+        }
     }
 }

@@ -775,11 +775,6 @@ msgstr "An das Hauptfenster andocken"
 msgid "Detach as floating window"
 msgstr "Als schwebendes Fenster abdocken"
 
-#: ui/sidebar.slint:307
-#, x-machine
-msgid "Close list"
-msgstr "Liste schließen"
-
 #: ui/sidebar.slint:371
 #, x-machine
 msgid ""

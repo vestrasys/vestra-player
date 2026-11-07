@@ -273,39 +273,75 @@ const WINIT_CLASS: &str = "Window Class";
 /// How long a window stays cloaked without a draw before it is shown anyway
 /// (minimized, a draw skipped, a held redraw that never comes).
 const CLOAK_LIMIT: std::time::Duration = std::time::Duration::from_millis(500);
+/// How long a held window ([`hold_next_shown`]) stays cloaked at most when
+/// [`placed`] never comes.
+const HOLD_LIMIT: std::time::Duration = std::time::Duration::from_millis(1500);
 /// How often the windows still cloaked are checked against [`CLOAK_LIMIT`].
 const CLOAK_CHECK: std::time::Duration = std::time::Duration::from_millis(100);
 
 /// Windows cloaked at their show (`cloak_until_drawn`) that have not drawn
-/// yet: raw HWND, when.
+/// yet (raw HWND, when), and those of them held cloaked past their draws
+/// until [`placed`] (the main window while its restored frame is set).
 #[derive(Default)]
-struct Cloaked(Vec<(isize, std::time::Instant)>);
+struct Cloaked {
+    shown: Vec<(isize, std::time::Instant)>,
+    held: Vec<isize>,
+}
 impl Cloaked {
-    /// `hwnd` was cloaked at `now` (again: from `now`).
-    fn add(&mut self, hwnd: isize, now: std::time::Instant) {
-        self.0.retain(|(known, _)| *known != hwnd);
-        self.0.push((hwnd, now));
+    /// `hwnd` was cloaked at `now` (again: from `now`), held when `hold`.
+    fn add(&mut self, hwnd: isize, now: std::time::Instant, hold: bool) {
+        self.shown.retain(|(known, _)| *known != hwnd);
+        self.shown.push((hwnd, now));
+        if hold && !self.held.contains(&hwnd) {
+            self.held.push(hwnd);
+        }
     }
-    /// `hwnd` draws: when it was cloaked, if it still is; it is no longer
-    /// waited for.
+    /// `hwnd` draws: when it was cloaked, if it still is and is not held; it
+    /// is no longer waited for.
     fn drawn(&mut self, hwnd: isize) -> Option<std::time::Instant> {
-        let index = self.0.iter().position(|(known, _)| *known == hwnd)?;
-        Some(self.0.remove(index).1)
+        if self.held.contains(&hwnd) {
+            return None;
+        }
+        let index = self.shown.iter().position(|(known, _)| *known == hwnd)?;
+        Some(self.shown.remove(index).1)
     }
-    /// The windows cloaked `limit` or longer before `now`, no longer waited for.
-    fn overdue(&mut self, now: std::time::Instant, limit: std::time::Duration) -> Vec<isize> {
+    /// `hwnd` is no longer held: its next draw shows it, the limit counts
+    /// from `now`.
+    fn release(&mut self, hwnd: isize, now: std::time::Instant) {
+        self.held.retain(|known| *known != hwnd);
+        for (known, at) in &mut self.shown {
+            if *known == hwnd {
+                *at = now;
+            }
+        }
+    }
+    /// The windows cloaked `limit` or longer before `now` (`held_limit` for
+    /// a held one), no longer waited for.
+    fn overdue(
+        &mut self,
+        now: std::time::Instant,
+        limit: std::time::Duration,
+        held_limit: std::time::Duration,
+    ) -> Vec<isize> {
         let mut late = Vec::new();
-        self.0.retain(|(hwnd, at)| {
+        let held = &self.held;
+        self.shown.retain(|(hwnd, at)| {
+            let limit = if held.contains(hwnd) {
+                held_limit
+            } else {
+                limit
+            };
             let waiting = now.saturating_duration_since(*at) < limit;
             if !waiting {
                 late.push(*hwnd);
             }
             waiting
         });
+        self.held.retain(|hwnd| !late.contains(hwnd));
         late
     }
     fn is_empty(&self) -> bool {
-        self.0.is_empty()
+        self.shown.is_empty()
     }
 }
 
@@ -314,6 +350,8 @@ thread_local! {
     static CLOAKED: RefCell<Cloaked> = RefCell::new(Cloaked::default());
     /// Checks [`CLOAKED`] against [`CLOAK_LIMIT`] while it is not empty.
     static CLOAK_TIMER: slint::Timer = slint::Timer::default();
+    /// [`hold_next_shown`]: the next window cloaked at its show is held.
+    static HOLD_NEXT: Cell<bool> = const { Cell::new(false) };
 }
 
 /// No white frame when a window opens. Slint draws a window's first frame
@@ -335,7 +373,8 @@ pub fn cloak_until_drawn() {
         if !vestra_win32::set_dark_title_bar(hwnd, DARK.get()) {
             diag!("platform: the system refused a dark/light title bar");
         }
-        CLOAKED.with_borrow_mut(|cloaked| cloaked.add(hwnd, std::time::Instant::now()));
+        let hold = HOLD_NEXT.replace(false);
+        CLOAKED.with_borrow_mut(|cloaked| cloaked.add(hwnd, std::time::Instant::now(), hold));
         CLOAK_TIMER.with(|timer| {
             if !timer.running() {
                 timer.start(slint::TimerMode::Repeated, CLOAK_CHECK, uncloak_overdue);
@@ -348,12 +387,13 @@ pub fn cloak_until_drawn() {
 }
 
 fn uncloak_overdue() {
-    let late =
-        CLOAKED.with_borrow_mut(|cloaked| cloaked.overdue(std::time::Instant::now(), CLOAK_LIMIT));
+    let late = CLOAKED.with_borrow_mut(|cloaked| {
+        cloaked.overdue(std::time::Instant::now(), CLOAK_LIMIT, HOLD_LIMIT)
+    });
     for hwnd in late {
         vestra_win32::set_cloaked(hwnd, false);
         diag!(
-            "ui: a window showed without a draw after {} ms",
+            "ui: a window showed without a draw (or its placement) after {} ms",
             CLOAK_LIMIT.as_millis()
         );
     }
@@ -382,6 +422,77 @@ pub fn window_drawing(id: u64) {
     if slint::invoke_from_event_loop(uncloak).is_err() {
         vestra_win32::set_cloaked(hwnd, false);
     }
+}
+
+/// The next window cloaked at its show stays cloaked past its draws until
+/// [`placed`] (at most [`HOLD_LIMIT`]): the main window, whose restored
+/// frame and maximized state are set once its native window exists, after
+/// Slint drew its first frame. Call just before showing it.
+pub fn hold_next_shown() {
+    HOLD_NEXT.set(true);
+}
+
+/// `window` has its restored frame: it shows at its next draw (asked for
+/// here; the frame set may not have resized it).
+pub fn placed(window: &slint::Window) {
+    if let Some(hwnd) = hwnd_of(window) {
+        CLOAKED.with_borrow_mut(|cloaked| cloaked.release(hwnd, std::time::Instant::now()));
+    }
+    HOLD_NEXT.set(false);
+    window.request_redraw();
+}
+
+/// The raw HWND behind `window`, once its native window exists.
+fn hwnd_of(window: &slint::Window) -> Option<isize> {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let native = native_of(window)?;
+    let handle = native.window_handle().ok()?;
+    match handle.as_raw() {
+        RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),
+        _ => None,
+    }
+}
+
+fn desktop_rect((left, top, right, bottom): vestra_win32::ScreenRect) -> super::DesktopRect {
+    super::DesktopRect {
+        x: left,
+        y: top,
+        width: right.saturating_sub(left).max(0) as u32,
+        height: bottom.saturating_sub(top).max(0) as u32,
+    }
+}
+
+/// The displays' work areas (without the taskbar and docked toolbars), the
+/// primary one marked.
+pub fn work_areas() -> Vec<(super::DesktopRect, bool)> {
+    vestra_win32::display_areas()
+        .into_iter()
+        .map(|area| (desktop_rect(area.work), area.primary))
+        .collect()
+}
+
+/// The main window's normal frame in desktop pixels, also while it is
+/// maximized (the window placement): saved as it is, so a display of
+/// another scale restores it exactly (logical pixels convert with the
+/// scale of whichever display the window is on).
+pub fn normal_frame(window: &slint::Window) -> Option<super::DesktopRect> {
+    let placement = vestra_win32::normal_placement(hwnd_of(window)?)?;
+    Some(desktop_rect(placement.frame)).filter(|frame| frame.width > 0 && frame.height > 0)
+}
+
+/// Put `window` at the normal frame `frame` (desktop pixels), maximized on
+/// that frame's display when `maximized` (`SetWindowPlacement`).
+pub fn set_normal_frame(
+    window: &slint::Window,
+    frame: super::DesktopRect,
+    maximized: bool,
+) -> bool {
+    let Some(hwnd) = hwnd_of(window) else {
+        return false;
+    };
+    let right = frame.x.saturating_add(frame.width as i32);
+    let bottom = frame.y.saturating_add(frame.height as i32);
+    vestra_win32::set_normal_placement(hwnd, (frame.x, frame.y, right, bottom), maximized)
 }
 
 /// Every window of the host stays above other applications' windows (or
@@ -1754,30 +1865,53 @@ mod tests {
         let limit = Duration::from_millis(500);
         let mut cloaked = Cloaked::default();
         assert_eq!(cloaked.drawn(7), None, "never cloaked");
-        cloaked.add(7, start);
-        cloaked.add(9, start + Duration::from_millis(100));
+        cloaked.add(7, start, false);
+        cloaked.add(9, start + Duration::from_millis(100), false);
         assert_eq!(cloaked.drawn(7), Some(start));
         assert_eq!(cloaked.drawn(7), None, "uncloaked once");
         assert!(
             cloaked
-                .overdue(start + Duration::from_millis(599), limit)
+                .overdue(start + Duration::from_millis(599), limit, limit)
                 .is_empty()
         );
         assert_eq!(
-            cloaked.overdue(start + Duration::from_millis(600), limit),
+            cloaked.overdue(start + Duration::from_millis(600), limit, limit),
             vec![9]
         );
         assert!(cloaked.is_empty());
         assert_eq!(cloaked.drawn(9), None, "already shown by the limit");
         // Shown again (hidden in between): waited for from the new show.
-        cloaked.add(7, start);
-        cloaked.add(7, start + Duration::from_secs(1));
+        cloaked.add(7, start, false);
+        cloaked.add(7, start + Duration::from_secs(1), false);
         assert!(
             cloaked
-                .overdue(start + Duration::from_millis(1400), limit)
+                .overdue(start + Duration::from_millis(1400), limit, limit)
                 .is_empty()
         );
         assert_eq!(cloaked.drawn(7), Some(start + Duration::from_secs(1)));
+    }
+
+    /// The main window held cloaked (`hold_next_shown`): its draws do not
+    /// show it until it is placed, then the next one does; without
+    /// `placed` the longer hold limit shows it, counted from its show.
+    #[test]
+    fn a_held_window_shows_at_its_first_draw_after_it_is_placed() {
+        use std::time::{Duration, Instant};
+        let start = Instant::now();
+        let (limit, held) = (Duration::from_millis(500), Duration::from_millis(1500));
+        let mut cloaked = Cloaked::default();
+        cloaked.add(7, start, true);
+        cloaked.add(9, start, false);
+        assert_eq!(cloaked.drawn(7), None, "held");
+        assert_eq!(cloaked.overdue(start + limit, limit, held), vec![9]);
+        cloaked.release(7, start + Duration::from_millis(40));
+        assert_eq!(cloaked.drawn(7), Some(start + Duration::from_millis(40)));
+        assert!(cloaked.is_empty());
+        // Never placed: shown by the hold limit, not the draw limit.
+        cloaked.add(8, start, true);
+        assert!(cloaked.overdue(start + limit, limit, held).is_empty());
+        assert_eq!(cloaked.overdue(start + held, limit, held), vec![8]);
+        assert!(cloaked.held.is_empty());
     }
 
     #[test]

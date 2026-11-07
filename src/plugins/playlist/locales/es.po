@@ -775,11 +775,6 @@ msgstr "Acoplar a la ventana principal"
 msgid "Detach as floating window"
 msgstr "Separar como ventana flotante"
 
-#: ui/sidebar.slint:307
-#, x-machine
-msgid "Close list"
-msgstr "Cerrar lista"
-
 #: ui/sidebar.slint:371
 #, x-machine
 msgid ""

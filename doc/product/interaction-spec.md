@@ -298,18 +298,21 @@ Without an API change: the host takes the first Latin letter of the title automa
 
 ### IA-CORE-03 Window size memory distinguishes "normal size" from "maximised" (P2)
 
-**Status**: implemented.
+**Status**: implemented (maximised restored since the user ruling of 2026-11-07; until then the player always started at the normal size).
 
 **Requirements**:
 
-1. The window position and size are saved only when the window is neither fullscreen nor maximised.
-2. On startup the window always opens at normal size; maximised is not restored.
-3. Restoring from maximised returns to the normal size from before maximising (system behaviour).
-4. After closing a file the window keeps its current size.
+1. The window position and size are saved only when the window is neither fullscreen, maximised nor minimised (`ui-state.json` `window`).
+2. Whether the window is maximised is saved too (`windowMaximized`); on startup the window opens at the saved normal frame, maximised on that frame's display, so restoring it returns to that frame. The user never sees it at another frame first: Windows keeps it cloaked until it is placed, macOS zooms it at its creation, before it shows.
+   - Windows also saves the normal frame in desktop pixels (`windowPhysical`, the window placement, also while maximised) and restores it with `SetWindowPlacement`, so a display of another scale restores it exactly; logical pixels convert with the scale of whichever display the window is on.
+3. Fullscreen is never restored and has no option (Chrome, VLC and mpv do not either; fullscreen at launch without a video is a black screen). Quitting in fullscreen keeps what was under it: the normal frame and the maximised flag from before fullscreen.
+4. A saved frame that is not reachable (less than 100 × 30 px of its title bar on any display's work area, the taskbar excluded on Windows; for example a display that is gone) opens centred on the primary display, shrunk to fit it, as Chrome and Firefox do.
+5. Restoring from maximised returns to the normal size from before maximising (system behaviour).
+6. After closing a file the window keeps its current size.
 
-**Cross-platform**: Slint's `is_maximized` corresponds to "zoom" on macOS and to `IsZoomed` on Windows, both provided by winit.
+**Cross-platform**: Slint's `is_maximized` corresponds to "zoom" on macOS and to `IsZoomed` on Windows, both provided by winit. winit un-maximises a window it moves, so the host places the frame first and maximises after (`view::Placements`).
 
-**Acceptance**: maximise the window (on macOS double-click the title bar or Option-click the green button), quit and restart: the window has the size and position from before maximising.
+**Acceptance**: maximise the window (on macOS double-click the title bar or Option-click the green button), quit and restart: the window opens maximised, and restoring it gives the size and position from before maximising. Maximise, enter fullscreen, quit and restart: the window opens maximised, not fullscreen. Save the window on a second display, disconnect it and restart: the window opens on the primary display.
 
 ### IA-CORE-04 Fullscreen entries: Esc, Enter / Leave Fullscreen, fullscreen+, fullscreen on another display (P2 / P3)
 
@@ -1252,7 +1255,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | W-09 | Pointer | Hidden while playing after the pointer rests 3 seconds over the video area (on by default) | G-06 |
 | W-10 | Minimum size | Currently 320×182; target width 320, with the height determined only by the title bar and bottom bar (not implemented) | IA-CORE-13 |
 | W-11 | Size and position on first launch | 780×671, position decided by the system | |
-| W-12 | Restoring the last window on startup | Restores the normal size and position; maximised is not restored | IA-CORE-03 |
+| W-12 | Restoring the last window on startup | Restores the normal size and position, then maximised if it was; never fullscreen; a frame off every display opens on the primary one | IA-CORE-03 |
 | W-13 | Snapping to screen edges | Snaps within 10 px while dragging the window (not implemented); Windows system snapping works as usual | IA-CORE-10 |
 | W-14 | Window size after closing a file | Keeps the current size | |
 
@@ -1282,7 +1285,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | --- | --- | --- | --- |
 | X-01 | Layout | Same as a normal window | |
 | X-02 | Kinds of maximise | The system's maximise / zoom; additional "Maximise" and "Maximise+" commands (not implemented) | IA-WIN-05 |
-| X-03 | Memory | The window size is not recorded while maximised | IA-CORE-03 |
+| X-03 | Memory | The window size is not recorded while maximised; that it is maximised is, and the next start opens maximised | IA-CORE-03 |
 
 **Mini size, always on top, picture-in-picture**
 
@@ -1428,7 +1431,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | L-19 | All | Scrolling after keyboard moves | Kept visible | G-08 |
 | L-20 | When switching files | Playing item | Scrolled to the centre when not in view | G-08 |
 | L-21 | All | List bottom bar | 35 px: four move buttons, add / remove / sort, search box, total duration; when narrow the search box collapses to a magnifier | |
-| L-22 | All | Ways to close | F6, the bottom bar button, the close button of the floating window, "Close" in the list menu, the × on the tab strip when attached | |
+| L-22 | All | Ways to close | F6, the bottom bar button, the close button of the floating window, "Close" in the list menu (the tab strip has no × since 2026-11-07: next to the window's close button it closed the player when missed) | |
 | L-23 | All | Panel locks | The panel is locked while the search box has focus and during drag reordering (in fullscreen the pop-out does not retract); focus on the list itself does not lock | G-01 |
 
 ### A.7 OSD and info layer

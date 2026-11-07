@@ -618,10 +618,6 @@ msgstr ""
 msgid "Detach as floating window"
 msgstr ""
 
-#: ui/sidebar.slint:307
-msgid "Close list"
-msgstr ""
-
 #: ui/sidebar.slint:371
 msgid ""
 "{}\n"

@@ -27,17 +27,17 @@ Status: implemented in the host and SDK 1.5.2 (2026-10-24); the playlist is one 
 - The tab list is in `PanelSlot.panels` (not in `SlotState`), so `deepEqual` on `state` in plugin tests does not fail because of a new field; on the wire it is still `LayoutSlot.panels`.
 - `"otherTab"` only appears in `Panel.state.reason`; `SlotState.reason` is for the whole sidebar and is unchanged.
 - The sidebar held at most 8 tabs (a 9th was refused with `conflict`); since 2026-11-03 it takes any number, with an overflow menu, and only the front tabs are compiled: see [sidebar-tabs.md](sidebar-tabs.md).
-- The close button at the right end of the tab strip has the tooltip "Close Sidebar"; inactive tab text uses `text-dim`, and hovering shows a rounded `hover-bg` background; when tabs do not fit at 105px they narrow equally and the text is elided.
+- The tab strip has no close button (user ruling 2026-11-07: right below the window's own close button, a missed click closed the player); the bottom bar's sidebar button, F6 and the menus hide the sidebar. Inactive tab text uses `text-dim`, and hovering shows a rounded `hover-bg` background; when tabs do not fit at 105px they narrow equally and the text is elided.
 - Drop coordinates are measured from below the tab strip (the panel component's own coordinate system).
 - Switching tabs with Ctrl+Tab is not done.
 
 ```
-┌──────────── video ────────────┬[Playlist][Example List]   ⧉ ✕┐
+┌──────────── video ────────────┬[Playlist][Example List]     ⧉┐
 │                               │  1. a.mkv                     │
 └──────────── bottom bar ───────┴───────────────────────────────┘
 ```
 
-- **Tab strip**: not drawn when there is only one sidebar panel, so the UI is exactly as it is now; with two or more, the host draws a 31px tab strip in the style of the playlist tabs in ui-spec §5. The detach and close buttons sit at the right end of the tab strip and act on the whole slot.
+- **Tab strip**: not drawn when there is only one sidebar panel, so the UI is exactly as it is now; with two or more, the host draws a 31px tab strip in the style of the playlist tabs in ui-spec §5. The detach button sits at the right end of the tab strip and acts on the whole slot (no close button since 2026-11-07).
 - **Host**
   - composition: generates one `if` branch per compiled sidebar panel (since 2026-11-03 `if root.sidebar-shown == <owner>: Owner<owner>View`, for the front tabs only, [sidebar-tabs.md](sidebar-tabs.md)); switching between compiled tabs only changes a property and does not recompile the shell.
   - `floating_source` takes several specs, and the floating window has the same tab strip.

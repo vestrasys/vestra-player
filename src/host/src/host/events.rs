@@ -28,12 +28,11 @@ pub(crate) enum Event {
     Binding(u64, u64, String),
     SidebarResized(u64, f64),
     /// The host's sidebar tab strip (shell or floating window generation): a
-    /// tab clicked (its index), the detach/attach button, the close button.
+    /// tab clicked (its index), the detach/attach button.
     SidebarTab(u64, usize),
     /// The strip's `»` (sidebar-tabs.md): the overflow menu's origin, logical px.
     SidebarOverflow(u64, f64, f64),
     SidebarDetach(u64),
-    SidebarClose(u64),
     /// IA-CORE-12: a double click on the video during picture-in-picture.
     PipReturn(u64),
     FloatingClosed(u64),

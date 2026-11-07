@@ -154,8 +154,7 @@ const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
     in property <[string]> sidebar-titles;\n\
     callback sidebar-tab(int);\n\
     callback sidebar-overflow(float, float);\n\
-    callback sidebar-detach();\n\
-    callback sidebar-close();";
+    callback sidebar-detach();";
 
 /// The height of the host's sidebar tab strip (the playlist's, ui-spec §5.2).
 pub const TAB_STRIP_HEIGHT: f64 = 31.0;
@@ -195,7 +194,7 @@ fn sidebar_content(tabs: &[&CompileSpec], tabbed: bool, keys: &str, detached: &s
          titles: root.sidebar-titles; active: root.sidebar-active; detached: {detached}; \
          tab(index) => {{ root.sidebar-active = index; {keys}.focus(); root.sidebar-tab(index); }} \
          overflow(x, y) => {{ root.sidebar-overflow(x, y); }} \
-         detach => {{ root.sidebar-detach(); }} close => {{ root.sidebar-close(); }} }} \
+         detach => {{ root.sidebar-detach(); }} }} \
          Rectangle {{ x: 0px; y: {TAB_STRIP_HEIGHT}px; width: parent.width; \
          height: parent.height - {TAB_STRIP_HEIGHT}px; background: Theme.bg-list; {views} }}"
     )
@@ -386,7 +385,6 @@ export component FloatingPanel inherits Window {{
     callback sidebar-tab(int);
     callback sidebar-overflow(float, float);
     callback sidebar-detach();
-    callback sidebar-close();
     panel-keys := FocusScope {{
         {keys}
         {content}
@@ -1005,14 +1003,11 @@ mod tests {
         for property in ["sidebar-active", "sidebar-titles"] {
             assert!(definition.properties().any(|(name, _)| name == property));
         }
-        for callback in [
-            "sidebar-tab",
-            "sidebar-overflow",
-            "sidebar-detach",
-            "sidebar-close",
-        ] {
+        for callback in ["sidebar-tab", "sidebar-overflow", "sidebar-detach"] {
             assert!(definition.callbacks().any(|name| name == callback));
         }
+        // No close button in the sidebar (user ruling 2026-11-07).
+        assert!(!definition.callbacks().any(|name| name == "sidebar-close"));
         assert!(definition.global_properties("Owner30Bridge").is_some());
         let floating = build(
             floating_source(&specs[1..], "播放列表").unwrap(),
