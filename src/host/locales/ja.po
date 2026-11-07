@@ -258,6 +258,16 @@ msgstr "フルスクリーン切り替え"
 msgid "Leave Fullscreen"
 msgstr "フルスクリーンを終了"
 
+#: ui/title-strip.slint
+#, x-machine
+msgid "Exit Fullscreen"
+msgstr "フルスクリーンを終了"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Minimize"
+msgstr "最小化"
+
 #: src/host/actions.rs
 #, x-machine
 msgid "Enter Fullscreen"

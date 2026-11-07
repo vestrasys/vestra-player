@@ -337,6 +337,11 @@ impl Host {
                 self.send(owner, json!({"event":event,"data":data}))
             }
             Event::MainClosed => self.host_command("quit"),
+            Event::TitleStrip(generation, action) => {
+                if generation == self.shell_generation {
+                    self.title_strip_action(&action);
+                }
+            }
             Event::ViewClosed(owner, id) => {
                 if let Some(view) = self.views.remove(&(owner, id.clone())) {
                     let _ = view.instance.hide();

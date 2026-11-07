@@ -164,6 +164,7 @@ impl Host {
             self.policy.pointer(0., viewport.width, now);
         }
         self.policy.tick(now);
+        self.title_strip_tick(&shell, fullscreen, now);
         self.sync_tabs(&shell);
         let mut sidebar_seen = None;
         let result = (|| -> Result<Value> {
@@ -204,7 +205,8 @@ impl Host {
             // band, no menu, dialog or bar lock); FS-BAR-1 decoupled it from
             // the bar. `setCursorAutoHide("playing")`: in a window too, while
             // it has focus.
-            let idle = self.policy.idle(now);
+            // Never while the pointer is at the top edge or over the title strip.
+            let idle = self.policy.idle(now) && !self.title_strip.holding();
             let windowed =
                 self.cursor_playing.get() && idle && native.is_some_and(|facts| facts.active);
             shell.set_property(
@@ -234,6 +236,79 @@ impl Host {
             ),
         }
         self.ui_state.save_if_due(now);
+    }
+    /// The fullscreen title strip (`title-strip.slint`): it applies to the
+    /// fullscreen main window where the system shows no title bar there
+    /// (`platform::FULLSCREEN_TITLE_STRIP`), not in picture-in-picture; it
+    /// shows while the pointer is at the top edge or over it
+    /// (`window_state::TitleStrip`). Properties are written only when they
+    /// change, and the tooltip keys only as it comes out: nothing per
+    /// pointer move.
+    fn title_strip_tick(
+        &mut self,
+        shell: &slint_interpreter::ComponentInstance,
+        fullscreen: bool,
+        now: u64,
+    ) {
+        let flag = |name: &str| matches!(shell.get_property(name), Ok(SValue::Bool(true)));
+        let set = |name: &str, value: SValue| {
+            if shell.get_property(name).ok().as_ref() != Some(&value)
+                && let Err(error) = shell.set_property(name, value)
+            {
+                diag!("host.error title strip {name}: {error}");
+            }
+        };
+        let eligible =
+            platform::FULLSCREEN_TITLE_STRIP && fullscreen && !flag("picture-in-picture");
+        let before = flag("title-strip-shown");
+        let shown = self.title_strip.update(
+            eligible,
+            flag("title-strip-edge"),
+            flag("title-strip-hover"),
+            now,
+        );
+        if shown && !before {
+            // Leave Fullscreen's own key, else Toggle Fullscreen's (Esc).
+            let (leave, close) = {
+                let input = self.input.borrow();
+                (
+                    input
+                        .table
+                        .label(bindings::HOST, "exit-fullscreen")
+                        .or_else(|| input.table.label(bindings::HOST, "fullscreen")),
+                    input.table.label(bindings::HOST, "quit"),
+                )
+            };
+            set(
+                "title-strip-exit-key",
+                SValue::String(leave.unwrap_or_default().into()),
+            );
+            set(
+                "title-strip-close-key",
+                SValue::String(close.unwrap_or_default().into()),
+            );
+        }
+        set("title-strip-enabled", eligible.into());
+        set("title-strip-shown", shown.into());
+    }
+    /// A title strip button: Minimize, Exit Fullscreen (Toggle Fullscreen,
+    /// as its key does) and Close (the window close button: Quit).
+    pub(crate) fn title_strip_action(&mut self, action: &str) {
+        self.policy.activity(self.now_ms());
+        let fullscreen = self
+            .shell
+            .as_ref()
+            .is_some_and(|shell| shell.window().is_fullscreen());
+        match action {
+            "minimize" => {
+                if let Some(shell) = &self.shell {
+                    shell.window().set_minimized(true);
+                }
+            }
+            "exit-fullscreen" if fullscreen => self.host_command("fullscreen"),
+            "close" => self.host_command("quit"),
+            _ => {}
+        }
     }
     /// Record the main window frame (logical px) for the next launch.
     pub(crate) fn remember_window(&mut self, shell: &slint_interpreter::ComponentInstance) {

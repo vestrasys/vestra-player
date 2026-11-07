@@ -3,6 +3,7 @@
 import { MenuView, MenuLevel } from "menu-view.slint";
 import { PaletteView, PaletteRow } from "command-palette.slint";
 import { Theme } from "@vestra/theme.slint";
+import { TitleStrip } from "title-strip.slint";
 // Exported so the player can set the colours (R-H6).
 export { VestraPalette } from "palette.slint";
 export { MenuChrome } from "menu-view.slint";
@@ -99,6 +100,16 @@ export component HostWindow inherits Window {
     // The fullscreen sidebar overlay's width: the user's width, leaving at
     // least the minimum video width (318) uncovered.
     out property <float> sidebar-pop-width: max(0, min(root.sidebar-width, root.width / 1px - 318));
+    // The fullscreen title strip (title-strip.slint): where it applies, whether
+    // it is out, the keys in its tooltips (the host sets them); where the
+    // pointer is, sampled by the host every tick; its buttons.
+    in property <bool> title-strip-enabled: false;
+    in property <bool> title-strip-shown: false;
+    in property <string> title-strip-exit-key;
+    in property <string> title-strip-close-key;
+    out property <bool> title-strip-edge: title-strip.edge-hover;
+    out property <bool> title-strip-hover: title-strip.strip-hover;
+    callback title-strip-action(string);
     // Keys reach the binding table only when something in the window has focus.
     init => { canvas.focus(); }
     // VESTRA-MOUNT-PROPERTIES
@@ -289,6 +300,17 @@ export component HostWindow inherits Window {
             // VESTRA-MOUNT-SIDEBAR
         }
         // VESTRA-MOUNT-OVERLAY
+    }
+    // Above the video and the fullscreen sidebar, below the menu layer.
+    title-strip := TitleStrip {
+        x: 0px; y: 0px; width: root.width;
+        enabled: root.title-strip-enabled;
+        shown: root.title-strip-shown;
+        title: root.window-title;
+        exit-key: root.title-strip-exit-key;
+        close-key: root.title-strip-close-key;
+        action(name) => { root.title-strip-action(name); }
+        activity => { root.window-input("activity"); }
     }
     if root.menu-open: Rectangle {
         width: root.width; height: root.height;

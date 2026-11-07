@@ -33,6 +33,9 @@ pub const CTRL_ACCEPTS_CMD: bool = false;
 /// combinations (Win+Q opens search), and a key named "Cmd" means nothing
 /// here. Alt+F4 and the close button quit (`bindings::label_shown`).
 pub const MENU_SHOWS_CMD: bool = false;
+/// The fullscreen title strip (Edge/Chrome F11, PotPlayer): a fullscreen
+/// window has no title bar, so the player reveals its own at the top edge.
+pub const FULLSCREEN_TITLE_STRIP: bool = true;
 
 // ------------------------------------------------------------------ windows
 

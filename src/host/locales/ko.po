@@ -258,6 +258,16 @@ msgstr "전체 화면"
 msgid "Leave Fullscreen"
 msgstr "전체 화면 종료"
 
+#: ui/title-strip.slint
+#, x-machine
+msgid "Exit Fullscreen"
+msgstr "전체 화면 종료"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Minimize"
+msgstr "최소화"
+
 #: src/host/actions.rs
 #, x-machine
 msgid "Enter Fullscreen"

@@ -1,0 +1,140 @@
+// The fullscreen title strip (Windows, Linux; macOS shows its own menu and
+// title bar at the top of a fullscreen space). Edge/Chrome F11 and PotPlayer
+// precedent: the pointer at the screen's top edge slides a title bar down
+// over the video, without moving the video: the app icon, the window title,
+// and Minimize, Exit Fullscreen and Close.
+//
+// The host decides when it shows (`window_state::TitleStrip`, every tick)
+// from `edge-hover` (the reveal zone, the top 2 physical px) and
+// `strip-hover`. It is created once with the shell: `shown` slides it and
+// `visible` takes it out of the accessibility tree while hidden; nothing is
+// created on hover. Menus and the layers above the shell stay above it.
+import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
+import { ToolTipArea } from "@vestra/widgets.slint";
+
+// One caption button, 46 px wide like the system's. `close` turns red on
+// hover as the system's close button does (fixed colours, the same in
+// both palettes).
+component CaptionButton inherits Rectangle {
+    in property <string> icon;
+    in property <string> label;
+    in property <string> tip;
+    in property <bool> close;
+    callback clicked();
+    width: 46px;
+    background: touch.pressed ? (root.close ? #c42b1ce6 : Theme.press-bg)
+        : touch.has-hover ? (root.close ? #c42b1c : Theme.hover-bg) : transparent;
+    accessible-role: button;
+    accessible-label: root.label;
+    accessible-description: root.tip;
+    accessible-action-default => { root.clicked(); }
+    Icon {
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        name: root.icon;
+        color: root.close && (touch.has-hover || touch.pressed) ? #ffffff : Theme.text;
+    }
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
+        touch := TouchArea {
+            clicked => { root.clicked(); }
+        }
+    }
+}
+
+export component TitleStrip {
+    // The main window is fullscreen where the strip applies (the host).
+    in property <bool> enabled;
+    // The strip is out (the host).
+    in property <bool> shown;
+    // The window title, as the system title bar shows it.
+    in property <string> title;
+    // The keys of Exit Fullscreen (Toggle Fullscreen) and Quit, "" for none (the host).
+    in property <string> exit-key;
+    in property <string> close-key;
+    out property <bool> edge-hover: edge.has-hover;
+    out property <bool> strip-hover: area.has-hover;
+    // "minimize", "exit-fullscreen" or "close".
+    callback action(string);
+    callback activity();
+    private property <string> minimize-label: @tr("Minimize");
+    private property <string> exit-label: @tr("Exit Fullscreen");
+    private property <string> close-label: @tr("Close");
+    height: 32px;
+    // The reveal zone: the top 2 physical px, above the video and the
+    // fullscreen sidebar, so the top-right corner reveals the strip only.
+    edge := TouchArea {
+        x: 0px;
+        y: 0px;
+        width: root.width;
+        height: 2phx;
+        visible: root.enabled;
+        changed mouse-x => { root.activity(); }
+    }
+    strip := Rectangle {
+        x: 0px;
+        y: root.shown ? 0px : -self.height;
+        width: root.width;
+        height: root.height;
+        visible: root.enabled && self.y > -self.height;
+        background: Theme.bg-bar;
+        animate y { duration: 150ms; easing: ease-out; }
+        area := TouchArea {
+            mouse-cursor: MouseCursor.default;
+            changed mouse-x => { root.activity(); }
+            changed mouse-y => { root.activity(); }
+            HorizontalLayout {
+                padding-left: 10px;
+                spacing: 8px;
+                VerticalLayout {
+                    alignment: center;
+                    Image {
+                        width: 16px;
+                        height: 16px;
+                        source: @image-url("app-icon.png");
+                        image-fit: contain;
+                    }
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.title;
+                    color: Theme.text;
+                    font-size: Theme.font-tab;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                HorizontalLayout {
+                    spacing: 0px;
+                    CaptionButton {
+                        icon: "remove";
+                        label: root.minimize-label;
+                        tip: root.minimize-label;
+                        clicked => { root.action("minimize"); }
+                    }
+                    CaptionButton {
+                        icon: "exit-fullscreen";
+                        label: root.exit-label;
+                        tip: root.exit-key == "" ? root.exit-label : @tr("{} ({})", root.exit-label, root.exit-key);
+                        clicked => { root.action("exit-fullscreen"); }
+                    }
+                    CaptionButton {
+                        icon: "close";
+                        close: true;
+                        label: root.close-label;
+                        tip: root.close-key == "" ? root.close-label : @tr("{} ({})", root.close-label, root.close-key);
+                        clicked => { root.action("close"); }
+                    }
+                }
+            }
+        }
+        // The edge between the strip and the video.
+        Rectangle {
+            y: parent.height - 1px;
+            height: 1px;
+            background: Theme.line;
+        }
+    }
+}

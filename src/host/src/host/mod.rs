@@ -221,6 +221,8 @@ pub(crate) struct Host {
     pub(crate) menu_open: bool,
     /// G-01: the fullscreen sidebar overlay was popped out at the last tick.
     pub(crate) sidebar_popped: bool,
+    /// The fullscreen title strip (`title-strip.slint`).
+    pub(crate) title_strip: window_state::TitleStrip,
     /// The current sidebar tab at the last tick, and whether the user just
     /// clicked a tab (which gave the sidebar the keys already).
     pub(crate) sidebar_active: Option<u64>,

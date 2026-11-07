@@ -261,6 +261,16 @@ msgstr "Vollbild umschalten"
 msgid "Leave Fullscreen"
 msgstr "Vollbild verlassen"
 
+#: ui/title-strip.slint
+#, x-machine
+msgid "Exit Fullscreen"
+msgstr "Vollbild beenden"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Minimize"
+msgstr "Minimieren"
+
 #: src/host/actions.rs
 #, x-machine
 msgid "Enter Fullscreen"

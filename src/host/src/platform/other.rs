@@ -21,6 +21,9 @@ pub const CTRL_ACCEPTS_CMD: bool = false;
 /// Menus show no `Cmd` binding: the desktop takes most Super-key
 /// combinations (`bindings::label_shown`).
 pub const MENU_SHOWS_CMD: bool = false;
+/// The fullscreen title strip, as on Windows: a fullscreen window has no
+/// title bar of its own.
+pub const FULLSCREEN_TITLE_STRIP: bool = true;
 
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");
 

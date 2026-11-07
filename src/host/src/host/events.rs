@@ -53,6 +53,9 @@ pub(crate) enum Event {
     ViewClosed(u64, String),
     /// The user closed the main window: the player quits (`view::on_main_close`).
     MainClosed,
+    /// A button of the fullscreen title strip: (shell generation,
+    /// `minimize`, `exit-fullscreen` or `close`).
+    TitleStrip(u64, String),
     PluginMessage(u64, String, Value),
     Exited(u64),
     /// A control line of the shared runner (`g` 0): (runner, message).

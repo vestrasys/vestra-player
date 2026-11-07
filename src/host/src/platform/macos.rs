@@ -28,6 +28,9 @@ pub const SLINT_CONTROL_IS_COMMAND: bool = true;
 pub const CTRL_ACCEPTS_CMD: bool = true;
 /// Menus show ⌘ bindings (`bindings::label_shown`).
 pub const MENU_SHOWS_CMD: bool = true;
+/// No fullscreen title strip: a fullscreen space shows the system menu
+/// bar and the window title bar when the pointer reaches the top.
+pub const FULLSCREEN_TITLE_STRIP: bool = false;
 
 // ------------------------------------------------------------------ windows
 
