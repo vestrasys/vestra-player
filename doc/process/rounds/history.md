@@ -212,13 +212,13 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 
 | # | Item | State |
 | --- | --- | --- |
-| A1 | **Window state and sidebar ✕** | Merged (#185) after a GUI check: rect, maximized and fullscreen-not-restored all as specified. Follow-ups (minimized start, macOS drift, round-trip test) in `window-placement-followups` |
-| A2 | **Filter performance** (branch `filter-performance`, cac0519d) | Done by the maintainer; independent review running. Next: measurement under quiet.flag, GUI drag test, merge |
+| A1 | **Window state and sidebar ✕** | Merged (#185, follow-ups #188: minimized start, macOS restore drift, round-trip test). Owed: minimized-start and multi-monitor GUI check on the next main build |
+| A2 | **Filter performance** | Merged (#189). GUI: 4K blur 8.6 → 60 fps; drags at 60; paused preview stays on the frame; values survive a seek. Follow-ups: snapshot `presentation` reads the scaled size; convolution/unsharp kernel minimum; play during a timed-out step; tool windows (Picture Adjustments) fall behind the main window when it is clicked — should stay above it (owned windows) |
 | A3 | **Exit-code fix for the remaining scripts** | Merged (#183); main CI green |
-| A4 | **Nightly advisories** | Merged (#184): pulldown-cmark 0.13.6 (we never enabled wikilinks); RUSTSEC-2026-0441 ignored (pin-utils via Slint spin_on, remove on a Slint upgrade). SDK: minimatch moderate advisory, fixed in B1 SDK patch |
+| A4 | **Nightly advisories** | Merged (#184, fixed by #187: plain ID in deny.toml). SDK minimatch advisory left: the fix needs minimatch 11, which typedoc 0.28 does not allow (dev-only) |
 | A5 | **Design doc consolidation** (`design-doc-consolidation`) | Workflow edits on hold (user). Rest: SDK 1.6.4 doc links, review, rebase, merge |
 | A6 | **Release 0.7.5**: macOS job cancelled on 11-04 | Needs the user (CI left alone for now) |
-| B1 | **Command palette** (host, menu layer, Ctrl+Shift+P) plus a command category field; the 28 superseded single-choice commands become palette-only | Maintainer at work (host `command-palette`, SDK `category`/`home`). Then plugin authors add `category` to built-in commands |
+| B1 | **Command palette** (host 0.7.4, Ctrl+Shift+P) and `category`/`home` | SDK 1.6.4 published. Host reviewed (merge); player SDK bump in progress, then GUI check, merge. Next: plugin authors add `category` to ~259 built-in commands. Ruling: a disabled command without a reason is hidden from the palette (VS Code `when` precedent) |
 | B2 | **Shortcut hints** in tabs, sliders and buttons | After B1 |
 | B3a | **Host-owned button strip**, » overflow, 🔍 button; host and playback in one release | After B2 |
 | B3b | **Adjust slot**: adjust column, narrow-window overlay, fullscreen slide-out, Adjust button; SDK patch (`adjust` slot value, docs) | After B3a |
@@ -229,9 +229,10 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 | D | **Download page**: re-record the clips that show menus, fix copy for the panels and the palette. Push only, no deploy | After B6 |
 | E | **Signing** (Apple enrolment, Windows choice), page deploy and SEO | Needs the user |
 | F | **Launch video v4**, re-made for the new UI; music decision | Last; needs the user |
-| G | Restore the GPU test clip default (`C:\vestra\clips` is gone; use `testmedia`) | Small, any time |
+| G | GPU test clip default | Done: env.ps1 sets VESTRA_GPU_CLIP to the testmedia 4K60 clip |
 
 ### Log (newest first)
 
+- 11-07: #187 (main CI green again), #188, #189 merged; SDK 1.6.4 released. Lessons: (1) a reviewer of a deny.toml change runs `npm run licenses` (its TOML reader takes only strings in arrays); (2) a squash merge must set its own body, or the branch commits' `[skip ci]` skips main CI (#185 ran no CI); (3) each agent keeps scripts in its own scratchpad subfolder (a reviewer's check script was overwritten by another agent); (4) watch C: free space: parallel target dirs filled the disk to 1 GB.
 - 11-07: A3 (#183) and A4 (#184) merged; A1 GUI-checked and merged (#185); A2 under review; B1 and A1 follow-ups started.
 - 11-07: menu redesign proposal v2 approved, with the host-owned strip and the 🔍 button. A1 re-review passed. A2 in progress. Nightly advisory failure found (A4).
