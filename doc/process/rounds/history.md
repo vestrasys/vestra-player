@@ -218,8 +218,8 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 | A4 | **Nightly advisories** | Merged (#184, fixed by #187: plain ID in deny.toml). SDK minimatch advisory left: the fix needs minimatch 11, which typedoc 0.28 does not allow (dev-only) |
 | A5 | **Design doc consolidation** (`design-doc-consolidation`) | Workflow edits on hold (user). Rest: SDK 1.6.4 doc links, review, rebase, merge |
 | A6 | **Release 0.7.5**: macOS job cancelled on 11-04 | Needs the user (CI left alone for now) |
-| B1 | **Command palette** (host 0.7.4, Ctrl+Shift+P) and `category`/`home` | SDK 1.6.4 published. Host reviewed (merge); player SDK bump in progress, then GUI check, merge. Next: plugin authors add `category` to ~259 built-in commands. Ruling: a disabled command without a reason is hidden from the palette (VS Code `when` precedent) |
-| B2 | **Shortcut hints** in tabs, sliders and buttons | After B1 |
+| B1 | **Command palette and categories** | Done: palette #191 (host 0.7.4, SDK 1.6.4); categories for all 16 built-in plugins, Keyboard Shortcuts names Category: Title, SDK 1.6.5, release.json 0.7.6 (#193). Follow-ups in progress: host/core command categories; x-machine marks, capture Export/Snapshot, shortcuts search by menu path, duplicate list rows |
+| B2 | **Shortcut hints** in tabs, sliders and buttons | Maintainer at work: SDK 1.6.6 `plugin.commands.keys`, `KeyHint` widget, `ToolTipArea.keys`, host push. Then plugin authors use them in the three tool windows |
 | B3a | **Host-owned button strip**, » overflow, 🔍 button; host and playback in one release | After B2 |
 | B3b | **Adjust slot**: adjust column, narrow-window overlay, fullscreen slide-out, Adjust button; SDK patch (`adjust` slot value, docs) | After B3a |
 | B4 | **Panels**: Picture (its effects part after A2), Audio, Subtitles, Playback. One plugin author each | After B3b |
@@ -230,9 +230,11 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 | E | **Signing** (Apple enrolment, Windows choice), page deploy and SEO | Needs the user |
 | F | **Launch video v4**, re-made for the new UI; music decision | Last; needs the user |
 | G | GPU test clip default | Done: env.ps1 sets VESTRA_GPU_CLIP to the testmedia 4K60 clip |
+| H | **Fullscreen title strip (Windows), side lane** (user request 11-07) | Merged (#192), spec G-19. GUI: reveal/hide, top-right vs sidebar, 60 fps, minimize→restore→exit returns maximized |
 
 ### Log (newest first)
 
+- 11-07 afternoon: #191 palette, #192 title strip, #193 categories merged; SDK 1.6.4 and 1.6.5 released (1.6.5: i18n extract missed `category`). release.json is 0.7.6 (v0.7.5 tag exists; tags are not moved); no release published. Follow-ups noted: `ToolTipArea` recreates its tooltip per press (AccessKit rebuild per click); preferences pages use for-loops instead of ListView; flaky tests: lifecycle_baseline b2b (pid reuse), info J10 download, playlist C21 debounce; tool windows fall behind the main window; palette long titles clip without ellipsis.
 - 11-07: #187 (main CI green again), #188, #189 merged; SDK 1.6.4 released. Lessons: (1) a reviewer of a deny.toml change runs `npm run licenses` (its TOML reader takes only strings in arrays); (2) a squash merge must set its own body, or the branch commits' `[skip ci]` skips main CI (#185 ran no CI); (3) each agent keeps scripts in its own scratchpad subfolder (a reviewer's check script was overwritten by another agent); (4) watch C: free space: parallel target dirs filled the disk to 1 GB.
 - 11-07: A3 (#183) and A4 (#184) merged; A1 GUI-checked and merged (#185); A2 under review; B1 and A1 follow-ups started.
 - 11-07: menu redesign proposal v2 approved, with the host-owned strip and the 🔍 button. A1 re-review passed. A2 in progress. Nightly advisory failure found (A4).
