@@ -777,11 +777,6 @@ msgstr "Rattacher à la fenêtre principale"
 msgid "Detach as floating window"
 msgstr "Détacher en fenêtre flottante"
 
-#: ui/sidebar.slint:307
-#, x-machine
-msgid "Close list"
-msgstr "Fermer la liste"
-
 #: ui/sidebar.slint:371
 #, x-machine
 msgid ""

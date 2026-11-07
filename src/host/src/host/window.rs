@@ -12,8 +12,12 @@ impl Host {
         let now = self.now_ms();
         let fullscreen = shell.window().is_fullscreen();
         // `WindowState.maximized`: never while fullscreen (a window maximized
-        // before fullscreen reads maximized again after it).
-        let maximized = !fullscreen && shell.window().is_maximized();
+        // before fullscreen reads maximized again after it). A main window
+        // restored maximized reads maximized from the start, before
+        // `Placements` maximizes it, so automatic sizing leaves it alone.
+        let placing = self.placements.placing(shell.window());
+        let maximized = !fullscreen
+            && (shell.window().is_maximized() || (placing && self.ui_state.state.window_maximized));
         if self.native_window.is_none()
             && let Some(before) = &self.native_before
         {
@@ -120,10 +124,18 @@ impl Host {
         {
             return;
         }
-        // IA-CORE-03: only the normal size is remembered (not fullscreen, not
-        // maximized), and the player always starts at it (`RestoreLastState=0`).
-        if !fullscreen && !maximized && !self.headless {
-            self.remember_window(&shell);
+        // IA-CORE-03: the normal frame and whether the window is maximized;
+        // fullscreen keeps what was under it.
+        if !self.headless && !placing {
+            let minimized = shell.window().is_minimized();
+            match record(fullscreen, maximized, minimized) {
+                Record::Normal => {
+                    self.remember_window(&shell);
+                    self.remember_maximized(false);
+                }
+                Record::Maximized => self.remember_maximized(true),
+                Record::Nothing => {}
+            }
         }
         // G-04 / G-01: where the pointer is. A hover counts only while its
         // panel is showing (Slint keeps `has-hover` until the pointer moves).
@@ -242,6 +254,13 @@ impl Host {
             self.ui_state.touch(self.now_ms());
         }
     }
+    /// Record whether the main window is maximized, for the next launch.
+    fn remember_maximized(&mut self, maximized: bool) {
+        if self.ui_state.state.window_maximized != maximized {
+            self.ui_state.state.window_maximized = maximized;
+            self.ui_state.touch(self.now_ms());
+        }
+    }
     /// The slot's remembered state (defaults before anything was saved).
     pub(crate) fn sidebar_slot(&self) -> ui_state::SidebarSlot {
         self.ui_state.state.sidebar_slot.clone().unwrap_or_default()
@@ -286,7 +305,7 @@ impl Host {
             self.ui_state.touch(self.now_ms());
         }
     }
-    /// Hide the whole sidebar (its close button, the floating window closed).
+    /// Hide the whole sidebar (the floating window closed).
     pub(crate) fn close_sidebar(&mut self) {
         if let Some(owner) = self.policy.sidebar_active() {
             let now = self.now_ms();
@@ -463,11 +482,6 @@ impl Host {
         let events = self.events.clone();
         window.set_callback("sidebar-detach", move |_| {
             let _ = events.send(Event::SidebarDetach(generation));
-            SValue::Void
-        })?;
-        let events = self.events.clone();
-        window.set_callback("sidebar-close", move |_| {
-            let _ = events.send(Event::SidebarClose(generation));
             SValue::Void
         })?;
         Ok(())
@@ -657,6 +671,49 @@ impl Host {
                 .as_ref()
                 .filter(|f| f.generation == generation)
                 .map(|f| &f.instance)
+        }
+    }
+}
+
+/// What a tick records of the main window for the next launch (IA-CORE-03).
+#[derive(Debug, PartialEq, Eq)]
+enum Record {
+    /// Its frame, and that it is not maximized.
+    Normal,
+    /// That it is maximized; the frame stays the normal one from before.
+    Maximized,
+    /// Nothing: fullscreen keeps what was under it (the player never starts
+    /// in fullscreen, as Chrome, VLC and mpv), and a minimized window has no
+    /// frame of its own (Windows reports it at -32000, -32000).
+    Nothing,
+}
+
+/// `maximized` as the window reports it (Slint keeps it through a
+/// minimize; the tick passes false in fullscreen).
+fn record(fullscreen: bool, maximized: bool, minimized: bool) -> Record {
+    if fullscreen || minimized {
+        Record::Nothing
+    } else if maximized {
+        Record::Maximized
+    } else {
+        Record::Normal
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Closed in fullscreen or minimized, the player opens as the window was
+    /// before; maximized, it opens maximized over the normal frame.
+    #[test]
+    fn the_window_records_its_normal_frame_and_maximized_never_fullscreen() {
+        assert_eq!(record(false, false, false), Record::Normal);
+        assert_eq!(record(false, true, false), Record::Maximized);
+        for maximized in [false, true] {
+            assert_eq!(record(true, maximized, false), Record::Nothing);
+            assert_eq!(record(false, maximized, true), Record::Nothing);
+            assert_eq!(record(true, maximized, true), Record::Nothing);
         }
     }
 }

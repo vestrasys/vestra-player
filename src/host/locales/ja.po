@@ -456,11 +456,6 @@ msgstr "メインウインドウに戻す"
 msgid "Detach as a floating window"
 msgstr "フローティングウインドウとして切り離す"
 
-#: ui/sidebar-tabs.slint:113
-#, x-machine
-msgid "Close the sidebar"
-msgstr "サイドバーを閉じる"
-
 #: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 #, x-machine
 msgid "Copy"

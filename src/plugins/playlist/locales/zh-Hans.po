@@ -621,10 +621,6 @@ msgstr "附着到主窗口"
 msgid "Detach as floating window"
 msgstr "分离为浮动窗口"
 
-#: ui/sidebar.slint:307
-msgid "Close list"
-msgstr "关闭列表"
-
 #: ui/sidebar.slint:371
 msgid ""
 "{}\n"

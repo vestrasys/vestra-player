@@ -374,10 +374,6 @@ msgstr "附着到主窗口"
 msgid "Detach as a floating window"
 msgstr "分离为浮动窗口"
 
-#: ui/sidebar-tabs.slint:113
-msgid "Close the sidebar"
-msgstr "关闭侧栏"
-
 #: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 msgid "Copy"
 msgstr "复制"

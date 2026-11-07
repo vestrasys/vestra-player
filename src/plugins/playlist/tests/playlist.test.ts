@@ -279,11 +279,11 @@ test("menu positions follow the round allocation table; list keys only work with
   }
 });
 
-test("F6, the tab-strip close button and the menu check share the sidebar preference; detach toggles", async () => {
+test("F6, Close List and the menu check share the sidebar preference; detach toggles", async () => {
   const app = await start();
   try {
     assert.equal(app.command("visibility").state.checked, true);
-    await app.emit("hide");
+    await app.run("close");
     assert.equal(app.host.layout.sidebar?.preferred, false);
     assert.equal(app.command("visibility").state.checked, false);
     await app.host.press("F6");
@@ -356,12 +356,12 @@ test("sidebar tabs: F6 brings the playlist's tab forward, hides the sidebar on i
     await host.settle();
     assert.equal(host.layout.sidebar?.preferred, true);
     assert.equal(app.command("visibility").state.checked, true);
-    // Focus in the list: F6 (关闭列表) and the own close button hide the whole sidebar.
+    // Focus in the list: F6 (关闭列表) and the list menu's Close List hide the whole sidebar.
     await app.press("F6");
     assert.equal(host.layout.sidebar?.preferred, false);
     await app.run("visibility");
     assert.equal(host.layout.sidebar?.preferred, true);
-    await app.emit("hide");
+    await app.run("close");
     assert.equal(host.layout.sidebar?.preferred, false);
     // The other tab gone: back to the one-panel behaviour.
     host.unmountOther("example.list");

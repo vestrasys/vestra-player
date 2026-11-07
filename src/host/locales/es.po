@@ -456,11 +456,6 @@ msgstr "Acoplar a la ventana principal"
 msgid "Detach as a floating window"
 msgstr "Separar como ventana flotante"
 
-#: ui/sidebar-tabs.slint:113
-#, x-machine
-msgid "Close the sidebar"
-msgstr "Cerrar la barra lateral"
-
 #: ui/vestra/markdown.slint:80 ui/vestra/markdown.slint:148 ui/vestra/markdown.slint:297
 #, x-machine
 msgid "Copy"

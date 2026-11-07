@@ -182,7 +182,7 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 | ID | Requirement | Owner |
 | --- | --- | --- |
 | UI-PL-01 | The toggle command "Playlist" has a check mark, shortcut F6, and sits in the window entry group at the top level of the context menu (§6.2); when the list has focus, F6 also closes the list | playlist (menu position) + host (F6, C3) |
-| UI-PL-02 | The bottom-bar toggle button (UI-BAR-09), the menu check and the close button on the tab strip are kept in the same state | playlist + playback (C7) |
+| UI-PL-02 | The bottom-bar toggle button (UI-BAR-09), the menu check and F6 / Close List are kept in the same state | playlist + playback (C7) |
 | UI-PL-03 | Shown by default, attached on the right; visibility, docking state and width are saved across launches | host (persistence, C8) |
 | UI-PL-04 | Can be detached into a floating window (default 300×408, minimum 300×250) and attached back to the main window (C14); the detach/attach button is at the right end of the tab strip | host (C14) + playlist (button) |
 
@@ -205,7 +205,7 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 
 | ID | Requirement | Owner |
 | --- | --- | --- |
-| UI-PL-05 | A 31px tab strip at the top (a single "Playlist" tab, 105px wide), no large title; the close button is at the right end of the tab strip (14×13 icon). When the sidebar holds panels from other plugins, the tab strip is drawn by the host instead (same style, one tab per panel, the playlist first, buttons act on the whole sidebar), and the playlist hides its own tab strip ([panel-slots.md](../architecture/panel-slots.md)) | playlist + host (tabs) |
+| UI-PL-05 | A 31px tab strip at the top (a single "Playlist" tab, 105px wide), no large title; the detach button is at the right end of the tab strip, and there is no close button (user ruling 2026-11-07: next to the window's close button it closed the player when missed). When the sidebar holds panels from other plugins, the tab strip is drawn by the host instead (same style, one tab per panel, the playlist first, buttons act on the whole sidebar), and the playlist hides its own tab strip ([panel-slots.md](../architecture/panel-slots.md)) | playlist + host (tabs) |
 | UI-PL-06 | List items are single lines: `index. title` left-aligned, duration right-aligned, background `bg-list`, no cards and no rounded corners, row height 20px | playlist |
 | UI-PL-07 | State is shown by color: now playing `playing` (plus a 2px bar on the left), played `text-played`, selected `selected-bg` background; no status text line. Failures use an on-screen message + a small icon at the end of the row | playlist |
 | UI-PL-08 | No button row above the list. Previous/next item belong to right-click on the bottom bar and PgUp/PgDn, playing is done by double-click/Enter, adding belongs to the popup menu of the bottom-bar "Add" button | playlist |

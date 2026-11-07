@@ -1084,7 +1084,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     scroller.sentAt = Date.now();
     listArea.scroll = to;
   });
-  list.on("hide", () => sidebar.setVisible(false));
   list.on("toggleDetached", () => sidebar.setDetached(!(sidebar.state?.detached ?? false)));
   // Only typing in the search box holds the panel (the bar or fullscreen pop-out stays while
   // the user types); list focus alone does not (G-01 acceptance 4: it collapses when the pointer leaves).

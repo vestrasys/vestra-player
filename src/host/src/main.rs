@@ -688,9 +688,16 @@ fn main() -> Result<()> {
         let texture = host.attach_gpu(&window);
         // Title bars follow the palette from the first window on.
         platform::set_dark_title_bars(!theme::is_light(host.theme()));
+        // IA-CORE-03: maximized again if it was, never in fullscreen.
+        let maximized = host.ui_state.state.window_maximized;
         match position {
-            Some(position) => host.placements.show_at(&window, position)?,
-            None => window.show()?,
+            Some(position) => host
+                .placements
+                .show_restored(&window, position, maximized)?,
+            None => {
+                window.window().set_maximized(maximized);
+                window.show()?;
+            }
         }
         host.video_texture.replace(texture);
         platform::shown(&window);

@@ -1,5 +1,5 @@
-//! Interface state kept across launches (core-ui-design.md §8): window frame,
-//! sidebar width, the sidebar slot (shown, floating, current tab, tab order,
+//! Interface state kept across launches (core-ui-design.md §8): window frame
+//! and whether it was maximized, sidebar width, the sidebar slot (shown, floating, current tab, tab order,
 //! floating frame), and the user's binding overlay. One JSON file, written
 //! atomically and debounced.
 #![forbid(unsafe_code)]
@@ -161,8 +161,14 @@ pub struct Settings {
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct UiState {
+    /// The main window's normal frame (logical px): never a maximized,
+    /// minimized or fullscreen one (IA-CORE-03).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub window: Option<Frame>,
+    /// The main window was maximized when last seen (under fullscreen: before
+    /// it); it opens maximized again over [`Self::window`] (IA-CORE-03).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub window_maximized: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub sidebar: Option<Sidebar>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -194,6 +200,7 @@ impl UiState {
         let window = serde_json::from_value::<Frame>(field("window"))
             .ok()
             .filter(Frame::valid);
+        let window_maximized = field("windowMaximized").as_bool().unwrap_or(false);
         let sidebar = serde_json::from_value::<Sidebar>(field("sidebar"))
             .ok()
             .filter(|s| s.width.is_finite() && s.width > 0.);
@@ -247,6 +254,7 @@ impl UiState {
             .or_else(|| SidebarSlot::migrate(&panels));
         Self {
             window,
+            window_maximized,
             sidebar,
             sidebar_slot,
             bindings,
@@ -368,6 +376,7 @@ mod tests {
             width: 780.,
             height: 671.,
         });
+        store.state.window_maximized = true;
         store.state.sidebar = Some(Sidebar { width: 400. });
         store.state.sidebar_slot = Some(SidebarSlot {
             visible: false,
@@ -403,6 +412,7 @@ mod tests {
         let text = std::fs::read_to_string(&path).unwrap();
         assert!(text.contains("\"version\": 1"));
         assert!(text.contains("\"bindingsMigrated\""), "{text}");
+        assert!(text.contains("\"windowMaximized\": true"), "{text}");
     }
 
     #[test]
@@ -437,11 +447,12 @@ mod tests {
         assert!(dir.path().join("ui-state.json.bad").exists());
         std::fs::write(
             &path,
-            r#"{"version":1,"appearance":{"theme":"pink"},"window":{"x":"left"},"sidebar":{"width":350},"panels":{"a":{"visible":true},"b":7},"bindings":{"x/y":["F6"],"z":3}}"#,
+            r#"{"version":1,"appearance":{"theme":"pink"},"window":{"x":"left"},"windowMaximized":"yes","sidebar":{"width":350},"panels":{"a":{"visible":true},"b":7},"bindings":{"x/y":["F6"],"z":3}}"#,
         )
         .unwrap();
         let state = Store::open(&path).state;
         assert_eq!(state.window, None);
+        assert!(!state.window_maximized);
         assert_eq!(state.appearance.unwrap().theme, "vestra");
         assert_eq!(state.sidebar, Some(Sidebar { width: 350. }));
         // The one readable panel entry ("a") became the slot's state.
