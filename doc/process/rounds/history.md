@@ -205,19 +205,20 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 - **Window:** remember size, position and maximized. Fullscreen is not restored and has no option. The sidebar header's ✕ is removed.
 - **Filters:** host-side fixes 1–4 are approved, generalised: process at the displayed resolution, and neutral nodes pass through.
 - **Order after the menu work:** first the SDK review (some features may fit a sidebar or panel better and need rewriting), then the download page (re-record the affected clips, small copy fixes), and the launch video last (re-made for the new UI).
+- **Screen and workflow (11-07, later):** the coordinator may use the screen for GUI checks while the user is away (isolated profiles only). agentic-workflow.md is not changed for now; CI and workflow topics are discussed with the user during the work.
 - **Authority while the user is away:** the coordinator assigns, reviews, commits, merges on local checks and releases SDK patches (agentic-workflow.md §8). It stops for the user on: workflow-file changes, player release tags (CI is left alone for now), paid services, deploys, using the screen without consent, and new trade-offs (agentic-workflow.md §7).
 
 ### State
 
 | # | Item | State |
 | --- | --- | --- |
-| A1 | **Window state and sidebar ✕** (branch `window-state-sidebar-close`) | Re-review passed. Next: GUI check in an isolated profile (needs the screen), then merge. Follow-up: minimized-start shortcut (`IsIconic`), macOS title-bar drift on restore, a placement round-trip test |
-| A2 | **Filter performance** (branch `filter-performance`) | Maintainer at work. Next: review, measurement under quiet.flag, GUI drag test, merge |
-| A3 | **Exit-code fix for the remaining scripts** (`exit-code-scripts`, bb81a11e) | Reviewed. Merge |
-| A4 | **Nightly advisories**: `pin-utils` unmaintained (RUSTSEC-2026-0441), `pulldown-cmark` 0.13.5 (RUSTSEC-2026-0433). Nightly red since 11-05 | Maintainer: update or ignore with a reason in `deny.toml`. Review, merge |
-| A5 | **Design doc consolidation** (`design-doc-consolidation`) | Needs the user: approve 3 agentic-workflow.md edits. Then SDK 1.6.4 (doc links), review, rebase, merge |
+| A1 | **Window state and sidebar ✕** | Merged (#185) after a GUI check: rect, maximized and fullscreen-not-restored all as specified. Follow-ups (minimized start, macOS drift, round-trip test) in `window-placement-followups` |
+| A2 | **Filter performance** (branch `filter-performance`, cac0519d) | Done by the maintainer; independent review running. Next: measurement under quiet.flag, GUI drag test, merge |
+| A3 | **Exit-code fix for the remaining scripts** | Merged (#183); main CI green |
+| A4 | **Nightly advisories** | Merged (#184): pulldown-cmark 0.13.6 (we never enabled wikilinks); RUSTSEC-2026-0441 ignored (pin-utils via Slint spin_on, remove on a Slint upgrade). SDK: minimatch moderate advisory, fixed in B1 SDK patch |
+| A5 | **Design doc consolidation** (`design-doc-consolidation`) | Workflow edits on hold (user). Rest: SDK 1.6.4 doc links, review, rebase, merge |
 | A6 | **Release 0.7.5**: macOS job cancelled on 11-04 | Needs the user (CI left alone for now) |
-| B1 | **Command palette** (host, menu layer, Ctrl+Shift+P) plus a command category field; the 28 superseded single-choice commands become palette-only | After A1–A3. Design spec into `doc/specs/` |
+| B1 | **Command palette** (host, menu layer, Ctrl+Shift+P) plus a command category field; the 28 superseded single-choice commands become palette-only | Maintainer at work (host `command-palette`, SDK `category`/`home`). Then plugin authors add `category` to built-in commands |
 | B2 | **Shortcut hints** in tabs, sliders and buttons | After B1 |
 | B3a | **Host-owned button strip**, » overflow, 🔍 button; host and playback in one release | After B2 |
 | B3b | **Adjust slot**: adjust column, narrow-window overlay, fullscreen slide-out, Adjust button; SDK patch (`adjust` slot value, docs) | After B3a |
@@ -232,4 +233,5 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 
 ### Log (newest first)
 
+- 11-07: A3 (#183) and A4 (#184) merged; A1 GUI-checked and merged (#185); A2 under review; B1 and A1 follow-ups started.
 - 11-07: menu redesign proposal v2 approved, with the host-owned strip and the 🔍 button. A1 re-review passed. A2 in progress. Nightly advisory failure found (A4).
