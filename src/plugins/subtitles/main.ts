@@ -129,6 +129,22 @@ export default async function activate(plugin: Plugin) {
   const tune = plugin.windows.create("ui/tune.slint", { id: "subtitle-tune" });
   const settings = plugin.windows.create("ui/settings.slint", { id: "subtitle-settings" });
   const syncWindow = plugin.windows.create("ui/sync.slint", { id: "subtitle-sync" });
+  /**
+   * Command categories (player 0.7.6): the command palette reads "Category: Title". Usually the submenu
+   * name; text values, so that the catalog keeps them whatever the menu paths become.
+   */
+  const CATEGORY = {
+    subtitles: text("Subtitles"),
+    // Its own text, not the submenu's "Subtitle Track": a category is a noun, and some
+    // languages word the menu as a verb phrase ("选择字幕轨"). TS texts have no msgctxt.
+    track: text("Subtitle Tracks"),
+    secondary: text("Secondary Subtitle"),
+    secondaryPosition: text("Secondary Subtitle Position"),
+    style: text("Subtitle Style"),
+    sync: text("Subtitle Sync"),
+    seek: text("Seek"),
+    reset: text("Reset"),
+  };
   const settingsStore = store<Record<string, unknown>>(plugin, "settings", {});
   const stored = parse(settingsStore.value);
   let syncStep = stored.syncStepMs;
@@ -886,35 +902,38 @@ export default async function activate(plugin: Plugin) {
   const idle = { enabled: () => !busy, busy: () => busy, reason: () => (busy ? BUSY : null) };
   plugin.commands.add({
     id: "load", path: ["@open", "Open Subtitle…"], order: 113, group: "open", bindings: ["Alt+O"], ...idle,
+    category: CATEGORY.subtitles, home: "tune",
     run: () => busy || announce(message("chooseFile"), load),
   });
   const hasMedia = () => plugin.player.state.phase === "ready" && !!plugin.player.state.source;
   plugin.commands.add({
-    id: "load-secondary", path: ["@open", "Add Secondary Subtitle…"], order: 114, group: "open",
+    id: "load-secondary", path: ["@open", "Add Secondary Subtitle…"], order: 114, group: "open", category: CATEGORY.subtitles,
     enabled: () => !busy && hasMedia(), busy: () => busy,
     reason: () => (busy ? BUSY : hasMedia() ? null : NO_MEDIA),
     run: () => busy || announce(message("chooseSecondaryFile"), loadAs("secondary")),
   });
   plugin.commands.add({
-    id: "show", path: ["@subtitles", "Show Subtitles"], order: 301, bindings: ["Alt+H"], ...idle,
+    id: "show", path: ["@subtitles", "Show Subtitles"], order: 301, bindings: ["Alt+H"], ...idle, category: CATEGORY.subtitles,
     checked: () => !!subtitles.state?.selected,
     run: () => busy || announce(message("togglingShown"), toggleShown),
   });
   plugin.commands.add({
     id: "track-off", path: ["@subtitles", "Subtitle Track", "Off"], order: 302, group: "subtitle-track", radio: true, ...idle,
+    category: CATEGORY.track, home: "tune",
     checked: () => !subtitles.state?.selected,
     run: () => busy || announce(message("hiding"), select(null)),
   });
   // A08 Subtitles ▸ Secondary Subtitle ▸: Off (312), the tracks (313–320), Position ▸ (321).
   plugin.commands.add({
     id: "second-off", path: ["@subtitles", "Secondary Subtitle", "Off"], order: 312, group: "subtitle-second", radio: true, ...idle,
+    category: CATEGORY.secondary, home: "tune",
     checked: () => !subtitles.state?.secondary,
     run: () => busy || announce(message("closingSecondary"), selectSecondary(null)),
   });
   for (const { id, label: title } of SECONDARY_POSITIONS)
     plugin.commands.add({
       id: `second-position-${id}`, path: ["@subtitles", "Secondary Subtitle", "Position", title], order: 321, group: "subtitle-second-pos",
-      radio: true, checked: () => secondaryPosition === id,
+      radio: true, checked: () => secondaryPosition === id, category: CATEGORY.secondaryPosition,
       run: () => setSecondaryPosition(id),
     });
   // The track items are rebuilt in a child scope whenever the track list changes.
@@ -973,7 +992,7 @@ export default async function activate(plugin: Plugin) {
         secondMenu.commands.add({
           // Track names are data; a fallback name is a text value (menuTitles).
           id: `second-${i + 1}`, path: ["@subtitles", "Secondary Subtitle", /* i18n-ignore */ titles[i]!.title], order: 313 + i,
-          group: "subtitle-second", radio: true, busy: () => busy,
+          group: "subtitle-second", radio: true, busy: () => busy, category: CATEGORY.secondary, home: "tune",
           enabled: () => !busy && !secondBlocked(track),
           reason: () => (busy ? BUSY : secondBlocked(track)),
           checked: () => track.id === subtitles.state?.secondary?.id,
@@ -983,7 +1002,7 @@ export default async function activate(plugin: Plugin) {
       tracks.forEach((track, i) =>
         trackMenu.commands.add({
           id: `track-${i + 1}`, path: ["@subtitles", "Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
-          group: "subtitle-track", radio: true, ...idle,
+          group: "subtitle-track", radio: true, ...idle, category: CATEGORY.track, home: "tune",
           checked: () => track.id === subtitles.state?.selected?.id,
           run: () => busy || announce(message("switching"), select(track, s.sourceId)),
         }),
@@ -992,6 +1011,7 @@ export default async function activate(plugin: Plugin) {
   }
   plugin.commands.add({
     id: "track-cycle", path: ["@subtitles", "Subtitle Track", "Cycle"], order: 311, group: "subtitle-cycle", bindings: ["Alt+L"],
+    category: CATEGORY.track,
     enabled: () => !!subtitles.state?.tracks.length,
     reason: () => (subtitles.state?.tracks.length ? null : "No subtitle tracks"),
     run: cycle,
@@ -1011,22 +1031,27 @@ export default async function activate(plugin: Plugin) {
   const STYLE = ["@subtitles", "Subtitle Style"] as const;
   plugin.commands.add({
     id: "size-up", path: [...STYLE, "Size +"], order: 325, group: "style-font", bindings: ["Alt+PageUp"], repeat: true,
+    category: CATEGORY.style, home: "tune",
     run: styleRun(() => sizeBy(1), (s) => osd.show("Subtitle size: larger ({})", [s.fontSize])),
   });
   plugin.commands.add({
     id: "size-down", path: [...STYLE, "Size −"], order: 326, group: "style-font", bindings: ["Alt+PageDown"], repeat: true,
+    category: CATEGORY.style, home: "tune",
     run: styleRun(() => sizeBy(-1), (s) => osd.show("Subtitle size: smaller ({})", [s.fontSize])),
   });
   plugin.commands.add({
     id: "move-up", path: [...STYLE, "Move Up"], order: 330, group: "style-move", bindings: [], repeat: true,
+    category: CATEGORY.style, home: "tune",
     run: styleRun(() => moveBy(1), (s) => osd.show("Subtitle position: up ({}%)", [s.marginPercent])),
   });
   plugin.commands.add({
     id: "move-down", path: [...STYLE, "Move Down"], order: 331, group: "style-move", bindings: [], repeat: true,
+    category: CATEGORY.style, home: "tune",
     run: styleRun(() => moveBy(-1), (s) => osd.show("Subtitle position: down ({}%)", [s.marginPercent])),
   });
   plugin.commands.add({
     id: "move-reset", path: ["@reset", "Subtitle Position"], order: 330, group: "reset-subtitles", bindings: ["Alt+Home"], repeat: false,
+    category: CATEGORY.reset, home: "tune",
     run: styleRun(
       () => styleChange(() => ({ marginPercent: BASE.marginPercent })),
       (s) => osd.show("Subtitle position: default ({}%)", [s.marginPercent]),
@@ -1035,6 +1060,7 @@ export default async function activate(plugin: Plugin) {
   // D09 Bold, D11 Shadow / Opaque Box (toggles; the window has the sliders).
   plugin.commands.add({
     id: "bold", path: [...STYLE, "Bold"], order: 324, group: "style-font", bindings: ["Alt+B"], repeat: false,
+    category: CATEGORY.style, home: "settings",
     checked: () => current().bold,
     run: styleRun(
       () => styleChange((s) => ({ bold: !s.bold })),
@@ -1043,6 +1069,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "shadow", path: [...STYLE, "Shadow"], order: 335, group: "style-box", bindings: [], repeat: false,
+    category: CATEGORY.style, home: "settings",
     checked: () => current().shadow > 0,
     run: styleRun(
       () => styleChange((s) => ({ shadow: (s.shadow ?? 0) > 0 ? 0 : styleFile.shadowLast })),
@@ -1051,6 +1078,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "box", path: [...STYLE, "Opaque Box"], order: 336, group: "style-box", bindings: [], repeat: false,
+    category: CATEGORY.style, home: "settings",
     checked: () => current().box !== null,
     run: styleRun(
       () => styleChange((s) => ({ box: s.box === null || s.box === undefined ? styleFile.boxOpacity : null })),
@@ -1071,6 +1099,7 @@ export default async function activate(plugin: Plugin) {
   const assMode = () => (restorePending && styleFile.style ? styleFile.style.assOverride : current().assOverride);
   plugin.commands.add({
     id: "ass-original", path: ["@subtitles", "Original ASS/SSA Styles"], order: 337, group: "subtitle-render",
+    category: CATEGORY.subtitles, home: "settings",
     checked: () => assMode() !== "force",
     run: () => setAssOverride(assMode() === "force" ? "keep" : "force"),
   });
@@ -1204,15 +1233,15 @@ export default async function activate(plugin: Plugin) {
   }
   const dialogue = { enabled: () => !cueReading && !dialogueBlocked(), busy: () => cueReading, reason: () => (cueReading ? "Reading subtitles…" : dialogueBlocked()) };
   plugin.commands.add({
-    id: "dialogue-previous", path: ["@playback", "Seek", "Previous Dialogue"], order: 217, group: "jump-subtitle",
+    id: "dialogue-previous", path: ["@playback", "Seek", "Previous Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek,
     bindings: ["Home"], repeat: true, ...dialogue, run: () => jump("previous"),
   });
   plugin.commands.add({
-    id: "dialogue-next", path: ["@playback", "Seek", "Next Dialogue"], order: 217, group: "jump-subtitle",
+    id: "dialogue-next", path: ["@playback", "Seek", "Next Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek,
     bindings: ["End"], repeat: true, ...dialogue, run: () => jump("next"),
   });
   plugin.commands.add({
-    id: "dialogue-current", path: ["@playback", "Seek", "Current Subtitle Start"], order: 217, group: "jump-subtitle",
+    id: "dialogue-current", path: ["@playback", "Seek", "Current Subtitle Start"], order: 217, group: "jump-subtitle", category: CATEGORY.seek,
     bindings: ["Ctrl+Home"], ...dialogue, run: () => jump("current"),
   });
 
@@ -1233,21 +1262,22 @@ export default async function activate(plugin: Plugin) {
       syncMenu = plugin.scope();
       syncMenu.commands.add({
         id: "sync-earlier", path: ["@subtitles", "Sync", titles.earlier], order: 339, group: "subtitle-sync",
-        bindings: ["."], repeat: true, run: styleRun(() => syncBy(-1), offsetText),
+        category: CATEGORY.sync, home: "tune", bindings: ["."], repeat: true, run: styleRun(() => syncBy(-1), offsetText),
       });
       syncMenu.commands.add({
         id: "sync-later", path: ["@subtitles", "Sync", titles.later], order: 340, group: "subtitle-sync",
-        bindings: [","], repeat: true, run: styleRun(() => syncBy(1), offsetText),
+        category: CATEGORY.sync, home: "tune", bindings: [","], repeat: true, run: styleRun(() => syncBy(1), offsetText),
       });
     });
   }
   syncSyncMenu();
   plugin.commands.add({
-    id: "sync-reset", path: ["@reset", "Subtitle Sync"], order: 331, group: "reset-subtitles",
+    id: "sync-reset", path: ["@reset", "Subtitle Sync"], order: 331, group: "reset-subtitles", category: CATEGORY.reset, home: "tune",
     bindings: ["/"], repeat: true, run: styleRun(syncReset, offsetText),
   });
   plugin.commands.add({
-    id: "sync-input", path: ["@subtitles", "Sync", "Adjust Sync…"], order: 342, group: "subtitle-sync-input", run: showSync,
+    id: "sync-input", path: ["@subtitles", "Sync", "Adjust Sync…"], order: 342, group: "subtitle-sync-input",
+    category: CATEGORY.sync, run: showSync,
   });
   const TOOLS = {
     reload: "Reload Subtitles",
@@ -1257,7 +1287,7 @@ export default async function activate(plugin: Plugin) {
   } as const;
   type Extra = Partial<Pick<CommandOptions, "bindings"> & typeof idle>;
   const tool = (id: keyof typeof TOOLS, order: number, run: () => unknown, extra: Extra = {}) =>
-    plugin.commands.add({ id, path: ["@subtitles", TOOLS[id]], order, group: "subtitle-tools", run, ...extra });
+    plugin.commands.add({ id, path: ["@subtitles", TOOLS[id]], order, group: "subtitle-tools", category: CATEGORY.subtitles, run, ...extra });
   tool("reload", 370, () => busy || announce(message("reloading"), reload()), { bindings: ["Ctrl+Alt+Y"], ...idle });
   tool("refresh", 371, () => busy || announce(message("refreshing"), refresh));
   tool("tune", 372, showTune);

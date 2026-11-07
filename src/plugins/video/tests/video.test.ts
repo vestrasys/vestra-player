@@ -307,6 +307,66 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
   await stop();
 });
 
+test("every command has a category (the submenu label) for the command palette, and controls in a window name it as home", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  const commands = [...host.commands.entries()];
+  assert.equal(commands.length, 83);
+  for (const [id, command] of commands) assert.ok(command.display.category, `${id} has a category`);
+  const count = new Map<string, number>();
+  for (const [, { display }] of commands) count.set(display.category!, (count.get(display.category!) ?? 0) + 1);
+  assert.deepEqual(Object.fromEntries(count), {
+    "Pixel Shaders": 5,
+    "HDR Tone Mapping": 8,
+    Deinterlace: 6,
+    Aspect: 12,
+    "Crop/Stretch": 15,
+    Reset: 3,
+    Framing: 7,
+    "Image Processing": 12,
+    Rotation: 5,
+    Picture: 10,
+  });
+  // The category is the submenu label (Deinterlace ▸ Output keeps "Deinterlace"); "Reset" in the
+  // Reset menu; "Picture" directly under Video.
+  for (const [id, { declaration: d, display }] of commands) {
+    const [menu, ...rest] = d.path as string[];
+    const parent = rest.length > 1 ? rest.at(-2) : menu === "@reset" ? "Reset" : "Picture";
+    assert.equal(display.category, parent === "Output" ? "Deinterlace" : parent, id);
+  }
+  const homes = new Map<string, string[]>();
+  for (const [id, { declaration: d }] of commands) if (d.home) homes.set(d.home, [...(homes.get(d.home) ?? []), id]);
+  assert.deepEqual([...homes.keys()].sort(), ["video.hdr.settings", "video.picture", "video.shader.list"]);
+  for (const home of homes.keys()) assert.ok(host.commands.has(home), `${home} is a command of the plugin`);
+  assert.deepEqual(homes.get("video.shader.list"), ["video.shader.folder"]);
+  const tones = ["auto", "off", "bt.2390", "hable", "mobius", "reinhard", "clip"];
+  assert.deepEqual(homes.get("video.hdr.settings"), ["video.shader.use", ...tones.map((t) => `video.hdr.${t}`)]);
+  const inWindow = ["video.brightness.up", "video.hue.down", "video.sharpen", "video.denoise.temporal", "video.interpolation", "video.rotate.90", "video.flip.vertical"];
+  for (const id of [...inWindow, "video.deinterlace.cycle", "video.fit.keep", "video.aspect.edit", "video.reframe.crop.1", "video.frame.zoom-in", "video.frame.reset"])
+    assert.equal(host.command(id).declaration.home, "video.picture", id);
+  const outside = ["video.picture", "video.reset", "video.reframe.reset", "video.reframe.left", "video.frame.left", "video.frame.centre", "video.hdr.peak", "video.shader.reload"];
+  for (const id of [...outside, "video.gpu-rendering"]) assert.equal(host.command(id).declaration.home, undefined, `${id} has no window control`);
+  await stop();
+});
+
+test("Simplified Chinese: command categories use the menu's translations", async () => {
+  const host = new TestHost();
+  const { stop } = await start(host, undefined, zh);
+  const shown = (id: string) => host.command(id).display.category;
+  assert.equal(shown("video.shader.use"), "像素着色");
+  assert.equal(shown("video.hdr.peak"), "HDR 色调映射");
+  assert.equal(shown("video.deinterlace.output.field"), "反交错");
+  assert.equal(shown("video.aspect.0"), "比例");
+  assert.equal(shown("video.reframe.none"), "裁剪/拉伸");
+  assert.equal(shown("video.frame.zoom-in"), "帧位");
+  assert.equal(shown("video.sharpen"), "图像处理");
+  assert.equal(shown("video.rotate.90"), "图像旋转");
+  assert.equal(shown("video.brightness.up"), "画面");
+  assert.equal(shown("video.reset"), "复位", "the Reset menu's own label");
+  await stop();
+});
+
 test("Simplified Chinese: the 视频 menu shows the titles of before", async () => {
   const host = new TestHost();
   const { stop } = await start(host, undefined, zh);

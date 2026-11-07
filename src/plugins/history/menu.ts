@@ -118,11 +118,15 @@ export class RecentMenu {
     if (this.#disposed) return; // stopped meanwhile: `#root` releases `scope`
     // Each title is a literal in its own `scope.commands.add` (`i18n extract` reads only those).
     const order = RECENT_ORDER;
+    const { text } = this.#plugin.i18n;
+    // The palette's "Category: Title" (player 0.7.6): the submenu's own label, so its translations.
+    const category = text("Recently Played");
 
     if (!items.length)
       scope.commands.add({
         id: "recent.empty",
         path: [...RECENT, "(No Entries)"],
+        category,
         order,
         group: "recent",
         enabled: false,
@@ -143,6 +147,7 @@ export class RecentMenu {
         scope.commands.add({
           id: `recent.item.${index}`,
           path: [...RECENT, title],
+          category,
           order,
           group: "recent",
           run: () => this.open(item),
@@ -152,20 +157,26 @@ export class RecentMenu {
       }
     });
     const some = () => this.#recent.items.length > 0;
+    // The palette hides a disabled command without a reason (player 0.7.6).
+    const noEntries = () => (some() ? null : text("No recently played items"));
     scope.commands.add({
       id: "recent.prune",
       path: [...RECENT, "Remove Invalid Entries"],
+      category,
       order,
       group: "recent-manage",
       enabled: some,
+      reason: noEntries,
       run: async () => quiet(this.#osd.show("Removed {} invalid entries", [await this.#recent.prune()])),
     });
     scope.commands.add({
       id: "recent.clear",
       path: [...RECENT, "Clear Entries"],
+      category,
       order,
       group: "recent-manage",
       enabled: some,
+      reason: noEntries,
       run: () => {
         this.#recent.clear();
         quiet(this.#osd.show("Playback history cleared"));
@@ -174,6 +185,7 @@ export class RecentMenu {
     scope.commands.add({
       id: "recent.enabled",
       path: [...RECENT, "Record Playback History"],
+      category,
       order,
       group: "recent-manage",
       checked: () => this.#recent.enabled,
@@ -204,6 +216,8 @@ export class RecentMenu {
 /** Playback ▸ Resume Playback ▸ (250–254). */
 export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
   const path = ["@playback", "Resume Playback"] as const;
+  // The palette's "Category: Title" (player 0.7.6): the submenu's own label, so its translations.
+  const category = plugin.i18n.text("Resume Playback");
   const modes = [
     ["off", "Don't Resume"],
     ["auto", "Resume Automatically"],
@@ -213,6 +227,7 @@ export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
     plugin.commands.add({
       id: `resume.${mode}`,
       path: [...path, title],
+      category,
       order: 250 + index,
       group: "domain",
       radio: true,
@@ -223,6 +238,7 @@ export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
   plugin.commands.add({
     id: "resume.audio",
     path: [...path, "Also Remember Audio Files"],
+    category,
     order: 253,
     group: "resume-options",
     checked: () => resume.audio,
@@ -231,6 +247,7 @@ export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
   plugin.commands.add({
     id: "resume.clear",
     path: [...path, "Clear All Saved Positions"],
+    category,
     order: 254,
     group: "resume-options",
     run: () => {

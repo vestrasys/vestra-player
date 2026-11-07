@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.history 0.1.3\n"
+"Project-Id-Version: vestra.history 0.1.8\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -28,79 +28,83 @@ msgstr ""
 msgid "resume"
 msgstr ""
 
-#: menu.ts:36
+#: menu.ts:60
 msgid "{} ({})"
 msgstr ""
 
-#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+#: menu.ts:123 menu.ts:128 menu.ts:164 menu.ts:174 menu.ts:187
 msgid "Recently Played"
 msgstr ""
 
-#: menu.ts:94
+#: menu.ts:128
 msgid "(No Entries)"
 msgstr ""
 
-#: menu.ts:114
+#: menu.ts:161
+msgid "No recently played items"
+msgstr ""
+
+#: menu.ts:164
 msgid "Remove Invalid Entries"
 msgstr ""
 
-#: menu.ts:118
+#: menu.ts:170
 msgid "Removed {} invalid entries"
 msgstr ""
 
-#: menu.ts:122
+#: menu.ts:174
 msgid "Clear Entries"
 msgstr ""
 
-#: menu.ts:128
+#: menu.ts:182
 msgid "Playback history cleared"
 msgstr ""
 
-#: menu.ts:133
+#: menu.ts:187
 msgid "Record Playback History"
 msgstr ""
 
-#: menu.ts:144
+#: menu.ts:199
 msgid "File not found: {}"
 msgstr ""
 
-#: menu.ts:153 menu.ts:156
+#: menu.ts:208 menu.ts:211
 msgid "Cannot open: {}"
 msgstr ""
 
-#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+#: menu.ts:220 menu.ts:229 menu.ts:240 menu.ts:249 ui/resume.slint:6
 msgid "Resume Playback"
 msgstr ""
 
-#: menu.ts:172
+#: menu.ts:229
 msgid "Don't Resume"
 msgstr ""
 
-#: menu.ts:172
+#: menu.ts:229
 msgid "Resume Automatically"
 msgstr ""
 
-#: menu.ts:172
+#: menu.ts:229
 msgid "Ask Every Time"
 msgstr ""
 
-#: menu.ts:182
+#: menu.ts:240
 msgid "Also Remember Audio Files"
 msgstr ""
 
-#: menu.ts:190
+#: menu.ts:249
 msgid "Clear All Saved Positions"
 msgstr ""
 
-#: menu.ts:195
+#: menu.ts:255
 msgid "All saved positions cleared"
 msgstr ""
 
-#: resume.ts:226
+#: resume.ts:248
 msgid "Resuming from {}"
 msgstr ""
 
-#: resume.ts:229
+#: resume.ts:251
 msgid "Cannot resume: {}"
 msgstr ""
 

@@ -197,6 +197,36 @@ test("the basic actions are the core's: the keys reach it with or without this p
     "frame-forward",
   ]);
   await host.press("F4");
+  // 0.2.15: the command palette's category (Category: Title), in Chinese.
+  assert.deepEqual(
+    own(host).map(([id, command]) => [id, command.display.category]),
+    [
+      ["open", "文件"],
+      ["open-url", "文件"],
+      ["reopen", "文件"],
+      ["copy-name", "复制到剪贴板"],
+      ["copy-folder", "复制到剪贴板"],
+      ["copy-path", "复制到剪贴板"],
+      ["keyframe-back", "跳转"],
+      ["keyframe-forward", "跳转"],
+      ["jump", "跳转"],
+      ["jump-start", "跳转"],
+      ["time-jump", "跳转"],
+      ["rate-05", "速度"],
+      ["rate-15", "速度"],
+      ["rate-20", "速度"],
+      ["rate-custom", "速度"],
+      ["prevent-sleep", "播放"],
+      ["hover-time", "播放"],
+      ["hover-thumbnail", "播放"],
+      ["backward-2", "跳转"],
+      ["forward-2", "跳转"],
+      ["backward-3", "跳转"],
+      ["forward-3", "跳转"],
+      ["backward-4", "跳转"],
+      ["forward-4", "跳转"],
+    ],
+  );
   assert.deepEqual(host.coreRuns.at(-1), "stop");
   await stop();
   // Stopped: the same keys still work.
@@ -205,6 +235,22 @@ test("the basic actions are the core's: the keys reach it with or without this p
   await host.press("Space");
   assert.equal(host.coreRuns.at(-1), "play-pause");
   assert.equal(lastOsd(host), "已暂停");
+});
+
+test("every command has a non-empty category (the command palette's Category: Title)", async () => {
+  const { host, stop } = await start(withMedia(), "en");
+  assert.equal(own(host).length, 24);
+  const counts = new Map<string, number>();
+  for (const [id, command] of own(host)) {
+    const category = command.display.category;
+    assert.ok(typeof category === "string" && category.trim() !== "", `${id} has no category`);
+    // Declared as a text value; in English the shown category is its source text.
+    assert.ok(command.declaration.category, `${id} declares no category`);
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+  // The seek steps (text-valued titles) are "Seek" too.
+  assert.deepEqual(Object.fromEntries(counts), { File: 3, "Copy to Clipboard": 3, Seek: 11, Playback: 3, Speed: 4 });
+  await stop();
 });
 
 test("in English the menus, reasons and messages are the source texts", async () => {

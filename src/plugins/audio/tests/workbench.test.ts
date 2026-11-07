@@ -1173,3 +1173,71 @@ test("G03: every Audio Track menu item fits the player's menu path segment in ev
   assert.equal(english[4], "5. a b c d e f g (e ac3) (external)");
   assert.equal(english[5], "Track 6 (opus) (external)");
 });
+
+// ---------------------------------------------------------------- command palette (player 0.7.6)
+
+/** Every command's palette category as shown, and its home, by id. */
+const palette = (host: TestHost) =>
+  Object.fromEntries([...host.commands.entries()].map(([id, { declaration: d, display }]) => [id, [display.category, d.home ?? null]]));
+
+test("palette: every command has a category, in every state and language, and names the window it lives in", async () => {
+  for (const locale of LOCALES) {
+    // Without tracks or devices (the placeholders), then with both.
+    const shown = async (setup: (host: TestHost) => void) => {
+      const host = new TestHost();
+      setup(host);
+      const { stop } = await startPlugin(activate, { directory, host, locale });
+      await host.settle();
+      const result = palette(host);
+      await stop();
+      return result;
+    };
+    const before = await shown(() => undefined);
+    const after = await shown((host) => {
+      host.audioDevices = [SPEAKERS, PHONES];
+      host.setSource({ audioTracks: [track(1), track(2, false)] });
+    });
+    for (const [id, [category]] of Object.entries({ ...before, ...after }))
+      assert.ok(typeof category === "string" && category.trim() !== "", `${locale}: ${id} has no category`);
+    assert.ok("audio.track.none" in before && "audio.device.none" in before);
+    assert.ok("audio.track.1" in after && "audio.track.2" in after && "audio.device.2" in after);
+  }
+
+  const host = new TestHost();
+  host.audioDevices = [SPEAKERS];
+  host.setSource({ audioTracks: [track(1)] });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  const home = "audio.workbench";
+  assert.deepEqual(palette(host), {
+    "audio.load": ["Audio", home],
+    "audio.workbench": ["Audio", null],
+    "audio.track.cycle": ["Audio Track", home],
+    ...Object.fromEntries(["stereo", "left", "right", "mono", "swap"].map((id) => [`audio.channels.${id}`, ["Channels", home]])),
+    "audio.equalizer": ["Audio", home],
+    ...Object.fromEntries(presets.map((_, i) => [`audio.preset.${i}`, ["Equalizer Preset", home]])),
+    "audio.sync.earlier": ["Audio Sync", home],
+    "audio.sync.later": ["Audio Sync", home],
+    "audio.sync.reset": ["Reset", home],
+    "audio.sync.keep.none": ["Audio Sync", home],
+    "audio.sync.keep.session": ["Audio Sync", home],
+    "audio.sync.keep.always": ["Audio Sync", home],
+    "audio.normalize": ["Audio Processing", home],
+    "audio.clarity": ["Audio Processing", home],
+    "audio.reset": ["Reset", null],
+    "audio.track.1": ["Audio Track", home],
+    "audio.device.0": ["Output Device", home],
+    "audio.device.1": ["Output Device", home],
+  });
+  await stop();
+
+  // The categories read as the menus do: the submenu labels' translations, "Audio" the player's.
+  const zh = new TestHost();
+  const started = await startPlugin(activate, { directory, host: zh, locale: "zh-Hans" });
+  await zh.settle();
+  assert.deepEqual(
+    [...new Set(Object.values(palette(zh)).map(([category]) => category))],
+    ["声音", "音轨", "声道", "均衡器预设", "声音同步", "复位", "声音处理", "输出设备"],
+  );
+  await started.stop();
+});

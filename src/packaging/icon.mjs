@@ -11,10 +11,14 @@
  *          embeds it in the exe); `--check` fails when its entries or
  *          pixels differ from a fresh one (not its bytes: zlib output
  *          differs between builds and CPUs).
+ *   Player app-icon.png: the logo at 64 px for the fullscreen title strip,
+ *          committed as src/host/ui/app-icon.png; `--check` compares its
+ *          pixels the same way.
  *
  * Pure Node (zlib): same bytes on every OS, no sips/iconutil/ImageMagick.
  *
- *   node packaging/icon.mjs [--icns <file>] [--ico <file>] [--png <file>] [--check]
+ *   node packaging/icon.mjs [--icns <file>] [--ico <file>] [--png <file>]
+ *                           [--strip-icon <file>] [--check]
  *   (--png writes the 1024 px macOS master, for review)
  */
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -24,6 +28,7 @@ import { fail, parseArgs, reportErrors, source } from "./lib.mjs";
 
 const LOGO = join(source, "assets/brand/logo.png");
 export const COMMITTED_ICO = join(source, "host/windows/vestra.ico");
+export const COMMITTED_STRIP_ICON = join(source, "host/ui/app-icon.png");
 
 // ------------------------------------------------------------ PNG codec
 
@@ -330,6 +335,11 @@ export function ico(master, options) {
   return Buffer.concat([header, ...images]);
 }
 
+/** The fullscreen title strip's icon: the logo itself at 64 px (as the .ico's 64 px entry). */
+export function stripIcon(logo, options) {
+  return encodePng(resize(logo, 64, 64), options);
+}
+
 // ------------------------------------------------------------ comparison
 
 /**
@@ -397,6 +407,7 @@ export async function writeIcons({
   icns: icnsPath,
   ico: icoPath,
   png: pngPath,
+  stripIcon: stripIconPath,
 }) {
   const logo = decodePng(await readFile(LOGO));
   const write = async (path, bytes) => {
@@ -410,26 +421,53 @@ export async function writeIcons({
     if (pngPath) await write(pngPath, encodePng(master));
   }
   if (icoPath) await write(icoPath, ico(logo));
+  if (stripIconPath) await write(stripIconPath, stripIcon(logo));
+}
+
+/** null when two PNG files hold the same pixels, else the first difference. */
+export function pngDifference(a, b) {
+  const [x, y] = [decodePngPixels(a), decodePngPixels(b)];
+  for (const key of ["width", "height", "channels"])
+    if (x[key] !== y[key]) return `${key} ${x[key]} vs ${y[key]}`;
+  return x.pixels.equals(y.pixels) ? null : "pixels differ";
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === import.meta.filename) {
   reportErrors();
   const options = parseArgs(process.argv.slice(2), ["check"]);
   if (options.check) {
+    const logo = decodePng(await readFile(LOGO));
     const committed = await readFile(COMMITTED_ICO);
-    const fresh = ico(decodePng(await readFile(LOGO)));
+    const fresh = ico(logo);
     const difference = iconDifference(committed, fresh);
     if (difference)
       fail(
         `src/host/windows/vestra.ico is out of date (${difference}): node packaging/icon.mjs --ico host/windows/vestra.ico`,
       );
     console.log("src/host/windows/vestra.ico matches the logo");
-  } else if (!options.icns && !options.ico && !options.png)
-    fail("usage: icon.mjs [--icns <file>] [--ico <file>] [--png <file>]");
+    const strip = pngDifference(
+      await readFile(COMMITTED_STRIP_ICON),
+      stripIcon(logo),
+    );
+    if (strip)
+      fail(
+        `src/host/ui/app-icon.png is out of date (${strip}): node packaging/icon.mjs --strip-icon host/ui/app-icon.png`,
+      );
+    console.log("src/host/ui/app-icon.png matches the logo");
+  } else if (
+    !options.icns &&
+    !options.ico &&
+    !options.png &&
+    !options["strip-icon"]
+  )
+    fail(
+      "usage: icon.mjs [--icns <file>] [--ico <file>] [--png <file>] [--strip-icon <file>]",
+    );
   else
     await writeIcons({
       icns: options.icns && resolve(options.icns),
       ico: options.ico && resolve(options.ico),
       png: options.png && resolve(options.png),
+      stripIcon: options["strip-icon"] && resolve(options["strip-icon"]),
     });
 }

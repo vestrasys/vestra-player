@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.1.12
+
+- Keyboard Shortcuts: the search box matches a command's menu path and category again, not only its shown name, so "Video" finds Video ▸ Snapshot ▸ Save Current Frame although the row reads "Snapshot: Save Current Frame". The display is unchanged.
+- Keyboard Shortcuts: a command that works only while its plugin's panel has focus (`focus: "panel"`) says so in its row, "{} (in panel)" as the edit area below already does, so a panel command and the menu item it mirrors no longer show as an identical pair ("Playlist: Add Files…" and "Playlist: Add Files… (in panel)"). New text, translated in all six languages and marked `x-machine`. Export List… is unchanged: it has its own Scope column. Who must change: nobody.
+
+## 0.1.11
+
+- Keyboard Shortcuts and Mouse name a command like the player's command palette: **"Category: Title"** when it has a category (`BindingInfo.category`, player 0.7.6, SDK 1.6.4), so titles such as "2×" or "Off" stay clear once menu paths go away; a command without one is still named by its menu path (`Playback ▸ Seek ▸ Forward 5 s`), or its title outside the menu. The separator follows the interface language as the palette writes it (`速度：2×`, `Vitesse : 2×`); new text "{0}: {1}", translated in all six languages. The same name is used in the list, its search, sorting, the conflict and "already used by" messages, the OSD after a change and Export List…. Who must change: nobody.
+- Every command of the plugin has a category for the command palette: **Settings** (Keyboard Shortcuts…, Mouse…, Ignore Default Shortcuts), translated like the player's Settings menu (machine, marked `x-machine`). Ignore Default Shortcuts names Keyboard Shortcuts… as its place (`home`): that page has the same switch. Titles, ids, menu paths, keys and order are unchanged.
+- Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
+
 ## 0.1.10
 
 - Ignore Default Shortcuts keeps a way out of fullscreen: Esc now belongs to Toggle Fullscreen (player 0.6.0), so Toggle Fullscreen is never ignored, like Quit and Leave Fullscreen. Enter Fullscreen has no default and is not exempt. The confirmation now names Toggle Fullscreen (Esc) instead of Leave Fullscreen; translations updated.

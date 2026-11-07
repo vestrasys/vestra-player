@@ -5,7 +5,7 @@
  * canonical binding with the same rules as the player's `bindings.rs`
  * (SDK: Reference, Commands, "Binding syntax"); the player's `bindings.set` stays the judge.
  */
-import type { BindingInfo, BindingRef } from "@vestra-player/sdk";
+import type { BindingInfo, BindingRef, I18n } from "@vestra-player/sdk";
 
 /**
  * Whether the system has a `Cmd` modifier to offer: macOS only, where it is ⌘.
@@ -229,11 +229,18 @@ export function sameKey(a: string, b: string): boolean {
 }
 
 /**
- * `Playback ▸ Seek ▸ Forward 5 s`, or the title for commands outside the menu.
+ * A command as lists name it, like the player's command palette: `Speed: 2×` when the
+ * command has a category (`BindingInfo.category`, player 0.7.6, already translated), so a
+ * title such as "2×" or "Off" still says what it changes once menu paths go away. Without
+ * one, the menu path (`Playback ▸ Seek ▸ Forward 5 s`), or the title for commands outside
+ * the menu. With `i18n` the separator is the interface language's (`速度：2×`, as the
+ * palette writes it); without, English.
  * ▸ (U+25B8) has no emoji presentation; ▶ (U+25B6) showed as a colour emoji.
  */
-export const commandText = (info: { path: string[] | null; title: string }) =>
-  info.path?.length ? info.path.join(" ▸ ") : info.title;
+export function commandText(info: { path: string[] | null; title: string; category?: string | null }, i18n?: I18n) {
+  if (info.category) return i18n ? i18n.resolve(i18n.text("{0}: {1}", [info.category, info.title])) : `${info.category}: ${info.title}`;
+  return info.path?.length ? info.path.join(" ▸ ") : info.title;
+}
 
 /** `"<plugin>/<command>"`, the overlay's own key. */
 export const refKey = (ref: BindingRef) => `${ref.plugin}/${ref.command}`;

@@ -61,6 +61,23 @@ export default async function activate(plugin: Plugin) {
     if (row.codec) return row.external ? text("Track {} ({}) (external)", [row.n, row.codec]) : text("Track {} ({})", [row.n, row.codec]);
     return row.external ? text("Track {} (external)", [row.n]) : text("Track {}", [row.n]);
   };
+  /**
+   * Command palette categories ("Category: Title", player 0.7.6): one per submenu, "Audio" for
+   * the top-level items, "Reset" for the Reset menu's. Text values, so `i18n extract` finds them;
+   * the submenu ones reuse the menu labels and so their translations.
+   */
+  const category = {
+    audio: text("Audio"),
+    track: text("Audio Track"),
+    channels: text("Channels"),
+    device: text("Output Device"),
+    preset: text("Equalizer Preset"),
+    sync: text("Audio Sync"),
+    processing: text("Audio Processing"),
+    reset: text("Reset"),
+  };
+  /** Where a command's control also lives: the Audio Workbench window (palette, player 0.7.6). */
+  const HOME = "audio.workbench";
   const filter = plugin.audio.filter("workbench");
   const workbenchWindow = plugin.windows.create("ui/workbench.slint", { id: "audio-workbench" });
   const store = settingsStore(plugin);
@@ -269,6 +286,7 @@ export default async function activate(plugin: Plugin) {
         trackScope.commands.add({
           id: "audio.track.none",
           path: [AUDIO, "Audio Track", loadingTracks() ? "Loading…" : "No Audio Tracks"],
+          category: category.track,
           order: 511,
           group: "audio-tools",
           enabled: false,
@@ -280,6 +298,8 @@ export default async function activate(plugin: Plugin) {
         trackScope.commands.add({
           id: `audio.track.${t.id}`,
           path: [AUDIO, "Audio Track", labels![index]!],
+          category: category.track,
+          home: HOME,
           order: 511,
           group: "audio-tools",
           radio: true,
@@ -399,13 +419,15 @@ export default async function activate(plugin: Plugin) {
       deviceScope = plugin.scope();
       const at = { order: 512, group: "audio-tools" } as const;
       if (!entries) {
-        deviceScope.commands.add({ id: "audio.device.none", path: [AUDIO, "Output Device", "No Output Devices"], ...at, enabled: false, run: () => undefined });
+        deviceScope.commands.add({ id: "audio.device.none", path: [AUDIO, "Output Device", "No Output Devices"], category: category.device, ...at, enabled: false, run: () => undefined });
         return;
       }
       entries.forEach((entry, index) =>
         deviceScope.commands.add({
           id: `audio.device.${index}`,
           path: [AUDIO, "Output Device", entry.title],
+          category: category.device,
+          home: HOME,
           ...at,
           radio: true,
           enabled: entry.connected,
@@ -535,6 +557,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "audio.load",
     path: ["@open", "Load External Audio…"],
+    category: category.audio,
+    home: HOME,
     order: 114,
     group: "open",
     enabled: () => loadReason() === null,
@@ -549,6 +573,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "audio.workbench",
     path: [AUDIO, "Audio Workbench…"],
+    category: category.audio,
     order: 510,
     group: "audio-tools",
     run: () => workbenchWindow.show(),
@@ -556,6 +581,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "audio.track.cycle",
     path: [AUDIO, "Audio Track", "Cycle Tracks"],
+    category: category.track,
+    home: HOME,
     order: 512,
     group: "audio-track-cycle",
     bindings: ["Alt+A"],
@@ -567,6 +594,8 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `audio.channels.${id}`,
       path: [AUDIO, "Audio Track", label],
+      category: category.channels,
+      home: HOME,
       order: 512,
       group: "audio-channels",
       radio: true,
@@ -579,6 +608,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "audio.equalizer",
     path: [AUDIO, "Equalizer"],
+    category: category.audio,
+    home: HOME,
     order: 513,
     group: "audio-eq",
     bindings: ["Shift+E"],
@@ -592,6 +623,8 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `audio.preset.${index}`,
       path: [AUDIO, "Preset", label],
+      category: category.preset,
+      home: HOME,
       order: 514,
       group: "audio-eq",
       radio: true,
@@ -608,10 +641,12 @@ export default async function activate(plugin: Plugin) {
     { id: "audio.sync.later", title: "50 ms Later", binding: "<", run: () => syncBy(1) },
   ] as const;
   for (const { id, title, binding, run } of syncSteps)
-    plugin.commands.add({ id, path: [AUDIO, "Audio Sync", title], order: 515, group: "audio-eq", bindings: [binding], ...repeating, run });
+    plugin.commands.add({ id, path: [AUDIO, "Audio Sync", title], category: category.sync, home: HOME, order: 515, group: "audio-eq", bindings: [binding], ...repeating, run });
   plugin.commands.add({
     id: "audio.sync.reset",
     path: ["@reset", "Audio Sync"],
+    category: category.reset,
+    home: HOME,
     order: 530,
     group: "reset-audio",
     bindings: ["?"],
@@ -624,6 +659,8 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `audio.sync.keep.${id}`,
       path: [AUDIO, "Audio Sync", label],
+      category: category.sync,
+      home: HOME,
       order: 515,
       group: "audio-sync-keep",
       radio: true,
@@ -634,6 +671,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "audio.normalize",
     path: [AUDIO, "Processing", "Normalize"],
+    category: category.processing,
+    home: HOME,
     order: 516,
     group: "audio-eq",
     bindings: ["Shift+N"],
@@ -646,6 +685,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "audio.clarity",
     path: [AUDIO, "Processing", "Crystalizer"],
+    category: category.processing,
+    home: HOME,
     order: 516,
     group: "audio-eq",
     bindings: ["Shift+C"],
@@ -659,6 +700,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "audio.reset",
     path: ["@reset", "Audio Processing"],
+    category: category.reset,
     order: 531,
     group: "reset-audio",
     ...editing,

@@ -601,7 +601,12 @@ msgstr "Vestra Player AI"
 msgid "{} (no longer offered)"
 msgstr "{}（提供終了）"
 
-#: main.ts:868
+#: main.ts:870
+#, x-machine
+msgid "Plugins"
+msgstr "プラグイン"
+
+#: main.ts:871
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"

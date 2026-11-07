@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
-import { exempt, fromSlintKey, inputOf, label, sameKey } from "../keys.ts";
+import { commandText, exempt, fromSlintKey, inputOf, label, sameKey } from "../keys.ts";
 import activate from "../main.ts";
 import { timing } from "../store.ts";
 
@@ -45,7 +45,7 @@ type Row = { key: string; command: string; keys: string; state: number; selected
 const PLAY = "Playback ▸ Play/Pause";
 const VOLUME_UP = "Audio ▸ Volume +";
 const MUTE = "Audio ▸ Mute";
-const KEYS = "Settings ▸ Keyboard Shortcuts…";
+const KEYS = "Settings: Keyboard Shortcuts…"; // the category (player 0.7.6), not the menu path
 const DEFAULT = 0;
 const CHANGED = 1;
 const CONFLICT = 2;
@@ -152,6 +152,15 @@ test("menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Short
     ],
   );
   for (const id of ["keys", "mouse", "ignore-defaults"]) assert.deepEqual(decl(id).bindings, []);
+  // Command palette (player 0.7.6): one category; Ignore Default Shortcuts also lives on the keys page.
+  assert.deepEqual(
+    ["keys", "mouse", "ignore-defaults"].map((id) => [host.command(id).display.category, decl(id).home ?? null]),
+    [
+      ["Settings", null],
+      ["Settings", null],
+      ["Settings", "keys"],
+    ],
+  );
   assert.equal(host.command("ignore-defaults").state.checked, false);
   assert.deepEqual(host.conflicts, []);
   // J01, J02 are pages of the options window (category input).
@@ -355,7 +364,7 @@ test("J01: filters by text (Ctrl+), status and source; orphans can be deleted", 
   await emit(host, "keys", "sourceFilter", sources.indexOf("vestra.hotkeys"));
   assert.deepEqual(
     rows(host).map((r) => r.command).sort(),
-    [KEYS, "Settings ▸ Ignore Default Shortcuts", "Settings ▸ Mouse…"].sort(),
+    [KEYS, "Settings: Ignore Default Shortcuts", "Settings: Mouse…"].sort(),
   );
   await emit(host, "keys", "sourceFilter", sources.indexOf("Plugins not loaded"));
   assert.deepEqual(rows(host).map((r) => [r.command, r.keys, r.state]), [["gone.plugin/thing", "Ctrl+T", ORPHAN]]);
@@ -388,6 +397,83 @@ test("J01: a conflict between defaults is shown with its holder", async () => {
   await emit(host, "keys", "select", "community.x/go");
   assert.equal(message(host).kind, "conflict");
   assert.deepEqual((page(host, "keys").props.message as { conflicts: unknown }).conflicts, go.conflicts);
+});
+
+test("palette: every command has a category in every language (player 0.7.6)", async () => {
+  for (const locale of ["en", "zh-Hans", "ja", "ko", "de", "fr", "es"] as const) {
+    const host = new TestHost();
+    await start(host, undefined, locale);
+    assert.equal(host.commands.size, 3);
+    for (const [id, { display }] of host.commands)
+      assert.ok(typeof display.category === "string" && display.category.trim() !== "", `${locale}: ${id} has no category`);
+  }
+});
+
+test("commandText: \"Category: Title\" with a category, else the menu path, else the title", () => {
+  assert.equal(commandText({ category: "Speed", title: "2×", path: ["Playback", "Speed", "2×"] }), "Speed: 2×");
+  assert.equal(commandText({ category: null, title: "2×", path: ["Playback", "Speed", "2×"] }), "Playback ▸ Speed ▸ 2×");
+  assert.equal(commandText({ title: "Go", path: null }), "Go"); // an SDK fake from before 1.6.4
+  assert.equal(commandText({ category: "", title: "Go", path: [] }), "Go");
+});
+
+test("J01: commands with a category are named \"Category: Title\", in the interface language's punctuation", async () => {
+  const commands = (category: string) => [
+    { plugin: "host", command: "speed-2", title: "2×", path: ["Playback", "Speed", "2×"], category, scope: "global", defaults: ["F2"], current: ["F2"], overridden: false, shadowed: [], labels: ["F2"] },
+    { plugin: "community.x", command: "off", title: "Off", path: null, category, scope: "global", defaults: ["F3"], current: ["F3"], overridden: false, shadowed: [{ input: "F3", by: { plugin: "host", command: "speed-2" } }], labels: ["F3"] },
+    { plugin: "community.y", command: "old", title: "Old", path: ["Tools", "Old"], category: null, scope: "global", defaults: ["F4"], current: ["F4"], overridden: false, shadowed: [], labels: ["F4"] },
+  ];
+  for (const [locale, category, speed, off] of [
+    ["en", "Speed", "Speed: 2×", "Speed: Off"],
+    ["zh-Hans", "速度", "速度：2×", "速度：Off"],
+    ["fr", "Vitesse", "Vitesse : 2×", "Vitesse : Off"],
+  ] as const) {
+    const host = new TestHost();
+    host.handle("bindings.list", () => ({ commands: commands(category), orphans: [] }));
+    await start(host, undefined, locale);
+    await openKeys(host);
+    assert.ok(row(host, speed), `${locale}: ${speed}`);
+    assert.ok(row(host, off), `${locale}: ${off}`);
+    assert.ok(row(host, "Tools ▸ Old"), `${locale}: the menu path without a category`);
+    // The conflict names its holder the same way.
+    assert.deepEqual(row(host, off)!.conflicts, [{ input: { prefix: "", mouse: -1, text: "F3" }, by: speed }]);
+  }
+});
+
+test("J01: search matches the menu path and the category too; a panel's command says so in its row", async () => {
+  const command = (id: string, path: string[] | null, scope: "global" | "panel", key: string) => ({
+    plugin: "vestra.playlist", command: id, title: "Add Files…", path, category: "Playlist", scope,
+    defaults: [key], current: [key], overridden: false, shadowed: [], labels: [key],
+  });
+  for (const [locale, panel] of [
+    ["en", "Playlist: Add Files… (in panel)"],
+    ["zh-Hans", "Playlist：Add Files…（面板内）"],
+  ] as const) {
+    const host = new TestHost();
+    host.handle("bindings.list", () => ({
+      commands: [
+        command("playlist.add", ["Playback", "Playlist", "Add Files…"], "global", "F7"),
+        command("playlist.list-add", null, "panel", "Ctrl+I"),
+        { plugin: "vestra.capture", command: "capture.save", title: "Save Current Frame", path: ["Video", "Snapshot", "Save Current Frame"], category: "Snapshot", scope: "global", defaults: ["Ctrl+E"], current: ["Ctrl+E"], overridden: false, shadowed: [], labels: ["Ctrl+E"] },
+      ],
+      orphans: [],
+    }));
+    await start(host, undefined, locale);
+    const window = await openKeys(host);
+    const colon = locale === "en" ? ": " : "：";
+    // The two "Playlist: Add Files…" no longer look the same.
+    assert.ok(row(host, `Playlist${colon}Add Files…`), `${locale}: the menu item keeps its name`);
+    assert.ok(row(host, panel), `${locale}: ${rows(host).map((r) => r.command).join(" | ")}`);
+    // "Video" is only in the menu path; "playlist" only in the category (and the path).
+    window.emit("search", "video");
+    await host.settle(WAIT);
+    assert.deepEqual(rows(host).map((r) => r.command), [`Snapshot${colon}Save Current Frame`]);
+    window.emit("search", "Playback");
+    await host.settle(WAIT);
+    assert.deepEqual(rows(host).map((r) => r.command), [`Playlist${colon}Add Files…`]);
+    window.emit("search", "playlist");
+    await host.settle(WAIT);
+    assert.equal(rows(host).length, 2);
+  }
 });
 
 test("J01: keys bound now read as the player labels them (macOS ⌘ style)", async () => {

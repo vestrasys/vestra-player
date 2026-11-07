@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.16
+
+- Command palette: Jump to Time… is in the **Seek** category (was Playback), with the other seek commands. The category texts "File" (all languages, zh-Hans included) and "Playback" (de, es, fr, ja, ko) are now marked `x-machine`. Who must change: nobody. What users see: "Seek: Jump to Time…" in the palette. Titles, ids, menu paths, keys and order are unchanged.
+
+## 0.2.15
+
+Who must change: nobody. Needs player 0.7.6 (`minPlayerVersion` raised from 0.5.10; older players refuse the new field). What users see: in the player's command palette (Ctrl+Shift+P) every command of this plugin reads **Category: Title**, so a title such as "Back 30 s" or "2×" says what it changes outside its menu. Titles, ids, menu paths, keys and order are unchanged.
+
+- Every command declares a `category` (SDK 1.6.4), translated in all six languages like the titles: **File** (Open File…, Open URL…, Reopen Current/Last File), **Copy to Clipboard** (File Name, Folder Path, Full Path), **Seek** (the keyframe steps, the tier 2–4 seek steps, Jump to Start, Seek Steps…), **Speed** (0.5×, 1.5×, 2×, Custom…) and **Playback** (Jump to Time… and the three Playback options). The submenu names reuse their existing translations; "File" and "Playback" are new.
+- No `home`: the commands have no panel of their own to open. Every command that can be disabled already gives a reason, so the palette keeps listing them greyed (a command is disabled without one only for the moment it is busy).
+
 ## 0.2.14
 
 Who must change: nobody. What users see: the two arrow buttons next to Stop are now **Previous** and **Next** (developer request; mpv, VLC and PotPlayer bars work the same way): a click plays the previous or next item of the playlist, the same as Playback ▸ Previous / Next and PgUp / PgDn, instead of seeking 5 s. Seeking with the keys (← / →, the Ctrl, Shift and Ctrl+Alt steps) and the seek bar is unchanged.

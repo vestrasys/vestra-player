@@ -33,6 +33,9 @@ pub const CTRL_ACCEPTS_CMD: bool = false;
 /// combinations (Win+Q opens search), and a key named "Cmd" means nothing
 /// here. Alt+F4 and the close button quit (`bindings::label_shown`).
 pub const MENU_SHOWS_CMD: bool = false;
+/// The fullscreen title strip (Edge/Chrome F11, PotPlayer): a fullscreen
+/// window has no title bar, so the player reveals its own at the top edge.
+pub const FULLSCREEN_TITLE_STRIP: bool = true;
 
 // ------------------------------------------------------------------ windows
 
@@ -136,6 +139,21 @@ pub fn focus_own_window(window: &slint::Window) {
         && !vestra_win32::set_foreground(handle.hwnd.get())
     {
         diag!("platform: the system refused to bring a window to the front");
+    }
+}
+
+/// Minimize `window` the way the system does (`vestra_win32::minimize`),
+/// also from fullscreen: Slint's and winit's minimized state follow from the
+/// window's state events, as after the taskbar's minimize.
+pub fn minimize_window(window: &slint::Window) {
+    use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let hwnd =
+        native_of(window).and_then(|native| match native.window_handle().map(|h| h.as_raw()) {
+            Ok(RawWindowHandle::Win32(handle)) => Some(handle.hwnd.get()),
+            _ => None,
+        });
+    if !hwnd.is_some_and(vestra_win32::minimize) {
+        diag!("platform: no native window to minimize");
     }
 }
 

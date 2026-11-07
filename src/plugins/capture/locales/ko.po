@@ -156,163 +156,168 @@ msgstr "연속 캡처 실패: {}"
 msgid "Export failed: {}"
 msgstr "내보내기 실패: {}"
 
-#: main.ts:88
+#: main.ts:113
 #, x-machine
 msgid "Frame saved as {}"
 msgstr "프레임을 저장했습니다: {}"
 
 #. {0} is the number of frames (2–20), {1} the folder.
-#: main.ts:93
+#: main.ts:118
 #, x-machine
 msgid "Burst of {0} frames saved to {1}"
 msgstr "연속 캡처 {0}프레임을 {1}에 저장했습니다"
 
-#: main.ts:97
+#: main.ts:122
 #, x-machine
 msgid "Clip exported as {}"
 msgstr "클립을 내보냈습니다: {}"
 
-#: main.ts:127
+#: main.ts:152
 #, x-machine
 msgid "Snapshot format: {}"
 msgstr "스냅샷 형식: {}"
 
-#: main.ts:149
+#: main.ts:179
 #, x-machine
 msgid "The previous snapshot is still being processed"
 msgstr "이전 스냅샷을 아직 처리하고 있습니다"
 
-#: main.ts:168
+#: main.ts:202
 #, x-machine
 msgid "Snapshot queued"
 msgstr "스냅샷 대기 중"
 
-#: main.ts:176
+#: main.ts:210
 #, x-machine
 msgid "Save Rendered Frame As"
 msgstr "렌더링된 프레임을 다른 이름으로 저장"
 
-#: main.ts:176
+#: main.ts:210
 #, x-machine
 msgid "Save Current Frame As"
 msgstr "현재 프레임을 다른 이름으로 저장"
 
-#: main.ts:187
+#: main.ts:221
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "프레임을 클립보드에 복사했습니다"
 
-#: main.ts:190
+#: main.ts:224
 #, x-machine
 msgid "Choose Snapshot Folder"
 msgstr "스냅샷 폴더 선택"
 
-#: main.ts:192
+#: main.ts:226
 #, x-machine
 msgid "Please choose an existing folder."
 msgstr "기존 폴더를 선택하세요."
 
-#: main.ts:195
+#: main.ts:229
 #, x-machine
 msgid "Snapshot folder: {}"
 msgstr "스냅샷 폴더: {}"
 
-#: main.ts:280 ui/clip.slint:8
+#: main.ts:309 ui/clip.slint:8
 #, x-machine
 msgid "Export Clip"
 msgstr "클립 내보내기"
 
-#: main.ts:329
+#: main.ts:360
 #, x-machine
 msgid "The snapshot window could not open."
 msgstr "스냅샷 창을 열 수 없습니다."
 
-#: main.ts:346 manifest.json ui/error.slint:5
+#: main.ts:389
+#, x-machine
+msgid "Export"
+msgstr "내보내기"
+
+#: main.ts:394 manifest.json ui/error.slint:5
 #, x-machine
 msgid "Snapshot"
 msgstr "스냅샷"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame"
 msgstr "현재 프레임 저장"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "현재 프레임을 다른 이름으로 저장…"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "현재 프레임 복사"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "렌더링된 프레임 저장"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "렌더링된 프레임을 다른 이름으로 저장…"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "렌더링된 프레임 복사"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Burst…"
 msgstr "연속 캡처…"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Export Clip…"
 msgstr "클립 내보내기…"
 
-#: main.ts:346 ui/clip.slint:85
+#: main.ts:394 ui/clip.slint:85
 #, x-machine
 msgid "Export Tasks…"
 msgstr "내보내기 작업…"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Capture as PNG"
 msgstr "PNG로 캡처"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "JPEG로 캡처"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Capture as BMP"
 msgstr "BMP로 캡처"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "렌더링된 프레임에 자막 포함"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "스냅샷 설정…"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "스냅샷 폴더…"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "스냅샷 폴더 열기"
 
-#: main.ts:346
+#: main.ts:394
 #, x-machine
 msgid "No frame to capture"
 msgstr "캡처할 프레임이 없습니다"
@@ -371,97 +376,97 @@ msgstr "트랙 {}"
 msgid "Burst"
 msgstr "연속 캡처"
 
-#: ui/burst.slint:41 ui/burst.slint:65
+#: ui/burst.slint:39 ui/burst.slint:63
 #, x-machine
 msgid "Count:"
 msgstr "개수:"
 
-#: ui/burst.slint:41 ui/burst.slint:71
+#: ui/burst.slint:39 ui/burst.slint:69
 #, x-machine
 msgid "Interval:"
 msgstr "간격:"
 
-#: ui/burst.slint:41 ui/burst.slint:78
+#: ui/burst.slint:39 ui/burst.slint:76
 #, x-machine
 msgid "Start:"
 msgstr "시작:"
 
-#: ui/burst.slint:44 ui/burst.slint:105
+#: ui/burst.slint:42 ui/burst.slint:102
 #, x-machine
 msgid "Progress:"
 msgstr "진행률:"
 
-#: ui/burst.slint:44 ui/burst.slint:110 ui/clip.slint:32 ui/clip.slint:77
+#: ui/burst.slint:42 ui/burst.slint:107 ui/clip.slint:32 ui/clip.slint:77
 #, x-machine
 msgid "Status:"
 msgstr "상태:"
 
-#: ui/burst.slint:52
+#: ui/burst.slint:50
 #, x-machine
 msgid "Save to"
 msgstr "저장 위치"
 
-#: ui/burst.slint:62
+#: ui/burst.slint:60
 #, x-machine
 msgid "Snapshot settings"
 msgstr "스냅샷 설정"
 
-#: ui/burst.slint:67
+#: ui/burst.slint:65
 #, x-machine
 msgid "frames (2–20)"
 msgstr "프레임 (2–20)"
 
-#: ui/burst.slint:73
+#: ui/burst.slint:71
 #, x-machine
 msgid "s (0.1–10)"
 msgstr "초 (0.1–10)"
 
-#: ui/burst.slint:75
+#: ui/burst.slint:73
 #, x-machine
 msgid "Start at the current position"
 msgstr "현재 위치에서 시작"
 
-#: ui/burst.slint:80 ui/clip.slint:45 ui/clip.slint:51
+#: ui/burst.slint:78 ui/clip.slint:45 ui/clip.slint:51
 #, x-machine
 msgid "Current"
 msgstr "현재"
 
-#: ui/burst.slint:84
+#: ui/burst.slint:82
 #, x-machine
 msgid "Other settings"
 msgstr "기타 설정"
 
-#: ui/burst.slint:87 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
+#: ui/burst.slint:85 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
 #, x-machine
 msgid "Format:"
 msgstr "형식:"
 
-#: ui/burst.slint:96 ui/clip.slint:69
+#: ui/burst.slint:93 ui/clip.slint:69
 #, x-machine
 msgid "Include video effects"
 msgstr "비디오 효과 포함"
 
-#: ui/burst.slint:97
+#: ui/burst.slint:94
 #, x-machine
 msgid "Capture subtitles too"
 msgstr "자막도 캡처"
 
-#: ui/burst.slint:102 ui/clip.slint:74
+#: ui/burst.slint:99 ui/clip.slint:74
 #, x-machine
 msgid "Information"
 msgstr "정보"
 
-#: ui/burst.slint:117 ui/tasks.slint:80
+#: ui/burst.slint:114 ui/tasks.slint:80
 #, x-machine
 msgid "Open Save Folder"
 msgstr "저장 폴더 열기"
 
-#: ui/burst.slint:118
+#: ui/burst.slint:115
 #, x-machine
 msgid "Capture Current Frame"
 msgstr "현재 프레임 캡처"
 
-#: ui/burst.slint:121
+#: ui/burst.slint:118
 #, x-machine
 msgid "Start"
 msgstr "시작"
@@ -594,7 +599,7 @@ msgstr "다시 시작했습니다."
 msgid "Snapshot Settings"
 msgstr "스냅샷 설정"
 
-#: ui/settings.slint:29 ui/settings.slint:50
+#: ui/settings.slint:29 ui/settings.slint:49
 #, x-machine
 msgid "Quality:"
 msgstr "품질:"
@@ -604,32 +609,32 @@ msgstr "품질:"
 msgid "Format"
 msgstr "형식"
 
-#: ui/settings.slint:61
+#: ui/settings.slint:60
 #, x-machine
 msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
 msgstr "품질은 JPEG에만 적용됩니다. 클립보드에는 항상 PNG로 복사됩니다."
 
-#: ui/settings.slint:64
+#: ui/settings.slint:63
 #, x-machine
 msgid "Save location"
 msgstr "저장 위치"
 
-#: ui/settings.slint:72
+#: ui/settings.slint:70
 #, x-machine
 msgid "Save to the media folder when possible"
 msgstr "가능하면 미디어 폴더에 저장"
 
-#: ui/settings.slint:78
+#: ui/settings.slint:76
 #, x-machine
 msgid "Rendered frame"
 msgstr "렌더링된 프레임"
 
-#: ui/settings.slint:81
+#: ui/settings.slint:78
 #, x-machine
 msgid "Include subtitles"
 msgstr "자막 포함"
 
-#: ui/settings.slint:86
+#: ui/settings.slint:83
 #, x-machine
 msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
 msgstr "렌더링된 프레임은 오프라인으로 만들어집니다. 플러그인의 비디오 효과가 포함되고 자막은 플러그인 스타일로 다시 그려져 항상 화면 안쪽에 놓이므로, 화면에 보이는 것과 픽셀 단위로 같지는 않습니다. 화면 메시지는 포함되지 않습니다."
@@ -644,38 +649,38 @@ msgstr "내보내기 작업"
 msgid "No export tasks yet."
 msgstr "아직 내보내기 작업이 없습니다."
 
-#: ui/tasks.slint:56
+#: ui/tasks.slint:57
 #, x-machine
 msgid "Burst · {}"
 msgstr "연속 캡처 · {}"
 
-#: ui/tasks.slint:56
+#: ui/tasks.slint:57
 #, x-machine
 msgid "Clip · {}"
 msgstr "클립 · {}"
 
-#: ui/tasks.slint:56
+#: ui/tasks.slint:57
 #, x-machine
 msgid "Snapshot · {}"
 msgstr "스냅샷 · {}"
 
 #. {0} is the time or time range, {1} the progress (Completed).
-#: ui/tasks.slint:60
+#: ui/tasks.slint:61
 #, x-machine
 msgid "{0} · {1}"
 msgstr "{0} · {1}"
 
-#: ui/tasks.slint:66
+#: ui/tasks.slint:67
 #, x-machine
 msgid "Cancel"
 msgstr "취소"
 
-#: ui/tasks.slint:67
+#: ui/tasks.slint:68
 #, x-machine
 msgid "Open"
 msgstr "열기"
 
-#: ui/tasks.slint:68
+#: ui/tasks.slint:69
 #, x-machine
 msgid "Retry"
 msgstr "다시 시도"

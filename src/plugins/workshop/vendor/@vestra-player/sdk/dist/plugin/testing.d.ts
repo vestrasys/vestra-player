@@ -2404,6 +2404,34 @@ export declare class TestHost implements Transport {
      */
     get conflicts(): string[][];
     /**
+     * Change the keys of one of the plugin's commands as the user does in
+     * Keyboard Shortcuts (SDK 1.6.6): `inputs` replaces its keys (`[]`
+     * clears them, as Ignore Default Shortcuts does for every default),
+     * `null` gives it its own defaults back. It writes
+     * {@link TestHost.bindings | bindings.overlay}, and the plugin hears it
+     * as from the player: `bindings.changed` and, when what
+     * `plugin.commands.keys` reads changed, `commands.keys`.
+     *
+     * @example Check that a key hint follows a rebinding
+     * The view showed W for Brightness −; after the user moves it to
+     * Shift+W, it shows the new key. `rebind` changes the overlay and
+     * pushes the new labels, and `settle` lets the binding run again. The
+     * test host is a Mac unless `systemInfo.os` says otherwise, hence ⇧W.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.rebind("brightness.down", ["Shift+W"]);
+     * await host.settle();
+     * assert.equal(host.window("picture").props["brightness-down"], "⇧W");
+     * ```
+     *
+     * @capability None.
+     * @throws `Error` `command` is not a command of the plugin.
+     * @since 1.6.6
+     */
+    rebind(command: string, inputs: readonly string[] | null): void;
+    /**
      * The binding overlay `plugin.bindings.set` writes (`"<plugin>/<command>"`
      * to inputs; preset it to simulate saved overrides). `press` honours it.
      */

@@ -662,7 +662,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "commands.update",
     "commands.unregister",
   ],
-  // SDK 1.6.6, player 0.7.6: the labels of the plugin's own commands.
+  // SDK 1.6.7, player 0.7.6: the labels of the plugin's own commands.
   "Commands.keys": ["commands.keys", "event:commands.keys"],
   "Commands.onKeysChange": ["event:commands.keys"],
   "Host.run": ["host.run", "source.state?"],
@@ -1574,7 +1574,7 @@ test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, p
   );
 });
 
-test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS; commands.keys from SDK 1.6.6)", async () => {
+test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS; commands.keys from SDK 1.6.7)", async () => {
   const rust = host("src/capabilities/events.rs");
   const block =
     /pub\(crate\) const WAKE_EVENTS: &\[&str\] = &\[([\s\S]*?)\];/.exec(

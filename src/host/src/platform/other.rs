@@ -21,6 +21,9 @@ pub const CTRL_ACCEPTS_CMD: bool = false;
 /// Menus show no `Cmd` binding: the desktop takes most Super-key
 /// combinations (`bindings::label_shown`).
 pub const MENU_SHOWS_CMD: bool = false;
+/// The fullscreen title strip, as on Windows: a fullscreen window has no
+/// title bar of its own.
+pub const FULLSCREEN_TITLE_STRIP: bool = true;
 
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");
 
@@ -30,6 +33,11 @@ pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
 pub fn app_in_foreground() -> bool {
     true
 }
+/// Minimize `window` (Slint's own minimize: no winit fullscreen quirk here).
+pub fn minimize_window(window: &slint::Window) {
+    window.set_minimized(true);
+}
+
 /// winit's `focus_window` (a request the window manager may refuse).
 pub fn focus_own_window(window: &slint::Window) {
     use slint::winit_030::WinitWindowAccessor;

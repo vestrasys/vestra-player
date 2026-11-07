@@ -66,37 +66,47 @@ msgstr "Logo im Leerlauf: Aus"
 msgid "Cover cache cleared"
 msgstr "Cover-Cache geleert"
 
-#: main.ts:229
+#: main.ts:232
 #, x-machine
-msgid "Show Album Cover for Audio Only"
-msgstr "Albumcover bei reinem Audio anzeigen"
+msgid "Audio"
+msgstr "Audio"
 
-#: main.ts:237 main.ts:245
+#: main.ts:232 main.ts:245 main.ts:254
 #, x-machine
 msgid "Appearance"
 msgstr "Darstellung"
 
-#: main.ts:237
+#: main.ts:232
+#, x-machine
+msgid "Reset"
+msgstr "Zurücksetzen"
+
+#: main.ts:236
+#, x-machine
+msgid "Show Album Cover for Audio Only"
+msgstr "Albumcover bei reinem Audio anzeigen"
+
+#: main.ts:245
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "Logo im Leerlauf anzeigen"
 
-#: main.ts:245
+#: main.ts:254
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "Logobild auswählen…"
 
-#: main.ts:253
+#: main.ts:263
 #, x-machine
 msgid "Idle Logo"
 msgstr "Leerlauf-Logo"
 
-#: main.ts:257
+#: main.ts:267
 #, x-machine
 msgid "Using the default logo"
 msgstr "Standardlogo wird verwendet"
 
-#: main.ts:265 ui/page.slint:40
+#: main.ts:275 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "Logo und Albumcover"

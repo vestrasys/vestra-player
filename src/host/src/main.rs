@@ -455,6 +455,7 @@ fn main() -> Result<()> {
         measured_shell: None,
         menu_open: false,
         sidebar_popped: false,
+        title_strip: Default::default(),
         sidebar_active: None,
         tab_clicked: false,
         shell_tabs: Vec::new(),

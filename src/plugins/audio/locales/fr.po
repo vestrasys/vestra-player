@@ -8,7 +8,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:52 main.ts:60 main.ts:315 main.ts:521
+#: main.ts:52 main.ts:60 main.ts:335 main.ts:543
 #, x-machine
 msgid "{}"
 msgstr "{}"
@@ -38,392 +38,412 @@ msgstr "Piste {} ({}) (externe)"
 msgid "Track {} (external)"
 msgstr "Piste {} (externe)"
 
-#: main.ts:108 main.ts:620
+#: main.ts:70
 #, x-machine
-msgid "Audio sync: {} s"
-msgstr "Synchro audio : {} s"
+msgid "Audio"
+msgstr "Audio"
 
-#: main.ts:117
-#, x-machine
-msgid "Channels: Stereo"
-msgstr "Canaux : stéréo"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Left Channel (mixed to stereo)"
-msgstr "Canaux : canal gauche (mixé en stéréo)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Right Channel (mixed to stereo)"
-msgstr "Canaux : canal droit (mixé en stéréo)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Mono Mix (mixed to stereo)"
-msgstr "Canaux : mixage mono (mixé en stéréo)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Swap Left and Right (mixed to stereo)"
-msgstr "Canaux : inverser gauche et droite (mixé en stéréo)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Left Channel"
-msgstr "Canaux : canal gauche"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Right Channel"
-msgstr "Canaux : canal droit"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Mono Mix"
-msgstr "Canaux : mixage mono"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Swap Left and Right"
-msgstr "Canaux : inverser gauche et droite"
-
-#: main.ts:180
-#, x-machine
-msgid "Load External Audio"
-msgstr "Charger un fichier audio externe"
-
-#: main.ts:183
-#, x-machine
-msgid "This audio is already loaded"
-msgstr "Ce fichier audio est déjà chargé"
-
-#: main.ts:187
-#, x-machine
-msgid "Audio loaded: {}"
-msgstr "Fichier audio chargé : {}"
-
-#: main.ts:189
-#, x-machine
-msgid "The source changed; the audio was not loaded"
-msgstr "La source a changé ; le fichier audio n'a pas été chargé"
-
-#: main.ts:190
-#, x-machine
-msgid "Cannot load audio: {}"
-msgstr "Impossible de charger le fichier audio : {}"
-
-#: main.ts:241
-#, x-machine
-msgid "Audio track: {}"
-msgstr "Piste audio : {}"
-
-#: main.ts:244
-#, x-machine
-msgid "Cannot switch the audio track: {}"
-msgstr "Impossible de changer de piste audio : {}"
-
-#: main.ts:249
-#, x-machine
-msgid "Only one audio track"
-msgstr "Une seule piste audio"
-
-#: main.ts:271 main.ts:282 main.ts:558 main.ts:569
+#: main.ts:71 main.ts:288 main.ts:300 main.ts:583 main.ts:596
 #, x-machine
 msgid "Audio Track"
 msgstr "Piste audio"
 
-#: main.ts:271
+#: main.ts:72 ui/workbench.slint:218 ui/workbench.slint:394
 #, x-machine
-msgid "Loading…"
-msgstr "Chargement…"
+msgid "Channels"
+msgstr "Canaux"
 
-#: main.ts:271
-#, x-machine
-msgid "No Audio Tracks"
-msgstr "Aucune piste audio"
-
-#: main.ts:314 main.ts:521
-#, x-machine
-msgid "Unnamed device"
-msgstr "Périphérique sans nom"
-
-#: main.ts:314 main.ts:519
-#, x-machine
-msgid "Selected device"
-msgstr "Périphérique sélectionné"
-
-#: main.ts:315
-#, x-machine
-msgid "{} ({})"
-msgstr "{} ({})"
-
-#: main.ts:318 main.ts:518 ui/workbench.slint:176
-#, x-machine
-msgid "System Default"
-msgstr "Par défaut du système"
-
-#: main.ts:355
-#, x-machine
-msgid "Cannot switch to System Default: {}"
-msgstr "Impossible de passer au périphérique par défaut du système : {}"
-
-#: main.ts:356
-#, x-machine
-msgid "Cannot switch to {}: {}"
-msgstr "Impossible de passer à {} : {}"
-
-#: main.ts:367
-#, x-machine
-msgid "Audio output: System Default"
-msgstr "Sortie audio : par défaut du système"
-
-#: main.ts:368
-#, x-machine
-msgid "Audio output: Selected device"
-msgstr "Sortie audio : périphérique sélectionné"
-
-#: main.ts:369
-#, x-machine
-msgid "Audio output: {}"
-msgstr "Sortie audio : {}"
-
-#: main.ts:379
-#, x-machine
-msgid "Output device disconnected, using System Default"
-msgstr "Périphérique de sortie déconnecté, utilisation du périphérique par défaut du système"
-
-#: main.ts:402 main.ts:408
+#: main.ts:73 main.ts:422 main.ts:428
 #, x-machine
 msgid "Output Device"
 msgstr "Périphérique de sortie"
 
-#: main.ts:402
+#: main.ts:74
 #, x-machine
-msgid "No Output Devices"
-msgstr "Aucun périphérique de sortie"
+msgid "Equalizer Preset"
+msgstr "Préréglage de l'égaliseur"
 
-#: main.ts:412
-#, x-machine
-msgid "Device not connected"
-msgstr "Périphérique non connecté"
-
-#: main.ts:452 main.ts:542 main.ts:563
-#, x-machine
-msgid "Loading"
-msgstr "Chargement"
-
-#: main.ts:452 main.ts:563 ui/workbench.slint:168
-#, x-machine
-msgid "No audio tracks"
-msgstr "Aucune piste audio"
-
-#: main.ts:511
-#, x-machine
-msgid "No output devices available"
-msgstr "Aucun périphérique de sortie disponible"
-
-#: main.ts:524
-#, x-machine
-msgid "{} (not connected)"
-msgstr "{} (non connecté)"
-
-#: main.ts:530
-#, x-machine
-msgid "{}: device not connected, using System Default"
-msgstr "{} : périphérique non connecté, utilisation du périphérique par défaut du système"
-
-#: main.ts:537
-#, x-machine
-msgid "Load External Audio…"
-msgstr "Charger un fichier audio externe…"
-
-#: main.ts:542
-#, x-machine
-msgid "No file is playing"
-msgstr "Aucun fichier en lecture"
-
-#: main.ts:542
-#, x-machine
-msgid "Generated video cannot take external audio"
-msgstr "Une vidéo générée ne peut pas recevoir d'audio externe"
-
-#: main.ts:551
-#, x-machine
-msgid "Audio Workbench…"
-msgstr "Atelier audio…"
-
-#: main.ts:558
-#, x-machine
-msgid "Cycle Tracks"
-msgstr "Faire défiler les pistes"
-
-#: main.ts:569 ui/workbench.slint:402
-#, x-machine
-msgid "Stereo"
-msgstr "Stéréo"
-
-#: main.ts:569 ui/workbench.slint:403
-#, x-machine
-msgid "Left Channel"
-msgstr "Canal gauche"
-
-#: main.ts:569 ui/workbench.slint:404
-#, x-machine
-msgid "Right Channel"
-msgstr "Canal droit"
-
-#: main.ts:569 ui/workbench.slint:405
-#, x-machine
-msgid "Mono Mix"
-msgstr "Mixage mono"
-
-#: main.ts:569 ui/workbench.slint:406
-#, x-machine
-msgid "Swap Left and Right"
-msgstr "Inverser gauche et droite"
-
-#: main.ts:575 main.ts:585 main.ts:598 main.ts:611 main.ts:618 main.ts:640 main.ts:652 main.ts:664 ui/workbench.slint:8
-#, x-machine
-msgid "No audio track selected"
-msgstr "Aucune piste audio sélectionnée"
-
-#: main.ts:575 ui/workbench.slint:390
-#, x-machine
-msgid "The current track is mono"
-msgstr "La piste actuelle est en mono"
-
-#: main.ts:581 ui/workbench.slint:200 ui/workbench.slint:257
-#, x-machine
-msgid "Equalizer"
-msgstr "Égaliseur"
-
-#: main.ts:588
-#, x-machine
-msgid "Equalizer: On"
-msgstr "Égaliseur : activé"
-
-#: main.ts:588
-#, x-machine
-msgid "Equalizer: Off"
-msgstr "Égaliseur : désactivé"
-
-#: main.ts:594
-#, x-machine
-msgid "Preset"
-msgstr "Préréglage"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Flat"
-msgstr "Neutre"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Voice"
-msgstr "Voix"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Music"
-msgstr "Musique"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Cinema"
-msgstr "Cinéma"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Flat"
-msgstr "Préréglage de l'égaliseur : neutre"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Voice"
-msgstr "Préréglage de l'égaliseur : voix"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Music"
-msgstr "Préréglage de l'égaliseur : musique"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Cinema"
-msgstr "Préréglage de l'égaliseur : cinéma"
-
-#: main.ts:611 main.ts:614 main.ts:626
+#: main.ts:75 main.ts:644 main.ts:647 main.ts:661
 #, x-machine
 msgid "Audio Sync"
 msgstr "Synchronisation audio"
 
-#: main.ts:611
-#, x-machine
-msgid "50 ms Earlier"
-msgstr "50 ms plus tôt"
-
-#: main.ts:611
-#, x-machine
-msgid "50 ms Later"
-msgstr "50 ms plus tard"
-
-#: main.ts:626 ui/workbench.slint:459
-#, x-machine
-msgid "Don't Keep"
-msgstr "Ne pas conserver"
-
-#: main.ts:626 ui/workbench.slint:460
-#, x-machine
-msgid "Keep for This Run"
-msgstr "Conserver pour cette session"
-
-#: main.ts:626 ui/workbench.slint:461
-#, x-machine
-msgid "Always Keep"
-msgstr "Toujours conserver"
-
-#: main.ts:636 main.ts:648
-#, x-machine
-msgid "Processing"
-msgstr "Traitement"
-
-#: main.ts:636 ui/workbench.slint:214 ui/workbench.slint:325
-#, x-machine
-msgid "Normalize"
-msgstr "Normaliser"
-
-#: main.ts:643
-#, x-machine
-msgid "Normalize: On"
-msgstr "Normalisation : activée"
-
-#: main.ts:643
-#, x-machine
-msgid "Normalize: Off"
-msgstr "Normalisation : désactivée"
-
-#: main.ts:648 ui/workbench.slint:214 ui/workbench.slint:339
-#, x-machine
-msgid "Crystalizer"
-msgstr "Cristalliseur"
-
-#: main.ts:656
-#, x-machine
-msgid "Crystalizer: On"
-msgstr "Cristalliseur : activé"
-
-#: main.ts:656
-#, x-machine
-msgid "Crystalizer: Off"
-msgstr "Cristalliseur : désactivé"
-
-#: main.ts:661
+#: main.ts:76 main.ts:702
 #, x-machine
 msgid "Audio Processing"
 msgstr "Traitement audio"
 
-#: main.ts:667
+#: main.ts:77 ui/workbench.slint:279
+#, x-machine
+msgid "Reset"
+msgstr "Réinitialiser"
+
+#: main.ts:125 main.ts:655
+#, x-machine
+msgid "Audio sync: {} s"
+msgstr "Synchro audio : {} s"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Stereo"
+msgstr "Canaux : stéréo"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Left Channel (mixed to stereo)"
+msgstr "Canaux : canal gauche (mixé en stéréo)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Right Channel (mixed to stereo)"
+msgstr "Canaux : canal droit (mixé en stéréo)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Mono Mix (mixed to stereo)"
+msgstr "Canaux : mixage mono (mixé en stéréo)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Swap Left and Right (mixed to stereo)"
+msgstr "Canaux : inverser gauche et droite (mixé en stéréo)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Left Channel"
+msgstr "Canaux : canal gauche"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Right Channel"
+msgstr "Canaux : canal droit"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Mono Mix"
+msgstr "Canaux : mixage mono"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Swap Left and Right"
+msgstr "Canaux : inverser gauche et droite"
+
+#: main.ts:197
+#, x-machine
+msgid "Load External Audio"
+msgstr "Charger un fichier audio externe"
+
+#: main.ts:200
+#, x-machine
+msgid "This audio is already loaded"
+msgstr "Ce fichier audio est déjà chargé"
+
+#: main.ts:204
+#, x-machine
+msgid "Audio loaded: {}"
+msgstr "Fichier audio chargé : {}"
+
+#: main.ts:206
+#, x-machine
+msgid "The source changed; the audio was not loaded"
+msgstr "La source a changé ; le fichier audio n'a pas été chargé"
+
+#: main.ts:207
+#, x-machine
+msgid "Cannot load audio: {}"
+msgstr "Impossible de charger le fichier audio : {}"
+
+#: main.ts:258
+#, x-machine
+msgid "Audio track: {}"
+msgstr "Piste audio : {}"
+
+#: main.ts:261
+#, x-machine
+msgid "Cannot switch the audio track: {}"
+msgstr "Impossible de changer de piste audio : {}"
+
+#: main.ts:266
+#, x-machine
+msgid "Only one audio track"
+msgstr "Une seule piste audio"
+
+#: main.ts:288
+#, x-machine
+msgid "Loading…"
+msgstr "Chargement…"
+
+#: main.ts:288
+#, x-machine
+msgid "No Audio Tracks"
+msgstr "Aucune piste audio"
+
+#: main.ts:334 main.ts:543
+#, x-machine
+msgid "Unnamed device"
+msgstr "Périphérique sans nom"
+
+#: main.ts:334 main.ts:541
+#, x-machine
+msgid "Selected device"
+msgstr "Périphérique sélectionné"
+
+#: main.ts:335
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: main.ts:338 main.ts:540 ui/workbench.slint:176
+#, x-machine
+msgid "System Default"
+msgstr "Par défaut du système"
+
+#: main.ts:375
+#, x-machine
+msgid "Cannot switch to System Default: {}"
+msgstr "Impossible de passer au périphérique par défaut du système : {}"
+
+#: main.ts:376
+#, x-machine
+msgid "Cannot switch to {}: {}"
+msgstr "Impossible de passer à {} : {}"
+
+#: main.ts:387
+#, x-machine
+msgid "Audio output: System Default"
+msgstr "Sortie audio : par défaut du système"
+
+#: main.ts:388
+#, x-machine
+msgid "Audio output: Selected device"
+msgstr "Sortie audio : périphérique sélectionné"
+
+#: main.ts:389
+#, x-machine
+msgid "Audio output: {}"
+msgstr "Sortie audio : {}"
+
+#: main.ts:399
+#, x-machine
+msgid "Output device disconnected, using System Default"
+msgstr "Périphérique de sortie déconnecté, utilisation du périphérique par défaut du système"
+
+#: main.ts:422
+#, x-machine
+msgid "No Output Devices"
+msgstr "Aucun périphérique de sortie"
+
+#: main.ts:434
+#, x-machine
+msgid "Device not connected"
+msgstr "Périphérique non connecté"
+
+#: main.ts:474 main.ts:566 main.ts:590
+#, x-machine
+msgid "Loading"
+msgstr "Chargement"
+
+#: main.ts:474 main.ts:590 ui/workbench.slint:168
+#, x-machine
+msgid "No audio tracks"
+msgstr "Aucune piste audio"
+
+#: main.ts:533
+#, x-machine
+msgid "No output devices available"
+msgstr "Aucun périphérique de sortie disponible"
+
+#: main.ts:546
+#, x-machine
+msgid "{} (not connected)"
+msgstr "{} (non connecté)"
+
+#: main.ts:552
+#, x-machine
+msgid "{}: device not connected, using System Default"
+msgstr "{} : périphérique non connecté, utilisation du périphérique par défaut du système"
+
+#: main.ts:559
+#, x-machine
+msgid "Load External Audio…"
+msgstr "Charger un fichier audio externe…"
+
+#: main.ts:566
+#, x-machine
+msgid "No file is playing"
+msgstr "Aucun fichier en lecture"
+
+#: main.ts:566
+#, x-machine
+msgid "Generated video cannot take external audio"
+msgstr "Une vidéo générée ne peut pas recevoir d'audio externe"
+
+#: main.ts:575
+#, x-machine
+msgid "Audio Workbench…"
+msgstr "Atelier audio…"
+
+#: main.ts:583
+#, x-machine
+msgid "Cycle Tracks"
+msgstr "Faire défiler les pistes"
+
+#: main.ts:596 ui/workbench.slint:402
+#, x-machine
+msgid "Stereo"
+msgstr "Stéréo"
+
+#: main.ts:596 ui/workbench.slint:403
+#, x-machine
+msgid "Left Channel"
+msgstr "Canal gauche"
+
+#: main.ts:596 ui/workbench.slint:404
+#, x-machine
+msgid "Right Channel"
+msgstr "Canal droit"
+
+#: main.ts:596 ui/workbench.slint:405
+#, x-machine
+msgid "Mono Mix"
+msgstr "Mixage mono"
+
+#: main.ts:596 ui/workbench.slint:406
+#, x-machine
+msgid "Swap Left and Right"
+msgstr "Inverser gauche et droite"
+
+#: main.ts:604 main.ts:616 main.ts:631 main.ts:644 main.ts:653 main.ts:679 main.ts:693 main.ts:706 ui/workbench.slint:8
+#, x-machine
+msgid "No audio track selected"
+msgstr "Aucune piste audio sélectionnée"
+
+#: main.ts:604 ui/workbench.slint:390
+#, x-machine
+msgid "The current track is mono"
+msgstr "La piste actuelle est en mono"
+
+#: main.ts:610 ui/workbench.slint:200 ui/workbench.slint:257
+#, x-machine
+msgid "Equalizer"
+msgstr "Égaliseur"
+
+#: main.ts:619
+#, x-machine
+msgid "Equalizer: On"
+msgstr "Égaliseur : activé"
+
+#: main.ts:619
+#, x-machine
+msgid "Equalizer: Off"
+msgstr "Égaliseur : désactivé"
+
+#: main.ts:625
+#, x-machine
+msgid "Preset"
+msgstr "Préréglage"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Flat"
+msgstr "Neutre"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Voice"
+msgstr "Voix"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Music"
+msgstr "Musique"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Cinema"
+msgstr "Cinéma"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Flat"
+msgstr "Préréglage de l'égaliseur : neutre"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Voice"
+msgstr "Préréglage de l'égaliseur : voix"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Music"
+msgstr "Préréglage de l'égaliseur : musique"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Cinema"
+msgstr "Préréglage de l'égaliseur : cinéma"
+
+#: main.ts:644
+#, x-machine
+msgid "50 ms Earlier"
+msgstr "50 ms plus tôt"
+
+#: main.ts:644
+#, x-machine
+msgid "50 ms Later"
+msgstr "50 ms plus tard"
+
+#: main.ts:661 ui/workbench.slint:459
+#, x-machine
+msgid "Don't Keep"
+msgstr "Ne pas conserver"
+
+#: main.ts:661 ui/workbench.slint:460
+#, x-machine
+msgid "Keep for This Run"
+msgstr "Conserver pour cette session"
+
+#: main.ts:661 ui/workbench.slint:461
+#, x-machine
+msgid "Always Keep"
+msgstr "Toujours conserver"
+
+#: main.ts:673 main.ts:687
+#, x-machine
+msgid "Processing"
+msgstr "Traitement"
+
+#: main.ts:673 ui/workbench.slint:214 ui/workbench.slint:325
+#, x-machine
+msgid "Normalize"
+msgstr "Normaliser"
+
+#: main.ts:682
+#, x-machine
+msgid "Normalize: On"
+msgstr "Normalisation : activée"
+
+#: main.ts:682
+#, x-machine
+msgid "Normalize: Off"
+msgstr "Normalisation : désactivée"
+
+#: main.ts:687 ui/workbench.slint:214 ui/workbench.slint:339
+#, x-machine
+msgid "Crystalizer"
+msgstr "Cristalliseur"
+
+#: main.ts:697
+#, x-machine
+msgid "Crystalizer: On"
+msgstr "Cristalliseur : activé"
+
+#: main.ts:697
+#, x-machine
+msgid "Crystalizer: Off"
+msgstr "Cristalliseur : désactivé"
+
+#: main.ts:709
 #, x-machine
 msgid "Audio processing reset"
 msgstr "Traitement audio réinitialisé"
@@ -522,11 +542,6 @@ msgstr "Charger automatiquement les fichiers audio portant le même nom"
 msgid "Track"
 msgstr "Piste"
 
-#: ui/workbench.slint:218 ui/workbench.slint:394
-#, x-machine
-msgid "Channels"
-msgstr "Canaux"
-
 #: ui/workbench.slint:218 ui/workbench.slint:422
 #, x-machine
 msgid "Device"
@@ -541,11 +556,6 @@ msgstr "Conserver"
 #, x-machine
 msgid "Custom"
 msgstr "Personnalisé"
-
-#: ui/workbench.slint:279
-#, x-machine
-msgid "Reset"
-msgstr "Réinitialiser"
 
 #: ui/workbench.slint:312
 #, x-machine

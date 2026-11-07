@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.7
+
+- Every command has a command palette category (SDK 1.6.4 `category`), so the player's palette (Ctrl+Shift+P) names it "Category: Title": "Chapters and Bookmarks" for the list, Add Bookmark, the previous/next steps, each chapter and bookmark line, the "More…" lines and Show Marks on Seek Bar; "A-B Loop" for the A-B points, nudges, range moves, Loop Current Chapter or Bookmark Range and A-B Loop On/Off; "Loop Count" for the six counts. The categories are the submenu names, so every language reads them as the menu does.
+- Add Bookmark and each chapter and bookmark line name Chapter and Bookmark List… as their `home`: the window lists them and has an Add Bookmark button.
+- Every command that can be disabled already gives a reason, so the palette keeps listing them greyed.
+- Needs player 0.7.6 (`minPlayerVersion`; older players refuse the new declaration fields).
+- Tests: every command, chapter and bookmark lines included, has a non-empty category; the homes; the categories in Simplified Chinese.
+- Who must change: nobody. Titles, ids, menu paths, keys and order are unchanged.
+
 ## 0.1.6
 
 - Code only: the Chapters and Bookmarks window handle is named `marksWindow` / `#marksWindow` (was `window` / `#window`). Who must change: nobody. No behaviour change.

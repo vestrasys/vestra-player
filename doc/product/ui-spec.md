@@ -90,7 +90,7 @@ label           { height: 14px; }                                    /* labels i
 
 The widget library `@vestra/widgets.slint` provides `Button`, `Slider`, `ToolTipArea` and others, sized by the tokens above; icons are in `@vestra/icons.slint` (§2.5).
 
-**Key hints** (SDK 1.6.6, player 0.7.6; menu redesign §3.5). They always show the current binding: the user's keys, nothing when cleared, only the user's keys under Ignore Default Shortcuts, ⌃/⌘ on macOS.
+**Key hints** (SDK 1.6.7, player 0.7.6; menu redesign §3.5). They always show the current binding: the user's keys, nothing when cleared, only the user's keys under Ignore Default Shortcuts, ⌃/⌘ on macOS.
 
 - **KeyHint** draws one key cap.
   - Text: the label from `plugin.commands.keys(id)`, formatted as in the menus (`Ctrl+B`, `⌘B`), in `Theme.font-mono` at `Theme.font-xs`, colour `Theme.text-dim`.

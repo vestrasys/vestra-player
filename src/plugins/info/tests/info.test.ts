@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
-import type { PlaybackStats, PlayerState, TextArg } from "@vestra-player/sdk";
+import type { Locale, PlaybackStats, PlayerState, TextArg } from "@vestra-player/sdk";
 import activate, { brief, briefColumns, currentChapter, decoding, displayed, fileName, shortCodec, subtitleName } from "../main.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -37,6 +37,7 @@ test("top-level Playback Info entry in the windows group, Tab toggles the overla
     bindings: ["Tab"],
     focus: null,
     repeat: false,
+    category: { $vestraText: "Info" },
   });
   assert.equal(command.state.checked, false);
   assert.equal(host.osdPanel, null);
@@ -180,6 +181,7 @@ test("I03: Shift+Tab shows two short lines for three seconds; no menu entry", as
     bindings: ["Shift+Tab"],
     focus: null,
     repeat: false,
+    category: { $vestraText: "Info" },
   });
   assert.deepEqual(host.conflicts, []);
   await host.press("Shift+Tab");
@@ -425,5 +427,31 @@ test("the new texts are machine translated in every language and marked for revi
       const escaped = id.replace(/[(){}]/g, "\\$&");
       assert.match(po, new RegExp(`#, x-machine\nmsgid "${escaped}"\nmsgstr "[^"]+"`), `${lang}: ${id}`);
     }
+  }
+});
+
+test("palette: every command has a category, translated in every language (player 0.7.6)", async () => {
+  const expected: Record<Locale, { info: string; help: string }> = {
+    en: { info: "Info", help: "Help" },
+    "zh-Hans": { info: "信息", help: "帮助" },
+    ja: { info: "情報", help: "ヘルプ" },
+    ko: { info: "정보", help: "도움말" },
+    de: { info: "Info", help: "Hilfe" },
+    fr: { info: "Infos", help: "Aide" },
+    es: { info: "Información", help: "Ayuda" },
+  };
+  for (const [locale, words] of Object.entries(expected) as [Locale, { info: string; help: string }][]) {
+    const { host, stop } = await startPlugin(activate, { directory, locale });
+    const shown = Object.fromEntries([...host.commands.entries()].map(([id, { display }]) => [id, display.category]));
+    for (const [id, category] of Object.entries(shown)) assert.ok(typeof category === "string" && category.trim() !== "", `${locale}: ${id} has no category`);
+    assert.deepEqual(shown, {
+      "info.toggle": words.info,
+      "info.brief": words.info,
+      "info.properties": words.info,
+      "info.about": words.help,
+      "info.update": words.help,
+    });
+    assert.equal(host.command("info.update").declaration.home, "info.about");
+    await stop();
   }
 });

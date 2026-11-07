@@ -311,32 +311,42 @@ msgstr "{} {}"
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:241 manifest.json
+#: main.ts:243 manifest.json
+#, x-machine
+msgid "Info"
+msgstr "Info"
+
+#: main.ts:243
+#, x-machine
+msgid "Help"
+msgstr "Hilfe"
+
+#: main.ts:247 manifest.json
 #, x-machine
 msgid "Playback Info"
 msgstr "Wiedergabeinformationen"
 
-#: main.ts:255
+#: main.ts:262
 #, x-machine
 msgid "Brief Info"
 msgstr "Kurzinformationen"
 
-#: main.ts:274
+#: main.ts:282
 #, x-machine
 msgid "Playback Properties…"
 msgstr "Wiedergabeeigenschaften…"
 
-#: main.ts:284
+#: main.ts:293
 #, x-machine
 msgid "About Vestra Player…"
 msgstr "Über Vestra Player…"
 
-#: main.ts:293
+#: main.ts:304
 #, x-machine
 msgid "Check for Updates…"
 msgstr "Nach Updates suchen…"
 
-#: main.ts:302 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
+#: main.ts:313 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
 #, x-machine
 msgid "Updates"
 msgstr "Updates"
@@ -350,11 +360,6 @@ msgstr "Wiedergabeinformationen im Bild, Wiedergabeeigenschaften und das Fenster
 #, x-machine
 msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
 msgstr "Zeigt oben links im Video aktuelle Angaben (Tab): Datei, Zeit, Codecs, Bildrate und mehr, oder mit Shift+Tab eine Kurzübersicht. „Wiedergabeeigenschaften…“ listet den Dekodierstatus, die Streams und Metadaten der Datei sowie Systeminformationen auf, zum Kopieren oder Speichern als Text. „Über Vestra Player…“ zeigt die Version, die Komponenten und die geladenen Plugins."
-
-#: manifest.json
-#, x-machine
-msgid "Info"
-msgstr "Info"
 
 #: manifest.json
 #, x-machine

@@ -26,32 +26,37 @@ msgstr "언어: 시스템 설정 따르기. 다시 시작하면 적용됩니다"
 msgid "Language: {}. Takes effect after restart"
 msgstr "언어: {}. 다시 시작하면 적용됩니다"
 
-#: main.ts:59 main.ts:93 ui/appearance.slint:98
+#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
 #, x-machine
 msgid "Appearance"
 msgstr "모양"
 
-#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
 #, x-machine
 msgid "Language"
 msgstr "언어"
 
-#: main.ts:84
+#: main.ts:94
+#, x-machine
+msgid "Settings"
+msgstr "설정"
+
+#: main.ts:101
 #, x-machine
 msgid "Options…"
 msgstr "옵션…"
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Dark"
 msgstr "Vestra 다크"
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Light"
 msgstr "Vestra 라이트"
 
-#: main.ts:103 ui/language.slint:66
+#: main.ts:123 ui/language.slint:59
 #, x-machine
 msgid "Follow System"
 msgstr "시스템 설정 따르기"
@@ -91,32 +96,32 @@ msgstr "팔레트"
 msgid "language"
 msgstr "언어"
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 #, x-machine
 msgid "For bright rooms; the video area stays dark"
 msgstr "밝은 환경용. 비디오 영역은 어둡게 유지됩니다"
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 #, x-machine
 msgid "Default, from the logo's aurora colours"
 msgstr "기본값. 로고의 오로라 색상에서 가져왔습니다"
 
-#: ui/appearance.slint:106
+#: ui/appearance.slint:91
 #, x-machine
 msgid "Palette"
 msgstr "팔레트"
 
-#: ui/appearance.slint:152
+#: ui/appearance.slint:144
 #, x-machine
 msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
 msgstr "변경 사항은 모든 창에 즉시 적용됩니다. 모서리 둥글기, 글꼴 크기, 컨트롤 크기는 어느 팔레트에서나 같습니다."
 
-#: ui/appearance.slint:162
+#: ui/appearance.slint:154
 #, x-machine
 msgid "Restore Defaults"
 msgstr "기본값 복원"
 
-#: ui/language.slint:77
+#: ui/language.slint:70
 #, x-machine
 msgid "Takes effect after restart."
 msgstr "다시 시작하면 적용됩니다."

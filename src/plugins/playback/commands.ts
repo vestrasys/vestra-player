@@ -6,7 +6,7 @@ import type { OpenUrl } from "./open-url.ts";
 import type { Prompt } from "./prompt.ts";
 import type { Reopener } from "./reopen.ts";
 import type { SeekSteps, SettingsStore } from "./settings.ts";
-import type { MenuText, Reason, State } from "./texts.ts";
+import type { Category, MenuText, Reason, State } from "./texts.ts";
 import type { Thumbnails } from "./thumbs.ts";
 import { stepText, type TimeJump } from "./time-jump.ts";
 
@@ -29,6 +29,8 @@ export type Features = {
 type Entry = {
   id: string;
   path: (MenuText | Text)[];
+  /** The command palette's "Category: Title" (translated like the title). */
+  category: Category;
   /** Menu position: doc/product/menus.md, and the 播放控制 chapter's 菜单与快捷键 table for new items. */
   order: number;
   group?: string;
@@ -65,6 +67,7 @@ function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n, seekBy: (del
     const seek = (id: string, direction: "backward" | "forward", at: number, delta: number, binding: string): Entry => ({
       id,
       path: ["@playback", "Seek", direction === "backward" ? text("Back {} s", [stepText(seconds)]) : text("Forward {} s", [stepText(seconds)])],
+      category: "Seek",
       order: at,
       group: "step",
       bindings: [binding],
@@ -82,6 +85,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
   const rate = (id: string, title: MenuText, order: number, value: number): Entry => ({
     id,
     path: ["@playback", "Speed", title],
+    category: "Speed",
     order,
     radio: true,
     action: () => p.setRate(value),
@@ -90,6 +94,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
   const keyframe = (id: string, title: MenuText, order: number, direction: "backward" | "forward", binding: string): Entry => ({
     id,
     path: ["@playback", "Seek", title],
+    category: "Seek",
     order,
     group: "frame",
     bindings: [binding],
@@ -100,6 +105,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
   const copy = (id: string, title: MenuText, order: number, kind: CopyKind): Entry => ({
     id,
     path: ["Copy to Clipboard", title],
+    category: "Copy to Clipboard",
     order,
     group: "open",
     action: () => f.copy(kind),
@@ -111,6 +117,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
   const option = (id: string, title: MenuText, order: number, value: () => boolean, toggle: () => void): Entry => ({
     id,
     path: ["@playback", title],
+    category: "Playback",
     order,
     group: "playback-options",
     action: toggle,
@@ -120,6 +127,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "open",
       path: ["Open File…"],
+      category: "File",
       order: 100,
       group: "open",
       bindings: ["Ctrl+O", "F3"],
@@ -129,6 +137,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "open-url",
       path: ["@open", "Open URL…"],
+      category: "File",
       order: 110,
       group: "open",
       bindings: ["Ctrl+U"],
@@ -139,6 +148,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "reopen",
       path: ["Reopen Current/Last File"],
+      category: "File",
       order: 121,
       group: "open",
       bindings: ["Ctrl+Y"],
@@ -153,6 +163,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "jump",
       path: ["@playback", "Jump to Time…"],
+      category: "Seek",
       order: 218,
       bindings: ["G"],
       action: () => jump.show(),
@@ -161,6 +172,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "jump-start",
       path: ["@playback", "Seek", "Jump to Start"],
+      category: "Seek",
       order: 219,
       group: "points",
       bindings: ["Backspace"],
@@ -170,6 +182,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "time-jump",
       path: ["@playback", "Seek", "Seek Steps…"],
+      category: "Seek",
       order: 223,
       group: "jump-settings",
       action: () => f.timeJump.show(),
@@ -181,6 +194,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "rate-custom",
       path: ["@playback", "Speed", "Custom…"],
+      category: "Speed",
       order: 226,
       action: () => customRate.show(),
       state: () => ready(p.can("rate"), null, p.rateBusy),
@@ -206,6 +220,7 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     {
       id: "hover-thumbnail",
       path: ["@playback", "Show Thumbnail on Seek Bar Hover"],
+      category: "Playback",
       order: 243,
       group: "playback-options",
       action: () => {
@@ -224,11 +239,12 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
 }
 
 /** Register `table` in `scope`; the host checks `enabled`, `run` checks it again for late runs. */
-function register(scope: Scope, table: Entry[]) {
-  for (const { id, path, order, group, radio, bindings, repeat, state, action } of table)
+function register(scope: Scope, { text }: I18n, table: Entry[]) {
+  for (const { id, path, category, order, group, radio, bindings, repeat, state, action } of table)
     scope.commands.add({
       id,
       path,
+      category: text(category),
       order,
       ...(group ? { group } : {}),
       ...(radio ? { radio } : {}),
@@ -250,14 +266,14 @@ function register(scope: Scope, table: Entry[]) {
  * the new seconds (same ids, orders and bindings).
  */
 export function addCommands(scope: Scope, i18n: I18n, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
-  register(scope, entries(playback, jump, customRate, features));
+  register(scope, i18n, entries(playback, jump, customRate, features));
   let seeks = scope.scope();
-  register(seeks, seekEntries(playback, features.settings.value.seekSteps, i18n, features.seekBy));
+  register(seeks, i18n, seekEntries(playback, features.settings.value.seekSteps, i18n, features.seekBy));
   return {
     async setSteps(steps: SeekSteps) {
       await seeks.dispose();
       seeks = scope.scope();
-      register(seeks, seekEntries(playback, steps, i18n, features.seekBy));
+      register(seeks, i18n, seekEntries(playback, steps, i18n, features.seekBy));
     },
   };
 }

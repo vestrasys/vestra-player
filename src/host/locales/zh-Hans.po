@@ -48,6 +48,22 @@ msgstr "速度"
 msgid "Seek"
 msgstr "跳转"
 
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "Window"
+msgstr "窗口"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "File"
+msgstr "文件"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Help"
+msgstr "帮助"
+
 #: src/composition.rs:39
 msgid "bottom bar"
 msgstr "底栏"
@@ -208,6 +224,14 @@ msgstr "全屏"
 #: src/main.rs:2607
 msgid "Leave Fullscreen"
 msgstr "仅退出全屏"
+
+#: ui/title-strip.slint
+msgid "Exit Fullscreen"
+msgstr "退出全屏"
+
+#: ui/title-strip.slint
+msgid "Minimize"
+msgstr "最小化"
 
 #: src/host/actions.rs
 #, x-machine

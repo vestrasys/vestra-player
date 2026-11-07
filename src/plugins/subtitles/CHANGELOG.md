@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.4.10
+
+- Command palette: the subtitle track commands (Off, the tracks, Cycle) have their own category text, **Subtitle Tracks**, instead of reusing the submenu's "Subtitle Track", whose Chinese is the verb phrase 选择字幕轨; the category is a noun in every language (zh-Hans 字幕轨). TS texts have no `msgctxt`, so it is a separate msgid; the menu text is unchanged. New text translated in all six languages and marked `x-machine`. The category texts "Secondary Subtitle Position" (all languages) and "Reset" (de, es, fr, ja, ko) are now marked `x-machine` too. Who must change: nobody. What users see: "字幕轨：依次切换" instead of "选择字幕轨：依次切换"; in English "Subtitle Tracks: Cycle". Titles, ids, menu paths, keys and order are unchanged.
+
+## 0.4.9
+
+- Every command has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title", so short titles such as "Off", "Top" or "Earlier 0.5 s" still say what they change outside the menu: **Subtitles** (Open Subtitle…, Add Secondary Subtitle…, Show Subtitles, Original ASS/SSA Styles, Reload Subtitles, Refresh Subtitle Tracks, Subtitle Tuning…, Subtitle Settings…), **Subtitle Track** (Off, the tracks, Cycle), **Secondary Subtitle** (Off, the tracks), **Secondary Subtitle Position** (Top, Above Main Subtitle), **Subtitle Style** (Size +/−, Move Up/Down, Bold, Shadow, Opaque Box), **Subtitle Sync** (Earlier, Later, Adjust Sync…), **Seek** (Previous Dialogue, Next Dialogue, Current Subtitle Start) and **Reset** (Subtitle Position, Subtitle Sync). The categories are translated in every language of the plugin.
+- Commands whose control is also in a window name that window as their place in the palette: Subtitle Tuning (track and secondary track choice, Open Subtitle…, size, position, sync and their resets) and Subtitle Settings (Bold, Shadow, Opaque Box, Original ASS/SSA Styles).
+- Who must change: nobody. Titles, ids, menu paths and default keys are unchanged. Requires player 0.7.6 (`minPlayerVersion`), which knows command categories.
+
 ## 0.4.8
 
 - The two subtitle resets moved to the player's **Reset** menu (below Settings, player 0.6.3; user ruling 2026-11-01): **Reset ▸ Subtitle Position** (was Subtitles ▸ Subtitle Style ▸ Reset Position, Alt+Home) and **Reset ▸ Subtitle Sync** (was Subtitles ▸ Sync ▸ Reset, `/`). Who must change: nobody. The command ids (`move-reset`, `sync-reset`) and default keys are the same, so keys a user bound to them keep working; the items are gone from Subtitle Style and Sync. Requires player 0.6.3 (`minPlayerVersion`), whose menus have the Reset menu.

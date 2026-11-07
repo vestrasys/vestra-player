@@ -1,6 +1,6 @@
 {
   "id": "vestra.video",
-  "version": "1.1.10",
+  "version": "1.1.12",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -23,5 +23,5 @@
     "color",
     "filters"
   ],
-  "minPlayerVersion": "0.6.3"
+  "minPlayerVersion": "0.7.6"
 }

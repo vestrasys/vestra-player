@@ -692,6 +692,12 @@ export function commandClient(transport) {
         }),
         /** Remove the command from the menu and the binding table; the id is free again. */
         unregister: (id) => transport.request("commands.unregister", { id }),
+        /**
+         * The key labels of the plugin's own commands, as menus show them
+         * (player 0.7.6); later changes come as the `commands.keys` event, in
+         * the same shape. `revision` orders answers and events.
+         */
+        keys: () => transport.request("commands.keys", {}),
         update: (id, revision, state, when) => transport.request("commands.update", {
             id,
             revision,

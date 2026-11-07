@@ -26,32 +26,37 @@ msgstr "言語：システムに従う。再起動後に反映されます"
 msgid "Language: {}. Takes effect after restart"
 msgstr "言語：{}。再起動後に反映されます"
 
-#: main.ts:59 main.ts:93 ui/appearance.slint:98
+#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
 #, x-machine
 msgid "Appearance"
 msgstr "外観"
 
-#: main.ts:73 main.ts:103 main.ts:113 ui/language.slint:59
+#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
 #, x-machine
 msgid "Language"
 msgstr "言語"
 
-#: main.ts:84
+#: main.ts:94
+#, x-machine
+msgid "Settings"
+msgstr "設定"
+
+#: main.ts:101
 #, x-machine
 msgid "Options…"
 msgstr "オプション…"
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Dark"
 msgstr "Vestra ダーク"
 
-#: main.ts:93 ui/appearance.slint:87
+#: main.ts:111 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Light"
 msgstr "Vestra ライト"
 
-#: main.ts:103 ui/language.slint:66
+#: main.ts:123 ui/language.slint:59
 #, x-machine
 msgid "Follow System"
 msgstr "システムに従う"
@@ -91,32 +96,32 @@ msgstr "パレット"
 msgid "language"
 msgstr "言語"
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 #, x-machine
 msgid "For bright rooms; the video area stays dark"
 msgstr "明るい部屋向け。ビデオ領域は暗いままです"
 
-#: ui/appearance.slint:90
+#: ui/appearance.slint:75
 #, x-machine
 msgid "Default, from the logo's aurora colours"
 msgstr "デフォルト。ロゴのオーロラの色を使用"
 
-#: ui/appearance.slint:106
+#: ui/appearance.slint:91
 #, x-machine
 msgid "Palette"
 msgstr "パレット"
 
-#: ui/appearance.slint:152
+#: ui/appearance.slint:144
 #, x-machine
 msgid "Changes apply to every window at once. Corner radii, font sizes and control sizes stay the same in every palette."
 msgstr "変更はすべてのウインドウにすぐ反映されます。角の丸み、フォントサイズ、コントロールのサイズはどのパレットでも同じです。"
 
-#: ui/appearance.slint:162
+#: ui/appearance.slint:154
 #, x-machine
 msgid "Restore Defaults"
 msgstr "デフォルトに戻す"
 
-#: ui/language.slint:77
+#: ui/language.slint:70
 #, x-machine
 msgid "Takes effect after restart."
 msgstr "再起動後に反映されます。"

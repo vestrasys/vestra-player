@@ -1,122 +1,130 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.playback 0.2.14\n"
+"Project-Id-Version: vestra.playback 0.2.16\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: commands.ts:67
+#: commands.ts:69
 msgid "Back {} s"
 msgstr ""
 
-#: commands.ts:67
+#: commands.ts:69
 msgid "Forward {} s"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 msgid "Seek"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 msgid "Speed"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Open File…"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Open URL…"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Reopen Current/Last File"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 msgid "Copy to Clipboard"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "File Name"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Folder Path"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Full Path"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Previous Keyframe"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Next Keyframe"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Jump to Time…"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Jump to Start"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Seek Steps…"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "0.5×"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "1.5×"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "2×"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Custom…"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Disable Screen Saver While Playing"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Show Time on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:231
+#: commands.ts:246
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:247
+msgid "File"
+msgstr ""
+
+#: commands.ts:247
+msgid "Playback"
+msgstr ""
+
+#: commands.ts:256
 msgid "Not supported by the current source"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:256
 msgid "No file to reopen"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:256
 msgid "No open file"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:256
 msgid "A network source has no file name"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:256
 msgid "No video"
 msgstr ""
 
-#: commands.ts:240
+#: commands.ts:256
 msgid "Needs ffmpeg"
 msgstr ""
 

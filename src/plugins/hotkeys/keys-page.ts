@@ -5,7 +5,6 @@ import type { IgnoreDefaults } from "./ignore.ts";
 import type { Osd } from "./main.ts";
 import {
   type Conflict,
-  commandText,
   fromSlintKey,
   inputOf,
   isMouse,
@@ -45,6 +44,12 @@ export type Line = Omit<Row, "selected"> & {
   inputs: string[];
   /** Sort text of the keys column (an ignored command's defaults in brackets, as shown). */
   sortKeys: string;
+  /**
+   * What the search box matches besides the keys, lower case: the name as shown plus the
+   * menu path and the category, so "Video" still finds Video ▸ Snapshot ▸ … now that the
+   * name is "Snapshot: Save Current Frame".
+   */
+  search: string;
 };
 
 /** The J01 page in the options window (category Keys and Mouse). */
@@ -67,12 +72,14 @@ export function lineOf(info: BindingInfo, ignored: boolean, model: BindingsModel
   } else if (info.overridden) {
     state = STATE.changed;
   }
+  const command = model.commandText(info);
   return {
     key: refKey(info),
     ref: { plugin: info.plugin, command: info.command },
     info,
     inputs: info.current,
-    command: commandText(info),
+    command,
+    search: [command, ...(info.path ?? []), info.category ?? ""].join("\n").toLowerCase(),
     keys,
     sortKeys,
     scope: info.scope,
@@ -209,6 +216,7 @@ export class KeysPage {
         info: null,
         inputs: o.inputs,
         command: refKey(o.ref),
+        search: refKey(o.ref).toLowerCase(),
         keys: o.inputs.filter((i) => !isMouse(i)).map(label).join(", "),
         sortKeys: o.inputs.filter((i) => !isMouse(i)).map(label).join(", "),
         scope: "",
@@ -246,7 +254,7 @@ export class KeysPage {
       .filter(
         (line) =>
           !search ||
-          line.command.toLowerCase().includes(search) ||
+          line.search.includes(search) ||
           line.keys.toLowerCase().includes(search) ||
           line.inputs.some((input) => input.toLowerCase().includes(search)),
       );
@@ -257,9 +265,13 @@ export class KeysPage {
       return by(a).localeCompare(by(b), "zh-Hans-CN") || a.command.localeCompare(b.command, "zh-Hans-CN");
     });
     if (prefs.descending) lines.reverse();
-    const rows = lines.map(({ key, command, keys, state, conflicts }) => ({
+    const { text, resolve } = this.#plugin.i18n;
+    const rows = lines.map(({ key, command, scope, keys, state, conflicts }) => ({
       key,
-      command,
+      // A panel's own command often shares its name with the menu item it mirrors
+      // ("Playlist: Add Files…" twice): the row says which one works only in the panel,
+      // as the edit area below does.
+      command: scope === "panel" ? resolve(text("{} (in panel)", [command])) : command,
       keys,
       state,
       conflicts,
@@ -370,7 +382,7 @@ export class KeysPage {
       (c) => c.scope !== info.scope && c.current.some((each) => sameKey(each, input)),
     );
     if (other && !this.#message.warn) {
-      const text = commandText(other);
+      const text = this.#model.commandText(other);
       if (info.scope !== "global") this.#say(message("outside-use", { text }));
       else if (other.plugin === "host") this.#say(message("player-panel-use", { text }));
       else this.#say(message("panel-use", { text, other: other.plugin }));
@@ -385,7 +397,7 @@ export class KeysPage {
       return { pendingKind: "quit", pendingKey: "", pendingCommand: this.#model.text(pending.target) };
     const first =
       pending.owners.find((o) => !o.shadowed.some((s) => sameKey(s.input, pending.input))) ?? pending.owners[0]!;
-    return { pendingKind: "used", pendingKey: this.#model.labelOf(pending.input), pendingCommand: commandText(first) };
+    return { pendingKind: "used", pendingKey: this.#model.labelOf(pending.input), pendingCommand: this.#model.commandText(first) };
   }
 
   async #replace() {
@@ -417,10 +429,10 @@ export class KeysPage {
     const keys = info.labels.filter((_, i) => !isMouse(info.current[i] ?? "")).join(", ");
     if (keys) {
       this.#say(message("updated", { text: keys }));
-      this.#osd(this.#plugin.osd.show("Shortcut updated: {0} = {1}", [commandText(info), keys]));
+      this.#osd(this.#plugin.osd.show("Shortcut updated: {0} = {1}", [this.#model.commandText(info), keys]));
     } else {
       this.#say(message("updated-none"));
-      this.#osd(this.#plugin.osd.show("Shortcut updated: {} = (none)", [commandText(info)]));
+      this.#osd(this.#plugin.osd.show("Shortcut updated: {} = (none)", [this.#model.commandText(info)]));
     }
   }
 

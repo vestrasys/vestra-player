@@ -236,8 +236,14 @@ export default async function activate(plugin: Plugin) {
       timer = undefined;
     }
   };
+  /**
+   * Command palette categories ("Category: Title", player 0.7.6). Text values, so
+   * `i18n extract` finds them; "Info" reuses the tag's translation.
+   */
+  const category = { info: plugin.i18n.text("Info"), help: plugin.i18n.text("Help") };
   plugin.commands.add({
     id: "info.toggle",
+    category: category.info,
     path: ["Playback Info"],
     order: 810,
     group: "windows",
@@ -252,6 +258,7 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "info.brief",
+    category: category.info,
     title: "Brief Info",
     bindings: ["Shift+Tab"],
     run: () => {
@@ -271,6 +278,7 @@ export default async function activate(plugin: Plugin) {
   const showProperties = propertiesWindow(plugin);
   plugin.commands.add({
     id: "info.properties",
+    category: category.info,
     path: ["Playback Properties…"],
     order: 811,
     group: "windows",
@@ -281,6 +289,7 @@ export default async function activate(plugin: Plugin) {
   const showAbout = aboutWindow(plugin, updater);
   plugin.commands.add({
     id: "info.about",
+    category: category.help,
     path: ["About Vestra Player…"],
     order: 880,
     group: "windows",
@@ -290,6 +299,8 @@ export default async function activate(plugin: Plugin) {
   // J10: right after About; the About window shows the result and the actions.
   updater.command = plugin.commands.add({
     id: "info.update",
+    category: category.help,
+    home: "info.about", // the About window's Updates row
     path: ["Check for Updates…"],
     order: 881,
     group: "windows",

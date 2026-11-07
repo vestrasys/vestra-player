@@ -82,9 +82,24 @@ export default async function activate(plugin: Plugin) {
   // The check marks are conditions the player evaluates (`plugin.when`, player
   // 0.5.21): they follow a switch made anywhere without this plugin running.
   const { when } = plugin;
+  /**
+   * Command palette categories ("Category: Title", player 0.7.6): "Settings"
+   * for Options…, the submenu names for the radios (reusing the menu labels
+   * and so their translations). Text values, so `i18n extract` finds them.
+   * The radios' home is Options…: the options window has the Appearance and
+   * Language pages with the same choices.
+   */
+  const { text } = plugin.i18n;
+  const category = {
+    settings: text("Settings"),
+    appearance: text("Appearance"),
+    language: text("Language"),
+  };
+  const HOME = "options";
   plugin.commands.add({
     id: "options",
     path: [SETTINGS, "Options…"],
+    category: category.settings,
     order: 830,
     group: "settings-main",
     bindings: ["F5"],
@@ -94,6 +109,8 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `theme.${row.id}`,
       path: [SETTINGS, "Appearance", row.title],
+      category: category.appearance,
+      home: HOME,
       order: 840 + index,
       group: "settings-look",
       radio: true,
@@ -104,6 +121,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "language.system",
     path: [SETTINGS, "Language", "Follow System"],
+    category: category.language,
+    home: HOME,
     order: 850,
     group: "settings-look",
     radio: true,
@@ -114,6 +133,8 @@ export default async function activate(plugin: Plugin) {
     plugin.commands.add({
       id: `language.${row.id}`,
       path: [SETTINGS, "Language", /* i18n-ignore */ row.name],
+      category: category.language,
+      home: HOME,
       order: 851 + index,
       group: "settings-language",
       radio: true,

@@ -441,7 +441,7 @@ export interface Transport {
     locale?: string;
 }
 /** The events a plugin subscribes to (`events.subscribe`). */
-type HostEvent = "source.state" | "playback.backend" | "window.state" | "packages.changed" | "bindings.changed" | "timeline.changed" | "appearance.changed" | "resolvers.fileTypes" | "video.upscaling.changed";
+type HostEvent = "source.state" | "playback.backend" | "window.state" | "packages.changed" | "bindings.changed" | "commands.keys" | "timeline.changed" | "appearance.changed" | "resolvers.fileTypes" | "video.upscaling.changed";
 export declare function createWire(transport: Transport): {
     processing: {
         state: () => Promise<import("./processing.ts").ProcessingState>;
@@ -453,6 +453,7 @@ export declare function createWire(transport: Transport): {
             revision: number;
         }>;
         unregister: (id: string) => Promise<void>;
+        keys: () => Promise<import("./commands.ts").CommandKeys>;
         update: (id: string, revision: number, state: import("./commands.ts").CommandState, when?: import("./commands.ts").CommandWhen) => Promise<{
             revision: number;
         }>;

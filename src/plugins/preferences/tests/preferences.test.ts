@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import type { Locale, ThemeId } from "@vestra-player/sdk";
-import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
+import { HostError, LOCALES, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate, { LANGUAGE_PAGE_ID, PAGE_ID } from "../main.ts";
 import { LANGUAGES } from "../languages.ts";
 import { THEMES } from "../themes.ts";
@@ -67,6 +67,33 @@ test("menu: Options… (F5, 830), one radio per palette from 840, the languages 
   assert.equal(checked(host), true);
   assert.equal(host.command("language.system").state.checked, true);
   assert.deepEqual(host.conflicts, []);
+});
+
+/** Every command's palette category as shown, and its home, by id. */
+const palette = (host: TestHost) =>
+  Object.fromEntries([...host.commands.entries()].map(([id, { declaration: d, display }]) => [id, [display.category, d.home ?? null]]));
+
+test("palette: every command has a category in every language, and the radios name Options… as home", async () => {
+  for (const locale of LOCALES) {
+    const { host, stop } = await start(new TestHost(), locale);
+    const shown = palette(host);
+    assert.equal(Object.keys(shown).length, 1 + THEMES.length + 1 + LANGUAGES.length);
+    for (const [id, [category]] of Object.entries(shown))
+      assert.ok(typeof category === "string" && category.trim() !== "", `${locale}: ${id} has no category`);
+    await stop();
+  }
+  const { host } = await start();
+  assert.deepEqual(palette(host), {
+    options: ["Settings", null],
+    ...Object.fromEntries(THEMES.map((row) => [`theme.${row.id}`, ["Appearance", "options"]])),
+    "language.system": ["Language", "options"],
+    ...Object.fromEntries(LANGUAGES.map((row) => [`language.${row.id}`, ["Language", "options"]])),
+  });
+  const { host: chinese } = await start(new TestHost(), "zh-Hans");
+  assert.deepEqual(
+    ["options", "theme.vestra", "language.ja"].map((id) => chinese.command(id).display.category),
+    ["设置", "外观", "语言"],
+  );
 });
 
 test("Simplified Chinese shows the texts of before", async () => {

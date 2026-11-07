@@ -26,6 +26,28 @@ fn json_ref(manifest: &str, id: &str) -> Value {
     json!({"plugin":manifest,"command":id})
 }
 
+/// One command of `bindings.list`: its bindings and how it is named.
+fn command_row(info: &bindings::Info, declaration: &crate::commands::Declaration) -> Value {
+    let texts = |inputs: &[bindings::Input]| inputs.iter().map(bindings::text).collect::<Vec<_>>();
+    json!({
+        "plugin":info.manifest,"command":info.id,
+        // What the user sees: the interface language.
+        "title":declaration.shown_title(),
+        "path":(!declaration.path.is_empty()).then(|| declaration.shown_path()),
+        // The keys menus merge by: the same in every language.
+        "key":(!declaration.path.is_empty()).then(|| declaration.path.clone()),
+        // Player 0.7.6: the category as shown, null without one.
+        "category":declaration.shown_category(),
+        "scope":if info.panel {"panel"} else {"global"},
+        "defaults":texts(&info.defaults),"current":texts(&info.current),
+        "overridden":info.overridden,
+        "shadowed":info.shadowed.iter().map(|(input, manifest, id)| {
+            json!({"input":bindings::text(input),"by":json_ref(manifest, id)})
+        }).collect::<Vec<_>>(),
+        "labels":info.current.iter().map(bindings::label).collect::<Vec<_>>(),
+    })
+}
+
 impl Host {
     pub(super) fn bindings_dispatch(
         &mut self,
@@ -83,30 +105,12 @@ impl Host {
     }
     fn bindings_list(&self) -> Value {
         let table = &self.input.borrow().table;
-        let texts =
-            |inputs: &[bindings::Input]| inputs.iter().map(bindings::text).collect::<Vec<_>>();
         let commands = table
             .infos()
             .into_iter()
             .filter_map(|info| {
                 let declaration = &self.commands.get(info.owner, &info.id)?.declaration;
-                Some(json!({
-                    "plugin":info.manifest,"command":info.id,
-                    // What the user sees: the interface language.
-                    "title":declaration.shown_title(),
-                    "path":(!declaration.path.is_empty()).then(|| declaration.shown_path()),
-                    // The keys menus merge by: the same in every language.
-                    "key":(!declaration.path.is_empty()).then(|| declaration.path.clone()),
-                    // Player 0.7.6: the category as shown, null without one.
-                    "category":declaration.shown_category(),
-                    "scope":if info.panel {"panel"} else {"global"},
-                    "defaults":texts(&info.defaults),"current":texts(&info.current),
-                    "overridden":info.overridden,
-                    "shadowed":info.shadowed.iter().map(|(input, manifest, id)| {
-                        json!({"input":bindings::text(input),"by":json_ref(manifest, id)})
-                    }).collect::<Vec<_>>(),
-                    "labels":info.current.iter().map(bindings::label).collect::<Vec<_>>(),
-                }))
+                Some(command_row(&info, declaration))
             })
             .collect::<Vec<_>>();
         let orphans = table
@@ -618,5 +622,58 @@ mod tests {
         // The first list of a run (nothing sent yet) is a change.
         assert!(!same_but_process(&running, &Value::Null));
         assert!(same_but_process(&json!([]), &json!([])));
+    }
+
+    /// `bindings.list` names the player's own commands and the core actions
+    /// by their categories, as the command palette does ("Seek: Back 5 s").
+    #[test]
+    fn bindings_list_gives_the_player_commands_their_categories() {
+        let mut table = bindings::Table::default();
+        let mut declarations = std::collections::BTreeMap::new();
+        let own = Host::host_declarations()
+            .into_iter()
+            .map(|(id, declaration, _)| (id, declaration));
+        for (id, declaration) in own.chain(crate::core_actions::declarations(5.)) {
+            table
+                .declare(
+                    bindings::HOST,
+                    id,
+                    "host",
+                    &declaration.bindings,
+                    false,
+                    false,
+                )
+                .unwrap();
+            declarations.insert(id.to_owned(), declaration);
+        }
+        let rows: std::collections::BTreeMap<String, Value> = table
+            .infos()
+            .iter()
+            .map(|info| (info.id.clone(), command_row(info, &declarations[&info.id])))
+            .collect();
+        assert_eq!(rows.len(), declarations.len());
+        for (id, row) in &rows {
+            assert!(row["category"].is_string(), "{id}: {row}");
+        }
+        let named = |id: &str| {
+            let row = &rows[id];
+            format!(
+                "{}: {}",
+                row["category"].as_str().unwrap(),
+                row["title"].as_str().unwrap()
+            )
+        };
+        assert_eq!(named("seek-backward"), "Seek: Back 5 s");
+        assert_eq!(named("stop"), "Playback: Close");
+        assert_eq!(named("mute"), "Audio: Mute");
+        assert_eq!(named("exit-fullscreen"), "Window: Leave Fullscreen");
+        assert_eq!(named("quit"), "File: Quit");
+        // Titles, keys and menu paths stay as they were.
+        assert_eq!(
+            rows["seek-backward"]["key"],
+            json!(["Playback", "Seek", "Back 5 s"])
+        );
+        assert_eq!(rows["palette"]["key"], Value::Null);
+        assert_eq!(rows["palette"]["defaults"], json!(["Ctrl+Shift+P"]));
     }
 }

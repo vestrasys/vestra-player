@@ -61,6 +61,23 @@ msgstr "Geschwindigkeit"
 msgid "Seek"
 msgstr "Springen"
 
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Window"
+msgstr "Fenster"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "File"
+msgstr "Datei"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Help"
+msgstr "Hilfe"
+
 #: src/composition.rs:39
 #, x-machine
 msgid "bottom bar"
@@ -260,6 +277,16 @@ msgstr "Vollbild umschalten"
 #, x-machine
 msgid "Leave Fullscreen"
 msgstr "Vollbild verlassen"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Exit Fullscreen"
+msgstr "Vollbild beenden"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Minimize"
+msgstr "Minimieren"
 
 #: src/host/actions.rs
 #, x-machine

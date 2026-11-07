@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.7
+
+- Every command has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Window** (Mini Size, Picture-in-Picture, Hide Pointer While Playing), **Window Size** (0.5×–2×, Fit to Video Aspect Ratio), **Size on Open** (Screen ▸ When Playback Starts: Don't Resize, 0.5×–2×, Fit to Video Aspect Ratio, Only Once; "When Playback Starts: 1×" would not say that it is the window's size) and **Always on Top** (Cycle Mode and the four modes). "Window" and "Always on Top" use the settings page's and the submenu's translations; "Window Size" and "Size on Open" are new, machine translations in every language marked `x-machine` (also in zh-Hans), worded like the settings page's "Window size when playback starts". No `home`: the settings page (Options ▸ Playback ▸ Window) has no command that opens it. Every command that can be disabled already gives a reason. Who must change: nobody. Titles, ids, menu paths, keys and order are unchanged.
+- Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
+
 ## 0.1.6
 
 - Window size when playback starts (G-02) leaves a maximized window alone, as MPC-HC's auto-zoom and mpv's autofit do: a new file no longer takes the window out of maximized and resizes it to the video. It reads `WindowState.maximized` (SDK 1.5.52, player 0.6.3). Who must change: nobody. What users see: with player 0.6.3 and later a maximized window stays maximized when a file starts; with older players, which do not report `maximized`, nothing changes (it reads `false`), so `minPlayerVersion` stays 0.6.0. The size commands (Screen ▸ 0.5×–2×, fit) still resize a maximized window: on Windows the player restores it first.

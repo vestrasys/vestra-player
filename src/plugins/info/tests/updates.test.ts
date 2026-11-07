@@ -98,7 +98,7 @@ test("J10: top-level Check for Updates… right after About (881, windows); Opti
   const { host, stop } = await start();
   try {
     assert.deepEqual(host.command("info.update").declaration, {
-      title: "Check for Updates…", path: ["Check for Updates…"], order: 881, group: "windows", radio: false, bindings: [], focus: null, repeat: false,
+      title: "Check for Updates…", path: ["Check for Updates…"], order: 881, group: "windows", radio: false, bindings: [], focus: null, repeat: false, category: { $vestraText: "Help" }, home: "info.about",
     });
     assert.deepEqual(host.conflicts, []);
     const page = host.settingsPage("info.updates");

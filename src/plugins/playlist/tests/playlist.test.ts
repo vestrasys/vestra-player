@@ -279,6 +279,70 @@ test("menu positions follow the round allocation table; list keys only work with
   }
 });
 
+test("every command has a palette category (its submenu or popup label) and a home where it has one", async () => {
+  const app = await start();
+  try {
+    const commands = [...app.host.commands.entries()];
+    assert.equal(commands.length, 48);
+    const ids = new Set(commands.map(([id]) => id));
+    const byCategory = new Map<string, string[]>();
+    const homes = new Map<string, string[]>();
+    for (const [id, { declaration, display }] of commands) {
+      const category = display.category;
+      assert.ok(typeof category === "string" && category.trim().length > 0, `${id} has a category`);
+      assert.ok(declaration.category, `${id} declares a category`);
+      byCategory.set(category, [...(byCategory.get(category) ?? []), id.replace("playlist.", "")]);
+      if (declaration.home) {
+        assert.ok(ids.has(declaration.home), `${id}: home ${declaration.home} is a command of this plugin`);
+        homes.set(declaration.home, [...(homes.get(declaration.home) ?? []), id.replace("playlist.", "")]);
+      }
+    }
+    // As a Simplified Chinese user sees them: the submenu and popup labels' own translations.
+    assert.deepEqual(
+      [...byCategory].map(([category, list]) => [category, list.length]),
+      [
+        ["播放列表", 30],
+        ["循环", 3],
+        ["打开文件时", 3],
+        ["排序", 12],
+      ],
+    );
+    assert.deepEqual(byCategory.get("排序"), [
+      "sort-ascending",
+      "sort-descending",
+      "sort-title",
+      "sort-filename",
+      "sort-extension",
+      "sort-size",
+      "sort-duration",
+      "sort-date",
+      "sort-shuffle",
+      "sort-folder",
+      "sort-path",
+      "sort-reverse",
+    ]);
+    // The options also on the settings page point there; the list's commands point at the list.
+    assert.deepEqual(homes.get("playlist.settings"), [
+      "repeat-none",
+      "repeat-all",
+      "repeat-one",
+      "shuffle",
+      "open-mode-only",
+      "open-mode-similar",
+      "open-mode-folder",
+      "fast-advance",
+      "remember",
+      "confirm-clear",
+    ]);
+    assert.equal(homes.get("playlist.visibility")?.length, 36);
+    assert.equal(app.command("visibility").declaration.home, undefined);
+    assert.equal(app.command("open-folder").declaration.home, undefined);
+    assert.equal(app.command("sort-size").declaration.home, "playlist.visibility");
+  } finally {
+    await app.close();
+  }
+});
+
 test("F6, Close List and the menu check share the sidebar preference; detach toggles", async () => {
   const app = await start();
   try {

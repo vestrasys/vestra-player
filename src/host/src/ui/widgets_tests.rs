@@ -149,7 +149,7 @@ export component W inherits Window {
     );
 }
 
-/// `KeyHint` (SDK 1.6.6) sizes to its label and takes no space with an
+/// `KeyHint` (SDK 1.6.7) sizes to its label and takes no space with an
 /// empty one (a cleared key); a `ToolTipArea` with `keys` and `detail`
 /// compiles without a warning and still shows its tip on hover; changing
 /// the keys while it shows keeps it showing.

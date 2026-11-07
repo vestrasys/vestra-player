@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.0.11
+
+- Command palette: the Snapshot submenu no longer uses the menu's "Video" as a category. Export Clip… and Export Tasks… are now **Export** (new text, translated in every locale; machine in de, es, fr, ja and ko, marked `x-machine`; zh-Hans 导出, the plugin's own word), Snapshot Settings…, Snapshot Folder… and Open Snapshot Folder are **Snapshot** like the rest of the submenu. Who must change: nobody. What users see: palette rows "Export: Export Clip…" and "Snapshot: Snapshot Settings…" instead of "Video: …". Titles, ids, menu paths, keys, order and `home` are unchanged.
+
+## 1.0.10
+
+- Command palette (player 0.7.6, SDK 1.6.4): every command declares a `category`, so the palette (Ctrl+Shift+P) names it on its own once the menus change. "Snapshot" (the submenu's own text and translations) for the six Save / Save As / Copy frame commands, Burst…, Capture as PNG / JPEG / BMP and Include Subtitles in Rendered Frame; "Video" (translated in every locale) for Export Clip…, Export Tasks…, Snapshot Settings…, Snapshot Folder… and Open Snapshot Folder, whose titles already name their subject ("Snapshot: Snapshot Settings…" would say it twice, and a clip is no snapshot). Capture as PNG / JPEG / BMP, Include Subtitles in Rendered Frame and Snapshot Folder… set `home` to Snapshot Settings…, the window that holds their controls. Who must change: nobody. What users see: palette rows such as "Snapshot: Save Current Frame" and "Video: Export Clip…", the options with "Snapshot Settings…" as their place. Titles, ids, menu paths, keys and order are unchanged; the frame commands keep their "No frame to capture" reason, so they stay listed (greyed) while disabled.
+- Requires player 0.7.6 (`minPlayerVersion`): older players refuse `category` and `home`.
+
 ## 1.0.9
 
 - Code only: the window parameter of the open/bind/release helpers is named `toolWindow` (was `window`). Who must change: nobody. No behaviour change.

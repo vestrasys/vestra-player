@@ -2,7 +2,7 @@ import type { Chapter, I18n, MarkKind, Plugin, Text, TimelineLayer } from "@vest
 import { type Bookmarks, bookmarkName } from "./bookmarks.ts";
 import { chapterName, type Chapters, hasMedia } from "./chapters.ts";
 import type { AbLoop } from "./loop.ts";
-import { MARKS } from "./menu.ts";
+import { MARKS, MARKS_CATEGORY } from "./menu.ts";
 import type { Osd } from "./osd.ts";
 import type { Settings } from "./store.ts";
 
@@ -145,6 +145,7 @@ export function addSeekbarCommand(plugin: Plugin, seekbar: SeekbarMarks) {
   plugin.commands.add({
     id: "marks.seekbar",
     path: [...MARKS, "Show Marks on Seek Bar"],
+    category: MARKS_CATEGORY,
     order: 30000,
     group: "marks-option",
     checked: () => seekbar.shown,

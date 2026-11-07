@@ -6,176 +6,186 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:65
+#: main.ts:50 main.ts:240 ui/page.slint:34
+#, x-machine
+msgid "Window"
+msgstr "Fenster"
+
+#: main.ts:51
+#, x-machine
+msgid "Window Size"
+msgstr "Fenstergröße"
+
+#: main.ts:52
+#, x-machine
+msgid "Size on Open"
+msgstr "Größe bei Wiedergabestart"
+
+#: main.ts:53 main.ts:202 main.ts:212
+#, x-machine
+msgid "Always on Top"
+msgstr "Immer im Vordergrund"
+
+#: main.ts:77
 #, x-machine
 msgid "Mini Size"
 msgstr "Minigröße"
 
-#: main.ts:72 main.ts:99
+#: main.ts:85 main.ts:113
 #, x-machine
 msgid "Switching picture-in-picture"
 msgstr "Bild-in-Bild wird umgeschaltet"
 
-#: main.ts:72 main.ts:99 main.ts:128 main.ts:140
+#: main.ts:85 main.ts:113 main.ts:143 main.ts:156
 #, x-machine
 msgid "Resizing the window"
 msgstr "Fenstergröße wird geändert"
 
-#: main.ts:72 main.ts:128 main.ts:140
+#: main.ts:85 main.ts:143 main.ts:156
 #, x-machine
 msgid "Not available in fullscreen"
 msgstr "Im Vollbild nicht verfügbar"
 
-#: main.ts:72 main.ts:99 main.ts:128 main.ts:140 pip.ts:42 size.ts:124
+#: main.ts:85 main.ts:113 main.ts:143 main.ts:156 pip.ts:42 size.ts:124
 #, x-machine
 msgid "No video"
 msgstr "Kein Video"
 
-#: main.ts:93
+#: main.ts:106
 #, x-machine
 msgid "Picture-in-Picture"
 msgstr "Bild-in-Bild"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 #, x-machine
 msgid "0.5×"
 msgstr "0,5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 #, x-machine
 msgid "1.5×"
 msgstr "1,5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: main.ts:134 main.ts:159
+#: main.ts:149 main.ts:175
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
 msgstr "An Seitenverhältnis des Videos anpassen"
 
-#: main.ts:148
+#: main.ts:164
 #, x-machine
 msgid "When playback starts: Don't resize the window"
 msgstr "Bei Wiedergabestart: Fenstergröße nicht ändern"
 
-#: main.ts:149
+#: main.ts:165
 #, x-machine
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "Bei Wiedergabestart: An Seitenverhältnis des Videos anpassen"
 
-#: main.ts:150
+#: main.ts:166
 #, x-machine
 msgid "When playback starts: {}×"
 msgstr "Bei Wiedergabestart: {}×"
 
-#: main.ts:154
+#: main.ts:170
 #, x-machine
 msgid "Resize only once when playback starts: On"
 msgstr "Nur einmal bei Wiedergabestart anpassen: Ein"
 
-#: main.ts:154
+#: main.ts:170
 #, x-machine
 msgid "Resize only once when playback starts: Off"
 msgstr "Nur einmal bei Wiedergabestart anpassen: Aus"
 
-#: main.ts:159 main.ts:169
+#: main.ts:175 main.ts:186
 #, x-machine
 msgid "When Playback Starts"
 msgstr "Bei Wiedergabestart"
 
-#: main.ts:159
+#: main.ts:175
 #, x-machine
 msgid "Don't Resize"
 msgstr "Nicht anpassen"
 
-#: main.ts:169
+#: main.ts:186
 #, x-machine
 msgid "Only Once"
 msgstr "Nur einmal"
 
-#: main.ts:180
+#: main.ts:198
 #, x-machine
 msgid "Always on top: Off"
 msgstr "Immer im Vordergrund: Aus"
 
-#: main.ts:180
+#: main.ts:198
 #, x-machine
 msgid "Always on top: Always"
 msgstr "Immer im Vordergrund: Immer"
 
-#: main.ts:180
+#: main.ts:198
 #, x-machine
 msgid "Always on top: While playing"
 msgstr "Immer im Vordergrund: Während der Wiedergabe"
 
-#: main.ts:180
+#: main.ts:198
 #, x-machine
 msgid "Always on top: While playing in fullscreen"
 msgstr "Immer im Vordergrund: Während der Wiedergabe im Vollbild"
 
-#: main.ts:184 main.ts:193
-#, x-machine
-msgid "Always on Top"
-msgstr "Immer im Vordergrund"
-
-#: main.ts:184
+#: main.ts:202
 #, x-machine
 msgid "Cycle Mode"
 msgstr "Modus durchschalten"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:66
+#: main.ts:212 ui/page.slint:66
 #, x-machine
 msgid "Never"
 msgstr "Nie"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:66
+#: main.ts:212 ui/page.slint:66
 #, x-machine
 msgid "Always"
 msgstr "Immer"
 
-#: main.ts:193
+#: main.ts:212
 #, x-machine
 msgid "While Playing"
 msgstr "Während der Wiedergabe"
 
-#: main.ts:193
+#: main.ts:212
 #, x-machine
 msgid "While Playing in Fullscreen"
 msgstr "Während der Wiedergabe im Vollbild"
 
-#: main.ts:206
+#: main.ts:226
 #, x-machine
 msgid "Hide pointer while playing: On"
 msgstr "Mauszeiger bei Wiedergabe ausblenden: Ein"
 
-#: main.ts:206
+#: main.ts:226
 #, x-machine
 msgid "Hide pointer while playing: Off"
 msgstr "Mauszeiger bei Wiedergabe ausblenden: Aus"
 
-#: main.ts:211
+#: main.ts:231
 #, x-machine
 msgid "Hide Pointer While Playing"
 msgstr "Mauszeiger bei Wiedergabe ausblenden"
-
-#: main.ts:219 ui/page.slint:34
-#, x-machine
-msgid "Window"
-msgstr "Fenster"
 
 #: manifest.json
 #, x-machine

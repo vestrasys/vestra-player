@@ -36,97 +36,102 @@ msgstr "기록"
 msgid "resume"
 msgstr "이어서 재생"
 
-#: menu.ts:36
+#: menu.ts:60
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+#: menu.ts:123 menu.ts:128 menu.ts:164 menu.ts:174 menu.ts:187
 #, x-machine
 msgid "Recently Played"
 msgstr "최근 재생"
 
-#: menu.ts:94
+#: menu.ts:128
 #, x-machine
 msgid "(No Entries)"
 msgstr "(항목 없음)"
 
-#: menu.ts:114
+#: menu.ts:161
+#, x-machine
+msgid "No recently played items"
+msgstr "최근 재생한 항목이 없습니다"
+
+#: menu.ts:164
 #, x-machine
 msgid "Remove Invalid Entries"
 msgstr "유효하지 않은 항목 제거"
 
-#: menu.ts:118
+#: menu.ts:170
 #, x-machine
 msgid "Removed {} invalid entries"
 msgstr "유효하지 않은 항목 {}개를 제거했습니다"
 
-#: menu.ts:122
+#: menu.ts:174
 #, x-machine
 msgid "Clear Entries"
 msgstr "항목 지우기"
 
-#: menu.ts:128
+#: menu.ts:182
 #, x-machine
 msgid "Playback history cleared"
 msgstr "재생 기록을 지웠습니다"
 
-#: menu.ts:133
+#: menu.ts:187
 #, x-machine
 msgid "Record Playback History"
 msgstr "재생 기록 남기기"
 
-#: menu.ts:144
+#: menu.ts:199
 #, x-machine
 msgid "File not found: {}"
 msgstr "파일을 찾을 수 없습니다: {}"
 
-#: menu.ts:153 menu.ts:156
+#: menu.ts:208 menu.ts:211
 #, x-machine
 msgid "Cannot open: {}"
 msgstr "열 수 없습니다: {}"
 
-#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+#: menu.ts:220 menu.ts:229 menu.ts:240 menu.ts:249 ui/resume.slint:6
 #, x-machine
 msgid "Resume Playback"
 msgstr "이어서 재생"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Don't Resume"
 msgstr "이어서 재생 안 함"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Resume Automatically"
 msgstr "자동으로 이어서 재생"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Ask Every Time"
 msgstr "매번 묻기"
 
-#: menu.ts:182
+#: menu.ts:240
 #, x-machine
 msgid "Also Remember Audio Files"
 msgstr "오디오 파일도 기억"
 
-#: menu.ts:190
+#: menu.ts:249
 #, x-machine
 msgid "Clear All Saved Positions"
 msgstr "저장된 위치 모두 지우기"
 
-#: menu.ts:195
+#: menu.ts:255
 #, x-machine
 msgid "All saved positions cleared"
 msgstr "저장된 위치를 모두 지웠습니다"
 
-#: resume.ts:226
+#: resume.ts:248
 #, x-machine
 msgid "Resuming from {}"
 msgstr "{}부터 이어서 재생합니다"
 
-#: resume.ts:229
+#: resume.ts:251
 #, x-machine
 msgid "Cannot resume: {}"
 msgstr "이어서 재생할 수 없습니다: {}"

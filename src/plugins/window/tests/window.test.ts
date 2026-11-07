@@ -219,6 +219,44 @@ test("menus: paths, orders, groups and bindings as in the window chapter; no con
   assert.equal(host.mainWindow.cursorAutoHide, "playing");
 });
 
+test("palette: every command has a category, the same one within a submenu; no home", async () => {
+  const { host } = await start();
+  const categories = [...host.commands.entries()].map(([id, c]) => [id, c.display.category]);
+  for (const [id, category] of categories) assert.ok(typeof category === "string" && category.length > 0, `${id} has a category`);
+  assert.deepEqual(categories, [
+    ["mini", "Window"],
+    ["pip", "Window"],
+    ["size.0.5", "Window Size"],
+    ["size.1", "Window Size"],
+    ["size.1.5", "Window Size"],
+    ["size.2", "Window Size"],
+    ["fit", "Window Size"],
+    ["auto.off", "Size on Open"],
+    ["auto.0.5", "Size on Open"],
+    ["auto.1", "Size on Open"],
+    ["auto.1.5", "Size on Open"],
+    ["auto.2", "Size on Open"],
+    ["auto.fit", "Size on Open"],
+    ["auto.once", "Size on Open"],
+    ["top.cycle", "Always on Top"],
+    ["top.never", "Always on Top"],
+    ["top.always", "Always on Top"],
+    ["top.playing", "Always on Top"],
+    ["top.fullscreen", "Always on Top"],
+    ["hide-cursor", "Window"],
+  ]);
+  for (const [id, c] of host.commands) assert.equal(c.declaration.home, undefined, id);
+});
+
+test("palette: commands that can be disabled say why (the palette hides them otherwise)", async () => {
+  const { host } = await start();
+  // No video: Mini Size, Picture-in-Picture, the sizes and Fit are disabled, each with a reason.
+  for (const id of ["mini", "pip", "size.0.5", "size.1", "size.1.5", "size.2", "fit"]) {
+    assert.equal(state(host, id).enabled, false, id);
+    assert.equal(host.command(id).display.reason, "No video", id);
+  }
+});
+
 test("menus: without system picture-in-picture there is no 画中画; ` is still 迷你尺寸", async () => {
   const { host } = await start(withoutPip());
   assert.equal(host.commands.has("pip"), false);
@@ -982,6 +1020,11 @@ test("zh-Hans: the menus, the settings page and the OSD texts are the Chinese on
     ],
   );
   assert.equal(host.settingsPage(PAGE_ID).title, "窗口");
+  // The palette categories: the page's and the submenu's words, and the two new ones.
+  assert.deepEqual(
+    ["mini", "size.1", "auto.once", "top.cycle", "hide-cursor"].map((id) => host.command(id).display.category),
+    ["窗口", "窗口尺寸", "开始播放时的尺寸", "置顶", "窗口"],
+  );
 
   // G-02, H05, B30 by menu.
   await host.command("auto.2").run();

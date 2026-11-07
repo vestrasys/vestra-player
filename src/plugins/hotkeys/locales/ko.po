@@ -46,7 +46,7 @@ msgstr "패널 내"
 msgid "Global"
 msgstr "전역"
 
-#: export.ts:22 keys-page.ts:192
+#: export.ts:22 keys-page.ts:203
 #, x-machine
 msgid "Player"
 msgstr "플레이어"
@@ -106,74 +106,89 @@ msgstr "기본 단축키 무시: 켬"
 msgid "Ignore default shortcuts: Off"
 msgstr "기본 단축키 무시: 끔"
 
-#: keys-page.ts:119
+#: keys-page.ts:126
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "키보드 단축키"
 
-#: keys-page.ts:191
+#: keys-page.ts:202
 #, x-machine
 msgid "All sources"
 msgstr "모든 출처"
 
-#: keys-page.ts:194
+#: keys-page.ts:205
 #, x-machine
 msgid "Plugins not loaded"
 msgstr "로드되지 않은 플러그인"
 
-#: keys-page.ts:416
+#: keys-page.ts:274
+#, x-machine
+msgid "{} (in panel)"
+msgstr "{} (패널 내)"
+
+#: keys-page.ts:432
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "단축키를 변경했습니다: {0} = {1}"
 
-#: keys-page.ts:419
+#: keys-page.ts:435
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "단축키를 변경했습니다: {} = (없음)"
 
-#: keys-page.ts:471
+#: keys-page.ts:487
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "모든 단축키를 기본값으로 복원할까요?"
 
-#: keys-page.ts:472
+#: keys-page.ts:488
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "로드되지 않은 플러그인을 포함해 모든 명령의 단축키와 마우스 동작에 대한 변경 사항이 지워집니다."
 
-#: keys-page.ts:473
+#: keys-page.ts:489
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "모두 기본값으로 복원"
 
-#: keys-page.ts:485
+#: keys-page.ts:501
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "단축키를 기본값으로 복원했습니다"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:512
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "단축키 목록 내보내기"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:512
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Vestra Player 단축키.csv"
 
+#: keys.ts:241
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0}: {1}"
+
 #: main.ts:36
+#, x-machine
+msgid "Settings"
+msgstr "설정"
+
+#: main.ts:40
 #, x-machine
 msgid "Keyboard Shortcuts…"
 msgstr "키보드 단축키…"
 
-#: main.ts:43
+#: main.ts:48
 #, x-machine
 msgid "Mouse…"
 msgstr "마우스…"
 
-#: main.ts:50
+#: main.ts:57
 #, x-machine
 msgid "Ignore Default Shortcuts"
 msgstr "기본 단축키 무시"
@@ -417,7 +432,7 @@ msgstr "모두 기본값으로 복원…"
 msgid "Export List…"
 msgstr "목록 내보내기…"
 
-#: ui/keys.slint:450
+#: ui/keys.slint:452
 #, x-machine
 msgid "Ignore default shortcuts"
 msgstr "기본 단축키 무시"

@@ -680,9 +680,110 @@ impl Policy {
     }
 }
 
+/// The fullscreen title strip (Windows, Linux; Edge/Chrome F11 and PotPlayer
+/// precedent): the pointer at the screen's top edge reveals it over the
+/// video; it stays while the pointer is over it and hides `LEAVE_MS` after
+/// the pointer left it and the edge, or at once when fullscreen ends. The
+/// edge is the top `TITLE_EDGE_PX` physical px of the window, read from the
+/// window's pointer (no input area, so the video keeps its clicks there);
+/// the top-right corner belongs to the strip, not to the G-01 right edge.
+/// The title strip's reveal zone: the top 2 physical px (Vestra value).
+pub const TITLE_EDGE_PX: f64 = 2.0;
+
+/// The pointer at `y` (window logical px) on a display of `scale` is in
+/// the title strip's reveal zone.
+pub fn at_top_edge(y: f64, scale: f64) -> bool {
+    y.is_finite() && scale.is_finite() && scale > 0.0 && y * scale < TITLE_EDGE_PX
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct TitleStrip {
+    shown: bool,
+    /// When the pointer was first seen outside the strip and the edge.
+    left_at: Option<u64>,
+}
+
+impl TitleStrip {
+    /// `eligible`: the main window is fullscreen on a system without a
+    /// title bar there, not in picture-in-picture. `edge`: the pointer is in
+    /// the reveal zone; `over`: it is over the strip (counts only while the
+    /// strip shows). The host samples both every tick. Returns whether the
+    /// strip shows.
+    pub fn update(&mut self, eligible: bool, edge: bool, over: bool, now_ms: u64) -> bool {
+        if !eligible {
+            *self = Self::default();
+        } else if edge || (self.shown && over) {
+            self.shown = true;
+            self.left_at = None;
+        } else if self.shown {
+            let left = *self.left_at.get_or_insert(now_ms);
+            if now_ms.saturating_sub(left) >= LEAVE_MS {
+                *self = Self::default();
+            }
+        }
+        self.shown
+    }
+
+    /// The pointer is at the edge or over the shown strip: the pointer
+    /// auto-hide leaves it alone.
+    pub fn holding(&self) -> bool {
+        self.shown && self.left_at.is_none()
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_title_strip_shows_at_the_top_edge_and_hides_500_ms_after_the_pointer_left() {
+        let mut strip = TitleStrip::default();
+        // Not fullscreen (or macOS, or picture-in-picture): the edge does nothing.
+        assert!(!strip.update(false, true, false, 0));
+        assert!(!strip.holding());
+        // Fullscreen, the pointer away from the edge: hidden.
+        assert!(!strip.update(true, false, false, 10));
+        assert!(!strip.update(true, false, true, 20), "over a hidden strip");
+        // At the edge: shown, held.
+        assert!(strip.update(true, true, false, 100));
+        assert!(strip.holding());
+        // Down onto the strip (out of the 2 px edge): it stays, however long.
+        assert!(strip.update(true, false, true, 200));
+        assert!(strip.update(true, false, true, 60_000));
+        assert!(strip.holding());
+        // Off the strip: the leave delay runs, not held any more.
+        assert!(strip.update(true, false, false, 60_100));
+        assert!(!strip.holding());
+        assert!(strip.update(true, false, false, 60_599));
+        // Back over it within the delay: the delay is cancelled.
+        assert!(strip.update(true, false, true, 60_599));
+        assert!(strip.holding());
+        assert!(strip.update(true, false, false, 61_000));
+        assert!(strip.update(true, false, false, 61_499));
+        assert!(
+            !strip.update(true, false, false, 61_500),
+            "500 ms after leaving"
+        );
+        assert!(!strip.update(true, false, false, 70_000));
+        // Leaving fullscreen hides it at once, even with the pointer over it.
+        assert!(strip.update(true, true, false, 80_000));
+        assert!(!strip.update(false, true, true, 80_001));
+        assert!(!strip.holding());
+        assert_eq!(strip, TitleStrip::default(), "nothing left over");
+        // Re-entering fullscreen starts hidden.
+        assert!(!strip.update(true, false, false, 80_002));
+    }
+
+    #[test]
+    fn the_title_strip_edge_is_the_top_two_physical_pixels() {
+        assert!(at_top_edge(0.0, 1.0) && at_top_edge(1.0, 1.0));
+        assert!(!at_top_edge(2.0, 1.0));
+        // 1.75: logical 1.0 is physical 1.75 (in), 1.2 is 2.1 (out).
+        assert!(at_top_edge(1.0, 1.75) && !at_top_edge(1.2, 1.75));
+        assert!(at_top_edge(0.9, 2.0) && !at_top_edge(1.0, 2.0));
+        assert!(!at_top_edge(f64::NAN, 1.0) && !at_top_edge(0.0, 0.0));
+    }
+
     fn viewport(width: f64, height: f64) -> Viewport {
         Viewport { width, height }
     }

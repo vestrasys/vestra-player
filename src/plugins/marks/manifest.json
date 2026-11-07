@@ -1,6 +1,6 @@
 {
   "id": "vestra.marks",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -23,5 +23,5 @@
     "Bookmarks",
     "Loop"
   ],
-  "minPlayerVersion": "0.4.3"
+  "minPlayerVersion": "0.7.6"
 }

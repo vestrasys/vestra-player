@@ -36,97 +36,102 @@ msgstr "Verlauf"
 msgid "resume"
 msgstr "Fortsetzen"
 
-#: menu.ts:36
+#: menu.ts:60
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: menu.ts:94 menu.ts:114 menu.ts:122 menu.ts:133
+#: menu.ts:123 menu.ts:128 menu.ts:164 menu.ts:174 menu.ts:187
 #, x-machine
 msgid "Recently Played"
 msgstr "Zuletzt abgespielt"
 
-#: menu.ts:94
+#: menu.ts:128
 #, x-machine
 msgid "(No Entries)"
 msgstr "(Keine Einträge)"
 
-#: menu.ts:114
+#: menu.ts:161
+#, x-machine
+msgid "No recently played items"
+msgstr "Keine zuletzt abgespielten Einträge"
+
+#: menu.ts:164
 #, x-machine
 msgid "Remove Invalid Entries"
 msgstr "Ungültige Einträge entfernen"
 
-#: menu.ts:118
+#: menu.ts:170
 #, x-machine
 msgid "Removed {} invalid entries"
 msgstr "{} ungültige Einträge entfernt"
 
-#: menu.ts:122
+#: menu.ts:174
 #, x-machine
 msgid "Clear Entries"
 msgstr "Einträge löschen"
 
-#: menu.ts:128
+#: menu.ts:182
 #, x-machine
 msgid "Playback history cleared"
 msgstr "Wiedergabeverlauf gelöscht"
 
-#: menu.ts:133
+#: menu.ts:187
 #, x-machine
 msgid "Record Playback History"
 msgstr "Wiedergabeverlauf aufzeichnen"
 
-#: menu.ts:144
+#: menu.ts:199
 #, x-machine
 msgid "File not found: {}"
 msgstr "Datei nicht gefunden: {}"
 
-#: menu.ts:153 menu.ts:156
+#: menu.ts:208 menu.ts:211
 #, x-machine
 msgid "Cannot open: {}"
 msgstr "Öffnen nicht möglich: {}"
 
-#: menu.ts:172 menu.ts:182 menu.ts:190 ui/resume.slint:6
+#: menu.ts:220 menu.ts:229 menu.ts:240 menu.ts:249 ui/resume.slint:6
 #, x-machine
 msgid "Resume Playback"
 msgstr "Wiedergabe fortsetzen"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Don't Resume"
 msgstr "Nicht fortsetzen"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Resume Automatically"
 msgstr "Automatisch fortsetzen"
 
-#: menu.ts:172
+#: menu.ts:229
 #, x-machine
 msgid "Ask Every Time"
 msgstr "Jedes Mal fragen"
 
-#: menu.ts:182
+#: menu.ts:240
 #, x-machine
 msgid "Also Remember Audio Files"
 msgstr "Auch für Audiodateien merken"
 
-#: menu.ts:190
+#: menu.ts:249
 #, x-machine
 msgid "Clear All Saved Positions"
 msgstr "Alle gemerkten Positionen löschen"
 
-#: menu.ts:195
+#: menu.ts:255
 #, x-machine
 msgid "All saved positions cleared"
 msgstr "Alle gemerkten Positionen gelöscht"
 
-#: resume.ts:226
+#: resume.ts:248
 #, x-machine
 msgid "Resuming from {}"
 msgstr "Fortsetzen ab {}"
 
-#: resume.ts:229
+#: resume.ts:251
 #, x-machine
 msgid "Cannot resume: {}"
 msgstr "Fortsetzen nicht möglich: {}"

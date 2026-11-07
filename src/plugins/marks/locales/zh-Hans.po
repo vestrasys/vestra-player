@@ -5,27 +5,27 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:183
+#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 msgid "Bookmark {}"
 msgstr "书签 {}"
 
-#: chapters.ts:12 menu.ts:51 ui/marks.slint:55
+#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
 msgid "Chapter {}"
 msgstr "章节 {}"
 
-#: list.ts:218
+#: list.ts:226
 msgid "Clear all bookmarks of this file?"
 msgstr "清空当前文件的全部书签？"
 
-#: list.ts:220
+#: list.ts:228
 msgid "{} bookmark will be removed. This can't be undone."
 msgstr "将移除 {} 个书签，不能撤销。"
 
-#: list.ts:220
+#: list.ts:228
 msgid "{} bookmarks will be removed. This can't be undone."
 msgstr "将移除 {} 个书签，不能撤销。"
 
-#: list.ts:223 ui/marks.slint:207
+#: list.ts:231 ui/marks.slint:210
 msgid "Clear Bookmarks"
 msgstr "清空书签"
 
@@ -62,156 +62,156 @@ msgid "Loop"
 msgstr "循环"
 
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:50
+#: menu.ts:59
 msgid "{}"
 msgstr "{}"
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:53
+#: menu.ts:62
 msgid "{}{}{}"
 msgstr "{}{}{}"
 
-#: menu.ts:101 menu.ts:109 menu.ts:120 menu.ts:158 menu.ts:171 menu.ts:179 menu.ts:190 seekbar.ts:147 ui/marks.slint:70
+#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
 msgid "Chapters and Bookmarks"
 msgstr "章节/书签"
 
-#: menu.ts:101
+#: menu.ts:110
 msgid "Chapter and Bookmark List…"
 msgstr "章节/书签列表…"
 
-#: menu.ts:109 ui/marks.slint:205
+#: menu.ts:119 ui/marks.slint:208
 msgid "Add Bookmark"
 msgstr "添加书签"
 
-#: menu.ts:114 osd.ts:51
+#: menu.ts:126 osd.ts:51
 msgid "Can't add bookmarks to this source"
 msgstr "当前来源不能添加书签"
 
-#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:154
+#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
 msgid "No media open"
 msgstr "未打开媒体"
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Previous Bookmark or Chapter"
 msgstr "上一书签/章节"
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Next Bookmark or Chapter"
 msgstr "下一书签/章节"
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Previous Chapter"
 msgstr "上一章节"
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Next Chapter"
 msgstr "下一章节"
 
-#: menu.ts:125 menu.ts:164 menu.ts:183
+#: menu.ts:138 menu.ts:179 menu.ts:201
 msgid "This source can't seek"
 msgstr "当前来源不能跳转"
 
-#: menu.ts:171
+#: menu.ts:186
 msgid "More Chapters… ({} in all)"
 msgstr "更多章节…（共 {} 项）"
 
-#: menu.ts:190
+#: menu.ts:208
 msgid "More Bookmarks… ({} in all)"
 msgstr "更多书签…（共 {} 项）"
 
-#: menu.ts:231 menu.ts:245 menu.ts:257
+#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
 msgid "A-B Loop"
 msgstr "A-B 区段循环"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Set Start Point"
 msgstr "设定起点"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Clear Start Point"
 msgstr "解除起点"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Start Point Back 0.1 s"
 msgstr "起点后退 0.1 秒"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Start Point Forward 0.1 s"
 msgstr "起点前进 0.1 秒"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Set End Point"
 msgstr "设定止点"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Clear End Point"
 msgstr "解除止点"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "End Point Back 0.1 s"
 msgstr "止点后退 0.1 秒"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "End Point Forward 0.1 s"
 msgstr "止点前进 0.1 秒"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Move Range Back 0.1 s"
 msgstr "区段整体后退 0.1 秒"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Move Range Forward 0.1 s"
 msgstr "区段整体前进 0.1 秒"
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Loop Current Chapter or Bookmark Range"
 msgstr "循环当前章节/书签区段"
 
-#: menu.ts:237 menu.ts:250 osd.ts:51
+#: menu.ts:257 menu.ts:271 osd.ts:51
 msgid "This source doesn't support A-B loop"
 msgstr "当前来源不支持区段循环"
 
-#: menu.ts:237
+#: menu.ts:257
 msgid "Start point not set"
 msgstr "未设定起点"
 
-#: menu.ts:237
+#: menu.ts:257
 msgid "End point not set"
 msgstr "未设定止点"
 
-#: menu.ts:237 menu.ts:250
+#: menu.ts:257 menu.ts:271
 msgid "A-B range not set"
 msgstr "未设定区段"
 
-#: menu.ts:245
+#: menu.ts:265
 msgid "A-B Loop On/Off"
 msgstr "区段循环 开/关"
 
-#: menu.ts:257
+#: menu.ts:278 menu.ts:279
 msgid "Loop Count"
 msgstr "循环次数"
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "Endless"
 msgstr "无限"
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "Once"
 msgstr "1 次"
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "2 Times"
 msgstr "2 次"
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "3 Times"
 msgstr "3 次"
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "5 Times"
 msgstr "5 次"
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "10 Times"
 msgstr "10 次"
 
@@ -339,55 +339,55 @@ msgstr "区段循环失败：{}"
 msgid "Show Marks on Seek Bar"
 msgstr "在进度条上显示标记"
 
-#: ui/marks.slint:114 ui/marks.slint:161
+#: ui/marks.slint:117 ui/marks.slint:164
 msgid "Time"
 msgstr "时间"
 
-#: ui/marks.slint:114 ui/marks.slint:177
+#: ui/marks.slint:117 ui/marks.slint:180
 msgid "Title"
 msgstr "标题"
 
-#: ui/marks.slint:124
+#: ui/marks.slint:127
 msgid "Search by title"
 msgstr "按标题搜索"
 
-#: ui/marks.slint:130
+#: ui/marks.slint:133
 msgid "The file has changed; bookmark times may be off"
 msgstr "文件已改变，书签时间可能不准"
 
-#: ui/marks.slint:154
+#: ui/marks.slint:157
 msgid "No matches"
 msgstr "无匹配项"
 
-#: ui/marks.slint:154
+#: ui/marks.slint:157
 msgid "No chapters or bookmarks"
 msgstr "没有章节或书签"
 
-#: ui/marks.slint:193
+#: ui/marks.slint:196
 msgid "Title can't be empty"
 msgstr "标题不能为空"
 
-#: ui/marks.slint:194
+#: ui/marks.slint:197
 msgid "Time format is h:mm:ss.d"
 msgstr "时间格式为 h:mm:ss.d"
 
-#: ui/marks.slint:195
+#: ui/marks.slint:198
 msgid "Time exceeds the duration ({})"
 msgstr "时间超出时长（{}）"
 
-#: ui/marks.slint:196
+#: ui/marks.slint:199
 msgid "Removed: {}"
 msgstr "已移除：{}"
 
-#: ui/marks.slint:197
+#: ui/marks.slint:200
 msgid "Can't confirm: {}"
 msgstr "无法确认：{}"
 
-#: ui/marks.slint:198
+#: ui/marks.slint:201
 msgid "{n} bookmark cleared"
 msgid_plural "{n} bookmarks cleared"
 msgstr[0] "已清空 {n} 个书签"
 
-#: ui/marks.slint:206
+#: ui/marks.slint:209
 msgid "Remove"
 msgstr "移除"

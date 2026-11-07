@@ -175,6 +175,13 @@ impl Host {
             let _ = events.send(Event::PipReturn(generation));
             SValue::Void
         })?;
+        let events = self.events.clone();
+        window.set_callback("title-strip-action", move |args| {
+            if let Some(SValue::String(action)) = args.first() {
+                let _ = events.send(Event::TitleStrip(generation, action.to_string()));
+            }
+            SValue::Void
+        })?;
         let input = self.input.clone();
         window.set_callback("left-press", move |args| {
             let number = |i: usize| match args.get(i) {

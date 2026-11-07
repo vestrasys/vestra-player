@@ -492,6 +492,25 @@ pub fn set_foreground(hwnd: isize) -> bool {
     unsafe { SetForegroundWindow(hwnd as HWND) != 0 }
 }
 
+/// Minimize window `hwnd` (a raw HWND value) as the system does
+/// (`ShowWindow(SW_MINIMIZE)`, what the taskbar and Win+Down do), not
+/// through winit's minimized flag: winit maximizes a window flagged maximized
+/// before minimizing it, and its flag stays set after a restore that is not a
+/// `WM_SYSCOMMAND`, which then skips restoring the frame styles when the
+/// window leaves fullscreen. `false` for an invalid handle.
+pub fn minimize(hwnd: isize) -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{IsWindow, SW_MINIMIZE, ShowWindow};
+    // SAFETY: both take the handle by value; IsWindow rejects an invalid
+    // one, and ShowWindow returns 0 for it, neither touches memory through it.
+    unsafe {
+        if IsWindow(hwnd as HWND) == 0 {
+            return false;
+        }
+        ShowWindow(hwnd as HWND, SW_MINIMIZE);
+    }
+    true
+}
+
 /// CPU cycles the calling thread has run so far (`QueryThreadCycleTime`):
 /// the frame log tells a busy UI thread from one that waits. 0 on failure.
 pub fn thread_cycles() -> u64 {
@@ -1359,9 +1378,14 @@ fn placement_steps(
 mod tests {
     use super::{
         Edges, SuperResolution, VBlank, display_areas, dxgi_adapters, file_is_remote,
-        hidden_top_level, is_own_show, unmatched, version_parts, video_super_resolution,
+        hidden_top_level, is_own_show, minimize, unmatched, version_parts, video_super_resolution,
     };
     use std::time::{Duration, Instant};
+
+    #[test]
+    fn minimize_refuses_a_handle_that_is_no_window() {
+        assert!(!minimize(0));
+    }
 
     /// The extra pixel goes
     /// where no other display shows it.

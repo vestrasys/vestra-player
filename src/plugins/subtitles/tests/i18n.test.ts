@@ -85,3 +85,58 @@ test("fixed lists stay in step with their Slint names; every text is translated"
     assert.deepEqual(code.filter((line) => /\p{Script=Han}/u.test(line)), [], source);
   }
 });
+
+test("every command has a category for the command palette, translated, and controls in a window name it as home", async () => {
+  const expected: Record<string, [string, string | null]> = {
+    "load": ["Subtitles", "tune"],
+    "load-secondary": ["Subtitles", null],
+    "show": ["Subtitles", null],
+    "track-off": ["Subtitle Tracks", "tune"],
+    "track-1": ["Subtitle Tracks", "tune"],
+    "track-cycle": ["Subtitle Tracks", null],
+    "second-off": ["Secondary Subtitle", "tune"],
+    "second-1": ["Secondary Subtitle", "tune"],
+    "second-position-top": ["Secondary Subtitle Position", null],
+    "second-position-aboveMain": ["Secondary Subtitle Position", null],
+    "size-up": ["Subtitle Style", "tune"],
+    "size-down": ["Subtitle Style", "tune"],
+    "move-up": ["Subtitle Style", "tune"],
+    "move-down": ["Subtitle Style", "tune"],
+    "bold": ["Subtitle Style", "settings"],
+    "shadow": ["Subtitle Style", "settings"],
+    "box": ["Subtitle Style", "settings"],
+    "ass-original": ["Subtitles", "settings"],
+    "move-reset": ["Reset", "tune"],
+    "sync-reset": ["Reset", "tune"],
+    "dialogue-previous": ["Seek", null],
+    "dialogue-next": ["Seek", null],
+    "dialogue-current": ["Seek", null],
+    "sync-earlier": ["Subtitle Sync", "tune"],
+    "sync-later": ["Subtitle Sync", "tune"],
+    "sync-input": ["Subtitle Sync", null],
+    "reload": ["Subtitles", null],
+    "refresh": ["Subtitles", null],
+    "tune": ["Subtitles", null],
+    "settings": ["Subtitles", null],
+  };
+  for (const locale of ["en", "zh-Hans"] as const) {
+    const host = sourceHost();
+    Object.assign(host.subtitles.tracks[0]!, { codec: "subrip", text: true }); // so Secondary Subtitle ▸ lists it
+    const { stop } = await startPlugin(activate, { directory, host, locale });
+    const commands = [...host.commands.entries()];
+    for (const [id, { display }] of commands) assert.ok(display.category, `${id} has a category (${locale})`);
+    const shown = Object.fromEntries(commands.map(([id, { declaration: d, display }]) => [id, [display.category, d.home ?? null]]));
+    if (locale === "en") assert.deepEqual(shown, expected);
+    else {
+      assert.equal(shown["second-position-top"]![0], "次字幕位置");
+      assert.equal(shown["sync-reset"]![0], "复位");
+      assert.equal(shown["dialogue-next"]![0], "跳转");
+      // A noun, not the menu's verb phrase "选择字幕轨".
+      for (const id of ["track-off", "track-1", "track-cycle"]) assert.equal(shown[id]![0], "字幕轨", id);
+      for (const [id, [category]] of Object.entries(expected)) assert.notEqual(shown[id]![0], category, `${id} is translated`);
+    }
+    // Every home is a command of this plugin that opens a window.
+    for (const [, home] of Object.values(expected)) if (home) assert.ok(host.commands.has(home));
+    await stop();
+  }
+});

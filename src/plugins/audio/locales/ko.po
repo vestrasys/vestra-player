@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:52 main.ts:60 main.ts:315 main.ts:521
+#: main.ts:52 main.ts:60 main.ts:335 main.ts:543
 #, x-machine
 msgid "{}"
 msgstr "{}"
@@ -36,392 +36,412 @@ msgstr "트랙 {} ({}) (외부)"
 msgid "Track {} (external)"
 msgstr "트랙 {} (외부)"
 
-#: main.ts:108 main.ts:620
+#: main.ts:70
 #, x-machine
-msgid "Audio sync: {} s"
-msgstr "오디오 싱크: {}초"
+msgid "Audio"
+msgstr "오디오"
 
-#: main.ts:117
-#, x-machine
-msgid "Channels: Stereo"
-msgstr "채널: 스테레오"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Left Channel (mixed to stereo)"
-msgstr "채널: 왼쪽 채널 (스테레오로 믹스)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Right Channel (mixed to stereo)"
-msgstr "채널: 오른쪽 채널 (스테레오로 믹스)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Mono Mix (mixed to stereo)"
-msgstr "채널: 모노 믹스 (스테레오로 믹스)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Swap Left and Right (mixed to stereo)"
-msgstr "채널: 좌우 바꾸기 (스테레오로 믹스)"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Left Channel"
-msgstr "채널: 왼쪽 채널"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Right Channel"
-msgstr "채널: 오른쪽 채널"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Mono Mix"
-msgstr "채널: 모노 믹스"
-
-#: main.ts:117
-#, x-machine
-msgid "Channels: Swap Left and Right"
-msgstr "채널: 좌우 바꾸기"
-
-#: main.ts:180
-#, x-machine
-msgid "Load External Audio"
-msgstr "외부 오디오 불러오기"
-
-#: main.ts:183
-#, x-machine
-msgid "This audio is already loaded"
-msgstr "이미 불러온 오디오입니다"
-
-#: main.ts:187
-#, x-machine
-msgid "Audio loaded: {}"
-msgstr "오디오를 불러옴: {}"
-
-#: main.ts:189
-#, x-machine
-msgid "The source changed; the audio was not loaded"
-msgstr "소스가 바뀌어 오디오를 불러오지 않았습니다"
-
-#: main.ts:190
-#, x-machine
-msgid "Cannot load audio: {}"
-msgstr "오디오를 불러올 수 없습니다: {}"
-
-#: main.ts:241
-#, x-machine
-msgid "Audio track: {}"
-msgstr "오디오 트랙: {}"
-
-#: main.ts:244
-#, x-machine
-msgid "Cannot switch the audio track: {}"
-msgstr "오디오 트랙을 전환할 수 없습니다: {}"
-
-#: main.ts:249
-#, x-machine
-msgid "Only one audio track"
-msgstr "오디오 트랙이 하나뿐입니다"
-
-#: main.ts:271 main.ts:282 main.ts:558 main.ts:569
+#: main.ts:71 main.ts:288 main.ts:300 main.ts:583 main.ts:596
 #, x-machine
 msgid "Audio Track"
 msgstr "오디오 트랙"
 
-#: main.ts:271
+#: main.ts:72 ui/workbench.slint:218 ui/workbench.slint:394
 #, x-machine
-msgid "Loading…"
-msgstr "불러오는 중…"
+msgid "Channels"
+msgstr "채널"
 
-#: main.ts:271
-#, x-machine
-msgid "No Audio Tracks"
-msgstr "오디오 트랙 없음"
-
-#: main.ts:314 main.ts:521
-#, x-machine
-msgid "Unnamed device"
-msgstr "이름 없는 장치"
-
-#: main.ts:314 main.ts:519
-#, x-machine
-msgid "Selected device"
-msgstr "선택한 장치"
-
-#: main.ts:315
-#, x-machine
-msgid "{} ({})"
-msgstr "{} ({})"
-
-#: main.ts:318 main.ts:518 ui/workbench.slint:176
-#, x-machine
-msgid "System Default"
-msgstr "시스템 기본값"
-
-#: main.ts:355
-#, x-machine
-msgid "Cannot switch to System Default: {}"
-msgstr "시스템 기본값으로 전환할 수 없습니다: {}"
-
-#: main.ts:356
-#, x-machine
-msgid "Cannot switch to {}: {}"
-msgstr "{} 장치로 전환할 수 없습니다: {}"
-
-#: main.ts:367
-#, x-machine
-msgid "Audio output: System Default"
-msgstr "오디오 출력: 시스템 기본값"
-
-#: main.ts:368
-#, x-machine
-msgid "Audio output: Selected device"
-msgstr "오디오 출력: 선택한 장치"
-
-#: main.ts:369
-#, x-machine
-msgid "Audio output: {}"
-msgstr "오디오 출력: {}"
-
-#: main.ts:379
-#, x-machine
-msgid "Output device disconnected, using System Default"
-msgstr "출력 장치 연결이 끊겨 시스템 기본값을 사용합니다"
-
-#: main.ts:402 main.ts:408
+#: main.ts:73 main.ts:422 main.ts:428
 #, x-machine
 msgid "Output Device"
 msgstr "출력 장치"
 
-#: main.ts:402
+#: main.ts:74
 #, x-machine
-msgid "No Output Devices"
-msgstr "출력 장치 없음"
+msgid "Equalizer Preset"
+msgstr "이퀄라이저 프리셋"
 
-#: main.ts:412
-#, x-machine
-msgid "Device not connected"
-msgstr "장치가 연결되지 않음"
-
-#: main.ts:452 main.ts:542 main.ts:563
-#, x-machine
-msgid "Loading"
-msgstr "불러오는 중"
-
-#: main.ts:452 main.ts:563 ui/workbench.slint:168
-#, x-machine
-msgid "No audio tracks"
-msgstr "오디오 트랙이 없습니다"
-
-#: main.ts:511
-#, x-machine
-msgid "No output devices available"
-msgstr "사용할 수 있는 출력 장치가 없습니다"
-
-#: main.ts:524
-#, x-machine
-msgid "{} (not connected)"
-msgstr "{} (연결 안 됨)"
-
-#: main.ts:530
-#, x-machine
-msgid "{}: device not connected, using System Default"
-msgstr "{}: 장치가 연결되지 않아 시스템 기본값을 사용합니다"
-
-#: main.ts:537
-#, x-machine
-msgid "Load External Audio…"
-msgstr "외부 오디오 불러오기…"
-
-#: main.ts:542
-#, x-machine
-msgid "No file is playing"
-msgstr "재생 중인 파일이 없습니다"
-
-#: main.ts:542
-#, x-machine
-msgid "Generated video cannot take external audio"
-msgstr "생성된 비디오에는 외부 오디오를 불러올 수 없습니다"
-
-#: main.ts:551
-#, x-machine
-msgid "Audio Workbench…"
-msgstr "오디오 작업대…"
-
-#: main.ts:558
-#, x-machine
-msgid "Cycle Tracks"
-msgstr "트랙 순환"
-
-#: main.ts:569 ui/workbench.slint:402
-#, x-machine
-msgid "Stereo"
-msgstr "스테레오"
-
-#: main.ts:569 ui/workbench.slint:403
-#, x-machine
-msgid "Left Channel"
-msgstr "왼쪽 채널"
-
-#: main.ts:569 ui/workbench.slint:404
-#, x-machine
-msgid "Right Channel"
-msgstr "오른쪽 채널"
-
-#: main.ts:569 ui/workbench.slint:405
-#, x-machine
-msgid "Mono Mix"
-msgstr "모노 믹스"
-
-#: main.ts:569 ui/workbench.slint:406
-#, x-machine
-msgid "Swap Left and Right"
-msgstr "좌우 바꾸기"
-
-#: main.ts:575 main.ts:585 main.ts:598 main.ts:611 main.ts:618 main.ts:640 main.ts:652 main.ts:664 ui/workbench.slint:8
-#, x-machine
-msgid "No audio track selected"
-msgstr "선택한 오디오 트랙이 없습니다"
-
-#: main.ts:575 ui/workbench.slint:390
-#, x-machine
-msgid "The current track is mono"
-msgstr "현재 트랙은 모노입니다"
-
-#: main.ts:581 ui/workbench.slint:200 ui/workbench.slint:257
-#, x-machine
-msgid "Equalizer"
-msgstr "이퀄라이저"
-
-#: main.ts:588
-#, x-machine
-msgid "Equalizer: On"
-msgstr "이퀄라이저: 켬"
-
-#: main.ts:588
-#, x-machine
-msgid "Equalizer: Off"
-msgstr "이퀄라이저: 끔"
-
-#: main.ts:594
-#, x-machine
-msgid "Preset"
-msgstr "프리셋"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Flat"
-msgstr "플랫"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Voice"
-msgstr "음성"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Music"
-msgstr "음악"
-
-#: main.ts:594 ui/workbench.slint:199 ui/workbench.slint:221
-#, x-machine
-msgid "Cinema"
-msgstr "영화"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Flat"
-msgstr "이퀄라이저 프리셋: 플랫"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Voice"
-msgstr "이퀄라이저 프리셋: 음성"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Music"
-msgstr "이퀄라이저 프리셋: 음악"
-
-#: main.ts:601
-#, x-machine
-msgid "Equalizer preset: Cinema"
-msgstr "이퀄라이저 프리셋: 영화"
-
-#: main.ts:611 main.ts:614 main.ts:626
+#: main.ts:75 main.ts:644 main.ts:647 main.ts:661
 #, x-machine
 msgid "Audio Sync"
 msgstr "오디오 싱크"
 
-#: main.ts:611
-#, x-machine
-msgid "50 ms Earlier"
-msgstr "50ms 빠르게"
-
-#: main.ts:611
-#, x-machine
-msgid "50 ms Later"
-msgstr "50ms 느리게"
-
-#: main.ts:626 ui/workbench.slint:459
-#, x-machine
-msgid "Don't Keep"
-msgstr "유지 안 함"
-
-#: main.ts:626 ui/workbench.slint:460
-#, x-machine
-msgid "Keep for This Run"
-msgstr "이번 실행 동안 유지"
-
-#: main.ts:626 ui/workbench.slint:461
-#, x-machine
-msgid "Always Keep"
-msgstr "항상 유지"
-
-#: main.ts:636 main.ts:648
-#, x-machine
-msgid "Processing"
-msgstr "처리"
-
-#: main.ts:636 ui/workbench.slint:214 ui/workbench.slint:325
-#, x-machine
-msgid "Normalize"
-msgstr "노멀라이즈"
-
-#: main.ts:643
-#, x-machine
-msgid "Normalize: On"
-msgstr "노멀라이즈: 켬"
-
-#: main.ts:643
-#, x-machine
-msgid "Normalize: Off"
-msgstr "노멀라이즈: 끔"
-
-#: main.ts:648 ui/workbench.slint:214 ui/workbench.slint:339
-#, x-machine
-msgid "Crystalizer"
-msgstr "크리스털라이저"
-
-#: main.ts:656
-#, x-machine
-msgid "Crystalizer: On"
-msgstr "크리스털라이저: 켬"
-
-#: main.ts:656
-#, x-machine
-msgid "Crystalizer: Off"
-msgstr "크리스털라이저: 끔"
-
-#: main.ts:661
+#: main.ts:76 main.ts:702
 #, x-machine
 msgid "Audio Processing"
 msgstr "오디오 처리"
 
-#: main.ts:667
+#: main.ts:77 ui/workbench.slint:279
+#, x-machine
+msgid "Reset"
+msgstr "재설정"
+
+#: main.ts:125 main.ts:655
+#, x-machine
+msgid "Audio sync: {} s"
+msgstr "오디오 싱크: {}초"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Stereo"
+msgstr "채널: 스테레오"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Left Channel (mixed to stereo)"
+msgstr "채널: 왼쪽 채널 (스테레오로 믹스)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Right Channel (mixed to stereo)"
+msgstr "채널: 오른쪽 채널 (스테레오로 믹스)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Mono Mix (mixed to stereo)"
+msgstr "채널: 모노 믹스 (스테레오로 믹스)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Swap Left and Right (mixed to stereo)"
+msgstr "채널: 좌우 바꾸기 (스테레오로 믹스)"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Left Channel"
+msgstr "채널: 왼쪽 채널"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Right Channel"
+msgstr "채널: 오른쪽 채널"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Mono Mix"
+msgstr "채널: 모노 믹스"
+
+#: main.ts:134
+#, x-machine
+msgid "Channels: Swap Left and Right"
+msgstr "채널: 좌우 바꾸기"
+
+#: main.ts:197
+#, x-machine
+msgid "Load External Audio"
+msgstr "외부 오디오 불러오기"
+
+#: main.ts:200
+#, x-machine
+msgid "This audio is already loaded"
+msgstr "이미 불러온 오디오입니다"
+
+#: main.ts:204
+#, x-machine
+msgid "Audio loaded: {}"
+msgstr "오디오를 불러옴: {}"
+
+#: main.ts:206
+#, x-machine
+msgid "The source changed; the audio was not loaded"
+msgstr "소스가 바뀌어 오디오를 불러오지 않았습니다"
+
+#: main.ts:207
+#, x-machine
+msgid "Cannot load audio: {}"
+msgstr "오디오를 불러올 수 없습니다: {}"
+
+#: main.ts:258
+#, x-machine
+msgid "Audio track: {}"
+msgstr "오디오 트랙: {}"
+
+#: main.ts:261
+#, x-machine
+msgid "Cannot switch the audio track: {}"
+msgstr "오디오 트랙을 전환할 수 없습니다: {}"
+
+#: main.ts:266
+#, x-machine
+msgid "Only one audio track"
+msgstr "오디오 트랙이 하나뿐입니다"
+
+#: main.ts:288
+#, x-machine
+msgid "Loading…"
+msgstr "불러오는 중…"
+
+#: main.ts:288
+#, x-machine
+msgid "No Audio Tracks"
+msgstr "오디오 트랙 없음"
+
+#: main.ts:334 main.ts:543
+#, x-machine
+msgid "Unnamed device"
+msgstr "이름 없는 장치"
+
+#: main.ts:334 main.ts:541
+#, x-machine
+msgid "Selected device"
+msgstr "선택한 장치"
+
+#: main.ts:335
+#, x-machine
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: main.ts:338 main.ts:540 ui/workbench.slint:176
+#, x-machine
+msgid "System Default"
+msgstr "시스템 기본값"
+
+#: main.ts:375
+#, x-machine
+msgid "Cannot switch to System Default: {}"
+msgstr "시스템 기본값으로 전환할 수 없습니다: {}"
+
+#: main.ts:376
+#, x-machine
+msgid "Cannot switch to {}: {}"
+msgstr "{} 장치로 전환할 수 없습니다: {}"
+
+#: main.ts:387
+#, x-machine
+msgid "Audio output: System Default"
+msgstr "오디오 출력: 시스템 기본값"
+
+#: main.ts:388
+#, x-machine
+msgid "Audio output: Selected device"
+msgstr "오디오 출력: 선택한 장치"
+
+#: main.ts:389
+#, x-machine
+msgid "Audio output: {}"
+msgstr "오디오 출력: {}"
+
+#: main.ts:399
+#, x-machine
+msgid "Output device disconnected, using System Default"
+msgstr "출력 장치 연결이 끊겨 시스템 기본값을 사용합니다"
+
+#: main.ts:422
+#, x-machine
+msgid "No Output Devices"
+msgstr "출력 장치 없음"
+
+#: main.ts:434
+#, x-machine
+msgid "Device not connected"
+msgstr "장치가 연결되지 않음"
+
+#: main.ts:474 main.ts:566 main.ts:590
+#, x-machine
+msgid "Loading"
+msgstr "불러오는 중"
+
+#: main.ts:474 main.ts:590 ui/workbench.slint:168
+#, x-machine
+msgid "No audio tracks"
+msgstr "오디오 트랙이 없습니다"
+
+#: main.ts:533
+#, x-machine
+msgid "No output devices available"
+msgstr "사용할 수 있는 출력 장치가 없습니다"
+
+#: main.ts:546
+#, x-machine
+msgid "{} (not connected)"
+msgstr "{} (연결 안 됨)"
+
+#: main.ts:552
+#, x-machine
+msgid "{}: device not connected, using System Default"
+msgstr "{}: 장치가 연결되지 않아 시스템 기본값을 사용합니다"
+
+#: main.ts:559
+#, x-machine
+msgid "Load External Audio…"
+msgstr "외부 오디오 불러오기…"
+
+#: main.ts:566
+#, x-machine
+msgid "No file is playing"
+msgstr "재생 중인 파일이 없습니다"
+
+#: main.ts:566
+#, x-machine
+msgid "Generated video cannot take external audio"
+msgstr "생성된 비디오에는 외부 오디오를 불러올 수 없습니다"
+
+#: main.ts:575
+#, x-machine
+msgid "Audio Workbench…"
+msgstr "오디오 작업대…"
+
+#: main.ts:583
+#, x-machine
+msgid "Cycle Tracks"
+msgstr "트랙 순환"
+
+#: main.ts:596 ui/workbench.slint:402
+#, x-machine
+msgid "Stereo"
+msgstr "스테레오"
+
+#: main.ts:596 ui/workbench.slint:403
+#, x-machine
+msgid "Left Channel"
+msgstr "왼쪽 채널"
+
+#: main.ts:596 ui/workbench.slint:404
+#, x-machine
+msgid "Right Channel"
+msgstr "오른쪽 채널"
+
+#: main.ts:596 ui/workbench.slint:405
+#, x-machine
+msgid "Mono Mix"
+msgstr "모노 믹스"
+
+#: main.ts:596 ui/workbench.slint:406
+#, x-machine
+msgid "Swap Left and Right"
+msgstr "좌우 바꾸기"
+
+#: main.ts:604 main.ts:616 main.ts:631 main.ts:644 main.ts:653 main.ts:679 main.ts:693 main.ts:706 ui/workbench.slint:8
+#, x-machine
+msgid "No audio track selected"
+msgstr "선택한 오디오 트랙이 없습니다"
+
+#: main.ts:604 ui/workbench.slint:390
+#, x-machine
+msgid "The current track is mono"
+msgstr "현재 트랙은 모노입니다"
+
+#: main.ts:610 ui/workbench.slint:200 ui/workbench.slint:257
+#, x-machine
+msgid "Equalizer"
+msgstr "이퀄라이저"
+
+#: main.ts:619
+#, x-machine
+msgid "Equalizer: On"
+msgstr "이퀄라이저: 켬"
+
+#: main.ts:619
+#, x-machine
+msgid "Equalizer: Off"
+msgstr "이퀄라이저: 끔"
+
+#: main.ts:625
+#, x-machine
+msgid "Preset"
+msgstr "프리셋"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Flat"
+msgstr "플랫"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Voice"
+msgstr "음성"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Music"
+msgstr "음악"
+
+#: main.ts:625 ui/workbench.slint:199 ui/workbench.slint:221
+#, x-machine
+msgid "Cinema"
+msgstr "영화"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Flat"
+msgstr "이퀄라이저 프리셋: 플랫"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Voice"
+msgstr "이퀄라이저 프리셋: 음성"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Music"
+msgstr "이퀄라이저 프리셋: 음악"
+
+#: main.ts:634
+#, x-machine
+msgid "Equalizer preset: Cinema"
+msgstr "이퀄라이저 프리셋: 영화"
+
+#: main.ts:644
+#, x-machine
+msgid "50 ms Earlier"
+msgstr "50ms 빠르게"
+
+#: main.ts:644
+#, x-machine
+msgid "50 ms Later"
+msgstr "50ms 느리게"
+
+#: main.ts:661 ui/workbench.slint:459
+#, x-machine
+msgid "Don't Keep"
+msgstr "유지 안 함"
+
+#: main.ts:661 ui/workbench.slint:460
+#, x-machine
+msgid "Keep for This Run"
+msgstr "이번 실행 동안 유지"
+
+#: main.ts:661 ui/workbench.slint:461
+#, x-machine
+msgid "Always Keep"
+msgstr "항상 유지"
+
+#: main.ts:673 main.ts:687
+#, x-machine
+msgid "Processing"
+msgstr "처리"
+
+#: main.ts:673 ui/workbench.slint:214 ui/workbench.slint:325
+#, x-machine
+msgid "Normalize"
+msgstr "노멀라이즈"
+
+#: main.ts:682
+#, x-machine
+msgid "Normalize: On"
+msgstr "노멀라이즈: 켬"
+
+#: main.ts:682
+#, x-machine
+msgid "Normalize: Off"
+msgstr "노멀라이즈: 끔"
+
+#: main.ts:687 ui/workbench.slint:214 ui/workbench.slint:339
+#, x-machine
+msgid "Crystalizer"
+msgstr "크리스털라이저"
+
+#: main.ts:697
+#, x-machine
+msgid "Crystalizer: On"
+msgstr "크리스털라이저: 켬"
+
+#: main.ts:697
+#, x-machine
+msgid "Crystalizer: Off"
+msgstr "크리스털라이저: 끔"
+
+#: main.ts:709
 #, x-machine
 msgid "Audio processing reset"
 msgstr "오디오 처리를 재설정했습니다"
@@ -520,11 +540,6 @@ msgstr "이름이 같은 오디오 파일 자동으로 불러오기"
 msgid "Track"
 msgstr "트랙"
 
-#: ui/workbench.slint:218 ui/workbench.slint:394
-#, x-machine
-msgid "Channels"
-msgstr "채널"
-
 #: ui/workbench.slint:218 ui/workbench.slint:422
 #, x-machine
 msgid "Device"
@@ -539,11 +554,6 @@ msgstr "싱크 유지"
 #, x-machine
 msgid "Custom"
 msgstr "사용자 지정"
-
-#: ui/workbench.slint:279
-#, x-machine
-msgid "Reset"
-msgstr "재설정"
 
 #: ui/workbench.slint:312
 #, x-machine

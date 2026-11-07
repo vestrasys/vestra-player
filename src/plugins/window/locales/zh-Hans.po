@@ -5,143 +5,153 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:65
+#: main.ts:50 main.ts:240 ui/page.slint:34
+msgid "Window"
+msgstr "窗口"
+
+#: main.ts:51
+#, x-machine
+msgid "Window Size"
+msgstr "窗口尺寸"
+
+#: main.ts:52
+#, x-machine
+msgid "Size on Open"
+msgstr "开始播放时的尺寸"
+
+#: main.ts:53 main.ts:202 main.ts:212
+msgid "Always on Top"
+msgstr "置顶"
+
+#: main.ts:77
 msgid "Mini Size"
 msgstr "迷你尺寸"
 
-#: main.ts:72 main.ts:99
+#: main.ts:85 main.ts:113
 msgid "Switching picture-in-picture"
 msgstr "正在切换画中画"
 
-#: main.ts:72 main.ts:99 main.ts:128 main.ts:140
+#: main.ts:85 main.ts:113 main.ts:143 main.ts:156
 msgid "Resizing the window"
 msgstr "正在调整窗口"
 
-#: main.ts:72 main.ts:128 main.ts:140
+#: main.ts:85 main.ts:143 main.ts:156
 msgid "Not available in fullscreen"
 msgstr "全屏时不可用"
 
-#: main.ts:72 main.ts:99 main.ts:128 main.ts:140 pip.ts:42 size.ts:124
+#: main.ts:85 main.ts:113 main.ts:143 main.ts:156 pip.ts:42 size.ts:124
 msgid "No video"
 msgstr "没有视频"
 
-#: main.ts:93
+#: main.ts:106
 msgid "Picture-in-Picture"
 msgstr "画中画"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 msgid "0.5×"
 msgstr "0.5倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 msgid "1×"
 msgstr "1倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 msgid "1.5×"
 msgstr "1.5倍"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:120 main.ts:159 ui/page.slint:44
+#: main.ts:134 main.ts:175 ui/page.slint:44
 msgid "2×"
 msgstr "2倍"
 
-#: main.ts:134 main.ts:159
+#: main.ts:149 main.ts:175
 msgid "Fit to Video Aspect Ratio"
 msgstr "适应视频比例"
 
-#: main.ts:148
+#: main.ts:164
 msgid "When playback starts: Don't resize the window"
 msgstr "开始播放时: 不调整窗口"
 
-#: main.ts:149
+#: main.ts:165
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "开始播放时: 适应视频比例"
 
-#: main.ts:150
+#: main.ts:166
 msgid "When playback starts: {}×"
 msgstr "开始播放时: {}倍"
 
-#: main.ts:154
+#: main.ts:170
 msgid "Resize only once when playback starts: On"
 msgstr "开始播放时只调整一次: 开"
 
-#: main.ts:154
+#: main.ts:170
 msgid "Resize only once when playback starts: Off"
 msgstr "开始播放时只调整一次: 关"
 
-#: main.ts:159 main.ts:169
+#: main.ts:175 main.ts:186
 msgid "When Playback Starts"
 msgstr "开始播放时"
 
-#: main.ts:159
+#: main.ts:175
 msgid "Don't Resize"
 msgstr "不调整"
 
-#: main.ts:169
+#: main.ts:186
 msgid "Only Once"
 msgstr "只调整一次"
 
-#: main.ts:180
+#: main.ts:198
 msgid "Always on top: Off"
 msgstr "置顶: 关闭"
 
-#: main.ts:180
+#: main.ts:198
 msgid "Always on top: Always"
 msgstr "置顶: 总是"
 
-#: main.ts:180
+#: main.ts:198
 msgid "Always on top: While playing"
 msgstr "置顶: 播放时"
 
-#: main.ts:180
+#: main.ts:198
 msgid "Always on top: While playing in fullscreen"
 msgstr "置顶: 全屏播放时"
 
-#: main.ts:184 main.ts:193
-msgid "Always on Top"
-msgstr "置顶"
-
-#: main.ts:184
+#: main.ts:202
 msgid "Cycle Mode"
 msgstr "切换置顶方式"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:66
+#: main.ts:212 ui/page.slint:66
 msgid "Never"
 msgstr "不置顶"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:193 ui/page.slint:66
+#: main.ts:212 ui/page.slint:66
 msgid "Always"
 msgstr "总是置顶"
 
-#: main.ts:193
+#: main.ts:212
 msgid "While Playing"
 msgstr "播放时置顶"
 
-#: main.ts:193
+#: main.ts:212
 msgid "While Playing in Fullscreen"
 msgstr "全屏播放时置顶"
 
-#: main.ts:206
+#: main.ts:226
 msgid "Hide pointer while playing: On"
 msgstr "播放时隐藏鼠标: 开"
 
-#: main.ts:206
+#: main.ts:226
 msgid "Hide pointer while playing: Off"
 msgstr "播放时隐藏鼠标: 关"
 
-#: main.ts:211
+#: main.ts:231
 msgid "Hide Pointer While Playing"
 msgstr "播放时隐藏鼠标指针"
-
-#: main.ts:219 ui/page.slint:34
-msgid "Window"
-msgstr "窗口"
 
 #: manifest.json
 msgid "Main Window"

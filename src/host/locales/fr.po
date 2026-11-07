@@ -60,6 +60,23 @@ msgstr "Vitesse"
 msgid "Seek"
 msgstr "Navigation"
 
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Window"
+msgstr "Fenêtre"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "File"
+msgstr "Fichier"
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+#, x-machine
+msgid "Help"
+msgstr "Aide"
+
 #: src/composition.rs:39
 #, x-machine
 msgid "bottom bar"
@@ -259,6 +276,16 @@ msgstr "Plein écran"
 #, x-machine
 msgid "Leave Fullscreen"
 msgstr "Quitter le plein écran"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Exit Fullscreen"
+msgstr "Quitter le plein écran"
+
+#: ui/title-strip.slint
+#, x-machine
+msgid "Minimize"
+msgstr "Réduire"
 
 #: src/host/actions.rs
 #, x-machine

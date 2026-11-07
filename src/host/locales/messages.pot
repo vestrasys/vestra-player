@@ -47,6 +47,21 @@ msgstr ""
 msgid "Seek"
 msgstr ""
 
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "Window"
+msgstr ""
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "File"
+msgstr ""
+
+#. A command category (command palette, Keyboard Shortcuts).
+#: src/core_actions.rs
+msgid "Help"
+msgstr ""
+
 #: src/composition.rs:39
 msgid "bottom bar"
 msgstr ""
@@ -206,6 +221,14 @@ msgstr ""
 
 #: src/main.rs:2607
 msgid "Leave Fullscreen"
+msgstr ""
+
+#: ui/title-strip.slint
+msgid "Exit Fullscreen"
+msgstr ""
+
+#: ui/title-strip.slint
+msgid "Minimize"
 msgstr ""
 
 #: src/host/actions.rs
