@@ -261,58 +261,80 @@ impl Host {
     /// its own (never another plugin's). One in standby that listens is
     /// woken for it (a key edit is a deliberate change, as for
     /// `bindings.changed`), unless it never got any in this run: it reads
-    /// them when it starts.
+    /// them when it starts. What is sent where is `plan_keys`'s.
     fn push_command_keys(&mut self) {
-        const EVENT: &str = "commands.keys";
         let running = self
             .plugins
             .iter()
-            .filter(|(_, plugin)| plugin.subscriptions.contains_key(EVENT))
-            .map(|(owner, _)| *owner)
+            .map(|(owner, plugin)| (*owner, plugin.subscriptions.contains_key(KEYS_EVENT)))
             .collect::<Vec<_>>();
-        for owner in running {
-            let (Some(manifest), keys) = self.keys_of(owner) else {
-                continue;
-            };
-            if self.keys_sent.get(&manifest) == Some(&keys) {
-                continue;
-            }
-            self.keys_sent.insert(manifest, keys.clone());
-            let data = self.keys_data(keys);
-            // A plugin waking for a wake event gets the held one first; a
-            // newer one waits behind it (as `broadcast`).
-            let pid = crate::supervisor::Pid(owner);
-            if self.supervisor.waking(pid).is_some() {
-                let now = self.now_ms();
-                self.supervisor.set_now(now);
-                let trigger =
-                    crate::supervisor::Trigger::event(EVENT, json!({"event":EVENT,"data":data}));
-                self.supervisor.wake(pid, &trigger);
-                continue;
-            }
-            self.send(owner, json!({"event":EVENT,"data":data}));
-        }
+        let running = running
+            .into_iter()
+            .filter_map(|(owner, subscribed)| {
+                // Labels only for a subscriber; any running plugin keeps its
+                // entry in `keys_sent`.
+                let (manifest, keys) = if subscribed {
+                    self.keys_of(owner)
+                } else {
+                    let manifest = self.plugins.get(&owner).map(|p| p.manifest.id.clone());
+                    (manifest, Value::Null)
+                };
+                Some(KeysCandidate {
+                    owner,
+                    manifest: manifest?,
+                    keys,
+                    subscribed,
+                    waking: self
+                        .supervisor
+                        .waking(crate::supervisor::Pid(owner))
+                        .is_some(),
+                })
+            })
+            .collect::<Vec<_>>();
         let parked = self
             .on_demand
             .wakes
             .iter()
-            .filter(|(_, events)| events.contains(EVENT))
+            .filter(|(_, events)| events.contains(KEYS_EVENT))
             .map(|(owner, _)| *owner)
             .collect::<Vec<_>>();
-        for owner in parked {
-            let (Some(manifest), keys) = self.keys_of(owner) else {
-                continue;
-            };
-            let Some(sent) = self.keys_sent.get(&manifest) else {
-                self.keys_sent.insert(manifest, keys);
-                continue;
-            };
-            if *sent == keys {
-                continue;
+        let parked = parked
+            .into_iter()
+            .filter_map(|owner| {
+                let (manifest, keys) = self.keys_of(owner);
+                Some(KeysCandidate {
+                    owner,
+                    manifest: manifest?,
+                    keys,
+                    subscribed: true,
+                    waking: false,
+                })
+            })
+            .collect::<Vec<_>>();
+        for push in plan_keys(&running, &parked, &mut self.keys_sent) {
+            match push {
+                KeysPush::Send(owner, keys) => {
+                    let data = self.keys_data(keys);
+                    self.send(owner, json!({"event":KEYS_EVENT,"data":data}));
+                }
+                KeysPush::Queue(owner, keys) => {
+                    // A plugin waking for a wake event gets the held one
+                    // first; a newer one waits behind it (as `broadcast`).
+                    let data = self.keys_data(keys);
+                    let now = self.now_ms();
+                    self.supervisor.set_now(now);
+                    let trigger = crate::supervisor::Trigger::event(
+                        KEYS_EVENT,
+                        json!({"event":KEYS_EVENT,"data":data}),
+                    );
+                    self.supervisor
+                        .wake(crate::supervisor::Pid(owner), &trigger);
+                }
+                KeysPush::Wake(owner, keys) => {
+                    let data = self.keys_data(keys);
+                    self.wake_listener(owner, KEYS_EVENT, &data);
+                }
             }
-            self.keys_sent.insert(manifest, keys.clone());
-            let data = self.keys_data(keys);
-            self.wake_listener(owner, EVENT, &data);
         }
     }
     /// Broadcast `event`; `first` (the first of a run) wakes no parked plugin.
@@ -332,6 +354,79 @@ impl Host {
                 .values()
                 .any(|events| events.contains(event))
     }
+}
+
+const KEYS_EVENT: &str = "commands.keys";
+
+/// A plugin `push_command_keys` considers: running (`subscribed`: it
+/// subscribed to `commands.keys`; `waking`: its start for a wake event is
+/// not ready yet) or in standby with a recorded listener.
+#[derive(Debug)]
+struct KeysCandidate {
+    owner: u64,
+    manifest: String,
+    keys: Value,
+    subscribed: bool,
+    waking: bool,
+}
+
+/// What `push_command_keys` does for one plugin.
+#[derive(Debug, PartialEq)]
+enum KeysPush {
+    /// Send the event now.
+    Send(u64, Value),
+    /// Queue it behind the wake event the plugin is starting for.
+    Queue(u64, Value),
+    /// Wake the plugin in standby to receive it.
+    Wake(u64, Value),
+}
+
+/// Who gets `commands.keys` now, given what each plugin (by manifest id)
+/// last got in `sent`, which this updates: a subscriber whose labels
+/// changed (or never got any), queued while it wakes; a listener in
+/// standby whose labels changed since it last got them, woken; a plugin in
+/// standby never seen in this run is only noted (it reads its keys when it
+/// starts, and waking every one at the first table change would be a
+/// storm). Entries of plugins neither running nor listening in standby go
+/// (uninstalled, disabled or parked without a listener: a new process asks
+/// again at its start).
+fn plan_keys(
+    running: &[KeysCandidate],
+    parked: &[KeysCandidate],
+    sent: &mut std::collections::BTreeMap<String, Value>,
+) -> Vec<KeysPush> {
+    let mut pushes = Vec::new();
+    for each in running.iter().filter(|each| each.subscribed) {
+        if sent.get(&each.manifest) == Some(&each.keys) {
+            continue;
+        }
+        sent.insert(each.manifest.clone(), each.keys.clone());
+        let keys = each.keys.clone();
+        pushes.push(if each.waking {
+            KeysPush::Queue(each.owner, keys)
+        } else {
+            KeysPush::Send(each.owner, keys)
+        });
+    }
+    for each in parked {
+        match sent.get(&each.manifest) {
+            None => {
+                sent.insert(each.manifest.clone(), each.keys.clone());
+            }
+            Some(last) if *last == each.keys => {}
+            Some(_) => {
+                sent.insert(each.manifest.clone(), each.keys.clone());
+                pushes.push(KeysPush::Wake(each.owner, each.keys.clone()));
+            }
+        }
+    }
+    let known = running
+        .iter()
+        .chain(parked)
+        .map(|each| each.manifest.as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    sent.retain(|manifest, _| known.contains(manifest.as_str()));
+    pushes
 }
 
 /// The sources of `packages.list` (`Host::packages_key`): the revisions of
@@ -395,6 +490,104 @@ mod tests {
         ] {
             assert_eq!(reference(&bad).unwrap_err().code, "invalid");
         }
+    }
+
+    fn candidate(owner: u64, manifest: &str, key: &str) -> KeysCandidate {
+        KeysCandidate {
+            owner,
+            manifest: manifest.into(),
+            keys: json!({"up":[key]}),
+            subscribed: true,
+            waking: false,
+        }
+    }
+
+    /// `commands.keys` goes only to subscribers, only when their labels
+    /// changed, and each gets its own.
+    #[test]
+    fn keys_go_to_subscribers_only_and_only_when_changed() {
+        let mut sent = std::collections::BTreeMap::new();
+        let quiet = KeysCandidate {
+            subscribed: false,
+            ..candidate(3, "c.quiet", "Q")
+        };
+        let running = [
+            candidate(1, "a.video", "E"),
+            candidate(2, "b.audio", "U"),
+            quiet,
+        ];
+        let pushes = plan_keys(&running, &[], &mut sent);
+        assert_eq!(
+            pushes,
+            [
+                KeysPush::Send(1, json!({"up":["E"]})),
+                KeysPush::Send(2, json!({"up":["U"]}))
+            ]
+        );
+        // The same labels again: nothing.
+        assert!(plan_keys(&running, &[], &mut sent).is_empty());
+        // One plugin's key changed: only it hears.
+        let running = [
+            candidate(1, "a.video", "Shift+E"),
+            candidate(2, "b.audio", "U"),
+        ];
+        assert_eq!(
+            plan_keys(&running, &[], &mut sent),
+            [KeysPush::Send(1, json!({"up":["Shift+E"]}))]
+        );
+    }
+
+    /// A plugin starting for a wake event gets the push queued behind it.
+    #[test]
+    fn a_waking_plugin_gets_the_keys_queued() {
+        let mut sent = std::collections::BTreeMap::new();
+        let waking = KeysCandidate {
+            waking: true,
+            ..candidate(4, "a.video", "E")
+        };
+        assert_eq!(
+            plan_keys(&[waking], &[], &mut sent),
+            [KeysPush::Queue(4, json!({"up":["E"]}))]
+        );
+    }
+
+    /// A listener in standby is woken for a change of its keys; one never
+    /// seen in this run is only noted (no wake storm at the first table
+    /// change), and woken by a later change.
+    #[test]
+    fn parked_listeners_wake_for_a_change_but_not_when_first_seen() {
+        let mut sent = std::collections::BTreeMap::new();
+        let parked = [candidate(7, "a.video", "E")];
+        assert!(plan_keys(&[], &parked, &mut sent).is_empty());
+        assert_eq!(sent["a.video"], json!({"up":["E"]}));
+        assert!(plan_keys(&[], &parked, &mut sent).is_empty());
+        let parked = [candidate(7, "a.video", "R")];
+        assert_eq!(
+            plan_keys(&[], &parked, &mut sent),
+            [KeysPush::Wake(7, json!({"up":["R"]}))]
+        );
+        // What it got while running counts: a change since wakes it.
+        let mut sent = std::collections::BTreeMap::new();
+        plan_keys(&[candidate(5, "b.audio", "U")], &[], &mut sent);
+        assert_eq!(
+            plan_keys(&[], &[candidate(8, "b.audio", "I")], &mut sent),
+            [KeysPush::Wake(8, json!({"up":["I"]}))]
+        );
+    }
+
+    /// A plugin neither running nor listening in standby (uninstalled,
+    /// disabled) loses its entry.
+    #[test]
+    fn keys_of_gone_plugins_are_forgotten() {
+        let mut sent = std::collections::BTreeMap::new();
+        plan_keys(
+            &[candidate(1, "a.video", "E"), candidate(2, "b.gone", "G")],
+            &[],
+            &mut sent,
+        );
+        assert_eq!(sent.len(), 2);
+        plan_keys(&[candidate(1, "a.video", "E")], &[], &mut sent);
+        assert_eq!(sent.keys().collect::<Vec<_>>(), ["a.video"]);
     }
 
     /// supervisor.md §10: `packages.changed` compares the list without
