@@ -532,6 +532,10 @@
         {
           "name": "timeline.set",
           "needs": "timeline.marks"
+        },
+        {
+          "name": "timeline.setRanges",
+          "needs": "timeline.marks"
         }
       ],
       "name": "timeline.marks",

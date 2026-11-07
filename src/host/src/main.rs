@@ -477,6 +477,7 @@ fn main() -> Result<()> {
             ui_state::Store::open(&ui_state::default_path())
         },
         osd_until: None,
+        osd_actions: None,
         info_panels: BTreeMap::new(),
         sequence: None,
         last_source: Value::Null,

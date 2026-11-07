@@ -343,6 +343,11 @@ impl Host {
                     self.title_strip_action(&action);
                 }
             }
+            Event::OsdAction(generation, index) => {
+                if generation == self.shell_generation {
+                    self.osd_action(index);
+                }
+            }
             Event::ViewClosed(owner, id) => {
                 if let Some(view) = self.views.remove(&(owner, id.clone())) {
                     let _ = view.instance.hide();

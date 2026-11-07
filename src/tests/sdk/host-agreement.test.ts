@@ -38,6 +38,7 @@ import {
   SECRET_LIMITS,
   SUBTITLE_LIMITS,
   THEME_PALETTES,
+  TIMELINE_LIMITS,
   UI_VALUE_LIMITS,
   LIST_SEPARATORS,
   TEXT_LIMITS,
@@ -621,6 +622,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "Player.chapters": ["player.chapters"],
   "Player.audioDevices": ["player.audioDevices"],
   "Timeline.marks": ["timeline.marks"],
+  "Timeline.ranges": ["timeline.marks"],
   "Player.open": CONTROL,
   "Player.setPaused": CONTROL,
   "Player.seek": CONTROL,
@@ -747,7 +749,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "Bindings.set": ["bindings.set"],
   "Bindings.reset": ["bindings.reset"],
   "Bindings.onChange": ["event:bindings.changed"],
-  "Timeline.layer": ["timeline.set"],
+  "Timeline.layer": ["timeline.set", "timeline.setRanges"],
   "Drops.provide": ["drops.provide", "drops.withdraw"],
   "Panel.onDrop": ["drops.listen"],
   "Settings.page": ["settings.register", "settings.set", "settings.unregister"],
@@ -864,7 +866,7 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
   }
 });
 
-test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, process/mod.rs)", () => {
+test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, timeline.rs, process/mod.rs)", () => {
   const constant = (file: string, name: string) => {
     const value = new RegExp(`const ${name}: \\w+ = ([^;]+);`).exec(
       host(file),
@@ -882,6 +884,8 @@ test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities
       panelBytes: constant("src/capabilities/ui_osd.rs", "OSD_PANEL_BYTES"),
       minColumns: constant("src/capabilities/ui_osd.rs", "OSD_MIN_COLUMNS"),
       maxColumns: constant("src/capabilities/ui_osd.rs", "OSD_MAX_COLUMNS"),
+      actions: constant("src/capabilities/ui_osd.rs", "OSD_ACTIONS"),
+      actionChars: constant("src/capabilities/ui_osd.rs", "OSD_ACTION_CHARS"),
     },
     { ...OSD_LIMITS },
     "OSD_LIMITS differ from the player's OSD_* constants",
@@ -894,6 +898,15 @@ test("OSD_LIMITS, SECRET_LIMITS and MESSAGE_LIMIT are the player's (capabilities
     },
     { ...SECRET_LIMITS },
     "SECRET_LIMITS differ from the player's secret limits",
+  );
+  assert.deepEqual(
+    {
+      marks: constant("src/timeline.rs", "MAX_MARKS"),
+      ranges: constant("src/timeline.rs", "MAX_RANGES"),
+      titleChars: constant("src/timeline.rs", "MAX_TITLE"),
+    },
+    { ...TIMELINE_LIMITS },
+    "TIMELINE_LIMITS differ from the player's timeline.rs limits",
   );
   assert.equal(
     constant("src/process/mod.rs", "MAX_MESSAGE_BYTES"),

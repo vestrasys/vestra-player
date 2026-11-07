@@ -60,8 +60,20 @@ impl Host {
             diag!("host.error physical-input bridge: {error}");
         }
         if self.osd_until.is_some_and(|until| now >= until) {
-            self.osd_until = None;
-            let _ = shell.set_property("osd-visible", false.into());
+            // A message with actions does not fade while the pointer is on
+            // it; it goes 2 s after the pointer leaves.
+            if self.osd_actions.is_some()
+                && matches!(
+                    shell.get_property("osd-hover"),
+                    Ok(slint_interpreter::Value::Bool(true))
+                )
+            {
+                self.osd_until = Some(now + OSD_MS);
+            } else {
+                self.osd_until = None;
+                self.osd_actions = None;
+                let _ = shell.set_property("osd-visible", false.into());
+            }
         }
         self.host_command_states(fullscreen);
         // The sidebar and plugin panels show and hide `if` elements.

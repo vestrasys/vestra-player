@@ -56,6 +56,8 @@ pub(crate) enum Event {
     /// A button of the fullscreen title strip: (shell generation,
     /// `minimize`, `exit-fullscreen` or `close`).
     TitleStrip(u64, String),
+    /// A button of the OSD message: (shell generation, its index).
+    OsdAction(u64, usize),
     PluginMessage(u64, String, Value),
     Exited(u64),
     /// A control line of the shared runner (`g` 0): (runner, message).

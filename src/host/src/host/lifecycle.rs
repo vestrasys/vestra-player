@@ -298,6 +298,7 @@ impl Host {
             self.sequence = None;
             self.rebroadcast_source();
         }
+        self.drop_osd_actions(owner);
         if self.info_panels.remove(&owner).is_some() {
             self.show_info_panels();
         }

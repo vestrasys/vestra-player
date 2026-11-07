@@ -308,12 +308,62 @@ impl Host {
     /// One OSD line; nothing without a window.
     pub(crate) fn show_osd(&mut self, text: &str) {
         let text: String = text.replace(['\n', '\r'], " ").chars().take(200).collect();
-        if let Some(shell) = &self.shell
-            && !text.trim().is_empty()
-        {
-            let _ = shell.set_property("osd-text", SValue::String(text.as_str().into()));
-            let _ = shell.set_property("osd-visible", true.into());
-            self.osd_until = Some(self.now_ms() + OSD_MS);
+        if !text.trim().is_empty() {
+            self.put_osd(&text, None);
+        }
+    }
+    /// Show one OSD line, with the buttons of `actions` (their titles and
+    /// the plugin's commands) after the text. It replaces the message on
+    /// screen and its buttons, whoever showed them.
+    pub(crate) fn put_osd(&mut self, text: &str, actions: Option<(OsdActions, Vec<String>)>) {
+        let Some(shell) = &self.shell else {
+            return;
+        };
+        let titles = actions
+            .as_ref()
+            .map_or(&[][..], |(_, titles)| titles.as_slice());
+        let title = |i: usize| SValue::String(titles.get(i).map_or("", String::as_str).into());
+        let _ = shell.set_property("osd-text", SValue::String(text.into()));
+        let _ = shell.set_property("osd-action-1", title(0));
+        let _ = shell.set_property("osd-action-2", title(1));
+        let _ = shell.set_property("osd-visible", true.into());
+        let ms = if actions.is_some() {
+            OSD_ACTION_MS
+        } else {
+            OSD_MS
+        };
+        self.osd_until = Some(self.now_ms() + ms);
+        self.osd_actions = actions.map(|(actions, _)| actions);
+    }
+    /// The buttons of `owner`'s message go (it stopped); the text stays for
+    /// its time.
+    pub(crate) fn drop_osd_actions(&mut self, owner: u64) {
+        if self.osd_actions.as_ref().is_some_and(|a| a.owner == owner) {
+            self.osd_actions = None;
+            if let Some(shell) = &self.shell {
+                let _ = shell.set_property("osd-action-1", SValue::String("".into()));
+                let _ = shell.set_property("osd-action-2", SValue::String("".into()));
+            }
+        }
+    }
+    /// The user pressed button `index` of the message: the message goes and
+    /// the plugin's command runs, as if picked from a menu.
+    pub(crate) fn osd_action(&mut self, index: usize) {
+        let Some(id) = self
+            .osd_actions
+            .as_ref()
+            .and_then(|actions| actions.commands.get(index))
+            .cloned()
+        else {
+            return;
+        };
+        let owner = self.osd_actions.take().map_or(0, |actions| actions.owner);
+        self.osd_until = None;
+        if let Some(shell) = &self.shell {
+            let _ = shell.set_property("osd-visible", false.into());
+        }
+        if let Err(error) = self.execute_command(owner, &id) {
+            diag!("osd action {id}: {}", error.message);
         }
     }
     pub(crate) fn host_command_states(&mut self, fullscreen: bool) {

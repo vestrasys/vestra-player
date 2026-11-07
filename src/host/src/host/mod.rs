@@ -154,6 +154,15 @@ pub(crate) enum MenuMode {
 /// One wheel step per this many logical pixels of accumulated scroll.
 pub(crate) const WHEEL_STEP: f64 = 40.;
 pub(crate) const OSD_MS: u64 = 2000;
+/// A message with actions (`osd.show` with `actions`) stays this long, and
+/// longer while the pointer is on it.
+pub(crate) const OSD_ACTION_MS: u64 = 4000;
+/// The action buttons of the message on screen: the plugin that showed it
+/// and the local ids of its commands, one per button.
+pub(crate) struct OsdActions {
+    pub(crate) owner: u64,
+    pub(crate) commands: Vec<String>,
+}
 /// At start-up, how long a queued mount waits for the other built-ins'
 /// mounts, so that the shell compiles once for all of them.
 pub(crate) const STARTUP_MOUNT_GATHER: Duration = Duration::from_millis(400);
@@ -258,6 +267,7 @@ pub(crate) struct Host {
     pub(crate) input: Rc<RefCell<InputShared>>,
     pub(crate) ui_state: ui_state::Store,
     pub(crate) osd_until: Option<u64>,
+    pub(crate) osd_actions: Option<OsdActions>,
     pub(crate) info_panels: BTreeMap<u64, String>,
     /// The sequence provider: owner, can-next, can-previous (C6).
     pub(crate) sequence: Option<(u64, bool, bool)>,
