@@ -809,7 +809,11 @@ impl Backend {
                         if let rsmpv::Event::PropertyChange { userdata, data, .. } = &event
                             && *userdata == PAUSE_OBSERVATION
                         {
-                            if let rsmpv::PropertyData::Flag(paused) = data {
+                            // A paused preview step unpauses mpv for two
+                            // frames (`Processing::stepping`): not the user's.
+                            if let rsmpv::PropertyData::Flag(paused) = data
+                                && !processing.stepping()
+                            {
                                 push.paused(*paused);
                             }
                             continue;
@@ -932,6 +936,18 @@ impl Backend {
                         }
                         producer_was_active = producer_active;
                     }
+                    // The processing chain's live changes: paused preview,
+                    // settling, pass-through teardown, processing size.
+                    {
+                        let settings = view.settings();
+                        let facts = crate::playback::processing_live::ViewFacts {
+                            area: view_target.get().1.area,
+                            zoom: settings.zoom,
+                            fit: settings.fit,
+                            aspect: settings.aspect,
+                        };
+                        processing.tick(&mpv, Instant::now(), Some(facts));
+                    }
                     let now_types = sources.file_types();
                     if now_types != file_types {
                         file_types = now_types;
@@ -942,7 +958,10 @@ impl Backend {
                     }
                     // A phase change from the commands and events above goes
                     // out in this iteration; otherwise every 100 ms.
-                    if push.due(sources.generation(), sources.phase(), Instant::now()) {
+                    // Not while a paused preview step has mpv unpaused.
+                    if !processing.stepping()
+                        && push.due(sources.generation(), sources.phase(), Instant::now())
+                    {
                         view_target.set_picture(picture_size(&mpv));
                         if frame_log {
                             out_frame.stages.mpv_counts(
@@ -987,6 +1006,9 @@ impl Backend {
                         // is on (a resize does not wake this thread).
                         let mut timeout = push.next(now).min(sources.device_check_in(now));
                         if let Some(due) = upscaling.due_in(now) {
+                            timeout = timeout.min(due);
+                        }
+                        if let Some(due) = processing.due_in(&mpv, now) {
                             timeout = timeout.min(due);
                         }
                         worker_wake.wait(timeout);
