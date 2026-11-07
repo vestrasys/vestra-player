@@ -1,27 +1,5 @@
-// Shared dialog parts for the capture windows (group-box dialogs, B§6.8).
+// Shared parts of the Snapshots & Clips tab: data structs and the words for the plugin's data.
 import { Theme } from "@vestra/theme.slint";
-
-// A titled group box: 1px frame, title on the first line.
-export component Group inherits Rectangle {
-    in property <string> title;
-    border-width: 1px;
-    border-color: Theme.line;
-    VerticalLayout {
-        padding: 8px;
-        padding-top: 4px;
-        spacing: 5px;
-        Text { text: root.title; color: Theme.text-dim; font-size: Theme.font-body; height: Theme.label-height; }
-        @children
-    }
-}
-
-// Right-aligned form label (B§2.3 label: 14px, SS_RIGHT).
-export component FormLabel inherits Text {
-    color: Theme.text;
-    font-size: Theme.font-body;
-    horizontal-alignment: right;
-    vertical-alignment: center;
-}
 
 // Plain body text that never wraps.
 export component Note inherits Text {
@@ -40,7 +18,7 @@ export struct Progress {
     total: int,
 }
 
-// A dialog's status line as the plugin passes it (main.ts `Status`): data only.
+// A status line as the plugin passes it (main.ts `Status`): data only.
 export struct Status {
     kind: string,
     reason: string,
@@ -49,12 +27,13 @@ export struct Status {
     name: string,
 }
 
-// The windows' words for the plugin's data. The reasons are the same texts as
+// The tab's words for the plugin's data. The reasons are the same texts as
 // model.ts `REASON` (a test keeps the two lists equal).
 export global Words {
     // A reason code of the plugin, or (code "") the player's or system's own message.
     public pure function reason(code: string, raw: string) -> string {
-        if (code == "range") { return @tr("Enter valid seconds; the end must be after the start."); }
+        if (code == "time") { return @tr("Enter a time such as 1:02:03.450, or seconds."); }
+        if (code == "endBeforeStart") { return @tr("The end must be after the start."); }
         if (code == "burstLimits") { return @tr("A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."); }
         if (code == "burstPastEnd") { return @tr("The burst runs past the end of the media. Use fewer frames or a shorter interval."); }
         if (code == "noName") { return @tr("No free file name found."); }
@@ -81,6 +60,12 @@ export global Words {
         if (code == "outputGone") { return @tr("The output file no longer exists."); }
         if (code == "cannotOpen") { return @tr("Could not open the folder."); }
         if (code == "folderUnavailable") { return @tr("The snapshot folder is unavailable. Please choose it again."); }
+        if (code == "needLocal") { return @tr("Clips need a local file."); }
+        if (code == "noLoop") { return @tr("Set A and B with A-B Loop (Chapters tab)."); }
+        if (code == "tooEarly") { return @tr("Nothing has played before the current position yet."); }
+        if (code == "fastImpossible") { return @tr("Fast cut is not possible for this file."); }
+        if (code == "folderGone") { return @tr("The file or folder was moved or deleted."); }
+        if (code == "noTab") { return @tr("The Snapshots & Clips tab could not open."); }
         return raw;
     }
 
@@ -116,8 +101,49 @@ export global Words {
         if (s.kind == "exported") { return @tr("Exported {}", s.name); }
         if (s.kind == "clip-failed") { return @tr("Export failed: {}", Words.reason(s.reason, s.raw)); }
         if (s.kind == "no-destination") { return @tr("No save location chosen."); }
-        if (s.kind == "clip-started") { return @tr("Export started. Follow it in Export Tasks."); }
+        if (s.kind == "clip-started") { return @tr("Export started. Follow it in Results."); }
         if (s.kind == "restarted") { return @tr("Restarted."); }
         return "";
+    }
+
+    // A clip method's name.
+    public pure function method(m: string) -> string {
+        if (m == "fast") { return @tr("Fast"); }
+        if (m == "precise") { return @tr("Precise"); }
+        return "";
+    }
+
+    // A Precise preset's name.
+    public pure function preset(p: string) -> string {
+        if (p == "source") { return @tr("Same as source"); }
+        if (p == "high") { return @tr("High quality"); }
+        if (p == "small") { return @tr("Small file"); }
+        if (p == "custom") { return @tr("Custom"); }
+        return "";
+    }
+
+    // How long ago, from minutes: "just now", "5 min ago", "3 h ago", "2 d ago".
+    public pure function ago(minutes: int) -> string {
+        if (minutes < 1) { return @tr("just now"); }
+        // TRANSLATORS: {} is a number of minutes (1–59).
+        if (minutes < 60) { return @tr("{} min ago", minutes); }
+        // TRANSLATORS: {} is a number of hours (1–23).
+        if (minutes < 1440) { return @tr("{} h ago", floor(minutes / 60)); }
+        // TRANSLATORS: {} is a number of days.
+        return @tr("{} d ago", floor(minutes / 1440));
+    }
+
+    // A time span from seconds: "2 s", "4–30 s", "about 1–3 min", "2 min".
+    public pure function span(low: int, high: int) -> string {
+        if (high < 90) {
+            // TRANSLATORS: {} is a number of seconds.
+            if (low == high) { return @tr("{} s", low); }
+            // TRANSLATORS: {0} and {1} are numbers of seconds.
+            return @tr("{0}–{1} s", low, high);
+        }
+        // TRANSLATORS: {} is a number of minutes.
+        if (round(low / 60) == round(high / 60)) { return @tr("{} min", max(1, round(high / 60))); }
+        // TRANSLATORS: {0} and {1} are numbers of minutes.
+        return @tr("about {0}–{1} min", max(1, round(low / 60)), max(1, round(high / 60)));
     }
 }
