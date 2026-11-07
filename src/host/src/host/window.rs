@@ -157,14 +157,26 @@ impl Host {
             number("bottom-band-height"),
             now,
         );
+        // The title strip's reveal zone, from the window's own pointer (the
+        // winit hook), wherever it is: over the video, the sidebar, the strip.
+        let at_edge = self
+            .input
+            .borrow()
+            .pointer
+            .is_some_and(|(generation, point)| {
+                generation == self.shell_generation && window_state::at_top_edge(point.y, scale)
+            });
         if let Some((x, _)) = over_video {
-            self.policy.pointer(x, viewport.width, now);
+            // The top-right corner reveals the title strip, not the sidebar.
+            if !at_edge {
+                self.policy.pointer(x, viewport.width, now);
+            }
         } else if bottom_hover {
             // The bar lies left of the popped-out sidebar.
             self.policy.pointer(0., viewport.width, now);
         }
         self.policy.tick(now);
-        self.title_strip_tick(&shell, fullscreen, now);
+        self.title_strip_tick(&shell, fullscreen, at_edge, now);
         self.sync_tabs(&shell);
         let mut sidebar_seen = None;
         let result = (|| -> Result<Value> {
@@ -240,7 +252,8 @@ impl Host {
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
     /// fullscreen main window where the system shows no title bar there
     /// (`platform::FULLSCREEN_TITLE_STRIP`), not in picture-in-picture; it
-    /// shows while the pointer is at the top edge or over it
+    /// shows while the pointer is at the top edge (`at_edge`, the window's
+    /// pointer; not while a menu is open) or over it
     /// (`window_state::TitleStrip`). Properties are written only when they
     /// change, and the tooltip keys only as it comes out: nothing per
     /// pointer move.
@@ -248,6 +261,7 @@ impl Host {
         &mut self,
         shell: &slint_interpreter::ComponentInstance,
         fullscreen: bool,
+        at_edge: bool,
         now: u64,
     ) {
         let flag = |name: &str| matches!(shell.get_property(name), Ok(SValue::Bool(true)));
@@ -263,12 +277,12 @@ impl Host {
         let before = flag("title-strip-shown");
         let shown = self.title_strip.update(
             eligible,
-            flag("title-strip-edge"),
+            at_edge && !self.menu_open,
             flag("title-strip-hover"),
             now,
         );
         if shown && !before {
-            // Leave Fullscreen's own key, else Toggle Fullscreen's (Esc).
+            // Exit Fullscreen's own key, else Toggle Fullscreen's (Esc).
             let (leave, close) = {
                 let input = self.input.borrow();
                 (
@@ -291,21 +305,17 @@ impl Host {
         set("title-strip-enabled", eligible.into());
         set("title-strip-shown", shown.into());
     }
-    /// A title strip button: Minimize, Exit Fullscreen (Toggle Fullscreen,
-    /// as its key does) and Close (the window close button: Quit).
+    /// A title strip button: Minimize, Exit Fullscreen (the
+    /// `exit-fullscreen` command) and Close (the window close button: Quit).
     pub(crate) fn title_strip_action(&mut self, action: &str) {
         self.policy.activity(self.now_ms());
-        let fullscreen = self
-            .shell
-            .as_ref()
-            .is_some_and(|shell| shell.window().is_fullscreen());
         match action {
             "minimize" => {
                 if let Some(shell) = &self.shell {
                     shell.window().set_minimized(true);
                 }
             }
-            "exit-fullscreen" if fullscreen => self.host_command("fullscreen"),
+            "exit-fullscreen" => self.host_command("exit-fullscreen"),
             "close" => self.host_command("quit"),
             _ => {}
         }

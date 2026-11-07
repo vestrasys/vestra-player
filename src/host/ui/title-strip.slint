@@ -5,8 +5,9 @@
 // and Minimize, Exit Fullscreen and Close.
 //
 // The host decides when it shows (`window_state::TitleStrip`, every tick)
-// from `edge-hover` (the reveal zone, the top 2 physical px) and
-// `strip-hover`. It is created once with the shell: `shown` slides it and
+// from the window's pointer (the top 2 physical px: `window_state::at_top_edge`,
+// read from the window events, so the video keeps every click, double click
+// and wheel there) and `strip-hover`. It is created once with the shell: `shown` slides it and
 // `visible` takes it out of the accessibility tree while hidden; nothing is
 // created on hover. Menus and the layers above the shell stay above it.
 import { Theme } from "@vestra/theme.slint";
@@ -55,25 +56,22 @@ export component TitleStrip {
     // The keys of Exit Fullscreen (Toggle Fullscreen) and Quit, "" for none (the host).
     in property <string> exit-key;
     in property <string> close-key;
-    out property <bool> edge-hover: edge.has-hover;
     out property <bool> strip-hover: area.has-hover;
+    // How far down the strip covers the window now, following the slide
+    // (0 while hidden): the OSD moves down by it.
+    out property <length> covered: strip.visible ? max(0px, strip.y + strip.height) : 0px;
     // "minimize", "exit-fullscreen" or "close".
     callback action(string);
     callback activity();
+    // A double click or the wheel on the strip's background (not a button):
+    // the shell gives them to the video's bindings, as the video under it
+    // would have had them (x in the window, the modifiers).
+    callback background-double-clicked(length, KeyboardModifiers);
+    callback background-scrolled(PointerScrollEvent) -> EventResult;
     private property <string> minimize-label: @tr("Minimize");
     private property <string> exit-label: @tr("Exit Fullscreen");
     private property <string> close-label: @tr("Close");
     height: 32px;
-    // The reveal zone: the top 2 physical px, above the video and the
-    // fullscreen sidebar, so the top-right corner reveals the strip only.
-    edge := TouchArea {
-        x: 0px;
-        y: 0px;
-        width: root.width;
-        height: 2phx;
-        visible: root.enabled;
-        changed mouse-x => { root.activity(); }
-    }
     strip := Rectangle {
         x: 0px;
         y: root.shown ? 0px : -self.height;
@@ -83,9 +81,13 @@ export component TitleStrip {
         background: Theme.bg-bar;
         animate y { duration: 150ms; easing: ease-out; }
         area := TouchArea {
+            private property <KeyboardModifiers> mods;
             mouse-cursor: MouseCursor.default;
             changed mouse-x => { root.activity(); }
             changed mouse-y => { root.activity(); }
+            pointer-event(event) => { self.mods = event.modifiers; }
+            double-clicked => { root.background-double-clicked(self.mouse-x, self.mods); }
+            scroll-event(event) => { return root.background-scrolled(event); }
             HorizontalLayout {
                 padding-left: 10px;
                 spacing: 8px;

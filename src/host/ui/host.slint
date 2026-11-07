@@ -101,13 +101,12 @@ export component HostWindow inherits Window {
     // least the minimum video width (318) uncovered.
     out property <float> sidebar-pop-width: max(0, min(root.sidebar-width, root.width / 1px - 318));
     // The fullscreen title strip (title-strip.slint): where it applies, whether
-    // it is out, the keys in its tooltips (the host sets them); where the
-    // pointer is, sampled by the host every tick; its buttons.
+    // it is out, the keys in its tooltips (the host sets them); whether the
+    // pointer is over it, sampled by the host every tick; its buttons.
     in property <bool> title-strip-enabled: false;
     in property <bool> title-strip-shown: false;
     in property <string> title-strip-exit-key;
     in property <string> title-strip-close-key;
-    out property <bool> title-strip-edge: title-strip.edge-hover;
     out property <bool> title-strip-hover: title-strip.strip-hover;
     callback title-strip-action(string);
     // Keys reach the binding table only when something in the window has focus.
@@ -250,7 +249,8 @@ export component HostWindow inherits Window {
                         // corners scale with the font (12×5px and 8px at 18px). The video
                         // area is dark in every palette, so the colours are fixed.
                         osd := Rectangle {
-                            x: 10px; y: 10px;
+                            // Below the fullscreen title strip while it is out (it follows the slide).
+                            x: 10px; y: 10px + title-strip.covered;
                             width: osd-label.preferred-width + 2 * root.osd-pad-x;
                             height: osd-label.preferred-height + 2 * root.osd-pad-y;
                             border-radius: Theme.radius-panel * root.osd-size / 18px;
@@ -311,6 +311,21 @@ export component HostWindow inherits Window {
         close-key: root.title-strip-close-key;
         action(name) => { root.title-strip-action(name); }
         activity => { root.window-input("activity"); }
+        // As on the video (its double click and wheel above).
+        background-double-clicked(x, mods) => {
+            if !root.menu-open {
+                root.mouse-input(x < self.width / 2 ? "LeftDoubleClick:LeftHalf" : "LeftDoubleClick:RightHalf",
+                    mods.control, mods.alt, mods.shift, mods.meta);
+            }
+        }
+        background-scrolled(event) => {
+            root.window-input("activity");
+            if root.wheel-input(event.delta-x / 1px, event.delta-y / 1px, event.modifiers.control,
+                    event.modifiers.alt, event.modifiers.shift, event.modifiers.meta) {
+                return accept;
+            }
+            reject
+        }
     }
     if root.menu-open: Rectangle {
         width: root.width; height: root.height;
