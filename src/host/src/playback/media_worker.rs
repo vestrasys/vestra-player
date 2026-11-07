@@ -93,6 +93,17 @@ pub struct Encoding {
     pub audio_bitrate: Option<u32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub threads: Option<Threads>,
+    /// `source`: aim at the source video's average bitrate (one-pass ABR,
+    /// peaks up to 1.5×) instead of a CRF, for a file about the source's size.
+    /// Not with `crf`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub video_bitrate: Option<VideoBitrate>,
+}
+/// The video bitrate target of a re-encode: only the source's for now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum VideoBitrate {
+    Source,
 }
 /// x264 presets by name: `veryfast`, `medium`, `slow`.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -123,6 +134,7 @@ pub enum Container {
 impl Encoding {
     pub fn valid(&self) -> bool {
         self.crf.is_none_or(|crf| (14..=30).contains(&crf))
+            && (self.crf.is_none() || self.video_bitrate.is_none())
             && self
                 .max_height
                 .is_none_or(|h| matches!(h, 1080 | 720 | 480))
@@ -858,7 +870,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         } else {
             // Clips also need the streams: the codecs and time bases of a
             // copy, the frame rate of a capped re-encode.
-            "format=start_time:stream=index,codec_type,codec_name,time_base,avg_frame_rate,r_frame_rate:stream_disposition=attached_pic"
+            "format=start_time,bit_rate:stream=index,codec_type,codec_name,time_base,avg_frame_rate,r_frame_rate,bit_rate:stream_disposition=attached_pic"
         },
         "-of",
         "json",
@@ -1108,6 +1120,22 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
             } else {
                 command.arg("-an");
             }
+            match encoding.video_bitrate {
+                None => command.args(["-crf", &encoding.crf().to_string()]),
+                Some(VideoBitrate::Source) => {
+                    let bits = source_bitrate(&probed, request.video_stream).ok_or_else(|| {
+                        Refused("unsupported: the source's video bitrate is unknown".into())
+                    })?;
+                    command.args([
+                        "-b:v",
+                        &bits.to_string(),
+                        "-maxrate",
+                        &(bits * 3 / 2).to_string(),
+                        "-bufsize",
+                        &(bits * 2).to_string(),
+                    ])
+                }
+            };
             command.args([
                 "-t",
                 &duration.to_string(),
@@ -1115,8 +1143,6 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                 "libx264",
                 "-preset",
                 encoding.preset(),
-                "-crf",
-                &encoding.crf().to_string(),
                 "-pix_fmt",
                 "yuv420p",
                 "-threads",
@@ -1169,6 +1195,29 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         Output::Copy { .. } => unreachable!("stream copies return above"),
     };
     publish(&reader, control, temp, destination, range)
+}
+
+/// The source video's average bitrate in bit/s: the stream's own, else the
+/// container's minus the other streams' known rates (at least 100 kb/s).
+fn source_bitrate(probed: &serde_json::Value, video_stream: u32) -> Option<u64> {
+    let bits = |v: &serde_json::Value| {
+        v["bit_rate"]
+            .as_str()
+            .and_then(|b| b.parse::<u64>().ok())
+            .filter(|b| *b > 0)
+    };
+    let streams = probed["streams"].as_array()?;
+    let video = streams
+        .iter()
+        .find(|s| s["index"].as_u64() == Some(u64::from(video_stream)))?;
+    bits(video).or_else(|| {
+        let others: u64 = streams
+            .iter()
+            .filter(|s| s["index"] != video["index"])
+            .filter_map(bits)
+            .sum();
+        Some(bits(&probed["format"])?.saturating_sub(others).max(100_000))
+    })
 }
 
 /// The R6 ceilings as filters after the range trim: a frame-rate cap only
@@ -1451,6 +1500,72 @@ mod tests {
         // Clamped to the clip's length.
         assert_eq!(control.progress(), Some((5., 5.)));
         assert_eq!(Control::new().progress(), None);
+    }
+
+    #[test]
+    fn the_source_bitrate_is_the_streams_or_the_containers_remainder() {
+        let probed = |video: serde_json::Value| serde_json::json!({"format":{"bit_rate":"5000000"},"streams":[video,{"index":1,"codec_type":"audio","bit_rate":"192000"}]});
+        assert_eq!(
+            source_bitrate(
+                &probed(serde_json::json!({"index":0,"bit_rate":"3000000"})),
+                0
+            ),
+            Some(3_000_000)
+        );
+        // MKV streams carry no bit_rate: the container's minus the audio.
+        assert_eq!(
+            source_bitrate(&probed(serde_json::json!({"index":0})), 0),
+            Some(4_808_000)
+        );
+        assert_eq!(
+            source_bitrate(&probed(serde_json::json!({"index":0})), 3),
+            None
+        );
+        assert_eq!(
+            source_bitrate(&serde_json::json!({"format":{},"streams":[{"index":0}]}), 0),
+            None
+        );
+    }
+
+    /// "Same as source": the re-encode aims at the source video's bitrate.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264 and the testmedia clips"]
+    fn a_source_bitrate_encode_lands_near_the_source_bitrate() {
+        let Some(source) = real::clip("bbb-480p-web.mp4") else {
+            return;
+        };
+        let rate = |file: &std::path::Path| {
+            real::probe(
+                file,
+                &["-select_streams", "v:0", "-show_entries", "stream=bit_rate"],
+            )["streams"][0]["bit_rate"]
+                .as_str()
+                .unwrap()
+                .parse::<f64>()
+                .unwrap()
+        };
+        let dir = tempfile::tempdir().unwrap();
+        let destination = dir.path().join("same.mp4");
+        let encoding: Encoding =
+            serde_json::from_value(serde_json::json!({"videoBitrate":"source","threads":"auto"}))
+                .unwrap();
+        let (control, _) = real::run_job(real::request(
+            &source,
+            20.,
+            destination.clone(),
+            Output::Mp4 {
+                end: 40.,
+                audio: None,
+                encoding,
+            },
+        ));
+        assert!(
+            matches!(control.snapshot().1, Some(Outcome::Completed { .. })),
+            "{:?}",
+            control.snapshot().1
+        );
+        let (out, src) = (rate(&destination), rate(&source));
+        assert!((0.5..1.6).contains(&(out / src)), "{out} vs source {src}");
     }
 
     #[test]

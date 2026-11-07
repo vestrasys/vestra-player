@@ -763,6 +763,9 @@ mod tests {
         assert!(valid(
             json!({"kind":"rawMp4","end":5,"encoding":{"crf":14,"speed":"smaller","maxHeight":480,"fps":30,"audioBitrate":256,"threads":"auto"}})
         ));
+        assert!(valid(
+            json!({"kind":"rawMp4","end":5,"encoding":{"videoBitrate":"source","maxHeight":720}})
+        ));
         // A copy cannot carry effects, so there is no processed one.
         assert!(!valid(json!({"kind":"processedCopy","end":5})));
         // Each option belongs to one kind.
@@ -783,6 +786,8 @@ mod tests {
             json!({"maxHeight":2160}),
             json!({"fps":24}),
             json!({"audioBitrate":320}),
+            // A bitrate target replaces the CRF; both is a contradiction.
+            json!({"crf":18,"videoBitrate":"source"}),
         ] {
             assert!(
                 !valid(json!({"kind":"rawMp4","end":5,"encoding":bad})),
@@ -796,6 +801,8 @@ mod tests {
             json!({"threads":4}),
             json!({"crf":"18 -vf evil"}),
             json!({"x264opts":"keyint=1"}),
+            json!({"videoBitrate":"5000k"}),
+            json!({"videoBitrate":5000000}),
         ] {
             assert!(
                 start(json!({"kind":"rawMp4","end":5,"encoding":bad})).is_err(),
