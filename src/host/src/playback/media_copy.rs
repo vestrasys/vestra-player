@@ -267,7 +267,13 @@ pub fn write(
     // non-keyframes; its first keyframe can be seconds in).
     for step in 0..FIRST_KEYFRAME_STEPS {
         let from = job.origin + f64::from(step) * FIRST_KEYFRAME_STEP;
-        searches.push((format!("{from}%{}", from + FIRST_KEYFRAME_STEP), true));
+        let interval = if step == 0 {
+            // From the file's start without a seek.
+            format!("%{}", from + FIRST_KEYFRAME_STEP)
+        } else {
+            format!("{from}%{}", from + FIRST_KEYFRAME_STEP)
+        };
+        searches.push((interval, true));
     }
     for (interval, first) in searches {
         let mut command = crate::platform::tool_command(&probe);
@@ -421,10 +427,11 @@ pub fn write(
     };
     let (first, earliest) = head_times(&head)?;
     let Some(tail) = probe_output(&[
+        // Every packet, read in order without a seek (a seek into the copy
+        // can land after its end and print nothing); the bounded output
+        // keeps the last lines, which hold the last frames.
         "-select_streams",
         "v:0",
-        "-read_intervals",
-        &format!("{}%", (duration - 10.).max(0.)),
         "-show_entries",
         "packet=pts_time,duration_time",
         "-of",
@@ -443,7 +450,12 @@ pub fn write(
         .fold(None, |max: Option<f64>, end| {
             Some(max.map_or(end, |m| m.max(end)))
         })
-        .context("copied clip has no final video packet")?;
+        .with_context(|| {
+            format!(
+                "copied clip has no final video packet (duration {duration}s, {} tail lines)",
+                tail.lines().count()
+            )
+        })?;
     // The output's first packet is the source keyframe (`-copypriorss 0`):
     // it maps output times to source times. Leading frames of an open GOP
     // present before it, so the start is the earliest presented frame.
@@ -455,7 +467,7 @@ pub fn write(
     let tolerance = frame + 0.0001;
     if end + tolerance < job.end {
         bail!(
-            "source-unavailable: the copied video ends at {end}s, before the requested {}s beyond one frame ({tolerance}s)",
+            "source-unavailable: the copied video ends at {end}s, before the requested {}s beyond one frame ({tolerance}s; output {duration}s, first packet {first}s, last frame end {last}s)",
             job.end
         );
     }
