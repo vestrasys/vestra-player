@@ -157,6 +157,29 @@ pub(crate) const OSD_MS: u64 = 2000;
 /// A message with actions (`osd.show` with `actions`) stays this long, and
 /// longer while the pointer is on it.
 pub(crate) const OSD_ACTION_MS: u64 = 4000;
+/// The longest a message with actions is held under the pointer, from when
+/// it showed: Slint's `has-hover` changes only on pointer events, so a
+/// message that moved under a still pointer (a fullscreen toggle by key,
+/// the title strip sliding) would otherwise read as hovered for ever.
+pub(crate) const OSD_HOLD_MS: u64 = 30_000;
+/// After a message hides, its button titles are cleared once the 300 ms
+/// fade is over (and 300 ms more), so no invisible, disabled buttons stay
+/// in the accessibility tree.
+pub(crate) const OSD_CLEAR_MS: u64 = 600;
+
+/// The tick for a message whose time is up: `Some(until)` keeps it that
+/// long. Only a message with actions is held, while the pointer is on it
+/// and active (not idle), and never past [`OSD_HOLD_MS`] after `shown_at`.
+pub(crate) fn osd_hold(
+    now: u64,
+    shown_at: u64,
+    actions: bool,
+    hover: bool,
+    idle: bool,
+) -> Option<u64> {
+    let cap = shown_at.saturating_add(OSD_HOLD_MS);
+    (actions && hover && !idle && now < cap).then(|| (now + OSD_MS).min(cap))
+}
 /// The action buttons of the message on screen: the plugin that showed it
 /// and the local ids of its commands, one per button.
 pub(crate) struct OsdActions {
@@ -268,6 +291,10 @@ pub(crate) struct Host {
     pub(crate) ui_state: ui_state::Store,
     pub(crate) osd_until: Option<u64>,
     pub(crate) osd_actions: Option<OsdActions>,
+    /// When the message on screen showed (`osd_hold`).
+    pub(crate) osd_shown_at: u64,
+    /// When the hidden message's button titles are cleared (`OSD_CLEAR_MS`).
+    pub(crate) osd_clear_at: Option<u64>,
     pub(crate) info_panels: BTreeMap<u64, String>,
     /// The sequence provider: owner, can-next, can-previous (C6).
     pub(crate) sequence: Option<(u64, bool, bool)>,

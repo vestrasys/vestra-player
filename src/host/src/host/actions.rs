@@ -332,18 +332,37 @@ impl Host {
         } else {
             OSD_MS
         };
-        self.osd_until = Some(self.now_ms() + ms);
+        let now = self.now_ms();
+        self.osd_until = Some(now + ms);
+        self.osd_shown_at = now;
+        self.osd_clear_at = None;
         self.osd_actions = actions.map(|(actions, _)| actions);
+    }
+    /// The message fades out; its buttons go now, their titles once the
+    /// fade is over (`OSD_CLEAR_MS`).
+    pub(crate) fn hide_osd(&mut self) {
+        self.osd_until = None;
+        self.osd_actions = None;
+        self.osd_clear_at = Some(self.now_ms() + OSD_CLEAR_MS);
+        if let Some(shell) = &self.shell {
+            let _ = shell.set_property("osd-visible", false.into());
+        }
+    }
+    /// Empty both button slots: no button element stays (hidden) in the
+    /// accessibility tree.
+    pub(crate) fn clear_osd_titles(&mut self) {
+        self.osd_clear_at = None;
+        if let Some(shell) = &self.shell {
+            let _ = shell.set_property("osd-action-1", SValue::String("".into()));
+            let _ = shell.set_property("osd-action-2", SValue::String("".into()));
+        }
     }
     /// The buttons of `owner`'s message go (it stopped); the text stays for
     /// its time.
     pub(crate) fn drop_osd_actions(&mut self, owner: u64) {
         if self.osd_actions.as_ref().is_some_and(|a| a.owner == owner) {
             self.osd_actions = None;
-            if let Some(shell) = &self.shell {
-                let _ = shell.set_property("osd-action-1", SValue::String("".into()));
-                let _ = shell.set_property("osd-action-2", SValue::String("".into()));
-            }
+            self.clear_osd_titles();
         }
     }
     /// The user pressed button `index` of the message: the message goes and
@@ -357,11 +376,8 @@ impl Host {
         else {
             return;
         };
-        let owner = self.osd_actions.take().map_or(0, |actions| actions.owner);
-        self.osd_until = None;
-        if let Some(shell) = &self.shell {
-            let _ = shell.set_property("osd-visible", false.into());
-        }
+        let owner = self.osd_actions.as_ref().map_or(0, |actions| actions.owner);
+        self.hide_osd();
         if let Err(error) = self.execute_command(owner, &id) {
             diag!("osd action {id}: {}", error.message);
         }
@@ -507,6 +523,32 @@ pub(crate) fn migrate_fullscreen_escape(
 mod tests {
     use super::*;
     use crate::bindings::{HOST, Input, Lookup, Table};
+
+    #[test]
+    fn osd_hold_needs_actions_an_active_pointer_and_ends_by_the_cap() {
+        let shown = 1_000;
+        // Due at 5 s: held 2 s at a time while the active pointer is on it.
+        assert_eq!(osd_hold(5_000, shown, true, true, false), Some(7_000));
+        // No actions, no hover, or a resting pointer: it goes.
+        assert_eq!(osd_hold(5_000, shown, false, true, false), None);
+        assert_eq!(osd_hold(5_000, shown, true, false, false), None);
+        assert_eq!(osd_hold(5_000, shown, true, true, true), None);
+        // A hover that never ends (the message moved under a still pointer)
+        // holds it at most `OSD_HOLD_MS` from when it showed.
+        let cap = shown + OSD_HOLD_MS;
+        assert_eq!(osd_hold(cap - 500, shown, true, true, false), Some(cap));
+        assert_eq!(osd_hold(cap, shown, true, true, false), None);
+        assert_eq!(osd_hold(cap + 10_000, shown, true, true, false), None);
+        let mut now = shown + OSD_ACTION_MS;
+        let mut ticks = 0;
+        while let Some(until) = osd_hold(now, shown, true, true, false) {
+            assert!(until > now);
+            now = until;
+            ticks += 1;
+        }
+        assert_eq!(now, cap);
+        assert!(ticks < 20);
+    }
 
     /// The table as register_host_commands fills it (the host's own
     /// commands, the core actions).
