@@ -1,4 +1,4 @@
-import type { PlayerState } from "@vestra-player/sdk";
+import type { ExportEncoding, PlayerState } from "@vestra-player/sdk";
 import { Failure } from "./model.ts";
 
 /**
@@ -68,12 +68,16 @@ export const keyframeArgs = (path: string, from: number, to: number) => [
   path,
 ];
 
-/** The times of the key packets in ffprobe's `pts_time,flags` lines, sorted, without repeats. */
-export function parseKeyframes(stdout: string): number[] {
+/**
+ * The times of the key packets in ffprobe's `pts_time,flags` lines, sorted,
+ * without repeats, on the player's clock: `offset` is the file's start time
+ * (ffprobe reports container timestamps; the player's positions start at 0).
+ */
+export function parseKeyframes(stdout: string, offset = 0): number[] {
   const times = new Set<number>();
   for (const line of stdout.split(/\r?\n/)) {
     const [time, flags] = line.split(",");
-    const seconds = Number(time);
+    const seconds = Number(time) - offset;
     if (time && flags?.includes("K") && Number.isFinite(seconds) && seconds >= 0) times.add(Math.round(seconds * 1000) / 1000);
   }
   return [...times].sort((a, b) => a - b);
@@ -86,8 +90,15 @@ export function snapStart(keyframes: readonly number[], start: number): number |
   return found;
 }
 
-/** ffprobe's arguments for the codec of the first video stream (the Fast container preview). */
-export const codecArgs = (path: string) => ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name", "-of", "csv=p=0", path];
+/** ffprobe's arguments for the first video stream's codec (the Fast container preview) and the file's start time (the keyframes' offset). */
+export const codecArgs = (path: string) => ["-v", "error", "-select_streams", "v:0", "-show_entries", "stream=codec_name:format=start_time", "-of", "default=noprint_wrappers=1", path];
+/** The codec and start time in ffprobe's `key=value` lines; a missing or unknown start time is 0. */
+export function parseCodec(stdout: string): { video: string | null; offset: number } {
+  const value = (key: string) => stdout.match(new RegExp(`^${key}=(.*)$`, "m"))?.[1]?.trim() ?? "";
+  const video = value("codec_name");
+  const offset = Number(value("start_time"));
+  return { video: video && video !== "N/A" ? video : null, offset: value("start_time") && Number.isFinite(offset) ? offset : 0 };
+}
 
 const MP4_VIDEO = new Set(["h264", "hevc", "av1", "vp9", "mpeg4"]);
 const MP4_AUDIO = new Set(["aac", "mp3", "alac", "opus", "flac", "ac3", "eac3"]);
@@ -149,6 +160,8 @@ export function timeline(range: { start: number; end: number }, actual: { start:
 // ---------------------------------------------------------------- Precise quality (R6)
 /** The encode options of a Precise cut (request R6): finite choices, never free FFmpeg arguments. */
 export interface Encode {
+  /** `crf`: a quality level; `source`: the source video's average bitrate ("Same as source"; the CRF is then unused). */
+  rate: "crf" | "source";
   /** 14–30: lower is a better picture and a bigger file. */
   crf: number;
   speed: "faster" | "balanced" | "smaller";
@@ -161,14 +174,15 @@ export interface Encode {
 export type Preset = "source" | "high" | "small" | "custom";
 export const PRESETS: readonly Exclude<Preset, "custom">[] = ["source", "high", "small"];
 /**
- * `high` is today's encoding (CRF 18, x264 veryfast, AAC 192 kb/s, the
- * source's size and rate), so the default output does not change when R6
- * lands. `source` aims at the source's quality; `small` caps at 1080p.
+ * The three presets (design §3.5). `high` is the encoding clips always had
+ * (CRF 18, x264 veryfast, AAC 192 kb/s, the source's size and rate), so the
+ * default output does not change. `source` aims at the source video's
+ * average bitrate (`videoBitrate: "source"`); `small` is CRF 26 at most 1080p.
  */
 export const PRESET_ENCODE: Readonly<Record<Exclude<Preset, "custom">, Encode>> = {
-  source: { crf: 16, speed: "balanced", height: 0, fps: 0, audio: 256 },
-  high: { crf: 18, speed: "faster", height: 0, fps: 0, audio: 192 },
-  small: { crf: 26, speed: "balanced", height: 1080, fps: 0, audio: 128 },
+  source: { rate: "source", crf: 18, speed: "balanced", height: 0, fps: 0, audio: 256 },
+  high: { rate: "crf", crf: 18, speed: "faster", height: 0, fps: 0, audio: 192 },
+  small: { rate: "crf", crf: 26, speed: "balanced", height: 1080, fps: 0, audio: 128 },
 };
 export const SPEEDS: readonly Encode["speed"][] = ["faster", "balanced", "smaller"];
 export const HEIGHTS: readonly Encode["height"][] = [0, 1080, 720, 480];
@@ -184,6 +198,7 @@ export function encodeOf(value: unknown): Encode {
   const high = PRESET_ENCODE.high;
   const pick = <T>(list: readonly T[], item: unknown, fallback: T) => (list.includes(item as T) ? (item as T) : fallback);
   return {
+    rate: v.rate === "source" ? "source" : "crf",
     crf: v.crf === undefined ? high.crf : crfOf(v.crf),
     speed: pick(SPEEDS, v.speed, high.speed),
     height: pick(HEIGHTS, v.height, high.height),
@@ -193,7 +208,27 @@ export function encodeOf(value: unknown): Encode {
 }
 /** The preset whose options these are, `custom` when none (the Quality box then says Custom). */
 export function presetOf(encode: Encode): Preset {
-  return PRESETS.find((preset) => JSON.stringify(PRESET_ENCODE[preset]) === JSON.stringify(encode)) ?? "custom";
+  const key = (e: Encode) => JSON.stringify([e.rate, e.rate === "crf" ? e.crf : 0, e.speed, e.height, e.fps, e.audio]);
+  return PRESETS.find((preset) => key(PRESET_ENCODE[preset]) === key(encode)) ?? "custom";
+}
+
+/**
+ * The player's encoder settings for a Precise cut (`ExportEncoding`, SDK
+ * 1.6.10): a closed set, never encoder arguments. A source bitrate replaces
+ * the CRF; the source's height and rate (0) are left out. `threads`: more
+ * cores while paused, one while playing, so playback keeps its rate
+ * (design open question 3; the player still caps it and runs exports below
+ * normal priority).
+ */
+export function exportEncoding(encode: Encode, paused: boolean): ExportEncoding {
+  return {
+    ...(encode.rate === "source" ? { videoBitrate: "source" as const } : { crf: encode.crf }),
+    speed: encode.speed,
+    ...(encode.height ? { maxHeight: encode.height } : {}),
+    ...(encode.fps ? { fps: encode.fps } : {}),
+    audioBitrate: encode.audio,
+    threads: paused ? "auto" : "single",
+  };
 }
 
 // ---------------------------------------------------------------- estimates
@@ -227,10 +262,11 @@ export function estimate(input: { method: Method; length: number; fileBytes: num
   }
   let sizelow = 0, sizehigh = 0;
   if (share !== null) {
-    const quality = Math.pow(2, (18 - encode.crf) / 6);
+    // A source bitrate: about the source's share, with peaks up to 1.5 times it.
+    const quality = encode.rate === "source" ? 1 : Math.pow(2, (18 - encode.crf) / 6);
     const scale = encode.height && height && height > encode.height ? Math.pow(encode.height / height, 2) : 1;
-    sizelow = mb(share * 0.7 * quality * scale);
-    sizehigh = mb(share * 1.3 * quality * scale);
+    sizelow = mb(share * (encode.rate === "source" ? 0.9 : 0.7) * quality * scale);
+    sizehigh = mb(share * (encode.rate === "source" ? 1.2 : 1.3) * quality * scale);
   }
   const timelow = secondsPerSecond ? Math.max(1, Math.round(length * secondsPerSecond * 0.8)) : Math.max(1, Math.round(length * 0.3));
   const timehigh = secondsPerSecond ? Math.max(timelow, Math.round(length * secondsPerSecond * 1.25)) : Math.max(timelow, Math.round(length * 3));

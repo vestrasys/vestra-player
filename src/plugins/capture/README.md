@@ -8,7 +8,7 @@ Saves and copies the current frame, captures bursts, exports video clips. Everyt
 - **Source frame and rendered frame**: the rendered frame includes video effects and, optionally, the subtitles.
 - **Formats**: PNG, JPEG (adjustable quality), BMP.
 - **Burst**: 2–20 frames at a fixed interval, saved into a folder of their own.
-- **Clips**: part of a local video as MP4, with a choice of audio track, video effects and subtitles; the range can be typed (`1:02:03.450` or seconds), set with Now, copied from the A-B loop, or be the last 10/30/60/120 seconds (Last N s).
+- **Clips**: part of a local video. **Fast** copies the streams (lossless, about as fast as the disk, from the keyframe at or before the start, shown in the tab); **Precise** re-encodes from the exact frame as MP4 with a preset (Same as source, High quality, Small file) or Advanced settings, video effects and subtitles. A progress bar with the time left, the clip's range on the seek bar while the tab shows, and Show in Folder / Copy / Show in Tab in the "saved" message. The range can be typed (`1:02:03.450` or seconds), set with Now, copied from the A-B loop, or be the last 10/30/60/120 seconds (Last N s).
 - **Results**: running and queued exports with Cancel, failed ones with Retry, and the last twenty finished captures (kept across restarts) with Open, Copy and Show in Folder.
 - **File names**: templates with `{name}`, `{pos}`, `{start}`, `{end}`, `{date}`, `{time}`, `{n}`; the defaults are the names the plugin always used (a clip also states its end).
 - The snapshot folder can be chosen, or captures go beside the video when possible. Existing files are never overwritten.
@@ -26,7 +26,8 @@ In the command palette (Ctrl+Shift+P): Save Rendered Frame (Ctrl+Alt+E), Copy Re
 ## Limits
 
 - Clips need a local video with a known duration; frames work wherever the player can capture one.
-- Clips are re-encoded (H.264 + AAC in MP4). Fast stream-copy cuts, quality presets, a percentage while exporting, the clip's range on the seek bar and buttons in the "saved" message come with a later player (host requests R1–R6 in the design).
+- A Fast cut starts on a keyframe (the tab shows which) and copies the video and one audio track, no subtitles; files whose codecs cannot be copied need Precise. Precise clips are H.264 + AAC in MP4.
+- Use A-B range needs the A-B loop switched on.
 
 ## Translations
 

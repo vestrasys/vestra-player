@@ -10,6 +10,10 @@ import activate from "../main.ts";
 import { Tasks } from "../tasks.ts";
 import type { Task } from "../tasks.ts";
 import { frameName, REASON } from "../model.ts";
+import { timelineWindow } from "../clip.ts";
+
+/** The end of the small timeline's window around a range (the keyframe probe reads that far). */
+const timelineEnd = (start: number, end: number) => timelineWindow(start, end, 600).to;
 import { words } from "./fakes.ts";
 
 /** A job as the test host records it. */
@@ -95,6 +99,8 @@ test("Snapshot ▸ keeps five items; every other command is in the command palet
       ["capture.settings", "", ""],
       ["capture.folder", "", "capture.settings"],
       ["capture.openFolder", "", ""],
+      ["capture.revealLast", "", "capture.tasks"],
+      ["capture.copyLast", "", "capture.tasks"],
       ["capture.clipStart", "", "capture.panel"],
       ["capture.clipEnd", "", "capture.panel"],
       ["capture.last30", "Ctrl+Shift+R", "capture.panel"],
@@ -118,7 +124,7 @@ test("every command has a category for the command palette, and every home is on
     ready(host);
     const { stop } = await start(host, locale);
     try {
-      assert.equal(host.commands.size, 21);
+      assert.equal(host.commands.size, 23);
       for (const [id, command] of host.commands) {
         assert.ok(command.declaration.category, `${id}: declares a category`);
         assert.ok(command.display.category?.trim(), `${id}: shows a category in ${locale}`);
@@ -447,7 +453,7 @@ test("Save As asks for a file; a source change while it is open captures nothing
   }
 });
 
-test("clip: Export saves into the folder with the template's name; the snapshot honours the tab's options; done becomes a result", async () => {
+test("clip, Precise: Export saves into the folder with the template's name and the tab's encoder settings (R6); progress (R4), the range written (R2), OSD buttons (R5)", async () => {
   const host = new TestHost();
   ready(host);
   host.setSource({ audioTracks: TRACKS });
@@ -457,6 +463,8 @@ test("clip: Export saves into the folder with the template's name; the snapshot 
   try {
     const panel = host.mounted();
     assert.deepEqual(tab(host)["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en", "音轨 8"]);
+    panel.emit("set-method", 1);
+    panel.emit("set-preset", 2);
     panel.emit("set-audio", 2);
     panel.emit("set-processed", true);
     panel.emit("clip-edited", "0:01", "0:04.5");
@@ -464,7 +472,8 @@ test("clip: Export saves into the folder with the template's name; the snapshot 
     assert.equal(tab(host)["clip-name"], "source-one_00.01.000-00.04.500.mp4", "the name the Export button gives");
     assert.equal(tab(host)["field-error"], "");
     assert.equal(tab(host).estimate && (tab(host).estimate as { length: string }).length, "3.5");
-    assert.equal((tab(host).note as { method: string }).method, "precise", "Fast waits for R1");
+    assert.equal((tab(host).note as { method: string }).method, "precise");
+    assert.equal(tab(host)["preset-index"], 2, "Small file");
     panel.emit("export-clip", "0:01", "0:04.5");
     await until(() => host.sent("jobs.start").length === 1 && statusOf(host, "clip-status") === "已开始导出，可在结果中查看。");
     assert.equal(host.sent("dialogs.open").length, 1, "only the folder dialog: Export asks for nothing");
@@ -474,20 +483,31 @@ test("clip: Export saves into the folder with the template's name; the snapshot 
     assert.deepEqual(capture.audio, { kind: "track", trackId: 7 });
     const job = host.sent("jobs.start")[0]!;
     assert.deepEqual([job.kind, job.end, job.destination], ["processedMp4", 4.5, join(folder, "source-one_00.01.000-00.04.500.mp4")]);
+    // Small file; the test host's source plays, so one thread.
+    assert.deepEqual(job.encoding, { crf: 26, speed: "balanced", maxHeight: 1080, audioBitrate: 128, threads: host.source.paused ? "auto" : "single" });
     // The progress card and the row while it runs.
     await until(() => (tab(host).card as { shown: boolean }).shown);
     assert.equal((tab(host).card as { name: string }).name, "source-one_00.01.000-00.04.500.mp4");
-    assert.equal((tab(host).card as { percent: number }).percent, -1, "no percentage before R4");
+    assert.equal((tab(host).card as { percent: number }).percent, -1, "no percentage before the first progress");
+    setJob(1, { status: "running", progress: { done: 1.75, total: 3.5 } } as never);
+    await until(() => (tab(host).card as { percent: number }).percent === 50);
+    assert.equal(rows(host)[0]!.state, "running");
+    assert.equal((rows(host)[0] as unknown as { percent: number }).percent, 50);
     const destination = join(folder, "source-one_00.01.000-00.04.500.mp4");
     await writeFile(destination, "mp4 bytes");
-    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination } });
+    setJob(1, { status: "completed", publicationStarted: true, progress: null, outcome: { destination, start: 1, end: 4.52 } } as never);
     await until(() => host.osd.at(-1) === `片段已导出为 ${destination}` && statusOf(host, "clip-status") === "已导出 source-one_00.01.000-00.04.500.mp4");
     await until(() => rows(host).length === 1 && rows(host)[0]!.state === "completed");
     assert.equal((tab(host).card as { shown: boolean }).shown, false);
     assert.deepEqual([rows(host)[0]!.kind, (rows(host)[0] as unknown as { method: string; badge: string }).method, (rows(host)[0] as unknown as { badge: string }).badge], ["clip", "precise", "3.5"]);
-    host.mounted().emit("reveal-result", rows(host)[0]!.id);
+    assert.equal((rows(host)[0] as unknown as { range: string }).range, "00:01.000–00:04.520", "R2: the range the file holds");
+    // R5: the message's buttons, and what they do.
+    assert.deepEqual(host.osdActions.at(-1), [{ title: "在文件夹中显示", command: "capture.revealLast" }, { title: "在页签中显示", command: "capture.tasks" }]);
+    await host.pressOsdAction(0);
     await until(() => host.system.revealed.length === 1);
     assert.deepEqual(host.system.revealed, [destination]);
+    host.mounted().emit("reveal-result", rows(host)[0]!.id);
+    await until(() => host.system.revealed.length === 2);
   } finally {
     await stop();
     await cleanup();
@@ -904,19 +924,32 @@ test("file-name templates: edits rename the next capture; a chip adds a variable
   }
 });
 
-test("with stream copy (R1, pretended): Fast by default, keyframes from ffprobe, the start snaps and the note says by how much", async () => {
+/** A fake ffprobe: the video's codec and start time, and key packets every 2 s (plus one at 241 s that is no keyframe). */
+function probing(host: TestHost, offset = 0) {
+  host.tools.handle("ffprobe", (args) =>
+    args.some((arg) => arg.startsWith("stream=codec_name"))
+      ? { stdout: `codec_name=h264\nstart_time=${offset.toFixed(6)}\n` }
+      : { stdout: [236, 238, 240, 244].map((t) => `${(t + offset).toFixed(6)},K__`).concat([`${(241 + offset).toFixed(6)},___`]).join("\n") },
+  );
+}
+
+test("Fast (R1): the default; keyframes from ffprobe on the player's clock; a stream copy from the keyframe; the range on the seek bar (R3) and in the row (R2)", async () => {
   const host = new TestHost();
   ready(host, "/contract/movie.mp4");
   host.setSource({ position: 250, duration: 600, audioTracks: TRACKS });
-  host.tools.handle("ffprobe", (args) =>
-    args.includes("stream=codec_name") ? { stdout: "h264\n" } : { stdout: "236.000000,K__\n238.000000,K__\n240.000000,K__\n241.000000,___\n244.000000,K__\n" },
-  );
-  const { stop } = await startPlugin((plugin) => activate(plugin, { support: { fastCut: true } }), { directory, host, locale: "en" });
+  // A file whose timestamps start at 1.4 s (MPEG-TS, say): ffprobe reports 1.4 s later than the player.
+  probing(host, 1.4);
+  const setJob = manualJobs(host);
+  const { stop } = await start(host, "en");
+  const folder = await mkdtemp(join(tmpdir(), "capture-fast-"));
   try {
+    host.dialogAnswers.push([folder]);
+    await host.command("capture.folder").run();
+    await until(() => host.osd.at(-1) === `Snapshot folder: ${folder}`);
     const panel = host.mounted();
     await host.settle();
     assert.equal(tab(host)["method-index"], 0, "Fast is the default");
-    assert.deepEqual(tab(host).support, { fast: true, encode: false, progress: false });
+    assert.deepEqual(tab(host).support, { fast: true, encode: true, progress: true });
     panel.emit("clip-edited", "4:02.3", "4:19");
     await until(() => (tab(host).note as { snapped: boolean }).snapped);
     assert.deepEqual(tab(host).note, { method: "fast", start: "04:00.000", end: "04:19.000", early: "2.3", snapped: true, container: "mp4" });
@@ -924,14 +957,71 @@ test("with stream copy (R1, pretended): Fast by default, keyframes from ffprobe,
     const line = tab(host).timeline as { key: number; gota: number; wanta: number; ticks: string };
     assert.ok(line.key >= 0 && line.gota < line.wanta && line.ticks.includes("M"));
     const probe = host.tools.calls.find((call) => call.args.includes("-read_intervals"))!;
-    assert.equal(probe.tool, "ffprobe");
-    assert.ok(probe.args.includes("/contract/movie.mp4"));
+    const window = probe.args[probe.args.indexOf("-read_intervals") + 1]!.split("%").map(Number);
+    assert.ok(Math.abs(window[1]! - (timelineEnd(242.3, 259) + 1.4)) < 0.01, "the window in the file's timestamps");
+    // R3: what the file will hold, on the seek bar while the tab shows.
+    await until(() => (host.timeline.rangeLayers.get("vestra.capture") ?? []).length === 1);
+    assert.deepEqual(host.timeline.rangeLayers.get("vestra.capture"), [{ start: 240, end: 259, style: "selection", title: "Clip" }]);
+    panel.emit("export-clip", "4:02.3", "4:19");
+    await until(() => host.sent("jobs.start").length === 1);
+    const capture = host.sent("snapshot.capture")[0]!;
+    assert.deepEqual([capture.mode, capture.time], ["raw", 242.3], "a copy needs a raw snapshot");
+    const job = host.sent("jobs.start")[0]!;
+    assert.deepEqual([job.kind, job.end, job.container], ["rawCopy", 259, "auto"]);
+    assert.equal(job.encoding, undefined);
+    // The player wrote MKV and reports where the file really starts.
+    const written = join(folder, "movie_04.00.000-04.19.000.mkv");
+    await writeFile(written, "mkv bytes");
+    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: written, start: 239.96, end: 259.02 } } as never);
+    await until(() => rows(host)[0]?.state === "completed");
+    const [row] = rows(host) as unknown as { name: string; method: string; range: string; badge: string }[];
+    assert.deepEqual([row!.name, row!.method, row!.range, row!.badge], ["movie_04.00.000-04.19.000.mkv", "fast", "03:59.960–04:19.020", "19.1"]);
+    assert.equal(host.osd.at(-1), `Clip exported as ${written}`);
+    // Precise: the exact frame; the seek bar follows.
     panel.emit("set-method", 1);
     await host.settle();
     assert.deepEqual([(tab(host).note as { method: string; start: string }).method, (tab(host).note as { start: string }).start], ["precise", "04:02.300"]);
     assert.equal(tab(host)["clip-name"], "movie_04.02.300-04.19.000.mp4");
+    await until(() => host.timeline.rangeLayers.get("vestra.capture")?.[0]?.start === 242.3);
+    // In the background the range goes.
+    host.mountOther("sidebar", "vestra.playlist", { title: "Playlist" });
+    host.selectTab("vestra.playlist");
+    await until(() => !(host.timeline.rangeLayers.get("vestra.capture") ?? []).length);
+    await host.settle();
+    assert.deepEqual(host.keepsRunning, [], "an empty layer in the background keeps nothing running");
   } finally {
     await stop();
+    await rm(folder, { recursive: true, force: true });
+  }
+});
+
+test("a stream copy the player cannot make: Fast cut is not possible, Use Precise; an unknown source bitrate asks for another quality", async () => {
+  const host = new TestHost();
+  ready(host, "/contract/movie.mp4");
+  host.setSource({ position: 5, duration: 600 });
+  probing(host);
+  const { stop } = await start(host, "en");
+  const folder = await mkdtemp(join(tmpdir(), "capture-fail-"));
+  try {
+    host.dialogAnswers.push([folder]);
+    await host.command("capture.folder").run();
+    await until(() => host.osd.at(-1) === `Snapshot folder: ${folder}`);
+    host.exportFailure = { code: "unsupported", message: "codec vc1 cannot be copied" };
+    host.mounted().emit("export-clip", "0:01", "0:04");
+    await until(() => host.osd.at(-1) === `Export failed: ${REASON.fastImpossible}`);
+    assert.deepEqual((tab(host)["clip-status"] as { reason: string }).reason, "fastImpossible", "the tab offers Use Precise");
+    assert.equal(rows(host)[0]!.reason, "fastImpossible");
+    // Same as source on a file whose bitrate the player cannot tell.
+    host.mounted().emit("set-method", 1);
+    host.mounted().emit("set-preset", 0);
+    host.mounted().emit("export-clip", "0:01", "0:04");
+    await until(() => host.osd.at(-1) === `Export failed: ${REASON.noSourceBitrate}`);
+    const job = host.sent("jobs.start").at(-1)!;
+    assert.deepEqual([job.kind, (job.encoding as { videoBitrate?: string }).videoBitrate, "crf" in (job.encoding as object)], ["rawMp4", "source", false]);
+  } finally {
+    host.exportFailure = null;
+    await stop();
+    await rm(folder, { recursive: true, force: true });
   }
 });
 

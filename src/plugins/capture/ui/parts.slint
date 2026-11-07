@@ -63,7 +63,8 @@ export global Words {
         if (code == "needLocal") { return @tr("Clips need a local file."); }
         if (code == "noLoop") { return @tr("Set A and B with A-B Loop (Chapters tab)."); }
         if (code == "tooEarly") { return @tr("Nothing has played before the current position yet."); }
-        if (code == "fastImpossible") { return @tr("Fast cut is not possible for this file."); }
+        if (code == "fastImpossible") { return @tr("Fast cut is not possible for this file. Use Precise."); }
+        if (code == "noSourceBitrate") { return @tr("The bitrate of this file is unknown. Choose another quality."); }
         if (code == "folderGone") { return @tr("The file or folder was moved or deleted."); }
         if (code == "noTab") { return @tr("The Snapshots & Clips tab could not open."); }
         return raw;

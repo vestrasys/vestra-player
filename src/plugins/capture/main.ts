@@ -2,7 +2,7 @@ import { access, constants, mkdir, rm, stat } from "node:fs/promises";
 import { basename, dirname, extname, join } from "node:path";
 import type { CommandOptions, ImageRef, Panel, PanelState, Plugin, PlayerState, Text } from "@vestra-player/sdk";
 import {
-  abRange, AUDIO_RATES, defaultRange, effectiveMethod, estimate, fastContainer, HEIGHTS, keyframeArgs, codecArgs, LAST_SECONDS, lastRange, lastSeconds,
+  abRange, AUDIO_RATES, defaultRange, effectiveMethod, estimate, fastContainer, HEIGHTS, keyframeArgs, codecArgs, parseCodec, LAST_SECONDS, lastRange, lastSeconds,
   METHODS, NO_TIMELINE, parseKeyframes, PRESET_ENCODE, presetOf, PRESETS, RATES, snapStart, SPEEDS, timeline, timelineWindow, crfOf,
 } from "./clip.ts";
 import type { Encode, Method } from "./clip.ts";
@@ -59,6 +59,8 @@ const TITLE = {
   "capture.clipStart": "Set Clip Start",
   "capture.clipEnd": "Set Clip End",
   "capture.clipExport": "Export Clip Range",
+  "capture.revealLast": "Show Last Capture in Folder",
+  "capture.copyLast": "Copy Last Snapshot",
 } as const;
 type CommandId = keyof typeof TITLE;
 /** The commands shown in the right-click menu's Snapshot ▸; the rest are in the command palette only. */
@@ -136,7 +138,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const tasks = new Tasks(plugin, (task) => void finished(task));
   const exporter = capturer(plugin, tasks);
   const copier = clipboard(plugin);
-  const marker = rangeMarker(plugin);
+  const marker = rangeMarker(plugin, text("Clip"));
   let sequence = 0;
   const nextNumber = () => ++sequence;
 
@@ -170,20 +172,23 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       if (kind === "clip" && task.spec.method !== "fast" && task.started && task.ended && actual.end > actual.start)
         settings.preciseSpeed = Math.max(0.01, (task.ended - task.started) / 1000 / (actual.end - actual.start));
       if (kind === "clip") store();
-      const actions: OsdAction[] = [{ title: "Show in Folder", run: () => plugin.system.reveal(path) }];
-      if (kind === "image") actions.push({ title: "Copy", run: () => plugin.clipboard.writeImage(path) });
-      // TODO(R2): with the range the file holds, the OSD and the row state it (task.actual already follows actualRange).
+      // R2: a clip's row states the range its file holds (a Fast cut's keyframe start).
+      const { saved, dropped } = results.add({
+        kind, path, first: kind === "burst" ? (task.outputs[0]?.path ?? "") : "", method: kind === "clip" ? (task.spec.method ?? "precise") : "",
+        bytes: await sizeOf(path, kind), count: task.outputs.length, start: actual.start, end: actual.end, finished: task.ended ?? Date.now(), thumb: "",
+      });
+      dropped.forEach(dropThumb);
+      // R5: the buttons run commands that act on the newest result, which this now is.
+      const actions: OsdAction[] = [
+        { title: text("Show in Folder"), command: "capture.revealLast" },
+        kind === "image" ? { title: text("Copy"), command: "capture.copyLast" } : { title: text("Show in Tab"), command: "capture.tasks" },
+      ];
       if (kind === "image") showDone(plugin, "Frame saved as {}", [fit(path)], actions);
       // TRANSLATORS: {0} is the number of frames (2–20), {1} the folder.
       else if (kind === "burst") showDone(plugin, "Burst of {0} frames saved to {1}", [task.outputs.length, fit(task.destination)], actions);
       else showDone(plugin, "Clip exported as {}", [fit(path)], actions);
       if (kind === "burst") ui.burstStatus = status("saved", { count: task.outputs.length });
       if (kind === "clip") ui.clipStatus = status("exported", { name: basename(path) });
-      const { saved, dropped } = results.add({
-        kind, path, first: kind === "burst" ? (task.outputs[0]?.path ?? "") : "", method: kind === "clip" ? (task.spec.method ?? "precise") : "",
-        bytes: await sizeOf(path, kind), count: task.outputs.length, start: actual.start, end: actual.end, finished: task.ended ?? Date.now(), thumb: "",
-      });
-      dropped.forEach(dropThumb);
       await tasks.forget(task);
       plugin.update();
       void thumbnail(saved);
@@ -424,7 +429,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
 
   // ---------------------------------------------------------------- clip
   /** What the tab knows of the source for a Fast cut: keyframes around the range, the video codec (ffprobe). */
-  const probe = { source: "", from: 0, to: 0, keyframes: [] as number[], video: null as string | null, timer: undefined as ReturnType<typeof setTimeout> | undefined, abort: null as AbortController | null };
+  const probe = { source: "", from: 0, to: 0, keyframes: [] as number[], video: null as string | null, offset: 0, timer: undefined as ReturnType<typeof setTimeout> | undefined, abort: null as AbortController | null };
   plugin.onDispose(() => {
     clearTimeout(probe.timer);
     probe.abort?.abort();
@@ -467,12 +472,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     try {
       if (!(await plugin.tools.available("ffprobe"))) return;
       if (probe.source !== source) {
-        probe.video = null;
+        Object.assign(probe, { video: null, offset: 0 });
         const codec = await plugin.tools.run("ffprobe", codecArgs(source), { timeoutMs: 5000, maxOutput: 4096, signal: abort.signal });
-        probe.video = Buffer.from(codec.stdout).toString("utf8").trim().split(/\r?\n/)[0] || null;
+        Object.assign(probe, parseCodec(Buffer.from(codec.stdout).toString("utf8")));
       }
-      const result = await plugin.tools.run("ffprobe", keyframeArgs(source, from, window.to), { timeoutMs: 10_000, maxOutput: 4 << 20, signal: abort.signal });
-      Object.assign(probe, { source, from, to: window.to, keyframes: parseKeyframes(Buffer.from(result.stdout).toString("utf8")) });
+      // ffprobe reads container timestamps: the window moves by the file's start time, the keyframes come back by it.
+      const result = await plugin.tools.run("ffprobe", keyframeArgs(source, from + probe.offset, window.to + probe.offset), { timeoutMs: 10_000, maxOutput: 4 << 20, signal: abort.signal });
+      Object.assign(probe, { source, from, to: window.to, keyframes: parseKeyframes(Buffer.from(result.stdout).toString("utf8"), probe.offset) });
       // Past ffprobe's await: the note and the small timeline changed outside SDK-invoked code.
       plugin.update();
     } catch (error) {
@@ -483,7 +489,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   function clipView(state: PlayerState) {
     const range = typedRange();
     const chosen = method();
-    const empty = { error: "", field: "", note: { method: chosen, start: "", end: "", early: "", snapped: false, container: "" }, timeline: NO_TIMELINE, estimate: { length: "", size: "", timelow: 0, timehigh: 0 }, name: "" };
+    const empty = { error: "", field: "", note: { method: chosen, start: "", end: "", early: "", snapped: false, container: "" }, timeline: NO_TIMELINE, estimate: { length: "", size: "", timelow: 0, timehigh: 0 }, name: "", span: null as { start: number; end: number } | null };
     // Nothing typed yet: no complaint, the fields show their placeholders.
     if (!clippable(state) || (!form.start.trim() && !form.end.trim())) return empty;
     if ("error" in range) return { ...empty, error: range.error, field: range.field };
@@ -504,6 +510,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       timeline: timeline(range, { start, end: range.end }, chosen === "fast" ? keyframes : [], state.position, state.duration, snapped),
       estimate: { length: length.toFixed(1), size: sizeText, timelow: guess.timelow, timehigh: guess.timehigh },
       name: `${renderName("clip", settings.templates.clip, { source: state.source, start, end: range.end, now: new Date(), n: sequence + 1 })}${extension}`,
+      // What the file will hold: a Fast cut from its keyframe.
+      span: { start, end: range.end },
     };
   }
   /** The playing file's size (the estimates), read once per source. */
@@ -529,12 +537,12 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     const chosen = method();
     const precise = chosen === "precise";
     const spec: Spec = {
-      kind: "clip", start: range.start, end: range.end, count: 1, step: 1,
+      kind: "clip", start: range.start, end: range.end, count: 1, step: 1, paused: seen.paused,
       processed: precise && form.processed, subtitles: precise && form.processed && form.burn,
       track: audioChoices(seen, text).values[form.audioIndex] ?? "none", current: false,
       method: chosen,
-      // TODO(R6): sent once the player takes encode options; until then every Precise cut is today's High quality.
-      encode: precise && support.encodeOptions ? settings.encode : undefined,
+      // R6: the tab's encoder settings.
+      encode: precise && support.encodeOptions ? { ...settings.encode } : undefined,
     };
     const snapped = chosen === "fast" && probe.source === seen.source ? snapStart(probe.keyframes, range.start) : null;
     const container = chosen === "fast" ? fastContainer(probe.source === seen.source ? probe.video : null, audioCodec(seen)) : "mp4";
@@ -633,11 +641,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     if (shown !== live) queueMicrotask(() => follow(panel.state));
     const rows = resultRows();
     const view = shown ? liveProps() : {};
-    if (shown) {
-      // TODO(R3): the clip's range on the seek bar while the tab shows.
-      const range = typedRange();
-      marker.set("error" in range || !clippable(player.state) ? null : range);
-    }
     return {
       ...view,
       keys: {
@@ -663,6 +666,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         return preset === "custom" ? 3 : PRESETS.indexOf(preset);
       })(),
       encCrf: settings.encode.crf,
+      encSource: settings.encode.rate === "source",
       encSpeed: SPEEDS.indexOf(settings.encode.speed),
       encHeight: HEIGHTS.indexOf(settings.encode.height),
       encFps: RATES.indexOf(settings.encode.fps),
@@ -701,6 +705,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     lastSource = isLocal(state.source) ? state.source : null;
     const ab = abRange(state);
     const view = clipView(state);
+    // R3: the clip's range on the seek bar while the tab shows (taken away when it goes, in `follow`).
+    marker.set(view.span);
     return {
       mode: tabMode(state),
       canCapture: usable(state),
@@ -831,7 +837,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   on("setEncode", (field: string, value: number) => {
     const next = { ...settings.encode };
     const n = Math.round(Number(value));
-    if (field === "crf") next.crf = crfOf(n);
+    // Moving the quality number leaves "Same as source" for a quality level.
+    if (field === "crf") Object.assign(next, { crf: crfOf(n), rate: "crf" });
     else if (field === "speed" && SPEEDS[n]) next.speed = SPEEDS[n]!;
     else if (field === "height" && HEIGHTS[n] !== undefined) next.height = HEIGHTS[n]!;
     else if (field === "fps" && RATES[n] !== undefined) next.fps = RATES[n]!;
@@ -1028,6 +1035,31 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
   entry("capture.folder", 437, chooseFolder, inSettings);
   entry("capture.openFolder", 438, openFolderSaying);
+  /**
+   * The buttons of a finished capture's message (R5) and palette commands:
+   * they act on the newest result. Players before 0.7.6 show no buttons, so
+   * the same is in the tab's Results.
+   */
+  const newest = async () => {
+    const item = results.list[0];
+    if (!item) throw new Failure("noOutput");
+    return existing(item.id);
+  };
+  entry("capture.revealLast", 444, () =>
+    newest()
+      .then((item) => plugin.system.reveal(item.kind === "burst" && item.first ? item.first : item.path))
+      .catch((error) => sayProblem(problemOf(error))), { home: "capture.tasks" });
+  entry("capture.copyLast", 445, () =>
+    newest()
+      .then(async (item) => {
+        const file = item.kind === "burst" ? item.first : item.path;
+        if (item.kind === "clip" || ![".png", ".jpg", ".jpeg"].includes(extname(file).toLowerCase())) throw new Failure("clipboard");
+        await plugin.clipboard.writeImage(file).catch(() => {
+          throw new Failure("clipboard");
+        });
+        shown(osd.show("Frame copied to the clipboard"));
+      })
+      .catch((error) => sayProblem(problemOf(error))), { home: "capture.tasks" });
   entry("capture.clipStart", 441, async () => {
     const position = (await player.refresh()).position ?? 0;
     setRange({ start: position });

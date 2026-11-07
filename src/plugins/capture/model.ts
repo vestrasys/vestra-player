@@ -23,8 +23,10 @@ export interface Spec {
   quality?: number;
   /** Clips: stream copy (`fast`, needs R1) or re-encode (`precise`); `precise` when absent. */
   method?: Method;
-  /** Clips: the encode options of a Precise cut (R6); today's encoding when absent. */
+  /** Clips: the encode options of a Precise cut (R6); the encoding clips always had when absent. */
   encode?: Encode;
+  /** Clips: playback was paused when it was asked for (a Precise cut may then use more cores). */
+  paused?: boolean;
 }
 
 /** F07: the image formats a frame can be saved as. */
@@ -80,15 +82,16 @@ export const REASON = {
   needLocal: "Clips need a local file.",
   noLoop: "Set A and B with A-B Loop (Chapters tab).",
   tooEarly: "Nothing has played before the current position yet.",
-  fastImpossible: "Fast cut is not possible for this file.",
+  fastImpossible: "Fast cut is not possible for this file. Use Precise.",
+  noSourceBitrate: "The bitrate of this file is unknown. Choose another quality.",
   folderGone: "The file or folder was moved or deleted.",
   noTab: "The Snapshots & Clips tab could not open.",
 } as const;
 export type Reason = keyof typeof REASON;
 
 /** The reasons an export job ends with (`jobError`, a released input). */
-export type JobReason = "space" | "exists" | "permission" | "encoder" | "exportFailed" | "released";
-const JOB_REASONS: readonly Reason[] = ["space", "exists", "permission", "encoder", "exportFailed", "released"];
+export type JobReason = "space" | "exists" | "permission" | "encoder" | "exportFailed" | "released" | "fastImpossible" | "noSourceBitrate";
+const JOB_REASONS: readonly Reason[] = ["space", "exists", "permission", "encoder", "exportFailed", "released", "fastImpossible", "noSourceBitrate"];
 
 /** A failure in the plugin's own words: `code` names its text in {@link REASON}. */
 export class Failure extends Error {

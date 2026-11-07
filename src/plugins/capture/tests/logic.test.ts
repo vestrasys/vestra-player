@@ -4,13 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import {
-  abRange, defaultRange, effectiveMethod, encodeOf, estimate, fastContainer, keyframeArgs, lastRange, lastSeconds, parseKeyframes, PRESET_ENCODE, presetOf,
+  abRange, defaultRange, effectiveMethod, encodeOf, estimate, exportEncoding, fastContainer, keyframeArgs, lastRange, lastSeconds, parseCodec, parseKeyframes, PRESET_ENCODE, presetOf,
   snapStart, timeline, timelineWindow,
 } from "../clip.ts";
 import { clippable, Failure, frameName, parseRange, parseTime, tabMode, uniqueFolder } from "../model.ts";
 import { DEFAULT_TEMPLATES, insertVariable, NAME_LIMIT, normalTemplate, renderName, safeName, TEMPLATE_LIMIT } from "../names.ts";
 import { RESULT_LIMIT, savedOf } from "../results.ts";
-import { clipExport, hostSupport } from "../seams.ts";
+import { actualRange, clipExport, hostSupport, jobProgress } from "../seams.ts";
 import { settingsOf } from "../settings.ts";
 import type { PlayerState } from "@vestra-player/sdk";
 
@@ -80,6 +80,11 @@ test("Fast: keyframes from ffprobe's packet flags, the cut starts on the last at
   assert.deepEqual(args.slice(args.indexOf("-read_intervals"), args.indexOf("-read_intervals") + 2), ["-read_intervals", "228.300%264.000"]);
   assert.ok(args.includes("packet=pts_time,flags") && args.at(-1) === "/m/a.mkv");
   assert.ok(!args.includes("-show_frames"), "packets only: nothing is decoded");
+  // A file whose timestamps start later (MPEG-TS, an edited MP4): keyframes on the player's clock.
+  assert.deepEqual(parseCodec("codec_name=h264\nstart_time=1.400000\n"), { video: "h264", offset: 1.4 });
+  assert.deepEqual(parseCodec("codec_name=hevc\r\nstart_time=N/A\r\n"), { video: "hevc", offset: 0 });
+  assert.deepEqual(parseCodec(""), { video: null, offset: 0 });
+  assert.deepEqual(parseKeyframes("11.400000,K__\n13.400000,K__\n", 1.4), [10, 12]);
 });
 
 test("Fast container: MP4 when the streams fit, MKV otherwise, unknown without the video codec", () => {
@@ -95,10 +100,34 @@ test("the method: Fast only while the player can copy streams (R1); Precise othe
   assert.equal(effectiveMethod("fast", true), "fast");
   assert.equal(effectiveMethod("precise", true), "precise");
   const support = hostSupport({} as never);
-  assert.deepEqual(Object.values(support), [false, false, false, false, false, false], "SDK 1.6.8 offers none of R1–R6");
-  assert.equal(hostSupport({} as never, { fastCut: true }).fastCut, true);
-  // Until R1 and R6: today's re-encode whatever is asked.
-  assert.deepEqual(clipExport("/o/a.mp4", 9, "fast", PRESET_ENCODE.small), { format: "mp4", destination: "/o/a.mp4", end: 9 });
+  assert.deepEqual(Object.values(support), [true, true, true, true, true, true], "player 0.7.6 (minPlayerVersion) has R1–R6");
+  assert.equal(hostSupport({} as never, { fastCut: false }).fastCut, false);
+  // R1: Fast is a stream copy, the player picks the container.
+  assert.deepEqual(clipExport("/o/a.mp4", 9, "fast", PRESET_ENCODE.small, true), { format: "copy", destination: "/o/a.mp4", end: 9, container: "auto" });
+  // R6: Precise with the tab's settings; without them, as clips always were.
+  assert.deepEqual(clipExport("/o/a.mp4", 9, "precise", PRESET_ENCODE.small, false), {
+    format: "mp4", destination: "/o/a.mp4", end: 9, encoding: { crf: 26, speed: "balanced", maxHeight: 1080, audioBitrate: 128, threads: "single" },
+  });
+  assert.deepEqual(clipExport("/o/a.mp4", 9, "precise", undefined, false), { format: "mp4", destination: "/o/a.mp4", end: 9 });
+});
+
+test("R6 encoder settings: a closed set; Same as source is the source bitrate; more threads only while paused", () => {
+  assert.deepEqual(exportEncoding(PRESET_ENCODE.high, false), { crf: 18, speed: "faster", audioBitrate: 192, threads: "single" }, "the encoding clips always had");
+  assert.deepEqual(exportEncoding(PRESET_ENCODE.source, true), { videoBitrate: "source", speed: "balanced", audioBitrate: 256, threads: "auto" }, "no CRF with a source bitrate");
+  assert.deepEqual(exportEncoding({ ...PRESET_ENCODE.high, height: 720, fps: 30 }, false).maxHeight, 720);
+  assert.deepEqual(exportEncoding({ ...PRESET_ENCODE.high, height: 720, fps: 30 }, false).fps, 30);
+});
+
+test("R2 and R4: the range the file holds and the progress, from the job's state", () => {
+  const done = (outcome: unknown) => ({ status: "completed", outcome }) as never;
+  assert.deepEqual(actualRange(done({ destination: "/a.mp4", start: 240, end: 259.02 }), { start: 242.3, end: 259 }), { start: 240, end: 259.02 });
+  assert.deepEqual(actualRange(done({ destination: "/a.mp4" }), { start: 242.3, end: 259 }), { start: 242.3, end: 259 }, "none reported: the range asked for");
+  assert.deepEqual(actualRange(done({ destination: "/a.mp4", start: 5, end: 5 }), { start: 1, end: 2 }), { start: 1, end: 2 });
+  assert.deepEqual(jobProgress({ progress: { done: 3, total: 12 } } as never), { done: 3, total: 12 });
+  assert.deepEqual(jobProgress({ progress: { done: 13, total: 12 } } as never), { done: 12, total: 12 });
+  assert.equal(jobProgress({ progress: null } as never), null);
+  assert.equal(jobProgress({} as never), null);
+  assert.equal(jobProgress({ progress: { done: 0, total: 0 } } as never), null);
 });
 
 test("the small timeline: about 30 s around the clip, ratios of what was typed and what is written", () => {
@@ -115,10 +144,13 @@ test("the small timeline: about 30 s around the clip, ratios of what was typed a
 });
 
 test("Precise presets: High quality is today's encoding; any change is Custom; stored options fall back field by field", () => {
-  assert.deepEqual(PRESET_ENCODE.high, { crf: 18, speed: "faster", height: 0, fps: 0, audio: 192 });
+  assert.deepEqual(PRESET_ENCODE.high, { rate: "crf", crf: 18, speed: "faster", height: 0, fps: 0, audio: 192 });
   assert.equal(presetOf(PRESET_ENCODE.small), "small");
+  assert.equal(presetOf(PRESET_ENCODE.source), "source");
+  assert.equal(presetOf({ ...PRESET_ENCODE.source, crf: 25 }), "source", "the CRF does not count with a source bitrate");
   assert.equal(presetOf({ ...PRESET_ENCODE.high, crf: 19 }), "custom");
-  assert.deepEqual(encodeOf({ crf: 99, speed: "warp", height: 720, fps: 30, audio: 1 }), { crf: 30, speed: "faster", height: 720, fps: 30, audio: 192 });
+  assert.deepEqual(encodeOf({ rate: "vbr", crf: 99, speed: "warp", height: 720, fps: 30, audio: 1 }), { rate: "crf", crf: 30, speed: "faster", height: 720, fps: 30, audio: 192 });
+  assert.equal(encodeOf({ rate: "source" }).rate, "source");
   assert.deepEqual(encodeOf(null), PRESET_ENCODE.high);
 });
 

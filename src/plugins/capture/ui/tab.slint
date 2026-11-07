@@ -20,7 +20,7 @@ export struct Keys {
     last: string,
 }
 
-// What the player offers beyond SDK 1.6.8 (seams.ts): stream copy (R1), encode options (R6), progress (R4).
+// What the player offers (seams.ts `hostSupport`; all of it from player 0.7.6): stream copy (R1), encoder settings (R6), progress (R4).
 export struct Support {
     fast: bool,
     encode: bool,
@@ -150,6 +150,8 @@ export global CaptureBridge {
     // 0 Same as source, 1 High quality, 2 Small file, 3 Custom.
     in-out property <int> preset-index: 1;
     in-out property <float> enc-crf: 18;
+    // "Same as source": the source video's bitrate instead of the quality number.
+    in property <bool> enc-source;
     in-out property <int> enc-speed;
     in-out property <int> enc-height;
     in-out property <int> enc-fps;
@@ -1159,7 +1161,7 @@ export component CaptureTab inherits Rectangle {
                                     title: @tr("Advanced");
                                     open: CaptureBridge.advanced-open;
                                     // TRANSLATORS: {} is the quality number (14–30).
-                                    summary: @tr("Quality number {}", round(CaptureBridge.enc-crf));
+                                    summary: CaptureBridge.enc-source ? @tr("Source bitrate") : @tr("Quality number {}", round(CaptureBridge.enc-crf));
                                     toggled(open) => {
                                         CaptureBridge.advanced-open = open;
                                         CaptureBridge.set-advanced-open(open);
@@ -1199,7 +1201,7 @@ export component CaptureTab inherits Rectangle {
                                         value <=> CaptureBridge.enc-crf;
                                         released(v) => { CaptureBridge.set-encode("crf", round(v)); }
                                     }
-                                    Note { width: 22px; text: round(CaptureBridge.enc-crf); horizontal-alignment: right; }
+                                    Note { width: 22px; text: CaptureBridge.enc-source ? "—" : round(CaptureBridge.enc-crf); horizontal-alignment: right; }
                                 }
                                 HorizontalLayout {
                                     spacing: 4px;
@@ -1297,6 +1299,18 @@ export component CaptureTab inherits Rectangle {
                             }
                         }
                         if Words.status(CaptureBridge.clip-status) != "": Dim { text: Words.status(CaptureBridge.clip-status); }
+                        // A Fast cut the player could not make: one click to cut precisely instead (design §4, mockup 04-C).
+                        if root.fast && CaptureBridge.clip-status.reason == "fastImpossible": HorizontalLayout {
+                            alignment: start;
+                            Action {
+                                text: @tr("Use Precise");
+                                glyph: Glyphs.precise;
+                                clicked => {
+                                    CaptureBridge.method-index = 1;
+                                    CaptureBridge.set-method(1);
+                                }
+                            }
+                        }
                     }
                 }
 

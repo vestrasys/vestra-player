@@ -46,9 +46,18 @@ export const HISTORY_LIMIT = 20;
 export type Progress = Problem<JobReason> & { status: string; done: number; total: number };
 export const terminal = (task: Task) => TERMINAL.includes(task.status);
 
-/** A host job failure as one of the plugin's reasons; the code and message go to the log. */
-export function jobError(error: { code: string; message: string }): JobReason {
+/**
+ * A host job failure as one of the plugin's reasons; the code and message go
+ * to the log. `unsupported` means what the clip asked for: a stream copy the
+ * player cannot make (Fast), or a source bitrate it cannot tell ("Same as
+ * source").
+ */
+export function jobError(error: { code: string; message: string }, spec?: Spec): JobReason {
   console.error(`[capture] export failed: ${error.code}: ${error.message}`);
+  if (error.code === "unsupported" && spec?.kind === "clip") {
+    if (spec.method === "fast") return "fastImpossible";
+    if (spec.encode?.rate === "source") return "noSourceBitrate";
+  }
   switch (error.code) {
     case "space":
       return "space";
@@ -163,7 +172,7 @@ export class Tasks {
               // Past the job's await: the row's "n/total" changed outside SDK-invoked code.
               this.#plugin.update();
             } else if (state.status === "failed")
-              throw new Failure(state.outcome && "error" in state.outcome ? jobError(state.outcome.error) : jobError({ code: "unknown", message: "no error outcome" }));
+              throw new Failure(state.outcome && "error" in state.outcome ? jobError(state.outcome.error, task.spec) : jobError({ code: "unknown", message: "no error outcome" }));
             else if (state.status === "cancelled") {
               task.cancel = true;
               break;
@@ -197,7 +206,7 @@ export class Tasks {
     // F07: the player converts JPEG/BMP from its checked PNG and publishes only the converted file.
     const job = await task.snapshot.export(
       spec.kind === "clip"
-        ? clipExport(destination, spec.end!, spec.method ?? "precise", spec.encode)
+        ? clipExport(destination, spec.end!, spec.method ?? "precise", spec.encode, spec.paused ?? false)
         : format === "jpeg"
           ? { format: "jpeg", destination, sampleTime, quality: spec.quality ?? 90 }
           : { format, destination, sampleTime },
