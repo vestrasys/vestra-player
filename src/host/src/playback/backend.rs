@@ -762,6 +762,14 @@ impl Backend {
                         // mpv does not observe) goes out at once.
                         if pause_control(&command.method, &command.params) {
                             push.soon();
+                            // "Play" during a paused preview step is applied
+                            // when the step is over (`Processing::pause_request`).
+                            if result.is_ok()
+                                && let Some(paused) =
+                                    command.params["intent"]["control"]["paused"].as_bool()
+                            {
+                                processing.pause_request(paused);
+                            }
                         }
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());

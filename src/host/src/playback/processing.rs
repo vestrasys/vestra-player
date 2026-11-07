@@ -87,6 +87,9 @@ pub struct Processing {
     framedrop: Option<String>,
     /// When the processing size was last looked at (`tick`).
     sized: Option<Instant>,
+    /// The user asked to play during a preview step (`pause_request`):
+    /// applied once the step is over.
+    resume: bool,
     /// Retries made, for the hardware tests.
     #[cfg(test)]
     hwdec_retries: u32,
@@ -208,6 +211,7 @@ impl Processing {
             // Another picture: no preview position, full budget.
             self.live.forget_position();
             self.live.stepping = None;
+            self.resume = false;
             if generation != self.source_generation {
                 self.live.budget.reset();
             }
@@ -754,6 +758,9 @@ impl Processing {
     pub fn renderer_changed(&mut self) {
         self.hwdec = None;
         self.hwdec_watch = None;
+        // Another renderer: a play asked for during a step is not carried
+        // over (the renderer switch decides what plays).
+        self.resume = false;
     }
     /// mpv's own deinterlacer (`deinterlace=auto`) for the `deinterlace`
     /// `auto` nodes, one switch shared by every owner: on while any owned
@@ -913,19 +920,40 @@ impl Processing {
         let (Some(view), Some(source)) = (self.live.view, source_display(mpv)) else {
             return 1.;
         };
-        let output = effects::chain_display_size(resources, source).unwrap_or(source);
-        live::factor(output, &view, self.live.budget.steps)
+        let output =
+            effects::chain_display_size(resources, source.display).unwrap_or(source.display);
+        live::factor(output, &view, self.live.budget.steps, source.anamorphic)
     }
     /// A paused preview step is in flight: mpv's `pause` reads `no` until
     /// it is over, which is not the user's (`StatePush` waits).
     pub fn stepping(&self) -> bool {
         self.live.stepping.is_some()
     }
+    /// A pause control (`source.submit` `pause`) reached the worker. During
+    /// a preview step mpv is unpaused already, so "play" changes nothing and
+    /// the step's end would pause again: it is remembered and applied when
+    /// the step is over (`tick`). "Pause" needs nothing (mpv pauses, which
+    /// ends the step) and drops a remembered "play".
+    pub fn pause_request(&mut self, paused: bool) {
+        if self.live.stepping.is_some() {
+            self.resume = !paused;
+        }
+    }
     /// How long the control worker may wait before `tick` has something to
     /// do (`None`: only a command or an event).
     pub fn due_in(&self, mpv: &Mpv, now: Instant) -> Option<Duration> {
         let installed = !self.installed.is_empty();
-        if !installed && !self.live.pending && self.live.stepping.is_none() {
+        if let Some(since) = self.live.stepping {
+            // Polled until it is over (mpv's pause event also wakes).
+            return Some(
+                Duration::from_millis(10)
+                    .min((since + live::STEP_TIMEOUT).saturating_duration_since(now)),
+            );
+        }
+        // An uncertain video stage takes no more changes: nothing to wait for.
+        if self.uncertain.contains_key("video")
+            || (!installed && !self.live.pending && self.live.anchor.is_none())
+        {
             return None;
         }
         let due = self
@@ -943,24 +971,31 @@ impl Processing {
     /// `None` when unknown (the graph then runs at full size).
     pub fn tick(&mut self, mpv: &Mpv, now: Instant, view: Option<ViewFacts>) {
         self.live.view = view;
-        let installed = !self.installed.is_empty();
-        if self.uncertain.contains_key("video")
-            || (!installed
-                && !self.live.pending
-                && self.live.stepping.is_none()
-                && self.live.anchor.is_none())
-        {
-            return;
-        }
-        let paused = paused(mpv);
+        // A step in flight ends whatever else holds (an uncertain backend
+        // too): until then the state pushes wait (`stepping`).
         if self.live.stepping.is_some() {
-            if !self.live.step_over(paused, now) {
+            if !self.live.step_over(paused(mpv), now) {
                 return;
             }
             // Where the step left the picture: a seek elsewhere since then
             // is someone else's, and the preview's way back no longer holds.
             self.live.stepped_to = mpv.get_property::<f64>("time-pos").ok();
+            if std::mem::take(&mut self.resume) {
+                // Play pressed during the step: mpv was already unpaused,
+                // so it took no effect, and the step paused again.
+                self.live.forget_position();
+                if let Err(error) = mpv.set_property("pause", false) {
+                    diag!("processing: resuming after a preview step failed: {error}");
+                }
+            }
         }
+        let installed = !self.installed.is_empty();
+        if self.uncertain.contains_key("video")
+            || (!installed && !self.live.pending && self.live.anchor.is_none())
+        {
+            return;
+        }
+        let paused = paused(mpv);
         if !paused {
             // Playing: the picture moves on, nothing to step or go back to.
             self.live.forget_position();
@@ -994,6 +1029,17 @@ impl Processing {
         if mpv.get_property::<bool>("eof-reached").unwrap_or(false) {
             self.live.unseen = false;
             return;
+        }
+        // Moved since the last step (the user seeked or stepped during the
+        // drag): the preview starts over from here, and the settle comes
+        // back here, not to where the drag began.
+        if let (Some(_), Some(stepped_to), Some(here)) = (
+            self.live.anchor,
+            self.live.stepped_to,
+            mpv.get_property::<f64>("time-pos").ok(),
+        ) && (here - stepped_to).abs() >= PREVIEW_MOVED
+        {
+            self.live.anchor = None;
         }
         let frames = if self.live.anchor.is_none() {
             self.live.anchor = mpv.get_property::<f64>("time-pos").ok();
@@ -1054,26 +1100,38 @@ impl Processing {
                 number("time-pos"),
                 number("container-fps").or_else(|| number("estimated-vf-fps")),
             ) {
-                let dropped = number("frame-drop-count").unwrap_or(0.)
-                    + number("decoder-frame-drop-count").unwrap_or(0.);
-                stepped = self.live.budget.sample(now, dropped, position, fps);
+                let dropped = number("decoder-frame-drop-count").unwrap_or(0.);
+                let moved = self.live.budget.sample(now, dropped, position, fps);
+                stepped = moved != live::BudgetMove::Stay;
                 if stepped {
                     diag!(
-                        "processing: the video chain drops frames; processing size one step smaller ({} below the shown size)",
+                        "processing: the video chain {}; processing size one step {} ({} below the shown size)",
+                        if moved == live::BudgetMove::Down {
+                            "drops frames"
+                        } else {
+                            "keeps up"
+                        },
+                        if moved == live::BudgetMove::Down {
+                            "smaller"
+                        } else {
+                            "larger"
+                        },
                         self.live.budget.steps
                     );
                 }
             }
         }
+        let (width, height) = source.display;
         let inputs = live::Inputs {
             view,
-            source: (source.0.round() as u32, source.1.round() as u32),
+            source: (width.round() as u32, height.round() as u32),
         };
         let settled = self.live.retarget.settled(inputs, now);
         let wanted = live::factor(
-            self.installed.display_size(source),
+            self.installed.display_size(source.display),
             &view,
             self.live.budget.steps,
+            source.anamorphic,
         );
         let busy = self.live.pending || (paused && self.live.anchor.is_some());
         if wanted != self.installed.factor && (settled || stepped) && !busy {
@@ -1425,21 +1483,31 @@ fn send(mpv: &Mpv, commands: &[RuntimeCommand]) -> rsmpv::Result<()> {
 fn paused(mpv: &Mpv) -> bool {
     mpv.get_property::<bool>("pause").unwrap_or(false)
 }
-/// The display size of the frames that reach the owned graph: mpv's
-/// `video-params` (after the decoder, aspect applied; a quarter `rotate`
-/// swapped, as the orientation stage turns the picture before the graph),
-/// before the decoder runs the container's (`current-tracks/video`).
-fn source_display(mpv: &Mpv) -> Option<(f64, f64)> {
+/// The frames that reach the owned graph: their display size and how much
+/// larger it is than the stored size (`processing_live::factor`).
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct SourceSize {
+    display: (f64, f64),
+    /// max(dw / w, dh / h), at least 1: 4/3 for HDV's 1440x1080 shown
+    /// 1920 wide.
+    anamorphic: f64,
+}
+/// mpv's `video-params` (after the decoder, aspect applied; a quarter
+/// `rotate` swapped, as the orientation stage turns the picture before the
+/// graph), before the decoder runs the container's (`current-tracks/video`,
+/// its pixel aspect `demux-par`).
+fn source_display(mpv: &Mpv) -> Option<SourceSize> {
     let int = |name: &str| mpv.get_property::<i64>(name).ok().filter(|v| *v > 0);
-    let (width, height, rotate) = match (int("video-params/dw"), int("video-params/dh")) {
+    let (width, height, stored, rotate) = match (int("video-params/dw"), int("video-params/dh")) {
         (Some(w), Some(h)) => (
             w as f64,
             h as f64,
+            int("video-params/w").zip(int("video-params/h")),
             mpv.get_property::<i64>("video-params/rotate").unwrap_or(0),
         ),
         _ => {
-            let w = int("current-tracks/video/demux-w")? as f64;
-            let h = int("current-tracks/video/demux-h")? as f64;
+            let w = int("current-tracks/video/demux-w")?;
+            let h = int("current-tracks/video/demux-h")?;
             let par = mpv
                 .get_property::<f64>("current-tracks/video/demux-par")
                 .ok()
@@ -1448,15 +1516,23 @@ fn source_display(mpv: &Mpv) -> Option<(f64, f64)> {
             let rotate = mpv
                 .get_property::<i64>("current-tracks/video/demux-rotation")
                 .unwrap_or(0);
-            (w * par, h, rotate)
+            (w as f64 * par, h as f64, Some((w, h)), rotate)
         }
     };
-    Some(if rotate.rem_euclid(180) == 90 {
+    let anamorphic = stored.map_or(1., |(w, h)| {
+        (width / w as f64).max(height / h as f64).max(1.)
+    });
+    let display = if rotate.rem_euclid(180) == 90 {
         (height, width)
     } else {
         (width, height)
+    };
+    Some(SourceSize {
+        display,
+        anamorphic,
     })
 }
+
 fn combined_offset(offsets: &BTreeMap<(u64, String), i32>) -> Result<i32, RpcError> {
     let positive: i64 = offsets
         .values()
@@ -1932,6 +2008,68 @@ mod tests {
         assert_eq!(processing.state()["videoScale"]["factor"], 1.0);
     }
 
+    /// A step in flight ends even when the video stage turned uncertain
+    /// meanwhile: otherwise `stepping` would hold the state pushes and the
+    /// worker would poll forever.
+    #[test]
+    fn a_preview_step_ends_although_the_video_stage_is_uncertain() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("no");
+        let mut processing = ready();
+        let t = Instant::now();
+        processing.live.stepping = Some(t);
+        processing
+            .uncertain
+            .insert("video".into(), "test: backend lost".into());
+        assert_eq!(
+            processing.due_in(&mpv, t),
+            Some(Duration::from_millis(10)),
+            "polled while it lasts"
+        );
+        // mpv never paused again (no file): the timeout ends it.
+        processing.tick(&mpv, t + live::STEP_TIMEOUT, None);
+        assert!(!processing.stepping());
+        assert_eq!(processing.due_in(&mpv, t + live::STEP_TIMEOUT), None);
+    }
+
+    /// "Play" during a step is applied once the step is over; a new source
+    /// or another renderer drops it, and "pause" cancels it.
+    #[test]
+    fn play_pressed_during_a_preview_step_is_applied_after_it() {
+        let _one = one_mpv_at_a_time();
+        let mpv = mpv("no");
+        let mut processing = ready();
+        let t = Instant::now();
+        // Outside a step a request is mpv's alone.
+        processing.pause_request(false);
+        assert!(!processing.resume);
+        mpv.set_property("pause", true).unwrap();
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.tick(&mpv, t, None);
+        assert!(!processing.stepping());
+        assert!(!mpv.get_property::<bool>("pause").unwrap(), "playing");
+        // Pause after play: nothing to apply.
+        mpv.set_property("pause", true).unwrap();
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.pause_request(true);
+        processing.tick(&mpv, t, None);
+        assert!(mpv.get_property::<bool>("pause").unwrap());
+        // Another source or renderer meanwhile: stays paused.
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.renderer_changed();
+        processing.tick(&mpv, t, None);
+        assert!(mpv.get_property::<bool>("pause").unwrap());
+        processing.live.stepping = Some(t);
+        processing.pause_request(false);
+        processing.note_source(2, Phase::Loading);
+        assert!(!processing.stepping() && !processing.resume);
+        processing.tick(&mpv, t, None);
+        assert!(mpv.get_property::<bool>("pause").unwrap());
+    }
+
     /// Paused, a live update is shown by stepping two frames; once the
     /// changes settle, the graph text is rewritten with the live value (a
     /// seek would otherwise rebuild the old one) and the picture goes back
@@ -1977,6 +2115,45 @@ mod tests {
             "back at {paused_at}"
         );
         assert!(mpv.get_property::<bool>("pause").unwrap());
+        // The user moves the picture during a drag (a seek): the next step
+        // starts over there, and the settle comes back there.
+        let wait_steps = |processing: &mut Processing| {
+            let start = Instant::now();
+            processing.tick(&mpv, Instant::now(), None);
+            while processing.stepping() && start.elapsed() < Duration::from_secs(5) {
+                std::thread::sleep(Duration::from_millis(10));
+                processing.tick(&mpv, Instant::now(), None);
+            }
+        };
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(3, eq(0.2)))
+            .unwrap();
+        wait_steps(&mut processing);
+        mpv.command(&["seek", "5", "absolute+exact"]).unwrap();
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5)
+            && (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() > 0.001
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        std::thread::sleep(Duration::from_millis(200));
+        processing
+            .replace(&mpv, OWNER, 1, Source::Decoded, &video(4, eq(0.4)))
+            .unwrap();
+        wait_steps(&mut processing);
+        let anchor = processing.live.anchor.unwrap();
+        assert!((anchor - 5.).abs() < 0.001, "re-anchored at {anchor}");
+        processing.tick(&mpv, Instant::now() + live::SETTLE, None);
+        let start = Instant::now();
+        while start.elapsed() < Duration::from_secs(5)
+            && (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() > 0.001
+        {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        assert!(
+            (mpv.get_property::<f64>("time-pos").unwrap() - 5.).abs() <= 0.001,
+            "back at 5, not at {paused_at}"
+        );
     }
 
     #[test]
