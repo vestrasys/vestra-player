@@ -50,9 +50,8 @@ component Tab {
     accessible-description: root.key;
     accessible-item-selected: root.current;
     accessible-action-default => { root.clicked(); }
-    // Hover plate and current-tab bar: persistent, hidden by `visible` (an
-    // `if` that flips with the pointer rebuilds the accessibility tree; see
-    // the rule in menu-view.slint, 2026-10-27).
+    // Hover plate and current-tab bar: persistent, hidden by `visible` (no
+    // `if` that flips with the pointer; the no-churn rule in menu-view.slint).
     Rectangle {
         visible: !root.current && touch.has-hover;
         x: 2px;
@@ -164,7 +163,7 @@ export component SidebarTabs inherits Rectangle {
     // Placed by hand, not in a layout: the tab width follows the strip's
     // width, which a layout would make depend on the tabs (a binding loop).
     // Every tab is a persistent element, hidden with `visible` (the
-    // AccessKit rule of menu-view.slint).
+    // no-churn rule of menu-view.slint).
     for title[index] in root.titles: Tab {
         visible: index < root.shown - 1 || index == root.last;
         x: (index < root.shown - 1 ? index : root.shown - 1) * root.tab-width;

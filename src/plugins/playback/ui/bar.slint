@@ -46,6 +46,10 @@ export global PlaybackBridge {
     // The line's span in physical px the plugin built the ticks for (0: none
     // yet); it answers `span-changed`.
     in-out property <float> tick-span;
+    // Timeline ranges (player 0.7.6): each style's filled rectangles
+    // `M<x0> 0H<x1>V1H<x0>Z` in the ticks' view box (0…tick-span): one Path per style.
+    in-out property <string> selection-ranges;
+    in-out property <string> region-ranges;
     in-out property <bool> has-loop;
     in-out property <float> loop-a;
     in-out property <float> loop-b;
@@ -184,6 +188,8 @@ component BarButton inherits Rectangle {
 // B22: 1×6 marks across the line (chapter Theme.text-dim, bookmark Theme.accent,
 // marker Theme.playing) and the A-B loop: a 2px Theme.playing band under the
 // line with 1×8 ends. Marks take no input: a click seeks as before.
+// Timeline ranges (0.2.17): semi-transparent 6px bands where the ticks are
+// (region Theme.text-dim, selection Theme.accent), RangeBand below.
 // The marks are one Path per kind (a 1 physical px stroke from the plugin's
 // commands), never an element per mark. Each tick fills one whole physical
 // pixel column and whole pixels top to bottom at any scale factor (125%,
@@ -219,6 +225,27 @@ component MarkTicks inherits Path {
     stroke-width: 1phx;
 }
 
+// Timeline ranges (player 0.7.6): one filled Path per style over the ticks'
+// 6px band, never an element per range. No stroke, so Slint fits the viewbox
+// into the whole element with no offset: the element `columns` physical px
+// wide over a viewbox `columns` wide (scale 1phx a unit), its left edge and
+// top on a physical pixel, so a rectangle x0…x1 fills whole columns and rows.
+component RangeBand inherits Path {
+    in property <length> origin-x;
+    in property <length> origin-y;
+    in property <length> inset-x;
+    in property <length> inset-y;
+    in property <int> columns;
+    private property <int> rows: Math.round(6px / 1phx);
+    x: Math.round((self.origin-x + self.inset-x + 4px) / 1phx) * 1phx - self.origin-x;
+    y: Math.round((self.origin-y + self.inset-y + 2px) / 1phx) * 1phx - self.origin-y;
+    width: max(1, self.columns) * 1phx;
+    height: self.rows * 1phx;
+    viewbox-width: PlaybackBridge.tick-span > 0 ? PlaybackBridge.tick-span : max(1, self.columns);
+    viewbox-height: 1;
+    fit: fill;
+}
+
 component SeekBar inherits Rectangle {
     // 0.2.10: the pointer band around the line's 10px box (which the drawing
     // keeps): `lead` left of it, `trail` right of it, `line-top` above it; the band
@@ -248,7 +275,8 @@ component SeekBar inherits Rectangle {
     init => { PlaybackBridge.span-changed(root.columns); }
     changed columns => { PlaybackBridge.span-changed(self.columns); }
     // Again when marks come for another span (a report the plugin never got).
-    private property <bool> stale-ticks: PlaybackBridge.marks.length > 0 && PlaybackBridge.tick-span != root.columns;
+    private property <bool> stale-ticks: (PlaybackBridge.marks.length > 0 || PlaybackBridge.selection-ranges != "" || PlaybackBridge.region-ranges != "")
+        && PlaybackBridge.tick-span != root.columns;
     changed stale-ticks => { if self.stale-ticks { PlaybackBridge.span-changed(root.columns); } }
     height: 22px;
     // The line's fraction under `x` (the band's own x), clamped to the ends.
@@ -325,6 +353,26 @@ component SeekBar inherits Rectangle {
         height: 2px;
         border-radius: 1px;
         background: PlaybackBridge.can-seek ? Theme.accent-fill : Theme.icon-disabled;
+    }
+    // Timeline ranges over the line and under the loop and the ticks:
+    // regions dim, the selection (such as a clip to export) in the accent.
+    RangeBand {
+        origin-x: root.absolute-position.x;
+        origin-y: root.absolute-position.y;
+        inset-x: root.lead;
+        inset-y: root.line-top;
+        columns: root.columns;
+        commands: PlaybackBridge.region-ranges;
+        fill: Theme.text-dim.with-alpha(0.35);
+    }
+    RangeBand {
+        origin-x: root.absolute-position.x;
+        origin-y: root.absolute-position.y;
+        inset-x: root.lead;
+        inset-y: root.line-top;
+        columns: root.columns;
+        commands: PlaybackBridge.selection-ranges;
+        fill: Theme.accent.with-alpha(0.45);
     }
     if PlaybackBridge.has-loop: Rectangle {
         x: root.lead + 4px + PlaybackBridge.loop-a * root.span;

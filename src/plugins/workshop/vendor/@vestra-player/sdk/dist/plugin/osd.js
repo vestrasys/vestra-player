@@ -47,7 +47,32 @@ export const OSD_LIMITS = Object.freeze({
     minColumns: 8,
     /** The largest `OsdPanelOptions.maxColumns` (1000). */
     maxColumns: 1000,
+    /** Action buttons of one `osd.show` message (`OsdShowOptions.actions`; player 0.7.6) (2). */
+    actions: 2,
+    /** Characters of an action's title, as shown (40; at least 1 that is not white space). */
+    actionChars: 40,
 });
+/** Copy and check `OsdShowOptions.actions`: what the SDK can check before the player does. */
+function osdActions(options) {
+    if (options === undefined || options === null)
+        return undefined;
+    if (typeof options !== "object")
+        throw failure("invalid", "options is an object");
+    const actions = options.actions;
+    if (actions === undefined)
+        return undefined;
+    if (!Array.isArray(actions) || actions.length > OSD_LIMITS.actions)
+        throw failure("invalid", `actions is a list of at most ${OSD_LIMITS.actions}`);
+    return actions.map((action, i) => {
+        const { title, command } = (action ?? {});
+        if (typeof command !== "string" || command === "")
+            throw failure("invalid", `actions[${i}].command is a command id`);
+        return {
+            title: shownText(title, undefined, `actions[${i}].title`),
+            command,
+        };
+    });
+}
 /**
  * Copy and check template arguments: an array or object of at most 16
  * strings, finite numbers, texts and lists (`TEXT_LIMITS`).
@@ -134,6 +159,6 @@ class PanelHandle {
     }
 }
 export const osd = (scope) => ({
-    show: async (text, args) => scope.runtime.host.osd.show(shownText(text, args), templateArgs(args)),
+    show: async (text, args, options) => scope.runtime.host.osd.show(shownText(text, args), templateArgs(args), osdActions(options)),
     panel: () => new PanelHandle(scope),
 });

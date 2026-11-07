@@ -262,6 +262,19 @@ export interface WireMark {
     title: string | null;
     plugin: string;
 }
+/** One timeline range as the player merges them (player 0.7.6). */
+export interface WireRange {
+    start: number;
+    end: number;
+    style: "selection" | "region";
+    title: string | null;
+    plugin: string;
+}
+/** `timeline.marks` and `timeline.changed`; `ranges` from player 0.7.6. */
+export interface WireTimeline {
+    marks: WireMark[];
+    ranges?: WireRange[];
+}
 /** The backdrop as `layout.state` reports it; `null` without one. */
 export interface LayoutBackdrop {
     owner: number;
@@ -568,12 +581,19 @@ export declare function createWire(transport: Transport): {
     };
     /** Mark layers on the seek bar (`plugin.timeline`). */
     timeline: {
-        marks: () => Promise<{
-            marks: WireMark[];
-        }>;
+        marks: () => Promise<WireTimeline>;
         set: (marks: {
             time: number;
             kind: string;
+            title?: string | TextJson;
+        }[], sourceId?: number) => Promise<{
+            applied: boolean;
+        }>;
+        /** Player 0.7.6. */
+        setRanges: (ranges: {
+            start: number;
+            end: number;
+            style: string;
             title?: string | TextJson;
         }[], sourceId?: number) => Promise<{
             applied: boolean;
@@ -666,7 +686,10 @@ export declare function createWire(transport: Transport): {
     };
     /** `text` is a template in the plugin's catalog, formatted with `args` (player 0.4.3). */
     osd: {
-        show: (text: TextValueJson, args?: TemplateArgsJson) => Promise<void>;
+        show: (text: TextValueJson, args?: TemplateArgsJson, actions?: {
+            title: TextValueJson;
+            command: string;
+        }[]) => Promise<void>;
         panel: (text: TextValueJson | null, args?: TemplateArgsJson, maxColumns?: number) => Promise<void>;
     };
     layout: {

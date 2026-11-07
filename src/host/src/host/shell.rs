@@ -182,6 +182,15 @@ impl Host {
             }
             SValue::Void
         })?;
+        let events = self.events.clone();
+        window.set_callback("osd-action", move |args| {
+            if let Some(SValue::Number(index)) = args.first()
+                && (0. ..2.).contains(index)
+            {
+                let _ = events.send(Event::OsdAction(generation, *index as usize));
+            }
+            SValue::Void
+        })?;
         let input = self.input.clone();
         window.set_callback("left-press", move |args| {
             let number = |i: usize| match args.get(i) {

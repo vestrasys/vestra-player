@@ -156,6 +156,11 @@ export function createWire(transport) {
                 marks,
                 ...(sourceId === undefined ? {} : { sourceId }),
             }),
+            /** Player 0.7.6. */
+            setRanges: (ranges, sourceId) => transport.request("timeline.setRanges", {
+                ranges,
+                ...(sourceId === undefined ? {} : { sourceId }),
+            }),
         },
         /** Chapters and the A-B loop of the current media. */
         marks: {
@@ -245,9 +250,11 @@ export function createWire(transport) {
         },
         /** `text` is a template in the plugin's catalog, formatted with `args` (player 0.4.3). */
         osd: {
-            show: (text, args) => transport.request("osd.show", {
+            show: (text, args, actions) => transport.request("osd.show", {
                 text,
                 ...(args === undefined ? {} : { args }),
+                // Player 0.7.6; older players ignore it.
+                ...(actions === undefined ? {} : { actions }),
             }),
             panel: (text, args, maxColumns) => transport.request("osd.panel", {
                 text,
