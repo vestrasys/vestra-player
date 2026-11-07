@@ -438,7 +438,7 @@ export component PlaybackBar inherits Rectangle {
     min-height: 62px;
     max-height: 62px;
     background: Theme.bg-bar;
-    // UI-BAR-10 (SDK 1.6.7): what the button row needs left of the player's
+    // UI-BAR-10 (SDK 1.6.8): what the button row needs left of the player's
     // strip; the player gives the strip the rest of the width, less 4px.
     out property <length> content-min-width: row.left-width;
 
@@ -486,7 +486,7 @@ export component PlaybackBar inherits Rectangle {
 
     // Button row: play/pause, stop, previous, next, open, fullscreen, time.
     // The player draws its strip of command buttons at the bar's right end
-    // (SDK 1.6.7, menu redesign step 3a): `[plugin buttons…][»][🔍][Sidebar]`,
+    // (SDK 1.6.8, menu redesign step 3a): `[plugin buttons…][»][🔍][Sidebar]`,
     // its own cells (`BarButtonsHost.fixed`, 41px each, 4px from the edge)
     // always shown. The bar ends its row left of it and reports what the row
     // needs (`content-min-width`); the strip gets the rest, so plugin buttons

@@ -2,7 +2,7 @@
 
 ## 0.2.17
 
-Who must change: nobody. Needs player 0.7.6 (`minPlayerVersion` already 0.7.6). What users see: the command buttons at the right end of the bar (other plugins' buttons, `»`, the command palette 🔍 and Toggle Sidebar) are now placed by the player (menu redesign step 3a, SDK 1.6.7); the bar keeps its own controls left of them and never lets them cover the time.
+Who must change: nobody. Needs player 0.7.6 (`minPlayerVersion` already 0.7.6). What users see: the command buttons at the right end of the bar (other plugins' buttons, `»`, the command palette 🔍 and Toggle Sidebar) are now placed by the player (menu redesign step 3a, SDK 1.6.8); the bar keeps its own controls left of them and never lets them cover the time.
 
 - The bar no longer places the deprecated `BarButtons` strip. It imports `BarButtonsHost` and reports what its button row needs as `content-min-width` (its buttons, the 10px gap, the time and 8px to spare); the player gives its strip the rest of the width. `content-min-width` does not read the strip's width.
 - UI-BAR-10: Fullscreen shows while it fits beside the player's own cells (`BarButtonsHost.fixed`, 41px each): from 6 × 41 + 10 + time + 8 + fixed × 41 + 4 px, about 435px with 🔍 and Sidebar and an 85px time (was 394px beside the sidebar toggle alone).

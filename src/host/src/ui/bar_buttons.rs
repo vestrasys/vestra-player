@@ -1,7 +1,7 @@
 //! Bottom-bar command buttons (player 0.5.10, SDK 1.5.29). A command declared
 //! with a `button` (`CommandOptions.button`: an icon and an order) and a menu
 //! path gets a cell in the player's strip. Since the menu redesign (step 3a,
-//! SDK 1.6.7) the player places the strip itself (`HostBarStrip`,
+//! SDK 1.6.8) the player places the strip itself (`HostBarStrip`,
 //! ui/bar-strip.slint) at the right end of the bottom slot, or in a band of
 //! its own without a bottom bar: `[plugin buttons…][»][Command Palette]
 //! [Toggle Sidebar]`. The bar says how wide its own controls must stay

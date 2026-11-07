@@ -937,7 +937,7 @@ test("0.2.5 the bar mounts beside the player's button strip and leaves the sideb
   try {
     const bar = host.mounted();
     assert.equal(bar.slot, "bottom");
-    // SDK 1.6.7: the player places the strip; the mounted file reports what
+    // SDK 1.6.8: the player places the strip; the mounted file reports what
     // its row needs (`content-min-width`) and places no deprecated BarButtons.
     const slint = await readFile(new URL(`../${bar.file}`, import.meta.url), "utf8");
     assert.ok(slint.includes('import { BarButtonsHost } from "@vestra/bar-buttons.slint";'));
