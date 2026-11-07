@@ -9,6 +9,15 @@ import { COUNTS, timing } from "./store.ts";
 /** Shared submenus (English keys, doc/product/menus.md). */
 export const MARKS = ["@playback", "Chapters and Bookmarks"] as const;
 export const AB = ["@playback", "A-B Loop"] as const;
+/**
+ * Command palette categories (player 0.7.6): the submenu names, so their
+ * translations are the menu's. Every command of a submenu shares one.
+ */
+export const MARKS_CATEGORY = MARKS[1];
+export const AB_CATEGORY = AB[1];
+export const COUNT_CATEGORY = "Loop Count";
+/** The command that opens the Chapters and Bookmarks window: the `home` of what the window lists or adds. */
+export const LIST_COMMAND = "marks.list";
 /** Chapters and bookmarks listed in the menu; past this the last line opens the window. */
 export const MENU_ITEMS = 50;
 
@@ -97,8 +106,9 @@ export class MarksMenu {
     const { commands } = this.#plugin;
     const actions = this.#actions;
     commands.add({
-      id: "marks.list",
+      id: LIST_COMMAND,
       path: [...MARKS, "Chapter and Bookmark List…"],
+      category: MARKS_CATEGORY,
       order: 260,
       group: "marks-list",
       bindings: ["H"],
@@ -107,6 +117,8 @@ export class MarksMenu {
     commands.add({
       id: "marks.add",
       path: [...MARKS, "Add Bookmark"],
+      category: MARKS_CATEGORY,
+      home: LIST_COMMAND,
       order: 261,
       group: "marks-edit",
       bindings: ["P"],
@@ -118,6 +130,7 @@ export class MarksMenu {
       commands.add({
         id: step.id,
         path: [...MARKS, step.title],
+        category: MARKS_CATEGORY,
         order: step.order,
         group: "marks-edit",
         bindings: [step.binding],
@@ -156,6 +169,8 @@ export class MarksMenu {
       scope.commands.add({
         id: `chapter.${i}`,
         path: [...MARKS, title],
+        category: MARKS_CATEGORY,
+        home: LIST_COMMAND,
         order: 10000 + i,
         group: "marks-chapters",
         radio: true,
@@ -169,6 +184,7 @@ export class MarksMenu {
       scope.commands.add({
         id: "chapter.more",
         path: [...MARKS, text("More Chapters… ({} in all)", [chapters.length])],
+        category: MARKS_CATEGORY,
         order: 10000 + MENU_ITEMS,
         group: "marks-chapters",
         run: () => this.#openList(),
@@ -177,6 +193,8 @@ export class MarksMenu {
       scope.commands.add({
         id: `bookmark.${i}`,
         path: [...MARKS, bookmarkTitles[i]!],
+        category: MARKS_CATEGORY,
+        home: LIST_COMMAND,
         order: 20000 + i,
         group: "marks-bookmarks",
         enabled: () => !actions.jumpBlocked(),
@@ -188,6 +206,7 @@ export class MarksMenu {
       scope.commands.add({
         id: "bookmark.more",
         path: [...MARKS, text("More Bookmarks… ({} in all)", [bookmarks.length])],
+        category: MARKS_CATEGORY,
         order: 20000 + MENU_ITEMS,
         group: "marks-bookmarks",
         run: () => this.#openList(),
@@ -229,6 +248,7 @@ export function addLoopCommands(plugin: Plugin, loop: AbLoop, actions: Actions) 
     plugin.commands.add({
       id: item.id,
       path: [...AB, item.title],
+      category: AB_CATEGORY,
       order: item.order,
       group: item.group,
       bindings: [item.binding],
@@ -243,6 +263,7 @@ export function addLoopCommands(plugin: Plugin, loop: AbLoop, actions: Actions) 
   plugin.commands.add({
     id: "ab.toggle",
     path: [...AB, "A-B Loop On/Off"],
+    category: AB_CATEGORY,
     order: 281,
     group: "ab-toggle",
     bindings: ["\\"],
@@ -255,6 +276,7 @@ export function addLoopCommands(plugin: Plugin, loop: AbLoop, actions: Actions) 
     plugin.commands.add({
       id: `ab.count.${count ?? "endless"}`,
       path: [...AB, "Loop Count", COUNT_TITLES[i]!],
+      category: COUNT_CATEGORY,
       order: 282 + i,
       group: "ab-count",
       radio: true,

@@ -53,31 +53,41 @@ msgstr "空闲时显示徽标：关"
 msgid "Cover cache cleared"
 msgstr "已清除封面缓存"
 
-#: main.ts:229
-msgid "Show Album Cover for Audio Only"
-msgstr "纯音频时显示专辑封面"
+#: main.ts:232
+#, x-machine
+msgid "Audio"
+msgstr "声音"
 
-#: main.ts:237 main.ts:245
+#: main.ts:232 main.ts:245 main.ts:254
 msgid "Appearance"
 msgstr "外观"
 
-#: main.ts:237
+#: main.ts:232
+#, x-machine
+msgid "Reset"
+msgstr "复位"
+
+#: main.ts:236
+msgid "Show Album Cover for Audio Only"
+msgstr "纯音频时显示专辑封面"
+
+#: main.ts:245
 msgid "Show Logo When Idle"
 msgstr "空闲时显示徽标"
 
-#: main.ts:245
+#: main.ts:254
 msgid "Choose Logo Image…"
 msgstr "选择徽标图片…"
 
-#: main.ts:253
+#: main.ts:263
 msgid "Idle Logo"
 msgstr "空闲徽标"
 
-#: main.ts:257
+#: main.ts:267
 msgid "Using the default logo"
 msgstr "正在使用默认徽标"
 
-#: main.ts:265 ui/page.slint:40
+#: main.ts:275 ui/page.slint:40
 msgid "Logo and Album Cover"
 msgstr "徽标与专辑封面"
 

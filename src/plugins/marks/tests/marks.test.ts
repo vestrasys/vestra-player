@@ -844,6 +844,51 @@ test("menu: orders, groups and shortcuts as in the requirements; no binding conf
   assert.deepEqual(host.conflicts, []);
 });
 
+/** A host playing a file with 51 chapters and 51 bookmarks: every kind of command, the "More…" lines included. */
+async function withEveryCommand(locale?: "zh-Hans") {
+  const data = mkdtempSync(join(scratch, "palette-"));
+  const movie = file();
+  const created = new Date().toISOString();
+  const items = Array.from({ length: 51 }, (_, i) => ({ time: 5 + i * 10, title: `B${i}`, created }));
+  const media = { [movie]: { size: 10, modified: created, items } };
+  writeFileSync(join(data, "bookmarks.json"), JSON.stringify({ version: 1, media }));
+  const host = new TestHost();
+  host.chapters = Array.from({ length: 51 }, (_, i) => ({ title: `C${i}`, start: i * 10 }));
+  await start(host, data, locale);
+  await play(host, movie, 1000);
+  return host;
+}
+
+test("palette: every command has a category (its submenu); listed items have the window as their home", async () => {
+  const host = await withEveryCommand();
+  const commands = [...host.commands.entries()];
+  // 7 fixed + 50 chapters + More + 50 bookmarks + More; 12 A-B + 6 counts.
+  assert.equal(commands.length, 7 + 51 + 51 + 18);
+  const counts = new Map<unknown, number>();
+  for (const [id, c] of commands) {
+    const category = c.declaration.category;
+    assert.ok(typeof category === "string" && category.length > 0, id);
+    assert.equal(c.display.category, category, id);
+    counts.set(category, (counts.get(category) ?? 0) + 1);
+  }
+  assert.deepEqual(Object.fromEntries(counts), { "Chapters and Bookmarks": 109, "A-B Loop": 12, "Loop Count": 6 });
+  const homes = commands.filter(([, c]) => c.declaration.home !== undefined);
+  assert.ok(homes.every(([, c]) => c.declaration.home === "marks.list"));
+  assert.deepEqual(
+    homes.map(([id]) => id).sort(),
+    ["marks.add", ...Array.from({ length: 50 }, (_, i) => [`chapter.${i}`, `bookmark.${i}`]).flat()].sort(),
+  );
+});
+
+test("palette: the categories read as the submenus in zh-Hans", async () => {
+  const host = await withEveryCommand("zh-Hans");
+  const shown = (id: string) => host.command(id).display.category;
+  for (const id of ["marks.list", "marks.add", "marks.next", "chapter.0", "chapter.more", "bookmark.0", "bookmark.more", "marks.seekbar"])
+    assert.equal(shown(id), "章节/书签", id);
+  for (const id of ["ab.set-a", "ab.segment", "ab.toggle"]) assert.equal(shown(id), "A-B 区段循环", id);
+  assert.equal(shown("ab.count.2"), "循环次数");
+});
+
 // ------------------------------------------------------------------ Simplified Chinese
 
 test("zh-Hans: the menus read as before the migration", async () => {

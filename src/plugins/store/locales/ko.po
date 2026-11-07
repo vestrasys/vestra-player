@@ -31,1126 +31,1131 @@ msgstr "플러그인"
 msgid "store"
 msgstr "스토어"
 
-#: store.ts:523
+#: store.ts:525
+#, x-machine
+msgid "Plugins"
+msgstr "플러그인"
+
+#: store.ts:526
 #, x-machine
 msgid "Plugin Store…"
 msgstr "플러그인 스토어…"
 
-#: store.ts:523
+#: store.ts:526
 #, x-machine
 msgid "Plugin Store ({} updates)…"
 msgstr "플러그인 스토어 (업데이트 {}개)…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Another install is in progress; wait for it to finish"
 msgstr "다른 설치가 진행 중입니다. 끝날 때까지 기다리세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This system does not support confirmation dialogs; cannot continue"
 msgstr "이 시스템은 확인 대화 상자를 지원하지 않아 계속할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Another dialog is open; close it first"
 msgstr "다른 대화 상자가 열려 있습니다. 먼저 닫으세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't open the link: {}"
 msgstr "링크를 열 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This kind of link cannot be opened"
 msgstr "이런 종류의 링크는 열 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The downloaded file does not match the repository's description (size); deleted"
 msgstr "다운로드한 파일이 저장소 설명과 일치하지 않아(크기) 삭제했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The downloaded file does not match the repository's description (checksum); deleted"
 msgstr "다운로드한 파일이 저장소 설명과 일치하지 않아(체크섬) 삭제했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package exceeds 64 MB; download stopped"
 msgstr "플러그인 패키지가 64MB를 넘어 다운로드를 중지했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The download address is insecure or redirects too often; stopped"
 msgstr "다운로드 주소가 안전하지 않거나 리디렉션이 너무 많아 중지했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Download cancelled"
 msgstr "다운로드를 취소했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't write the download file: {}"
 msgstr "다운로드 파일을 쓸 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Download failed: {}"
 msgstr "다운로드 실패: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This is not a valid plugin package: {}"
 msgstr "올바른 플러그인 패키지가 아닙니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin needs Vestra Player ≥ {} (current {})"
 msgstr "이 플러그인에는 Vestra Player {} 이상이 필요합니다 (현재 {})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin needs a newer Vestra Player (current {})"
 msgstr "이 플러그인에는 더 새로운 Vestra Player가 필요합니다 (현재 {})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}” has the same id as a built-in plugin and cannot be installed"
 msgstr "“{}”: 내장 플러그인과 ID가 같아 설치할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin has the same id as a built-in plugin and cannot be installed"
 msgstr "이 플러그인은 내장 플러그인과 ID가 같아 설치할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Plugins are being installed or cleaned up; try again later"
 msgstr "플러그인을 설치하거나 정리하는 중입니다. 나중에 다시 시도하세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The Plugin Store lacks the “Manage plugins” permission"
 msgstr "플러그인 스토어에 “플러그인 관리” 권한이 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin no longer exists"
 msgstr "이 플러그인은 더 이상 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package does not match the repository's description (id); not installed"
 msgstr "플러그인 패키지가 저장소 설명과 일치하지 않아(ID) 설치하지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package does not match the repository's description (version); not installed"
 msgstr "플러그인 패키지가 저장소 설명과 일치하지 않아(버전) 설치하지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The plugin package does not match the repository's description (permissions); not installed"
 msgstr "플러그인 패키지가 저장소 설명과 일치하지 않아(권한) 설치하지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "You can only install from https:// links"
 msgstr "https:// 링크에서만 설치할 수 있습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Not installed"
 msgstr "설치 안 됨"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {} {}"
 msgstr "{} {} 설치 완료"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated {} to {}"
 msgstr "{} 플러그인을 {} 버전으로 업데이트했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {} {} (still disabled)"
 msgstr "{} {} 설치 완료 (사용 중지 상태 유지)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated {} to {} (still disabled)"
 msgstr "{} 플러그인을 {} 버전으로 업데이트했습니다 (사용 중지 상태 유지)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {} {}, but couldn't keep it disabled: {}"
 msgstr "{} {} 설치 완료, 하지만 사용 중지 상태를 유지할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated {} to {}, but couldn't keep it disabled: {}"
 msgstr "{} 플러그인을 {} 버전으로 업데이트했지만 사용 중지 상태를 유지할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Installed {} {}, but couldn't enable it: {}"
 msgstr "{} {} 설치 완료, 하지만 사용하도록 설정할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Updated {} to {}, but couldn't enable it: {}"
 msgstr "{} 플러그인을 {} 버전으로 업데이트했지만 사용하도록 설정할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalled {} (data deleted)"
 msgstr "{} 플러그인을 제거했습니다 (데이터 삭제됨)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalled {} (data kept)"
 msgstr "{} 플러그인을 제거했습니다 (데이터 보관됨)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Built-in plugins cannot be uninstalled"
 msgstr "내장 플러그인은 제거할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enabled “{}” again"
 msgstr "“{}” 플러그인을 다시 사용합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't enable “{}”: {}"
 msgstr "“{}” 플러그인을 사용할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can no longer cancel; the installation continues"
 msgstr "더 이상 취소할 수 없습니다. 설치를 계속합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can no longer cancel; the uninstallation continues"
 msgstr "더 이상 취소할 수 없습니다. 제거를 계속합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installation failed; the previous version was restored"
 msgstr "설치에 실패하여 이전 버전을 복원했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installation cancelled"
 msgstr "설치를 취소했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstallation cancelled"
 msgstr "제거를 취소했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installation failed: {}"
 msgstr "설치 실패: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstallation failed: {}"
 msgstr "제거 실패: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading {} {}"
 msgstr "{} {} 다운로드 중"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading {} {} ({}%)"
 msgstr "{} {} 다운로드 중 ({}%)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading the plugin package"
 msgstr "플러그인 패키지 다운로드 중"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Downloading the plugin package ({}%)"
 msgstr "플러그인 패키지 다운로드 중 ({}%)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Checking {}…"
 msgstr "{} 확인 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Checking the plugin package…"
 msgstr "플러그인 패키지 확인 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installing {}…"
 msgstr "{} 설치 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalling {}…"
 msgstr "{} 제거 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installing… (preparing)"
 msgstr "설치 중… (준비 중)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installing… (activating)"
 msgstr "설치 중… (활성화 중)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalling… (preparing)"
 msgstr "제거 중… (준비 중)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstalling… (activating)"
 msgstr "제거 중… (활성화 중)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updating {}…"
 msgstr "{} 업데이트 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: up to date at {1}"
 msgstr "{0}: {1} 기준 최신 상태"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: updated at {1}"
 msgstr "{0}: {1}에 업데이트됨"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: data from {1}"
 msgstr "{0}: {1} 데이터"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The official repository has no signature file; this update was ignored"
 msgstr "공식 저장소에 서명 파일이 없어 이번 업데이트를 무시했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The official repository's signature check failed (it may have been tampered with); this update was ignored"
 msgstr "공식 저장소의 서명 확인에 실패하여(변조되었을 수 있음) 이번 업데이트를 무시했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The official repository returned an old index; this update was ignored"
 msgstr "공식 저장소가 오래된 인덱스를 반환하여 이번 업데이트를 무시했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} uses a newer format; please update Vestra Player"
 msgstr "{}: 더 새로운 형식을 사용합니다. Vestra Player를 업데이트하세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{}'s index is malformed"
 msgstr "{}의 인덱스 형식이 잘못되었습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}'s index is malformed; showing the data from {1}"
 msgstr "{0}의 인덱스 형식이 잘못되어 {1} 데이터를 표시합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0} returned error {1}"
 msgstr "{0}에서 오류를 반환했습니다 ({1})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0} returned error {1}; showing the data from {2}"
 msgstr "{0}에서 오류를 반환했습니다 ({1}). {2} 데이터를 표시합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{}'s index exceeds 4 MB; refused"
 msgstr "{}의 인덱스가 4MB를 넘어 거부했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}'s index exceeds 4 MB; refused; showing the data from {1}"
 msgstr "{0}의 인덱스가 4MB를 넘어 거부했습니다. {1} 데이터를 표시합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: {1}"
 msgstr "{0}: {1}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{0}: {1}; showing the data from {2}"
 msgstr "{0}: {1}. {2} 데이터를 표시합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can't connect to {0} ({1}); its plugins are not available for now"
 msgstr "{0}에 연결할 수 없습니다 ({1}). 지금은 이 저장소의 플러그인을 사용할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Can't connect to {0} ({1}); showing the cache from {2}"
 msgstr "{0}에 연결할 수 없습니다 ({1}). {2} 캐시를 표시합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This repository has already been added"
 msgstr "이미 추가된 저장소입니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "At most {} repositories can be added"
 msgstr "저장소는 최대 {}개까지 추가할 수 있습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Reading {}…"
 msgstr "{} 읽는 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't read this repository: {}. Check the address (the repository's root address or the full address of index.json)"
 msgstr "이 저장소를 읽을 수 없습니다: {}. 주소(저장소의 루트 주소 또는 index.json의 전체 주소)를 확인하세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Added {}"
 msgstr "추가했습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Removed {}"
 msgstr "제거했습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "No plugins match"
 msgstr "일치하는 플러그인이 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "All plugins are up to date"
 msgstr "모든 플러그인이 최신 상태입니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "No plugins installed yet"
 msgstr "아직 설치한 플러그인이 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "No plugins installed besides the built-in ones, which are hidden"
 msgstr "내장 플러그인 외에 설치된 플러그인이 없습니다(내장 플러그인은 숨겨져 있음)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Reading repositories…"
 msgstr "저장소 읽는 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry."
 msgstr "저장소에 연결할 수 없습니다. 온라인이 될 때까지 아무것도 표시되지 않습니다. 다시 시도하려면 “새로 고침”을 클릭하세요."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The repositories have no plugins yet"
 msgstr "저장소에 아직 플러그인이 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry."
 msgstr "저장소에 연결할 수 없어 설치된 플러그인만 표시합니다. 다시 시도하려면 “새로 고침”을 클릭하세요."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed"
 msgstr "설치됨"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update → {}"
 msgstr "업데이트 → {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Revoked"
 msgstr "철회됨"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed from {}"
 msgstr "{}에서 설치됨"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Incompatible"
 msgstr "호환되지 않음"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Cannot be installed"
 msgstr "설치할 수 없음"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Disabled"
 msgstr "사용 안 함"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Failed"
 msgstr "실패"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Dev"
 msgstr "개발"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Warning"
 msgstr "경고"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Development load"
 msgstr "개발용 로드"
 
-#: store.ts:578 store.ts:593 store.ts:594 store.ts:595 store.ts:596 store.ts:598 text.ts:409 ui/store.slint:312 ui/store.slint:417 ui/store.slint:611
+#: store.ts:581 store.ts:596 store.ts:597 store.ts:598 store.ts:599 store.ts:601 text.ts:409 ui/store.slint:312 ui/store.slint:417 ui/store.slint:611
 #, x-machine
 msgid "Install"
 msgstr "설치"
 
-#: store.ts:578 store.ts:593 store.ts:594 store.ts:595 store.ts:596 store.ts:598 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 store.ts:598 store.ts:599 store.ts:601 text.ts:409
 #, x-machine
 msgid "Update"
 msgstr "업데이트"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Enable"
 msgstr "사용"
 
-#: store.ts:578 store.ts:593 store.ts:594 store.ts:595 store.ts:596 store.ts:598 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 store.ts:598 store.ts:599 store.ts:601 text.ts:409
 #, x-machine
 msgid "Disable"
 msgstr "사용 중지"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Reload"
 msgstr "다시 로드"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Open Data Folder"
 msgstr "데이터 폴더 열기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Working…"
 msgstr "처리 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Enabled “{}”"
 msgstr "“{}” 플러그인을 사용합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Disabled “{}”"
 msgstr "“{}” 플러그인을 사용 중지했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Reloaded “{}”"
 msgstr "“{}” 플러그인을 다시 로드했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Couldn't disable “{}”: {}"
 msgstr "“{}” 플러그인을 사용 중지할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Couldn't reload “{}”: {}"
 msgstr "“{}” 플러그인을 다시 로드할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Built-in plugins cannot be disabled"
 msgstr "내장 플러그인은 사용 중지할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Disabled “{}” until the player quits"
 msgstr "플레이어를 종료할 때까지 “{}” 플러그인을 사용 중지했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "“{}” is being installed or reloaded; try again later"
 msgstr "“{}” 플러그인을 설치하거나 다시 로드하는 중입니다. 나중에 다시 시도하세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "“{}” is disabled; enable it instead of reloading it"
 msgstr "“{}” 플러그인은 사용 중지되어 있습니다. 다시 로드하지 말고 사용하도록 설정하세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its data folder does not exist yet"
 msgstr "데이터 폴더가 아직 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Couldn't open the data folder: {}"
 msgstr "데이터 폴더를 열 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install {}"
 msgstr "{} 설치"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update to {}"
 msgstr "{} 버전으로 업데이트"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enable Anyway…"
 msgstr "그래도 사용…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Replace…"
 msgstr "바꾸기…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Replace with {0} from {1}…"
 msgstr "{1}의 {0}(으)로 바꾸기…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstall…"
 msgstr "제거…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Load"
 msgstr "불러오기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show Images"
 msgstr "이미지 표시"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Retry"
 msgstr "다시 시도"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This version has been revoked: {}."
 msgstr "이 버전은 철회되었습니다: {}."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This version has been revoked: {}. You confirmed the risk and enabled it again; the store will not disable it again."
 msgstr "이 버전은 철회되었습니다: {}. 위험을 확인하고 다시 사용하도록 했으므로 스토어에서 다시 사용 중지하지 않습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This version has been revoked: {}. The store has disabled it."
 msgstr "이 버전은 철회되었습니다: {}. 스토어에서 사용 중지했습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"
 msgstr "비공식 저장소: Vestra Player에서 검토하지 않았습니다. 플러그인이 파일을 읽거나 네트워크를 사용할 수 있습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This is a test repository on this machine, without encryption"
 msgstr "이 컴퓨터에 있는 테스트 저장소이며 암호화되지 않습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Also in {}"
 msgstr "{}에도 있음"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Installed {1} from {0}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data; the current data is kept"
 msgstr "{0}에서 {1} 버전을 설치했습니다. 바꾸면 이 출처에서 예전에 설치한 적이 있을 경우 그때의 데이터를 이어서 사용하고, 없으면 비어 있는 새 데이터로 시작합니다. 현재 데이터는 보관됩니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Same id as a built-in plugin of the player; cannot be installed from here"
 msgstr "플레이어 내장 플러그인과 ID가 같아 여기서 설치할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Built-in plugins are updated with the player and cannot be uninstalled or disabled"
 msgstr "내장 플러그인은 플레이어와 함께 업데이트되며 제거하거나 사용 중지할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The repository no longer offers this plugin; the store no longer checks it for updates (it still checks for revocations)"
 msgstr "저장소에서 더 이상 이 플러그인을 제공하지 않습니다. 스토어는 업데이트를 더 이상 확인하지 않습니다 (철회 여부는 계속 확인함)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Its repository was removed from the store; the store no longer checks it for updates or revocations"
 msgstr "이 플러그인의 저장소가 스토어에서 제거되었습니다. 스토어는 업데이트와 철회 여부를 더 이상 확인하지 않습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Sideloaded plugin: not reviewed; the store does not check it for updates"
 msgstr "사이드로드한 플러그인: 검토되지 않았으며, 스토어에서 업데이트를 확인하지 않습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This run uses the development-loaded version"
 msgstr "이번 실행에서는 개발용으로 로드한 버전을 사용합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Loaded for development (--plugin) in this run: disabling it lasts until the player quits, and it cannot be uninstalled here"
 msgstr "이번 실행에서 개발용으로 로드되었습니다(--plugin). 사용 중지는 플레이어를 종료할 때까지만 유지되며, 여기서 제거할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its bottom bar is not shown: “{}” holds the bottom bar"
 msgstr "하단 바가 표시되지 않습니다: “{}” 플러그인이 하단 바를 사용 중입니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its sidebar tab is not shown: “{}” holds that place"
 msgstr "사이드바 탭이 표시되지 않습니다: “{}” 플러그인이 그 자리를 사용 중입니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its sidebar tab is not shown: the sidebar is full"
 msgstr "사이드바 탭이 표시되지 않습니다: 사이드바가 가득 찼습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its backdrop is not shown: “{}” holds the backdrop"
 msgstr "배경이 표시되지 않습니다: “{}” 플러그인이 배경을 사용 중입니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its panel is not shown: “{}” holds that place"
 msgstr "패널이 표시되지 않습니다: “{}” 플러그인이 그 자리를 사용 중입니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its panel is not shown: that place is full"
 msgstr "패널이 표시되지 않습니다: 그 자리가 가득 찼습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Its Previous/Next is not used: “{}” provides them"
 msgstr "이전/다음이 사용되지 않습니다: “{}” 플러그인이 제공합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "It does not open {}: “{}” does"
 msgstr "{}을(를) 열지 않습니다: “{}” 플러그인이 엽니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Part of it was refused because another plugin holds it ({})"
 msgstr "다른 플러그인이 사용 중이어서 일부가 거부되었습니다({})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The description is on another website ({}); not loaded automatically"
 msgstr "설명이 다른 웹사이트({})에 있어 자동으로 불러오지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Remote images blocked (unofficial source): {}"
 msgstr "원격 이미지 차단됨 (비공식 출처): {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "From the installed version"
 msgstr "설치된 버전의 내용"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Loading…"
 msgstr "불러오는 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Loading the description…"
 msgstr "설명 불러오는 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Loading the changelog…"
 msgstr "변경 내역 불러오는 중…"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The author provided no description"
 msgstr "작성자가 설명을 제공하지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The author provided no changelog"
 msgstr "작성자가 변경 내역을 제공하지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The description is on another website; not loaded automatically"
 msgstr "설명이 다른 웹사이트에 있어 자동으로 불러오지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The changelog is on another website; not loaded automatically"
 msgstr "변경 내역이 다른 웹사이트에 있어 자동으로 불러오지 않았습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't load the description: {}"
 msgstr "설명을 불러올 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't load the changelog: {}"
 msgstr "변경 내역을 불러올 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't show the description: {}"
 msgstr "설명을 표시할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Couldn't show the changelog: {}"
 msgstr "변경 내역을 표시할 수 없습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Current"
 msgstr "현재"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Current, {}"
 msgstr "현재, {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Incompatible: {}"
 msgstr "호환되지 않음: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Latest"
 msgstr "최신"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409 ui/store.slint:310 ui/store.slint:586
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409 ui/store.slint:310 ui/store.slint:586
 #, x-machine
 msgid "Version"
 msgstr "버전"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Updated"
 msgstr "업데이트"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Source"
 msgstr "출처"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "License"
 msgstr "라이선스"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Code"
 msgstr "소스 코드"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Open ↗"
 msgstr "열기 ↗"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Status"
 msgstr "상태"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Running"
 msgstr "실행 중"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Starting"
 msgstr "시작 중"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Stopped"
 msgstr "중지됨"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Failed: {}"
 msgstr "실패: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Package"
 msgstr "패키지"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Data folder"
 msgstr "데이터 폴더"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Data size"
 msgstr "데이터 크기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409 ui/store.slint:306
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409 ui/store.slint:306
 #, x-machine
 msgid "Tags: All"
 msgstr "태그: 전체"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The new version needs new permissions: {}"
 msgstr "새 버전에는 새 권한이 필요합니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Official repository"
 msgstr "공식 저장소"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unnamed repository ({})"
 msgstr "이름 없는 저장소 ({})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unofficial: {} ({})"
 msgstr "비공식: {} ({})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unofficial: Unnamed repository ({})"
 msgstr "비공식: 이름 없는 저장소 ({})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Vestra Player official repository"
 msgstr "Vestra Player 공식 저장소"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Built-in"
 msgstr "내장"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Local file"
 msgstr "로컬 파일"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Link"
 msgstr "링크"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Plugin Workshop"
 msgstr "플러그인 워크숍"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Repository {}"
 msgstr "저장소 {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown source"
 msgstr "알 수 없는 출처"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown author"
 msgstr "알 수 없는 작성자"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Cancelled"
 msgstr "취소됨"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Only https:// addresses are supported"
 msgstr "https:// 주소만 지원합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Redirected to an insecure address"
 msgstr "안전하지 않은 주소로 리디렉션되었습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Redirect without a target address ({})"
 msgstr "대상 주소가 없는 리디렉션 ({})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Too many redirects"
 msgstr "리디렉션이 너무 많습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Size does not match the description"
 msgstr "크기가 설명과 일치하지 않습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "File exceeds the size limit"
 msgstr "파일이 크기 제한을 넘습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Checksum does not match the description"
 msgstr "체크섬이 설명과 일치하지 않습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Connection timed out"
 msgstr "연결 시간이 초과되었습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Server not found"
 msgstr "서버를 찾을 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Connection refused"
 msgstr "연결이 거부되었습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Connection reset"
 msgstr "연결이 재설정되었습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Secure connection failed"
 msgstr "보안 연결에 실패했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "File exceeds 256 KB"
 msgstr "파일이 256KB를 넘습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Not JSON"
 msgstr "JSON이 아닙니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The top level is not an object"
 msgstr "최상위가 객체가 아닙니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Wrong schema"
 msgstr "스키마가 잘못되었습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "plugins is not an array"
 msgstr "plugins가 배열이 아닙니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "revoked is not an array"
 msgstr "revoked가 배열이 아닙니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "revoked has more than {} entries"
 msgstr "revoked 항목이 {}개를 넘습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Needs a newer plugin API ({})"
 msgstr "더 새로운 플러그인 API가 필요합니다 ({})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Needs Vestra Player ≥ {} (current {})"
 msgstr "Vestra Player {} 이상 필요 (현재 {})"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Revoked: {}"
 msgstr "철회됨: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin has been revoked: {}"
 msgstr "이 플러그인은 철회되었습니다: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}”: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "“{}”: vestra.로 시작하는 ID는 플레이어 내장 플러그인용으로 예약되어 있어 설치하거나 테스트용으로 로드할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin: ids starting with vestra. are reserved for the player's built-in plugins and cannot be installed or loaded for testing"
 msgstr "이 플러그인: vestra.로 시작하는 ID는 플레이어 내장 플러그인용으로 예약되어 있어 설치하거나 테스트용으로 로드할 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enter a repository address starting with https://"
 msgstr "https://로 시작하는 저장소 주소를 입력하세요"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The address cannot contain a user name or password"
 msgstr "주소에 사용자 이름이나 암호를 넣을 수 없습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The repository address is too long"
 msgstr "저장소 주소가 너무 깁니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown permission: {}"
 msgstr "알 수 없는 권한: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Plugin Store: plugin updates available ({})"
 msgstr "플러그인 스토어: 플러그인 업데이트 있음 ({}개)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Disabled the revoked plugin “{}”"
 msgstr "철회된 “{}” 플러그인을 사용 중지했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Replace the installed “{}”?"
 msgstr "설치된 “{}” 플러그인을 바꿀까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{1}\n"
@@ -1165,7 +1170,7 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{1}\n"
@@ -1184,12 +1189,12 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update “{}” to {}? The new version needs more permissions"
 msgstr "“{}” 플러그인을 {} 버전으로 업데이트할까요? 새 버전에는 더 많은 권한이 필요합니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Added:\n"
@@ -1206,22 +1211,22 @@ msgstr ""
 "\n"
 "플러그인은 완전한 프로그램입니다. 위 권한은 플레이어에서 할 수 있는 일만 제한하며, 파일 읽기·쓰기나 네트워크 사용은 제한하지 않습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Update “{}” to {}?"
 msgstr "“{}” 플러그인을 {} 버전으로 업데이트할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Current: {2}."
 msgstr "현재: {2}."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install “{}” {} (reinstall)?"
 msgstr "“{}” {} 버전을 설치할까요? (다시 설치)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Current: {2}.\n"
@@ -1234,12 +1239,12 @@ msgstr ""
 "이 버전에는 더 많은 권한이 필요합니다:\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install “{}” {}?"
 msgstr "“{}” {} 버전을 설치할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "From the Vestra Player official repository, author {2}.\n"
@@ -1250,12 +1255,12 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install “{}” {} from an unofficial repository?"
 msgstr "비공식 저장소에서 “{}” {} 버전을 설치할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1266,32 +1271,32 @@ msgstr ""
 "\n"
 "{3}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{1}"
 msgstr "{1}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "이 플러그인은 이미 다른 출처에서 설치되었습니다. 바꾸면 이 출처에서 예전에 설치한 적이 있을 경우 그때의 데이터를 이어서 사용하고, 없으면 비어 있는 새 데이터로 시작합니다. 원래 플러그인의 데이터는 보관되며, 원래 출처에서 다시 설치하면 다시 사용됩니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The current “{}” {} comes from {}. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source."
 msgstr "현재 “{}” {}의 출처는 {}입니다. 바꾸면 이 출처에서 예전에 설치한 적이 있을 경우 그때의 데이터를 이어서 사용하고, 없으면 비어 있는 새 데이터로 시작합니다. 원래 플러그인의 데이터는 보관되며, 원래 출처에서 다시 설치하면 다시 사용됩니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust."
 msgstr "저장소: {} ({}). 이 저장소는 Vestra Player에서 검토하지 않았으며, 플러그인이 파일을 읽거나 네트워크를 사용할 수 있습니다. 신뢰하는 작성자의 플러그인만 설치하세요."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption."
 msgstr "저장소: {} ({}). 이 저장소는 Vestra Player에서 검토하지 않았으며, 플러그인이 파일을 읽거나 네트워크를 사용할 수 있습니다. 신뢰하는 작성자의 플러그인만 설치하세요. 이 컴퓨터에 있는 테스트 저장소이며 암호화되지 않습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "It will be able to:\n"
@@ -1304,32 +1309,32 @@ msgstr ""
 "\n"
 "플러그인은 완전한 프로그램입니다. 위 권한은 플레이어에서 할 수 있는 일만 제한하며, 파일 읽기·쓰기나 네트워크 사용은 제한하지 않습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Unknown"
 msgstr "알 수 없음"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "· {}"
 msgstr "· {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "· Uses none of the player's features"
 msgstr "· 플레이어 기능을 사용하지 않음"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "{} in total"
 msgstr "모두 {}개"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Replace the installed version with the plugin package “{}” {}?"
 msgstr "설치된 버전을 플러그인 패키지 “{}” {} 버전으로 바꿀까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1344,12 +1349,12 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install the plugin package “{}” {}?"
 msgstr "플러그인 패키지 “{}” {} 버전을 설치할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{2}\n"
@@ -1364,37 +1369,37 @@ msgstr ""
 "\n"
 "{4}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "From the file {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "파일 {}에서 설치합니다. 어떤 저장소에서도 검토되지 않았으며 자동으로 업데이트되지 않습니다. 신뢰하는 작성자의 플러그인만 설치하세요."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "From the link {}; not reviewed by any repository and not updated automatically. Only install plugins from authors you trust."
 msgstr "링크 {}에서 설치합니다. 어떤 저장소에서도 검토되지 않았으며 자동으로 업데이트되지 않습니다. 신뢰하는 작성자의 플러그인만 설치하세요."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Uninstall “{}”?"
 msgstr "“{}” 플러그인을 제거할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Its menus, windows and processing effects are removed immediately."
 msgstr "이 플러그인의 메뉴, 창, 처리 효과가 즉시 제거됩니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add the unofficial repository “{}”?"
 msgstr "“{}” 비공식 저장소를 추가할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add the unofficial repository “Unnamed repository”?"
 msgstr "비공식 저장소 “이름 없는 저장소”를 추가할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Address: {1}\n"
@@ -1405,7 +1410,7 @@ msgstr ""
 "\n"
 "이 저장소의 플러그인은 Vestra Player에서 검토하지 않았으며 파일을 읽거나 네트워크를 사용할 수 있습니다. 스토어는 이 저장소의 플러그인을 표시하지만, 신뢰할 수 있는지는 판단해 주지 않습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "Address: {1}\n"
@@ -1420,32 +1425,32 @@ msgstr ""
 "\n"
 "이 컴퓨터에 있는 테스트 저장소이며 암호화되지 않습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Remove the repository “{} ({})”?"
 msgstr "“{} ({})” 저장소를 제거할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Remove the repository “Unnamed repository ({1})”?"
 msgstr "저장소 “이름 없는 저장소 ({1})”를 제거할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "The store will stop reading this repository. Plugins installed from it stay, but the store no longer checks them for updates and revocations."
 msgstr "스토어에서 이 저장소를 더 이상 읽지 않습니다. 이 저장소에서 설치한 플러그인은 남아 있지만, 업데이트와 철회 여부는 더 이상 확인하지 않습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Disabled the revoked plugin “{}” {}"
 msgstr "철회된 “{}” {} 버전을 사용 중지했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Disabled {} revoked plugins"
 msgstr "철회된 플러그인 {}개를 사용 중지했습니다"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "The repository revoked these versions. Reasons:\n"
@@ -1460,12 +1465,12 @@ msgstr ""
 "\n"
 "그래도 계속 사용하려면 플러그인 스토어의 해당 페이지에서 “그래도 사용…”을 선택하세요."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}” {}: {}"
 msgstr "“{}” {}: {}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "“{}” {}: {}\n"
@@ -1474,7 +1479,7 @@ msgstr ""
 "“{}” {}: {}\n"
 "플러그인 스토어에서 {} 버전으로 업데이트할 수 있습니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "{}\n"
@@ -1485,12 +1490,12 @@ msgstr ""
 "\n"
 "{}"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Enable the revoked “{}” {} anyway?"
 msgstr "철회된 “{}” {} 버전을 그래도 사용할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
@@ -1501,7 +1506,7 @@ msgstr ""
 "\n"
 "사용하면 위험할 수 있습니다. 확인하면 스토어에서 다시 자동으로 사용 중지하지 않으며, 해당 페이지에 경고가 계속 표시됩니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "The repository's reason for revoking this version: {2}\n"
@@ -1516,12 +1521,12 @@ msgstr ""
 "\n"
 "대신 {3} 버전으로 업데이트하는 것을 권장합니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "“{}” {} has been revoked. Keep using it?"
 msgstr "“{}” {} 버전이 철회되었습니다. 계속 사용할까요?"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
@@ -1532,7 +1537,7 @@ msgstr ""
 "\n"
 "사용하면 위험할 수 있습니다. 확인하면 스토어에서 다시 자동으로 사용 중지하지 않으며, 해당 페이지에 경고가 계속 표시됩니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid ""
 "It was just enabled again. The repository's reason for revoking this version: {2}\n"
@@ -1547,187 +1552,187 @@ msgstr ""
 "\n"
 "대신 {3} 버전으로 업데이트하는 것을 권장합니다."
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add menu commands and shortcuts"
 msgstr "메뉴 명령과 단축키 추가"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Open tool windows"
 msgstr "도구 창 열기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show panels in the bottom bar, the sidebar or behind the video"
 msgstr "하단 바, 사이드바, 비디오 뒤에 패널 표시"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show file pickers and confirmations"
 msgstr "파일 선택 및 확인 대화 상자 표시"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show messages on the video"
 msgstr "비디오 위에 메시지 표시"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Receive files dropped on the player"
 msgstr "플레이어에 끌어다 놓은 파일 받기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Change the player's palette"
 msgstr "플레이어 팔레트 변경"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Add pages to the Options window"
 msgstr "옵션 창에 페이지 추가"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Read what is playing and the position"
 msgstr "재생 중인 항목과 위치 읽기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Receive playback changes as they happen"
 msgstr "재생 상태 변화를 실시간으로 받기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Open media, control playback, keep the computer awake"
 msgstr "미디어 열기, 재생 제어, 컴퓨터 잠자기 방지"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Provide audio and video it generates itself"
 msgstr "직접 생성한 오디오와 비디오 제공"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Process the picture (filters, shaders)"
 msgstr "화면 처리 (필터, 셰이더)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Process the sound"
 msgstr "소리 처리"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Read subtitles"
 msgstr "자막 읽기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Load and change subtitles"
 msgstr "자막 불러오기 및 변경"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Take snapshots and export clips"
 msgstr "스냅샷 찍기 및 클립 내보내기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Resolve online video addresses"
 msgstr "온라인 비디오 주소 해석"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Show marks on the progress bar"
 msgstr "탐색 막대에 마커 표시"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Adjust the main window (size, on top, picture-in-picture)"
 msgstr "기본 창 조정 (크기, 항상 위에 표시, PIP 모드)"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Read and write the clipboard"
 msgstr "클립보드 읽기 및 쓰기"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Change all shortcuts"
 msgstr "모든 단축키 변경"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Store sign-in details in the system keychain"
 msgstr "로그인 정보를 시스템 키체인에 저장"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Install, uninstall and disable other plugins"
 msgstr "다른 플러그인 설치, 제거, 사용 중지"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Choose GPU or software rendering and restart the player"
 msgstr "GPU 렌더링과 소프트웨어 렌더링 선택, 플레이어 다시 시작"
 
-#: store.ts:578 store.ts:593 store.ts:594 text.ts:409
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "GPU 비디오 업스케일러로 영상 업스케일링"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Replace"
 msgstr "바꾸기"
 
-#: store.ts:595 store.ts:596 store.ts:598 ui/settings.slint:45 ui/settings.slint:134
+#: store.ts:598 store.ts:599 store.ts:601 ui/settings.slint:45 ui/settings.slint:134
 #, x-machine
 msgid "Add"
 msgstr "추가"
 
-#: store.ts:595 store.ts:596 store.ts:598 ui/settings.slint:44 ui/settings.slint:92
+#: store.ts:598 store.ts:599 store.ts:601 ui/settings.slint:44 ui/settings.slint:92
 #, x-machine
 msgid "Remove"
 msgstr "제거"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Install Anyway"
 msgstr "그래도 설치"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Uninstall"
 msgstr "제거"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Also delete its settings and data?"
 msgstr "설정과 데이터도 삭제할까요?"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Open Plugin Store"
 msgstr "플러그인 스토어 열기"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "OK"
 msgstr "확인"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Enable Anyway"
 msgstr "그래도 사용"
 
-#: store.ts:595 store.ts:596 store.ts:598
+#: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Keep Using"
 msgstr "계속 사용"
 
-#: store.ts:1406
+#: store.ts:1416
 #, x-machine
 msgid "Choose a plugin package (.vxp)"
 msgstr "플러그인 패키지 선택 (.vxp)"

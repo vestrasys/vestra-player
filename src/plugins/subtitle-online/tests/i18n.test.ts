@@ -31,6 +31,19 @@ test("Simplified Chinese: the menus show the old words", async () => {
   await stop();
 });
 
+test("palette: every command has a category in every language, the submenu's words (player 0.7.6)", async () => {
+  const expected = { en: "Online Subtitles", "zh-Hans": "在线字幕", ja: "オンライン字幕", ko: "온라인 자막", de: "Online-Untertitel", fr: "Sous-titres en ligne", es: "Subtítulos en línea" } as const;
+  for (const [locale, category] of Object.entries(expected) as [keyof typeof expected, string][]) {
+    const { host, stop } = await startPlugin(activate, { directory, locale });
+    assert.equal(host.commands.size, 2);
+    for (const [id, { display }] of host.commands) {
+      assert.ok(typeof display.category === "string" && display.category.trim() !== "", `${locale}: ${id} has no category`);
+      assert.equal(display.category, category, `${locale}: ${id}`);
+    }
+    await stop();
+  }
+});
+
 test("a track title: the language name translated, the release as it is", () => {
   const { text } = words;
   const result = (language: string) => ({ language, release: "Movie.CN\u0001x" }) as Result;

@@ -37,7 +37,7 @@ msgstr "面板内"
 msgid "Global"
 msgstr "全局"
 
-#: export.ts:22 keys-page.ts:192
+#: export.ts:22 keys-page.ts:195
 msgid "Player"
 msgstr "宿主"
 
@@ -85,61 +85,71 @@ msgstr "忽略默认快捷键：开"
 msgid "Ignore default shortcuts: Off"
 msgstr "忽略默认快捷键：关"
 
-#: keys-page.ts:119
+#: keys-page.ts:118
 msgid "Keyboard Shortcuts"
 msgstr "快捷键"
 
-#: keys-page.ts:191
+#: keys-page.ts:194
 msgid "All sources"
 msgstr "全部来源"
 
-#: keys-page.ts:194
+#: keys-page.ts:197
 msgid "Plugins not loaded"
 msgstr "未加载的插件"
 
-#: keys-page.ts:416
+#: keys-page.ts:419
 msgid "Shortcut updated: {0} = {1}"
 msgstr "快捷键已更新：{0} = {1}"
 
-#: keys-page.ts:419
+#: keys-page.ts:422
 msgid "Shortcut updated: {} = (none)"
 msgstr "快捷键已更新：{} = （无）"
 
-#: keys-page.ts:471
+#: keys-page.ts:474
 msgid "Restore all default shortcuts?"
 msgstr "恢复全部默认快捷键？"
 
-#: keys-page.ts:472
+#: keys-page.ts:475
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "将清除你对所有命令（包括未加载插件）的快捷键与鼠标动作修改。"
 
-#: keys-page.ts:473
+#: keys-page.ts:476
 msgid "Restore All Defaults"
 msgstr "恢复全部默认"
 
-#: keys-page.ts:485
+#: keys-page.ts:488
 msgid "Shortcuts restored to defaults"
 msgstr "快捷键已恢复默认"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 msgid "Export Shortcut List"
 msgstr "导出快捷键列表"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Vestra Player 快捷键.csv"
 
+#: keys.ts:241
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0}：{1}"
+
 #: main.ts:36
+#, x-machine
+msgid "Settings"
+msgstr "设置"
+
+#: main.ts:40
 msgid "Keyboard Shortcuts…"
 msgstr "快捷键…"
 
-#: main.ts:43
+#: main.ts:48
 msgid "Mouse…"
 msgstr "鼠标…"
 
-#: main.ts:50
+#: main.ts:57
 msgid "Ignore Default Shortcuts"
 msgstr "忽略默认快捷键"
 
@@ -335,7 +345,7 @@ msgstr "恢复全部默认…"
 msgid "Export List…"
 msgstr "导出列表…"
 
-#: ui/keys.slint:450
+#: ui/keys.slint:452
 msgid "Ignore default shortcuts"
 msgstr "忽略默认快捷键"
 

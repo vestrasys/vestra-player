@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.info 0.1.11\n"
+"Project-Id-Version: vestra.info 0.1.13\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -249,27 +249,35 @@ msgstr ""
 msgid "{} · {}"
 msgstr ""
 
-#: main.ts:241 manifest.json
+#: main.ts:243 manifest.json
+msgid "Info"
+msgstr ""
+
+#: main.ts:243
+msgid "Help"
+msgstr ""
+
+#: main.ts:247 manifest.json
 msgid "Playback Info"
 msgstr ""
 
-#: main.ts:255
+#: main.ts:262
 msgid "Brief Info"
 msgstr ""
 
-#: main.ts:274
+#: main.ts:282
 msgid "Playback Properties…"
 msgstr ""
 
-#: main.ts:284
+#: main.ts:293
 msgid "About Vestra Player…"
 msgstr ""
 
-#: main.ts:293
+#: main.ts:304
 msgid "Check for Updates…"
 msgstr ""
 
-#: main.ts:302 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
+#: main.ts:313 ui/about.slint:197 ui/about.slint:279 ui/updates.slint:21
 msgid "Updates"
 msgstr ""
 
@@ -279,10 +287,6 @@ msgstr ""
 
 #: manifest.json
 msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
-msgstr ""
-
-#: manifest.json
-msgid "Info"
 msgstr ""
 
 #: manifest.json

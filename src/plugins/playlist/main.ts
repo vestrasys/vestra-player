@@ -574,6 +574,17 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     }
   });
 
+  // Palette categories (player 0.7.6): the palette reads "Category: Title". Each is the
+  // label of the submenu or popup the command sits in (shared texts, same translations).
+  const categories = {
+    playlist: text("Playlist"),
+    repeat: text("Repeat"),
+    openMode: text("When Opening a File"),
+    sort: text("Sort"),
+  };
+  /** Where a command's control lives: the playlist panel, or its settings page. */
+  const PANEL = { home: "playlist.visibility" };
+  const SETTINGS = { home: "playlist.settings" };
   const reason = (enabled: () => boolean) => (): Reason | null =>
     enabled() ? null : player.busy() ? "Opening, or the result is not known yet" : "Nothing to act on";
   /** A list command: not in the main menu; its keys work while the list has focus. */
@@ -588,6 +599,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     plugin.commands.add({
       id: `playlist.${id}`,
       title,
+      category: categories.playlist,
+      ...PANEL,
       enabled,
       reason: extra.reason ?? reason(enabled),
       ...(bindings ? { bindings, focus: "panel" as const } : {}),
@@ -599,6 +612,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   plugin.commands.add({
     id: "playlist.visibility",
     path: ["Playlist"],
+    category: categories.playlist,
     group: "windows",
     order: 800,
     bindings: ["F6"],
@@ -611,6 +625,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   plugin.commands.add({
     id: "playlist.open-folder",
     path: ["@open", "Open Folder…"],
+    category: categories.playlist,
     group: "open",
     order: 110,
     bindings: ["F2"],
@@ -623,16 +638,17 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       id: `playlist.${id}`,
       path: ["@playback", "Playlist", ...title],
       order,
+      category: categories.playlist,
       run: () => {},
       ...options,
       reason: options.reason ?? null,
     });
   const addingFiles = { enabled: () => !adding, busy: () => adding };
   const scanningFolder = { busy: () => scanning, reason: (): Reason | null => (scanning ? "Scanning folder" : null) };
-  const listFile = { busy: () => listBusy, group: "list" };
-  playlistMenu("add", ["Add Files…"], 230, { ...addingFiles, run: addFiles });
-  playlistMenu("link", ["Add Link…"], 231, { run: guard(() => link.show()) });
-  playlistMenu("add-folder", ["Add Folder…"], 232, { ...scanningFolder, run: addFolderOnly });
+  const listFile = { busy: () => listBusy, group: "list", ...PANEL };
+  playlistMenu("add", ["Add Files…"], 230, { ...addingFiles, ...PANEL, run: addFiles });
+  playlistMenu("link", ["Add Link…"], 231, { ...PANEL, run: guard(() => link.show()) });
+  playlistMenu("add-folder", ["Add Folder…"], 232, { ...scanningFolder, ...PANEL, run: addFolderOnly });
   // The options shared by the menu and the settings page (IA-PL-02).
   const setRepeat = (mode: Repeat) => {
     queue.repeat = mode;
@@ -658,12 +674,15 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   };
   repeats.forEach(([mode, title], index) =>
     playlistMenu(`repeat-${mode}`, ["Repeat", title], 233 + index, {
+      category: categories.repeat,
+      ...SETTINGS,
       radio: true,
       checked: () => queue.repeat === mode,
       run: () => setRepeat(mode),
     }),
   );
   playlistMenu("shuffle", ["Shuffle"], 236, {
+    ...SETTINGS,
     checked: () => queue.shuffle,
     run: () => setShuffle(!queue.shuffle),
   });
@@ -677,6 +696,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   openModes.forEach(([mode, title], index) =>
     playlistMenu(`open-mode-${mode}`, ["When Opening a File", title], 239 + index, {
       group: "open-mode",
+      category: categories.openMode,
+      ...SETTINGS,
       radio: true,
       checked: () => settings.openMode === mode,
       run: () => {
@@ -686,17 +707,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   );
   playlistMenu("fast-advance", ["Fast Advance to Next"], 242, {
     group: "options",
+    ...SETTINGS,
     checked: () => settings.gapless,
     run: () => setFast(!settings.gapless),
   });
   playlistMenu("remember", ["Remember List"], 243, {
     group: "options",
+    ...SETTINGS,
     checked: () => settings.remember,
     run: () => setRemember(!settings.remember),
   });
   // Turns the Remove All question back on after "Don't ask again" (or off).
   playlistMenu("confirm-clear", ["Confirm Before Removing All"], 244, {
     group: "options",
+    ...SETTINGS,
     checked: () => settings.confirmClear,
     run: () => setConfirmClear(!settings.confirmClear),
   });
@@ -738,7 +762,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     bottom: move("move-bottom", "Move to Bottom", "bottom", "Ctrl+End"),
   };
   const sortable = () => queue.rows.length > 1;
-  const sortState = { busy: () => statting };
+  const sortState = { busy: () => statting, category: categories.sort };
   const sorts = [
     listCommand("sort-ascending", "Ascending", () => true, setDirection(false), ["Ctrl+1"], {
       ...sortState,

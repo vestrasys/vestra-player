@@ -110,6 +110,26 @@ test("menu per the allocation table; each dialog binds exactly its Slint callbac
     ["视频 > 截图 > 打开截图文件夹", 438, "capture-folder", ""],
   ]);
   assert.deepEqual(host.conflicts, []);
+  // The command palette's "Category: Title" (player 0.7.6) and where an option's control lives.
+  const palette = [...host.commands.values()].map(({ declaration: d, display }) => [d.title, display.category, d.home ?? ""]);
+  assert.deepEqual(palette, [
+    ["Save Current Frame", "截图", ""],
+    ["Save Current Frame As…", "截图", ""],
+    ["Copy Current Frame", "截图", ""],
+    ["Save Rendered Frame", "截图", ""],
+    ["Save Rendered Frame As…", "截图", ""],
+    ["Copy Rendered Frame", "截图", ""],
+    ["Burst…", "截图", ""],
+    ["Export Clip…", "视频", ""],
+    ["Export Tasks…", "视频", ""],
+    ["Capture as PNG", "截图", "capture.settings"],
+    ["Capture as JPEG", "截图", "capture.settings"],
+    ["Capture as BMP", "截图", "capture.settings"],
+    ["Include Subtitles in Rendered Frame", "截图", "capture.settings"],
+    ["Snapshot Settings…", "视频", ""],
+    ["Snapshot Folder…", "视频", "capture.settings"],
+    ["Open Snapshot Folder", "视频", ""],
+  ]);
   await host.press("Ctrl+G");
   await host.command("capture.clip").run();
   await host.command("capture.tasks").run();
@@ -126,6 +146,29 @@ test("menu per the allocation table; each dialog binds exactly its Slint callbac
   assert.equal(host.window("clip").props["start-time"], "2");
   assert.equal(host.window("clip").props["end-time"], "12");
   await stop();
+});
+
+test("every command has a category for the command palette, and every home is one of its commands", async () => {
+  for (const locale of ["en", "zh-Hans"] as const) {
+    const host = new TestHost();
+    ready(host);
+    const { stop } = await start(host, locale);
+    try {
+      assert.equal(host.commands.size, 16);
+      for (const [id, command] of host.commands) {
+        assert.ok(command.declaration.category, `${id}: declares a category`);
+        assert.ok(command.display.category?.trim(), `${id}: shows a category in ${locale}`);
+        const { home } = command.declaration;
+        if (home !== undefined) assert.ok(host.commands.has(home), `${id}: home ${home} is a command of this plugin`);
+      }
+      if (locale === "en") {
+        assert.equal(host.command("capture.save").display.category, "Snapshot");
+        assert.equal(host.command("capture.clip").display.category, "Video");
+      }
+    } finally {
+      await stop();
+    }
+  }
 });
 
 test("English by default: menus, dialog titles, OSD and window texts are the English source texts", async () => {

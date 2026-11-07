@@ -555,12 +555,15 @@ export default async function activate(plugin: Plugin) {
   }
 
   // ------------------------------------------------------------ menu
+  // Command palette category (player 0.7.6): the submenu's name, a text value so `i18n extract`
+  // finds it, with the submenu's translations.
+  const category = plugin.i18n.text("Online Subtitles");
   plugin.commands.add({
-    id: "search", path: ["@subtitles", "Online Subtitles", "Search and Download Subtitles…"], order: 360, group: "subtitle-online",
+    id: "search", path: ["@subtitles", "Online Subtitles", "Search and Download Subtitles…"], order: 360, group: "subtitle-online", category,
     run: showDownload,
   });
   plugin.commands.add({
-    id: "settings", path: ["@subtitles", "Online Subtitles", "Online Subtitle Settings…"], order: 361, group: "subtitle-online",
+    id: "settings", path: ["@subtitles", "Online Subtitles", "Online Subtitle Settings…"], order: 361, group: "subtitle-online", category,
     run: showSettings,
   });
 

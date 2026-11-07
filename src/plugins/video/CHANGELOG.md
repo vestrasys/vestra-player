@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.1.11
+
+- Every command has a **category** for the player's command palette (Ctrl+Shift+P, SDK 1.6.4), which names a command "Category: Title": the item's submenu label (**Pixel Shaders**, **HDR Tone Mapping**, **Deinterlace** (its Output items too), **Aspect**, **Crop/Stretch**, **Framing**, **Image Processing**, **Rotation**), **Reset** for the items in the Reset menu, and **Picture** for the items directly under Video (Picture Adjustments…, the colour keys, GPU Rendering). The categories use the menu's translations; "Reset" uses the player's own word for its menu in every language.
+- Commands whose control is also in a window name that window as their `home`, so the palette shows where the setting can be changed by hand: **Picture Adjustments…** for the colour keys, Image Processing, Rotation, Deinterlace, Aspect, the Crop/Stretch choices, Zoom In/Out and Reset ▸ Framing (the Zoom row's Default button); **HDR Settings…** (its Advanced page) for the tone mappings and Use Shaders; **Shader List…** for Open Shader Folder.
+- No titles, ids, menu paths, keys or order changed. Who must change: nobody. Requires player 0.7.6 (`minPlayerVersion`), whose command declarations accept `category` and `home`.
+
 ## 1.1.10
 
 - Code only: the Picture window handle (`picture.slint`) is named `pictureWindow` (was `window`). Who must change: nobody. No behaviour change.

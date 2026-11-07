@@ -865,6 +865,9 @@ export default async function activate(plugin: Plugin) {
 
   plugin.commands.add({
     id: "workshop.open",
+    // Command palette category (player 0.7.6): "Plugins: Vestra Player AI…", next to the
+    // Plugin Store's. A text value, so `i18n extract` finds it; the player's word for plugins.
+    category: plugin.i18n.text("Plugins"),
     path: ["Vestra Player AI…"],
     order: 820,
     group: "windows",

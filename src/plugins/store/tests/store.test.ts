@@ -28,6 +28,8 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     const command = host.command("open");
     assert.deepEqual(command.declaration.path, ["Plugin Store…"]);
     assert.deepEqual(command.display.path, ["插件商城…"]);
+    assert.equal(command.display.category, "插件"); // the palette (player 0.7.6): "插件：插件商城…"
+    assert.equal(command.declaration.home, undefined);
     assert.equal(command.declaration.order, 822);
     assert.equal(command.declaration.group, "windows");
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
@@ -35,6 +37,7 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     await store.refreshAll(true);
     await until(host, () => path(host)?.[0] !== "Plugin Store…", "menu title");
     assert.deepEqual(host.command("open").display.path, ["插件商城（1 个可更新）…"]);
+    assert.equal(host.command("open").display.category, "插件", "the category stays when the title counts updates");
     assert.deepEqual(host.osd, ["插件商城：1 个插件可以更新"]);
     await store.refreshAll(true);
     await host.settle(20);
@@ -317,5 +320,21 @@ test("review 4: third-party README and icon on another host are not fetched unti
     assert.equal(net.count("https://tracker.test/i.png"), 0, "the icon never");
   } finally {
     await stop();
+  }
+});
+
+test("palette: every command has a category in every language, the player's word for plugins (player 0.7.6)", async () => {
+  const expected = { en: "Plugins", "zh-Hans": "插件", ja: "プラグイン", ko: "플러그인", de: "Plugins", fr: "Plugins", es: "Complementos" } as const;
+  for (const [locale, category] of Object.entries(expected) as [keyof typeof expected, string][]) {
+    const { host, stop } = await start({ locale });
+    try {
+      assert.deepEqual([...host.commands.keys()], ["open"]);
+      for (const [id, { display }] of host.commands) {
+        assert.ok(typeof display.category === "string" && display.category.trim() !== "", `${locale}: ${id} has no category`);
+        assert.equal(display.category, category, `${locale}: ${id}`);
+      }
+    } finally {
+      await stop();
+    }
   }
 });

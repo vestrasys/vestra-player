@@ -46,7 +46,7 @@ msgstr "En panel"
 msgid "Global"
 msgstr "Global"
 
-#: export.ts:22 keys-page.ts:192
+#: export.ts:22 keys-page.ts:195
 #, x-machine
 msgid "Player"
 msgstr "Reproductor"
@@ -106,74 +106,84 @@ msgstr "Ignorar atajos predeterminados: activado"
 msgid "Ignore default shortcuts: Off"
 msgstr "Ignorar atajos predeterminados: desactivado"
 
-#: keys-page.ts:119
+#: keys-page.ts:118
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "Atajos de teclado"
 
-#: keys-page.ts:191
+#: keys-page.ts:194
 #, x-machine
 msgid "All sources"
 msgstr "Todos los orígenes"
 
-#: keys-page.ts:194
+#: keys-page.ts:197
 #, x-machine
 msgid "Plugins not loaded"
 msgstr "Complementos no cargados"
 
-#: keys-page.ts:416
+#: keys-page.ts:419
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "Atajo actualizado: {0} = {1}"
 
-#: keys-page.ts:419
+#: keys-page.ts:422
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "Atajo actualizado: {} = (ninguno)"
 
-#: keys-page.ts:471
+#: keys-page.ts:474
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "¿Restaurar todos los atajos predeterminados?"
 
-#: keys-page.ts:472
+#: keys-page.ts:475
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "Se borrarán tus cambios en los atajos y acciones del mouse de todos los comandos, incluidos los de complementos que no están cargados."
 
-#: keys-page.ts:473
+#: keys-page.ts:476
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "Restaurar valores predeterminados"
 
-#: keys-page.ts:485
+#: keys-page.ts:488
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "Se restauraron los atajos predeterminados"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "Exportar lista de atajos"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Atajos de Vestra Player.csv"
 
+#: keys.ts:241
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0}: {1}"
+
 #: main.ts:36
+#, x-machine
+msgid "Settings"
+msgstr "Configuración"
+
+#: main.ts:40
 #, x-machine
 msgid "Keyboard Shortcuts…"
 msgstr "Atajos de teclado…"
 
-#: main.ts:43
+#: main.ts:48
 #, x-machine
 msgid "Mouse…"
 msgstr "Mouse…"
 
-#: main.ts:50
+#: main.ts:57
 #, x-machine
 msgid "Ignore Default Shortcuts"
 msgstr "Ignorar atajos predeterminados"
@@ -417,7 +427,7 @@ msgstr "Restaurar valores predeterminados…"
 msgid "Export List…"
 msgstr "Exportar lista…"
 
-#: ui/keys.slint:450
+#: ui/keys.slint:452
 #, x-machine
 msgid "Ignore default shortcuts"
 msgstr "Ignorar atajos predeterminados"

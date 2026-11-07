@@ -48,7 +48,7 @@ msgstr "Dans le panneau"
 msgid "Global"
 msgstr "Global"
 
-#: export.ts:22 keys-page.ts:192
+#: export.ts:22 keys-page.ts:195
 #, x-machine
 msgid "Player"
 msgstr "Lecteur"
@@ -108,74 +108,84 @@ msgstr "Ignorer les raccourcis par défaut : activé"
 msgid "Ignore default shortcuts: Off"
 msgstr "Ignorer les raccourcis par défaut : désactivé"
 
-#: keys-page.ts:119
+#: keys-page.ts:118
 #, x-machine
 msgid "Keyboard Shortcuts"
 msgstr "Raccourcis clavier"
 
-#: keys-page.ts:191
+#: keys-page.ts:194
 #, x-machine
 msgid "All sources"
 msgstr "Toutes les sources"
 
-#: keys-page.ts:194
+#: keys-page.ts:197
 #, x-machine
 msgid "Plugins not loaded"
 msgstr "Plugins non chargés"
 
-#: keys-page.ts:416
+#: keys-page.ts:419
 #, x-machine
 msgid "Shortcut updated: {0} = {1}"
 msgstr "Raccourci modifié : {0} = {1}"
 
-#: keys-page.ts:419
+#: keys-page.ts:422
 #, x-machine
 msgid "Shortcut updated: {} = (none)"
 msgstr "Raccourci modifié : {} = (aucun)"
 
-#: keys-page.ts:471
+#: keys-page.ts:474
 #, x-machine
 msgid "Restore all default shortcuts?"
 msgstr "Rétablir tous les raccourcis par défaut ?"
 
-#: keys-page.ts:472
+#: keys-page.ts:475
 #, x-machine
 msgid "This clears your changes to the shortcuts and mouse actions of every command, including those of plugins that are not loaded."
 msgstr "Cela efface vos modifications des raccourcis et des actions de la souris de toutes les commandes, y compris celles des plugins non chargés."
 
-#: keys-page.ts:473
+#: keys-page.ts:476
 #, x-machine
 msgid "Restore All Defaults"
 msgstr "Tout rétablir par défaut"
 
-#: keys-page.ts:485
+#: keys-page.ts:488
 #, x-machine
 msgid "Shortcuts restored to defaults"
 msgstr "Raccourcis par défaut rétablis"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 #, x-machine
 msgid "Export Shortcut List"
 msgstr "Exporter la liste des raccourcis"
 
 #. only the part before the extension.
-#: keys-page.ts:496
+#: keys-page.ts:499
 #, x-machine
 msgid "Vestra Player Shortcuts.csv"
 msgstr "Raccourcis Vestra Player.csv"
 
+#: keys.ts:241
+#, x-machine
+msgid "{0}: {1}"
+msgstr "{0} : {1}"
+
 #: main.ts:36
+#, x-machine
+msgid "Settings"
+msgstr "Paramètres"
+
+#: main.ts:40
 #, x-machine
 msgid "Keyboard Shortcuts…"
 msgstr "Raccourcis clavier…"
 
-#: main.ts:43
+#: main.ts:48
 #, x-machine
 msgid "Mouse…"
 msgstr "Souris…"
 
-#: main.ts:50
+#: main.ts:57
 #, x-machine
 msgid "Ignore Default Shortcuts"
 msgstr "Ignorer les raccourcis par défaut"
@@ -419,7 +429,7 @@ msgstr "Tout rétablir…"
 msgid "Export List…"
 msgstr "Exporter…"
 
-#: ui/keys.slint:450
+#: ui/keys.slint:452
 #, x-machine
 msgid "Ignore default shortcuts"
 msgstr "Ignorer les raccourcis par défaut"

@@ -15,7 +15,7 @@ var __rewriteRelativeImportExtension = (this && this.__rewriteRelativeImportExte
  *
  * Translatable texts are the `@tr` calls of the plugin's `.slint` files, the
  * declaration fields and sentences it hands the player (`commands.add`
- * title, path and reason, `Command.set` reason, `settings.page` and
+ * title, category, path and reason, `Command.set` reason, `settings.page` and
  * `panels.mount` titles, `osd.show`, `OsdPanel.set`, `dialogs.*` texts) and
  * the manifest's display fields. Plugins write no translation code: the
  * player translates these with the plugin's catalog.
@@ -47,7 +47,11 @@ const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hang
 const COMPOSED = 'user-visible text composed in TypeScript: pass a template with args (osd.show("Speed {}×", [rate]), plugin.i18n.text("Track {}", [n])) or move it into Slint';
 const DYNAMIC = (what) => `${what} is not a literal; its text cannot be extracted (use a string literal or an \`as const\` table)`;
 const SITES = {
-    "Commands.add": { object: 0, fields: ["title", "reason"], path: true },
+    "Commands.add": {
+        object: 0,
+        fields: ["title", "category", "reason"],
+        path: true,
+    },
     "Command.set": { object: 0, fields: ["reason"] },
     "Settings.page": { object: 1, fields: ["title"] },
     "Panels.mount": { object: 2, fields: ["title"] },

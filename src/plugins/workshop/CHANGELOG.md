@@ -1,5 +1,11 @@
 # Changelog
 
+## 2.2.36
+
+- Vestra Player AI… has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Plugins**, so the palette reads "Plugins: Vestra Player AI…", next to the Plugin Store. Translated like the player's word for plugins (machine, marked `x-machine`). No `home`: the command opens its own window. Who must change: nobody. Title, id, menu path, button and order are unchanged.
+- Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
+- The vendored SDK is 1.6.5 (`npm run vendor:sdk`), the version the player now uses: `vestra-plugin i18n extract` now finds string-literal command categories. Who must change: nobody.
+
 ## 2.2.35
 
 - The vendored SDK is 1.6.4 (`npm run vendor:sdk`), the version the player now uses. Who must change: nobody. The AI's documentation now describes the command palette of player 0.7.6 (Ctrl+Shift+P, ⌘⇧P on macOS), the new optional `CommandOptions.category` and `home` (a plugin that sets them needs `"minPlayerVersion": "0.7.6"`) and `BindingInfo.category`, and its examples name window handles after their window (SDK 1.6.3). No change to the plugin's own behaviour; `minPlayerVersion` stays 0.6.8.

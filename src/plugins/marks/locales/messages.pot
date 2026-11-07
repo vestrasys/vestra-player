@@ -1,30 +1,30 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.marks 0.1.3\n"
+"Project-Id-Version: vestra.marks 0.1.7\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: bookmarks.ts:46 menu.ts:51 ui/marks.slint:56 ui/marks.slint:183
+#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 msgid "Bookmark {}"
 msgstr ""
 
-#: chapters.ts:12 menu.ts:51 ui/marks.slint:55
+#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
 msgid "Chapter {}"
 msgstr ""
 
-#: list.ts:218
+#: list.ts:226
 msgid "Clear all bookmarks of this file?"
 msgstr ""
 
-#: list.ts:220
+#: list.ts:228
 msgid "{} bookmark will be removed. This can't be undone."
 msgstr ""
 
-#: list.ts:220
+#: list.ts:228
 msgid "{} bookmarks will be removed. This can't be undone."
 msgstr ""
 
-#: list.ts:223 ui/marks.slint:207
+#: list.ts:231 ui/marks.slint:210
 msgid "Clear Bookmarks"
 msgstr ""
 
@@ -59,156 +59,156 @@ msgid "Loop"
 msgstr ""
 
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:50
+#: menu.ts:59
 msgid "{}"
 msgstr ""
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:53
+#: menu.ts:62
 msgid "{}{}{}"
 msgstr ""
 
-#: menu.ts:101 menu.ts:109 menu.ts:120 menu.ts:158 menu.ts:171 menu.ts:179 menu.ts:190 seekbar.ts:147 ui/marks.slint:70
+#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
 msgid "Chapters and Bookmarks"
 msgstr ""
 
-#: menu.ts:101
+#: menu.ts:110
 msgid "Chapter and Bookmark List…"
 msgstr ""
 
-#: menu.ts:109 ui/marks.slint:205
+#: menu.ts:119 ui/marks.slint:208
 msgid "Add Bookmark"
 msgstr ""
 
-#: menu.ts:114 osd.ts:51
+#: menu.ts:126 osd.ts:51
 msgid "Can't add bookmarks to this source"
 msgstr ""
 
-#: menu.ts:114 menu.ts:125 menu.ts:164 menu.ts:183 menu.ts:237 menu.ts:250 ui/marks.slint:154
+#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
 msgid "No media open"
 msgstr ""
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Previous Bookmark or Chapter"
 msgstr ""
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Next Bookmark or Chapter"
 msgstr ""
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Previous Chapter"
 msgstr ""
 
-#: menu.ts:120
+#: menu.ts:132
 msgid "Next Chapter"
 msgstr ""
 
-#: menu.ts:125 menu.ts:164 menu.ts:183
+#: menu.ts:138 menu.ts:179 menu.ts:201
 msgid "This source can't seek"
 msgstr ""
 
-#: menu.ts:171
+#: menu.ts:186
 msgid "More Chapters… ({} in all)"
 msgstr ""
 
-#: menu.ts:190
+#: menu.ts:208
 msgid "More Bookmarks… ({} in all)"
 msgstr ""
 
-#: menu.ts:231 menu.ts:245 menu.ts:257
+#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
 msgid "A-B Loop"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Set Start Point"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Clear Start Point"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Start Point Back 0.1 s"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Start Point Forward 0.1 s"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Set End Point"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Clear End Point"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "End Point Back 0.1 s"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "End Point Forward 0.1 s"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Move Range Back 0.1 s"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Move Range Forward 0.1 s"
 msgstr ""
 
-#: menu.ts:231
+#: menu.ts:250
 msgid "Loop Current Chapter or Bookmark Range"
 msgstr ""
 
-#: menu.ts:237 menu.ts:250 osd.ts:51
+#: menu.ts:257 menu.ts:271 osd.ts:51
 msgid "This source doesn't support A-B loop"
 msgstr ""
 
-#: menu.ts:237
+#: menu.ts:257
 msgid "Start point not set"
 msgstr ""
 
-#: menu.ts:237
+#: menu.ts:257
 msgid "End point not set"
 msgstr ""
 
-#: menu.ts:237 menu.ts:250
+#: menu.ts:257 menu.ts:271
 msgid "A-B range not set"
 msgstr ""
 
-#: menu.ts:245
+#: menu.ts:265
 msgid "A-B Loop On/Off"
 msgstr ""
 
-#: menu.ts:257
+#: menu.ts:278 menu.ts:279
 msgid "Loop Count"
 msgstr ""
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "Endless"
 msgstr ""
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "Once"
 msgstr ""
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "2 Times"
 msgstr ""
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "3 Times"
 msgstr ""
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "5 Times"
 msgstr ""
 
-#: menu.ts:257
+#: menu.ts:278
 msgid "10 Times"
 msgstr ""
 
@@ -336,56 +336,56 @@ msgstr ""
 msgid "Show Marks on Seek Bar"
 msgstr ""
 
-#: ui/marks.slint:114 ui/marks.slint:161
+#: ui/marks.slint:117 ui/marks.slint:164
 msgid "Time"
 msgstr ""
 
-#: ui/marks.slint:114 ui/marks.slint:177
+#: ui/marks.slint:117 ui/marks.slint:180
 msgid "Title"
 msgstr ""
 
-#: ui/marks.slint:124
+#: ui/marks.slint:127
 msgid "Search by title"
 msgstr ""
 
-#: ui/marks.slint:130
+#: ui/marks.slint:133
 msgid "The file has changed; bookmark times may be off"
 msgstr ""
 
-#: ui/marks.slint:154
+#: ui/marks.slint:157
 msgid "No matches"
 msgstr ""
 
-#: ui/marks.slint:154
+#: ui/marks.slint:157
 msgid "No chapters or bookmarks"
 msgstr ""
 
-#: ui/marks.slint:193
+#: ui/marks.slint:196
 msgid "Title can't be empty"
 msgstr ""
 
-#: ui/marks.slint:194
+#: ui/marks.slint:197
 msgid "Time format is h:mm:ss.d"
 msgstr ""
 
-#: ui/marks.slint:195
+#: ui/marks.slint:198
 msgid "Time exceeds the duration ({})"
 msgstr ""
 
-#: ui/marks.slint:196
+#: ui/marks.slint:199
 msgid "Removed: {}"
 msgstr ""
 
-#: ui/marks.slint:197
+#: ui/marks.slint:200
 msgid "Can't confirm: {}"
 msgstr ""
 
-#: ui/marks.slint:198
+#: ui/marks.slint:201
 msgid "{n} bookmark cleared"
 msgid_plural "{n} bookmarks cleared"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ui/marks.slint:206
+#: ui/marks.slint:209
 msgid "Remove"
 msgstr ""

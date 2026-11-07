@@ -66,37 +66,47 @@ msgstr "대기 중 로고: 끔"
 msgid "Cover cache cleared"
 msgstr "커버 캐시를 지웠습니다"
 
-#: main.ts:229
+#: main.ts:232
 #, x-machine
-msgid "Show Album Cover for Audio Only"
-msgstr "오디오 전용일 때 앨범 커버 표시"
+msgid "Audio"
+msgstr "오디오"
 
-#: main.ts:237 main.ts:245
+#: main.ts:232 main.ts:245 main.ts:254
 #, x-machine
 msgid "Appearance"
 msgstr "모양"
 
-#: main.ts:237
+#: main.ts:232
+#, x-machine
+msgid "Reset"
+msgstr "재설정"
+
+#: main.ts:236
+#, x-machine
+msgid "Show Album Cover for Audio Only"
+msgstr "오디오 전용일 때 앨범 커버 표시"
+
+#: main.ts:245
 #, x-machine
 msgid "Show Logo When Idle"
 msgstr "대기 중 로고 표시"
 
-#: main.ts:245
+#: main.ts:254
 #, x-machine
 msgid "Choose Logo Image…"
 msgstr "로고 이미지 선택…"
 
-#: main.ts:253
+#: main.ts:263
 #, x-machine
 msgid "Idle Logo"
 msgstr "대기 화면 로고"
 
-#: main.ts:257
+#: main.ts:267
 #, x-machine
 msgid "Using the default logo"
 msgstr "기본 로고 사용 중"
 
-#: main.ts:265 ui/page.slint:40
+#: main.ts:275 ui/page.slint:40
 #, x-machine
 msgid "Logo and Album Cover"
 msgstr "로고 및 앨범 커버"

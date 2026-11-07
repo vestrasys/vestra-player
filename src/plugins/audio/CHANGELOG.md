@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.5.9
+
+- Every command has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Audio** (Load External Audio…, Audio Workbench…, Equalizer), **Audio Track** (the tracks, Cycle Tracks, the "No Audio Tracks" placeholder), **Channels** (Stereo … Swap Left and Right, which sit in the Audio Track submenu), **Equalizer Preset** (Flat, Voice, Music, Cinema), **Audio Sync** (50 ms Earlier/Later and the keep modes), **Audio Processing** (Normalize, Crystalizer), **Output Device** (the devices and the "No Output Devices" placeholder) and **Reset** (Reset ▸ Audio Sync, Reset ▸ Audio Processing). The categories are translated in every language of the plugin; the submenu ones use the menu labels' translations, "Audio" the player's word for its Audio menu. Commands whose control is also in the Audio Workbench window name it as their place (`home`), so the palette shows where to find them; Reset ▸ Audio Processing does not, as the window's Reset button resets more. Who must change: nobody. Titles, ids, menu paths, keys and order are unchanged.
+- Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
+
 ## 1.5.8
 
 - Code only: the Audio Workbench window handle is named `workbenchWindow` (was `window`). Who must change: nobody. No behaviour change.

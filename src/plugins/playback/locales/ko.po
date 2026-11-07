@@ -6,147 +6,155 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: commands.ts:67
+#: commands.ts:69
 #, x-machine
 msgid "Back {} s"
 msgstr "{}초 뒤로"
 
-#: commands.ts:67
+#: commands.ts:69
 #, x-machine
 msgid "Forward {} s"
 msgstr "{}초 앞으로"
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 #, x-machine
 msgid "Seek"
 msgstr "탐색"
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 #, x-machine
 msgid "Speed"
 msgstr "속도"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Open File…"
 msgstr "파일 열기…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Open URL…"
 msgstr "URL 열기…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Reopen Current/Last File"
 msgstr "현재/마지막 파일 다시 열기"
 
-#: commands.ts:231
+#: commands.ts:246 commands.ts:247
 #, x-machine
 msgid "Copy to Clipboard"
 msgstr "클립보드에 복사"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "File Name"
 msgstr "파일 이름"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Folder Path"
 msgstr "폴더 경로"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Full Path"
 msgstr "전체 경로"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Previous Keyframe"
 msgstr "이전 키프레임"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Next Keyframe"
 msgstr "다음 키프레임"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Jump to Time…"
 msgstr "시간으로 이동…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Jump to Start"
 msgstr "처음으로 이동"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Seek Steps…"
 msgstr "탐색 간격…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Custom…"
 msgstr "사용자 지정…"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Disable Screen Saver While Playing"
 msgstr "재생 중 화면 보호기 끄기"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Show Time on Seek Bar Hover"
 msgstr "탐색 막대에 마우스를 올리면 시간 표시"
 
-#: commands.ts:231
+#: commands.ts:246
 #, x-machine
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "탐색 막대에 마우스를 올리면 썸네일 표시"
 
-#: commands.ts:240
+#: commands.ts:247
+msgid "File"
+msgstr "파일"
+
+#: commands.ts:247
+msgid "Playback"
+msgstr "재생"
+
+#: commands.ts:256
 #, x-machine
 msgid "Not supported by the current source"
 msgstr "현재 소스에서는 지원되지 않습니다"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "No file to reopen"
 msgstr "다시 열 파일이 없습니다"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "No open file"
 msgstr "열린 파일이 없습니다"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "A network source has no file name"
 msgstr "네트워크 소스에는 파일 이름이 없습니다"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "No video"
 msgstr "비디오가 없습니다"
 
-#: commands.ts:240
+#: commands.ts:256
 #, x-machine
 msgid "Needs ffmpeg"
 msgstr "ffmpeg 필요"

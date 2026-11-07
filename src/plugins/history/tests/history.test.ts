@@ -504,6 +504,44 @@ test("B25 menu: 不记忆 / 自动继续 / 每次询问 radios 250–252, audio 
   await stop();
 });
 
+// ------------------------------------------------------------------ palette
+
+test("palette: every command has a category (the submenu's label), empty and with records, in English and Chinese", async () => {
+  const a = file("a.mkv");
+  const expected = {
+    en: { recent: "Recently Played", resume: "Resume Playback", reason: "No recently played items" },
+    "zh-Hans": { recent: "最近播放", resume: "记忆播放位置", reason: "没有最近播放的项目" },
+  } as const;
+  for (const locale of ["en", "zh-Hans"] as const) {
+    const { host, stop } = await start(undefined, undefined, locale);
+    const { recent, resume, reason } = expected[locale];
+    const check = () => {
+      assert.ok(host.commands.size > 0);
+      for (const [id, { declaration, display }] of host.commands) {
+        assert.ok(typeof display.category === "string" && display.category.trim() !== "", `${locale}: ${id} has no category`);
+        // Same submenu, same category: the menu label as shown.
+        assert.equal(display.category, display.path[1], `${locale}: ${id}`);
+        assert.equal(display.category, id.startsWith("recent.") ? recent : resume, `${locale}: ${id}`);
+        assert.equal(declaration.home, undefined, `${locale}: ${id} has no window of its own`);
+      }
+    };
+    // Empty: the management items are disabled with a reason, so the palette still lists them.
+    check();
+    for (const id of ["recent.prune", "recent.clear"]) {
+      assert.equal(host.command(id).state.enabled, false, id);
+      assert.equal(host.command(id).display.reason, reason, `${locale}: ${id}`);
+    }
+    await play(host, a);
+    assert.ok(host.commands.has("recent.item.0"));
+    check();
+    for (const id of ["recent.prune", "recent.clear"]) {
+      assert.equal(host.command(id).state.enabled, true, id);
+      assert.equal(host.command(id).display.reason ?? null, null, `${locale}: ${id}`);
+    }
+    await stop();
+  }
+});
+
 test("B25 left at 05:00 and opened again: continues from 04:58 with 「从 05:00 继续播放」; A12 shows the point", async () => {
   const [a, b] = [file("a.mkv"), file("b.mkv")];
   const { host, stop } = await start();

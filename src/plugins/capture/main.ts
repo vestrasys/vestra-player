@@ -379,9 +379,18 @@ export default async function activate(plugin: Plugin) {
   const canCapture = { enabled: when.can("snapshot").and(when.phase("ready", "ended"), when.stream.not()), reason: "No frame to capture" as const };
   /** The options besides id, path, order and run; `reason` is typed so that extract finds its text. */
   type Extra = Omit<CommandOptions, "id" | "path" | "title" | "order" | "run" | "reason"> & { reason?: "No frame to capture" };
+  /**
+   * The command palette shows "Category: Title" (player 0.7.6). "Snapshot",
+   * the submenu's own text, for the captures and their options; "Video", the
+   * menu, for the items whose title already names its subject ("Snapshot:
+   * Snapshot Settings…" would say it twice, and a clip is no snapshot).
+   */
+  const video = { category: text("Video") };
+  /** An option whose control is in the Snapshot Settings window. */
+  const inSettings = { home: "capture.settings" };
   // `@video` is the player's Video menu; "Snapshot" is this plugin's own submenu.
   const entry = (id: keyof typeof MENU, order: number, run: () => unknown, extra: Extra = {}) =>
-    plugin.commands.add({ id, path: ["@video", "Snapshot", MENU[id]], order, run, ...extra });
+    plugin.commands.add({ id, path: ["@video", "Snapshot", MENU[id]], order, run, category: "Snapshot", ...extra });
   const source = { group: "capture-source", ...canCapture };
   const screen = { group: "capture-screen", ...canCapture };
   entry("capture.save", 420, () => saveFrame(false), { bindings: ["Ctrl+E"], ...source });
@@ -395,18 +404,18 @@ export default async function activate(plugin: Plugin) {
     bindings: ["Ctrl+G"], group: "capture-export", checked: () => burst.opened,
   });
   burst.onClose(() => plugin.update());
-  entry("capture.clip", 428, () => show(clip, startAtNow(clip, true)), { group: "capture-export" });
-  entry("capture.tasks", 429, () => show(list), { group: "capture-export" });
+  entry("capture.clip", 428, () => show(clip, startAtNow(clip, true)), { group: "capture-export", ...video });
+  entry("capture.tasks", 429, () => show(list), { group: "capture-export", ...video });
   FORMATS.forEach((format, index) =>
     entry(`capture.format.${format}`, 430 + index, () => setFormat(format), {
-      group: "capture-format", radio: true, checked: () => settings.format === format,
+      group: "capture-format", radio: true, checked: () => settings.format === format, ...inSettings,
     }));
   entry("capture.screenSubtitles", 435, () => setFlag("screenSubtitles", !settings.screenSubtitles), {
-    group: "capture-name", checked: () => settings.screenSubtitles,
+    group: "capture-name", checked: () => settings.screenSubtitles, ...inSettings,
   });
-  entry("capture.settings", 436, () => show(settingsWindow), { group: "capture-name" });
-  entry("capture.folder", 437, chooseFolder, { group: "capture-folder" });
-  entry("capture.openFolder", 438, openFolderSaying, { group: "capture-folder" });
+  entry("capture.settings", 436, () => show(settingsWindow), { group: "capture-name", ...video });
+  entry("capture.folder", 437, chooseFolder, { group: "capture-folder", ...video, ...inSettings });
+  entry("capture.openFolder", 438, openFolderSaying, { group: "capture-folder", ...video });
 
   // Closing a window keeps tasks running; deactivation cancels them (the SDK releases jobs and snapshots).
   plugin.onDispose(async () => {

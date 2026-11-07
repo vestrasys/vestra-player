@@ -217,6 +217,16 @@ test("activation: backdrop, settings page and menu entries, in English", async (
       "Reset ▸ Idle Logo",
     ],
   );
+  // Command palette categories (player 0.7.6): "Category: Title" without the menu path.
+  assert.deepEqual(
+    [...host.commands.values()].map((c) => [c.display.category, c.declaration.home ?? null]),
+    [
+      ["Audio", null],
+      ["Appearance", null],
+      ["Appearance", null],
+      ["Reset", null],
+    ],
+  );
   assert.equal(host.command("reset-logo").state.reason, "Using the default logo");
   assert.equal(host.command("audio-cover").state.checked, true);
   assert.equal(host.command("reset-logo").state.enabled, false);
@@ -584,6 +594,10 @@ test("Simplified Chinese: menus, settings page and messages from locales/zh-Hans
     [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
     ["声音 ▸ 纯音频时显示专辑封面", "设置 ▸ 外观 ▸ 空闲时显示徽标", "设置 ▸ 外观 ▸ 选择徽标图片…", "复位 ▸ 空闲徽标"],
   );
+  assert.deepEqual(
+    [...host.commands.values()].map((c) => c.display.category),
+    ["声音", "外观", "外观", "复位"],
+  );
   // The player translates the reason with the plugin's catalog when it shows it.
   assert.equal(host.translate(host.command("reset-logo").state.reason!), "正在使用默认徽标");
   await host.command("audio-cover").run();
@@ -599,4 +613,18 @@ test("Simplified Chinese: menus, settings page and messages from locales/zh-Hans
   // The window texts are @tr in ui/*.slint; the same catalog translates them.
   assert.equal(host.translate("Opening: {}", ["a.mp3"]), "正在打开：a.mp3");
   assert.equal(host.translate("Cover cache: empty"), "封面缓存：空");
+});
+
+test("palette: every command has a category in every language (player 0.7.6)", async () => {
+  for (const locale of ["en", "zh-Hans", "ja", "ko", "de", "fr", "es"] as const) {
+    const { host, stop } = await startPlugin(activate, { directory, host: new TestHost(), locale });
+    assert.equal(host.commands.size, 4);
+    for (const [id, { display }] of host.commands) {
+      const category = display.category;
+      assert.ok(typeof category === "string" && category.trim() !== "", `${locale}: ${id} has no category`);
+      // The CJK catalogs translate every category (the European ones may keep "Audio").
+      if (locale === "zh-Hans" || locale === "ja" || locale === "ko") assert.match(category, /[^\x20-\x7e]/, `${locale}: ${id} is not translated`);
+    }
+    await stop();
+  }
 });

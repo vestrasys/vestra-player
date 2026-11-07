@@ -9,7 +9,7 @@ msgstr ""
 msgid "External subtitle"
 msgstr "外部字幕"
 
-#: main.ts:120 main.ts:938
+#: main.ts:120 main.ts:955
 msgid "Track {}"
 msgstr "字幕轨 {}"
 
@@ -17,345 +17,353 @@ msgstr "字幕轨 {}"
 msgid "Embedded {}"
 msgstr "内嵌 {}"
 
-#: main.ts:128 main.ts:945
+#: main.ts:128 main.ts:962
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:171
-msgid "Subtitle sync: 0 s"
-msgstr "字幕同步: 0 秒"
+#: main.ts:137 manifest.json
+msgid "Subtitles"
+msgstr "字幕"
 
-#: main.ts:172
-msgid "Subtitle sync: {} s earlier"
-msgstr "字幕同步: 超前 {} 秒"
-
-#: main.ts:172
-msgid "Subtitle sync: {} s later"
-msgstr "字幕同步: 滞后 {} 秒"
-
-#: main.ts:297
-msgid "Add Secondary Subtitle"
-msgstr "添加次字幕"
-
-#: main.ts:297
-msgid "Open Subtitle"
-msgstr "打开字幕"
-
-#: main.ts:711
-msgid "Subtitles Off"
-msgstr "关闭字幕"
-
-#: main.ts:714
-msgid "Secondary Off"
-msgstr "关闭次字幕"
-
-#: main.ts:888
-msgid "Open Subtitle…"
-msgstr "打开字幕…"
-
-#: main.ts:888 main.ts:895 main.ts:899 main.ts:904 main.ts:910 main.ts:978 main.ts:986 main.ts:1260
-msgid "Subtitle operation in progress"
-msgstr "字幕操作进行中"
-
-#: main.ts:893
-msgid "Add Secondary Subtitle…"
-msgstr "添加次字幕…"
-
-#: main.ts:895
-msgid "No media to play"
-msgstr "没有可播放的媒体"
-
-#: main.ts:899
-msgid "Show Subtitles"
-msgstr "显示字幕"
-
-#: main.ts:904 main.ts:985 main.ts:994
+#: main.ts:138 main.ts:919 main.ts:1002 main.ts:1011
 msgid "Subtitle Track"
 msgstr "选择字幕轨"
 
-#: main.ts:904 main.ts:910
-msgid "Off"
-msgstr "不显示"
-
-#: main.ts:910 main.ts:916 main.ts:975
+#: main.ts:139 main.ts:926 main.ts:933 main.ts:992
 msgid "Secondary Subtitle"
 msgstr "次字幕"
 
-#: main.ts:916
-msgid "Position"
-msgstr "位置"
+#: main.ts:140
+msgid "Secondary Subtitle Position"
+msgstr "次字幕位置"
 
-#: main.ts:916
-msgid "Top"
-msgstr "顶部"
-
-#: main.ts:916
-msgid "Above Main Subtitle"
-msgstr "主字幕上方"
-
-#: main.ts:952
-msgid "{} ({})"
-msgstr "{} ({})"
-
-#: main.ts:978
-msgid "Only text subtitles can be secondary"
-msgstr "次字幕仅支持文本字幕"
-
-#: main.ts:978
-msgid "Already the primary subtitle"
-msgstr "已作为主字幕"
-
-#: main.ts:994
-msgid "Cycle"
-msgstr "依次切换"
-
-#: main.ts:996
-msgid "No subtitle tracks"
-msgstr "没有字幕轨"
-
-#: main.ts:1013 main.ts:1017 main.ts:1021 main.ts:1025 main.ts:1037 main.ts:1045 main.ts:1053
+#: main.ts:141 main.ts:1031 main.ts:1036 main.ts:1041 main.ts:1046 main.ts:1060 main.ts:1069 main.ts:1078
 msgid "Subtitle Style"
 msgstr "字幕样式"
 
-#: main.ts:1013
-msgid "Size +"
-msgstr "字号 +"
-
-#: main.ts:1014
-msgid "Subtitle size: larger ({})"
-msgstr "字幕尺寸：增加({})"
-
-#: main.ts:1017
-msgid "Size −"
-msgstr "字号 −"
-
-#: main.ts:1018
-msgid "Subtitle size: smaller ({})"
-msgstr "字幕尺寸：减小({})"
-
-#: main.ts:1021
-msgid "Move Up"
-msgstr "上移"
-
-#: main.ts:1022
-msgid "Subtitle position: up ({}%)"
-msgstr "字幕位置：上移({}%)"
-
-#: main.ts:1025
-msgid "Move Down"
-msgstr "下移"
-
-#: main.ts:1026
-msgid "Subtitle position: down ({}%)"
-msgstr "字幕位置：下移({}%)"
-
-#: main.ts:1029
-msgid "Subtitle Position"
-msgstr "字幕位置"
-
-#: main.ts:1032
-msgid "Subtitle position: default ({}%)"
-msgstr "字幕位置：默认({}%)"
-
-#: main.ts:1037 ui/settings.slint:119
-msgid "Bold"
-msgstr "粗体"
-
-#: main.ts:1041
-msgid "Bold subtitles"
-msgstr "粗体字幕"
-
-#: main.ts:1041
-msgid "Bold subtitles off"
-msgstr "禁用粗体字幕"
-
-#: main.ts:1045
-msgid "Shadow"
-msgstr "阴影"
-
-#: main.ts:1049
-msgid "Subtitle shadow: on ({})"
-msgstr "字幕阴影：开({})"
-
-#: main.ts:1049
-msgid "Subtitle shadow: off"
-msgstr "字幕阴影：关"
-
-#: main.ts:1053
-msgid "Opaque Box"
-msgstr "字幕边框不透明"
-
-#: main.ts:1057
-msgid "Opaque subtitle box: on"
-msgstr "字幕边框不透明：开"
-
-#: main.ts:1057
-msgid "Opaque subtitle box: off"
-msgstr "字幕边框不透明：关"
-
-#: main.ts:1067
-msgid "ASS/SSA animated subtitles: on"
-msgstr "ASS/SSA 动态字幕：开"
-
-#: main.ts:1067
-msgid "ASS/SSA animated subtitles: off"
-msgstr "ASS/SSA 动态字幕：关"
-
-#: main.ts:1073
-msgid "Original ASS/SSA Styles"
-msgstr "开启 ASS/SSA 原样式"
-
-#: main.ts:1107
-msgid "Secondary subtitle position: top"
-msgstr "次字幕位置：顶部"
-
-#: main.ts:1107
-msgid "Secondary subtitle position: above the main subtitle"
-msgstr "次字幕位置：主字幕上方"
-
-#: main.ts:1143 main.ts:1208 main.ts:1212 main.ts:1216
-msgid "Reading subtitles…"
-msgstr "正在读取字幕…"
-
-#: main.ts:1181 main.ts:1208 main.ts:1212 main.ts:1216
-msgid "The current media cannot seek"
-msgstr "当前媒体不能跳转"
-
-#: main.ts:1181 main.ts:1192 main.ts:1208 main.ts:1212 main.ts:1216
-msgid "No text subtitles available"
-msgstr "没有可用的文本字幕"
-
-#: main.ts:1188
-msgid "ffmpeg is needed to read embedded subtitles"
-msgstr "需要 ffmpeg 才能读取内嵌字幕"
-
-#: main.ts:1188
-msgid "Reading embedded subtitles timed out"
-msgstr "读取内嵌字幕超时"
-
-#: main.ts:1188
-msgid "Cannot read embedded subtitles"
-msgstr "无法读取内嵌字幕"
-
-#: main.ts:1198
-msgid "No previous dialogue"
-msgstr "没有上一句对白"
-
-#: main.ts:1198
-msgid "No next dialogue"
-msgstr "没有下一句对白"
-
-#: main.ts:1198
-msgid "No dialogue to jump to"
-msgstr "没有可跳转的对白"
-
-#: main.ts:1199
-msgid "Seek: previous dialogue {}"
-msgstr "定位：上一对白位置 {}"
-
-#: main.ts:1199
-msgid "Seek: next dialogue {}"
-msgstr "定位：下一对白位置 {}"
-
-#: main.ts:1199
-msgid "Seek: start of current dialogue {}"
-msgstr "定位：当前对白起点 {}"
-
-#: main.ts:1207 main.ts:1211 main.ts:1215
-msgid "Seek"
-msgstr "跳转"
-
-#: main.ts:1207
-msgid "Previous Dialogue"
-msgstr "上一句对白"
-
-#: main.ts:1211
-msgid "Next Dialogue"
-msgstr "下一句对白"
-
-#: main.ts:1215
-msgid "Current Subtitle Start"
-msgstr "当前字幕起点"
-
-#: main.ts:1235 main.ts:1239 main.ts:1250
-msgid "Sync"
-msgstr "同步"
-
-#: main.ts:1235
-msgid "Earlier 0.05 s"
-msgstr "超前 0.05 秒"
-
-#: main.ts:1235
-msgid "Earlier 0.1 s"
-msgstr "超前 0.1 秒"
-
-#: main.ts:1235
-msgid "Earlier 0.25 s"
-msgstr "超前 0.25 秒"
-
-#: main.ts:1235
-msgid "Earlier 0.5 s"
-msgstr "超前 0.5 秒"
-
-#: main.ts:1235
-msgid "Earlier 1 s"
-msgstr "超前 1 秒"
-
-#: main.ts:1235
-msgid "Earlier 5 s"
-msgstr "超前 5 秒"
-
-#: main.ts:1239
-msgid "Later 0.05 s"
-msgstr "滞后 0.05 秒"
-
-#: main.ts:1239
-msgid "Later 0.1 s"
-msgstr "滞后 0.1 秒"
-
-#: main.ts:1239
-msgid "Later 0.25 s"
-msgstr "滞后 0.25 秒"
-
-#: main.ts:1239
-msgid "Later 0.5 s"
-msgstr "滞后 0.5 秒"
-
-#: main.ts:1239
-msgid "Later 1 s"
-msgstr "滞后 1 秒"
-
-#: main.ts:1239
-msgid "Later 5 s"
-msgstr "滞后 5 秒"
-
-#: main.ts:1246
+#: main.ts:142 main.ts:1273
 msgid "Subtitle Sync"
 msgstr "字幕同步"
 
-#: main.ts:1250
+#: main.ts:143 main.ts:1234 main.ts:1238 main.ts:1242
+msgid "Seek"
+msgstr "跳转"
+
+#: main.ts:144
+msgid "Reset"
+msgstr "复位"
+
+#: main.ts:185
+msgid "Subtitle sync: 0 s"
+msgstr "字幕同步: 0 秒"
+
+#: main.ts:186
+msgid "Subtitle sync: {} s earlier"
+msgstr "字幕同步: 超前 {} 秒"
+
+#: main.ts:186
+msgid "Subtitle sync: {} s later"
+msgstr "字幕同步: 滞后 {} 秒"
+
+#: main.ts:311
+msgid "Add Secondary Subtitle"
+msgstr "添加次字幕"
+
+#: main.ts:311
+msgid "Open Subtitle"
+msgstr "打开字幕"
+
+#: main.ts:725
+msgid "Subtitles Off"
+msgstr "关闭字幕"
+
+#: main.ts:728
+msgid "Secondary Off"
+msgstr "关闭次字幕"
+
+#: main.ts:902
+msgid "Open Subtitle…"
+msgstr "打开字幕…"
+
+#: main.ts:902 main.ts:910 main.ts:914 main.ts:919 main.ts:926 main.ts:995 main.ts:1003 main.ts:1288
+msgid "Subtitle operation in progress"
+msgstr "字幕操作进行中"
+
+#: main.ts:908
+msgid "Add Secondary Subtitle…"
+msgstr "添加次字幕…"
+
+#: main.ts:910
+msgid "No media to play"
+msgstr "没有可播放的媒体"
+
+#: main.ts:914
+msgid "Show Subtitles"
+msgstr "显示字幕"
+
+#: main.ts:919 main.ts:926
+msgid "Off"
+msgstr "不显示"
+
+#: main.ts:933
+msgid "Position"
+msgstr "位置"
+
+#: main.ts:933
+msgid "Top"
+msgstr "顶部"
+
+#: main.ts:933
+msgid "Above Main Subtitle"
+msgstr "主字幕上方"
+
+#: main.ts:969
+msgid "{} ({})"
+msgstr "{} ({})"
+
+#: main.ts:995
+msgid "Only text subtitles can be secondary"
+msgstr "次字幕仅支持文本字幕"
+
+#: main.ts:995
+msgid "Already the primary subtitle"
+msgstr "已作为主字幕"
+
+#: main.ts:1011
+msgid "Cycle"
+msgstr "依次切换"
+
+#: main.ts:1014
+msgid "No subtitle tracks"
+msgstr "没有字幕轨"
+
+#: main.ts:1031
+msgid "Size +"
+msgstr "字号 +"
+
+#: main.ts:1033
+msgid "Subtitle size: larger ({})"
+msgstr "字幕尺寸：增加({})"
+
+#: main.ts:1036
+msgid "Size −"
+msgstr "字号 −"
+
+#: main.ts:1038
+msgid "Subtitle size: smaller ({})"
+msgstr "字幕尺寸：减小({})"
+
+#: main.ts:1041
+msgid "Move Up"
+msgstr "上移"
+
+#: main.ts:1043
+msgid "Subtitle position: up ({}%)"
+msgstr "字幕位置：上移({}%)"
+
+#: main.ts:1046
+msgid "Move Down"
+msgstr "下移"
+
+#: main.ts:1048
+msgid "Subtitle position: down ({}%)"
+msgstr "字幕位置：下移({}%)"
+
+#: main.ts:1051
+msgid "Subtitle Position"
+msgstr "字幕位置"
+
+#: main.ts:1055
+msgid "Subtitle position: default ({}%)"
+msgstr "字幕位置：默认({}%)"
+
+#: main.ts:1060 ui/settings.slint:119
+msgid "Bold"
+msgstr "粗体"
+
+#: main.ts:1065
+msgid "Bold subtitles"
+msgstr "粗体字幕"
+
+#: main.ts:1065
+msgid "Bold subtitles off"
+msgstr "禁用粗体字幕"
+
+#: main.ts:1069
+msgid "Shadow"
+msgstr "阴影"
+
+#: main.ts:1074
+msgid "Subtitle shadow: on ({})"
+msgstr "字幕阴影：开({})"
+
+#: main.ts:1074
+msgid "Subtitle shadow: off"
+msgstr "字幕阴影：关"
+
+#: main.ts:1078
+msgid "Opaque Box"
+msgstr "字幕边框不透明"
+
+#: main.ts:1083
+msgid "Opaque subtitle box: on"
+msgstr "字幕边框不透明：开"
+
+#: main.ts:1083
+msgid "Opaque subtitle box: off"
+msgstr "字幕边框不透明：关"
+
+#: main.ts:1093
+msgid "ASS/SSA animated subtitles: on"
+msgstr "ASS/SSA 动态字幕：开"
+
+#: main.ts:1093
+msgid "ASS/SSA animated subtitles: off"
+msgstr "ASS/SSA 动态字幕：关"
+
+#: main.ts:1099
+msgid "Original ASS/SSA Styles"
+msgstr "开启 ASS/SSA 原样式"
+
+#: main.ts:1134
+msgid "Secondary subtitle position: top"
+msgstr "次字幕位置：顶部"
+
+#: main.ts:1134
+msgid "Secondary subtitle position: above the main subtitle"
+msgstr "次字幕位置：主字幕上方"
+
+#: main.ts:1170 main.ts:1235 main.ts:1239 main.ts:1243
+msgid "Reading subtitles…"
+msgstr "正在读取字幕…"
+
+#: main.ts:1208 main.ts:1235 main.ts:1239 main.ts:1243
+msgid "The current media cannot seek"
+msgstr "当前媒体不能跳转"
+
+#: main.ts:1208 main.ts:1219 main.ts:1235 main.ts:1239 main.ts:1243
+msgid "No text subtitles available"
+msgstr "没有可用的文本字幕"
+
+#: main.ts:1215
+msgid "ffmpeg is needed to read embedded subtitles"
+msgstr "需要 ffmpeg 才能读取内嵌字幕"
+
+#: main.ts:1215
+msgid "Reading embedded subtitles timed out"
+msgstr "读取内嵌字幕超时"
+
+#: main.ts:1215
+msgid "Cannot read embedded subtitles"
+msgstr "无法读取内嵌字幕"
+
+#: main.ts:1225
+msgid "No previous dialogue"
+msgstr "没有上一句对白"
+
+#: main.ts:1225
+msgid "No next dialogue"
+msgstr "没有下一句对白"
+
+#: main.ts:1225
+msgid "No dialogue to jump to"
+msgstr "没有可跳转的对白"
+
+#: main.ts:1226
+msgid "Seek: previous dialogue {}"
+msgstr "定位：上一对白位置 {}"
+
+#: main.ts:1226
+msgid "Seek: next dialogue {}"
+msgstr "定位：下一对白位置 {}"
+
+#: main.ts:1226
+msgid "Seek: start of current dialogue {}"
+msgstr "定位：当前对白起点 {}"
+
+#: main.ts:1234
+msgid "Previous Dialogue"
+msgstr "上一句对白"
+
+#: main.ts:1238
+msgid "Next Dialogue"
+msgstr "下一句对白"
+
+#: main.ts:1242
+msgid "Current Subtitle Start"
+msgstr "当前字幕起点"
+
+#: main.ts:1262 main.ts:1266 main.ts:1277
+msgid "Sync"
+msgstr "同步"
+
+#: main.ts:1262
+msgid "Earlier 0.05 s"
+msgstr "超前 0.05 秒"
+
+#: main.ts:1262
+msgid "Earlier 0.1 s"
+msgstr "超前 0.1 秒"
+
+#: main.ts:1262
+msgid "Earlier 0.25 s"
+msgstr "超前 0.25 秒"
+
+#: main.ts:1262
+msgid "Earlier 0.5 s"
+msgstr "超前 0.5 秒"
+
+#: main.ts:1262
+msgid "Earlier 1 s"
+msgstr "超前 1 秒"
+
+#: main.ts:1262
+msgid "Earlier 5 s"
+msgstr "超前 5 秒"
+
+#: main.ts:1266
+msgid "Later 0.05 s"
+msgstr "滞后 0.05 秒"
+
+#: main.ts:1266
+msgid "Later 0.1 s"
+msgstr "滞后 0.1 秒"
+
+#: main.ts:1266
+msgid "Later 0.25 s"
+msgstr "滞后 0.25 秒"
+
+#: main.ts:1266
+msgid "Later 0.5 s"
+msgstr "滞后 0.5 秒"
+
+#: main.ts:1266
+msgid "Later 1 s"
+msgstr "滞后 1 秒"
+
+#: main.ts:1266
+msgid "Later 5 s"
+msgstr "滞后 5 秒"
+
+#: main.ts:1277
 msgid "Adjust Sync…"
 msgstr "手动调整同步…"
 
-#: main.ts:1260
+#: main.ts:1288
 msgid "Reload Subtitles"
 msgstr "重载字幕"
 
-#: main.ts:1260
+#: main.ts:1288
 msgid "Refresh Subtitle Tracks"
 msgstr "刷新字幕轨"
 
-#: main.ts:1260
+#: main.ts:1288
 msgid "Subtitle Tuning…"
 msgstr "字幕微调…"
 
-#: main.ts:1260
+#: main.ts:1288
 msgid "Subtitle Settings…"
 msgstr "字幕设置…"
-
-#: manifest.json
-msgid "Subtitles"
-msgstr "字幕"
 
 #: manifest.json
 msgid "Load external subtitles, pick tracks, adjust style and sync"

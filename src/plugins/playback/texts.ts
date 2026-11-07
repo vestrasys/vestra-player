@@ -34,6 +34,13 @@ export type MenuText =
   | "Show Time on Seek Bar Hover"
   | "Show Thumbnail on Seek Bar Hover";
 
+/**
+ * What a command is about (`category`, player 0.7.6): the command palette
+ * shows "Category: Title". A submenu's commands take its name; a top-level
+ * item takes its area.
+ */
+export type Category = "File" | "Copy to Clipboard" | "Seek" | "Speed" | "Playback";
+
 /** Why a command is greyed out (`reason`). */
 export type Reason =
   | "Not supported by the current source"
