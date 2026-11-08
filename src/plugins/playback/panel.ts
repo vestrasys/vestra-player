@@ -1,14 +1,12 @@
 import type { HostAction, Panel, Plugin } from "@vestra-player/sdk";
 import type { PanelActions } from "./commands.ts";
-import type { Playback } from "./controller.ts";
+import { MAX_RATE, MIN_RATE, type Playback } from "./controller.ts";
 import { parseTime, rateText } from "./format.ts";
 import type { Keyframes } from "./keyframes.ts";
 import { DEFAULT_STEPS, parseStep, type SeekSteps, type SettingsStore, stepText } from "./settings.ts";
+import { dragRate, positionOf, TICKS, tickOf } from "./speed.ts";
 import { Failure } from "./texts.ts";
 import { Keys } from "./tips.ts";
-
-/** The speed buttons under the speed (ui/panel.slint, in this order). */
-export const PRESETS = [0.5, 1, 1.25, 1.5, 2] as const;
 
 export type PanelOptions = {
   playback: Playback;
@@ -37,6 +35,15 @@ export class PlaybackPanel implements PanelActions {
   #editRate = 0;
   #revealSteps = 0;
   #done = 0;
+  /**
+   * The speed the ruler asked for and the player has not reached yet (a drag, a tick, a
+   * double click), shown at once; `undefined` shows the player's. While a speed is being
+   * applied the latest ask waits and replaces any older one (latest wins), so a drag never
+   * queues one request per pointer move and never ends on a stale value.
+   */
+  #draft: number | undefined;
+  #dragging = false;
+  #pumping = false;
   /** The text fields that have the keyboard now (normally one; two for a moment while it moves). */
   readonly #focused = new Set<string>();
   readonly #plugin: Plugin;
@@ -53,7 +60,12 @@ export class PlaybackPanel implements PanelActions {
     void keys.refresh();
     const own = (id: string) => plugin.commands.keys(id)[0] ?? "";
     this.panel.bind(() => {
-      const { rate } = p.state;
+      // A source that cannot change speed ends any drag: nothing is pending, nothing to show.
+      if (this.#draft !== undefined && !p.can("rate")) {
+        this.#draft = undefined;
+        this.#dragging = false;
+      }
+      const rate = this.#draft ?? p.state.rate;
       const keyframe = keyframes.state();
       return {
         keys: {
@@ -75,9 +87,11 @@ export class PlaybackPanel implements PanelActions {
           back4: own("backward-4"),
           forward4: own("forward-4"),
         },
-        canRate: p.can("rate") && !p.rateBusy,
+        // Not greyed while a speed is being applied: the ruler keeps taking a drag (latest wins).
+        canRate: p.can("rate"),
         rateText: rateText(rate),
-        preset: PRESETS.findIndex((value) => Math.abs(value - rate) < 1e-6),
+        ratePosition: positionOf(rate),
+        tick: tickOf(rate),
         canJump: p.canSeek(),
         canStart: p.canRestart() && !p.restartBusy,
         canFrame: p.canStep(),
@@ -96,10 +110,23 @@ export class PlaybackPanel implements PanelActions {
     });
     const panel = this.panel;
     panel.on("rateStep", (direction: number) => this.#host(direction < 0 ? "rate-down" : "rate-up"));
-    panel.on("setPreset", (index: number) => {
-      const value = PRESETS[index];
-      if (value !== undefined) return this.#guard(p.setRate(value));
+    panel.on("setTick", (index: number) => {
+      const value = TICKS[index];
+      if (value !== undefined) this.#ask(value);
     });
+    panel.on("speedDrag", (position: number, snap: number) => {
+      if (typeof position !== "number" || !p.can("rate")) return;
+      this.#dragging = true;
+      this.#ask(dragRate(position, typeof snap === "number" ? snap : 0));
+    });
+    panel.on("speedRelease", () => {
+      this.#dragging = false;
+      if (!this.#pumping && this.#draft !== undefined) {
+        this.#draft = undefined;
+        plugin.update();
+      }
+    });
+    panel.on("speedNormal", () => this.#ask(1));
     panel.on("applyRate", (typed: string) => this.#applyRate(String(typed ?? "")));
     panel.on("applyJump", (typed: string) => this.#applyJump(String(typed ?? "")));
     panel.on("jumpStart", () => this.#guard(options.jumpToStart()));
@@ -175,18 +202,16 @@ export class PlaybackPanel implements PanelActions {
     this.#o.playback.report(new Failure(kind));
   }
 
-  async #applyRate(typed: string) {
+  /** A typed speed: checked against the player's limits here, then applied like the ruler's (latest wins). */
+  #applyRate(typed: string) {
     const p = this.#o.playback;
-    if (!p.can("rate") || p.rateBusy) return;
-    const value = Number(typed.trim().replace(/[x×]$/i, "").trim());
-    try {
-      await p.setRate(typed.trim() ? value : Number.NaN);
-    } catch (error) {
-      if (error instanceof Failure && error.kind === "rate-range")
-        return this.#refused("rate-range", () => (this.#rateInvalid = true));
-      return p.report(error);
-    }
+    if (!p.can("rate")) return;
+    const text = typed.trim();
+    const value = Number(text.replace(/[x×]$/i, "").trim());
+    if (!text || !Number.isFinite(value) || value < MIN_RATE || value > MAX_RATE)
+      return this.#refused("rate-range", () => (this.#rateInvalid = true));
     this.#applied();
+    this.#ask(value);
   }
 
   #applyJump(typed: string) {
@@ -209,6 +234,40 @@ export class PlaybackPanel implements PanelActions {
     steps[row] = seconds;
     this.#applied();
     await this.#guard(this.#o.applySteps(steps, settings.value.seekKeyframes));
+  }
+
+  /** The ruler asks for a speed: shown at once, applied latest-wins. */
+  #ask(rate: number) {
+    if (!this.#o.playback.can("rate")) return;
+    this.#draft = rate;
+    this.#plugin.update();
+    void this.#pump();
+  }
+  async #pump() {
+    if (this.#pumping) return;
+    this.#pumping = true;
+    const p = this.#o.playback;
+    try {
+      let sent: number | undefined;
+      while (this.#draft !== undefined && this.#draft !== sent) {
+        // A speed set another way (a palette command) is still applying: wait for it rather
+        // than drop the ask (`setRate` returns without sending while busy).
+        while (p.rateBusy && p.can("rate")) await new Promise((resolve) => setTimeout(resolve, 10));
+        if (!p.can("rate")) break;
+        sent = this.#draft;
+        if (Math.abs(sent - p.state.rate) < 1e-6) continue;
+        try {
+          await p.setRate(sent);
+        } catch (error) {
+          p.report(error);
+          break;
+        }
+      }
+    } finally {
+      this.#pumping = false;
+      if (!this.#dragging) this.#draft = undefined;
+      this.#plugin.update();
+    }
   }
 
   /** The player's own action (speed, frames), exactly as its key; one that is off right now does nothing. */

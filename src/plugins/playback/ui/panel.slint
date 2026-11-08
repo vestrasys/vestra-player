@@ -36,8 +36,10 @@ export global PlaybackPanelBridge {
     // The speed can change now; the speed as "1.25" (no trailing zeros).
     in property <bool> can-rate;
     in property <string> rate-text: "1";
-    // The preset that matches the speed (0.5, 1, 1.25, 1.5, 2 → 0–4), -1 for none.
-    in property <int> preset: 1;
+    // Where the speed sits on the ruler (0–1; speed.ts maps it) and the tick it is
+    // (0.25, 0.5, 1, 1.25, 1.5, 2, 4 → 0–6), -1 for none.
+    in property <float> rate-position: 0.5;
+    in property <int> tick: 2;
     // Jump to a time (a seekable source with a duration), Jump to Start, a frame step.
     in property <bool> can-jump;
     in property <bool> can-start;
@@ -59,9 +61,16 @@ export global PlaybackPanelBridge {
     // Bumped when a typed value was applied: the fields close and the time field empties.
     in property <int> done;
 
-    // -1 slower, +1 faster (the player's X / C).
+    // -1 slower, +1 faster (the player's X / C; the ruler's mouse wheel).
     callback rate-step(int);
-    callback set-preset(int);
+    // A click on a tick's label (0–6).
+    callback set-tick(int);
+    // The ruler is dragged to a position (0–1); it snaps to a tick within the second
+    // value (the same unit: a few pixels of the track). speed-release ends the drag.
+    callback speed-drag(float, float);
+    callback speed-release();
+    // A double click on the ruler: 1×.
+    callback speed-normal();
     // The typed speed ("1.3").
     callback apply-rate(string);
     // The typed time ("1:02:03.5").
@@ -83,8 +92,6 @@ global Glyphs {
     out property <string> previous: "M 9.5 2 L 4.5 6 L 9.5 10 Z";
     out property <string> next: "M 4.5 2 L 9.5 6 L 4.5 10 Z";
     out property <string> start: "M 3.5 2 V 10 M 11 2 L 6 6 L 11 10 Z";
-    out property <string> minus: "M 3 6 H 11";
-    out property <string> plus: "M 3 6 H 11 M 7 2 V 10";
 }
 
 component Glyph inherits Path {
@@ -226,20 +233,22 @@ component Btn {
     }
 }
 
-// The key caps at a row's right end (up to two: `a`, `b`, each with what it does), in a tooltip
-// that names them. A key that is not bound takes no room.
+// The key caps at a row's right end (up to three: `a`, `b`, `c`, each with what it does), in a
+// tooltip that names them. A key that is not bound takes no room.
 component Caps {
     in property <string> tip;
     in property <string> a;
     in property <string> a-text;
     in property <string> b;
     in property <string> b-text;
-    visible: root.a != "" || root.b != "";
+    in property <string> c;
+    in property <string> c-text;
+    visible: root.a != "" || root.b != "" || root.c != "";
     horizontal-stretch: 0;
     width: self.visible ? row.preferred-width : 0px;
     ToolTipArea {
         text: root.tip;
-        keys: [{ key: root.a, text: root.a-text }, { key: root.b, text: root.b-text }];
+        keys: [{ key: root.a, text: root.a-text }, { key: root.b, text: root.b-text }, { key: root.c, text: root.c-text }];
         row := HorizontalLayout {
             alignment: end;
             VerticalLayout {
@@ -250,6 +259,11 @@ component Caps {
                 alignment: center;
                 padding-left: root.a != "" && root.b != "" ? 3px : 0px;
                 KeyHint { text: root.b; }
+            }
+            VerticalLayout {
+                alignment: center;
+                padding-left: (root.a != "" || root.b != "") && root.c != "" ? 3px : 0px;
+                KeyHint { text: root.c; }
             }
         }
     }
@@ -449,6 +463,174 @@ component StepRow {
     }
 }
 
+// One tick of the speed ruler: its mark under the track and its label, which a click jumps to;
+// the current speed's label is outlined. Fixed elements: the hover only recolours them.
+component SpeedTick {
+    in property <int> index;
+    in property <string> text;
+    // The tick's x in the ruler and the track's centre line.
+    in property <length> at;
+    in property <length> track-y;
+    private property <bool> on: PlaybackPanelBridge.tick == root.index;
+    private property <bool> enabled: PlaybackPanelBridge.can-rate;
+    Rectangle {
+        x: root.at - 0.5px;
+        y: root.track-y + 7px;
+        width: 1px;
+        height: 5px;
+        background: root.enabled ? Theme.text-dim : Theme.icon-disabled;
+    }
+    Rectangle {
+        // Narrow enough for 1.25 and 1.5 one tick apart at 280px.
+        width: label.preferred-width + 6px;
+        height: 16px;
+        x: root.at - self.width / 2;
+        y: root.track-y + 14px;
+        border-radius: 3px;
+        border-width: root.on ? 1px : 0px;
+        border-color: root.enabled ? Theme.accent : Theme.accent-disabled;
+        background: touch.has-hover && root.enabled ? Theme.button-hover : transparent;
+        label := Text {
+            width: parent.width;
+            height: parent.height;
+            text: root.text;
+            color: !root.enabled ? Theme.text-dim : root.on || touch.has-hover ? Theme.text : Theme.text-dim;
+            font-size: Theme.font-body;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        touch := TouchArea {
+            width: parent.width;
+            height: parent.height;
+            enabled: root.enabled;
+            clicked => { PlaybackPanelBridge.set-tick(root.index); }
+        }
+    }
+}
+
+// The speed ruler (menu redesign "Speed B", mockup 12): a track with the seven presets as
+// labelled ticks, 1× in the centre, linear between ticks (speed.ts maps position ↔ speed).
+// Drag: the plugin snaps near a tick and moves in 0.05 steps between them; a bubble shows the
+// value while the button is down (● on a tick). A label click jumps there, a double click is
+// 1×, the wheel ±0.1 (the player's X / C). The tooltip names the keys.
+component SpeedRuler {
+    in property <string> tip;
+    in property <string> tip-detail;
+    in property <[ToolTipKey]> tip-keys;
+    private property <bool> enabled: PlaybackPanelBridge.can-rate;
+    // The first and last labels stay inside: the track is inset by half a label.
+    private property <length> inset: 14px;
+    private property <length> track-y: 30px;
+    private property <length> span: max(1px, self.width - 2 * self.inset);
+    private property <length> thumb-x: self.inset + clamp(PlaybackPanelBridge.rate-position, 0, 1) * self.span;
+    private property <length> one-x: self.inset + 0.5 * self.span;
+    private property <bool> dragging: drag.pressed;
+    function sample(x: length) {
+        // Snap within 5px of a tick.
+        PlaybackPanelBridge.speed-drag((x - root.inset) / root.span, 5px / root.span);
+    }
+    height: 62px;
+    min-width: 200px;
+    horizontal-stretch: 1;
+    ToolTipArea {
+        width: root.width;
+        height: root.height;
+        text: root.tip;
+        keys: root.tip-keys;
+        detail: root.enabled ? root.tip-detail : "";
+        // The track, and the fill from 1× to the speed.
+        Rectangle {
+            x: root.inset;
+            y: root.track-y - 1px;
+            width: root.span;
+            height: 2px;
+            border-radius: 1px;
+            background: Theme.line;
+        }
+        Rectangle {
+            x: min(root.one-x, root.thumb-x);
+            y: root.track-y - 1px;
+            width: abs(root.thumb-x - root.one-x);
+            height: 2px;
+            border-radius: 1px;
+            background: root.enabled ? Theme.accent-fill : Theme.icon-disabled;
+        }
+        // 1×: a taller mark at the centre.
+        Rectangle {
+            x: root.one-x - 0.5px;
+            y: root.track-y - 6px;
+            width: 1px;
+            height: 5px;
+            background: root.enabled ? Theme.text-dim : Theme.icon-disabled;
+        }
+        drag := TouchArea {
+            x: 0;
+            y: root.track-y - 10px;
+            width: root.width;
+            height: 22px;
+            enabled: root.enabled;
+            mouse-cursor: MouseCursor.pointer;
+            // A drag that ends without a release (the window loses the pointer, the ruler is
+            // disabled mid-drag) is cancelled: it ends like a release, so the value never sticks.
+            pointer-event(event) => {
+                if event.kind == PointerEventKind.cancel {
+                    PlaybackPanelBridge.speed-release();
+                } else if event.button == PointerEventButton.left {
+                    if event.kind == PointerEventKind.down { root.sample(self.mouse-x); }
+                    if event.kind == PointerEventKind.up { PlaybackPanelBridge.speed-release(); }
+                }
+            }
+            moved => { if self.pressed { root.sample(self.mouse-x); } }
+            double-clicked => { PlaybackPanelBridge.speed-normal(); }
+            scroll-event(event) => {
+                if event.delta-y > 0 { PlaybackPanelBridge.rate-step(1); }
+                if event.delta-y < 0 { PlaybackPanelBridge.rate-step(-1); }
+                accept
+            }
+        }
+        SpeedTick { x: 0; y: 0; width: root.width; height: root.height; index: 0; text: "0.25"; at: root.inset; track-y: root.track-y; }
+        SpeedTick { x: 0; y: 0; width: root.width; height: root.height; index: 1; text: "0.5"; at: root.inset + 0.25 * root.span; track-y: root.track-y; }
+        SpeedTick { x: 0; y: 0; width: root.width; height: root.height; index: 2; text: @tr("1×"); at: root.inset + 0.5 * root.span; track-y: root.track-y; }
+        SpeedTick { x: 0; y: 0; width: root.width; height: root.height; index: 3; text: "1.25"; at: root.inset + 0.625 * root.span; track-y: root.track-y; }
+        SpeedTick { x: 0; y: 0; width: root.width; height: root.height; index: 4; text: "1.5"; at: root.inset + 0.75 * root.span; track-y: root.track-y; }
+        SpeedTick { x: 0; y: 0; width: root.width; height: root.height; index: 5; text: "2"; at: root.inset + 0.875 * root.span; track-y: root.track-y; }
+        SpeedTick { x: 0; y: 0; width: root.width; height: root.height; index: 6; text: "4"; at: root.inset + root.span; track-y: root.track-y; }
+        // The thumb (the SDK slider's panel style, 14×12).
+        Rectangle {
+            x: root.thumb-x - 7px;
+            y: root.track-y - 6px;
+            width: 14px;
+            height: 12px;
+            border-radius: Theme.radius-control;
+            background: root.enabled ? Theme.text : Theme.icon-disabled;
+            border-width: root.dragging ? 1px : 0px;
+            border-color: Theme.accent;
+        }
+        // The value while dragging, above the thumb and kept inside the ruler.
+        Rectangle {
+            visible: root.dragging;
+            width: bubble.preferred-width + 12px;
+            height: 18px;
+            x: clamp(root.thumb-x - self.width / 2, 0px, root.width - self.width);
+            y: root.track-y - 28px;
+            border-radius: 4px;
+            border-width: 1px;
+            border-color: Theme.line;
+            background: Theme.bg-list;
+            bubble := Text {
+                width: parent.width;
+                height: parent.height;
+                // TRANSLATORS: {} is the playback speed ("1.25"); the × reads "times".
+                text: @tr("{}×", PlaybackPanelBridge.rate-text) + (PlaybackPanelBridge.tick >= 0 ? " ●" : "");
+                color: Theme.text;
+                font-size: Theme.font-body;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+        }
+    }
+}
+
 export component PlaybackPanel inherits Rectangle {
     background: Theme.bg-panel;
     // The label column: the widest label, 52–84px (a longer translation elides, whole in its tooltip).
@@ -500,13 +682,8 @@ export component PlaybackPanel inherits Rectangle {
             HorizontalLayout {
                 spacing: 4px;
                 RowLabel { column: root.column; text: @tr("Speed"); }
-                Btn {
-                    glyph: Glyphs.minus;
-                    enabled: PlaybackPanelBridge.can-rate;
-                    tip: PlaybackPanelBridge.can-rate ? @tr("Slower 0.1") : root.unsupported;
-                    tip-keys: [{ key: PlaybackPanelBridge.keys.slower, text: "" }];
-                    clicked => { PlaybackPanelBridge.rate-step(-1); }
-                }
+                Rectangle { horizontal-stretch: 1; }
+                // The speed; a click types any speed in the player's range (this was Custom…).
                 rate-value := EditValue {
                     // TRANSLATORS: {} is the playback speed ("1.25"); the × reads "times".
                     text: @tr("{}×", PlaybackPanelBridge.rate-text);
@@ -520,72 +697,24 @@ export component PlaybackPanel inherits Rectangle {
                     apply(text) => { PlaybackPanelBridge.apply-rate(text); }
                     focus-changed(on) => { PlaybackPanelBridge.focus-changed("rate", on); }
                 }
-                Btn {
-                    glyph: Glyphs.plus;
-                    enabled: PlaybackPanelBridge.can-rate;
-                    tip: PlaybackPanelBridge.can-rate ? @tr("Faster 0.1") : root.unsupported;
-                    tip-keys: [{ key: PlaybackPanelBridge.keys.faster, text: "" }];
-                    clicked => { PlaybackPanelBridge.rate-step(1); }
-                }
-                Rectangle { horizontal-stretch: 1; }
                 Caps {
                     tip: @tr("Playback speed");
                     a: PlaybackPanelBridge.keys.slower;
                     a-text: "−";
                     b: PlaybackPanelBridge.keys.faster;
                     b-text: "+";
+                    c: PlaybackPanelBridge.keys.normal;
+                    c-text: @tr("1×");
                 }
             }
-            // Equal widths whatever the labels: the same preferred width, the same stretch.
-            HorizontalLayout {
-                spacing: 4px;
-                Btn {
-                    horizontal-stretch: 1;
-                    preferred-width: 30px;
-                    text: @tr("0.5×");
-                    on: PlaybackPanelBridge.preset == 0;
-                    enabled: PlaybackPanelBridge.can-rate;
-                    tip: PlaybackPanelBridge.can-rate ? @tr("0.5×") : root.unsupported;
-                    clicked => { PlaybackPanelBridge.set-preset(0); }
-                }
-                Btn {
-                    horizontal-stretch: 1;
-                    preferred-width: 30px;
-                    text: @tr("1×");
-                    key: PlaybackPanelBridge.keys.normal;
-                    on: PlaybackPanelBridge.preset == 1;
-                    enabled: PlaybackPanelBridge.can-rate;
-                    tip: PlaybackPanelBridge.can-rate ? @tr("Normal") : root.unsupported;
-                    tip-keys: [{ key: PlaybackPanelBridge.keys.normal, text: "" }];
-                    clicked => { PlaybackPanelBridge.set-preset(1); }
-                }
-                Btn {
-                    horizontal-stretch: 1;
-                    preferred-width: 30px;
-                    text: @tr("1.25×");
-                    on: PlaybackPanelBridge.preset == 2;
-                    enabled: PlaybackPanelBridge.can-rate;
-                    tip: PlaybackPanelBridge.can-rate ? @tr("1.25×") : root.unsupported;
-                    clicked => { PlaybackPanelBridge.set-preset(2); }
-                }
-                Btn {
-                    horizontal-stretch: 1;
-                    preferred-width: 30px;
-                    text: @tr("1.5×");
-                    on: PlaybackPanelBridge.preset == 3;
-                    enabled: PlaybackPanelBridge.can-rate;
-                    tip: PlaybackPanelBridge.can-rate ? @tr("1.5×") : root.unsupported;
-                    clicked => { PlaybackPanelBridge.set-preset(3); }
-                }
-                Btn {
-                    horizontal-stretch: 1;
-                    preferred-width: 30px;
-                    text: @tr("2×");
-                    on: PlaybackPanelBridge.preset == 4;
-                    enabled: PlaybackPanelBridge.can-rate;
-                    tip: PlaybackPanelBridge.can-rate ? @tr("2×") : root.unsupported;
-                    clicked => { PlaybackPanelBridge.set-preset(4); }
-                }
+            SpeedRuler {
+                tip: PlaybackPanelBridge.can-rate ? @tr("Speed") : root.unsupported;
+                tip-detail: @tr("drag or scroll · double-click: 1×");
+                tip-keys: [
+                    { key: PlaybackPanelBridge.keys.slower, text: "−" },
+                    { key: PlaybackPanelBridge.keys.faster, text: "+" },
+                    { key: PlaybackPanelBridge.keys.normal, text: @tr("1×") },
+                ];
             }
 
             // ------------------------------------------------------------ Jump
