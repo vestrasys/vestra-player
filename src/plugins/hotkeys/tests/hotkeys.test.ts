@@ -7,6 +7,7 @@ import type { Locale } from "@vestra-player/sdk";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { commandText, exempt, fromSlintKey, inputOf, label, sameKey } from "../keys.ts";
 import activate from "../main.ts";
+import { COMMAND_RENAMES, renameRefs } from "../renames.ts";
 import { timing } from "../store.ts";
 
 Object.assign(timing, { reload: 5, write: 5 });
@@ -933,4 +934,87 @@ test("J03: checked at start; a half-finished switch-off is completed", async () 
   await host.settle(WAIT);
   assert.deepEqual(overlay(host), { "host/mute": ["N"] });
   assert.deepEqual(JSON.parse(readFileSync(join(data, "ignore-defaults.json"), "utf8")).written, []);
+});
+
+// ------------------------------------------------------------------ J03 renames
+
+test("J03 record: moved commands are renamed by the host's table, once; unknown ids are kept", () => {
+  // The same 30 pairs as src/host/src/command_renames.rs: 12 core actions, 18 A-B Loop commands.
+  assert.equal(COMMAND_RENAMES.length, 30);
+  assert.equal(COMMAND_RENAMES.filter(([old]) => old.startsWith("vestra.marks/ab.")).length, 18);
+  for (const [, now] of COMMAND_RENAMES) assert.ok(!COMMAND_RENAMES.some(([old]) => old === now), `${now} renamed again`);
+  const ref = (global: string) => ({ plugin: global.slice(0, global.indexOf("/")), command: global.slice(global.indexOf("/") + 1) });
+  const before = [
+    "vestra.marks/ab.set-a",
+    "vestra.playback/toggle-pause",
+    "vestra.marks/chapter.next",
+    "vestra.marks/ab.toggle",
+    "vestra.playback/ab.toggle", // already there: one entry stays
+    "host/play-pause", // likewise
+    "other.plugin/ab.set-a",
+    "vestra.marks/ab.count.10",
+  ].map(ref);
+  const after = renameRefs(before);
+  assert.deepEqual(
+    after.map((each) => `${each.plugin}/${each.command}`),
+    [
+      "vestra.playback/ab.set-a",
+      "host/play-pause",
+      "vestra.marks/chapter.next",
+      "vestra.playback/ab.toggle",
+      "other.plugin/ab.set-a",
+      "vestra.playback/ab.count.10",
+    ],
+  );
+  assert.deepEqual(renameRefs(after), after, "idempotent");
+});
+
+test("J03: an A-B Loop command ignored under vestra.marks is restored under vestra.playback when the switch goes off", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const AB = ["ab.set-a", "ab.set-b", "ab.segment"];
+  writeFileSync(
+    join(data, "ignore-defaults.json"),
+    JSON.stringify({
+      version: 1,
+      enabled: true,
+      written: [
+        ...AB.map((command) => ({ plugin: "vestra.marks", command })),
+        { plugin: "vestra.playback", command: "ab.set-a" }, // a duplicate after the rename
+        { plugin: "host", command: "stop" },
+      ],
+    }),
+  );
+  const host = new TestHost();
+  // Basic Playback's A-B Loop commands, as another plugin's (the binding table keys them by full id).
+  const keys: Record<string, string> = { "ab.set-a": "[", "ab.set-b": "]", "ab.segment": "Alt+\\" };
+  for (const command of AB) {
+    host.coreCommands.set(`vestra.playback/${command}`, {
+      declaration: { title: command, path: ["A-B Loop", command], order: 270, group: "ab", bindings: [keys[command]] },
+      display: { title: command, path: ["A-B Loop", command] },
+      state: { enabled: true, checked: false, busy: false, reason: null },
+      revision: 1,
+      async run() {},
+    } as unknown as Parameters<typeof host.coreCommands.set>[1]);
+    // The host moved the empty overrides at start (command_renames.rs).
+    host.bindings.overlay.set(`vestra.playback/${command}`, []);
+  }
+  host.bindings.overlay.set("host/stop", []);
+  await start(host, data);
+  await host.settle(WAIT);
+  const written = () =>
+    (JSON.parse(readFileSync(join(data, "ignore-defaults.json"), "utf8")).written as { plugin: string; command: string }[]).map(
+      (ref) => `${ref.plugin}/${ref.command}`,
+    );
+  const recorded = written();
+  for (const command of AB) assert.equal(recorded.filter((id) => id === `vestra.playback/${command}`).length, 1, command);
+  assert.ok(!recorded.some((id) => id.startsWith("vestra.marks/")));
+  assert.ok(recorded.includes("host/stop"));
+  for (const command of AB) assert.deepEqual(overlay(host)[`vestra.playback/${command}`], [], "still ignored");
+
+  await host.command("ignore-defaults").run(); // off: no question
+  await host.settle(WAIT);
+  assert.equal(host.command("ignore-defaults").state.checked, false);
+  for (const command of AB) assert.equal(host.bindings.overlay.has(`vestra.playback/${command}`), false, `${command} has its defaults back`);
+  assert.equal(host.bindings.overlay.has("host/stop"), false);
+  assert.deepEqual(written(), []);
 });
