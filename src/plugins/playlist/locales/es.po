@@ -814,8 +814,8 @@ msgstr "No hay coincidencias"
 
 #: ui/sidebar.slint:633
 #, x-machine
-msgid "Move to top (Ctrl+Home)"
-msgstr "Mover al principio (Ctrl+Inicio)"
+msgid "Move to top"
+msgstr "Mover al principio"
 
 #: ui/sidebar.slint:639
 #, x-machine

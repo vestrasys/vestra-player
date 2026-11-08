@@ -654,8 +654,8 @@ msgid "No matches"
 msgstr "无匹配项"
 
 #: ui/sidebar.slint:633
-msgid "Move to top (Ctrl+Home)"
-msgstr "置顶 (Ctrl+Home)"
+msgid "Move to top"
+msgstr "置顶"
 
 #: ui/sidebar.slint:639
 msgid "Move up (Ctrl+↑)"

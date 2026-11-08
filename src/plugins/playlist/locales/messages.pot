@@ -645,7 +645,7 @@ msgid "No matches"
 msgstr ""
 
 #: ui/sidebar.slint:633
-msgid "Move to top (Ctrl+Home)"
+msgid "Move to top"
 msgstr ""
 
 #: ui/sidebar.slint:639

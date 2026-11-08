@@ -816,8 +816,8 @@ msgstr "Aucun résultat"
 
 #: ui/sidebar.slint:633
 #, x-machine
-msgid "Move to top (Ctrl+Home)"
-msgstr "Placer en haut (Ctrl+Home)"
+msgid "Move to top"
+msgstr "Placer en haut"
 
 #: ui/sidebar.slint:639
 #, x-machine

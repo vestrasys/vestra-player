@@ -18,7 +18,7 @@ The playlist in the right sidebar.
 - F6 (Playlist in the command palette) shows or hides the list; when the sidebar has tabs from other plugins, F6 first switches to the playlist tab, and pressing it again on the playlist tab hides the sidebar. The player's Sidebar item in the right-click menu and the Sidebar button at the right of the control bar show or hide the sidebar at its last tab.
 - Right-click menu Open ▸ Open Folder… (F2).
 - Command palette (Ctrl+Shift+P): Playlist: Add Files… / Add Link… / Add Folder…, Open List File…, Save List…, Shuffle, Fast Advance to Next, Remember List, Confirm Before Removing All; Repeat: Off / All / One; When Opening a File: the three modes (no longer in the right-click menu).
-- The right-click menu inside the list and the ADD, DEL and SORT buttons; when the list has focus, Enter plays, Delete removes, Ctrl+A selects all, Ctrl+S searches, and so on.
+- The right-click menu inside the list and the ADD, DEL and SORT buttons; when the list has focus, Enter plays, Delete removes, Ctrl+A selects all, Ctrl+S searches, and so on; playing an item (Enter, a double-click) or Esc gives the keys back to the video, and the list never takes a player key.
 - Options window Playback ▸ Playlist.
 
 ## Limits

@@ -726,16 +726,18 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
 
   // List commands (context menu, bottom-bar popups and keys while the list has focus).
-  const play = listCommand("play", "Play", canPlay, playSelected, ["Enter", "P"], {
+  // Coordinator ruling 2026-11-08: while the list has focus its keys never take a player key
+  // away; the list commands whose keys are the player's (P, Ctrl+I, Ctrl+O, Ctrl+U, Backspace,
+  // Ctrl+T, Ctrl+Home, F2, F3, F5, F6) have none and stay in the list menu and the palette.
+  // Enter is caught by the list itself (play, then the keys go back to the video); its
+  // binding here names the key in the list menu.
+  const play = listCommand("play", "Play", canPlay, playSelected, ["Enter"], {
     busy: () => player.busy(),
   });
-  const add = listCommand("list-add", "Add Files…", () => !adding, addFiles, ["Ctrl+I"], { busy: () => adding });
-  const addFolderCommand = listCommand("list-add-folder", "Add Folder…", () => true, addFolderOnly, ["Ctrl+O"], scanningFolder);
-  const addLink = listCommand("list-link", "Add Link…", () => true, guard(() => link.show()), ["Ctrl+U"]);
-  const remove = listCommand("remove", "Remove Selected", () => queue.selection.size > 0, removeSelected, [
-    "Delete",
-    "Backspace",
-  ]);
+  const add = listCommand("list-add", "Add Files…", () => !adding, addFiles, undefined, { busy: () => adding });
+  const addFolderCommand = listCommand("list-add-folder", "Add Folder…", () => true, addFolderOnly, undefined, scanningFolder);
+  const addLink = listCommand("list-link", "Add Link…", () => true, guard(() => link.show()));
+  const remove = listCommand("remove", "Remove Selected", () => queue.selection.size > 0, removeSelected, ["Delete"]);
   const removeOthers = listCommand(
     "remove-unselected",
     "Remove Unselected",
@@ -743,7 +745,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     removeUnselected,
     ["Ctrl+Delete"],
   );
-  const removeInvalidCommand = listCommand("remove-invalid", "Remove Invalid Items", hasRows, removeInvalid, ["Ctrl+T"], {
+  const removeInvalidCommand = listCommand("remove-invalid", "Remove Invalid Items", hasRows, removeInvalid, undefined, {
     busy: () => checking,
   });
   const removeAll = listCommand("clear", "Remove All", hasRows, clearAll, ["Alt+Delete"]);
@@ -753,10 +755,12 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
   const moveReason = (where: Placement) => (): Reason | null =>
     queue.canPlace(where) ? null : queue.filtering ? "The order cannot change while searching" : "Nothing to act on";
-  const move = (id: string, title: ListTitle, where: Placement, binding: string) =>
-    listCommand(id, title, () => queue.canPlace(where), place(where), [binding], { reason: moveReason(where) });
+  const move = (id: string, title: ListTitle, where: Placement, binding: string | null) =>
+    listCommand(id, title, () => queue.canPlace(where), place(where), binding ? [binding] : undefined, {
+      reason: moveReason(where),
+    });
   const moves: Record<Placement, Command> = {
-    top: move("move-top", "Move to Top", "top", "Ctrl+Home"),
+    top: move("move-top", "Move to Top", "top", null),
     up: move("move-up", "Move Up", "up", "Ctrl+ArrowUp"),
     down: move("move-down", "Move Down", "down", "Ctrl+ArrowDown"),
     bottom: move("move-bottom", "Move to Bottom", "bottom", "Ctrl+End"),
@@ -782,17 +786,16 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     "Ctrl+A",
   ]);
   const search = listCommand("search", "Search", () => true, () => void focusSearch++, ["Ctrl+S"]);
-  const openListCommand = listCommand("list-open-list", "Open List File…", () => true, openList, ["F3"], {
+  const openListCommand = listCommand("list-open-list", "Open List File…", () => true, openList, undefined, {
     busy: () => listBusy,
   });
-  const saveListCommand = listCommand("list-save-list", "Save List…", hasRows, saveList, ["F2"], {
+  const saveListCommand = listCommand("list-save-list", "Save List…", hasRows, saveList, undefined, {
     busy: () => listBusy,
   });
-  // F6 while the list has focus closes it, shown as "Close List" in the list menu.
-  const close = listCommand("close", "Close List", () => true, () => sidebar.setVisible(false), ["F6"]);
-  // IA-PL-02: F5 while the list has focus opens its settings page (Playlist Settings…);
-  // elsewhere F5 stays the global Options….
-  listCommand("settings", "Playlist Settings…", () => true, guard(() => plugin.settings.show(SETTINGS_PAGE)), ["F5"]);
+  // "Close List" in the list menu (F6 is the player-wide Playlist toggle, which hides it too).
+  const close = listCommand("close", "Close List", () => true, () => sidebar.setVisible(false));
+  // IA-PL-02: Playlist Settings… in the list menu (F5 stays the player's Options… everywhere).
+  listCommand("settings", "Playlist Settings…", () => true, guard(() => plugin.settings.show(SETTINGS_PAGE)));
 
   // IA-PL-02: Options ▸ Playback ▸ Playlist, in step with the menu items.
   const page = plugin.settings.page("ui/settings.slint", {
@@ -1056,6 +1059,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     queue.select(rowId);
     return playSelected();
   });
+  /** Enter in the list (the list gives the keys back to the video right after). */
+  list.on("playSelected", () => playSelected());
   list.on("selectStep", (delta: number, extend: boolean) => {
     queue.selectNeighbor(delta, extend);
     revealCursor = true;

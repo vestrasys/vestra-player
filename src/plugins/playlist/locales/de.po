@@ -814,8 +814,8 @@ msgstr "Keine Treffer"
 
 #: ui/sidebar.slint:633
 #, x-machine
-msgid "Move to top (Ctrl+Home)"
-msgstr "Ganz nach oben (Ctrl+Home)"
+msgid "Move to top"
+msgstr "Ganz nach oben"
 
 #: ui/sidebar.slint:639
 #, x-machine

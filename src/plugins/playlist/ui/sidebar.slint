@@ -4,6 +4,7 @@ import { ListView, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { ToolTipArea } from "@vestra/widgets.slint";
+import { VestraFocus } from "@vestra/focus.slint";
 
 // One entry of the list. `id` is the row's stable key: the player's row patches (player 0.6.0)
 // match rows by it, so a reorder, an insertion or a removal moves row elements instead of
@@ -94,6 +95,8 @@ export global PlaylistBridge {
     // (row, Ctrl/Cmd held, Shift held)
     callback select-row(string, bool, bool);
     callback play-row(string);
+    // Enter in the list: play the selected row (the list then gives the keys back to the video).
+    callback play-selected();
     // (rows to move the cursor by, Shift held)
     callback select-step(int, bool);
     // Drag reorder: (dragged row, insertion index in the current order)
@@ -301,11 +304,19 @@ export component PlaylistSidebar inherits Rectangle {
         // A press no child takes (the bar's background, a disabled button) does not focus the list.
         focus-on-click: false;
         changed has-focus => { PlaylistBridge.focus-changed(self.has-focus); }
-        // The list's own keys: ↑ ↓ PgUp PgDn Home End (Shift extends the selection). Every
-        // other key goes on: Enter, Delete and the Ctrl chords to the list's key bindings
-        // (`focus: "panel"` commands), everything else (Space, ← →, media keys) to the player.
+        // The list's own keys: ↑ ↓ PgUp PgDn Home End (Shift extends the selection), Enter (play
+        // the selected row) and Esc, which give the keys back to the video as desktop players do.
+        // Every other key goes on: Delete and the Ctrl chords to the list's key bindings
+        // (`focus: "panel"` commands, none of them a player key), everything else (Space, ← →,
+        // media keys) to the player.
         key-pressed(event) => {
             if event.modifiers.control || event.modifiers.meta || event.modifiers.alt { return reject; }
+            if event.text == Key.Return && !event.modifiers.shift {
+                PlaylistBridge.play-selected();
+                VestraFocus.release();
+                return accept;
+            }
+            if event.text == Key.Escape && !event.modifiers.shift { VestraFocus.release(); return accept; }
             if event.text == Key.UpArrow { PlaylistBridge.select-step(-1, event.modifiers.shift); return accept; }
             if event.text == Key.DownArrow { PlaylistBridge.select-step(1, event.modifiers.shift); return accept; }
             if event.text == Key.PageUp { PlaylistBridge.select-step(-root.page-rows, event.modifiers.shift); return accept; }
@@ -442,8 +453,15 @@ export component PlaylistSidebar inherits Rectangle {
                         }
                     }
                     // Called before the release's pointer event: `press-row` is the second press's row.
+                    // Playing gives the keys back to the video; clearing `press-row` keeps that
+                    // release from focusing the list again.
                     double-clicked => {
-                        if !root.dragging && root.press-row != "" { PlaylistBridge.play-row(root.press-row); }
+                        if !root.dragging && root.press-row != "" {
+                            PlaylistBridge.play-row(root.press-row);
+                            VestraFocus.release();
+                            root.press-row = "";
+                            root.collapse = false;
+                        }
                     }
                     list := ListView {
                         x: 0;
@@ -655,7 +673,7 @@ export component PlaylistSidebar inherits Rectangle {
                     padding-left: 6px;
                     padding-top: 1px;
                     IconButton {
-                        tip: @tr("Move to top (Ctrl+Home)");
+                        tip: @tr("Move to top");
                         enabled: PlaylistBridge.can-top;
                         icon: "move-top";
                         clicked => { PlaylistBridge.place("top"); }

@@ -814,8 +814,8 @@ msgstr "一致する項目はありません"
 
 #: ui/sidebar.slint:633
 #, x-machine
-msgid "Move to top (Ctrl+Home)"
-msgstr "先頭へ移動（Ctrl+Home）"
+msgid "Move to top"
+msgstr "先頭へ移動"
 
 #: ui/sidebar.slint:639
 #, x-machine

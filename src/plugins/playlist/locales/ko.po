@@ -814,8 +814,8 @@ msgstr "일치하는 항목 없음"
 
 #: ui/sidebar.slint:633
 #, x-machine
-msgid "Move to top (Ctrl+Home)"
-msgstr "맨 위로 이동 (Ctrl+Home)"
+msgid "Move to top"
+msgstr "맨 위로 이동"
 
 #: ui/sidebar.slint:639
 #, x-machine

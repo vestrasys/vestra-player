@@ -216,16 +216,16 @@ test("menu positions follow the round allocation table; list keys only work with
       ["(快速推进到下一个)", 242, "options", "", ""],
       ["(记住列表)", 243, "options", "", ""],
       ["(移除全部前确认)", 244, "options", "", ""],
-      ["(播放)", 0, "domain", "Enter P", "panel"],
-      ["(添加文件…)", 0, "domain", "Ctrl+I", "panel"],
-      ["(添加文件夹…)", 0, "domain", "Ctrl+O", "panel"],
-      ["(添加链接…)", 0, "domain", "Ctrl+U", "panel"],
-      ["(移除所选)", 0, "domain", "Delete Backspace", "panel"],
+      ["(播放)", 0, "domain", "Enter", "panel"],
+      ["(添加文件…)", 0, "domain", "", ""],
+      ["(添加文件夹…)", 0, "domain", "", ""],
+      ["(添加链接…)", 0, "domain", "", ""],
+      ["(移除所选)", 0, "domain", "Delete", "panel"],
       ["(移除未选)", 0, "domain", "Ctrl+Delete", "panel"],
-      ["(移除无效项)", 0, "domain", "Ctrl+T", "panel"],
+      ["(移除无效项)", 0, "domain", "", ""],
       ["(移除全部)", 0, "domain", "Alt+Delete", "panel"],
       ["(在 Finder 中显示)", 0, "domain", "Ctrl+F", "panel"],
-      ["(置顶)", 0, "domain", "Ctrl+Home", "panel"],
+      ["(置顶)", 0, "domain", "", ""],
       ["(上移)", 0, "domain", "Ctrl+ArrowUp", "panel"],
       ["(下移)", 0, "domain", "Ctrl+ArrowDown", "panel"],
       ["(置底)", 0, "domain", "Ctrl+End", "panel"],
@@ -243,10 +243,10 @@ test("menu positions follow the round allocation table; list keys only work with
       ["(倒置当前顺序)", 0, "domain", "", ""],
       ["(全选)", 0, "domain", "Ctrl+A", "panel"],
       ["(搜索)", 0, "domain", "Ctrl+S", "panel"],
-      ["(打开列表文件…)", 0, "domain", "F3", "panel"],
-      ["(保存列表…)", 0, "domain", "F2", "panel"],
-      ["(关闭列表)", 0, "domain", "F6", "panel"],
-      ["(播放列表设置…)", 0, "domain", "F5", "panel"],
+      ["(打开列表文件…)", 0, "domain", "", ""],
+      ["(保存列表…)", 0, "domain", "", ""],
+      ["(关闭列表)", 0, "domain", "", ""],
+      ["(播放列表设置…)", 0, "domain", "", ""],
     ]);
     // Radio groups: repeat (off by default), open mode ("加入相似文件" by default, IA-PL-01), sort direction (ascending).
     for (const [id, on] of [
@@ -357,7 +357,7 @@ test("F6, Close List and the menu check share the sidebar preference; detach tog
     await app.host.settle();
     assert.equal(app.host.layout.sidebar?.preferred, true);
     assert.equal(app.command("visibility").state.checked, true);
-    await app.press("F6"); // with list focus F6 closes the list
+    await app.press("F6"); // with list focus F6 is the player-wide toggle too
     assert.equal(app.host.layout.sidebar?.preferred, false);
     await app.run("visibility");
     // Another plugin (the bar's list button) toggles the same slot.
@@ -423,7 +423,7 @@ test("sidebar tabs: F6 brings the playlist's tab forward, hides the sidebar on i
     await host.settle();
     assert.equal(host.layout.sidebar?.preferred, true);
     assert.equal(app.command("visibility").state.checked, true);
-    // Focus in the list: F6 (关闭列表) and the list menu's Close List hide the whole sidebar.
+    // Focus in the list: F6 (the toggle) and the list menu's Close List hide the whole sidebar.
     await app.press("F6");
     assert.equal(host.layout.sidebar?.preferred, false);
     await app.run("visibility");
@@ -465,9 +465,9 @@ test("adding files dedups by realpath and never plays; Enter plays with startPau
     assert.equal(app.rows()[1].duration, "");
     assert.equal(app.prop("total"), "01:05");
     assert.deepEqual(app.host.sequence, { canNext: true, canPrevious: false });
-    // P plays too; a double-click plays the clicked row.
+    // Enter plays too; a double-click plays the clicked row.
     await app.click(1);
-    await app.press("P");
+    await app.press("Enter");
     assert.equal(app.opens().at(-1)?.source, app.b);
     app.host.setSource({ phase: "ready", duration: 3600 });
     await app.host.settle();
@@ -541,7 +541,7 @@ test("Ctrl+arrows, the bottom-bar icons and dragging reorder the selection", asy
     assert.equal(app.prop("can-down"), false);
     await app.press("Ctrl+ArrowUp");
     assert.deepEqual(app.names(), ["a.mp4", "c.mp4", "b.mp4"]);
-    await app.press("Ctrl+Home");
+    await app.run("move-top");
     assert.deepEqual(app.names(), ["c.mp4", "a.mp4", "b.mp4"]);
     assert.equal(app.command("move-top").state.enabled, false);
     await app.press("Ctrl+End");
@@ -1212,17 +1212,32 @@ test("Prober: ffprobe runs with a 10 s timeout and removal aborts the run", asyn
 
 // Focus rules (user ruling 2026-11-08): the list keeps only its own keys and passes every other
 // key on to the player; only a click on a row (or the search box's Esc/↓) gives it the focus.
-test("list focus: the list's keys are ↑ ↓ PgUp PgDn Home End; the player's keys go on", async () => {
+test("list focus: the list's keys are ↑ ↓ PgUp PgDn Home End Enter Esc; the player's keys go on", async () => {
   const app = await start();
   try {
-    // List key bindings (`focus: "panel"`) never take the player's playback keys.
-    const panelKeys = [...app.host.commands.values()]
-      .filter(({ declaration: d }) => d.focus === "panel")
-      .flatMap(({ declaration: d }) => d.bindings);
+    // List key bindings (`focus: "panel"`) never take a player key (coordinator ruling
+    // 2026-11-08): neither the player's and other built-ins' keys nor this plugin's own global ones.
+    const commands = [...app.host.commands.values()].map(({ declaration: d }) => d);
+    const panelKeys = commands.filter((d) => d.focus === "panel").flatMap((d) => d.bindings ?? []);
+    const ownGlobal = commands.filter((d) => d.focus !== "panel").flatMap((d) => d.bindings ?? []);
+    assert.deepEqual(ownGlobal.toSorted(), ["F2", "F6"], "Open Folder… and Playlist");
     assert.ok(panelKeys.includes("Enter") && panelKeys.includes("Delete") && panelKeys.includes("Ctrl+A"));
-    for (const key of ["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Escape"]) {
+    const playerKeys = [
+      ...["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Escape"],
+      ...["P", "Ctrl+I", "Ctrl+O", "F3", "Ctrl+U", "Backspace", "Ctrl+T", "Ctrl+Home", "F5", "Home", "End"],
+    ];
+    for (const key of [...playerKeys, ...ownGlobal]) {
       assert.ok(!panelKeys.includes(key), `${key} is not a list binding`);
     }
+    // The commands that lost their keys stay (list menu, palette).
+    for (const id of ["list-add", "list-add-folder", "list-link", "remove-invalid", "move-top", "list-open-list", "list-save-list", "close", "settings"]) {
+      assert.deepEqual(app.command(id).declaration.bindings ?? [], [], id);
+    }
+    // Enter from the list (`play-selected`) plays the selected row.
+    await app.addFiles([app.a, app.b]);
+    await app.click(1);
+    await app.emit("play-selected");
+    assert.equal(app.opens().at(-1)?.source, app.b);
   } finally {
     await app.close();
   }
@@ -1232,7 +1247,17 @@ test("list focus: the list's keys are ↑ ↓ PgUp PgDn Home End; the player's k
   // The Slint handler accepts exactly these keys (unmodified, Shift extends) and rejects the rest.
   assert.deepEqual(
     [...handler.matchAll(/event\.text == Key\.(\w+)/g)].map((m) => m[1]),
-    ["UpArrow", "DownArrow", "PageUp", "PageDown", "Home", "End"],
+    ["Return", "Escape", "UpArrow", "DownArrow", "PageUp", "PageDown", "Home", "End"],
+  );
+  // Enter plays and Esc only gives the keys back to the video (`VestraFocus.release()`, at once).
+  assert.match(slint, /^import \{ VestraFocus \} from "@vestra\/focus\.slint";$/m);
+  assert.match(handler, /Key\.Return[^{]*\{\s+PlaylistBridge\.play-selected\(\);\s+VestraFocus\.release\(\);\s+return accept;/);
+  assert.match(handler, /Key\.Escape[^{]*\{ VestraFocus\.release\(\); return accept; \}/);
+  // A double-click plays, gives the keys back, and its release does not focus the list again.
+  const double = slint.slice(slint.indexOf("double-clicked => {"));
+  assert.match(
+    double.slice(0, double.indexOf("list := ListView")),
+    /PlaylistBridge\.play-row\(root\.press-row\);\s+VestraFocus\.release\(\);\s+root\.press-row = "";/,
   );
   assert.match(handler, /control \|\| event\.modifiers\.meta \|\| event\.modifiers\.alt \{ return reject; \}/);
   // A press no control takes does not focus the list, and none reaches the player's sidebar scope.
