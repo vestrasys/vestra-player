@@ -1,6 +1,6 @@
 {
   "id": "vestra.video",
-  "version": "1.1.12",
+  "version": "1.1.13",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -8,6 +8,7 @@
     "playback.read",
     "events",
     "processing.video",
+    "ui.mount",
     "ui.window",
     "ui.dialog",
     "ui.osd",
@@ -16,7 +17,7 @@
   "name": "Picture Adjustments",
   "author": "Vestra Player",
   "punchline": "Color, image processing, aspect ratio, crop, rotation and HDR",
-  "description": "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\nFind it in the Video context menu and the Picture Adjustments… window.",
+  "description": "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\nEverything is in the Picture panel beside the video: right-click Picture… or press Alt+1. Each control shows its key.",
   "tags": [
     "video",
     "picture",

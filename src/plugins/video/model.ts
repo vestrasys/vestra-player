@@ -350,9 +350,9 @@ export interface Stored {
   reframe: Reframe;
   display: Display;
   render: Render;
-  tab: number;
+  /** The Picture panel's Advanced section is open (closed by default). */
+  advanced: boolean;
 }
-export const TABS = 4;
 
 type Raw = Record<string, unknown>;
 const record = (value: unknown): Raw =>
@@ -373,7 +373,7 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback
 export function parse(raw: unknown): Stored {
   const value = record(raw);
   const base = defaultLook();
-  if (value.version !== undefined && value.version !== 1) return { ...stored(base), tab: 0 };
+  if (value.version !== undefined && value.version !== 1) return { ...stored(base), advanced: false };
   const p = record(value.picture);
   const picture: Picture = {
     brightness: num(p.brightness, 0, -100, 100),
@@ -435,11 +435,11 @@ export function parse(raw: unknown): Stored {
   };
   // 倍帧 and 运动补偿 exclude each other; a file with both keeps 倍帧.
   if (effects.frameBlend) render.interpolation = false;
-  const tab = typeof value.tab === "number" && Number.isInteger(value.tab) && value.tab >= 0 && value.tab < TABS ? value.tab : 0;
-  return { picture, effects, deinterlace, reframe, display, render, tab };
+  // `tab` (the page of the old Picture Adjustments window, up to 1.1.12) is no longer read.
+  return { picture, effects, deinterlace, reframe, display, render, advanced: value.advanced === true };
 }
 
-const stored = (look: Look): Omit<Stored, "tab"> => ({
+const stored = (look: Look): Omit<Stored, "advanced"> => ({
   picture: look.picture,
   effects: look.effects,
   deinterlace: look.deinterlace,
@@ -449,9 +449,9 @@ const stored = (look: Look): Omit<Stored, "tab"> => ({
 });
 
 /** The display settings are written as `view` (`view.aspect`, `view.customAspect`, `view.fit`). */
-export const serialize = (look: Look, tab: number) => {
+export const serialize = (look: Look, advanced: boolean) => {
   const { display, ...rest } = structuredClone(stored(look));
-  return { version: 1, ...rest, view: display, tab };
+  return { version: 1, ...rest, view: display, advanced };
 };
 
 // ---------------------------------------------------------------- frame drops (E10 field output)
