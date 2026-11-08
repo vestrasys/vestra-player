@@ -742,9 +742,16 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
     }
     if let Some(visible) = visible {
         let now = host.now_ms();
-        host.policy
-            .set_preferred(policy_slot, owner, visible, now)
-            .map_err(anyhow::Error::from)?;
+        // `reveal: false` (SDK 1.6.13 `toggle()`): a switch, which in
+        // fullscreen pops nothing out (user ruling 2026-11-08); absent or
+        // true (`show()`, `setVisible`, older SDKs): reveal, as before.
+        let reveal = params["reveal"].as_bool().unwrap_or(true);
+        if reveal {
+            host.policy.set_preferred(policy_slot, owner, visible, now)
+        } else {
+            host.policy.switch(policy_slot, owner, visible, now)
+        }
+        .map_err(anyhow::Error::from)?;
         if let Some(mount) = host.mounts.get_mut(&owner) {
             mount.visible = visible;
         }

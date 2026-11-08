@@ -202,8 +202,9 @@ pub fn cell(item: Option<&Item>, image: Option<slint::Image>) -> SValue {
 }
 
 impl Host {
-    /// Toggle Sidebar: show or hide the sidebar, as `panels.sidebar.toggle()`
-    /// does (the preference of its current panel).
+    /// Toggle Sidebar: switch the sidebar on or off, as `panels.sidebar.toggle()`
+    /// does (the preference of its current panel), the same in every mode
+    /// (user ruling 2026-11-08: in fullscreen nothing pops out).
     pub(crate) fn toggle_sidebar(&mut self) {
         let (Some(owner), Some((preferred, _))) =
             (self.policy.sidebar_active(), self.policy.sidebar_state())
@@ -211,11 +212,10 @@ impl Host {
             return;
         };
         let now = self.now_ms();
-        // Collapsed at the fullscreen edge: slides out, as Adjust does.
-        let show = !preferred || self.policy.collapsed(window_state::Slot::Sidebar);
+        let show = !preferred;
         if self
             .policy
-            .set_preferred(window_state::Slot::Sidebar, owner, show, now)
+            .switch(window_state::Slot::Sidebar, owner, show, now)
             .is_ok()
         {
             if let Some(mount) = self.mounts.get_mut(&owner) {
@@ -226,18 +226,17 @@ impl Host {
         }
     }
 
-    /// Adjust (`host/adjust`): show or hide the adjust column, showing its
-    /// last tab, as `panels.adjust.toggle()` does.
-    /// In fullscreen, a column wanted shown but collapsed at the right edge
-    /// slides out instead of being turned off (GUI check of 3b).
+    /// Adjust (`host/adjust`): switch the adjust column on or off, showing
+    /// its last tab, as `panels.adjust.toggle()` does, the same in every
+    /// mode (user ruling 2026-11-08: in fullscreen nothing pops out).
     pub(crate) fn toggle_adjust(&mut self) {
-        let slot = window_state::Slot::Adjust;
-        if let Some((preferred, _)) = self.policy.column_state(slot) {
-            self.set_adjust_visible(!preferred || self.policy.collapsed(slot));
+        if let Some((preferred, _)) = self.policy.column_state(window_state::Slot::Adjust) {
+            self.set_adjust_visible(!preferred);
         }
     }
 
-    /// Show or hide the adjust column (the preference of its current panel).
+    /// Switch the adjust column on or off (the preference of its current
+    /// panel; a toggle: nothing pops out).
     pub(crate) fn set_adjust_visible(&mut self, visible: bool) {
         let Some(owner) = self.policy.active(window_state::Slot::Adjust) else {
             return;
@@ -245,7 +244,7 @@ impl Host {
         let now = self.now_ms();
         if self
             .policy
-            .set_preferred(window_state::Slot::Adjust, owner, visible, now)
+            .switch(window_state::Slot::Adjust, owner, visible, now)
             .is_ok()
         {
             self.remember_column(crate::ui::sidebar_tabs::Column::Adjust, false);
