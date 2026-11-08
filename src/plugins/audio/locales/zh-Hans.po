@@ -5,7 +5,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:56 main.ts:64 main.ts:335 main.ts:578
+#: main.ts:56 main.ts:64 main.ts:335 main.ts:581
 msgid "{}"
 msgstr "{}"
 
@@ -37,7 +37,7 @@ msgstr "声音"
 msgid "Audio Track"
 msgstr "音轨"
 
-#: main.ts:76 ui/workbench.slint:203 ui/workbench.slint:345
+#: main.ts:76 ui/workbench.slint:207 ui/workbench.slint:353
 msgid "Channels"
 msgstr "声道"
 
@@ -58,7 +58,7 @@ msgstr "声音同步"
 msgid "Audio Processing"
 msgstr "声音处理"
 
-#: main.ts:128 main.ts:686
+#: main.ts:128 main.ts:689
 msgid "Audio sync: {} s"
 msgstr "音频同步: {}秒"
 
@@ -138,11 +138,11 @@ msgstr "正在载入…"
 msgid "No Audio Tracks"
 msgstr "没有音轨"
 
-#: main.ts:334 main.ts:578
+#: main.ts:334 main.ts:581
 msgid "Unnamed device"
 msgstr "未命名设备"
 
-#: main.ts:334 main.ts:576
+#: main.ts:334 main.ts:579
 msgid "Selected device"
 msgstr "所选设备"
 
@@ -150,7 +150,7 @@ msgstr "所选设备"
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: main.ts:338 main.ts:575 ui/workbench.slint:40
+#: main.ts:338 main.ts:578 ui/workbench.slint:42
 msgid "System Default"
 msgstr "系统默认"
 
@@ -182,168 +182,173 @@ msgstr "输出设备已断开，改用系统默认"
 msgid "Device not connected"
 msgstr "设备未连接"
 
-#: main.ts:508 main.ts:604 main.ts:629
+#: main.ts:502
+#, x-machine
+msgid "No audio output"
+msgstr "没有音频输出"
+
+#: main.ts:511 main.ts:607 main.ts:632
 msgid "Loading"
 msgstr "正在载入"
 
-#: main.ts:508 main.ts:629 ui/workbench.slint:35
+#: main.ts:511 main.ts:632 ui/workbench.slint:37
 msgid "No audio tracks"
 msgstr "没有音轨"
 
-#: main.ts:568
+#: main.ts:571
 msgid "No output devices available"
 msgstr "没有可用的输出设备"
 
-#: main.ts:581
+#: main.ts:584
 msgid "{} (not connected)"
 msgstr "{}（未连接）"
 
-#: main.ts:587
+#: main.ts:590
 msgid "{}: device not connected, using System Default"
 msgstr "{}：设备未连接，正在使用系统默认"
 
-#: main.ts:597
+#: main.ts:600
 msgid "Load External Audio…"
 msgstr "载入外部音频…"
 
-#: main.ts:604
+#: main.ts:607
 msgid "No file is playing"
 msgstr "没有正在播放的文件"
 
-#: main.ts:604
+#: main.ts:607
 msgid "Generated video cannot take external audio"
 msgstr "生成的画面不能载入音频"
 
-#: main.ts:615
+#: main.ts:618
 #, x-machine
 msgid "Audio…"
 msgstr "声音…"
 
-#: main.ts:624
+#: main.ts:627
 msgid "Cycle Tracks"
 msgstr "按序切换"
 
-#: main.ts:635 ui/workbench.slint:190 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:192 ui/workbench.slint:195
 msgid "Stereo"
 msgstr "立体声"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 msgid "Left Channel"
 msgstr "左声道"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 msgid "Right Channel"
 msgstr "右声道"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 msgid "Mono Mix"
 msgstr "单声道混合"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 msgid "Swap Left and Right"
 msgstr "左右互换"
 
-#: main.ts:641 main.ts:651 main.ts:664 main.ts:677 main.ts:684 main.ts:706 main.ts:718 main.ts:730 ui/workbench.slint:574
+#: main.ts:644 main.ts:654 main.ts:667 main.ts:680 main.ts:687 main.ts:709 main.ts:721 main.ts:733 ui/workbench.slint:584
 msgid "No audio track selected"
 msgstr "没有选中的音轨"
 
-#: main.ts:641 ui/workbench.slint:353
+#: main.ts:644 ui/workbench.slint:357
 msgid "The current track is mono"
 msgstr "当前音轨是单声道"
 
-#: main.ts:647 ui/workbench.slint:206 ui/workbench.slint:477
+#: main.ts:650 ui/workbench.slint:210 ui/workbench.slint:487
 msgid "Equalizer"
 msgstr "均衡器"
 
-#: main.ts:654
+#: main.ts:657
 msgid "Equalizer: On"
 msgstr "均衡器: 开"
 
-#: main.ts:654
+#: main.ts:657
 msgid "Equalizer: Off"
 msgstr "均衡器: 关"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 msgid "Flat"
 msgstr "平直"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 msgid "Voice"
 msgstr "人声"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 msgid "Music"
 msgstr "音乐"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 msgid "Cinema"
 msgstr "影院"
 
-#: main.ts:667
+#: main.ts:670
 msgid "Equalizer preset: Flat"
 msgstr "均衡器预设: 平直"
 
-#: main.ts:667
+#: main.ts:670
 msgid "Equalizer preset: Voice"
 msgstr "均衡器预设: 人声"
 
-#: main.ts:667
+#: main.ts:670
 msgid "Equalizer preset: Music"
 msgstr "均衡器预设: 音乐"
 
-#: main.ts:667
+#: main.ts:670
 msgid "Equalizer preset: Cinema"
 msgstr "均衡器预设: 影院"
 
-#: main.ts:677
+#: main.ts:680
 msgid "50 ms Earlier"
 msgstr "超前 50 毫秒"
 
-#: main.ts:677
+#: main.ts:680
 msgid "50 ms Later"
 msgstr "滞后 50 毫秒"
 
-#: main.ts:680 main.ts:727 ui/workbench.slint:595
+#: main.ts:683 main.ts:730 ui/workbench.slint:605
 msgid "Reset"
 msgstr "复位"
 
-#: main.ts:692 ui/workbench.slint:465
+#: main.ts:695 ui/workbench.slint:475
 msgid "Don't Keep"
 msgstr "不保持"
 
-#: main.ts:692 ui/workbench.slint:465
+#: main.ts:695 ui/workbench.slint:475
 msgid "Keep for This Run"
 msgstr "本次运行内保持"
 
-#: main.ts:692 ui/workbench.slint:465
+#: main.ts:695 ui/workbench.slint:475
 msgid "Always Keep"
 msgstr "始终保持"
 
-#: main.ts:702 ui/workbench.slint:522
+#: main.ts:705 ui/workbench.slint:532
 msgid "Normalize"
 msgstr "规格化"
 
-#: main.ts:709
+#: main.ts:712
 msgid "Normalize: On"
 msgstr "规格化: 开"
 
-#: main.ts:709
+#: main.ts:712
 msgid "Normalize: Off"
 msgstr "规格化: 关"
 
-#: main.ts:714 ui/workbench.slint:536
+#: main.ts:717 ui/workbench.slint:546
 msgid "Crystalizer"
 msgstr "晶化"
 
-#: main.ts:722
+#: main.ts:725
 msgid "Crystalizer: On"
 msgstr "晶化: 开"
 
-#: main.ts:722
+#: main.ts:725
 msgid "Crystalizer: Off"
 msgstr "晶化: 关"
 
-#: main.ts:733
+#: main.ts:736
 msgid "Audio processing reset"
 msgstr "音频处理已复位"
 
@@ -376,145 +381,145 @@ msgstr "音轨"
 msgid "output device"
 msgstr "输出设备"
 
-#: ui/workbench.slint:188
+#: ui/workbench.slint:190
 msgid "Custom"
 msgstr "自定义"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "L"
 msgstr "左"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "R"
 msgstr "右"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "Mono"
 msgstr "单声道"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "Swap"
 msgstr "互换"
 
-#: ui/workbench.slint:195
+#: ui/workbench.slint:199
 msgid "{} ms"
 msgstr "{} ms"
 
-#: ui/workbench.slint:200 ui/workbench.slint:250
+#: ui/workbench.slint:204 ui/workbench.slint:254
 #, x-machine
 msgid "Volume"
 msgstr "音量"
 
-#: ui/workbench.slint:201 ui/workbench.slint:289
+#: ui/workbench.slint:205 ui/workbench.slint:297
 msgid "Track"
 msgstr "音轨"
 
-#: ui/workbench.slint:202 ui/workbench.slint:327
+#: ui/workbench.slint:206 ui/workbench.slint:335
 #, x-machine
 msgid "Output"
 msgstr "输出"
 
-#: ui/workbench.slint:204 ui/workbench.slint:391
+#: ui/workbench.slint:208 ui/workbench.slint:401
 #, x-machine
 msgid "Delay"
 msgstr "延迟"
 
-#: ui/workbench.slint:205 ui/workbench.slint:460
+#: ui/workbench.slint:209 ui/workbench.slint:470
 #, x-machine
 msgid "Keep"
 msgstr "保持"
 
-#: ui/workbench.slint:276
+#: ui/workbench.slint:284
 #, x-machine
 msgid "{}%"
 msgstr "{}%"
 
-#: ui/workbench.slint:285
+#: ui/workbench.slint:293
 #, x-machine
 msgid "TRACK"
 msgstr "音轨"
 
-#: ui/workbench.slint:292
+#: ui/workbench.slint:300
 #, x-machine
 msgid "next"
 msgstr "下一条"
 
-#: ui/workbench.slint:312
+#: ui/workbench.slint:320
 msgid "Load…"
 msgstr "载入…"
 
-#: ui/workbench.slint:315
+#: ui/workbench.slint:323
 #, x-machine
 msgid "Load audio files with the same name as the video automatically"
 msgstr "自动载入与视频同名的音频文件"
 
-#: ui/workbench.slint:318
+#: ui/workbench.slint:326
 #, x-machine
 msgid "Same name"
 msgstr "同名"
 
-#: ui/workbench.slint:379
+#: ui/workbench.slint:389
 #, x-machine
 msgid "SYNC"
 msgstr "同步"
 
-#: ui/workbench.slint:383
+#: ui/workbench.slint:393
 msgid "Audio sync"
 msgstr "声音同步"
 
-#: ui/workbench.slint:385
+#: ui/workbench.slint:395
 #, x-machine
 msgid "earlier"
 msgstr "提前"
 
-#: ui/workbench.slint:386
+#: ui/workbench.slint:396
 #, x-machine
 msgid "later"
 msgstr "延后"
 
-#: ui/workbench.slint:473
+#: ui/workbench.slint:483
 #, x-machine
 msgid "EQUALIZER"
 msgstr "均衡器"
 
-#: ui/workbench.slint:515
+#: ui/workbench.slint:525
 #, x-machine
 msgid "PROCESSING"
 msgstr "声音处理"
 
-#: ui/workbench.slint:553
+#: ui/workbench.slint:563
 msgid "{} dB"
 msgstr "{} dB"
 
-#: ui/workbench.slint:573
+#: ui/workbench.slint:583
 msgid "Loading audio…"
 msgstr "正在载入音频…"
 
-#: ui/workbench.slint:575
+#: ui/workbench.slint:585
 msgid "Applying…"
 msgstr "正在应用…"
 
-#: ui/workbench.slint:576
+#: ui/workbench.slint:586
 msgid "Audio processing failed"
 msgstr "音频处理失败"
 
-#: ui/workbench.slint:577
+#: ui/workbench.slint:587
 msgid "Applied"
 msgstr "已应用"
 
-#: ui/workbench.slint:578
+#: ui/workbench.slint:588
 msgid "Ready"
 msgstr "就绪"
 
-#: ui/workbench.slint:588
+#: ui/workbench.slint:598
 msgid "Retry"
 msgstr "重试"
 
-#: ui/workbench.slint:591
+#: ui/workbench.slint:601
 #, x-machine
 msgid "Equalizer, Normalize and Crystalizer back to neutral; sync and channels are kept"
 msgstr "均衡器、规格化与晶化恢复为中性；同步与声道保持不变"

@@ -31,6 +31,8 @@ export global AudioBridge {
     in property <float> volume;
     in property <bool> muted;
     in property <bool> can-volume;
+    // Why the volume cannot change ("" when it can): there is no audio output.
+    in property <string> volume-reason;
     // The labels arrive translated (text values from main.ts).
     in property <[string]> track-rows: [@tr("No audio tracks")];
     in property <int> track-index: 0;
@@ -188,6 +190,8 @@ export component Audio inherits Rectangle {
     private property <[string]> preset-names: [@tr("Flat"), @tr("Voice"), @tr("Music"), @tr("Cinema"), @tr("Custom")];
     // The channel modes of model.ts, in the same order: short labels, the full name in the tooltip.
     private property <[string]> channel-short: [@tr("Stereo"), @tr("L"), @tr("R"), @tr("Mono"), @tr("Swap")];
+    // The segment last under the pointer (its full name is the row's tooltip).
+    private property <int> channel-hovered: 0;
     private property <[string]> channel-names: [@tr("Stereo"), @tr("Left Channel"), @tr("Right Channel"), @tr("Mono Mix"), @tr("Swap Left and Right")];
     // Below 300 px (the column at its least width is 280) the Delay row leaves out its three key caps;
     // the tooltips of its buttons still name the keys.
@@ -262,14 +266,18 @@ export component Audio inherits Rectangle {
                             clicked => { AudioBridge.mute-toggled(); }
                         }
                     }
-                    volume := Slider {
-                        panel: true;
-                        minimum: 0;
-                        maximum: 100;
-                        step: 5;
-                        value: AudioBridge.volume;
-                        enabled: AudioBridge.can-volume;
-                        changed(v) => { AudioBridge.volume-changed(v); }
+                    // Greyed out without an audio output; the tooltip says why.
+                    ToolTipArea {
+                        text: AudioBridge.volume-reason;
+                        volume := Slider {
+                            panel: true;
+                            minimum: 0;
+                            maximum: 100;
+                            step: 5;
+                            value: AudioBridge.volume;
+                            enabled: AudioBridge.can-volume;
+                            changed(v) => { AudioBridge.volume-changed(v); }
+                        }
                     }
                     Text {
                         width: 34px;
@@ -343,16 +351,17 @@ export component Audio inherits Rectangle {
                     height: 24px;
                     spacing: 6px;
                     Label { width: root.column; text: @tr("Channels"); color: AudioBridge.channels-available ? Theme.text : Theme.text-dim; }
-                    // Segments: one per mode, the current one lit; the full name (or why not) in the tooltip.
-                    Rectangle {
-                        border-radius: Theme.radius-control;
-                        background: Theme.bg-bar;
-                        HorizontalLayout {
-                            padding: 2px;
-                            for name[index] in root.channel-short: ToolTipArea {
-                                text: AudioBridge.mono-track ? @tr("The current track is mono") : root.channel-names[index];
-                                horizontal-stretch: 1;
-                                Rectangle {
+                    // Segments: one per mode, the current one lit. One tooltip for the row: the full name of
+                    // the segment under the pointer (or why the row is off).
+                    ToolTipArea {
+                        text: AudioBridge.mono-track ? @tr("The current track is mono") : root.channel-names[root.channel-hovered];
+                        Rectangle {
+                            border-radius: Theme.radius-control;
+                            background: Theme.bg-bar;
+                            HorizontalLayout {
+                                padding: 2px;
+                                for name[index] in root.channel-short: Rectangle {
+                                    horizontal-stretch: 1;
                                     border-radius: Theme.radius-control;
                                     background: index == AudioBridge.channel-index ? Theme.button-bg
                                         : segment.has-hover && AudioBridge.channels-available ? Theme.hover-bg : transparent;
@@ -367,6 +376,7 @@ export component Audio inherits Rectangle {
                                     }
                                     segment := TouchArea {
                                         enabled: AudioBridge.channels-available;
+                                        changed has-hover => { if self.has-hover { root.channel-hovered = index; } }
                                         clicked => { if index != AudioBridge.channel-index { AudioBridge.channel-selected(index); } }
                                     }
                                 }

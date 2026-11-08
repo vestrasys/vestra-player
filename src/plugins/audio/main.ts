@@ -456,8 +456,10 @@ export default async function activate(plugin: Plugin) {
   // older state, so a drag does not jump back.
   let volumeDraft: number | null = null;
   let volumeTicket = 0;
+  /** The player lists no audio output (headless, `ao=null`, no device): nothing to set the volume of. */
+  const canVolume = () => devices !== null;
   const setVolume = async (value: number) => {
-    if (typeof value !== "number" || !Number.isFinite(value)) return;
+    if (!canVolume() || typeof value !== "number" || !Number.isFinite(value)) return;
     const ticket = ++volumeTicket;
     volumeDraft = Math.round(Math.min(100, Math.max(0, value)));
     try {
@@ -471,7 +473,7 @@ export default async function activate(plugin: Plugin) {
       }
     }
   };
-  const toggleMute = () => player.setOutput({ muted: !player.state.muted }).catch(() => undefined);
+  const toggleMute = () => (canVolume() ? player.setOutput({ muted: !player.state.muted }).catch(() => undefined) : undefined);
 
   // ---------------------------------------------------------------- panel
   /** The first key of one of this plugin's commands, "" without one (the key caps and tooltips). */
@@ -496,7 +498,8 @@ export default async function activate(plugin: Plugin) {
       },
       volume: Math.min(volumeDraft ?? state.volume, 100),
       muted: state.muted,
-      canVolume: true,
+      canVolume: canVolume(),
+      volumeReason: canVolume() ? "" : text("No audio output"),
       equalizerEnabled: settings.equalizer,
       presetIndex: presetOf(settings),
       gainValues: settings.gains,

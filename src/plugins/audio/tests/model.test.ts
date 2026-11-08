@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, OLD_BANDS, parse, presetOf, presets, serialize, spread, syncSeconds,
+  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, narrow, neutral, nodes, OLD_BANDS, parse, presetOf, presets, serialize, spread, syncSeconds,
   TRACK_TEXT_BYTES, trackRow,
 } from "../model.ts";
 
@@ -40,7 +40,7 @@ test("settings parse leniently; a legacy numeric clarity migrates to the crystal
   assert.deepEqual(parse({ clarity: 2.5 }).settings.clarity, { on: true, db: 2.5 });
   assert.deepEqual(parse({ clarity: 0 }).settings.clarity, { on: false, db: 3 });
   assert.deepEqual(parse({ clarity: { on: true, db: 9 } }).settings.clarity, { on: true, db: 6 });
-  assert.deepEqual(parse({ gains: [1, "x", 9, 0, 0, 0, 0, 0, 0, -2] }).settings.gains, [1, 0, 6, 0, 0, 0, 0, 0, 0, -2]);
+  assert.deepEqual(parse({ gains10: [1, "x", 9, 0, 0, 0, 0, 0, 0, -2] }).settings.gains, [1, 0, 6, 0, 0, 0, 0, 0, 0, -2]);
   assert.deepEqual(parse({ gains: [1, 2] }).settings.gains, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(parse({ gains: [1, "x", 9, 0, 0, 0] }).settings.gains, spread([1, 0, 6, 0, 0, 0]), "six gains (version 1) are spread");
   assert.equal(parse({ syncKeep: "session", syncMs: 500 }).settings.delayMs, 0, "only Always Keep restores the delay");
@@ -57,7 +57,8 @@ test("settings parse leniently; a legacy numeric clarity migrates to the crystal
     future: "usb",
     version: 2,
     equalizer: true,
-    gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+    gains: [0, 0, 0, 0, 0, 0],
+    gains10: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     normalize: false,
     clarity: { on: false, db: 3 },
     channels: { mode: "left" },
@@ -233,4 +234,55 @@ test("ten bands: six saved gains follow the old curve, the ends held, and the ol
   const old = [[0, 0, 0, 0, 0, 0], [-3, -2, 1, 3, 2, -1], [3, 2, -1, 0, 2, 3], [4, 2, -1, 1, 2, 2]];
   old.forEach((gains, index) => assert.equal(presetOf(parse({ version: 1, gains }).settings), index));
   assert.equal(nodes({ ...neutral(), gains: [...presets[2].gains] }).length, 9, "Music: nine bands off 0 dB");
+});
+
+test("downgrade: the file keeps the ten gains in gains10 and a close six-band curve in gains", () => {
+  const curve = [5, 4, 2, -1, -3, -2, 0, 2, 4, 6];
+  const saved = serialize({ ...parse({}), settings: { ...neutral(), gains: curve } });
+  assert.deepEqual(saved.gains10, curve);
+  assert.equal(saved.gains.length, 6);
+  // The six old bands read the ten-band curve where they sit (60 Hz lies between 31 and 62 Hz, 1 kHz on a band).
+  assert.equal(saved.gains[3], -2, "1 kHz");
+  assert.deepEqual(parse(JSON.parse(JSON.stringify(saved))).settings.gains, curve, "this version reads the ten gains back");
+  // An older plugin changed the curve since: it wrote gains and kept gains10 as it was; its curve wins.
+  const edited = { ...JSON.parse(JSON.stringify(saved)), gains: [0, 0, 0, 0, 0, 3] };
+  assert.deepEqual(parse(edited).settings.gains, spread([0, 0, 0, 0, 0, 3]));
+  // The presets survive both ways.
+  for (const [index, preset] of presets.entries()) {
+    assert.equal(presetOf(parse(spreadBack(preset.gains)).settings), index, preset.label);
+  }
+  assert.deepEqual(narrow(bands.map(() => 0)), [0, 0, 0, 0, 0, 0]);
+});
+/** A file written by this version for the given ten gains, read back as JSON. */
+const spreadBack = (gains: readonly number[]) => JSON.parse(JSON.stringify(serialize({ ...parse({}), settings: { ...neutral(), gains: [...gains] } })));
+
+test("downgrade: 1.5.10's model.ts (origin/main before the panel) reads the new file as a close, non-flat curve", async (t) => {
+  const { execFileSync } = await import("node:child_process");
+  const { mkdtemp, writeFile, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { join } = await import("node:path");
+  const { pathToFileURL } = await import("node:url");
+  let source: string;
+  try {
+    // 5b5f785a: the last commit with the six-band model (1.5.10).
+    source = execFileSync("git", ["show", "5b5f785a:src/plugins/audio/model.ts"], { cwd: import.meta.dirname, encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] });
+  } catch {
+    t.skip("no git history here (shallow clone)");
+    return;
+  }
+  const dir = await mkdtemp(join(tmpdir(), "audio-old-model-"));
+  try {
+    const file = join(dir, "model.ts");
+    await writeFile(file, source);
+    const old = (await import(pathToFileURL(file).href)) as { parse: (raw: unknown) => { settings: { gains: number[] } } };
+    const curve = [5, 4, 2, -1, -3, -2, 0, 2, 4, 6];
+    const saved = spreadBack(curve);
+    const read = old.parse(saved).settings.gains;
+    assert.deepEqual(read, narrow(curve));
+    assert.ok(read.some((gain) => gain !== 0), "not flat");
+    // The old plugin saves the six gains (and keeps gains10): this version reads its curve.
+    assert.deepEqual(parse({ ...saved, gains: read }).settings.gains, curve, "unchanged by the old plugin: the ten gains");
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 });

@@ -102,8 +102,10 @@ export function nodes(value: Settings, track: { mono: boolean } = { mono: false 
 }
 
 /**
- * What `settings.json` holds (version 2: ten equalizer gains; version 1 had six). Fields this version
- * does not know are kept as they are.
+ * What `settings.json` holds. Version 2 keeps the ten equalizer gains in `gains10` and still writes
+ * `gains` as the six-band curve of version 1 (`narrow`), so an older plugin (up to 1.5.10, which
+ * reads only `gains`) plays a close curve instead of a flat one. Fields this version does not know
+ * are kept as they are.
  */
 export type Stored = {
   settings: Settings;
@@ -116,7 +118,7 @@ export type Stored = {
   extra: Record<string, unknown>;
 };
 // "tab" was the Audio Workbench window's page (up to 1.5.10): read no more, and dropped at the next save.
-const KNOWN = new Set(["version", "equalizer", "gains", "normalize", "clarity", "channels", "autoLoadExternal", "syncKeep", "syncMs", "tab", "device", "deviceName"]);
+const KNOWN = new Set(["version", "equalizer", "gains", "gains10", "normalize", "clarity", "channels", "autoLoadExternal", "syncKeep", "syncMs", "tab", "device", "deviceName"]);
 
 /**
  * Six gains of version 1 (60 Hz–10 kHz) spread over the ten bands: each band takes the gain the old
@@ -131,6 +133,22 @@ export function spread(old: readonly number[]): number[] {
     const i = at.findIndex((v, k) => x >= v && x <= at[k + 1]!);
     const t = (x - at[i]!) / (at[i + 1]! - at[i]!);
     return Math.round((old[i]! + (old[i + 1]! - old[i]!) * t) * 10) / 10;
+  });
+}
+
+/**
+ * The ten gains as six of version 1 (`spread`'s inverse): each old band takes the ten-band curve's
+ * value at its frequency, interpolated on a logarithmic frequency scale, in 0.1 dB.
+ */
+export function narrow(gains: readonly number[]): number[] {
+  const at = bands.map(Math.log2);
+  return OLD_BANDS.map((frequency) => {
+    const x = Math.log2(frequency);
+    if (x <= at[0]!) return gains[0]!;
+    if (x >= at.at(-1)!) return gains.at(-1)!;
+    const i = at.findIndex((v, k) => x >= v && x <= at[k + 1]!);
+    const t = (x - at[i]!) / (at[i + 1]! - at[i]!);
+    return Math.round((gains[i]! + (gains[i + 1]! - gains[i]!) * t) * 10) / 10;
   });
 }
 
@@ -152,13 +170,12 @@ export function parse(raw: unknown): Stored {
   const value = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const base = neutral();
   const read = (list: unknown[]) => list.map((gain) => number(gain, 0, (g) => tenth(g, -6, 6)));
-  const gains = !Array.isArray(value.gains)
-    ? base.gains
-    : value.gains.length === bands.length
-      ? read(value.gains)
-      : value.gains.length === OLD_BANDS.length
-        ? spread(read(value.gains))
-        : base.gains;
+  const six = Array.isArray(value.gains) && value.gains.length === OLD_BANDS.length ? read(value.gains) : null;
+  const ten = Array.isArray(value.gains10) && value.gains10.length === bands.length ? read(value.gains10) : null;
+  // `gains10` while `gains` is still its six-band curve; an older plugin that changed the curve
+  // since wrote `gains` only (and kept `gains10` as it was), so its curve wins, spread.
+  const sameCurve = ten !== null && (six === null || narrow(ten).every((gain, i) => gain === six[i]));
+  const gains = sameCurve ? ten! : six !== null ? spread(six) : base.gains;
   let clarity = neutralClarity();
   if (typeof value.clarity === "number") {
     const db = number(value.clarity, 0, (v) => tenth(v, 0, 6));
@@ -189,7 +206,8 @@ export function serialize({ settings, syncKeep, autoLoad, device, deviceName, ex
     ...extra,
     version: 2,
     equalizer: settings.equalizer,
-    gains: settings.gains,
+    gains: narrow(settings.gains),
+    gains10: settings.gains,
     normalize: settings.normalize,
     clarity: { ...settings.clarity },
     channels: { mode: settings.channels },

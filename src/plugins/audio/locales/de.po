@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:56 main.ts:64 main.ts:335 main.ts:578
+#: main.ts:56 main.ts:64 main.ts:335 main.ts:581
 #, x-machine
 msgid "{}"
 msgstr "{}"
@@ -46,7 +46,7 @@ msgstr "Audio"
 msgid "Audio Track"
 msgstr "Audiospur"
 
-#: main.ts:76 ui/workbench.slint:203 ui/workbench.slint:345
+#: main.ts:76 ui/workbench.slint:207 ui/workbench.slint:353
 #, x-machine
 msgid "Channels"
 msgstr "Kanäle"
@@ -71,7 +71,7 @@ msgstr "Audioversatz"
 msgid "Audio Processing"
 msgstr "Klangbearbeitung"
 
-#: main.ts:128 main.ts:686
+#: main.ts:128 main.ts:689
 #, x-machine
 msgid "Audio sync: {} s"
 msgstr "Audioversatz: {} s"
@@ -171,12 +171,12 @@ msgstr "Wird geladen…"
 msgid "No Audio Tracks"
 msgstr "Keine Audiospuren"
 
-#: main.ts:334 main.ts:578
+#: main.ts:334 main.ts:581
 #, x-machine
 msgid "Unnamed device"
 msgstr "Unbenanntes Gerät"
 
-#: main.ts:334 main.ts:576
+#: main.ts:334 main.ts:579
 #, x-machine
 msgid "Selected device"
 msgstr "Ausgewähltes Gerät"
@@ -186,7 +186,7 @@ msgstr "Ausgewähltes Gerät"
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: main.ts:338 main.ts:575 ui/workbench.slint:40
+#: main.ts:338 main.ts:578 ui/workbench.slint:42
 #, x-machine
 msgid "System Default"
 msgstr "Systemstandard"
@@ -226,207 +226,212 @@ msgstr "Ausgabegerät getrennt, Systemstandard wird verwendet"
 msgid "Device not connected"
 msgstr "Gerät nicht verbunden"
 
-#: main.ts:508 main.ts:604 main.ts:629
+#: main.ts:502
+#, x-machine
+msgid "No audio output"
+msgstr "Keine Audioausgabe"
+
+#: main.ts:511 main.ts:607 main.ts:632
 #, x-machine
 msgid "Loading"
 msgstr "Wird geladen"
 
-#: main.ts:508 main.ts:629 ui/workbench.slint:35
+#: main.ts:511 main.ts:632 ui/workbench.slint:37
 #, x-machine
 msgid "No audio tracks"
 msgstr "Keine Audiospuren"
 
-#: main.ts:568
+#: main.ts:571
 #, x-machine
 msgid "No output devices available"
 msgstr "Keine Ausgabegeräte verfügbar"
 
-#: main.ts:581
+#: main.ts:584
 #, x-machine
 msgid "{} (not connected)"
 msgstr "{} (nicht verbunden)"
 
-#: main.ts:587
+#: main.ts:590
 #, x-machine
 msgid "{}: device not connected, using System Default"
 msgstr "{}: Gerät nicht verbunden, Systemstandard wird verwendet"
 
-#: main.ts:597
+#: main.ts:600
 #, x-machine
 msgid "Load External Audio…"
 msgstr "Externe Audiodatei laden…"
 
-#: main.ts:604
+#: main.ts:607
 #, x-machine
 msgid "No file is playing"
 msgstr "Es wird keine Datei abgespielt"
 
-#: main.ts:604
+#: main.ts:607
 #, x-machine
 msgid "Generated video cannot take external audio"
 msgstr "Zu generiertem Video kann keine externe Audiodatei geladen werden"
 
-#: main.ts:615
+#: main.ts:618
 #, x-machine
 msgid "Audio…"
 msgstr "Audio…"
 
-#: main.ts:624
+#: main.ts:627
 #, x-machine
 msgid "Cycle Tracks"
 msgstr "Spuren durchschalten"
 
-#: main.ts:635 ui/workbench.slint:190 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:192 ui/workbench.slint:195
 #, x-machine
 msgid "Stereo"
 msgstr "Stereo"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 #, x-machine
 msgid "Left Channel"
 msgstr "Linker Kanal"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 #, x-machine
 msgid "Right Channel"
 msgstr "Rechter Kanal"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 #, x-machine
 msgid "Mono Mix"
 msgstr "Mono-Mix"
 
-#: main.ts:635 ui/workbench.slint:191
+#: main.ts:638 ui/workbench.slint:195
 #, x-machine
 msgid "Swap Left and Right"
 msgstr "Links/rechts tauschen"
 
-#: main.ts:641 main.ts:651 main.ts:664 main.ts:677 main.ts:684 main.ts:706 main.ts:718 main.ts:730 ui/workbench.slint:574
+#: main.ts:644 main.ts:654 main.ts:667 main.ts:680 main.ts:687 main.ts:709 main.ts:721 main.ts:733 ui/workbench.slint:584
 #, x-machine
 msgid "No audio track selected"
 msgstr "Keine Audiospur ausgewählt"
 
-#: main.ts:641 ui/workbench.slint:353
+#: main.ts:644 ui/workbench.slint:357
 #, x-machine
 msgid "The current track is mono"
 msgstr "Die aktuelle Spur ist mono"
 
-#: main.ts:647 ui/workbench.slint:206 ui/workbench.slint:477
+#: main.ts:650 ui/workbench.slint:210 ui/workbench.slint:487
 #, x-machine
 msgid "Equalizer"
 msgstr "Equalizer"
 
-#: main.ts:654
+#: main.ts:657
 #, x-machine
 msgid "Equalizer: On"
 msgstr "Equalizer: Ein"
 
-#: main.ts:654
+#: main.ts:657
 #, x-machine
 msgid "Equalizer: Off"
 msgstr "Equalizer: Aus"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 #, x-machine
 msgid "Flat"
 msgstr "Neutral"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 #, x-machine
 msgid "Voice"
 msgstr "Stimme"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 #, x-machine
 msgid "Music"
 msgstr "Musik"
 
-#: main.ts:660 ui/workbench.slint:188
+#: main.ts:663 ui/workbench.slint:190
 #, x-machine
 msgid "Cinema"
 msgstr "Kino"
 
-#: main.ts:667
+#: main.ts:670
 #, x-machine
 msgid "Equalizer preset: Flat"
 msgstr "Equalizer-Voreinstellung: Neutral"
 
-#: main.ts:667
+#: main.ts:670
 #, x-machine
 msgid "Equalizer preset: Voice"
 msgstr "Equalizer-Voreinstellung: Stimme"
 
-#: main.ts:667
+#: main.ts:670
 #, x-machine
 msgid "Equalizer preset: Music"
 msgstr "Equalizer-Voreinstellung: Musik"
 
-#: main.ts:667
+#: main.ts:670
 #, x-machine
 msgid "Equalizer preset: Cinema"
 msgstr "Equalizer-Voreinstellung: Kino"
 
-#: main.ts:677
+#: main.ts:680
 #, x-machine
 msgid "50 ms Earlier"
 msgstr "50 ms früher"
 
-#: main.ts:677
+#: main.ts:680
 #, x-machine
 msgid "50 ms Later"
 msgstr "50 ms später"
 
-#: main.ts:680 main.ts:727 ui/workbench.slint:595
+#: main.ts:683 main.ts:730 ui/workbench.slint:605
 #, x-machine
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: main.ts:692 ui/workbench.slint:465
+#: main.ts:695 ui/workbench.slint:475
 #, x-machine
 msgid "Don't Keep"
 msgstr "Nicht beibehalten"
 
-#: main.ts:692 ui/workbench.slint:465
+#: main.ts:695 ui/workbench.slint:475
 #, x-machine
 msgid "Keep for This Run"
 msgstr "Nur diese Sitzung"
 
-#: main.ts:692 ui/workbench.slint:465
+#: main.ts:695 ui/workbench.slint:475
 #, x-machine
 msgid "Always Keep"
 msgstr "Immer beibehalten"
 
-#: main.ts:702 ui/workbench.slint:522
+#: main.ts:705 ui/workbench.slint:532
 #, x-machine
 msgid "Normalize"
 msgstr "Normalisieren"
 
-#: main.ts:709
+#: main.ts:712
 #, x-machine
 msgid "Normalize: On"
 msgstr "Normalisieren: Ein"
 
-#: main.ts:709
+#: main.ts:712
 #, x-machine
 msgid "Normalize: Off"
 msgstr "Normalisieren: Aus"
 
-#: main.ts:714 ui/workbench.slint:536
+#: main.ts:717 ui/workbench.slint:546
 #, x-machine
 msgid "Crystalizer"
 msgstr "Crystalizer"
 
-#: main.ts:722
+#: main.ts:725
 #, x-machine
 msgid "Crystalizer: On"
 msgstr "Crystalizer: Ein"
 
-#: main.ts:722
+#: main.ts:725
 #, x-machine
 msgid "Crystalizer: Off"
 msgstr "Crystalizer: Aus"
 
-#: main.ts:733
+#: main.ts:736
 #, x-machine
 msgid "Audio processing reset"
 msgstr "Klangbearbeitung zurückgesetzt"
@@ -465,157 +470,157 @@ msgstr "Audiospur"
 msgid "output device"
 msgstr "Ausgabegerät"
 
-#: ui/workbench.slint:188
+#: ui/workbench.slint:190
 #, x-machine
 msgid "Custom"
 msgstr "Angepasst"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "L"
 msgstr "L"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "R"
 msgstr "R"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "Mono"
 msgstr "Mono"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:192
 #, x-machine
 msgid "Swap"
 msgstr "Tauschen"
 
-#: ui/workbench.slint:195
+#: ui/workbench.slint:199
 #, x-machine
 msgid "{} ms"
 msgstr "{} ms"
 
-#: ui/workbench.slint:200 ui/workbench.slint:250
+#: ui/workbench.slint:204 ui/workbench.slint:254
 #, x-machine
 msgid "Volume"
 msgstr "Lautstärke"
 
-#: ui/workbench.slint:201 ui/workbench.slint:289
+#: ui/workbench.slint:205 ui/workbench.slint:297
 #, x-machine
 msgid "Track"
 msgstr "Spur"
 
-#: ui/workbench.slint:202 ui/workbench.slint:327
+#: ui/workbench.slint:206 ui/workbench.slint:335
 #, x-machine
 msgid "Output"
 msgstr "Ausgabe"
 
-#: ui/workbench.slint:204 ui/workbench.slint:391
+#: ui/workbench.slint:208 ui/workbench.slint:401
 #, x-machine
 msgid "Delay"
 msgstr "Versatz"
 
-#: ui/workbench.slint:205 ui/workbench.slint:460
+#: ui/workbench.slint:209 ui/workbench.slint:470
 #, x-machine
 msgid "Keep"
 msgstr "Behalten"
 
-#: ui/workbench.slint:276
+#: ui/workbench.slint:284
 #, x-machine
 msgid "{}%"
 msgstr "{} %"
 
-#: ui/workbench.slint:285
+#: ui/workbench.slint:293
 #, x-machine
 msgid "TRACK"
 msgstr "SPUR"
 
-#: ui/workbench.slint:292
+#: ui/workbench.slint:300
 #, x-machine
 msgid "next"
 msgstr "nächste"
 
-#: ui/workbench.slint:312
+#: ui/workbench.slint:320
 #, x-machine
 msgid "Load…"
 msgstr "Laden…"
 
-#: ui/workbench.slint:315
+#: ui/workbench.slint:323
 #, x-machine
 msgid "Load audio files with the same name as the video automatically"
 msgstr "Audiodateien mit dem Namen des Videos automatisch laden"
 
-#: ui/workbench.slint:318
+#: ui/workbench.slint:326
 #, x-machine
 msgid "Same name"
 msgstr "Gleicher Name"
 
-#: ui/workbench.slint:379
+#: ui/workbench.slint:389
 #, x-machine
 msgid "SYNC"
 msgstr "VERSATZ"
 
-#: ui/workbench.slint:383
+#: ui/workbench.slint:393
 #, x-machine
 msgid "Audio sync"
 msgstr "Versatz"
 
-#: ui/workbench.slint:385
+#: ui/workbench.slint:395
 #, x-machine
 msgid "earlier"
 msgstr "früher"
 
-#: ui/workbench.slint:386
+#: ui/workbench.slint:396
 #, x-machine
 msgid "later"
 msgstr "später"
 
-#: ui/workbench.slint:473
+#: ui/workbench.slint:483
 #, x-machine
 msgid "EQUALIZER"
 msgstr "EQUALIZER"
 
-#: ui/workbench.slint:515
+#: ui/workbench.slint:525
 #, x-machine
 msgid "PROCESSING"
 msgstr "VERARBEITUNG"
 
-#: ui/workbench.slint:553
+#: ui/workbench.slint:563
 #, x-machine
 msgid "{} dB"
 msgstr "{} dB"
 
-#: ui/workbench.slint:573
+#: ui/workbench.slint:583
 #, x-machine
 msgid "Loading audio…"
 msgstr "Audio wird geladen…"
 
-#: ui/workbench.slint:575
+#: ui/workbench.slint:585
 #, x-machine
 msgid "Applying…"
 msgstr "Wird angewendet…"
 
-#: ui/workbench.slint:576
+#: ui/workbench.slint:586
 #, x-machine
 msgid "Audio processing failed"
 msgstr "Klangbearbeitung fehlgeschlagen"
 
-#: ui/workbench.slint:577
+#: ui/workbench.slint:587
 #, x-machine
 msgid "Applied"
 msgstr "Angewendet"
 
-#: ui/workbench.slint:578
+#: ui/workbench.slint:588
 #, x-machine
 msgid "Ready"
 msgstr "Bereit"
 
-#: ui/workbench.slint:588
+#: ui/workbench.slint:598
 #, x-machine
 msgid "Retry"
 msgstr "Wiederholen"
 
-#: ui/workbench.slint:591
+#: ui/workbench.slint:601
 #, x-machine
 msgid "Equalizer, Normalize and Crystalizer back to neutral; sync and channels are kept"
 msgstr "Equalizer, Normalisieren und Crystalizer zurück auf neutral; Versatz und Kanäle bleiben"

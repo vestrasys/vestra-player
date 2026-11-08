@@ -1302,8 +1302,12 @@ test("activated before a file is open, the panel follows the file opened later (
 });
 
 test("the panel's volume slider and mute set the player's output; −50 / +50 step the sync without on-screen text", async () => {
-  const { host, window, stop } = await open();
+  const host = new TestHost();
+  host.audioDevices = [SPEAKERS];
+  const { window, stop } = await open(host);
   await host.settle();
+  assert.equal(window.props["can-volume"], true);
+  assert.equal(window.props["volume-reason"], "");
   assert.equal(window.props.volume, 100);
   assert.equal(window.props.muted, false);
   window.emit("volume-changed", 42.4);
@@ -1326,5 +1330,17 @@ test("the panel's volume slider and mute set the player's output; −50 / +50 st
   await host.settle();
   assert.equal(own(host)?.offsetMs, -50);
   assert.equal(host.osd.length, shown, "the panel shows the value itself");
+  await stop();
+});
+
+test("without an audio output the volume is greyed out and says why; nothing is sent", async () => {
+  const { host, window, stop } = await open(); // the test host lists no output device
+  await host.settle();
+  assert.equal(window.props["can-volume"], false);
+  assert.equal(host.translate(window.props["volume-reason"] as never), "No audio output");
+  window.emit("volume-changed", 30);
+  window.emit("mute-toggled");
+  await host.settle();
+  assert.equal(host.sent("playback.set").length, 0);
   await stop();
 });
