@@ -2316,7 +2316,7 @@ const upOf = (host: TestHost) => host.mounted().props.upscaling as Upscaling;
 const upItem = (host: TestHost) => host.command("video.upscaling");
 const RTX = "NVIDIA GeForce RTX 4070 Laptop GPU";
 
-test("AI Upscaling: starting checks no GPU; showing the panel reads the state; the switch upscales and is saved", async () => {
+test("AI Upscaling: starting and showing the panel check no GPU; the switch upscales and is saved", async () => {
   await withData(async (data) => {
     const host = new TestHost();
     host.openElsewhere("/movie.mp4");
@@ -2329,14 +2329,21 @@ test("AI Upscaling: starting checks no GPU; showing the panel reads the state; t
         [upItem(host).display.title, upItem(host).display.category, upItem(host).declaration.order, upItem(host).state.checked],
         ["AI Upscaling", "Picture", 461, false],
       );
-      // The panel shows: the state is read (the player's check), and the GPU's name reaches the GPU line.
+      // The panel shows: nothing is read (that would wake a sleeping discrete GPU), nothing is
+      // followed; the row says Off with the switch usable, and the GPU line has no name.
       await host.command("video.picture").run();
-      await until(host, () => host.upscaling.checked, "read when the panel shows");
-      await eventually(() => gpuOf(host).name, RTX);
-      await eventually(() => upOf(host).kind, "off");
-      // The panel's switch runs the command.
+      await host.settle();
+      assert.equal(host.upscaling.checked, false, "showing the panel woke no GPU");
+      assert.equal(host.listening.has("video.upscaling.changed"), false, "not followed before the state was read");
+      assert.deepEqual(upOf(host), { checked: false, enabled: true, busy: false, kind: "off", detail: "", from: 0, to: 0, gpu: "" });
+      assert.equal(gpuOf(host).name, "");
+      assert.equal(upItem(host).state.enabled, true);
+      // The panel's switch runs the command: now the GPU is checked, and the panel follows the player.
       host.mounted().emit("run", "video.upscaling");
       await until(host, () => upOf(host).kind === "upscaling", "upscaling");
+      assert.equal(host.upscaling.checked, true);
+      await until(host, () => host.listening.has("video.upscaling.changed"), "followed once read while the panel shows");
+      await eventually(() => gpuOf(host).name, RTX);
       assert.deepEqual(upOf(host), { checked: true, enabled: true, busy: false, kind: "upscaling", detail: "", from: 1080, to: 2160, gpu: RTX });
       assert.equal(host.upscaling.enabled, true);
       assert.equal(upItem(host).state.checked, true);
@@ -2358,6 +2365,24 @@ test("AI Upscaling: starting checks no GPU; showing the panel reads the state; t
       await second.stop();
     }
     assert.equal(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).render.upscaling, false);
+  });
+});
+
+test("AI Upscaling: saved on, the state is read at start and the panel follows it while shown", async () => {
+  await withData(async (data) => {
+    await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, render: { ...defaultLook().render, upscaling: true } }));
+    const host = new TestHost();
+    host.openElsewhere("/movie.mp4");
+    const { stop } = await start(host, data);
+    try {
+      await until(host, () => host.upscaling.enabled, "asked for again at start");
+      assert.equal(host.listening.has("video.upscaling.changed"), false, "no listener while the panel is hidden");
+      await host.command("video.picture").run();
+      await until(host, () => host.listening.has("video.upscaling.changed"), "followed while shown");
+      await until(host, () => upOf(host).kind === "upscaling", "upscaling");
+    } finally {
+      await stop();
+    }
   });
 });
 
@@ -2414,14 +2439,21 @@ test("AI Upscaling: greyed with the reason where it cannot work, never asking th
   } finally {
     await second.stop();
   }
-  // GPU rendering without an RTX GPU: the player's reason, once the panel read it.
+  // GPU rendering without an RTX GPU: the panel shows a usable switch (nothing read); turned on,
+  // the switch goes back off with the player's reason, and the command greys with it.
   const amd = new TestHost();
   amd.upscaling.reason = { code: "no-gpu", message: "no NVIDIA GPU (AMD Radeon 780M renders)" };
   amd.openElsewhere("/movie.mp4");
   const third = await start(amd);
   try {
     await amd.command("video.picture").run();
+    await amd.settle();
+    assert.equal(amd.upscaling.checked, false, "the panel alone woke no GPU");
+    assert.deepEqual([upOf(amd).kind, upOf(amd).enabled, upItem(amd).state.enabled], ["off", true, true]);
+    amd.mounted().emit("run", "video.upscaling");
     await until(amd, () => upOf(amd).kind === "gpu", "not on this GPU");
+    assert.equal(upOf(amd).checked, false, "back off");
+    assert.equal(amd.osd.at(-1), "AI upscaling unavailable: no NVIDIA GPU (AMD Radeon 780M renders)");
     assert.deepEqual([upOf(amd).enabled, upOf(amd).detail], [false, "no NVIDIA GPU (AMD Radeon 780M renders)"]);
     assert.deepEqual([upItem(amd).state.enabled, upItem(amd).display.reason], [false, "Not available on this GPU: no NVIDIA GPU (AMD Radeon 780M renders)"]);
   } finally {
@@ -2497,4 +2529,26 @@ test("panel: Reset All (video.resetPanel) resets Colour, Effects and Geometry, n
   } finally {
     await stop();
   }
+});
+
+test("panel: on/off settings are sliding switches (std-widgets Switch, as Playback's Loop); the footer stays a check box", () => {
+  const slint = readFileSync(new URL("../picture.slint", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  assert.match(slint, /import \{[^}]*\bSwitch as StdSwitch\b[^}]*\} from "std-widgets\.slint";/);
+  const body = (name: string) => {
+    const at = slint.indexOf(`\ncomponent ${name} {`);
+    assert.notEqual(at, -1, name);
+    return slint.slice(at, slint.indexOf("\n}\n", at));
+  };
+  assert.match(body("Switch"), /knob := StdSwitch \{/);
+  assert.doesNotMatch(body("Switch"), /\bCheck \{/);
+  assert.match(body("CheckRow"), /\bCheck \{/);
+  // The rows the mockups (30, 31) draw as switches, by their label; the footer's master check box.
+  const control = (label: string) => {
+    const at = slint.indexOf(label);
+    assert.notEqual(at, -1, label);
+    return /(\w+) \{\s*$/.exec(slint.slice(Math.max(0, slint.lastIndexOf("{", at) - 40), slint.lastIndexOf("{", at) + 1))?.[1];
+  };
+  for (const label of ['text: @tr("GPU Rendering")', 'text: @tr("AI Upscaling")', 'text: @tr("Double rate")', 'text: @tr("Peak detection")', "text: root.shaders-text", "width: Layout.switch-column;\n                text: root.label;"])
+    assert.equal(control(label), "Switch", label);
+  assert.equal(control('text: @tr("Enable picture effects");\n                    checked'), "CheckRow");
 });

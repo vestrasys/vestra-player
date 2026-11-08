@@ -1661,10 +1661,14 @@ export default async function activate(plugin: Plugin) {
   // (`plugin.video.upscaling`; user ruling 2026-11-08: this plugin offers it, under GPU Rendering
   // in the panel's Rendering section and as a command; there is no separate upscaling plugin).
   // The choice is saved and asked for again at each start (the player keeps a request for one run).
-  // The player's first GPU check wakes a sleeping discrete GPU, so the state is read only when it
-  // is needed: at start when upscaling is on, when the panel shows, and when the user switches;
-  // while the panel shows, the player's changes are followed (a listener would keep this plugin
-  // running, so only then). Under software rendering nothing is asked: it needs GPU rendering.
+  // The player's first GPU check wakes a sleeping discrete GPU (hybrid laptops), so the state is
+  // read only when the user wants upscaling: at start and when the panel shows while it is saved
+  // on, and when the user switches (the panel switch or the command). Opening the panel alone reads
+  // nothing: until then the row says Off (what it does) with the switch usable, and the GPU line
+  // has no name; turned on where it cannot work, the switch goes back off with the player's reason
+  // (and the command greys with it from then on). While the panel shows and the state has been
+  // read, the player's changes are followed (a listener would keep this plugin running, so only
+  // then). Under software rendering nothing is asked: it needs GPU rendering.
   let upscalingBusy = false;
   const softwareNow = () => rendering?.mode === "software";
   /** What the status line says (`Upscaling.kind` in picture.slint) and the player's message. */
@@ -1721,6 +1725,7 @@ export default async function activate(plugin: Plugin) {
     if (stopped) return;
     if (next) upscaling = next;
     plugin.update();
+    followPanel(panel.state);
   };
   const switchUpscaling = async () => {
     if (upscalingBusy) return;
@@ -1753,7 +1758,10 @@ export default async function activate(plugin: Plugin) {
       }
     } finally {
       upscalingBusy = false;
-      if (!stopped) plugin.update();
+      if (!stopped) {
+        plugin.update();
+        followPanel(panel.state);
+      }
     }
   };
   runs.set("video.upscaling", switchUpscaling);
@@ -1775,25 +1783,28 @@ export default async function activate(plugin: Plugin) {
     void plugin.video.upscaling.set(true).then(
       (state) => {
         upscaling = state;
-        if (!stopped) plugin.update();
+        if (stopped) return;
+        plugin.update();
+        followPanel(panel.state);
       },
       () => void readUpscaling(),
     );
-  // While the panel shows: its status follows the player (the factor, the reason, the decoder).
+  // While the panel shows and the state has been read: its status follows the player (the factor,
+  // the reason, the decoder). Shown again while upscaling is saved on, the state is read afresh.
   let following: Disposable | null = null;
-  const followPanel = (state: PanelState | null) => {
+  function followPanel(state: PanelState | null) {
     const visible = state?.effective === true && !softwareNow() && !stopped;
-    if (visible && following === null) {
+    if (visible && following === null && upscaling !== null) {
       following = plugin.video.upscaling.onChange((next) => {
         upscaling = next;
         plugin.update();
       });
-      void readUpscaling();
+      if (look.render.upscaling) void readUpscaling();
     } else if (!visible && following !== null) {
       following.dispose();
       following = null;
     }
-  };
+  }
   panel.onChange(followPanel);
   followPanel(panel.state);
   let renderingSource = player.state.sourceId;

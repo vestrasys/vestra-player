@@ -11,7 +11,7 @@
 // Key caps come from `plugin.commands.keys` (`Keys`): the user's current keys, "" for none.
 // The file keeps its name and the names `Picture` / `PictureBridge`, which the host's measurement
 // of the adjust column's first opening uses (composition.rs).
-import { ScrollView } from "std-widgets.slint";
+import { ScrollView, Switch as StdSwitch } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Button, Check, Choice, KeyHint, Slider, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
@@ -212,8 +212,11 @@ global Layout {
     out property <length> row: 22px;
     // The Rendering section's status lines.
     out property <length> status: 14px;
-    // Indent of a status line under its switch: the check box and the gap after it.
-    out property <length> status-indent: 22px;
+    // Indent of a status line under its switch: the switch (std-widgets, 40 px) and the gap after it,
+    // so the dot lines up with the label (mockups 30 and 31).
+    out property <length> status-indent: 46px;
+    // A switch with its label in a row of its own (the Denoise card): the switch, the gap, a label column.
+    out property <length> switch-column: 46px + 64px;
 }
 
 // Status colours of the Rendering section (mockup 31): on (green), waiting for a restart (amber).
@@ -414,9 +417,57 @@ component Fader {
     }
 }
 
-// A check box with a one-line label (elided); a click anywhere on it asks for the other state, and
-// the plugin sets `checked` (the library Check's plugin-decided mode).
+// A sliding switch with a one-line label (elided): the Playback panel's Loop switch (std-widgets
+// `Switch`, focusable: Space toggles it); a click on the label asks too. The plugin owns the state:
+// a toggle asks for the other state and the switch shows `checked` again until the plugin answers.
 component Switch {
+    in property <string> text;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    callback toggled(bool);
+    min-height: Theme.checkbox-row-height;
+    horizontal-stretch: 1;
+    changed checked => { knob.checked = root.checked; }
+    HorizontalLayout {
+        spacing: 6px;
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+            knob := StdSwitch {
+                text: "";
+                checked: root.checked;
+                enabled: root.enabled;
+                toggled => {
+                    root.toggled(self.checked);
+                    self.checked = root.checked;
+                }
+            }
+        }
+        Rectangle {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            Text {
+                width: 100%;
+                height: 100%;
+                horizontal-alignment: left;
+                text: root.text;
+                color: root.enabled ? Theme.text : Theme.text-dim;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            TouchArea {
+                enabled: root.enabled;
+                clicked => { root.toggled(!root.checked); }
+            }
+        }
+    }
+}
+
+// A check box with a one-line label (elided), for the footer's master switch (a check box in the
+// mockup too); a click anywhere on it asks for the other state, and the plugin sets `checked` (the
+// library Check's plugin-decided mode).
+component CheckRow {
     in property <string> text;
     in property <bool> checked;
     in property <bool> enabled: true;
@@ -736,7 +787,7 @@ component DenoiseRow {
             spacing: 6px;
             Switch {
                 horizontal-stretch: 0;
-                width: Layout.column;
+                width: Layout.switch-column;
                 text: root.label;
                 checked: root.checked;
                 toggled(on) => { root.toggled(on); }
@@ -2052,7 +2103,7 @@ export component Picture inherits Rectangle {
                 horizontal-stretch: 1;
                 min-height: Theme.button-height;
                 text: @tr("Enable picture effects");
-                Switch {
+                CheckRow {
                     width: 100%;
                     height: 100%;
                     text: @tr("Enable picture effects");
