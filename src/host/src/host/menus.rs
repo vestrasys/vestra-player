@@ -79,20 +79,39 @@ pub(crate) fn menu_area(
 ) -> menu::Area {
     use slint::winit_030::WinitWindowAccessor;
     let scale = f64::from(window.window().scale_factor());
+    // The displays' work areas (without the taskbar), as the system's menus
+    // keep to them: Windows lists them (`platform::work_areas`, the same
+    // desktop pixels as winit's positions); elsewhere winit gives only
+    // whole displays.
+    let work: Vec<_> = crate::platform::work_areas()
+        .into_iter()
+        .map(|(area, _)| {
+            (
+                f64::from(area.x),
+                f64::from(area.y),
+                f64::from(area.width),
+                f64::from(area.height),
+            )
+        })
+        .collect();
     let screens = window.window().with_winit_window(|winit| {
         let client = winit.inner_position().ok()?;
-        let monitors: Vec<_> = winit
-            .available_monitors()
-            .map(|monitor| {
-                let (at, extent) = (monitor.position(), monitor.size());
-                (
-                    f64::from(at.x),
-                    f64::from(at.y),
-                    f64::from(extent.width),
-                    f64::from(extent.height),
-                )
-            })
-            .collect();
+        let monitors: Vec<_> = if work.is_empty() {
+            winit
+                .available_monitors()
+                .map(|monitor| {
+                    let (at, extent) = (monitor.position(), monitor.size());
+                    (
+                        f64::from(at.x),
+                        f64::from(at.y),
+                        f64::from(extent.width),
+                        f64::from(extent.height),
+                    )
+                })
+                .collect()
+        } else {
+            work.clone()
+        };
         Some(((f64::from(client.x), f64::from(client.y)), monitors))
     });
     match screens.flatten() {
