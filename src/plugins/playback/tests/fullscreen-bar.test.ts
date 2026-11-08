@@ -38,7 +38,7 @@ const held = (locks: unknown) =>
 test("FS-BAR-1 keyboard seeks and speed in fullscreen show the OSD but never lock the bar", async () => {
   const { host, stop } = await start(fullscreenWithMedia());
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     const before = host.sent("ui.interaction").length;
     await host.command("forward-2").run();
     await host.command("backward-2").run();
@@ -69,7 +69,7 @@ test("FS-BAR-1 keyboard seeks and speed in fullscreen show the OSD but never loc
 test("0.2.11 the pointer on the seek band holds the bar (also in the 4px above it, which the player counts as neither bar nor video) and lets go when it leaves", async () => {
   const { host, stop } = await start(fullscreenWithMedia());
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     const popup = () => (bar.locks as { popupOpen?: boolean } | null)?.popupOpen === true;
     bar.emit("pointing", true);
     await until(popup);
@@ -84,7 +84,7 @@ test("0.2.11 the pointer on the seek band holds the bar (also in the 4px above i
 test("FS-BAR-1 a drag on the bar holds it while dragging and lets go on release", async () => {
   const { host, stop } = await start(fullscreenWithMedia());
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     bar.emit("dragging", true);
     await until(() => dragging(bar.locks));
     bar.emit("seekChanged", 0.5);

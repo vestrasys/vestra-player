@@ -34,7 +34,7 @@ const icon = (props: Record<string, unknown>) => (props["fullscreen"] ? "exit-fu
 test("UI-BAR-05 a click enters fullscreen, a second click leaves it, through host.run like the Toggle Fullscreen key", async () => {
   const { host, stop } = await start(withMedia());
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     assert.equal(host.mainWindow.fullscreen, false);
     assert.equal(bar.props["fullscreen"], false);
     assert.equal(icon(bar.props), "fullscreen");
@@ -58,7 +58,7 @@ test("UI-BAR-05 a click enters fullscreen, a second click leaves it, through hos
 test("UI-BAR-05 works without media too (the window is not playback state)", async () => {
   const { host, stop } = await start();
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     bar.emit("action", "fullscreen");
     await until(() => host.mainWindow.fullscreen && bar.props["fullscreen"] === true);
   } finally {
@@ -69,7 +69,7 @@ test("UI-BAR-05 works without media too (the window is not playback state)", asy
 test("UI-BAR-05 the icon follows the window when fullscreen changes elsewhere (key, Escape)", async () => {
   const { host, stop } = await start(withMedia());
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     host.setMainWindow({ fullscreen: true });
     await until(() => bar.props["fullscreen"] === true);
     assert.equal(icon(bar.props), "exit-fullscreen");
@@ -102,7 +102,7 @@ test("UI-BAR-05 bar.slint draws the button right of Open, left of the time, as a
 test("UI-BAR-05 the tooltip is translated and names the Toggle Fullscreen key", async () => {
   const { host, stop } = await start(withMedia(), "zh-Hans");
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     host.emit("bindings.changed", null);
     await until(() => bar.props["key-open"] === "Ctrl+O");
     // The test host's binding table has no host/fullscreen command (the

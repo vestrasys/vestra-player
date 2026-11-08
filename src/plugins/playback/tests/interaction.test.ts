@@ -68,7 +68,7 @@ const settingsFile = async (data: string) => {
 
 test("G-07 every bar element has a tooltip naming its key; Previous/Next name PgUp/PgDn", async () => {
   const { host, stop } = await start(withMedia());
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   // The player announces the table after the plugin's commands are declared.
   host.emit("bindings.changed", null);
   // Properties are written one at a time: `key-mute` comes after `key-open`.
@@ -106,7 +106,7 @@ test("G-07 every bar element has a tooltip naming its key; Previous/Next name Pg
 
 test("G-07 in English the tooltips are the source texts", async () => {
   const { host, stop } = await start(withMedia(), undefined, "en");
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   host.emit("bindings.changed", null);
   await until(() => bar.props["key-open"] === "Ctrl+O");
   const tip = tips(host, bar.props);
@@ -142,7 +142,7 @@ test("G-14 the elapsed/remaining choice is saved and kept after a restart", asyn
   const data = mkdtempSync(join(tmpdir(), "playback-g14-"));
   try {
     const first = await start(withMedia(), data);
-    const bar = first.host.mounted();
+    const bar = first.host.mounted("bottom");
     assert.equal(bar.props["elapsed-label"], "00:12");
     bar.emit("toggle-time");
     await first.host.settle();
@@ -153,10 +153,10 @@ test("G-14 the elapsed/remaining choice is saved and kept after a restart", asyn
     await first.stop();
 
     const second = await start(withMedia(), data);
-    assert.equal(second.host.mounted().props["elapsed-label"], "-01:28");
-    second.host.mounted().emit("toggle-time");
+    assert.equal(second.host.mounted("bottom").props["elapsed-label"], "-01:28");
+    second.host.mounted("bottom").emit("toggle-time");
     await second.host.settle();
-    assert.equal(second.host.mounted().props["elapsed-label"], "00:12");
+    assert.equal(second.host.mounted("bottom").props["elapsed-label"], "00:12");
     await until(async () => (await settingsFile(data)).remainingTime === false);
     await second.stop();
   } finally {
@@ -171,13 +171,13 @@ test("IA-PB-01 the hover time is off by default; a saved choice is kept", async 
   try {
     const first = await start(new TestHost(), data);
     assert.equal(first.host.command("hover-time").state.checked, false);
-    assert.equal(first.host.mounted().props["hover-time"], false);
+    assert.equal(first.host.mounted("bottom").props["hover-time"], false);
     await first.stop();
 
     writeFileSync(join(data, "settings.json"), JSON.stringify({ hoverTime: true, seekSteps: [0.5, 30, 60, 300] }));
     const second = await start(new TestHost(), data);
     assert.equal(second.host.command("hover-time").state.checked, true);
-    assert.equal(second.host.mounted().props["hover-time"], true);
+    assert.equal(second.host.mounted("bottom").props["hover-time"], true);
     await second.stop();
   } finally {
     rmSync(data, { recursive: true, force: true });

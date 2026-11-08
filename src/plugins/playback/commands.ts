@@ -3,19 +3,31 @@ import type { Playback } from "./controller.ts";
 import { type CopyKind, copyTarget } from "./copy.ts";
 import type { Keyframes } from "./keyframes.ts";
 import type { OpenUrl } from "./open-url.ts";
-import type { Prompt } from "./prompt.ts";
 import type { Reopener } from "./reopen.ts";
-import type { SeekSteps, SettingsStore } from "./settings.ts";
-import type { Category, MenuText, Reason, State } from "./texts.ts";
+import { type SeekSteps, type SettingsStore, stepText } from "./settings.ts";
+import type { Anchor, Category, MenuText, Reason, State } from "./texts.ts";
 import type { Thumbnails } from "./thumbs.ts";
-import { stepText, type TimeJump } from "./time-jump.ts";
+
+/** What the commands do with the Playback panel (panel.ts). */
+export type PanelActions = {
+  /** Playback… (Alt+4): the adjust column at this panel, or closed when the panel is in front. */
+  toggle: () => Promise<void>;
+  /** The adjust column is shown with this panel in front (Playback… is checked). */
+  shown: () => boolean;
+  /** Jump to Time… (G): the panel in front, its time field focused. */
+  focusJump: () => Promise<void>;
+  /** Custom… speed: the panel in front, its speed open for typing. */
+  typeRate: () => Promise<void>;
+  /** Seek Steps…: the panel in front at its Seek steps section. */
+  revealSteps: () => Promise<void>;
+};
 
 /** The 播放控制 chapter's features (doc/product/feature-requirements.md). */
 export type Features = {
   openUrl: OpenUrl;
   reopener: Reopener;
   keyframes: Keyframes;
-  timeJump: TimeJump;
+  panel: PanelActions;
   /** B29: pass the switch to the host. */
   sleep: () => void;
   settings: SettingsStore;
@@ -28,11 +40,16 @@ export type Features = {
 
 type Entry = {
   id: string;
-  path: (MenuText | Text)[];
+  /** In the menu; without one the command is in the command palette only (with its key). */
+  path?: (Anchor | MenuText | Text)[];
+  /** The title of a command outside the menu. */
+  title?: MenuText | Text;
   /** The command palette's "Category: Title" (translated like the title). */
   category: Category;
+  /** The command that opens the place where this command's control lives (`panel`: the Playback panel). */
+  home?: "panel";
   /** Menu position: doc/product/menus.md, and the 播放控制 chapter's 菜单与快捷键 table for new items. */
-  order: number;
+  order?: number;
   group?: string;
   radio?: boolean;
   bindings?: string[];
@@ -52,8 +69,10 @@ const ready = (enabled = true, checked: boolean | null = null, busy = false, rea
 });
 
 /**
- * Tiers 2–4 of the relative seeks (B06). Tier 1 (← →) is the core's
- * `seek-backward` / `seek-forward`, given its step with `player.setStepSeek`.
+ * Tiers 2–4 of the relative seeks (B06), in the command palette with their keys
+ * (menu redesign: the Playback panel's Seek steps replace Playback ▸ Seek). Tier 1
+ * (← →) is the core's `seek-backward` / `seek-forward`, given its step with
+ * `player.setStepSeek`.
  */
 function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n, seekBy: (delta: number) => unknown): Entry[] {
   const tiers: [number, string, string][] = [
@@ -63,40 +82,34 @@ function seekEntries(p: Playback, steps: SeekSteps, { text }: I18n, seekBy: (del
   ];
   return tiers.flatMap(([tier, back, forward]) => {
     const seconds = steps[tier - 1]!;
-    const order = 210 + (tier - 1) * 2;
-    const seek = (id: string, direction: "backward" | "forward", at: number, delta: number, binding: string): Entry => ({
+    const seek = (id: string, direction: "backward" | "forward", delta: number, binding: string): Entry => ({
       id,
-      path: ["@playback", "Seek", direction === "backward" ? text("Back {} s", [stepText(seconds)]) : text("Forward {} s", [stepText(seconds)])],
+      title: direction === "backward" ? text("Back {} s", [stepText(seconds)]) : text("Forward {} s", [stepText(seconds)]),
       category: "Seek",
-      order: at,
-      group: "step",
+      home: "panel",
       bindings: [binding],
       action: () => seekBy(delta),
       state: () => ready(p.canStep()),
     });
-    return [
-      seek(`backward-${tier}`, "backward", order, -seconds, back),
-      seek(`forward-${tier}`, "forward", order + 1, seconds, forward),
-    ];
+    return [seek(`backward-${tier}`, "backward", -seconds, back), seek(`forward-${tier}`, "forward", seconds, forward)];
   });
 }
 
-function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): Entry[] {
-  const rate = (id: string, title: MenuText, order: number, value: number): Entry => ({
+function entries(p: Playback, f: Features): Entry[] {
+  const rate = (id: string, title: MenuText, value: number): Entry => ({
     id,
-    path: ["@playback", "Speed", title],
+    title,
     category: "Speed",
-    order,
+    home: "panel",
     radio: true,
     action: () => p.setRate(value),
     state: () => ready(p.can("rate"), p.state.rate === value, p.rateBusy),
   });
-  const keyframe = (id: string, title: MenuText, order: number, direction: "backward" | "forward", binding: string): Entry => ({
+  const keyframe = (id: string, title: MenuText, direction: "backward" | "forward", binding: string): Entry => ({
     id,
-    path: ["@playback", "Seek", title],
+    title,
     category: "Seek",
-    order,
-    group: "frame",
+    home: "panel",
     bindings: [binding],
     repeat: true,
     action: () => f.keyframes.run(direction),
@@ -158,45 +171,57 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
     copy("copy-name", "File Name", 125, "name"),
     copy("copy-folder", "Folder Path", 126, "folder"),
     copy("copy-path", "Full Path", 127, "path"),
-    keyframe("keyframe-back", "Previous Keyframe", 206, "backward", "Ctrl+Shift+ArrowLeft"),
-    keyframe("keyframe-forward", "Next Keyframe", 207, "forward", "Ctrl+Shift+ArrowRight"),
+    // Menu redesign (step 7): Playback… (Alt+4) opens the Playback panel in the adjust column;
+    // again closes the column. The panel replaces Playback ▸ Speed and Seek, Jump to Time…,
+    // the custom speed window and Seek Steps…: those commands are in the command palette
+    // ("Category: Title") with their ids and keys, and name the panel as their home.
+    {
+      id: "panel",
+      path: ["Playback…"],
+      category: "Playback",
+      order: 794,
+      group: "windows",
+      bindings: ["Alt+4"],
+      action: () => f.panel.toggle(),
+      state: () => ready(true, f.panel.shown()),
+    },
+    keyframe("keyframe-back", "Previous Keyframe", "backward", "Ctrl+Shift+ArrowLeft"),
+    keyframe("keyframe-forward", "Next Keyframe", "forward", "Ctrl+Shift+ArrowRight"),
     {
       id: "jump",
-      path: ["@playback", "Jump to Time…"],
+      title: "Jump to Time…",
       category: "Seek",
-      order: 218,
+      home: "panel",
       bindings: ["G"],
-      action: () => jump.show(),
+      action: () => f.panel.focusJump(),
       state: () => ready(p.canSeek()),
     },
     {
       id: "jump-start",
-      path: ["@playback", "Seek", "Jump to Start"],
+      title: "Jump to Start",
       category: "Seek",
-      order: 219,
-      group: "points",
+      home: "panel",
       bindings: ["Backspace"],
       action: () => f.jumpToStart(),
       state: () => ready(p.canRestart(), null, p.restartBusy),
     },
     {
       id: "time-jump",
-      path: ["@playback", "Seek", "Seek Steps…"],
+      title: "Seek Steps…",
       category: "Seek",
-      order: 223,
-      group: "jump-settings",
-      action: () => f.timeJump.show(),
+      home: "panel",
+      action: () => f.panel.revealSteps(),
       state: () => ready(),
     },
-    rate("rate-05", "0.5×", 223, 0.5),
-    rate("rate-15", "1.5×", 224, 1.5),
-    rate("rate-20", "2×", 225, 2),
+    rate("rate-05", "0.5×", 0.5),
+    rate("rate-15", "1.5×", 1.5),
+    rate("rate-20", "2×", 2),
     {
       id: "rate-custom",
-      path: ["@playback", "Speed", "Custom…"],
+      title: "Custom…",
       category: "Speed",
-      order: 226,
-      action: () => customRate.show(),
+      home: "panel",
+      action: () => f.panel.typeRate(),
       state: () => ready(p.can("rate"), null, p.rateBusy),
     },
     option("prevent-sleep", "Disable Screen Saver While Playing", 240, () => f.settings.value.preventSleep, () => {
@@ -240,12 +265,14 @@ function entries(p: Playback, jump: Prompt, customRate: Prompt, f: Features): En
 
 /** Register `table` in `scope`; the host checks `enabled`, `run` checks it again for late runs. */
 function register(scope: Scope, { text }: I18n, table: Entry[]) {
-  for (const { id, path, category, order, group, radio, bindings, repeat, state, action } of table)
+  for (const { id, path, title, category, home, order, group, radio, bindings, repeat, state, action } of table)
     scope.commands.add({
       id,
       path,
+      title,
       category: text(category),
-      order,
+      ...(home ? { home } : {}),
+      ...(order !== undefined ? { order } : {}),
       ...(group ? { group } : {}),
       ...(radio ? { radio } : {}),
       ...(bindings ? { bindings } : {}),
@@ -261,19 +288,25 @@ function register(scope: Scope, { text }: I18n, table: Entry[]) {
 }
 
 /**
- * Register the menu commands. The tier 2–4 seeks live in a child scope: a title
+ * Register the commands. The tier 2–4 seeks live in a child scope: a title
  * cannot change in place, so `setSteps` disposes them and adds them again with
- * the new seconds (same ids, orders and bindings).
+ * the new seconds (same ids and bindings).
  */
-export function addCommands(scope: Scope, i18n: I18n, playback: Playback, jump: Prompt, customRate: Prompt, features: Features) {
-  register(scope, i18n, entries(playback, jump, customRate, features));
+export function addCommands(scope: Scope, i18n: I18n, playback: Playback, features: Features) {
+  register(scope, i18n, entries(playback, features));
   let seeks = scope.scope();
   register(seeks, i18n, seekEntries(playback, features.settings.value.seekSteps, i18n, features.seekBy));
+  // One retitle at a time (steps typed one after another): each waits for the previous one,
+  // so a scope is never disposed twice nor its ids added while the old ones still hold them.
+  let queue = Promise.resolve();
   return {
-    async setSteps(steps: SeekSteps) {
-      await seeks.dispose();
-      seeks = scope.scope();
-      register(seeks, i18n, seekEntries(playback, steps, i18n, features.seekBy));
+    setSteps(steps: SeekSteps) {
+      queue = queue.catch(() => {}).then(async () => {
+        await seeks.dispose();
+        seeks = scope.scope();
+        register(seeks, i18n, seekEntries(playback, steps, i18n, features.seekBy));
+      });
+      return queue;
     },
   };
 }

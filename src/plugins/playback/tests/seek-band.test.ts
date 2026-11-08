@@ -136,7 +136,7 @@ test("0.2.10 hover and presses at the band's edges reach the plugin: preview on,
   const host = withMedia();
   const { stop } = await startPlugin(activate, { directory, host, locale: "en" });
   try {
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     const { band, fraction } = layout(1000);
     // Hover at the band's top-left corner: the bar reports pointing (the tip and the
     // preview show from it); no seek.
