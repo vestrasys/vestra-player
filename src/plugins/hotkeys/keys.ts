@@ -232,8 +232,8 @@ export function sameKey(a: string, b: string): boolean {
  * A command as lists name it, like the player's command palette: `Speed: 2×` when the
  * command has a category (`BindingInfo.category`, player 0.7.6, already translated), so a
  * title such as "2×" or "Off" still says what it changes once menu paths go away. Without
- * one, the menu path (`Playback ▸ Seek ▸ Forward 5 s`), or the title for commands outside
- * the menu. With `i18n` the separator is the interface language's (`速度：2×`, as the
+ * one, the menu path (`Open ▸ Open URL…`), or the title for commands outside the menu
+ * (the palette-only core commands since the menu sweep, `Mute`). With `i18n` the separator is the interface language's (`速度：2×`, as the
  * palette writes it); without, English.
  * ▸ (U+25B8) has no emoji presentation; ▶ (U+25B6) showed as a colour emoji.
  */

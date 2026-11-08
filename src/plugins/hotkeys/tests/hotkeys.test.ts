@@ -42,9 +42,12 @@ const key = (text: string, mods: Partial<{ control: boolean; alt: boolean; shift
   fromSlintKey({ text, control: false, alt: false, shift: false, meta: false, ...mods });
 const overlay = (host: TestHost) => Object.fromEntries(host.bindings.overlay);
 type Row = { key: string; command: string; keys: string; state: number; selected: boolean; conflicts: unknown[] };
-const PLAY = "Playback ▸ Play/Pause";
-const VOLUME_UP = "Audio ▸ Volume +";
-const MUTE = "Audio ▸ Mute";
+// Menu sweep (B5, SDK 1.6.17): Play/Pause is a top-level item; the other core commands have no
+// menu path (command palette only). The test host gives them no category, so their rows read
+// the bare title; the player names them "Category: Title" (see the palette-only test below).
+const PLAY = "Play/Pause";
+const VOLUME_UP = "Volume +";
+const MUTE = "Mute";
 const KEYS = "Settings: Keyboard Shortcuts…"; // the category (player 0.7.6), not the menu path
 const DEFAULT = 0;
 const CHANGED = 1;
@@ -441,6 +444,51 @@ test("J01: commands with a category are named \"Category: Title\", in the interf
   }
 });
 
+test("J01: palette-only core commands (menu sweep B5) are listed; with a category they read \"Category: Title\"", async () => {
+  // The test host's table (SDK 1.6.17): Play/Pause top level, the rest without a menu path.
+  const host = new TestHost();
+  await start(host);
+  await openKeys(host);
+  const core = (id: string) => host.coreCommands.get(`host/${id}`)!.declaration.path;
+  assert.deepEqual(core("play-pause"), ["Play/Pause"]);
+  for (const id of ["mute", "volume-up", "seek-forward", "frame-back", "rate-up", "previous", "next"]) assert.deepEqual(core(id), [], id);
+  // Every one of them has a row, keys and all; without a category the row is the title.
+  assert.deepEqual(row(host, MUTE)!.keys, "M");
+  assert.deepEqual(row(host, "Forward 5 s")!.keys, "ArrowRight"); // as the host labels it
+  assert.deepEqual(row(host, "Previous Frame")!.keys, "D");
+  assert.equal(row(host, "Previous")!.state, DEFAULT);
+  await emit(host, "keys", "select", "host/mute");
+  assert.equal(page(host, "keys").props["edit-command"], MUTE);
+  for (const stop of [...running]) await stop();
+
+  // The player (0.7.6) gives its own commands a category: the row, the search, the edit
+  // area, the OSD and the export say "Audio: Mute" (B1 ruling), never a menu path.
+  const withCategory = new TestHost();
+  withCategory.handle("bindings.list", () => ({
+    commands: [
+      { plugin: "host", command: "play-pause", title: "Play/Pause", path: ["Play/Pause"], category: "Playback", scope: "global", defaults: ["Space"], current: ["Space"], overridden: false, shadowed: [], labels: ["Space"] },
+      { plugin: "host", command: "mute", title: "Mute", path: [], category: "Audio", scope: "global", defaults: ["M"], current: ["M"], overridden: false, shadowed: [], labels: ["M"] },
+    ],
+    orphans: [],
+  }));
+  await start(withCategory);
+  const window = await openKeys(withCategory);
+  assert.deepEqual(rows(withCategory).map((r) => [r.command, r.keys]), [["Audio: Mute", "M"], ["Playback: Play/Pause", "Space"]]);
+  window.emit("search", "audio");
+  await withCategory.settle(WAIT);
+  assert.deepEqual(rows(withCategory).map((r) => r.command), ["Audio: Mute"]);
+  window.emit("search", "");
+  await withCategory.settle(WAIT);
+  await capture(withCategory, "host/mute", "n");
+  assert.equal(window.props["edit-command"], "Audio: Mute");
+  // The stubbed list does not follow the write; the name is what matters here.
+  assert.match(withCategory.osd.at(-1)!, /^Shortcut updated: Audio: Mute = M/);
+  const csv = join(scratch, "keys-category.csv");
+  withCategory.dialogAnswers.push([csv]);
+  await emit(withCategory, "keys", "export");
+  assert.ok(readFileSync(csv, "utf8").includes("\nAudio: Mute,"));
+});
+
 test("J01: search matches the menu path and the category too; a panel's command says so in its row", async () => {
   const command = (id: string, path: string[] | null, scope: "global" | "panel", key: string) => ({
     plugin: "vestra.playlist", command: id, title: "Add Files…", path, category: "Playlist", scope,
@@ -523,14 +571,14 @@ test("J01: the exported list in Simplified Chinese has the words of before", asy
   assert.deepEqual(host.fileDialogs.at(-1), { kind: "saveFile", title: "导出快捷键列表", fileName: "Vestra Player 快捷键.csv" });
   const text = readFileSync(csv, "utf8");
   assert.ok(text.startsWith("\u{feff}命令,快捷键,范围,来源,状态\n"));
-  assert.match(text, /\n播放 ▸ 播放\/暂停,Space,全局,宿主,默认\n/);
+  assert.match(text, /\n播放\/暂停,Space,全局,宿主,默认\n/);
   assert.match(text, /,N,全局,宿主,已修改\n/);
   const txt = join(scratch, "keys-zh.txt");
   host.dialogAnswers.push([txt]);
   await emit(host, "keys", "export");
   const plain = readFileSync(txt, "utf8");
   assert.ok(plain.startsWith("Vestra Player 快捷键列表\n\n命令\t快捷键\t范围\t来源\t状态\n"));
-  assert.match(plain, /播放 ▸ 播放\/暂停\tSpace\t全局\t宿主\t默认/);
+  assert.match(plain, /播放\/暂停\tSpace\t全局\t宿主\t默认/);
 });
 
 test("J01: the list follows changes made elsewhere; the selection stays", async () => {
@@ -580,10 +628,11 @@ test("J02: mouse rows show the command each input runs; choosing moves the input
     "host/volume-up": ["ArrowUp"],
     "host/seek-forward": ["ArrowRight", "Mouse:WheelUp"],
   });
-  assert.equal(host.osd.at(-1)!.startsWith("Mouse action updated: Wheel up = Playback ▸ Seek ▸ "), true);
+  // Seek is palette only (B5): named by its title, which carries the step.
+  assert.equal(host.osd.at(-1), "Mouse action updated: Wheel up = Forward 5 s");
   const updated = window.props.message as { kind: string; input: unknown; text: string };
   assert.deepEqual([updated.kind, updated.input], ["mouse-updated", { prefix: "", mouse: 7, text: "" }]);
-  assert.ok(updated.text.startsWith("Playback ▸ Seek ▸ "));
+  assert.equal(updated.text, "Forward 5 s");
   await host.press("Mouse:WheelUp");
   assert.equal(host.coreRuns.at(-1), "seek-forward");
   assert.equal(mouseRows()[7]!.resettable, true);
@@ -633,7 +682,7 @@ test("J02: the mouse OSD message in Simplified Chinese names the input in Chines
   await emit(host, "mouse", "setModifier", 1); // Ctrl
   await emit(host, "mouse", "pick", 7);
   await emit(host, "mouse", "choose", "host/mute");
-  assert.match(host.osd.at(-1)!, /^鼠标动作已更新：Ctrl\+滚轮上推 = .+静音/);
+  assert.equal(host.osd.at(-1), "鼠标动作已更新：Ctrl+滚轮上推 = 静音");
   await emit(host, "mouse", "setModifier", 0);
   await emit(host, "mouse", "pick", 8);
   await emit(host, "mouse", "choose", "");
@@ -776,9 +825,9 @@ test("OSD messages and dialogs in Simplified Chinese, as before", async () => {
 
   await openKeys(host);
   await capture(host, "host/play-pause", "k");
-  assert.equal(host.osd.at(-1), "快捷键已更新：播放 ▸ 播放/暂停 = Space, K");
+  assert.equal(host.osd.at(-1), "快捷键已更新：播放/暂停 = Space, K");
   await emit(host, "keys", "unbindAll");
-  assert.equal(host.osd.at(-1), "快捷键已更新：播放 ▸ 播放/暂停 = （无）");
+  assert.equal(host.osd.at(-1), "快捷键已更新：播放/暂停 = （无）");
   host.dialogAnswers.push({ confirmed: true, checked: false });
   await emit(host, "keys", "resetAll");
   assert.deepEqual(
