@@ -208,10 +208,10 @@ export interface BuiltinSubmenu {
  * built-in plugins declare.
  *
  * @example Add an item to the built-in Snapshot submenu
- * "Copy Snapshot" appears in Video ▸ Snapshot next to the built-in capture
+ * "Copy Snapshot" appears in Snapshot ▸ next to the built-in capture
  * plugin's items. Paths merge by their English keys, so a command whose
- * path continues with the submenu's keys (`["Video", "Snapshot"]`, the menu
- * written as `@video`) lands in the same submenu whatever the interface
+ * path starts with the submenu's keys (`["Snapshot"]`, a top-level submenu
+ * since player 0.7.6) lands in the same submenu whatever the interface
  * language.
  * ```ts
  * import type { Plugin } from "@vestra-player/sdk";
@@ -223,8 +223,8 @@ export interface BuiltinSubmenu {
  * const snapshot = BUILTIN_SUBMENUS.find((menu) => menu.path.at(-1) === "Snapshot")!;
  * plugin.commands.add({
  *   id: "snapshot-to-clipboard",
- *   // ["@video", "Snapshot", "Copy Snapshot"]; @video stands for "Video".
- *   path: ["@video", ...snapshot.path.slice(1), "Copy Snapshot"],
+ *   // ["Snapshot", "Copy Snapshot"]
+ *   path: [...snapshot.path, "Copy Snapshot"],
  *   run: copySnapshot,
  * });
  * ```
