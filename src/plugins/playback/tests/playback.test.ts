@@ -887,17 +887,26 @@ test("Jump to Time (G) focuses the Playback panel's time field; a typed time app
   await stop();
 });
 
-test("the Playback panel's speed: − / + are the player's, the presets and a typed speed are conditional on the current state", async () => {
+test("the Playback panel's speed: the wheel is the player's X / C, a tick and a typed speed are conditional on the current state", async () => {
   const { host, stop } = await start(withMedia());
   const panel = host.mounted("adjust");
-  await eventually(() => [panel.props["rate-text"], panel.props.preset, panel.props["can-rate"]], ["1", 1, true]);
+  await eventually(
+    () => [panel.props["rate-text"], panel.props.tick, panel.props["rate-position"], panel.props["can-rate"]],
+    ["1", 2, 0.5, true],
+  );
   panel.emit("rateStep", 1);
   panel.emit("rateStep", -1);
   await eventually(() => host.coreRuns, ["rate-up", "rate-down"]);
-  panel.emit("setPreset", 2);
+  panel.emit("setTick", 3);
   await eventually(() => host.source.rate, 1.25);
-  await eventually(() => [panel.props["rate-text"], panel.props.preset], ["1.25", 2]);
+  await eventually(() => [panel.props["rate-text"], panel.props.tick, panel.props["rate-position"]], ["1.25", 3, 0.625]);
   await eventually(() => lastOsd(host), "播放速度: 1.25x");
+  panel.emit("setTick", 9); // not a tick: nothing
+  panel.emit("setTick", 6);
+  await eventually(() => [host.source.rate, panel.props.tick, panel.props["rate-position"]], [4, 6, 1]);
+  // A double click on the ruler: 1×.
+  panel.emit("speedNormal");
+  await eventually(() => [host.source.rate, panel.props.tick], [1, 2]);
   // Custom… (palette only): the panel in front, the speed open for typing.
   await host.command("rate-custom").run();
   await eventually(() => [panel.props["edit-rate"], host.layout.adjust?.preferred], [1, true]);
@@ -908,9 +917,58 @@ test("the Playback panel's speed: − / + are the player's, the presets and a ty
   await eventually(() => host.osd.filter((text) => text === "速度范围为0.25–4倍").length, 2);
   panel.emit("applyRate", "1.3×");
   await eventually(() => host.source.rate, 1.3);
-  await eventually(() => [panel.props["rate-text"], panel.props.preset, panel.props["rate-invalid"], panel.props.done], ["1.3", -1, false, 1]);
+  await eventually(() => [panel.props["rate-text"], panel.props.tick, panel.props["rate-invalid"], panel.props.done], ["1.3", -1, false, 1]);
   assert.ok((host.sent("source.submit").at(-1)!.intent as Record<string, unknown>).expected);
   for (const id of ["rate-05", "rate-15", "rate-20"]) assert.equal(host.command(id).state.checked, false, id);
+  await stop();
+});
+
+/** The speeds the plugin asked the player for, in order. */
+const rates = (host: TestHost) =>
+  host
+    .sent("source.submit")
+    .map((p) => p.intent as { kind: string; control?: { kind: string; rate?: number } })
+    .filter((i) => i.kind === "control" && i.control?.kind === "rate")
+    .map((i) => i.control!.rate);
+
+test("the Playback panel's speed ruler: a drag snaps, steps by 0.05, shows at once and applies latest-wins", async () => {
+  const { host, stop } = await start(withMedia(), "en");
+  const panel = host.mounted("adjust");
+  await eventually(() => panel.props["rate-text"], "1");
+  // A burst of pointer moves: the first goes out, the rest collapse into the last one.
+  const snap = 0.02;
+  panel.emit("speedDrag", 0.57, snap); // 1.14 → 1.15
+  panel.emit("speedDrag", 0.6, snap); // 1.2
+  panel.emit("speedDrag", 0.74, snap); // near 1.5: snaps
+  // Shown before the player answers, and the panel stays usable while it applies.
+  await eventually(() => [panel.props["rate-text"], panel.props.tick, panel.props["can-rate"]], ["1.5", 4, true]);
+  await eventually(() => host.source.rate, 1.5);
+  await host.settle();
+  const sent = rates(host);
+  assert.equal(sent.at(-1), 1.5);
+  assert.ok(sent.length <= 2, `latest wins: ${sent}`);
+  // Between ticks: 0.05 steps; the release keeps what the player has.
+  panel.emit("speedDrag", 0.94, snap);
+  await eventually(() => host.source.rate, 3.05);
+  panel.emit("speedRelease");
+  await host.settle();
+  assert.deepEqual([panel.props["rate-text"], panel.props.tick], ["3.05", -1]);
+  assert.ok(Math.abs((panel.props["rate-position"] as number) - (0.875 + 0.125 * (1.05 / 2))) < 1e-9);
+  // Past the ends: the player's limits.
+  panel.emit("speedDrag", -0.3, snap);
+  panel.emit("speedRelease");
+  await eventually(() => [host.source.rate, panel.props["rate-text"]], [0.25, "0.25"]);
+  // A speed someone else sets (X / C) moves the ruler.
+  await host.press("C");
+  await eventually(() => [panel.props["rate-text"], panel.props.tick], ["0.35", -1]);
+  // A source that cannot change speed: the ruler is off and a drag does nothing.
+  const before = rates(host).length;
+  await host.press("F4");
+  await eventually(() => panel.props["can-rate"], false);
+  panel.emit("speedDrag", 0.9, snap);
+  panel.emit("setTick", 0);
+  await host.settle(80);
+  assert.equal(rates(host).length, before);
   await stop();
 });
 
