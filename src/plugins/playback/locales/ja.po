@@ -16,152 +16,152 @@ msgstr "{} 秒戻る"
 msgid "Forward {} s"
 msgstr "{} 秒進む"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Playback…"
 msgstr "再生…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Open File…"
 msgstr "ファイルを開く…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Open URL…"
 msgstr "URL を開く…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Reopen Current/Last File"
 msgstr "現在/最後のファイルを開き直す"
 
-#: commands.ts:272 commands.ts:273
+#: commands.ts:273 commands.ts:274
 #, x-machine
 msgid "Copy to Clipboard"
 msgstr "クリップボードにコピー"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "File Name"
 msgstr "ファイル名"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Folder Path"
 msgstr "フォルダのパス"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Full Path"
 msgstr "フルパス"
 
-#: commands.ts:272 ui/panel.slint:820
+#: commands.ts:273 ui/panel.slint:1275
 #, x-machine
 msgid "Previous Keyframe"
 msgstr "前のキーフレーム"
 
-#: commands.ts:272 ui/panel.slint:827
+#: commands.ts:273 ui/panel.slint:1282
 #, x-machine
 msgid "Next Keyframe"
 msgstr "次のキーフレーム"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Jump to Time…"
 msgstr "指定時間へ移動…"
 
-#: commands.ts:272 ui/panel.slint:772 ui/panel.slint:775 ui/panel.slint:781
+#: commands.ts:273 ui/panel.slint:1227 ui/panel.slint:1230 ui/panel.slint:1236
 #, x-machine
 msgid "Jump to Start"
 msgstr "先頭へ移動"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Seek Steps…"
 msgstr "シーク幅…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Custom…"
 msgstr "カスタム…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Disable Screen Saver While Playing"
 msgstr "再生中はスクリーンセーバーを無効にする"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Show Time on Seek Bar Hover"
 msgstr "シークバーにポインタを置くと時間を表示"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "シークバーにポインタを置くとサムネールを表示"
 
-#: commands.ts:273
+#: commands.ts:274
 #, x-machine
 msgid "File"
 msgstr "ファイル"
 
-#: commands.ts:273
+#: commands.ts:274
 #, x-machine
 msgid "Seek"
 msgstr "シーク"
 
-#: commands.ts:273 ui/panel.slint:657 ui/panel.slint:675 ui/panel.slint:678 ui/panel.slint:705
+#: commands.ts:274 ui/panel.slint:1011 ui/panel.slint:1029 ui/panel.slint:1032 ui/panel.slint:1059
 #, x-machine
 msgid "Speed"
 msgstr "速度"
 
-#: commands.ts:273 panel.ts:56
+#: commands.ts:274 panel.ts:69
 #, x-machine
 msgid "Playback"
 msgstr "再生"
 
-#: commands.ts:283 ui/panel.slint:632
+#: commands.ts:284 ui/panel.slint:979
 #, x-machine
 msgid "Not supported by the current source"
 msgstr "現在のソースではこの操作はできません"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "No file to reopen"
 msgstr "開き直すファイルがありません"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "No open file"
 msgstr "開いているファイルはありません"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "A network source has no file name"
 msgstr "ネットワークソースにはファイル名がありません"
 
-#: commands.ts:283 ui/panel.slint:650
+#: commands.ts:284 ui/panel.slint:997
 #, x-machine
 msgid "No video"
 msgstr "ビデオがありません"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "Needs ffmpeg"
 msgstr "ffmpeg が必要です"
@@ -176,132 +176,342 @@ msgstr "メディアを開く"
 msgid "Open Media (replaces the current source)"
 msgstr "メディアを開く（現在のソースを置き換えます）"
 
-#: main.ts:29
+#: loop-commands.ts:50 ui/panel.slint:1087
+#, x-machine
+msgid "Set Start Point"
+msgstr "開始点を設定"
+
+#: loop-commands.ts:50 ui/panel.slint:1089
+#, x-machine
+msgid "Clear Start Point"
+msgstr "開始点を解除"
+
+#: loop-commands.ts:50 ui/panel.slint:1090
+#, x-machine
+msgid "Start Point Back 0.1 s"
+msgstr "開始点を 0.1 秒戻す"
+
+#: loop-commands.ts:50 ui/panel.slint:1091
+#, x-machine
+msgid "Start Point Forward 0.1 s"
+msgstr "開始点を 0.1 秒進める"
+
+#: loop-commands.ts:50 ui/panel.slint:1105
+#, x-machine
+msgid "Set End Point"
+msgstr "終了点を設定"
+
+#: loop-commands.ts:50 ui/panel.slint:1107
+#, x-machine
+msgid "Clear End Point"
+msgstr "終了点を解除"
+
+#: loop-commands.ts:50 ui/panel.slint:1108
+#, x-machine
+msgid "End Point Back 0.1 s"
+msgstr "終了点を 0.1 秒戻す"
+
+#: loop-commands.ts:50 ui/panel.slint:1109
+#, x-machine
+msgid "End Point Forward 0.1 s"
+msgstr "終了点を 0.1 秒進める"
+
+#: loop-commands.ts:50
+#, x-machine
+msgid "Move Range Back 0.1 s"
+msgstr "区間全体を 0.1 秒戻す"
+
+#: loop-commands.ts:50
+#, x-machine
+msgid "Move Range Forward 0.1 s"
+msgstr "区間全体を 0.1 秒進める"
+
+#: loop-commands.ts:50 ui/panel.slint:1163
+#, x-machine
+msgid "Loop Current Chapter or Bookmark Range"
+msgstr "現在のチャプター/ブックマーク区間をリピート"
+
+#: loop-commands.ts:51 loop-commands.ts:66 ui/panel.slint:1071
+#, x-machine
+msgid "A-B Loop"
+msgstr "A-B リピート"
+
+#: loop-commands.ts:58 loop-commands.ts:72 main.ts:32 ui/panel.slint:999
+#, x-machine
+msgid "This source doesn't support A-B loop"
+msgstr "このソースは A-B リピートに対応していません"
+
+#: loop-commands.ts:58 loop-commands.ts:72 ui/panel.slint:999
+#, x-machine
+msgid "No media open"
+msgstr "メディアが開かれていません"
+
+#: loop-commands.ts:58
+#, x-machine
+msgid "Start point not set"
+msgstr "開始点が設定されていません"
+
+#: loop-commands.ts:58
+#, x-machine
+msgid "End point not set"
+msgstr "終了点が設定されていません"
+
+#: loop-commands.ts:58 loop-commands.ts:72
+#, x-machine
+msgid "A-B range not set"
+msgstr "A-B 区間が設定されていません"
+
+#: loop-commands.ts:65 ui/panel.slint:1075 ui/panel.slint:1122
+#, x-machine
+msgid "A-B Loop On/Off"
+msgstr "A-B リピートのオン/オフ"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "Endless"
+msgstr "無限"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "Once"
+msgstr "1 回"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "2 Times"
+msgstr "2 回"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "3 Times"
+msgstr "3 回"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "5 Times"
+msgstr "5 回"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "10 Times"
+msgstr "10 回"
+
+#: loop-commands.ts:80
+#, x-machine
+msgid "Loop Count"
+msgstr "リピート回数"
+
+#: main.ts:32
 #, x-machine
 msgid "Seek: {} / {}"
 msgstr "シーク：{} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Back {} s: {} / {}"
 msgstr "{} 秒戻る：{} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Forward {} s: {} / {}"
 msgstr "{} 秒進む：{} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Jumped to the start"
 msgstr "先頭へ移動しました"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Previous keyframe: {} / {}"
 msgstr "前のキーフレーム：{} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Next keyframe: {} / {}"
 msgstr "次のキーフレーム：{} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Already at the last keyframe"
 msgstr "すでに最後のキーフレームです"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Speed: {}x"
 msgstr "速度：{}x"
 
-#: main.ts:29 ui/bar.slint:95
+#: main.ts:32 ui/bar.slint:95
 #, x-machine
 msgid "Volume: {}%"
 msgstr "音量：{}%"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Open failed"
 msgstr "開けませんでした"
 
-#: main.ts:29 ui/open-url.slint:66
+#: main.ts:32 ui/open-url.slint:66
 #, x-machine
 msgid "Open failed: {}"
 msgstr "開けませんでした：{}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Reopened: {}"
 msgstr "開き直しました：{}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Reopened the last file: {}"
 msgstr "最後のファイルを開き直しました：{}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Copied: {}"
 msgstr "コピーしました：{}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Copy failed: {}"
 msgstr "コピーに失敗しました：{}"
 
-#: main.ts:29 ui/open-url.slint:65
+#: main.ts:32 ui/open-url.slint:65
 #, x-machine
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr "開くのは 1 行目だけです。複数のリンクを開くには、プレイリストに追加してください"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Disable screen saver while playing: On"
 msgstr "再生中はスクリーンセーバーを無効にする：オン"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Disable screen saver while playing: Off"
 msgstr "再生中はスクリーンセーバーを無効にする：オフ"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show time on seek bar hover: On"
 msgstr "シークバーにポインタを置くと時間を表示：オン"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show time on seek bar hover: Off"
 msgstr "シークバーにポインタを置くと時間を表示：オフ"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show thumbnail on seek bar hover: On"
 msgstr "シークバーにポインタを置くとサムネールを表示：オン"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr "シークバーにポインタを置くとサムネールを表示：オフ"
 
-#: main.ts:29
+#: main.ts:32
+#, x-machine
+msgid "A-B loop: {} ~ {}"
+msgstr "A-B リピート：{} 〜 {}"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B start: {}"
+msgstr "A-B 開始点：{}"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B end: {}"
+msgstr "A-B 終了点：{}"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B loop ended"
+msgstr "A-B リピートが終了しました"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B loop off"
+msgstr "A-B リピート：オフ"
+
+#: main.ts:32
+#, x-machine
+msgid "Start point is after the end point; end point cleared"
+msgstr "開始点が終了点より後のため、終了点を解除しました"
+
+#: main.ts:32
+#, x-machine
+msgid "End point must be after the start point"
+msgstr "終了点は開始点より後にしてください"
+
+#: main.ts:32
+#, x-machine
+msgid "Start point cleared"
+msgstr "開始点を解除しました"
+
+#: main.ts:32
+#, x-machine
+msgid "End point cleared"
+msgstr "終了点を解除しました"
+
+#: main.ts:32
+#, x-machine
+msgid "Reached the beginning"
+msgstr "先頭に達しました"
+
+#: main.ts:32
+#, x-machine
+msgid "Reached the end"
+msgstr "末尾に達しました"
+
+#: main.ts:32 ui/panel.slint:1122
+#, x-machine
+msgid "Set the start and end points first"
+msgstr "先に開始点と終了点を設定してください"
+
+#: main.ts:32
+#, x-machine
+msgid "No chapters or bookmarks to define a range"
+msgstr "区間を決めるチャプターやブックマークがありません"
+
+#: main.ts:32
+#, x-machine
+msgid "Range too short to loop"
+msgstr "区間が短すぎるためリピートできません"
+
+#: main.ts:32
+#, x-machine
+msgid "Loop count: endless"
+msgstr "リピート回数：無限"
+
+#: main.ts:32
+#, x-machine
+msgid "Loop count: {}"
+msgstr "リピート回数：{} 回"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B loop failed: {}"
+msgstr "A-B リピートに失敗しました：{}"
+
+#: main.ts:32
 #, x-machine
 msgid "Source operation failed: {}"
 msgstr "ソースの操作に失敗しました：{}"
 
-#: main.ts:29 ui/panel.slint:735
+#: main.ts:32 ui/panel.slint:940 ui/panel.slint:1190
 #, x-machine
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "ソースの長さの範囲内で時間を HH:MM:SS.mmm 形式で入力してください"
 
-#: main.ts:29 ui/panel.slint:689
+#: main.ts:32 ui/panel.slint:1043
 #, x-machine
 msgid "Speed must be between 0.25× and 4×"
 msgstr "速度は 0.25× から 4× の間で指定してください"
 
-#: main.ts:29 ui/panel.slint:449
+#: main.ts:32 ui/panel.slint:500
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "範囲は 0.1〜3600 秒、小数点以下は 1 桁まで"
@@ -319,11 +529,11 @@ msgstr "下部のコントロールバー、ファイルとリンクを開く、
 #: manifest.json
 #, x-machine
 msgid ""
-"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\n"
-"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps."
+"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; an A-B loop that repeats a range a chosen number of times; time or thumbnail on seek bar hover; no screen saver while playing.\n"
+"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, A-B Loop, jump, frame and keyframe steps, seek steps."
 msgstr ""
-"メインウインドウ下部のコントロールバー（シークバー、再生ボタン、音量）。ファイルやリンクを開く、最後のファイルを開き直す。複数段階のシーク幅、キーフレーム単位のシーク、指定時間への移動、固定およびカスタムの再生速度。シークバーにポインタを置いたときの時間やサムネールの表示。再生中のスクリーンセーバーの無効化。\n"
-"右クリックメニューの「再生…」(Alt+4) で動画の横にパネルを開きます: 速度、ジャンプ、フレーム／キーフレーム送り、シーク幅。"
+"メインウインドウ下部のコントロールバー（シークバー、再生ボタン、音量）。ファイルやリンクを開く、最後のファイルを開き直す。複数段階のシーク幅、キーフレーム単位のシーク、指定時間への移動、固定およびカスタムの再生速度。A-B 区間を指定した回数だけリピート。シークバーにポインタを置いたときの時間やサムネールの表示。再生中のスクリーンセーバーの無効化。\n"
+"右クリックメニューの「再生…」(Alt+4) で動画の横にパネルを開きます: 速度、A-B リピート、ジャンプ、フレーム／キーフレーム送り、シーク幅。"
 
 #: manifest.json
 #, x-machine
@@ -344,6 +554,11 @@ msgstr "シーク"
 #, x-machine
 msgid "speed"
 msgstr "速度"
+
+#: manifest.json
+#, x-machine
+msgid "loop"
+msgstr "リピート"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
 #: ui/bar.slint:84
@@ -453,114 +668,174 @@ msgid "Not a valid link"
 msgstr "有効なリンクではありません"
 
 #. {} is a number of seconds ("30").
-#: ui/panel.slint:443
+#: ui/panel.slint:494
 #, x-machine
 msgid "{} s"
 msgstr "{} 秒"
 
-#: ui/panel.slint:449
+#: ui/panel.slint:500
 #, x-machine
 msgid "Seek step"
 msgstr "シーク幅"
 
-#: ui/panel.slint:450
+#: ui/panel.slint:501
 #, x-machine
 msgid "click: type a value · double-click: Default"
 msgstr "クリック: 値を入力 · ダブルクリック: 既定値"
 
-#: ui/panel.slint:587 ui/panel.slint:701 ui/panel.slint:710
+#: ui/panel.slint:644 ui/panel.slint:1055 ui/panel.slint:1064
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. {} is the playback speed ("1.25"); the × reads "times".
-#: ui/panel.slint:618 ui/panel.slint:683
+#: ui/panel.slint:675 ui/panel.slint:1037
 #, x-machine
 msgid "{}×"
 msgstr "{}×"
 
-#: ui/panel.slint:657 ui/panel.slint:718
+#: ui/panel.slint:822
+#, x-machine
+msgid "hold to repeat"
+msgstr "長押しで連続"
+
+#: ui/panel.slint:941
+#, x-machine
+msgid "Start point"
+msgstr "開始点"
+
+#: ui/panel.slint:941
+#, x-machine
+msgid "End point"
+msgstr "終了点"
+
+#: ui/panel.slint:942
+#, x-machine
+msgid "click: type a time"
+msgstr "クリック：時間を入力"
+
+#: ui/panel.slint:1011 ui/panel.slint:1173
 #, x-machine
 msgid "Go to"
 msgstr "移動先"
 
-#: ui/panel.slint:657 ui/panel.slint:770
+#: ui/panel.slint:1011 ui/panel.slint:1225
 #, x-machine
 msgid "Start"
 msgstr "先頭"
 
-#: ui/panel.slint:657 ui/panel.slint:790 ui/panel.slint:807
+#: ui/panel.slint:1011 ui/panel.slint:1245 ui/panel.slint:1262
 #, x-machine
 msgid "Frame"
 msgstr "フレーム"
 
-#: ui/panel.slint:657 ui/panel.slint:816 ui/panel.slint:833
+#: ui/panel.slint:1011 ui/panel.slint:1271 ui/panel.slint:1288
 #, x-machine
 msgid "Keyframe"
 msgstr "キーフレーム"
 
-#: ui/panel.slint:689 ui/panel.slint:695
+#: ui/panel.slint:1043 ui/panel.slint:1049
 #, x-machine
 msgid "Playback speed"
 msgstr "再生速度"
 
-#: ui/panel.slint:690
+#: ui/panel.slint:1044
 #, x-machine
 msgid "click: type a value"
 msgstr "クリック: 値を入力"
 
-#: ui/panel.slint:706
+#: ui/panel.slint:1060
 #, x-machine
 msgid "drag or scroll · double-click: 1×"
 msgstr "ドラッグまたはスクロール · ダブルクリック: 1×"
 
-#: ui/panel.slint:715
+#. the button that sets the loop's start point A at the current position.
+#: ui/panel.slint:1086
+#, x-machine
+msgid "Set A here"
+msgstr "ここを A に"
+
+#: ui/panel.slint:1088
+#, x-machine
+msgid "at the current position"
+msgstr "現在の位置"
+
+#. the button that sets the loop's end point B at the current position.
+#: ui/panel.slint:1104
+#, x-machine
+msgid "Set B here"
+msgstr "ここを B に"
+
+#: ui/panel.slint:1106
+#, x-machine
+msgid "at the current position · the loop starts at once"
+msgstr "現在の位置 · すぐにリピート開始"
+
+#. the A-B loop's on/off switch.
+#: ui/panel.slint:1137
+#, x-machine
+msgid "Loop"
+msgstr "リピート"
+
+#. how many times the A-B loop repeats (Endless, Once, 2 Times…).
+#: ui/panel.slint:1142
+#, x-machine
+msgid "Count"
+msgstr "回数"
+
+#. a short button: loop the current chapter or bookmark range.
+#: ui/panel.slint:1160
+#, x-machine
+msgid "Chapter"
+msgstr "チャプター"
+
+#: ui/panel.slint:1170
 #, x-machine
 msgid "Jump"
 msgstr "ジャンプ"
 
-#: ui/panel.slint:736 ui/panel.slint:760 ui/panel.slint:764
+#: ui/panel.slint:1191 ui/panel.slint:1215 ui/panel.slint:1219
 #, x-machine
 msgid "Jump to Time"
 msgstr "指定時間へ移動"
 
 #. the format of the time to jump to (hours, minutes, seconds).
-#: ui/panel.slint:750
+#: ui/panel.slint:1205
 #, x-machine
 msgid "hh:mm:ss"
 msgstr "時:分:秒"
 
-#: ui/panel.slint:758
+#: ui/panel.slint:1213
 #, x-machine
 msgid "Go"
 msgstr "移動"
 
-#: ui/panel.slint:787
+#: ui/panel.slint:1242
 #, x-machine
 msgid "Step"
 msgstr "コマ送り"
 
-#: ui/panel.slint:794
+#: ui/panel.slint:1249
 #, x-machine
 msgid "Previous Frame"
 msgstr "前のフレーム"
 
-#: ui/panel.slint:801
+#: ui/panel.slint:1256
 #, x-machine
 msgid "Next Frame"
 msgstr "次のフレーム"
 
-#: ui/panel.slint:842
+#: ui/panel.slint:1297
 #, x-machine
 msgid "Seek steps"
 msgstr "シーク幅"
 
-#: ui/panel.slint:876
+#: ui/panel.slint:1331
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "キーフレームにのみジャンプ"
 
-#: ui/panel.slint:877
+#: ui/panel.slint:1332
 #, x-machine
 msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr "シーク幅とシークバーはキーフレームに移動します: どのファイルでも速く、最大でキーフレーム間隔 1 つ分ずれます"

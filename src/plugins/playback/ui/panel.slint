@@ -1,14 +1,15 @@
-// The Playback panel in the adjust column (menu redesign §3.2, mockup 03 left): Speed, Jump, Step
-// and Seek steps in one column, 317px by default and usable from 280px. It replaces Playback ▸
-// Speed and Seek, the Jump to Time and custom speed windows and the Seek Steps window.
+// The Playback panel in the adjust column (menu redesign §3.2, mockup 03 left): Speed, A-B Loop
+// (mockup 32; moved here from the marks plugin), Jump, Step and Seek steps in one column, 317px by
+// default and usable from 280px. It replaces Playback ▸ Speed and Seek, the Jump to Time and custom
+// speed windows and the Seek Steps window.
 // Every row is a layout and every text one line (elided, its whole wording in a tooltip); the
 // elements are always there and change only their values, never per hover. Key caps come from the
 // player's binding table (`plugin.commands.keys` for this plugin's commands, `plugin.bindings` for
 // the player's own); an empty one takes no room. Every text is @tr (English source;
 // locales/<lang>.po translate it); the plugin passes data.
-import { LineEdit, ScrollView } from "std-widgets.slint";
+import { LineEdit, ScrollView, Switch } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Check, KeyHint, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
+import { Check, Choice, KeyHint, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
 
 // The first key of each command, "" without one. back1 / forward1 are the player's ← / →.
 export struct Keys {
@@ -29,6 +30,17 @@ export struct Keys {
     forward3: string,
     back4: string,
     forward4: string,
+    // A-B Loop (this plugin's ab.* commands).
+    seta: string,
+    cleara: string,
+    aback: string,
+    aforward: string,
+    setb: string,
+    clearb: string,
+    bback: string,
+    bforward: string,
+    abtoggle: string,
+    absegment: string,
 }
 
 export global PlaybackPanelBridge {
@@ -60,6 +72,31 @@ export global PlaybackPanelBridge {
     in property <int> reveal-steps;
     // Bumped when a typed value was applied: the fields close and the time field empties.
     in property <int> done;
+    // A-B Loop (mockup 32). The commands can run now; else why not: "media" (no media open) or
+    // "source" (the source cannot loop).
+    in property <bool> ab-usable;
+    in property <string> ab-reason;
+    // The points as "4:02.3", "" while unset.
+    in property <string> ab-a;
+    in property <string> ab-b;
+    // A loop runs (whoever set it): the switch; it can be switched (A and B set, or a loop runs).
+    in property <bool> ab-on;
+    in property <bool> ab-can-loop;
+    // The Loop Count choice (0 Endless, 1 Once, 2, 3, 5, 10 → 2–5).
+    in property <int> ab-count;
+    // The mini timeline's top-right text: "∞" or "2 / 5" while looping, the position before A is set.
+    in property <string> ab-status;
+    // Fractions of the duration (0–1): the position, A, B, the span drawn (the running loop, else
+    // A–B in grey) and the chapter ticks (`M<x> 0V1` in a 1000 × 1 view box).
+    in property <float> ab-at;
+    in property <float> ab-a-at;
+    in property <float> ab-b-at;
+    in property <bool> ab-span;
+    in property <float> ab-span-a;
+    in property <float> ab-span-b;
+    in property <string> ab-ticks;
+    // The typed point that was refused: "a", "b" or "".
+    in property <string> ab-invalid;
 
     // -1 slower, +1 faster (the player's X / C; the ruler's mouse wheel).
     callback rate-step(int);
@@ -83,7 +120,17 @@ export global PlaybackPanelBridge {
     callback apply-step(int, string);
     callback reset-step(int);
     callback set-keyframes-only(bool);
-    // A text field ("jump", "rate", "step0"–"step3") took or lost the focus; any focused one keeps the fullscreen column out.
+    // A-B Loop: the point ("a" or "b") set at the position (the [ / ] keys), cleared, nudged 0.1 s
+    // (-1 back, +1 forward; repeats while held) or typed; the switch, a count (its index), the
+    // current chapter or bookmark range (Alt+\).
+    callback ab-set(string);
+    callback ab-clear(string);
+    callback ab-nudge(string, int);
+    callback ab-type(string, string);
+    callback ab-toggle();
+    callback ab-count(int);
+    callback ab-segment();
+    // A text field ("jump", "rate", "step0"–"step3", "a", "b") took or lost the focus; any focused one keeps the fullscreen column out.
     callback focus-changed(string, bool);
 }
 
@@ -92,6 +139,10 @@ global Glyphs {
     out property <string> previous: "M 9.5 2 L 4.5 6 L 9.5 10 Z";
     out property <string> next: "M 4.5 2 L 9.5 6 L 4.5 10 Z";
     out property <string> start: "M 3.5 2 V 10 M 11 2 L 6 6 L 11 10 Z";
+    out property <string> less: "M 8.5 2.5 L 5 6 L 8.5 9.5";
+    out property <string> more: "M 5.5 2.5 L 9 6 L 5.5 9.5";
+    out property <string> clear: "M 4 2.5 L 10 9.5 M 10 2.5 L 4 9.5";
+    out property <string> again: "M 10.5 6 A 3.5 3.5 0 1 1 9.4 3.4 M 10.2 1 V 3.6 H 7.6";
 }
 
 component Glyph inherits Path {
@@ -631,6 +682,296 @@ component SpeedRuler {
     }
 }
 
+// ------------------------------------------------------------------ A-B Loop (mockup 32)
+
+// A point flag on the mini timeline: a 12px badge with its letter and a stem down to the track;
+// `set` false draws the outline only (where A would go: the position), without the stem.
+component AbFlag {
+    in property <string> letter;
+    in property <length> at;
+    in property <bool> set;
+    if root.set: Rectangle {
+        x: root.at - 0.5px;
+        y: 14px;
+        width: 1px;
+        height: 6px;
+        background: Theme.accent;
+    }
+    Rectangle {
+        x: root.at - 6px;
+        y: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        background: root.set ? Theme.accent : transparent;
+        border-width: root.set ? 0px : 1px;
+        border-color: Theme.text-dim;
+        Text {
+            text: root.letter;
+            color: root.set ? Theme.text : Theme.text-dim;
+            font-size: Theme.font-xs;
+            font-weight: 700;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+    }
+}
+
+// The 30px mini timeline: the track, the chapter ticks, the A–B span (coloured while a loop runs,
+// grey while A and B wait for the switch), the A and B flags, the position dot, and at the top right
+// the pass ("2 / 5", "∞") or, before A is set, the position.
+component AbTimeline {
+    private property <length> inset: 7px;
+    private property <length> span: max(1px, self.width - 2 * self.inset);
+    private property <bool> usable: PlaybackPanelBridge.ab-usable;
+    private property <bool> has-a: PlaybackPanelBridge.ab-a != "";
+    private property <bool> has-b: PlaybackPanelBridge.ab-b != "";
+    height: 30px;
+    horizontal-stretch: 1;
+    Rectangle {
+        x: root.inset;
+        y: 17px;
+        width: root.span;
+        height: 2px;
+        border-radius: 1px;
+        background: Theme.line;
+    }
+    if PlaybackPanelBridge.ab-ticks != "": Path {
+        x: root.inset;
+        y: 15px;
+        width: root.span;
+        height: 6px;
+        commands: PlaybackPanelBridge.ab-ticks;
+        viewbox-width: 1000;
+        viewbox-height: 1;
+        fit: fill;
+        stroke: Theme.text-dim;
+        stroke-width: 1px;
+    }
+    if PlaybackPanelBridge.ab-span: Rectangle {
+        x: root.inset + PlaybackPanelBridge.ab-span-a * root.span;
+        y: 16px;
+        width: max(2px, (PlaybackPanelBridge.ab-span-b - PlaybackPanelBridge.ab-span-a) * root.span);
+        height: 4px;
+        border-radius: 2px;
+        background: PlaybackPanelBridge.ab-on ? Theme.accent-fill : Theme.icon-disabled;
+    }
+    if root.usable || root.has-a: AbFlag {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        letter: "A";
+        set: root.has-a;
+        at: root.inset + (root.has-a ? PlaybackPanelBridge.ab-a-at : PlaybackPanelBridge.ab-at) * root.span;
+    }
+    if root.has-b: AbFlag {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: root.height;
+        letter: "B";
+        set: true;
+        at: root.inset + PlaybackPanelBridge.ab-b-at * root.span;
+    }
+    if root.usable: Rectangle {
+        x: root.inset + PlaybackPanelBridge.ab-at * root.span - 4px;
+        y: 14px;
+        width: 8px;
+        height: 8px;
+        border-radius: 4px;
+        background: Theme.text;
+        border-width: 1px;
+        border-color: Theme.bg-list;
+    }
+    Text {
+        x: 0;
+        y: 0;
+        width: root.width;
+        height: 12px;
+        text: PlaybackPanelBridge.ab-status;
+        color: PlaybackPanelBridge.ab-on ? Theme.text : Theme.text-dim;
+        font-family: Theme.font-mono;
+        font-size: Theme.font-xs + 1px;
+        horizontal-alignment: right;
+        vertical-alignment: center;
+    }
+}
+
+// A ‹ or › nudge: one step on the press, then repeating while it is held (as the held keys).
+component NudgeBtn {
+    in property <string> glyph;
+    in property <bool> enabled: true;
+    in property <string> tip;
+    in property <[ToolTipKey]> tip-keys;
+    callback step();
+    // Held past the first delay: repeating.
+    private property <bool> repeating;
+    min-height: Theme.button-height;
+    preferred-height: Theme.button-height;
+    min-width: 22px;
+    preferred-width: 22px;
+    horizontal-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.tip;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.step(); } }
+    ToolTipArea {
+        text: root.tip;
+        keys: root.tip-keys;
+        detail: root.enabled ? @tr("hold to repeat") : "";
+        Rectangle {
+            border-radius: Theme.radius-control;
+            background: !root.enabled ? Theme.button-disabled
+                : touch.pressed ? Theme.button-press
+                : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+            HorizontalLayout {
+                alignment: center;
+                VerticalLayout {
+                    alignment: center;
+                    Glyph { glyph: root.glyph; color: root.enabled ? Theme.text-list : Theme.icon-disabled; }
+                }
+            }
+            touch := TouchArea {
+                enabled: root.enabled;
+                pointer-event(event) => {
+                    if event.button == PointerEventButton.left && event.kind == PointerEventKind.down {
+                        root.repeating = false;
+                        root.step();
+                    }
+                }
+            }
+        }
+    }
+    Timer {
+        interval: root.repeating ? 60ms : 400ms;
+        running: touch.pressed && root.enabled;
+        triggered => {
+            root.repeating = true;
+            root.step();
+        }
+    }
+}
+
+// A point's row: its badge, then either a "Set A here" button (the point at the position, its key
+// beside it) or its time (click to type one), the ‹ › nudges and × clear; its set key at the right.
+component AbPointRow {
+    in property <string> letter;
+    // "a" or "b".
+    in property <string> point;
+    in property <string> value;
+    in property <string> set-text;
+    in property <string> set-tip;
+    in property <string> set-detail;
+    in property <string> clear-tip;
+    in property <string> back-tip;
+    in property <string> forward-tip;
+    in property <string> set-key;
+    in property <string> clear-key;
+    in property <string> back-key;
+    in property <string> forward-key;
+    in property <string> why;
+    in property <int> done;
+    private property <bool> usable: PlaybackPanelBridge.ab-usable;
+    private property <bool> refused: PlaybackPanelBridge.ab-invalid == root.point;
+    private property <bool> has: root.value != "";
+    HorizontalLayout {
+        spacing: 4px;
+        VerticalLayout {
+            alignment: center;
+            Rectangle {
+                width: 16px;
+                height: 16px;
+                border-radius: 3px;
+                background: root.has ? Theme.accent : transparent;
+                border-width: root.has ? 0px : 1px;
+                border-color: Theme.text-dim;
+                Text {
+                    text: root.letter;
+                    color: root.has ? Theme.text : Theme.text-dim;
+                    font-size: Theme.font-body - 1px;
+                    font-weight: 700;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                }
+            }
+        }
+        if !root.has: Rectangle {
+            min-width: 64px;
+            preferred-width: max(64px, set-label.preferred-width + 16px);
+            height: Theme.button-height;
+            horizontal-stretch: 0;
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: set-touch.has-hover && root.usable ? Theme.accent : Theme.text-dim;
+            background: !root.usable ? transparent : set-touch.pressed ? Theme.button-press
+                : set-touch.has-hover ? Theme.button-hover : transparent;
+            accessible-role: button;
+            accessible-label: root.set-tip;
+            accessible-enabled: root.usable;
+            accessible-action-default => { if root.usable { PlaybackPanelBridge.ab-set(root.point); } }
+            ToolTipArea {
+                text: root.usable ? root.set-tip : root.why;
+                keys: [{ key: root.set-key, text: "" }];
+                detail: root.usable ? root.set-detail : "";
+                set-label := Text {
+                    x: 8px;
+                    width: parent.width - 16px;
+                    height: parent.height;
+                    text: root.set-text;
+                    color: root.usable ? Theme.text-list : Theme.text-dim;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                set-touch := TouchArea {
+                    enabled: root.usable;
+                    clicked => { PlaybackPanelBridge.ab-set(root.point); }
+                }
+            }
+        }
+        if root.has: EditValue {
+            text: root.value;
+            value: root.value;
+            box: 64px;
+            enabled: root.usable;
+            invalid: root.refused;
+            done: root.done;
+            tip: !root.usable ? root.why : root.refused ? @tr("Enter a time within the source's duration as HH:MM:SS.mmm")
+                : root.letter == "A" ? @tr("Start point") : @tr("End point");
+            tip-detail: @tr("click: type a time");
+            apply(text) => { PlaybackPanelBridge.ab-type(root.point, text); }
+            focus-changed(on) => { PlaybackPanelBridge.focus-changed(root.point, on); }
+        }
+        if root.has: NudgeBtn {
+            glyph: Glyphs.less;
+            enabled: root.usable;
+            tip: root.usable ? root.back-tip : root.why;
+            tip-keys: [{ key: root.back-key, text: "" }];
+            step => { PlaybackPanelBridge.ab-nudge(root.point, -1); }
+        }
+        if root.has: NudgeBtn {
+            glyph: Glyphs.more;
+            enabled: root.usable;
+            tip: root.usable ? root.forward-tip : root.why;
+            tip-keys: [{ key: root.forward-key, text: "" }];
+            step => { PlaybackPanelBridge.ab-nudge(root.point, 1); }
+        }
+        if root.has: Btn {
+            glyph: Glyphs.clear;
+            enabled: root.usable;
+            tip: root.usable ? root.clear-tip : root.why;
+            tip-keys: [{ key: root.clear-key, text: "" }];
+            clicked => { PlaybackPanelBridge.ab-clear(root.point); }
+        }
+        Rectangle { horizontal-stretch: 1; }
+        Caps {
+            tip: root.set-tip;
+            a: root.set-key;
+        }
+    }
+}
+
 export component PlaybackPanel inherits Rectangle {
     background: Theme.bg-panel;
     // The label column: the widest label, 52–84px (a longer translation elides, whole in its tooltip).
@@ -654,6 +995,13 @@ export component PlaybackPanel inherits Rectangle {
     }
     // Why the keyframe steps cannot run.
     private property <string> keyframe-why: PlaybackPanelBridge.keyframe-reason == "video" ? @tr("No video") : root.unsupported;
+    // Why the A-B Loop controls cannot run.
+    private property <string> ab-why: PlaybackPanelBridge.ab-reason == "media" ? @tr("No media open") : @tr("This source doesn't support A-B loop");
+    // The switch and the Count list change themselves on a click; they follow the plugin's values again.
+    private property <bool> ab-on: PlaybackPanelBridge.ab-on;
+    private property <int> ab-count: PlaybackPanelBridge.ab-count;
+    changed ab-on => { loop-switch.checked = self.ab-on; }
+    changed ab-count => { count-choice.current-index = self.ab-count; }
 
     Rectangle {
         visible: false;
@@ -715,6 +1063,107 @@ export component PlaybackPanel inherits Rectangle {
                     { key: PlaybackPanelBridge.keys.faster, text: "+" },
                     { key: PlaybackPanelBridge.keys.normal, text: @tr("1×") },
                 ];
+            }
+
+            // ------------------------------------------------------------ A-B Loop
+            HorizontalLayout {
+                spacing: 6px;
+                Heading { text: @tr("A-B Loop"); horizontal-stretch: 1; }
+                VerticalLayout {
+                    alignment: end;
+                    Caps {
+                        tip: @tr("A-B Loop On/Off");
+                        a: PlaybackPanelBridge.keys.abtoggle;
+                    }
+                }
+            }
+            AbTimeline { }
+            AbPointRow {
+                letter: "A";
+                point: "a";
+                value: PlaybackPanelBridge.ab-a;
+                // TRANSLATORS: the button that sets the loop's start point A at the current position.
+                set-text: @tr("Set A here");
+                set-tip: @tr("Set Start Point");
+                set-detail: @tr("at the current position");
+                clear-tip: @tr("Clear Start Point");
+                back-tip: @tr("Start Point Back 0.1 s");
+                forward-tip: @tr("Start Point Forward 0.1 s");
+                set-key: PlaybackPanelBridge.keys.seta;
+                clear-key: PlaybackPanelBridge.keys.cleara;
+                back-key: PlaybackPanelBridge.keys.aback;
+                forward-key: PlaybackPanelBridge.keys.aforward;
+                why: root.ab-why;
+                done: root.done;
+            }
+            AbPointRow {
+                letter: "B";
+                point: "b";
+                value: PlaybackPanelBridge.ab-b;
+                // TRANSLATORS: the button that sets the loop's end point B at the current position.
+                set-text: @tr("Set B here");
+                set-tip: @tr("Set End Point");
+                set-detail: @tr("at the current position · the loop starts at once");
+                clear-tip: @tr("Clear End Point");
+                back-tip: @tr("End Point Back 0.1 s");
+                forward-tip: @tr("End Point Forward 0.1 s");
+                set-key: PlaybackPanelBridge.keys.setb;
+                clear-key: PlaybackPanelBridge.keys.clearb;
+                back-key: PlaybackPanelBridge.keys.bback;
+                forward-key: PlaybackPanelBridge.keys.bforward;
+                why: root.ab-why;
+                done: root.done;
+            }
+            HorizontalLayout {
+                spacing: 6px;
+                ToolTipArea {
+                    horizontal-stretch: 0;
+                    text: !PlaybackPanelBridge.ab-usable ? root.ab-why
+                        : PlaybackPanelBridge.ab-can-loop ? @tr("A-B Loop On/Off") : @tr("Set the start and end points first");
+                    keys: [{ key: PlaybackPanelBridge.keys.abtoggle, text: "" }];
+                    loop-switch := Switch {
+                        text: "";
+                        enabled: PlaybackPanelBridge.ab-can-loop;
+                        checked: PlaybackPanelBridge.ab-on;
+                        // The plugin owns the state: ask, and show the plugin's answer again.
+                        toggled => {
+                            PlaybackPanelBridge.ab-toggle();
+                            self.checked = PlaybackPanelBridge.ab-on;
+                        }
+                    }
+                }
+                Line {
+                    // TRANSLATORS: the A-B loop's on/off switch.
+                    text: @tr("Loop");
+                    color: PlaybackPanelBridge.ab-can-loop ? Theme.text : Theme.text-dim;
+                }
+                Line {
+                    // TRANSLATORS: how many times the A-B loop repeats (Endless, Once, 2 Times…).
+                    text: @tr("Count");
+                    color: Theme.text-dim;
+                    horizontal-stretch: 0;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    horizontal-stretch: 0;
+                    count-choice := Choice {
+                        width: 66px;
+                        max-visible-rows: 6;
+                        popup-min-width: 90px;
+                        model: [@tr("Endless"), @tr("Once"), @tr("2 Times"), @tr("3 Times"), @tr("5 Times"), @tr("10 Times")];
+                        current-index: PlaybackPanelBridge.ab-count;
+                        selected(index) => { PlaybackPanelBridge.ab-count(index); }
+                    }
+                }
+                Btn {
+                    // TRANSLATORS: a short button: loop the current chapter or bookmark range.
+                    text: @tr("Chapter");
+                    glyph: Glyphs.again;
+                    enabled: PlaybackPanelBridge.ab-usable;
+                    tip: PlaybackPanelBridge.ab-usable ? @tr("Loop Current Chapter or Bookmark Range") : root.ab-why;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.absegment, text: "" }];
+                    clicked => { PlaybackPanelBridge.ab-segment(); }
+                }
             }
 
             // ------------------------------------------------------------ Jump

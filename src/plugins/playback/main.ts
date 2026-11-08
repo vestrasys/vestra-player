@@ -6,6 +6,8 @@ import { copyToClipboard } from "./copy.ts";
 import { OpenUrl } from "./open-url.ts";
 import { OutputMemory } from "./output-memory.ts";
 import { Keyframes } from "./keyframes.ts";
+import { AbLoop } from "./loop.ts";
+import { addLoopCommands } from "./loop-commands.ts";
 import { Reopener } from "./reopen.ts";
 import { PlaybackPanel } from "./panel.ts";
 import { type SeekSteps, SettingsStore } from "./settings.ts";
@@ -20,7 +22,8 @@ import type { Osd } from "./texts.ts";
  * Playback…, Alt+4), and the 播放控制 chapter's features (Open
  * URL, Reopen Current/Last File, Copy to Clipboard, keyframes, seek steps, Jump
  * to Start, Disable Screen Saver While Playing, the seek bar's hover time and
- * thumbnail), and the seek line's marks (B22: `timeline.marks` and the A-B loop).
+ * thumbnail), the seek line's marks (B22: `timeline.marks` and the A-B loop), and A-B Loop
+ * (B23, moved from the marks plugin: the `ab.*` commands and the panel's A-B Loop section).
  */
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
@@ -69,7 +72,9 @@ export default async function activate(plugin: Plugin) {
     if (changed) await commands?.setSteps(steps);
   };
   const jumpToStart = () => playback.jumpToStart();
-  const panel = new PlaybackPanel(plugin, { playback, keyframes, settings, applySteps, jumpToStart });
+  const loop = new AbLoop(plugin, settings, osd);
+  const panel = new PlaybackPanel(plugin, { playback, keyframes, settings, applySteps, jumpToStart, loop });
+  addLoopCommands(plugin, loop);
 
   commands = addCommands(plugin, plugin.i18n, playback, {
     openUrl,
@@ -88,6 +93,7 @@ export default async function activate(plugin: Plugin) {
 
   reopener.observe(player.state);
   keyframes.observe(player.state);
+  loop.observe(player.state);
   thumbnails.observe(player.state);
   void thumbnails.probe();
   if (settings.value.preventSleep) void sleep().catch((error) => playback.report(error));
@@ -106,6 +112,7 @@ export default async function activate(plugin: Plugin) {
     phase = state.phase;
     reopener.observe(state);
     keyframes.observe(state);
+    loop.observe(state);
     thumbnails.observe(state);
     output.observe(state);
     await Promise.resolve(); // the drag gesture observes the same change first

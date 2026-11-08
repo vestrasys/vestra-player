@@ -107,8 +107,4 @@ export class Actions {
     return result.bookmark;
   }
 
-  /** Chapter starts and bookmark times, for the B23 current range. */
-  times(): number[] {
-    return [...this.#chapters.list.map((chapter) => chapter.start), ...this.#bookmarks.items.map((item) => item.time)];
-  }
 }

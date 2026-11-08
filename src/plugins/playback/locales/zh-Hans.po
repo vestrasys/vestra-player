@@ -13,125 +13,125 @@ msgstr "后退{}秒"
 msgid "Forward {} s"
 msgstr "前进{}秒"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Playback…"
 msgstr "播放…"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Open File…"
 msgstr "打开文件…"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Open URL…"
 msgstr "打开链接…"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Reopen Current/Last File"
 msgstr "重开当前/最后文件"
 
-#: commands.ts:272 commands.ts:273
+#: commands.ts:273 commands.ts:274
 msgid "Copy to Clipboard"
 msgstr "复制到剪贴板"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "File Name"
 msgstr "文件名"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Folder Path"
 msgstr "文件夹路径"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Full Path"
 msgstr "完整路径"
 
-#: commands.ts:272 ui/panel.slint:820
+#: commands.ts:273 ui/panel.slint:1275
 msgid "Previous Keyframe"
 msgstr "上一关键帧"
 
-#: commands.ts:272 ui/panel.slint:827
+#: commands.ts:273 ui/panel.slint:1282
 msgid "Next Keyframe"
 msgstr "下一关键帧"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Jump to Time…"
 msgstr "跳转到…"
 
-#: commands.ts:272 ui/panel.slint:772 ui/panel.slint:775 ui/panel.slint:781
+#: commands.ts:273 ui/panel.slint:1227 ui/panel.slint:1230 ui/panel.slint:1236
 msgid "Jump to Start"
 msgstr "跳到开头"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Seek Steps…"
 msgstr "时间跨度设置…"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "0.5×"
 msgstr "0.5倍"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "1.5×"
 msgstr "1.5倍"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "2×"
 msgstr "2倍"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Custom…"
 msgstr "自定义…"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Disable Screen Saver While Playing"
 msgstr "播放时禁止屏保"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Show Time on Seek Bar Hover"
 msgstr "进度条悬停显示时间"
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "进度条悬停显示缩略图"
 
-#: commands.ts:273
+#: commands.ts:274
 #, x-machine
 msgid "File"
 msgstr "文件"
 
-#: commands.ts:273
+#: commands.ts:274
 msgid "Seek"
 msgstr "跳转"
 
-#: commands.ts:273 ui/panel.slint:657 ui/panel.slint:675 ui/panel.slint:678 ui/panel.slint:705
+#: commands.ts:274 ui/panel.slint:1011 ui/panel.slint:1029 ui/panel.slint:1032 ui/panel.slint:1059
 msgid "Speed"
 msgstr "速度"
 
-#: commands.ts:273 panel.ts:56
+#: commands.ts:274 panel.ts:69
 msgid "Playback"
 msgstr "播放"
 
-#: commands.ts:283 ui/panel.slint:632
+#: commands.ts:284 ui/panel.slint:979
 msgid "Not supported by the current source"
 msgstr "当前来源不支持此操作"
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "No file to reopen"
 msgstr "没有可重开的文件"
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "No open file"
 msgstr "没有打开的文件"
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "A network source has no file name"
 msgstr "网络来源没有文件名"
 
-#: commands.ts:283 ui/panel.slint:650
+#: commands.ts:284 ui/panel.slint:997
 msgid "No video"
 msgstr "没有视频"
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "Needs ffmpeg"
 msgstr "需要 ffmpeg"
 
@@ -143,107 +143,275 @@ msgstr "打开媒体"
 msgid "Open Media (replaces the current source)"
 msgstr "打开媒体（将替换当前来源）"
 
-#: main.ts:29
+#: loop-commands.ts:50 ui/panel.slint:1087
+msgid "Set Start Point"
+msgstr "设定起点"
+
+#: loop-commands.ts:50 ui/panel.slint:1089
+msgid "Clear Start Point"
+msgstr "解除起点"
+
+#: loop-commands.ts:50 ui/panel.slint:1090
+msgid "Start Point Back 0.1 s"
+msgstr "起点后退 0.1 秒"
+
+#: loop-commands.ts:50 ui/panel.slint:1091
+msgid "Start Point Forward 0.1 s"
+msgstr "起点前进 0.1 秒"
+
+#: loop-commands.ts:50 ui/panel.slint:1105
+msgid "Set End Point"
+msgstr "设定止点"
+
+#: loop-commands.ts:50 ui/panel.slint:1107
+msgid "Clear End Point"
+msgstr "解除止点"
+
+#: loop-commands.ts:50 ui/panel.slint:1108
+msgid "End Point Back 0.1 s"
+msgstr "止点后退 0.1 秒"
+
+#: loop-commands.ts:50 ui/panel.slint:1109
+msgid "End Point Forward 0.1 s"
+msgstr "止点前进 0.1 秒"
+
+#: loop-commands.ts:50
+msgid "Move Range Back 0.1 s"
+msgstr "区段整体后退 0.1 秒"
+
+#: loop-commands.ts:50
+msgid "Move Range Forward 0.1 s"
+msgstr "区段整体前进 0.1 秒"
+
+#: loop-commands.ts:50 ui/panel.slint:1163
+msgid "Loop Current Chapter or Bookmark Range"
+msgstr "循环当前章节/书签区段"
+
+#: loop-commands.ts:51 loop-commands.ts:66 ui/panel.slint:1071
+msgid "A-B Loop"
+msgstr "A-B 区段循环"
+
+#: loop-commands.ts:58 loop-commands.ts:72 main.ts:32 ui/panel.slint:999
+msgid "This source doesn't support A-B loop"
+msgstr "当前来源不支持区段循环"
+
+#: loop-commands.ts:58 loop-commands.ts:72 ui/panel.slint:999
+msgid "No media open"
+msgstr "未打开媒体"
+
+#: loop-commands.ts:58
+msgid "Start point not set"
+msgstr "未设定起点"
+
+#: loop-commands.ts:58
+msgid "End point not set"
+msgstr "未设定止点"
+
+#: loop-commands.ts:58 loop-commands.ts:72
+msgid "A-B range not set"
+msgstr "未设定区段"
+
+#: loop-commands.ts:65 ui/panel.slint:1075 ui/panel.slint:1122
+msgid "A-B Loop On/Off"
+msgstr "区段循环 开/关"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "Endless"
+msgstr "无限"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "Once"
+msgstr "1 次"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "2 Times"
+msgstr "2 次"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "3 Times"
+msgstr "3 次"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "5 Times"
+msgstr "5 次"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "10 Times"
+msgstr "10 次"
+
+#: loop-commands.ts:80
+msgid "Loop Count"
+msgstr "循环次数"
+
+#: main.ts:32
 msgid "Seek: {} / {}"
 msgstr "跳转: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Back {} s: {} / {}"
 msgstr "后退 {}秒: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Forward {} s: {} / {}"
 msgstr "前进 {}秒: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Jumped to the start"
 msgstr "定位: 开始处"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Previous keyframe: {} / {}"
 msgstr "定位: 上一关键帧 {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Next keyframe: {} / {}"
 msgstr "定位: 下一关键帧 {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Already at the last keyframe"
 msgstr "已是最后一个关键帧"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Speed: {}x"
 msgstr "播放速度: {}x"
 
-#: main.ts:29 ui/bar.slint:95
+#: main.ts:32 ui/bar.slint:95
 msgid "Volume: {}%"
 msgstr "音量: {}%"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Open failed"
 msgstr "打开失败"
 
-#: main.ts:29 ui/open-url.slint:66
+#: main.ts:32 ui/open-url.slint:66
 msgid "Open failed: {}"
 msgstr "打开失败：{}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Reopened: {}"
 msgstr "重新打开: {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Reopened the last file: {}"
 msgstr "重开最后文件: {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Copied: {}"
 msgstr "已复制: {}"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Copy failed: {}"
 msgstr "复制失败：{}"
 
-#: main.ts:29 ui/open-url.slint:65
+#: main.ts:32 ui/open-url.slint:65
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr "只打开第一行；多个链接请用播放列表的「添加链接…」"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Disable screen saver while playing: On"
 msgstr "播放时禁止屏保: 开"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Disable screen saver while playing: Off"
 msgstr "播放时禁止屏保: 关"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show time on seek bar hover: On"
 msgstr "进度条悬停显示时间: 开"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show time on seek bar hover: Off"
 msgstr "进度条悬停显示时间: 关"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show thumbnail on seek bar hover: On"
 msgstr "进度条悬停显示缩略图: 开"
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr "进度条悬停显示缩略图: 关"
 
-#: main.ts:29
+#: main.ts:32
+msgid "A-B loop: {} ~ {}"
+msgstr "A-B 循环：{} ~ {}"
+
+#: main.ts:32
+msgid "A-B start: {}"
+msgstr "A-B 起点：{}"
+
+#: main.ts:32
+msgid "A-B end: {}"
+msgstr "A-B 止点：{}"
+
+#: main.ts:32
+msgid "A-B loop ended"
+msgstr "区段循环结束"
+
+#: main.ts:32
+msgid "A-B loop off"
+msgstr "解除区段循环"
+
+#: main.ts:32
+msgid "Start point is after the end point; end point cleared"
+msgstr "起点晚于止点，已清除止点"
+
+#: main.ts:32
+msgid "End point must be after the start point"
+msgstr "止点必须晚于起点"
+
+#: main.ts:32
+msgid "Start point cleared"
+msgstr "已解除起点"
+
+#: main.ts:32
+msgid "End point cleared"
+msgstr "已解除止点"
+
+#: main.ts:32
+msgid "Reached the beginning"
+msgstr "已到开头"
+
+#: main.ts:32
+msgid "Reached the end"
+msgstr "已到结尾"
+
+#: main.ts:32 ui/panel.slint:1122
+msgid "Set the start and end points first"
+msgstr "请先设定起点和止点"
+
+#: main.ts:32
+msgid "No chapters or bookmarks to define a range"
+msgstr "没有章节或书签，无法确定区段"
+
+#: main.ts:32
+msgid "Range too short to loop"
+msgstr "区段太短，无法循环"
+
+#: main.ts:32
+msgid "Loop count: endless"
+msgstr "循环次数：无限"
+
+#: main.ts:32
+msgid "Loop count: {}"
+msgstr "循环次数：{} 次"
+
+#: main.ts:32
+msgid "A-B loop failed: {}"
+msgstr "区段循环失败：{}"
+
+#: main.ts:32
 msgid "Source operation failed: {}"
 msgstr "来源操作失败：{}"
 
-#: main.ts:29 ui/panel.slint:735
+#: main.ts:32 ui/panel.slint:940 ui/panel.slint:1190
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "请输入来源时长范围内的HH:MM:SS.mmm"
 
-#: main.ts:29 ui/panel.slint:689
+#: main.ts:32 ui/panel.slint:1043
 msgid "Speed must be between 0.25× and 4×"
 msgstr "速度范围为0.25–4倍"
 
-#: main.ts:29 ui/panel.slint:449
+#: main.ts:32 ui/panel.slint:500
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "范围 0.1–3600 秒，最多一位小数"
 
@@ -256,13 +424,12 @@ msgid "Bottom control bar, open files and links, seek and speed"
 msgstr "底部控制栏、打开文件与链接、跳转与速度"
 
 #: manifest.json
-#, x-machine
 msgid ""
-"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\n"
-"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps."
+"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; an A-B loop that repeats a range a chosen number of times; time or thumbnail on seek bar hover; no screen saver while playing.\n"
+"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, A-B Loop, jump, frame and keyframe steps, seek steps."
 msgstr ""
-"主窗口底部的控制栏（进度条、播放按钮、音量）；打开文件、打开链接、重开最后的文件；多档跳转秒数、关键帧跳转、跳转到指定时间、固定与自定义播放速度；进度条悬停显示时间或缩略图；播放时禁止屏保。\n"
-"右键菜单中的“播放…”(Alt+4) 在视频旁打开它的面板：速度、跳转、逐帧和关键帧、跳转步长。"
+"主窗口底部的控制栏（进度条、播放按钮、音量）；打开文件、打开链接、重开最后的文件；多档跳转秒数、关键帧跳转、跳转到指定时间、固定与自定义播放速度；A-B 区段按指定次数循环；进度条悬停显示时间或缩略图；播放时禁止屏保。\n"
+"右键菜单中的“播放…”(Alt+4) 在视频旁打开它的面板：速度、A-B 区段循环、跳转、逐帧和关键帧、跳转步长。"
 
 #: manifest.json
 msgid "playback"
@@ -279,6 +446,10 @@ msgstr "跳转"
 #: manifest.json
 msgid "speed"
 msgstr "速度"
+
+#: manifest.json
+msgid "loop"
+msgstr "循环"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
 #: ui/bar.slint:84
@@ -367,111 +538,160 @@ msgid "Not a valid link"
 msgstr "不是有效的链接"
 
 #. {} is a number of seconds ("30").
-#: ui/panel.slint:443
+#: ui/panel.slint:494
 #, x-machine
 msgid "{} s"
 msgstr "{}秒"
 
-#: ui/panel.slint:449
+#: ui/panel.slint:500
 #, x-machine
 msgid "Seek step"
 msgstr "跳转步长"
 
-#: ui/panel.slint:450
+#: ui/panel.slint:501
 #, x-machine
 msgid "click: type a value · double-click: Default"
 msgstr "单击: 输入数值 · 双击: 默认值"
 
-#: ui/panel.slint:587 ui/panel.slint:701 ui/panel.slint:710
+#: ui/panel.slint:644 ui/panel.slint:1055 ui/panel.slint:1064
 #, x-machine
 msgid "1×"
 msgstr "1倍"
 
 #. {} is the playback speed ("1.25"); the × reads "times".
-#: ui/panel.slint:618 ui/panel.slint:683
+#: ui/panel.slint:675 ui/panel.slint:1037
 #, x-machine
 msgid "{}×"
 msgstr "{}倍"
 
-#: ui/panel.slint:657 ui/panel.slint:718
+#: ui/panel.slint:822
+msgid "hold to repeat"
+msgstr "按住连续调整"
+
+#: ui/panel.slint:941
+msgid "Start point"
+msgstr "起点"
+
+#: ui/panel.slint:941
+msgid "End point"
+msgstr "止点"
+
+#: ui/panel.slint:942
+msgid "click: type a time"
+msgstr "单击：输入时间"
+
+#: ui/panel.slint:1011 ui/panel.slint:1173
 #, x-machine
 msgid "Go to"
 msgstr "跳转到"
 
-#: ui/panel.slint:657 ui/panel.slint:770
+#: ui/panel.slint:1011 ui/panel.slint:1225
 #, x-machine
 msgid "Start"
 msgstr "开头"
 
-#: ui/panel.slint:657 ui/panel.slint:790 ui/panel.slint:807
+#: ui/panel.slint:1011 ui/panel.slint:1245 ui/panel.slint:1262
 #, x-machine
 msgid "Frame"
 msgstr "帧"
 
-#: ui/panel.slint:657 ui/panel.slint:816 ui/panel.slint:833
+#: ui/panel.slint:1011 ui/panel.slint:1271 ui/panel.slint:1288
 #, x-machine
 msgid "Keyframe"
 msgstr "关键帧"
 
-#: ui/panel.slint:689 ui/panel.slint:695
+#: ui/panel.slint:1043 ui/panel.slint:1049
 #, x-machine
 msgid "Playback speed"
 msgstr "播放速度"
 
-#: ui/panel.slint:690
+#: ui/panel.slint:1044
 #, x-machine
 msgid "click: type a value"
 msgstr "单击: 输入数值"
 
-#: ui/panel.slint:706
+#: ui/panel.slint:1060
 #, x-machine
 msgid "drag or scroll · double-click: 1×"
 msgstr "拖动或滚动 · 双击: 1×"
 
-#: ui/panel.slint:715
+#. the button that sets the loop's start point A at the current position.
+#: ui/panel.slint:1086
+msgid "Set A here"
+msgstr "在此设 A"
+
+#: ui/panel.slint:1088
+msgid "at the current position"
+msgstr "当前位置"
+
+#. the button that sets the loop's end point B at the current position.
+#: ui/panel.slint:1104
+msgid "Set B here"
+msgstr "在此设 B"
+
+#: ui/panel.slint:1106
+msgid "at the current position · the loop starts at once"
+msgstr "当前位置 · 循环立即开始"
+
+#. the A-B loop's on/off switch.
+#: ui/panel.slint:1137
+msgid "Loop"
+msgstr "循环"
+
+#. how many times the A-B loop repeats (Endless, Once, 2 Times…).
+#: ui/panel.slint:1142
+msgid "Count"
+msgstr "次数"
+
+#. a short button: loop the current chapter or bookmark range.
+#: ui/panel.slint:1160
+msgid "Chapter"
+msgstr "章节"
+
+#: ui/panel.slint:1170
 #, x-machine
 msgid "Jump"
 msgstr "跳转"
 
-#: ui/panel.slint:736 ui/panel.slint:760 ui/panel.slint:764
+#: ui/panel.slint:1191 ui/panel.slint:1215 ui/panel.slint:1219
 msgid "Jump to Time"
 msgstr "跳转到"
 
 #. the format of the time to jump to (hours, minutes, seconds).
-#: ui/panel.slint:750
+#: ui/panel.slint:1205
 #, x-machine
 msgid "hh:mm:ss"
 msgstr "时:分:秒"
 
-#: ui/panel.slint:758
+#: ui/panel.slint:1213
 msgid "Go"
 msgstr "定位"
 
-#: ui/panel.slint:787
+#: ui/panel.slint:1242
 #, x-machine
 msgid "Step"
 msgstr "逐帧"
 
-#: ui/panel.slint:794
+#: ui/panel.slint:1249
 #, x-machine
 msgid "Previous Frame"
 msgstr "上一帧"
 
-#: ui/panel.slint:801
+#: ui/panel.slint:1256
 #, x-machine
 msgid "Next Frame"
 msgstr "下一帧"
 
-#: ui/panel.slint:842
+#: ui/panel.slint:1297
 #, x-machine
 msgid "Seek steps"
 msgstr "跳转步长"
 
-#: ui/panel.slint:876
+#: ui/panel.slint:1331
 msgid "Jump to keyframes only"
 msgstr "仅跳转到关键帧"
 
-#: ui/panel.slint:877
+#: ui/panel.slint:1332
 #, x-machine
 msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr "跳转步长和进度条都落在关键帧上：任何文件都很快，最多偏差一个关键帧间隔"

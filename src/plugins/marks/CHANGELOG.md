@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.8
+
+- A-B Loop moved to the Playback panel (user ruling 2026-11-08): the A-B loop, its 18 commands (`ab.set-a` … `ab.toggle`, the six `ab.count.*`) and the Loop Count setting are now the Basic Playback plugin's (`vestra.playback` 0.2.18), which shows them in its Playback panel (Alt+4) and keeps the same local ids, titles, keys, categories and checked states. This plugin keeps chapters, bookmarks, the Chapter and Bookmark List… window (H), their commands and their seek-bar marks; the `A` marker a lone start point puts on the seek bar now comes from the playback plugin. Who must change: nobody, with the player release that carries the binding migration (keys a user rebound for `vestra.marks/ab.*` follow to `vestra.playback/ab.*`). The Loop Count saved in `marks.json` (`abCount`) is left in that file untouched; the playback plugin starts at Endless.
+- The plugin is now called **Chapters and Bookmarks** (was "Chapters, Bookmarks and A-B Loop"); the punchline, description and tags follow, in all six languages (the name reuses the existing "Chapters and Bookmarks" translations; the new punchline is machine-translated, `x-machine`, in de, es, fr, ja and ko). The A-B Loop texts are removed from the catalogs.
+- Code: `loop.ts`, `addLoopCommands`, `segmentAt`, `Actions.times` and the loop count in `store.ts` are gone; `seekbarMarks` no longer takes A and B.
+- Tests: the B23 tests moved to the playback plugin; this plugin's tests check that it declares no `ab.*` command and publishes no `A` marker.
+
 ## 0.1.7
 
 - Menu sweep (menu redesign §4): Chapter and Bookmark List… (H) moves from Playback ▸ Chapters and Bookmarks ▸ to the top level, right after Playlist (order 801, windows group). Everything else of Chapters and Bookmarks ▸ (Add Bookmark, the previous/next steps, the chapter and bookmark lines, the "More…" lines, Show Marks on Seek Bar) and the whole A-B Loop ▸ with Loop Count ▸ leave the menu and are in the command palette only, with their ids, keys, radio and checked states and categories unchanged (the list window shows the chapters and bookmarks). Who must change: nobody.

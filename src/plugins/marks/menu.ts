@@ -3,8 +3,7 @@ import type { Actions } from "./actions.ts";
 import type { Bookmarks } from "./bookmarks.ts";
 import { type Chapters, currentChapter } from "./chapters.ts";
 import { clock, line } from "./format.ts";
-import type { AbLoop } from "./loop.ts";
-import { COUNTS, timing } from "./store.ts";
+import { timing } from "./store.ts";
 
 /**
  * Command palette categories (player 0.7.6): the names of the former Playback ▸
@@ -13,8 +12,6 @@ import { COUNTS, timing } from "./store.ts";
  * (top level, after Playlist); everything else is in the command palette only.
  */
 export const MARKS_CATEGORY = "Chapters and Bookmarks";
-export const AB_CATEGORY = "A-B Loop";
-export const COUNT_CATEGORY = "Loop Count";
 /** The command that opens the Chapters and Bookmarks window: the `home` of what the window lists or adds. */
 export const LIST_COMMAND = "marks.list";
 /** Chapters and bookmarks registered as commands; past this the last line opens the window. */
@@ -73,7 +70,7 @@ const STEPS = [
  * Chapters and Bookmarks (B21: Chapter and Bookmark List… at the top level,
  * 801 in the windows group after Playlist; the rest palette only, orders
  * 261–265; the chapters and bookmarks 10000 + i / 20000 + i in a child scope
- * rebuilt when they change) and A-B Loop (B23, palette only, orders 270–287).
+ * rebuilt when they change). A-B Loop (B23, orders 270–287) moved to the playback plugin.
  */
 export class MarksMenu {
   readonly #plugin: Plugin;
@@ -212,76 +209,4 @@ export class MarksMenu {
         run: () => this.#openList(),
       });
   }
-}
-
-/** What an A-B command needs besides a usable source, and the reason shown without it. */
-const MISSING = {
-  a: "Start point not set",
-  b: "End point not set",
-  range: "A-B range not set",
-} as const;
-
-/** A-B Loop: Loop Count (B23), in `COUNTS` order. */
-const COUNT_TITLES = ["Endless", "Once", "2 Times", "3 Times", "5 Times", "10 Times"] as const;
-
-/** A-B Loop (B23), in the command palette only. */
-export function addLoopCommands(plugin: Plugin, loop: AbLoop, actions: Actions) {
-  const usable = () => loop.blocked();
-  const hasA = () => loop.a !== null;
-  const hasB = () => loop.b !== null;
-  const has = { a: hasA, b: hasB, range: () => hasA() && hasB() };
-  const items = [
-    { id: "ab.set-a", title: "Set Start Point", order: 270, group: "ab-a", binding: "[", needs: null, run: () => loop.setA() },
-    { id: "ab.clear-a", title: "Clear Start Point", order: 271, group: "ab-a", binding: "{", needs: "a", run: () => loop.clearA() },
-    { id: "ab.a-back", title: "Start Point Back 0.1 s", order: 272, group: "ab-a", binding: "Ctrl+[", needs: "a", repeat: true, run: () => loop.nudgeA(-0.1) },
-    { id: "ab.a-forward", title: "Start Point Forward 0.1 s", order: 273, group: "ab-a", binding: "Alt+[", needs: "a", repeat: true, run: () => loop.nudgeA(0.1) },
-    { id: "ab.set-b", title: "Set End Point", order: 274, group: "ab-b", binding: "]", needs: null, run: () => loop.setB() },
-    { id: "ab.clear-b", title: "Clear End Point", order: 275, group: "ab-b", binding: "}", needs: "b", run: () => loop.clearB() },
-    { id: "ab.b-back", title: "End Point Back 0.1 s", order: 276, group: "ab-b", binding: "Ctrl+]", needs: "b", repeat: true, run: () => loop.nudgeB(-0.1) },
-    { id: "ab.b-forward", title: "End Point Forward 0.1 s", order: 277, group: "ab-b", binding: "Alt+]", needs: "b", repeat: true, run: () => loop.nudgeB(0.1) },
-    { id: "ab.back", title: "Move Range Back 0.1 s", order: 278, group: "ab-both", binding: "Ctrl+Alt+[", needs: "range", repeat: true, run: () => loop.shift(-0.1) },
-    { id: "ab.forward", title: "Move Range Forward 0.1 s", order: 279, group: "ab-both", binding: "Ctrl+Alt+]", needs: "range", repeat: true, run: () => loop.shift(0.1) },
-    { id: "ab.segment", title: "Loop Current Chapter or Bookmark Range", order: 280, group: "ab-toggle", binding: "Alt+\\", needs: null, run: () => loop.loopSegment(actions.times()) },
-  ] as const;
-  for (const item of items) {
-    const ok = item.needs === null ? () => true : has[item.needs];
-    plugin.commands.add({
-      id: item.id,
-      title: item.title,
-      category: AB_CATEGORY,
-      order: item.order,
-      group: item.group,
-      bindings: [item.binding],
-      ...("repeat" in item ? { repeat: item.repeat } : {}),
-      enabled: () => !usable() && ok(),
-      reason: () => usable() ?? (ok() || item.needs === null ? null : MISSING[item.needs]),
-      run: item.run,
-    });
-  }
-  // `\`: on while any loop runs (another plugin's too), so it can always stop one.
-  const toggleable = () => (hasA() && hasB()) || !!plugin.player.state.loop;
-  plugin.commands.add({
-    id: "ab.toggle",
-    title: "A-B Loop On/Off",
-    category: AB_CATEGORY,
-    order: 281,
-    group: "ab-toggle",
-    bindings: ["\\"],
-    enabled: () => !usable() && toggleable(),
-    reason: () => usable() ?? (toggleable() ? null : MISSING.range),
-    checked: () => !!plugin.player.state.loop,
-    run: () => loop.toggle(),
-  });
-  COUNTS.forEach((count, i) =>
-    plugin.commands.add({
-      id: `ab.count.${count ?? "endless"}`,
-      title: COUNT_TITLES[i]!,
-      category: COUNT_CATEGORY,
-      order: 282 + i,
-      group: "ab-count",
-      radio: true,
-      checked: () => loop.count === count,
-      run: () => loop.setCount(count),
-    }),
-  );
 }

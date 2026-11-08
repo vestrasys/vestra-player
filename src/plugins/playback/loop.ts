@@ -1,8 +1,12 @@
-import type { Plugin, PlayerState } from "@vestra-player/sdk";
-import { precise, round1 } from "./format.ts";
-import { segmentAt } from "./chapters.ts";
-import type { Osd } from "./osd.ts";
-import { type Count, type Settings, timing } from "./store.ts";
+import type { Plugin, PlayerState, TimelineLayer } from "@vestra-player/sdk";
+import { type Count, type SettingsStore } from "./settings.ts";
+import { Failure, type Osd } from "./texts.ts";
+
+/** Delays, in milliseconds; tests shorten them. */
+export const loopTiming = {
+  /** B23: nudges (held keys repeat) are committed to the player this long after the last one. */
+  loopCommit: 100,
+};
 
 /** B23: the shortest span between A and B (seconds). */
 export const MIN_SPAN = 0.2;
@@ -12,25 +16,68 @@ const same = (x: Loop | null | undefined, y: Loop | null | undefined) =>
   (x ?? null) === (y ?? null) || (!!x && !!y && x.a === y.a && x.b === y.b && x.count === y.count);
 const clamp = (value: number, low: number, high: number) => Math.min(high, Math.max(low, value));
 
+/** Seconds to one decimal (the A and B points). */
+export const round1 = (seconds: number) => Math.round(seconds * 10) / 10;
+const two = (n: number) => String(n).padStart(2, "0");
+
+/** The OSD's and the panel's point time: `m:ss.d`, `h:mm:ss.d` from one hour on. */
+export function precise(seconds: number): string {
+  const tenths = Math.max(0, Math.round(seconds * 10));
+  const d = tenths % 10;
+  const total = Math.floor(tenths / 10);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
+  return h ? `${h}:${two(m)}:${two(s)}.${d}` : `${m}:${two(s)}.${d}`;
+}
+
+/**
+ * B23 current range: the span between the adjacent marks around `position`, the
+ * start and end of the media counting as marks; `null` without marks.
+ */
+export function segmentAt(
+  times: readonly number[],
+  position: number,
+  duration: number,
+): { a: number; b: number } | null {
+  if (!times.length) return null;
+  const points = [...new Set([0, ...times.filter((t) => t > 0 && t < duration), duration])].sort((a, b) => a - b);
+  for (let i = 0; i < points.length - 1; i++) {
+    const a = points[i]!;
+    const b = points[i + 1]!;
+    if (position >= a && position < b) return { a, b };
+  }
+  return null;
+}
+
 /** Why the A-B commands are unavailable (shown as the commands' reason). */
 export type LoopBlocked = "No media open" | "This source doesn't support A-B loop";
 
+const hasMedia = (state: PlayerState) =>
+  state.kind === "media" && (state.phase === "ready" || state.phase === "ended") && state.source !== null;
+
 /**
- * B23 A-B loop. The plugin keeps A, B and the on/off switch; the player
- * runs the loop (`player.setLoop`) whenever both points are set and the
- * switch is on, and `setLoop(null)` otherwise. `state.loop` is the truth for
- * the switch: a loop set by another plugin shows as on, and the switch turns
- * it off. A new source clears A and B (the player clears the loop).
+ * B23 A-B loop (moved here from the marks plugin; the Playback panel's A-B Loop
+ * section and the `ab.*` commands). The plugin keeps A, B and the on/off
+ * switch; the player runs the loop (`player.setLoop`) whenever both points are
+ * set and the switch is on, and `setLoop(null)` otherwise. `state.loop` is the
+ * truth for the switch: a loop set by another plugin shows as on, and the
+ * switch turns it off. A new source clears A and B (the player clears the loop).
+ *
+ * Also here: the media's chapter starts (`player.chapters()`, once per source:
+ * the panel's ticks and the current range), the pass the running loop is on
+ * (counted from the jumps back the position shows), and a lone A as an `A`
+ * marker in this plugin's seek-bar layer (`timeline.marks`).
  */
 export class AbLoop {
   #a: number | null = null;
   #b: number | null = null;
-  readonly #pointListeners: (() => void)[] = [];
   /** The switch as this plugin wants it (the player's `state.loop` may differ). */
   on = false;
   readonly #plugin: Plugin;
-  readonly #settings: Settings;
+  readonly #settings: SettingsStore;
   readonly #osd: Osd;
+  readonly #layer: TimelineLayer;
   /** What this plugin last got the player to run. */
   #committed: Loop | null = null;
   #pending = 0;
@@ -39,11 +86,18 @@ export class AbLoop {
   #seekOnStart = false;
   #sourceId: number | null = null;
   #lastLoop: Loop | null = null;
+  #lastPosition: number | null = null;
+  #pass = 1;
+  #chapters: number[] = [];
+  #chaptersFor: number | null = null;
+  /** What the seek-bar layer holds for this source (the player empties it on a new one). */
+  #sent = "[]";
 
-  constructor(plugin: Plugin, settings: Settings, osd: Osd) {
+  constructor(plugin: Plugin, settings: SettingsStore, osd: Osd) {
     this.#plugin = plugin;
     this.#settings = settings;
     this.#osd = osd;
+    this.#layer = plugin.timeline.layer();
     plugin.onDispose(() => {
       if (this.#timer) clearTimeout(this.#timer);
     });
@@ -56,7 +110,7 @@ export class AbLoop {
   set a(value: number | null) {
     if (value === this.#a) return;
     this.#a = value;
-    for (const listener of this.#pointListeners) listener();
+    this.#publish();
   }
   /** The end point B (seconds), `null` when unset. */
   get b(): number | null {
@@ -65,15 +119,19 @@ export class AbLoop {
   set b(value: number | null) {
     if (value === this.#b) return;
     this.#b = value;
-    for (const listener of this.#pointListeners) listener();
-  }
-  /** A or B moved (B22 publishes a lone A as a seek-bar marker). */
-  onPoints(listener: () => void) {
-    this.#pointListeners.push(listener);
+    this.#publish();
   }
 
   get count(): Count {
-    return this.#settings.abCount;
+    return this.#settings.value.abCount;
+  }
+  /** The pass the running loop is on (1 at its start, +1 on each jump back to A). */
+  get pass(): number {
+    return this.#pass;
+  }
+  /** The media's chapter starts, in order (empty until read, and for a new source). */
+  get chapters(): readonly number[] {
+    return this.#chapters;
   }
   get #state() {
     return this.#plugin.player.state;
@@ -87,11 +145,14 @@ export class AbLoop {
     return null;
   }
 
-  /** Follow the player: forget A and B on a new source; notice a finished or foreign loop. */
+  /** Follow the player: forget A and B on a new source; notice a finished or foreign loop; count the passes. */
   observe(state: PlayerState) {
     const loop = state.loop ?? null;
     if (state.sourceId !== this.#sourceId) {
       this.#sourceId = state.sourceId;
+      this.#chapters = [];
+      this.#chaptersFor = null;
+      this.#sent = "[]"; // the player emptied every layer for the new source
       this.a = this.b = null;
       this.on = false;
       this.#committed = null;
@@ -99,10 +160,29 @@ export class AbLoop {
       if (this.#timer) clearTimeout(this.#timer);
       this.#timer = null;
       this.#lastLoop = loop;
+      this.#lastPosition = state.position;
+      this.#pass = 1;
+      this.#readChapters(state);
       return;
     }
+    this.#readChapters(state);
     const before = this.#lastLoop;
     this.#lastLoop = loop;
+    const previous = this.#lastPosition;
+    this.#lastPosition = state.position;
+    if (!same(before, loop)) this.#pass = 1;
+    else if (
+      // Not while this plugin starts a loop (its own seek to A).
+      !this.#pending &&
+      loop &&
+      previous !== null &&
+      state.position !== null &&
+      state.position < previous - 0.2 &&
+      previous >= loop.b - 1 &&
+      state.position <= loop.a + 1
+    )
+      // The player jumped back from B to A.
+      this.#pass++;
     if (this.#pending || same(before, loop)) return;
     if (loop === null && this.#committed !== null) {
       // The count ran out (or someone else stopped it): keep A and B.
@@ -116,12 +196,66 @@ export class AbLoop {
     }
   }
 
+  /** Chapters: read with `player.chapters()` once per source, when it first is ready. */
+  #readChapters(state: PlayerState) {
+    if (this.#chaptersFor === state.sourceId || !hasMedia(state)) return;
+    this.#chaptersFor = state.sourceId;
+    void this.#plugin.player.chapters().then(
+      ({ sourceId, chapters }) => {
+        if (sourceId !== this.#sourceId) return;
+        this.#chapters = chapters
+          .map((chapter) => chapter.start)
+          .filter((start) => Number.isFinite(start) && start >= 0)
+          .sort((x, y) => x - y);
+        this.#plugin.update();
+      },
+      () => {
+        // Refused (source gone meanwhile): try again on the next ready state.
+        if (this.#chaptersFor === state.sourceId) this.#chaptersFor = null;
+      },
+    );
+  }
+
+  /**
+   * The current range's marks: the chapter starts and the bookmarks any plugin
+   * shows on the seek bar (`timeline.marks`, such as the marks plugin's).
+   */
+  times(): number[] {
+    const bookmarks = this.#plugin.timeline.marks.filter((mark) => mark.kind === "bookmark").map((mark) => mark.time);
+    return [...this.#chapters, ...bookmarks];
+  }
+
   // --------------------------------------------------------------- commands
 
   setA() {
     const state = this.#state;
     if (this.blocked(state) || state.position === null) return;
-    const at = clamp(round1(state.position), 0, state.duration!);
+    this.#placeA(clamp(round1(state.position), 0, state.duration!));
+  }
+
+  setB() {
+    const state = this.#state;
+    if (this.blocked(state) || state.position === null) return;
+    this.#placeB(Math.min(round1(state.position), state.duration!));
+  }
+
+  /**
+   * A typed point (the panel's A or B field): placed as `[` / `]` would at that
+   * time. `false` when refused (outside the media, or B not after A); the reason
+   * is on the video.
+   */
+  type(point: "a" | "b", seconds: number): boolean {
+    const state = this.#state;
+    if (this.blocked(state)) return false;
+    if (!Number.isFinite(seconds) || seconds < 0 || seconds > state.duration! + EPS) {
+      new Failure("time-range").show(this.#osd);
+      return false;
+    }
+    const at = Math.min(round1(seconds), state.duration!);
+    return point === "a" ? this.#placeA(at) : this.#placeB(at);
+  }
+
+  #placeA(at: number): boolean {
     if (this.b !== null && this.b - at < MIN_SPAN - EPS) {
       this.b = null;
       this.#osd("Start point is after the end point; end point cleared");
@@ -130,21 +264,20 @@ export class AbLoop {
     if (this.b !== null) this.#start();
     else this.on = false;
     this.#commitNow();
+    return true;
   }
 
-  setB() {
-    const state = this.#state;
-    if (this.blocked(state) || state.position === null) return;
-    const at = Math.min(round1(state.position), state.duration!);
+  #placeB(at: number): boolean {
     const a = this.a ?? 0;
     if (at - a < MIN_SPAN - EPS) {
       this.#osd("End point must be after the start point");
-      return;
+      return false;
     }
     this.a = a;
     this.b = at;
     this.#start();
     this.#commitNow();
+    return true;
   }
 
   clearA() {
@@ -185,6 +318,11 @@ export class AbLoop {
     this.#commitLater();
   }
 
+  /** `\` can run: A and B are set, or a loop runs (another plugin's too, so it can always stop one). */
+  toggleable(): boolean {
+    return (this.a !== null && this.b !== null) || !!this.#state.loop;
+  }
+
   /** `\`: stop the running loop (whoever set it), or start ours when A and B are set. */
   toggle() {
     if (this.#state.loop) return this.#stop("A-B loop off");
@@ -195,7 +333,7 @@ export class AbLoop {
   }
 
   /** Alt+\: loop the span between the marks around the position, and start now. */
-  loopSegment(times: readonly number[]) {
+  loopSegment(times: readonly number[] = this.times()) {
     const state = this.#state;
     if (this.blocked(state) || state.position === null) return;
     const span = segmentAt(times, state.position, state.duration!);
@@ -210,7 +348,9 @@ export class AbLoop {
   }
 
   setCount(count: Count) {
-    this.#settings.setAbCount(count);
+    this.#settings.update((s) => {
+      s.abCount = count;
+    });
     if (count === null) this.#osd("Loop count: endless");
     else this.#osd("Loop count: {}", [count]);
     if (this.on) this.#commitNow();
@@ -238,6 +378,22 @@ export class AbLoop {
     else if (this.b !== null) this.#osd("A-B end: {}", [precise(this.b)]);
   }
 
+  /**
+   * B22: while only A is set, an `A` marker on the seek bar (this plugin's
+   * layer); with B too the loop span is the player's to draw. Written for the
+   * source it belongs to (`ifCurrent`), and only when it changed.
+   */
+  #publish() {
+    const state = this.#state;
+    const a = this.#a;
+    const show = a !== null && this.#b === null && state.duration !== null && a <= state.duration;
+    const marks = show ? [{ time: a, kind: "marker" as const, title: "A" }] : [];
+    const sent = JSON.stringify(marks);
+    if (sent === this.#sent) return;
+    this.#sent = sent;
+    this.#layer.set(marks, { ifCurrent: state });
+  }
+
   #wanted(): Loop | null {
     if (!this.on || this.a === null || this.b === null) return null;
     return { a: this.a, b: this.b, count: this.count };
@@ -247,13 +403,13 @@ export class AbLoop {
     this.#timer = null;
     this.#chain = this.#chain.then(() => this.#flush());
   }
-  /** Held nudges: commit once they pause for `timing.loopCommit`. */
+  /** Held nudges: commit once they pause for `loopTiming.loopCommit`. */
   #commitLater() {
     if (this.#timer) clearTimeout(this.#timer);
     this.#timer = setTimeout(() => {
       this.#timer = null;
       this.#chain = this.#chain.then(() => this.#flush());
-    }, timing.loopCommit);
+    }, loopTiming.loopCommit);
   }
 
   async #flush() {
@@ -281,9 +437,11 @@ export class AbLoop {
       if (player.state.sourceId !== sourceId) return;
       this.#committed = want;
       this.#lastLoop = player.state.loop ?? null;
+      this.#pass = 1;
       const position = player.state.position;
       if (want && seek && position !== null && (position < want.a || position >= want.b))
         await player.seek(want.a).catch(() => {});
+      this.#lastPosition = player.state.position;
     } catch (error) {
       if (player.state.sourceId !== sourceId) return;
       if (want) this.on = false;

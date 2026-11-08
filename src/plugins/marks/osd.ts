@@ -21,26 +21,7 @@ export type OsdText =
   | "Can't seek: {}"
   // B22 seek bar
   | "Bookmark and chapter marks on the seek bar: on"
-  | "Bookmark and chapter marks on the seek bar: off"
-  // B23 A-B loop
-  | "A-B loop: {} ~ {}"
-  | "A-B start: {}"
-  | "A-B end: {}"
-  | "A-B loop ended"
-  | "A-B loop off"
-  | "Start point is after the end point; end point cleared"
-  | "End point must be after the start point"
-  | "Start point cleared"
-  | "End point cleared"
-  | "Reached the beginning"
-  | "Reached the end"
-  | "Set the start and end points first"
-  | "No chapters or bookmarks to define a range"
-  | "Range too short to loop"
-  | "Loop count: endless"
-  | "Loop count: {}"
-  | "This source doesn't support A-B loop"
-  | "A-B loop failed: {}";
+  | "Bookmark and chapter marks on the seek bar: off";
 
 export type Osd = (text: OsdText, args?: TemplateArgs) => void;
 

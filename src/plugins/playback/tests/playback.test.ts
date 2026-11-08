@@ -57,8 +57,8 @@ async function startWith(settings: Record<string, unknown>, host = withMedia()) 
   };
 }
 const lastOsd = (host: TestHost) => host.osd.at(-1);
-/** This plugin's own commands (the core's are in `host.coreCommands`). */
-const own = (host: TestHost) => [...host.commands];
+/** This plugin's own commands (the core's are in `host.coreCommands`), A-B Loop's `ab.*` aside (loop.test.ts). */
+const own = (host: TestHost) => [...host.commands].filter(([id]) => !id.startsWith("ab."));
 
 test("time input and labels", () => {
   assert.equal(parseTime("1:02:03.250"), 3723.25);

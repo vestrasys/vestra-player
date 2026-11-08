@@ -8,12 +8,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
+#: bookmarks.ts:46 menu.ts:56 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 #, x-machine
 msgid "Bookmark {}"
 msgstr "Signet {}"
 
-#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
+#: chapters.ts:12 menu.ts:56 ui/marks.slint:55 ui/marks.slint:129
 #, x-machine
 msgid "Chapter {}"
 msgstr "Chapitre {}"
@@ -38,24 +38,24 @@ msgstr "{} signets seront supprimés. Cette action est irréversible."
 msgid "Clear Bookmarks"
 msgstr "Effacer les signets"
 
-#: manifest.json
+#: manifest.json menu.ts:108 menu.ts:117 menu.ts:130 menu.ts:169 menu.ts:184 menu.ts:193 menu.ts:206 seekbar.ts:137 ui/marks.slint:70
 #, x-machine
-msgid "Chapters, Bookmarks and A-B Loop"
-msgstr "Chapitres, signets et boucle A-B"
+msgid "Chapters and Bookmarks"
+msgstr "Chapitres et signets"
 
 #: manifest.json
 #, x-machine
-msgid "Jump by chapter and bookmark; loop an A-B range"
-msgstr "Naviguer par chapitre et par signet ; lire en boucle une plage A-B"
+msgid "Jump by chapter and bookmark"
+msgstr "Naviguer par chapitre et par signet"
 
 #: manifest.json
 #, x-machine
 msgid ""
-"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
-"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\" and \"A-B Loop\"."
+"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
+"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
 msgstr ""
-"Liste les chapitres du média ; ajoute, nomme et gère des signets pour chaque fichier ; passe d'un chapitre ou d'un signet à l'autre et les affiche comme repères sur la barre de progression ; définit une plage A-B et la répète un nombre de fois choisi.\n"
-"Accessible depuis le menu contextuel, sous « Liste des chapitres et signets… » (H) ; les autres commandes sont dans la palette de commandes, sous « Chapitres et signets » et « Boucle A-B »."
+"Liste les chapitres du média ; ajoute, nomme et gère des signets pour chaque fichier ; passe d'un chapitre ou d'un signet à l'autre et les affiche comme repères sur la barre de progression.\n"
+"Accessible depuis le menu contextuel, sous « Liste des chapitres et signets… » (H) ; les autres commandes sont dans la palette de commandes, sous « Chapitres et signets ». La boucle A-B se trouve dans le panneau « Lecture » (Lecture de base)."
 
 #: manifest.json
 #, x-machine
@@ -72,354 +72,139 @@ msgstr "Chapitres"
 msgid "Bookmarks"
 msgstr "Signets"
 
-#: manifest.json
-#, x-machine
-msgid "Loop"
-msgstr "Boucle"
-
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:59
+#: menu.ts:55
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:62
+#: menu.ts:58
 #, x-machine
 msgid "{}{}{}"
 msgstr "{}{}{}"
 
-#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
-#, x-machine
-msgid "Chapters and Bookmarks"
-msgstr "Chapitres et signets"
-
-#: menu.ts:110
+#: menu.ts:107
 #, x-machine
 msgid "Chapter and Bookmark List…"
 msgstr "Liste des chapitres et signets…"
 
-#: menu.ts:119 ui/marks.slint:208
+#: menu.ts:116 ui/marks.slint:208
 #, x-machine
 msgid "Add Bookmark"
 msgstr "Ajouter un signet"
 
-#: menu.ts:126 osd.ts:51
+#: menu.ts:123 osd.ts:32
 #, x-machine
 msgid "Can't add bookmarks to this source"
 msgstr "Impossible d'ajouter des signets à cette source"
 
-#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
+#: menu.ts:123 menu.ts:135 menu.ts:176 menu.ts:198 ui/marks.slint:157
 #, x-machine
 msgid "No media open"
 msgstr "Aucun média ouvert"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Bookmark or Chapter"
 msgstr "Signet ou chapitre précédent"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Bookmark or Chapter"
 msgstr "Signet ou chapitre suivant"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Chapter"
 msgstr "Chapitre précédent"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Chapter"
 msgstr "Chapitre suivant"
 
-#: menu.ts:138 menu.ts:179 menu.ts:201
+#: menu.ts:135 menu.ts:176 menu.ts:198
 #, x-machine
 msgid "This source can't seek"
 msgstr "Cette source ne permet pas de se déplacer"
 
-#: menu.ts:186
+#: menu.ts:183
 #, x-machine
 msgid "More Chapters… ({} in all)"
 msgstr "Plus de chapitres… ({} au total)"
 
-#: menu.ts:208
+#: menu.ts:205
 #, x-machine
 msgid "More Bookmarks… ({} in all)"
 msgstr "Plus de signets… ({} au total)"
 
-#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
-#, x-machine
-msgid "A-B Loop"
-msgstr "Boucle A-B"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set Start Point"
-msgstr "Définir le point de début"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear Start Point"
-msgstr "Effacer le point de début"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Back 0.1 s"
-msgstr "Point de début −0,1 s"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Forward 0.1 s"
-msgstr "Point de début +0,1 s"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set End Point"
-msgstr "Définir le point de fin"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear End Point"
-msgstr "Effacer le point de fin"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Back 0.1 s"
-msgstr "Point de fin −0,1 s"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Forward 0.1 s"
-msgstr "Point de fin +0,1 s"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Back 0.1 s"
-msgstr "Décaler la plage de −0,1 s"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Forward 0.1 s"
-msgstr "Décaler la plage de +0,1 s"
-
-#: menu.ts:250
-#, x-machine
-msgid "Loop Current Chapter or Bookmark Range"
-msgstr "Boucler le chapitre actuel ou la plage de signets actuelle"
-
-#: menu.ts:257 menu.ts:271 osd.ts:51
-#, x-machine
-msgid "This source doesn't support A-B loop"
-msgstr "Cette source ne prend pas en charge la boucle A-B"
-
-#: menu.ts:257
-#, x-machine
-msgid "Start point not set"
-msgstr "Point de début non défini"
-
-#: menu.ts:257
-#, x-machine
-msgid "End point not set"
-msgstr "Point de fin non défini"
-
-#: menu.ts:257 menu.ts:271
-#, x-machine
-msgid "A-B range not set"
-msgstr "Plage A-B non définie"
-
-#: menu.ts:265
-#, x-machine
-msgid "A-B Loop On/Off"
-msgstr "Activer/désactiver la boucle A-B"
-
-#: menu.ts:278 menu.ts:279
-#, x-machine
-msgid "Loop Count"
-msgstr "Nombre de répétitions"
-
-#: menu.ts:278
-#, x-machine
-msgid "Endless"
-msgstr "Infini"
-
-#: menu.ts:278
-#, x-machine
-msgid "Once"
-msgstr "Une fois"
-
-#: menu.ts:278
-#, x-machine
-msgid "2 Times"
-msgstr "2 fois"
-
-#: menu.ts:278
-#, x-machine
-msgid "3 Times"
-msgstr "3 fois"
-
-#: menu.ts:278
-#, x-machine
-msgid "5 Times"
-msgstr "5 fois"
-
-#: menu.ts:278
-#, x-machine
-msgid "10 Times"
-msgstr "10 fois"
-
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: {}"
 msgstr "Chapitre : {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: Chapter {}"
 msgstr "Chapitre : Chapitre {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark: {}"
 msgstr "Signet : {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark added: {} ({})"
 msgstr "Signet ajouté : {} ({})"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "A bookmark already exists here"
 msgstr "Un signet existe déjà à cet endroit"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmarks full ({})"
 msgstr "Nombre maximal de signets atteint ({})"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous chapter"
 msgstr "Aucun chapitre précédent"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next chapter"
 msgstr "Aucun chapitre suivant"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous bookmark or chapter"
 msgstr "Aucun signet ou chapitre précédent"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next bookmark or chapter"
 msgstr "Aucun signet ou chapitre suivant"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Can't seek: {}"
 msgstr "Impossible de se déplacer : {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: on"
 msgstr "Repères de signets et de chapitres sur la barre de progression : activés"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: off"
 msgstr "Repères de signets et de chapitres sur la barre de progression : désactivés"
 
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop: {} ~ {}"
-msgstr "Boucle A-B : {} – {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B start: {}"
-msgstr "Début A-B : {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B end: {}"
-msgstr "Fin A-B : {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop ended"
-msgstr "Boucle A-B terminée"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop off"
-msgstr "Boucle A-B désactivée"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point is after the end point; end point cleared"
-msgstr "Le point de début est après le point de fin ; point de fin effacé"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point must be after the start point"
-msgstr "Le point de fin doit être après le point de début"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point cleared"
-msgstr "Point de début effacé"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point cleared"
-msgstr "Point de fin effacé"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the beginning"
-msgstr "Début atteint"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the end"
-msgstr "Fin atteinte"
-
-#: osd.ts:51
-#, x-machine
-msgid "Set the start and end points first"
-msgstr "Définissez d'abord les points de début et de fin"
-
-#: osd.ts:51
-#, x-machine
-msgid "No chapters or bookmarks to define a range"
-msgstr "Aucun chapitre ni signet pour définir une plage"
-
-#: osd.ts:51
-#, x-machine
-msgid "Range too short to loop"
-msgstr "Plage trop courte pour être bouclée"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: endless"
-msgstr "Nombre de répétitions : infini"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: {}"
-msgstr "Nombre de répétitions : {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop failed: {}"
-msgstr "Échec de la boucle A-B : {}"
-
-#: seekbar.ts:147
+#: seekbar.ts:136
 #, x-machine
 msgid "Show Marks on Seek Bar"
 msgstr "Afficher les repères sur la barre de progression"

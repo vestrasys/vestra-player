@@ -76,7 +76,29 @@ export type OsdText =
   | "Show time on seek bar hover: Off"
   | "Show thumbnail on seek bar hover: On"
   | "Show thumbnail on seek bar hover: Off"
+  | LoopOsdText
   | FailureText;
+
+/** B23 A-B Loop (moved here from the marks plugin with the same texts). */
+export type LoopOsdText =
+  | "A-B loop: {} ~ {}"
+  | "A-B start: {}"
+  | "A-B end: {}"
+  | "A-B loop ended"
+  | "A-B loop off"
+  | "Start point is after the end point; end point cleared"
+  | "End point must be after the start point"
+  | "Start point cleared"
+  | "End point cleared"
+  | "Reached the beginning"
+  | "Reached the end"
+  | "Set the start and end points first"
+  | "No chapters or bookmarks to define a range"
+  | "Range too short to loop"
+  | "Loop count: endless"
+  | "Loop count: {}"
+  | "This source doesn't support A-B loop"
+  | "A-B loop failed: {}";
 
 /** Shows one on-screen message; headless hosts refuse it, which never fails the action. */
 export type Osd = (text: OsdText, args?: TemplateArgs) => void;

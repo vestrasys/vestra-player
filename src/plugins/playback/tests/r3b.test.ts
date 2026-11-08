@@ -316,9 +316,8 @@ test("B22 the A-B loop is drawn whoever set it, and goes with the source", async
   const bar = host.mounted("bottom");
   assert.equal(bar.props["has-loop"], false);
   host.setSource({ loop: { a: 20, b: 50, count: null } });
-  await until(() => bar.props["has-loop"] === true);
-  assert.equal(bar.props["loop-a"], 0.1);
-  assert.equal(bar.props["loop-b"], 0.25);
+  // Properties are written one at a time: wait for all three.
+  await until(() => bar.props["has-loop"] === true && bar.props["loop-a"] === 0.1 && bar.props["loop-b"] === 0.25);
   host.openElsewhere("/other.mkv");
   host.setSource({ duration: 50 });
   await until(() => bar.props["has-loop"] === false);
