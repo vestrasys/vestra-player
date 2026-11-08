@@ -36,7 +36,7 @@ if (out || states) {
   const stateTarget = states && join(states, `${process.pid}.jsonl`);
   for (const dir of [out, states]) if (dir) mkdirSync(dir, { recursive: true });
   const seen = new Set();
-  /** Per test host: window id → file, settings page id → view, the panel. */
+  /** Per test host: window id → file, settings page id → view, slot → panel. */
   const views = new WeakMap();
   const record = (view, property, value) => {
     if (!target) return;
@@ -101,7 +101,7 @@ if (out || states) {
       views.set(this, {
         windows: new Map(),
         pages: new Map(),
-        panel: null,
+        panels: new Map(),
         host: ++hosts,
         serials: 0,
       });
@@ -111,6 +111,14 @@ if (out || states) {
     // value: record the whole value the property shows after it.
     const shownValue = (props) =>
       p.patch ? props?.[String(p.property)] : p.value;
+    // A plugin holds one panel per slot (SDK 1.6.15); a request names its
+    // slot, or (one panel, older SDKs) means the only one.
+    const panelOf = () => {
+      if (p.slot != null) return known.panels.get(String(p.slot)) ?? null;
+      return known.panels.size === 1 ? [...known.panels.values()][0] : null;
+    };
+    const panelProps = () =>
+      (p.slot != null ? this.panels?.get(String(p.slot)) : this.panel)?.props;
     const each = (view, properties) => {
       for (const [name, value] of Object.entries(properties ?? {}))
         record(plain(view), name, value);
@@ -141,25 +149,39 @@ if (out || states) {
         known.windows.delete(String(p.id));
         break;
       }
-      case "ui.mount":
-        known.panel = {
+      case "ui.mount": {
+        const view = {
           file: String(p.file),
           component: String(p.component),
           global: String(p.global),
         };
-        each(known.panel, p.properties);
-        stateful(known, known.panel, "panel", p.properties);
+        known.panels.set(String(p.slot ?? "bottom"), view);
+        each(view, p.properties);
+        stateful(known, view, "panel", p.properties);
         break;
-      case "ui.setMount":
-        if (known.panel) {
-          const value = shownValue(this.panel?.props);
-          record(plain(known.panel), String(p.property), value);
-          event(known, known.panel, "panel", "set", {
+      }
+      case "ui.setMount": {
+        const view = panelOf();
+        if (view) {
+          const value = shownValue(panelProps());
+          record(plain(view), String(p.property), value);
+          event(known, view, "panel", "set", {
             property: String(p.property),
             value,
           });
         }
         break;
+      }
+      case "ui.unmount": {
+        const gone =
+          p.slot != null ? [String(p.slot)] : [...known.panels.keys()];
+        for (const slot of gone) {
+          const view = known.panels.get(slot);
+          if (view) event(known, view, "panel", "close");
+          known.panels.delete(slot);
+        }
+        break;
+      }
       case "settings.register": {
         const view = {
           file: String(p.file),
