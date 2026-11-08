@@ -2396,8 +2396,9 @@ export declare class TestHost implements Transport {
     }>): void;
     /**
      * The pointer reached the right edge in fullscreen (`true`) or left the
-     * popped-out sidebar (`false`): the attached sidebar pops out or collapses
-     * (reference §6.3). No effect outside fullscreen, when hidden or floating.
+     * popped-out columns (`false`): the attached sidebar and the adjust column
+     * (SDK 1.6.13), those switched on, pop out or collapse (reference §6.3). No
+     * effect outside fullscreen, or on a column switched off or floating.
      *
      * @capability None.
      *
