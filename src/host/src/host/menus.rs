@@ -563,13 +563,17 @@ impl Host {
                 self.menu_panels = menu::panels(&value);
                 value
             }
-            MenuMode::Tabs => {
+            MenuMode::Tabs(column) => {
+                let column = *column;
                 // Every tab, in that window's tab order (sidebar-tabs.md).
                 let owners = match &self.floating {
-                    Some(floating) if floating.generation == self.menu_generation => {
+                    Some(floating)
+                        if floating.generation == self.menu_generation
+                            && column == sidebar_tabs::Column::Sidebar =>
+                    {
                         &floating.owners
                     }
-                    _ => &self.shell_tabs,
+                    _ => &self.columns[column.index()].tabs,
                 };
                 let tabs = owners
                     .iter()
@@ -577,7 +581,7 @@ impl Host {
                     .collect::<Vec<_>>();
                 let (origin, size) = menu_frame(window);
                 let scroll = self.menu_scroll.first().copied().unwrap_or(0.);
-                let active = self.policy.sidebar_active();
+                let active = self.policy.active(super::mounts::policy_column(column));
                 let value = menu::within(menu_area(window, origin, size), origin, |o, s| {
                     menu::tabs_level(&tabs, active, o, s, scroll)
                 });

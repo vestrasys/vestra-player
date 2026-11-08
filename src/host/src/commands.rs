@@ -98,7 +98,7 @@ pub enum ButtonIcon {
 /// button may name. Mirrored by `BAR_BUTTON_ICONS` in the SDK package;
 /// tests/sdk/host-agreement.test.ts checks the installed SDK agrees, and a
 /// test here that the list is the icon set's.
-pub const BUTTON_ICONS: [&str; 38] = [
+pub const BUTTON_ICONS: [&str; 39] = [
     "play",
     "pause",
     "stop",
@@ -137,6 +137,7 @@ pub const BUTTON_ICONS: [&str; 38] = [
     "exit-fullscreen",
     "store",
     "ai",
+    "sliders",
 ];
 
 /// The shown text of a [`Declaration`].

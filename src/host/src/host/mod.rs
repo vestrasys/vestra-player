@@ -108,6 +108,37 @@ pub(crate) struct Mount {
     /// (`sidebar_tabs::recorded_call`).
     pub(crate) call: Value,
 }
+/// What the host keeps of one column of tabs (the sidebar, the adjust
+/// column) between ticks and shells (sidebar-tabs.md, per column).
+#[derive(Default)]
+pub(crate) struct ColumnState {
+    /// The current tab at the last tick, and whether the user just clicked
+    /// a tab (which gave the column the keys already).
+    pub(crate) active: Option<u64>,
+    pub(crate) tab_clicked: bool,
+    /// Its panels in the current shell, in its tab order (its
+    /// `<column>-active` indexes this; the policy may already have dropped one).
+    pub(crate) tabs: Vec<u64>,
+    /// The current shell draws its tab strip.
+    pub(crate) tabbed: bool,
+    /// The tab whose compile failed: not tried again until another is current.
+    pub(crate) refresh_failed: Option<u64>,
+    /// The placeholder tab whose plugin was woken for being shown.
+    pub(crate) woken: Option<u64>,
+    /// G-01: its fullscreen overlay was popped out at the last tick (the
+    /// adjust column: also its overlay over a narrow window's video).
+    pub(crate) popped: bool,
+    /// It was on screen at the last tick (the adjust column).
+    pub(crate) shown: bool,
+    /// The user has wanted it shown in this run (the adjust column): its
+    /// panels are compiled only from then on (menu redesign, open question
+    /// 1: on demand), and stay compiled when it closes.
+    pub(crate) opened: bool,
+    /// What the keys under its tabs were last computed from: the binding
+    /// table's and the command registry's revisions, the shell generation
+    /// and the tabs (the adjust column).
+    pub(crate) keys_from: Option<(u64, u64, u64, Vec<u64>)>,
+}
 /// The detached sidebar's own window (C14).
 pub(crate) struct Floating {
     pub(crate) instance: slint_interpreter::ComponentInstance,
@@ -125,6 +156,8 @@ pub(crate) struct InputShared {
     pub(crate) table: bindings::Table,
     pub(crate) bottom: Option<u64>,
     pub(crate) sidebar: Option<u64>,
+    /// The adjust column's current tab (`panel:adjust` keys).
+    pub(crate) adjust: Option<u64>,
     pub(crate) blocked: bool,
     pub(crate) wheel: (f64, f64),
     /// The key press being dispatched, recorded by the window's winit hook.
@@ -143,8 +176,8 @@ pub(crate) enum MenuMode {
     Main,
     /// A panel menu (C11): owner and its command ids, `None` = separator.
     Panel(u64, Vec<Option<String>>),
-    /// The sidebar's overflow menu (`»`, sidebar-tabs.md): every tab.
-    Tabs,
+    /// A column's overflow menu (`»`, sidebar-tabs.md): every tab.
+    Tabs(sidebar_tabs::Column),
     /// The command palette (`host/palette`), in the main window.
     Palette,
     /// The bottom-bar strip's `»` (bar_buttons.rs): the plugin buttons not
@@ -328,32 +361,21 @@ pub(crate) struct Host {
     pub(crate) window_facts: Value,
     pub(crate) measured_shell: Option<u64>,
     pub(crate) menu_open: bool,
-    /// G-01: the fullscreen sidebar overlay was popped out at the last tick.
-    pub(crate) sidebar_popped: bool,
     /// The fullscreen title strip (`title-strip.slint`).
     pub(crate) title_strip: window_state::TitleStrip,
-    /// The current sidebar tab at the last tick, and whether the user just
-    /// clicked a tab (which gave the sidebar the keys already).
-    pub(crate) sidebar_active: Option<u64>,
-    pub(crate) tab_clicked: bool,
-    /// The sidebar's panels in the current shell, in its tab order (its
-    /// `sidebar-active` indexes this; the policy may already have dropped one).
-    pub(crate) shell_tabs: Vec<u64>,
-    /// What the current shell was compiled with: its specs (the sidebar's
-    /// compiled panels among them) and whether it draws the tab strip.
+    /// The columns of tabs (by `sidebar_tabs::Column::index`): the sidebar
+    /// and the adjust column.
+    pub(crate) columns: [ColumnState; 2],
+    /// What the current shell was compiled with: its specs (the columns'
+    /// compiled panels among them).
     pub(crate) shell_specs: Vec<composition::CompileSpec>,
-    pub(crate) shell_tabbed: bool,
-    /// The sidebar tabs compiled into the current shell: owner → the owner
+    /// The column tabs compiled into the current shell: owner → the owner
     /// its branch was compiled under (different after a parked plugin woke
     /// under a new owner, until its new mount compiles it).
     pub(crate) shell_compiled: BTreeMap<u64, u64>,
-    /// The current tab needs its panel compiled (`prepare_mount_tick`).
+    /// A current tab needs its panel compiled (`prepare_mount_tick`).
     pub(crate) shell_refresh: bool,
-    /// The tab whose compile failed: not tried again until another is current.
-    pub(crate) refresh_failed: Option<u64>,
-    /// The placeholder tab whose plugin was woken for being shown.
-    pub(crate) tab_woken: Option<u64>,
-    /// Sidebar panels whose compile failed when their tab joined the compiled
+    /// Column panels whose compile failed when their tab joined the compiled
     /// set (reported to their plugin): left out until they mount again.
     pub(crate) tabs_failed: std::collections::BTreeSet<u64>,
     /// The bottom bar was shown at the last tick.

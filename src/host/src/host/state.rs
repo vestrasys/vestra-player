@@ -32,6 +32,9 @@ pub(crate) fn layout_change(
     if detached.is_some() && slot == composition::Slot::Bottom {
         return Err(RpcError::invalid("the bottom bar cannot be detached"));
     }
+    if detached == Some(true) && slot == composition::Slot::Adjust {
+        return Err(RpcError::invalid("the adjust column cannot be detached"));
+    }
     let active = match params.get("active").filter(|v| !v.is_null()) {
         None => None,
         Some(Value::String(id)) => Some(
@@ -62,6 +65,7 @@ pub(crate) fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot>
     match slot {
         composition::Slot::Bottom => Some(window_state::Slot::Bottom),
         composition::Slot::Sidebar => Some(window_state::Slot::Sidebar),
+        composition::Slot::Adjust => Some(window_state::Slot::Adjust),
         composition::Slot::Backdrop => None,
     }
 }
@@ -270,13 +274,19 @@ impl Host {
         };
         let sidebar = &self.window_facts["slots"]["sidebar"];
         let docked = sidebar["preferred"] == true && sidebar["detached"] == false;
+        // The adjust column, while docked, takes its width beside the video.
+        let adjust = self.window_facts["slots"]["adjustWidth"]
+            .as_f64()
+            .filter(|width| *width > 0.)
+            .map_or(0., |width| width + window_state::SPLITTER_WIDTH);
         let frame = window_control::Frame {
             extra_height: (number("logical-height") - number("video-height")).max(0.),
-            extra_width: if docked {
-                self.policy.sidebar_user_width() + window_state::SPLITTER_WIDTH
-            } else {
-                0.
-            },
+            extra_width: adjust
+                + if docked {
+                    self.policy.sidebar_user_width() + window_state::SPLITTER_WIDTH
+                } else {
+                    0.
+                },
             max_content: platform::max_content(&screen),
         };
         let fit = window_control::fit(width, height, frame);
@@ -325,12 +335,17 @@ impl Host {
             .map(|m| m.spec.owner)
             .collect::<Vec<_>>();
         let sidebar = self.policy.sidebar_panels();
+        let adjust = self.policy.panels(window_state::Slot::Adjust);
         let slot = |name: &str| {
             let slot = &self.window_facts["slots"][name];
             if slot.is_null() {
                 return Value::Null;
             }
-            let owners = if name == "sidebar" { &sidebar } else { &bottom };
+            let owners = match name {
+                "sidebar" => &sidebar,
+                "adjust" => &adjust,
+                _ => &bottom,
+            };
             let panels = owners
                 .iter()
                 .filter_map(|owner| self.mounts.get(owner))
@@ -340,7 +355,7 @@ impl Host {
                 "reason":slot["reason"],"detached":slot["detached"],"panels":panels})
         };
         Ok(
-            json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"backdrop":self.backdrop_state()}),
+            json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"adjust":slot("adjust"),"backdrop":self.backdrop_state()}),
         )
     }
     /// `panels.backdrop.state`: `{ owner, effective }`, null without a backdrop.
@@ -416,5 +431,18 @@ mod tests {
         assert_eq!(code(json!({"active":7}), Slot::Sidebar), "invalid");
         assert_eq!(code(json!({"visible":"yes"}), Slot::Sidebar), "invalid");
         assert_eq!(code(json!({"detached":true}), Slot::Bottom), "invalid");
+        // Menu redesign step 3b: the adjust column does not detach.
+        assert_eq!(code(json!({"detached":true}), Slot::Adjust), "invalid");
+        assert_eq!(
+            layout_change(
+                &json!({"detached":false,"visible":true}),
+                Slot::Adjust,
+                &panels
+            )
+            .unwrap()
+            .visible,
+            Some(true)
+        );
+        assert_eq!(policy_slot(Slot::Adjust), Some(window_state::Slot::Adjust));
     }
 }

@@ -1,6 +1,18 @@
-//! The window tick, the sidebar's tabs and its floating window.
+//! The window tick, the tabs of the columns (the sidebar, the adjust
+//! column) and the sidebar's floating window.
+use super::mounts::policy_column;
 use super::*;
 use crate::playback::renderer::GpuBackend as _;
+use crate::ui::sidebar_tabs::Column;
+
+/// What a column remembers across launches (`ui_state`'s `sidebarSlot`,
+/// `adjustSlot`).
+pub(crate) struct ColumnMemory {
+    pub(crate) visible: bool,
+    pub(crate) detached: bool,
+    pub(crate) active: Option<String>,
+    pub(crate) order: Vec<String>,
+}
 
 impl Host {
     pub(crate) fn window_tick(&mut self) {
@@ -161,7 +173,11 @@ impl Host {
             .set_hover(window_state::Slot::Bottom, bottom_hover);
         self.policy.set_hover(
             window_state::Slot::Sidebar,
-            flag("sidebar-hover") && self.sidebar_popped,
+            flag("sidebar-hover") && self.columns[Column::Sidebar.index()].popped,
+        );
+        self.policy.set_hover(
+            window_state::Slot::Adjust,
+            flag("adjust-hover") && self.columns[Column::Adjust.index()].popped,
         );
         // FS-BAR-1: the fullscreen bar shows only while the pointer is in
         // its band (the bar's laid-out height, also while it is hidden).
@@ -194,10 +210,10 @@ impl Host {
         self.policy.tick(now);
         self.title_strip_tick(&shell, fullscreen, at_edge, now);
         self.sync_tabs(&shell);
-        let mut sidebar_seen = None;
+        let mut columns_seen = (None, None);
         let result = (|| -> Result<Value> {
             let snapshot = self.policy.evaluate(viewport, now)?;
-            sidebar_seen = snapshot.sidebar;
+            columns_seen = (snapshot.sidebar, snapshot.adjust);
             shell.set_property("host-fullscreen", fullscreen.into())?;
             shell.set_property(
                 "menu-open",
@@ -222,10 +238,33 @@ impl Host {
             shell.set_property("sidebar-overlay", sidebar.is_some_and(|s| s.overlay).into())?;
             let popped = sidebar.is_some_and(|s| s.overlay && s.effective);
             shell.set_property("sidebar-popped", popped.into())?;
-            if self.sidebar_popped && !popped {
+            let state = &mut self.columns[Column::Sidebar.index()];
+            if state.popped && !popped {
                 let _ = shell.invoke("focus-video", &[]);
             }
-            self.sidebar_popped = popped;
+            state.popped = popped;
+            // The adjust column: docked, over the video of a narrow window,
+            // or in fullscreen an overlay that exists collapsed too, so it
+            // can slide out.
+            let adjust = snapshot.adjust;
+            let docked = adjust.is_some_and(|a| a.effective && !a.overlay);
+            shell.set_property("adjust-visible", docked.into())?;
+            shell.set_property(
+                "adjust-overlay",
+                adjust
+                    .is_some_and(|a| a.overlay && (fullscreen || a.effective))
+                    .into(),
+            )?;
+            let popped = adjust.is_some_and(|a| a.overlay && a.effective);
+            shell.set_property("adjust-popped", popped.into())?;
+            let state = &mut self.columns[Column::Adjust.index()];
+            // Hidden, its panels' focus goes; the keys go back to the video
+            // (Slint #11079, as for the bar and the sidebar).
+            if state.shown && !(popped || docked) && !flag("canvas-focused") {
+                let _ = shell.invoke("focus-video", &[]);
+            }
+            state.popped = popped;
+            state.shown = popped || docked;
             let playing =
                 self.last_source["phase"] == "ready" && self.last_source["paused"] == false;
             // UI-SHELL-09: in fullscreen the pointer hides while playing and
@@ -246,7 +285,7 @@ impl Host {
             )
         })();
         self.answer_video_area(video, now);
-        self.bar_tick(&shell, sidebar_seen);
+        self.bar_tick(&shell, columns_seen);
         match result {
             Ok(facts) => {
                 let detached = facts["slots"]["sidebar"]["effective"] == true
@@ -371,44 +410,99 @@ impl Host {
     pub(crate) fn sidebar_slot(&self) -> ui_state::SidebarSlot {
         self.ui_state.state.sidebar_slot.clone().unwrap_or_default()
     }
+    /// The adjust column's remembered state (defaults: closed, 317 wide).
+    pub(crate) fn adjust_slot(&self) -> ui_state::AdjustSlot {
+        self.ui_state.state.adjust_slot.clone().unwrap_or_default()
+    }
+    /// What a column remembers across launches: shown, floating (the
+    /// sidebar only), its current tab and its tab order.
+    pub(crate) fn column_memory(&self, column: Column) -> ColumnMemory {
+        match column {
+            Column::Sidebar => {
+                let slot = self.sidebar_slot();
+                ColumnMemory {
+                    visible: slot.visible,
+                    detached: slot.detached,
+                    active: slot.active,
+                    order: slot.order,
+                }
+            }
+            Column::Adjust => {
+                let slot = self.adjust_slot();
+                ColumnMemory {
+                    visible: slot.visible,
+                    detached: false,
+                    active: slot.active,
+                    order: slot.order,
+                }
+            }
+        }
+    }
     /// Keep the sidebar slot's persisted state current: shown, floating, the
-    /// current tab and the tab order.
-    /// `chosen`: the current tab was just chosen (a click, `layout.set`
-    /// `active`), so it is remembered even over one not mounted yet.
+    /// current tab and the tab order (`remember_column`).
     pub(crate) fn remember_sidebar(&mut self, chosen: bool) {
-        let Some((visible, detached)) = self.policy.sidebar_state() else {
+        self.remember_column(Column::Sidebar, chosen);
+    }
+    /// Keep a column's persisted state current: shown, floating (the
+    /// sidebar), the current tab and the tab order. `chosen`: the current
+    /// tab was just chosen (a click, `layout.set` `active`), so it is
+    /// remembered even over one not mounted yet.
+    pub(crate) fn remember_column(&mut self, column: Column, chosen: bool) {
+        let slot_of = policy_column(column);
+        let Some((visible, detached)) = self.policy.column_state(slot_of) else {
             return;
         };
-        let mut slot = self.sidebar_slot();
-        slot.visible = visible;
-        slot.detached = detached;
+        let mut memory = self.column_memory(column);
+        memory.visible = visible;
+        memory.detached = detached;
         // A remembered tab whose plugin has not mounted (yet: plugins start
         // one after another) stays remembered, so it is current again once
         // it does.
         let manifests = self
             .policy
-            .sidebar_panels()
+            .panels(slot_of)
             .iter()
             .filter_map(|owner| self.mounts.get(owner).map(|m| m.manifest.clone()))
             .collect::<Vec<_>>();
-        let waiting = slot
+        let waiting = memory
             .active
             .as_ref()
             .is_some_and(|active| !manifests.contains(active));
         if chosen || !waiting {
-            slot.active = self
+            memory.active = self
                 .policy
-                .sidebar_active()
+                .active(slot_of)
                 .and_then(|owner| self.mounts.get(&owner))
                 .map(|m| m.manifest.clone());
         }
         let current = manifests.iter().map(String::as_str).collect::<Vec<_>>();
-        for manifest in &current {
-            slot.remember_among(manifest, &current);
-        }
-        if self.ui_state.state.sidebar_slot.as_ref() != Some(&slot) {
-            self.ui_state.state.sidebar_slot = Some(slot);
-            self.ui_state.touch(self.now_ms());
+        let now = self.now_ms();
+        match column {
+            Column::Sidebar => {
+                let mut slot = self.sidebar_slot();
+                slot.visible = memory.visible;
+                slot.detached = memory.detached;
+                slot.active = memory.active;
+                for manifest in &current {
+                    slot.remember_among(manifest, &current);
+                }
+                if self.ui_state.state.sidebar_slot.as_ref() != Some(&slot) {
+                    self.ui_state.state.sidebar_slot = Some(slot);
+                    self.ui_state.touch(now);
+                }
+            }
+            Column::Adjust => {
+                let mut slot = self.adjust_slot();
+                slot.visible = memory.visible;
+                slot.active = memory.active;
+                for manifest in &current {
+                    slot.remember_among(manifest, &current);
+                }
+                if self.ui_state.state.adjust_slot.as_ref() != Some(&slot) {
+                    self.ui_state.state.adjust_slot = Some(slot);
+                    self.ui_state.touch(now);
+                }
+            }
         }
     }
     /// Hide the whole sidebar (the floating window closed).
@@ -421,33 +515,37 @@ impl Host {
             self.remember_sidebar(false);
         }
     }
-    /// The sidebar's panels in tab order: the playlist's, other built-in plugins', then as
-    /// remembered (`SidebarSlot::order`), new ones last in mount order.
-    pub(crate) fn tab_order(&self, mounts: &BTreeMap<u64, Mount>) -> Vec<u64> {
+    /// A column's panels in tab order (`sidebar_tabs::order`): its first
+    /// tabs (the playlist; Picture, Audio, Subtitles, Playback), the other
+    /// built-in plugins', then as remembered, new ones last in mount order.
+    pub(crate) fn tab_order(&self, column: Column, mounts: &BTreeMap<u64, Mount>) -> Vec<u64> {
         let tabs = mounts
             .values()
-            .filter(|m| m.spec.slot == composition::Slot::Sidebar)
+            .filter(|m| m.spec.slot == column.slot())
             .map(|m| sidebar_tabs::Tab {
                 owner: m.spec.owner,
                 manifest: &m.manifest,
                 builtin: m.builtin,
             })
             .collect::<Vec<_>>();
-        sidebar_tabs::order(&tabs, &self.sidebar_slot())
+        sidebar_tabs::order(column, &tabs, &self.column_memory(column).order)
     }
-    /// What the current tab needs (sidebar-tabs.md): a placeholder's plugin
-    /// is woken once (its activation mounts the panel again); a running
-    /// plugin's panel that is not in the shell is compiled into it
-    /// (`prepare_mount_tick`), unless that just failed for this tab.
-    fn tab_demand(&mut self, active: Option<u64>) {
+    /// What a column's current tab needs (sidebar-tabs.md): a placeholder's
+    /// plugin is woken once (its activation mounts the panel again); a
+    /// running plugin's panel that is not in the shell is compiled into it
+    /// (`prepare_mount_tick`), unless that just failed for this tab. The
+    /// adjust column's first opening compiles its panel this way (menu
+    /// redesign, open question 1: on demand).
+    fn tab_demand(&mut self, column: Column, active: Option<u64>) {
+        let index = column.index();
         let Some(owner) = active else {
-            self.tab_woken = None;
+            self.columns[index].woken = None;
             return;
         };
         let Some(mount) = self.mounts.get(&owner) else {
             return;
         };
-        if mount.spec.slot != composition::Slot::Sidebar {
+        if mount.spec.slot != column.slot() {
             return;
         }
         // Its running plugin is kept up while the tab is current (declared
@@ -467,22 +565,28 @@ impl Host {
         let compiled = self.shell_compiled.get(&owner) == Some(&owner);
         match sidebar_tabs::need(mount.recorded, compiled, pending) {
             sidebar_tabs::Need::Wake => {
-                if self.tab_woken != Some(owner) {
-                    self.tab_woken = Some(owner);
-                    diag!("sidebar: tab of {} shown, waking it", mount.manifest);
+                if self.columns[index].woken != Some(owner) {
+                    self.columns[index].woken = Some(owner);
+                    diag!(
+                        "{}: tab of {} shown, waking it",
+                        column.prefix(),
+                        mount.manifest
+                    );
                     self.panel_shown(owner);
                 }
             }
             sidebar_tabs::Need::Compile => {
-                self.tab_woken = None;
-                if self.refresh_failed != Some(owner) && !self.tabs_failed.contains(&owner) {
+                self.columns[index].woken = None;
+                if self.columns[index].refresh_failed != Some(owner)
+                    && !self.tabs_failed.contains(&owner)
+                {
                     self.shell_refresh = true;
                 }
             }
             sidebar_tabs::Need::Nothing => {
-                self.tab_woken = None;
+                self.columns[index].woken = None;
                 if compiled {
-                    self.refresh_failed = None;
+                    self.columns[index].refresh_failed = None;
                 }
             }
         }
@@ -492,43 +596,57 @@ impl Host {
     /// branch until its new mount): the floating window compiles the same
     /// ones, so a wake does not reopen it.
     pub(crate) fn compiled_tabs(&self) -> Vec<u64> {
-        self.shell_tabs
+        self.columns[Column::Sidebar.index()]
+            .tabs
             .iter()
             .filter_map(|owner| self.shell_compiled.get(owner).copied())
             .collect()
     }
-    /// The current tab everywhere it matters: the panel keys' owner, the
-    /// shell's and the floating window's `sidebar-active` (and the floating
-    /// window's title). A tab that changed without a click on the strip
-    /// (a plugin, the current panel removed) hands the keys back to the
-    /// video if they were in the sidebar: the panel that had them is gone.
+    /// The current tabs everywhere they matter: the panel keys' owners, the
+    /// shell's and the floating window's `<column>-active` (and the floating
+    /// window's title), the keys under the adjust column's tabs. A tab that
+    /// changed without a click on the strip (a plugin, the current panel
+    /// removed) hands the keys back to the video if they were in the column:
+    /// the panel that had them is gone.
     pub(crate) fn sync_tabs(&mut self, shell: &slint_interpreter::ComponentInstance) {
-        let tabs = self.policy.sidebar_panels();
-        let active = self.policy.sidebar_active();
-        self.input.borrow_mut().sidebar = active;
+        for column in Column::ALL {
+            self.sync_column(shell, column);
+        }
+    }
+    fn sync_column(&mut self, shell: &slint_interpreter::ComponentInstance, column: Column) {
+        let index = column.index();
+        let p = column.prefix();
+        let tabs = self.policy.panels(policy_column(column));
+        let active = self.policy.active(policy_column(column));
+        match column {
+            Column::Sidebar => self.input.borrow_mut().sidebar = active,
+            Column::Adjust => self.input.borrow_mut().adjust = active,
+        }
         // Each window indexes its own tab order; a tab it does not have yet
         // (or any more) leaves it as it is until it is rebuilt.
+        let active_name = format!("{p}-active");
+        let shown_name = format!("{p}-shown");
         let set_index = |window: &slint_interpreter::ComponentInstance, order: &[u64]| {
             let Some(index) = active.and_then(|owner| order.iter().position(|&o| o == owner))
             else {
                 return;
             };
             let index = index as f64;
-            if !matches!(window.get_property("sidebar-active"), Ok(SValue::Number(n)) if n == index)
-            {
-                let _ = window.set_property("sidebar-active", SValue::Number(index));
+            if !matches!(window.get_property(&active_name), Ok(SValue::Number(n)) if n == index) {
+                let _ = window.set_property(&active_name, SValue::Number(index));
             }
         };
         let set_shown = |window: &slint_interpreter::ComponentInstance, owner: i64| {
             let owner = owner as f64;
-            if !matches!(window.get_property("sidebar-shown"), Ok(SValue::Number(n)) if n == owner)
-            {
-                let _ = window.set_property("sidebar-shown", SValue::Number(owner));
+            if !matches!(window.get_property(&shown_name), Ok(SValue::Number(n)) if n == owner) {
+                let _ = window.set_property(&shown_name, SValue::Number(owner));
             }
         };
-        set_index(shell, &self.shell_tabs);
+        set_index(shell, &self.columns[index].tabs);
         set_shown(shell, sidebar_tabs::shown(active, &self.shell_compiled));
-        if let Some(floating) = &self.floating {
+        if column == Column::Sidebar
+            && let Some(floating) = &self.floating
+        {
             set_index(&floating.instance, &floating.owners);
             // Its branches are the shell's (`compiled_tabs`), by the same owners.
             let shown = sidebar_tabs::shown(active, &self.shell_compiled);
@@ -545,17 +663,71 @@ impl Host {
                 }
             }
         }
-        if self.sidebar_active != active {
+        if column == Column::Adjust {
+            self.tab_keys(shell, column);
+        }
+        let state = &mut self.columns[index];
+        if state.active != active {
             let canvas = matches!(shell.get_property("canvas-focused"), Ok(SValue::Bool(true)));
-            if self.sidebar_active.is_some() && !self.tab_clicked && !canvas && tabs.len() > 1 {
+            let more = tabs.len() > 1 || column.always_tabbed();
+            if state.active.is_some() && !state.tab_clicked && !canvas && more {
                 let _ = shell.invoke("focus-video", &[]);
             }
-            self.sidebar_active = active;
+            state.active = active;
         }
-        self.tab_clicked = false;
-        self.tab_demand(active);
+        state.tab_clicked = false;
+        // The adjust column's current tab is shown, and needs its panel, its
+        // plugin and its compile, only while the column is wanted shown
+        // (opened once, its panels stay compiled).
+        let wanted = self
+            .policy
+            .column_state(policy_column(column))
+            .is_some_and(|(preferred, _)| preferred);
+        if column == Column::Adjust && !wanted {
+            self.columns[index].woken = None;
+            return;
+        }
+        if column == Column::Adjust && !self.columns[index].opened {
+            self.columns[index].opened = true;
+            diag!("adjust: first opened, its panels compile now");
+        }
+        self.tab_demand(column, active);
     }
-    /// The titles of the sidebar's tabs, in tab order.
+    /// The keys under a column's tabs (the adjust column, menu redesign
+    /// §3.3): each tab's command that opens it (`sidebar_tabs::tab_command`)
+    /// with its current key, "" for none. Written only when the binding
+    /// table, the commands, the shell or the tabs changed.
+    fn tab_keys(&mut self, shell: &slint_interpreter::ComponentInstance, column: Column) {
+        let index = column.index();
+        let from = (
+            self.input.borrow().table.revision(),
+            self.commands.revision(),
+            self.shell_generation,
+            self.columns[index].tabs.clone(),
+        );
+        if self.columns[index].keys_from.as_ref() == Some(&from) {
+            return;
+        }
+        let keys = self.columns[index]
+            .tabs
+            .iter()
+            .map(|&owner| {
+                let entries = self.commands.entries_of(owner);
+                sidebar_tabs::tab_command(
+                    entries
+                        .iter()
+                        .map(|(entry, ..)| entry.declaration.home.as_deref()),
+                )
+                .and_then(|id| self.input.borrow().table.label(owner, id))
+                .unwrap_or_default()
+            })
+            .collect::<Vec<_>>();
+        if let Ok(value) = ui_values::from_json(&json!(keys)) {
+            let _ = shell.set_property(&format!("{}-keys", column.prefix()), value);
+        }
+        self.columns[index].keys_from = Some(from);
+    }
+    /// The titles of a column's tabs, in tab order.
     pub(crate) fn tab_titles(&self, owners: &[u64]) -> Result<SValue> {
         let titles = owners
             .iter()
@@ -563,33 +735,51 @@ impl Host {
             .collect::<Vec<_>>();
         ui_values::from_json(&json!(titles))
     }
-    /// The host's tab strip callbacks of a shell or floating window.
+    /// The host's tab strip callbacks of a shell or floating window (the
+    /// adjust column's where the window has it: the shell).
     pub(crate) fn bind_tabs(
         &self,
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) -> Result<()> {
-        let events = self.events.clone();
-        window.set_callback("sidebar-tab", move |args| {
-            if let Some(SValue::Number(index)) = args.first()
-                && *index >= 0.
-            {
-                let _ = events.send(Event::SidebarTab(generation, *index as usize));
+        let has_adjust = window
+            .definition()
+            .callbacks()
+            .any(|name| name == "adjust-tab");
+        for column in Column::ALL {
+            if column == Column::Adjust && !has_adjust {
+                continue;
             }
-            SValue::Void
-        })?;
-        let events = self.events.clone();
-        window.set_callback("sidebar-overflow", move |args| {
-            if let [SValue::Number(x), SValue::Number(y)] = args {
-                let _ = events.send(Event::SidebarOverflow(generation, *x, *y));
-            }
-            SValue::Void
-        })?;
+            let p = column.prefix();
+            let events = self.events.clone();
+            window.set_callback(&format!("{p}-tab"), move |args| {
+                if let Some(SValue::Number(index)) = args.first()
+                    && *index >= 0.
+                {
+                    let _ = events.send(Event::Tab(generation, column, *index as usize));
+                }
+                SValue::Void
+            })?;
+            let events = self.events.clone();
+            window.set_callback(&format!("{p}-overflow"), move |args| {
+                if let [SValue::Number(x), SValue::Number(y)] = args {
+                    let _ = events.send(Event::TabOverflow(generation, column, *x, *y));
+                }
+                SValue::Void
+            })?;
+        }
         let events = self.events.clone();
         window.set_callback("sidebar-detach", move |_| {
             let _ = events.send(Event::SidebarDetach(generation));
             SValue::Void
         })?;
+        if has_adjust {
+            let events = self.events.clone();
+            window.set_callback("adjust-dismiss", move |_| {
+                let _ = events.send(Event::AdjustDismiss(generation));
+                SValue::Void
+            })?;
+        }
         Ok(())
     }
     /// Open or close the floating window so it matches the policy; a window

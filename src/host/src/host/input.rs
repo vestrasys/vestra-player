@@ -402,6 +402,7 @@ impl Host {
                 match scope.as_str() {
                     "panel:bottom" => shared.bottom,
                     "panel:sidebar" => shared.sidebar,
+                    "panel:adjust" => shared.adjust,
                     _ => None,
                 }
             };
