@@ -114,3 +114,30 @@ flowchart LR
 - **Cost per tick.** `bar_tick` runs on every window tick but compares `bar_buttons::Inputs` first (the registry and binding revisions, the sidebar's state, the language, the window generations) and rebuilds only when it changed (UI frame-rate rule; `bar_buttons::tests::an_unchanged_tick_does_not_rebuild`).
 - **Images** are decoded when the strip is rebuilt (at most 64 px); one that cannot be loaded shows the icon set's `failed` icon instead of an empty cell, and stays clickable.
 - **Standby.** The `button` is part of the recorded command declaration: the button of a plugin in standby stays in the strip from the recording, and a click starts the plugin like its menu item does ([supervisor §4](supervisor.md#4-standby-and-wake)); checked on hardware.
+
+## One panel per slot per plugin (SDK 1.6.15)
+
+2026-11-08. Until SDK 1.6.14 a plugin held at most one panel. Now it may hold one panel **per slot**: a bottom bar and a backdrop (each exclusive across plugins, R-U3), a sidebar tab and an adjust-column tab. Two panels of the same plugin in the same slot are refused with `conflict`; exclusivity between plugins is unchanged.
+
+**Panel keys.** Everything that knows a panel (the shell's `if` branches and `Owner<key>Bridge`, `window_state::Policy`, the compile sets, `host.mounts`, `shell_compiled`) knows it by its key, `panel_key(owner, slot) = owner × 4 + slot` (`host/mod.rs`); `panel_plugin(key) = key / 4` gives the plugin back. `Mount.spec.owner` is the key, `Mount.plugin` the plugin's owner generation. Everything addressed to the plugin (messages, commands, its process, images) uses the plugin's owner. Owner generations count up from 1 and stay below the wire's 2^53, far below `u64::MAX / 4`; `panel_key` checks that bound in debug builds. A woken plugin moves its keys with it (`UiMount::rekey`).
+
+**Per-slot views.** Images and row patches of a panel live under `mount_view(slot)`: `$mount` (bottom bar), `$mount:sidebar`, `$mount:adjust`, `$mount:backdrop`, so two panels of one plugin never share a model.
+
+**Wire (`vestra/1`, additive).**
+
+| Method | `slot` |
+|---|---|
+| `ui.mount` | required, as before |
+| `ui.setMount`, `ui.interaction`, `ui.menu` | optional; without it the plugin's only panel, or `invalid` ("name the slot") when it has several |
+| `ui.unmount` | optional; without it every panel of the plugin |
+| `ui.callback`, `ui.preparing` (host → plugin) | the panel's slot; `ui.callback` keeps `view: "$mount"` |
+
+The SDK sends `slot` only while the plugin has panels in more than one slot, so one-panel plugins put exactly the 1.6.14 bytes on the wire and older hosts keep working. Its runtime routes a `$mount` callback to the `panel:<slot>` view (falling back to the only panel view when `slot` is missing, i.e. an older host).
+
+**Lifecycle.** A plugin that stops for good loses all its panels; its mounts still queued, replayed placeholder tabs among them, are dropped from `mount_queue` too, also when another of its panels is already applied, so no placeholder stays without its plugin (`ui_mount::forget_queued`). Its queued unmounts stay, since they remove what is applied. A plugin that parks keeps its recorded panels as placeholders ([sidebar-tabs.md](sidebar-tabs.md), [supervisor §4](supervisor.md#4-standby-and-wake)).
+
+**SDK.** `PanelHandle` is per slot; `TestHost.panels` maps slot → `FakePanel`, `TestHost.mounted(slot?)` names one, `TestHost.panel` is the last mounted.
+
+**Core actions.** With the same change, the host's frame step, seek and speed actions (7 rows) left Playback ▸ Seek and Playback ▸ Speed and are reachable from the command palette only; the groups themselves stay player-owned (`host_group_label`).
+
+**Tests.** `host::mounts` (`each_panel_of_a_plugin_has_its_own_key`), `capabilities::ui_mount::tests` (a plugin gone for good leaves no queued placeholder), `tests/lazy_activation.rs`, `tests/sdk/host-agreement.test.ts` (palette rows, host groups); in the SDK, `test/multi-panel.test.ts` (wire shape with one and several panels, callback routing, `TestHost.panels`).

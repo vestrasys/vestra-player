@@ -328,10 +328,24 @@ export function createWire(transport) {
                 base,
             }),
             mount: (options) => transport.request("ui.mount", options),
-            setMount: (property, write) => transport.request("ui.setMount", { property, ...write }),
-            interaction: (locks) => transport.request("ui.interaction", locks),
-            unmount: () => transport.request("ui.unmount"),
-            menu: (items, x, y) => transport.request("ui.menu", { items, x, y }),
+            // `slot`: which of the plugin's panels (player 0.7.6: one per slot;
+            // older players have one and ignore it).
+            setMount: (property, write, slot) => transport.request("ui.setMount", {
+                property,
+                ...write,
+                ...(slot ? { slot } : {}),
+            }),
+            interaction: (locks, slot) => transport.request("ui.interaction", {
+                ...locks,
+                ...(slot ? { slot } : {}),
+            }),
+            unmount: (slot) => transport.request("ui.unmount", slot ? { slot } : undefined),
+            menu: (items, x, y, slot) => transport.request("ui.menu", {
+                items,
+                x,
+                y,
+                ...(slot ? { slot } : {}),
+            }),
             open: (id, file, properties = {}, callbacks = []) => transport.request("ui.open", { id, file, properties, callbacks }),
             set: (id, property, write) => transport.request("ui.set", { id, property, ...write }),
             show: (id, visible) => transport.request("ui.show", { id, visible }),

@@ -275,6 +275,8 @@ export interface WireTimeline {
     marks: WireMark[];
     ranges?: WireRange[];
 }
+/** A panel position (`ui.mount`'s `slot`). */
+export type MountSlot = "bottom" | "sidebar" | "backdrop" | "adjust";
 /** The backdrop as `layout.state` reports it; `null` without one. */
 export interface LayoutBackdrop {
     owner: number;
@@ -752,14 +754,14 @@ export declare function createWire(transport: Transport): {
             prepareMs: number;
             shellGeneration: number;
         }>;
-        setMount: (property: string, write: PropertyWrite) => Promise<void>;
+        setMount: (property: string, write: PropertyWrite, slot?: MountSlot) => Promise<void>;
         interaction: (locks: {
             focused: boolean;
             dragging: boolean;
             popupOpen: boolean;
-        }) => Promise<void>;
-        unmount: () => Promise<void>;
-        menu: (items: (string | null)[], x: number, y: number) => Promise<void>;
+        }, slot?: MountSlot) => Promise<void>;
+        unmount: (slot?: MountSlot) => Promise<void>;
+        menu: (items: (string | null)[], x: number, y: number, slot?: MountSlot) => Promise<void>;
         open: (id: string, file: string, properties?: Record<string, Json>, callbacks?: string[]) => Promise<void>;
         set: (id: string, property: string, write: PropertyWrite) => Promise<void>;
         show: (id: string, visible: boolean) => Promise<void>;
