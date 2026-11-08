@@ -254,6 +254,7 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 
 ### Log (newest first)
 
+- 11-08 evening: user — merge B4 at once, no GUI checks (the user tries the player themselves from a staged build in an isolated profile), then start the SDK work; SDK-lane agents run on Opus 5.5 high, others default.
 - 11-08 afternoon: user made the SDK refactor top priority (3 dedicated agents, 1.7.0 for Steps 2+3) and accepted the still licence. SDK lane started: characterisation tests (spec §4.0) in C:estrawt-sdk-char; spec being updated with the rulings.
 - 11-08 midday (deputy): ci:local on b4-panels 6e07a0e3 was 20/21 — typos rejected the `iy` identifier in picture.slint; renamed to inner-x/inner-y as a two-line coordinator fix (8e25e419; ruling: next time even a rename goes to an author with a reviewer glance); 21-step rerun and staged build queued. B5 sweep landed (413fd30e on b5-menu, 70 files): 13 plugins, all paths per mockup 04, ids/titles/keys/categories unchanged; 13 plugin suites green under the lock; small ordering deviations accepted (Recently Played 119, Audio Track 301 + Subtitle Track in domain, About in settings-main, Snapshot first item domain). Maintainer batch (host Play/Pause top level, Previous/Next palette-only, Command Palette… 829, SDK 1.6.17 tables, host-agreement test) in progress in the same worktree.
 - 11-08 afternoon: SDK refactor plan document written (author on Fable) and merged as doc/specs/sdk-refactor.md; typos clean. Open questions for the user in its §7.
