@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import {
-  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, parse, presetOf, presets, serialize, syncSeconds,
+  bands, clamp, companions, deviceId, deviceLabel, deviceTitles, matches, neutral, nodes, OLD_BANDS, parse, presetOf, presets, serialize, spread, syncSeconds,
   TRACK_TEXT_BYTES, trackRow,
 } from "../model.ts";
 
@@ -23,12 +23,12 @@ test("normalization and the crystalizer use typed processing nodes without devic
     { kind: "treble", frequency: 3000, slope: 0.5, gainDb: 3 },
     { kind: "dynaudnorm", enabled: true, maxGain: 4, peak: 0.9 },
   ]);
-  assert.ok(nodes({ ...neutral(), gains: [6, 6, 6, 6, 6, 6] }).every((node) => node.kind === "equalizer"));
+  assert.ok(nodes({ ...neutral(), gains: bands.map(() => 6) }).every((node) => node.kind === "equalizer"));
   assert.deepEqual(nodes({ ...neutral(), clarity: { on: false, db: 5 } }), [], "crystalizer off keeps its strength but makes no node");
 });
 
 test("a bypassed equalizer drops only the bands; presetOf names the matching preset", () => {
-  const value = { ...neutral(), equalizer: false, gains: [3, 0, 0, 0, 0, 0], clarity: { on: true, db: 1 } };
+  const value = { ...neutral(), equalizer: false, gains: [3, 0, 0, 0, 0, 0, 0, 0, 0, 0], clarity: { on: true, db: 1 } };
   assert.deepEqual(nodes(value), [{ kind: "treble", frequency: 3000, slope: 0.5, gainDb: 1 }]);
   assert.equal(presetOf(neutral()), 0);
   assert.equal(presetOf({ ...neutral(), gains: [...presets[3].gains] }), 3);
@@ -36,17 +36,18 @@ test("a bypassed equalizer drops only the bands; presetOf names the matching pre
 });
 
 test("settings parse leniently; a legacy numeric clarity migrates to the crystalizer switch", () => {
-  assert.deepEqual(parse(null), { settings: neutral(), syncKeep: "none", autoLoad: false, tab: 0, device: null, deviceName: null, extra: {} });
+  assert.deepEqual(parse(null), { settings: neutral(), syncKeep: "none", autoLoad: false, device: null, deviceName: null, extra: {} });
   assert.deepEqual(parse({ clarity: 2.5 }).settings.clarity, { on: true, db: 2.5 });
   assert.deepEqual(parse({ clarity: 0 }).settings.clarity, { on: false, db: 3 });
   assert.deepEqual(parse({ clarity: { on: true, db: 9 } }).settings.clarity, { on: true, db: 6 });
-  assert.deepEqual(parse({ gains: [1, "x", 9, 0, 0, 0] }).settings.gains, [1, 0, 6, 0, 0, 0]);
-  assert.deepEqual(parse({ gains: [1, 2] }).settings.gains, [0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(parse({ gains: [1, "x", 9, 0, 0, 0, 0, 0, 0, -2] }).settings.gains, [1, 0, 6, 0, 0, 0, 0, 0, 0, -2]);
+  assert.deepEqual(parse({ gains: [1, 2] }).settings.gains, [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(parse({ gains: [1, "x", 9, 0, 0, 0] }).settings.gains, spread([1, 0, 6, 0, 0, 0]), "six gains (version 1) are spread");
   assert.equal(parse({ syncKeep: "session", syncMs: 500 }).settings.delayMs, 0, "only Always Keep restores the delay");
   assert.equal(parse({ syncKeep: "always", syncMs: 5003 }).settings.delayMs, 5000);
   assert.equal(parse({ syncKeep: "always", syncMs: -25000 }).settings.delayMs, -10000, "G09: ±10 000 ms");
   assert.equal(parse({ syncKeep: "bogus" }).syncKeep, "none");
-  assert.equal(parse({ tab: 7 }).tab, 0);
+  assert.equal("tab" in parse({ tab: 1 }).extra, false, "the old window's page is dropped");
   assert.equal(parse({ channels: { mode: "sideways" } }).settings.channels, "stereo");
   const stored = parse({ version: 1, future: "usb", channels: { mode: "left" }, autoLoadExternal: true, syncKeep: "always", syncMs: 120 });
   assert.deepEqual(stored.extra, { future: "usb" }, "later fields are kept");
@@ -54,16 +55,15 @@ test("settings parse leniently; a legacy numeric clarity migrates to the crystal
   assert.equal(stored.autoLoad, true);
   assert.deepEqual(serialize(stored), {
     future: "usb",
-    version: 1,
+    version: 2,
     equalizer: true,
-    gains: [0, 0, 0, 0, 0, 0],
+    gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     normalize: false,
     clarity: { on: false, db: 3 },
     channels: { mode: "left" },
     autoLoadExternal: true,
     syncKeep: "always",
     syncMs: 120,
-    tab: 0,
     device: null,
   });
   assert.equal("syncMs" in serialize({ ...stored, syncKeep: "session" }), false);
@@ -73,7 +73,7 @@ test("settings parse leniently; a legacy numeric clarity migrates to the crystal
 });
 
 test("G05: the channels node comes first, only off stereo and never on a mono track", () => {
-  const value = { ...neutral(), channels: "swap" as const, gains: [2, 0, 0, 0, 0, 0], normalize: true };
+  const value = { ...neutral(), channels: "swap" as const, gains: [2, 0, 0, 0, 0, 0, 0, 0, 0, 0], normalize: true };
   assert.deepEqual(
     nodes(value).map((n) => n.kind),
     ["channels", "equalizer", "dynaudnorm"],
@@ -221,4 +221,16 @@ test("G16: the saved device is an id the player accepts, kept with its name; tit
   const long = deviceLabel("扬声器".repeat(40));
   assert.ok(new TextEncoder().encode(long).length <= 72 && long.endsWith("…"));
   assert.equal(deviceLabel(" Speakers\u0085(USB)\u009b "), "Speakers (USB)", "C1 controls become spaces too");
+});
+
+test("ten bands: six saved gains follow the old curve, the ends held, and the old presets stay presets", () => {
+  assert.deepEqual([...bands], [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]);
+  assert.deepEqual(spread([1, 2, 3, 4, 5, 6]).slice(0, 2), [1, 1], "below 60 Hz: the first gain");
+  assert.equal(spread([1, 2, 3, 4, 5, 6])[5], 4, "1 kHz is an old band");
+  assert.equal(spread([1, 2, 3, 4, 5, 6])[9], 6, "above 10 kHz: the last gain");
+  assert.equal(OLD_BANDS.length, 6);
+  // The presets of 1.5.10, as settings.json held them, read as the same presets.
+  const old = [[0, 0, 0, 0, 0, 0], [-3, -2, 1, 3, 2, -1], [3, 2, -1, 0, 2, 3], [4, 2, -1, 1, 2, 2]];
+  old.forEach((gains, index) => assert.equal(presetOf(parse({ version: 1, gains }).settings), index));
+  assert.equal(nodes({ ...neutral(), gains: [...presets[2].gains] }).length, 9, "Music: nine bands off 0 dB");
 });
