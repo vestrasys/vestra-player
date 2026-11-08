@@ -1161,6 +1161,62 @@ impl ConvolutionPlane {
     }
 }
 
+/// How much of the source before an export's start a node must see so the
+/// exported frames and samples are those of decoding from 0 s (`media_worker`
+/// seeks the held file to the start minus this). Every built-in node is
+/// classified by an exhaustive match, so a new kind cannot become stateless
+/// by accident.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
+pub enum History {
+    /// Each frame or sample depends only on itself.
+    None,
+    /// Memory that fades within seconds (temporal filters, IIR filters,
+    /// gain smoothing): a bounded window before the start reproduces it.
+    Bounded,
+    /// Output tied to the source's first frame (frameBlend's frame grid is
+    /// anchored there): only decoding from 0 s gives the same frames.
+    FromZero,
+}
+
+impl VideoNode {
+    pub fn history(&self) -> History {
+        match self {
+            Self::Eq { .. }
+            | Self::Gblur { .. }
+            | Self::Hue { .. }
+            | Self::Sharpen { .. }
+            | Self::Deblock { .. }
+            | Self::Deband { .. }
+            | Self::Transform { .. }
+            | Self::Reframe { .. }
+            | Self::Convolution { .. }
+            | Self::Lut3d { .. } => History::None,
+            // hqdn3d's temporal part averages with the previous output.
+            Self::Denoise {
+                luma_temporal,
+                chroma_temporal,
+                ..
+            } if *luma_temporal == 0. && *chroma_temporal == 0. => History::None,
+            Self::Denoise { .. } => History::Bounded,
+            // bwdif reads the neighbouring frames.
+            Self::Deinterlace { .. } => History::Bounded,
+            Self::FrameBlend { .. } => History::FromZero,
+        }
+    }
+}
+
+impl AudioNode {
+    pub fn history(&self) -> History {
+        match self {
+            Self::Volume { .. } | Self::Channels { .. } => History::None,
+            // Biquad state, and dynaudnorm's frame window and gain smoothing.
+            Self::Equalizer { .. } | Self::Treble { .. } | Self::Dynaudnorm { .. } => {
+                History::Bounded
+            }
+        }
+    }
+}
+
 impl VideoNode {
     /// The node leaves every frame as it is: eq at its defaults, hue 0,
     /// gblur sigma 0, sharpen amount 0, denoise all 0, transform without a
