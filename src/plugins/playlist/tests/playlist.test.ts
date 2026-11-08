@@ -1276,7 +1276,7 @@ test("list focus: the list takes ↑ ↓ PgUp PgDn Home End Enter Esc; its bindi
   assert.match(scope, /^\s+focus-on-click: false;/m);
   assert.match(scope, /^\s+TouchArea \{\}/m);
   // The list takes the focus in four places only: a row's release (no drag), a right press on a
-  // row, and the search box's Esc and ↓; and it shows a focus ring meanwhile.
+  // row, and the search box's Esc and ↓; and it shows no focus ring (user ruling 2026-11-08).
   assert.equal([...slint.matchAll(/list-focus\.focus\(\)/g)].length, 4);
-  assert.match(slint, /visible: list-focus\.has-focus;\s+border-width: 1px;\s+border-color: Theme\.accent;/);
+  assert.doesNotMatch(slint, /visible: list-focus\.has-focus;/);
 });

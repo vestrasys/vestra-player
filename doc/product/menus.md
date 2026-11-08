@@ -87,7 +87,7 @@ Global keys not in the menu: Shift+Tab brief info (info). Esc is Toggle Fullscre
 
 ### When the playlist has focus
 
-Focus rules (user ruling 2026-11-08): only a single click on a row (on release, so a drag does not take it; or a right press on a row) and the search box's Esc/↓ give the list the focus; it then shows a 1px accent ring. A double-click or Enter on a row (play), Esc in the list, and a click on the video give the keys back to the video. The wheel, the bar's buttons, a drag, a click below the rows or on the bar's background leave the focus where it was.
+Focus rules (user ruling 2026-11-08): only a single click on a row (on release, so a drag does not take it; or a right press on a row) and the search box's Esc/↓ give the list the focus; it shows no focus indicator. A double-click or Enter on a row (play), Esc in the list, and a click on the video give the keys back to the video. The wheel, the bar's buttons, a drag, a click below the rows or on the bar's background leave the focus where it was.
 
 While the list has focus it handles the standard list keys itself (in `sidebar.slint`, unmodified; Shift extends the selection), as desktop players and file lists do; these are the only keys it takes from the player:
 

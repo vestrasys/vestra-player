@@ -645,13 +645,6 @@ export component PlaylistSidebar inherits Rectangle {
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
-                // While the list has the keys: the 1px accent focus ring of @vestra/widgets
-                // around the list area (it takes no pointer input).
-                Rectangle {
-                    visible: list-focus.has-focus;
-                    border-width: 1px;
-                    border-color: Theme.accent;
-                }
             }
 
             // Bottom bar: move icons | ADD DEL SORT | search | total duration (hidden first when narrow).
