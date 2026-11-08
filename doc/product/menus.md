@@ -42,9 +42,9 @@ The labels below are the English interface text (the English source text of each
 | Picture… | video | Alt+1 | 791, group `windows`; the Picture panel in the adjust column (Colour · Effects · Geometry · Advanced) |
 | Audio… | audio | Alt+2 | 792; the Audio panel |
 | Subtitles… | subtitles | Alt+3 | 793; the Subtitles panel |
-| Playback… | playback | Alt+4 | 794; the Playback panel (speed ruler, jump, frame and keyframe steps, seek steps) |
+| Playback… | playback | Alt+4 | 794; the Playback panel (speed ruler, A-B Loop, jump, frame and keyframe steps, seek steps) |
 | Playlist | playlist | F6 | 800; checked |
-| Chapter and Bookmark List… | marks | H | 801; top level since B5 (was Playback ▸ Chapters and Bookmarks ▸). Becomes a Chapters sidebar tab with the A-B Loop controls in proposal step 8 |
+| Chapter and Bookmark List… | marks | H | 801; top level since B5 (was Playback ▸ Chapters and Bookmarks ▸). Becomes a Chapters sidebar tab in proposal step 8 |
 | —— | | | |
 | Fullscreen | host | Esc | 810, group `screen`; checked; key `Toggle Fullscreen` (id `fullscreen`); Esc is its only default (user ruling 2026-11-01). "Enter Fullscreen" and "Leave Fullscreen" are not in the menu and have no default key |
 | —— | | | |
@@ -72,7 +72,8 @@ Every command below keeps its id, default key, category and checked/radio state.
 | subtitles | Everything that was under Subtitles ▸ except Subtitle Track ▸ (Show Subtitles Alt+H, Cycle Alt+L, Secondary Subtitle ▸, Subtitle Style ▸ Bold Alt+B · Size ± Alt+PgUp/PgDn · Move Up/Down · Shadow · Opaque Box, Original ASS/SSA Styles, Sync ▸ `.` `,` · Adjust Sync…, Reload Subtitles Ctrl+Alt+Y, Refresh Subtitle Tracks, Subtitle Tuning…, Subtitle Settings…), Previous/Next Dialogue (Home · End), Current Subtitle Start (Ctrl+Home), Remove External Subtitle, and Reset ▸ Subtitle Position (Alt+Home) · Subtitle Sync (`/`) | Subtitles panel (tracks, secondary, style, sync, files); the dialogue seeks stay palette-only |
 | subtitle-online | Online Subtitle Settings… | Palette (an Options page later) |
 | capture | Save Current Frame As…; Save/Copy Rendered Frame (Ctrl+Alt+E · Ctrl+Alt+C) and As…; Save/Copy Video Frame Only; Export Tasks…; Capture as PNG · JPEG · BMP; Include Subtitles in Rendered Frame; Snapshot Settings…; Snapshot Folder… · Open Snapshot Folder; Show Last Capture in Folder; Copy Last Snapshot; Set Clip Start · Set Clip End; Export Clip Range (Ctrl+Shift+E); Toggle range marks (Ctrl+Shift+R) | Capture sidebar tab (Snapshot: Save and Copy only; Clips; Results; Settings with format, effects, Burst, folder); keyboard commands stay in the palette |
-| marks | Add Bookmark (P); Previous/Next Bookmark or Chapter (Shift+PgUp/PgDn); Previous/Next Chapter (Ctrl+PgUp/PgDn); the dynamic chapter and bookmark entries; Show Marks on Seek Bar; A-B Loop ▸ (all: `[` `]` `{` `}`, Ctrl/Alt+`[`/`]`, Ctrl+Alt+`[`/`]`, Alt+\, `\`, Loop Count ▸) | Chapter and Bookmark List… window (H) now; the Chapters sidebar tab with the A-B Loop section in proposal step 8 |
+| marks | Add Bookmark (P); Previous/Next Bookmark or Chapter (Shift+PgUp/PgDn); Previous/Next Chapter (Ctrl+PgUp/PgDn); the dynamic chapter and bookmark entries; Show Marks on Seek Bar | Chapter and Bookmark List… window (H) now; the Chapters sidebar tab in proposal step 8 |
+| playback (A-B Loop, from marks) | A-B Loop ▸ (all: `[` `]` `{` `}`, Ctrl/Alt+`[`/`]`, Ctrl+Alt+`[`/`]`, Alt+\, `\`, Loop Count ▸); the 18 `ab.*` commands moved from `vestra.marks` to `vestra.playback` with the same ids and keys, and user overrides are migrated | Playback panel A-B Loop section (mini timeline, A and B rows with nudges and clear, Loop switch, Count, ↺ Chapter); palette (categories A-B Loop and Loop Count) |
 | playlist | Playback ▸ Playlist ▸ (Add Files… · Add Link… · Add Folder…, Repeat ▸ Off · All · One, Shuffle, Open List File… · Save List…, When Opening a File ▸, Fast Advance to Next, Remember List, Confirm Before Removing All) | Playlist sidebar (Add ＋ button, list context menu); Repeat and Shuffle go to the playlist footer in proposal step 8; the four settings are palette-only until an Options ▸ Playback ▸ Playlist page |
 | history | Resume Playback ▸ Don't Resume · Resume Automatically · Ask Every Time, Also Remember Audio Files, Clear All Saved Positions | Palette until the Options ▸ Playback ▸ Resume page (proposal step 9) |
 | window | Hide Pointer While Playing; Screen ▸ Picture-in-Picture, Mini Size (`` ` ``), 0.5× · 1× · 1.5× · 2× (1 · 2 · 3 · 4), Fit to Video Aspect Ratio (8), When Playback Starts ▸, Always on Top ▸ Cycle Mode (Ctrl+T) · modes | Palette (category Screen / Window); the "Options ▸ Playback ▸ Window" page holds the settings |
@@ -122,11 +123,11 @@ Slots: `bottom` (the control bar), `adjust` (one column of task panels beside th
 | --- | --- |
 | playback | Bottom bar (always present): source, seek bar (including the chapter/bookmark marks from marks), time, open/pause/speed/mute, volume; inline edit boxes (seek, speed, volume). Adjust panel **Playback** (Alt+4): speed ruler 0.25–4 (1× centred, snapping, double-click 1×, click to type), jump, frame and keyframe steps, seek steps |
 | playlist | Sidebar tab **Playlist** (F6): list and action buttons; "Add Link" tool window |
-| video | Adjust panel **Picture** (Alt+1): one scrolling page with Colour · Effects · Geometry · Advanced jump tabs; the Geometry editor works on a bundled still (Big Buck Bunny frame, CC BY 3.0); tool windows: custom aspect ratio, shader list |
+| video | Adjust panel **Picture** (Alt+1): one flat panel — Rendering (GPU Rendering, AI Upscaling), Colour, Effects, Geometry, Advanced (collapsed row) — no jump tabs; the Geometry editor works on a bundled still (Big Buck Bunny frame, CC BY 3.0); tool windows: custom aspect ratio, shader list |
 | audio | Adjust panel **Audio** (Alt+2): device, channels, equalizer, sync, processing |
 | subtitles | Adjust panel **Subtitles** (Alt+3): tracks, secondary subtitle, style, sync, files |
 | capture | Sidebar tab **Capture** (Alt+S): Snapshot, Clips, Results, Settings sub-pages; range marks and OSD actions on the seek bar |
-| marks | Tool window: chapter/bookmark list (H); seek-bar marks. Planned: Chapters sidebar tab with A-B Loop (proposal step 8) |
+| marks | Tool window: chapter/bookmark list (H); seek-bar marks. Planned: Chapters sidebar tab (proposal step 8) |
 | info | Read-only info overlay at the top left of the video (Tab, Shift+Tab); tool windows: playback properties, About Vestra Player |
 | window | No windows of its own, only adjusts the main window (size, always on top, pointer, picture-in-picture); "Options ▸ Playback ▸ Window" settings page |
 | visualizer | Video-area background layer (idle logo, album cover for audio only); settings page in "Options" |
