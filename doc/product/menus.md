@@ -6,7 +6,7 @@ The product's context menu tree is merged from the commands registered by the 16
 
 ## Menu tree
 
-2026-11-08, baseline branch `b5-menu` (B5 of the menu redesign). Compiled from the snapshot exported by `OUT=<file> node --test tests/menus-snapshot.test.ts` (run in `src/`; it covers every plugin under `src/plugins`). Menu `order` ranges: open 100–199, domain 200–699, screen 700–799, windows 800–899, exit 900–999. Checked, radio and initially disabled states come from each command's `state` in the same test host.
+2026-11-08, baseline branch `b5-menu` (B5 of the menu redesign). Compiled from the snapshot exported by `OUT=<file> node --test tests/menus-snapshot.test.ts` (run in `src/`; it covers every plugin under `src/plugins`). Menu `order` values are listed per item below; the separators come from each item's group (open · domain · windows · screen · windows · settings-main · exit), not from fixed number ranges — the four panels (791–794, group `windows`) and Fullscreen (810, group `screen`) sit outside the ranges the proposal once gave. Checked, radio and initially disabled states come from each command's `state` in the same test host.
 
 The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
@@ -35,7 +35,7 @@ The labels below are the English interface text (the English source text of each
 | Audio Track ▸ (actual audio track names) | audio | | 301, `domain`; radio; dynamic; with no audio tracks a greyed-out "No Audio Tracks" ("Loading…" while loading) |
 | Subtitle Track ▸ Off · (actual track names) | subtitles | | 302, `domain`; radio; dynamic |
 | Snapshot ▸ Save Current Frame · Copy Current Frame | capture | Ctrl+E · Ctrl+C | 420/422, `domain`; top level since B5 (was Video ▸ Snapshot ▸); disabled when there is no frame to capture |
-| Snapshot ▸ Burst… | capture | Ctrl+G | 426; checked while the burst window is open |
+| Snapshot ▸ Burst… | capture | Ctrl+G | 426; checked while the Capture tab's Settings page shows the Burst row |
 | Snapshot ▸ Export Clip… | capture | | 428 |
 | Snapshot ▸ —— Capture… | capture | Alt+S | 440, group `capture-tab`; opens the Capture sidebar tab (results, settings). Snapshot Settings… is palette-only |
 | —— | | | |
@@ -57,19 +57,19 @@ The labels below are the English interface text (the English source text of each
 | —— | | | |
 | Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | 990, group `exit`; key `Quit` |
 
-Top level: 19 entries plus third-party anchors; 33 fixed items in all, the rest are dynamic lists.
+Top level: 20 entries plus third-party anchors; 33 fixed items in all, the rest are dynamic lists. Items with the same `order` sort by plugin id, which is why Open ▸ Load External Audio… (audio, 114) comes before Add Secondary Subtitle… (subtitles, 114); mockup 04 drew them the other way round.
 
 ## Commands outside the menu
 
 Every command below keeps its id, default key, category and checked/radio state. The palette shows it as "Category: Title" with its key and, where it has one, the place that now holds its control; `Alt+Enter` in the palette opens that place. Users' own key bindings keep working (no orphan bindings).
 
-| Plugin | Left the menu (B5) | Where it lives now |
+| Plugin | Outside the menu (left in B4 or B5, or never in it) | Where it lives now |
 | --- | --- | --- |
 | core (host) | Previous · Next (PgUp · PgDn, mouse X2 · X1); Seek ▸ Previous/Next Frame (D · F), Back/Forward 5 s (← · →); Speed ▸ Normal (Z), Slower/Faster 0.1 (X · C) | Bottom bar; Playback panel (speed ruler, frame steps); palette (category Playback / Seek / Speed) |
 | playback | Reopen Current/Last File (Ctrl+Y); Copy to Clipboard ▸ File Name · Folder Path · Full Path; Seek ▸ Previous/Next Keyframe (Ctrl+Shift+←/→), Back/Forward 30 s (Ctrl+←/→), 60 s (Shift+←/→), 300 s (Ctrl+Alt+←/→), Jump to Start (Backspace), Seek Steps…; Jump to Time… (G); Speed ▸ 0.5× · 1.5× · 2× · Custom…; Disable Screen Saver While Playing; Show Time / Show Thumbnail on Seek Bar Hover | Playback panel (speed, jump, frame and keyframe steps, seek steps); the three toggles are palette-only until the Options ▸ Playback ▸ General page (proposal step 9) |
-| video | Everything that was under Video ▸ (colour ±1 % keys W/E, R/T, Y/U, I/O; aspect, crop/stretch, framing, rotation, deinterlace, flip, image processing toggles and their keys; pixel shaders, HDR, GPU rendering) and Reset ▸ Picture (Q) · Framing (Numpad5, Alt+Backspace) · Crop Position | Picture panel: Colour (sliders with ↺), Effects (toggle chips with strength, Frames Off / Doubling / Interpolate), Geometry (editor on a still: pan, zoom, crop with ratio chips; aspect; rotation; flip), Advanced (deinterlace, shaders, HDR, GPU rendering). Reset / Reset All at the panel bottom |
+| video | Everything that was under Video ▸ (colour ±1 % keys W/E, R/T, Y/U, I/O; aspect, crop/stretch, framing, rotation, deinterlace, flip, image processing toggles and their keys; pixel shaders, HDR, GPU rendering) and Reset ▸ Picture (Q) · Framing (Numpad5, Alt+Backspace) · Crop Position; Reset: Picture Panel (the panel's Reset All, palette only) | Picture panel: Colour (sliders with ↺), Effects (toggle chips with strength, Frames Off / Doubling / Interpolate), Geometry (editor on a still: pan, zoom, crop with ratio chips; aspect; rotation; flip), Advanced (deinterlace, shaders, HDR, GPU rendering). Reset / Reset All at the panel bottom |
 | audio | Everything that was under Audio ▸ except Audio Track ▸ (Cycle Tracks Alt+A, channel modes, Output Device ▸, Equalizer Shift+E, Preset ▸, Audio Sync ▸ `>` `<`, Processing ▸ Normalize Shift+N · Crystalizer Shift+C) and Reset ▸ Audio Sync (`?`) · Audio Processing | Audio panel (device, channels, equalizer with presets, sync with keep mode, processing) |
-| subtitles | Everything that was under Subtitles ▸ except Subtitle Track ▸ (Show Subtitles Alt+H, Cycle Alt+L, Secondary Subtitle ▸, Subtitle Style ▸ Bold Alt+B · Size ± Alt+PgUp/PgDn · Move Up/Down · Shadow · Opaque Box, Original ASS/SSA Styles, Sync ▸ `.` `,` · Adjust Sync…, Reload Subtitles Ctrl+Alt+Y, Refresh Subtitle Tracks, Subtitle Tuning…, Subtitle Settings…) and Reset ▸ Subtitle Position (Alt+Home) · Subtitle Sync (`/`) | Subtitles panel (tracks, secondary, style, sync, files) |
+| subtitles | Everything that was under Subtitles ▸ except Subtitle Track ▸ (Show Subtitles Alt+H, Cycle Alt+L, Secondary Subtitle ▸, Subtitle Style ▸ Bold Alt+B · Size ± Alt+PgUp/PgDn · Move Up/Down · Shadow · Opaque Box, Original ASS/SSA Styles, Sync ▸ `.` `,` · Adjust Sync…, Reload Subtitles Ctrl+Alt+Y, Refresh Subtitle Tracks, Subtitle Tuning…, Subtitle Settings…), Previous/Next Dialogue (Home · End), Current Subtitle Start (Ctrl+Home), Remove External Subtitle, and Reset ▸ Subtitle Position (Alt+Home) · Subtitle Sync (`/`) | Subtitles panel (tracks, secondary, style, sync, files); the dialogue seeks stay palette-only |
 | subtitle-online | Online Subtitle Settings… | Palette (an Options page later) |
 | capture | Save Current Frame As…; Save/Copy Rendered Frame (Ctrl+Alt+E · Ctrl+Alt+C) and As…; Save/Copy Video Frame Only; Export Tasks…; Capture as PNG · JPEG · BMP; Include Subtitles in Rendered Frame; Snapshot Settings…; Snapshot Folder… · Open Snapshot Folder; Show Last Capture in Folder; Copy Last Snapshot; Set Clip Start · Set Clip End; Export Clip Range (Ctrl+Shift+E); Toggle range marks (Ctrl+Shift+R) | Capture sidebar tab (Snapshot: Save and Copy only; Clips; Results; Settings with format, effects, Burst, folder); keyboard commands stay in the palette |
 | marks | Add Bookmark (P); Previous/Next Bookmark or Chapter (Shift+PgUp/PgDn); Previous/Next Chapter (Ctrl+PgUp/PgDn); the dynamic chapter and bookmark entries; Show Marks on Seek Bar; A-B Loop ▸ (all: `[` `]` `{` `}`, Ctrl/Alt+`[`/`]`, Ctrl+Alt+`[`/`]`, Alt+\, `\`, Loop Count ▸) | Chapter and Bookmark List… window (H) now; the Chapters sidebar tab with the A-B Loop section in proposal step 8 |
