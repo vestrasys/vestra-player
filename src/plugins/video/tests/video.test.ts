@@ -8,7 +8,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { aspectIndex, aspectMessage, blendFps, defaultLook, defaults, droppedTooMany, eqNeutral, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, presets, serialize, shaderList } from "../model.ts";
+import { activeDenoise, aspectIndex, aspectMessage, blendFps, defaultLook, defaults, droppedTooMany, eqNeutral, framed, framesIndex, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, presets, rememberDenoise, serialize, shaderList, switchDenoise } from "../model.ts";
 import type { Look, Picture } from "../model.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -630,7 +630,7 @@ test("Reset (Q) also turns every image-processing switch off, keeps strengths an
     await host.press("Ctrl+B");
     for (const id of ["video.sharpen", "video.edge", "video.denoise.d3", "video.denoise.gradual", "video.denoise.temporal", "video.deblock", "video.deband", "video.frame-blend"])
       await host.command(id).run();
-    window.emit("commit", "denoise", 90);
+    window.emit("commit", "d3", 90);
     await until(host, blendNode(host, 48), "the 24 fps rate read");
     assert.deepEqual(kinds(host), ["reframe", "transform", "denoise", "denoise", "denoise", "deblock", "deband", "eq", "sharpen", "sharpen", "gblur", "frameBlend"]);
     await host.press("Q");
@@ -640,9 +640,9 @@ test("Reset (Q) also turns every image-processing switch off, keeps strengths an
     for (const id of ["video.gaussian", "video.sharpen", "video.edge", "video.denoise.d3", "video.denoise.gradual", "video.denoise.temporal", "video.deblock", "video.deband", "video.frame-blend"])
       assert.equal(host.command(id).state.checked, false, id);
     assert.equal(host.command("video.flip.vertical").state.checked, true);
-    assert.equal(window.props["denoise-enabled"], false);
-    assert.equal(window.props["blend-enabled"], false);
-    assert.equal(window.props["denoise-strength"], 90, "off keeps the strength");
+    assert.equal(window.props["d3-enabled"], false);
+    assert.equal(window.props["frames-index"], 0);
+    assert.equal(window.props["d3-strength"], 90, "off keeps the strength");
     // Nothing of this plugin left on: no filter, so zero-copy decoding can resume.
     await host.press("Ctrl+P");
     await host.command("video.reframe.none").run();
@@ -737,6 +737,201 @@ test("settings restored at startup with a non-default colour install the eq node
 
 // ---------------------------------------------------------------- effects
 
+test("panel model: the Denoise chip is a master switch; the editor's framing is kept in range; one frames choice", () => {
+  const denoise = defaultLook().effects.denoise;
+  let last = switchDenoise(denoise, true, []);
+  assert.deepEqual([denoise.d3.on, denoise.gradual.on, denoise.temporal.on], [true, false, false], "first use: 3D");
+  assert.deepEqual(last, ["d3"]);
+  denoise.temporal.on = true;
+  denoise.temporal.strength = 70;
+  last = switchDenoise(denoise, false, last);
+  assert.deepEqual([denoise.d3.on, denoise.gradual.on, denoise.temporal.on], [false, false, false], "off: all off");
+  assert.deepEqual(last, ["d3", "temporal"], "the set that was on is remembered");
+  assert.equal(denoise.temporal.strength, 70, "strengths are kept");
+  last = switchDenoise(denoise, true, last);
+  assert.deepEqual([denoise.d3.on, denoise.gradual.on, denoise.temporal.on], [true, false, true], "on: the last set comes back");
+  denoise.d3.on = false;
+  assert.deepEqual(switchDenoise(denoise, true, ["gradual"]), ["temporal"], "on while one is on: nothing changes");
+  assert.deepEqual([denoise.d3.on, denoise.gradual.on, denoise.temporal.on], [false, false, true]);
+  assert.deepEqual(switchDenoise(denoise, false, ["gradual"]), ["temporal"]);
+  assert.deepEqual(switchDenoise(denoise, false, ["gradual"]), ["gradual"], "off with none on keeps what was remembered");
+  // A single denoiser switched (the card, Ctrl+N / Ctrl+M): the memory follows the last one off.
+  denoise.d3.on = true;
+  denoise.temporal.on = true;
+  let before = activeDenoise(denoise);
+  assert.deepEqual(before, ["d3", "temporal"]);
+  denoise.d3.on = false;
+  assert.deepEqual(rememberDenoise(denoise, before, ["gradual"]), ["gradual"], "one still on: the memory is untouched");
+  before = activeDenoise(denoise);
+  denoise.temporal.on = false;
+  assert.deepEqual(rememberDenoise(denoise, before, ["gradual"]), ["temporal"], "the last one off: the set that was on is remembered");
+  assert.deepEqual(rememberDenoise(denoise, [], ["gradual"]), ["gradual"], "nothing was on: the memory is untouched");
+  denoise.gradual.on = true;
+  assert.deepEqual(rememberDenoise(denoise, [], ["d3"]), ["d3"], "switched on: the memory is untouched");
+
+  const frame = { zoom: 1.5, panX: 0.2, panY: -0.1 };
+  assert.deepEqual(framed(frame, 9, 3, -3), { zoom: 4, panX: 1, panY: -1 });
+  assert.deepEqual(framed(frame, 0.1, 0.123456, Number.NaN), { zoom: 0.25, panX: 0.123, panY: -0.1 });
+  assert.deepEqual(framed(frame, 1.234567, 0, 0), { zoom: 1.2346, panX: 0, panY: 0 });
+
+  const look = defaultLook();
+  assert.equal(framesIndex(look.effects, look.render), 0);
+  look.effects.frameBlend = true;
+  assert.equal(framesIndex(look.effects, look.render), 1);
+  look.effects.frameBlend = false;
+  look.render.interpolation = true;
+  assert.equal(framesIndex(look.effects, look.render), 2);
+});
+
+test("Picture panel: the Denoise chip, the Frames choice, the editor's framing and crop box", async () => {
+  const { host, window, stop } = await playing();
+  // The chip: on → 3D (first use); off → all off; on → the set that was on.
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["d3-enabled"] === true, "3D on");
+  assert.equal(host.command("video.denoise.d3").state.checked, true);
+  await host.press("Ctrl+M");
+  await until(host, () => window.props["temporal-enabled"] === true, "Temporal on");
+  window.emit("toggle", "denoise", false);
+  await until(host, () => window.props["d3-enabled"] === false && window.props["temporal-enabled"] === false, "all off");
+  assert.equal(chain(host).filter((n) => n.kind === "denoise").length, 0);
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["temporal-enabled"] === true, "the set again");
+  assert.deepEqual([window.props["d3-enabled"], window.props["gradual-enabled"]], [true, false]);
+  assert.equal(chain(host).filter((n) => n.kind === "denoise").length, 2);
+  // Frames: Doubling, then Interpolate turns doubling off, then Off.
+  window.emit("choose", "frames", 1);
+  await until(host, () => window.props["frames-index"] === 1, "doubling");
+  assert.equal(host.command("video.frame-blend").state.checked, true);
+  window.emit("choose", "frames", 2);
+  await until(host, () => window.props["frames-index"] === 2, "interpolation");
+  assert.equal(host.command("video.frame-blend").state.checked, false);
+  assert.equal(host.videoRender.values.interpolation, true);
+  window.emit("choose", "frames", 0);
+  await until(host, () => window.props["frames-index"] === 0, "off");
+  assert.equal(host.videoRender.values.interpolation, false);
+  // The editor's drag and wheel: the framing, kept in range, applied at once without an OSD.
+  const osd = host.osd.length;
+  window.emit("frame-edit", 1.5, 0.25, -0.125, true);
+  await until(host, () => window.props["zoom-percent"] === 150, "the zoom");
+  assert.deepEqual([host.videoView.values.zoom, host.videoView.values.panX, host.videoView.values.panY], [1.5, 0.25, -0.125]);
+  assert.deepEqual([window.props.zoom, window.props["pan-x-value"], window.props["pan-x"], window.props["pan-y"]], [1.5, 0.25, 25, -12]);
+  window.emit("frame-edit", 10, -5, 0, true);
+  await until(host, () => window.props["zoom-percent"] === 400, "the most");
+  assert.deepEqual([host.videoView.values.zoom, host.videoView.values.panX], [4, -1]);
+  assert.equal(host.osd.length, osd, "no OSD for the editor's own edits");
+  // Crop: a ratio chip crops (from none), the box moves (live while dragging, saved on release).
+  window.emit("choose", "crop", 5);
+  await until(host, () => window.props["reframe-index"] === 2 && window.props["ratio-index"] === 4, "crop 2.35");
+  assert.deepEqual(node(host, "reframe"), { kind: "reframe", mode: "crop", aspect: 2.35, x: 0, y: 0 });
+  window.emit("crop-at", 20.4, 50, false);
+  await until(host, () => window.props["crop-x"] === 20, "the box moved");
+  assert.equal(node(host, "reframe")!.x, -0.6);
+  window.emit("crop-at", 120, -3, true);
+  await until(host, () => window.props["crop-x"] === 100, "kept in range");
+  assert.deepEqual([node(host, "reframe")!.x, node(host, "reframe")!.y], [1, -1]);
+  // Stretch keeps the ratio; another chip keeps stretch; Off removes it.
+  window.emit("choose", "reframe", 1);
+  window.emit("choose", "crop", 1);
+  await until(host, () => window.props["ratio-index"] === 0, "4:3");
+  assert.equal(node(host, "reframe")!.mode, "pad");
+  window.emit("choose", "crop", 0);
+  await until(host, () => window.props["reframe-index"] === 0, "no crop");
+  assert.equal(node(host, "reframe"), undefined);
+  // Rotation from the toolbar's arrows.
+  window.emit("choose", "rotate", 3);
+  await until(host, () => window.props["rotate-index"] === 3, "270°");
+  assert.equal(node(host, "transform")!.rotate, 270);
+  await stop();
+});
+
+test("Picture panel: the Denoise chip remembers the set that was on whichever path turned the last denoiser off", async () => {
+  const { host, window, stop } = await playing();
+  const on = () => [window.props["d3-enabled"], window.props["gradual-enabled"], window.props["temporal-enabled"]];
+  // The chip: 3D. In the card: Temporal on, 3D off, then Temporal off (the last one, by the card).
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["d3-enabled"] === true, "3D on");
+  window.emit("toggle", "temporal", true);
+  await until(host, () => window.props["temporal-enabled"] === true, "Temporal on");
+  window.emit("toggle", "d3", false);
+  await until(host, () => window.props["d3-enabled"] === false, "3D off");
+  window.emit("toggle", "temporal", false);
+  await until(host, () => window.props["temporal-enabled"] === false, "all off");
+  assert.deepEqual(on(), [false, false, false]);
+  // The chip brings back Temporal (what was on last), not 3D (what the chip itself turned on).
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["temporal-enabled"] === true, "Temporal again");
+  assert.deepEqual(on(), [false, false, true]);
+  // The same through the keys: Ctrl+N adds 3D, Ctrl+M takes Temporal away, Ctrl+N the last one.
+  await host.press("Ctrl+N");
+  await until(host, () => window.props["d3-enabled"] === true, "3D by key");
+  await host.press("Ctrl+M");
+  await until(host, () => window.props["temporal-enabled"] === false, "Temporal off by key");
+  await host.press("Ctrl+N");
+  await until(host, () => window.props["d3-enabled"] === false, "all off by key");
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["d3-enabled"] === true, "3D again");
+  assert.deepEqual(on(), [true, false, false], "the key's set, not the card's");
+  assert.equal(chain(host).filter((n) => n.kind === "denoise").length, 1);
+  // Another effect's switch leaves the memory alone.
+  window.emit("toggle", "denoise", false);
+  await until(host, () => window.props["d3-enabled"] === false, "off");
+  window.emit("toggle", "sharpen", true);
+  await until(host, () => window.props["sharpen-enabled"] === true, "sharpen");
+  window.emit("toggle", "sharpen", false);
+  await until(host, () => window.props["sharpen-enabled"] === false, "sharpen off");
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["d3-enabled"] === true, "3D once more");
+  assert.deepEqual(on(), [true, false, false]);
+  await stop();
+});
+
+test("Picture panel: an editor drag on an occupied display says 'Display unavailable' once, not on every move", async () => {
+  const host = new TestHost();
+  host.setVideoViewOwner("probe.plugin");
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  await host.command("video.picture").run();
+  await host.settle();
+  const window = host.mounted();
+  assert.deepEqual(host.osd, [], "silent at start");
+  // One drag: moves (`done` false), then the release (`done` true): one notice.
+  window.emit("frame-edit", 1.1, 0, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.2, 0.1, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.3, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.3, 0.2, 0, true);
+  await host.settle();
+  assert.deepEqual(host.osd, ["Display unavailable: another plugin controls the display"]);
+  assert.equal(host.videoView.owner, "probe.plugin");
+  // The next drag is a new action: one more; a wheel notch (`done` at once) is one each.
+  window.emit("frame-edit", 1.4, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.5, 0.2, 0, true);
+  await host.settle();
+  window.emit("frame-edit", 1.6, 0.2, 0, true);
+  await host.settle();
+  assert.equal(host.osd.length, 3);
+  // A drag that changes nothing at first still announces on its first real change.
+  window.emit("frame-edit", 1.6, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.7, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.7, 0.2, 0, true);
+  await host.settle();
+  assert.equal(host.osd.length, 4);
+  // Once the display is free, the drag applies without a notice.
+  host.setVideoViewOwner(null);
+  window.emit("frame-edit", 2, 0.5, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 2, 0.5, 0, true);
+  await host.settle();
+  assert.equal(host.osd.length, 4);
+  assert.deepEqual([host.videoView.values.zoom, host.videoView.values.panX], [2, 0.5]);
+  await stop();
+});
+
 test("E04–E06: menu keys switch effects at the remembered strength; menu, window and OSD agree", async () => {
   const { host, window, stop } = await playing();
   await host.press("Ctrl+R");
@@ -752,18 +947,19 @@ test("E04–E06: menu keys switch effects at the remembered strength; menu, wind
   assert.deepEqual(node(host, "deblock"), { kind: "deblock", strength: "weak" });
   assert.equal(host.command("video.sharpen").state.checked, true);
   assert.equal(window.props["sharpen-enabled"], true);
-  assert.equal(window.props["denoise-enabled"], true, "the shown mode (3D) is on");
-  // The window's 降噪 row shows one mode at a time.
-  window.emit("toggle", "denoise", false);
+  assert.deepEqual([window.props["d3-enabled"], window.props["gradual-enabled"], window.props["temporal-enabled"]], [true, true, true]);
+  // The Denoise card: each denoiser has its own switch and strength.
+  window.emit("toggle", "d3", false);
   await host.settle();
   assert.equal(host.command("video.denoise.d3").state.checked, false);
-  window.emit("choose", "denoiseMode", 2);
-  await host.settle();
-  assert.equal(window.props["denoise-index"], 2);
-  assert.equal(window.props["denoise-enabled"], true, "瞬态 is still on");
-  window.emit("commit", "denoise", 100);
+  assert.equal(window.props["temporal-enabled"], true, "瞬态 is still on");
+  window.emit("commit", "temporal", 100);
   await host.settle();
   assert.equal(chain(host).filter((n) => n.kind === "denoise").at(-1)!.lumaTemporal, 20);
+  assert.equal(window.props["temporal-strength"], 100);
+  window.emit("reset-field", "temporal");
+  await host.settle();
+  assert.equal(window.props["temporal-strength"], 40, "a double-click returns the default");
   await host.press("Ctrl+R");
   assert.equal(host.osd.at(-1), "Sharpen: off");
   assert.equal(window.props["sharpen-strength"], 50, "off keeps the strength");
@@ -1102,7 +1298,7 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   await host.command("video.frame-blend").run();
   assert.equal(host.osd.at(-1), "Frame doubling: on");
   assert.equal(host.command("video.frame-blend").state.checked, true);
-  assert.equal(window.props["blend-enabled"], true);
+  assert.equal(window.props["frames-index"], 1);
   assert.equal(node(host, "frameBlend"), undefined, "not before the rate is read");
   await until(host, blendNode(host, 48), "the 24 fps rate read");
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 48 });
@@ -1121,7 +1317,7 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   await host.command("video.deinterlace.on").run();
   await until(host, blendNode(host, 50), "the rate read again after the deinterlace change");
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 50 });
-  window.emit("toggle", "frameBlend", false);
+  window.emit("choose", "frames", 0);
   await host.settle();
   assert.equal(node(host, "frameBlend"), undefined);
   assert.equal(window.props["blend-enough"], false);
@@ -1685,13 +1881,12 @@ test("E18: 运动补偿 and 倍帧 exclude each other, with OSD; the window does
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 48 });
   await host.command("video.picture").run();
   const window = host.mounted();
-  window.emit("toggle", "interpolation", true);
+  window.emit("choose", "frames", 2);
   await host.settle();
   assert.equal(host.osd.at(-1), "运动补偿: 开（已关闭倍帧）");
   assert.equal(node(host, "frameBlend"), undefined);
-  assert.equal(window.props["blend-enabled"], false);
-  assert.equal(window.props.interpolation, true);
-  window.emit("toggle", "interpolation", false);
+  assert.equal(window.props["frames-index"], 2);
+  window.emit("choose", "frames", 0);
   await host.settle();
   assert.equal(host.videoRender.values.interpolation, false);
   assert.equal(host.osd.at(-1), "运动补偿: 开（已关闭倍帧）", "a plain window edit gives no on-screen text");
@@ -2005,7 +2200,9 @@ test("panel key caps show each command's current first key and follow the user's
       blur: "Ctrl+B",
       deblock: "Ctrl+H",
       deband: "",
-      denoise: "Ctrl+N",
+      d3: "Ctrl+N",
+      gradual: "",
+      temporal: "Ctrl+M",
       doubling: "",
       interpolation: "",
       aspect: "Shift+F6",
@@ -2026,11 +2223,6 @@ test("panel key caps show each command's current first key and follow the user's
       reset: "Q",
       resetpanel: "",
     });
-    // The denoise cap is the shown mode's: Temporal has Ctrl+M, Gradual none.
-    host.mounted().emit("choose", "denoiseMode", 2);
-    await eventually(() => keysOf(host).denoise, "Ctrl+M");
-    host.mounted().emit("choose", "denoiseMode", 1);
-    await eventually(() => keysOf(host).denoise, "");
     host.rebind("video.brightness.down", ["Ctrl+Shift+W"]);
     await eventually(() => keysOf(host).brightnessdown, "Ctrl+Shift+W");
     host.rebind("video.reset", []);

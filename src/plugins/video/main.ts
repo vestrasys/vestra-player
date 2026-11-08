@@ -16,6 +16,7 @@ import {
   RATIOS,
   REFRAME_MODES,
   ROTATIONS,
+  activeDenoise,
   aspectIndex,
   aspectMessage,
   blendFps,
@@ -25,6 +26,8 @@ import {
   defaultLook,
   defaults,
   droppedTooMany,
+  framed,
+  framesIndex,
   isHdr,
   isShaderName,
   nextAspect,
@@ -34,10 +37,12 @@ import {
   peakOf,
   presets,
   reframeMessage,
+  rememberDenoise,
   serialize,
+  switchDenoise,
   upright,
 } from "./model.ts";
-import type { DeinterlaceMode, DeinterlaceOutput, Fit, Frame, FrameCount, Look, ReframeMode, Rotation, Toggle, ToneMapping } from "./model.ts";
+import type { DeinterlaceMode, DeinterlaceOutput, DenoiseMode, Fit, Frame, FrameCount, Look, ReframeMode, Rotation, Toggle, ToneMapping } from "./model.ts";
 
 type Color = "brightness" | "contrast" | "saturation" | "hue" | "gamma";
 const colors: readonly Color[] = ["brightness", "contrast", "saturation", "hue", "gamma"];
@@ -78,8 +83,8 @@ const steps = [
 type StepTexts = { title: string; osd: string; off: string };
 type Step = (typeof steps)[number]["up" | "down"];
 /** Effect rows with one 0–100 strength; their filters rebuild, so a drag commits on release. */
-type Strength = "sharpen" | "edge" | "denoise" | "deblock" | "deband";
-const strengths: readonly Strength[] = ["sharpen", "edge", "denoise", "deblock", "deband"];
+type Strength = "sharpen" | "edge" | DenoiseMode | "deblock" | "deband";
+const strengths: readonly Strength[] = ["sharpen", "edge", ...DENOISE_MODES, "deblock", "deband"];
 /** 图像处理 switches with a strength: menu title, key, OSD on and off; `toggle` names the setting. */
 const EFFECTS = [
   { id: "video.sharpen", toggle: "sharpen", title: "Sharpen", group: "video-sharpness", bindings: ["Ctrl+R"], on: "Sharpen: on", off: "Sharpen: off" },
@@ -224,6 +229,8 @@ export default async function activate(plugin: Plugin) {
   let transfer: string | null = null;
   let transferSource = -1;
   let transferRead = false;
+  /** The source's width / height once read (null: unknown, the editor's still keeps its own 16:9). */
+  let sourceAspect: number | null = null;
   let reading = false;
   let stopped = false;
   plugin.onDispose(() => {
@@ -235,6 +242,7 @@ export default async function activate(plugin: Plugin) {
       transferSource = source;
       transfer = null;
       transferRead = false;
+      sourceAspect = null;
     }
     if (transferRead || reading || player.state.phase !== "ready") return;
     reading = true;
@@ -243,6 +251,13 @@ export default async function activate(plugin: Plugin) {
         if (attempt > 0) await pause(MEASURE_DELAY_MS);
         const stats = await player.stats().catch(() => null);
         if (stopped || player.state.sourceId !== source) return;
+        // The geometry editor's picture shape: the coded size (square pixels assumed; the
+        // display size would already include this plugin's crop and rotation).
+        const { width, height } = stats?.video ?? {};
+        if (width && height && width > 0 && height > 0 && sourceAspect !== width / height) {
+          sourceAspect = width / height;
+          plugin.update();
+        }
         if (stats?.video?.transfer) {
           transfer = stats.video.transfer;
           plugin.update();
@@ -327,8 +342,23 @@ export default async function activate(plugin: Plugin) {
   /** Best-effort feedback: a missing OSD (headless) must not look like a picture failure. */
   const shown = (message: Promise<void>) => void message.catch(() => undefined);
   const effects = look.effects;
-  const toggleOf = (field: Strength): Toggle =>
-    field === "denoise" ? effects.denoise[effects.denoise.shown] : effects[field];
+  const isDenoise = (field: Strength): field is DenoiseMode => (DENOISE_MODES as readonly string[]).includes(field);
+  const toggleOf = (field: Strength): Toggle => (isDenoise(field) ? effects.denoise[field] : effects[field]);
+  const defaultToggle = (field: Strength): Toggle => {
+    const base = defaultEffects();
+    return isDenoise(field) ? base.denoise[field] : base[field];
+  };
+  /** The denoisers the panel's Denoise chip turns back on (see `switchDenoise`); this session only. */
+  let lastDenoise: DenoiseMode[] = [];
+  /**
+   * One switch (a card row, Ctrl+N, Ctrl+M) applied to a toggle: when it turns the last denoiser
+   * off, the chip remembers the set that was on (`rememberDenoise`), whatever the path.
+   */
+  const switchToggle = (toggle: Toggle, on: boolean) => {
+    const before = activeDenoise(effects.denoise);
+    toggle.on = on;
+    lastDenoise = rememberDenoise(effects.denoise, before, lastDenoise);
+  };
 
   // ---------------------------------------------------------------- panel
   /** The commands the panel's buttons run (`run`, by command id), filled where they are added. */
@@ -338,31 +368,42 @@ export default async function activate(plugin: Plugin) {
   /** The renderer switch as the panel shows it (set once the rendering state is read, below). */
   let gpuView = () => ({ shown: false, checked: false, enabled: false, busy: false, pending: false, reason: "" });
   panel.bind(() => {
-    const denoise = effects.denoise[effects.denoise.shown];
+    const { d3, gradual, temporal } = effects.denoise;
     return {
       ...look.picture,
       sharpenEnabled: effects.sharpen.on,
       sharpenStrength: effects.sharpen.strength,
       edgeEnabled: effects.edge.on,
       edgeStrength: effects.edge.strength,
-      denoiseIndex: DENOISE_MODES.indexOf(effects.denoise.shown),
-      denoiseEnabled: denoise.on,
-      denoiseStrength: denoise.strength,
+      d3Enabled: d3.on,
+      d3Strength: d3.strength,
+      gradualEnabled: gradual.on,
+      gradualStrength: gradual.strength,
+      temporalEnabled: temporal.on,
+      temporalStrength: temporal.strength,
       deblockEnabled: effects.deblock.on,
       deblockStrength: effects.deblock.strength,
       debandEnabled: effects.deband.on,
       debandStrength: effects.deband.strength,
-      blendEnabled: effects.frameBlend,
+      framesIndex: framesIndex(effects, look.render),
       blendEnough: blendEnough(),
-      interpolation: look.render.interpolation,
       fitIndex: FITS.findIndex((f) => f.id === look.display.fit),
       customRatio: look.display.customAspect,
       aspectIndex: aspectIndex(look.display),
+      // The geometry editor draws from these (0 = no aspect override / not known yet).
+      displayAspect: look.display.aspect ?? 0,
+      sourceAspect: sourceAspect ?? 0,
       reframeIndex: REFRAME_MODES.indexOf(look.reframe.mode),
       ratioIndex: look.reframe.ratio,
+      ratioAspect: RATIOS[look.reframe.ratio]!.aspect,
+      cropX: look.reframe.x,
+      cropY: look.reframe.y,
       rotateIndex: ROTATIONS.indexOf(look.geometry.rotate),
       flipV: look.geometry.flipV,
       flipH: look.geometry.flipH,
+      zoom: frame.zoom,
+      panXValue: frame.panX,
+      panYValue: frame.panY,
       zoomPercent: percent(frame.zoom),
       panX: percent(frame.panX),
       panY: percent(frame.panY),
@@ -395,8 +436,10 @@ export default async function activate(plugin: Plugin) {
         blur: keyOf("video.gaussian"),
         deblock: keyOf("video.deblock"),
         deband: keyOf("video.deband"),
-        // The denoise switch is the shown mode's (3D Ctrl+N, Temporal Ctrl+M).
-        denoise: keyOf(EFFECTS.find((row) => row.toggle === effects.denoise.shown)!.id),
+        // Each denoiser's own key (3D Ctrl+N, Temporal Ctrl+M); the Denoise chip has none.
+        d3: keyOf("video.denoise.d3"),
+        gradual: keyOf("video.denoise.gradual"),
+        temporal: keyOf("video.denoise.temporal"),
         doubling: keyOf("video.frame-blend"),
         interpolation: keyOf("video.interpolation"),
         aspect: keyOf("video.aspect.cycle"),
@@ -451,9 +494,7 @@ export default async function activate(plugin: Plugin) {
     }
     if (field === "blurStrength") look.picture.blurStrength = defaults.blurStrength;
     else if ((colors as string[]).includes(field)) look.picture[field as Color] = defaults[field as Color];
-    else if (field === "denoise") toggleOf("denoise").strength = defaultEffects().denoise[effects.denoise.shown].strength;
-    else if ((strengths as string[]).includes(field))
-      toggleOf(field as Strength).strength = (defaultEffects()[field as Exclude<Strength, "denoise">] as Toggle).strength;
+    else if ((strengths as string[]).includes(field)) toggleOf(field as Strength).strength = defaultToggle(field as Strength).strength;
     else return;
     change();
   });
@@ -471,26 +512,37 @@ export default async function activate(plugin: Plugin) {
   panel.on("toggle", (field: string, on: boolean) => {
     const value = on === true;
     if (field === "blur") look.picture.blurEnabled = value;
-    else if (field === "frameBlend") return setBlend(value, false);
-    else if (field === "interpolation") return setInterpolation(value, false);
     else if (field === "shaders") return setShaders(value, false);
     else if (field === "peakDetect") {
       look.render.peakDetect = value;
       return renderChanged(true);
     } else if (field === "flipV" || field === "flipH") look.geometry[field] = value;
-    else if ((strengths as string[]).includes(field)) toggleOf(field as Strength).on = value;
+    // The Denoise chip: the master switch over the three denoisers (`switchDenoise`).
+    else if (field === "denoise") lastDenoise = switchDenoise(effects.denoise, value, lastDenoise);
+    else if ((strengths as string[]).includes(field)) switchToggle(toggleOf(field as Strength), value);
     else return;
     change();
   });
   panel.on("choose", (field: string, index: number) => {
     if (!Number.isInteger(index) || index < 0) return;
-    if (field === "denoiseMode" && index < DENOISE_MODES.length) {
-      effects.denoise.shown = DENOISE_MODES[index]!;
-      persist();
+    // Frames: Off / Doubling / Interpolate, one control over the two that exclude each other (E18).
+    if (field === "frames" && index <= 2) {
+      if (index === 1) return setBlend(true, false);
+      if (index === 2) return gpuReady() ? setInterpolation(true, false) : undefined;
+      if (effects.frameBlend) setBlend(false, false);
+      if (look.render.interpolation) setInterpolation(false, false);
       return;
     }
     if (field === "rotate" && index < ROTATIONS.length) look.geometry.rotate = ROTATIONS[index]!;
-    else if (field === "reframe" && index < REFRAME_MODES.length) look.reframe.mode = REFRAME_MODES[index]!;
+    // The editor's crop ratios: Off, or a ratio, kept as crop or stretch (pad) as it was (crop
+    // when there was none). `reframe` picks crop / stretch for the ratio already set.
+    else if (field === "crop" && index <= RATIOS.length) {
+      if (index === 0) look.reframe.mode = "none";
+      else {
+        if (look.reframe.mode === "none") look.reframe.mode = "crop";
+        look.reframe.ratio = index - 1;
+      }
+    } else if (field === "reframe" && index < REFRAME_MODES.length) look.reframe.mode = REFRAME_MODES[index]!;
     else if (field === "ratio" && index < RATIOS.length) look.reframe.ratio = index;
     else if (field === "deinterlace" && index < DEINTERLACE_MODES.length) look.deinterlace.mode = DEINTERLACE_MODES[index]!.id;
     else if (field === "output" && index < DEINTERLACE_OUTPUTS.length) look.deinterlace.output = DEINTERLACE_OUTPUTS[index]!.id;
@@ -508,6 +560,35 @@ export default async function activate(plugin: Plugin) {
   });
   // The zoom, pan and crop buttons, Reset All and the GPU switch run their commands (OSD included).
   panel.on("run", (id: string) => void runs.get(String(id))?.());
+  // The geometry editor: a drag, a corner or the wheel asks for a framing (zoom, pan) and the
+  // video follows at once, without an OSD (the editor shows the numbers). A drag is one user
+  // action: its first edit announces (a refusal says "Display unavailable" once), the moves
+  // until `done` (the release) do not, so an occupied display does not say so on every frame.
+  let editing = false;
+  panel.on("frameEdit", (zoom: number, panX: number, panY: number, done: boolean) => {
+    const next = framed(frame, Number(zoom), Number(panX), Number(panY));
+    const changed = next.zoom !== frame.zoom || next.panX !== frame.panX || next.panY !== frame.panY;
+    if (changed) {
+      frame = next;
+      showView(!editing);
+    }
+    editing = done !== true && (editing || changed);
+  });
+  // The editor's crop box (or, when stretching, the picture inside the bars) dragged to x, y
+  // (0–100 %, 50 centred). A crop moves live while dragging; stretching (pad) rebuilds the
+  // filter, so it waits for the release (`done`), as the strength sliders do.
+  panel.on("cropAt", (x: number, y: number, done: boolean) => {
+    if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+    const r = look.reframe;
+    const nx = clamp(Math.round(x), 0, 100);
+    const ny = clamp(Math.round(y), 0, 100);
+    const moved = nx !== r.x || ny !== r.y;
+    r.x = nx;
+    r.y = ny;
+    if (r.mode === "none") return;
+    if (done === true) change();
+    else if (moved && r.mode === "crop") apply();
+  });
   panel.on("setAdvanced", (open: boolean) => {
     advanced = open === true;
     persist();
@@ -627,6 +708,7 @@ export default async function activate(plugin: Plugin) {
       look.picture.blurEnabled || switches().some((t) => t.on) || effects.frameBlend || look.render.interpolation;
     look.picture = { ...defaults };
     for (const toggle of switches()) toggle.on = false;
+    lastDenoise = [];
     switchBlend(false);
     const interpolation = look.render.interpolation;
     look.render.interpolation = false;
@@ -672,7 +754,7 @@ export default async function activate(plugin: Plugin) {
     shown(degrees === 0 ? plugin.osd.show("Rotation: none") : plugin.osd.show("Rotation: {}°", [degrees]));
   };
   const switchEffect = (toggle: Toggle, texts: Switch) => {
-    toggle.on = !toggle.on;
+    switchToggle(toggle, !toggle.on);
     change();
     shown(plugin.osd.show(toggle.on ? texts.on : texts.off));
   };

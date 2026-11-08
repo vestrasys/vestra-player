@@ -6,1050 +6,1050 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:165 main.ts:948 main.ts:1347
+#: main.ts:168 main.ts:1015 main.ts:1414
 #, x-machine
 msgid "Picture"
 msgstr "映像"
 
-#: main.ts:216 picture.slint:524
+#: main.ts:219 picture.slint:1086
 #, x-machine
 msgid "Shader failed to load"
 msgstr "シェーダの読み込みに失敗しました"
 
-#: main.ts:217
+#: main.ts:220
 #, x-machine
 msgid "Render options unavailable: another plugin controls them"
 msgstr "レンダリングオプションを使用できません：別のプラグインが制御しています"
 
-#: main.ts:220
+#: main.ts:223
 #, x-machine
 msgid "Render options unavailable: {}"
 msgstr "レンダリングオプションを使用できません：{}"
 
-#: main.ts:534
+#: main.ts:600
 #, x-machine
 msgid "Display unavailable: another plugin controls the display"
 msgstr "表示を使用できません：別のプラグインが表示を制御しています"
 
-#: main.ts:536
+#: main.ts:602
 #, x-machine
 msgid "Display unavailable: {}"
 msgstr "表示を使用できません：{}"
 
-#: main.ts:546
+#: main.ts:612
 #, x-machine
 msgid "Aspect ratio: Default"
 msgstr "アスペクト比：デフォルト"
 
-#: main.ts:546
+#: main.ts:612
 #, x-machine
 msgid "Aspect ratio: {}"
 msgstr "アスペクト比：{}"
 
-#: main.ts:546
+#: main.ts:612
 #, x-machine
 msgid "Aspect ratio: Custom - {}"
 msgstr "アスペクト比：カスタム - {}"
 
-#: main.ts:551 main.ts:1053 picture.slint:764
+#: main.ts:617 main.ts:1120 picture.slint:1596
 #, x-machine
 msgid "Keep Aspect Ratio"
 msgstr "アスペクト比を保持"
 
-#: main.ts:551 main.ts:1053 picture.slint:764
+#: main.ts:617 main.ts:1120 picture.slint:1596
 #, x-machine
 msgid "Ignore Aspect Ratio"
 msgstr "アスペクト比を無視"
 
-#: main.ts:551 picture.slint:764
+#: main.ts:617 picture.slint:1596
 #, x-machine
 msgid "Fill Window"
 msgstr "ウインドウに合わせる"
 
-#: main.ts:557
+#: main.ts:623
 #, x-machine
 msgid "Framing: larger ({}%)"
 msgstr "フレーミング：拡大（{}%）"
 
-#: main.ts:557
+#: main.ts:623
 #, x-machine
 msgid "Framing: smaller ({}%)"
 msgstr "フレーミング：縮小（{}%）"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move right ({}%, {}%)"
 msgstr "フレーミング：右へ移動（{}%, {}%）"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move left ({}%, {}%)"
 msgstr "フレーミング：左へ移動（{}%, {}%）"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move up ({}%, {}%)"
 msgstr "フレーミング：上へ移動（{}%, {}%）"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move down ({}%, {}%)"
 msgstr "フレーミング：下へ移動（{}%, {}%）"
 
-#: main.ts:569
+#: main.ts:635
 #, x-machine
 msgid "Framing: centered"
 msgstr "フレーミング：中央"
 
-#: main.ts:569
+#: main.ts:635
 #, x-machine
 msgid "Framing: reset"
 msgstr "フレーミング：リセット"
 
-#: main.ts:639
+#: main.ts:706
 #, x-machine
 msgid "Picture reset; image processing off"
 msgstr "映像の調整をリセットし、画像処理をオフにしました"
 
-#: main.ts:639
+#: main.ts:706
 #, x-machine
 msgid "Picture reset"
 msgstr "映像の調整をリセットしました"
 
-#: main.ts:655
+#: main.ts:722
 #, x-machine
 msgid "Picture panel reset"
 msgstr "映像パネルをリセットしました"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness -1% ({}%)"
 msgstr "明るさ -1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness +1% ({}%)"
 msgstr "明るさ +1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast -1% ({}%)"
 msgstr "コントラスト -1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast +1% ({}%)"
 msgstr "コントラスト +1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation -1% ({}%)"
 msgstr "彩度 -1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation +1% ({}%)"
 msgstr "彩度 +1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue -1% ({}%)"
 msgstr "色相 -1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue +1% ({}%)"
 msgstr "色相 +1%（{}%）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness -1% ({}%) (picture effects off)"
 msgstr "明るさ -1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness +1% ({}%) (picture effects off)"
 msgstr "明るさ +1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast -1% ({}%) (picture effects off)"
 msgstr "コントラスト -1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast +1% ({}%) (picture effects off)"
 msgstr "コントラスト +1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation -1% ({}%) (picture effects off)"
 msgstr "彩度 -1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation +1% ({}%) (picture effects off)"
 msgstr "彩度 +1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue -1% ({}%) (picture effects off)"
 msgstr "色相 -1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue +1% ({}%) (picture effects off)"
 msgstr "色相 +1%（{}%）（映像エフェクトはオフ）"
 
-#: main.ts:666
+#: main.ts:733
 #, x-machine
 msgid "Flip vertically: on"
 msgstr "上下反転：オン"
 
-#: main.ts:666
+#: main.ts:733
 #, x-machine
 msgid "Flip vertically: off"
 msgstr "上下反転：オフ"
 
-#: main.ts:667
+#: main.ts:734
 #, x-machine
 msgid "Flip horizontally: on"
 msgstr "左右反転：オン"
 
-#: main.ts:667
+#: main.ts:734
 #, x-machine
 msgid "Flip horizontally: off"
 msgstr "左右反転：オフ"
 
-#: main.ts:672
+#: main.ts:739
 #, x-machine
 msgid "Rotation: none"
 msgstr "回転：なし"
 
-#: main.ts:672
+#: main.ts:739
 #, x-machine
 msgid "Rotation: {}°"
 msgstr "回転：{}°"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Sharpen: on"
 msgstr "シャープ：オン"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Edge sharpen: on"
 msgstr "エッジシャープ：オン"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deblock: on"
 msgstr "ブロックノイズ除去：オン"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deband: on"
 msgstr "バンディング除去：オン"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "3D denoise: on"
 msgstr "3D ノイズ除去：オン"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Gradual denoise: on"
 msgstr "段階的ノイズ除去：オン"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Temporal denoise: on"
 msgstr "時間軸ノイズ除去：オン"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Sharpen: off"
 msgstr "シャープ：オフ"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Edge sharpen: off"
 msgstr "エッジシャープ：オフ"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deblock: off"
 msgstr "ブロックノイズ除去：オフ"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deband: off"
 msgstr "バンディング除去：オフ"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "3D denoise: off"
 msgstr "3D ノイズ除去：オフ"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Gradual denoise: off"
 msgstr "段階的ノイズ除去：オフ"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Temporal denoise: off"
 msgstr "時間軸ノイズ除去：オフ"
 
-#: main.ts:682
+#: main.ts:749
 #, x-machine
 msgid "Deinterlace: auto"
 msgstr "インターレース解除：自動"
 
-#: main.ts:682
+#: main.ts:749
 #, x-machine
 msgid "Deinterlace: always"
 msgstr "インターレース解除：常に使用"
 
-#: main.ts:682
+#: main.ts:749
 #, x-machine
 msgid "Deinterlace: never"
 msgstr "インターレース解除：使用しない"
 
-#: main.ts:687
+#: main.ts:754
 #, x-machine
 msgid "Deinterlace output: by frame"
 msgstr "インターレース解除の出力：フレーム単位"
 
-#: main.ts:687
+#: main.ts:754
 #, x-machine
 msgid "Deinterlace output: by field (double rate)"
 msgstr "インターレース解除の出力：フィールド単位（倍レート）"
 
-#: main.ts:694
+#: main.ts:761
 #, x-machine
 msgid "Crop/stretch: none"
 msgstr "クロップ/ストレッチ：なし"
 
-#: main.ts:694
+#: main.ts:761
 #, x-machine
 msgid "Crop/stretch: stretch to {}"
 msgstr "クロップ/ストレッチ：{} にストレッチ"
 
-#: main.ts:694
+#: main.ts:761
 #, x-machine
 msgid "Crop/stretch: crop to {}"
 msgstr "クロップ/ストレッチ：{} にクロップ"
 
-#: main.ts:701
+#: main.ts:768
 #, x-machine
 msgid "Crop position ({}%, {}%)"
 msgstr "クロップの位置（{}%, {}%）"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: off"
 msgstr "フレーム倍増：オフ"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: on (motion interpolation turned off)"
 msgstr "フレーム倍増：オン（動き補間はオフにしました）"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: on"
 msgstr "フレーム倍増：オン"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: on (picture effects off)"
 msgstr "フレーム倍増：オン（映像エフェクトはオフ）"
 
-#: main.ts:736
+#: main.ts:803
 #, x-machine
 msgid "Motion interpolation: off"
 msgstr "動き補間：オフ"
 
-#: main.ts:736
+#: main.ts:803
 #, x-machine
 msgid "Motion interpolation: on (frame doubling turned off)"
 msgstr "動き補間：オン（フレーム倍増はオフにしました）"
 
-#: main.ts:736
+#: main.ts:803
 #, x-machine
 msgid "Motion interpolation: on"
 msgstr "動き補間：オン"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: auto (not an HDR source)"
 msgstr "HDR トーンマッピング：自動（HDR ソースではありません）"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: off (not an HDR source)"
 msgstr "HDR トーンマッピング：オフ（HDR ソースではありません）"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: BT.2390 (not an HDR source)"
 msgstr "HDR トーンマッピング：BT.2390（HDR ソースではありません）"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Hable (not an HDR source)"
 msgstr "HDR トーンマッピング：Hable（HDR ソースではありません）"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Mobius (not an HDR source)"
 msgstr "HDR トーンマッピング：Mobius（HDR ソースではありません）"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Reinhard (not an HDR source)"
 msgstr "HDR トーンマッピング：Reinhard（HDR ソースではありません）"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: clip (not an HDR source)"
 msgstr "HDR トーンマッピング：クリップ（HDR ソースではありません）"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: auto"
 msgstr "HDR トーンマッピング：自動"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: off"
 msgstr "HDR トーンマッピング：オフ"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: BT.2390"
 msgstr "HDR トーンマッピング：BT.2390"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Hable"
 msgstr "HDR トーンマッピング：Hable"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Mobius"
 msgstr "HDR トーンマッピング：Mobius"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Reinhard"
 msgstr "HDR トーンマッピング：Reinhard"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: clip"
 msgstr "HDR トーンマッピング：クリップ"
 
-#: main.ts:749
+#: main.ts:816
 #, x-machine
 msgid "Dynamic peak detection: on"
 msgstr "動的ピーク検出：オン"
 
-#: main.ts:749
+#: main.ts:816
 #, x-machine
 msgid "Dynamic peak detection: off"
 msgstr "動的ピーク検出：オフ"
 
-#: main.ts:757
+#: main.ts:824
 #, x-machine
 msgid "Pixel shaders: off"
 msgstr "ピクセルシェーダ：オフ"
 
-#: main.ts:758
+#: main.ts:825
 #, x-machine
 msgid "Pixel shaders: no shaders"
 msgstr "ピクセルシェーダ：シェーダなし"
 
-#: main.ts:759
+#: main.ts:826
 #, x-machine
 msgid "Pixel shaders: on ({})"
 msgstr "ピクセルシェーダ：オン（{}）"
 
-#: main.ts:810
+#: main.ts:877
 #, x-machine
 msgid "Many frames dropped with field output, try frame output; many dropped with frame doubling, consider turning it off"
 msgstr "フィールド出力でフレームのドロップが多いため、フレーム出力をお試しください。フレーム倍増でもドロップが多いため、オフにすることを検討してください"
 
-#: main.ts:810
+#: main.ts:877
 #, x-machine
 msgid "Many frames dropped with field output, try frame output"
 msgstr "フィールド出力でフレームのドロップが多いため、フレーム出力をお試しください"
 
-#: main.ts:810
+#: main.ts:877
 #, x-machine
 msgid "Many frames dropped with frame doubling, consider turning it off"
 msgstr "フレーム倍増でフレームのドロップが多いため、オフにすることを検討してください"
 
-#: main.ts:844 main.ts:860
+#: main.ts:911 main.ts:927
 #, x-machine
 msgid "At most {} shaders"
 msgstr "シェーダは最大 {} 個です"
 
-#: main.ts:855
+#: main.ts:922
 #, x-machine
 msgid "Add Shader (.glsl)"
 msgstr "シェーダを追加（.glsl）"
 
-#: main.ts:858
+#: main.ts:925
 #, x-machine
 msgid "Only .glsl or .hook shader files can be added"
 msgstr "追加できるのは .glsl または .hook のシェーダファイルのみです"
 
-#: main.ts:865
+#: main.ts:932
 #, x-machine
 msgid "Could not copy the shader: {}"
 msgstr "シェーダをコピーできませんでした：{}"
 
-#: main.ts:874
+#: main.ts:941
 #, x-machine
 msgid "Could not open the shader folder: {}"
 msgstr "シェーダのフォルダを開けませんでした：{}"
 
 #. {} is a list of file names.
-#: main.ts:883
+#: main.ts:950
 #, x-machine
 msgid "Removed missing shaders: {}"
 msgstr "見つからないシェーダを削除しました：{}"
 
 #. {} is a list of file names.
-#: main.ts:884
+#: main.ts:951
 #, x-machine
 msgid "Shaders reloaded ({})"
 msgstr "シェーダを再読み込みしました（{}）"
 
-#: main.ts:939
+#: main.ts:1006
 #, x-machine
 msgid "Pixel Shaders"
 msgstr "ピクセルシェーダ"
 
-#: main.ts:940
+#: main.ts:1007
 #, x-machine
 msgid "HDR Tone Mapping"
 msgstr "HDR トーンマッピング"
 
-#: main.ts:941 picture.slint:925
+#: main.ts:1008 picture.slint:1640
 #, x-machine
 msgid "Deinterlace"
 msgstr "インターレース解除"
 
-#: main.ts:942 picture.slint:775
+#: main.ts:1009 picture.slint:1572
 #, x-machine
 msgid "Aspect"
 msgstr "アスペクト比"
 
-#: main.ts:943 picture.slint:799
+#: main.ts:1010
 #, x-machine
 msgid "Crop/Stretch"
 msgstr "クロップ/ストレッチ"
 
-#: main.ts:944 main.ts:1217
+#: main.ts:1011 main.ts:1284
 #, x-machine
 msgid "Framing"
 msgstr "フレーミング"
 
-#: main.ts:945
+#: main.ts:1012
 #, x-machine
 msgid "Image Processing"
 msgstr "画像処理"
 
-#: main.ts:946
+#: main.ts:1013
 #, x-machine
 msgid "Rotation"
 msgstr "回転"
 
-#: main.ts:947
+#: main.ts:1014
 #, x-machine
 msgid "Reset"
 msgstr "リセット"
 
-#: main.ts:959
+#: main.ts:1026
 #, x-machine
 msgid "Use Shaders"
 msgstr "シェーダを使用"
 
-#: main.ts:966 main.ts:972 main.ts:983 main.ts:994 main.ts:1005 main.ts:1307 picture.slint:520 ui/shaders.slint:131
+#: main.ts:1033 main.ts:1039 main.ts:1050 main.ts:1061 main.ts:1072 main.ts:1374 picture.slint:1082 ui/shaders.slint:131
 #, x-machine
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "GPU レンダリングが必要です（現在はソフトウェアレンダリング）"
 
-#: main.ts:970
+#: main.ts:1037
 #, x-machine
 msgid "Shader List…"
 msgstr "シェーダの一覧…"
 
-#: main.ts:971
+#: main.ts:1038
 #, x-machine
 msgid "Open Shader Folder"
 msgstr "シェーダのフォルダを開く"
 
-#: main.ts:972
+#: main.ts:1039
 #, x-machine
 msgid "Reload Shaders"
 msgstr "シェーダを再読み込み"
 
-#: main.ts:976 main.ts:1026 picture.slint:931 picture.slint:966
+#: main.ts:1043 main.ts:1093 picture.slint:1646 picture.slint:1681
 #, x-machine
 msgid "Auto"
 msgstr "自動"
 
-#: main.ts:976 picture.slint:966
+#: main.ts:1043 picture.slint:1420 picture.slint:1546 picture.slint:1681
 #, x-machine
 msgid "Off"
 msgstr "オフ"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "BT.2390"
 msgstr "BT.2390"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "Hable"
 msgstr "Hable"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "Mobius"
 msgstr "Mobius"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:976 picture.slint:966
+#: main.ts:1043 picture.slint:1681
 #, x-machine
 msgid "Clip"
 msgstr "クリップ"
 
-#: main.ts:988 picture.slint:1005
+#: main.ts:1055 picture.slint:1722
 #, x-machine
 msgid "Dynamic Peak Detection"
 msgstr "動的ピーク検出"
 
-#: main.ts:1000
+#: main.ts:1067
 #, x-machine
 msgid "HDR Settings…"
 msgstr "HDR の設定…"
 
-#: main.ts:1012 main.ts:1313
+#: main.ts:1079 main.ts:1380
 #, x-machine
 msgid "Cycle"
 msgstr "順に切り替え"
 
-#: main.ts:1026 picture.slint:931
+#: main.ts:1093 picture.slint:1646
 #, x-machine
 msgid "Always"
 msgstr "常に使用"
 
-#: main.ts:1026 picture.slint:931
+#: main.ts:1093 picture.slint:1646
 #, x-machine
 msgid "Never"
 msgstr "使用しない"
 
-#: main.ts:1038
+#: main.ts:1105
 #, x-machine
 msgid "By Frame"
 msgstr "フレーム単位"
 
-#: main.ts:1038 picture.slint:943
+#: main.ts:1105 picture.slint:1658
 #, x-machine
 msgid "By Field (Double Rate)"
 msgstr "フィールド単位（倍レート）"
 
-#: main.ts:1045 picture.slint:942
+#: main.ts:1112 picture.slint:1657
 #, x-machine
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr "自動はフィールド単位（倍レート）で出力します。この設定は「常に使用」に適用されます"
 
-#: main.ts:1053
+#: main.ts:1120
 #, x-machine
 msgid "Fill Window (Crop Excess)"
 msgstr "ウインドウに合わせる（はみ出しを切り取り）"
 
-#: main.ts:1064
+#: main.ts:1131
 #, x-machine
 msgid "Cycle Aspect Ratio"
 msgstr "アスペクト比を順に切り替え"
 
-#: main.ts:1074 picture.slint:532 picture.slint:533
+#: main.ts:1141 picture.slint:1094 picture.slint:1095
 #, x-machine
 msgid "Default (Source)"
 msgstr "デフォルト（ソース）"
 
-#: main.ts:1121 picture.slint:533
+#: main.ts:1188 picture.slint:1095
 #, x-machine
 msgid "Custom ({})"
 msgstr "カスタム（{}）"
 
-#: main.ts:1122
+#: main.ts:1189
 #, x-machine
 msgid "Custom (x:y)"
 msgstr "カスタム（x:y）"
 
-#: main.ts:1122
+#: main.ts:1189
 #, x-machine
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "先に「カスタムアスペクト比…」で入力してください"
 
-#: main.ts:1125 picture.slint:792
+#: main.ts:1192 picture.slint:1589
 #, x-machine
 msgid "Custom Aspect Ratio…"
 msgstr "カスタムアスペクト比…"
 
-#: main.ts:1137 picture.slint:804
+#: main.ts:1204
 #, x-machine
 msgid "None"
 msgstr "なし"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 4:3"
 msgstr "4:3 にストレッチ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 16:9"
 msgstr "16:9 にストレッチ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 16:10"
 msgstr "16:10 にストレッチ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 1.85:1"
 msgstr "1.85:1 にストレッチ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 2.35:1"
 msgstr "2.35:1 にストレッチ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 4:3"
 msgstr "4:3 にクロップ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 16:9"
 msgstr "16:9 にクロップ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 16:10"
 msgstr "16:10 にクロップ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 1.85:1"
 msgstr "1.85:1 にクロップ"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 2.35:1"
 msgstr "2.35:1 にクロップ"
 
-#: main.ts:1170 picture.slint:826
+#: main.ts:1237
 #, x-machine
 msgid "Move Left"
 msgstr "左へ移動"
 
-#: main.ts:1170 picture.slint:829
+#: main.ts:1237
 #, x-machine
 msgid "Move Right"
 msgstr "右へ移動"
 
-#: main.ts:1170 picture.slint:827 ui/shaders.slint:91 ui/shaders.slint:114
+#: main.ts:1237 ui/shaders.slint:91 ui/shaders.slint:114
 #, x-machine
 msgid "Move Up"
 msgstr "上へ移動"
 
-#: main.ts:1170 picture.slint:828 ui/shaders.slint:91 ui/shaders.slint:115
+#: main.ts:1237 ui/shaders.slint:91 ui/shaders.slint:115
 #, x-machine
 msgid "Move Down"
 msgstr "下へ移動"
 
-#: main.ts:1182
+#: main.ts:1249
 #, x-machine
 msgid "Crop Position"
 msgstr "クロップの位置"
 
-#: main.ts:1205 picture.slint:874
+#: main.ts:1272
 #, x-machine
 msgid "Zoom In"
 msgstr "拡大"
 
-#: main.ts:1205 picture.slint:865
+#: main.ts:1272
 #, x-machine
 msgid "Zoom Out"
 msgstr "縮小"
 
-#: main.ts:1205 picture.slint:886
+#: main.ts:1272
 #, x-machine
 msgid "Pan →"
 msgstr "パン →"
 
-#: main.ts:1205 picture.slint:883
+#: main.ts:1272
 #, x-machine
 msgid "Pan ←"
 msgstr "パン ←"
 
-#: main.ts:1205 picture.slint:884
+#: main.ts:1272
 #, x-machine
 msgid "Pan ↑"
 msgstr "パン ↑"
 
-#: main.ts:1205 picture.slint:885
+#: main.ts:1272
 #, x-machine
 msgid "Pan ↓"
 msgstr "パン ↓"
 
-#: main.ts:1205 picture.slint:887
+#: main.ts:1272 picture.slint:1508
 #, x-machine
 msgid "Center Frame"
 msgstr "フレームを中央に"
 
-#: main.ts:1230 picture.slint:849
+#: main.ts:1297 picture.slint:1484
 #, x-machine
 msgid "Flip Vertically"
 msgstr "上下反転"
 
-#: main.ts:1241 picture.slint:856
+#: main.ts:1308 picture.slint:1491
 #, x-machine
 msgid "Flip Horizontally"
 msgstr "左右反転"
 
-#: main.ts:1252 picture.slint:667
+#: main.ts:1319 picture.slint:1248 picture.slint:1309
 #, x-machine
 msgid "Gaussian Blur"
 msgstr "ガウスぼかし"
 
-#: main.ts:1262
+#: main.ts:1329
 #, x-machine
 msgid "Gaussian blur: on"
 msgstr "ガウスぼかし：オン"
 
-#: main.ts:1262
+#: main.ts:1329
 #, x-machine
 msgid "Gaussian blur: off"
 msgstr "ガウスぼかし：オフ"
 
-#: main.ts:1278 picture.slint:645
+#: main.ts:1345 picture.slint:1229 picture.slint:1230 picture.slint:1288 picture.slint:1289
 #, x-machine
 msgid "Sharpen"
 msgstr "シャープ"
 
-#: main.ts:1278
+#: main.ts:1345
 #, x-machine
 msgid "Edge Sharpen"
 msgstr "エッジシャープ"
 
-#: main.ts:1278 picture.slint:678
+#: main.ts:1345 picture.slint:1256 picture.slint:1257 picture.slint:1319
 #, x-machine
 msgid "Deblock"
 msgstr "ブロックノイズ除去"
 
-#: main.ts:1278 picture.slint:689
+#: main.ts:1345 picture.slint:1265 picture.slint:1266 picture.slint:1329 picture.slint:1330
 #, x-machine
 msgid "Deband"
 msgstr "バンディング除去"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1375
 #, x-machine
 msgid "3D Denoise"
 msgstr "3D ノイズ除去"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1386
 #, x-machine
 msgid "Gradual Denoise"
 msgstr "段階的ノイズ除去"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1397
 #, x-machine
 msgid "Temporal Denoise"
 msgstr "時間軸ノイズ除去"
 
-#: main.ts:1291 picture.slint:732
+#: main.ts:1358
 #, x-machine
 msgid "Frame Doubling"
 msgstr "フレーム倍増"
 
-#: main.ts:1301 picture.slint:750
+#: main.ts:1368
 #, x-machine
 msgid "Motion Interpolation"
 msgstr "動き補間"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "No Rotation"
 msgstr "回転なし"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "90°"
 msgstr "90°"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "180°"
 msgstr "180°"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "270°"
 msgstr "270°"
 
-#: main.ts:1338
+#: main.ts:1405
 #, x-machine
 msgid "Picture…"
 msgstr "映像…"
 
-#: main.ts:1359
+#: main.ts:1426
 #, x-machine
 msgid "Picture Panel"
 msgstr "映像パネル"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Brightness -1%"
 msgstr "明るさ -1%"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Contrast -1%"
 msgstr "コントラスト -1%"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Saturation -1%"
 msgstr "彩度 -1%"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Hue -1%"
 msgstr "色相 -1%"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Brightness +1%"
 msgstr "明るさ +1%"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Contrast +1%"
 msgstr "コントラスト +1%"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Saturation +1%"
 msgstr "彩度 +1%"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Hue +1%"
 msgstr "色相 +1%"
 
 #. {} is the player's own message, already in the interface language.
-#: main.ts:1408
+#: main.ts:1475
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
-#: main.ts:1421
+#: main.ts:1488
 #, x-machine
 msgid "GPU Rendering (Restart to Apply)"
 msgstr "GPU レンダリング（再起動で適用）"
 
-#: main.ts:1421 picture.slint:1048
+#: main.ts:1488 picture.slint:1767
 #, x-machine
 msgid "GPU Rendering (Experimental)"
 msgstr "GPU レンダリング（試験的）"
 
-#: main.ts:1431 picture.slint:1040
+#: main.ts:1498 picture.slint:1757
 #, x-machine
 msgid "Switching…"
 msgstr "切り替え中…"
 
-#: main.ts:1440
+#: main.ts:1507
 #, x-machine
 msgid "Restart Player to Apply"
 msgstr "プレーヤーを再起動して適用"
 
-#: main.ts:1485
+#: main.ts:1552
 #, x-machine
 msgid "GPU rendering unavailable: {}"
 msgstr "GPU レンダリングは使用できません：{}"
 
-#: main.ts:1486
+#: main.ts:1553
 #, x-machine
 msgid "Could not save the rendering choice: {}"
 msgstr "レンダリング方式を保存できませんでした：{}"
 
-#: main.ts:1495
+#: main.ts:1562
 #, x-machine
 msgid "GPU rendering chosen; the next start still uses software rendering: {}"
 msgstr "GPU レンダリングを選択しましたが、次回起動時もソフトウェアレンダリングを使います：{}"
 
-#: main.ts:1496
+#: main.ts:1563
 #, x-machine
 msgid "GPU rendering: on"
 msgstr "GPU レンダリング：オン"
 
-#: main.ts:1496
+#: main.ts:1563
 #, x-machine
 msgid "GPU rendering: off"
 msgstr "GPU レンダリング：オフ"
 
-#: main.ts:1507
+#: main.ts:1574
 #, x-machine
 msgid "Restart Vestra Player now to apply?"
 msgstr "今すぐ Vestra Player を再起動して適用しますか？"
 
-#: main.ts:1508
+#: main.ts:1575
 #, x-machine
 msgid "Vestra Player will draw on the GPU from the restart on. A local file continues where it is. If you choose Later, GPU rendering starts the next time you open Vestra Player."
 msgstr "再起動後、Vestra Player は GPU で描画します。ローカルファイルは現在の位置から再開します。「後で」を選ぶと、次に Vestra Player を開いたときから GPU レンダリングになります。"
 
-#: main.ts:1508
+#: main.ts:1575
 #, x-machine
 msgid "Vestra Player will use software rendering from the restart on. A local file continues where it is. If you choose Later, software rendering starts the next time you open Vestra Player."
 msgstr "再起動後、Vestra Player はソフトウェアレンダリングを使います。ローカルファイルは現在の位置から再開します。「後で」を選ぶと、次に Vestra Player を開いたときからソフトウェアレンダリングになります。"
 
-#: main.ts:1511
+#: main.ts:1578
 #, x-machine
 msgid "Restart Now"
 msgstr "今すぐ再起動"
 
-#: main.ts:1512
+#: main.ts:1579
 #, x-machine
 msgid "Later"
 msgstr "後で"
 
-#: main.ts:1517
+#: main.ts:1584
 #, x-machine
 msgid "GPU rendering: on (applies at the next start)"
 msgstr "GPU レンダリング：オン（次回起動時に適用）"
 
-#: main.ts:1517
+#: main.ts:1584
 #, x-machine
 msgid "GPU rendering: off (applies at the next start)"
 msgstr "GPU レンダリング：オフ（次回起動時に適用）"
 
-#: main.ts:1530
+#: main.ts:1597
 #, x-machine
 msgid "Could not restart the player: {}"
 msgstr "プレーヤーを再起動できませんでした：{}"
@@ -1093,329 +1093,385 @@ msgstr "色"
 msgid "filters"
 msgstr "フィルタ"
 
-#: picture.slint:380 picture.slint:462 picture.slint:977
+#: picture.slint:403 picture.slint:550 picture.slint:587 picture.slint:1692
 #, x-machine
 msgid "· double-click: Default"
 msgstr "· ダブルクリック: デフォルト"
 
-#: picture.slint:521
+#: picture.slint:466
+#, x-machine
+msgid "· click: on or off"
+msgstr "· クリック：オン / オフ"
+
+#: picture.slint:989
+#, x-machine
+msgid "Pick a ratio below"
+msgstr "下で比率を選択"
+
+#: picture.slint:989
+#, x-machine
+msgid "Screen"
+msgstr "画面"
+
+#: picture.slint:1083
 #, x-machine
 msgid "No picture in the current source"
 msgstr "現在のソースには映像がありません"
 
-#: picture.slint:522
+#: picture.slint:1084
 #, x-machine
 msgid "Picture processing failed"
 msgstr "映像の処理に失敗しました"
 
-#: picture.slint:523
+#: picture.slint:1085
 #, x-machine
 msgid "Display unavailable"
 msgstr "表示を使用できません"
 
-#: picture.slint:525
+#: picture.slint:1087
 #, x-machine
 msgid "Render options unavailable"
 msgstr "レンダリングオプションを使用できません"
 
-#: picture.slint:526
+#: picture.slint:1088
 #, x-machine
 msgid "Render settings failed"
 msgstr "レンダリングの設定に失敗しました"
 
-#: picture.slint:529
+#: picture.slint:1091
 #, x-machine
 msgid "Another plugin controls the display"
 msgstr "別のプラグインが表示を制御しています"
 
-#: picture.slint:530
+#: picture.slint:1092
 #, x-machine
 msgid "Another plugin controls the render options"
 msgstr "別のプラグインがレンダリングオプションを制御しています"
 
-#: picture.slint:566 picture.slint:588
-#, x-machine
-msgid "Colour"
-msgstr "色"
-
-#: picture.slint:567 picture.slint:643
-#, x-machine
-msgid "Effects"
-msgstr "エフェクト"
-
-#: picture.slint:568 picture.slint:761
-#, x-machine
-msgid "Geometry"
-msgstr "ジオメトリ"
-
-#: picture.slint:569 picture.slint:903
-#, x-machine
-msgid "Advanced"
-msgstr "詳細"
-
-#: picture.slint:590
-#, x-machine
-msgid "Brightness"
-msgstr "明るさ"
-
-#: picture.slint:599
-#, x-machine
-msgid "Contrast"
-msgstr "コントラスト"
-
-#: picture.slint:608
-#, x-machine
-msgid "Saturation"
-msgstr "彩度"
-
-#: picture.slint:617
-#, x-machine
-msgid "Hue"
-msgstr "色相"
-
-#: picture.slint:626
-#, x-machine
-msgid "Gamma"
-msgstr "ガンマ"
-
-#: picture.slint:636
-#, x-machine
-msgid "Original"
-msgstr "オリジナル"
-
-#: picture.slint:637
-#, x-machine
-msgid "Vivid"
-msgstr "鮮やか"
-
-#: picture.slint:638
-#, x-machine
-msgid "Cinema"
-msgstr "シネマ"
-
-#: picture.slint:639
-#, x-machine
-msgid "Soft"
-msgstr "ソフト"
-
-#: picture.slint:655
-#, x-machine
-msgid "Edges"
-msgstr "エッジ"
-
-#: picture.slint:656
-#, x-machine
-msgid "Wide-radius sharpening that mainly strengthens outlines"
-msgstr "広い範囲のシャープ処理で、主に輪郭を強調します"
-
-#: picture.slint:666
-#, x-machine
-msgid "Blur"
-msgstr "ぼかし"
-
-#: picture.slint:679
-#, x-machine
-msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
-msgstr "50 未満は弱、50 以上は強。低ビットレートの MPEG-2/MPEG-4 で最も効果があります"
-
-#: picture.slint:700
-#, x-machine
-msgid "Denoise"
-msgstr "ノイズ除去"
-
-#: picture.slint:715
+#: picture.slint:1105 picture.slint:1278 picture.slint:1374
 #, x-machine
 msgid "3D"
 msgstr "3D"
 
-#: picture.slint:716
+#: picture.slint:1107 picture.slint:1385
 #, x-machine
 msgid "Gradual"
 msgstr "段階的"
 
-#: picture.slint:717
+#: picture.slint:1109 picture.slint:1278 picture.slint:1396
 #, x-machine
 msgid "Temporal"
 msgstr "時間軸"
 
-#: picture.slint:726
+#: picture.slint:1113
+#, x-machine
+msgid "{} with bars"
+msgstr "{}（黒帯付き）"
+
+#: picture.slint:1144 picture.slint:1166
+#, x-machine
+msgid "Colour"
+msgstr "色"
+
+#: picture.slint:1145 picture.slint:1223
+#, x-machine
+msgid "Effects"
+msgstr "エフェクト"
+
+#: picture.slint:1146 picture.slint:1458
+#, x-machine
+msgid "Geometry"
+msgstr "ジオメトリ"
+
+#: picture.slint:1147 picture.slint:1618
+#, x-machine
+msgid "Advanced"
+msgstr "詳細"
+
+#: picture.slint:1168
+#, x-machine
+msgid "Brightness"
+msgstr "明るさ"
+
+#: picture.slint:1177
+#, x-machine
+msgid "Contrast"
+msgstr "コントラスト"
+
+#: picture.slint:1186
+#, x-machine
+msgid "Saturation"
+msgstr "彩度"
+
+#: picture.slint:1195
+#, x-machine
+msgid "Hue"
+msgstr "色相"
+
+#: picture.slint:1204
+#, x-machine
+msgid "Gamma"
+msgstr "ガンマ"
+
+#: picture.slint:1214
+#, x-machine
+msgid "Original"
+msgstr "オリジナル"
+
+#: picture.slint:1215
+#, x-machine
+msgid "Vivid"
+msgstr "鮮やか"
+
+#: picture.slint:1216
+#, x-machine
+msgid "Cinema"
+msgstr "シネマ"
+
+#: picture.slint:1217
+#, x-machine
+msgid "Soft"
+msgstr "ソフト"
+
+#: picture.slint:1238 picture.slint:1298
+#, x-machine
+msgid "Edges"
+msgstr "エッジ"
+
+#: picture.slint:1239 picture.slint:1299
+#, x-machine
+msgid "Wide-radius sharpening that mainly strengthens outlines"
+msgstr "広い範囲のシャープ処理で、主に輪郭を強調します"
+
+#: picture.slint:1247 picture.slint:1308
+#, x-machine
+msgid "Blur"
+msgstr "ぼかし"
+
+#: picture.slint:1276 picture.slint:1358
+#, x-machine
+msgid "Denoise"
+msgstr "ノイズ除去"
+
+#: picture.slint:1277
+#, x-machine
+msgid "Denoise: turns the denoisers on or off"
+msgstr "ノイズ除去：ノイズ除去をオン / オフ"
+
+#: picture.slint:1320
+#, x-machine
+msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
+msgstr "50 未満は弱、50 以上は強。低ビットレートの MPEG-2/MPEG-4 で最も効果があります"
+
+#: picture.slint:1410
+#, x-machine
+msgid "Frames"
+msgstr "フレーム"
+
+#: picture.slint:1416
+#, x-machine
+msgid "Neither frame doubling nor motion interpolation"
+msgstr "フレーム倍増も動き補間もしない"
+
+#: picture.slint:1427
 #, x-machine
 msgid "Rate already high enough"
 msgstr "フレームレートは十分に高いです"
 
-#: picture.slint:727
+#: picture.slint:1428
 #, x-machine
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr "フレームレートを 2 倍（最大 60）にし、中間フレームを前後のフレームから合成します"
 
-#: picture.slint:745
+#: picture.slint:1433
+#, x-machine
+msgid "Doubling"
+msgstr "倍増"
+
+#: picture.slint:1440
 #, x-machine
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr "ディスプレイのリフレッシュレートに合わせた GPU 補間。フレーム倍増とは併用できません"
 
-#: picture.slint:763
+#: picture.slint:1445
 #, x-machine
-msgid "Fit"
-msgstr "フィット"
+msgid "Interpolate"
+msgstr "補間"
 
-#: picture.slint:768
+#: picture.slint:1464
 #, x-machine
-msgid "Keep"
-msgstr "保持"
+msgid "Rotate Left"
+msgstr "左に回転"
 
-#: picture.slint:769 picture.slint:804
+#: picture.slint:1469
 #, x-machine
-msgid "Stretch"
-msgstr "ストレッチ"
+msgid "Rotate Right"
+msgstr "右に回転"
 
-#: picture.slint:770
+#: picture.slint:1499
 #, x-machine
-msgid "Fill"
-msgstr "全体"
+msgid "Leave Crop Mode"
+msgstr "切り抜きモードを終了"
 
-#: picture.slint:776
+#: picture.slint:1499
 #, x-machine
-msgid "Aspect ratio"
-msgstr "アスペクト比"
+msgid "Crop: pick a ratio, then drag the box"
+msgstr "切り抜き：比率を選び、枠をドラッグ"
 
-#: picture.slint:798 picture.slint:804
-#, x-machine
-msgid "Crop"
-msgstr "クロップ"
-
-#: picture.slint:830
-#, x-machine
-msgid "Reset Crop Position"
-msgstr "クロップの位置をリセット"
-
-#: picture.slint:833
-#, x-machine
-msgid "Rotate"
-msgstr "回転"
-
-#: picture.slint:846
-#, x-machine
-msgid "Flip"
-msgstr "反転"
-
-#: picture.slint:864
-#, x-machine
-msgid "Zoom"
-msgstr "ズーム"
-
-#: picture.slint:868
-#, x-machine
-msgid "{}%"
-msgstr "{}%"
-
-#: picture.slint:878
-#, x-machine
-msgid "Pan"
-msgstr "移動"
-
-#. {0} and {1} are the picture's offset in percent, across and down.
-#: picture.slint:880
-#, x-machine
-msgid "Pan ({0}%, {1}%)"
-msgstr "移動（{0}%, {1}%）"
-
-#: picture.slint:882
-#, x-machine
-msgid "· resets zoom and pan"
-msgstr "· ズームと移動をリセット"
-
-#: picture.slint:888
+#: picture.slint:1509
 #, x-machine
 msgid "Reset Framing"
 msgstr "フレーミングをリセット"
 
-#: picture.slint:947
+#: picture.slint:1517
+#, x-machine
+msgid "Zoom {}%"
+msgstr "ズーム {}%"
+
+#. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
+#: picture.slint:1522
+#, x-machine
+msgid "Offset {0}, {1}"
+msgstr "オフセット {0}, {1}"
+
+#: picture.slint:1524
+#, x-machine
+msgid "Crop {}"
+msgstr "切り抜き {}"
+
+#. the crop box's position in percent, across and down (50 = centred).
+#: picture.slint:1529
+#, x-machine
+msgid "at {0}%, {1}%"
+msgstr "位置 {0}%, {1}%"
+
+#: picture.slint:1540
+#, x-machine
+msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
+msgstr "比率で切り抜き。エディターで枠をドラッグして残す部分を選択"
+
+#: picture.slint:1558
+#, x-machine
+msgid "Stretch to the ratio: add bars instead of cutting the picture"
+msgstr "比率に合わせる：画面を切らずに黒帯を追加"
+
+#: picture.slint:1562
+#, x-machine
+msgid "Add bars instead of cutting"
+msgstr "切らずに黒帯を追加"
+
+#: picture.slint:1573
+#, x-machine
+msgid "Aspect ratio"
+msgstr "アスペクト比"
+
+#: picture.slint:1595
+#, x-machine
+msgid "Fit"
+msgstr "フィット"
+
+#: picture.slint:1600
+#, x-machine
+msgid "Keep"
+msgstr "保持"
+
+#: picture.slint:1601
+#, x-machine
+msgid "Stretch"
+msgstr "ストレッチ"
+
+#: picture.slint:1602
+#, x-machine
+msgid "Fill"
+msgstr "全体"
+
+#: picture.slint:1662
 #, x-machine
 msgid "Double rate"
 msgstr "倍レート"
 
-#: picture.slint:955
+#: picture.slint:1670
 #, x-machine
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:957
+#: picture.slint:1672
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr "SDR ディスプレイでの HDR ソース（PQ / HLG）のトーンマッピング · HDR ソースではありません"
 
-#: picture.slint:958
+#: picture.slint:1673
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr "SDR ディスプレイでの HDR ソース（PQ / HLG）のトーンマッピング"
 
-#: picture.slint:976
+#: picture.slint:1691
 #, x-machine
 msgid "Target brightness"
 msgstr "目標の明るさ"
 
-#: picture.slint:991
+#: picture.slint:1708
 #, x-machine
 msgid "{} nits"
 msgstr "{} nit"
 
-#: picture.slint:1009
+#: picture.slint:1726
 #, x-machine
 msgid "Peak detection"
 msgstr "ピーク検出"
 
-#: picture.slint:1018
+#: picture.slint:1735
 #, x-machine
 msgid "Shaders"
 msgstr "シェーダ"
 
-#: picture.slint:1019
+#: picture.slint:1736
 #, x-machine
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr "mpv ユーザーシェーダ（.glsl）。一覧の順に実行されます"
 
-#: picture.slint:1023
+#: picture.slint:1740
 #, x-machine
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] "シェーダ {n} 個"
 
-#: picture.slint:1030
+#: picture.slint:1747
 #, x-machine
 msgid "List…"
 msgstr "一覧…"
 
-#: picture.slint:1042
+#: picture.slint:1759
 #, x-machine
 msgid "Restart Vestra Player to apply"
 msgstr "適用するには Vestra Player を再起動してください"
 
-#: picture.slint:1043
+#: picture.slint:1760
 #, x-machine
 msgid "Draw the video on the GPU from the next start"
 msgstr "次回の起動から映像を GPU で描画します"
 
-#: picture.slint:1058
+#: picture.slint:1777
 #, x-machine
 msgid "Restart"
 msgstr "再起動"
 
-#: picture.slint:1093
+#: picture.slint:1814
 #, x-machine
 msgid "Retry"
 msgstr "再試行"
 
-#: picture.slint:1109 picture.slint:1113
+#: picture.slint:1830 picture.slint:1834
 #, x-machine
 msgid "Enable picture effects"
 msgstr "映像エフェクトを有効にする"
 
-#: picture.slint:1122
+#: picture.slint:1843
 #, x-machine
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr "色・エフェクト・ジオメトリをデフォルトに戻します。詳細設定はそのままです"
 
-#: picture.slint:1127
+#: picture.slint:1848
 #, x-machine
 msgid "Reset All"
 msgstr "すべてリセット"
