@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { mkdir, mkdtemp, realpath, rm, symlink, writeFile } from "node:fs/promises";
+import { mkdir, mkdtemp, readFile, realpath, rm, symlink, writeFile } from "node:fs/promises";
 import { basename, join } from "node:path";
 import { tmpdir } from "node:os";
 import type { Json } from "@vestra-player/sdk";
@@ -1208,4 +1208,38 @@ test("Prober: ffprobe runs with a 10 s timeout and removal aborts the run", asyn
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
+});
+
+// Focus rules (user ruling 2026-11-08): the list keeps only its own keys and passes every other
+// key on to the player; only a click on a row (or the search box's Esc/↓) gives it the focus.
+test("list focus: the list's keys are ↑ ↓ PgUp PgDn Home End; the player's keys go on", async () => {
+  const app = await start();
+  try {
+    // List key bindings (`focus: "panel"`) never take the player's playback keys.
+    const panelKeys = [...app.host.commands.values()]
+      .filter(({ declaration: d }) => d.focus === "panel")
+      .flatMap(({ declaration: d }) => d.bindings);
+    assert.ok(panelKeys.includes("Enter") && panelKeys.includes("Delete") && panelKeys.includes("Ctrl+A"));
+    for (const key of ["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Escape"]) {
+      assert.ok(!panelKeys.includes(key), `${key} is not a list binding`);
+    }
+  } finally {
+    await app.close();
+  }
+  const slint = await readFile(new URL("../ui/sidebar.slint", import.meta.url), "utf8");
+  const scope = slint.slice(slint.indexOf("list-focus := FocusScope {"));
+  const handler = scope.slice(scope.indexOf("key-pressed(event) => {"), scope.indexOf("return reject;\n        }"));
+  // The Slint handler accepts exactly these keys (unmodified, Shift extends) and rejects the rest.
+  assert.deepEqual(
+    [...handler.matchAll(/event\.text == Key\.(\w+)/g)].map((m) => m[1]),
+    ["UpArrow", "DownArrow", "PageUp", "PageDown", "Home", "End"],
+  );
+  assert.match(handler, /control \|\| event\.modifiers\.meta \|\| event\.modifiers\.alt \{ return reject; \}/);
+  // A press no control takes does not focus the list, and none reaches the player's sidebar scope.
+  assert.match(scope, /^\s+focus-on-click: false;/m);
+  assert.match(scope, /^\s+TouchArea \{\}/m);
+  // The list takes the focus in four places only: a row's release (no drag), a right press on a
+  // row, and the search box's Esc and ↓; and it shows a focus ring meanwhile.
+  assert.equal([...slint.matchAll(/list-focus\.focus\(\)/g)].length, 4);
+  assert.match(slint, /visible: list-focus\.has-focus;\s+border-width: 1px;\s+border-color: Theme\.accent;/);
 });
