@@ -45,14 +45,17 @@ export function propertiesWindow(plugin: Plugin) {
     // no data directory: the tab is remembered for this run only
   }
   const saved = Math.round(Number(prefs.value.propertiesTab));
-  let tab = saved >= 0 && saved < TABS ? saved : 0;
-  /** `""`, `copy-failed` or `save-failed` (properties.slint words it), with the reason. */
-  let status = "";
-  let statusDetail = "";
-  let stats: PlaybackStats | null = null;
-  let file: { sourceId: number; rows: Row[] } | null = null;
+  // What the window shows; a write re-runs its binding (the polling, the reads and the handlers alike).
+  const st = plugin.state({
+    tab: saved >= 0 && saved < TABS ? saved : 0,
+    /** `""`, `copy-failed` or `save-failed` (properties.slint words it), with the reason. */
+    status: "",
+    statusDetail: "",
+    stats: null as PlaybackStats | null,
+    file: null as { sourceId: number; rows: Row[] } | null,
+    facts: null as SystemFacts | null,
+  });
   let probe: AbortController | null = null;
-  let facts: SystemFacts | null = null;
   let reading: AbortController | null = null;
   let timer: ReturnType<typeof setInterval> | undefined;
   /** What follows the player while the window is open; `null` while closed. */
@@ -61,18 +64,18 @@ export function propertiesWindow(plugin: Plugin) {
 
   const page = (): Row[] => {
     const state = player.state;
-    if (tab === 0) return playbackPage(plugin.i18n, state, stats);
-    if (tab === 2) return systemPage(plugin.i18n, plugin.app, facts);
+    if (st.tab === 0) return playbackPage(plugin.i18n, state, st.stats);
+    if (st.tab === 2) return systemPage(plugin.i18n, plugin.app, st.facts);
     if (!state.source) return message(plugin.i18n.text("No media open"));
-    if (isUrl(state.source)) return remotePage(plugin.i18n, state, stats);
-    return file?.sourceId === state.sourceId ? file.rows : message(plugin.i18n.text("Reading…"));
+    if (isUrl(state.source)) return remotePage(plugin.i18n, state, st.stats);
+    return st.file?.sourceId === state.sourceId ? st.file.rows : message(plugin.i18n.text("Reading…"));
   };
 
   const propertiesToolWindow = plugin.windows.create("ui/properties.slint");
 
   async function readStats() {
     try {
-      stats = await player.stats();
+      st.stats = await player.stats();
     } catch {
       // keep the last values; try again next second
     }
@@ -81,11 +84,10 @@ export function propertiesWindow(plugin: Plugin) {
   /** The File page of a local source, unless already read (or `again`). The previous read is aborted. */
   async function readFile(again = false) {
     const state: PlayerState = player.state;
-    if (!state.source || isUrl(state.source) || (!again && file?.sourceId === state.sourceId)) return;
+    if (!state.source || isUrl(state.source) || (!again && st.file?.sourceId === state.sourceId)) return;
     probe?.abort();
     const controller = (probe = new AbortController());
-    file = null;
-    plugin.update(); // Reading…
+    st.file = null; // Reading…
     let rows: Row[];
     try {
       const info = await stat(state.source).catch(() => {
@@ -105,36 +107,33 @@ export function propertiesWindow(plugin: Plugin) {
     }
     if (probe !== controller) return;
     probe = null;
-    file = { sourceId: state.sourceId, rows };
-    plugin.update();
+    st.file = { sourceId: state.sourceId, rows };
   }
 
   /** The System page, unless already read (or `again`). */
   async function readSystem(again = false) {
-    if (reading || (facts && !again)) return;
+    if (reading || (st.facts && !again)) return;
     const controller = (reading = new AbortController());
-    if (again) facts = null;
-    plugin.update();
+    if (again) st.facts = null;
     try {
       const read = await readFacts(plugin.i18n, plugin.app);
-      if (!controller.signal.aborted) facts = read; // closed meanwhile: read again next time
+      if (!controller.signal.aborted) st.facts = read; // closed meanwhile: read again next time
     } finally {
       if (reading === controller) reading = null;
-      plugin.update();
     }
   }
 
   /** What the shown page needs. */
   function load() {
-    if (tab === 1) void readFile();
-    if (tab === 2) void readSystem();
+    if (st.tab === 1) void readFile();
+    if (st.tab === 2) void readSystem();
   }
 
   /** A source change: the stats and the File page belong to the old one. */
   function sourceChanged(state: PlayerState) {
     if (state.sourceId === sourceId) return false;
     sourceId = state.sourceId;
-    stats = null;
+    st.stats = null;
     return true;
   }
 
@@ -146,7 +145,7 @@ export function propertiesWindow(plugin: Plugin) {
     scope.add(propertiesToolWindow.bind(() => {
       const rows = page();
       // The label column's width: the host lays out this one label, not every row's.
-      return { tabIndex: tab, rows: rows as unknown as Record<string, string | boolean>[], labelSample: widestLabel(plugin.i18n, rows), status, statusDetail, canRefresh: tab !== 0 };
+      return { tabIndex: st.tab, rows: rows as unknown as Record<string, string | boolean>[], labelSample: widestLabel(plugin.i18n, rows), status: st.status, statusDetail: st.statusDetail, canRefresh: st.tab !== 0 };
     }));
     scope.player.onChange((state) => {
       if (!sourceChanged(state) || !propertiesToolWindow.opened) return;
@@ -171,24 +170,24 @@ export function propertiesWindow(plugin: Plugin) {
   }
 
   propertiesToolWindow.on("tabChanged", (index: number) => {
-    tab = Math.min(TABS - 1, Math.max(0, Math.round(Number(index))));
-    status = "";
-    if (prefs.value.propertiesTab !== tab) prefs.save({ propertiesTab: tab });
+    st.tab = Math.min(TABS - 1, Math.max(0, Math.round(Number(index))));
+    st.status = "";
+    if (prefs.value.propertiesTab !== st.tab) prefs.save({ propertiesTab: st.tab });
     load();
   });
   propertiesToolWindow.on("refresh", () => {
-    status = "";
-    if (tab === 1) void readFile(true);
-    if (tab === 2) void readSystem(true);
+    st.status = "";
+    if (st.tab === 1) void readFile(true);
+    if (st.tab === 2) void readSystem(true);
   });
   propertiesToolWindow.on("copyPage", async () => {
     try {
       await plugin.clipboard.writeText(pageText(plugin.i18n, page()));
-      status = "";
+      st.status = "";
       void plugin.osd.show("Playback info copied").catch(() => {});
     } catch (error) {
       console.error(`[info] copy: ${reason(error)}`);
-      status = "copy-failed";
+      st.status = "copy-failed";
     }
   });
   propertiesToolWindow.on("savePage", async () => {
@@ -199,12 +198,12 @@ export function propertiesWindow(plugin: Plugin) {
     try {
       await writeFile(temporary, text);
       await rename(temporary, chosen);
-      status = "";
+      st.status = "";
       void plugin.osd.show("Saved to {}", [basename(chosen)]).catch(() => {});
     } catch (error) {
       await rm(temporary, { force: true });
-      status = "save-failed";
-      statusDetail = reason(error); // the system's message
+      st.status = "save-failed";
+      st.statusDetail = reason(error); // the system's message
     }
   });
   propertiesToolWindow.on("closeWindow", async () => {
@@ -223,7 +222,7 @@ export function propertiesWindow(plugin: Plugin) {
     follow();
     if (!timer) {
       // Claimed before the first read: an overlapping show() (two quick Ctrl+F1) starts no second interval.
-      timer = setInterval(() => void readStats().then(() => plugin.update()), 1000);
+      timer = setInterval(() => void readStats(), 1000);
       await readStats();
     }
     load();

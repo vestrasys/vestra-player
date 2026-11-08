@@ -32,7 +32,7 @@ export default async function activate(plugin: Plugin) {
   const osd: Osd = (text, args) => void (args ? plugin.osd.show(text, args) : plugin.osd.show(text)).catch(() => {});
   // i18n-ignore: the player's (or the SDK's) own message
   const raw = (text: string) => void plugin.osd.show(text).catch(() => {});
-  const playback = new Playback(player, plugin.dialogs, () => plugin.update(), osd, raw);
+  const playback = new Playback(plugin, osd, raw);
 
   const settings = new SettingsStore(plugin);
   // The last volume and mute come back once at start; later changes by anyone are saved.
@@ -40,7 +40,7 @@ export default async function activate(plugin: Plugin) {
   void output.restore();
   const reopener = new Reopener(plugin, osd);
   const openUrl = new OpenUrl(plugin, settings, osd);
-  const keyframes = new Keyframes(plugin, playback, () => plugin.update());
+  const keyframes = new Keyframes(plugin, playback);
   const thumbnails = new Thumbnails(plugin, settings, (id) => keyframes.video(id));
   // B29: the host holds the assertion while playing; a failed start is only in its log.
   const sleep = () => plugin.power.preventSleep(settings.value.preventSleep ? "playing" : "off");
@@ -115,6 +115,7 @@ export default async function activate(plugin: Plugin) {
     loop.observe(state);
     thumbnails.observe(state);
     output.observe(state);
+    panel.observe();
     await Promise.resolve(); // the drag gesture observes the same change first
     if (replaced || playback.gestureLost) {
       playback.clearSeek();

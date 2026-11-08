@@ -294,13 +294,15 @@ const partOf = (job: Job, cell: number): Part =>
  *   twice its estimate (`tooSlow`), falls back to the keyframe sprite.
  */
 export class Thumbnails {
-  /** ffmpeg was found (`null` until the first answer). */
-  available: boolean | null = null;
-  /** The sprite the bar shows, `null` when the source has none (yet). */
-  preview: Preview | null = null;
+  /**
+   * What the bar and the menu item read, in `plugin.state` (a write re-runs
+   * them): whether ffmpeg was found (`null` until the first answer), the
+   * sprite the bar shows (`null` when the source has none yet), the current
+   * source's job and whether its cells failed `MAX_FAILURES` times in a row.
+   */
+  readonly #st: { available: boolean | null; preview: Preview | null; job: Job | null; failing: boolean };
   #root: string | null = null;
   #seen: number | null = null;
-  #job: Job | null = null;
   #timer: unknown = null;
   #due = 0;
   #slots = WORKERS;
@@ -326,6 +328,7 @@ export class Thumbnails {
     this.#scope = scope;
     this.#settings = settings;
     this.#video = video;
+    this.#st = scope.state({ available: null as boolean | null, preview: null as Preview | null, job: null as Job | null, failing: false });
     try {
       this.#root = join(scope.dataDirectory, "thumbs");
     } catch {
@@ -334,16 +337,36 @@ export class Thumbnails {
     scope.onDispose(() => this.#end());
   }
 
+  /** ffmpeg was found (`null` until the first answer). */
+  get available() {
+    return this.#st.available;
+  }
+  /** The sprite the bar shows, `null` when the source has none (yet). */
+  get preview() {
+    return this.#st.preview;
+  }
+  get #job() {
+    return this.#st.job;
+  }
+  set #job(job: Job | null) {
+    this.#st.job = job;
+    this.#st.failing = false;
+  }
+  /** `job`'s failed runs in a row: 0 after a success. */
+  #failures(job: Job, count: number) {
+    job.failures = count;
+    if (job === this.#job) this.#st.failing = count >= MAX_FAILURES;
+  }
+
   /** Look for ffmpeg (at start, and on each new source while it is missing). */
   async probe() {
     const found = this.#root !== null && (await this.#scope.tools.available("ffmpeg").catch(() => false));
-    this.available = found;
-    this.#scope.update();
+    this.#st.available = found;
     this.#schedule(0);
   }
 
   command(): State {
-    const missing = this.available === false;
+    const missing = this.#st.available === false;
     return {
       enabled: !missing,
       checked: this.#settings.value.hoverThumbnail,
@@ -357,10 +380,10 @@ export class Thumbnails {
     const job = this.#job;
     return (
       this.#settings.value.hoverThumbnail &&
-      this.available === true &&
+      this.#st.available === true &&
       job !== null &&
       job.sourceId === state.sourceId &&
-      job.failures < MAX_FAILURES &&
+      !this.#st.failing &&
       state.phase === "ready" &&
       this.#video(state.sourceId) === true
     );
@@ -377,7 +400,7 @@ export class Thumbnails {
     if (this.#seen !== state.sourceId) {
       this.#seen = state.sourceId;
       void this.#end();
-      if (this.available === false && this.#root !== null) void this.probe(); // ffmpeg may be installed by now
+      if (this.#st.available === false && this.#root !== null) void this.probe(); // ffmpeg may be installed by now
     }
     // A local file with a known length (it may be known only once ready).
     const { kind, source, duration } = state;
@@ -489,7 +512,7 @@ export class Thumbnails {
     }
     const wait = job.shownAt + START_DELAY_MS - now;
     if (wait > 0) return this.#schedule(wait);
-    if (!this.#settings.value.hoverThumbnail || this.available !== true) return this.#schedule(1000); // the option may come on
+    if (!this.#settings.value.hoverThumbnail || this.#st.available !== true) return this.#schedule(1000); // the option may come on
     job.stage = "starting";
     await this.#start(job);
   }
@@ -706,7 +729,7 @@ export class Thumbnails {
             job.dirty.add(s);
           } else job.failed.add(index); // the stream ended before the cell's time: its neighbour shows
         }
-        job.failures = 0;
+        this.#failures(job, 0);
         return;
       }
       const seconds = cells.map((index) => cellTime(index, job.count, job.duration));
@@ -724,7 +747,7 @@ export class Thumbnails {
         job.made[index] = 1;
         job.dirty.add(s);
       });
-      job.failures = 0;
+      this.#failures(job, 0);
     } catch (error) {
       if (job.abort.signal.aborted) return;
       if (run.signal.aborted) {
@@ -732,10 +755,9 @@ export class Thumbnails {
         return;
       }
       if ((error as { code?: string })?.code === "unavailable") {
-        this.available = false; // ffmpeg went away: the menu item turns grey
+        this.#st.available = false; // ffmpeg went away: the menu item turns grey
         job.queue.length = 0;
         job.stage = "done";
-        this.#scope.update();
         return;
       }
       if (exact) {
@@ -751,11 +773,8 @@ export class Thumbnails {
       }
       // A failed cell shows its neighbour, without a message.
       job.failed.add(cells[0]!);
-      job.failures++;
-      if (job.failures >= MAX_FAILURES) {
-        job.queue.length = 0;
-        this.#scope.update();
-      }
+      this.#failures(job, job.failures + 1);
+      if (job.failures >= MAX_FAILURES) job.queue.length = 0;
     } finally {
       job.abort.signal.removeEventListener("abort", end);
       for (const index of cells) job.running.delete(index);
@@ -778,8 +797,7 @@ export class Thumbnails {
     next.keyframesOnly = true;
     next.stage = "starting";
     this.#job = next;
-    this.preview = null;
-    this.#scope.update();
+    this.#st.preview = null;
     // After the exact folder's index is on disk: the new job's start evicts
     // folders without a valid index, and that one is not kept.
     void remembered.then(() => {
@@ -836,7 +854,7 @@ export class Thumbnails {
    */
   #publish(job: Job) {
     const wait = this.#shownAt + SHOW_MS - clock.now();
-    if (this.#pointing && this.preview !== null && wait > 0) return this.#schedule(wait);
+    if (this.#pointing && this.#st.preview !== null && wait > 0) return this.#schedule(wait);
     this.#show(job);
   }
 
@@ -846,7 +864,7 @@ export class Thumbnails {
    * so the player does not decode it again.
    */
   #show(job: Job) {
-    const previous = this.preview?.count === job.count ? this.preview.sheets : [];
+    const previous = this.#st.preview?.count === job.count ? this.#st.preview.sheets : [];
     const sheets = Array.from({ length: sheetCount(job.count) }, (_, s) => {
       const first = s * 100;
       const any = job.made.subarray(first, Math.min(job.count, first + 100)).some(Boolean);
@@ -856,8 +874,7 @@ export class Thumbnails {
     });
     job.unshown.clear();
     this.#shownAt = clock.now();
-    this.preview = { count: job.count, map: nearestMade(job.made), sheets };
-    this.#scope.update();
+    this.#st.preview = { count: job.count, map: nearestMade(job.made), sheets };
   }
 
   /** Write the job's index as it is now, after the job's earlier index writes (so the newest lands last). */
@@ -942,7 +959,7 @@ export class Thumbnails {
     const job = this.#job;
     this.#job = null;
     this.#last = null;
-    this.preview = null;
+    this.#st.preview = null;
     this.#clearTimer();
     if (job) {
       job.abort.abort();

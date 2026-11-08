@@ -103,7 +103,7 @@ function entries(p: Playback, f: Features): Entry[] {
     home: "panel",
     radio: true,
     action: () => p.setRate(value),
-    state: () => ready(p.can("rate"), p.state.rate === value, p.rateBusy),
+    state: () => ready(p.can("rate"), p.state.rate === value, p.ui.rateBusy),
   });
   const keyframe = (id: string, title: MenuText, direction: "backward" | "forward", binding: string): Entry => ({
     id,
@@ -146,7 +146,7 @@ function entries(p: Playback, f: Features): Entry[] {
       group: "open",
       bindings: ["Ctrl+O", "F3"],
       action: () => p.open(),
-      state: () => ready(!p.selecting, null, p.selecting),
+      state: () => ready(!p.ui.selecting, null, p.ui.selecting),
     },
     {
       id: "open-url",
@@ -204,7 +204,7 @@ function entries(p: Playback, f: Features): Entry[] {
       home: "panel",
       bindings: ["Backspace"],
       action: () => f.jumpToStart(),
-      state: () => ready(p.canRestart(), null, p.restartBusy),
+      state: () => ready(p.canRestart(), null, p.ui.restartBusy),
     },
     {
       id: "time-jump",
@@ -223,7 +223,7 @@ function entries(p: Playback, f: Features): Entry[] {
       category: "Speed",
       home: "panel",
       action: () => f.panel.typeRate(),
-      state: () => ready(p.can("rate"), null, p.rateBusy),
+      state: () => ready(p.can("rate"), null, p.ui.rateBusy),
     },
     option("prevent-sleep", "Disable Screen Saver While Playing", 240, () => f.settings.value.preventSleep, () => {
       f.settings.update((s) => {

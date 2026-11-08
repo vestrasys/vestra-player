@@ -121,61 +121,62 @@ export function aboutText(i18n: I18n, app: AppInfo, node: string | null, plugins
  */
 export function aboutWindow(plugin: Plugin, updater: Updater) {
   const node = process.versions.node ? `v${process.versions.node}` : null;
-  let plugins: PluginRow[] | null = null;
-  let rendering = NO_RENDERING;
-  /** `""`, or `copy-failed` (about.slint words it). */
-  let status = "";
+  /** What the window shows besides the app's own facts; a write re-runs the window's binding. */
+  const st = plugin.state({
+    plugins: null as PluginRow[] | null,
+    rendering: NO_RENDERING,
+    /** `""`, or `copy-failed` (about.slint words it). */
+    status: "",
+  });
   /** Read the list now (each opening); a failure shows Unknown until the next read or change. */
   async function readPlugins() {
     try {
-      plugins = pluginRows(await plugin.packages.list());
+      st.plugins = pluginRows(await plugin.packages.list());
     } catch (error) {
       console.error(`[info] packages.list: ${error instanceof Error ? error.message : String(error)}`);
-      plugins = null;
+      st.plugins = null;
     }
-    plugin.update();
   }
   /** The renderer now (each opening); a failed read leaves the row out, as an older player does. */
   async function readRendering() {
     try {
-      rendering = renderingRow(await plugin.app.system());
+      st.rendering = renderingRow(await plugin.app.system());
     } catch (error) {
       console.error(`[info] app.system: ${error instanceof Error ? error.message : String(error)}`);
-      rendering = NO_RENDERING;
+      st.rendering = NO_RENDERING;
     }
-    plugin.update();
   }
   // Starts, stops, failures, installs and uninstalls arrive here; the open window follows at once.
-  plugin.packages.onChange((list) => void (plugins = pluginRows(list)));
+  plugin.packages.onChange((list) => void (st.plugins = pluginRows(list)));
   const aboutToolWindow = plugin.windows.create("ui/about.slint");
   aboutToolWindow.bind(() => ({
     version: plugin.app.version,
     build: plugin.app.build ?? "",
     ...versions(plugin.app, node),
-    plugins: plugins ?? [],
-    pluginsUnknown: !plugins,
-    rendering: rendering.mode,
-    renderingReason: rendering.reason,
-    status,
+    plugins: st.plugins ?? [],
+    pluginsUnknown: !st.plugins,
+    rendering: st.rendering.mode,
+    renderingReason: st.rendering.reason,
+    status: st.status,
     ...updater.props(),
   }));
   aboutToolWindow.on("updateAction", () => updater.action());
   aboutToolWindow.on("releaseNotes", () => updater.releaseNotes());
   aboutToolWindow.on("copyInfo", async () => {
     try {
-      await plugin.clipboard.writeText(aboutText(plugin.i18n, plugin.app, node, plugins, rendering));
-      status = "";
+      await plugin.clipboard.writeText(aboutText(plugin.i18n, plugin.app, node, st.plugins, st.rendering));
+      st.status = "";
       void plugin.osd.show("Version info copied").catch(() => {});
     } catch (error) {
       console.error(`[info] copy: ${error instanceof Error ? error.message : String(error)}`);
-      status = "copy-failed";
+      st.status = "copy-failed";
     }
   });
   aboutToolWindow.on("closeWindow", () => aboutToolWindow.close());
   // Nothing polls while the window is open; a title-bar close only clears the status line.
-  aboutToolWindow.onClose(() => void (status = ""));
+  aboutToolWindow.onClose(() => void (st.status = ""));
   return async function show() {
-    status = "";
+    st.status = "";
     if (!aboutToolWindow.opened) await Promise.all([readPlugins(), readRendering()]);
     await aboutToolWindow.show();
   };
