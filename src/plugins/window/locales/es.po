@@ -344,7 +344,3 @@ msgstr "Puntero del mouse"
 #, x-machine
 msgid "Hide the pointer while playing"
 msgstr "Ocultar el puntero durante la reproducción"
-
-#, x-machine
-#~ msgid "When Playback Starts"
-#~ msgstr "Al iniciar la reproducción"

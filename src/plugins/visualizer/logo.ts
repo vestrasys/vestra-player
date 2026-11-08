@@ -58,7 +58,7 @@ export class Logo {
     this.#osd(UNREADABLE);
   }
 
-  /** Settings ▸ Appearance ▸ Choose Logo Image…; true when the logo changed. */
+  /** Appearance: Choose Logo Image… (command palette); true when the logo changed. */
   async choose(): Promise<boolean> {
     const picked = await this.#plugin.dialogs.openFile({ title: "Choose Logo Image" });
     if (!picked) return false;
@@ -97,7 +97,7 @@ export class Logo {
     return true;
   }
 
-  /** Reset ▸ Idle Logo. */
+  /** Reset: Idle Logo (command palette). */
   async reset() {
     const name = this.#settings.value.idle.logo;
     this.image = null;

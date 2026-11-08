@@ -15,7 +15,7 @@
   "name": "Playback History",
   "author": "Vestra Player",
   "punchline": "Recently played items, and resuming where you left off",
-  "description": "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped.",
+  "description": "Open ▸ Recently Played lists the files and links opened recently. Resume Playback, in the command palette, offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped.",
   "tags": [
     "playback",
     "history",

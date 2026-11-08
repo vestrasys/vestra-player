@@ -344,7 +344,3 @@ msgstr "마우스 포인터"
 #, x-machine
 msgid "Hide the pointer while playing"
 msgstr "재생 중 포인터 숨기기"
-
-#, x-machine
-#~ msgid "When Playback Starts"
-#~ msgstr "재생 시작 시"

@@ -11,8 +11,8 @@ import { MousePage } from "./mouse-page.ts";
 export type Osd = (shown: Promise<unknown>) => void;
 
 /**
- * Shortcut Settings: Settings ▸ Keyboard Shortcuts… (J01), Mouse… (J02) and Ignore
- * Default Shortcuts (J03). Keyboard Shortcuts… and Mouse… open the options
+ * Shortcut Settings: Keyboard Shortcuts… (J01), Mouse… (J02) and Ignore Default
+ * Shortcuts (J03), in the command palette ("Settings: …"). Keyboard Shortcuts… and Mouse… open the options
  * window on this plugin's pages (hotkeys.keyboard, hotkeys.mouse; category
  * Keys and Mouse). Talks only to the player's binding table (`plugin.bindings`);
  * never to other plugins. Their commands appear and go as they load and stop.

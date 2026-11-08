@@ -110,7 +110,7 @@ component Row inherits Rectangle {
         width: 100%;
         height: 100%;
         text: root.item.state == 2 ? Words.conflicts(root.item.conflicts)
-            : root.item.state == 3 ? @tr("Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)")
+            : root.item.state == 3 ? @tr("Default shortcuts are ignored (see the switch on this page)")
             : root.item.state == 4 ? @tr("The plugin is not loaded; this change works again when it is back") : "";
         TouchArea {
             width: 100%;

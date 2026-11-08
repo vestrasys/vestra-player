@@ -18,8 +18,8 @@ msgstr "最近再生した項目と、続きからの再生"
 
 #: manifest.json
 #, x-machine
-msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
-msgstr "「開く ▸ 最近再生した項目」に最近開いたファイルとリンクが表示されます。「再生 ▸ 再生位置の記憶」では「続きから再生しない」「自動的に続きから再生」「毎回確認する」を選べます。次に同じファイルを開いたとき、停止した位置から再生を続けます。"
+msgid "Open ▸ Recently Played lists the files and links opened recently. Resume Playback, in the command palette, offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr "「開く ▸ 最近再生した項目」に最近開いたファイルとリンクが表示されます。コマンドパレットの「再生位置の記憶」では「続きから再生しない」「自動的に続きから再生」「毎回確認する」を選べます。次に同じファイルを開いたとき、停止した位置から再生を続けます。"
 
 #: manifest.json
 #, x-machine

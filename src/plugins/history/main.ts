@@ -4,7 +4,7 @@ import { Recent } from "./recent.ts";
 import { Resume } from "./resume.ts";
 
 /**
- * Playback History: Open ▸ Recently Played (A12) and Playback ▸ Resume Playback (B25). Sources are
+ * Playback History: Open ▸ Recently Played (A12) and Resume Playback (B25, command palette only). Sources are
  * seen only through `player.state`, whoever opened them; reopening uses
  * `player.open`. Data lives in `plugin.storage` files (recent.json,
  * positions.json), written after each change and on deactivation.

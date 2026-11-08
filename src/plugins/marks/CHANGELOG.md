@@ -3,6 +3,7 @@
 ## 0.1.7
 
 - Menu sweep (menu redesign §4): Chapter and Bookmark List… (H) moves from Playback ▸ Chapters and Bookmarks ▸ to the top level, right after Playlist (order 801, windows group). Everything else of Chapters and Bookmarks ▸ (Add Bookmark, the previous/next steps, the chapter and bookmark lines, the "More…" lines, Show Marks on Seek Bar) and the whole A-B Loop ▸ with Loop Count ▸ leave the menu and are in the command palette only, with their ids, keys, radio and checked states and categories unchanged (the list window shows the chapters and bookmarks). Who must change: nobody.
+- The description names Chapter and Bookmark List… (H) in the menu and the command palette for the rest, in all six languages.
 
 - Every command has a command palette category (SDK 1.6.4 `category`), so the player's palette (Ctrl+Shift+P) names it "Category: Title": "Chapters and Bookmarks" for the list, Add Bookmark, the previous/next steps, each chapter and bookmark line, the "More…" lines and Show Marks on Seek Bar; "A-B Loop" for the A-B points, nudges, range moves, Loop Current Chapter or Bookmark Range and A-B Loop On/Off; "Loop Count" for the six counts. The categories are the submenu names, so every language reads them as the menu does.
 - Add Bookmark and each chapter and bookmark line name Chapter and Bookmark List… as their `home`: the window lists them and has an Add Bookmark button.

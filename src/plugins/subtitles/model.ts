@@ -12,7 +12,7 @@ export const DEFAULT_SYNC_STEP = 500;
 export const SYNC_LIMIT = 600000;
 
 /**
- * The Subtitles ▸ Sync menu titles of each step (the step is in the title,
+ * The Subtitle Sync: Earlier / Later titles of each step, command palette (the step is in the title,
  * so each is a whole text); same order as `SYNC_STEPS`.
  */
 export const SYNC_MENU = [

@@ -344,7 +344,3 @@ msgstr "マウスポインタ"
 #, x-machine
 msgid "Hide the pointer while playing"
 msgstr "再生中はポインタを隠す"
-
-#, x-machine
-#~ msgid "When Playback Starts"
-#~ msgstr "再生開始時"

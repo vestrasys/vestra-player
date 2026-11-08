@@ -88,8 +88,8 @@ msgstr "Standard-Tastenkürzel ignorieren?"
 
 #: ignore.ts:50
 #, x-machine
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "Nur die Tasten, die Sie unter „Tastenkürzel“ geändert haben, funktionieren; Standardtasten wie Leertaste und Pfeiltasten funktionieren nicht mehr. „Beenden“ (⌘Q) und „Vollbild umschalten“ (Esc) sind nicht betroffen. Sie können dies jederzeit unter „Einstellungen ▸ Standard-Tastenkürzel ignorieren“ ausschalten."
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette."
+msgstr "Nur die Tasten, die Sie unter „Tastenkürzel“ geändert haben, funktionieren; Standardtasten wie Leertaste und Pfeiltasten funktionieren nicht mehr. „Beenden“ (⌘Q) und „Vollbild umschalten“ (Esc) sind nicht betroffen. Sie können dies jederzeit mit dem Schalter auf der Seite „Tastenkürzel“ oder in der Befehlspalette ausschalten."
 
 #: ignore.ts:51
 #, x-machine
@@ -207,10 +207,10 @@ msgstr "Tastenkürzel und Mausaktionen anzeigen und neu belegen"
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
 msgstr ""
 "Listet die Befehle des Players und aller Plugins in der Kategorie „Tastatur und Maus“ des Optionsfensters auf: Suche nach Befehl oder Taste, neu belegen, Belegung entfernen, Standardwerte wiederherstellen, Konflikte prüfen und die Liste exportieren. Weist Mausklicks und dem Mausrad auf dem Video Befehle zu und kann alle Standard-Tastenkürzel auf einmal ignorieren.\n"
-"Aufruf über das Kontextmenü: Einstellungen ▸ Tastenkürzel… / Maus… / Standard-Tastenkürzel ignorieren."
+"Aufruf über das Optionsfenster (Optionen…, F5) oder die Befehlspalette: Einstellungen: Tastenkürzel… / Maus… / Standard-Tastenkürzel ignorieren."
 
 #: manifest.json
 #, x-machine
@@ -309,8 +309,8 @@ msgstr "Mausaktion geändert: {} = (keine)"
 
 #: ui/keys.slint:113
 #, x-machine
-msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
-msgstr "Standard-Tastenkürzel werden ignoriert (Einstellungen ▸ Standard-Tastenkürzel ignorieren)"
+msgid "Default shortcuts are ignored (see the switch on this page)"
+msgstr "Standard-Tastenkürzel werden ignoriert (siehe Schalter auf dieser Seite)"
 
 #: ui/keys.slint:114
 #, x-machine

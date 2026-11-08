@@ -3,6 +3,7 @@
 ## 0.1.12
 
 - Menu sweep (menu redesign §4): Settings ▸ Keyboard Shortcuts…, Mouse… and Ignore Default Shortcuts leave the right-click menu and are in the command palette only ("Settings: …"), with ids, orders and the checked state unchanged; the options window's Keys and Mouse pages are unchanged. Who must change: nobody.
+- Texts follow the sweep: the Ignore Default Shortcuts question and the ignored row's tooltip point at the switch on the Keyboard Shortcuts page and the command palette; the description names the options window and the palette as the entry points. Translated in all six languages.
 
 - Keyboard Shortcuts: the search box matches a command's menu path and category again, not only its shown name, so "Video" finds Video ▸ Snapshot ▸ Save Current Frame although the row reads "Snapshot: Save Current Frame". The display is unchanged.
 - Keyboard Shortcuts: a command that works only while its plugin's panel has focus (`focus: "panel"`) says so in its row, "{} (in panel)" as the edit area below already does, so a panel command and the menu item it mirrors no longer show as an identical pair ("Playlist: Add Files…" and "Playlist: Add Files… (in panel)"). New text, translated in all six languages and marked `x-machine`. Export List… is unchanged: it has its own Scope column. Who must change: nobody.

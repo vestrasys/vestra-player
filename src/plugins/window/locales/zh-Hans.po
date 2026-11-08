@@ -281,6 +281,3 @@ msgstr "鼠标指针"
 #: ui/page.slint:73
 msgid "Hide the pointer while playing"
 msgstr "播放时隐藏鼠标指针"
-
-#~ msgid "When Playback Starts"
-#~ msgstr "开始播放时"

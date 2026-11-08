@@ -344,7 +344,3 @@ msgstr "Mauszeiger"
 #, x-machine
 msgid "Hide the pointer while playing"
 msgstr "Mauszeiger während der Wiedergabe ausblenden"
-
-#, x-machine
-#~ msgid "When Playback Starts"
-#~ msgstr "Bei Wiedergabestart"

@@ -10,9 +10,10 @@ import { addSeekbarCommand, SeekbarMarks } from "./seekbar.ts";
 import { Settings } from "./store.ts";
 
 /**
- * Chapters, Bookmarks and A-B Loop: Playback ▸ Chapters and Bookmarks (B21:
+ * Chapters, Bookmarks and A-B Loop: Chapter and Bookmark List… in the menu and
+ * the other Chapters and Bookmarks commands in the command palette (B21:
  * chapters from `player.chapters()`, bookmarks per file in bookmarks.json,
- * the Chapters and Bookmarks window) and Playback ▸ A-B Loop (B23:
+ * the Chapters and Bookmarks window) and A-B Loop, command palette only (B23:
  * `player.setLoop`, the count in marks.json) and
  * the seek-bar marks (B22: this plugin's `timeline` layer, the switch in
  * marks.json).

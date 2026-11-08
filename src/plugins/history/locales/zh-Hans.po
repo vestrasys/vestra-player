@@ -14,8 +14,8 @@ msgid "Recently played items, and resuming where you left off"
 msgstr "最近播放记录，记忆并继续上次的播放位置"
 
 #: manifest.json
-msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
-msgstr "在「打开 ▸ 最近播放」列出最近打开的文件和链接；在「播放 ▸ 记忆播放位置」中选择不记忆、自动继续或每次询问，下次打开同一文件时从上次停下的地方继续。"
+msgid "Open ▸ Recently Played lists the files and links opened recently. Resume Playback, in the command palette, offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr "在「打开 ▸ 最近播放」列出最近打开的文件和链接；在命令面板的「记忆播放位置」中选择不记忆、自动继续或每次询问，下次打开同一文件时从上次停下的地方继续。"
 
 #: manifest.json
 msgid "playback"

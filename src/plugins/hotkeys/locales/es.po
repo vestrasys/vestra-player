@@ -88,8 +88,8 @@ msgstr "¿Ignorar los atajos predeterminados?"
 
 #: ignore.ts:50
 #, x-machine
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "Solo funcionarán las teclas que cambiaste en Atajos de teclado; las teclas predeterminadas, como Espacio y las flechas, dejan de funcionar. Salir (⌘Q) y Activar/desactivar pantalla completa (Esc) no se ven afectados. Puedes desactivarlo en cualquier momento en Configuración ▸ Ignorar atajos predeterminados."
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette."
+msgstr "Solo funcionarán las teclas que cambiaste en Atajos de teclado; las teclas predeterminadas, como Espacio y las flechas, dejan de funcionar. Salir (⌘Q) y Activar/desactivar pantalla completa (Esc) no se ven afectados. Puedes desactivarlo en cualquier momento con el interruptor de la página Atajos de teclado o en la paleta de comandos."
 
 #: ignore.ts:51
 #, x-machine
@@ -207,10 +207,10 @@ msgstr "Consulta y reasigna atajos de teclado y acciones del mouse"
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
 msgstr ""
 "Muestra los comandos del reproductor y de cada complemento en la categoría Teclas y mouse de la ventana de opciones: busca por comando o tecla, reasigna, quita asignaciones, restaura los predeterminados, revisa conflictos y exporta la lista. Asigna comandos a los clics y la rueda del mouse sobre el video, y puede ignorar todos los atajos predeterminados a la vez.\n"
-"Ábrelo desde el menú contextual: Configuración ▸ Atajos de teclado… / Mouse… / Ignorar atajos predeterminados."
+"Ábrelo desde la ventana de opciones (Opciones…, F5) o la paleta de comandos: Configuración: Atajos de teclado… / Mouse… / Ignorar atajos predeterminados."
 
 #: manifest.json
 #, x-machine
@@ -309,8 +309,8 @@ msgstr "Acción del mouse actualizada: {} = (ninguna)"
 
 #: ui/keys.slint:113
 #, x-machine
-msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
-msgstr "Se ignoran los atajos predeterminados (Configuración ▸ Ignorar atajos predeterminados)"
+msgid "Default shortcuts are ignored (see the switch on this page)"
+msgstr "Se ignoran los atajos predeterminados (ver el interruptor de esta página)"
 
 #: ui/keys.slint:114
 #, x-machine

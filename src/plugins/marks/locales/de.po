@@ -50,10 +50,10 @@ msgstr "Nach Kapiteln und Lesezeichen springen; einen A-B-Bereich wiederholen"
 #, x-machine
 msgid ""
 "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
-"Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
+"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\" and \"A-B Loop\"."
 msgstr ""
 "Listet die Kapitel des Mediums auf; fügt für jede Datei Lesezeichen hinzu, benennt und verwaltet sie; springt zwischen Kapiteln und Lesezeichen und zeigt sie als Markierungen auf der Zeitleiste; legt einen A-B-Bereich fest und wiederholt ihn beliebig oft.\n"
-"Zu finden im Kontextmenü unter „Wiedergabe ▸ Kapitel und Lesezeichen“ und „Wiedergabe ▸ A-B-Wiederholung“."
+"Zu finden im Kontextmenü unter „Kapitel- und Lesezeichenliste…“ (H); die übrigen Befehle stehen in der Befehlspalette unter „Kapitel und Lesezeichen“ und „A-B-Wiederholung“."
 
 #: manifest.json
 #, x-machine

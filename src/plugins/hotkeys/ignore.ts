@@ -47,7 +47,7 @@ export class IgnoreDefaults {
     const answer = await this.#plugin.dialogs.confirm({
       message: "Ignore default shortcuts?",
       detail:
-        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts.",
+        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette.",
       confirm: "Ignore",
     });
     if (answer.confirmed) await this.set(true);
