@@ -203,6 +203,10 @@ test("settings parse leniently; an unknown version starts from the defaults", ()
   assert.equal(parsed.advanced, true);
   assert.equal("tab" in parsed, false, "the old window page is not read");
   assert.equal(parse({ version: 1, advanced: "yes" }).advanced, false);
+  // Migration from 1.1.12: the old window left on its Advanced page opens the Advanced section.
+  assert.equal(parse({ version: 1, tab: 3 }).advanced, true);
+  assert.equal(parse({ version: 1, tab: 2 }).advanced, false);
+  assert.equal(parse({ version: 1, tab: 3, advanced: false }).advanced, false, "a saved choice wins");
   assert.equal(parse({ version: 2, picture: { brightness: 40 }, advanced: true }).picture.brightness, 0);
   const written = serialize({ ...base, geometry: { flipH: true, flipV: true, rotate: 90 } }, true);
   assert.equal(written.version, 1);

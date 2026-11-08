@@ -435,8 +435,10 @@ export function parse(raw: unknown): Stored {
   };
   // 倍帧 and 运动补偿 exclude each other; a file with both keeps 倍帧.
   if (effects.frameBlend) render.interpolation = false;
-  // `tab` (the page of the old Picture Adjustments window, up to 1.1.12) is no longer read.
-  return { picture, effects, deinterlace, reframe, display, render, advanced: value.advanced === true };
+  // Settings from before 1.1.13 have no `advanced` but the old window's page (`tab`): one left on
+  // its Advanced page (3) opens the panel's Advanced section; the other pages are not read.
+  const advanced = typeof value.advanced === "boolean" ? value.advanced : value.tab === 3;
+  return { picture, effects, deinterlace, reframe, display, render, advanced };
 }
 
 const stored = (look: Look): Omit<Stored, "advanced"> => ({

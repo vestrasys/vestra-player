@@ -288,43 +288,44 @@ component Switch {
     }
 }
 
-// A segmented choice: equal parts, the current one lit; labels elide.
-component Segments {
-    in property <[string]> model;
-    in property <int> current-index;
-    in property <bool> enabled: true;
-    callback selected(int);
+// A segmented choice: a bar of equal parts (`Segment`, written out at each use), the current one lit.
+component SegmentBar inherits Rectangle {
     min-height: 22px;
     horizontal-stretch: 1;
-    Rectangle {
-        border-radius: Theme.radius-control;
-        background: Theme.bg-bar;
-        HorizontalLayout {
-            padding: 1px;
-            spacing: 1px;
-            for name[index] in root.model: Rectangle {
-                horizontal-stretch: 1;
-                min-width: 20px;
-                border-radius: Theme.radius-control;
-                background: index == root.current-index ? (root.enabled ? Theme.selected-bg : Theme.button-disabled)
-                    : touch.has-hover && root.enabled ? Theme.hover-bg : transparent;
-                Text {
-                    x: 3px;
-                    width: parent.width - 6px;
-                    height: parent.height;
-                    text: name;
-                    color: !root.enabled ? Theme.text-dim : index == root.current-index ? Theme.text : Theme.text-list;
-                    font-size: Theme.font-body;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-                touch := TouchArea {
-                    enabled: root.enabled;
-                    clicked => { root.selected(index); }
-                }
-            }
-        }
+    border-radius: Theme.radius-control;
+    background: Theme.bg-bar;
+    HorizontalLayout {
+        padding: 1px;
+        spacing: 1px;
+        @children
+    }
+}
+
+// One part of a SegmentBar; its label elides.
+component Segment inherits Rectangle {
+    in property <string> text;
+    in property <bool> selected;
+    in property <bool> enabled: true;
+    callback clicked();
+    horizontal-stretch: 1;
+    min-width: 20px;
+    border-radius: Theme.radius-control;
+    background: root.selected ? (root.enabled ? Theme.selected-bg : Theme.button-disabled)
+        : touch.has-hover && root.enabled ? Theme.hover-bg : transparent;
+    Text {
+        x: 3px;
+        width: parent.width - 6px;
+        height: parent.height;
+        text: root.text;
+        color: !root.enabled ? Theme.text-dim : root.selected ? Theme.text : Theme.text-list;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        clicked => { root.clicked(); }
     }
 }
 
@@ -406,7 +407,41 @@ component ColourRow {
     }
 }
 
-// Effect row: switch with its label, the strength (greyed while off), the key.
+// Effect row: switch with its label, the strength (greyed while off), the key. No tooltip:
+// `EffectRow` adds one where the row has something to explain.
+component EffectLine {
+    in property <string> label;
+    in property <string> key;
+    in property <bool> checked;
+    in-out property <float> value;
+    in property <float> maximum: 100;
+    callback toggled(bool);
+    callback edited(float);
+    callback committed(float);
+    callback reset();
+    height: Layout.row;
+    HorizontalLayout {
+        spacing: 6px;
+        Switch {
+            horizontal-stretch: 0;
+            width: Layout.column;
+            text: root.label;
+            checked: root.checked;
+            toggled(on) => { root.toggled(on); }
+        }
+        Fader {
+            maximum: root.maximum;
+            enabled: root.checked;
+            value <=> root.value;
+            edited(v) => { root.edited(v); }
+            committed(v) => { root.committed(v); }
+            reset => { root.reset(); }
+        }
+        Cap { text: root.key; }
+    }
+}
+
+// An effect row whose tooltip explains it (with its key and the double-click).
 component EffectRow {
     in property <string> label;
     in property <string> tip;
@@ -422,32 +457,42 @@ component EffectRow {
     ToolTipArea {
         width: 100%;
         height: 100%;
-        text: root.tip != "" ? root.tip : root.label;
+        text: root.tip;
         keys: [{ key: root.key, text: "" }];
         detail: @tr("· double-click: Default");
-        HorizontalLayout {
-            spacing: 6px;
-            Switch {
-                horizontal-stretch: 0;
-                width: Layout.column;
-                text: root.label;
-                checked: root.checked;
-                toggled(on) => { root.toggled(on); }
-            }
-            Fader {
-                maximum: root.maximum;
-                enabled: root.checked;
-                value <=> root.value;
-                edited(v) => { root.edited(v); }
-                committed(v) => { root.committed(v); }
-                reset => { root.reset(); }
-            }
-            Cap { text: root.key; }
+        EffectLine {
+            label: root.label;
+            key: root.key;
+            checked: root.checked;
+            maximum: root.maximum;
+            value <=> root.value;
+            toggled(on) => { root.toggled(on); }
+            edited(v) => { root.edited(v); }
+            committed(v) => { root.committed(v); }
+            reset => { root.reset(); }
         }
     }
 }
 
-// A row: label, control(s), key cap; the tooltip names the row and its key.
+// A row: label, control(s), key cap; no tooltip (`Row` adds one where the row has something to say).
+component Line {
+    in property <string> label;
+    in property <string> key;
+    in property <bool> enabled: true;
+    height: Layout.row;
+    HorizontalLayout {
+        spacing: 6px;
+        Name { text: root.label; enabled: root.enabled; }
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            spacing: 4px;
+            @children
+        }
+        Cap { text: root.key; }
+    }
+}
+
+// A Line whose tooltip names or explains the row, with its key.
 component Row {
     in property <string> label;
     in property <string> tip;
@@ -461,15 +506,11 @@ component Row {
         text: root.tip != "" ? root.tip : root.label;
         keys: [{ key: root.key, text: "" }];
         detail: root.detail;
-        HorizontalLayout {
-            spacing: 6px;
-            Name { text: root.label; enabled: root.enabled; }
-            HorizontalLayout {
-                horizontal-stretch: 1;
-                spacing: 4px;
-                @children
-            }
-            Cap { text: root.key; }
+        Line {
+            label: root.label;
+            key: root.key;
+            enabled: root.enabled;
+            @children
         }
     }
 }
@@ -521,10 +562,11 @@ export component Picture inherits Rectangle {
             padding-right: 10px;
             padding-top: 8px;
             padding-bottom: 4px;
-            Segments {
-                model: [@tr("Colour"), @tr("Effects"), @tr("Geometry"), @tr("Advanced")];
-                current-index: root.section;
-                selected(index) => { root.jump(index); }
+            SegmentBar {
+                Segment { text: @tr("Colour"); selected: root.section == 0; clicked => { root.jump(0); } }
+                Segment { text: @tr("Effects"); selected: root.section == 1; clicked => { root.jump(1); } }
+                Segment { text: @tr("Geometry"); selected: root.section == 2; clicked => { root.jump(2); } }
+                Segment { text: @tr("Advanced"); selected: root.section == 3; clicked => { root.jump(3); } }
             }
         }
 
@@ -590,19 +632,16 @@ export component Picture inherits Rectangle {
                 HorizontalLayout {
                     spacing: 3px;
                     padding-top: 2px;
-                    for preset in [{ id: "original", name: @tr("Original") }, { id: "vivid", name: @tr("Vivid") },
-                            { id: "cinema", name: @tr("Cinema") }, { id: "soft", name: @tr("Soft") }]: Button {
-                        // Four equal buttons that fit the narrowest column (the library default is 66 px).
-                        horizontal-stretch: 1;
-                        min-width: 20px;
-                        text: preset.name;
-                        clicked => { PictureBridge.preset(preset.id); }
-                    }
+                    // Four equal buttons that fit the narrowest column (the library default is 66 px).
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Original"); clicked => { PictureBridge.preset("original"); } }
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Vivid"); clicked => { PictureBridge.preset("vivid"); } }
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Cinema"); clicked => { PictureBridge.preset("cinema"); } }
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Soft"); clicked => { PictureBridge.preset("soft"); } }
                 }
 
                 // ---------------------------------------------------------------- Effects
                 effects-head := Head { text: @tr("Effects"); }
-                EffectRow {
+                EffectLine {
                     label: @tr("Sharpen");
                     key: root.keys.sharpen;
                     checked: PictureBridge.sharpen-enabled;
@@ -646,7 +685,7 @@ export component Picture inherits Rectangle {
                     committed(v) => { PictureBridge.commit("deblock", v); }
                     reset => { PictureBridge.reset-field("deblock"); }
                 }
-                EffectRow {
+                EffectLine {
                     label: @tr("Deband");
                     key: root.keys.deband;
                     checked: PictureBridge.deband-enabled;
@@ -657,7 +696,7 @@ export component Picture inherits Rectangle {
                     reset => { PictureBridge.reset-field("deband"); }
                 }
                 // Denoise: the switch and strength of the mode shown below it (each mode keeps its own).
-                EffectRow {
+                EffectLine {
                     label: @tr("Denoise");
                     key: root.keys.denoise;
                     checked: PictureBridge.denoise-enabled;
@@ -672,10 +711,10 @@ export component Picture inherits Rectangle {
                     height: Layout.row;
                     VerticalLayout {
                         alignment: center;
-                        Segments {
-                            model: [@tr("3D"), @tr("Gradual"), @tr("Temporal")];
-                            current-index: PictureBridge.denoise-index;
-                            selected(index) => { PictureBridge.choose("denoiseMode", index); }
+                        SegmentBar {
+                            Segment { text: @tr("3D"); selected: PictureBridge.denoise-index == 0; clicked => { PictureBridge.choose("denoiseMode", 0); } }
+                            Segment { text: @tr("Gradual"); selected: PictureBridge.denoise-index == 1; clicked => { PictureBridge.choose("denoiseMode", 1); } }
+                            Segment { text: @tr("Temporal"); selected: PictureBridge.denoise-index == 2; clicked => { PictureBridge.choose("denoiseMode", 2); } }
                         }
                     }
                 }
@@ -725,10 +764,10 @@ export component Picture inherits Rectangle {
                     tip: PictureBridge.fit-index == 1 ? @tr("Ignore Aspect Ratio") : PictureBridge.fit-index == 2 ? @tr("Fill Window") : @tr("Keep Aspect Ratio");
                     VerticalLayout {
                         alignment: center;
-                        Segments {
-                            model: [@tr("Keep"), @tr("Stretch"), @tr("Fill")];
-                            current-index: PictureBridge.fit-index;
-                            selected(index) => { PictureBridge.choose("fit", index); }
+                        SegmentBar {
+                            Segment { text: @tr("Keep"); selected: PictureBridge.fit-index == 0; clicked => { PictureBridge.choose("fit", 0); } }
+                            Segment { text: @tr("Stretch"); selected: PictureBridge.fit-index == 1; clicked => { PictureBridge.choose("fit", 1); } }
+                            Segment { text: @tr("Fill"); selected: PictureBridge.fit-index == 2; clicked => { PictureBridge.choose("fit", 2); } }
                         }
                     }
                 }
@@ -790,19 +829,20 @@ export component Picture inherits Rectangle {
                     Glyph { glyph: Glyphs.right; tip: @tr("Move Right"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.right"); } }
                     Glyph { glyph: Glyphs.reset; tip: @tr("Reset Crop Position"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.reset"); } }
                 }
-                Row {
+                Line {
                     label: @tr("Rotate");
                     key: root.keys.rotate;
                     VerticalLayout {
                         alignment: center;
-                        Segments {
-                            model: ["0°", "90°", "180°", "270°"];
-                            current-index: PictureBridge.rotate-index;
-                            selected(index) => { PictureBridge.choose("rotate", index); }
+                        SegmentBar {
+                            Segment { text: "0°"; selected: PictureBridge.rotate-index == 0; clicked => { PictureBridge.choose("rotate", 0); } }
+                            Segment { text: "90°"; selected: PictureBridge.rotate-index == 1; clicked => { PictureBridge.choose("rotate", 1); } }
+                            Segment { text: "180°"; selected: PictureBridge.rotate-index == 2; clicked => { PictureBridge.choose("rotate", 2); } }
+                            Segment { text: "270°"; selected: PictureBridge.rotate-index == 3; clicked => { PictureBridge.choose("rotate", 3); } }
                         }
                     }
                 }
-                Row {
+                Line {
                     label: @tr("Flip");
                     Glyph {
                         glyph: Glyphs.flipv;
@@ -820,7 +860,7 @@ export component Picture inherits Rectangle {
                     }
                     Rectangle { horizontal-stretch: 1; }
                 }
-                Row {
+                Line {
                     label: @tr("Zoom");
                     Glyph { glyph: Glyphs.minus; tip: @tr("Zoom Out"); key: root.keys.zoomout; clicked => { PictureBridge.run("video.frame.zoom-out"); } }
                     Text {
@@ -881,7 +921,7 @@ export component Picture inherits Rectangle {
                 }
                 if PictureBridge.advanced-open: VerticalLayout {
                     spacing: 4px;
-                    Row {
+                    Line {
                         label: @tr("Deinterlace");
                         key: root.keys.deinterlace;
                         VerticalLayout {
