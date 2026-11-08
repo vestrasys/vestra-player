@@ -222,10 +222,10 @@ When the format is invalid (unknown key name, wrong modifier order, symbol key w
 | Scope | When it applies | Implementation |
 | --- | --- | --- |
 | Global (default) | The main window or a floating panel window has focus, and the key was not consumed by the focused control (typing in an input box, arrow keys that a list handles itself, etc.) | The outermost `keys := FocusScope` in `host.slint` receives keys that bubble up. In Slint 1.16 keys go first to the focused control, and those not accepted are passed up level by level to the parent FocusScopes (`i-slint-core` `window.rs` `process_key_input`), so space and arrow keys in an input box do not fire bindings |
-| `focus: "panel"` | While focus is inside that plugin's panel, looked up **before** global | The host wraps a FocusScope around the panel (`focus-on-click` is true by default, so clicking empty space in the panel gives it focus); keys not accepted inside the panel are first looked up here in the "panel P" scope, and if none is found they bubble up to global |
+| `focus: "panel"` | While focus is inside that plugin's panel, looked up **before** global | The host wraps a FocusScope around the panel; keys not accepted inside the panel are first looked up here in the "panel P" scope, and if none is found they bubble up to global. Since the user ruling of 2026-11-08 the main window's panel scopes are `focus-on-click: false`: a click on empty space in a panel leaves the keys with the video, so this scope applies while a control of the panel (a list, a field) has the focus; the panel gives it back with `VestraFocus.release()` (`@vestra/focus.slint`, [architecture README](README.md) "Focus") |
 
 - Tool windows (plugin `windows.create`) do not fire any bindings, same as today; tool-window-scoped bindings are not done this round (§18 Q5).
-- Compared with today, global bindings also apply when focus is on empty space in the sidebar or bottom bar (today only when the video has focus). All places where shortcuts worked before still work.
+- Compared with today, global bindings also apply when focus is in the sidebar or bottom bar and the focused control does not take the key (today only when the video has focus). All places where shortcuts worked before still work.
 
 ### 3.4 Host data structures
 

@@ -3,7 +3,7 @@
  * The SDK package (@vestra-player/sdk, repository vestra-player-sdk) carries
  * a read-only copy of the player's Slint library (`@vestra/theme.slint`,
  * `@vestra/widgets.slint`, `@vestra/markdown.slint`, `@vestra/icons.slint`,
- * `@vestra/bar-buttons.slint` and the palette
+ * `@vestra/bar-buttons.slint`, `@vestra/focus.slint` and the palette
  * they import) for plugin authors' IDEs. The player's host/ui/ is the source of the content; the copy lives in
  * the SDK repository's slint/ and ships in its releases.
  *
@@ -32,6 +32,7 @@ const SLINT_FILES = [
   "vestra/markdown.slint",
   "vestra/icons.slint",
   "vestra/bar-buttons.slint",
+  "vestra/focus.slint",
 ];
 const from = join(source, "host/ui");
 

@@ -1,0 +1,33 @@
+// A sidebar panel whose list takes the keys on a click (a FocusScope's
+// default) and gives them back to the video with `VestraFocus.release()`
+// on Enter (the row played) and Esc; below the list the panel is empty.
+import { VestraFocus } from "@vestra/focus.slint";
+
+export global Bridge {
+    in-out property <int> played;
+}
+
+export component FocusList inherits Rectangle {
+    background: #283746;
+    FocusScope {
+        x: 0px;
+        y: 0px;
+        width: parent.width;
+        height: 100px;
+        key-pressed(event) => {
+            if event.text == Key.Return {
+                Bridge.played += 1;
+                VestraFocus.release();
+                return accept;
+            }
+            if event.text == Key.Escape {
+                VestraFocus.release();
+                return accept;
+            }
+            if event.text == Key.DownArrow {
+                return accept;
+            }
+            reject
+        }
+    }
+}

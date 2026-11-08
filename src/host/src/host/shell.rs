@@ -137,6 +137,7 @@ impl Host {
         self.bind_menu(window, generation, true)?;
         self.bind_palette(window, generation)?;
         self.bind_keys(window, generation)?;
+        view::bind_focus(window)?;
         let input = self.input.clone();
         let events = self.events.clone();
         window.set_callback("mouse-input", move |args| {
