@@ -984,10 +984,27 @@ test("Playback… (Alt+4) toggles the adjust column at the Playback panel; the k
     return [keys.jump !== "G" && keys.jump !== "", keys.start];
   }, [true, ""]);
   // A text field with the keyboard keeps the fullscreen column out.
-  panel.emit("focusChanged", true);
-  await eventually(() => (panel.locks as { focused?: boolean } | null)?.focused, true);
-  panel.emit("focusChanged", false);
-  await eventually(() => (panel.locks as { focused?: boolean } | null)?.focused, false);
+  const focused = () => (panel.locks as { focused?: boolean } | null)?.focused;
+  panel.emit("focusChanged", "jump", true);
+  await eventually(focused, true);
+  panel.emit("focusChanged", "jump", false);
+  await eventually(focused, false);
+  // Focus moving from field to field: the next field's focus may arrive before the last one's
+  // blur. The panel keeps the keyboard until no field has it.
+  panel.emit("focusChanged", "rate", true);
+  panel.emit("focusChanged", "step2", true);
+  panel.emit("focusChanged", "rate", false);
+  await host.settle();
+  assert.equal(focused(), true);
+  panel.emit("focusChanged", "step2", false);
+  panel.emit("focusChanged", "step2", false); // a repeated blur changes nothing
+  await eventually(focused, false);
+  // A blur only drops its own field's mark.
+  panel.emit("applyJump", "9:99");
+  panel.emit("applyRate", "9");
+  await eventually(() => [panel.props["jump-invalid"], panel.props["rate-invalid"]], [true, true]);
+  panel.emit("focusChanged", "rate", false);
+  await eventually(() => [panel.props["jump-invalid"], panel.props["rate-invalid"]], [true, false]);
   await stop();
 });
 

@@ -56,12 +56,12 @@ msgstr "Ordnerpfad"
 msgid "Full Path"
 msgstr "Vollständiger Pfad"
 
-#: commands.ts:272 ui/panel.slint:678
+#: commands.ts:272 ui/panel.slint:697
 #, x-machine
 msgid "Previous Keyframe"
 msgstr "Vorheriges Schlüsselbild"
 
-#: commands.ts:272 ui/panel.slint:685
+#: commands.ts:272 ui/panel.slint:704
 #, x-machine
 msgid "Next Keyframe"
 msgstr "Nächstes Schlüsselbild"
@@ -71,7 +71,7 @@ msgstr "Nächstes Schlüsselbild"
 msgid "Jump to Time…"
 msgstr "Zu Zeitpunkt springen…"
 
-#: commands.ts:272 ui/panel.slint:630 ui/panel.slint:633 ui/panel.slint:639
+#: commands.ts:272 ui/panel.slint:649 ui/panel.slint:652 ui/panel.slint:658
 #, x-machine
 msgid "Jump to Start"
 msgstr "Zum Anfang springen"
@@ -81,17 +81,17 @@ msgstr "Zum Anfang springen"
 msgid "Seek Steps…"
 msgstr "Sprungweiten…"
 
-#: commands.ts:272 ui/panel.slint:526 ui/panel.slint:529
+#: commands.ts:272 ui/panel.slint:545 ui/panel.slint:548
 #, x-machine
 msgid "0.5×"
 msgstr "0,5×"
 
-#: commands.ts:272 ui/panel.slint:555 ui/panel.slint:558
+#: commands.ts:272 ui/panel.slint:574 ui/panel.slint:577
 #, x-machine
 msgid "1.5×"
 msgstr "1,5×"
 
-#: commands.ts:272 ui/panel.slint:564 ui/panel.slint:567
+#: commands.ts:272 ui/panel.slint:583 ui/panel.slint:586
 #, x-machine
 msgid "2×"
 msgstr "2×"
@@ -126,17 +126,17 @@ msgstr "Datei"
 msgid "Seek"
 msgstr "Springen"
 
-#: commands.ts:273 ui/panel.slint:462 ui/panel.slint:480 ui/panel.slint:483
+#: commands.ts:273 ui/panel.slint:481 ui/panel.slint:499 ui/panel.slint:502
 #, x-machine
 msgid "Speed"
 msgstr "Geschwindigkeit"
 
-#: commands.ts:273 panel.ts:47
+#: commands.ts:273 panel.ts:49
 #, x-machine
 msgid "Playback"
 msgstr "Wiedergabe"
 
-#: commands.ts:283 ui/panel.slint:437
+#: commands.ts:283 ui/panel.slint:456
 #, x-machine
 msgid "Not supported by the current source"
 msgstr "Von der aktuellen Quelle nicht unterstützt"
@@ -156,7 +156,7 @@ msgstr "Keine Datei geöffnet"
 msgid "A network source has no file name"
 msgstr "Eine Netzwerkquelle hat keinen Dateinamen"
 
-#: commands.ts:283 ui/panel.slint:455
+#: commands.ts:283 ui/panel.slint:474
 #, x-machine
 msgid "No video"
 msgstr "Kein Video"
@@ -291,17 +291,17 @@ msgstr "Vorschaubild beim Überfahren der Zeitleiste: Aus"
 msgid "Source operation failed: {}"
 msgstr "Vorgang der Quelle fehlgeschlagen: {}"
 
-#: main.ts:29 ui/panel.slint:593
+#: main.ts:29 ui/panel.slint:612
 #, x-machine
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "Geben Sie eine Zeit innerhalb der Dauer der Quelle im Format HH:MM:SS.mmm ein"
 
-#: main.ts:29 ui/panel.slint:499
+#: main.ts:29 ui/panel.slint:518
 #, x-machine
 msgid "Speed must be between 0.25× and 4×"
 msgstr "Die Geschwindigkeit muss zwischen 0.25× und 4× liegen"
 
-#: main.ts:29 ui/panel.slint:416
+#: main.ts:29 ui/panel.slint:435
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "Bereich 0.1–3600 s, höchstens eine Nachkommastelle"
@@ -453,194 +453,129 @@ msgid "Not a valid link"
 msgstr "Kein gültiger Link"
 
 #. {} is a number of seconds ("30").
-#: ui/panel.slint:410
+#: ui/panel.slint:429
 #, x-machine
 msgid "{} s"
 msgstr "{} s"
 
-#: ui/panel.slint:416
+#: ui/panel.slint:435
 #, x-machine
 msgid "Seek step"
 msgstr "Sprungweite"
 
-#: ui/panel.slint:417
+#: ui/panel.slint:436
 #, x-machine
 msgid "click: type a value · double-click: Default"
 msgstr "Klick: Wert eingeben · Doppelklick: Standard"
 
-#: ui/panel.slint:462 ui/panel.slint:576
+#: ui/panel.slint:481 ui/panel.slint:595
 #, x-machine
 msgid "Go to"
 msgstr "Gehe zu"
 
-#: ui/panel.slint:462 ui/panel.slint:628
+#: ui/panel.slint:481 ui/panel.slint:647
 #, x-machine
 msgid "Start"
 msgstr "Anfang"
 
-#: ui/panel.slint:462 ui/panel.slint:648 ui/panel.slint:665
+#: ui/panel.slint:481 ui/panel.slint:667 ui/panel.slint:684
 #, x-machine
 msgid "Frame"
 msgstr "Bild"
 
-#: ui/panel.slint:462 ui/panel.slint:674 ui/panel.slint:691
+#: ui/panel.slint:481 ui/panel.slint:693 ui/panel.slint:710
 #, x-machine
 msgid "Keyframe"
 msgstr "Schlüsselbild"
 
-#: ui/panel.slint:487
+#: ui/panel.slint:506
 #, x-machine
 msgid "Slower 0.1"
 msgstr "Langsamer 0,1"
 
 #. {} is the playback speed ("1.25"); the × reads "times".
-#: ui/panel.slint:493
+#: ui/panel.slint:512
 #, x-machine
 msgid "{}×"
 msgstr "{}×"
 
-#: ui/panel.slint:499 ui/panel.slint:513
+#: ui/panel.slint:518 ui/panel.slint:532
 #, x-machine
 msgid "Playback speed"
 msgstr "Wiedergabegeschwindigkeit"
 
-#: ui/panel.slint:500
+#: ui/panel.slint:519
 #, x-machine
 msgid "click: type a value"
 msgstr "Klick: Wert eingeben"
 
-#: ui/panel.slint:507
+#: ui/panel.slint:526
 #, x-machine
 msgid "Faster 0.1"
 msgstr "Schneller 0,1"
 
-#: ui/panel.slint:535
+#: ui/panel.slint:554
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
-#: ui/panel.slint:539
+#: ui/panel.slint:558
 #, x-machine
 msgid "Normal"
 msgstr "Normal"
 
-#: ui/panel.slint:546 ui/panel.slint:549
+#: ui/panel.slint:565 ui/panel.slint:568
 #, x-machine
 msgid "1.25×"
 msgstr "1,25×"
 
-#: ui/panel.slint:573
+#: ui/panel.slint:592
 #, x-machine
 msgid "Jump"
 msgstr "Springen"
 
-#: ui/panel.slint:594 ui/panel.slint:618 ui/panel.slint:622
+#: ui/panel.slint:613 ui/panel.slint:637 ui/panel.slint:641
 #, x-machine
 msgid "Jump to Time"
 msgstr "Zu Zeitpunkt springen"
 
 #. the format of the time to jump to (hours, minutes, seconds).
-#: ui/panel.slint:608
+#: ui/panel.slint:627
 #, x-machine
 msgid "hh:mm:ss"
 msgstr "hh:mm:ss"
 
-#: ui/panel.slint:616
+#: ui/panel.slint:635
 #, x-machine
 msgid "Go"
 msgstr "Springen"
 
-#: ui/panel.slint:645
+#: ui/panel.slint:664
 #, x-machine
 msgid "Step"
 msgstr "Schritt"
 
-#: ui/panel.slint:652
+#: ui/panel.slint:671
 #, x-machine
 msgid "Previous Frame"
 msgstr "Vorheriges Bild"
 
-#: ui/panel.slint:659
+#: ui/panel.slint:678
 #, x-machine
 msgid "Next Frame"
 msgstr "Nächstes Bild"
 
-#: ui/panel.slint:700
+#: ui/panel.slint:719
 #, x-machine
 msgid "Seek steps"
 msgstr "Sprungweiten"
 
-#: ui/panel.slint:734
+#: ui/panel.slint:753
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "Nur zu Schlüsselbildern springen"
 
-#: ui/panel.slint:735
+#: ui/panel.slint:754
 #, x-machine
 msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr "Sprünge und Suchleiste landen auf Schlüsselbildern: schnell bei jeder Datei, bis zu einem Schlüsselbildabstand daneben"
-
-#, x-machine
-#~ msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
-#~ msgstr "Die Steuerleiste unten im Hauptfenster (Zeitleiste, Wiedergabetasten, Lautstärke); Datei öffnen, Link öffnen, letzte Datei erneut öffnen; mehrere Sprungweiten, Sprünge zu Schlüsselbildern, Sprung zu einem Zeitpunkt, feste und benutzerdefinierte Geschwindigkeiten; Zeit oder Vorschaubild beim Überfahren der Zeitleiste; kein Bildschirmschoner während der Wiedergabe."
-
-#, x-machine
-#~ msgid "The source changed; open this window again"
-#~ msgstr "Die Quelle hat sich geändert; öffnen Sie dieses Fenster erneut"
-
-#, x-machine
-#~ msgid "Custom Speed"
-#~ msgstr "Benutzerdefinierte Geschwindigkeit"
-
-#, x-machine
-#~ msgid "Speed (0.25–4×)"
-#~ msgstr "Geschwindigkeit (0.25–4×)"
-
-#, x-machine
-#~ msgid "Time (h:mm:ss.ms)"
-#~ msgstr "Zeit (h:mm:ss.ms)"
-
-#, x-machine
-#~ msgid "OK"
-#~ msgstr "OK"
-
-#. the unit after a number of seconds.
-#, x-machine
-#~ msgid "s"
-#~ msgstr "s"
-
-#, x-machine
-#~ msgid "Default"
-#~ msgstr "Standard"
-
-#, x-machine
-#~ msgid "Seek Steps"
-#~ msgstr "Sprungweiten"
-
-#, x-machine
-#~ msgid "Left/Right arrow keys:"
-#~ msgstr "Pfeil links/rechts:"
-
-#, x-machine
-#~ msgid "Ctrl + Left/Right arrow keys:"
-#~ msgstr "Ctrl + Pfeil links/rechts:"
-
-#, x-machine
-#~ msgid "Shift + Left/Right arrow keys:"
-#~ msgstr "Shift + Pfeil links/rechts:"
-
-#, x-machine
-#~ msgid "Ctrl + Alt + Left/Right arrow keys:"
-#~ msgstr "Ctrl + Alt + Pfeil links/rechts:"
-
-#, x-machine
-#~ msgid "Set how far each seek key moves during playback."
-#~ msgstr "Legen Sie fest, wie weit jede Sprungtaste während der Wiedergabe springt."
-
-#, x-machine
-#~ msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
-#~ msgstr "Gilt für die Pfeiltasten und die Fortschrittsleiste: Klicken oder Ziehen auf der Leiste springt zum Schlüsselbild an oder vor der Zeigerposition."
-
-#, x-machine
-#~ msgid "Cancel"
-#~ msgstr "Abbrechen"

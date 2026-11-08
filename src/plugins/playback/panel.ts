@@ -37,6 +37,8 @@ export class PlaybackPanel implements PanelActions {
   #editRate = 0;
   #revealSteps = 0;
   #done = 0;
+  /** The text fields that have the keyboard now (normally one; two for a moment while it moves). */
+  readonly #focused = new Set<string>();
   readonly #plugin: Plugin;
   readonly #o: PanelOptions;
 
@@ -114,14 +116,20 @@ export class PlaybackPanel implements PanelActions {
       if (typeof on !== "boolean" || on === settings.value.seekKeyframes) return;
       return this.#guard(options.applySteps(settings.value.seekSteps, on));
     });
-    // A text field has the keyboard (keeps the fullscreen column out); leaving it drops the marks.
-    panel.on("focusChanged", (focused: boolean) => {
-      panel.setInteraction({ focused: focused === true });
-      if (focused !== true) {
-        this.#invalidStep = -1;
-        this.#jumpInvalid = this.#rateInvalid = false;
+    // Each text field reports its own focus: the panel holds the keyboard (keeps the fullscreen
+    // column out) while any of them has it, whatever order the next field's focus and the last
+    // one's blur arrive in. Leaving a field drops its mark.
+    panel.on("focusChanged", (field: string, focused: boolean) => {
+      const name = String(field);
+      if (focused === true) this.#focused.add(name);
+      else {
+        this.#focused.delete(name);
+        if (name === "jump") this.#jumpInvalid = false;
+        else if (name === "rate") this.#rateInvalid = false;
+        else if (name === `step${this.#invalidStep}`) this.#invalidStep = -1;
         plugin.update();
       }
+      panel.setInteraction({ focused: this.#focused.size > 0 });
     });
   }
 

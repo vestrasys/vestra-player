@@ -74,8 +74,8 @@ export global PlaybackPanelBridge {
     callback apply-step(int, string);
     callback reset-step(int);
     callback set-keyframes-only(bool);
-    // A text field took or lost the focus (keeps the fullscreen column out).
-    callback focus-changed(bool);
+    // A text field ("jump", "rate", "step0"–"step3") took or lost the focus; any focused one keeps the fullscreen column out.
+    callback focus-changed(string, bool);
 }
 
 // Glyphs of this panel only, in the V-Line style of @vestra/icons.slint (1.5px round-capped lines), 14×12 boxes.
@@ -518,7 +518,7 @@ export component PlaybackPanel inherits Rectangle {
                         : PlaybackPanelBridge.rate-invalid ? @tr("Speed must be between 0.25× and 4×") : @tr("Playback speed");
                     tip-detail: @tr("click: type a value");
                     apply(text) => { PlaybackPanelBridge.apply-rate(text); }
-                    focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+                    focus-changed(on) => { PlaybackPanelBridge.focus-changed("rate", on); }
                 }
                 Btn {
                     glyph: Glyphs.plus;
@@ -626,7 +626,7 @@ export component PlaybackPanel inherits Rectangle {
                                 // TRANSLATORS: the format of the time to jump to (hours, minutes, seconds).
                                 placeholder-text: @tr("hh:mm:ss");
                                 accepted(text) => { PlaybackPanelBridge.apply-jump(text); }
-                                changed has-focus => { PlaybackPanelBridge.focus-changed(self.has-focus); }
+                                changed has-focus => { PlaybackPanelBridge.focus-changed("jump", self.has-focus); }
                             }
                         }
                     }
@@ -723,7 +723,7 @@ export component PlaybackPanel inherits Rectangle {
                 back: PlaybackPanelBridge.keys.back1;
                 forward: PlaybackPanelBridge.keys.forward1;
                 done: root.done;
-                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed("step0", on); }
             }
             StepRow {
                 index: 1;
@@ -731,7 +731,7 @@ export component PlaybackPanel inherits Rectangle {
                 back: PlaybackPanelBridge.keys.back2;
                 forward: PlaybackPanelBridge.keys.forward2;
                 done: root.done;
-                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed("step1", on); }
             }
             StepRow {
                 index: 2;
@@ -739,7 +739,7 @@ export component PlaybackPanel inherits Rectangle {
                 back: PlaybackPanelBridge.keys.back3;
                 forward: PlaybackPanelBridge.keys.forward3;
                 done: root.done;
-                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed("step2", on); }
             }
             StepRow {
                 index: 3;
@@ -747,7 +747,7 @@ export component PlaybackPanel inherits Rectangle {
                 back: PlaybackPanelBridge.keys.back4;
                 forward: PlaybackPanelBridge.keys.forward4;
                 done: root.done;
-                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed("step3", on); }
             }
             CheckRow {
                 text: @tr("Jump to keyframes only");

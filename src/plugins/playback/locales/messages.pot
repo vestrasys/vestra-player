@@ -44,11 +44,11 @@ msgstr ""
 msgid "Full Path"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:678
+#: commands.ts:272 ui/panel.slint:697
 msgid "Previous Keyframe"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:685
+#: commands.ts:272 ui/panel.slint:704
 msgid "Next Keyframe"
 msgstr ""
 
@@ -56,7 +56,7 @@ msgstr ""
 msgid "Jump to Time…"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:630 ui/panel.slint:633 ui/panel.slint:639
+#: commands.ts:272 ui/panel.slint:649 ui/panel.slint:652 ui/panel.slint:658
 msgid "Jump to Start"
 msgstr ""
 
@@ -64,15 +64,15 @@ msgstr ""
 msgid "Seek Steps…"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:526 ui/panel.slint:529
+#: commands.ts:272 ui/panel.slint:545 ui/panel.slint:548
 msgid "0.5×"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:555 ui/panel.slint:558
+#: commands.ts:272 ui/panel.slint:574 ui/panel.slint:577
 msgid "1.5×"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:564 ui/panel.slint:567
+#: commands.ts:272 ui/panel.slint:583 ui/panel.slint:586
 msgid "2×"
 msgstr ""
 
@@ -100,15 +100,15 @@ msgstr ""
 msgid "Seek"
 msgstr ""
 
-#: commands.ts:273 ui/panel.slint:462 ui/panel.slint:480 ui/panel.slint:483
+#: commands.ts:273 ui/panel.slint:481 ui/panel.slint:499 ui/panel.slint:502
 msgid "Speed"
 msgstr ""
 
-#: commands.ts:273 panel.ts:47
+#: commands.ts:273 panel.ts:49
 msgid "Playback"
 msgstr ""
 
-#: commands.ts:283 ui/panel.slint:437
+#: commands.ts:283 ui/panel.slint:456
 msgid "Not supported by the current source"
 msgstr ""
 
@@ -124,7 +124,7 @@ msgstr ""
 msgid "A network source has no file name"
 msgstr ""
 
-#: commands.ts:283 ui/panel.slint:455
+#: commands.ts:283 ui/panel.slint:474
 msgid "No video"
 msgstr ""
 
@@ -232,15 +232,15 @@ msgstr ""
 msgid "Source operation failed: {}"
 msgstr ""
 
-#: main.ts:29 ui/panel.slint:593
+#: main.ts:29 ui/panel.slint:612
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr ""
 
-#: main.ts:29 ui/panel.slint:499
+#: main.ts:29 ui/panel.slint:518
 msgid "Speed must be between 0.25× and 4×"
 msgstr ""
 
-#: main.ts:29 ui/panel.slint:416
+#: main.ts:29 ui/panel.slint:435
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr ""
 
@@ -361,104 +361,104 @@ msgid "Not a valid link"
 msgstr ""
 
 #. {} is a number of seconds ("30").
-#: ui/panel.slint:410
+#: ui/panel.slint:429
 msgid "{} s"
 msgstr ""
 
-#: ui/panel.slint:416
+#: ui/panel.slint:435
 msgid "Seek step"
 msgstr ""
 
-#: ui/panel.slint:417
+#: ui/panel.slint:436
 msgid "click: type a value · double-click: Default"
 msgstr ""
 
-#: ui/panel.slint:462 ui/panel.slint:576
+#: ui/panel.slint:481 ui/panel.slint:595
 msgid "Go to"
 msgstr ""
 
-#: ui/panel.slint:462 ui/panel.slint:628
+#: ui/panel.slint:481 ui/panel.slint:647
 msgid "Start"
 msgstr ""
 
-#: ui/panel.slint:462 ui/panel.slint:648 ui/panel.slint:665
+#: ui/panel.slint:481 ui/panel.slint:667 ui/panel.slint:684
 msgid "Frame"
 msgstr ""
 
-#: ui/panel.slint:462 ui/panel.slint:674 ui/panel.slint:691
+#: ui/panel.slint:481 ui/panel.slint:693 ui/panel.slint:710
 msgid "Keyframe"
 msgstr ""
 
-#: ui/panel.slint:487
+#: ui/panel.slint:506
 msgid "Slower 0.1"
 msgstr ""
 
 #. {} is the playback speed ("1.25"); the × reads "times".
-#: ui/panel.slint:493
+#: ui/panel.slint:512
 msgid "{}×"
 msgstr ""
 
-#: ui/panel.slint:499 ui/panel.slint:513
+#: ui/panel.slint:518 ui/panel.slint:532
 msgid "Playback speed"
 msgstr ""
 
-#: ui/panel.slint:500
+#: ui/panel.slint:519
 msgid "click: type a value"
 msgstr ""
 
-#: ui/panel.slint:507
+#: ui/panel.slint:526
 msgid "Faster 0.1"
 msgstr ""
 
-#: ui/panel.slint:535
+#: ui/panel.slint:554
 msgid "1×"
 msgstr ""
 
-#: ui/panel.slint:539
+#: ui/panel.slint:558
 msgid "Normal"
 msgstr ""
 
-#: ui/panel.slint:546 ui/panel.slint:549
+#: ui/panel.slint:565 ui/panel.slint:568
 msgid "1.25×"
 msgstr ""
 
-#: ui/panel.slint:573
+#: ui/panel.slint:592
 msgid "Jump"
 msgstr ""
 
-#: ui/panel.slint:594 ui/panel.slint:618 ui/panel.slint:622
+#: ui/panel.slint:613 ui/panel.slint:637 ui/panel.slint:641
 msgid "Jump to Time"
 msgstr ""
 
 #. the format of the time to jump to (hours, minutes, seconds).
-#: ui/panel.slint:608
+#: ui/panel.slint:627
 msgid "hh:mm:ss"
 msgstr ""
 
-#: ui/panel.slint:616
+#: ui/panel.slint:635
 msgid "Go"
 msgstr ""
 
-#: ui/panel.slint:645
+#: ui/panel.slint:664
 msgid "Step"
 msgstr ""
 
-#: ui/panel.slint:652
+#: ui/panel.slint:671
 msgid "Previous Frame"
 msgstr ""
 
-#: ui/panel.slint:659
+#: ui/panel.slint:678
 msgid "Next Frame"
 msgstr ""
 
-#: ui/panel.slint:700
+#: ui/panel.slint:719
 msgid "Seek steps"
 msgstr ""
 
-#: ui/panel.slint:734
+#: ui/panel.slint:753
 msgid "Jump to keyframes only"
 msgstr ""
 
-#: ui/panel.slint:735
+#: ui/panel.slint:754
 msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr ""

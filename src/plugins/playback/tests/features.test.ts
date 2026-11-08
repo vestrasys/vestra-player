@@ -402,7 +402,7 @@ test("B06 the panel's seek steps: a typed step saves and applies, tier 1 goes to
     for (const bad of ["abc", "0.05", ""]) panel.emit("applyStep", 1, bad);
     await eventually(() => panel.props["invalid-step"], 1);
     // Leaving the field drops the mark.
-    panel.emit("focusChanged", false);
+    panel.emit("focusChanged", "step1", false);
     await eventually(() => panel.props["invalid-step"], -1);
 
     // Typed steps and the switch: the pair goes to the core and is saved with the steps.
@@ -471,7 +471,7 @@ test("B06 a refused or abandoned seek step saves nothing", async () => {
     panel.emit("applyStep", 1, "1.25");
     await eventually(() => panel.props["invalid-step"], 1);
     // Esc or leaving the field keeps the old value; the switch set to what it is changes nothing.
-    panel.emit("focusChanged", false);
+    panel.emit("focusChanged", "step1", false);
     panel.emit("setKeyframesOnly", true);
     // Rows outside 0–3 are ignored.
     panel.emit("applyStep", 7, "10");

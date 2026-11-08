@@ -46,11 +46,11 @@ msgstr "文件夹路径"
 msgid "Full Path"
 msgstr "完整路径"
 
-#: commands.ts:272 ui/panel.slint:678
+#: commands.ts:272 ui/panel.slint:697
 msgid "Previous Keyframe"
 msgstr "上一关键帧"
 
-#: commands.ts:272 ui/panel.slint:685
+#: commands.ts:272 ui/panel.slint:704
 msgid "Next Keyframe"
 msgstr "下一关键帧"
 
@@ -58,7 +58,7 @@ msgstr "下一关键帧"
 msgid "Jump to Time…"
 msgstr "跳转到…"
 
-#: commands.ts:272 ui/panel.slint:630 ui/panel.slint:633 ui/panel.slint:639
+#: commands.ts:272 ui/panel.slint:649 ui/panel.slint:652 ui/panel.slint:658
 msgid "Jump to Start"
 msgstr "跳到开头"
 
@@ -66,15 +66,15 @@ msgstr "跳到开头"
 msgid "Seek Steps…"
 msgstr "时间跨度设置…"
 
-#: commands.ts:272 ui/panel.slint:526 ui/panel.slint:529
+#: commands.ts:272 ui/panel.slint:545 ui/panel.slint:548
 msgid "0.5×"
 msgstr "0.5倍"
 
-#: commands.ts:272 ui/panel.slint:555 ui/panel.slint:558
+#: commands.ts:272 ui/panel.slint:574 ui/panel.slint:577
 msgid "1.5×"
 msgstr "1.5倍"
 
-#: commands.ts:272 ui/panel.slint:564 ui/panel.slint:567
+#: commands.ts:272 ui/panel.slint:583 ui/panel.slint:586
 msgid "2×"
 msgstr "2倍"
 
@@ -103,15 +103,15 @@ msgstr "文件"
 msgid "Seek"
 msgstr "跳转"
 
-#: commands.ts:273 ui/panel.slint:462 ui/panel.slint:480 ui/panel.slint:483
+#: commands.ts:273 ui/panel.slint:481 ui/panel.slint:499 ui/panel.slint:502
 msgid "Speed"
 msgstr "速度"
 
-#: commands.ts:273 panel.ts:47
+#: commands.ts:273 panel.ts:49
 msgid "Playback"
 msgstr "播放"
 
-#: commands.ts:283 ui/panel.slint:437
+#: commands.ts:283 ui/panel.slint:456
 msgid "Not supported by the current source"
 msgstr "当前来源不支持此操作"
 
@@ -127,7 +127,7 @@ msgstr "没有打开的文件"
 msgid "A network source has no file name"
 msgstr "网络来源没有文件名"
 
-#: commands.ts:283 ui/panel.slint:455
+#: commands.ts:283 ui/panel.slint:474
 msgid "No video"
 msgstr "没有视频"
 
@@ -235,15 +235,15 @@ msgstr "进度条悬停显示缩略图: 关"
 msgid "Source operation failed: {}"
 msgstr "来源操作失败：{}"
 
-#: main.ts:29 ui/panel.slint:593
+#: main.ts:29 ui/panel.slint:612
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "请输入来源时长范围内的HH:MM:SS.mmm"
 
-#: main.ts:29 ui/panel.slint:499
+#: main.ts:29 ui/panel.slint:518
 msgid "Speed must be between 0.25× and 4×"
 msgstr "速度范围为0.25–4倍"
 
-#: main.ts:29 ui/panel.slint:416
+#: main.ts:29 ui/panel.slint:435
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "范围 0.1–3600 秒，最多一位小数"
 
@@ -367,175 +367,126 @@ msgid "Not a valid link"
 msgstr "不是有效的链接"
 
 #. {} is a number of seconds ("30").
-#: ui/panel.slint:410
+#: ui/panel.slint:429
 #, x-machine
 msgid "{} s"
 msgstr "{}秒"
 
-#: ui/panel.slint:416
+#: ui/panel.slint:435
 #, x-machine
 msgid "Seek step"
 msgstr "跳转步长"
 
-#: ui/panel.slint:417
+#: ui/panel.slint:436
 #, x-machine
 msgid "click: type a value · double-click: Default"
 msgstr "单击: 输入数值 · 双击: 默认值"
 
-#: ui/panel.slint:462 ui/panel.slint:576
+#: ui/panel.slint:481 ui/panel.slint:595
 #, x-machine
 msgid "Go to"
 msgstr "跳转到"
 
-#: ui/panel.slint:462 ui/panel.slint:628
+#: ui/panel.slint:481 ui/panel.slint:647
 #, x-machine
 msgid "Start"
 msgstr "开头"
 
-#: ui/panel.slint:462 ui/panel.slint:648 ui/panel.slint:665
+#: ui/panel.slint:481 ui/panel.slint:667 ui/panel.slint:684
 #, x-machine
 msgid "Frame"
 msgstr "帧"
 
-#: ui/panel.slint:462 ui/panel.slint:674 ui/panel.slint:691
+#: ui/panel.slint:481 ui/panel.slint:693 ui/panel.slint:710
 #, x-machine
 msgid "Keyframe"
 msgstr "关键帧"
 
-#: ui/panel.slint:487
+#: ui/panel.slint:506
 #, x-machine
 msgid "Slower 0.1"
 msgstr "减速 0.1"
 
 #. {} is the playback speed ("1.25"); the × reads "times".
-#: ui/panel.slint:493
+#: ui/panel.slint:512
 #, x-machine
 msgid "{}×"
 msgstr "{}倍"
 
-#: ui/panel.slint:499 ui/panel.slint:513
+#: ui/panel.slint:518 ui/panel.slint:532
 #, x-machine
 msgid "Playback speed"
 msgstr "播放速度"
 
-#: ui/panel.slint:500
+#: ui/panel.slint:519
 #, x-machine
 msgid "click: type a value"
 msgstr "单击: 输入数值"
 
-#: ui/panel.slint:507
+#: ui/panel.slint:526
 #, x-machine
 msgid "Faster 0.1"
 msgstr "加速 0.1"
 
-#: ui/panel.slint:535
+#: ui/panel.slint:554
 #, x-machine
 msgid "1×"
 msgstr "1倍"
 
-#: ui/panel.slint:539
+#: ui/panel.slint:558
 #, x-machine
 msgid "Normal"
 msgstr "正常速度"
 
-#: ui/panel.slint:546 ui/panel.slint:549
+#: ui/panel.slint:565 ui/panel.slint:568
 #, x-machine
 msgid "1.25×"
 msgstr "1.25倍"
 
-#: ui/panel.slint:573
+#: ui/panel.slint:592
 #, x-machine
 msgid "Jump"
 msgstr "跳转"
 
-#: ui/panel.slint:594 ui/panel.slint:618 ui/panel.slint:622
+#: ui/panel.slint:613 ui/panel.slint:637 ui/panel.slint:641
 msgid "Jump to Time"
 msgstr "跳转到"
 
 #. the format of the time to jump to (hours, minutes, seconds).
-#: ui/panel.slint:608
+#: ui/panel.slint:627
 #, x-machine
 msgid "hh:mm:ss"
 msgstr "时:分:秒"
 
-#: ui/panel.slint:616
+#: ui/panel.slint:635
 msgid "Go"
 msgstr "定位"
 
-#: ui/panel.slint:645
+#: ui/panel.slint:664
 #, x-machine
 msgid "Step"
 msgstr "逐帧"
 
-#: ui/panel.slint:652
+#: ui/panel.slint:671
 #, x-machine
 msgid "Previous Frame"
 msgstr "上一帧"
 
-#: ui/panel.slint:659
+#: ui/panel.slint:678
 #, x-machine
 msgid "Next Frame"
 msgstr "下一帧"
 
-#: ui/panel.slint:700
+#: ui/panel.slint:719
 #, x-machine
 msgid "Seek steps"
 msgstr "跳转步长"
 
-#: ui/panel.slint:734
+#: ui/panel.slint:753
 msgid "Jump to keyframes only"
 msgstr "仅跳转到关键帧"
 
-#: ui/panel.slint:735
+#: ui/panel.slint:754
 #, x-machine
 msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr "跳转步长和进度条都落在关键帧上：任何文件都很快，最多偏差一个关键帧间隔"
-
-#~ msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
-#~ msgstr "主窗口底部的控制栏（进度条、播放按钮、音量）；打开文件、打开链接、重开最后的文件；多档跳转秒数、关键帧跳转、跳转到指定时间、固定与自定义播放速度；进度条悬停显示时间或缩略图；播放时禁止屏保。"
-
-#~ msgid "The source changed; open this window again"
-#~ msgstr "来源已变化，请重新打开"
-
-#~ msgid "Custom Speed"
-#~ msgstr "自定义速度"
-
-#~ msgid "Speed (0.25–4×)"
-#~ msgstr "播放速度(0.25–4倍)"
-
-#~ msgid "Time (h:mm:ss.ms)"
-#~ msgstr "时间定位(时:分:秒.毫秒)"
-
-#~ msgid "OK"
-#~ msgstr "确定"
-
-#. the unit after a number of seconds.
-#~ msgid "s"
-#~ msgstr "秒"
-
-#~ msgid "Default"
-#~ msgstr "默认值"
-
-#~ msgid "Seek Steps"
-#~ msgstr "时间跨度设置"
-
-#~ msgid "Left/Right arrow keys:"
-#~ msgstr "左/右 方向键："
-
-#~ msgid "Ctrl + Left/Right arrow keys:"
-#~ msgstr "Ctrl + 左/右 方向键："
-
-#~ msgid "Shift + Left/Right arrow keys:"
-#~ msgstr "Shift + 左/右 方向键："
-
-#~ msgid "Ctrl + Alt + Left/Right arrow keys:"
-#~ msgstr "Ctrl + Alt + 左/右 方向键："
-
-#~ msgid "Set how far each seek key moves during playback."
-#~ msgstr "可设置播放时以时间为单位的移动跨度。"
-
-#~ msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
-#~ msgstr "适用于方向键和进度条：点击或拖动进度条会落在指针位置或其之前的关键帧上。"
-
-#~ msgid "Cancel"
-#~ msgstr "取消"
