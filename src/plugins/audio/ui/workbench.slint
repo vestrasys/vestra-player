@@ -1,54 +1,147 @@
+// The Audio panel in the player's adjust column (menu redesign step 5, design of 2026-11-07): one
+// column, 317 px wide by default and 280 at least, top to bottom Volume, Track, Sync, Equalizer and
+// Processing, Reset at the bottom. Every row is a layout and every text one line (elided; a tooltip
+// has the rest), and nothing is created or removed while the pointer moves: the parts that come and
+// go are persistent and shown with `visible`. Key caps come from `plugin.commands.keys`.
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { Button, Check, Choice, Slider, Tabs, ToolTipArea } from "@vestra/widgets.slint";
+import { Button, Check, Choice, KeyHint, Slider, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
 
-global Words {
-    pure public function status(state: string) -> string {
-        return state == "loading" ? @tr("Loading audio…")
-            : state == "no-track" ? @tr("No audio track selected")
-            : state == "applying" ? @tr("Applying…")
-            : state == "failed" ? @tr("Audio processing failed")
-            : state == "applied" ? @tr("Applied")
-            : @tr("Ready");
+// The first key of each command (`plugin.commands.keys`), "" without one.
+export struct Keys {
+    track: string,
+    earlier: string,
+    later: string,
+    reset: string,
+    equalizer: string,
+    normalize: string,
+    clarity: string,
+}
+
+export global AudioBridge {
+    // "loading", "no-track", "applying", "failed", "applied" or "ready" (the footer's words).
+    in property <string> status;
+    in property <bool> source-ready;
+    in property <bool> is-busy;
+    in property <bool> has-error;
+    in property <string> error-detail;
+    in property <Keys> keys;
+    // The player's volume, 0–100 on the slider (louder shows at the right end), and mute.
+    in property <float> volume;
+    in property <bool> muted;
+    in property <bool> can-volume;
+    // Why the volume cannot change ("" when it can): there is no audio output.
+    in property <string> volume-reason;
+    // The labels arrive translated (text values from main.ts).
+    in property <[string]> track-rows: [@tr("No audio tracks")];
+    in property <int> track-index: 0;
+    in property <bool> tracks-available;
+    in property <bool> can-load;
+    in property <bool> auto-load;
+    in property <[string]> device-rows: [@tr("System Default")];
+    in property <int> device-index: 0;
+    in property <bool> devices-available;
+    in property <string> device-tip;
+    in property <int> channel-index: 0;
+    in property <bool> channels-available;
+    in property <bool> mono-track;
+    in property <float> delay-ms;
+    in property <int> sync-keep-index: 0;
+    in property <bool> equalizer-enabled: true;
+    // -1: custom gains.
+    in property <int> preset-index: 0;
+    in property <[float]> gain-values: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+    in property <bool> normalize-enabled;
+    in property <bool> clarity-enabled;
+    in property <float> clarity-db: 3;
+    callback volume-changed(float);
+    callback mute-toggled();
+    callback track-selected(int);
+    callback load-requested();
+    callback auto-load-changed(bool);
+    callback device-selected(int);
+    callback channel-selected(int);
+    // -1 earlier, +1 later (50 ms).
+    callback sync-stepped(int);
+    callback delay-changed(float);
+    callback delay-reset();
+    callback sync-keep-selected(int);
+    callback equalizer-changed(bool);
+    callback preset-selected(int);
+    callback gain-changed(int, float);
+    callback normalize-changed(bool);
+    callback clarity-toggled(bool);
+    callback clarity-changed(float);
+    callback reset-requested();
+    callback retry-requested();
+}
+
+// A section heading: dim capitals and a rule to the right edge.
+component Section {
+    in property <string> text;
+    height: 22px;
+    HorizontalLayout {
+        spacing: 8px;
+        Text {
+            text: root.text;
+            color: Theme.text-dim;
+            font-size: Theme.font-xs;
+            letter-spacing: 0.6px;
+            vertical-alignment: center;
+            horizontal-stretch: 0;
+        }
+        VerticalLayout {
+            alignment: center;
+            Rectangle { height: 1px; background: Theme.line; }
+        }
     }
 }
 
-// Vertical panel slider 14×70 (EQ bands): 2px line, blue fill from the bottom, 14×12 thumb.
+// A row's label in the label column, one line.
+component Label inherits Text {
+    color: AudioBridge.source-ready ? Theme.text : Theme.text-dim;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+// Vertical band slider 14×70: 2px line, blue fill from the 0 dB line, 14×12 thumb.
 component VSlider {
     in-out property <float> value;
-    in property <float> minimum: 0;
-    in property <float> maximum: 1;
     in property <bool> enabled: true;
+    // The pointer is on the band, or drags it.
+    out property <bool> active: touch.has-hover || touch.pressed;
     callback changed(float);
     private property <length> thumb: 12px;
-    private property <float> span: max(0.000001, root.maximum - root.minimum);
-    private property <float> ratio: clamp((root.value - root.minimum) / root.span, 0, 1);
+    private property <float> ratio: clamp((root.value + 6) / 12, 0, 1);
     width: 14px;
     height: 70px;
     accessible-role: slider;
     accessible-value: root.value;
-    accessible-value-minimum: root.minimum;
-    accessible-value-maximum: root.maximum;
+    accessible-value-minimum: -6;
+    accessible-value-maximum: 6;
     function set-from(y: length) {
-        root.value = root.maximum - clamp((y - root.thumb / 2) / max(1px, root.height - root.thumb), 0, 1) * root.span;
+        root.value = 6 - clamp((y - root.thumb / 2) / max(1px, root.height - root.thumb), 0, 1) * 12;
         root.changed(root.value);
     }
     Rectangle {
         x: (parent.width - 2px) / 2;
         width: 2px;
-        background: Theme.bg-bar;
+        background: Theme.line;
     }
     Rectangle {
         x: (parent.width - 2px) / 2;
         width: 2px;
-        height: root.thumb / 2 + root.ratio * (root.height - root.thumb);
-        y: parent.height - self.height;
+        y: min(root.height / 2, (1 - root.ratio) * (root.height - root.thumb) + root.thumb / 2);
+        height: abs(root.ratio - 0.5) * (root.height - root.thumb);
         background: root.enabled ? Theme.playing : Theme.icon-disabled;
     }
     Rectangle {
         y: (1 - root.ratio) * (root.height - root.thumb);
         width: 14px;
         height: root.thumb;
+        border-radius: Theme.radius-control;
         background: root.enabled ? Theme.text : Theme.icon-disabled;
     }
     touch := TouchArea {
@@ -57,455 +150,460 @@ component VSlider {
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.down { root.set-from(self.mouse-y); }
         }
         moved => { if self.pressed { root.set-from(self.mouse-y); } }
+        double-clicked => {
+            root.value = 0;
+            root.changed(0);
+        }
     }
 }
 
-// One EQ band in a 23px column: value above, slider, frequency below.
+// One band: the slider over its frequency, which shows the gain while the pointer is on the band
+// (the same Text: nothing is created or removed while hovering). Double-click: 0 dB.
 component Band {
     in property <string> caption;
     in property <float> gain;
     in property <bool> available;
     callback edited(float);
-    // A drag writes the slider's value and drops the binding; re-push model changes.
+    // A drag writes the slider's value and drops its binding; re-push model changes.
     changed gain => { slider.value = root.gain; }
-    width: 23px;
+    horizontal-stretch: 1;
     VerticalLayout {
-        spacing: 2px;
-        Text { text: round(root.gain * 10) / 10; color: Theme.text-list; font-size: Theme.font-xs; horizontal-alignment: center; }
+        spacing: 4px;
         HorizontalLayout {
             alignment: center;
-            slider := VSlider { minimum: -6; maximum: 6; value: root.gain; enabled: root.available; changed(v) => { root.edited(v); } }
-        }
-        Text { text: root.caption; color: Theme.text-dim; font-size: Theme.font-xs; horizontal-alignment: center; }
-    }
-}
-
-// Effect row (UI-TOOL-04): label 56 (right, 11px) + panel slider 100 + value 60 + Default 41, 4px apart:
-// 269px, inside the 285px the 301px window leaves after its 8px padding ("-10000 ms" needs ~57).
-component EffectRow {
-    in property <string> label;
-    in property <string> shown;
-    in property <bool> available;
-    in-out property <float> value;
-    in property <float> minimum;
-    in property <float> maximum;
-    callback edited(float);
-    callback reset();
-    in property <length> column: 56px;
-    height: 24px;
-    HorizontalLayout {
-        spacing: 4px;
-        alignment: start;
-        Text { width: root.column; text: root.label; color: root.available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
-        Slider {
-            width: 100px;
-            panel: true;
-            minimum: root.minimum;
-            maximum: root.maximum;
-            enabled: root.available;
-            value <=> root.value;
-            changed(v) => { root.edited(v); }
-        }
-        Text { width: 60px; text: root.shown; color: Theme.text-list; font-size: Theme.font-body; vertical-alignment: center; }
-        VerticalLayout {
-            alignment: center;
-            Button { width: max(41px, self.preferred-width); text: @tr("Default"); small: true; enabled: root.available; clicked => { root.reset(); } }
-        }
-    }
-}
-
-// One popup row: radio dot for the current preset, menu-style hover.
-component PresetItem {
-    in property <string> text;
-    in property <bool> selected;
-    callback picked();
-    height: 22px;
-    Rectangle { background: touch.has-hover ? Theme.press-bg : transparent; }
-    HorizontalLayout {
-        padding-left: 6px;
-        spacing: 6px;
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 8px;
-                height: 8px;
-                border-radius: 4px;
-                background: root.selected ? Theme.playing : transparent;
-            }
+            slider := VSlider { value: root.gain; enabled: root.available; changed(v) => { root.edited(v); } }
         }
         Text {
-            text: root.text;
-            color: touch.has-hover ? Theme.accent : Theme.text-list;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
+            text: slider.active ? (slider.value > 0 ? "+" : "") + round(slider.value * 10) / 10 : root.caption;
+            color: slider.active ? Theme.text : Theme.text-dim;
+            font-size: Theme.font-xs;
+            horizontal-alignment: center;
+            overflow: elide;
         }
     }
-    touch := TouchArea { clicked => { root.picked(); } }
 }
 
-export component AudioWorkbench inherits Window {
-    title: @tr("Audio Workbench");
-    // 301px, wider only when the content needs it in this language.
-    width: max(301px, tab-strip.min-width, max(equalizer-page.min-width, effects-page.min-width, output-page.min-width) + 16px);
-    height: 260px;
-    background: Theme.bg-panel;
-    // "loading", "no-track", "applying", "failed", "applied" or "ready" (Words.status).
-    in property <string> status;
-    in property <bool> source-ready;
-    in property <bool> is-busy;
-    in property <bool> has-error;
-    in property <string> error-detail;
-    in-out property <int> tab-index: 0;
-    in property <bool> equalizer-enabled: true;
-    in property <int> preset-index: 0;
-    in property <[float]> gain-values: [0, 0, 0, 0, 0, 0];
-    in property <float> delay-ms;
-    in property <bool> normalize-enabled;
-    in property <bool> clarity-enabled;
-    in property <float> clarity-db: 3;
-    in property <int> sync-keep-index: 0;
-    // The labels arrive translated (text values from main.ts).
-    in property <[string]> track-rows: [@tr("No audio tracks")];
-    in property <int> track-index: 0;
-    in property <bool> tracks-available;
-    in property <bool> can-load;
-    in property <int> channel-index: 0;
-    in property <bool> channels-available;
-    in property <bool> mono-track;
-    in property <bool> auto-load;
-    in property <[string]> device-rows: [@tr("System Default")];
-    in property <int> device-index: 0;
-    in property <bool> devices-available;
-    in property <string> device-tip;
-    callback tab-changed(int);
-    callback gain-changed(int, float);
-    callback equalizer-changed(bool);
-    callback delay-changed(float);
-    callback delay-reset();
-    callback normalize-changed(bool);
-    callback clarity-toggled(bool);
-    callback clarity-changed(float);
-    callback clarity-reset();
-    callback sync-keep-selected(int);
-    callback preset-selected(int);
-    callback reset-requested();
-    callback retry-requested();
-    callback track-selected(int);
-    callback load-requested();
-    callback channel-selected(int);
-    callback auto-load-changed(bool);
-    callback device-selected(int);
-    // The presets of model.ts, in the same order.
-    private property <[string]> preset-names: [@tr("Flat"), @tr("Voice"), @tr("Music"), @tr("Cinema")];
-    private property <[string]> tab-names: [@tr("Equalizer"), @tr("Effects"), @tr("Output")];
-    // Label columns: Effects 56px, Output 65px, or the widest label there (a check adds its 12px box and 4px gap).
-    private property <length> effects-column: max(56px, effects-measure.preferred-width, effects-check-measure.preferred-width + 16px);
-    private property <length> output-column: max(65px, output-measure.preferred-width);
-    // The preset drop-down: 97px, or the widest preset with the button padding and the caret.
-    private property <length> preset-width: max(97px, preset-measure.preferred-width + 2 * Theme.button-padding + 12px);
-    Rectangle {
+export component Audio inherits Rectangle {
+    background: Theme.bg-list;
+    // The label column: the widest label of this language, within 56–96 px.
+    private property <length> column: clamp(measure.preferred-width, 56px, 96px);
+    private property <[string]> preset-names: [@tr("Flat"), @tr("Voice"), @tr("Music"), @tr("Cinema"), @tr("Custom")];
+    // The channel modes of model.ts, in the same order: short labels, the full name in the tooltip.
+    private property <[string]> channel-short: [@tr("Stereo"), @tr("L"), @tr("R"), @tr("Mono"), @tr("Swap")];
+    // The segment last under the pointer (its full name is the row's tooltip).
+    private property <int> channel-hovered: 0;
+    private property <[string]> channel-names: [@tr("Stereo"), @tr("Left Channel"), @tr("Right Channel"), @tr("Mono Mix"), @tr("Swap Left and Right")];
+    // Below 300 px (the column at its least width is 280) the Delay row leaves out its three key caps;
+    // the tooltips of its buttons still name the keys.
+    private property <bool> roomy: root.width >= 300px;
+    private property <string> delay-shown: @tr("{} ms", (AudioBridge.delay-ms > 0 ? "+" : "") + round(AudioBridge.delay-ms));
+    measure := VerticalLayout {
         visible: false;
         width: 0;
         height: 0;
-        effects-measure := VerticalLayout {
-            Text { text: @tr("Audio sync"); font-size: Theme.font-body; }
-        }
-        effects-check-measure := VerticalLayout {
-            for text in [@tr("Normalize"), @tr("Crystalizer")]: Text { text: text; font-size: Theme.font-body; }
-        }
-        auto-measure := Text { text: @tr("Auto-load audio files with the same name"); font-size: Theme.font-body; }
-        output-measure := VerticalLayout {
-            for text in [@tr("Track"), @tr("Channels"), @tr("Device"), @tr("Keep sync")]: Text { text: text; font-size: Theme.font-body; }
-        }
-        preset-measure := VerticalLayout {
-            for text in [@tr("Flat"), @tr("Voice"), @tr("Music"), @tr("Cinema"), @tr("Custom")]: Text { text: text; font-size: Theme.font-body; }
-        }
+        Text { text: @tr("Volume"); font-size: Theme.font-body; }
+        Text { text: @tr("Track"); font-size: Theme.font-body; }
+        Text { text: @tr("Output"); font-size: Theme.font-body; }
+        Text { text: @tr("Channels"); font-size: Theme.font-body; }
+        Text { text: @tr("Delay"); font-size: Theme.font-body; }
+        Text { text: @tr("Keep"); font-size: Theme.font-body; }
+        Text { text: @tr("Equalizer"); font-size: Theme.font-body; }
     }
-    changed delay-ms => { delay.value = root.delay-ms; }
-    changed clarity-db => { clarity.value = root.clarity-db; }
-    changed normalize-enabled => { norm.checked = root.normalize-enabled; }
-    changed clarity-enabled => { clarity-check.checked = root.clarity-enabled; }
-    changed equalizer-enabled => { eq.checked = root.equalizer-enabled; }
-    changed sync-keep-index => { keep-combo.current-index = root.sync-keep-index; }
-    changed track-index => { track-combo.current-index = root.track-index; }
-    changed channel-index => { channel-combo.current-index = root.channel-index; }
-    changed auto-load => { auto-check.checked = root.auto-load; }
-    changed device-index => { device-combo.current-index = root.device-index; }
-    changed device-rows => { device-combo.current-index = root.device-index; }
+    // A pick, a click or a drag replaces a one-way binding (Choice, Check, Slider, the typed delay):
+    // copies of the plugin's values set the control again whenever the plugin's value changes.
+    private property <int> track-at: AudioBridge.track-index;
+    private property <int> device-at: AudioBridge.device-index;
+    private property <[string]> devices: AudioBridge.device-rows;
+    private property <int> keep-at: AudioBridge.sync-keep-index;
+    private property <int> preset-at: AudioBridge.preset-index >= 0 ? AudioBridge.preset-index : 4;
+    private property <float> volume-at: AudioBridge.volume;
+    private property <float> clarity-at: AudioBridge.clarity-db;
+    private property <bool> eq-on: AudioBridge.equalizer-enabled;
+    private property <bool> norm-on: AudioBridge.normalize-enabled;
+    private property <bool> clarity-on: AudioBridge.clarity-enabled;
+    private property <bool> auto-on: AudioBridge.auto-load;
+    changed track-at => { track-combo.current-index = self.track-at; }
+    changed device-at => { device-combo.current-index = self.device-at; }
+    changed devices => { device-combo.current-index = self.device-at; }
+    changed keep-at => { keep-combo.current-index = self.keep-at; }
+    changed preset-at => { preset-combo.current-index = self.preset-at; }
+    changed volume-at => { volume.value = self.volume-at; }
+    changed clarity-at => { clarity.value = self.clarity-at; }
+    changed eq-on => { eq.checked = self.eq-on; }
+    changed norm-on => { norm.checked = self.norm-on; }
+    changed clarity-on => { clarity-check.checked = self.clarity-on; }
+    changed auto-on => { auto-check.checked = self.auto-on; }
+    changed delay-shown => { if !delay-input.has-focus { delay-input.text = self.delay-shown; } }
     VerticalLayout {
-        // Page tabs, 31px; the last picked page is remembered by the plugin.
-        tab-strip := Tabs {
-            model: root.tab-names;
-            current-index <=> root.tab-index;
-            selected(index) => { root.tab-changed(index); }
-        }
-        VerticalLayout {
-            padding: 8px;
-            spacing: 6px;
-            Rectangle {
-                vertical-stretch: 1;
-                equalizer-page := VerticalLayout {
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    visible: root.tab-index == 0;
+        ScrollView {
+            vertical-stretch: 1;
+            viewport-height: max(self.visible-height, content.preferred-height);
+            content := VerticalLayout {
+                width: parent.width;
+                padding-left: 12px;
+                padding-right: 12px;
+                padding-top: 10px;
+                padding-bottom: 10px;
+                spacing: 6px;
+                alignment: start;
+
+                // ---------------------------------------------------------------- Volume
+                HorizontalLayout {
+                    height: 24px;
                     spacing: 6px;
-                    HorizontalLayout {
-                        height: 22px;
-                        spacing: 6px;
-                        eq := Check {
-                            panel: true;
-                            width: max(82px, self.preferred-width);
-                            text: @tr("Equalizer");
-                            checked: root.equalizer-enabled;
-                            enabled: root.source-ready;
-                            toggled(on) => { root.equalizer-changed(on); }
+                    Label { width: root.column; text: @tr("Volume"); color: Theme.text; }
+                    // Mute: the speaker, crossed out while muted.
+                    Rectangle {
+                        width: 18px;
+                        Icon {
+                            x: (parent.width - self.width) / 2;
+                            y: (parent.height - self.height) / 2;
+                            name: AudioBridge.muted ? "mute" : "volume";
+                            color: !AudioBridge.can-volume ? Theme.icon-disabled : AudioBridge.muted || mute.has-hover ? Theme.accent : Theme.text-dim;
                         }
-                        Rectangle {
-                            width: root.preset-width;
-                            preset-button := Button {
-                                width: 100%;
-                                height: 100%;
-                                enabled: root.source-ready;
-                                text: root.preset-index >= 0 ? root.preset-names[root.preset-index] : @tr("Custom");
-                                clicked => { presets.show(); }
-                            }
-                            Icon {
-                                x: parent.width - Theme.button-padding - self.width;
-                                name: "caret-down";
-                                color: root.source-ready ? Theme.text-dim : Theme.icon-disabled;
-                            }
+                        mute := TouchArea {
+                            enabled: AudioBridge.can-volume;
+                            clicked => { AudioBridge.mute-toggled(); }
                         }
-                        VerticalLayout {
-                            alignment: center;
-                            Button { text: @tr("Reset"); small: true; enabled: root.source-ready; clicked => { root.reset-requested(); } }
-                        }
-                        Rectangle { }
                     }
-                    HorizontalLayout {
-                        padding-left: 3px;
-                        spacing: 0px;
-                        for value[index] in root.gain-values: Band {
-                            // i18n-ignore: frequencies
-                        caption: ["60", "170", "350", "1k", "3.5k", "10k"][index];
-                            gain: value;
-                            available: root.source-ready;
-                            edited(gain) => { root.gain-changed(index, gain); }
-                        }
-                        VerticalLayout {
-                            padding-left: 6px;
-                            padding-top: 11px;
-                            padding-bottom: 13px;
-                            Text { text: "+6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: top; } // i18n-ignore: unit
-                            Text { text: "0"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: center; }
-                            Text { text: "-6 dB"; color: Theme.text-dim; font-size: Theme.font-xs; vertical-alignment: bottom; } // i18n-ignore: unit
-                        }
-                        Rectangle { }
-                    }
-                    Rectangle { }
-                }
-                effects-page := VerticalLayout {
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    visible: root.tab-index == 1;
-                    spacing: 0px;
-                    delay := EffectRow {
-                        column: root.effects-column;
-                        label: @tr("Audio sync");
-                        shown: @tr("{} ms", round(root.delay-ms));
-                        minimum: -10000;
-                        maximum: 10000;
-                        value: root.delay-ms;
-                        available: root.source-ready;
-                        edited(v) => { root.delay-changed(v); }
-                        reset => { root.delay-reset(); }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        norm := Check {
-                            panel: true;
-                            width: root.effects-column;
-                            text: @tr("Normalize");
-                            checked: root.normalize-enabled;
-                            enabled: root.source-ready;
-                            toggled(on) => { root.normalize-changed(on); }
-                        }
-                        Rectangle { }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 4px;
-                        alignment: start;
-                        clarity-check := Check {
-                            panel: true;
-                            width: root.effects-column;
-                            text: @tr("Crystalizer");
-                            checked: root.clarity-enabled;
-                            enabled: root.source-ready;
-                            toggled(on) => { root.clarity-toggled(on); }
-                        }
-                        // Off keeps the strength but greys the slider out.
-                        clarity := Slider {
-                            width: 100px;
+                    // Greyed out without an audio output; the tooltip says why.
+                    ToolTipArea {
+                        text: AudioBridge.volume-reason;
+                        volume := Slider {
                             panel: true;
                             minimum: 0;
-                            maximum: 6;
-                            value: root.clarity-db;
-                            enabled: root.source-ready && root.clarity-enabled;
-                            changed(v) => { root.clarity-changed(v); }
-                        }
-                        Text { width: 60px; text: @tr("{} dB", round(root.clarity-db * 10) / 10); color: root.clarity-enabled ? Theme.text-list : Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; }
-                        VerticalLayout {
-                            alignment: center;
-                            Button { width: max(41px, self.preferred-width); text: @tr("Default"); small: true; enabled: root.source-ready; clicked => { root.clarity-reset(); } }
+                            maximum: 100;
+                            step: 5;
+                            value: AudioBridge.volume;
+                            enabled: AudioBridge.can-volume;
+                            changed(v) => { AudioBridge.volume-changed(v); }
                         }
                     }
-                    Rectangle { }
+                    Text {
+                        width: 34px;
+                        text: @tr("{}%", round(AudioBridge.volume));
+                        color: Theme.text-list;
+                        font-size: Theme.font-body;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                    }
                 }
-                output-page := VerticalLayout {
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    visible: root.tab-index == 2;
-                    spacing: 4px;
-                    // Track (G03) + Load… (A11): 65 + 6 + 140 + 6 + 50 = 267 of 285.
-                    track-row := HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Text { width: root.output-column; text: @tr("Track"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+
+                // ---------------------------------------------------------------- Track
+                Section { text: @tr("TRACK"); }
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: 6px;
+                    Label { width: root.column; text: @tr("Track"); color: AudioBridge.tracks-available ? Theme.text : Theme.text-dim; }
+                    ToolTipArea {
+                        text: track-combo.current-text;
+                        keys: [{ key: AudioBridge.keys.track, text: @tr("next") }];
                         VerticalLayout {
                             alignment: center;
                             track-combo := Choice {
-                                width: 140px;
-                                enabled: root.tracks-available;
-                                model: root.track-rows;
-                                current-index: root.track-index;
-                                selected(i) => { root.track-selected(i); }
+                                enabled: AudioBridge.tracks-available;
+                                model: AudioBridge.track-rows;
+                                current-index: AudioBridge.track-index;
+                                selected(i) => { AudioBridge.track-selected(i); }
                             }
                         }
-                        VerticalLayout {
-                            alignment: center;
-                            Button { width: max(50px, self.preferred-width); text: @tr("Load…"); small: true; enabled: root.can-load; clicked => { root.load-requested(); } }
-                        }
                     }
-                    // Channels (G05): 65 + 6 + 140 = 211.
+                    VerticalLayout { alignment: center; KeyHint { text: AudioBridge.keys.track; } }
+                }
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: 8px;
+                    padding-left: root.column + 6px;
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 0;
+                        Button { text: @tr("Load…"); small: true; enabled: AudioBridge.can-load; clicked => { AudioBridge.load-requested(); } }
+                    }
                     ToolTipArea {
-                        height: 24px;
-                        text: root.mono-track ? @tr("The current track is mono") : "";
-                        channel-row := HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-                            Text { width: root.output-column; text: @tr("Channels"); color: root.channels-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
-                            VerticalLayout {
-                                alignment: center;
-                                channel-combo := Choice {
-                                    width: 140px;
-                                    enabled: root.channels-available;
-                                    // The channel modes of model.ts, in the same order.
-                                    model: [
-                                        @tr("Stereo"),
-                                        @tr("Left Channel"),
-                                        @tr("Right Channel"),
-                                        @tr("Mono Mix"),
-                                        @tr("Swap Left and Right"),
-                                    ];
-                                    current-index: root.channel-index;
-                                    selected(i) => { root.channel-selected(i); }
-                                }
-                            }
-                        }
-                    }
-                    // Output device (G16): 65 + 6 + 200 = 271 of 285; the full name on hover. The list
-                    // opens at y ≈ 117 of 260, so 7 rows (142) fit below; longer lists scroll.
-                    ToolTipArea {
-                        height: 24px;
-                        text: root.device-tip;
-                        device-row := HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-                            Text { width: root.output-column; text: @tr("Device"); color: root.devices-available ? Theme.text : Theme.text-dim; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
-                            VerticalLayout {
-                                alignment: center;
-                                device-combo := Choice {
-                                    width: 200px;
-                                    max-visible-rows: 7;
-                                    enabled: root.devices-available;
-                                    model: root.device-rows;
-                                    current-index: root.device-index;
-                                    selected(i) => { root.device-selected(i); }
-                                }
-                            }
-                        }
-                    }
-                    // Auto-load (A11): indented to the controls, 71 + check.
-                    HorizontalLayout {
-                        height: 24px;
-                        padding-left: root.output-column + 6px;
+                        text: @tr("Load audio files with the same name as the video automatically");
                         auto-check := Check {
-                            // One line, as before: a long translation widens the window instead of wrapping.
-                            min-width: auto-measure.preferred-width + 16px;
                             panel: true;
-                            text: @tr("Auto-load audio files with the same name");
-                            checked: root.auto-load;
-                            toggled(on) => { root.auto-load-changed(on); }
+                            text: @tr("Same name");
+                            checked: AudioBridge.auto-load;
+                            toggled(on) => { AudioBridge.auto-load-changed(on); }
                         }
                     }
-                    keep-row := HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        Text { width: root.output-column; text: @tr("Keep sync"); color: Theme.text; font-size: Theme.font-body; horizontal-alignment: right; vertical-alignment: center; }
+                }
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: 6px;
+                    Label { width: root.column; text: @tr("Output"); color: AudioBridge.devices-available ? Theme.text : Theme.text-dim; }
+                    ToolTipArea {
+                        text: AudioBridge.device-tip;
                         VerticalLayout {
                             alignment: center;
-                            keep-combo := Choice {
-                                width: 140px;
-                                // The keep modes of model.ts, in the same order.
-                                model: [
-                                    @tr("Don't Keep"),
-                                    @tr("Keep for This Run"),
-                                    @tr("Always Keep"),
-                                ];
-                                current-index: root.sync-keep-index;
-                                selected(i) => { root.sync-keep-selected(i); }
+                            device-combo := Choice {
+                                max-visible-rows: 7;
+                                enabled: AudioBridge.devices-available;
+                                model: AudioBridge.device-rows;
+                                current-index: AudioBridge.device-index;
+                                selected(i) => { AudioBridge.device-selected(i); }
                             }
                         }
-                        Rectangle { }
+                    }
+                }
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: 6px;
+                    Label { width: root.column; text: @tr("Channels"); color: AudioBridge.channels-available ? Theme.text : Theme.text-dim; }
+                    // Segments: one per mode, the current one lit. One tooltip for the row: the full name of
+                    // the segment under the pointer (or why the row is off).
+                    ToolTipArea {
+                        text: AudioBridge.mono-track ? @tr("The current track is mono") : root.channel-names[root.channel-hovered];
+                        Rectangle {
+                            border-radius: Theme.radius-control;
+                            background: Theme.bg-bar;
+                            HorizontalLayout {
+                                padding: 2px;
+                                for name[index] in root.channel-short: Rectangle {
+                                    horizontal-stretch: 1;
+                                    border-radius: Theme.radius-control;
+                                    background: index == AudioBridge.channel-index ? Theme.button-bg
+                                        : segment.has-hover && AudioBridge.channels-available ? Theme.hover-bg : transparent;
+                                    Text {
+                                        text: name;
+                                        color: !AudioBridge.channels-available ? Theme.icon-disabled
+                                            : index == AudioBridge.channel-index ? Theme.text : Theme.text-dim;
+                                        font-size: Theme.font-body;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                        overflow: elide;
+                                    }
+                                    segment := TouchArea {
+                                        enabled: AudioBridge.channels-available;
+                                        changed has-hover => { if self.has-hover { root.channel-hovered = index; } }
+                                        clicked => { if index != AudioBridge.channel-index { AudioBridge.channel-selected(index); } }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // ---------------------------------------------------------------- Sync
+                Section { text: @tr("SYNC"); }
+                // One tooltip for the row: its three keys.
+                ToolTipArea {
+                    height: 24px;
+                    text: @tr("Audio sync");
+                    keys: [
+                        { key: AudioBridge.keys.earlier, text: @tr("earlier") },
+                        { key: AudioBridge.keys.later, text: @tr("later") },
+                        { key: AudioBridge.keys.reset, text: "0" },
+                    ];
+                    HorizontalLayout {
+                        spacing: 4px;
+                        Label { width: root.column + 2px; text: @tr("Delay"); }
+                        VerticalLayout {
+                            alignment: center;
+                            horizontal-stretch: 0;
+                            Button { text: "−50"; small: true; enabled: AudioBridge.source-ready; clicked => { AudioBridge.sync-stepped(-1); } } // i18n-ignore: number
+                        }
+                        // The delay in ms; a click lets you type it, Enter applies, Escape cancels.
+                        Rectangle {
+                            min-width: 56px;
+                            horizontal-stretch: 1;
+                            border-radius: Theme.radius-control;
+                            border-width: 1px;
+                            border-color: delay-input.has-focus ? Theme.accent : Theme.line;
+                            background: Theme.bg-bar;
+                            delay-input := TextInput {
+                                x: 4px;
+                                width: parent.width - 8px;
+                                text: root.delay-shown;
+                                enabled: AudioBridge.source-ready;
+                                single-line: true;
+                                color: AudioBridge.source-ready ? Theme.text : Theme.text-dim;
+                                font-size: Theme.font-body;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                                changed has-focus => { self.text = self.has-focus ? round(AudioBridge.delay-ms) : root.delay-shown; }
+                                accepted => {
+                                    if self.text.is-float() { AudioBridge.delay-changed(self.text.to-float()); }
+                                    self.clear-focus();
+                                }
+                                key-pressed(event) => {
+                                    if event.text == Key.Escape {
+                                        self.clear-focus();
+                                        return accept;
+                                    }
+                                    reject
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            horizontal-stretch: 0;
+                            Button { text: "+50"; small: true; enabled: AudioBridge.source-ready; clicked => { AudioBridge.sync-stepped(1); } } // i18n-ignore: number
+                        }
+                        Rectangle {
+                            width: 18px;
+                            Text {
+                                text: "↺"; // i18n-ignore: symbol
+                                color: !AudioBridge.source-ready || AudioBridge.delay-ms == 0 ? Theme.icon-disabled : undo.has-hover ? Theme.accent : Theme.text-dim;
+                                font-size: Theme.font-title;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                            undo := TouchArea {
+                                enabled: AudioBridge.source-ready && AudioBridge.delay-ms != 0;
+                                clicked => { AudioBridge.delay-reset(); }
+                            }
+                        }
+                        HorizontalLayout {
+                            spacing: 2px;
+                            horizontal-stretch: 0;
+                            VerticalLayout { alignment: center; KeyHint { text: root.roomy ? AudioBridge.keys.earlier : ""; } }
+                            VerticalLayout { alignment: center; KeyHint { text: root.roomy ? AudioBridge.keys.later : ""; } }
+                            VerticalLayout { alignment: center; KeyHint { text: root.roomy ? AudioBridge.keys.reset : ""; } }
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: 6px;
+                    Label { width: root.column; text: @tr("Keep"); color: Theme.text; }
+                    VerticalLayout {
+                        alignment: center;
+                        keep-combo := Choice {
+                            // The keep modes of model.ts, in the same order.
+                            model: [@tr("Don't Keep"), @tr("Keep for This Run"), @tr("Always Keep")];
+                            current-index: AudioBridge.sync-keep-index;
+                            selected(i) => { AudioBridge.sync-keep-selected(i); }
+                        }
+                    }
+                }
+
+                // ---------------------------------------------------------------- Equalizer
+                Section { text: @tr("EQUALIZER"); }
+                HorizontalLayout {
+                    height: 24px;
+                    spacing: 6px;
+                    Label { width: root.column; text: @tr("Equalizer"); }
+                    VerticalLayout {
+                        alignment: center;
+                        horizontal-stretch: 0;
+                        eq := Check {
+                            panel: true;
+                            checked: AudioBridge.equalizer-enabled;
+                            enabled: AudioBridge.source-ready;
+                            toggled(on) => { AudioBridge.equalizer-changed(on); }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        // "Custom" (last) stands for gains of no preset; picking it changes nothing.
+                        preset-combo := Choice {
+                            enabled: AudioBridge.source-ready;
+                            model: root.preset-names;
+                            current-index: root.preset-at;
+                            selected(i) => {
+                                if i < 4 { AudioBridge.preset-selected(i); }
+                                self.current-index = root.preset-at;
+                            }
+                        }
+                    }
+                    VerticalLayout { alignment: center; KeyHint { text: AudioBridge.keys.equalizer; } }
+                }
+                HorizontalLayout {
+                    padding-top: 2px;
+                    // A fixed model (the ten bands of model.ts); the gains are read by index.
+                    for caption[index] in ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"]: Band { // i18n-ignore: frequencies
+                        caption: caption;
+                        gain: AudioBridge.gain-values[index];
+                        available: AudioBridge.source-ready;
+                        edited(gain) => { AudioBridge.gain-changed(index, gain); }
+                    }
+                }
+
+                // ---------------------------------------------------------------- Processing
+                Section { text: @tr("PROCESSING"); }
+                HorizontalLayout {
+                    height: 22px;
+                    spacing: 6px;
+                    norm := Check {
+                        panel: true;
+                        min-width: self.preferred-width;
+                        text: @tr("Normalize");
+                        checked: AudioBridge.normalize-enabled;
+                        enabled: AudioBridge.source-ready;
+                        toggled(on) => { AudioBridge.normalize-changed(on); }
                     }
                     Rectangle { }
+                    VerticalLayout { alignment: center; KeyHint { text: AudioBridge.keys.normalize; } }
                 }
-            }
-            HorizontalLayout {
-                height: 20px;
-                spacing: 6px;
-                ToolTipArea {
-                    text: root.error-detail;
-                    Text {
-                        text: Words.status(root.status);
-                        color: root.has-error ? Theme.accent : Theme.text-dim;
-                        font-size: Theme.font-body;
-                        vertical-alignment: center;
-                        overflow: elide;
+                HorizontalLayout {
+                    height: 22px;
+                    spacing: 6px;
+                    clarity-check := Check {
+                        panel: true;
+                        min-width: self.preferred-width;
+                        text: @tr("Crystalizer");
+                        checked: AudioBridge.clarity-enabled;
+                        enabled: AudioBridge.source-ready;
+                        toggled(on) => { AudioBridge.clarity-toggled(on); }
                     }
-                }
-                if root.has-error: VerticalLayout {
-                    alignment: center;
-                    Button { text: @tr("Retry"); small: true; enabled: !root.is-busy; clicked => { root.retry-requested(); } }
+                    // The strength; off keeps it but greys the slider out.
+                    clarity := Slider {
+                        panel: true;
+                        minimum: 0;
+                        maximum: 6;
+                        step: 0.5;
+                        value: AudioBridge.clarity-db;
+                        enabled: AudioBridge.source-ready && AudioBridge.clarity-enabled;
+                        changed(v) => { AudioBridge.clarity-changed(v); }
+                    }
+                    Text {
+                        width: 40px;
+                        text: @tr("{} dB", round(AudioBridge.clarity-db * 10) / 10);
+                        color: AudioBridge.clarity-enabled ? Theme.text-list : Theme.text-dim;
+                        font-size: Theme.font-body;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                    }
+                    VerticalLayout { alignment: center; KeyHint { text: AudioBridge.keys.clarity; } }
                 }
             }
         }
-    }
-    presets := PopupWindow {
-        x: preset-button.absolute-position.x - root.absolute-position.x;
-        y: preset-button.absolute-position.y - root.absolute-position.y + preset-button.height;
-        width: preset-button.width;
-        Rectangle {
-            background: Theme.bg-list;
-            border-color: Theme.line;
-            border-width: 1px;
-            VerticalLayout {
-                padding: 1px;
-                for name[index] in root.preset-names: PresetItem {
-                    text: name;
-                    selected: index == root.preset-index;
-                    picked => { root.preset-selected(index); }
+        // ---------------------------------------------------------------- footer
+        Rectangle { height: 1px; background: Theme.line; }
+        HorizontalLayout {
+            height: 36px;
+            padding-left: 12px;
+            padding-right: 12px;
+            spacing: 6px;
+            ToolTipArea {
+                text: AudioBridge.error-detail;
+                Text {
+                    text: AudioBridge.status == "loading" ? @tr("Loading audio…")
+                        : AudioBridge.status == "no-track" ? @tr("No audio track selected")
+                        : AudioBridge.status == "applying" ? @tr("Applying…")
+                        : AudioBridge.status == "failed" ? @tr("Audio processing failed")
+                        : AudioBridge.status == "applied" ? @tr("Applied")
+                        : @tr("Ready");
+                    color: AudioBridge.has-error ? Theme.accent : Theme.text-dim;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
                 }
-                Rectangle { height: 7px; Rectangle { height: 1px; background: Theme.line; } }
-                PresetItem { text: @tr("Default"); picked => { root.reset-requested(); } }
+            }
+            VerticalLayout {
+                alignment: center;
+                visible: AudioBridge.has-error;
+                Button { text: @tr("Retry"); small: true; enabled: !AudioBridge.is-busy; clicked => { AudioBridge.retry-requested(); } }
+            }
+            ToolTipArea {
+                text: @tr("Equalizer, Normalize and Crystalizer back to neutral; sync and channels are kept");
+                horizontal-stretch: 0;
+                VerticalLayout {
+                    alignment: center;
+                    Button { text: @tr("Reset"); enabled: AudioBridge.source-ready; clicked => { AudioBridge.reset-requested(); } }
+                }
             }
         }
     }
