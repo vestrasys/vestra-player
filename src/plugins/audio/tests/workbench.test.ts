@@ -1333,14 +1333,28 @@ test("the panel's volume slider and mute set the player's output; −50 / +50 st
   await stop();
 });
 
-test("without an audio output the volume is greyed out and says why; nothing is sent", async () => {
-  const { host, window, stop } = await open(); // the test host lists no output device
+test("the volume stays enabled with an empty device list; a refused change greys it out with the reason until the next source", async () => {
+  const { host, window, stop } = await open(); // the test host lists no output device (as with mpv's `auto` only)
+  await host.settle();
+  assert.equal(window.props["can-volume"], true, "an empty device list does not mean no output");
+  host.handle("playback.set", () => {
+    throw new HostError("unavailable", "no audio output");
+  });
+  window.emit("volume-changed", 30);
   await host.settle();
   assert.equal(window.props["can-volume"], false);
-  assert.equal(host.translate(window.props["volume-reason"] as never), "No audio output");
-  window.emit("volume-changed", 30);
-  window.emit("mute-toggled");
+  assert.equal(host.translate(window.props["volume-reason"] as never), "no audio output");
+  const sent = host.sent("playback.set").length;
+  window.emit("mute-toggled"); // greyed out: nothing is sent
   await host.settle();
-  assert.equal(host.sent("playback.set").length, 0);
+  assert.equal(host.sent("playback.set").length, sent);
+  host.reset("playback.set");
+  host.openElsewhere("/next.mp4");
+  host.setSource({ audioTracks: [track(1)] });
+  await host.settle();
+  assert.equal(window.props["can-volume"], true, "the next source tries again");
+  window.emit("volume-changed", 30);
+  await host.settle();
+  assert.deepEqual(host.sent("playback.set").at(-1), { property: "volume", value: 30 });
   await stop();
 });

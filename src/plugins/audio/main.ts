@@ -315,6 +315,17 @@ export default async function activate(plugin: Plugin) {
   // The device list is read at start and every 5 s (the player pushes no list changes);
   // the choice is saved here and handed to the player at start (it keeps it for one run).
   let devices: AudioDevice[] | null = null; // null: the player lists none (headless, ao=null)
+  /**
+   * Why the player refused the last volume or mute change (it has no audio output), `null` while it
+   * took it. The device list cannot tell: the player leaves mpv's `auto` device out, so a working
+   * output may list none. Cleared by the next source, an output change or a device list read.
+   */
+  let volumeRefused: string | null = null;
+  const volumeWorks = () => {
+    if (volumeRefused === null) return;
+    volumeRefused = null;
+    plugin.update();
+  };
   /** The chosen device is not connected: its return gets an OSD, its loss already had one or none. */
   let lost = false;
   let switching = 0;
@@ -348,6 +359,7 @@ export default async function activate(plugin: Plugin) {
       list = null;
     }
     devices = list && list.length > 0 ? list : null;
+    if (devices) volumeWorks();
     // Keep the saved name current, so a disconnected device still shows what it is called.
     const found = device === null ? undefined : devices?.find((d) => d.id === device);
     if (found && found.name !== deviceName) {
@@ -456,16 +468,15 @@ export default async function activate(plugin: Plugin) {
   // older state, so a drag does not jump back.
   let volumeDraft: number | null = null;
   let volumeTicket = 0;
-  /** The player lists no audio output (headless, `ao=null`, no device): nothing to set the volume of. */
-  const canVolume = () => devices !== null;
   const setVolume = async (value: number) => {
-    if (!canVolume() || typeof value !== "number" || !Number.isFinite(value)) return;
+    if (volumeRefused !== null || typeof value !== "number" || !Number.isFinite(value)) return;
     const ticket = ++volumeTicket;
     volumeDraft = Math.round(Math.min(100, Math.max(0, value)));
     try {
       await player.setOutput({ volume: volumeDraft });
-    } catch {
-      // Refused (no audio output): the state stays what the player says.
+    } catch (error) {
+      // Refused (no audio output): the controls grey out with the player's reason; the state stays.
+      refuse(error);
     } finally {
       if (ticket === volumeTicket) {
         volumeDraft = null;
@@ -473,7 +484,21 @@ export default async function activate(plugin: Plugin) {
       }
     }
   };
-  const toggleMute = () => (canVolume() ? player.setOutput({ muted: !player.state.muted }).catch(() => undefined) : undefined);
+  const toggleMute = () => (volumeRefused === null ? player.setOutput({ muted: !player.state.muted }).catch(refuse) : undefined);
+  function refuse(error: unknown) {
+    volumeRefused = clip(String((error as Error)?.message || "unavailable"), 120);
+    plugin.update();
+  }
+  // A new source or a change of the output may bring the output back.
+  let outputSource = player.state.sourceId;
+  let outputActive = player.state.audioOutput?.active ?? null;
+  player.onChange((state) => {
+    const active = state.audioOutput?.active ?? null;
+    if (state.sourceId === outputSource && active === outputActive) return;
+    outputSource = state.sourceId;
+    outputActive = active;
+    volumeWorks();
+  });
 
   // ---------------------------------------------------------------- panel
   /** The first key of one of this plugin's commands, "" without one (the key caps and tooltips). */
@@ -498,8 +523,8 @@ export default async function activate(plugin: Plugin) {
       },
       volume: Math.min(volumeDraft ?? state.volume, 100),
       muted: state.muted,
-      canVolume: canVolume(),
-      volumeReason: canVolume() ? "" : text("No audio output"),
+      canVolume: volumeRefused === null,
+      volumeReason: volumeRefused === null ? "" : text("{}", [volumeRefused]),
       equalizerEnabled: settings.equalizer,
       presetIndex: presetOf(settings),
       gainValues: settings.gains,
