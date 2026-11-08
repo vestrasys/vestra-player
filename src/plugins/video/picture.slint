@@ -345,6 +345,8 @@ component Glyph {
         text: root.tip;
         keys: [{ key: root.key, text: "" }];
         Rectangle {
+            width: 100%;
+            height: 100%;
             border-radius: Theme.radius-control;
             background: root.checked ? Theme.selected-bg : transparent;
             border-width: root.checked ? 1px : 0px;
@@ -379,6 +381,8 @@ component ColourRow {
         keys: [{ key: root.down, text: "−" }, { key: root.up, text: "+" }];
         detail: @tr("· double-click: Default");
         HorizontalLayout {
+            width: 100%;
+            height: 100%;
             spacing: 6px;
             Name { text: root.label; }
             Fader {
@@ -461,6 +465,8 @@ component EffectRow {
         keys: [{ key: root.key, text: "" }];
         detail: @tr("· double-click: Default");
         EffectLine {
+            width: 100%;
+            height: 100%;
             label: root.label;
             key: root.key;
             checked: root.checked;
@@ -507,6 +513,8 @@ component Row {
         keys: [{ key: root.key, text: "" }];
         detail: root.detail;
         Line {
+            width: 100%;
+            height: 100%;
             label: root.label;
             key: root.key;
             enabled: root.enabled;
@@ -727,6 +735,8 @@ export component Picture inherits Rectangle {
                             : @tr("Doubles the frame rate (up to 60), blending each in-between frame from its neighbours");
                         keys: [{ key: root.keys.doubling, text: "" }];
                         HorizontalLayout {
+                            width: 100%;
+                            height: 100%;
                             spacing: 6px;
                             Switch {
                                 text: @tr("Frame Doubling");
@@ -745,6 +755,8 @@ export component Picture inherits Rectangle {
                         text: PictureBridge.render-ready ? @tr("GPU interpolation to the display refresh rate; excludes frame doubling") : root.render-reason;
                         keys: [{ key: root.keys.interpolation, text: "" }];
                         HorizontalLayout {
+                            width: 100%;
+                            height: 100%;
                             spacing: 6px;
                             Switch {
                                 text: @tr("Motion Interpolation");
@@ -976,6 +988,8 @@ export component Picture inherits Rectangle {
                             text: PictureBridge.render-ready ? @tr("Target brightness") : root.render-reason;
                             detail: @tr("· double-click: Default");
                             HorizontalLayout {
+                                width: 100%;
+                                height: 100%;
                                 spacing: 6px;
                                 Fader {
                                     enabled: PictureBridge.render-ready;
@@ -1043,6 +1057,8 @@ export component Picture inherits Rectangle {
                                 : @tr("Draw the video on the GPU from the next start");
                             keys: [{ key: root.keys.gpu, text: "" }];
                             HorizontalLayout {
+                                width: 100%;
+                                height: 100%;
                                 spacing: 6px;
                                 Switch {
                                     text: @tr("GPU Rendering (Experimental)");
@@ -1077,6 +1093,8 @@ export component Picture inherits Rectangle {
             ToolTipArea {
                 text: root.detail-text != "" ? root.detail-text : root.status-text;
                 HorizontalLayout {
+                    width: 100%;
+                    height: 100%;
                     padding-left: 10px;
                     padding-right: 10px;
                     spacing: 6px;

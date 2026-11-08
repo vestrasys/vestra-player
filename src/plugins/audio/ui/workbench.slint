@@ -298,7 +298,11 @@ export component Audio inherits Rectangle {
                     // Greyed out without an audio output; the tooltip says why.
                     ToolTipArea {
                         text: AudioBridge.volume-reason;
+                        horizontal-stretch: 1;
+                        // Not a layout: the slider fills the tooltip area itself.
                         volume := Slider {
+                            width: parent.width;
+                            height: parent.height;
                             panel: true;
                             minimum: 0;
                             maximum: 100;
