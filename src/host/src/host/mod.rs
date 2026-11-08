@@ -86,13 +86,18 @@ pub(crate) use supervisor::Origin;
 pub(crate) use supervisor::shutdown::{DEVICE_LOSS_BUDGET, QUIT_BUDGET};
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
 
-/// The key of a plugin's panel in one slot (SDK 1.6.14: a plugin mounts
+/// The key of a plugin's panel in one slot (SDK 1.6.15: a plugin mounts
 /// one panel per slot): what the shell, the policy and the compile sets
 /// know a panel by (`CompileSpec.owner`, `Owner<key>Bridge`). The plugin
 /// is [`panel_plugin`]; everything addressed to the plugin (messages,
 /// commands, images, its process) uses that.
+///
+/// Owner generations count up from 1, one per plugin start
+/// (`alloc_pid`, kept below the wire's 2^53), so far below `u64::MAX / 4`; a
+/// larger one would wrap into another panel's key, which debug builds catch.
 pub(crate) fn panel_key(owner: u64, slot: composition::Slot) -> u64 {
-    owner * PANEL_SLOTS + slot as u64
+    debug_assert!(owner <= u64::MAX / PANEL_SLOTS, "owner {owner} too large");
+    owner.wrapping_mul(PANEL_SLOTS) + slot as u64
 }
 /// The plugin a panel key belongs to.
 pub(crate) fn panel_plugin(key: u64) -> u64 {

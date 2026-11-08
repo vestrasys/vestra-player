@@ -47,7 +47,7 @@ impl Capability for UiMount {
     /// is Normal, the current tab keeps it running as declared work
     /// (`Busy::ShownTab`), and a background tab stays as a placeholder while
     /// the plugin stands by. A plugin may hold one panel per slot (SDK
-    /// 1.6.14): any live one makes it Resident; its tabs are recorded, one
+    /// 1.6.15): any live one makes it Resident; its tabs are recorded, one
     /// call each.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
         // What each of its panels will be once the waiting changes apply:
@@ -138,10 +138,11 @@ impl Capability for UiMount {
             .filter(|m| m.plugin == owner)
             .map(|m| m.spec.owner)
             .collect::<Vec<_>>();
-        if keys.is_empty() && !keep_recorded {
-            // Replayed tabs not applied yet.
-            host.mount_queue
-                .retain(|c| c.reply.owner != owner || c.contribution.is_none());
+        if !keep_recorded {
+            // Its mounts not applied yet (replayed tabs among them) go too,
+            // also when another of its panels is applied: a queued
+            // placeholder would otherwise stay without its plugin.
+            forget_queued(&mut host.mount_queue, owner);
         }
         for key in keys {
             revoke_panel(host, key, keep_recorded);
@@ -216,6 +217,12 @@ impl Capability for UiMount {
     }
 }
 
+/// Drop the mounts of plugin `owner` that wait in `queue` (its unmounts
+/// stay: they remove what is applied).
+fn forget_queued(queue: &mut std::collections::VecDeque<MountChange>, owner: u64) {
+    queue.retain(|c| c.reply.owner != owner || c.contribution.is_none());
+}
+
 /// [`UiMount::revoke`] for one panel.
 fn revoke_panel(host: &mut Host, key: u64, keep_recorded: bool) {
     let Some(mount) = host.mounts.get_mut(&key) else {
@@ -240,8 +247,8 @@ fn revoke_panel(host: &mut Host, key: u64, keep_recorded: bool) {
 }
 
 /// The panel a `ui.setMount`, `ui.interaction`, `ui.menu` or `ui.unmount`
-/// is about (SDK 1.6.14: `slot`): the plugin's panel in `slot`, or, without
-/// one (SDKs before 1.6.14, one panel each), its only panel. `None`: it
+/// is about (SDK 1.6.15: `slot`): the plugin's panel in `slot`, or, without
+/// one (SDKs before 1.6.15, one panel each), its only panel. `None`: it
 /// has none.
 fn panel_of(host: &Host, owner: u64, params: &Value) -> std::result::Result<Option<u64>, RpcError> {
     if let Some(slot) = params.get("slot").filter(|v| !v.is_null()) {
@@ -265,7 +272,7 @@ fn panel_of(host: &Host, owner: u64, params: &Value) -> std::result::Result<Opti
 }
 
 /// `ui.mount` and `ui.unmount`: queued for the next shell preparation. A
-/// plugin mounts one panel per slot (SDK 1.6.14); `ui.unmount` takes the
+/// plugin mounts one panel per slot (SDK 1.6.15); `ui.unmount` takes the
 /// slot's panel, or without `slot` every panel of the plugin.
 fn mount(
     host: &mut Host,
@@ -885,4 +892,64 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
     // Answer after the next layout pass so a following layout.state sees it.
     host.window_tick();
     Ok(Value::Null)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn change(owner: u64, slot: composition::Slot, mount: bool) -> MountChange {
+        let key = panel_key(owner, slot);
+        MountChange {
+            reply: Reply { owner, id: 0 },
+            key,
+            contribution: mount.then(|| Mount {
+                spec: composition::CompileSpec {
+                    owner: key,
+                    file: std::path::PathBuf::from("tab.slint"),
+                    component: "Tab".into(),
+                    global: Some("Bridge".into()),
+                    slot,
+                },
+                plugin: owner,
+                properties: BTreeMap::new(),
+                visible: true,
+                detached: false,
+                title: "Tab".into(),
+                manifest: "a.b".into(),
+                builtin: false,
+                recorded: true,
+                call: Value::Null,
+            }),
+            announced: true,
+        }
+    }
+
+    /// Review of the multi-panel change: a plugin gone for good (disabled,
+    /// uninstalled) with one tab applied and another replayed but still
+    /// queued loses the queued one too (`UiMount::revoke` always forgets its
+    /// queued mounts), so no placeholder is left without its plugin; its
+    /// unmounts and other plugins' changes stay.
+    #[test]
+    fn a_plugin_gone_for_good_leaves_no_queued_placeholder() {
+        use composition::Slot;
+        let mut queue = std::collections::VecDeque::from([
+            // Its adjust tab replayed, not applied yet (its sidebar tab is).
+            change(7, Slot::Adjust, true),
+            change(9, Slot::Sidebar, true),
+            change(7, Slot::Bottom, false),
+        ]);
+        forget_queued(&mut queue, 7);
+        let left = queue
+            .iter()
+            .map(|c| (c.reply.owner, c.key, c.contribution.is_some()))
+            .collect::<Vec<_>>();
+        assert_eq!(
+            left,
+            [
+                (9, panel_key(9, Slot::Sidebar), true),
+                (7, panel_key(7, Slot::Bottom), false),
+            ]
+        );
+    }
 }

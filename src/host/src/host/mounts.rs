@@ -710,7 +710,7 @@ impl Host {
                 continue;
             }
             // To the panel's plugin: `view` stays `"$mount"` for SDKs before
-            // 1.6.14 (one panel each); `slot` says which panel.
+            // 1.6.15 (one panel each); `slot` says which panel.
             let (owner, slot) = (panel_plugin(event.owner), slot_of(event.owner));
             match event.args {
                 Ok(args)=>self.send(owner,json!({"event":"ui.callback","data":{"view":"$mount","slot":slot,"callback":event.callback,"args":args}})),
@@ -724,7 +724,7 @@ impl Host {
 mod tests {
     use super::*;
 
-    /// SDK 1.6.14: a plugin mounts one panel per slot. Each panel has a key
+    /// SDK 1.6.15: a plugin mounts one panel per slot. Each panel has a key
     /// of its own (the shell, the policy and the compile sets know it by
     /// that); the plugin and the slot come back from it, and keys of
     /// different plugins or slots never meet.
