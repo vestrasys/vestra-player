@@ -265,7 +265,9 @@ component Switch {
     horizontal-stretch: 1;
     HorizontalLayout {
         spacing: 4px;
+        // The box keeps its own width; the label takes the rest, left-aligned.
         box := Check {
+            horizontal-stretch: 0;
             text: "";
             panel: true;
             self-toggle: false;
@@ -275,6 +277,7 @@ component Switch {
         }
         Text {
             horizontal-stretch: 1;
+            horizontal-alignment: left;
             text: root.text;
             color: root.enabled ? Theme.text : Theme.text-dim;
             font-size: Theme.font-body;
