@@ -10,9 +10,9 @@ Opens the options window and changes the palette and the interface language.
 
 ## Entries
 
-- Right-click menu: Settings ▸ Options… (F5).
-- Right-click menu: Settings ▸ Appearance ▸ Vestra Dark / Vestra Light (radio).
-- Right-click menu: Settings ▸ Language ▸ Follow System / a language (radio).
+- Right-click menu: Options… (F5), at the top level next to About Vestra Player….
+- Command palette (Ctrl+Shift+P): Appearance: Vestra Dark / Vestra Light (radio).
+- Command palette: Language: Follow System / a language (radio).
 - Options ▸ General ▸ Language, Options ▸ Appearance ▸ Appearance.
 
 ## Translations

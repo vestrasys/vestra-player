@@ -5,8 +5,11 @@ import type { Mode, Resume } from "./resume.ts";
 import { timing } from "./store.ts";
 
 const RECENT = ["@open", "Recently Played"] as const;
-/** All of Open ▸ Recently Played shares one order; declaration order arranges it (SDK: Concepts, Commands, "Order and separators"). */
-const RECENT_ORDER = 114;
+/**
+ * All of Open ▸ Recently Played shares one order; declaration order arranges it (SDK: Concepts, Commands, "Order and separators").
+ * 119: after every Open ▸ item (110–115), so the submenu is the last line of Open ▸ (menu sweep B5).
+ */
+const RECENT_ORDER = 119;
 /** Headless hosts refuse the display; that never fails the action itself. */
 export const quiet = (shown: Promise<void>) => void shown.catch(() => {});
 
@@ -213,10 +216,9 @@ export class RecentMenu {
   }
 }
 
-/** Playback ▸ Resume Playback ▸ (250–254). */
+/** Resume Playback (250–254): in the command palette only (menu sweep B5), "Resume Playback: Title". */
 export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
-  const path = ["@playback", "Resume Playback"] as const;
-  // The palette's "Category: Title" (player 0.7.6): the submenu's own label, so its translations.
+  // The palette's "Category: Title" (player 0.7.6): the former submenu's own label, so its translations.
   const category = plugin.i18n.text("Resume Playback");
   const modes = [
     ["off", "Don't Resume"],
@@ -226,7 +228,7 @@ export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
   modes.forEach(([mode, title], index) =>
     plugin.commands.add({
       id: `resume.${mode}`,
-      path: [...path, title],
+      title,
       category,
       order: 250 + index,
       group: "domain",
@@ -237,7 +239,7 @@ export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
   );
   plugin.commands.add({
     id: "resume.audio",
-    path: [...path, "Also Remember Audio Files"],
+    title: "Also Remember Audio Files",
     category,
     order: 253,
     group: "resume-options",
@@ -246,7 +248,7 @@ export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
   });
   plugin.commands.add({
     id: "resume.clear",
-    path: [...path, "Clear All Saved Positions"],
+    title: "Clear All Saved Positions",
     category,
     order: 254,
     group: "resume-options",

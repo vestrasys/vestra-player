@@ -56,13 +56,14 @@ const at = async (host: TestHost, position: number) => {
   host.setSource({ position });
   await host.settle();
 };
+// Menu sweep (B5): the chapter and bookmark lines are palette only, so their text is the title.
 const menuLines = (host: TestHost, group: string) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.group === group)
     .sort((a, b) => a.declaration.order - b.declaration.order)
-    .map((c) => c.display.path.at(-1)!);
+    .map((c) => c.display.title);
 const idFor = (host: TestHost, title: string) =>
-  [...host.commands.entries()].find(([, c]) => c.display.path.at(-1) === title)![0];
+  [...host.commands.entries()].find(([, c]) => c.display.title === title)![0];
 const seeks = (host: TestHost) =>
   host
     .sent("source.submit")
@@ -791,50 +792,55 @@ test("B22: stopping the plugin clears its layer; other plugins' layers stay", as
 
 // ------------------------------------------------------------------ menus
 
-const fixedMenu = (host: TestHost, path: (c: ReturnType<TestHost["command"]>) => readonly unknown[]) =>
+/** The fixed commands by order: title (as declared or as shown), order, group, keys. */
+const fixedMenu = (host: TestHost, title: (c: ReturnType<TestHost["command"]>) => unknown) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.order < 10000)
     .sort((a, b) => a.declaration.order - b.declaration.order)
-    .map((c) => [path(c).slice(1).join(" ▸ "), c.declaration.order, c.declaration.group, c.declaration.bindings.join(",")]);
+    .map((c) => [title(c), c.declaration.order, c.declaration.group, c.declaration.bindings.join(",")]);
 
-test("menu: orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
+test("menu: Chapter and Bookmark List… at the top level, the rest palette only; orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
   const host = new TestHost();
   await start(host);
-  // English source text, in the player's Playback menu.
-  assert.ok([...host.commands.values()].every((c) => c.declaration.path[0] === "@playback"));
-  assert.deepEqual(fixedMenu(host, (c) => c.declaration.path), [
-    ["Chapters and Bookmarks ▸ Chapter and Bookmark List…", 260, "marks-list", "H"],
-    ["Chapters and Bookmarks ▸ Add Bookmark", 261, "marks-edit", "P"],
-    ["Chapters and Bookmarks ▸ Previous Bookmark or Chapter", 262, "marks-edit", "Shift+PageUp"],
-    ["Chapters and Bookmarks ▸ Next Bookmark or Chapter", 263, "marks-edit", "Shift+PageDown"],
-    ["Chapters and Bookmarks ▸ Previous Chapter", 264, "marks-edit", "Ctrl+PageUp"],
-    ["Chapters and Bookmarks ▸ Next Chapter", 265, "marks-edit", "Ctrl+PageDown"],
-    ["A-B Loop ▸ Set Start Point", 270, "ab-a", "["],
-    ["A-B Loop ▸ Clear Start Point", 271, "ab-a", "{"],
-    ["A-B Loop ▸ Start Point Back 0.1 s", 272, "ab-a", "Ctrl+["],
-    ["A-B Loop ▸ Start Point Forward 0.1 s", 273, "ab-a", "Alt+["],
-    ["A-B Loop ▸ Set End Point", 274, "ab-b", "]"],
-    ["A-B Loop ▸ Clear End Point", 275, "ab-b", "}"],
-    ["A-B Loop ▸ End Point Back 0.1 s", 276, "ab-b", "Ctrl+]"],
-    ["A-B Loop ▸ End Point Forward 0.1 s", 277, "ab-b", "Alt+]"],
-    ["A-B Loop ▸ Move Range Back 0.1 s", 278, "ab-both", "Ctrl+Alt+["],
-    ["A-B Loop ▸ Move Range Forward 0.1 s", 279, "ab-both", "Ctrl+Alt+]"],
-    ["A-B Loop ▸ Loop Current Chapter or Bookmark Range", 280, "ab-toggle", "Alt+\\"],
-    ["A-B Loop ▸ A-B Loop On/Off", 281, "ab-toggle", "\\"],
-    ["A-B Loop ▸ Loop Count ▸ Endless", 282, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ Once", 283, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 2 Times", 284, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 3 Times", 285, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 5 Times", 286, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 10 Times", 287, "ab-count", ""],
+  // Menu sweep (B5): only the list command has a menu path (top level, after Playlist 800, windows group).
+  const list = host.command("marks.list");
+  assert.deepEqual(list.declaration.path, ["Chapter and Bookmark List…"]);
+  assert.deepEqual(list.display.path, ["Chapter and Bookmark List…"]);
+  for (const [id, c] of host.commands) if (id !== "marks.list") assert.deepEqual(c.declaration.path, [], `${id} is palette only`);
+  assert.deepEqual(fixedMenu(host, (c) => c.declaration.title), [
+    ["Add Bookmark", 261, "marks-edit", "P"],
+    ["Previous Bookmark or Chapter", 262, "marks-edit", "Shift+PageUp"],
+    ["Next Bookmark or Chapter", 263, "marks-edit", "Shift+PageDown"],
+    ["Previous Chapter", 264, "marks-edit", "Ctrl+PageUp"],
+    ["Next Chapter", 265, "marks-edit", "Ctrl+PageDown"],
+    ["Set Start Point", 270, "ab-a", "["],
+    ["Clear Start Point", 271, "ab-a", "{"],
+    ["Start Point Back 0.1 s", 272, "ab-a", "Ctrl+["],
+    ["Start Point Forward 0.1 s", 273, "ab-a", "Alt+["],
+    ["Set End Point", 274, "ab-b", "]"],
+    ["Clear End Point", 275, "ab-b", "}"],
+    ["End Point Back 0.1 s", 276, "ab-b", "Ctrl+]"],
+    ["End Point Forward 0.1 s", 277, "ab-b", "Alt+]"],
+    ["Move Range Back 0.1 s", 278, "ab-both", "Ctrl+Alt+["],
+    ["Move Range Forward 0.1 s", 279, "ab-both", "Ctrl+Alt+]"],
+    ["Loop Current Chapter or Bookmark Range", 280, "ab-toggle", "Alt+\\"],
+    ["A-B Loop On/Off", 281, "ab-toggle", "\\"],
+    ["Endless", 282, "ab-count", ""],
+    ["Once", 283, "ab-count", ""],
+    ["2 Times", 284, "ab-count", ""],
+    ["3 Times", 285, "ab-count", ""],
+    ["5 Times", 286, "ab-count", ""],
+    ["10 Times", 287, "ab-count", ""],
+    ["Chapter and Bookmark List…", 801, "windows", "H"],
   ]);
   assert.deepEqual(
-    fixedMenu(host, (c) => c.display.path),
-    fixedMenu(host, (c) => c.declaration.path),
+    fixedMenu(host, (c) => c.display.title),
+    fixedMenu(host, (c) => c.declaration.title),
   );
   const option = host.command("marks.seekbar").declaration;
-  assert.deepEqual([option.path.slice(1).join(" ▸ "), option.order, option.group, option.bindings.join(",")], [
-    "Chapters and Bookmarks ▸ Show Marks on Seek Bar",
+  assert.deepEqual([option.path, option.title, option.order, option.group, option.bindings.join(",")], [
+    [],
+    "Show Marks on Seek Bar",
     30000,
     "marks-option",
     "",
@@ -894,34 +900,39 @@ test("palette: the categories read as the submenus in zh-Hans", async () => {
 test("zh-Hans: the menus read as before the migration", async () => {
   const host = new TestHost();
   await start(host, undefined, "zh-Hans");
-  assert.ok([...host.commands.values()].every((c) => c.display.path[0] === "播放"));
-  assert.deepEqual(fixedMenu(host, (c) => c.display.path), [
-    ["章节/书签 ▸ 章节/书签列表…", 260, "marks-list", "H"],
-    ["章节/书签 ▸ 添加书签", 261, "marks-edit", "P"],
-    ["章节/书签 ▸ 上一书签/章节", 262, "marks-edit", "Shift+PageUp"],
-    ["章节/书签 ▸ 下一书签/章节", 263, "marks-edit", "Shift+PageDown"],
-    ["章节/书签 ▸ 上一章节", 264, "marks-edit", "Ctrl+PageUp"],
-    ["章节/书签 ▸ 下一章节", 265, "marks-edit", "Ctrl+PageDown"],
-    ["A-B 区段循环 ▸ 设定起点", 270, "ab-a", "["],
-    ["A-B 区段循环 ▸ 解除起点", 271, "ab-a", "{"],
-    ["A-B 区段循环 ▸ 起点后退 0.1 秒", 272, "ab-a", "Ctrl+["],
-    ["A-B 区段循环 ▸ 起点前进 0.1 秒", 273, "ab-a", "Alt+["],
-    ["A-B 区段循环 ▸ 设定止点", 274, "ab-b", "]"],
-    ["A-B 区段循环 ▸ 解除止点", 275, "ab-b", "}"],
-    ["A-B 区段循环 ▸ 止点后退 0.1 秒", 276, "ab-b", "Ctrl+]"],
-    ["A-B 区段循环 ▸ 止点前进 0.1 秒", 277, "ab-b", "Alt+]"],
-    ["A-B 区段循环 ▸ 区段整体后退 0.1 秒", 278, "ab-both", "Ctrl+Alt+["],
-    ["A-B 区段循环 ▸ 区段整体前进 0.1 秒", 279, "ab-both", "Ctrl+Alt+]"],
-    ["A-B 区段循环 ▸ 循环当前章节/书签区段", 280, "ab-toggle", "Alt+\\"],
-    ["A-B 区段循环 ▸ 区段循环 开/关", 281, "ab-toggle", "\\"],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 无限", 282, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 1 次", 283, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 2 次", 284, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 3 次", 285, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 5 次", 286, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 10 次", 287, "ab-count", ""],
+  // Menu sweep (B5): the list command is the only menu item; the rest show as "分类: 标题" in the palette.
+  assert.deepEqual(host.command("marks.list").display.path, ["章节/书签列表…"]);
+  assert.deepEqual(
+    [...new Set([...host.commands.values()].map((c) => c.display.category))].sort(),
+    ["A-B 区段循环", "循环次数", "章节/书签"].sort(),
+  );
+  assert.deepEqual(fixedMenu(host, (c) => c.display.title), [
+    ["添加书签", 261, "marks-edit", "P"],
+    ["上一书签/章节", 262, "marks-edit", "Shift+PageUp"],
+    ["下一书签/章节", 263, "marks-edit", "Shift+PageDown"],
+    ["上一章节", 264, "marks-edit", "Ctrl+PageUp"],
+    ["下一章节", 265, "marks-edit", "Ctrl+PageDown"],
+    ["设定起点", 270, "ab-a", "["],
+    ["解除起点", 271, "ab-a", "{"],
+    ["起点后退 0.1 秒", 272, "ab-a", "Ctrl+["],
+    ["起点前进 0.1 秒", 273, "ab-a", "Alt+["],
+    ["设定止点", 274, "ab-b", "]"],
+    ["解除止点", 275, "ab-b", "}"],
+    ["止点后退 0.1 秒", 276, "ab-b", "Ctrl+]"],
+    ["止点前进 0.1 秒", 277, "ab-b", "Alt+]"],
+    ["区段整体后退 0.1 秒", 278, "ab-both", "Ctrl+Alt+["],
+    ["区段整体前进 0.1 秒", 279, "ab-both", "Ctrl+Alt+]"],
+    ["循环当前章节/书签区段", 280, "ab-toggle", "Alt+\\"],
+    ["区段循环 开/关", 281, "ab-toggle", "\\"],
+    ["无限", 282, "ab-count", ""],
+    ["1 次", 283, "ab-count", ""],
+    ["2 次", 284, "ab-count", ""],
+    ["3 次", 285, "ab-count", ""],
+    ["5 次", 286, "ab-count", ""],
+    ["10 次", 287, "ab-count", ""],
+    ["章节/书签列表…", 801, "windows", "H"],
   ]);
-  assert.deepEqual(host.command("marks.seekbar").display.path.slice(1), ["章节/书签", "在进度条上显示标记"]);
+  assert.deepEqual([host.command("marks.seekbar").display.category, host.command("marks.seekbar").display.title], ["章节/书签", "在进度条上显示标记"]);
   assert.equal(host.translate(host.command("marks.add").state.reason!), "未打开媒体");
   assert.equal(host.translate(host.command("ab.set-a").state.reason!), "未打开媒体");
 });

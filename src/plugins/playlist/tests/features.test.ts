@@ -929,8 +929,9 @@ test("B26: \"快速推进到下一个\" is off by default, toggles with a notice
   let app = await start({ data });
   try {
     assert.equal(app.command("fast-advance").state.checked, false);
-    assert.deepEqual(app.command("fast-advance").declaration.path, ["@playback", "Playlist", "Fast Advance to Next"]);
-    assert.deepEqual(app.command("fast-advance").display.path, ["播放", "播放列表", "快速推进到下一个"]);
+    // Menu sweep (B5): the former Playback ▸ Playlist ▸ items are in the command palette only.
+    assert.deepEqual(app.command("fast-advance").declaration.path, []);
+    assert.deepEqual([app.command("fast-advance").display.path, app.command("fast-advance").display.title], [[], "快速推进到下一个"]);
     await app.run("fast-advance");
     assert.equal(app.command("fast-advance").state.checked, true);
     assert.equal(app.osd(), "快速推进到下一个：开");

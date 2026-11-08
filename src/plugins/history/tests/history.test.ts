@@ -169,12 +169,19 @@ test("English by default: menus, messages and the ask window in the source text"
       ["Open", "Recently Played", "Record Playback History"],
     ],
   );
-  assert.deepEqual(host.command("resume.off").declaration.path, ["@playback", "Resume Playback", "Don't Resume"]);
+  // Menu sweep (B5): Resume Playback is in the command palette only ("Resume Playback: Title").
+  assert.deepEqual(host.command("resume.off").declaration.path, []);
   assert.deepEqual(
-    ["resume.off", "resume.auto", "resume.ask", "resume.audio", "resume.clear"].map((id) => shown(id).at(-1)),
-    ["Don't Resume", "Resume Automatically", "Ask Every Time", "Also Remember Audio Files", "Clear All Saved Positions"],
+    ["resume.off", "resume.auto", "resume.ask", "resume.audio", "resume.clear"].map((id) => [shown(id), host.command(id).display.title]),
+    [
+      [[], "Don't Resume"],
+      [[], "Resume Automatically"],
+      [[], "Ask Every Time"],
+      [[], "Also Remember Audio Files"],
+      [[], "Clear All Saved Positions"],
+    ],
   );
-  assert.equal(shown("resume.off")[1], "Resume Playback");
+  assert.equal(host.command("resume.off").display.category, "Resume Playback");
 
   await play(host, a);
   host.setSource({ position: 300 });
@@ -195,13 +202,13 @@ test("English by default: menus, messages and the ask window in the source text"
   await stop();
 });
 
-test("A12 menu entries: one order 114 under 打开 ▸ 最近播放, records then the management group", async () => {
+test("A12 menu entries: one order 119 under 打开 ▸ 最近播放 (last in Open ▸), records then the management group", async () => {
   const { host, stop } = await start();
   assert.deepEqual(recentMenu(host), ["（无记录）", "移除无效记录", "清除记录", "记录播放历史"]);
   const empty = host.command("recent.empty");
   assert.equal(empty.state.enabled, false);
   for (const id of ["recent.empty", "recent.prune", "recent.clear", "recent.enabled"])
-    assert.equal(host.command(id).declaration.order, 114, id);
+    assert.equal(host.command(id).declaration.order, 119, id);
   assert.equal(empty.declaration.group, "recent");
   assert.equal(host.command("recent.prune").declaration.group, "recent-manage");
   assert.equal(host.command("recent.prune").state.enabled, false);
@@ -493,7 +500,8 @@ test("B25 menu: 不记忆 / 自动继续 / 每次询问 radios 250–252, audio 
   ];
   for (const [id, title, order, group] of expected) {
     const { declaration, display } = host.command(id);
-    assert.deepEqual(display.path, ["播放", "记忆播放位置", title]);
+    // Menu sweep (B5): palette only, "记忆播放位置: <title>".
+    assert.deepEqual([display.path, display.title, display.category], [[], title, "记忆播放位置"]);
     assert.equal(declaration.order, order);
     assert.equal(declaration.group, group);
   }
@@ -519,8 +527,9 @@ test("palette: every command has a category (the submenu's label), empty and wit
       assert.ok(host.commands.size > 0);
       for (const [id, { declaration, display }] of host.commands) {
         assert.ok(typeof display.category === "string" && display.category.trim() !== "", `${locale}: ${id} has no category`);
-        // Same submenu, same category: the menu label as shown.
-        assert.equal(display.category, display.path[1], `${locale}: ${id}`);
+        // Same (former) submenu, same category: the menu label as shown; Recently Played is still a submenu.
+        if (id.startsWith("recent.")) assert.equal(display.category, display.path[1], `${locale}: ${id}`);
+        else assert.deepEqual(display.path, [], `${locale}: ${id} is palette only`);
         assert.equal(display.category, id.startsWith("recent.") ? recent : resume, `${locale}: ${id}`);
         assert.equal(declaration.home, undefined, `${locale}: ${id} has no window of its own`);
       }

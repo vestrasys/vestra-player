@@ -87,7 +87,7 @@ test.afterEach(async () => {
 test("I05: top-level Playback Properties… (811, windows, Ctrl+F1) opens the window; a second Ctrl+F1 keeps it open", async () => {
   const { host, stop } = await start();
   assert.deepEqual(host.command("info.properties").declaration, {
-    title: "Playback Properties…", path: ["Playback Properties…"], order: 811, group: "windows", radio: false, bindings: ["Ctrl+F1"], focus: null, repeat: false, category: { $vestraText: "Info" },
+    title: "Playback Properties…", path: [], order: 811, group: "windows", radio: false, bindings: ["Ctrl+F1"], focus: null, repeat: false, category: { $vestraText: "Info" },
   });
   assert.deepEqual(host.conflicts, []);
   await host.press("Ctrl+F1");
@@ -575,7 +575,7 @@ test("lazy activation: the window reads the player's state and follows the sourc
 
 test("I05 in Simplified Chinese: the menu, the window's words and the messages of before", async () => {
   const { host, stop } = await start();
-  assert.deepEqual(host.command("info.properties").display.path, ["播放属性…"]);
+  assert.deepEqual([host.command("info.properties").display.path, host.command("info.properties").display.title], [[], "播放属性…"]);
   // What properties.slint shows through @tr.
   const words = ["Playback Properties", "Refresh", "Copy", "Save As…", "Close", "Copy failed", "Save As"];
   assert.deepEqual(words.map((w) => host.translate(w)), ["播放属性", "刷新", "复制到剪贴板", "保存为…", "关闭", "复制失败", "保存为"]);

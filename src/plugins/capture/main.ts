@@ -1018,12 +1018,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   /** Where an option's control lives now: the tab (proposal §6). */
   const inTab = { home: "capture.panel" };
   const inSettings = { home: "capture.settings" };
-  // `@video` is the player's Video menu; "Snapshot" is this plugin's own submenu.
+  // "Snapshot" is this plugin's own top-level submenu (menu sweep B5: moved out of the Video menu);
+  // its first item's group "domain" puts it with Audio Track ▸ and Subtitle Track ▸, no separator between.
   const entry = (id: CommandId, order: number, run: () => unknown, extra: Extra = {}) =>
     IN_MENU.includes(id)
-      ? plugin.commands.add({ id, path: ["@video", "Snapshot", TITLE[id]], order, run, category: "Snapshot", ...extra })
+      ? plugin.commands.add({ id, path: ["Snapshot", TITLE[id]], order, run, category: "Snapshot", ...extra })
       : plugin.commands.add({ id, title: TITLE[id], order, run, category: "Snapshot", ...extra });
-  const quick = { group: "capture-quick" };
+  const quick = { group: "domain" };
   entry("capture.save", 420, () => saveFrame("frame"), { bindings: ["Ctrl+E"], ...quick, ...canCapture });
   entry("capture.copy", 422, () => copyFrame("frame"), { bindings: ["Ctrl+C"], ...quick, ...canCapture });
   // Ctrl+G: the tab's Burst row, open; checked while it shows.

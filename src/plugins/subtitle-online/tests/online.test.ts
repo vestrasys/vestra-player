@@ -109,14 +109,15 @@ const waitFor = async (check: () => boolean, what: string) => {
   assert.ok(ok(), what);
 };
 
-test("menu: two items under Subtitles ▸ Online Subtitles without shortcuts; windows bind their Slint callbacks", async () => {
+test("menu: Search and Download Subtitles… last in Open ▸, the settings palette only, no shortcuts; windows bind their Slint callbacks", async () => {
   const fetch = fakeFetch({});
   const t = await setup({ key: false });
   try {
-    const declared = [...t.host.commands.values()].map(({ declaration: d }) => [d.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
+    // Menu sweep (B5): a command without a path is palette only, shown here as "(title)".
+    const declared = [...t.host.commands.values()].map(({ declaration: d }) => [d.path.join(" > ") || `(${String(d.title)})`, d.order, d.group, d.bindings.join(",")]);
     assert.deepEqual(declared, [
-      ["@subtitles > Online Subtitles > Search and Download Subtitles…", 360, "subtitle-online", ""],
-      ["@subtitles > Online Subtitles > Online Subtitle Settings…", 361, "subtitle-online", ""],
+      ["@open > Search and Download Subtitles…", 115, "open", ""],
+      ["(Online Subtitle Settings…)", 361, "subtitle-online", ""],
     ]);
     // Command palette (player 0.7.6): the submenu's name as the category; no home.
     assert.deepEqual(

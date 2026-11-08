@@ -10,8 +10,7 @@ What the video area shows when there is no picture.
 
 ## Entries
 
-- Context menu Audio ▸ Show Album Cover for Audio Only.
-- Context menu Settings ▸ Appearance ▸ Show Logo When Idle / Choose Logo Image…; Reset ▸ Idle Logo puts the default logo back.
+- Command palette (Ctrl+Shift+P): Audio: Show Album Cover for Audio Only; Appearance: Show Logo When Idle / Choose Logo Image…; Reset: Idle Logo puts the default logo back (none of them is in the right-click menu).
 - Options window Appearance ▸ Logo and Album Cover: the switches above, a logo preview and clearing the cover cache.
 
 ## Languages

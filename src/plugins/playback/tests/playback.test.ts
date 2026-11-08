@@ -74,7 +74,8 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   const { host, stop } = await start();
   // The menu as a Chinese user sees it: the texts before English became the source. Menu redesign
   // (step 7): the speed and seek commands are in the command palette only (no path), with their
-  // keys, and name the Playback panel (`home: "panel"`) that Playback… (Alt+4) opens.
+  // keys, and name the Playback panel (`home: "panel"`) that Playback… (Alt+4) opens. Menu sweep
+  // (B5): Reopen, Copy to Clipboard and the three Playback options are palette only too.
   assert.deepEqual(
     own(host).map(([id, { declaration: d, display }]) => [
       id,
@@ -89,10 +90,10 @@ test("menu follows the allocation table: positions, groups, radio items, binding
     [
       ["open", "打开文件…", 100, "open", false, ["Ctrl+O", "F3"], false, null],
       ["open-url", "打开/打开链接…", 110, "open", false, ["Ctrl+U"], false, null],
-      ["reopen", "重开当前/最后文件", 121, "open", false, ["Ctrl+Y"], false, null],
-      ["copy-name", "复制到剪贴板/文件名", 125, "open", false, [], false, null],
-      ["copy-folder", "复制到剪贴板/文件夹路径", 126, "open", false, [], false, null],
-      ["copy-path", "复制到剪贴板/完整路径", 127, "open", false, [], false, null],
+      ["reopen", "(重开当前/最后文件)", null, null, false, ["Ctrl+Y"], false, null],
+      ["copy-name", "(文件名)", null, null, false, [], false, null],
+      ["copy-folder", "(文件夹路径)", null, null, false, [], false, null],
+      ["copy-path", "(完整路径)", null, null, false, [], false, null],
       ["panel", "播放…", 794, "windows", false, ["Alt+4"], false, null],
       ["keyframe-back", "(上一关键帧)", null, null, false, ["Ctrl+Shift+ArrowLeft"], true, "panel"],
       ["keyframe-forward", "(下一关键帧)", null, null, false, ["Ctrl+Shift+ArrowRight"], true, "panel"],
@@ -103,9 +104,9 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["rate-15", "(1.5倍)", null, null, true, [], false, "panel"],
       ["rate-20", "(2倍)", null, null, true, [], false, "panel"],
       ["rate-custom", "(自定义…)", null, null, false, [], false, "panel"],
-      ["prevent-sleep", "播放/播放时禁止屏保", 240, "playback-options", false, [], false, null],
-      ["hover-time", "播放/进度条悬停显示时间", 242, "playback-options", false, [], false, null],
-      ["hover-thumbnail", "播放/进度条悬停显示缩略图", 243, "playback-options", false, [], false, null],
+      ["prevent-sleep", "(播放时禁止屏保)", null, null, false, [], false, null],
+      ["hover-time", "(进度条悬停显示时间)", null, null, false, [], false, null],
+      ["hover-thumbnail", "(进度条悬停显示缩略图)", null, null, false, [], false, null],
       ["backward-2", "(后退30秒)", null, null, false, ["Ctrl+ArrowLeft"], false, "panel"],
       ["forward-2", "(前进30秒)", null, null, false, ["Ctrl+ArrowRight"], false, "panel"],
       ["backward-3", "(后退60秒)", null, null, false, ["Shift+ArrowLeft"], false, "panel"],
@@ -122,10 +123,10 @@ test("menu follows the allocation table: positions, groups, radio items, binding
     [
       ["open", "Open File…"],
       ["open-url", "@open/Open URL…"],
-      ["reopen", "Reopen Current/Last File"],
-      ["copy-name", "Copy to Clipboard/File Name"],
-      ["copy-folder", "Copy to Clipboard/Folder Path"],
-      ["copy-path", "Copy to Clipboard/Full Path"],
+      ["reopen", "(Reopen Current/Last File)"],
+      ["copy-name", "(File Name)"],
+      ["copy-folder", "(Folder Path)"],
+      ["copy-path", "(Full Path)"],
       ["panel", "Playback…"],
       ["keyframe-back", "(Previous Keyframe)"],
       ["keyframe-forward", "(Next Keyframe)"],
@@ -136,9 +137,9 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["rate-15", "(1.5×)"],
       ["rate-20", "(2×)"],
       ["rate-custom", "(Custom…)"],
-      ["prevent-sleep", "@playback/Disable Screen Saver While Playing"],
-      ["hover-time", "@playback/Show Time on Seek Bar Hover"],
-      ["hover-thumbnail", "@playback/Show Thumbnail on Seek Bar Hover"],
+      ["prevent-sleep", "(Disable Screen Saver While Playing)"],
+      ["hover-time", "(Show Time on Seek Bar Hover)"],
+      ["hover-thumbnail", "(Show Thumbnail on Seek Bar Hover)"],
       ["backward-2", "(Back 30 s)"],
       ["forward-2", "(Forward 30 s)"],
       ["backward-3", "(Back 60 s)"],
@@ -275,7 +276,8 @@ test("in English the menus, reasons and messages are the source texts", async ()
   assert.deepEqual([host.command("backward-2").display.title, host.command("backward-2").display.category], ["Back 30 s", "Seek"]);
   assert.deepEqual([host.command("rate-05").display.title, host.command("rate-05").display.category], ["0.5×", "Speed"]);
   assert.deepEqual(host.command("panel").display.path, ["Playback…"]);
-  assert.deepEqual(host.command("copy-path").display.path, ["Copy to Clipboard", "Full Path"]);
+  // Menu sweep (B5): Copy to Clipboard is in the command palette only.
+  assert.deepEqual([host.command("copy-path").display.path, host.command("copy-path").display.title], [[], "Full Path"]);
   await host.command("rate-05").run();
   assert.equal(lastOsd(host), "Speed: 0.5x");
   await host.press("Ctrl+ArrowRight");

@@ -170,7 +170,8 @@ async function start(probe = fakeProbe(), locale: "en" | "zh-Hans" = "zh-Hans") 
 test("English is the source: menus, notices and confirmations in English by default", async () => {
   const app = await start(fakeProbe(), "en");
   try {
-    assert.deepEqual(app.command("fast-advance").display.path, ["Playback", "Playlist", "Fast Advance to Next"]);
+    // Menu sweep (B5): the former Playback ▸ Playlist ▸ items are palette only.
+    assert.deepEqual([app.command("fast-advance").display.path, app.command("fast-advance").display.title], [[], "Fast Advance to Next"]);
     assert.deepEqual(app.command("open-folder").display.path, ["Open", "Open Folder…"]);
     assert.equal(app.command("remove").display.title, "Remove Selected");
     await app.addFiles([app.a, app.alias, app.b]);
@@ -187,7 +188,8 @@ test("English is the source: menus, notices and confirmations in English by defa
 test("menu positions follow the round allocation table; list keys only work with list focus", async () => {
   const app = await start();
   try {
-    // As a Simplified Chinese user sees the menus (the declarations are English, see below).
+    // As a Simplified Chinese user sees the menus (the declarations are English, see below). Menu
+    // sweep (B5): the former Playback ▸ Playlist ▸ items (230–244) are palette only, shown as "(title)".
     const declared = [...app.host.commands.values()].map(({ declaration: d, display }) => [
       display.path.join("/") || `(${display.title})`,
       d.order,
@@ -198,21 +200,21 @@ test("menu positions follow the round allocation table; list keys only work with
     assert.deepEqual(declared, [
       ["播放列表", 800, "windows", "F6", ""],
       ["打开/打开文件夹…", 110, "open", "F2", ""],
-      ["播放/播放列表/添加文件…", 230, "domain", "", ""],
-      ["播放/播放列表/添加链接…", 231, "domain", "", ""],
-      ["播放/播放列表/添加文件夹…", 232, "domain", "", ""],
-      ["播放/播放列表/循环/不循环", 233, "domain", "", ""],
-      ["播放/播放列表/循环/全部", 234, "domain", "", ""],
-      ["播放/播放列表/循环/单个", 235, "domain", "", ""],
-      ["播放/播放列表/随机", 236, "domain", "", ""],
-      ["播放/播放列表/打开列表文件…", 237, "list", "", ""],
-      ["播放/播放列表/保存列表…", 238, "list", "", ""],
-      ["播放/播放列表/打开文件时/仅打开该文件", 239, "open-mode", "", ""],
-      ["播放/播放列表/打开文件时/加入相似文件", 240, "open-mode", "", ""],
-      ["播放/播放列表/打开文件时/加入同文件夹全部文件", 241, "open-mode", "", ""],
-      ["播放/播放列表/快速推进到下一个", 242, "options", "", ""],
-      ["播放/播放列表/记住列表", 243, "options", "", ""],
-      ["播放/播放列表/移除全部前确认", 244, "options", "", ""],
+      ["(添加文件…)", 230, "domain", "", ""],
+      ["(添加链接…)", 231, "domain", "", ""],
+      ["(添加文件夹…)", 232, "domain", "", ""],
+      ["(不循环)", 233, "domain", "", ""],
+      ["(全部)", 234, "domain", "", ""],
+      ["(单个)", 235, "domain", "", ""],
+      ["(随机)", 236, "domain", "", ""],
+      ["(打开列表文件…)", 237, "list", "", ""],
+      ["(保存列表…)", 238, "list", "", ""],
+      ["(仅打开该文件)", 239, "open-mode", "", ""],
+      ["(加入相似文件)", 240, "open-mode", "", ""],
+      ["(加入同文件夹全部文件)", 241, "open-mode", "", ""],
+      ["(快速推进到下一个)", 242, "options", "", ""],
+      ["(记住列表)", 243, "options", "", ""],
+      ["(移除全部前确认)", 244, "options", "", ""],
       ["(播放)", 0, "domain", "Enter P", "panel"],
       ["(添加文件…)", 0, "domain", "Ctrl+I", "panel"],
       ["(添加文件夹…)", 0, "domain", "Ctrl+O", "panel"],

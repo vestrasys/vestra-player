@@ -17,7 +17,7 @@ The playlist in the right sidebar.
 
 - Right-click menu Playlist (F6) shows or hides the list; when the sidebar has tabs from other plugins, F6 first switches to the playlist tab, and pressing it again on the playlist tab hides the sidebar. The control bar also has a toggle on the right.
 - Right-click menu Open ▸ Open Folder… (F2).
-- Right-click menu Playback ▸ Playlist: add, repeat, shuffle, list files and the settings.
+- Command palette (Ctrl+Shift+P): Playlist: Add Files… / Add Link… / Add Folder…, Open List File…, Save List…, Shuffle, Fast Advance to Next, Remember List, Confirm Before Removing All; Repeat: Off / All / One; When Opening a File: the three modes (no longer in the right-click menu).
 - The right-click menu inside the list and the ADD, DEL and SORT buttons; when the list has focus, Enter plays, Delete removes, Ctrl+A selects all, Ctrl+S searches, and so on.
 - Options window Playback ▸ Playlist.
 

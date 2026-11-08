@@ -98,7 +98,7 @@ type Reason =
   | "The order cannot change while searching";
 /** Command options whose `reason` is one of `Reason`, without the title and path (so the texts are found for translation). */
 type CommandSetup = Partial<Omit<CommandOptions, "reason" | "title" | "path">> & { reason?: () => Reason | null };
-/** Playback ▸ Playlist ▸ … (after the shared "Playlist" submenu). */
+/** The former Playback ▸ Playlist ▸ … items, now in the command palette only (menu sweep B5); "Repeat" and "When Opening a File" are their categories. */
 type PlaylistItem =
   | "Add Files…"
   | "Add Link…"
@@ -608,7 +608,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       ...extra,
     });
 
-  // Main menu (allocation table: Open ▸ 110, Playback ▸ Playlist ▸ 230–249, windows 800).
+  // Main menu (allocation table: Open ▸ 110, windows 800); the former Playback ▸ Playlist ▸ items (230–249) are palette only.
   plugin.commands.add({
     id: "playlist.visibility",
     path: ["Playlist"],
@@ -633,10 +633,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     reason: () => (scanning ? "Scanning folder" : null),
     run: openFolder,
   });
-  const playlistMenu = (id: string, title: readonly PlaylistItem[], order: number, options: CommandSetup) =>
+  const playlistMenu = (id: string, title: PlaylistItem, order: number, options: CommandSetup) =>
     plugin.commands.add({
       id: `playlist.${id}`,
-      path: ["@playback", "Playlist", ...title],
+      title,
       order,
       category: categories.playlist,
       run: () => {},
@@ -646,9 +646,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const addingFiles = { enabled: () => !adding, busy: () => adding };
   const scanningFolder = { busy: () => scanning, reason: (): Reason | null => (scanning ? "Scanning folder" : null) };
   const listFile = { busy: () => listBusy, group: "list", ...PANEL };
-  playlistMenu("add", ["Add Files…"], 230, { ...addingFiles, ...PANEL, run: addFiles });
-  playlistMenu("link", ["Add Link…"], 231, { ...PANEL, run: guard(() => link.show()) });
-  playlistMenu("add-folder", ["Add Folder…"], 232, { ...scanningFolder, ...PANEL, run: addFolderOnly });
+  playlistMenu("add", "Add Files…", 230, { ...addingFiles, ...PANEL, run: addFiles });
+  playlistMenu("link", "Add Link…", 231, { ...PANEL, run: guard(() => link.show()) });
+  playlistMenu("add-folder", "Add Folder…", 232, { ...scanningFolder, ...PANEL, run: addFolderOnly });
   // The options shared by the menu and the settings page (IA-PL-02).
   const setRepeat = (mode: Repeat) => {
     queue.repeat = mode;
@@ -673,7 +673,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     queue.notice(settings.confirmClear ? "Confirm before removing all: On" : "Confirm before removing all: Off");
   };
   repeats.forEach(([mode, title], index) =>
-    playlistMenu(`repeat-${mode}`, ["Repeat", title], 233 + index, {
+    playlistMenu(`repeat-${mode}`, title, 233 + index, {
       category: categories.repeat,
       ...SETTINGS,
       radio: true,
@@ -681,20 +681,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       run: () => setRepeat(mode),
     }),
   );
-  playlistMenu("shuffle", ["Shuffle"], 236, {
+  playlistMenu("shuffle", "Shuffle", 236, {
     ...SETTINGS,
     checked: () => queue.shuffle,
     run: () => setShuffle(!queue.shuffle),
   });
-  playlistMenu("open-list", ["Open List File…"], 237, { ...listFile, run: openList });
-  playlistMenu("save-list", ["Save List…"], 238, {
+  playlistMenu("open-list", "Open List File…", 237, { ...listFile, run: openList });
+  playlistMenu("save-list", "Save List…", 238, {
     ...listFile,
     enabled: hasRows,
     reason: reason(hasRows),
     run: saveList,
   });
   openModes.forEach(([mode, title], index) =>
-    playlistMenu(`open-mode-${mode}`, ["When Opening a File", title], 239 + index, {
+    playlistMenu(`open-mode-${mode}`, title, 239 + index, {
       group: "open-mode",
       category: categories.openMode,
       ...SETTINGS,
@@ -705,20 +705,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       },
     }),
   );
-  playlistMenu("fast-advance", ["Fast Advance to Next"], 242, {
+  playlistMenu("fast-advance", "Fast Advance to Next", 242, {
     group: "options",
     ...SETTINGS,
     checked: () => settings.gapless,
     run: () => setFast(!settings.gapless),
   });
-  playlistMenu("remember", ["Remember List"], 243, {
+  playlistMenu("remember", "Remember List", 243, {
     group: "options",
     ...SETTINGS,
     checked: () => settings.remember,
     run: () => setRemember(!settings.remember),
   });
   // Turns the Remove All question back on after "Don't ask again" (or off).
-  playlistMenu("confirm-clear", ["Confirm Before Removing All"], 244, {
+  playlistMenu("confirm-clear", "Confirm Before Removing All", 244, {
     group: "options",
     ...SETTINGS,
     checked: () => settings.confirmClear,

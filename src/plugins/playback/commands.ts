@@ -115,9 +115,10 @@ function entries(p: Playback, f: Features): Entry[] {
     action: () => f.keyframes.run(direction),
     state: () => f.keyframes.state(),
   });
+  // Menu sweep (B5): Copy to Clipboard ▸ and the Playback options are in the command palette only.
   const copy = (id: string, title: MenuText, order: number, kind: CopyKind): Entry => ({
     id,
-    path: ["Copy to Clipboard", title],
+    title,
     category: "Copy to Clipboard",
     order,
     group: "open",
@@ -129,7 +130,7 @@ function entries(p: Playback, f: Features): Entry[] {
   });
   const option = (id: string, title: MenuText, order: number, value: () => boolean, toggle: () => void): Entry => ({
     id,
-    path: ["@playback", title],
+    title,
     category: "Playback",
     order,
     group: "playback-options",
@@ -160,7 +161,7 @@ function entries(p: Playback, f: Features): Entry[] {
     // A10: the former Reopen (only after a failed load), renamed and widened.
     {
       id: "reopen",
-      path: ["Reopen Current/Last File"],
+      title: "Reopen Current/Last File",
       category: "File",
       order: 121,
       group: "open",
@@ -244,7 +245,7 @@ function entries(p: Playback, f: Features): Entry[] {
     // I07: greyed out with "Needs ffmpeg" when ffmpeg cannot be found.
     {
       id: "hover-thumbnail",
-      path: ["@playback", "Show Thumbnail on Seek Bar Hover"],
+      title: "Show Thumbnail on Seek Bar Hover",
       category: "Playback",
       order: 243,
       group: "playback-options",

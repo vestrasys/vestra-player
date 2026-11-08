@@ -18,9 +18,8 @@ The main window's control bar, and playback commands such as open, seek and spee
 
 ## Where to find it
 
-- Right-click menu: Open File… (Ctrl+O, F3), Open ▸ Open URL… (Ctrl+U), Reopen Current/Last File (Ctrl+Y), Copy to Clipboard.
+- Right-click menu: Open File… (Ctrl+O, F3), Open ▸ Open URL… (Ctrl+U).
 - Right-click menu: Playback… (Alt+4), the Playback panel.
-- Command palette (Ctrl+Shift+P), with their keys: Seek: Previous/Next Keyframe (Ctrl+Shift+←/→), Back/Forward 30 s (Ctrl+←/→), 60 s (Shift+←/→), 300 s (Ctrl+Alt+←/→), Jump to Time… (G), Jump to Start (Backspace), Seek Steps…; Speed: 0.5×, 1.5×, 2×, Custom….
-- Right-click menu Playback: Disable Screen Saver While Playing, Show Time / Thumbnail on Seek Bar Hover.
+- Command palette (Ctrl+Shift+P), with their keys: File: Reopen Current/Last File (Ctrl+Y); Copy to Clipboard: File Name, Folder Path, Full Path; Seek: Previous/Next Keyframe (Ctrl+Shift+←/→), Back/Forward 30 s (Ctrl+←/→), 60 s (Shift+←/→), 300 s (Ctrl+Alt+←/→), Jump to Time… (G), Jump to Start (Backspace), Seek Steps…; Speed: 0.5×, 1.5×, 2×, Custom…; Playback: Disable Screen Saver While Playing, Show Time / Thumbnail on Seek Bar Hover.
 
 Basic actions such as play/pause, back/forward 5 seconds, volume and mute are provided by the player and keep working when this plugin is turned off (without it, the volume is not remembered).

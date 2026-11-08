@@ -135,14 +135,14 @@ test("labels, same key, safe exits", () => {
 
 // ------------------------------------------------------------------ menu
 
-test("menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts, no bindings of its own", async () => {
+test("palette only (menu sweep B5): Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts without a menu path, no bindings of its own", async () => {
   const host = new TestHost();
   await start(host);
   const decl = (id: string) => host.command(id).declaration;
-  assert.deepEqual(decl("keys").path, ["@settings", "Keyboard Shortcuts…"]);
-  assert.deepEqual(decl("mouse").path, ["@settings", "Mouse…"]);
-  assert.deepEqual(decl("ignore-defaults").path, ["@settings", "Ignore Default Shortcuts"]);
-  assert.deepEqual(host.command("keys").display.path, ["Settings", "Keyboard Shortcuts…"]);
+  assert.deepEqual([decl("keys").path, decl("keys").title], [[], "Keyboard Shortcuts…"]);
+  assert.deepEqual([decl("mouse").path, decl("mouse").title], [[], "Mouse…"]);
+  assert.deepEqual([decl("ignore-defaults").path, decl("ignore-defaults").title], [[], "Ignore Default Shortcuts"]);
+  assert.deepEqual([host.command("keys").display.path, host.command("keys").display.title], [[], "Keyboard Shortcuts…"]);
   assert.deepEqual(
     ["keys", "mouse", "ignore-defaults"].map((id) => [decl(id).order, decl(id).group]),
     [
@@ -173,9 +173,11 @@ test("menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Short
 test("menu and pages in Simplified Chinese, as before the English source texts", async () => {
   const host = new TestHost();
   await start(host, undefined, "zh-Hans");
-  assert.deepEqual(host.command("keys").display.path, ["设置", "快捷键…"]);
-  assert.deepEqual(host.command("mouse").display.path, ["设置", "鼠标…"]);
-  assert.deepEqual(host.command("ignore-defaults").display.path, ["设置", "忽略默认快捷键"]);
+  // Menu sweep (B5): palette only, "设置: 快捷键…".
+  const palette = (id: string) => [host.command(id).display.path, host.command(id).display.category, host.command(id).display.title];
+  assert.deepEqual(palette("keys"), [[], "设置", "快捷键…"]);
+  assert.deepEqual(palette("mouse"), [[], "设置", "鼠标…"]);
+  assert.deepEqual(palette("ignore-defaults"), [[], "设置", "忽略默认快捷键"]);
   assert.equal(host.settingsPage("hotkeys.keyboard").title, "快捷键");
   assert.equal(host.settingsPage("hotkeys.mouse").title, "鼠标");
 });

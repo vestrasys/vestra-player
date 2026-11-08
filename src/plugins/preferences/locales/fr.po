@@ -8,57 +8,57 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:42
+#: main.ts:41
 #, x-machine
 msgid "Palette: Vestra Light"
 msgstr "Palette : Vestra Light"
 
-#: main.ts:42
+#: main.ts:41
 #, x-machine
 msgid "Palette: Vestra Dark"
 msgstr "Palette : Vestra Dark"
 
-#: main.ts:51
+#: main.ts:50
 #, x-machine
 msgid "Language: Follow System. Takes effect after restart"
 msgstr "Langue : selon le système. Prend effet après redémarrage"
 
-#: main.ts:52
+#: main.ts:51
 #, x-machine
 msgid "Language: {}. Takes effect after restart"
 msgstr "Langue : {}. Prend effet après redémarrage"
 
-#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
+#: main.ts:58 main.ts:94 ui/appearance.slint:83
 #, x-machine
 msgid "Appearance"
 msgstr "Apparence"
 
-#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
+#: main.ts:72 main.ts:95 ui/language.slint:52
 #, x-machine
 msgid "Language"
 msgstr "Langue"
 
-#: main.ts:94
+#: main.ts:93
 #, x-machine
 msgid "Settings"
 msgstr "Paramètres"
 
-#: main.ts:101
+#: main.ts:100
 #, x-machine
 msgid "Options…"
 msgstr "Options…"
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Dark"
 msgstr "Vestra Dark"
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Light"
 msgstr "Vestra Light"
 
-#: main.ts:123 ui/language.slint:59
+#: main.ts:122 ui/language.slint:59
 #, x-machine
 msgid "Follow System"
 msgstr "Selon le système"

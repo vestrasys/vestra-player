@@ -12,10 +12,10 @@ Information about the media playing, the player and the system.
 
 ## Entries
 
-- Context menu **Playback Info** (Tab); Brief Info with Shift+Tab.
-- Context menu **Playback Properties…** (Ctrl+F1).
-- Context menu **About Vestra Player…** (F1).
-- Context menu **Check for Updates…**; Options ▸ General ▸ **Updates**.
+- Command palette (Ctrl+Shift+P): Info: **Playback Info** (Tab); Brief Info with Shift+Tab.
+- Command palette: Info: **Playback Properties…** (Ctrl+F1).
+- Context menu **About Vestra Player…** (F1), at the top level next to Options….
+- Command palette: Help: **Check for Updates…** (also the Updates row of the About window); Options ▸ General ▸ **Updates**.
 
 ## Languages
 

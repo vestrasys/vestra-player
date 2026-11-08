@@ -5,8 +5,7 @@ import { hasCmd } from "./keys.ts";
 import { BindingsModel } from "./model.ts";
 import { MousePage } from "./mouse-page.ts";
 
-/** Settings ▸ (orders 832–834, group settings-input; no default bindings of its own). */
-export const SETTINGS = "@settings";
+/** The three commands (orders 832–834, group settings-input) are in the command palette only (menu sweep B5); no default bindings of its own. */
 
 /** Shows an OSD message (`plugin.osd.show(…)`); headless hosts refuse the display, which never fails the action itself. */
 export type Osd = (shown: Promise<unknown>) => void;
@@ -31,13 +30,13 @@ export default async function activate(plugin: Plugin) {
   const keys = new KeysPage(plugin, model, ignore, osd, mac);
   const mouse = new MousePage(plugin, model, osd, mac);
 
-  // Command palette category (player 0.7.6): the Settings menu the three live in. A text
+  // Command palette category (player 0.7.6): the Settings menu the three lived in. A text
   // value, so `i18n extract` finds it; translated like the player's Settings menu.
   const category = plugin.i18n.text("Settings");
   plugin.commands.add({
     id: "keys",
     category,
-    path: [SETTINGS, "Keyboard Shortcuts…"],
+    title: "Keyboard Shortcuts…",
     order: 832,
     group: "settings-input",
     run: () => keys.show(),
@@ -45,7 +44,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "mouse",
     category,
-    path: [SETTINGS, "Mouse…"],
+    title: "Mouse…",
     order: 833,
     group: "settings-input",
     run: () => mouse.show(),
@@ -54,7 +53,7 @@ export default async function activate(plugin: Plugin) {
     id: "ignore-defaults",
     category,
     home: "keys", // the Keyboard Shortcuts page has the same switch
-    path: [SETTINGS, "Ignore Default Shortcuts"],
+    title: "Ignore Default Shortcuts",
     order: 834,
     group: "settings-input",
     checked: () => ignore.enabled,

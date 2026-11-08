@@ -4,149 +4,145 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:50 main.ts:240 ui/page.slint:34
+#: main.ts:49 main.ts:238 ui/page.slint:34
 msgid "Window"
 msgstr ""
 
-#: main.ts:51
+#: main.ts:50
 msgid "Window Size"
 msgstr ""
 
-#: main.ts:52
+#: main.ts:51
 msgid "Size on Open"
 msgstr ""
 
-#: main.ts:53 main.ts:202 main.ts:212
+#: main.ts:52
 msgid "Always on Top"
 msgstr ""
 
-#: main.ts:77
+#: main.ts:75
 msgid "Mini Size"
 msgstr ""
 
-#: main.ts:85 main.ts:113
+#: main.ts:83 main.ts:111
 msgid "Switching picture-in-picture"
 msgstr ""
 
-#: main.ts:85 main.ts:113 main.ts:143 main.ts:156
+#: main.ts:83 main.ts:111 main.ts:141 main.ts:154
 msgid "Resizing the window"
 msgstr ""
 
-#: main.ts:85 main.ts:143 main.ts:156
+#: main.ts:83 main.ts:141 main.ts:154
 msgid "Not available in fullscreen"
 msgstr ""
 
-#: main.ts:85 main.ts:113 main.ts:143 main.ts:156 pip.ts:42 size.ts:124
+#: main.ts:83 main.ts:111 main.ts:141 main.ts:154 pip.ts:42 size.ts:124
 msgid "No video"
 msgstr ""
 
-#: main.ts:106
+#: main.ts:104
 msgid "Picture-in-Picture"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 msgid "0.5×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 msgid "1×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 msgid "1.5×"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 msgid "2×"
 msgstr ""
 
-#: main.ts:149 main.ts:175
+#: main.ts:147 main.ts:173
 msgid "Fit to Video Aspect Ratio"
 msgstr ""
 
-#: main.ts:164
+#: main.ts:162
 msgid "When playback starts: Don't resize the window"
 msgstr ""
 
-#: main.ts:165
+#: main.ts:163
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr ""
 
-#: main.ts:166
+#: main.ts:164
 msgid "When playback starts: {}×"
 msgstr ""
 
-#: main.ts:170
+#: main.ts:168
 msgid "Resize only once when playback starts: On"
 msgstr ""
 
-#: main.ts:170
+#: main.ts:168
 msgid "Resize only once when playback starts: Off"
 msgstr ""
 
-#: main.ts:175 main.ts:186
-msgid "When Playback Starts"
-msgstr ""
-
-#: main.ts:175
+#: main.ts:173
 msgid "Don't Resize"
 msgstr ""
 
-#: main.ts:186
+#: main.ts:184
 msgid "Only Once"
 msgstr ""
 
-#: main.ts:198
+#: main.ts:196
 msgid "Always on top: Off"
 msgstr ""
 
-#: main.ts:198
+#: main.ts:196
 msgid "Always on top: Always"
 msgstr ""
 
-#: main.ts:198
+#: main.ts:196
 msgid "Always on top: While playing"
 msgstr ""
 
-#: main.ts:198
+#: main.ts:196
 msgid "Always on top: While playing in fullscreen"
 msgstr ""
 
-#: main.ts:202
+#: main.ts:200
 msgid "Cycle Mode"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:212 ui/page.slint:66
+#: main.ts:210 ui/page.slint:66
 msgid "Never"
 msgstr ""
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:212 ui/page.slint:66
+#: main.ts:210 ui/page.slint:66
 msgid "Always"
 msgstr ""
 
-#: main.ts:212
+#: main.ts:210
 msgid "While Playing"
 msgstr ""
 
-#: main.ts:212
+#: main.ts:210
 msgid "While Playing in Fullscreen"
 msgstr ""
 
-#: main.ts:226
+#: main.ts:224
 msgid "Hide pointer while playing: On"
 msgstr ""
 
-#: main.ts:226
+#: main.ts:224
 msgid "Hide pointer while playing: Off"
 msgstr ""
 
-#: main.ts:231
+#: main.ts:229
 msgid "Hide Pointer While Playing"
 msgstr ""
 

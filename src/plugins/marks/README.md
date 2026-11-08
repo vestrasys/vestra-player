@@ -11,15 +11,18 @@ Jump between chapters and bookmarks, and loop a range.
 
 ## Where to find it
 
-Context menu "Playback ▸ Chapters and Bookmarks":
+Context menu: Chapter and Bookmark List… (H), at the top level after Playlist.
 
-- Chapter and Bookmark List… (H), Add Bookmark (P)
+Command palette (Ctrl+Shift+P), with their keys, "Chapters and Bookmarks: …":
+
+- Add Bookmark (P)
 - Previous Bookmark or Chapter, Next Bookmark or Chapter (Shift+PgUp, Shift+PgDn)
 - Previous Chapter, Next Chapter (Ctrl+PgUp, Ctrl+PgDn)
+- the chapters and bookmarks of the open file
 - Show Marks on Seek Bar
 
-Context menu "Playback ▸ A-B Loop": Set Start Point `[`, Set End Point `]`, clear them with `{` `}`, Loop Current Chapter or Bookmark Range Alt+\, A-B Loop On/Off `\`, Loop Count.
+Command palette "A-B Loop: …": Set Start Point `[`, Set End Point `]`, clear them with `{` `}`, Loop Current Chapter or Bookmark Range Alt+\, A-B Loop On/Off `\`; "Loop Count: …".
 
 ## Limits
 
-- The menu lists at most 50 chapters and 50 bookmarks; see the rest in the list window.
+- The command palette lists at most 50 chapters and 50 bookmarks; see the rest in the list window.

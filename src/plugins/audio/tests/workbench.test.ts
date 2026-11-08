@@ -89,7 +89,7 @@ test("the right-click menu keeps Load External Audio…, Audio Track ▸ and Aud
       ["Normalize", 0, "domain", "Shift+N", false, false],
       ["Crystalizer", 0, "domain", "Shift+C", false, false],
       ["Reset", 0, "domain", "", false, false],
-      ["Audio Track ▸ No Audio Tracks", 505, "domain", "", false, false],
+      ["Audio Track ▸ No Audio Tracks", 301, "domain", "", false, false],
     ],
   );
   assert.equal(host.mounted().slot, "adjust");
@@ -644,7 +644,7 @@ test("G03: the Audio Track menu lists the tracks, follows the list and switches 
   await host.settle();
   const items = () =>
     [...host.commands.values()]
-      .filter(({ declaration: d }) => d.path[0] === "Audio Track" && d.order === 505)
+      .filter(({ declaration: d }) => d.path[0] === "Audio Track" && d.order === 301)
       .map(({ display }) => display.path[1]);
   assert.deepEqual(items(), ["1. 日语 [jpn] (aac)", "2. English [eng] (aac)"]);
   assert.equal(host.command("audio.track.1").state.checked, true);

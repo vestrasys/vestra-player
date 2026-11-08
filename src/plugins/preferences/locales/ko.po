@@ -6,57 +6,57 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:42
+#: main.ts:41
 #, x-machine
 msgid "Palette: Vestra Light"
 msgstr "팔레트: Vestra 라이트"
 
-#: main.ts:42
+#: main.ts:41
 #, x-machine
 msgid "Palette: Vestra Dark"
 msgstr "팔레트: Vestra 다크"
 
-#: main.ts:51
+#: main.ts:50
 #, x-machine
 msgid "Language: Follow System. Takes effect after restart"
 msgstr "언어: 시스템 설정 따르기. 다시 시작하면 적용됩니다"
 
-#: main.ts:52
+#: main.ts:51
 #, x-machine
 msgid "Language: {}. Takes effect after restart"
 msgstr "언어: {}. 다시 시작하면 적용됩니다"
 
-#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
+#: main.ts:58 main.ts:94 ui/appearance.slint:83
 #, x-machine
 msgid "Appearance"
 msgstr "모양"
 
-#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
+#: main.ts:72 main.ts:95 ui/language.slint:52
 #, x-machine
 msgid "Language"
 msgstr "언어"
 
-#: main.ts:94
+#: main.ts:93
 #, x-machine
 msgid "Settings"
 msgstr "설정"
 
-#: main.ts:101
+#: main.ts:100
 #, x-machine
 msgid "Options…"
 msgstr "옵션…"
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Dark"
 msgstr "Vestra 다크"
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Light"
 msgstr "Vestra 라이트"
 
-#: main.ts:123 ui/language.slint:59
+#: main.ts:122 ui/language.slint:59
 #, x-machine
 msgid "Follow System"
 msgstr "시스템 설정 따르기"

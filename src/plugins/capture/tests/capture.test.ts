@@ -82,11 +82,12 @@ test("Snapshot ▸ keeps five items; every other command is in the command palet
   try {
     const menu = [...host.commands.values()].filter((c) => c.declaration.path?.length).map(({ declaration: d, display }) => [display.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
     assert.deepEqual(menu, [
-      ["视频 > 截图 > 保存当前画面", 420, "capture-quick", "Ctrl+E"],
-      ["视频 > 截图 > 复制当前画面", 422, "capture-quick", "Ctrl+C"],
-      ["视频 > 截图 > 连拍…", 426, "capture-quick", "Ctrl+G"],
-      ["视频 > 截图 > 导出片段…", 428, "capture-quick", ""],
-      ["视频 > 截图 > 截取…", 440, "capture-tab", "Alt+S"],
+      // Menu sweep (B5): Snapshot ▸ is a top-level submenu in the domain group.
+      ["截图 > 保存当前画面", 420, "domain", "Ctrl+E"],
+      ["截图 > 复制当前画面", 422, "domain", "Ctrl+C"],
+      ["截图 > 连拍…", 426, "domain", "Ctrl+G"],
+      ["截图 > 导出片段…", 428, "domain", ""],
+      ["截图 > 截取…", 440, "capture-tab", "Alt+S"],
     ]);
     const palette = [...host.commands.entries()].filter(([, c]) => !c.declaration.path?.length).map(([id, { declaration: d }]) => [id, d.bindings.join(","), d.home ?? ""]);
     assert.deepEqual(palette, [
@@ -155,8 +156,9 @@ test("English by default: menus, the tab's title, OSD and the clip's dialog are 
   host.setSource({ audioTracks: TRACKS });
   const { stop } = await start(host, "en");
   try {
-    assert.deepEqual(host.command("capture.save").declaration.path, ["@video", "Snapshot", "Save Current Frame"]);
-    assert.deepEqual(host.command("capture.panel").display.path, ["Video", "Snapshot", "Capture…"]);
+    // Menu sweep (B5): Snapshot ▸ is a top-level submenu in the domain group.
+    assert.deepEqual([host.command("capture.save").declaration.path, host.command("capture.save").declaration.group], [["Snapshot", "Save Current Frame"], "domain"]);
+    assert.deepEqual(host.command("capture.panel").display.path, ["Snapshot", "Capture…"]);
     assert.equal(host.command("capture.last30").display.title, "Export Last 30 Seconds");
     await host.command("capture.format.jpeg").run();
     await host.settle();

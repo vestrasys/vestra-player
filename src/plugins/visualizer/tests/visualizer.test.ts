@@ -201,21 +201,18 @@ test("activation: backdrop, settings page and menu entries, in English", async (
   assert.equal(props(host)["custom-logo"], false);
   const page = host.settingsPage(PAGE_ID);
   assert.deepEqual([page.category, page.title, page.order], ["appearance", "Logo and Album Cover", 20]);
-  const menu = [...host.commands.values()].map((c) => [c.declaration.path!.join(" ▸ "), c.declaration.order, c.declaration.group]);
+  // Menu sweep (B5): all four commands are in the command palette only (no menu path).
+  for (const [id, c] of host.commands) assert.deepEqual([c.declaration.path, c.display.path], [[], []], `${id} has no menu path`);
+  const menu = [...host.commands.values()].map((c) => [c.declaration.title, c.declaration.order, c.declaration.group]);
   assert.deepEqual(menu, [
-    ["@audio ▸ Show Album Cover for Audio Only", 530, "visual"],
-    ["@settings ▸ Appearance ▸ Show Logo When Idle", 845, "settings-logo"],
-    ["@settings ▸ Appearance ▸ Choose Logo Image…", 846, "settings-logo"],
-    ["@reset ▸ Idle Logo", 850, "reset-appearance"],
+    ["Show Album Cover for Audio Only", 530, "visual"],
+    ["Show Logo When Idle", 845, "settings-logo"],
+    ["Choose Logo Image…", 846, "settings-logo"],
+    ["Idle Logo", 850, "reset-appearance"],
   ]);
   assert.deepEqual(
-    [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
-    [
-      "Audio ▸ Show Album Cover for Audio Only",
-      "Settings ▸ Appearance ▸ Show Logo When Idle",
-      "Settings ▸ Appearance ▸ Choose Logo Image…",
-      "Reset ▸ Idle Logo",
-    ],
+    [...host.commands.values()].map((c) => c.display.title),
+    ["Show Album Cover for Audio Only", "Show Logo When Idle", "Choose Logo Image…", "Idle Logo"],
   );
   // Command palette categories (player 0.7.6): "Category: Title" without the menu path.
   assert.deepEqual(
@@ -590,9 +587,10 @@ test("Simplified Chinese: menus, settings page and messages from locales/zh-Hans
   assert.equal(plugin.i18n.locale, "zh-Hans");
   assert.deepEqual(host.osd, ["徽标图片无法读取，已使用默认徽标"]);
   assert.equal(host.settingsPage(PAGE_ID).title, "徽标与专辑封面");
+  // Menu sweep (B5): palette only, so the title and the category are what a Chinese user reads.
   assert.deepEqual(
-    [...host.commands.values()].map((c) => c.display.path.join(" ▸ ")),
-    ["声音 ▸ 纯音频时显示专辑封面", "设置 ▸ 外观 ▸ 空闲时显示徽标", "设置 ▸ 外观 ▸ 选择徽标图片…", "复位 ▸ 空闲徽标"],
+    [...host.commands.values()].map((c) => c.display.title),
+    ["纯音频时显示专辑封面", "空闲时显示徽标", "选择徽标图片…", "空闲徽标"],
   );
   assert.deepEqual(
     [...host.commands.values()].map((c) => c.display.category),

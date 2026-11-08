@@ -2,6 +2,8 @@
 
 ## 0.1.7
 
+- Menu sweep (menu redesign §4): the whole Screen ▸ submenu (Picture-in-Picture, Mini Size, 0.5×–2×, Fit to Video Aspect Ratio, When Playback Starts ▸, Always on Top ▸) and Playback ▸ Hide Pointer While Playing leave the right-click menu and are in the command palette only, with their ids, keys, radio and checked states and the categories above; the settings page is unchanged. Who must change: nobody.
+
 - Every command has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Window** (Mini Size, Picture-in-Picture, Hide Pointer While Playing), **Window Size** (0.5×–2×, Fit to Video Aspect Ratio), **Size on Open** (Screen ▸ When Playback Starts: Don't Resize, 0.5×–2×, Fit to Video Aspect Ratio, Only Once; "When Playback Starts: 1×" would not say that it is the window's size) and **Always on Top** (Cycle Mode and the four modes). "Window" and "Always on Top" use the settings page's and the submenu's translations; "Window Size" and "Size on Open" are new, machine translations in every language marked `x-machine` (also in zh-Hans), worded like the settings page's "Window size when playback starts". No `home`: the settings page (Options ▸ Playback ▸ Window) has no command that opens it. Every command that can be disabled already gives a reason. Who must change: nobody. Titles, ids, menu paths, keys and order are unchanged.
 - Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category.
 
