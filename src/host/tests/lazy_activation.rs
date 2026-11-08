@@ -889,7 +889,13 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
     // Only the built-ins with a panel mount (refused headless, so their
     // activation fails) may be left out: one that stops reaching its ready
     // fails here instead of shrinking the coverage unnoticed.
-    const MOUNTS: [&str; 3] = ["vestra.playback", "vestra.playlist", "vestra.visualizer"];
+    // vestra.capture: its sidebar tab since the capture tab (#211).
+    const MOUNTS: [&str; 4] = [
+        "vestra.capture",
+        "vestra.playback",
+        "vestra.playlist",
+        "vestra.visualizer",
+    ];
     let unexpected = uncovered
         .iter()
         .filter(|line| !MOUNTS.iter().any(|id| line.starts_with(&format!("{id}:"))))
@@ -899,7 +905,7 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
         "built-ins not covered: {unexpected:?}"
     );
     assert!(
-        covered.len() >= builtins.len().saturating_sub(MOUNTS.len()) && covered.len() >= 13,
+        covered.len() >= builtins.len().saturating_sub(MOUNTS.len()) && covered.len() >= 12,
         "{} of {} built-ins covered: {uncovered:?}",
         covered.len(),
         builtins.len()

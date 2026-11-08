@@ -668,11 +668,10 @@ mod tests {
         assert_eq!(named("mute"), "Audio: Mute");
         assert_eq!(named("exit-fullscreen"), "Window: Leave Fullscreen");
         assert_eq!(named("quit"), "File: Quit");
-        // Titles, keys and menu paths stay as they were.
-        assert_eq!(
-            rows["seek-backward"]["key"],
-            json!(["Playback", "Seek", "Back 5 s"])
-        );
+        // Titles and keys stay; seek, frame and speed left the menu (menu
+        // redesign step 4) and have no menu path any more, like the palette.
+        assert_eq!(rows["seek-backward"]["key"], Value::Null);
+        assert_eq!(rows["stop"]["key"], json!(["Close"]));
         assert_eq!(rows["palette"]["key"], Value::Null);
         assert_eq!(rows["palette"]["defaults"], json!(["Ctrl+Shift+P"]));
     }

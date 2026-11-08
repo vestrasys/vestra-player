@@ -278,9 +278,15 @@ impl Host {
         self.held_mounts.forget(owner);
         self.warnings.edit().remove(&owner);
         capabilities::revoke(self, owner, park);
-        // Parked with a sidebar tab: the tab stays, a placeholder
-        // (sidebar-tabs.md); its panel stays in the shell if it is compiled.
-        let kept_tab = park && self.mounts.get(&owner).is_some_and(|m| m.recorded);
+        // Its panels (one per slot): parked, a tab stays, a placeholder
+        // (sidebar-tabs.md), its panel in the shell if it is compiled; the
+        // others go.
+        let gone = self
+            .mounts
+            .values()
+            .filter(|m| m.plugin == owner && !(park && m.recorded))
+            .map(|m| m.spec.owner)
+            .collect::<Vec<_>>();
         {
             let mut input = self.input.borrow_mut();
             if input.bottom == Some(owner) {
@@ -293,14 +299,18 @@ impl Host {
                 input.adjust = None;
             }
         }
-        let column_of = self
-            .mounts
-            .get(&owner)
-            .filter(|m| m.spec.slot.tabbed())
-            .and_then(|m| policy_slot(m.spec.slot));
-        let tabs_before = column_of
-            .map(|slot| self.policy.panels(slot))
-            .unwrap_or_default();
+        // Each gone tab's column before it goes.
+        let tabs_before = gone
+            .iter()
+            .map(|key| {
+                self.mounts
+                    .get(key)
+                    .filter(|m| m.spec.slot.tabbed())
+                    .and_then(|m| policy_slot(m.spec.slot))
+                    .map(|slot| self.policy.panels(slot))
+                    .unwrap_or_default()
+            })
+            .collect::<Vec<_>>();
         if self
             .sequence
             .is_some_and(|(provider, ..)| provider == owner)
@@ -313,19 +323,18 @@ impl Host {
             self.show_info_panels();
         }
         // The floating window opens again without this panel (`sync_floating`).
-        if !kept_tab
-            && self
-                .floating
-                .as_ref()
-                .is_some_and(|f| f.owners.contains(&owner))
+        if self
+            .floating
+            .as_ref()
+            .is_some_and(|f| gone.iter().any(|key| f.owners.contains(key)))
         {
             self.close_floating();
         }
         if matches!(&self.menu_mode, MenuMode::Panel(menu_owner, _) if *menu_owner == owner) {
             self.close_menu();
         }
-        if !kept_tab {
-            self.policy.remove_owner(owner);
+        for key in &gone {
+            self.policy.remove_owner(*key);
         }
         self.power.remove_owner(owner);
         self.timeline.remove_owner(owner);
@@ -345,9 +354,12 @@ impl Host {
         {
             self.preparing = None;
         }
-        if let Some(mount) = (!kept_tab).then(|| self.mounts.remove(&owner)).flatten() {
+        for (key, tabs_before) in gone.into_iter().zip(tabs_before) {
+            let Some(mount) = self.mounts.remove(&key) else {
+                continue;
+            };
             // Another tab of its column stays shown until the shell is rebuilt.
-            let last_tab = tabs_before.iter().all(|&o| o == owner);
+            let last_tab = tabs_before.iter().all(|&o| o == key);
             if let Some(shell) = &self.shell
                 && let Some(property) = mount.spec.slot.visible_property()
                 && (!mount.spec.slot.tabbed() || last_tab)
@@ -356,6 +368,7 @@ impl Host {
             }
             self.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
+                key,
                 contribution: None,
                 announced: false,
             });

@@ -167,6 +167,13 @@ impl Declaration {
             button: None,
         }
     }
+    /// Out of the menu (command palette and Keyboard Shortcuts only), keeping
+    /// its title, shown title and category.
+    pub fn without_path(mut self) -> Self {
+        self.path.clear();
+        self.display.path.clear();
+        self
+    }
     /// The menu text of this command.
     pub fn shown_title(&self) -> &str {
         if self.display.title.is_empty() {

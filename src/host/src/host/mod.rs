@@ -86,9 +86,36 @@ pub(crate) use supervisor::Origin;
 pub(crate) use supervisor::shutdown::{DEVICE_LOSS_BUDGET, QUIT_BUDGET};
 pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
 
+/// The key of a plugin's panel in one slot (SDK 1.6.14: a plugin mounts
+/// one panel per slot): what the shell, the policy and the compile sets
+/// know a panel by (`CompileSpec.owner`, `Owner<key>Bridge`). The plugin
+/// is [`panel_plugin`]; everything addressed to the plugin (messages,
+/// commands, images, its process) uses that.
+pub(crate) fn panel_key(owner: u64, slot: composition::Slot) -> u64 {
+    owner * PANEL_SLOTS + slot as u64
+}
+/// The plugin a panel key belongs to.
+pub(crate) fn panel_plugin(key: u64) -> u64 {
+    key / PANEL_SLOTS
+}
+/// Slots per plugin in a panel key (bottom, sidebar, backdrop, adjust).
+const PANEL_SLOTS: u64 = 4;
+/// The view a panel's images and row patches are kept under, per slot
+/// (the bottom bar keeps the `"$mount"` of one-panel plugins).
+pub(crate) fn mount_view(slot: composition::Slot) -> &'static str {
+    match slot {
+        composition::Slot::Bottom => "$mount",
+        composition::Slot::Sidebar => "$mount:sidebar",
+        composition::Slot::Backdrop => "$mount:backdrop",
+        composition::Slot::Adjust => "$mount:adjust",
+    }
+}
 #[derive(Clone)]
 pub(crate) struct Mount {
+    /// `spec.owner` is the panel's key (`panel_key`), not the plugin.
     pub(crate) spec: composition::CompileSpec,
+    /// The plugin that mounted it (its owner generation).
+    pub(crate) plugin: u64,
     pub(crate) properties: BTreeMap<String, Value>,
     /// The bottom bar's preference; a sidebar panel's come from the slot
     /// (`ui_state::SidebarSlot`, then the policy).
@@ -298,6 +325,8 @@ pub(crate) struct OsdActions {
 pub(crate) const STARTUP_MOUNT_GATHER: Duration = Duration::from_millis(400);
 pub(crate) struct MountChange {
     pub(crate) reply: Reply,
+    /// The panel it changes (`panel_key`); `reply.owner` is the plugin.
+    pub(crate) key: u64,
     pub(crate) contribution: Option<Mount>,
     /// Its owner was already told `ui.preparing` (a change put back after
     /// its batch failed).

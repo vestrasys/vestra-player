@@ -24,6 +24,19 @@ struct ColumnStrip {
     shown: i64,
 }
 
+/// The wire name of a panel key's slot.
+fn slot_of(key: u64) -> &'static str {
+    [
+        composition::Slot::Bottom,
+        composition::Slot::Sidebar,
+        composition::Slot::Backdrop,
+        composition::Slot::Adjust,
+    ]
+    .into_iter()
+    .find(|&slot| panel_key(panel_plugin(key), slot) == key)
+    .map_or("bottom", composition::Slot::name)
+}
+
 /// The policy's slot of a column.
 pub(crate) fn policy_column(column: Column) -> window_state::Slot {
     match column {
@@ -57,7 +70,7 @@ impl Host {
                 if !change.announced {
                     self.send(
                         change.reply.owner,
-                        json!({"event":"ui.preparing","data":{"phase":"preparing"}}),
+                        json!({"event":"ui.preparing","data":{"phase":"preparing","slot":slot_of(change.key)}}),
                     );
                 }
                 self.preparing = Some((Instant::now(), change));
@@ -108,7 +121,7 @@ impl Host {
                 if !change.announced {
                     self.send(
                         change.reply.owner,
-                        json!({"event":"ui.preparing","data":{"phase":"preparing"}}),
+                        json!({"event":"ui.preparing","data":{"phase":"preparing","slot":slot_of(change.key)}}),
                     );
                 }
                 changes.push(change);
@@ -136,12 +149,12 @@ impl Host {
             if let Some(mount) = &change.contribution {
                 // Mounted after all: an earlier refusal no longer applies.
                 self.clear_warning(owner, "slot-occupied");
-                next.insert(owner, mount.clone());
+                next.insert(change.key, mount.clone());
             } else {
-                next.remove(&owner);
+                next.remove(&change.key);
             }
         }
-        let batch = changes.iter().map(|c| c.reply.owner).collect::<Vec<_>>();
+        let batch = changes.iter().map(|c| c.key).collect::<Vec<_>>();
         let result = self.apply_mounts(next, &batch);
         self.log_prepared(changes.len(), started, result.is_ok());
         if result.is_err() && changes.len() > 1 {
@@ -164,7 +177,7 @@ impl Host {
         for change in changes {
             let owner = change.reply.owner;
             if !change.contribution.as_ref().is_some_and(|m| m.recorded) {
-                self.send(owner,json!({"event":"ui.preparing","data":{"phase":if result.is_ok(){"ready"}else{"failed"},"elapsedMs":elapsed}}));
+                self.send(owner,json!({"event":"ui.preparing","data":{"phase":if result.is_ok(){"ready"}else{"failed"},"elapsedMs":elapsed,"slot":slot_of(change.key)}}));
             }
             if change.reply.id == 0 {
                 if let Err(error) = &result {
@@ -367,7 +380,7 @@ impl Host {
                         diag!("tab {owner}: its panel does not compile: {error:#}");
                         self.tabs_failed.insert(owner);
                         let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
-                        self.send(owner, ui_error(&refusal));
+                        self.send(panel_plugin(owner), ui_error(&refusal));
                     }
                 }
             }
@@ -428,8 +441,11 @@ impl Host {
         }
         for old in &leaving {
             self.policy.remove_owner(*old);
-            if !next.contains_key(old) {
-                self.images.release_view(*old, "$mount");
+            if !next.contains_key(old)
+                && let Some(mount) = self.mounts.get(old)
+            {
+                self.images
+                    .release_view(mount.plugin, mount_view(mount.spec.slot));
             }
         }
         let memory = Column::ALL.map(|column| self.column_memory(column));
@@ -481,9 +497,13 @@ impl Host {
             input.bottom = next
                 .values()
                 .find(|m| m.spec.slot == composition::Slot::Bottom)
-                .map(|m| m.spec.owner);
-            input.sidebar = self.policy.sidebar_active();
-            input.adjust = self.policy.active(window_state::Slot::Adjust);
+                .map(|m| m.plugin);
+            // The panel keys' plugins: their commands take the panel's keys.
+            input.sidebar = self.policy.sidebar_active().map(panel_plugin);
+            input.adjust = self
+                .policy
+                .active(window_state::Slot::Adjust)
+                .map(panel_plugin);
         }
         self.mounts = next;
         for (state, plan) in self.columns.iter_mut().zip(plans) {
@@ -510,7 +530,7 @@ impl Host {
     pub(crate) fn report_value_failures(&mut self, failures: Vec<(u64, String)>) {
         for (owner, message) in failures {
             diag!("mount property {owner}/{message}");
-            self.send(owner, ui_error(&RpcError::new("ui", message)));
+            self.send(panel_plugin(owner), ui_error(&RpcError::new("ui", message)));
         }
     }
     /// Compile the shell with `shown` (every panel it draws: the bottom bar,
@@ -668,10 +688,11 @@ impl Host {
     /// property keeps its default), logged and reported to the plugin
     /// (`ui.error`, its `onError`).
     pub(crate) fn mount_values(&mut self, mount: &Mount) -> Vec<(String, SValue)> {
-        let owner = mount.spec.owner;
+        let owner = mount.plugin;
+        let view = mount_view(mount.spec.slot);
         let mut values = Vec::new();
         for (name, value) in &mount.properties {
-            match self.prop_value(owner, "$mount", name, value) {
+            match self.prop_value(owner, view, name, value) {
                 Ok(value) => values.push((name.clone(), value)),
                 Err(error) => {
                     diag!("mount property {owner}/{name}: {}", error.message);
@@ -688,10 +709,47 @@ impl Host {
             {
                 continue;
             }
+            // To the panel's plugin: `view` stays `"$mount"` for SDKs before
+            // 1.6.14 (one panel each); `slot` says which panel.
+            let (owner, slot) = (panel_plugin(event.owner), slot_of(event.owner));
             match event.args {
-                Ok(args)=>self.send(event.owner,json!({"event":"ui.callback","data":{"view":"$mount","callback":event.callback,"args":args}})),
-                Err(error)=>self.send(event.owner,json!({"event":"ui.error","data":{"code":"ui","message":format!("callback {}: {error}",event.callback)}})),
+                Ok(args)=>self.send(owner,json!({"event":"ui.callback","data":{"view":"$mount","slot":slot,"callback":event.callback,"args":args}})),
+                Err(error)=>self.send(owner,json!({"event":"ui.error","data":{"code":"ui","slot":slot,"message":format!("callback {}: {error}",event.callback)}})),
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// SDK 1.6.14: a plugin mounts one panel per slot. Each panel has a key
+    /// of its own (the shell, the policy and the compile sets know it by
+    /// that); the plugin and the slot come back from it, and keys of
+    /// different plugins or slots never meet.
+    #[test]
+    fn each_panel_of_a_plugin_has_its_own_key() {
+        use composition::Slot;
+        let slots = [Slot::Bottom, Slot::Sidebar, Slot::Backdrop, Slot::Adjust];
+        let mut seen = std::collections::BTreeSet::new();
+        for owner in [1, 2, 7, 1000] {
+            for slot in slots {
+                let key = panel_key(owner, slot);
+                assert!(seen.insert(key), "{owner} {slot:?}");
+                assert_eq!(panel_plugin(key), owner);
+                assert_eq!(slot_of(key), slot.name());
+            }
+        }
+        // Images and row patches per panel: the bottom bar keeps `$mount`.
+        assert_eq!(mount_view(Slot::Bottom), "$mount");
+        let views = slots.map(mount_view);
+        assert_eq!(
+            views
+                .iter()
+                .collect::<std::collections::BTreeSet<_>>()
+                .len(),
+            4
+        );
     }
 }

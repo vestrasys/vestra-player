@@ -1391,10 +1391,43 @@ function hostCommands(): Row[] {
     });
     return { path, bindings: literals(arrays[1]!) };
   };
-  for (const m of body.matchAll(/\(\s*"([a-z-]+)",\s*(make\(|(\w+)\))/g)) {
+  // `palette(category, title, shown, &[bindings], repeat)`: out of the
+  // menu (menu redesign step 4), its title alone.
+  const palette = (at: number) => {
+    const args = body.slice(at + 1, matching(body, at));
+    const title = /^\s*"[^"]*",\s*(&\w+|"[^"]*")/.exec(args)![1]!;
+    const bindings = /&\[([^\]]*)\]/.exec(args)![1]!;
+    return {
+      path: [] as string[],
+      title: title.startsWith("&")
+        ? computed[title.slice(1)]!
+        : title.replace(/^"|"$/g, ""),
+      bindings: literals(bindings),
+    };
+  };
+  for (const m of body.matchAll(
+    /\(\s*"([a-z-]+)",\s*(make\(|palette\(|(\w+)\))/g,
+  )) {
+    const made = m[3]
+      ? /let mut \w+ = (make|palette)\(/.exec(
+          body.slice(body.indexOf(`let mut ${m[3]} = `)),
+        )![1]
+      : m[2]!.slice(0, -1);
     const at = m[3]
-      ? body.indexOf("(", body.indexOf(`let mut ${m[3]} = make`))
+      ? body.indexOf("(", body.indexOf(`let mut ${m[3]} = `))
       : m.index + m[0].length - 1;
+    if (made === "palette") {
+      const { path, title, bindings } = palette(at);
+      rows.push({
+        owner: "host",
+        id: m[1]!,
+        path,
+        title,
+        bindings,
+        focus: null,
+      });
+      continue;
+    }
     const { path, bindings } = make(at);
     rows.push({
       owner: "host",
@@ -1450,14 +1483,22 @@ test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in
     "the built-in plugins' commands (started in the test host) differ from BUILTIN_COMMANDS",
   );
   // Submenus: every inner path of a plugin command below the top level of a
-  // built-in menu, or a top-level menu of its own; not those the player's
-  // own commands open (Playback ▸ Seek, Playback ▸ Speed).
+  // built-in menu, or a top-level menu of its own; not the player's own
+  // groups (`host_group_label` in commands.rs: Playback ▸ Seek, Playback ▸
+  // Speed), whoever fills them (the player's seek and speed actions left them
+  // for the command palette, menu redesign step 4).
   const builtIn = new Set(Object.values(MENU_KEYS));
   const hosts = new Set(
-    hostCommands().flatMap((row) =>
-      row.path.slice(0, -1).map((_, i) => row.path.slice(0, i + 1).join(" ▸ ")),
-    ),
+    [
+      ...braces(host("src/commands.rs"), "pub fn host_group_label(").matchAll(
+        /\[((?:"[^"]+",?\s*)+)\] =>/g,
+      ),
+    ]
+      .map((m) => [...m[1]!.matchAll(/"([^"]*)"/g)].map((s) => s[1]!))
+      .filter((path) => path.length > 1)
+      .map((path) => path.join(" ▸ ")),
   );
+  assert.ok(hosts.has("Playback ▸ Seek"), "host_group_label in commands.rs");
   const submenus = new Map<string, Set<string>>();
   for (const row of rows)
     for (let i = 1; i < row.path.length; i++) {

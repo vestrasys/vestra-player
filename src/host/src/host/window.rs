@@ -551,17 +551,15 @@ impl Host {
         // Its running plugin is kept up while the tab is current (declared
         // work, `Busy::ShownTab`), also when it woke under a new owner after
         // the tab was shown: registered here, every tick, not only on a change.
+        let plugin = mount.plugin;
         if !mount.recorded {
-            self.tab_work(owner);
+            self.tab_work(plugin);
         }
         let Some(mount) = self.mounts.get(&owner) else {
             return;
         };
-        let pending = self.mount_queue.iter().any(|c| c.reply.owner == owner)
-            || self
-                .preparing
-                .as_ref()
-                .is_some_and(|(_, c)| c.reply.owner == owner);
+        let pending = self.mount_queue.iter().any(|c| c.key == owner)
+            || self.preparing.as_ref().is_some_and(|(_, c)| c.key == owner);
         let compiled = self.shell_compiled.get(&owner) == Some(&owner);
         match sidebar_tabs::need(mount.recorded, compiled, pending) {
             sidebar_tabs::Need::Wake => {
@@ -572,7 +570,7 @@ impl Host {
                         column.prefix(),
                         mount.manifest
                     );
-                    self.panel_shown(owner);
+                    self.panel_shown(plugin);
                 }
             }
             sidebar_tabs::Need::Compile => {
@@ -619,8 +617,8 @@ impl Host {
         let tabs = self.policy.panels(policy_column(column));
         let active = self.policy.active(policy_column(column));
         match column {
-            Column::Sidebar => self.input.borrow_mut().sidebar = active,
-            Column::Adjust => self.input.borrow_mut().adjust = active,
+            Column::Sidebar => self.input.borrow_mut().sidebar = active.map(panel_plugin),
+            Column::Adjust => self.input.borrow_mut().adjust = active.map(panel_plugin),
         }
         // Each window indexes its own tab order; a tab it does not have yet
         // (or any more) leaves it as it is until it is rebuilt.
@@ -712,13 +710,14 @@ impl Host {
             .tabs
             .iter()
             .map(|&owner| {
-                let entries = self.commands.entries_of(owner);
+                let plugin = panel_plugin(owner);
+                let entries = self.commands.entries_of(plugin);
                 sidebar_tabs::tab_command(
                     entries
                         .iter()
                         .map(|(entry, ..)| entry.declaration.home.as_deref()),
                 )
-                .and_then(|id| self.input.borrow().table.label(owner, id))
+                .and_then(|id| self.input.borrow().table.label(plugin, id))
                 .unwrap_or_default()
             })
             .collect::<Vec<_>>();
@@ -798,7 +797,7 @@ impl Host {
                     diag!("floating panel: {error:#}");
                     if let Some(&owner) = owners.first() {
                         for owner in &owners {
-                            self.send(*owner, json!({"event":"ui.error","data":{"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}}));
+                            self.send(panel_plugin(*owner), json!({"event":"ui.error","data":{"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}}));
                         }
                         let _ = self.policy.set_detached(owner, false);
                         self.remember_sidebar(false);

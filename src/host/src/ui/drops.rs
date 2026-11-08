@@ -325,7 +325,9 @@ impl Host {
                 .native
                 .and_then(|id| platform::pointer_in(id).ok())
                 .unwrap_or((0., 0.));
-            self.policy.sidebar_active().map(|owner| (owner, at))
+            self.policy
+                .sidebar_active()
+                .map(|key| (panel_plugin(key), at))
         } else if generation == self.shell_generation {
             if let Some(shell) = &self.shell {
                 view::settle_layout(shell.window());
@@ -374,9 +376,14 @@ impl Host {
         // Tabs: the current panel starts below the host's tab strip (the
         // adjust column always draws its strip).
         let tabbed = self.policy.sidebar_panels().len() > 1;
-        let adjust = self.policy.active(crate::ui::window_state::Slot::Adjust);
+        // The drop's panel by its plugin (one panel per column at most).
+        let adjust = self
+            .policy
+            .active(crate::ui::window_state::Slot::Adjust)
+            .map(panel_plugin);
+        let sidebar = self.policy.sidebar_active().map(panel_plugin);
         let panel = panel.map(|(owner, (x, y))| {
-            if (tabbed && Some(owner) == self.policy.sidebar_active()) || Some(owner) == adjust {
+            if (tabbed && Some(owner) == sidebar) || Some(owner) == adjust {
                 (owner, (x, y - crate::ui::composition::TAB_STRIP_HEIGHT))
             } else {
                 (owner, (x, y))
