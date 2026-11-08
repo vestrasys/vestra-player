@@ -26,7 +26,7 @@ use std::{
     process::{Child, Stdio},
     sync::{
         Arc, Mutex,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc,
     },
     thread,
@@ -363,6 +363,9 @@ impl MemberStop {
 pub struct SharedRunner {
     pub link: Arc<Link>,
     child: Option<Child>,
+    /// Its stderr was read to the end (the reaper waits for it a moment
+    /// after the runner is gone, so its last lines are not lost).
+    stderr_done: Arc<AtomicBool>,
     /// `runner.hello`'s data, once it arrived.
     pub hello: Option<Value>,
     pub heartbeat: Heartbeat,
@@ -385,9 +388,21 @@ impl SharedRunner {
             .arg(&paths.shared_runner)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
-            .stderr(Stdio::inherit())
+            .stderr(Stdio::piped())
             .spawn()
             .with_context(|| paths.node_failure())?;
+        // Its stderr goes on to the player's, as when it was inherited, and
+        // to the plugin log; each member's line already starts with
+        // `[<plugin id>]` (shared-runner.ts). A heap abort ends the runner,
+        // which `RunnerExited` reports.
+        let stderr_done = Arc::new(AtomicBool::new(child.stderr.is_none()));
+        if let Some(stderr) = child.stderr.take() {
+            let done = stderr_done.clone();
+            thread::spawn(move || {
+                crate::process::forward_stderr(BufReader::new(stderr), None, None);
+                done.store(true, Ordering::Release);
+            });
+        }
         let stdin = child.stdin.take().context("shared runner stdin")?;
         let stdout = child.stdout.take().context("shared runner stdout")?;
         let (outbound, output) = mpsc::sync_channel::<Line>(QUEUE);
@@ -414,6 +429,7 @@ impl SharedRunner {
         Ok(Self {
             link,
             child: Some(child),
+            stderr_done,
             hello: None,
             heartbeat: Heartbeat::new(now),
             stats: Value::Null,
@@ -564,7 +580,7 @@ impl SharedRunner {
         } else {
             let _ = child.kill();
         }
-        reaper.child(child, STOP_WAIT);
+        reaper.child(child, STOP_WAIT, self.stderr_done.clone());
     }
 }
 impl SharedRunner {
@@ -582,7 +598,7 @@ impl SharedRunner {
             queued: None,
         });
         self.link.close();
-        reaper.child(child, wait);
+        reaper.child(child, wait, self.stderr_done.clone());
     }
 }
 impl Drop for SharedRunner {
@@ -597,6 +613,11 @@ impl Drop for SharedRunner {
                 queued: None,
             });
             wait_or_kill(&mut child);
+            // Its last lines, briefly (as the reaper does).
+            let deadline = Instant::now() + crate::process::STDERR_WAIT;
+            while !self.stderr_done.load(Ordering::Acquire) && Instant::now() < deadline {
+                thread::sleep(Duration::from_millis(5));
+            }
         }
         self.link.close();
     }

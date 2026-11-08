@@ -79,7 +79,7 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
         let (titles, commands) = actions.into_iter().unzip();
         (OsdActions { owner, commands }, titles)
     });
-    host.put_osd(&text, actions);
+    host.put_osd(&text, Some(owner), actions);
     Ok(())
 }
 

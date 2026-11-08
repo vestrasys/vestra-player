@@ -8,7 +8,6 @@
 // `visible`. Moving through the list or typing never creates or destroys
 // an element (the no-churn rule in menu-view.slint). Keep ROW (28px), TOP (16px) and CHROME (92px:
 // field, separator, footer and padding) in sync with command_palette.rs.
-import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { MenuChrome } from "menu-view.slint";
@@ -179,6 +178,12 @@ export component PaletteView inherits Rectangle {
 
     public function focus-palette() { field.focus(); }
     init => { field.focus(); }
+    // The text cursor in the field's coordinates, as the field last
+    // reported it; where it is drawn in the field's window, and that
+    // window's width (tests read them: the cursor stays in view).
+    private property <length> cursor-at;
+    out property <length> cursor-in-field: field.x + root.cursor-at;
+    out property <length> field-width: field-clip.width;
 
     private property <length> panel-width: min(520px, root.width - 16px);
 
@@ -201,33 +206,81 @@ export component PaletteView inherits Rectangle {
                 accept
             }
         }
-        // The field, and the count to its right in a column of its own,
-        // clear of the field's ✕ button.
-        field := LineEdit {
+        // The field, and the count to its right in a column of its own. A
+        // plain box with the panel's 1px line (user ruling 2026-11-08: no
+        // focus underline and no accent line under it; the field always
+        // has the focus while the palette is open). Esc closes the palette,
+        // so it has no clear button.
+        Rectangle {
             x: 8px;
             y: 6px;
             width: parent.width - 24px - count.width;
             height: 32px;
-            font-size: 13px;
-            placeholder-text: @tr("Type a command name");
-            text <=> root.query;
-            edited(text) => { root.edited(text); }
-            key-pressed(event) => {
-                if event.text == Key.Escape {
-                    root.dismissed();
-                    return accept;
+            background: Theme.bg-list;
+            border-color: Theme.line;
+            border-width: 1px;
+            border-radius: Theme.radius-control;
+            // The placeholder while the query is empty; the element stays.
+            Text {
+                x: 9px;
+                width: parent.width - 18px;
+                height: parent.height;
+                text: root.query == "" ? @tr("Type a command name") : "";
+                font-size: 13px;
+                color: Theme.text-dim;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            // The text's window: it clips, and the text scrolls so the
+            // cursor stays in view, as std-widgets' LineEdit does
+            // (lineedit-base.slint): the input is at least as wide as the
+            // window and moves left by `scroll`.
+            field-clip := Rectangle {
+                x: 9px;
+                width: parent.width - 18px;
+                height: parent.height;
+                clip: true;
+                field := TextInput {
+                    // How far the text is moved left (≥ 0).
+                    property <length> scroll;
+                    x: -min(self.scroll, max(0px, self.width - parent.width));
+                    width: max(parent.width, self.preferred-width + self.text-cursor-width);
+                    height: 100%;
+                    cursor-position-changed(position) => {
+                        root.cursor-at = position.x;
+                        if position.x - self.scroll < 0px {
+                            self.scroll = position.x;
+                        } else if position.x - self.scroll > parent.width - self.text-cursor-width {
+                            self.scroll = position.x - parent.width + self.text-cursor-width;
+                        }
+                    }
+                    font-size: 13px;
+                    color: Theme.text;
+                    selection-background-color: Theme.selected-bg;
+                    vertical-alignment: center;
+                    single-line: true;
+                    accessible-role: text-input;
+                    accessible-label: @tr("Type a command name");
+                    text <=> root.query;
+                    edited => { root.edited(self.text); }
+                    key-pressed(event) => {
+                        if event.text == Key.Escape {
+                            root.dismissed();
+                            return accept;
+                        }
+                        if event.text == Key.UpArrow { root.moved(-1); return accept; }
+                        if event.text == Key.DownArrow { root.moved(1); return accept; }
+                        if event.text == Key.PageUp { root.moved(-max(1, root.shown - 1)); return accept; }
+                        if event.text == Key.PageDown { root.moved(max(1, root.shown - 1)); return accept; }
+                        if event.text == Key.Return {
+                            root.run(-1, event.modifiers.shift);
+                            return accept;
+                        }
+                        // The focus stays in the palette.
+                        if event.text == Key.Tab || event.text == Key.Backtab { return accept; }
+                        reject
+                    }
                 }
-                if event.text == Key.UpArrow { root.moved(-1); return accept; }
-                if event.text == Key.DownArrow { root.moved(1); return accept; }
-                if event.text == Key.PageUp { root.moved(-max(1, root.shown - 1)); return accept; }
-                if event.text == Key.PageDown { root.moved(max(1, root.shown - 1)); return accept; }
-                if event.text == Key.Return {
-                    root.run(-1, event.modifiers.shift);
-                    return accept;
-                }
-                // The focus stays in the palette.
-                if event.text == Key.Tab || event.text == Key.Backtab { return accept; }
-                reject
             }
         }
         count := Text {
@@ -239,14 +292,6 @@ export component PaletteView inherits Rectangle {
             font-size: 11px;
             color: Theme.text-dim;
             vertical-alignment: center;
-        }
-        // The accent line under the field.
-        Rectangle {
-            x: 8px;
-            y: 42px;
-            width: parent.width - 16px;
-            height: 1px;
-            background: Theme.accent-fill;
         }
         // Rows from y 48px.
         for row[i] in root.rows: PaletteItem {

@@ -213,6 +213,80 @@ pub(crate) fn osd_hold(
     let cap = shown_at.saturating_add(OSD_HOLD_MS);
     (actions && hover && !idle && now < cap).then(|| (now + OSD_MS).min(cap))
 }
+
+/// Why a message whose time is up goes (`VESTRA_DEBUG_OSD`), when
+/// [`osd_hold`] does not keep it.
+pub(crate) fn osd_hide_reason(
+    now: u64,
+    shown_at: u64,
+    actions: bool,
+    hover: bool,
+    idle: bool,
+) -> &'static str {
+    if !actions || !hover {
+        "time"
+    } else if now >= shown_at.saturating_add(OSD_HOLD_MS) {
+        "hold cap"
+    } else if idle {
+        "pointer idle"
+    } else {
+        "time"
+    }
+}
+
+/// What the OSD message shows, as the host last wrote it to the shell. A
+/// new shell instance (a rebuild for a mount change) gets it written again,
+/// so a message on screen stays with its buttons and its remaining time.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct OsdShown {
+    pub(crate) text: String,
+    /// The button titles; `""` for none.
+    pub(crate) titles: [String; 2],
+    pub(crate) visible: bool,
+}
+
+impl OsdShown {
+    /// The shell properties that show this state.
+    pub(crate) fn values(&self) -> [(&'static str, SValue); 4] {
+        let text = |text: &str| SValue::String(text.into());
+        [
+            ("osd-text", text(&self.text)),
+            ("osd-action-1", text(&self.titles[0])),
+            ("osd-action-2", text(&self.titles[1])),
+            ("osd-visible", self.visible.into()),
+        ]
+    }
+}
+
+/// `VESTRA_DEBUG_OSD=1`: a stderr line for every OSD message shown or
+/// hidden, with the plugin that showed it, its buttons and why it went.
+pub(crate) fn debug_osd() -> bool {
+    static ON: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+    *ON.get_or_init(|| std::env::var_os("VESTRA_DEBUG_OSD").is_some_and(|v| v == "1"))
+}
+
+/// One `VESTRA_DEBUG_OSD` event.
+pub(crate) enum OsdEvent<'a> {
+    Show(&'a str),
+    Hide(&'a str),
+    /// Written again into a rebuilt shell.
+    Kept,
+}
+
+/// The `VESTRA_DEBUG_OSD` line of `event` for a message from `from` (a
+/// plugin id, or "the player") with `actions` buttons.
+pub(crate) fn osd_line(event: &OsdEvent<'_>, from: &str, actions: usize) -> String {
+    let buttons = match actions {
+        0 => "no actions".to_owned(),
+        1 => "1 action".to_owned(),
+        n => format!("{n} actions"),
+    };
+    match event {
+        OsdEvent::Show(text) => format!("osd: show from {from}, {buttons}: {text:?}"),
+        OsdEvent::Hide(reason) => format!("osd: hide ({reason}) from {from}, {buttons}"),
+        OsdEvent::Kept => format!("osd: kept across a shell rebuild, from {from}, {buttons}"),
+    }
+}
 /// The action buttons of the message on screen: the plugin that showed it
 /// and the local ids of its commands, one per button.
 pub(crate) struct OsdActions {
@@ -317,6 +391,10 @@ pub(crate) struct Host {
     pub(crate) osd_shown_at: u64,
     /// When the hidden message's button titles are cleared (`OSD_CLEAR_MS`).
     pub(crate) osd_clear_at: Option<u64>,
+    /// What the OSD shows (written again into a rebuilt shell).
+    pub(crate) osd_shown: OsdShown,
+    /// The plugin that showed the message on screen; `None`: the player.
+    pub(crate) osd_from: Option<u64>,
     pub(crate) info_panels: BTreeMap<u64, String>,
     /// The sequence provider: owner, can-next, can-previous (C6).
     pub(crate) sequence: Option<(u64, bool, bool)>,

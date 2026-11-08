@@ -35,6 +35,89 @@ pub struct Point {
     pub y: f64,
 }
 
+/// The part of a window the menu may use, in its logical coordinates.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Area {
+    pub left: f64,
+    pub top: f64,
+    pub right: f64,
+    pub bottom: f64,
+}
+
+/// An area narrower or lower than this is no use for a menu: the whole
+/// window is used instead.
+const MIN_AREA: f64 = 120.;
+
+/// G-03 (GUI finding 2026-11-07): the part of a window `window` (logical
+/// size) that is on the screen holding the menu's `origin`, so a menu flips
+/// and shifts at the screen's edge as the system's menus do, also when the
+/// window reaches past it. `client` is the window's client area's top left
+/// and `monitors` the screens' rectangles `(x, y, width, height)`, all in
+/// physical screen pixels; `scale` is physical pixels per logical pixel.
+/// Without a screen holding the origin, the screen overlapping the window
+/// most is used; without any (or a sliver), the whole window.
+pub fn visible_area(
+    window: Point,
+    origin: Point,
+    client: (f64, f64),
+    scale: f64,
+    monitors: &[(f64, f64, f64, f64)],
+) -> Area {
+    let whole = Area {
+        left: 0.,
+        top: 0.,
+        right: window.x,
+        bottom: window.y,
+    };
+    if scale.is_nan() || scale <= 0. {
+        return whole;
+    }
+    let clip = |&(x, y, w, h): &(f64, f64, f64, f64)| Area {
+        left: ((x - client.0) / scale).max(0.),
+        top: ((y - client.1) / scale).max(0.),
+        right: ((x + w - client.0) / scale).min(window.x),
+        bottom: ((y + h - client.1) / scale).min(window.y),
+    };
+    let size = |a: &Area| (a.right - a.left).max(0.) * (a.bottom - a.top).max(0.);
+    let areas: Vec<Area> = monitors.iter().map(clip).collect();
+    let holding = areas
+        .iter()
+        .find(|a| (a.left..a.right).contains(&origin.x) && (a.top..a.bottom).contains(&origin.y));
+    let largest = areas
+        .iter()
+        .filter(|a| size(a) > 0.)
+        .max_by(|a, b| size(a).total_cmp(&size(b)));
+    match holding.or(largest) {
+        Some(area) if area.right - area.left >= MIN_AREA && area.bottom - area.top >= MIN_AREA => {
+            *area
+        }
+        _ => whole,
+    }
+}
+
+/// Lay a menu out inside `area`: `layout` gets the origin and the area's
+/// size in the area's own coordinates (as if it were the window), and the
+/// panels it returns are moved back into window coordinates.
+pub fn within(area: Area, origin: Point, layout: impl FnOnce(Point, Point) -> Value) -> Value {
+    let inside = Point {
+        x: (origin.x - area.left).clamp(0., area.right - area.left),
+        y: (origin.y - area.top).clamp(0., area.bottom - area.top),
+    };
+    let size = Point {
+        x: area.right - area.left,
+        y: area.bottom - area.top,
+    };
+    let mut value = layout(inside, size);
+    for level in value.as_array_mut().into_iter().flatten() {
+        for (key, by) in [("x", area.left), ("y", area.top)] {
+            if let Some(at) = level[key].as_f64() {
+                level[key] = json!(at + by);
+            }
+        }
+    }
+    value
+}
+
 /// Token for a row; parsed back by `parse_token`.
 pub enum Token {
     Group(Vec<String>),
@@ -683,6 +766,102 @@ mod tests {
                 (x, x + level["width"].as_f64().unwrap())
             })
             .collect()
+    }
+
+    /// GUI finding 2026-11-07 (4K, scale 2): with the window reaching past
+    /// the screen's right edge, a third-level submenu opened past the screen.
+    /// The area a menu uses is the part of the window on the screen holding
+    /// its origin.
+    #[test]
+    fn the_visible_area_is_the_window_on_the_screen_holding_the_origin() {
+        let window = Point { x: 1200., y: 800. };
+        let inside = Point { x: 500., y: 300. };
+        // Scale 2: a 3840x2160 screen at 0,0; the client area at 2000,200
+        // (physical) reaches 600 logical px past its right edge.
+        let screens = [(0., 0., 3840., 2160.)];
+        assert_eq!(
+            visible_area(window, inside, (2000., 200.), 2., &screens),
+            Area {
+                left: 0.,
+                top: 0.,
+                right: 920.,
+                bottom: 800.,
+            }
+        );
+        // Wholly on the screen: the whole window.
+        let whole = Area {
+            left: 0.,
+            top: 0.,
+            right: 1200.,
+            bottom: 800.,
+        };
+        assert_eq!(
+            visible_area(window, inside, (100., 100.), 2., &screens),
+            whole
+        );
+        // Two screens side by side: the one holding the origin.
+        let two = [(0., 0., 1920., 1080.), (1920., 0., 1920., 1080.)];
+        let left = visible_area(window, Point { x: 100., y: 100. }, (1000., 0.), 1., &two);
+        assert_eq!((left.left, left.right), (0., 920.));
+        let right = visible_area(window, Point { x: 1000., y: 100. }, (1000., 0.), 1., &two);
+        assert_eq!((right.left, right.right), (920., 1200.));
+        // A sliver, no screen, or no scale: the whole window.
+        assert_eq!(
+            visible_area(window, inside, (3800., 0.), 1., &screens),
+            whole
+        );
+        assert_eq!(visible_area(window, inside, (0., 0.), 1., &[]), whole);
+        assert_eq!(visible_area(window, inside, (0., 0.), 0., &screens), whole);
+    }
+
+    /// Every level opened near the right end of the visible area stays in
+    /// it: the submenus flip left of their parents instead of opening past
+    /// the screen, and a level that would pass the bottom moves up.
+    #[test]
+    fn submenus_flip_at_the_screen_edge_not_the_window_edge() {
+        let path = vec!["文件".to_owned(), "网络".to_owned()];
+        // The window is 1600 wide; the screen ends at 1000.
+        let window = Point { x: 1600., y: 700. };
+        let area = Area {
+            left: 0.,
+            top: 0.,
+            right: 1000.,
+            bottom: 700.,
+        };
+        let origin = Point { x: 860., y: 640. };
+        let value = within(area, origin, |o, s| {
+            levels(&tree(), &path, o, s, &[], &none)
+        });
+        let all = value.as_array().unwrap();
+        assert_eq!(all.len(), 3);
+        for level in all {
+            let (x, y) = (level["x"].as_f64().unwrap(), level["y"].as_f64().unwrap());
+            let (w, h) = (
+                level["width"].as_f64().unwrap(),
+                level["height"].as_f64().unwrap(),
+            );
+            assert!(x >= area.left && x + w <= area.right, "{value}");
+            assert!(y >= area.top && y + h <= area.bottom, "{value}");
+        }
+        let flipped = spans(&value);
+        assert!(flipped[1].1 <= flipped[0].0 + OVERLAP, "{flipped:?}");
+        assert!(flipped[2].1 <= flipped[1].0 + OVERLAP, "{flipped:?}");
+        // Laid out against the whole window, the same menu passes the screen.
+        let unclipped = spans(&levels(&tree(), &path, origin, window, &[], &none));
+        assert!(unclipped.iter().any(|(_, right)| *right > area.right));
+        // An area that does not start at the window's corner moves the
+        // panels back into window coordinates.
+        let shifted = Area {
+            left: 300.,
+            top: 50.,
+            right: 1300.,
+            bottom: 750.,
+        };
+        let moved = within(shifted, Point { x: 400., y: 60. }, |o, s| {
+            levels(&tree(), &path[..1], o, s, &[], &none)
+        });
+        assert_eq!(moved[0]["x"].as_f64(), Some(400.));
+        assert_eq!(moved[0]["y"].as_f64(), Some(60.));
     }
 
     /// Coordinator report 2026-10-24: a submenu drawn over its parent takes
