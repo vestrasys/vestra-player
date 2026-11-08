@@ -28,7 +28,7 @@ Browse the plugins in the official Vestra Player repository; install, update, un
 - The official repository's index is digitally signed, and the store checks it with a built-in public key; an index that does not verify is not used, and the last trusted copy stays. A package is installed only when its size and checksum match the index.
 - The only official plugins are the built-in ones that come with the player, with ids starting with `vestra.`. The plugins in the official repository are third-party plugins, written by their authors and reviewed by the repository; the list marks them Official repository. An id starting with `vestra.` cannot be installed from any repository or package.
 - Plugins of third-party repositories are marked Unofficial: <repository>; they and sideloaded plugins come with a warning before installing. A third-party README does not load remote images until you click Show Images.
-- A plugin is a complete program: permissions only limit what it can do with the player, not reading and writing files or using the network. Only install plugins from authors you trust.
+- Only install plugins from authors you trust.
 
 ## Limits
 

@@ -1200,16 +1200,12 @@ msgid ""
 "Added:\n"
 "{2}\n"
 "\n"
-"Current: {3}.\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"Current: {3}."
 msgstr ""
 "追加される権限：\n"
 "{2}\n"
 "\n"
-"現在：{3}。\n"
-"\n"
-"プラグインは完全なプログラムです。上記の権限はプレーヤーの機能の使用を制限するだけで、ファイルの読み書きやネットワークの使用は制限しません。"
+"現在：{3}。"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1300,14 +1296,10 @@ msgstr "リポジトリ：{}（{}）。このリポジトリは Vestra Player �
 #, x-machine
 msgid ""
 "It will be able to:\n"
-"{}\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"{}"
 msgstr ""
 "このプラグインができること：\n"
-"{}\n"
-"\n"
-"プラグインは完全なプログラムです。上記の権限はプレーヤーの機能の使用を制限するだけで、ファイルの読み書きやネットワークの使用は制限しません。"
+"{}"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1737,7 +1729,7 @@ msgstr "使い続ける"
 msgid "Choose a plugin package (.vxp)"
 msgstr "プラグインパッケージ（.vxp）を選択"
 
-#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:695
+#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:688
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"
@@ -1879,8 +1871,3 @@ msgstr "最低プレーヤーバージョン"
 #, x-machine
 msgid "Permissions ({})"
 msgstr "権限（{}）"
-
-#: ui/store.slint:668
-#, x-machine
-msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "プラグインは完全なプログラムです。上記の権限はプレーヤーの機能の使用を制限するだけで、ファイルの読み書きやネットワークの使用は制限しません。"
