@@ -129,6 +129,12 @@ export component HostWindow inherits Window {
     out property <length> info-size: clamp(11px * root.osd-size / 16px, 9px, 28px);
     private property <length> osd-pad-x: round(12px * root.osd-size / 18px / 1px) * 1px;
     private property <length> osd-pad-y: round(5px * root.osd-size / 18px / 1px) * 1px;
+    // The OSD message's text width budget: the video width less the plate's
+    // 10px margins, its padding and the action buttons (never negative).
+    out property <length> osd-text-room: max(0px, canvas.width - 20px - 2 * root.osd-pad-x - osd-first.width - osd-second.width);
+    // Where the message's plate ends, and its text's width (tests read them).
+    out property <length> osd-right: osd.x + osd.width;
+    out property <length> osd-text-width: osd-label.width;
     callback window-input(string);
     // Bindings (C3): true when the input is bound, so Slint stops propagating it.
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
@@ -318,7 +324,7 @@ export component HostWindow inherits Window {
                         osd := Rectangle {
                             // Below the fullscreen title strip while it is out (it follows the slide).
                             x: 10px; y: 10px + title-strip.covered;
-                            width: osd-label.preferred-width + osd-first.width + osd-second.width + 2 * root.osd-pad-x;
+                            width: osd-label.width + osd-first.width + osd-second.width + 2 * root.osd-pad-x;
                             height: osd-label.preferred-height + 2 * root.osd-pad-y;
                             border-radius: Theme.radius-panel * root.osd-size / 18px;
                             background: #0b0a10c4;
@@ -331,12 +337,18 @@ export component HostWindow inherits Window {
                                 enabled: root.osd-visible && root.osd-action-1 != "";
                                 changed mouse-x => { root.window-input("activity"); }
                                 changed mouse-y => { root.window-input("activity"); }
+                                // The text takes what the video width leaves beside the
+                                // buttons (10px margins on both sides) and ends in "…"
+                                // when longer, so the buttons always show whole. Only
+                                // widths change: no element comes or goes.
                                 osd-label := Text {
                                     x: root.osd-pad-x; y: root.osd-pad-y;
-                                    width: self.preferred-width; height: self.preferred-height;
+                                    width: min(self.preferred-width, root.osd-text-room);
+                                    height: self.preferred-height;
                                     text: root.osd-text;
                                     font-size: root.osd-size; font-weight: 600;
                                     color: #ffffff;
+                                    overflow: elide;
                                 }
                                 osd-first := OsdAction {
                                     x: osd-label.x + osd-label.width; y: root.osd-pad-y;

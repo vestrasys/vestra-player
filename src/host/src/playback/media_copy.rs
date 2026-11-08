@@ -36,8 +36,13 @@ const FIRST_KEYFRAME_STEPS: u32 = 30;
 /// Packets read at the head of the copy for its first presented frame: open
 /// GOPs write leading frames (earlier presentation times) after the keyframe.
 const HEAD_PACKETS: u32 = 64;
-/// The copied file's first seconds are decoded before publication.
-const DECODE_CHECK_SECONDS: f64 = 3.;
+/// The copied file's first half second is decoded before publication: its
+/// start must decode (the keyframe and an open GOP's leading frames). More
+/// only costs time: 3 s of a 4K60 clip took 6 to 8 s on one thread (GUI
+/// check 2026-11-08), all of it shown as "Finishing".
+const DECODE_CHECK_SECONDS: f64 = 0.5;
+/// Decoder threads for that check (below-normal priority, as every tool).
+const DECODE_CHECK_THREADS: usize = 2;
 /// FFmpeg's refusals of a codec in a container.
 const MUXER_REFUSALS: &[&str] = &[
     "not currently supported in container",
@@ -377,7 +382,15 @@ pub fn write(
     reader
         .validate()
         .context("source-unavailable after the stream copy")?;
-    if decode_check(job.ffmpeg, temp, 1, Some(DECODE_CHECK_SECONDS), control)?.is_none() {
+    if decode_check(
+        job.ffmpeg,
+        temp,
+        DECODE_CHECK_THREADS,
+        Some(DECODE_CHECK_SECONDS),
+        control,
+    )?
+    .is_none()
+    {
         return Ok(None);
     }
 

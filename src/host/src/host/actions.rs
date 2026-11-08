@@ -318,24 +318,35 @@ impl Host {
     pub(crate) fn show_osd(&mut self, text: &str) {
         let text: String = text.replace(['\n', '\r'], " ").chars().take(200).collect();
         if !text.trim().is_empty() {
-            self.put_osd(&text, None);
+            self.put_osd(&text, None, None);
         }
     }
-    /// Show one OSD line, with the buttons of `actions` (their titles and
-    /// the plugin's commands) after the text. It replaces the message on
-    /// screen and its buttons, whoever showed them.
-    pub(crate) fn put_osd(&mut self, text: &str, actions: Option<(OsdActions, Vec<String>)>) {
-        let Some(shell) = &self.shell else {
+    /// Show one OSD line from `from` (a plugin; `None`: the player), with
+    /// the buttons of `actions` (their titles and the plugin's commands)
+    /// after the text. It replaces the message on screen and its buttons,
+    /// whoever showed them.
+    pub(crate) fn put_osd(
+        &mut self,
+        text: &str,
+        from: Option<u64>,
+        actions: Option<(OsdActions, Vec<String>)>,
+    ) {
+        if self.shell.is_none() {
             return;
-        };
+        }
+        if self.osd_shown.visible {
+            self.osd_debug(&OsdEvent::Hide("replaced"));
+        }
         let titles = actions
             .as_ref()
             .map_or(&[][..], |(_, titles)| titles.as_slice());
-        let title = |i: usize| SValue::String(titles.get(i).map_or("", String::as_str).into());
-        let _ = shell.set_property("osd-text", SValue::String(text.into()));
-        let _ = shell.set_property("osd-action-1", title(0));
-        let _ = shell.set_property("osd-action-2", title(1));
-        let _ = shell.set_property("osd-visible", true.into());
+        let title = |i: usize| titles.get(i).cloned().unwrap_or_default();
+        self.osd_shown = OsdShown {
+            text: text.to_owned(),
+            titles: [title(0), title(1)],
+            visible: true,
+        };
+        self.write_osd();
         let ms = if actions.is_some() {
             OSD_ACTION_MS
         } else {
@@ -345,34 +356,59 @@ impl Host {
         self.osd_until = Some(now + ms);
         self.osd_shown_at = now;
         self.osd_clear_at = None;
+        self.osd_from = from;
         self.osd_actions = actions.map(|(actions, _)| actions);
+        self.osd_debug(&OsdEvent::Show(text));
     }
-    /// The message fades out; its buttons go now, their titles once the
-    /// fade is over (`OSD_CLEAR_MS`).
-    pub(crate) fn hide_osd(&mut self) {
+    /// Write the whole OSD state into the shell: after every change, and
+    /// again into a rebuilt shell (`compile_shell`), which keeps a message
+    /// on screen with its buttons; its remaining time is the host's.
+    pub(crate) fn write_osd(&self) {
+        if let Some(shell) = &self.shell {
+            for (name, value) in self.osd_shown.values() {
+                let _ = shell.set_property(name, value);
+            }
+        }
+    }
+    /// The message fades out (`reason` for `VESTRA_DEBUG_OSD`); its buttons
+    /// go now, their titles once the fade is over (`OSD_CLEAR_MS`).
+    pub(crate) fn hide_osd(&mut self, reason: &str) {
+        self.osd_debug(&OsdEvent::Hide(reason));
         self.osd_until = None;
         self.osd_actions = None;
         self.osd_clear_at = Some(self.now_ms() + OSD_CLEAR_MS);
-        if let Some(shell) = &self.shell {
-            let _ = shell.set_property("osd-visible", false.into());
-        }
+        self.osd_shown.visible = false;
+        self.write_osd();
     }
     /// Empty both button slots: no button element stays (hidden) in the
     /// accessibility tree.
     pub(crate) fn clear_osd_titles(&mut self) {
         self.osd_clear_at = None;
-        if let Some(shell) = &self.shell {
-            let _ = shell.set_property("osd-action-1", SValue::String("".into()));
-            let _ = shell.set_property("osd-action-2", SValue::String("".into()));
-        }
+        self.osd_shown.titles = Default::default();
+        self.write_osd();
     }
     /// The buttons of `owner`'s message go (it stopped); the text stays for
     /// its time.
     pub(crate) fn drop_osd_actions(&mut self, owner: u64) {
         if self.osd_actions.as_ref().is_some_and(|a| a.owner == owner) {
+            self.osd_debug(&OsdEvent::Hide("its plugin stopped: buttons only"));
             self.osd_actions = None;
             self.clear_osd_titles();
         }
+    }
+    /// A `VESTRA_DEBUG_OSD` line for the message on screen.
+    pub(crate) fn osd_debug(&self, event: &OsdEvent<'_>) {
+        if !debug_osd() {
+            return;
+        }
+        let from = self
+            .osd_from
+            .map_or_else(|| "the player".to_owned(), |owner| self.plugin_id(owner));
+        let actions = self
+            .osd_actions
+            .as_ref()
+            .map_or(0, |actions| actions.commands.len());
+        diag!("{}", osd_line(event, &from, actions));
     }
     /// The user pressed button `index` of the message: the message goes and
     /// the plugin's command runs, as if picked from a menu.
@@ -386,7 +422,7 @@ impl Host {
             return;
         };
         let owner = self.osd_actions.as_ref().map_or(0, |actions| actions.owner);
-        self.hide_osd();
+        self.hide_osd("action pressed");
         if let Err(error) = self.execute_command(owner, &id) {
             diag!("osd action {id}: {}", error.message);
         }
@@ -536,6 +572,60 @@ pub(crate) fn migrate_fullscreen_escape(
 mod tests {
     use super::*;
     use crate::bindings::{HOST, Input, Lookup, Table};
+
+    /// `VESTRA_DEBUG_OSD`: one line per show and hide, naming the plugin,
+    /// its buttons and why the message went.
+    #[test]
+    fn osd_debug_lines_name_the_plugin_the_buttons_and_the_reason() {
+        assert_eq!(
+            osd_line(
+                &OsdEvent::Show("Clip exported as a.mp4"),
+                "vestra.capture",
+                2
+            ),
+            "osd: show from vestra.capture, 2 actions: \"Clip exported as a.mp4\""
+        );
+        assert_eq!(
+            osd_line(&OsdEvent::Hide("hold cap"), "vestra.capture", 1),
+            "osd: hide (hold cap) from vestra.capture, 1 action"
+        );
+        assert_eq!(
+            osd_line(&OsdEvent::Kept, "the player", 0),
+            "osd: kept across a shell rebuild, from the player, no actions"
+        );
+        let shown = 1_000;
+        assert_eq!(osd_hide_reason(5_000, shown, false, true, false), "time");
+        assert_eq!(osd_hide_reason(5_000, shown, true, false, false), "time");
+        assert_eq!(
+            osd_hide_reason(5_000, shown, true, true, true),
+            "pointer idle"
+        );
+        assert_eq!(
+            osd_hide_reason(shown + OSD_HOLD_MS, shown, true, true, false),
+            "hold cap"
+        );
+    }
+
+    /// The state a rebuilt shell gets written again: the message, its two
+    /// button slots and whether it shows.
+    #[test]
+    fn the_osd_state_is_the_four_shell_properties() {
+        let shown = OsdShown {
+            text: "Saved".into(),
+            titles: ["Show in Folder".into(), String::new()],
+            visible: true,
+        };
+        let values = shown.values();
+        let names: Vec<_> = values.iter().map(|(name, _)| *name).collect();
+        assert_eq!(
+            names,
+            ["osd-text", "osd-action-1", "osd-action-2", "osd-visible"]
+        );
+        assert_eq!(values[1].1, SValue::String("Show in Folder".into()));
+        assert_eq!(values[2].1, SValue::String("".into()));
+        assert_eq!(values[3].1, SValue::Bool(true));
+        assert_eq!(OsdShown::default().values()[3].1, SValue::Bool(false));
+    }
 
     #[test]
     fn osd_hold_needs_actions_an_active_pointer_and_ends_by_the_cap() {

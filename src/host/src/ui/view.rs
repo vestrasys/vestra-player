@@ -1966,6 +1966,120 @@ export component W inherits Window {
         }
     }
 
+    /// A long OSD message ends in "…" so that its action buttons stay whole
+    /// inside the video area (GUI finding 2026-11-07: a long saved path
+    /// pushed "Show in Folder" past the right edge); a short one keeps its
+    /// width. Only widths change.
+    #[test]
+    fn osd_text_leaves_room_for_its_actions() {
+        headless();
+        let source = crate::ui::composition::shell_source(&[]).unwrap();
+        let shell = crate::ui::composition::build(source, "HostWindow")
+            .unwrap()
+            .create()
+            .unwrap();
+        let number = |name: &str| match shell.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{other:?}"),
+        };
+        let set = |name: &str, text: &str| {
+            shell
+                .set_property(name, slint_interpreter::Value::String(text.into()))
+                .unwrap();
+        };
+        let long = "Clip exported as C:\\Users\\someone\\Videos\\Vestra\\\
+                    bbb_sunflower_2160p_60fps_normal_02.15.433-02.31.100.mp4";
+        for (width, height) in [(780., 609.), (1920., 1080.), (320., 182.)] {
+            shell
+                .window()
+                .set_size(slint::LogicalSize::new(width, height + 40.));
+            for (actions, label) in [
+                (["Show in Folder", "Copy"], "two actions"),
+                (["Show in Folder", ""], "one action"),
+                (["", ""], "none"),
+            ] {
+                set("osd-action-1", actions[0]);
+                set("osd-action-2", actions[1]);
+                set("osd-text", long);
+                settle_layout(shell.window());
+                let video = number("video-width");
+                let right = number("osd-right");
+                // The plate (text and buttons) ends 10px before the edge.
+                assert!(
+                    right <= video - 10. + 0.5,
+                    "{width}x{height} {label}: plate ends at {right}, video {video}"
+                );
+                // The text is as wide as it needs, at most the room left
+                // (where it does not fit, it takes all of it and elides).
+                let (text, room) = (number("osd-text-width"), number("osd-text-room"));
+                assert!(
+                    text <= room + 0.5,
+                    "{width}x{height} {label}: text {text}, room {room}"
+                );
+                if width < 1000. {
+                    assert_eq!(
+                        text, room,
+                        "{width}x{height} {label}: the long text takes the room left"
+                    );
+                }
+                // A short message keeps its own width, left of the room.
+                set("osd-text", "Saved");
+                settle_layout(shell.window());
+                let short = number("osd-text-width");
+                assert!(short > 0. && short < number("osd-text-room"), "{label}");
+            }
+        }
+    }
+
+    /// A shell rebuilt for a mount change starts with the OSD hidden; the
+    /// host writes its OSD state into it again (`Host::write_osd` after
+    /// `compile_shell`), and the new instance shows the same message with
+    /// the same buttons (GUI finding 2026-11-08).
+    #[test]
+    fn a_rebuilt_shell_shows_the_osd_state_written_into_it() {
+        headless();
+        let build = || {
+            let source = crate::ui::composition::shell_source(&[]).unwrap();
+            let shell = crate::ui::composition::build(source, "HostWindow")
+                .unwrap()
+                .create()
+                .unwrap();
+            shell.window().set_size(slint::LogicalSize::new(780., 649.));
+            shell
+        };
+        let state = crate::host::OsdShown {
+            text: "Clip exported as a.mp4".into(),
+            titles: ["Show in Folder".into(), "Show in Tab".into()],
+            visible: true,
+        };
+        let read = |shell: &slint_interpreter::ComponentInstance| {
+            settle_layout(shell.window());
+            let get = |name: &str| shell.get_property(name).unwrap();
+            (
+                get("osd-text"),
+                get("osd-action-1"),
+                get("osd-action-2"),
+                get("osd-visible"),
+                get("osd-right"),
+            )
+        };
+        let old = build();
+        for (name, value) in state.values() {
+            old.set_property(name, value).unwrap();
+        }
+        let fresh = build();
+        assert_eq!(
+            fresh.get_property("osd-visible").unwrap(),
+            slint_interpreter::Value::Bool(false),
+            "a new instance starts hidden"
+        );
+        for (name, value) in state.values() {
+            fresh.set_property(name, value).unwrap();
+        }
+        assert_eq!(read(&fresh), read(&old));
+        assert_eq!(read(&fresh).3, slint_interpreter::Value::Bool(true));
+    }
+
     /// Sidebar tabs: the docked column is as wide as with one panel, the
     /// tab strip takes the top 31px, and switching tabs (a property) keeps
     /// the layout; the host-owned `tabbed` reaches a global declaring it.

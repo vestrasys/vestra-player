@@ -205,6 +205,10 @@ fn main() -> Result<()> {
         !directories.is_empty(),
         platform::app_data_dir(),
     ) {
+        // The plugin log beside it: what plugins write to their console.
+        if let Err(error) = diag::open_plugin_log(diag::plugin_log_path(&path)) {
+            diag!("log: the plugin log cannot be opened ({error})");
+        }
         match diag::open_log(path) {
             Ok(()) => diag::log_panics(),
             Err(error) => diag!("log: the host log cannot be opened ({error})"),
@@ -474,6 +478,8 @@ fn main() -> Result<()> {
         osd_actions: None,
         osd_shown_at: 0,
         osd_clear_at: None,
+        osd_shown: Default::default(),
+        osd_from: None,
         info_panels: BTreeMap::new(),
         sequence: None,
         last_source: Value::Null,

@@ -213,6 +213,49 @@ pub fn log_open() -> bool {
     LOG.lock().unwrap_or_else(PoisonError::into_inner).is_some()
 }
 
+/// The plugin log's size before it rolls over to `plugins.log.1`.
+pub const PLUGIN_LOG_CAP: u64 = 2 * 1024 * 1024;
+
+static PLUGIN_LOG: Mutex<Option<LogFile>> = Mutex::new(None);
+
+/// The plugin log beside the host log: `plugins.log` in the same folder.
+/// It holds what plugins write to their console (each line starts with
+/// `[<plugin id>]`), as VS Code keeps an extension host log apart from its
+/// main log. The plugins' own words are kept as they are; the host log's
+/// rule against the user's paths applies to the player's lines, not here.
+pub fn plugin_log_path(host_log: &Path) -> PathBuf {
+    host_log.with_file_name("plugins.log")
+}
+
+/// Start the plugin log at `path` (`plugin_log_path`), capped at
+/// [`PLUGIN_LOG_CAP`] with one older file.
+pub fn open_plugin_log(path: PathBuf) -> std::io::Result<()> {
+    let log = LogFile::open(path, PLUGIN_LOG_CAP)?;
+    *PLUGIN_LOG.lock().unwrap_or_else(PoisonError::into_inner) = Some(log);
+    Ok(())
+}
+
+/// One line a plugin wrote to its console (its stderr, read by the
+/// player), for the plugin log with the time; `prefix` is put in front
+/// unless the line has it already (the shared runner prefixes its own).
+pub fn plugin_line(prefix: Option<&str>, bytes: &[u8]) {
+    let mut log = PLUGIN_LOG.lock().unwrap_or_else(PoisonError::into_inner);
+    if let Some(log) = log.as_mut() {
+        log.write(&stamped(&plugin_text(prefix, bytes)));
+    }
+}
+
+/// `bytes` as one log line: lossy UTF-8 without its line end, with
+/// `prefix` (`[<plugin id>]`) in front unless it starts with it.
+pub fn plugin_text(prefix: Option<&str>, bytes: &[u8]) -> String {
+    let text = String::from_utf8_lossy(bytes);
+    let text = text.trim_end_matches(['\n', '\r']);
+    match prefix {
+        Some(prefix) if !text.starts_with(prefix) => format!("{prefix} {text}"),
+        _ => text.to_owned(),
+    }
+}
+
 /// Where the host log goes: `VESTRA_LOG_FILE` when set (empty: no log, in
 /// any build), else `<app data>/logs/host.log` for a release build with
 /// windows that loads no development plugins (`--plugin`: those runs keep
@@ -428,6 +471,40 @@ mod tests {
         fn flush(&mut self) -> io::Result<()> {
             Err(io::ErrorKind::BrokenPipe.into())
         }
+    }
+
+    /// The plugin log sits beside the host log; each line names its plugin
+    /// once (the shared runner prefixes its members' lines itself).
+    #[test]
+    fn plugin_log_lines_name_their_plugin_once() {
+        let host = Path::new("C:/data/Vestra/logs/host.log");
+        assert_eq!(
+            plugin_log_path(host),
+            Path::new("C:/data/Vestra/logs/plugins.log")
+        );
+        assert_eq!(
+            plugin_text(Some("[vestra.capture]"), b"export done\r\n"),
+            "[vestra.capture] export done"
+        );
+        assert_eq!(
+            plugin_text(Some("[vestra.capture]"), b"[vestra.capture] already\n"),
+            "[vestra.capture] already"
+        );
+        assert_eq!(
+            plugin_text(None, b"[vestra.marks] shared\n"),
+            "[vestra.marks] shared"
+        );
+        assert_eq!(plugin_text(None, b"bad \xff byte"), "bad \u{fffd} byte");
+        // Capped like the host log, with its own (larger) cap.
+        let dir = tempfile::tempdir().unwrap();
+        let path = plugin_log_path(&dir.path().join("logs").join("host.log"));
+        let mut log = LogFile::open(path.clone(), 64).unwrap();
+        for n in 0..10 {
+            log.write(&plugin_text(Some("[p]"), format!("line {n}\n").as_bytes()));
+        }
+        assert!(LogFile::older(&path).exists());
+        assert!(std::fs::metadata(&path).unwrap().len() <= 64);
+        const { assert!(PLUGIN_LOG_CAP > LOG_CAP) };
     }
 
     #[test]

@@ -119,6 +119,50 @@ fn call(instance: &ComponentInstance, name: &str) {
 
 const SPACE: &str = " ";
 
+/// The command palette's field (a plain `TextInput`, review of
+/// 2026-11-08): a query longer than the field scrolls with the cursor and
+/// is clipped to the field, as std-widgets' LineEdit; Home brings the
+/// start back.
+#[test]
+fn the_palette_field_keeps_the_cursor_in_view() {
+    let palette = build(
+        r#"import { PaletteView } from "command-palette.slint";
+export component W inherits Window {
+    p := PaletteView { width: 100%; height: 100%; }
+    out property <length> cursor: p.cursor-in-field;
+    out property <length> room: p.field-width;
+    out property <string> query: p.query;
+}"#,
+        420.,
+        300.,
+    );
+    let room = number(&palette, "room");
+    assert!(room > 100., "{room}");
+    let inside = |what: &str| {
+        let cursor = number(&palette, "cursor");
+        assert!(
+            (0. ..=room).contains(&cursor),
+            "{what}: cursor at {cursor}, field {room}"
+        );
+        cursor
+    };
+    for _ in 0..120 {
+        key(&palette, "w");
+    }
+    assert_eq!(
+        get(&palette, "query"),
+        Value::String("w".repeat(120).into())
+    );
+    // At the end of a query far wider than the field: near its right edge.
+    let end = inside("after typing");
+    assert!(end > room / 2., "{end} of {room}");
+    key(&palette, Key::Home);
+    let start = inside("after Home");
+    assert!(start < 4., "{start}");
+    key(&palette, Key::End);
+    inside("after End");
+}
+
 /// Every control in every mode compiles without a warning, in a layout as
 /// the plugins place them.
 #[test]
