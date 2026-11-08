@@ -888,8 +888,8 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
     );
     // Only the built-ins with a panel mount (refused headless, so their
     // activation fails) may be left out: one that stops reaching its ready
-    // fails here instead of shrinking the coverage unnoticed.
-    // vestra.capture: its sidebar tab since the capture tab (#211).
+    // fails here instead of shrinking the coverage unnoticed. Capture mounts
+    // its sidebar tab at activation since the capture tab (player 0.7.6).
     const MOUNTS: [&str; 4] = [
         "vestra.capture",
         "vestra.playback",
@@ -905,6 +905,7 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
         "built-ins not covered: {unexpected:?}"
     );
     assert!(
+        // 16 built-ins less the 4 that mount a panel (12 since the capture tab).
         covered.len() >= builtins.len().saturating_sub(MOUNTS.len()) && covered.len() >= 12,
         "{} of {} built-ins covered: {uncovered:?}",
         covered.len(),

@@ -19,9 +19,11 @@ extend-ignore-re = [
 ]
 
 [default.extend-words]
-# mpv/FFmpeg filter and option names: `anull`, deband `1thr`…`4thr`.
+# mpv/FFmpeg filter and option names: `anull`, deband `1thr`…`4thr`, noise `alls`.
 anull = "anull"
 thr = "thr"
+# FFmpeg noise filter: all-components strength (`noise=alls=20`).
+alls = "alls"
 # The HTML media event name, used for mpv seeks too.
 seeked = "seeked"
 # File-name fixtures in the similar-files tests and docs (`abc-01`, `abd-01`).
