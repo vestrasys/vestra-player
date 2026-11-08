@@ -596,6 +596,21 @@ impl Policy {
         sidebar + adjust
     }
 
+    /// G-19: the pointer at (`x`, `y`) (window logical px, on a display of
+    /// `scale`) in a viewport `width` wide is in the title strip's reveal
+    /// zone: the top edge (`at_top_edge`) left of the popped-out columns.
+    /// In fullscreen the strip spans the video only, as the fullscreen bar
+    /// does, so the top edge over the columns does not bring it out.
+    pub fn at_title_edge(&self, x: f64, y: f64, scale: f64, width: f64) -> bool {
+        let right = width
+            - if self.fullscreen {
+                self.overlay_extent(width)
+            } else {
+                0.0
+            };
+        at_top_edge(y, scale) && x.is_finite() && x < right
+    }
+
     /// G-01: the pointer is over the video at `x` (window coordinates) in a
     /// viewport `width` wide. At the right edge the fullscreen columns pop
     /// out; left of the popped-out panels the leave delay starts.
@@ -903,8 +918,9 @@ impl Policy {
 /// video; it stays while the pointer is over it and hides `LEAVE_MS` after
 /// the pointer left it and the edge, or at once when fullscreen ends. The
 /// edge is the top `TITLE_EDGE_PX` physical px of the window, read from the
-/// window's pointer (no input area, so the video keeps its clicks there);
-/// the top-right corner belongs to the strip, not to the G-01 right edge.
+/// window's pointer (no input area, so the video keeps its clicks there),
+/// left of the popped-out columns (`Policy::at_title_edge`); the top-right
+/// corner belongs to the strip, not to the G-01 right edge.
 /// The title strip's reveal zone: the top 2 physical px (Vestra value).
 pub const TITLE_EDGE_PX: f64 = 2.0;
 
@@ -1786,6 +1802,42 @@ mod tests {
         assert!(docked.adjust.unwrap().effective && !docked.adjust.unwrap().overlay);
         assert_eq!(adjust_overlay_width(1000.0, 317.0, 400.0), 282.0);
         assert_eq!(adjust_overlay_width(700.0, 317.0, 400.0), 0.0);
+    }
+
+    /// G-19 (user ruling 2026-11-08): in fullscreen the title strip spans
+    /// the video only; the top edge over the popped-out columns does not
+    /// bring it out, the top edge left of them does.
+    #[test]
+    fn the_title_strip_edge_ends_at_the_popped_out_columns() {
+        let mut policy = both_columns();
+        let edge = |policy: &Policy, x: f64| policy.at_title_edge(x, 0.0, 1.0, 1920.0);
+        // In a window and collapsed in fullscreen: the whole top edge.
+        assert!(edge(&policy, 0.0) && edge(&policy, 1919.0));
+        policy.set_fullscreen(true, 0);
+        assert!(edge(&policy, 1919.0), "the top-right corner");
+        // Both popped out: they cover 1286..1920.
+        policy.pointer(1919.0, 1920.0, 100);
+        assert_eq!(policy.overlay_extent(1920.0), 634.0);
+        assert!(edge(&policy, 0.0) && edge(&policy, 1285.0));
+        assert!(!edge(&policy, 1286.0) && !edge(&policy, 1600.0) && !edge(&policy, 1919.0));
+        // Still the top 2 physical px only, and no pointer position.
+        assert!(!policy.at_title_edge(100.0, 2.0, 1.0, 1920.0));
+        assert!(!policy.at_title_edge(f64::NAN, 0.0, 1.0, 1920.0));
+        // The adjust column alone: the zone ends at its left edge.
+        policy.pointer(1200.0, 1920.0, 9000);
+        policy.activity(9000);
+        policy.tick(10_000);
+        assert_eq!(policy.overlay_extent(1920.0), 0.0);
+        assert!(edge(&policy, 1919.0), "collapsed: the whole edge again");
+        policy
+            .set_preferred(Slot::Adjust, 5, false, 11_000)
+            .unwrap();
+        policy.set_preferred(Slot::Adjust, 5, true, 11_000).unwrap();
+        assert_eq!(policy.overlay_extent(1920.0), 317.0);
+        assert!(edge(&policy, 1602.0) && !edge(&policy, 1603.0));
+        // Leaving fullscreen: the whole edge (no strip there anyway).
+        policy.set_fullscreen(false, 12_000);
+        assert!(edge(&policy, 1919.0));
     }
 
     /// User ruling 2026-11-08: a toggle (the bottom bar's buttons, Toggle

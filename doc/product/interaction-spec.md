@@ -140,9 +140,9 @@ The decisions below replace earlier wording in the feature requirements and the 
 **Requirements**:
 
 1. Applies in fullscreen in the main window on Windows and Linux (`platform::FULLSCREEN_TITLE_STRIP`). Not on macOS, where the system reveals its own menu and title bar at the top of a fullscreen space. Not in picture-in-picture or mini size.
-2. The pointer within 2 physical px of the screen's top edge slides down a 32 px strip over the video, without pushing it. The edge is read from the window pointer, so clicks, double-clicks and the wheel still reach the video. The strip holds the app icon, the window title, then Minimize, Exit Fullscreen (`exit-fullscreen`, with its key in the tooltip) and Close (red hover). Precedents: Edge and Chrome F11 fullscreen, PotPlayer.
+2. The pointer within 2 physical px of the screen's top edge, left of the popped-out columns (adjust column and sidebar overlays, G-01), slides down a 32 px strip over the video, without pushing it. The top edge over the popped-out columns does not reveal it (`Policy::at_title_edge`). The edge is read from the window pointer, so clicks, double-clicks and the wheel still reach the video. The strip holds the app icon, the window title, then Minimize, Exit Fullscreen (`exit-fullscreen`, with its key in the tooltip) and Close (red hover). Precedents: Edge and Chrome F11 fullscreen, PotPlayer.
 3. It hides 500 ms after the pointer leaves the strip and its edge (the G-01 `LEAVE_MS`), and at once when fullscreen ends. While the pointer is on the strip it stays, and the pointer auto-hide does not hide the pointer there.
-4. The top-right corner belongs to the strip only at the very top edge; below it the right edge still pops out the sidebar (G-01). Menus and the command palette stay above the strip. The OSD moves down by the strip's height while it shows.
+4. The strip spans the video only and never covers the popped-out columns: its width ends at their left edge, as the fullscreen bar does (G-01 item 4, `columns-popped-width`), and follows their 150 ms slide, so its window buttons move left while a column is out (user ruling 2026-11-08). A column popping out or in beside one already out moves the strip's edge at once. With the columns retracted, the top-right corner belongs to the strip only at the very top edge; below it the right edge still pops out the columns (G-01). Menus and the command palette stay above the strip. The OSD moves down by the strip's height while it shows.
 5. Double-click and wheel on the strip background act as on the video. Minimize goes through the system's minimize (on Windows `ShowWindow`), so a later restore and Exit Fullscreen return to the window state from before fullscreen.
 6. The strip is created once and shown with `visible` and an animation. No element is created or destroyed per show, hide or hover (the no-churn rule).
 
@@ -153,6 +153,7 @@ The decisions below replace earlier wording in the feature requirements and the 
 3. Moving the pointer away hides it.
 4. The top-right corner shows only the strip; the right edge below it shows the sidebar.
 5. Strip Minimize, a restore and Exit Fullscreen give the maximised window with its title bar, and no tooltip is left behind.
+6. With the columns popped out, the strip ends at their left edge and the top edge over them does not show it; retracting them with the strip out widens it with their slide, without a jump.
 
 ### G-03 The context menu is fully usable in a small window and can extend beyond the main window (P1)
 
