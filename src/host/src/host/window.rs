@@ -67,15 +67,13 @@ impl Host {
                 shell.get_property("osd-hover"),
                 Ok(slint_interpreter::Value::Bool(true))
             );
-            match osd_hold(
-                now,
-                self.osd_shown_at,
-                self.osd_actions.is_some(),
-                hover,
-                self.policy.idle(now),
-            ) {
+            let (actions, idle) = (self.osd_actions.is_some(), self.policy.idle(now));
+            match osd_hold(now, self.osd_shown_at, actions, hover, idle) {
                 Some(until) => self.osd_until = Some(until),
-                None => self.hide_osd(),
+                None => {
+                    let reason = osd_hide_reason(now, self.osd_shown_at, actions, hover, idle);
+                    self.hide_osd(reason);
+                }
             }
         }
         if self.osd_clear_at.is_some_and(|at| now >= at) {

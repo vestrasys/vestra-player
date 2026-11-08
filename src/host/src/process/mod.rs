@@ -342,6 +342,7 @@ impl Plugin {
         let runner = match placement {
             Placement::Own { heap_mib } => own_process(
                 paths,
+                &manifest.id,
                 &directory,
                 data_directory.as_deref(),
                 heap_mib,
@@ -481,6 +482,7 @@ impl Plugin {
 /// abort, which the supervisor reports as "ran out of memory" (supervisor.md §7).
 fn own_process(
     paths: &crate::process::runtime_paths::RuntimePaths,
+    id: &str,
     directory: &Path,
     data_directory: Option<&Path>,
     heap_mib: Option<u32>,
@@ -507,14 +509,20 @@ fn own_process(
         .stderr(Stdio::piped())
         .spawn()
         .with_context(|| paths.node_failure())?;
-    // Its stderr goes on to the player's, as when inherited; read here so
-    // V8's heap abort is seen (supervisor.md §7, §8).
+    // Its stderr goes on to the player's, as when inherited, and to the
+    // plugin log with `[<id>]` in front; read here so V8's heap abort is
+    // seen (supervisor.md §7, §8).
     let stderr_done = Arc::new(AtomicBool::new(false));
     if let Some(stderr) = child.stderr.take() {
         let done = stderr_done.clone();
         let events = events.clone();
+        let prefix = format!("[{id}]");
         thread::spawn(move || {
-            forward_stderr(BufReader::new(stderr), generation, &events);
+            forward_stderr(
+                BufReader::new(stderr),
+                Some(&prefix),
+                Some((generation, &events)),
+            );
             done.store(true, Ordering::Release);
         });
     } else {
@@ -552,10 +560,17 @@ fn own_process(
 /// (`FATAL ERROR: … JavaScript heap out of memory`), before it aborts.
 pub const HEAP_ABORT_LINE: &str = "JavaScript heap out of memory";
 /// How long a reap waits for the end of a gone process's stderr.
-const STDERR_WAIT: Duration = Duration::from_millis(100);
-/// An own process's stderr, copied on to the player's line by line; V8's
-/// heap abort line is reported once as `Event::OutOfMemory`.
-fn forward_stderr(mut reader: impl BufRead, generation: u64, events: &mpsc::Sender<Event>) {
+pub(crate) const STDERR_WAIT: Duration = Duration::from_millis(100);
+/// A runner's stderr (an own process's, or the shared runner's), copied on
+/// to the player's line by line and to the plugin log (`diag::plugin_line`,
+/// with `prefix` in front of lines without it; the shared runner prefixes
+/// its own). With `oom`, V8's heap abort line is reported once as
+/// `Event::OutOfMemory` for that generation.
+pub(crate) fn forward_stderr(
+    mut reader: impl BufRead,
+    prefix: Option<&str>,
+    oom: Option<(u64, &mpsc::Sender<Event>)>,
+) {
     let mut told = false;
     loop {
         let mut bytes = Vec::new();
@@ -566,7 +581,11 @@ fn forward_stderr(mut reader: impl BufRead, generation: u64, events: &mpsc::Send
             Ok(0) | Err(_) => break,
             Ok(_) => {
                 let _ = std::io::stderr().lock().write_all(&bytes);
-                if !told && String::from_utf8_lossy(&bytes).contains(HEAP_ABORT_LINE) {
+                crate::diag::plugin_line(prefix, &bytes);
+                if let Some((generation, events)) = oom
+                    && !told
+                    && String::from_utf8_lossy(&bytes).contains(HEAP_ABORT_LINE)
+                {
                     told = true;
                     let _ = events.send(Event::OutOfMemory(generation));
                 }
@@ -721,6 +740,7 @@ mod stop_tests {
         let (events, receiver) = mpsc::channel();
         let runner = own_process(
             crate::process::runtime_paths::get(),
+            &manifest.id,
             &directory,
             None,
             None,

@@ -171,6 +171,56 @@ fn built_ins_share_one_runner_and_a_restart_keeps_their_session_values() {
     assert!(!log.contains("start 3"), "{log}");
 }
 
+/// What plugins write to their console reaches the player's stderr and the
+/// plugin log beside the host log (`plugins.log`), each line once with its
+/// plugin's id: a built-in in the shared runner and one running alone
+/// (digest mismatch), whose lines the player prefixes itself.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn plugin_console_lines_go_to_the_plugin_log() {
+    let root = plugins_root();
+    let plugins = [
+        builtin(
+            &root.path().join("plugins"),
+            "vestra.fixture-a",
+            "console.warn(\"shared says hi\");",
+            false,
+        ),
+        builtin(
+            &root.path().join("plugins"),
+            "vestra.fixture-c",
+            "console.log(\"alone says hi\");",
+            true,
+        ),
+    ];
+    let host_log = root.path().join("logs").join("host.log");
+    let stderr = run(
+        &plugins,
+        root.path(),
+        4,
+        &[("VESTRA_LOG_FILE", host_log.to_str().unwrap())],
+    );
+    assert!(
+        stderr.contains("[vestra.fixture-a] shared says hi"),
+        "{stderr}"
+    );
+    let plugin_log = std::fs::read_to_string(root.path().join("logs").join("plugins.log"))
+        .unwrap_or_else(|error| panic!("no plugins.log ({error}); stderr:\n{stderr}"));
+    for line in [
+        "[vestra.fixture-a] shared says hi",
+        "[vestra.fixture-c] alone says hi",
+        "[vestra.fixture-a] vestra.fixture-a start 1",
+    ] {
+        assert_eq!(
+            plugin_log.matches(line).count(),
+            1,
+            "{line:?} once in plugins.log:\n{plugin_log}"
+        );
+    }
+    // The player's own lines stay in the host log.
+    assert!(!plugin_log.contains("admitted"), "{plugin_log}");
+}
+
 /// Three restarts within a minute: own processes for the rest of the run.
 /// `VESTRA_SHARED=0`: own processes from the start. With backoff
 /// (supervisor.md §7) only the first restart in the window is immediate, the second

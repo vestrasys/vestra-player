@@ -13,7 +13,10 @@ pub(crate) fn menu_levels(
 ) -> Result<(Value, Vec<menu::Rect>)> {
     *path = menu::valid_path(roots, path);
     let (origin, size) = menu_frame(window);
-    let value = menu::levels(roots, path, origin, size, scroll, labels);
+    let area = menu_area(window, origin, size);
+    let value = menu::within(area, origin, |origin, size| {
+        menu::levels(roots, path, origin, size, scroll, labels)
+    });
     if debug_menu() {
         let panels: Vec<String> = value
             .as_array()
@@ -31,9 +34,13 @@ pub(crate) fn menu_levels(
             })
             .collect();
         diag!(
-            "menu: open={path:?} window={:.0}x{:.0} panels=[{}]",
+            "menu: open={path:?} window={:.0}x{:.0} area={:.0},{:.0}..{:.0},{:.0} panels=[{}]",
             size.x,
             size.y,
+            area.left,
+            area.top,
+            area.right,
+            area.bottom,
             panels.join("; ")
         );
     }
@@ -59,6 +66,44 @@ pub(crate) fn menu_frame(
             y: number("logical-height"),
         },
     )
+}
+
+/// The part of `window` on the screen holding the menu's origin
+/// (`menu::visible_area`): menus flip and shift at the screen's edge, also
+/// when the window reaches past it. The whole window when the system does
+/// not say where the window or its screens are (headless, Wayland).
+pub(crate) fn menu_area(
+    window: &slint_interpreter::ComponentInstance,
+    origin: menu::Point,
+    size: menu::Point,
+) -> menu::Area {
+    use slint::winit_030::WinitWindowAccessor;
+    let scale = f64::from(window.window().scale_factor());
+    let screens = window.window().with_winit_window(|winit| {
+        let client = winit.inner_position().ok()?;
+        let monitors: Vec<_> = winit
+            .available_monitors()
+            .map(|monitor| {
+                let (at, extent) = (monitor.position(), monitor.size());
+                (
+                    f64::from(at.x),
+                    f64::from(at.y),
+                    f64::from(extent.width),
+                    f64::from(extent.height),
+                )
+            })
+            .collect();
+        Some(((f64::from(client.x), f64::from(client.y)), monitors))
+    });
+    match screens.flatten() {
+        Some((client, monitors)) => menu::visible_area(size, origin, client, scale, &monitors),
+        None => menu::Area {
+            left: 0.,
+            top: 0.,
+            right: size.x,
+            bottom: size.y,
+        },
+    }
 }
 
 /// `VESTRA_DEBUG_KEYS=1`: log every key event and how it resolved to stderr.
@@ -477,13 +522,10 @@ impl Host {
                     })
                     .collect();
                 let (origin, size) = menu_frame(window);
-                let value = menu::context_level(
-                    &entries,
-                    origin,
-                    size,
-                    self.menu_scroll.first().copied().unwrap_or(0.),
-                    &labels,
-                );
+                let scroll = self.menu_scroll.first().copied().unwrap_or(0.);
+                let value = menu::within(menu_area(window, origin, size), origin, |o, s| {
+                    menu::context_level(&entries, o, s, scroll, &labels)
+                });
                 self.menu_panels = menu::panels(&value);
                 value
             }
@@ -495,13 +537,10 @@ impl Host {
                     .filter_map(|(owner, id)| self.commands.get(*owner, id))
                     .collect();
                 let (origin, size) = menu_frame(window);
-                let value = menu::bar_level(
-                    &entries,
-                    origin,
-                    size,
-                    self.menu_scroll.first().copied().unwrap_or(0.),
-                    &labels,
-                );
+                let scroll = self.menu_scroll.first().copied().unwrap_or(0.);
+                let value = menu::within(menu_area(window, origin, size), origin, |o, s| {
+                    menu::bar_level(&entries, o, s, scroll, &labels)
+                });
                 self.menu_panels = menu::panels(&value);
                 value
             }
@@ -518,13 +557,11 @@ impl Host {
                     .filter_map(|owner| self.mounts.get(owner).map(|m| (*owner, m.title.clone())))
                     .collect::<Vec<_>>();
                 let (origin, size) = menu_frame(window);
-                let value = menu::tabs_level(
-                    &tabs,
-                    self.policy.sidebar_active(),
-                    origin,
-                    size,
-                    self.menu_scroll.first().copied().unwrap_or(0.),
-                );
+                let scroll = self.menu_scroll.first().copied().unwrap_or(0.);
+                let active = self.policy.sidebar_active();
+                let value = menu::within(menu_area(window, origin, size), origin, |o, s| {
+                    menu::tabs_level(&tabs, active, o, s, scroll)
+                });
                 self.menu_panels = menu::panels(&value);
                 value
             }

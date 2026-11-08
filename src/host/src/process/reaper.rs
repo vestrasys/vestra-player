@@ -39,8 +39,13 @@ enum Item {
         plugin: Box<Plugin>,
         report: bool,
     },
-    /// A retired shared runner: killed after `wait`.
-    Child { child: Child, wait: Duration },
+    /// A retired shared runner: killed after `wait`; gone once its stderr
+    /// was read to the end too (`stderr_done`).
+    Child {
+        child: Child,
+        wait: Duration,
+        stderr_done: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    },
     /// Kill that owner's process now (`Action::Kill`: a quit, a stuck
     /// process).
     Kill(u64),
@@ -99,8 +104,17 @@ impl Reaper {
         });
     }
     /// A retired shared runner: waited for `wait`, then killed.
-    pub fn child(&self, child: Child, wait: Duration) {
-        self.hand_over(Item::Child { child, wait });
+    pub fn child(
+        &self,
+        child: Child,
+        wait: Duration,
+        stderr_done: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    ) {
+        self.hand_over(Item::Child {
+            child,
+            wait,
+            stderr_done,
+        });
     }
     /// `owner`'s process is killed now (its grace is cut short).
     pub fn kill(&self, owner: u64) {
@@ -153,7 +167,11 @@ fn begin(item: Item) -> Waiting {
             stop: Stop::Gone,
             _plugin: None,
         },
-        Item::Child { child, wait } => Waiting {
+        Item::Child {
+            child,
+            wait,
+            stderr_done,
+        } => Waiting {
             owner: None,
             stop: Stop::Own {
                 child,
@@ -162,7 +180,7 @@ fn begin(item: Item) -> Waiting {
                 killed: false,
                 code: None,
                 exited: None,
-                stderr_done: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
+                stderr_done,
             },
             _plugin: None,
         },
@@ -293,8 +311,8 @@ mod tests {
         let began = Instant::now();
         let (first, second) = (sleeper(), sleeper());
         let (one, two) = (first.id(), second.id());
-        reaper.child(first, Duration::from_millis(200));
-        reaper.child(second, Duration::from_millis(300));
+        reaper.child(first, Duration::from_millis(200), Default::default());
+        reaper.child(second, Duration::from_millis(300), Default::default());
         // Both gone well before either would have exited by itself.
         let deadline = Instant::now() + Duration::from_secs(10);
         while alive(one) || alive(two) {

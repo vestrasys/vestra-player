@@ -484,6 +484,14 @@ impl Host {
         }
         // Not hidden: it shared the window. Dropping it frees its tree.
         drop(self.shell.replace(shell));
+        // A message on screen stays, with its buttons; its remaining time
+        // and hold are the host's (`osd_until`), unchanged.
+        if self.osd_shown.visible {
+            self.osd_debug(&OsdEvent::Kept);
+        }
+        self.write_osd();
+        // And the plugins' information blocks (`osd.panel`), lost likewise.
+        self.show_info_panels();
         if self.menu_generation == self.shell_generation {
             self.menu_open = false;
             self.menu_mode = MenuMode::Main;
