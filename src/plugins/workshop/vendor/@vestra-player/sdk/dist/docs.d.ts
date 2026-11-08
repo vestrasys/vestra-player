@@ -19,7 +19,7 @@ export interface DocsOptions {
  *
  * `/` lists Overview, Guides and API. `/Guides/<group>/<page title>` is a
  * page of the documentation site (its file name works too:
- * `/Guides/How-to/testing`); `/API/<category>/<symbol>/<member>` is a
+ * `/Guides/Guides/testing`); `/API/<category>/<symbol>/<member>` is a
  * declaration with its signature, parameters, return value, errors,
  * capability, player version and examples. Matching ignores case, spaces
  * and punctuation; a leading `/` and a `.md` suffix are optional; `.`

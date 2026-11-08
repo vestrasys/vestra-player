@@ -355,7 +355,7 @@ Picture Adjustments, Audio Workbench and Subtitle Tuning use the same small-wind
 
 ### 7.3 Common requirements (all tool windows)
 
-The rules for plugin authors are on the SDK documentation site, [Interface guidelines → Tool windows](https://vestrasys.github.io/vestra-player-sdk/documents/Interface_guidelines.html#tool-windows); this table is the acceptance list for the built-in plugins.
+The rules for plugin authors are on the SDK documentation site, [Design rules → Build tool windows the player's way](https://vestrasys.github.io/vestra-player-sdk/documents/Design_rules.html#build-tool-windows-the-players-way); this table is the acceptance list for the built-in plugins.
 
 | ID | Requirement | Owner |
 | --- | --- | --- |

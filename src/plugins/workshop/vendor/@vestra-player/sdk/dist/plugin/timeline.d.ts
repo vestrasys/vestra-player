@@ -33,7 +33,7 @@ import type { Timeline, TimelineMark, TimelineRange } from "./types.ts";
 export declare const TIMELINE_LIMITS: Readonly<{
     /** Marks in one layer (`TimelineLayer.set`) (1000). */
     readonly marks: 1000;
-    /** Ranges in one layer (`TimelineLayer.setRanges`; player 0.7.6) (100). */
+    /** Ranges in one layer (`TimelineLayer.setRanges`) (100). */
     readonly ranges: 100;
     /** Characters of a mark's or a range's title, as shown (100). */
     readonly titleChars: 100;

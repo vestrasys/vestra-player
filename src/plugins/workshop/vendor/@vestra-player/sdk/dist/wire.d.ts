@@ -57,8 +57,8 @@ export interface UiCallback {
     args: Json[];
 }
 /**
- * One row operation of a list property's patch, by index, applied to the
- * result of the ones before (player 0.6.0, feature `ui.patch`).
+ * One row operation of a list property's patch, by index, applied to the result
+ * of the ones before (feature `ui.patch`).
  *
  * @remarks
  * Part of the wire protocol, which is not semver: this type changes with
@@ -118,14 +118,13 @@ export type RowOp = {
  * @remarks
  * Part of the wire protocol, which is not semver: this type changes with
  * versions. `{ value }` replaces the property; to a player that takes row
- * patches (player 0.6.0) it carries a `seq` that later patches apply on.
- * `{ patch: { base, seq, ops } }` applies `ops` on the write numbered
- * `base` (0: the view's initial properties) and is numbered `seq` itself;
- * the player refuses it with `stale` when the property changed since
- * `base`. `more` marks a part of a whole value sent in several, not the
- * last: the player shows the value at the last part. The SDK writes these
- * for `set()` and `bind()`; a plugin writes them with
- * {@link WireView.write}.
+ * patches it carries a `seq` that later patches apply on.
+ * `{ patch: { base, seq, ops } }` applies `ops` on the write numbered `base`
+ * (0: the view's initial properties) and is numbered `seq` itself; the player
+ * refuses it with `stale` when the property changed since `base`. `more` marks
+ * a part of a whole value sent in several, not the last: the player shows the
+ * value at the last part. The SDK writes these for `set()` and `bind()`; a
+ * plugin writes them with {@link WireView.write}.
  *
  * @example Write a whole list, numbered
  * The property `items` becomes a list of two rows; a later patch with
@@ -143,7 +142,7 @@ export type PropertyWrite = {
     value: Json;
     /** This write's number, which later patches name as their `base`. */
     seq?: number;
-    /** A part of a whole value sent in parts, not the last (player 0.6.0). */
+    /** A part of a whole value sent in parts, not the last. */
     more?: boolean;
 } | {
     /** Row operations on a list property. */
@@ -155,7 +154,7 @@ export type PropertyWrite = {
         /** The operations, applied in order. */
         ops: RowOp[];
     };
-    /** A part of a whole value sent in parts, not the last (player 0.6.0). */
+    /** A part of a whole value sent in parts, not the last. */
     more?: boolean;
 };
 /**
@@ -243,13 +242,13 @@ export interface PackageInfo {
     capabilities: string[];
     /** Its directory on disk. */
     directory: string;
-    /** One of the player's built-in plugins (player 0.2.0; absent from older players). */
+    /** One of the player's built-in plugins. */
     builtin?: boolean;
     /** Where an installed package came from; `null` for a development directory. */
     source?: WireSource | null;
     /** Its data directory, `null` when it has none. */
     dataDirectory?: string | null;
-    /** What the plugin was refused because another plugin holds it (player 0.4.x, after 0.4.0). */
+    /** What the plugin was refused because another plugin holds it. */
     warnings?: {
         /** Why: `slot-occupied`, `sequence-taken` or `resolver-taken`; a newer player may add codes. */
         code: string;
@@ -258,7 +257,7 @@ export interface PackageInfo {
         /** The manifest id of the plugin holding it, if any. */
         owner?: string;
     }[];
-    /** The manifest's display texts in the interface language (player 0.4.3). */
+    /** The manifest's display texts in the interface language. */
     display?: {
         /** The display name, or `null`. */
         name: string | null;
@@ -269,7 +268,7 @@ export interface PackageInfo {
         /** The store tags. */
         tags: string[];
     };
-    /** Whether it has a process now (player 0.5.18, `state: "running"`). */
+    /** Whether it has a process now (`state: "running"`). */
     process?: "running" | "idle";
 }
 /**
@@ -310,9 +309,9 @@ export interface BindingTable {
         command: string;
         title: string;
         path: string[] | null;
-        /** The path's keys (player 0.4.3). */
+        /** The path's keys. */
         key?: string[] | null;
-        /** The shown category (player 0.7.6). */
+        /** The shown category. */
         category?: string | null;
         scope: "global" | "panel";
         defaults: string[];
@@ -351,7 +350,7 @@ export interface BindingTable {
 export interface WindowFacts {
     /** The main window is fullscreen. */
     fullscreen: boolean;
-    /** The main window is maximized, `false` in fullscreen (player 0.6.3; absent from older players: `false`). */
+    /** The main window is maximized, `false` in fullscreen. */
     maximized?: boolean;
     /** The video area's size. */
     videoArea: {
@@ -360,7 +359,7 @@ export interface WindowFacts {
         /** Height in logical points. */
         height: number;
     };
-    /** System picture-in-picture (absent from older players: unsupported). */
+    /** System picture-in-picture. */
     pictureInPicture?: {
         /** The system offers it. */
         supported: boolean;
@@ -369,11 +368,11 @@ export interface WindowFacts {
     };
     /** The palette (`plugin.appearance`), with the `window.state` reply; a newer player may name a palette this SDK does not list. */
     appearance?: string;
-    /** The file resolvers' extensions (`plugin.resolvers.fileTypes`; player 0.4.2). */
+    /** The file resolvers' extensions (`plugin.resolvers.fileTypes`). */
     fileTypes?: string[];
-    /** The saved interface language, `"system"` or a locale (player 0.4.3). */
+    /** The saved interface language, `"system"` or a locale. */
     language?: string;
-    /** The interface language of this run (player 0.4.3). */
+    /** The interface language of this run. */
     locale?: string;
 }
 /**
@@ -398,8 +397,8 @@ export interface WireMark {
     plugin: string;
 }
 /**
- * One timeline range as the player merges them (player 0.7.6): what
- * `TimelineRange` is made from.
+ * One timeline range as the player merges them: what `TimelineRange` is made
+ * from.
  *
  * @remarks
  * The player's wire shape (`timeline.marks`, `timeline.changed`), part of the protocol, which is not
@@ -434,7 +433,7 @@ export interface WireRange {
 export interface WireTimeline {
     /** The marks, in time order. */
     marks: WireMark[];
-    /** The ranges (from player 0.7.6; absent from older players). */
+    /** The ranges. */
     ranges?: WireRange[];
 }
 /** A panel position (`ui.mount`'s `slot`). */
@@ -453,8 +452,8 @@ export interface LayoutPanel {
     title: string;
 }
 /**
- * One position (the bottom bar, the sidebar or, from player 0.7.6, the
- * adjust column) as `layout.state` reports it.
+ * One position (the bottom bar, the sidebar or, the adjust column) as
+ * `layout.state` reports it.
  */
 export interface LayoutSlot {
     /** The current tab's panel (the only panel of the bottom bar). */
@@ -463,7 +462,7 @@ export interface LayoutSlot {
     effective: boolean;
     reason: "userHidden" | "space" | "fullscreen" | "idle" | null;
     detached: boolean;
-    /** The position's panels in tab order; absent from players without sidebar tabs (0.4.0 and older). */
+    /** The position's panels in tab order. */
     panels?: LayoutPanel[];
 }
 export interface PlaybackStats {
@@ -471,7 +470,7 @@ export interface PlaybackStats {
     session: number;
     framesShown: number;
     framesDropped: number | null;
-    /** Player 0.5.1 and newer; the SDK fills in `null`. */
+    /** Frames presented per second; the SDK fills in `null` when absent. */
     presentedFps?: number | null;
     video: {
         codec: string | null;
@@ -541,9 +540,9 @@ export interface WireSystemInfo {
         refreshRate: number | null;
         primary: boolean;
     }[];
-    /** Player 0.5.12; older players leave it out. */
+    /** The renderer drawing now. */
     rendering?: "gpu" | "software";
-    /** Why `rendering` is what it is (player 0.5.13; older players leave it out). */
+    /** Why `rendering` is what it is. */
     renderingReason?: WireRenderingReason;
 }
 /**
@@ -562,7 +561,7 @@ export interface WireRenderingReason {
     /** English text, to show. */
     message: string;
 }
-/** `rendering.state` and `rendering.setPreference` (player 0.5.13). */
+/** `rendering.state` and `rendering.setPreference`. */
 export interface WireRenderingState {
     mode: "gpu" | "software";
     reason: WireRenderingReason;
@@ -577,8 +576,8 @@ export interface WireRenderingState {
 }
 /**
  * An upscaling reason: `{ code, message }` as a rendering reason; with
- * `decoding` a `cause`, with cause `copy-back` the `plugins` (player 0.5.25).
- * What `UpscalingReason` is made from.
+ * `decoding` a `cause`, with cause `copy-back` the `plugins`. What
+ * `UpscalingReason` is made from.
  *
  * @remarks
  * The player's wire shape (`video.upscaling.state`, `video.upscaling.changed`), part of the protocol, which is not
@@ -600,8 +599,7 @@ export interface WireUpscalingReason extends WireRenderingReason {
 }
 /**
  * The GPU video upscaler's state as `video.upscaling.state` and
- * `video.upscaling.set` answer it (player 0.5.16; the monitoring fields
- * from player 0.5.25, which also sends it without `enabled` as the event
+ * `video.upscaling.set` answer it (also sent without `enabled` as the event
  * `video.upscaling.changed`): what `UpscalingState` is made from.
  *
  * @remarks
@@ -648,13 +646,13 @@ export interface WireUpscalingState {
     inChain?: boolean;
 }
 /**
- * Template arguments on the wire (`osd.show`, `osd.panel`, `dialogs.confirm`,
- * a text's `args`): data, or text values (player 0.4.3).
+ * Template arguments on the wire (`osd.show`, `osd.panel`, `dialogs.confirm`, a
+ * text's `args`): data, or text values.
  */
 export type TemplateArgsJson = ArgJson[] | {
     [name: string]: ArgJson;
 };
-/** A text the player shows: source text, or a text value (player 0.4.3). */
+/** A text the player shows: source text, or a text value. */
 export type TextValueJson = string | TextJson | ListJson;
 export interface Transport {
     request<T>(method: string, params?: Json): Promise<T>;
@@ -668,9 +666,8 @@ export interface Transport {
     locale?: string;
 }
 /**
- * The events a plugin subscribes to (`events.subscribe`). The plugin API
- * names the same list `HostEvent` (`plugin.player.on`, SDK 1.7.0); a test
- * keeps the two equal.
+ * The events a plugin subscribes to (`events.subscribe`). The plugin API names
+ * the same list `HostEvent` (`plugin.player.on`); a test keeps the two equal.
  */
 export type HostEvent = "source.state" | "playback.backend" | "window.state" | "packages.changed" | "bindings.changed" | "commands.keys" | "timeline.changed" | "appearance.changed" | "resolvers.fileTypes" | "video.upscaling.changed";
 export declare function createWire(transport: Transport): {
@@ -698,7 +695,7 @@ export declare function createWire(transport: Transport): {
             cancelled: boolean;
             paths: string[];
         }>;
-        /** Message and detail are templates formatted with `args` (player 0.4.3). */
+        /** Message and detail are templates formatted with `args`. */
         confirm: (options: {
             [key: string]: Json;
         }) => Promise<{
@@ -744,7 +741,7 @@ export declare function createWire(transport: Transport): {
     /** The palette (`ui.theme` to change it). */
     appearance: {
         set: (theme: string) => Promise<void>;
-        /** The interface language for the next start (player 0.4.3). */
+        /** The interface language for the next start. */
         setLanguage: (language: string) => Promise<void>;
     };
     /** Settings pages in the player's options window (`ui.settings`). */
@@ -787,13 +784,13 @@ export declare function createWire(transport: Transport): {
         }>;
         renderRelease: () => Promise<void>;
         /**
-         * One shader channel handle's list (`plugin.video.shaders(id)`, player
-         * 0.5.20); `[]` removes it.
+         * One shader channel handle's list (`plugin.video.shaders(id)`); `[]`
+         * removes it.
          */
         shadersSet: (id: string, paths: string[]) => Promise<{
             state: "applied" | "waiting";
         }>;
-        /** The GPU's video upscaler (`plugin.video.upscaling`, player 0.5.16). */
+        /** The GPU's video upscaler (`plugin.video.upscaling`). */
         upscalingState: () => Promise<WireUpscalingState>;
         upscalingSet: (enabled: boolean) => Promise<WireUpscalingState>;
     };
@@ -807,7 +804,7 @@ export declare function createWire(transport: Transport): {
         }[], sourceId?: number) => Promise<{
             applied: boolean;
         }>;
-        /** Player 0.7.6. */
+        /** Replace this layer's ranges. */
         setRanges: (ranges: {
             start: number;
             end: number;
@@ -868,8 +865,8 @@ export declare function createWire(transport: Transport): {
         delete: (name: string) => Promise<void>;
     };
     /**
-     * JSON values the player keeps per plugin until it quits (SDK 1.5.25,
-     * player 0.5.5). `get` answers `{}` for a missing key.
+     * JSON values the player keeps per plugin until it quits. `get` answers
+     * `{}` for a missing key.
      */
     storageSession: {
         get: (key: string) => Promise<{
@@ -883,8 +880,8 @@ export declare function createWire(transport: Transport): {
         system: () => Promise<WireSystemInfo>;
     };
     /**
-     * The rendering choice (player 0.5.13): `state` needs no capability,
-     * `setPreference` and `restart` need `rendering.manage`.
+     * The rendering choice: `state` needs no capability, `setPreference` and
+     * `restart` need `rendering.manage`.
      */
     rendering: {
         state: () => Promise<WireRenderingState>;
@@ -902,7 +899,7 @@ export declare function createWire(transport: Transport): {
         } | null) => Promise<void>;
         step: (direction: "next" | "previous") => Promise<void>;
     };
-    /** `text` is a template in the plugin's catalog, formatted with `args` (player 0.4.3). */
+    /** `text` is a template in the plugin's catalog, formatted with `args`. */
     osd: {
         show: (text: TextValueJson, args?: TemplateArgsJson, actions?: {
             title: TextValueJson;
@@ -914,12 +911,12 @@ export declare function createWire(transport: Transport): {
         state: () => Promise<{
             bottom: LayoutSlot | null;
             sidebar: LayoutSlot | null;
-            /** Player 0.7.6 (absent from older players). */
+            /** The adjust column. */
             adjust?: LayoutSlot | null;
             backdrop?: LayoutBackdrop | null;
         }>;
         set: (options: {
-            /** `"adjust"`: player 0.7.6 (older players refuse it with `invalid`). */
+            /** The panel's position. */
             slot: "bottom" | "sidebar" | "adjust";
             visible?: boolean;
             detached?: boolean;
@@ -927,35 +924,32 @@ export declare function createWire(transport: Transport): {
             active?: string;
             /**
              * With `visible: true`: `false` switches the position on without
-             * popping a column out in fullscreen (`toggle()`, SDK 1.6.13; player
-             * 0.7.6). Absent: reveal, as `show()` and `setVisible` do. Older
-             * players ignore it.
+             * popping a column out in fullscreen (`toggle()`). Absent: reveal, as
+             * `show()` and `setVisible` do.
              */
             reveal?: boolean;
         }) => Promise<void>;
     };
     events: {
         /**
-         * One `events.subscribe` per name however many listeners. `mirror`:
-         * only the SDK keeps a copy of the state (player 0.5.18; older
-         * players ignore it); `listen` changes it.
+         * One `events.subscribe` per name however many listeners. `mirror`: only
+         * the SDK keeps a copy of the state; `listen` changes it.
          */
         subscribe(event: HostEvent, listener: (data: unknown) => void, mirror?: boolean, why?: string[]): Promise<() => Promise<void>>;
         /**
          * Tell the player whether a subscribed event has a real listener
          * (`active`) or only the SDK's copy of the state: `events.subscribe`
-         * again, which replaces the mark (player 0.5.18; older players keep
-         * one subscription per name and ignore the mark).
+         * again, which replaces the mark.
          */
         listen: (event: HostEvent, active: boolean, why?: string[]) => Promise<void>;
     };
     ui: {
-        /** Player 0.2.0: the remote images a Markdown document shows. */
+        /** The remote images a Markdown document shows. */
         markdownScan: (text: string, base: string | null) => Promise<{
             images: string[];
         }>;
         mount: (options: {
-            /** `"adjust"`: player 0.7.6 (older players refuse it with `invalid`). */
+            /** The panel's position. */
             slot: "bottom" | "sidebar" | "backdrop" | "adjust";
             file: string;
             component: string;
@@ -983,13 +977,12 @@ export declare function createWire(transport: Transport): {
     /** Executes trusted package code. Validation checks production JS and Slint. */
     packages: {
         validate: (directory: string, apiVersion?: string) => Promise<PackageValidation>;
-        /** Player 0.2.0: a `.vxp` file. */
+        /** A `.vxp` file. */
         validateArchive: (file: string) => Promise<PackageValidation>;
         installed: (id: string) => Promise<InstalledPackage>;
         /**
-         * `source` and `replace` are sent only when given (player 0.2.0);
-         * `enabled` only when given (player 0.6.4; older players
-         * ignore it).
+         * `source` and `replace` are sent only when given; `enabled` only when
+         * given.
          */
         install: (token: string, expectedRevision: number, requestId: string, options?: {
             source?: WireSource;

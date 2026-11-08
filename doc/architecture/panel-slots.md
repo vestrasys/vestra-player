@@ -61,7 +61,7 @@ Status: implemented in the host and SDK 1.5.2 (2026-10-24); the playlist is one 
 
 ## What a plugin gets when it cannot get a slot
 
-A background tab (`reason: "otherTab"`) or a taken exclusive slot (`conflict`, `slot-occupied`) never fails activation; what the plugin sees is on the SDK site: [Panel](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html#panel).
+A background tab (`reason: "otherTab"`) or a taken exclusive slot (`conflict`, `slot-occupied`) never fails activation; what the plugin sees is on the SDK site: [Panel](https://vestrasys.github.io/vestra-player-sdk/interfaces/_vestra-player_sdk.Panel.html).
 
 ## Tests
 

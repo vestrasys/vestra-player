@@ -8,7 +8,7 @@
  * docs("/")                            the top level
  * docs("/API/Media")                   a category: its symbols
  * docs("/API/Media/Snapshot/dispose")  a member: its whole documentation
- * docs("/Guides/How-to/Test a plugin") a guide page
+ * docs("/Guides/Guides/Test a plugin") a guide page
  * searchDocs("snapshot export")        matching paths
  * ```
  *
@@ -71,7 +71,8 @@ function tree() {
     };
     const root = nodes[0];
     assign(root);
-    loaded = { version: data.version, root, nodes };
+    const moved = new Map(Object.entries(data.m ?? {}).map(([key, index]) => [key, nodes[index]]));
+    loaded = { version: data.version, root, nodes, moved };
     return loaded;
 }
 const bytes = (text) => Buffer.byteLength(text, "utf8");
@@ -193,6 +194,15 @@ function resolve(segments) {
     const none = { node: root, jumps: 0, inexact: 0, dropped: 0 };
     if (!segments.length)
         return { node: root, jumped: false };
+    // A page of an old group (`/Guides/How-to/testing`, `/Guides/Explanation/plugins`)
+    // opens the page it moved to, as the site's redirects do.
+    const old = loose(segments[0]) === "guides" ? segments.slice(1) : segments;
+    if (old.length === 2) {
+        const page = old[1].replace(/\.md$/i, "");
+        const moved = tree().moved.get(`${loose(old[0])}/${loose(page)}`);
+        if (moved)
+            return { node: moved, jumped: false };
+    }
     const attempts = [segments];
     const dotted = segments.flatMap((segment) => segment.split(".").filter(Boolean));
     if (dotted.length !== segments.length)
@@ -438,7 +448,7 @@ function notFound(asked, segments, page) {
  *
  * `/` lists Overview, Guides and API. `/Guides/<group>/<page title>` is a
  * page of the documentation site (its file name works too:
- * `/Guides/How-to/testing`); `/API/<category>/<symbol>/<member>` is a
+ * `/Guides/Guides/testing`); `/API/<category>/<symbol>/<member>` is a
  * declaration with its signature, parameters, return value, errors,
  * capability, player version and examples. Matching ignores case, spaces
  * and punctuation; a leading `/` and a `.md` suffix are optional; `.`

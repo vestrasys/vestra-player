@@ -4,10 +4,10 @@
  */
 import { isAbsolute } from "node:path";
 /**
- * The player's bounds for the video primitives of SDK 1.5.39 (player
- * 0.5.20): `convolution` and `lut3d` {@link VideoNode}s and the shader
- * channel (`plugin.video.shaders()`). Values beyond them fail with
- * `invalid`; more shaders than `shaders` fail with `limit`.
+ * The player's bounds for the video primitives: `convolution` and `lut3d`
+ * {@link VideoNode}s and the shader channel (`plugin.video.shaders()`). Values
+ * beyond them fail with `invalid`; more shaders than `shaders` fail with
+ * `limit`.
  *
  * @example Refuse a shader list the player would not take
  * The plugin checks a shader list against the player's limit before it

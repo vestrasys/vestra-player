@@ -19,7 +19,7 @@ const docsSchema = Type.Object({
   path: Type.Optional(
     Type.String({
       description:
-        'Path in the documentation tree, default "/". Examples: "/", "/Guides/How-to", "/API/Commands/Commands/add", "/API/Media/Snapshot/export". Case, spaces and punctuation do not matter; "." works like "/"; a name alone finds its declaration ("TestHost", "Snapshot.export").',
+        'Path in the documentation tree, default "/". Examples: "/", "/Guides/Guides", "/API/Commands/Commands/add", "/API/Media/Snapshot/export". Case, spaces and punctuation do not matter; "." works like "/"; a name alone finds its declaration ("TestHost", "Snapshot.export").',
     }),
   ),
   page,

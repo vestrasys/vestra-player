@@ -68,9 +68,8 @@ export declare const BINDING_INPUTS: Readonly<{
     /**
      * Mouse inputs on the video area; the side buttons `Mouse:X1` (back) and
      * `Mouse:X2` (forward) anywhere in the main window or the floating sidebar
-     * window, except while a menu is open (player 0.6.0).
-     * `:LeftHalf` and `:RightHalf` tell the halves of the video apart for a
-     * double click.
+     * window, except while a menu is open. `:LeftHalf` and `:RightHalf` tell the
+     * halves of the video apart for a double click.
      */
     readonly mouse: readonly ["Mouse:LeftClick", "Mouse:LeftDoubleClick", "Mouse:LeftDoubleClick:LeftHalf", "Mouse:LeftDoubleClick:RightHalf", "Mouse:MiddleClick", "Mouse:X1", "Mouse:X2", "Mouse:WheelUp", "Mouse:WheelDown", "Mouse:WheelLeft", "Mouse:WheelRight"];
 }>;

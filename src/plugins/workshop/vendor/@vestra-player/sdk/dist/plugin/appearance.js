@@ -55,7 +55,7 @@ class AppearanceService {
         this.#runtime.on("appearance.changed", (data) => {
             const event = data;
             const language = preference(event?.language);
-            // Older players send no language: their events are theme changes.
+            // An event without a language is a theme change.
             const languageChanged = language !== undefined && language !== this.#eventLanguage;
             if (language)
                 this.#eventLanguage = language;

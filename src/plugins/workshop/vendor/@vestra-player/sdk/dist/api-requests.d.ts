@@ -44,14 +44,14 @@ export declare const API_REQUESTS: Readonly<Record<string, readonly ApiRequest[]
  */
 export declare const SUBSCRIBED_EVENTS: readonly string[];
 /**
- * Members whose requests depend on an argument (SDK 1.7.0), which
- * `API_REQUESTS` cannot list: the event name of a listener (`event`: a
- * subscribed event's `events.subscribe`, nothing for the others) or the
- * method name of a request (`method`: that method, with the string
- * fields of the second argument as its parameters). The capability check
- * reads the argument when its type is one string (a literal, a constant),
- * and reports the call as unchecked otherwise (a computed name, a union of
- * several, the member taken by destructuring or as a value).
+ * Members whose requests depend on an argument, which `API_REQUESTS` cannot
+ * list: the event name of a listener (`event`: a subscribed event's
+ * `events.subscribe`, nothing for the others) or the method name of a request
+ * (`method`: that method, with the string fields of the second argument as its
+ * parameters). The capability check reads the argument when its type is one
+ * string (a literal, a constant), and reports the call as unchecked otherwise
+ * (a computed name, a union of several, the member taken by destructuring or as
+ * a value).
  *
  * @internal
  */

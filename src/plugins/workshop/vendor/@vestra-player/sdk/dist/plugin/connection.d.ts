@@ -1,15 +1,14 @@
 import type { Json, LocalServices, Transport, Wire } from "../wire.ts";
 import type { App, Disposable, Locale, StopReason, SystemInfo } from "./types.ts";
 /**
- * Why something listens, for the player's log line that says why a plugin
- * keeps running (`events.subscribe { why }`, player 0.5.21): computed
- * only when the player is told.
+ * Why something listens, for the player's log line that says why a plugin keeps
+ * running (`events.subscribe { why }`): computed only when the player is told.
  */
 export type Why = () => string;
 /**
- * Events the player wakes a stopped plugin for (player 0.5.21): a listener
- * of one does not keep the plugin running. They follow deliberate changes
- * (an install, a key edit, the palette, a resolver), not playback.
+ * Events the player wakes a stopped plugin for: a listener of one does not keep
+ * the plugin running. They follow deliberate changes (an install, a key edit,
+ * the palette, a resolver), not playback.
  */
 export declare const WAKE_EVENTS: readonly string[];
 export interface PluginManifest {
@@ -88,8 +87,8 @@ export declare class Connection {
     readonly locale: Locale;
     /**
      * Protocol additions the player advertises at start-up (`features` in the
-     * handshake's app data, player 0.6.0): `ui.patch` (row patches of
-     * property writes). Not part of the plugin API; empty for older players.
+     * handshake's app data): `ui.patch` (row patches of property writes). Not
+     * part of the plugin API.
      */
     readonly features: ReadonlySet<string>;
     constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown, options?: RuntimeOptions);
@@ -104,13 +103,13 @@ export declare class Connection {
      */
     starting<T>(work: Promise<T>, report: (error: unknown) => void): Promise<T>;
     /**
-     * A declaration the player checks on its own (`what`: "command x"),
-     * started like `starting`. In the player's runner a refusal of it during
-     * activation (`invalid`, `conflict`, `limit`) does not fail the plugin:
-     * it is logged, skipped and reported to the scope once activation
-     * completes, so an `onError` added anywhere in `activate` hears it (SDK
-     * 1.5.49; VS Code logs a bad contribution and activates the extension).
-     * Under `strictDeclarations` (TestHost) it fails activation as before.
+     * A declaration the player checks on its own (`what`: "command x"), started
+     * like `starting`. In the player's runner a refusal of it during activation
+     * (`invalid`, `conflict`, `limit`) does not fail the plugin: it is logged,
+     * skipped and reported to the scope once activation completes, so an
+     * `onError` added anywhere in `activate` hears it (VS Code logs a bad
+     * contribution and activates the extension). Under `strictDeclarations`
+     * (TestHost) it fails activation as before.
      */
     declaring<T>(work: Promise<T>, what: string, report: (error: unknown) => void): Promise<T>;
     activated(): Promise<void>;
@@ -142,10 +141,10 @@ export declare class Connection {
      */
     listening(): Map<string, string[]>;
     /**
-     * One request by its method name, as given (`plugin.wire.request`, SDK
-     * 1.7.0): nothing added, nothing checked here, the player checks the
-     * capability. Every other part of the SDK uses the typed clients
-     * (`host`); `scripts/check-layers.mjs` keeps it so.
+     * One request by its method name, as given (`plugin.wire.request`): nothing
+     * added, nothing checked here, the player checks the capability. Every other
+     * part of the SDK uses the typed clients (`host`); `scripts/check-layers.mjs`
+     * keeps it so.
      */
     request<T>(method: string, params?: Json): Promise<T>;
     /** Raw transport events the host pushes without a subscription. */

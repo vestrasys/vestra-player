@@ -32,7 +32,7 @@ import { failure, quiet } from "./errors.js";
 export const TIMELINE_LIMITS = Object.freeze({
     /** Marks in one layer (`TimelineLayer.set`) (1000). */
     marks: 1000,
-    /** Ranges in one layer (`TimelineLayer.setRanges`; player 0.7.6) (100). */
+    /** Ranges in one layer (`TimelineLayer.setRanges`) (100). */
     ranges: 100,
     /** Characters of a mark's or a range's title, as shown (100). */
     titleChars: 100,
@@ -219,7 +219,7 @@ class Layer {
         this.#latestRanges.stop();
         timelineOf(this.#scope.runtime).layer = false;
         await this.#scope.runtime.host.timeline.set([]).catch(() => { });
-        // Only a layer that sent ranges: an older player refuses the method.
+        // Only a layer that sent ranges.
         if (this.#ranged)
             await this.#scope.runtime.host.timeline.setRanges([]).catch(() => { });
     }

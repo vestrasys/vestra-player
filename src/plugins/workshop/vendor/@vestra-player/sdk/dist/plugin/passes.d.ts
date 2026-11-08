@@ -77,10 +77,10 @@ export declare class Passes {
     readonly counts: PassCounts;
     constructor(connection: Connection);
     /**
-     * Register a binding: `evaluate` runs in a full pass now and in every
-     * pass that concerns it. Only what calls this takes part in the passes:
-     * a view on its first `bind()`, a command with a function field, a
-     * sequence provider (SDK 1.7.0; before, every view and command).
+     * Register a binding: `evaluate` runs in a full pass now and in every pass
+     * that concerns it. Only what calls this takes part in the passes: a view on
+     * its first `bind()`, a command with a function field, a sequence provider
+     * (before, every view and command).
      */
     bind(evaluate: () => void, slot?: number): BindingHandle;
     /**

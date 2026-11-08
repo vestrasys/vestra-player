@@ -134,10 +134,10 @@ export function findUndeclaredCapabilities(ts, program, options) {
     return checkCapabilities(ts, program, options).findings;
 }
 /**
- * The capability check (SDK 1.7.0): the uses of members whose capability
- * the manifest does not declare (`findings`, as
- * {@link findUndeclaredCapabilities}), and the calls whose capability
- * depends on a name the checker cannot read (`unchecked`).
+ * The capability check: the uses of members whose capability the manifest does
+ * not declare (`findings`, as {@link findUndeclaredCapabilities}), and the
+ * calls whose capability depends on a name the checker cannot read
+ * (`unchecked`).
  *
  * A call of `plugin.player.on` or `plugin.wire.on` is checked by its event
  * name, one of `plugin.wire.request` by its method name and the string

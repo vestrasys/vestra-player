@@ -88,7 +88,7 @@ export function createWire(transport) {
         commands: commandClient(transport),
         dialogs: {
             open: (options) => transport.request("dialogs.open", options),
-            /** Message and detail are templates formatted with `args` (player 0.4.3). */
+            /** Message and detail are templates formatted with `args`. */
             confirm: (options) => transport.request("dialogs.confirm", options),
         },
         /** The main window: its state, size, level, pointer hiding and picture-in-picture. */
@@ -119,7 +119,7 @@ export function createWire(transport) {
         /** The palette (`ui.theme` to change it). */
         appearance: {
             set: (theme) => transport.request("appearance.set", { theme }),
-            /** The interface language for the next start (player 0.4.3). */
+            /** The interface language for the next start. */
             setLanguage: (language) => transport.request("appearance.setLanguage", { language }),
         },
         /** Settings pages in the player's options window (`ui.settings`). */
@@ -139,11 +139,11 @@ export function createWire(transport) {
             renderSet: (values) => transport.request("video.render.set", { values }),
             renderRelease: () => transport.request("video.render.release"),
             /**
-             * One shader channel handle's list (`plugin.video.shaders(id)`, player
-             * 0.5.20); `[]` removes it.
+             * One shader channel handle's list (`plugin.video.shaders(id)`); `[]`
+             * removes it.
              */
             shadersSet: (id, paths) => transport.request("video.shaders.set", { id, paths }),
-            /** The GPU's video upscaler (`plugin.video.upscaling`, player 0.5.16). */
+            /** The GPU's video upscaler (`plugin.video.upscaling`). */
             upscalingState: () => transport.request("video.upscaling.state"),
             upscalingSet: (enabled) => transport.request("video.upscaling.set", {
                 enabled,
@@ -156,7 +156,7 @@ export function createWire(transport) {
                 marks,
                 ...(sourceId === undefined ? {} : { sourceId }),
             }),
-            /** Player 0.7.6. */
+            /** Replace this layer's ranges. */
             setRanges: (ranges, sourceId) => transport.request("timeline.setRanges", {
                 ranges,
                 ...(sourceId === undefined ? {} : { sourceId }),
@@ -217,8 +217,8 @@ export function createWire(transport) {
             delete: (name) => transport.request("secrets.delete", { name }),
         },
         /**
-         * JSON values the player keeps per plugin until it quits (SDK 1.5.25,
-         * player 0.5.5). `get` answers `{}` for a missing key.
+         * JSON values the player keeps per plugin until it quits. `get` answers
+         * `{}` for a missing key.
          */
         storageSession: {
             get: (key) => transport.request("storage.session.get", { key }),
@@ -230,8 +230,8 @@ export function createWire(transport) {
             system: () => transport.request("app.system"),
         },
         /**
-         * The rendering choice (player 0.5.13): `state` needs no capability,
-         * `setPreference` and `restart` need `rendering.manage`.
+         * The rendering choice: `state` needs no capability, `setPreference` and
+         * `restart` need `rendering.manage`.
          */
         rendering: {
             state: () => transport.request("rendering.state"),
@@ -248,12 +248,12 @@ export function createWire(transport) {
             set: (flags) => transport.request("sequence.set", { flags }),
             step: (direction) => transport.request("sequence.step", { direction }),
         },
-        /** `text` is a template in the plugin's catalog, formatted with `args` (player 0.4.3). */
+        /** `text` is a template in the plugin's catalog, formatted with `args`. */
         osd: {
             show: (text, args, actions) => transport.request("osd.show", {
                 text,
                 ...(args === undefined ? {} : { args }),
-                // Player 0.7.6; older players ignore it.
+                // Sent only when given.
                 ...(actions === undefined ? {} : { actions }),
             }),
             panel: (text, args, maxColumns) => transport.request("osd.panel", {
@@ -268,12 +268,11 @@ export function createWire(transport) {
         },
         events: {
             /**
-             * One `events.subscribe` per name however many listeners. `mirror`:
-             * only the SDK keeps a copy of the state (player 0.5.18; older
-             * players ignore it); `listen` changes it.
+             * One `events.subscribe` per name however many listeners. `mirror`: only
+             * the SDK keeps a copy of the state; `listen` changes it.
              */
             async subscribe(event, listener, mirror = false, 
-            /** What listens (player 0.5.21 logs it; older players ignore it). */
+            /** What listens (the player logs it). */
             why) {
                 const off = transport.on(event, listener);
                 let subscription = subscriptions.get(event);
@@ -312,8 +311,7 @@ export function createWire(transport) {
             /**
              * Tell the player whether a subscribed event has a real listener
              * (`active`) or only the SDK's copy of the state: `events.subscribe`
-             * again, which replaces the mark (player 0.5.18; older players keep
-             * one subscription per name and ignore the mark).
+             * again, which replaces the mark.
              */
             listen: (event, active, why) => transport.request("events.subscribe", active
                 ? why?.length
@@ -322,14 +320,13 @@ export function createWire(transport) {
                 : { event, mirror: true }),
         },
         ui: {
-            /** Player 0.2.0: the remote images a Markdown document shows. */
+            /** The remote images a Markdown document shows. */
             markdownScan: (text, base) => transport.request("ui.markdownScan", {
                 text,
                 base,
             }),
             mount: (options) => transport.request("ui.mount", options),
-            // `slot`: which of the plugin's panels (player 0.7.6: one per slot;
-            // older players have one and ignore it).
+            // `slot`: which of the plugin's panels (one per slot).
             setMount: (property, write, slot) => transport.request("ui.setMount", {
                 property,
                 ...write,
@@ -357,15 +354,14 @@ export function createWire(transport) {
                 directory,
                 apiVersion,
             }),
-            /** Player 0.2.0: a `.vxp` file. */
+            /** A `.vxp` file. */
             validateArchive: (file) => transport.request("packages.validateArchive", {
                 file,
             }),
             installed: (id) => transport.request("packages.installed", { id }),
             /**
-             * `source` and `replace` are sent only when given (player 0.2.0);
-             * `enabled` only when given (player 0.6.4; older players
-             * ignore it).
+             * `source` and `replace` are sent only when given; `enabled` only when
+             * given.
              */
             install: (token, expectedRevision, requestId, options = {}) => transport.request("packages.install", {
                 token,

@@ -8,26 +8,25 @@
  * bindings: the binder (`binder.ts`, L2) puts values in, the view
  * (`base.ts`) says where a write goes.
  *
- * Two modes (SDK 1.7.0, refactor Step 2). Until the view's first `bind()`
- * (`track()`), the writer serves `set()` alone: each value is sent whole
- * (limits checked, large arrays in parts with `more`, one write in
- * flight per view), only the properties `set()` named are looked at, and
- * no row-patch base is kept, so nothing is diffed. Once tracked it is the
- * binder's: every value is compared with what was sent and arrays become
- * row patches where one applies; a `set()` then takes the same path, so
- * mixed use stays consistent. Patch planning stays here, used only in the
- * tracked mode: it needs what was sent and the player's base, which are
- * this writer's, and moving it above would split one property's write
- * state across two layers.
+ * Two modes (refactor Step 2). Until the view's first `bind()` (`track()`), the
+ * writer serves `set()` alone: each value is sent whole (limits checked, large
+ * arrays in parts with `more`, one write in flight per view), only the
+ * properties `set()` named are looked at, and no row-patch base is kept, so
+ * nothing is diffed. Once tracked it is the binder's: every value is compared
+ * with what was sent and arrays become row patches where one applies; a `set()`
+ * then takes the same path, so mixed use stays consistent. Patch planning stays
+ * here, used only in the tracked mode: it needs what was sent and the player's
+ * base, which are this writer's, and moving it above would split one property's
+ * write state across two layers.
  *
- * A third track (SDK 1.7.0, refactor Step 3): properties written directly
- * through `plugin.wire.view(v)` (`direct`, `directRows`). Such a property
- * is the plugin's alone: its `PropertyWrite`s and `RowOp`s go out as
- * given, with only one write in flight per property, a `seq` when the
- * player takes patches, and large writes in parts; nothing is encoded,
- * compared or checked against the limits. One track per property: a
- * property written directly cannot be `set()` or bound, and the other
- * way round (`invalid`), so `#sent` and `#bases` never go stale.
+ * A third track (refactor Step 3): properties written directly through
+ * `plugin.wire.view(v)` (`direct`, `directRows`). Such a property is the
+ * plugin's alone: its `PropertyWrite`s and `RowOp`s go out as given, with only
+ * one write in flight per property, a `seq` when the player takes patches, and
+ * large writes in parts; nothing is encoded, compared or checked against the
+ * limits. One track per property: a property written directly cannot be `set()`
+ * or bound, and the other way round (`invalid`), so `#sent` and `#bases` never
+ * go stale.
  */
 import { HostError } from "../../wire.js";
 import { MarkdownHandle } from "../markdown.js";
@@ -335,11 +334,11 @@ export class ViewWriter {
      */
     #cut = new Map();
     /**
-     * Not bound: initial arrays the view shows the first rows of, by key,
-     * whose next write inserts only the rest (SDK 1.7.0).
+     * Not bound: initial arrays the view shows the first rows of, by key, whose
+     * next write inserts only the rest.
      */
     #rest = new Map();
-    /** Properties written directly (`plugin.wire.view(v)`, SDK 1.7.0). */
+    /** Properties written directly (`plugin.wire.view(v)`). */
     #direct = new Map();
     /** Direct properties a binding produced: reported once each. */
     #refused = new Set();
@@ -365,14 +364,14 @@ export class ViewWriter {
         return this.#target.patches();
     }
     /**
-     * Initial properties in wire form. A released image is left out (the
-     * property keeps its default) and reported, like a failed write. With a
-     * player that takes row patches, the arrays of one request carry at most
-     * {@link CHUNK_BYTES} of rows together (SDK 1.5.46): an array over that
-     * goes with its first rows, and the first flush sends the rest as patches.
-     * An array over the value limits is refused here, as the player would
-     * refuse it whole: left out and reported (a panel, a settings page), or,
-     * with `refuse` (a window's `show`), thrown.
+     * Initial properties in wire form. A released image is left out (the property
+     * keeps its default) and reported, like a failed write. With a player that
+     * takes row patches, the arrays of one request carry at most
+     * {@link CHUNK_BYTES} of rows together: an array over that goes with its
+     * first rows, and the first flush sends the rest as patches. An array over
+     * the value limits is refused here, as the player would refuse it whole: left
+     * out and reported (a panel, a settings page), or, with `refuse` (a window's
+     * `show`), thrown.
      */
     wired(values, refuse = false) {
         const out = {};
@@ -697,7 +696,7 @@ export class ViewWriter {
         if (Array.isArray(value) && this.#patches) {
             // Row by row: the same work as one `JSON.stringify`, and the rows to
             // diff against those last sent. Rows that cannot change (deep-frozen
-            // objects bound again, SDK 1.5.47) are taken from `settledRows`.
+            // objects bound again) are taken from `settledRows`.
             const encoded = encodeRows(value);
             const { enc } = encoded;
             const signature = () => `[${enc.join(",")}]`;
@@ -739,13 +738,12 @@ export class ViewWriter {
         };
     }
     /**
-     * Write one property: a row patch when the player takes them and one
-     * applies (else the whole value); a `stale` patch is followed by the whole
-     * value at once. The base is forgotten on any failure, so the next write
-     * of the property is whole. A write larger than one request
-     * ({@link CHUNK_BYTES} of rows, SDK 1.5.46) is sent in parts: a whole
-     * array as its first rows and `insert` patches of the rest, a patch as
-     * several, each applying on the one before.
+     * Write one property: a row patch when the player takes them and one applies
+     * (else the whole value); a `stale` patch is followed by the whole value at
+     * once. The base is forgotten on any failure, so the next write of the
+     * property is whole. A write larger than one request ({@link CHUNK_BYTES} of
+     * rows) is sent in parts: a whole array as its first rows and `insert`
+     * patches of the rest, a patch as several, each applying on the one before.
      */
     async #send(pending) {
         const { key, value } = pending;
@@ -859,7 +857,7 @@ export class ViewWriter {
                     throw rowTooLarge(key, largest);
                 // Every part but the last carries `more`: the player holds them
                 // and writes the whole value at the last, so a list it shows is
-                // written once (player 0.6.0).
+                // written once.
                 await this.#target.write(key, {
                     value: wireValue(rows.slice(0, count)),
                     seq,

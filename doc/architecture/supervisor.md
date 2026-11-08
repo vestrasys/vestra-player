@@ -2,7 +2,7 @@
 
 The supervisor decides **when each plugin's Node process should exist**: when it starts, when it stops, when it is restarted after a fault, when it rests in standby, and how many run at once. It does not schedule CPU time; the operating system does that. Plugins see none of it on the wire beyond what they always saw: `runtime.ready`, `runtime.stop` with a reason, and the same `packages.list` states.
 
-Plugin authors' view of the same rules (timings, stop reasons, what keeps a plugin running) is on the SDK site: [How the player runs and talks to plugins](https://vestrasys.github.io/vestra-player-sdk/documents/How_the_player_runs_and_talks_to_plugins.html). Process placement (the shared runner for built-ins, an own process for every other plugin) is in the [architecture overview](README.md#2-loading-and-stopping-plugins).
+Plugin authors' view of the same rules (timings, stop reasons, what keeps a plugin running) is on the SDK site: [Keep a command's state without keeping the plugin running](https://vestrasys.github.io/vestra-player-sdk/documents/Keep_a_command_s_state_without_keeping_the_plugin_running.html). Process placement (the shared runner for built-ins, an own process for every other plugin) is in the [architecture overview](README.md#2-loading-and-stopping-plugins).
 
 ## 1. Core and adapter
 
