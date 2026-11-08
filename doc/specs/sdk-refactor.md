@@ -160,6 +160,16 @@ The exported types grow (`Wire`, `PropertyWrite`, `RowOp`, `HostEvent`, `EventPa
 
 `Plugin`/`Scope` and every existing member keep their signatures and behaviour; `TestHost` keeps its public members and stays an L0 fake (`class TestHost implements Transport`, `src/plugin/testing.ts:1040`; `request` at `:3755`, `on` at `:3785`, `calls` at `:1045`, `#defaults` at `:5374`); `createPlugin`'s signature (`src/plugin/index.ts:40-49`) and the player's runner are untouched; `apiVersion` stays `vestra/1`.
 
+### 2.5 As built in Step 1 (1.6.18–1.6.20)
+
+Where Step 1 landed differently from the layout above (the layout above stays the Step 2 target):
+
+- `connection.ts`, `passes.ts`, `errors.ts` and `latest.ts` live in `src/plugin/`, not `src/`: `callSite` locates the SDK with `new URL("..", import.meta.url)`, and every user is under `src/plugin/`. `Runtime` is a thin class (`extends Connection`, a `passes` field, one-line delegations).
+- The view code is `src/plugin/view/{writer,binder,base,window,panel,layout,image}.ts`; `base.ts` (`ViewBase` composing writer and binder) is new and belongs to neither layer until Step 2 changes its constructor. Dialogs are `src/plugin/services/dialogs.ts`. `view/writer.ts` (L1) uses the row diff engine of `patch.ts`; Step 2 decides whether patch planning stays in the writer.
+- The types are `src/plugin/types/{base,commands,ui-content,ui-layout,ui-locale,ui-shell,playback,processing,subtitles,snapshots,sources,packages,services}.ts`, one documentation category per file (UI in four); the names follow TypeDoc's source order so the reference keeps its order.
+- The import lint is `scripts/check-layers.mjs` in `npm run check`: L0/L1 files may not import or load any framework file (passes, runtime, binder), no value-import cycles (one known function-only cycle in `testing/`), every relative import resolves, types files are type-only. Three known L1→L2 edges (services → player mirror, stream → player mirror, packages → `scope.update()`) are listed as pending until `player.ts` is split. The rule "only `connection.ts` reaches `src/wire/`" waits for `src/wire/` to exist.
+- The `TestHost` facade (`testing/index.ts`) is limited on non-comment code lines (≤ 1,500), not total lines: its doc comments must stay on the declarations.
+
 ## 3. The three plugin styles
 
 Scenario used throughout: **the Playback panel shows the playback speed; pressing C cycles it.** The panel is `plugin.panels.mount("bottom", "ui/bar.slint")` as in `src/plugins/playback/main.ts:28`, with a Slint `in property <string> rate`.
