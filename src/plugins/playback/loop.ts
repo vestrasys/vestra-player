@@ -88,6 +88,13 @@ export class AbLoop {
   #lastLoop: Loop | null = null;
   #lastPosition: number | null = null;
   #pass = 1;
+  /**
+   * The last pass of a counted loop: the player clears `state.loop` at its last
+   * jump back (mpv's count is the jumps back, so the range plays count + 1
+   * times), so this keeps the range and the pass total until the position
+   * leaves the range (passes B), the points change or the source changes.
+   */
+  #final: { a: number; b: number; total: number } | null = null;
   #chapters: number[] = [];
   #chaptersFor: number | null = null;
   /** What the seek-bar layer holds for this source (the player empties it on a new one). */
@@ -110,6 +117,7 @@ export class AbLoop {
   set a(value: number | null) {
     if (value === this.#a) return;
     this.#a = value;
+    this.#final = null;
     this.#publish();
   }
   /** The end point B (seconds), `null` when unset. */
@@ -119,15 +127,23 @@ export class AbLoop {
   set b(value: number | null) {
     if (value === this.#b) return;
     this.#b = value;
+    this.#final = null;
     this.#publish();
   }
 
   get count(): Count {
     return this.#settings.value.abCount;
   }
-  /** The pass the running loop is on (1 at its start, +1 on each jump back to A). */
+  /**
+   * The pass the running loop is on (1 at its start, +1 on each jump back to A).
+   * A counted loop plays `count + 1` passes (mpv's `ab-loop-count` is the jumps back).
+   */
   get pass(): number {
     return this.#pass;
+  }
+  /** The pass total while the last pass of a counted loop plays (the player's loop is gone then); else `null`. */
+  get finalPass(): number | null {
+    return this.#final?.total ?? null;
   }
   /** The media's chapter starts, in order (empty until read, and for a new source). */
   get chapters(): readonly number[] {
@@ -162,6 +178,7 @@ export class AbLoop {
       this.#lastLoop = loop;
       this.#lastPosition = state.position;
       this.#pass = 1;
+      this.#final = null;
       this.#readChapters(state);
       return;
     }
@@ -170,6 +187,7 @@ export class AbLoop {
     this.#lastLoop = loop;
     const previous = this.#lastPosition;
     this.#lastPosition = state.position;
+    const passes = this.#pass;
     if (!same(before, loop)) this.#pass = 1;
     else if (
       // Not while this plugin starts a loop (its own seek to A).
@@ -183,12 +201,33 @@ export class AbLoop {
     )
       // The player jumped back from B to A.
       this.#pass++;
+    if (this.#final && !this.#pending) {
+      const final = this.#final;
+      if (loop !== null) this.#final = null;
+      else if (state.position !== null && (state.position >= final.b - EPS || state.position < final.a - 1)) {
+        // The last pass is over (playback went past B, or a seek left the range).
+        this.#final = null;
+        this.#osd("A-B loop ended");
+        this.#plugin.update();
+      }
+    }
     if (this.#pending || same(before, loop)) return;
     if (loop === null && this.#committed !== null) {
       // The count ran out (or someone else stopped it): keep A and B.
+      const ran = this.#committed;
       this.#committed = null;
       this.on = false;
-      this.#osd("A-B loop ended");
+      const position = state.position;
+      if (
+        ran.count !== null &&
+        passes >= ran.count &&
+        position !== null &&
+        position >= ran.a - EPS &&
+        position < ran.b - EPS
+      )
+        // Cleared at the last jump back: the last pass plays now; "ended" once it passes B.
+        this.#final = { a: ran.a, b: ran.b, total: ran.count + 1 };
+      else this.#osd("A-B loop ended");
     } else if (loop !== null && !same(loop, this.#committed)) {
       // Another plugin's loop replaced ours.
       this.#committed = null;
@@ -436,6 +475,7 @@ export class AbLoop {
       }
       if (player.state.sourceId !== sourceId) return;
       this.#committed = want;
+      this.#final = null;
       this.#lastLoop = player.state.loop ?? null;
       this.#pass = 1;
       const position = player.state.position;

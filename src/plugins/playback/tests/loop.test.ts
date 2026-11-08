@@ -408,15 +408,15 @@ test("panel: idle, set A and B, nudge, clear, the switch, the count, the chapter
   assert.deepEqual([panel.props["ab-span"], panel.props["ab-span-a"], panel.props["ab-span-b"]], [true, 242.8 / 600, 289 / 600]);
   assert.equal(panel.props["ab-status"], "∞");
 
-  // The count: 5 times re-sends the loop; the pass follows the jumps back.
+  // The count: 5 times re-sends the loop; the pass follows the jumps back (5 jumps back = 6 passes).
   panel.emit("abCountChosen", 4);
   await eventually(() => panel.props["ab-count"], 4);
   assert.deepEqual(loops(host).at(-1), { a: 242.8, b: 289, count: 5 });
-  assert.equal(panel.props["ab-status"], "1 / 5");
+  assert.equal(panel.props["ab-status"], "1 / 6");
   await at(host, 260);
   await at(host, 288.8);
   await at(host, 242.9); // the player jumped back to A
-  await eventually(() => panel.props["ab-status"], "2 / 5");
+  await eventually(() => panel.props["ab-status"], "2 / 6");
   assert.equal(host.command("ab.count.5").state.checked, true);
 
   // The switch: off keeps A and B (the span grey), on again.
@@ -456,6 +456,65 @@ test("panel: idle, set A and B, nudge, clear, the switch, the count, the chapter
   await eventually(() => [panel.props["ab-a"], panel.props["ab-b"], panel.props["ab-on"]], ["2:30.0", "7:30.0", true]);
   assert.deepEqual(loops(host).at(-1), { a: 150, b: 450, count: 5 });
   assert.deepEqual(host.conflicts, []);
+});
+
+test("panel: a counted loop shows count + 1 passes; the last one plays after the player drops the loop", async () => {
+  const host = new TestHost();
+  await start(host);
+  const panel = host.mounted("adjust");
+  await host.command("ab.count.2").run();
+  await play(host, file(), 600, 10);
+  await press(host, "[");
+  await at(host, 20);
+  await press(host, "]");
+  assert.deepEqual(loops(host).at(-1), { a: 10, b: 20, count: 2 });
+  await at(host, 10);
+  await eventually(() => panel.props["ab-status"], "1 / 3");
+  // First jump back.
+  await at(host, 19.9);
+  await at(host, 10.1);
+  await eventually(() => panel.props["ab-status"], "2 / 3");
+  // Second (last) jump back: the player clears the loop in the same state.
+  await at(host, 19.9);
+  host.setSource({ position: 10.1, loop: null });
+  await host.settle(WAIT);
+  await eventually(() => panel.props["ab-status"], "3 / 3");
+  assert.equal(panel.props["ab-on"], false);
+  assert.notEqual(host.osd.at(-1), "A-B loop ended");
+  await at(host, 15);
+  assert.equal(panel.props["ab-status"], "3 / 3");
+  assert.notEqual(host.osd.at(-1), "A-B loop ended");
+  // The last pass ends when the position passes B.
+  await at(host, 20.2);
+  assert.equal(host.osd.at(-1), "A-B loop ended");
+  await eventually(() => panel.props["ab-status"], "");
+  assert.equal(host.command("ab.toggle").state.enabled, true); // A and B are kept
+});
+
+test("panel: the last pass also ends on a seek out of the range or a new source", async () => {
+  const host = new TestHost();
+  await start(host);
+  const panel = host.mounted("adjust");
+  await host.command("ab.count.1").run();
+  await play(host, file(), 600, 10);
+  await press(host, "[");
+  await at(host, 20);
+  await press(host, "]");
+  await at(host, 19.9);
+  host.setSource({ position: 10, loop: null }); // the only jump back
+  await host.settle(WAIT);
+  await eventually(() => panel.props["ab-status"], "2 / 2");
+  await at(host, 3);
+  assert.equal(host.osd.at(-1), "A-B loop ended");
+  await eventually(() => panel.props["ab-status"], "");
+  // Again, then a new source.
+  await press(host, "\\");
+  await at(host, 19.9);
+  host.setSource({ position: 10, loop: null });
+  await host.settle(WAIT);
+  await eventually(() => panel.props["ab-status"], "2 / 2");
+  await play(host, file());
+  await eventually(() => panel.props["ab-status"], "0:00.0");
 });
 
 test("panel: a source that cannot loop greys the section with its reason", async () => {

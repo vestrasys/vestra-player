@@ -145,11 +145,15 @@ export class PlaybackPanel implements PanelActions {
         abOn: Boolean(running),
         abCanLoop: abUsable && loop.toggleable(),
         abCount: Math.max(0, COUNTS.indexOf(loop.count)),
+        // The pass being played of all passes: mpv's count is the jumps back, so count + 1 passes;
+        // the last one plays after the player dropped the loop (`finalPass`).
         abStatus: running
           ? running.count === null
             ? "∞"
-            : `${Math.min(loop.pass, running.count)} / ${running.count}`
-          : loop.a === null && abUsable && state.position !== null
+            : `${Math.min(loop.pass, running.count + 1)} / ${running.count + 1}`
+          : loop.finalPass !== null
+            ? `${loop.finalPass} / ${loop.finalPass}`
+            : loop.a === null && abUsable && state.position !== null
             ? precise(state.position)
             : "",
         abAt: at(state.position),

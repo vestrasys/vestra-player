@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
@@ -937,6 +938,26 @@ test("J03: checked at start; a half-finished switch-off is completed", async () 
 });
 
 // ------------------------------------------------------------------ J03 renames
+
+test("J03 record: renames.ts is exactly the host's COMMAND_RENAMES (when the repository's host source is there)", (t) => {
+  // The plugin cannot import host code, so renames.ts is a copy; this catches the two drifting apart.
+  const source = fileURLToPath(new URL("../../../host/src/command_renames.rs", import.meta.url));
+  if (!existsSync(source)) {
+    t.skip(`host source not found (${source}): a packaged plugin, nothing to compare`);
+    return;
+  }
+  const rust = readFileSync(source, "utf8");
+  const declared = /pub const COMMAND_RENAMES: \[\(&str, &str\); (\d+)\] = \[([\s\S]*?)\n\];/.exec(rust);
+  assert.ok(declared, "COMMAND_RENAMES not found in command_renames.rs");
+  const body = declared[2]!.replace(/\/\/[^\n]*/g, "");
+  const pairs = [...body.matchAll(/\(\s*"([^"]*)"\s*,\s*"([^"]*)"\s*,?\s*\)/g)].map((m) => [m[1], m[2]]);
+  assert.equal(pairs.length, Number(declared[1]), "every pair of the host table was parsed");
+  assert.deepEqual(
+    COMMAND_RENAMES.map(([old, now]) => [old, now]),
+    pairs,
+    "renames.ts differs from src/host/src/command_renames.rs: copy the host table",
+  );
+});
 
 test("J03 record: moved commands are renamed by the host's table, once; unknown ids are kept", () => {
   // The same 30 pairs as src/host/src/command_renames.rs: 12 core actions, 18 A-B Loop commands.
