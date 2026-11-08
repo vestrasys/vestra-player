@@ -39,7 +39,7 @@ The labels below are the English interface text (the English source text of each
 | Snapshot ▸ Export Clip… | capture | | 428 |
 | Snapshot ▸ —— Capture… | capture | Alt+S | 440, group `capture-tab`; opens the Capture sidebar tab (results, settings). Snapshot Settings… is palette-only |
 | —— | | | |
-| Picture… | video | Alt+1 | 791, group `windows`; the Picture panel in the adjust column (Colour · Effects · Geometry · Advanced) |
+| Picture… | video | Alt+1 | 791, group `windows`; the Picture panel in the adjust column (Rendering · Colour · Effects · Geometry · Advanced, one flat panel) |
 | Audio… | audio | Alt+2 | 792; the Audio panel |
 | Subtitles… | subtitles | Alt+3 | 793; the Subtitles panel |
 | Playback… | playback | Alt+4 | 794; the Playback panel (speed ruler, A-B Loop, jump, frame and keyframe steps, seek steps) |
@@ -121,7 +121,7 @@ Slots: `bottom` (the control bar), `adjust` (one column of task panels beside th
 
 | Plugin | UI |
 | --- | --- |
-| playback | Bottom bar (always present): source, seek bar (including the chapter/bookmark marks from marks), time, open/pause/speed/mute, volume; inline edit boxes (seek, speed, volume). Adjust panel **Playback** (Alt+4): speed ruler 0.25–4 (1× centred, snapping, double-click 1×, click to type), jump, frame and keyframe steps, seek steps |
+| playback | Bottom bar (always present): source, seek bar (including the chapter/bookmark marks from marks), time, open/pause/speed/mute, volume; inline edit boxes (seek, speed, volume). Adjust panel **Playback** (Alt+4): speed ruler 0.25–4 (1× centred, snapping, double-click 1×, click to type), A-B Loop (mini timeline, A and B rows, Loop switch, Count, ↺ Chapter), jump, frame and keyframe steps, seek steps |
 | playlist | Sidebar tab **Playlist** (F6): list and action buttons; "Add Link" tool window |
 | video | Adjust panel **Picture** (Alt+1): one flat panel — Rendering (GPU Rendering, AI Upscaling), Colour, Effects, Geometry, Advanced (collapsed row) — no jump tabs; the Geometry editor works on a bundled still (Big Buck Bunny frame, CC BY 3.0); tool windows: custom aspect ratio, shader list |
 | audio | Adjust panel **Audio** (Alt+2): device, channels, equalizer, sync, processing |
