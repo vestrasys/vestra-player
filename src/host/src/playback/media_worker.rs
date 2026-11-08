@@ -2091,6 +2091,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs ffmpeg (VESTRA_FFMPEG or PATH): run with --include-ignored (ci:local)"]
     fn a_far_seek_starts_the_audio_timeline_at_the_seek() {
         let seek = |at| {
             Some(Seek {
@@ -2204,6 +2205,7 @@ mod tests {
     }
 
     #[test]
+    #[ignore = "needs ffmpeg (VESTRA_FFMPEG or PATH): run with --include-ignored (ci:local)"]
     fn the_seek_follows_the_chain_s_history() {
         const MP4: &str = "mov,mp4,m4a,3gp,3g2,mj2";
         use crate::playback::effects::{AudioNode, Resource, VideoNode};

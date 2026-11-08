@@ -156,9 +156,14 @@ export component W inherits Window {
     // At the end of a query far wider than the field: near its right edge.
     let end = inside("after typing");
     assert!(end > room / 2., "{end} of {room}");
-    key(&palette, Key::Home);
-    let start = inside("after Home");
-    assert!(start < 4., "{start}");
+    // Home brings the start back where Home is the line start; on macOS it
+    // is not (Slint follows the platform there: Cmd+Left is), so the step
+    // is left out (CI on macOS, 2026-11-08).
+    if !cfg!(target_os = "macos") {
+        key(&palette, Key::Home);
+        let start = inside("after Home");
+        assert!(start < 4., "{start}");
+    }
     key(&palette, Key::End);
     inside("after End");
 }
