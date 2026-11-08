@@ -190,13 +190,18 @@ impl Host {
             now,
         );
         // The title strip's reveal zone, from the window's own pointer (the
-        // winit hook), wherever it is: over the video, the sidebar, the strip.
+        // winit hook), wherever it is: over the video, the strip; in
+        // fullscreen only left of the popped-out columns (G-19), as the
+        // strip ends there.
         let at_edge = self
             .input
             .borrow()
             .pointer
             .is_some_and(|(generation, point)| {
-                generation == self.shell_generation && window_state::at_top_edge(point.y, scale)
+                generation == self.shell_generation
+                    && self
+                        .policy
+                        .at_title_edge(point.x, point.y, scale, viewport.width)
             });
         if let Some((x, _)) = over_video {
             // The top-right corner reveals the title strip, not the sidebar.

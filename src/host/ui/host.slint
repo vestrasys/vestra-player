@@ -416,8 +416,19 @@ export component HostWindow inherits Window {
         // VESTRA-MOUNT-OVERLAY
     }
     // Above the video and the fullscreen sidebar, below the menu layer.
+    // G-19: it spans the video only. In fullscreen it ends at the popped-out
+    // columns, as the fullscreen bar does, and follows them as they slide
+    // (the overlays' own 150 ms x animation, composition.rs); a column
+    // popping out or in beside one already out moves the edge at once.
     title-strip := TitleStrip {
         x: 0px; y: 0px; width: root.width;
+        states [
+            columns when root.host-fullscreen && (root.sidebar-popped || root.adjust-popped): {
+                width: root.width - root.columns-popped-width * 1px;
+                in { animate width { duration: 150ms; easing: ease-out; } }
+                out { animate width { duration: 150ms; easing: ease-in; } }
+            }
+        ]
         enabled: root.title-strip-enabled;
         shown: root.title-strip-shown;
         title: root.window-title;
@@ -425,10 +436,11 @@ export component HostWindow inherits Window {
         close-key: root.title-strip-close-key;
         action(name) => { root.title-strip-action(name); }
         activity => { root.window-input("activity"); }
-        // As on the video (its double click and wheel above).
+        // As on the video (its double click and wheel above): its halves,
+        // not the strip's.
         background-double-clicked(x, mods) => {
             if !root.menu-open {
-                root.mouse-input(x < self.width / 2 ? "LeftDoubleClick:LeftHalf" : "LeftDoubleClick:RightHalf",
+                root.mouse-input(x < mouse.width / 2 ? "LeftDoubleClick:LeftHalf" : "LeftDoubleClick:RightHalf",
                     mods.control, mods.alt, mods.shift, mods.meta);
             }
         }

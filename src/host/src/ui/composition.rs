@@ -1505,8 +1505,13 @@ mod tests {
         assert!(overlay < source.find("title-strip := TitleStrip {").unwrap());
         assert!(source.contains("root.adjust-dismiss()"));
         assert!(source.contains("root.adjust-hover = self.has-hover"));
-        // The fullscreen bar ends at both popped-out columns.
+        // The fullscreen bar ends at both popped-out columns, and so does
+        // the title strip, following their 150 ms slide (G-19).
         assert!(source.contains("root.columns-popped-width"));
+        let strip = &source[source.find("title-strip := TitleStrip {").unwrap()..];
+        let strip = &strip[..strip.find("enabled:").unwrap()];
+        assert!(strip.contains("width: root.width - root.columns-popped-width * 1px;"));
+        assert_eq!(strip.matches("animate width { duration: 150ms;").count(), 2);
         let definition = build(source, "HostWindow").unwrap();
         for callback in [
             "adjust-tab",
