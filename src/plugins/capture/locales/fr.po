@@ -8,321 +8,431 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:57
+#: main.ts:135 main.ts:140 ui/parts.slint:35
 #, x-machine
-msgid "Enter valid seconds; the end must be after the start."
-msgstr "Saisissez un nombre de secondes valide ; la fin doit être postérieure au début."
+msgid "Enter a time such as 1:02:03.450, or seconds."
+msgstr "Saisissez une durée comme 1:02:03.450, ou des secondes."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:58
+#: main.ts:135 main.ts:140 ui/parts.slint:36
+#, x-machine
+msgid "The end must be after the start."
+msgstr "La fin doit être après le début."
+
+#: main.ts:135 main.ts:140 ui/parts.slint:37
 #, x-machine
 msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
 msgstr "Une rafale nécessite 2 à 20 images, un intervalle de 0.1 à 10 s et une durée de média connue."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:59
+#: main.ts:135 main.ts:140 ui/parts.slint:38
 #, x-machine
 msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
 msgstr "La rafale dépasse la fin du média. Utilisez moins d'images ou un intervalle plus court."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:60
+#: main.ts:135 main.ts:140 ui/parts.slint:39
 #, x-machine
 msgid "No free file name found."
 msgstr "Aucun nom de fichier disponible."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:61
+#: main.ts:135 main.ts:140 ui/parts.slint:40
 #, x-machine
 msgid "The current frame cannot be captured. Open a local video file first."
 msgstr "Impossible de capturer l'image actuelle. Ouvrez d'abord un fichier vidéo local."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:62
+#: main.ts:135 main.ts:140 ui/parts.slint:41
 #, x-machine
 msgid "The current frame cannot be exported. Open a local video file first."
 msgstr "Impossible d'exporter l'image actuelle. Ouvrez d'abord un fichier vidéo local."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:63
+#: main.ts:135 main.ts:140 ui/parts.slint:42
 #, x-machine
 msgid "Bursts and clips need a known media duration."
 msgstr "Les rafales et les extraits nécessitent une durée de média connue."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:64
+#: main.ts:135 main.ts:140 ui/parts.slint:43
 #, x-machine
 msgid "The selected range is past the end of the media."
 msgstr "La plage sélectionnée dépasse la fin du média."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:65
+#: main.ts:135 main.ts:140 ui/parts.slint:44
 #, x-machine
 msgid "The selected audio track cannot be exported. Choose another track or No Audio."
 msgstr "La piste audio sélectionnée ne peut pas être exportée. Choisissez une autre piste ou Sans audio."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:66
+#: main.ts:135 main.ts:140 ui/parts.slint:45
 #, x-machine
 msgid "The media changed; nothing was started."
 msgstr "Le média a changé ; rien n'a été lancé."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:67
+#: main.ts:135 main.ts:140 ui/parts.slint:46
 #, x-machine
 msgid "The player is busy. Try again later."
 msgstr "Le lecteur est occupé. Réessayez plus tard."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:68
+#: main.ts:135 main.ts:140 ui/parts.slint:47
 #, x-machine
 msgid "The current frame cannot be captured."
 msgstr "Impossible de capturer l'image actuelle."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:69
+#: main.ts:135 main.ts:140 ui/parts.slint:48
 #, x-machine
 msgid "Could not capture the frame."
 msgstr "Impossible de capturer l'image."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:70
+#: main.ts:135 main.ts:140 ui/parts.slint:49
 #, x-machine
 msgid "One export is running and four are queued. Please wait."
 msgstr "Une exportation est en cours et quatre sont en attente. Veuillez patienter."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:71
+#: main.ts:135 main.ts:140 ui/parts.slint:50
 #, x-machine
 msgid "The kept frame has expired. Retry with the current frame."
 msgstr "L'image conservée a expiré. Réessayez avec l'image actuelle."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:72
+#: main.ts:135 main.ts:140 ui/parts.slint:51
 #, x-machine
 msgid "The kept frame was released."
 msgstr "L'image conservée a été libérée."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:73
+#: main.ts:135 main.ts:140 ui/parts.slint:52
 #, x-machine
 msgid "Cancelled."
 msgstr "Annulé."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:74
+#: main.ts:135 main.ts:140 ui/parts.slint:53
 #, x-machine
 msgid "Could not write to the clipboard"
 msgstr "Impossible d'écrire dans le presse-papiers"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:75
+#: main.ts:135 main.ts:140 ui/parts.slint:54
 #, x-machine
 msgid "Not enough disk space"
 msgstr "Espace disque insuffisant"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:76
+#: main.ts:135 main.ts:140 ui/parts.slint:55
 #, x-machine
 msgid "The target file already exists"
 msgstr "Le fichier de destination existe déjà"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:77
+#: main.ts:135 main.ts:140 ui/parts.slint:56
 #, x-machine
 msgid "No write permission"
 msgstr "Pas d'autorisation d'écriture"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:78
+#: main.ts:135 main.ts:140 ui/parts.slint:57
 #, x-machine
 msgid "This media cannot be encoded"
 msgstr "Ce média ne peut pas être encodé"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:79
+#: main.ts:135 main.ts:140 ui/parts.slint:58
 #, x-machine
 msgid "Export failed"
 msgstr "Échec de l'exportation"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:80
+#: main.ts:135 main.ts:140 ui/parts.slint:59
 #, x-machine
 msgid "This task has no output file yet."
 msgstr "Cette tâche n'a pas encore de fichier de sortie."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:81
+#: main.ts:135 main.ts:140 ui/parts.slint:60
 #, x-machine
 msgid "The output file no longer exists."
 msgstr "Le fichier de sortie n'existe plus."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:82
+#: main.ts:135 main.ts:140 ui/parts.slint:61
 #, x-machine
 msgid "Could not open the folder."
 msgstr "Impossible d'ouvrir le dossier."
 
-#: main.ts:68 main.ts:73 ui/parts.slint:83
+#: main.ts:135 main.ts:140 ui/parts.slint:62
 #, x-machine
 msgid "The snapshot folder is unavailable. Please choose it again."
 msgstr "Le dossier des captures est indisponible. Veuillez le choisir à nouveau."
 
-#: main.ts:73
+#: main.ts:135 main.ts:140 ui/parts.slint:63
+#, x-machine
+msgid "Clips need a local file."
+msgstr "Les extraits nécessitent un fichier local."
+
+#: main.ts:135 main.ts:140 ui/parts.slint:64
+#, x-machine
+msgid "Set A and B with A-B Loop (Chapters tab)."
+msgstr "Définissez A et B avec la boucle A-B (onglet Chapitres)."
+
+#: main.ts:135 main.ts:140 ui/parts.slint:65
+#, x-machine
+msgid "Nothing has played before the current position yet."
+msgstr "Rien n’a encore été lu avant la position actuelle."
+
+#: main.ts:135 main.ts:140 ui/parts.slint:66
+#, x-machine
+msgid "Fast cut is not possible for this file. Use Precise."
+msgstr "La coupe rapide est impossible pour ce fichier. Utilisez Précis."
+
+#: main.ts:135 main.ts:140 ui/parts.slint:67
+#, x-machine
+msgid "The bitrate of this file is unknown. Choose another quality."
+msgstr "Le débit de ce fichier est inconnu. Choisissez une autre qualité."
+
+#: main.ts:135 main.ts:140 ui/parts.slint:68
+#, x-machine
+msgid "The file or folder was moved or deleted."
+msgstr "Le fichier ou le dossier a été déplacé ou supprimé."
+
+#: main.ts:135 main.ts:140 main.ts:810 main.ts:1068 ui/parts.slint:69
+#, x-machine
+msgid "The Capture tab could not open."
+msgstr "L’onglet Capture n’a pas pu s’ouvrir."
+
+#: main.ts:140
 #, x-machine
 msgid "Snapshot failed: {}"
 msgstr "Échec de la capture : {}"
 
-#: main.ts:73 ui/parts.slint:115
+#: main.ts:140 ui/parts.slint:101
 #, x-machine
 msgid "Burst failed: {}"
 msgstr "Échec de la rafale : {}"
 
-#: main.ts:73 ui/parts.slint:117
+#: main.ts:140 ui/parts.slint:103
 #, x-machine
 msgid "Export failed: {}"
 msgstr "Échec de l'exportation : {}"
 
-#: main.ts:113
+#: main.ts:145 ui/tab.slint:757 ui/tab.slint:1290
 #, x-machine
-msgid "Frame saved as {}"
-msgstr "Image enregistrée sous {}"
+msgid "Clip"
+msgstr "Extrait"
 
-#. {0} is the number of frames (2–20), {1} the folder.
-#: main.ts:118
+#: main.ts:189 ui/tab.slint:661
 #, x-machine
-msgid "Burst of {0} frames saved to {1}"
-msgstr "Rafale de {0} images enregistrée dans {1}"
+msgid "Show in Folder"
+msgstr "Afficher dans le dossier"
 
-#: main.ts:122
+#: main.ts:190 ui/tab.slint:651 ui/tab.slint:804
 #, x-machine
-msgid "Clip exported as {}"
-msgstr "Extrait exporté sous {}"
+msgid "Copy"
+msgstr "Copier"
 
-#: main.ts:152
+#: main.ts:190
+#, x-machine
+msgid "Show in Tab"
+msgstr "Afficher dans l’onglet"
+
+#: main.ts:317
 #, x-machine
 msgid "Snapshot format: {}"
 msgstr "Format de capture : {}"
 
-#: main.ts:179
-#, x-machine
-msgid "The previous snapshot is still being processed"
-msgstr "La capture précédente est encore en cours de traitement"
-
-#: main.ts:202
-#, x-machine
-msgid "Snapshot queued"
-msgstr "Capture en attente"
-
-#: main.ts:210
-#, x-machine
-msgid "Save Rendered Frame As"
-msgstr "Enregistrer l'image rendue sous"
-
-#: main.ts:210
-#, x-machine
-msgid "Save Current Frame As"
-msgstr "Enregistrer l'image actuelle sous"
-
-#: main.ts:221
-#, x-machine
-msgid "Frame copied to the clipboard"
-msgstr "Image copiée dans le presse-papiers"
-
-#: main.ts:224
+#: main.ts:332
 #, x-machine
 msgid "Choose Snapshot Folder"
 msgstr "Choisir le dossier des captures"
 
-#: main.ts:226
+#: main.ts:334
 #, x-machine
 msgid "Please choose an existing folder."
 msgstr "Veuillez choisir un dossier existant."
 
-#: main.ts:229
+#: main.ts:337
 #, x-machine
 msgid "Snapshot folder: {}"
 msgstr "Dossier des captures : {}"
 
-#: main.ts:309 ui/clip.slint:8
+#: main.ts:398
+#, x-machine
+msgid "The previous snapshot is still being processed"
+msgstr "La capture précédente est encore en cours de traitement"
+
+#: main.ts:421
+#, x-machine
+msgid "Snapshot queued"
+msgstr "Capture en attente"
+
+#: main.ts:429
+#, x-machine
+msgid "Save Rendered Frame As"
+msgstr "Enregistrer l'image rendue sous"
+
+#: main.ts:429
+#, x-machine
+msgid "Save Current Frame As"
+msgstr "Enregistrer l'image actuelle sous"
+
+#: main.ts:441
+#, x-machine
+msgid "Frame copied without subtitles: they cannot be drawn into a frame"
+msgstr "Image copiée sans sous-titres : ils ne peuvent pas être dessinés dans l’image"
+
+#: main.ts:441 main.ts:953 main.ts:1109
+#, x-machine
+msgid "Frame copied to the clipboard"
+msgstr "Image copiée dans le presse-papiers"
+
+#: main.ts:596
 #, x-machine
 msgid "Export Clip"
 msgstr "Exporter un extrait"
 
-#: main.ts:360
+#: main.ts:631
 #, x-machine
-msgid "The snapshot window could not open."
-msgstr "La fenêtre de capture n'a pas pu s'ouvrir."
+msgid "Exporting the last {} seconds"
+msgstr "Exportation des {} dernières secondes"
 
-#: main.ts:389
+#: main.ts:666
+#, x-machine
+msgid "Capture"
+msgstr "Capture"
+
+#: main.ts:1017 main.ts:1132 ui/tab.slint:1102
 #, x-machine
 msgid "Export"
 msgstr "Exportation"
 
-#: main.ts:394 manifest.json ui/error.slint:5
+#: main.ts:1024 main.ts:1025 manifest.json ui/tab.slint:757 ui/tab.slint:1283
 #, x-machine
 msgid "Snapshot"
 msgstr "Capture"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:799
 #, x-machine
 msgid "Save Current Frame"
 msgstr "Enregistrer l'image actuelle"
 
-#: main.ts:394
-#, x-machine
-msgid "Save Current Frame As…"
-msgstr "Enregistrer l'image actuelle sous…"
-
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:809
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "Copier l'image actuelle"
 
-#: main.ts:394
-#, x-machine
-msgid "Save Rendered Frame"
-msgstr "Enregistrer l'image rendue"
-
-#: main.ts:394
-#, x-machine
-msgid "Save Rendered Frame As…"
-msgstr "Enregistrer l'image rendue sous…"
-
-#: main.ts:394
-#, x-machine
-msgid "Copy Rendered Frame"
-msgstr "Copier l'image rendue"
-
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Burst…"
 msgstr "Rafale…"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Export Clip…"
 msgstr "Exporter un extrait…"
 
-#: main.ts:394 ui/clip.slint:85
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Capture…"
+msgstr "Capture…"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Save Current Frame As…"
+msgstr "Enregistrer l'image actuelle sous…"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Save Rendered Frame"
+msgstr "Enregistrer l'image rendue"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Save Rendered Frame As…"
+msgstr "Enregistrer l'image rendue sous…"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Copy Rendered Frame"
+msgstr "Copier l'image rendue"
+
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Export Tasks…"
 msgstr "Tâches d'exportation…"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Capture as PNG"
 msgstr "Capturer en PNG"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "Capturer en JPEG"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Capture as BMP"
 msgstr "Capturer en BMP"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "Inclure les sous-titres dans l'image rendue"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "Paramètres de capture…"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "Dossier des captures…"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:1156
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "Ouvrir le dossier des captures"
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:939
+#, x-machine
+msgid "Set Clip Start"
+msgstr "Définir le début de l’extrait"
+
+#: main.ts:1024 main.ts:1025 ui/tab.slint:951
+#, x-machine
+msgid "Set Clip End"
+msgstr "Définir la fin de l’extrait"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Export Clip Range"
+msgstr "Exporter la plage de l’extrait"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Show Last Capture in Folder"
+msgstr "Afficher la dernière capture dans le dossier"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Copy Last Snapshot"
+msgstr "Copier la dernière capture"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Save Video Frame Only"
+msgstr "Enregistrer l’image vidéo seule"
+
+#: main.ts:1024 main.ts:1025
+#, x-machine
+msgid "Copy Video Frame Only"
+msgstr "Copier l’image vidéo seule"
+
+#: main.ts:1024 main.ts:1025 main.ts:1137 ui/tab.slint:799 ui/tab.slint:809 ui/tab.slint:817 ui/tab.slint:889
 #, x-machine
 msgid "No frame to capture"
 msgstr "Aucune image à capturer"
+
+#: main.ts:1115
+#, x-machine
+msgid "Clip start: {}"
+msgstr "Début de l’extrait : {}"
+
+#: main.ts:1120
+#, x-machine
+msgid "Clip end: {}"
+msgstr "Fin de l’extrait : {}"
+
+#. {} is 10, 30, 60 or 120.
+#: main.ts:1131 ui/tab.slint:975
+#, x-machine
+msgid "Export Last {} Seconds"
+msgstr "Exporter les {} dernières secondes"
 
 #: manifest.json
 #, x-machine
@@ -332,11 +442,11 @@ msgstr "Enregistrer ou copier l'image actuelle, capturer des rafales, exporter d
 #: manifest.json
 #, x-machine
 msgid ""
-"Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
-"Right-click menu: Video ▸ Snapshot."
+"Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as a lossless stream copy or a re-encoded MP4. One sidebar tab, Capture, holds the controls, the running exports and the finished results.\n"
+"Right-click menu: Video ▸ Snapshot; Alt+S opens the tab."
 msgstr ""
-"Enregistre, enregistre sous ou copie l'image actuelle (l'image source, ou l'image rendue avec les effets vidéo et les sous-titres) en PNG, JPEG ou BMP ; capture une rafale d'images ; exporte une partie d'une vidéo en MP4 et affiche sa progression dans une liste de tâches.\n"
-"Menu contextuel : Vidéo ▸ Capture."
+"Enregistre, enregistre sous ou copie l’image actuelle (avec les sous-titres affichés, ou l’image rendue avec effets vidéo) en PNG, JPEG ou BMP ; capture une rafale d’images ; exporte une partie d’une vidéo en copie des flux sans perte ou en MP4 réencodé. Un onglet de la barre latérale, Capture, regroupe les commandes, les exportations en cours et les résultats terminés.\n"
+"Menu contextuel : Vidéo ▸ Capture ; Alt+S ouvre l’onglet."
 
 #: manifest.json
 #, x-machine
@@ -353,336 +463,716 @@ msgstr "capture"
 msgid "export"
 msgstr "exportation"
 
-#: model.ts:178 ui/clip.slint:14
+#: model.ts:250 ui/tab.slint:151
 #, x-machine
 msgid "No Audio"
 msgstr "Sans audio"
 
-#: model.ts:179 ui/clip.slint:14
+#: model.ts:251 ui/tab.slint:151
 #, x-machine
 msgid "Current Track"
 msgstr "Piste actuelle"
 
-#: model.ts:180
+#: model.ts:252
 #, x-machine
 msgid "Track {} · {}"
 msgstr "Piste {} · {}"
 
-#: model.ts:180
+#: model.ts:252
 #, x-machine
 msgid "Track {}"
 msgstr "Piste {}"
 
-#: ui/burst.slint:8
+#: seams.ts:83
 #, x-machine
-msgid "Burst"
-msgstr "Rafale"
+msgid "Frame saved as {}"
+msgstr "Image enregistrée sous {}"
 
-#: ui/burst.slint:39 ui/burst.slint:63
+#: seams.ts:83
 #, x-machine
-msgid "Count:"
-msgstr "Nombre :"
+msgid "Frame saved without subtitles as {}"
+msgstr "Image enregistrée sans sous-titres sous {}"
 
-#: ui/burst.slint:39 ui/burst.slint:69
+#: seams.ts:83
 #, x-machine
-msgid "Interval:"
-msgstr "Intervalle :"
+msgid "Clip exported as {}"
+msgstr "Extrait exporté sous {}"
 
-#: ui/burst.slint:39 ui/burst.slint:76
+#: seams.ts:83
 #, x-machine
-msgid "Start:"
-msgstr "Début :"
+msgid "Burst of {0} frames saved to {1}"
+msgstr "Rafale de {0} images enregistrée dans {1}"
 
-#: ui/burst.slint:42 ui/burst.slint:102
-#, x-machine
-msgid "Progress:"
-msgstr "Progression :"
-
-#: ui/burst.slint:42 ui/burst.slint:107 ui/clip.slint:32 ui/clip.slint:77
-#, x-machine
-msgid "Status:"
-msgstr "État :"
-
-#: ui/burst.slint:50
-#, x-machine
-msgid "Save to"
-msgstr "Enregistrer dans"
-
-#: ui/burst.slint:60
-#, x-machine
-msgid "Snapshot settings"
-msgstr "Paramètres de capture"
-
-#: ui/burst.slint:65
-#, x-machine
-msgid "frames (2–20)"
-msgstr "images (2–20)"
-
-#: ui/burst.slint:71
-#, x-machine
-msgid "s (0.1–10)"
-msgstr "s (0.1–10)"
-
-#: ui/burst.slint:73
-#, x-machine
-msgid "Start at the current position"
-msgstr "Commencer à la position actuelle"
-
-#: ui/burst.slint:78 ui/clip.slint:45 ui/clip.slint:51
-#, x-machine
-msgid "Current"
-msgstr "Actuelle"
-
-#: ui/burst.slint:82
-#, x-machine
-msgid "Other settings"
-msgstr "Autres paramètres"
-
-#: ui/burst.slint:85 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
-#, x-machine
-msgid "Format:"
-msgstr "Format :"
-
-#: ui/burst.slint:93 ui/clip.slint:69
-#, x-machine
-msgid "Include video effects"
-msgstr "Inclure les effets vidéo"
-
-#: ui/burst.slint:94
-#, x-machine
-msgid "Capture subtitles too"
-msgstr "Capturer aussi les sous-titres"
-
-#: ui/burst.slint:99 ui/clip.slint:74
-#, x-machine
-msgid "Information"
-msgstr "Informations"
-
-#: ui/burst.slint:114 ui/tasks.slint:80
-#, x-machine
-msgid "Open Save Folder"
-msgstr "Ouvrir le dossier d'enregistrement"
-
-#: ui/burst.slint:115
-#, x-machine
-msgid "Capture Current Frame"
-msgstr "Capturer l'image actuelle"
-
-#: ui/burst.slint:118
-#, x-machine
-msgid "Start"
-msgstr "Démarrer"
-
-#: ui/clip.slint:32 ui/clip.slint:43
-#, x-machine
-msgid "Start (s):"
-msgstr "Début (s) :"
-
-#: ui/clip.slint:32 ui/clip.slint:49
-#, x-machine
-msgid "End (s):"
-msgstr "Fin (s) :"
-
-#: ui/clip.slint:32 ui/clip.slint:63
-#, x-machine
-msgid "Audio:"
-msgstr "Audio :"
-
-#: ui/clip.slint:40
-#, x-machine
-msgid "Range"
-msgstr "Plage"
-
-#: ui/clip.slint:55
-#, x-machine
-msgid "Output"
-msgstr "Sortie"
-
-#: ui/clip.slint:59
-#, x-machine
-msgid "MP4 (H.264 + AAC)"
-msgstr "MP4 (H.264 + AAC)"
-
-#: ui/clip.slint:70
-#, x-machine
-msgid "Export subtitles too"
-msgstr "Exporter aussi les sous-titres"
-
-#: ui/clip.slint:88
-#, x-machine
-msgid "Export…"
-msgstr "Exporter…"
-
-#: ui/error.slint:12
-#, x-machine
-msgid "The snapshot window could not open. Close this notice and try again."
-msgstr "La fenêtre de capture n'a pas pu s'ouvrir. Fermez ce message et réessayez."
-
-#: ui/parts.slint:89
+#: ui/parts.slint:75
 #, x-machine
 msgid "Queued"
 msgstr "En attente"
 
-#: ui/parts.slint:90
+#: ui/parts.slint:76
 #, x-machine
 msgid "Preparing"
 msgstr "Préparation"
 
-#: ui/parts.slint:91
+#: ui/parts.slint:77
 #, x-machine
 msgid "Exporting"
 msgstr "Exportation"
 
-#: ui/parts.slint:92
+#: ui/parts.slint:78
 #, x-machine
 msgid "Cancelling"
 msgstr "Annulation"
 
-#: ui/parts.slint:93
+#: ui/parts.slint:79
 #, x-machine
 msgid "Completed"
 msgstr "Terminé"
 
-#: ui/parts.slint:94
+#: ui/parts.slint:80
 #, x-machine
 msgid "Failed"
 msgstr "Échec"
 
-#: ui/parts.slint:95
+#: ui/parts.slint:81
 #, x-machine
 msgid "Cancelled"
 msgstr "Annulé"
 
-#: ui/parts.slint:103
+#: ui/parts.slint:89 ui/tab.slint:598
 #, x-machine
 msgid "Failed: {}"
 msgstr "Échec : {}"
 
 #. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
-#: ui/parts.slint:105
+#: ui/parts.slint:91 ui/tab.slint:604
 #, x-machine
 msgid "{0} · {1}/{2}"
 msgstr "{0} · {1}/{2}"
 
 #. {} is the number of frames (2–20).
-#: ui/parts.slint:112
+#: ui/parts.slint:98
 #, x-machine
 msgid "{} frames saved"
 msgstr "{} images enregistrées"
 
 #. {} is the number of frames (2–20).
-#: ui/parts.slint:114
+#: ui/parts.slint:100
 #, x-machine
 msgid "Burst of {} frames started"
 msgstr "Rafale de {} images lancée"
 
-#: ui/parts.slint:116
+#: ui/parts.slint:102
 #, x-machine
 msgid "Exported {}"
 msgstr "Exporté : {}"
 
-#: ui/parts.slint:118
+#: ui/parts.slint:104
 #, x-machine
 msgid "No save location chosen."
 msgstr "Aucun emplacement d'enregistrement choisi."
 
-#: ui/parts.slint:119
+#: ui/parts.slint:105
 #, x-machine
-msgid "Export started. Follow it in Export Tasks."
-msgstr "Exportation lancée. Suivez-la dans « Tâches d'exportation »."
+msgid "Export started. Follow it in Results."
+msgstr "Exportation lancée. Suivez-la dans Résultats."
 
-#: ui/parts.slint:120
+#: ui/parts.slint:106
 #, x-machine
 msgid "Restarted."
 msgstr "Relancé."
 
-#: ui/settings.slint:8
+#: ui/parts.slint:112 ui/tab.slint:906
 #, x-machine
-msgid "Snapshot Settings"
-msgstr "Paramètres de capture"
+msgid "Fast"
+msgstr "Rapide"
 
-#: ui/settings.slint:29 ui/settings.slint:49
+#: ui/parts.slint:113 ui/tab.slint:914
 #, x-machine
-msgid "Quality:"
-msgstr "Qualité :"
+msgid "Precise"
+msgstr "Précis"
 
-#: ui/settings.slint:37
+#: ui/parts.slint:119 ui/tab.slint:1016 ui/tab.slint:1017
 #, x-machine
-msgid "Format"
-msgstr "Format"
+msgid "Same as source"
+msgstr "Identique à la source"
 
-#: ui/settings.slint:60
+#: ui/parts.slint:120 ui/tab.slint:992 ui/tab.slint:1016 ui/tab.slint:1017
 #, x-machine
-msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
-msgstr "La qualité ne s'applique qu'au JPEG ; les copies dans le presse-papiers sont toujours en PNG."
+msgid "High quality"
+msgstr "Haute qualité"
 
-#: ui/settings.slint:63
+#: ui/parts.slint:121 ui/tab.slint:1016 ui/tab.slint:1017
 #, x-machine
-msgid "Save location"
-msgstr "Emplacement d'enregistrement"
+msgid "Small file"
+msgstr "Petit fichier"
 
-#: ui/settings.slint:70
+#: ui/parts.slint:122 ui/tab.slint:1016
 #, x-machine
-msgid "Save to the media folder when possible"
-msgstr "Enregistrer dans le dossier du média si possible"
+msgid "Custom"
+msgstr "Personnalisé"
 
-#: ui/settings.slint:76
+#: ui/parts.slint:128
 #, x-machine
-msgid "Rendered frame"
-msgstr "Image rendue"
+msgid "just now"
+msgstr "à l’instant"
 
-#: ui/settings.slint:78
+#. {} is a number of minutes (1–59).
+#: ui/parts.slint:130
 #, x-machine
-msgid "Include subtitles"
-msgstr "Inclure les sous-titres"
+msgid "{} min ago"
+msgstr "il y a {} min"
 
-#: ui/settings.slint:83
+#. {} is a number of hours (1–23).
+#: ui/parts.slint:132
 #, x-machine
-msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
-msgstr "L'image rendue est produite hors ligne : elle inclut les effets vidéo des plugins, et les sous-titres sont redessinés dans le style des plugins, toujours à l'intérieur de l'image ; elle n'est donc pas identique pixel pour pixel à ce qu'affiche l'écran. Les messages à l'écran ne sont pas inclus."
+msgid "{} h ago"
+msgstr "il y a {} h"
 
-#: ui/tasks.slint:20
+#. {} is a number of days.
+#: ui/parts.slint:134
 #, x-machine
-msgid "Export Tasks"
-msgstr "Tâches d'exportation"
+msgid "{} d ago"
+msgstr "il y a {} j"
 
-#: ui/tasks.slint:41
+#. {} is a number of seconds.
+#. {} is a clip's length in seconds ("3.5") or a burst's number of frames.
+#: ui/parts.slint:141 ui/tab.slint:575 ui/tab.slint:1336
 #, x-machine
-msgid "No export tasks yet."
-msgstr "Aucune tâche d'exportation pour l'instant."
+msgid "{} s"
+msgstr "{} s"
 
-#: ui/tasks.slint:57
+#. {0} and {1} are numbers of seconds.
+#: ui/parts.slint:143
 #, x-machine
-msgid "Burst · {}"
-msgstr "Rafale · {}"
+msgid "{0}–{1} s"
+msgstr "{0}–{1} s"
 
-#: ui/tasks.slint:57
+#. {} is a number of minutes.
+#: ui/parts.slint:146
 #, x-machine
-msgid "Clip · {}"
-msgstr "Extrait · {}"
+msgid "{} min"
+msgstr "{} min"
 
-#: ui/tasks.slint:57
+#. {0} and {1} are numbers of minutes.
+#: ui/parts.slint:148
 #, x-machine
-msgid "Snapshot · {}"
-msgstr "Capture · {}"
+msgid "about {0}–{1} min"
+msgstr "environ {0} à {1} min"
 
-#. {0} is the time or time range, {1} the progress (Completed).
-#: ui/tasks.slint:61
+#. {0} is the time a Fast cut starts at (the keyframe), {1} how many seconds before the typed start.
+#: ui/tab.slint:481
+#, x-machine
+msgid "{0} (−{1} s)"
+msgstr "{0} (−{1} s)"
+
+#: ui/tab.slint:521
+#, x-machine
+msgid "Default name"
+msgstr "Nom par défaut"
+
+#. {} is a clip's length in seconds ("3.5") or a burst's number of frames.
+#: ui/tab.slint:575
+#, x-machine
+msgid "×{}"
+msgstr "×{}"
+
+#: ui/tab.slint:597
+#, x-machine
+msgid "File moved or deleted"
+msgstr "Fichier déplacé ou supprimé"
+
+#. {0} is the number of frames (2–20), {1} the time of the first.
+#: ui/tab.slint:601
+#, x-machine
+msgid "Queued · {0} frames from {1}"
+msgstr "En attente · {0} images à partir de {1}"
+
+#. {} is a time or a time range.
+#: ui/tab.slint:603
+#, x-machine
+msgid "Queued · {}"
+msgstr "En attente · {}"
+
+#. {} is a percentage.
+#: ui/tab.slint:606 ui/tab.slint:872
+#, x-machine
+msgid "Finishing…"
+msgstr "Finalisation…"
+
+#. {0} is a percentage, {1} seconds.
+#: ui/tab.slint:609
+#, x-machine
+msgid "Exporting · {0} % · about {1} s left"
+msgstr "Exportation · {0} % · environ {1} s restantes"
+
+#. {} is a percentage.
+#: ui/tab.slint:611
+#, x-machine
+msgid "Exporting · {} %"
+msgstr "Exportation · {} %"
+
+#. {0} is a task state (Exporting), {1} the time spent (0:12).
+#. what the closed Advanced rows hold now: an audio choice and a quality.
+#: ui/tab.slint:613 ui/tab.slint:991
 #, x-machine
 msgid "{0} · {1}"
 msgstr "{0} · {1}"
 
-#: ui/tasks.slint:67
+#. {} is the number of frames (2–20).
+#: ui/tab.slint:615 ui/tab.slint:617 ui/tab.slint:618
+#, x-machine
+msgid "{} MB"
+msgstr "{} Mo"
+
+#. {} is the number of frames (2–20).
+#: ui/tab.slint:617
+#, x-machine
+msgid "Burst · {} frames"
+msgstr "Rafale · {} images"
+
+#: ui/tab.slint:636 ui/tab.slint:853
 #, x-machine
 msgid "Cancel"
 msgstr "Annuler"
 
-#: ui/tasks.slint:68
+#: ui/tab.slint:641
+#, x-machine
+msgid "Retry"
+msgstr "Réessayer"
+
+#: ui/tab.slint:646 ui/tab.slint:656
 #, x-machine
 msgid "Open"
 msgstr "Ouvrir"
 
-#: ui/tasks.slint:69
+#: ui/tab.slint:656
 #, x-machine
-msgid "Retry"
-msgstr "Réessayer"
+msgid "Open Folder"
+msgstr "Ouvrir le dossier"
+
+#: ui/tab.slint:666
+#, x-machine
+msgid "Remove from List"
+msgstr "Retirer de la liste"
+
+#: ui/tab.slint:720
+#, x-machine
+msgid "Fast cut copies the streams: lossless and done in seconds, but a clip can only start on a keyframe."
+msgstr "La coupe rapide copie les flux : sans perte et en quelques secondes, mais un extrait ne peut commencer que sur une image clé."
+
+#. {0} and {2} are times, {1} seconds.
+#: ui/tab.slint:724
+#, x-machine
+msgid "It will start at {0}, {1} s before your start, and end at {2}."
+msgstr "Il commencera à {0}, {1} s avant votre début, et finira à {2}."
+
+#. {0} and {1} are times.
+#: ui/tab.slint:726
+#, x-machine
+msgid "It will start at {0} and end at {1}."
+msgstr "Il commencera à {0} et finira à {1}."
+
+#: ui/tab.slint:727
+#, x-machine
+msgid "It starts on the keyframe at or before your start."
+msgstr "Il commence sur l’image clé située à votre début ou avant."
+
+#: ui/tab.slint:728
+#, x-machine
+msgid "Its streams do not fit in MP4, so it is saved as MKV."
+msgstr "Ses flux ne tiennent pas dans un MP4 : il est enregistré en MKV."
+
+#: ui/tab.slint:729
+#, x-machine
+msgid "Pick Precise to start on the exact frame."
+msgstr "Choisissez Précis pour commencer sur l’image exacte."
+
+#: ui/tab.slint:730
+#, x-machine
+msgid "Precise re-encodes from the exact frame, and can include video effects and subtitles."
+msgstr "Précis réencode à partir de l’image exacte, et peut inclure les effets vidéo et les sous-titres."
+
+#. {0} and {1} are times.
+#: ui/tab.slint:732
+#, x-machine
+msgid "Precise re-encodes from the exact frame {0} to {1}, and can include video effects and subtitles."
+msgstr "Précis réencode de l’image exacte {0} jusqu’à {1}, et peut inclure les effets vidéo et les sous-titres."
+
+#. {0} seconds of media, {1} megabytes ("46" or "55–80"), {2} a time span ("2 s", "about 1–3 min").
+#: ui/tab.slint:737
+#, x-machine
+msgid "Length {0} s · ≈ {1} MB · ≈ {2}"
+msgstr "Durée {0} s · ≈ {1} Mo · ≈ {2}"
+
+#. {0} seconds of media, {1} a time span ("2 s", "about 1–3 min").
+#: ui/tab.slint:739
+#, x-machine
+msgid "Length {0} s · ≈ {1}"
+msgstr "Durée {0} s · ≈ {1}"
+
+#: ui/tab.slint:758
+#, x-machine
+msgid "Results ({})"
+msgstr "Résultats ({})"
+
+#: ui/tab.slint:758
+#, x-machine
+msgid "Results"
+msgstr "Résultats"
+
+#: ui/tab.slint:758
+#, x-machine
+msgid "Settings"
+msgstr "Réglages"
+
+#: ui/tab.slint:768
+#, x-machine
+msgid "Show or hide this tab"
+msgstr "Afficher ou masquer cet onglet"
+
+#: ui/tab.slint:794
+#, x-machine
+msgid "Save"
+msgstr "Enregistrer"
+
+#: ui/tab.slint:816 ui/tab.slint:888
+#, x-machine
+msgid "This picture is made by a plugin"
+msgstr "Cette image est produite par un plugin"
+
+#: ui/tab.slint:818
+#, x-machine
+msgid "Source size, with the subtitles shown and the video effects"
+msgstr "Taille source, avec les sous-titres affichés et les effets vidéo"
+
+#: ui/tab.slint:819
+#, x-machine
+msgid "Source size, with the subtitles shown"
+msgstr "Taille source, avec les sous-titres affichés"
+
+#. {} is the file or folder name.
+#: ui/tab.slint:850
+#, x-machine
+msgid "Exporting {}"
+msgstr "Exportation de {}"
+
+#: ui/tab.slint:873
+#, x-machine
+msgid "{} %"
+msgstr "{} %"
+
+#. {} is a number of seconds.
+#: ui/tab.slint:875
+#, x-machine
+msgid "about {} s left"
+msgstr "environ {} s restantes"
+
+#. {} is the number of exports waiting (1–4).
+#: ui/tab.slint:878
+#, x-machine
+msgid "+{} queued"
+msgstr "+{} en attente"
+
+#: ui/tab.slint:893
+#, x-machine
+msgid "There is no file to cut."
+msgstr "Il n’y a aucun fichier à couper."
+
+#: ui/tab.slint:894
+#, x-machine
+msgid "Frames can still be saved; open a local file to cut clips."
+msgstr "Vous pouvez toujours enregistrer des images ; ouvrez un fichier local pour couper des extraits."
+
+#: ui/tab.slint:895
+#, x-machine
+msgid "Open a local video file to save frames, bursts and clips."
+msgstr "Ouvrez un fichier vidéo local pour enregistrer des images, des rafales et des extraits."
+
+#: ui/tab.slint:907
+#, x-machine
+msgid "lossless"
+msgstr "sans perte"
+
+#: ui/tab.slint:907
+#, x-machine
+msgid "no re-encode · lossless"
+msgstr "sans réencodage · sans perte"
+
+#: ui/tab.slint:915
+#, x-machine
+msgid "re-encode"
+msgstr "réencoder"
+
+#: ui/tab.slint:915
+#, x-machine
+msgid "re-encode · any frame"
+msgstr "réencoder · n’importe quelle image"
+
+#: ui/tab.slint:931 ui/tab.slint:1231 ui/tab.slint:1269
+#, x-machine
+msgid "Start"
+msgstr "Démarrer"
+
+#: ui/tab.slint:939 ui/tab.slint:951 ui/tab.slint:1274
+#, x-machine
+msgid "Now"
+msgstr "Maintenant"
+
+#: ui/tab.slint:943
+#, x-machine
+msgid "End"
+msgstr "Fin"
+
+#: ui/tab.slint:958
+#, x-machine
+msgid "Use A-B range"
+msgstr "Utiliser la plage A-B"
+
+#: ui/tab.slint:961
+#, x-machine
+msgid "Copy the A-B loop into Start and End"
+msgstr "Copier la boucle A-B dans Début et Fin"
+
+#. {0} and {1} are the A and B times of the loop.
+#: ui/tab.slint:963
+#, x-machine
+msgid "A {0} · B {1}"
+msgstr "A {0} · B {1}"
+
+#. {} is 10, 30, 60 or 120.
+#: ui/tab.slint:969
+#, x-machine
+msgid "Last {} s"
+msgstr "{} dernières s"
+
+#: ui/tab.slint:988
+#, x-machine
+msgid "Advanced"
+msgstr "Avancé"
+
+#: ui/tab.slint:992 ui/tab.slint:1013
+#, x-machine
+msgid "Same as source (stream copy)"
+msgstr "Identique à la source (copie des flux)"
+
+#: ui/tab.slint:1003 ui/tab.slint:1066
+#, x-machine
+msgid "Audio"
+msgstr "Audio"
+
+#: ui/tab.slint:1012
+#, x-machine
+msgid "Quality"
+msgstr "Qualité"
+
+#: ui/tab.slint:1021
+#, x-machine
+msgid "High quality (H.264 + AAC in MP4)"
+msgstr "Haute qualité (H.264 + AAC en MP4)"
+
+#: ui/tab.slint:1027
+#, x-machine
+msgid "Resolution"
+msgstr "Résolution"
+
+#: ui/tab.slint:1029 ui/tab.slint:1039
+#, x-machine
+msgid "Source"
+msgstr "Source"
+
+#: ui/tab.slint:1036
+#, x-machine
+msgid "Frame rate"
+msgstr "Fréquence d’images"
+
+#: ui/tab.slint:1039
+#, x-machine
+msgid "{} fps"
+msgstr "{} i/s"
+
+#: ui/tab.slint:1046
+#, x-machine
+msgid "Source bitrate"
+msgstr "Débit de la source"
+
+#: ui/tab.slint:1046
+#, x-machine
+msgid "Quality number {}"
+msgstr "Indice de qualité {}"
+
+#: ui/tab.slint:1057
+#, x-machine
+msgid "Speed"
+msgstr "Vitesse"
+
+#: ui/tab.slint:1059
+#, x-machine
+msgid "Faster"
+msgstr "Plus rapide"
+
+#: ui/tab.slint:1059
+#, x-machine
+msgid "Balanced"
+msgstr "Équilibré"
+
+#: ui/tab.slint:1059
+#, x-machine
+msgid "Smaller"
+msgstr "Plus petit"
+
+#: ui/tab.slint:1069
+#, x-machine
+msgid "AAC {} kb/s"
+msgstr "AAC {} kb/s"
+
+#: ui/tab.slint:1078
+#, x-machine
+msgid "Reset"
+msgstr "Réinitialiser"
+
+#: ui/tab.slint:1084 ui/tab.slint:1208 ui/tab.slint:1276
+#, x-machine
+msgid "Include video effects"
+msgstr "Inclure les effets vidéo"
+
+#: ui/tab.slint:1090
+#, x-machine
+msgid "Burn in subtitles"
+msgstr "Incruster les sous-titres"
+
+#: ui/tab.slint:1095
+#, x-machine
+msgid "Effects and subtitles: Precise only"
+msgstr "Effets et sous-titres : Précis uniquement"
+
+#: ui/tab.slint:1109
+#, x-machine
+msgid "Export as {} into the snapshot folder"
+msgstr "Exporter sous {} dans le dossier des captures"
+
+#: ui/tab.slint:1110
+#, x-machine
+msgid "Export the range into the snapshot folder"
+msgstr "Exporter la plage dans le dossier des captures"
+
+#: ui/tab.slint:1116
+#, x-machine
+msgid "Export As…"
+msgstr "Exporter sous…"
+
+#: ui/tab.slint:1118
+#, x-machine
+msgid "Export the range into a file you choose"
+msgstr "Exporter la plage dans un fichier de votre choix"
+
+#: ui/tab.slint:1131
+#, x-machine
+msgid "Use Precise"
+msgstr "Utiliser Précis"
+
+#: ui/tab.slint:1148
+#, x-machine
+msgid "No snapshots or clips yet."
+msgstr "Aucune capture ni aucun extrait pour l’instant."
+
+#: ui/tab.slint:1158
+#, x-machine
+msgid "Clear Finished"
+msgstr "Effacer les terminés"
+
+#: ui/tab.slint:1175
+#, x-machine
+msgid "Save to"
+msgstr "Enregistrer dans"
+
+#: ui/tab.slint:1182
+#, x-machine
+msgid "Save to the media folder when possible"
+msgstr "Enregistrer dans le dossier du média si possible"
+
+#: ui/tab.slint:1187
+#, x-machine
+msgid "Snapshots"
+msgstr "Captures"
+
+#: ui/tab.slint:1190
+#, x-machine
+msgid "Format"
+msgstr "Format"
+
+#: ui/tab.slint:1205
+#, x-machine
+msgid "Quality: JPEG only"
+msgstr "Qualité : JPEG uniquement"
+
+#: ui/tab.slint:1218 ui/tab.slint:1297
+#, x-machine
+msgid "Burst"
+msgstr "Rafale"
+
+#. {0} is the number of frames, {1} the interval in seconds.
+#: ui/tab.slint:1222
+#, x-machine
+msgid "{0} frames · every {1} s · from now"
+msgstr "{0} images · toutes les {1} s · à partir de maintenant"
+
+#. {0} is the number of frames, {1} the interval in seconds, {2} the start time.
+#: ui/tab.slint:1224
+#, x-machine
+msgid "{0} frames · every {1} s · from {2}"
+msgstr "{0} images · toutes les {1} s · à partir de {2}"
+
+#: ui/tab.slint:1236
+#, x-machine
+msgid "Start the burst"
+msgstr "Lancer la rafale"
+
+#: ui/tab.slint:1248
+#, x-machine
+msgid "Count"
+msgstr "Nombre"
+
+#: ui/tab.slint:1254
+#, x-machine
+msgid "frames (2–20)"
+msgstr "images (2–20)"
+
+#: ui/tab.slint:1258
+#, x-machine
+msgid "Interval"
+msgstr "Intervalle"
+
+#: ui/tab.slint:1264
+#, x-machine
+msgid "s (0.1–10)"
+msgstr "s (0.1–10)"
+
+#: ui/tab.slint:1266
+#, x-machine
+msgid "Start at the current position"
+msgstr "Commencer à la position actuelle"
+
+#: ui/tab.slint:1277
+#, x-machine
+msgid "Capture subtitles too"
+msgstr "Capturer aussi les sous-titres"
+
+#: ui/tab.slint:1281
+#, x-machine
+msgid "File names"
+msgstr "Noms de fichier"
+
+#: ui/tab.slint:1306
+#, x-machine
+msgid "Click a variable to add it to the template you edited last. Existing files are never overwritten: a number is added."
+msgstr "Cliquez sur une variable pour l’ajouter au dernier modèle modifié. Les fichiers existants ne sont jamais écrasés : un numéro est ajouté."
+
+#: ui/tab.slint:1330
+#, x-machine
+msgid "Clips"
+msgstr "Extraits"
+
+#: ui/tab.slint:1333
+#, x-machine
+msgid "Last clip length"
+msgstr "Durée de « N dernières s »"

@@ -6,7 +6,7 @@ import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { newFakes, stills, watchHost, words } from "./fakes.ts";
+import { eventually, newFakes, stills, watchHost, words } from "./fakes.ts";
 
 const fakes = newFakes();
 const directory = new URL("..", import.meta.url);
@@ -25,7 +25,12 @@ async function until(predicate: () => boolean | Promise<boolean>) {
 const exists = (path: string) => stat(path).then(() => true, () => false);
 const lastOsd = (host: TestHost) => host.osd.at(-1) ?? "";
 /** The burst dialog's progress line as shown. */
-const burstProgress = (host: TestHost) => words(host).progress(host.window("burst").props.progress as never);
+/** The tab's bridge values. */
+const tab = (host: TestHost) => host.mounted().props;
+type Row = { id: string; kind: string; state: string; reason: string; retryable: boolean };
+const rows = (host: TestHost) => tab(host).results as Row[];
+/** The newest burst finished: its result row. */
+const burstDone = (host: TestHost) => rows(host).some((row) => row.kind === "burst" && row.state === "completed");
 
 /** Jobs publish a real file at the requested destination (like the worker), so copies and the task list see it. */
 function publishingJobs(host: TestHost) {
@@ -172,12 +177,11 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     assert.equal(lastOsd(host), "截图格式：JPEG");
     assert.equal(jpeg.state.checked, true);
     assert.equal(host.command("capture.format.png").state.checked, false);
-    await host.command("capture.settings").run();
-    const settings = host.window("settings");
-    assert.equal(settings.props["format-index"], 1);
+    const settings = host.mounted();
+    await eventually(() => tab(host)["format-index"], 1);
     settings.emit("set-quality", 80);
     await host.settle();
-    assert.equal(settings.props.quality, 80);
+    await eventually(() => tab(host).quality, 80);
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
     const target = join(folder, "source-one_00.02.000.jpg");
@@ -187,7 +191,8 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     assert.deepEqual(await readdir(folder), ["source-one_00.02.000.jpg"], "only the final file, no temporary PNG");
     // plugin.storage writes 300 ms after the last change
     const expected = { folder, format: "jpeg", quality: 80, screenSubtitles: true, besideMedia: false };
-    await until(() => readFile(join(data, "settings.json"), "utf8").then((text) => isDeepStrictEqual(JSON.parse(text), expected), () => false));
+    const picked = (value: Record<string, unknown>) => Object.fromEntries(Object.keys(expected).map((key) => [key, value[key]]));
+    await until(() => readFile(join(data, "settings.json"), "utf8").then((text) => isDeepStrictEqual(picked(JSON.parse(text)), expected), () => false));
     settings.emit("choose-format", 2);
     await host.settle();
     assert.equal(host.command("capture.format.bmp").state.checked, true);
@@ -199,8 +204,8 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     const restart = new TestHost();
     const again = await startPlugin(activate, { directory, host: restart, dataDirectory: data, locale: "zh-Hans" });
     assert.equal(restart.command("capture.format.bmp").state.checked, true);
-    await restart.command("capture.settings").run();
-    assert.equal(restart.window("settings").props.quality, 80);
+    await restart.settle();
+    await eventually(() => tab(restart).quality, 80);
     await again.stop();
   } finally {
     await stop();
@@ -223,9 +228,9 @@ test("F07: a failed JPEG export fails the task like a PNG one; nothing is left b
     await until(() => lastOsd(host) === "截图失败：导出失败");
     assert.equal(stills(host)[0]!.kind, "rawJpeg");
     assert.deepEqual(await readdir(folder), []);
-    await host.command("capture.tasks").run();
-    const [row] = host.window("tasks").props["task-rows"] as (Parameters<ReturnType<typeof words>["row"]>[0] & { retryable: boolean })[];
-    assert.match(words(host).row(row!).detail, /失败：导出失败$/);
+    await until(() => rows(host)[0]?.state === "failed");
+    const [row] = rows(host);
+    assert.equal(words(host).reason(row!.reason, ""), "导出失败");
     assert.equal(row!.retryable, true);
   } finally {
     await stop();
@@ -261,14 +266,14 @@ test("F07: bursts use the shared format; the dialog's combo box changes it", asy
   const { host, folder, stop } = await setup();
   try {
     await host.press("Ctrl+G");
-    const burst = host.window("burst");
-    assert.equal(burst.props["format-index"], 0);
+    const burst = host.mounted();
+    await eventually(() => tab(host)["format-index"], 0);
     burst.emit("choose-format", 1);
     await host.settle();
     assert.equal(lastOsd(host), "截图格式：JPEG");
     assert.equal(host.command("capture.format.jpeg").state.checked, true);
     burst.emit("start-burst", "1", "3", "0.5", false, false, false);
-    await until(() => burstProgress(host) === "已完成 · 3/3");
+    await until(() => burstDone(host));
     const [child] = await readdir(folder);
     assert.deepEqual((await readdir(join(folder, child!))).sort(), ["001-1.000s.jpg", "002-1.500s.jpg", "003-2.000s.jpg"]);
     assert.equal(host.exports.length, 3);
@@ -291,7 +296,7 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
     await until(() => fakes.opened.length === 2);
     assert.equal(await exists(folder), true, "recreated");
     await host.command("capture.settings").run();
-    host.window("settings").emit("set-beside-media", true);
+    host.mounted().emit("set-beside-media", true);
     await host.settle();
     await host.command("capture.openFolder").run();
     await until(() => fakes.opened.length === 3);
@@ -313,25 +318,31 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
   }
 });
 
-test("F09: 导出任务「打开」opens the confirmed output with system.openPath; a burst opens its folder", async () => {
+test("F09: Results Open opens the output with system.openPath; a burst opens its folder; a moved file says so", async () => {
   const { host, folder, stop } = await setup();
   try {
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
-    await host.command("capture.tasks").run();
-    host.window("tasks").emit("open-output", "1");
+    await until(() => rows(host)[0]?.state === "completed");
+    const frame = rows(host)[0]!.id;
+    host.mounted().emit("open-result", frame);
     await until(() => fakes.opened.length === 1);
     assert.deepEqual(fakes.opened, [join(folder, "source-one_00.02.000.png")]);
     await host.press("Ctrl+G");
-    host.window("burst").emit("start-burst", "1", "2", "0.5", false, false, false);
-    await until(() => burstProgress(host) === "已完成 · 2/2");
-    host.window("tasks").emit("open-output", "2");
+    host.mounted().emit("start-burst", "1", "2", "0.5", false, false, false);
+    await until(() => burstDone(host));
+    host.mounted().emit("open-result", rows(host)[0]!.id);
     await until(() => fakes.opened.length === 2);
     const [burstFolder] = (await readdir(folder)).filter((name) => name.startsWith("Capture-"));
     assert.equal(fakes.opened[1], join(folder, burstFolder!));
     fakes.failOpen = true;
-    host.window("tasks").emit("open-output", "1");
-    await until(() => words(host).status(host.window("tasks").props.status as never) === "无法打开文件夹。");
+    host.mounted().emit("open-result", frame);
+    await until(() => words(host).status(tab(host)["results-status"] as never) === "无法打开文件夹。");
+    fakes.failOpen = false;
+    await rm(join(folder, "source-one_00.02.000.png"));
+    host.mounted().emit("open-result", frame);
+    await until(() => rows(host).find((row) => row.id === frame)?.state === "gone");
+    assert.equal(fakes.opened.length, 2, "nothing opened for a moved file");
   } finally {
     await stop();
   }
@@ -351,8 +362,8 @@ test("settings: a damaged settings.json is set aside as .bad-<time>; a partly in
     const { host } = started;
     assert.equal(host.command("capture.format.png").state.checked, true, "unknown format → PNG");
     assert.equal(host.command("capture.screenSubtitles").state.checked, true, "not a boolean → default");
-    await host.command("capture.settings").run();
-    const props = host.window("settings").props;
+    await host.settle();
+    const props = tab(host);
     assert.deepEqual([props.folder, props.quality, props["beside-media"]], [folder, 100, true]);
     await started.stop();
   } finally {

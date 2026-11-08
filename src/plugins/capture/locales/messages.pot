@@ -1,260 +1,348 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.capture 1.0.11\n"
+"Project-Id-Version: vestra.capture 1.0.12\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:68 main.ts:73 ui/parts.slint:57
-msgid "Enter valid seconds; the end must be after the start."
+#: main.ts:135 main.ts:140 ui/parts.slint:35
+msgid "Enter a time such as 1:02:03.450, or seconds."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:58
+#: main.ts:135 main.ts:140 ui/parts.slint:36
+msgid "The end must be after the start."
+msgstr ""
+
+#: main.ts:135 main.ts:140 ui/parts.slint:37
 msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:59
+#: main.ts:135 main.ts:140 ui/parts.slint:38
 msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:60
+#: main.ts:135 main.ts:140 ui/parts.slint:39
 msgid "No free file name found."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:61
+#: main.ts:135 main.ts:140 ui/parts.slint:40
 msgid "The current frame cannot be captured. Open a local video file first."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:62
+#: main.ts:135 main.ts:140 ui/parts.slint:41
 msgid "The current frame cannot be exported. Open a local video file first."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:63
+#: main.ts:135 main.ts:140 ui/parts.slint:42
 msgid "Bursts and clips need a known media duration."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:64
+#: main.ts:135 main.ts:140 ui/parts.slint:43
 msgid "The selected range is past the end of the media."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:65
+#: main.ts:135 main.ts:140 ui/parts.slint:44
 msgid "The selected audio track cannot be exported. Choose another track or No Audio."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:66
+#: main.ts:135 main.ts:140 ui/parts.slint:45
 msgid "The media changed; nothing was started."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:67
+#: main.ts:135 main.ts:140 ui/parts.slint:46
 msgid "The player is busy. Try again later."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:68
+#: main.ts:135 main.ts:140 ui/parts.slint:47
 msgid "The current frame cannot be captured."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:69
+#: main.ts:135 main.ts:140 ui/parts.slint:48
 msgid "Could not capture the frame."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:70
+#: main.ts:135 main.ts:140 ui/parts.slint:49
 msgid "One export is running and four are queued. Please wait."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:71
+#: main.ts:135 main.ts:140 ui/parts.slint:50
 msgid "The kept frame has expired. Retry with the current frame."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:72
+#: main.ts:135 main.ts:140 ui/parts.slint:51
 msgid "The kept frame was released."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:73
+#: main.ts:135 main.ts:140 ui/parts.slint:52
 msgid "Cancelled."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:74
+#: main.ts:135 main.ts:140 ui/parts.slint:53
 msgid "Could not write to the clipboard"
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:75
+#: main.ts:135 main.ts:140 ui/parts.slint:54
 msgid "Not enough disk space"
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:76
+#: main.ts:135 main.ts:140 ui/parts.slint:55
 msgid "The target file already exists"
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:77
+#: main.ts:135 main.ts:140 ui/parts.slint:56
 msgid "No write permission"
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:78
+#: main.ts:135 main.ts:140 ui/parts.slint:57
 msgid "This media cannot be encoded"
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:79
+#: main.ts:135 main.ts:140 ui/parts.slint:58
 msgid "Export failed"
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:80
+#: main.ts:135 main.ts:140 ui/parts.slint:59
 msgid "This task has no output file yet."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:81
+#: main.ts:135 main.ts:140 ui/parts.slint:60
 msgid "The output file no longer exists."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:82
+#: main.ts:135 main.ts:140 ui/parts.slint:61
 msgid "Could not open the folder."
 msgstr ""
 
-#: main.ts:68 main.ts:73 ui/parts.slint:83
+#: main.ts:135 main.ts:140 ui/parts.slint:62
 msgid "The snapshot folder is unavailable. Please choose it again."
 msgstr ""
 
-#: main.ts:73
+#: main.ts:135 main.ts:140 ui/parts.slint:63
+msgid "Clips need a local file."
+msgstr ""
+
+#: main.ts:135 main.ts:140 ui/parts.slint:64
+msgid "Set A and B with A-B Loop (Chapters tab)."
+msgstr ""
+
+#: main.ts:135 main.ts:140 ui/parts.slint:65
+msgid "Nothing has played before the current position yet."
+msgstr ""
+
+#: main.ts:135 main.ts:140 ui/parts.slint:66
+msgid "Fast cut is not possible for this file. Use Precise."
+msgstr ""
+
+#: main.ts:135 main.ts:140 ui/parts.slint:67
+msgid "The bitrate of this file is unknown. Choose another quality."
+msgstr ""
+
+#: main.ts:135 main.ts:140 ui/parts.slint:68
+msgid "The file or folder was moved or deleted."
+msgstr ""
+
+#: main.ts:135 main.ts:140 main.ts:810 main.ts:1068 ui/parts.slint:69
+msgid "The Capture tab could not open."
+msgstr ""
+
+#: main.ts:140
 msgid "Snapshot failed: {}"
 msgstr ""
 
-#: main.ts:73 ui/parts.slint:115
+#: main.ts:140 ui/parts.slint:101
 msgid "Burst failed: {}"
 msgstr ""
 
-#: main.ts:73 ui/parts.slint:117
+#: main.ts:140 ui/parts.slint:103
 msgid "Export failed: {}"
 msgstr ""
 
-#: main.ts:113
-msgid "Frame saved as {}"
+#: main.ts:145 ui/tab.slint:757 ui/tab.slint:1290
+msgid "Clip"
 msgstr ""
 
-#. {0} is the number of frames (2–20), {1} the folder.
-#: main.ts:118
-msgid "Burst of {0} frames saved to {1}"
+#: main.ts:189 ui/tab.slint:661
+msgid "Show in Folder"
 msgstr ""
 
-#: main.ts:122
-msgid "Clip exported as {}"
+#: main.ts:190 ui/tab.slint:651 ui/tab.slint:804
+msgid "Copy"
 msgstr ""
 
-#: main.ts:152
+#: main.ts:190
+msgid "Show in Tab"
+msgstr ""
+
+#: main.ts:317
 msgid "Snapshot format: {}"
 msgstr ""
 
-#: main.ts:179
-msgid "The previous snapshot is still being processed"
-msgstr ""
-
-#: main.ts:202
-msgid "Snapshot queued"
-msgstr ""
-
-#: main.ts:210
-msgid "Save Rendered Frame As"
-msgstr ""
-
-#: main.ts:210
-msgid "Save Current Frame As"
-msgstr ""
-
-#: main.ts:221
-msgid "Frame copied to the clipboard"
-msgstr ""
-
-#: main.ts:224
+#: main.ts:332
 msgid "Choose Snapshot Folder"
 msgstr ""
 
-#: main.ts:226
+#: main.ts:334
 msgid "Please choose an existing folder."
 msgstr ""
 
-#: main.ts:229
+#: main.ts:337
 msgid "Snapshot folder: {}"
 msgstr ""
 
-#: main.ts:309 ui/clip.slint:8
+#: main.ts:398
+msgid "The previous snapshot is still being processed"
+msgstr ""
+
+#: main.ts:421
+msgid "Snapshot queued"
+msgstr ""
+
+#: main.ts:429
+msgid "Save Rendered Frame As"
+msgstr ""
+
+#: main.ts:429
+msgid "Save Current Frame As"
+msgstr ""
+
+#: main.ts:441
+msgid "Frame copied without subtitles: they cannot be drawn into a frame"
+msgstr ""
+
+#: main.ts:441 main.ts:953 main.ts:1109
+msgid "Frame copied to the clipboard"
+msgstr ""
+
+#: main.ts:596
 msgid "Export Clip"
 msgstr ""
 
-#: main.ts:360
-msgid "The snapshot window could not open."
+#: main.ts:631
+msgid "Exporting the last {} seconds"
 msgstr ""
 
-#: main.ts:389
+#: main.ts:666
+msgid "Capture"
+msgstr ""
+
+#: main.ts:1017 main.ts:1132 ui/tab.slint:1102
 msgid "Export"
 msgstr ""
 
-#: main.ts:394 manifest.json ui/error.slint:5
+#: main.ts:1024 main.ts:1025 manifest.json ui/tab.slint:757 ui/tab.slint:1283
 msgid "Snapshot"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:799
 msgid "Save Current Frame"
 msgstr ""
 
-#: main.ts:394
-msgid "Save Current Frame As…"
-msgstr ""
-
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:809
 msgid "Copy Current Frame"
 msgstr ""
 
-#: main.ts:394
-msgid "Save Rendered Frame"
-msgstr ""
-
-#: main.ts:394
-msgid "Save Rendered Frame As…"
-msgstr ""
-
-#: main.ts:394
-msgid "Copy Rendered Frame"
-msgstr ""
-
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Burst…"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Export Clip…"
 msgstr ""
 
-#: main.ts:394 ui/clip.slint:85
+#: main.ts:1024 main.ts:1025
+msgid "Capture…"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Save Current Frame As…"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Save Rendered Frame"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Save Rendered Frame As…"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Copy Rendered Frame"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
 msgid "Export Tasks…"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Capture as PNG"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Capture as JPEG"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Capture as BMP"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Include Subtitles in Rendered Frame"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Snapshot Settings…"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025
 msgid "Snapshot Folder…"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:1156
 msgid "Open Snapshot Folder"
 msgstr ""
 
-#: main.ts:394
+#: main.ts:1024 main.ts:1025 ui/tab.slint:939
+msgid "Set Clip Start"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025 ui/tab.slint:951
+msgid "Set Clip End"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Export Clip Range"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Show Last Capture in Folder"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Copy Last Snapshot"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Save Video Frame Only"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025
+msgid "Copy Video Frame Only"
+msgstr ""
+
+#: main.ts:1024 main.ts:1025 main.ts:1137 ui/tab.slint:799 ui/tab.slint:809 ui/tab.slint:817 ui/tab.slint:889
 msgid "No frame to capture"
+msgstr ""
+
+#: main.ts:1115
+msgid "Clip start: {}"
+msgstr ""
+
+#: main.ts:1120
+msgid "Clip end: {}"
+msgstr ""
+
+#. {} is 10, 30, 60 or 120.
+#: main.ts:1131 ui/tab.slint:975
+msgid "Export Last {} Seconds"
 msgstr ""
 
 #: manifest.json
@@ -263,8 +351,8 @@ msgstr ""
 
 #: manifest.json
 msgid ""
-"Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\n"
-"Right-click menu: Video ▸ Snapshot."
+"Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as a lossless stream copy or a re-encoded MP4. One sidebar tab, Capture, holds the controls, the running exports and the finished results.\n"
+"Right-click menu: Video ▸ Snapshot; Alt+S opens the tab."
 msgstr ""
 
 #: manifest.json
@@ -279,270 +367,580 @@ msgstr ""
 msgid "export"
 msgstr ""
 
-#: model.ts:178 ui/clip.slint:14
+#: model.ts:250 ui/tab.slint:151
 msgid "No Audio"
 msgstr ""
 
-#: model.ts:179 ui/clip.slint:14
+#: model.ts:251 ui/tab.slint:151
 msgid "Current Track"
 msgstr ""
 
-#: model.ts:180
+#: model.ts:252
 msgid "Track {} · {}"
 msgstr ""
 
-#: model.ts:180
+#: model.ts:252
 msgid "Track {}"
 msgstr ""
 
-#: ui/burst.slint:8
-msgid "Burst"
+#: seams.ts:83
+msgid "Frame saved as {}"
 msgstr ""
 
-#: ui/burst.slint:39 ui/burst.slint:63
-msgid "Count:"
+#: seams.ts:83
+msgid "Frame saved without subtitles as {}"
 msgstr ""
 
-#: ui/burst.slint:39 ui/burst.slint:69
-msgid "Interval:"
+#: seams.ts:83
+msgid "Clip exported as {}"
 msgstr ""
 
-#: ui/burst.slint:39 ui/burst.slint:76
-msgid "Start:"
+#: seams.ts:83
+msgid "Burst of {0} frames saved to {1}"
 msgstr ""
 
-#: ui/burst.slint:42 ui/burst.slint:102
-msgid "Progress:"
-msgstr ""
-
-#: ui/burst.slint:42 ui/burst.slint:107 ui/clip.slint:32 ui/clip.slint:77
-msgid "Status:"
-msgstr ""
-
-#: ui/burst.slint:50
-msgid "Save to"
-msgstr ""
-
-#: ui/burst.slint:60
-msgid "Snapshot settings"
-msgstr ""
-
-#: ui/burst.slint:65
-msgid "frames (2–20)"
-msgstr ""
-
-#: ui/burst.slint:71
-msgid "s (0.1–10)"
-msgstr ""
-
-#: ui/burst.slint:73
-msgid "Start at the current position"
-msgstr ""
-
-#: ui/burst.slint:78 ui/clip.slint:45 ui/clip.slint:51
-msgid "Current"
-msgstr ""
-
-#: ui/burst.slint:82
-msgid "Other settings"
-msgstr ""
-
-#: ui/burst.slint:85 ui/clip.slint:32 ui/clip.slint:58 ui/settings.slint:29 ui/settings.slint:40
-msgid "Format:"
-msgstr ""
-
-#: ui/burst.slint:93 ui/clip.slint:69
-msgid "Include video effects"
-msgstr ""
-
-#: ui/burst.slint:94
-msgid "Capture subtitles too"
-msgstr ""
-
-#: ui/burst.slint:99 ui/clip.slint:74
-msgid "Information"
-msgstr ""
-
-#: ui/burst.slint:114 ui/tasks.slint:80
-msgid "Open Save Folder"
-msgstr ""
-
-#: ui/burst.slint:115
-msgid "Capture Current Frame"
-msgstr ""
-
-#: ui/burst.slint:118
-msgid "Start"
-msgstr ""
-
-#: ui/clip.slint:32 ui/clip.slint:43
-msgid "Start (s):"
-msgstr ""
-
-#: ui/clip.slint:32 ui/clip.slint:49
-msgid "End (s):"
-msgstr ""
-
-#: ui/clip.slint:32 ui/clip.slint:63
-msgid "Audio:"
-msgstr ""
-
-#: ui/clip.slint:40
-msgid "Range"
-msgstr ""
-
-#: ui/clip.slint:55
-msgid "Output"
-msgstr ""
-
-#: ui/clip.slint:59
-msgid "MP4 (H.264 + AAC)"
-msgstr ""
-
-#: ui/clip.slint:70
-msgid "Export subtitles too"
-msgstr ""
-
-#: ui/clip.slint:88
-msgid "Export…"
-msgstr ""
-
-#: ui/error.slint:12
-msgid "The snapshot window could not open. Close this notice and try again."
-msgstr ""
-
-#: ui/parts.slint:89
+#: ui/parts.slint:75
 msgid "Queued"
 msgstr ""
 
-#: ui/parts.slint:90
+#: ui/parts.slint:76
 msgid "Preparing"
 msgstr ""
 
-#: ui/parts.slint:91
+#: ui/parts.slint:77
 msgid "Exporting"
 msgstr ""
 
-#: ui/parts.slint:92
+#: ui/parts.slint:78
 msgid "Cancelling"
 msgstr ""
 
-#: ui/parts.slint:93
+#: ui/parts.slint:79
 msgid "Completed"
 msgstr ""
 
-#: ui/parts.slint:94
+#: ui/parts.slint:80
 msgid "Failed"
 msgstr ""
 
-#: ui/parts.slint:95
+#: ui/parts.slint:81
 msgid "Cancelled"
 msgstr ""
 
-#: ui/parts.slint:103
+#: ui/parts.slint:89 ui/tab.slint:598
 msgid "Failed: {}"
 msgstr ""
 
 #. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
-#: ui/parts.slint:105
+#: ui/parts.slint:91 ui/tab.slint:604
 msgid "{0} · {1}/{2}"
 msgstr ""
 
 #. {} is the number of frames (2–20).
-#: ui/parts.slint:112
+#: ui/parts.slint:98
 msgid "{} frames saved"
 msgstr ""
 
 #. {} is the number of frames (2–20).
-#: ui/parts.slint:114
+#: ui/parts.slint:100
 msgid "Burst of {} frames started"
 msgstr ""
 
-#: ui/parts.slint:116
+#: ui/parts.slint:102
 msgid "Exported {}"
 msgstr ""
 
-#: ui/parts.slint:118
+#: ui/parts.slint:104
 msgid "No save location chosen."
 msgstr ""
 
-#: ui/parts.slint:119
-msgid "Export started. Follow it in Export Tasks."
+#: ui/parts.slint:105
+msgid "Export started. Follow it in Results."
 msgstr ""
 
-#: ui/parts.slint:120
+#: ui/parts.slint:106
 msgid "Restarted."
 msgstr ""
 
-#: ui/settings.slint:8
-msgid "Snapshot Settings"
+#: ui/parts.slint:112 ui/tab.slint:906
+msgid "Fast"
 msgstr ""
 
-#: ui/settings.slint:29 ui/settings.slint:49
-msgid "Quality:"
+#: ui/parts.slint:113 ui/tab.slint:914
+msgid "Precise"
 msgstr ""
 
-#: ui/settings.slint:37
-msgid "Format"
+#: ui/parts.slint:119 ui/tab.slint:1016 ui/tab.slint:1017
+msgid "Same as source"
 msgstr ""
 
-#: ui/settings.slint:60
-msgid "Quality applies to JPEG only; copies to the clipboard are always PNG."
+#: ui/parts.slint:120 ui/tab.slint:992 ui/tab.slint:1016 ui/tab.slint:1017
+msgid "High quality"
 msgstr ""
 
-#: ui/settings.slint:63
-msgid "Save location"
+#: ui/parts.slint:121 ui/tab.slint:1016 ui/tab.slint:1017
+msgid "Small file"
 msgstr ""
 
-#: ui/settings.slint:70
-msgid "Save to the media folder when possible"
+#: ui/parts.slint:122 ui/tab.slint:1016
+msgid "Custom"
 msgstr ""
 
-#: ui/settings.slint:76
-msgid "Rendered frame"
+#: ui/parts.slint:128
+msgid "just now"
 msgstr ""
 
-#: ui/settings.slint:78
-msgid "Include subtitles"
+#. {} is a number of minutes (1–59).
+#: ui/parts.slint:130
+msgid "{} min ago"
 msgstr ""
 
-#: ui/settings.slint:83
-msgid "The rendered frame is made offline: it includes the plugins' video effects, and subtitles are drawn again in the plugins' style, always inside the picture, so it is not pixel for pixel what the screen shows. On-screen messages are not included."
+#. {} is a number of hours (1–23).
+#: ui/parts.slint:132
+msgid "{} h ago"
 msgstr ""
 
-#: ui/tasks.slint:20
-msgid "Export Tasks"
+#. {} is a number of days.
+#: ui/parts.slint:134
+msgid "{} d ago"
 msgstr ""
 
-#: ui/tasks.slint:41
-msgid "No export tasks yet."
+#. {} is a number of seconds.
+#. {} is a clip's length in seconds ("3.5") or a burst's number of frames.
+#: ui/parts.slint:141 ui/tab.slint:575 ui/tab.slint:1336
+msgid "{} s"
 msgstr ""
 
-#: ui/tasks.slint:57
-msgid "Burst · {}"
+#. {0} and {1} are numbers of seconds.
+#: ui/parts.slint:143
+msgid "{0}–{1} s"
 msgstr ""
 
-#: ui/tasks.slint:57
-msgid "Clip · {}"
+#. {} is a number of minutes.
+#: ui/parts.slint:146
+msgid "{} min"
 msgstr ""
 
-#: ui/tasks.slint:57
-msgid "Snapshot · {}"
+#. {0} and {1} are numbers of minutes.
+#: ui/parts.slint:148
+msgid "about {0}–{1} min"
 msgstr ""
 
-#. {0} is the time or time range, {1} the progress (Completed).
-#: ui/tasks.slint:61
+#. {0} is the time a Fast cut starts at (the keyframe), {1} how many seconds before the typed start.
+#: ui/tab.slint:481
+msgid "{0} (−{1} s)"
+msgstr ""
+
+#: ui/tab.slint:521
+msgid "Default name"
+msgstr ""
+
+#. {} is a clip's length in seconds ("3.5") or a burst's number of frames.
+#: ui/tab.slint:575
+msgid "×{}"
+msgstr ""
+
+#: ui/tab.slint:597
+msgid "File moved or deleted"
+msgstr ""
+
+#. {0} is the number of frames (2–20), {1} the time of the first.
+#: ui/tab.slint:601
+msgid "Queued · {0} frames from {1}"
+msgstr ""
+
+#. {} is a time or a time range.
+#: ui/tab.slint:603
+msgid "Queued · {}"
+msgstr ""
+
+#. {} is a percentage.
+#: ui/tab.slint:606 ui/tab.slint:872
+msgid "Finishing…"
+msgstr ""
+
+#. {0} is a percentage, {1} seconds.
+#: ui/tab.slint:609
+msgid "Exporting · {0} % · about {1} s left"
+msgstr ""
+
+#. {} is a percentage.
+#: ui/tab.slint:611
+msgid "Exporting · {} %"
+msgstr ""
+
+#. {0} is a task state (Exporting), {1} the time spent (0:12).
+#. what the closed Advanced rows hold now: an audio choice and a quality.
+#: ui/tab.slint:613 ui/tab.slint:991
 msgid "{0} · {1}"
 msgstr ""
 
-#: ui/tasks.slint:67
+#. {} is the number of frames (2–20).
+#: ui/tab.slint:615 ui/tab.slint:617 ui/tab.slint:618
+msgid "{} MB"
+msgstr ""
+
+#. {} is the number of frames (2–20).
+#: ui/tab.slint:617
+msgid "Burst · {} frames"
+msgstr ""
+
+#: ui/tab.slint:636 ui/tab.slint:853
 msgid "Cancel"
 msgstr ""
 
-#: ui/tasks.slint:68
+#: ui/tab.slint:641
+msgid "Retry"
+msgstr ""
+
+#: ui/tab.slint:646 ui/tab.slint:656
 msgid "Open"
 msgstr ""
 
-#: ui/tasks.slint:69
-msgid "Retry"
+#: ui/tab.slint:656
+msgid "Open Folder"
+msgstr ""
+
+#: ui/tab.slint:666
+msgid "Remove from List"
+msgstr ""
+
+#: ui/tab.slint:720
+msgid "Fast cut copies the streams: lossless and done in seconds, but a clip can only start on a keyframe."
+msgstr ""
+
+#. {0} and {2} are times, {1} seconds.
+#: ui/tab.slint:724
+msgid "It will start at {0}, {1} s before your start, and end at {2}."
+msgstr ""
+
+#. {0} and {1} are times.
+#: ui/tab.slint:726
+msgid "It will start at {0} and end at {1}."
+msgstr ""
+
+#: ui/tab.slint:727
+msgid "It starts on the keyframe at or before your start."
+msgstr ""
+
+#: ui/tab.slint:728
+msgid "Its streams do not fit in MP4, so it is saved as MKV."
+msgstr ""
+
+#: ui/tab.slint:729
+msgid "Pick Precise to start on the exact frame."
+msgstr ""
+
+#: ui/tab.slint:730
+msgid "Precise re-encodes from the exact frame, and can include video effects and subtitles."
+msgstr ""
+
+#. {0} and {1} are times.
+#: ui/tab.slint:732
+msgid "Precise re-encodes from the exact frame {0} to {1}, and can include video effects and subtitles."
+msgstr ""
+
+#. {0} seconds of media, {1} megabytes ("46" or "55–80"), {2} a time span ("2 s", "about 1–3 min").
+#: ui/tab.slint:737
+msgid "Length {0} s · ≈ {1} MB · ≈ {2}"
+msgstr ""
+
+#. {0} seconds of media, {1} a time span ("2 s", "about 1–3 min").
+#: ui/tab.slint:739
+msgid "Length {0} s · ≈ {1}"
+msgstr ""
+
+#: ui/tab.slint:758
+msgid "Results ({})"
+msgstr ""
+
+#: ui/tab.slint:758
+msgid "Results"
+msgstr ""
+
+#: ui/tab.slint:758
+msgid "Settings"
+msgstr ""
+
+#: ui/tab.slint:768
+msgid "Show or hide this tab"
+msgstr ""
+
+#: ui/tab.slint:794
+msgid "Save"
+msgstr ""
+
+#: ui/tab.slint:816 ui/tab.slint:888
+msgid "This picture is made by a plugin"
+msgstr ""
+
+#: ui/tab.slint:818
+msgid "Source size, with the subtitles shown and the video effects"
+msgstr ""
+
+#: ui/tab.slint:819
+msgid "Source size, with the subtitles shown"
+msgstr ""
+
+#. {} is the file or folder name.
+#: ui/tab.slint:850
+msgid "Exporting {}"
+msgstr ""
+
+#: ui/tab.slint:873
+msgid "{} %"
+msgstr ""
+
+#. {} is a number of seconds.
+#: ui/tab.slint:875
+msgid "about {} s left"
+msgstr ""
+
+#. {} is the number of exports waiting (1–4).
+#: ui/tab.slint:878
+msgid "+{} queued"
+msgstr ""
+
+#: ui/tab.slint:893
+msgid "There is no file to cut."
+msgstr ""
+
+#: ui/tab.slint:894
+msgid "Frames can still be saved; open a local file to cut clips."
+msgstr ""
+
+#: ui/tab.slint:895
+msgid "Open a local video file to save frames, bursts and clips."
+msgstr ""
+
+#: ui/tab.slint:907
+msgid "lossless"
+msgstr ""
+
+#: ui/tab.slint:907
+msgid "no re-encode · lossless"
+msgstr ""
+
+#: ui/tab.slint:915
+msgid "re-encode"
+msgstr ""
+
+#: ui/tab.slint:915
+msgid "re-encode · any frame"
+msgstr ""
+
+#: ui/tab.slint:931 ui/tab.slint:1231 ui/tab.slint:1269
+msgid "Start"
+msgstr ""
+
+#: ui/tab.slint:939 ui/tab.slint:951 ui/tab.slint:1274
+msgid "Now"
+msgstr ""
+
+#: ui/tab.slint:943
+msgid "End"
+msgstr ""
+
+#: ui/tab.slint:958
+msgid "Use A-B range"
+msgstr ""
+
+#: ui/tab.slint:961
+msgid "Copy the A-B loop into Start and End"
+msgstr ""
+
+#. {0} and {1} are the A and B times of the loop.
+#: ui/tab.slint:963
+msgid "A {0} · B {1}"
+msgstr ""
+
+#. {} is 10, 30, 60 or 120.
+#: ui/tab.slint:969
+msgid "Last {} s"
+msgstr ""
+
+#: ui/tab.slint:988
+msgid "Advanced"
+msgstr ""
+
+#: ui/tab.slint:992 ui/tab.slint:1013
+msgid "Same as source (stream copy)"
+msgstr ""
+
+#: ui/tab.slint:1003 ui/tab.slint:1066
+msgid "Audio"
+msgstr ""
+
+#: ui/tab.slint:1012
+msgid "Quality"
+msgstr ""
+
+#: ui/tab.slint:1021
+msgid "High quality (H.264 + AAC in MP4)"
+msgstr ""
+
+#: ui/tab.slint:1027
+msgid "Resolution"
+msgstr ""
+
+#: ui/tab.slint:1029 ui/tab.slint:1039
+msgid "Source"
+msgstr ""
+
+#: ui/tab.slint:1036
+msgid "Frame rate"
+msgstr ""
+
+#: ui/tab.slint:1039
+msgid "{} fps"
+msgstr ""
+
+#: ui/tab.slint:1046
+msgid "Source bitrate"
+msgstr ""
+
+#: ui/tab.slint:1046
+msgid "Quality number {}"
+msgstr ""
+
+#: ui/tab.slint:1057
+msgid "Speed"
+msgstr ""
+
+#: ui/tab.slint:1059
+msgid "Faster"
+msgstr ""
+
+#: ui/tab.slint:1059
+msgid "Balanced"
+msgstr ""
+
+#: ui/tab.slint:1059
+msgid "Smaller"
+msgstr ""
+
+#: ui/tab.slint:1069
+msgid "AAC {} kb/s"
+msgstr ""
+
+#: ui/tab.slint:1078
+msgid "Reset"
+msgstr ""
+
+#: ui/tab.slint:1084 ui/tab.slint:1208 ui/tab.slint:1276
+msgid "Include video effects"
+msgstr ""
+
+#: ui/tab.slint:1090
+msgid "Burn in subtitles"
+msgstr ""
+
+#: ui/tab.slint:1095
+msgid "Effects and subtitles: Precise only"
+msgstr ""
+
+#: ui/tab.slint:1109
+msgid "Export as {} into the snapshot folder"
+msgstr ""
+
+#: ui/tab.slint:1110
+msgid "Export the range into the snapshot folder"
+msgstr ""
+
+#: ui/tab.slint:1116
+msgid "Export As…"
+msgstr ""
+
+#: ui/tab.slint:1118
+msgid "Export the range into a file you choose"
+msgstr ""
+
+#: ui/tab.slint:1131
+msgid "Use Precise"
+msgstr ""
+
+#: ui/tab.slint:1148
+msgid "No snapshots or clips yet."
+msgstr ""
+
+#: ui/tab.slint:1158
+msgid "Clear Finished"
+msgstr ""
+
+#: ui/tab.slint:1175
+msgid "Save to"
+msgstr ""
+
+#: ui/tab.slint:1182
+msgid "Save to the media folder when possible"
+msgstr ""
+
+#: ui/tab.slint:1187
+msgid "Snapshots"
+msgstr ""
+
+#: ui/tab.slint:1190
+msgid "Format"
+msgstr ""
+
+#: ui/tab.slint:1205
+msgid "Quality: JPEG only"
+msgstr ""
+
+#: ui/tab.slint:1218 ui/tab.slint:1297
+msgid "Burst"
+msgstr ""
+
+#. {0} is the number of frames, {1} the interval in seconds.
+#: ui/tab.slint:1222
+msgid "{0} frames · every {1} s · from now"
+msgstr ""
+
+#. {0} is the number of frames, {1} the interval in seconds, {2} the start time.
+#: ui/tab.slint:1224
+msgid "{0} frames · every {1} s · from {2}"
+msgstr ""
+
+#: ui/tab.slint:1236
+msgid "Start the burst"
+msgstr ""
+
+#: ui/tab.slint:1248
+msgid "Count"
+msgstr ""
+
+#: ui/tab.slint:1254
+msgid "frames (2–20)"
+msgstr ""
+
+#: ui/tab.slint:1258
+msgid "Interval"
+msgstr ""
+
+#: ui/tab.slint:1264
+msgid "s (0.1–10)"
+msgstr ""
+
+#: ui/tab.slint:1266
+msgid "Start at the current position"
+msgstr ""
+
+#: ui/tab.slint:1277
+msgid "Capture subtitles too"
+msgstr ""
+
+#: ui/tab.slint:1281
+msgid "File names"
+msgstr ""
+
+#: ui/tab.slint:1306
+msgid "Click a variable to add it to the template you edited last. Existing files are never overwritten: a number is added."
+msgstr ""
+
+#: ui/tab.slint:1330
+msgid "Clips"
+msgstr ""
+
+#: ui/tab.slint:1333
+msgid "Last clip length"
 msgstr ""

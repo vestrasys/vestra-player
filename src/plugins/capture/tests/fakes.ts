@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import { stat } from "node:fs/promises";
 import { HostError } from "@vestra-player/sdk/testing";
 import type { TestHost } from "@vestra-player/sdk/testing";
@@ -40,7 +42,6 @@ export const stills = (host: TestHost) => host.exports.filter((job) => /(Jpeg|Bm
 
 type Progress = { status: string; reason: string; raw: string; done: number; total: number };
 type Status = { kind: string; reason: string; raw: string; count: number; name: string };
-type Row = { kind: string; name: string; range: string; progress: Progress };
 const STATES: Record<string, string> = {
   queued: "Queued",
   preparing: "Preparing",
@@ -57,13 +58,12 @@ const STATUS: Record<string, string> = {
   exported: "Exported {}",
   "clip-failed": "Export failed: {}",
   "no-destination": "No save location chosen.",
-  "clip-started": "Export started. Follow it in Export Tasks.",
+  "clip-started": "Export started. Follow it in Results.",
   restarted: "Restarted.",
 };
-const TITLE: Record<string, string> = { image: "Snapshot · {}", burst: "Burst · {}", clip: "Clip · {}" };
 
 /**
- * What the windows show for the plugin's data, in the test host's language: a
+ * What the tab shows for the plugin's data, in the test host's language: a
  * mirror of `Words` in ui/parts.slint (the test host does not run Slint), with
  * the same English templates looked up in the plugin's catalog.
  */
@@ -86,6 +86,29 @@ export function words(host: TestHost) {
     const why = reason(s.reason, s.raw);
     return t(template, s.kind === "saved" || s.kind === "started" ? [s.count] : s.kind === "exported" ? [s.name] : s.kind.endsWith("failed") ? [why] : undefined);
   };
-  const row = (r: Row) => ({ title: t(TITLE[r.kind]!, [r.name]), detail: t("{0} · {1}", [r.range, progress(r.progress)]) });
-  return { reason, progress, status, row, STATES, STATUS, TITLE };
+  return { reason, progress, status, STATES, STATUS };
+}
+
+/**
+ * Wait until `read()` gives `expected` (deep, strict equality), then pass; fail
+ * after about 6 s with the last value and `message`. The tab's values arrive in
+ * the plugin's own updates, after the condition a test waited for: assert on
+ * the value itself, never right after waiting on another one. A value already
+ * there passes at once; a read that throws (a row not there yet) is retried.
+ */
+export async function eventually(read: () => unknown, expected: unknown, message?: string) {
+  let last: unknown;
+  let failure: unknown;
+  for (let i = 0; i < 1200; i++) {
+    try {
+      last = read();
+      failure = undefined;
+      if (isDeepStrictEqual(last, expected)) return;
+    } catch (error) {
+      failure = error;
+    }
+    await new Promise((done) => setTimeout(done, 5));
+  }
+  if (failure) throw failure;
+  assert.deepStrictEqual(last, expected, message);
 }

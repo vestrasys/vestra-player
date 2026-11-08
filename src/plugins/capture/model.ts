@@ -1,6 +1,7 @@
-import { lstat } from "node:fs/promises";
-import { basename, dirname, extname, join, resolve } from "node:path";
+import { lstat, mkdir } from "node:fs/promises";
+import { basename, dirname, extname, isAbsolute, join, resolve } from "node:path";
 import type { I18n, PlayerState } from "@vestra-player/sdk";
+import type { Encode, Method } from "./clip.ts";
 
 /** Pure capture rules: parsing, validation, ranges and file naming. */
 export type Kind = "image" | "burst" | "clip";
@@ -20,6 +21,12 @@ export interface Spec {
   format?: Format;
   /** JPEG quality 1–100. */
   quality?: number;
+  /** Clips: stream copy (`fast`, needs R1) or re-encode (`precise`); `precise` when absent. */
+  method?: Method;
+  /** Frames: the subtitles shown were left out (the player cannot draw them into a frame); the message says so. */
+  withoutSubtitles?: boolean;
+  /** Clips: the encode options of a Precise cut (R6); the encoding clips always had when absent. */
+  encode?: Encode;
 }
 
 /** F07: the image formats a frame can be saved as. */
@@ -44,7 +51,8 @@ export function quality(value: unknown) {
  * keeps the two lists equal); the OSD shows them as text values.
  */
 export const REASON = {
-  range: "Enter valid seconds; the end must be after the start.",
+  time: "Enter a time such as 1:02:03.450, or seconds.",
+  endBeforeStart: "The end must be after the start.",
   burstLimits: "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration.",
   burstPastEnd: "The burst runs past the end of the media. Use fewer frames or a shorter interval.",
   noName: "No free file name found.",
@@ -71,12 +79,19 @@ export const REASON = {
   outputGone: "The output file no longer exists.",
   cannotOpen: "Could not open the folder.",
   folderUnavailable: "The snapshot folder is unavailable. Please choose it again.",
+  needLocal: "Clips need a local file.",
+  noLoop: "Set A and B with A-B Loop (Chapters tab).",
+  tooEarly: "Nothing has played before the current position yet.",
+  fastImpossible: "Fast cut is not possible for this file. Use Precise.",
+  noSourceBitrate: "The bitrate of this file is unknown. Choose another quality.",
+  folderGone: "The file or folder was moved or deleted.",
+  noTab: "The Capture tab could not open.",
 } as const;
 export type Reason = keyof typeof REASON;
 
 /** The reasons an export job ends with (`jobError`, a released input). */
-export type JobReason = "space" | "exists" | "permission" | "encoder" | "exportFailed" | "released";
-const JOB_REASONS: readonly Reason[] = ["space", "exists", "permission", "encoder", "exportFailed", "released"];
+export type JobReason = "space" | "exists" | "permission" | "encoder" | "exportFailed" | "released" | "fastImpossible" | "noSourceBitrate";
+const JOB_REASONS: readonly Reason[] = ["space", "exists", "permission", "encoder", "exportFailed", "released", "fastImpossible", "noSourceBitrate"];
 
 /** A failure in the plugin's own words: `code` names its text in {@link REASON}. */
 export class Failure extends Error {
@@ -97,11 +112,28 @@ export const jobProblem = (error: unknown): Problem<JobReason> =>
 
 export const message = (error: unknown) => (error instanceof Error ? error.message : String(error));
 
+/**
+ * A time as the user types it: `1:02:03.450`, `02:03.450` or seconds (`62.5`).
+ * Minutes and seconds after a colon are below 60; `null` when it is none of these.
+ */
+export function parseTime(value: unknown): number | null {
+  const text = String(value ?? "").trim();
+  const parts = text.split(":");
+  if (!text || parts.length > 3) return null;
+  // The seconds may be `5`, `5.25`, `.5` or `5.`; the parts before them are whole numbers.
+  if (!parts.every((part, index) => (index === parts.length - 1 ? /^(\d+\.?\d*|\.\d+)$/ : /^\d+$/).test(part))) return null;
+  const numbers = parts.map(Number);
+  if (numbers.slice(1).some((n) => n >= 60)) return null;
+  const seconds = numbers.reduce((total, n) => total * 60 + n, 0);
+  return Number.isFinite(seconds) ? seconds : null;
+}
+
+/** A start (and end) as typed: `time` when one is no time, `endBeforeStart` when the end is not after the start. */
 export function parseRange(start: unknown, end?: unknown) {
-  const a = Number(String(start).trim());
-  const b = end === undefined ? undefined : Number(String(end).trim());
-  if (String(start).trim() === "" || !Number.isFinite(a) || a < 0 || (b !== undefined && (!Number.isFinite(b) || b <= a)))
-    throw new Failure("range");
+  const a = parseTime(start);
+  const b = end === undefined ? undefined : parseTime(end);
+  if (a === null || b === null) throw new Failure("time");
+  if (b !== undefined && b <= a) throw new Failure("endBeforeStart");
   return { start: a, end: b };
 }
 
@@ -131,6 +163,21 @@ export async function uniqueFile(path: string, taken: ReadonlySet<string> = new 
   throw new Failure("noName");
 }
 
+/** Create the first unused folder `path`, `path (1)`, … and return it; an existing folder is never reused. */
+export async function uniqueFolder(path: string) {
+  const absolute = resolve(path);
+  for (let i = 0; i < 1000; i++) {
+    const candidate = i ? `${absolute} (${i})` : absolute;
+    try {
+      await mkdir(candidate);
+      return candidate;
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== "EEXIST") throw error;
+    }
+  }
+  throw new Failure("noName");
+}
+
 /** `1:02:03.450` style time for file names and rows (no hours below one hour). */
 export function clock(seconds: number, separator = ":") {
   const ms = Math.max(0, Math.round(seconds * 1000));
@@ -139,14 +186,39 @@ export function clock(seconds: number, separator = ":") {
   return `${h ? `${h}${separator}` : ""}${two(m)}${separator}${two(s)}.${String(ms % 1000).padStart(3, "0")}`;
 }
 
-/** `movie_01.02.450.png`: source name plus media time. */
+/** The source's file name without its extension (`capture` without one), safe in a file name. */
+export function stemOf(source: string | null) {
+  const path = source?.split(/[?#]/)[0] ?? "";
+  const stem = path ? basename(path, extname(path)) : "";
+  return (stem || "capture").replace(/[\\/:*?"<>|]/g, "_");
+}
+
+/** `movie_01.02.450.png`: source name plus media time (the default snapshot template). */
 export function frameName(source: string | null, seconds: number, extension: string) {
-  const stem = source ? basename(source.split(/[?#]/)[0]!, extname(source.split(/[?#]/)[0]!)) || "capture" : "capture";
-  return `${stem.replace(/[\\/:*?"<>|]/g, "_")}_${clock(seconds, ".")}${extension}`;
+  return `${stemOf(source)}_${clock(seconds, ".")}${extension}`;
 }
 
 export const usable = (state: PlayerState) =>
   state.kind === "media" && (state.phase === "ready" || state.phase === "ended") && state.can.snapshot;
+
+/** A local file path (not a URL). */
+export const isLocal = (source: string | null): source is string =>
+  !!source && isAbsolute(source) && !/^[a-z][a-z0-9+.-]*:\/\//i.test(source);
+
+/**
+ * What the tab offers for the current source (proposal §4): `local`
+ * everything; `network` frames only (clips need a local file); `stream` a
+ * picture made by a plugin; `none` nothing to capture.
+ */
+export type TabMode = "local" | "network" | "stream" | "none";
+export function tabMode(state: PlayerState): TabMode {
+  if (state.kind === "stream") return "stream";
+  if (!usable(state)) return "none";
+  return isLocal(state.source) ? "local" : "network";
+}
+/** A clip can be cut: a local file with a known duration. */
+export const clippable = (state: PlayerState) =>
+  tabMode(state) === "local" && state.duration !== null && Number.isFinite(state.duration) && state.duration > 0;
 
 export function validate(spec: Spec, state: PlayerState) {
   if (!usable(state)) throw new Failure("unusable");

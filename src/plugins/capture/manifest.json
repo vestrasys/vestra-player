@@ -1,16 +1,17 @@
 {
   "id": "vestra.capture",
-  "version": "1.0.11",
+  "version": "1.0.12",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
     "commands",
     "events",
-    "ui.window",
+    "ui.mount",
     "ui.dialog",
     "media.read",
     "media.control",
     "playback.read",
+    "timeline.marks",
     "subtitles.read",
     "ui.osd",
     "clipboard"
@@ -18,7 +19,7 @@
   "name": "Snapshot",
   "author": "Vestra Player",
   "punchline": "Save or copy the current frame, capture bursts, export clips",
-  "description": "Saves, saves as or copies the current frame (the source frame, or the rendered frame with video effects and subtitles) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as MP4 and shows its progress in a task list.\nRight-click menu: Video ▸ Snapshot.",
+  "description": "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as a lossless stream copy or a re-encoded MP4. One sidebar tab, Capture, holds the controls, the running exports and the finished results.\nRight-click menu: Video ▸ Snapshot; Alt+S opens the tab.",
   "tags": [
     "video",
     "snapshot",
