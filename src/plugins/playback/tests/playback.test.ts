@@ -972,6 +972,90 @@ test("the Playback panel's speed ruler: a drag snaps, steps by 0.05, shows at on
   await stop();
 });
 
+test("the Playback panel's speed ruler: a drag whose release never arrives does not stick", async () => {
+  const { host, stop } = await start(withMedia(), "en");
+  const panel = host.mounted("adjust");
+  await eventually(() => panel.props["rate-text"], "1");
+  // Mid-drag the source stops (the playlist moves on, Alt+Tab): no `up`, no `speed-release`.
+  panel.emit("speedDrag", 0.94, 0.02);
+  await eventually(() => host.source.rate, 3.05);
+  await host.press("F4");
+  await eventually(() => panel.props["can-rate"], false);
+  // The shown speed is the player's, not the drag's.
+  await eventually(() => panel.props["rate-text"], rateText(host.source.rate));
+  // The next source: the ruler follows the player again and takes a click.
+  host.openElsewhere("/next.mp4");
+  host.setSource({ duration: 100, position: 0, rate: 1 });
+  await eventually(() => [panel.props["can-rate"], panel.props["rate-text"], panel.props.tick], [true, "1", 2]);
+  panel.emit("setTick", 1);
+  await eventually(() => [host.source.rate, panel.props["rate-text"]], [0.5, "0.5"]);
+  // The pointer is cancelled (Slint's `cancel` ends a drag like a release): a late release is harmless.
+  panel.emit("speedDrag", 0.6, 0.02);
+  await eventually(() => host.source.rate, 1.2);
+  panel.emit("speedRelease");
+  await host.press("C");
+  await eventually(() => [host.source.rate, panel.props["rate-text"]], [1.3, "1.3"]);
+  await stop();
+});
+
+/** Hold the next speed request until `release` is called; it then lands like the test host's own. */
+function holdRate(host: TestHost) {
+  let release = () => {};
+  const gate = new Promise<void>((resolve) => (release = resolve));
+  host.handle("source.submit", async (p) => {
+    const intent = p.intent as { kind: string; control?: { kind: string; rate?: number } };
+    assert.equal(intent.control?.kind, "rate");
+    await gate;
+    host.reset("source.submit");
+    const stamp = { ...host.source.stamp, intentVersion: host.source.stamp.intentVersion + 1 };
+    host.setSource({ rate: intent.control!.rate!, stamp });
+    return { status: "completed", ticket: { stamp, cycle: host.source.cycle, owner: 1 } };
+  });
+  return release;
+}
+
+test("the Playback panel's speed: a typed speed while a drag's request is still applying is not lost", async () => {
+  const { host, stop } = await start(withMedia(), "en");
+  const panel = host.mounted("adjust");
+  await eventually(() => panel.props["rate-text"], "1");
+  const release = holdRate(host);
+  panel.emit("speedDrag", 0.6, 0.02); // 1.2, held
+  panel.emit("speedRelease");
+  await until(() => rates(host).length === 1);
+  // The value is clicked and 1.3 typed within the request's time: it closes and is applied after.
+  panel.emit("applyRate", "1.3");
+  await eventually(() => [panel.props.done, panel.props["rate-text"], panel.props["rate-invalid"]], [1, "1.3", false]);
+  release();
+  await eventually(() => host.source.rate, 1.3);
+  await host.settle();
+  assert.deepEqual(rates(host), [1.2, 1.3]);
+  assert.equal(panel.props["rate-text"], "1.3");
+  // A refused typed speed is refused at once, busy or not.
+  panel.emit("applyRate", "0.1");
+  await eventually(() => panel.props["rate-invalid"], true);
+  await stop();
+});
+
+test("the Playback panel's speed: a tick clicked while a palette speed is applying waits for it", async () => {
+  const { host, stop } = await start(withMedia(), "en");
+  const panel = host.mounted("adjust");
+  await eventually(() => panel.props["rate-text"], "1");
+  const release = holdRate(host);
+  void host.command("rate-15").run(); // 1.5, held
+  await until(() => rates(host).length === 1);
+  panel.emit("setTick", 5); // 2: shown now, sent once the first request lands
+  await eventually(() => [panel.props["rate-text"], panel.props.tick], ["2", 5]);
+  // (`settle` waits for the held request: plain time instead.)
+  await new Promise((resolve) => setTimeout(resolve, 60));
+  assert.deepEqual(rates(host), [1.5]);
+  release();
+  await eventually(() => host.source.rate, 2);
+  await host.settle();
+  assert.deepEqual(rates(host), [1.5, 2]);
+  assert.deepEqual([panel.props["rate-text"], panel.props.tick], ["2", 5]);
+  await stop();
+});
+
 test("the Playback panel's steps: frames are the player's, keyframes and Jump to Start this plugin's", async () => {
   const host = new TestHost();
   host.stats = { ...host.stats, video: { codec: "h264", width: 1920, height: 1080, fps: 24 } } as never;

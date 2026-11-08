@@ -1,6 +1,6 @@
 import type { HostAction, Panel, Plugin } from "@vestra-player/sdk";
 import type { PanelActions } from "./commands.ts";
-import type { Playback } from "./controller.ts";
+import { MAX_RATE, MIN_RATE, type Playback } from "./controller.ts";
 import { parseTime, rateText } from "./format.ts";
 import type { Keyframes } from "./keyframes.ts";
 import { DEFAULT_STEPS, parseStep, type SeekSteps, type SettingsStore, stepText } from "./settings.ts";
@@ -60,6 +60,11 @@ export class PlaybackPanel implements PanelActions {
     void keys.refresh();
     const own = (id: string) => plugin.commands.keys(id)[0] ?? "";
     this.panel.bind(() => {
+      // A source that cannot change speed ends any drag: nothing is pending, nothing to show.
+      if (this.#draft !== undefined && !p.can("rate")) {
+        this.#draft = undefined;
+        this.#dragging = false;
+      }
       const rate = this.#draft ?? p.state.rate;
       const keyframe = keyframes.state();
       return {
@@ -197,18 +202,16 @@ export class PlaybackPanel implements PanelActions {
     this.#o.playback.report(new Failure(kind));
   }
 
-  async #applyRate(typed: string) {
+  /** A typed speed: checked against the player's limits here, then applied like the ruler's (latest wins). */
+  #applyRate(typed: string) {
     const p = this.#o.playback;
-    if (!p.can("rate") || p.rateBusy) return;
-    const value = Number(typed.trim().replace(/[x×]$/i, "").trim());
-    try {
-      await p.setRate(typed.trim() ? value : Number.NaN);
-    } catch (error) {
-      if (error instanceof Failure && error.kind === "rate-range")
-        return this.#refused("rate-range", () => (this.#rateInvalid = true));
-      return p.report(error);
-    }
+    if (!p.can("rate")) return;
+    const text = typed.trim();
+    const value = Number(text.replace(/[x×]$/i, "").trim());
+    if (!text || !Number.isFinite(value) || value < MIN_RATE || value > MAX_RATE)
+      return this.#refused("rate-range", () => (this.#rateInvalid = true));
     this.#applied();
+    this.#ask(value);
   }
 
   #applyJump(typed: string) {
@@ -247,6 +250,10 @@ export class PlaybackPanel implements PanelActions {
     try {
       let sent: number | undefined;
       while (this.#draft !== undefined && this.#draft !== sent) {
+        // A speed set another way (a palette command) is still applying: wait for it rather
+        // than drop the ask (`setRate` returns without sending while busy).
+        while (p.rateBusy && p.can("rate")) await new Promise((resolve) => setTimeout(resolve, 10));
+        if (!p.can("rate")) break;
         sent = this.#draft;
         if (Math.abs(sent - p.state.rate) < 1e-6) continue;
         try {

@@ -570,9 +570,15 @@ component SpeedRuler {
             height: 22px;
             enabled: root.enabled;
             mouse-cursor: MouseCursor.pointer;
+            // A drag that ends without a release (the window loses the pointer, the ruler is
+            // disabled mid-drag) is cancelled: it ends like a release, so the value never sticks.
             pointer-event(event) => {
-                if event.button == PointerEventButton.left && event.kind == PointerEventKind.down { root.sample(self.mouse-x); }
-                if event.button == PointerEventButton.left && event.kind == PointerEventKind.up { PlaybackPanelBridge.speed-release(); }
+                if event.kind == PointerEventKind.cancel {
+                    PlaybackPanelBridge.speed-release();
+                } else if event.button == PointerEventButton.left {
+                    if event.kind == PointerEventKind.down { root.sample(self.mouse-x); }
+                    if event.kind == PointerEventKind.up { PlaybackPanelBridge.speed-release(); }
+                }
             }
             moved => { if self.pressed { root.sample(self.mouse-x); } }
             double-clicked => { PlaybackPanelBridge.speed-normal(); }
