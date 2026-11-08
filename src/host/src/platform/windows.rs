@@ -233,6 +233,78 @@ fn set_up(native: &Arc<winit::window::Window>) {
     });
 }
 
+// ------------------------------------------------------------ owned windows
+
+/// The main window (`set_main_window`): its component, and its native
+/// window once known (it stays when a composition change builds a new
+/// component tree in it).
+#[derive(Default)]
+struct MainWindow {
+    instance: Option<slint::Weak<slint_interpreter::ComponentInstance>>,
+    native: Weak<winit::window::Window>,
+}
+
+thread_local! {
+    /// `set_main_window` (UI thread).
+    static MAIN: RefCell<MainWindow> = RefCell::new(MainWindow::default());
+}
+
+/// `instance` is the main window's component (at the start, and after each
+/// composition change): the windows Slint creates from now on are owned by
+/// its native window ([`window_attributes`]).
+pub fn set_main_window(instance: &slint_interpreter::ComponentInstance) {
+    use slint::ComponentHandle;
+    let native = native_of(instance.window());
+    MAIN.set(MainWindow {
+        instance: Some(instance.as_weak()),
+        native: native.as_ref().map_or_else(Weak::new, Arc::downgrade),
+    });
+}
+
+/// The main window's HWND, once its native window exists and while it does.
+fn main_hwnd() -> Option<isize> {
+    use slint::ComponentHandle;
+    let native = MAIN.with_borrow_mut(|main| {
+        if let Some(native) = main.native.upgrade() {
+            return Some(native);
+        }
+        let native = native_of(main.instance.as_ref()?.upgrade()?.window())?;
+        main.native = Arc::downgrade(&native);
+        Some(native)
+    })?;
+    native_hwnd(&native)
+}
+
+/// Slint's winit hook for each window it creates (`main.rs`, the backend
+/// selection). Once the main window exists, a new window (a plugin's
+/// window, Options, the floating sidebar) is created owned by it, as the
+/// tool windows of mpv, VLC and PotPlayer are (Win32 owned windows): always
+/// above the main window, hidden while it is minimized and shown again with
+/// it, no taskbar button or Alt+Tab entry of their own. Set at creation
+/// (winit then leaves out `WS_EX_APPWINDOW`, which would give an owned
+/// window a taskbar button again), so ownership never changes afterwards and
+/// no window is re-parented or destroyed for it. Without a taskbar button a
+/// minimized owned window would sit as a title bar at the desktop's lower
+/// left: the minimize button goes, as on owned dialogs (Qt's, VLC's); the
+/// main window's minimize takes them along. The main window itself is
+/// created before `set_main_window` and so owned by none; a composition
+/// change builds its new tree in the same native window (no new window).
+pub fn window_attributes(
+    attributes: winit::window::WindowAttributes,
+) -> winit::window::WindowAttributes {
+    use winit::platform::windows::WindowAttributesExtWindows;
+    use winit::window::WindowButtons;
+    match main_hwnd() {
+        Some(owner) => attributes
+            .with_owner_window(owner)
+            .with_enabled_buttons(WindowButtons::CLOSE | WindowButtons::MAXIMIZE),
+        None => attributes,
+    }
+}
+
+/// Tool windows follow the main window through ownership ([`window_attributes`]).
+pub fn tool_windows_tick() {}
+
 fn live() -> Vec<(i64, Arc<winit::window::Window>)> {
     WINDOWS.with_borrow_mut(|list| {
         list.retain(|(_, weak)| weak.strong_count() > 0);
@@ -462,8 +534,12 @@ pub fn placed(window: &slint::Window) {
 
 /// The raw HWND behind `window`, once its native window exists.
 fn hwnd_of(window: &slint::Window) -> Option<isize> {
+    native_hwnd(native_of(window)?.as_ref())
+}
+
+/// The raw HWND of a native window.
+fn native_hwnd(native: &winit::window::Window) -> Option<isize> {
     use winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    let native = native_of(window)?;
     let handle = native.window_handle().ok()?;
     match handle.as_raw() {
         RawWindowHandle::Win32(handle) => Some(handle.hwnd.get()),

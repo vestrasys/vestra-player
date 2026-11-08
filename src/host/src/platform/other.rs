@@ -28,6 +28,17 @@ pub const FULLSCREEN_TITLE_STRIP: bool = true;
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");
 
 pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
+/// Tool windows are not tied to the main window here: winit 0.30 has no
+/// transient-for (X11 `WM_TRANSIENT_FOR`, Wayland `xdg_toplevel.set_parent`)
+/// for top-level windows, so the window manager stacks them as ordinary windows.
+pub fn set_main_window(_instance: &slint_interpreter::ComponentInstance) {}
+/// Windows are created as Slint asks (see [`set_main_window`]).
+pub fn window_attributes(
+    attributes: slint::winit_030::winit::window::WindowAttributes,
+) -> slint::winit_030::winit::window::WindowAttributes {
+    attributes
+}
+pub fn tool_windows_tick() {}
 /// Not known here: the window manager decides (its focus-stealing
 /// prevention applies to `focus_own_window`).
 pub fn app_in_foreground() -> bool {

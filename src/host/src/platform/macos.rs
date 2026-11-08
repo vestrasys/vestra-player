@@ -41,8 +41,107 @@ fn app() -> Result<objc2::rc::Retained<NSApplication>> {
     Ok(NSApplication::sharedApplication(marker))
 }
 
-/// Nothing to record: AppKit lists the application's windows itself.
-pub fn shown(_instance: &slint_interpreter::ComponentInstance) {}
+/// AppKit lists the application's windows itself; a new tool window gets
+/// its level at the next [`tool_windows_tick`].
+pub fn shown(_instance: &slint_interpreter::ComponentInstance) {
+    TOOLS_APPLIED.set(None);
+}
+
+// ------------------------------------------------------------- tool windows
+
+thread_local! {
+    /// The main window's component (`set_main_window`).
+    static MAIN: std::cell::RefCell<Option<slint::Weak<slint_interpreter::ComponentInstance>>> =
+        const { std::cell::RefCell::new(None) };
+    /// `set_floating`.
+    static FLOATING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) };
+    /// What [`tool_windows_tick`] applied last: the player active, floating,
+    /// the number of windows and the main window's view.
+    static TOOLS_APPLIED: std::cell::Cell<Option<(bool, bool, usize, usize)>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// `instance` is the main window's component (at the start, and after each
+/// composition change); every other window of winit's is a tool window
+/// ([`tool_windows_tick`]).
+pub fn set_main_window(instance: &slint_interpreter::ComponentInstance) {
+    use slint::ComponentHandle;
+    MAIN.set(Some(instance.as_weak()));
+    TOOLS_APPLIED.set(None);
+}
+
+/// Windows are created as Slint asks: AppKit has no owner at creation;
+/// tool windows get their level from [`tool_windows_tick`].
+pub fn window_attributes(
+    attributes: slint::winit_030::winit::window::WindowAttributes,
+) -> slint::winit_030::winit::window::WindowAttributes {
+    attributes
+}
+
+/// The address of the main window's content view (winit's view), which
+/// tells its NSWindow from the others.
+fn main_view() -> Option<usize> {
+    use slint::ComponentHandle;
+    use slint::winit_030::WinitWindowAccessor;
+    use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let instance = MAIN.with_borrow(|main| main.as_ref()?.upgrade())?;
+    instance
+        .window()
+        .with_winit_window(|native| match native.window_handle().ok()?.as_raw() {
+            RawWindowHandle::AppKit(handle) => Some(handle.ns_view.as_ptr() as usize),
+            _ => None,
+        })
+        .flatten()
+}
+
+/// The level of a tool window: one level above the main window's while the
+/// player is the active application, so a click in the main window leaves
+/// it in front (what floating panels do in Preview or VLC); the main
+/// window's own while another application is active, so it does not float
+/// above that application's windows (unless the player's windows all do:
+/// always on top, `set_floating`).
+fn tool_level(active: bool, floating: bool) -> objc2_app_kit::NSWindowLevel {
+    use objc2_app_kit::{NSFloatingWindowLevel, NSNormalWindowLevel};
+    match (active, floating) {
+        (true, false) => NSFloatingWindowLevel,
+        (true, true) => NSFloatingWindowLevel + 1,
+        (false, false) => NSNormalWindowLevel,
+        (false, true) => NSFloatingWindowLevel,
+    }
+}
+
+/// Whether `window` is one of winit's (the host's Slint windows, not an
+/// alert, a sheet or the picture-in-picture source window) other than the
+/// main window (content view `main_view`).
+fn is_tool_window(window: &objc2_app_kit::NSWindow, main_view: usize) -> bool {
+    let winit = window.class().name().to_bytes() == b"WinitWindow";
+    let view = window
+        .contentView()
+        .map(|view| objc2::rc::Retained::as_ptr(&view) as usize);
+    winit && view.is_some_and(|view| view != main_view)
+}
+
+/// Keep the tool windows (a plugin's window, Options, the floating sidebar)
+/// above the main window while the player is active ([`tool_level`]):
+/// AppKit has no owned windows, and a child window (`addChildWindow`)
+/// would move with the main window. Checked every tick (cheap), applied
+/// when the activation, the always-on-top setting or the windows change.
+/// Nothing before the main window exists.
+pub fn tool_windows_tick() {
+    let Ok(app) = app() else { return };
+    let Some(main) = main_view() else { return };
+    let windows = app.windows();
+    let state = (app.isActive(), FLOATING.get(), windows.count(), main);
+    if TOOLS_APPLIED.replace(Some(state)) == Some(state) {
+        return;
+    }
+    let level = tool_level(state.0, state.1);
+    for window in windows.iter() {
+        if is_tool_window(&window, main) && window.level() != level {
+            window.setLevel(level);
+        }
+    }
+}
 
 /// Whether the player is the active application (the user works in one of
 /// its windows).
@@ -201,20 +300,26 @@ pub fn set_dark_title_bars(dark: bool) {
 
 /// Every ordinary window of this application floats above other apps'
 /// windows (or returns to the normal level). Panels and other levels are
-/// left alone. Returns how many windows the application has.
+/// left alone, and so are the tool windows, whose level follows the main
+/// window's ([`tool_windows_tick`]). Returns how many windows the
+/// application has.
 pub fn set_floating(on: bool) -> Result<usize> {
     use objc2_app_kit::{NSFloatingWindowLevel, NSNormalWindowLevel};
     let windows = app()?.windows();
+    FLOATING.set(on);
+    let main = main_view();
     let (from, to) = if on {
         (NSNormalWindowLevel, NSFloatingWindowLevel)
     } else {
         (NSFloatingWindowLevel, NSNormalWindowLevel)
     };
     for window in windows.iter() {
-        if window.level() == from {
+        let tool = main.is_some_and(|main| is_tool_window(&window, main));
+        if window.level() == from && !tool {
             window.setLevel(to);
         }
     }
+    tool_windows_tick();
     Ok(windows.count())
 }
 
@@ -745,6 +850,24 @@ mod tests {
         assert_eq!((facts.os, facts.name.as_str()), ("macos", "macOS"));
         assert!(facts.version.unwrap().split('.').count() >= 2);
         assert!(facts.build.is_some());
+    }
+
+    /// Tool windows float one level above the main window while the player
+    /// is active, and never above other apps' windows more than the main
+    /// window does once it is not.
+    #[test]
+    fn tool_windows_float_above_the_main_window_only_while_active() {
+        use objc2_app_kit::{NSFloatingWindowLevel, NSNormalWindowLevel};
+        for floating in [false, true] {
+            let main = if floating {
+                NSFloatingWindowLevel
+            } else {
+                NSNormalWindowLevel
+            };
+            assert!(tool_level(true, floating) > main);
+            assert_eq!(tool_level(false, floating), main);
+            assert!(tool_level(true, floating) < objc2_app_kit::NSModalPanelWindowLevel);
+        }
     }
 
     #[test]
