@@ -587,8 +587,8 @@ msgstr "プラグインのシェーダーはオフです: 有効中にプレー�
 #. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
 #: src/host/host/actions.rs
 #, x-machine
-msgid "Command Palette"
-msgstr "コマンドパレット"
+msgid "Command Palette…"
+msgstr "コマンドパレット…"
 
 #. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
 #: src/host/ui/command_palette.rs

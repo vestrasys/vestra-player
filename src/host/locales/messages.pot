@@ -477,7 +477,7 @@ msgstr ""
 
 #. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
 #: src/host/host/actions.rs
-msgid "Command Palette"
+msgid "Command Palette…"
 msgstr ""
 
 #. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.

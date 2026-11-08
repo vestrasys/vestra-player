@@ -717,10 +717,15 @@ mod tests {
         assert_eq!(named("exit-fullscreen"), "Window: Leave Fullscreen");
         assert_eq!(named("quit"), "File: Quit");
         // Titles and keys stay; seek, frame and speed left the menu (menu
-        // redesign step 4) and have no menu path any more, like the palette.
+        // redesign step 4), Previous, Next, the volume steps and Mute too
+        // (the slim menu, B5), so they have no menu path; Play/Pause and the
+        // command palette are top-level items.
         assert_eq!(rows["seek-backward"]["key"], Value::Null);
+        assert_eq!(rows["mute"]["key"], Value::Null);
+        assert_eq!(rows["previous"]["key"], Value::Null);
         assert_eq!(rows["stop"]["key"], json!(["Close"]));
-        assert_eq!(rows["palette"]["key"], Value::Null);
+        assert_eq!(rows["play-pause"]["key"], json!(["Play/Pause"]));
+        assert_eq!(rows["palette"]["key"], json!(["Command Palette…"]));
         assert_eq!(rows["palette"]["defaults"], json!(["Ctrl+Shift+P"]));
     }
 }

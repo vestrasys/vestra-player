@@ -603,8 +603,14 @@ mod tests {
         assert_eq!(row("volume-up").label, "Audio: Volume +");
         assert_eq!(row("fullscreen").label, "Window: Toggle Fullscreen");
         assert_eq!(row("quit").label, "File: Quit");
-        assert_eq!(row("palette").label, "Help: Command Palette");
-        assert_eq!(row("palette").place, "");
+        // In the menu since the slim menu (B5), with its ellipsis.
+        assert_eq!(row("palette").label, "Help: Command Palette…");
+        assert_eq!(row("palette").place, "Menu");
+        // Palette only (B5): Previous, Next, the volume steps and Mute.
+        assert_eq!(row("previous").label, "Playback: Previous");
+        assert_eq!(row("previous").place, "");
+        assert_eq!(row("mute").label, "Audio: Mute");
+        assert_eq!(row("mute").place, "");
         assert_eq!(row("sidebar").global, "host/sidebar");
     }
 

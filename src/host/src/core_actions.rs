@@ -158,8 +158,9 @@ pub fn seek_title(forward: bool, step: f64) -> (String, String) {
     }
 }
 
-/// Menu entries: the same paths, orders and bindings the playback plugin
-/// had. Paths are the keys (English); each item's menu text is the player's
+/// Menu entries: the bindings the playback plugin had; Close and Play/Pause
+/// in the menu (the slim menu, B5), the rest in the command palette only.
+/// Paths are the keys (English); each item's menu text is the player's
 /// translation.
 pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
     let make = |category: &str,
@@ -182,6 +183,9 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
     // seek, frame and speed actions leave Playback ▸ Seek and Speed for the
     // command palette, found by category and title ("Seek: Next Frame"),
     // with their keys unchanged; the Playback panel has their controls.
+    // Step 9 (the slim menu, B5): Previous and Next, and the volume and mute
+    // actions (the Audio panel has their controls) follow, so Playback ▸ and
+    // Audio ▸ hold no player item and show only while a plugin fills them.
     let palette = |category: &str, title: &str, shown: String, bindings: &[&str], repeat: bool| {
         make(category, &[title], shown, 0, "domain", bindings, repeat).without_path()
     };
@@ -202,11 +206,15 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
                 false,
             ),
         ),
+        // The slim menu (B5): Play/Pause at the top level, first of the
+        // domain group after Close's separator, before the Audio Track,
+        // Subtitle Track and Snapshot submenus. (tests/sdk/host-agreement
+        // .test.ts reads these tuples: keep `"id",` directly before `make(`.)
         (
             "play-pause",
             make(
                 "Playback",
-                &["Playback", "Play/Pause"],
+                &["Play/Pause"],
                 tr("Play/Pause"),
                 201,
                 "domain",
@@ -218,24 +226,20 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         ),
         (
             "previous",
-            make(
+            palette(
                 "Playback",
-                &["Playback", "Previous"],
+                "Previous",
                 tr("Previous"),
-                202,
-                "domain",
                 &["PageUp", "Mouse:X2"],
                 false,
             ),
         ),
         (
             "next",
-            make(
+            palette(
                 "Playback",
-                &["Playback", "Next"],
+                "Next",
                 tr("Next"),
-                203,
-                "domain",
                 &["PageDown", "Mouse:X1"],
                 false,
             ),
@@ -267,40 +271,25 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         ),
         (
             "volume-up",
-            make(
+            palette(
                 "Audio",
-                &["Audio", "Volume +"],
+                "Volume +",
                 tr("Volume +"),
-                501,
-                "domain",
                 &["ArrowUp", "Mouse:WheelUp"],
                 true,
             ),
         ),
         (
             "volume-down",
-            make(
+            palette(
                 "Audio",
-                &["Audio", "Volume −"],
+                "Volume −",
                 tr("Volume −"),
-                502,
-                "domain",
                 &["ArrowDown", "Mouse:WheelDown"],
                 true,
             ),
         ),
-        (
-            "mute",
-            make(
-                "Audio",
-                &["Audio", "Mute"],
-                tr("Mute"),
-                503,
-                "domain",
-                &["M"],
-                false,
-            ),
-        ),
+        ("mute", palette("Audio", "Mute", tr("Mute"), &["M"], false)),
     ]
 }
 
@@ -820,15 +809,30 @@ mod tests {
                 "{id}"
             );
         }
-        assert_eq!(find("play-pause").path, ["Playback", "Play/Pause"]);
+        // The slim menu (B5): Play/Pause at the top level, in the domain
+        // group right after Close's separator.
+        assert_eq!(find("play-pause").path, ["Play/Pause"]);
         assert_eq!(find("play-pause").order, 201);
+        assert_eq!(find("play-pause").group, "domain");
         assert_eq!(find("play-pause").bindings, ["Space", "Mouse:LeftClick"]);
         assert_eq!(find("stop").path, ["Close"]);
         assert_eq!(find("stop").bindings, ["F4"]);
         assert_eq!(find("stop").group, "open");
+        // Close and Play/Pause are the only core actions in the menu: no
+        // player item is left in Playback ▸ or Audio ▸, so those built-in
+        // menus show only while a plugin fills them.
+        let in_menu: Vec<&str> = declarations
+            .iter()
+            .filter(|(_, declaration)| !declaration.path.is_empty())
+            .map(|(id, _)| *id)
+            .collect();
+        assert_eq!(in_menu, ["stop", "play-pause"]);
         // Menu redesign step 4: seek, frame and speed are palette only, with
-        // their titles, keys and categories.
+        // their titles, keys and categories; step 9 (B5): Previous, Next,
+        // the volume steps and Mute too.
         for id in [
+            "previous",
+            "next",
             "frame-back",
             "frame-forward",
             "seek-backward",
@@ -836,11 +840,17 @@ mod tests {
             "rate-down",
             "rate-up",
             "rate-normal",
+            "volume-up",
+            "volume-down",
+            "mute",
         ] {
             assert!(find(id).path.is_empty(), "{id}");
             assert!(find(id).shown_path().is_empty(), "{id}");
             assert!(!find(id).bindings.is_empty(), "{id}");
         }
+        assert_eq!(find("previous").shown_title(), "Previous");
+        assert_eq!(find("next").shown_title(), "Next");
+        assert_eq!(find("mute").shown_title(), "Mute");
         assert_eq!(find("seek-backward").shown_title(), "Back 5 s");
         assert_eq!(find("seek-backward").category.as_deref(), Some("Seek"));
         assert_eq!(find("rate-up").category.as_deref(), Some("Speed"));
@@ -850,13 +860,14 @@ mod tests {
         );
         assert!(!find("play-pause").repeat && !find("mute").repeat);
         assert_eq!(find("previous").bindings, ["PageUp", "Mouse:X2"]);
+        assert_eq!(find("next").bindings, ["PageDown", "Mouse:X1"]);
         assert_eq!(
             find("volume-down").bindings,
             ["ArrowDown", "Mouse:WheelDown"]
         );
-        assert_eq!(find("volume-down").path, ["Audio", "Volume −"]);
+        assert_eq!(find("volume-down").shown_title(), "Volume −");
+        assert_eq!(find("mute").bindings, ["M"]);
         assert!(find("rate-normal").radio);
-        assert_eq!(find("mute").order, 503);
         assert_eq!(
             declarations_titles(10.5),
             ("Back 10.5 s".to_owned(), "Forward 10.5 s".to_owned())
