@@ -137,7 +137,7 @@ export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video
  * every icon of the player's V-Line set, `@vestra/icons.slint` (draw one
  * in your own Slint with `Icon { name: "store"; }`). The player's tests check
  * that this list is its icon set. `"sliders"` (three sliders, the player's
- * Adjust button) is new in player 0.7.6 (SDK 1.6.11); older players refuse
+ * Adjustments and Effects button) is new in player 0.7.6 (SDK 1.6.11); older players refuse
  * it as a button icon with `invalid`.
  *
  * @example Check in a test that the button's icon exists
@@ -351,8 +351,16 @@ export type CommandDeclaration = {
  * local id, and (SDK 1.6.16) each of the player's own as `host/<id>`, with
  * the labels of its current keys; the answer to the request and the data of
  * the event of that name.
+ *
+ * @remarks
+ * The player's wire shape (`commands.keys`), part of the protocol, which is not
+ * semver: it can gain fields with a player version.
+ *
+ * @since 1.7.0
+ * @category Playback
  */
 export type CommandKeys = {
+    /** The key labels of each command, by local id (the player's own: `host/<id>`). */
     keys: Record<string, string[]>;
     /** The player's binding table revision: a larger one is newer. */
     revision: number;

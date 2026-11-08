@@ -21,6 +21,7 @@
 - Settings: the Advanced section's state is saved (`advanced`); the old window page (`tab`) is no longer read. The zoom slider is replaced by the − / + buttons (the commands' ×1.05 steps).
 - Translations: the new texts in all six languages (machine in de, es, fr, ja and ko, marked `x-machine`); the texts of the removed window and menus are gone from the catalogs.
 - Manifest: `ui.mount` (the panel), `video.upscaling` (AI Upscaling); `ui.window` stays for Custom Aspect Ratio… and Shader List…. Requires player 0.7.6 (`minPlayerVersion`, unchanged).
+- **Picture…** (`video.picture`, Alt+1) leaves the right-click menu and is in the command palette only (user ruling 2026-11-08): the right-click menu's player items **Adjustments and Effects** and **Sidebar** (named like the bottom-bar buttons) open the adjust column and the sidebar at their last tab instead. Title, category, id and key are unchanged. The description says so. Who must change: nobody.
 
 ## 1.1.12
 

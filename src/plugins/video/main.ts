@@ -1439,14 +1439,12 @@ export default async function activate(plugin: Plugin) {
       run: () => rotate(degrees),
     });
   // Picture… opens the panel (the adjust column at the Picture tab) and closes it when that tab
-  // shows (Alt+1, as Alt+2…4 for the other built-in panels). The only item of this plugin in the
-  // menu: at the top level of the context menu, before Playlist.
+  // shows (Alt+1, as Alt+2…4 for the other built-in panels). Palette only (user ruling 2026-11-08):
+  // the menu's Adjustments and Effects (the player's) opens the column at its last tab.
   commands.add({
     id: "video.picture",
-    path: ["Picture…"],
+    title: "Picture…",
     category: category.picture,
-    order: 791,
-    group: "windows",
     bindings: ["Alt+1"],
     run: () => panel.toggle(),
   });

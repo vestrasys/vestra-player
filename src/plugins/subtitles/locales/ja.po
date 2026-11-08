@@ -470,10 +470,10 @@ msgstr "外部字幕の読み込み、トラックの選択、スタイルと同
 #, x-machine
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Subtitles… (Alt+3) in the right-click menu opens its panel beside the video."
+"Its panel is beside the video: press Alt+3, or right-click Adjustments and Effects and pick the Subtitles tab."
 msgstr ""
 "字幕トラックの選択と切り替え、SRT、ASS/SSA、WebVTT、SAMI、MicroDVD 字幕の読み込み（エンコーディングは自動検出）、ローカル動画を開いたときの同じ名前の字幕ファイルの読み込み、副字幕の表示ができます。サイズ、位置、フォント、色、縁取り、影、背景ボックス、同期を調整でき、セリフ単位で移動でき、外部字幕ファイルが変更されると自動で再読み込みします。\n"
-"右クリックメニューの「字幕…」（Alt+3）で動画の横にパネルが開きます。"
+"パネルは動画の横にあります。Alt+3 を押すか、右クリックで「調整とエフェクト」を選んで「字幕」タブを開きます。"
 
 #: manifest.json
 #, x-machine

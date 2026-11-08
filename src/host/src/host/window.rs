@@ -867,6 +867,7 @@ impl Host {
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);
         self.bind_keys(&instance, generation)?;
+        view::bind_focus(&instance)?;
         self.bind_tabs(&instance, generation)?;
         let events = self.events.clone();
         instance.window().on_close_requested(move || {

@@ -99,6 +99,25 @@ pub fn focus_video(shell: &ComponentInstance) {
     let _ = shell.invoke("focus-video", &[]);
 }
 
+/// The library global panels call to give the keys back to the video
+/// (`@vestra/focus.slint`).
+pub const FOCUS_GLOBAL: &str = "VestraFocus";
+
+/// Route `VestraFocus.release()` of a window's panels to its `focus-video`
+/// (the main shell: the video area; the detached sidebar: its key scope),
+/// synchronously, inside the panel's handler. The window exports the
+/// global from the same library file the panels import, so they share it.
+pub fn bind_focus(window: &ComponentInstance) -> Result<()> {
+    let weak = window.as_weak();
+    window.set_global_callback(FOCUS_GLOBAL, "release", move |_| {
+        if let Some(window) = weak.upgrade() {
+            focus_video(&window);
+        }
+        slint_interpreter::Value::Void
+    })?;
+    Ok(())
+}
+
 /// Build the next component tree of a window that stays open (the main
 /// window's shell, the Options window) and show it, the way browsers and
 /// IDEs swap content without touching the top-level window.
@@ -1934,6 +1953,197 @@ export component W inherits Window {
         settle_layout(shell.window());
         assert_eq!(read("sidebar-pop-width"), 317.);
         assert_eq!((read("t-bar-x"), read("t-bar-w")), (0., 1470. - 317.));
+    }
+
+    /// The sidebar fixture whose list gives the keys back with
+    /// `VestraFocus.release()` (Enter, Esc).
+    fn focus_list() -> [crate::ui::composition::CompileSpec; 1] {
+        sidebar_fixture("focus-list.slint", "FocusList")
+    }
+
+    /// The fixture `file`'s `component` as owner 20's sidebar panel.
+    fn sidebar_fixture(file: &str, component: &str) -> [crate::ui::composition::CompileSpec; 1] {
+        use crate::ui::composition::{CompileSpec, Slot};
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        [CompileSpec {
+            owner: 20,
+            file: base.join(file),
+            component: component.into(),
+            global: Some("Bridge".into()),
+            slot: Slot::Sidebar,
+        }]
+    }
+
+    /// `source` with a probe of `item`'s focus as `t-focused`, built as
+    /// `component`, shown at 1470×956, `VestraFocus` bound.
+    fn focus_window(source: String, item: &str, component: &str) -> ComponentInstance {
+        let marker = "    callback focus-video();\n";
+        assert_eq!(source.matches(marker).count(), 1);
+        let probe = format!("{marker}    out property <bool> t-focused: {item}.has-focus;\n");
+        let window = crate::ui::composition::build(source.replacen(marker, &probe, 1), component)
+            .unwrap()
+            .create()
+            .unwrap();
+        window
+            .window()
+            .set_size(slint::LogicalSize::new(1470., 956.));
+        window.show().unwrap();
+        bind_focus(&window).unwrap();
+        settle_layout(window.window());
+        window
+            .window()
+            .dispatch_event(slint::platform::WindowEvent::WindowActiveChanged(true));
+        window
+    }
+
+    fn click_at(window: &ComponentInstance, x: f32, y: f32) {
+        use slint::platform::{PointerEventButton, WindowEvent};
+        let position = slint::LogicalPosition::new(x, y);
+        let window = window.window();
+        window.dispatch_event(WindowEvent::PointerMoved { position });
+        for event in [
+            WindowEvent::PointerPressed {
+                position,
+                button: PointerEventButton::Left,
+            },
+            WindowEvent::PointerReleased {
+                position,
+                button: PointerEventButton::Left,
+            },
+        ] {
+            window.dispatch_event(event);
+        }
+        slint::platform::update_timers_and_animations();
+    }
+
+    fn press(window: &ComponentInstance, key: slint::platform::Key) {
+        use slint::platform::WindowEvent;
+        let text: slint::SharedString = key.into();
+        window
+            .window()
+            .dispatch_event(WindowEvent::KeyPressed { text: text.clone() });
+        window
+            .window()
+            .dispatch_event(WindowEvent::KeyReleased { text });
+        slint::platform::update_timers_and_animations();
+    }
+
+    fn focused(window: &ComponentInstance) -> bool {
+        window.get_property("t-focused").unwrap() == Value::Bool(true)
+    }
+
+    /// A panel's own list takes the keys on a click, and its
+    /// `VestraFocus.release()` (Enter, Esc) gives them back to the video at
+    /// once; a click on an empty part of the panel gives them to the
+    /// panel's key scope (as before 0.7.6), a click on the video back.
+    #[test]
+    fn panels_give_the_keys_back_to_the_video() {
+        use slint::platform::Key;
+        headless();
+        let source = crate::ui::composition::shell_source(&focus_list()).unwrap();
+        let shell = focus_window(source, "canvas", "HostWindow");
+        assert!(focused(&shell), "the video has the keys at start");
+        // The docked sidebar: 317px at the right edge; its list the top
+        // 100px, the rest of the panel empty.
+        click_at(&shell, 1300., 600.);
+        assert!(!focused(&shell), "the panel's key scope took them");
+        click_at(&shell, 500., 400.);
+        assert!(focused(&shell), "a click on the video");
+        click_at(&shell, 1300., 50.);
+        assert!(!focused(&shell), "the list took the keys");
+        press(&shell, Key::DownArrow);
+        assert!(!focused(&shell), "the list keeps them");
+        press(&shell, Key::Return);
+        assert!(focused(&shell), "Enter played the row and released");
+        click_at(&shell, 1300., 50.);
+        assert!(!focused(&shell));
+        press(&shell, Key::Escape);
+        assert!(focused(&shell), "Esc released");
+        shell.hide().unwrap();
+    }
+
+    /// The detached sidebar has no video: `VestraFocus.release()` gives the
+    /// keys to the window's own key scope (unaccepted keys then reach the
+    /// player's shortcuts through `key-input`).
+    #[test]
+    fn a_detached_panel_gives_the_keys_to_its_window() {
+        use slint::platform::Key;
+        headless();
+        let source = crate::ui::composition::floating_source(&focus_list(), "List").unwrap();
+        let window = focus_window(source, "panel-keys", "FloatingPanel");
+        click_at(&window, 150., 50.);
+        assert!(!focused(&window), "the list has the keys");
+        press(&window, Key::Return);
+        assert!(focused(&window), "the window's key scope has them");
+        window.hide().unwrap();
+    }
+
+    /// A docked panel whose rows are a `ListView` of `TouchArea`s (the SDK's
+    /// panel-menu example) gets its `focus: "panel"` keys after a click on
+    /// its empty part, as before 0.7.6: a press on a row is the row's and
+    /// leaves the focus where it was; a press below the rows gives the
+    /// panel's key scope the keys, and a row click then keeps them there.
+    #[test]
+    fn a_docked_row_list_gets_panel_keys_after_a_click() {
+        use slint::platform::Key;
+        use std::{cell::RefCell, rc::Rc};
+        headless();
+        let source =
+            crate::ui::composition::shell_source(&sidebar_fixture("row-list.slint", "RowList"))
+                .unwrap();
+        let shell = focus_window(source, "canvas", "HostWindow");
+        // The scopes `key-input` was asked for, in order; the panel scope
+        // binds Delete (as panel-menu's Remove with `focus: "panel"`).
+        let scopes = Rc::new(RefCell::new(Vec::<String>::new()));
+        let delete: slint::SharedString = Key::Delete.into();
+        shell
+            .set_callback("key-input", {
+                let scopes = scopes.clone();
+                move |args| {
+                    let text = |i: usize| match &args[i] {
+                        Value::String(s) => s.to_string(),
+                        _ => String::new(),
+                    };
+                    let scope = text(0);
+                    let bound = scope == "panel:sidebar" && text(1) == delete.as_str();
+                    scopes.borrow_mut().push(scope);
+                    Value::Bool(bound)
+                }
+            })
+            .unwrap();
+        let delete_scopes = || {
+            scopes.borrow_mut().clear();
+            press(&shell, Key::Delete);
+            std::mem::take(&mut *scopes.borrow_mut())
+        };
+        let selected = |shell: &ComponentInstance| {
+            shell
+                .get_global_property(&crate::ui::composition::global_alias(20), "selected")
+                .unwrap()
+        };
+        // The docked sidebar: 317px at the right edge; three 40px rows at
+        // its top, the rest of it empty.
+        click_at(&shell, 1300., 20.);
+        assert_eq!(
+            selected(&shell),
+            Value::Number(0.),
+            "the row took the press"
+        );
+        assert!(
+            focused(&shell),
+            "a row click leaves the keys with the video"
+        );
+        assert_eq!(delete_scopes(), [""], "only the player's own keys");
+        click_at(&shell, 1300., 600.);
+        assert!(!focused(&shell), "the panel's key scope took the keys");
+        assert_eq!(delete_scopes(), ["panel:sidebar"], "the panel's binding");
+        click_at(&shell, 1300., 60.);
+        assert_eq!(selected(&shell), Value::Number(1.));
+        assert_eq!(delete_scopes(), ["panel:sidebar"], "a row click keeps them");
+        click_at(&shell, 500., 400.);
+        assert!(focused(&shell), "a click on the video takes them back");
+        assert_eq!(delete_scopes(), [""]);
+        shell.hide().unwrap();
     }
 
     /// G-10: the OSD and information block sizes follow the video area.

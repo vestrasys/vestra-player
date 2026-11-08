@@ -126,6 +126,16 @@ pub fn global_alias(owner: u64) -> String {
 }
 
 /// Slint handler body that forwards a key event to the host binding table.
+/// The panel key scopes it goes into (the docked sidebar, its fullscreen
+/// overlay, the bottom bar, the adjust column, the detached window's) keep
+/// Slint's default `focus-on-click: true`, so plugins' `focus: "panel"`
+/// bindings work as they did before 0.7.6: a press that no control of the
+/// panel takes (an empty part of it) gives the panel the keys. A press a
+/// control takes (a button, a row's `TouchArea`, a drag) never reaches the
+/// scope (Slint 1.18 offers a press to the children first), so it leaves
+/// the focus where it was; a panel that wants an empty press to leave it
+/// too puts a `TouchArea {}` under its content (the playlist does).
+/// `VestraFocus.release` gives the keys back to the video.
 fn key_forward(scope: &str) -> String {
     format!(
         "key-pressed(event) => {{ if root.key-input(\"{scope}\", event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta, event.repeat) {{ return accept; }} reject }}"
@@ -632,6 +642,7 @@ import {{ Theme }} from "@vestra/theme.slint";
 export {{ VestraPalette }} from "palette.slint";
 export {{ MenuChrome }} from "menu-view.slint";
 export {{ BarButtonsHost }} from "@vestra/bar-buttons.slint";
+export {{ VestraFocus }} from "@vestra/focus.slint";
 export component FloatingPanel inherits Window {{
     in property <string> panel-title: {title};
     title: root.panel-title;
@@ -656,6 +667,10 @@ export component FloatingPanel inherits Window {{
     callback sidebar-tab(int);
     callback sidebar-overflow(float, float);
     callback sidebar-detach();
+    // `VestraFocus.release` (view::bind_focus): no video here, so the
+    // window's key scope takes the keys from the panel's control.
+    callback focus-video();
+    focus-video => {{ panel-keys.focus(); }}
     panel-keys := FocusScope {{
         {keys}
         {content}
@@ -1344,6 +1359,16 @@ mod tests {
         assert!(single.contains(
             "sidebar-keys := FocusScope { width: root.sidebar-actual * 1px; horizontal-stretch: 0; key-pressed"
         ));
+        // The panel key scopes (docked, overlay, bottom bar, detached) keep
+        // Slint's click-to-focus, so `focus: "panel"` bindings work as
+        // before 0.7.6; only the window's outermost `keys` (host.slint)
+        // opts out.
+        assert_eq!(single.matches("focus-on-click").count(), 1);
+        assert!(
+            !floating_source(&specs[1..2], "List")
+                .unwrap()
+                .contains("focus-on-click")
+        );
         // Two: the strip and one `if` per compiled tab, keyed by its owner
         // (`sidebar-shown`), in the docked column and the fullscreen overlay alike.
         let tabbed = shell_source(&specs).unwrap();
@@ -1451,6 +1476,10 @@ mod tests {
             .unwrap();
         assert!(adjust < sidebar);
         assert!(source.find("bottom-content := Owner10View").unwrap() < adjust);
+        // The docked column, the narrow window's overlay and the sidebar
+        // all keep Slint's click-to-focus (`focus: "panel"` bindings);
+        // only the window's outermost `keys` (host.slint) opts out.
+        assert_eq!(source.matches("focus-on-click").count(), 1);
         // One branch docked, one in the overlay, keyed by its owner.
         assert_eq!(
             source

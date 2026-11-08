@@ -22,6 +22,17 @@ export type Change = ReadonlyMap<string, ReadonlySet<string>>;
  */
 export declare const SAFETY_PASS_MS = 1000;
 /**
+ * The most passes in a row that a pass itself asks for (something it
+ * evaluated changed what it reads, `plugin.state` written in a `bind`
+ * function). The next one is dropped and reported once: without it such a
+ * plugin would spin in microtasks and never yield. It counts passes, not
+ * loops: a legitimate chain deeper than this (101 bindings, each writing a
+ * `plugin.state` field the next one reads) is cut the same way: the
+ * readers of the dropped pass's changes run again only in the next full
+ * pass (after a handler, `update()`).
+ */
+export declare const MAX_CHAINED_PASSES = 100;
+/**
  * Read-only counters of the update passes, for the SDK's own
  * characterisation tests and benchmark (`test/golden-traces.test.ts`,
  * `scripts/bench.mjs`): how many passes ran, how many were full, how many
@@ -45,13 +56,39 @@ export interface PassCounts {
      */
     safetyPasses: number;
 }
+/**
+ * One `Passes.bind` registration as its owner holds it: dispose it, or ask
+ * for it alone to be evaluated again ({@link BindingHandle.invalidate}).
+ */
+export interface BindingHandle extends Disposable {
+    /**
+     * Evaluate this binding in the next pass even if nothing it read
+     * changed (a precise pass, not a full one): its owner changed something
+     * the binding reads that no state copy tracks (`Command.set`).
+     */
+    invalidate(): void;
+}
 /** The update pass scheduler of one plugin (`Runtime` delegates to it). */
 export declare class Passes {
     #private;
+    /** Where a runaway goes: the plugin's error handlers (`createPlugin`). */
+    report: (error: unknown) => void;
     /** Pass counters, read by the SDK's own tests and benchmark ({@link PassCounts}). */
     readonly counts: PassCounts;
     constructor(connection: Connection);
-    bind(evaluate: () => void): Disposable;
+    /**
+     * Register a binding: `evaluate` runs in a full pass now and in every
+     * pass that concerns it. Only what calls this takes part in the passes:
+     * a view on its first `bind()`, a command with a function field, a
+     * sequence provider (SDK 1.7.0; before, every view and command).
+     */
+    bind(evaluate: () => void, slot?: number): BindingHandle;
+    /**
+     * A place in the evaluation order, for a binding made later (`bind`): a
+     * view or a command reserves one when it is made, so it is evaluated in
+     * the order of making whenever it joins.
+     */
+    slot(): number;
     /**
      * A service's state for `event` is read: a binding evaluated now depends
      * on it, so the event counts as listened to while the binding reads it.

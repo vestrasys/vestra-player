@@ -46,6 +46,11 @@ const slash = (path) => path.split(sep).join("/");
 const CJK = /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u;
 const COMPOSED = 'user-visible text composed in TypeScript: pass a template with args (osd.show("Speed {}×", [rate]), plugin.i18n.text("Track {}", [n])) or move it into Slint';
 const DYNAMIC = (what) => `${what} is not a literal; its text cannot be extracted (use a string literal or an \`as const\` table)`;
+/**
+ * The files of the SDK's plugin API declarations: `plugin/types.ts` and the
+ * domain files it re-exports, `plugin/types/*.ts` (`.d.ts` when installed).
+ */
+const SDK_TYPES = /\/plugin\/types(\/[\w-]+)?\.(d\.)?ts$/;
 const SITES = {
     "Commands.add": {
         object: 0,
@@ -324,7 +329,7 @@ class Extractor {
                 ts.isInterfaceDeclaration(declaration.parent) &&
                 declaration.name &&
                 ts.isIdentifier(declaration.name) &&
-                /\/plugin\/types\.(d\.)?ts$/.test(slash(declaration.getSourceFile().fileName))) {
+                SDK_TYPES.test(slash(declaration.getSourceFile().fileName))) {
                 const name = `${declaration.parent.name.text}.${declaration.name.text}`;
                 return name in SITES ? name : undefined;
             }
@@ -336,7 +341,7 @@ class Extractor {
             declaration.parent &&
             ts.isInterfaceDeclaration(declaration.parent)) {
             const file = slash(declaration.getSourceFile().fileName);
-            if (/\/plugin\/types\.(d\.)?ts$/.test(file)) {
+            if (SDK_TYPES.test(file)) {
                 const name = `${declaration.parent.name.text}.${method}`;
                 return name in SITES ? name : undefined;
             }

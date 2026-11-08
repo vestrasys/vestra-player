@@ -7,9 +7,8 @@
 import { Connection } from "./connection.ts";
 import type { PluginManifest, RuntimeOptions } from "./connection.ts";
 import { Passes } from "./passes.ts";
-import type { Change, Deps, PassCounts } from "./passes.ts";
+import type { BindingHandle, Change, Deps, PassCounts } from "./passes.ts";
 import type { Transport } from "../wire.ts";
-import type { Disposable } from "./types.ts";
 export { WAKE_EVENTS } from "./connection.ts";
 /** Per-plugin services: the connection, and the update passes over it. */
 export declare class Runtime extends Connection {
@@ -19,7 +18,7 @@ export declare class Runtime extends Connection {
     readonly counts: PassCounts;
     constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown, options?: RuntimeOptions);
     /** {@link Passes.bind} */
-    bind(evaluate: () => void): Disposable;
+    bind(evaluate: () => void, slot?: number): BindingHandle;
     /** {@link Passes.reading} */
     reading(event: string): void;
     /** {@link Passes.depends} */

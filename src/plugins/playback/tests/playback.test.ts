@@ -75,7 +75,8 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   // The menu as a Chinese user sees it: the texts before English became the source. Menu redesign
   // (step 7): the speed and seek commands are in the command palette only (no path), with their
   // keys, and name the Playback panel (`home: "panel"`) that Playback… (Alt+4) opens. Menu sweep
-  // (B5): Reopen, Copy to Clipboard and the three Playback options are palette only too.
+  // (B5): Reopen, Copy to Clipboard and the three Playback options are palette only too, and so
+  // is Playback… (user ruling 2026-11-08: the player's Adjustments and Effects opens the column).
   assert.deepEqual(
     own(host).map(([id, { declaration: d, display }]) => [
       id,
@@ -94,7 +95,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["copy-name", "(文件名)", null, null, false, [], false, null],
       ["copy-folder", "(文件夹路径)", null, null, false, [], false, null],
       ["copy-path", "(完整路径)", null, null, false, [], false, null],
-      ["panel", "播放…", 794, "windows", false, ["Alt+4"], false, null],
+      ["panel", "(播放…)", null, null, false, ["Alt+4"], false, null],
       ["keyframe-back", "(上一关键帧)", null, null, false, ["Ctrl+Shift+ArrowLeft"], true, "panel"],
       ["keyframe-forward", "(下一关键帧)", null, null, false, ["Ctrl+Shift+ArrowRight"], true, "panel"],
       ["jump", "(跳转到…)", null, null, false, ["G"], false, "panel"],
@@ -127,7 +128,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       ["copy-name", "(File Name)"],
       ["copy-folder", "(Folder Path)"],
       ["copy-path", "(Full Path)"],
-      ["panel", "Playback…"],
+      ["panel", "(Playback…)"],
       ["keyframe-back", "(Previous Keyframe)"],
       ["keyframe-forward", "(Next Keyframe)"],
       ["jump", "(Jump to Time…)"],
@@ -275,7 +276,7 @@ test("in English the menus, reasons and messages are the source texts", async ()
   assert.deepEqual(host.command("open-url").display.path, ["Open", "Open URL…"]);
   assert.deepEqual([host.command("backward-2").display.title, host.command("backward-2").display.category], ["Back 30 s", "Seek"]);
   assert.deepEqual([host.command("rate-05").display.title, host.command("rate-05").display.category], ["0.5×", "Speed"]);
-  assert.deepEqual(host.command("panel").display.path, ["Playback…"]);
+  assert.deepEqual([host.command("panel").display.path, host.command("panel").display.title], [[], "Playback…"]);
   // Menu sweep (B5): Copy to Clipboard is in the command palette only.
   assert.deepEqual([host.command("copy-path").display.path, host.command("copy-path").display.title], [[], "Full Path"]);
   await host.command("rate-05").run();
@@ -1100,8 +1101,8 @@ test("Playback… (Alt+4) toggles the adjust column at the Playback panel; the k
   );
   const command = host.command("panel");
   assert.deepEqual(
-    [command.display.path, command.declaration.order, command.declaration.group, command.declaration.bindings, command.display.category],
-    [["Playback…"], 794, "windows", ["Alt+4"], "Playback"],
+    [command.display.path, command.display.title, command.declaration.bindings, command.display.category],
+    [[], "Playback…", ["Alt+4"], "Playback"],
   );
   await host.press("Alt+4");
   await eventually(() => [host.layout.adjust?.preferred, command.state.checked], [true, true]);

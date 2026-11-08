@@ -382,10 +382,10 @@ msgstr "载入外部字幕、选择轨道、调整样式与同步"
 #, x-machine
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Subtitles… (Alt+3) in the right-click menu opens its panel beside the video."
+"Its panel is beside the video: press Alt+3, or right-click Adjustments and Effects and pick the Subtitles tab."
 msgstr ""
 "选择和切换字幕轨，载入 SRT、ASS/SSA、WebVTT、SAMI、MicroDVD 字幕（自动识别编码），打开本地视频时也载入同名字幕文件，显示次字幕；调整字号、位置、字体、颜色、描边、阴影与背景框，调整同步；按对白跳转；外部字幕文件改动后自动重载。\n"
-"右键菜单「字幕…」（Alt+3）在视频旁打开字幕面板。"
+"字幕面板在视频旁：按 Alt+3，或右键选「调整与效果」后切到「字幕」标签。"
 
 #: manifest.json
 msgid "subtitles"

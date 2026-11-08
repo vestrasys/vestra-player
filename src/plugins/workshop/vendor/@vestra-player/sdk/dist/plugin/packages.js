@@ -41,7 +41,9 @@ class ChangeHandle {
             return;
         for (const listener of this.#listeners)
             this.#scope.run(listener, operation.status);
-        this.#scope.update();
+        // `status` changed: bindings that show it are evaluated again (a full
+        // pass, through the connection: this file is a primitive).
+        this.#scope.runtime.signals.invalidate();
     }
     async #poll() {
         const host = this.#scope.runtime.host.packages;

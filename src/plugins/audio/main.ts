@@ -33,8 +33,6 @@ import type { ChannelMode, Settings, SyncKeep, TrackRow } from "./model.ts";
  */
 const TRACKS = "Audio Track";
 const TRACKS_ORDER = 301;
-/** Audio… sits before Playlist (800) in the windows group, second of the four built-in panels (791–794 proposed for Picture…, Audio…, Subtitles…, Playback…). */
-const PANEL_ORDER = 792;
 
 /** Template arguments that are data (file names, device names, errors) are cut so the message fits the OSD's 200 characters. */
 const arg = (text: string) => clip(text, 120);
@@ -622,9 +620,11 @@ export default async function activate(plugin: Plugin) {
   }
 
   // ---------------------------------------------------------------- commands
-  // In the right-click menu: Open ▸ Load External Audio… (114), Audio Track ▸ (`TRACKS`) and Audio…
-  // (`PANEL_ORDER`). Everything else is in the Audio panel and, by name, in the command palette
-  // ("Category: Title", with the panel as its home); ids and keys are those of the old Audio ▸ menu.
+  // In the right-click menu: Open ▸ Load External Audio… (114) and Audio Track ▸ (`TRACKS`). Audio…
+  // (Alt+2) is palette only (user ruling 2026-11-08: the menu's Adjustments and Effects, the
+  // player's, opens the column at its last tab). Everything else is in the Audio panel and, by name,
+  // in the command palette ("Category: Title", with the panel as its home); ids and keys are those
+  // of the old Audio ▸ menu.
   plugin.commands.add({
     id: "audio.load",
     path: ["@open", "Load External Audio…"],
@@ -645,10 +645,8 @@ export default async function activate(plugin: Plugin) {
   // like the player's own Alt+1…4 for its other panels).
   plugin.commands.add({
     id: "audio.workbench",
-    path: ["Audio…"],
+    title: "Audio…",
     category: category.audio,
-    order: PANEL_ORDER,
-    group: "windows",
     bindings: ["Alt+2"],
     run: () => panel.toggle(),
   });

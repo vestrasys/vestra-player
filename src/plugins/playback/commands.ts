@@ -176,12 +176,12 @@ function entries(p: Playback, f: Features): Entry[] {
     // again closes the column. The panel replaces Playback ▸ Speed and Seek, Jump to Time…,
     // the custom speed window and Seek Steps…: those commands are in the command palette
     // ("Category: Title") with their ids and keys, and name the panel as their home.
+    // Palette only (user ruling 2026-11-08): the menu's Adjustments and Effects (the player's)
+    // opens the column at its last tab.
     {
       id: "panel",
-      path: ["Playback…"],
+      title: "Playback…",
       category: "Playback",
-      order: 794,
-      group: "windows",
       bindings: ["Alt+4"],
       action: () => f.panel.toggle(),
       state: () => ready(true, f.panel.shown()),

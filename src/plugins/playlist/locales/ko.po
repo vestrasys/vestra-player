@@ -550,10 +550,10 @@ msgstr "사이드바 재생목록: 추가, 정렬, 반복, 무작위 재생"
 #, x-machine
 msgid ""
 "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
-"Entry points: \"Playlist\" (F6) in the context menu and \"Playlist: …\" in the command palette."
+"Entry points: F6, \"Sidebar\" in the context menu and \"Playlist: …\" in the command palette."
 msgstr ""
 "오른쪽 사이드바의 재생목록입니다. 파일, 폴더, 링크 추가, 끌어서 놓기, 정렬과 검색, 반복과 무작위 재생을 지원하며, 파일을 열 때 같은 폴더의 비슷한 파일을 추가할 수 있습니다. M3U, M3U8, PLS 목록 파일을 읽고 쓰며, 다시 실행한 뒤에도 목록을 복원합니다.\n"
-"여는 방법: 컨텍스트 메뉴의 ‘재생목록’(F6), 명령 팔레트의 ‘재생목록: …’."
+"여는 방법: F6, 컨텍스트 메뉴의 ‘사이드바’, 명령 팔레트의 ‘재생목록: …’."
 
 #: manifest.json
 #, x-machine
@@ -814,8 +814,8 @@ msgstr "일치하는 항목 없음"
 
 #: ui/sidebar.slint:633
 #, x-machine
-msgid "Move to top (Ctrl+Home)"
-msgstr "맨 위로 이동 (Ctrl+Home)"
+msgid "Move to top"
+msgstr "맨 위로 이동"
 
 #: ui/sidebar.slint:639
 #, x-machine

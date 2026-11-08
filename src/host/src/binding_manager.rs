@@ -727,5 +727,12 @@ mod tests {
         assert_eq!(rows["play-pause"]["key"], json!(["Play/Pause"]));
         assert_eq!(rows["palette"]["key"], json!(["Command Palette…"]));
         assert_eq!(rows["palette"]["defaults"], json!(["Ctrl+Shift+P"]));
+        // The column toggles are top-level items (user ruling 2026-11-08),
+        // still without a default key.
+        assert_eq!(named("sidebar"), "Window: Sidebar");
+        assert_eq!(rows["sidebar"]["key"], json!(["Sidebar"]));
+        assert_eq!(named("adjust"), "Window: Adjustments and Effects");
+        assert_eq!(rows["adjust"]["key"], json!(["Adjustments and Effects"]));
+        assert_eq!(rows["adjust"]["defaults"], json!([]));
     }
 }

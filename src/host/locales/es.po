@@ -294,12 +294,13 @@ msgstr "Minimizar"
 msgid "Enter Fullscreen"
 msgstr "Entrar en pantalla completa"
 
-#: src/main.rs
+#. The command (host/sidebar), its top-level menu item and its bottom-bar button that show or hide the sidebar at its last tab.
+#: src/host/host/actions.rs
 #, x-machine
-msgid "Toggle Sidebar"
-msgstr "Mostrar/ocultar la barra lateral"
+msgid "Sidebar"
+msgstr "Barra lateral"
 
-#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#. Why Sidebar (the bottom bar's sidebar button) is unavailable.
 #: src/bar_buttons.rs
 #, x-machine
 msgid "No panel is in the sidebar"
@@ -651,13 +652,13 @@ msgstr "cerrar"
 msgid "adjust column"
 msgstr "columna de ajustes"
 
-#. The command (host/adjust) and bottom-bar button that shows or hides the adjust column (picture, audio, subtitle and playback controls).
+#. The command (host/adjust), its top-level menu item and its bottom-bar button that show or hide the adjust column (picture, audio, subtitle and playback controls) at its last tab.
 #: src/host/host/actions.rs
 #, x-machine
-msgid "Adjust"
-msgstr "Ajustes"
+msgid "Adjustments and Effects"
+msgstr "Ajustes y efectos"
 
-#. Why Adjust (the bottom bar's sliders button) is unavailable.
+#. Why Adjustments and Effects (the bottom bar's sliders button) is unavailable.
 #: src/ui/bar_buttons.rs
 #, x-machine
 msgid "No panel is in the adjust column"

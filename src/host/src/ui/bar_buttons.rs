@@ -4,7 +4,7 @@
 //! SDK 1.6.8) the player places the strip itself (`HostBarStrip`,
 //! ui/bar-strip.slint) at the right end of the bottom slot, or in a band of
 //! its own without a bottom bar: `[plugin buttons…][»][Command Palette]
-//! [Adjust][Toggle Sidebar]` (Adjust: step 3b). The bar says how wide its row is with every control
+//! [Adjustments and Effects][Sidebar]` (the adjust cell: step 3b). The bar says how wide its row is with every control
 //! (`content-full-width`; plugin buttons get only the room beyond it) or at
 //! least (`content-min-width`, a 3a bar; composition.rs) and reads the strip's width
 //! (`BarButtonsHost.width`). A bar that still places the deprecated
@@ -29,9 +29,9 @@ use std::collections::BTreeSet;
 
 /// The global every composed window exports.
 pub const GLOBAL: &str = "BarButtonsHost";
-/// The player's Toggle Sidebar command (owner `bindings::HOST`).
+/// The player's Sidebar command (owner `bindings::HOST`).
 pub const SIDEBAR: &str = "sidebar";
-/// The player's Adjust command (owner `bindings::HOST`, menu redesign step
+/// The player's Adjustments and Effects command (owner `bindings::HOST`, menu redesign step
 /// 3b): shows or hides the adjust column.
 pub const ADJUST: &str = "adjust";
 
@@ -202,7 +202,7 @@ pub fn cell(item: Option<&Item>, image: Option<slint::Image>) -> SValue {
 }
 
 impl Host {
-    /// Toggle Sidebar: switch the sidebar on or off, as `panels.sidebar.toggle()`
+    /// Sidebar (`host/sidebar`): switch the sidebar on or off, as `panels.sidebar.toggle()`
     /// does (the preference of its current panel), the same in every mode
     /// (user ruling 2026-11-08: in fullscreen nothing pops out).
     pub(crate) fn toggle_sidebar(&mut self) {
@@ -226,7 +226,7 @@ impl Host {
         }
     }
 
-    /// Adjust (`host/adjust`): switch the adjust column on or off, showing
+    /// Adjustments and Effects (`host/adjust`): switch the adjust column on or off, showing
     /// its last tab, as `panels.adjust.toggle()` does, the same in every
     /// mode (user ruling 2026-11-08: in fullscreen nothing pops out).
     pub(crate) fn toggle_adjust(&mut self) {
@@ -252,7 +252,7 @@ impl Host {
         }
     }
 
-    /// Toggle Sidebar's and Adjust's states: available while a panel is in
+    /// Sidebar's and Adjustments and Effects' states: available while a panel is in
     /// their column, checked while it is wanted shown.
     fn sidebar_command_state(&mut self) {
         for (id, slot) in [
@@ -357,7 +357,7 @@ impl Host {
         })
     }
 
-    /// The sidebar toggle's cell: the Toggle Sidebar command, the playlist
+    /// The sidebar toggle's cell: the Sidebar command, the playlist
     /// icon, its on dot while the sidebar is wanted, at half opacity while it is
     /// wanted but the window is too narrow for it (G-18).
     fn sidebar_item(&self, sidebar: Option<window_state::Visibility>) -> Option<Item> {
@@ -463,7 +463,7 @@ impl Host {
             }
         }
         self.bar_placement(shell);
-        // After Toggle Sidebar's own state update, which moves the revision.
+        // After Sidebar's own state update, which moves the revision.
         self.bar.inputs = Some(self.bar_inputs(sidebar));
     }
 
@@ -630,7 +630,7 @@ mod tests {
     fn labels_drop_the_ellipsis_and_tips_name_the_key_and_the_reason() {
         assert_eq!(label("Plugin Store…"), "Plugin Store");
         assert_eq!(label("Vestra Player AI..."), "Vestra Player AI");
-        assert_eq!(label("Toggle Sidebar"), "Toggle Sidebar");
+        assert_eq!(label("Sidebar"), "Sidebar");
         let on = state(true, false, None);
         assert_eq!(tip("Plugin Store", Some("F9"), &on), "Plugin Store (F9)");
         assert_eq!(tip("Plugin Store", None, &on), "Plugin Store");

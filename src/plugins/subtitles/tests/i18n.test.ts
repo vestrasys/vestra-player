@@ -27,7 +27,7 @@ test("English by default: menus, on-screen messages and window status", async ()
   assert.deepEqual(host.command("load").declaration.path, ["@open", "Open Subtitle…"]);
   assert.deepEqual(host.command("dialogue-next").display, { title: "Next Dialogue", path: [] });
   assert.deepEqual(host.command("track-off").declaration.path, ["Subtitle Track", "Off"]);
-  assert.deepEqual(host.command("tune").display, { title: "Subtitles…", path: ["Subtitles…"] });
+  assert.deepEqual(host.command("tune").display, { title: "Subtitles…", path: [] });
   assert.deepEqual(host.command("sync-earlier").display, { title: "Earlier 0.5 s", path: [] });
   assert.deepEqual(host.command("box").display, { title: "Opaque Box", path: [] });
   assert.equal(host.command("track-1").declaration.path.at(-1), "English · en", "track names are data");

@@ -4,6 +4,7 @@ import { ListView, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { ToolTipArea } from "@vestra/widgets.slint";
+import { VestraFocus } from "@vestra/focus.slint";
 
 // One entry of the list. `id` is the row's stable key: the player's row patches (player 0.6.0)
 // match rows by it, so a reorder, an insertion or a removal moves row elements instead of
@@ -94,6 +95,8 @@ export global PlaylistBridge {
     // (row, Ctrl/Cmd held, Shift held)
     callback select-row(string, bool, bool);
     callback play-row(string);
+    // Enter in the list: play the selected row (the list then gives the keys back to the video).
+    callback play-selected();
     // (rows to move the cursor by, Shift held)
     callback select-step(int, bool);
     // Drag reorder: (dragged row, insertion index in the current order)
@@ -203,6 +206,8 @@ export component PlaylistSidebar inherits Rectangle {
     // The selected-row background (ui-spec §5.2); the theme has no token for it.
     private property <color> selected-bg: Theme.selected-bg;
     private property <int> row-count: PlaylistBridge.rows.length;
+    // PgUp/PgDn move the cursor by the rows the list shows (at least one).
+    private property <int> page-rows: max(1, Math.floor(list.visible-height / root.row-height));
     // The thumbnail toggle changes every row's height: the ListView keeps the row at the top
     // of the view itself (0.2.2). Setting `content-y` in `changed row-height` ran before the
     // ListView's layout, which still placed rows by the old height, and landed far away.
@@ -292,17 +297,37 @@ export component PlaylistSidebar inherits Rectangle {
         if search.text == "" && !search.has-focus { root.unfolded = false; }
     }
 
+    // Focus rules (user ruling 2026-11-08): only a click on a row (left, without a drag, or
+    // right) and the search box's Esc/↓ give the list the focus; the bar's buttons, the wheel,
+    // a drag, a click below the rows or on the bar's background leave it where it was.
     list-focus := FocusScope {
+        // A press no child takes (the bar's background, a disabled button) does not focus the list.
+        focus-on-click: false;
         changed has-focus => { PlaylistBridge.focus-changed(self.has-focus); }
+        // The list's own keys: ↑ ↓ PgUp PgDn Home End (Shift extends the selection), Enter (play
+        // the selected row) and Esc, which give the keys back to the video as desktop players do.
+        // Every other key goes on: Delete and the Ctrl chords to the list's key bindings
+        // (`focus: "panel"` commands, none of them a player key), everything else (Space, ← →,
+        // media keys) to the player.
         key-pressed(event) => {
-            // Ctrl/Cmd/Alt chords (Ctrl+↑, Ctrl+A …) bubble up to the list's key bindings.
             if event.modifiers.control || event.modifiers.meta || event.modifiers.alt { return reject; }
+            if event.text == Key.Return && !event.modifiers.shift {
+                PlaylistBridge.play-selected();
+                VestraFocus.release();
+                return accept;
+            }
+            if event.text == Key.Escape && !event.modifiers.shift { VestraFocus.release(); return accept; }
             if event.text == Key.UpArrow { PlaylistBridge.select-step(-1, event.modifiers.shift); return accept; }
             if event.text == Key.DownArrow { PlaylistBridge.select-step(1, event.modifiers.shift); return accept; }
+            if event.text == Key.PageUp { PlaylistBridge.select-step(-root.page-rows, event.modifiers.shift); return accept; }
+            if event.text == Key.PageDown { PlaylistBridge.select-step(root.page-rows, event.modifiers.shift); return accept; }
             if event.text == Key.Home { PlaylistBridge.select-step(-1000000, event.modifiers.shift); return accept; }
             if event.text == Key.End { PlaylistBridge.select-step(1000000, event.modifiers.shift); return accept; }
             return reject;
         }
+        // Takes the presses no control takes, so that they focus nothing: the player's
+        // sidebar FocusScope around the panel would take them otherwise. Wheel events go on.
+        TouchArea {}
         VerticalLayout {
             // Tab strip with the detach/attach button at its right end, no close button (next to
             // the window's own it closed the player when missed; F6, the menus and the bottom bar's
@@ -363,7 +388,6 @@ export component PlaylistSidebar inherits Rectangle {
                 pointer := TouchArea {
                     pointer-event(event) => {
                         if event.kind == PointerEventKind.down {
-                            list-focus.focus();
                             let at = root.row-at(self.mouse-y);
                             let hit = at >= 0 && at < root.row-count;
                             let pressed = hit ? PlaylistBridge.rows[at].id : "";
@@ -372,7 +396,8 @@ export component PlaylistSidebar inherits Rectangle {
                                 root.press-y = self.mouse-y;
                                 root.press-row = pressed;
                                 root.collapse = false;
-                                // Below the rows: focus only.
+                                // Below the rows: nothing (the focus stays where it was). On a row
+                                // the list takes the focus on release, unless the press became a drag.
                                 if hit {
                                     if event.modifiers.shift {
                                         PlaylistBridge.select-row(pressed, false, true);
@@ -386,9 +411,11 @@ export component PlaylistSidebar inherits Rectangle {
                                     }
                                 }
                             }
-                            // Right press selects; the menu opens on release (G-15).
-                            if event.button == PointerEventButton.right && hit && !PlaylistBridge.rows[at].selected {
-                                PlaylistBridge.select-row(pressed, false, false);
+                            // Right press on a row selects it and focuses the list (its menu acts
+                            // on the selection); the menu opens on release (G-15).
+                            if event.button == PointerEventButton.right && hit {
+                                if !PlaylistBridge.rows[at].selected { PlaylistBridge.select-row(pressed, false, false); }
+                                list-focus.focus();
                             }
                         }
                         // The list menu opens when the right button is released (as the main menu, G-15).
@@ -398,8 +425,10 @@ export component PlaylistSidebar inherits Rectangle {
                         if event.kind == PointerEventKind.up && event.button == PointerEventButton.left {
                             if root.dragging {
                                 root.end-drag(true);
-                            } else if root.collapse {
-                                PlaylistBridge.select-row(root.press-row, false, false);
+                            } else if root.press-row != "" {
+                                if root.collapse { PlaylistBridge.select-row(root.press-row, false, false); }
+                                // A click on a row (single-click select): the list takes the focus.
+                                list-focus.focus();
                             }
                             root.collapse = false;
                             root.press-row = "";
@@ -424,8 +453,15 @@ export component PlaylistSidebar inherits Rectangle {
                         }
                     }
                     // Called before the release's pointer event: `press-row` is the second press's row.
+                    // Playing gives the keys back to the video; clearing `press-row` keeps that
+                    // release from focusing the list again.
                     double-clicked => {
-                        if !root.dragging && root.press-row != "" { PlaylistBridge.play-row(root.press-row); }
+                        if !root.dragging && root.press-row != "" {
+                            PlaylistBridge.play-row(root.press-row);
+                            VestraFocus.release();
+                            root.press-row = "";
+                            root.collapse = false;
+                        }
                     }
                     list := ListView {
                         x: 0;
@@ -609,6 +645,13 @@ export component PlaylistSidebar inherits Rectangle {
                     horizontal-alignment: center;
                     vertical-alignment: center;
                 }
+                // While the list has the keys: the 1px accent focus ring of @vestra/widgets
+                // around the list area (it takes no pointer input).
+                Rectangle {
+                    visible: list-focus.has-focus;
+                    border-width: 1px;
+                    border-color: Theme.accent;
+                }
             }
 
             // Bottom bar: move icons | ADD DEL SORT | search | total duration (hidden first when narrow).
@@ -630,7 +673,7 @@ export component PlaylistSidebar inherits Rectangle {
                     padding-left: 6px;
                     padding-top: 1px;
                     IconButton {
-                        tip: @tr("Move to top (Ctrl+Home)");
+                        tip: @tr("Move to top");
                         enabled: PlaylistBridge.can-top;
                         icon: "move-top";
                         clicked => { PlaylistBridge.place("top"); }

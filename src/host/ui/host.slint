@@ -11,6 +11,8 @@ export { VestraPalette } from "palette.slint";
 export { MenuChrome } from "menu-view.slint";
 // Bottom-bar command buttons (bar_buttons.rs fills it; HostBarStrip draws it).
 export { BarButtonsHost } from "@vestra/bar-buttons.slint";
+// `VestraFocus.release` from a panel runs `focus-video` (view::bind_focus).
+export { VestraFocus } from "@vestra/focus.slint";
 // One action button of the OSD message (`osd.show` actions): its title in
 // white on a lighter plate, a gap before it, sized with the OSD font. An
 // empty `text` draws nothing and takes no space; the element stays either
@@ -156,6 +158,7 @@ export component HostWindow inherits Window {
     callback close-menu();
     close-menu => { canvas.focus(); }
     // G-01: the fullscreen sidebar collapsed; keys go back to the video.
+    // Also a panel's `VestraFocus.release()` (view::bind_focus).
     callback focus-video();
     focus-video => { canvas.focus(); }
     // G-04 / G-01: where the pointer is, sampled by the host every tick:
@@ -184,6 +187,11 @@ export component HostWindow inherits Window {
     init => { canvas.focus(); }
     // VESTRA-MOUNT-PROPERTIES
     keys := FocusScope {
+        // A press that nothing below takes leaves the keys where they
+        // were; the video takes them on a press, and a panel's own key
+        // scope on a press on an empty part of it (composition.rs
+        // `key_forward`), so its `focus: "panel"` bindings apply.
+        focus-on-click: false;
         key-pressed(event) => {
             if root.key-input("", event.text, event.modifiers.control, event.modifiers.alt,
                     event.modifiers.shift, event.modifiers.meta, event.repeat) {

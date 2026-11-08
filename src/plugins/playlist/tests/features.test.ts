@@ -217,12 +217,12 @@ test("A03 / C04: the folder commands are busy while one runs; a second press ope
   }
 });
 
-test("C04: Ctrl+O in the list adds a folder without playing and selects the first row of an empty list", async () => {
+test("C04: Add Folder… in the list adds a folder without playing and selects the first row of an empty list", async () => {
   const app = await start();
   try {
     await app.files(["f/x2.mp4", "f/x1.mp4"]);
     app.host.dialogAnswers.push([join(app.root, "f")]);
-    await app.press("Ctrl+O");
+    await app.run("list-add-folder");
     assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openDirectory", title: "Add Folder to Playlist" });
     assert.equal(app.host.translate("Add Folder to Playlist"), "添加文件夹到播放列表");
     assert.deepEqual(app.names(), ["x1.mp4", "x2.mp4"]);
@@ -234,7 +234,7 @@ test("C04: Ctrl+O in the list adds a folder without playing and selects the firs
   }
 });
 
-test("C07: Ctrl+Delete keeps the selection; Ctrl+T removes rows whose files are gone, never links", async () => {
+test("C07: Ctrl+Delete keeps the selection; Remove Invalid Items removes rows whose files are gone, never links", async () => {
   const app = await start();
   try {
     const [a, b, c, d, e] = await app.files(["a.mp4", "b.mp4", "c.mp4", "d.mp4", "e.mp4"]);
@@ -257,10 +257,10 @@ test("C07: Ctrl+Delete keeps the selection; Ctrl+T removes rows whose files are 
     app.host.window("playlist-link").emit("add-link", "https://example.org/v");
     await app.host.settle();
     await rm(d!);
-    await app.press("Ctrl+T");
+    await app.run("remove-invalid");
     assert.deepEqual(app.names(), ["b.mp4", "https://example.org/v"]);
     assert.equal(app.osd(), "已移除 1 个无效项");
-    await app.press("Ctrl+T");
+    await app.run("remove-invalid");
     assert.equal(app.osd(), "没有无效项");
   } finally {
     await app.close();
@@ -447,7 +447,7 @@ test("C18: opening an m3u8 resolves relative paths, file URLs, titles and links;
       ].join("\r\n"),
     );
     app.host.dialogAnswers.push([list]);
-    await app.press("F3");
+    await app.run("list-open-list");
     assert.deepEqual(app.host.sent("dialogs.open").at(-1), { kind: "openFile", title: "Open Playlist File" });
     assert.equal(app.host.translate("Open Playlist File"), "打开播放列表文件");
     assert.deepEqual(app.names(), [
@@ -607,7 +607,7 @@ test("C18: GBK .m3u, PLS round trip, DPL; saving adds .m3u8 and writes relative 
     // No extension: .m3u8 is appended; the default name follows the last opened list
     // (before any, it is the translated "Playlist.m3u8", see "saving before any list file").
     app.host.dialogAnswers.push([join(app.root, "list")]);
-    await app.press("F2");
+    await app.run("list-save-list");
     assert.deepEqual(app.host.sent("dialogs.open").at(-1), {
       kind: "saveFile",
       title: "Save Playlist",
@@ -1298,7 +1298,7 @@ test("G-11: with 「追加」 a drop on the video area adds to the end; while an
   }
 });
 
-test("IA-PL-02: the 播放列表 settings page follows the menu both ways; F5 with list focus opens it", async () => {
+test("IA-PL-02: the 播放列表 settings page follows the menu both ways; Playlist Settings… opens it, F5 stays Options… with list focus", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-playlist-page-"));
   const app = await start({ data });
   try {
@@ -1334,11 +1334,10 @@ test("IA-PL-02: the 播放列表 settings page follows the menu both ways; F5 wi
     assert.equal(page.props["fast-advance"], true);
     assert.equal(page.props["open-mode"], 2);
 
-    // F5 with the list focused is this page; without focus it is not the list's.
-    await app.press("F5");
+    // Playlist Settings… (list menu) is this page; F5 is the player's 选项… also with list focus.
+    await app.run("settings");
     assert.deepEqual(app.host.settings.shows, ["playlist"]);
-    // Without list focus the list's F5 is not in force (the player's 选项… takes it).
-    await assert.rejects(app.host.press("F5"), /nothing is bound to F5/);
+    await assert.rejects(app.press("F5"), /nothing is bound to F5/);
     assert.deepEqual(app.host.settings.shows, ["playlist"]);
 
     // The two drop options are saved with the other settings.

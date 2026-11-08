@@ -22,6 +22,8 @@ import { packages } from "./packages.js";
 import { osd } from "./osd.js";
 import { mainWindow } from "./window.js";
 import { bindingsApi } from "./bindings.js";
+import { trackedState } from "./state.js";
+import { wire } from "./wire-facade.js";
 import { clipboard, host, power, rendering, secrets, storage, system, tools, videoUpscaling, } from "./services.js";
 export class ScopeImpl {
     runtime;
@@ -83,6 +85,7 @@ export class ScopeImpl {
     appearance = appearance(this);
     settings = settings(this);
     i18n = i18n(this);
+    wire = wire(this);
     get app() {
         return this.runtime.app;
     }
@@ -180,8 +183,29 @@ export class ScopeImpl {
         if (full)
             this.update();
     }
+    /**
+     * Run a listener that pushes its own values (`player.on`, SDK 1.7.0)
+     * like `run`, except that no full pass follows it: what it writes to
+     * `plugin.state` runs the passes for its readers, and for anything else
+     * the plugin calls `update()`. Its reads are not counted as a binding's.
+     */
+    runQuiet(handler, ...args) {
+        if (this.disposed)
+            return;
+        try {
+            const { value } = this.runtime.observe(() => handler(...args));
+            if (value instanceof Promise)
+                value.catch((error) => this.report(error));
+        }
+        catch (error) {
+            this.report(error);
+        }
+    }
     update() {
         this.runtime.invalidate();
+    }
+    state(initial) {
+        return trackedState(this, initial);
     }
     async dispose() {
         if (this.#disposed)

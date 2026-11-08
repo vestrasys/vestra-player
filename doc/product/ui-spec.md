@@ -193,7 +193,7 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 
 | ID | Requirement | Owner |
 | --- | --- | --- |
-| UI-PL-01 | The toggle command "Playlist" has a check mark, shortcut F6, and sits in the window entry group at the top level of the context menu (§6.2); when the list has focus, F6 also closes the list | playlist (menu position) + host (F6, C3) |
+| UI-PL-01 | The toggle command "Playlist" has a check mark, shortcut F6, and sits in the window entry group at the top level of the context menu (§6.2); it works the same when the list has focus (the list has no F6 binding of its own) | playlist (menu position) + host (F6, C3) |
 | UI-PL-02 | The bottom-bar toggle button (UI-BAR-09), the menu check and F6 / Close List are kept in the same state | playlist + playback (C7) |
 | UI-PL-03 | Shown by default, attached on the right; visibility, docking state and width are saved across launches | host (persistence, C8) |
 | UI-PL-04 | Can be detached into a floating window (default 300×408, minimum 300×250) and attached back to the main window (C14); the detach/attach button is at the right end of the tab strip | host (C14) + playlist (button) |
@@ -230,7 +230,7 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 | ID | Action | Requirement | Owner |
 | --- | --- | --- | --- |
 | UI-PL-12 | Double-click an item | Play | playlist |
-| UI-PL-13 | Enter / P | Play the selection | playlist + host (keys while the list has focus, C3) |
+| UI-PL-13 | Enter, double-click | Play the selection and give the keys back to the video | playlist + host (keys while the list has focus, C3) |
 | UI-PL-14 | Delete | Remove the selection | Same as above |
 | UI-PL-15 | Ctrl+↑/↓, Ctrl+Home/End | Move up/move down/move to top/move to bottom | Same as above |
 | UI-PL-16 | Ctrl+A, Shift/Ctrl+click | Multi-select; DEL and moves act on the selection | playlist |

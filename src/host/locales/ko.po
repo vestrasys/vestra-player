@@ -294,12 +294,13 @@ msgstr "최소화"
 msgid "Enter Fullscreen"
 msgstr "전체 화면으로 전환"
 
-#: src/main.rs
+#. The command (host/sidebar), its top-level menu item and its bottom-bar button that show or hide the sidebar at its last tab.
+#: src/host/host/actions.rs
 #, x-machine
-msgid "Toggle Sidebar"
-msgstr "사이드바 전환"
+msgid "Sidebar"
+msgstr "사이드바"
 
-#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#. Why Sidebar (the bottom bar's sidebar button) is unavailable.
 #: src/bar_buttons.rs
 #, x-machine
 msgid "No panel is in the sidebar"
@@ -651,13 +652,13 @@ msgstr "닫기"
 msgid "adjust column"
 msgstr "조정 열"
 
-#. The command (host/adjust) and bottom-bar button that shows or hides the adjust column (picture, audio, subtitle and playback controls).
+#. The command (host/adjust), its top-level menu item and its bottom-bar button that show or hide the adjust column (picture, audio, subtitle and playback controls) at its last tab.
 #: src/host/host/actions.rs
 #, x-machine
-msgid "Adjust"
-msgstr "조정"
+msgid "Adjustments and Effects"
+msgstr "조정 및 효과"
 
-#. Why Adjust (the bottom bar's sliders button) is unavailable.
+#. Why Adjustments and Effects (the bottom bar's sliders button) is unavailable.
 #: src/ui/bar_buttons.rs
 #, x-machine
 msgid "No panel is in the adjust column"

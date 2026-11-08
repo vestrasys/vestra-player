@@ -242,12 +242,12 @@ msgstr "最小化"
 msgid "Enter Fullscreen"
 msgstr "仅进入全屏"
 
-#: src/main.rs
-#, x-machine
-msgid "Toggle Sidebar"
-msgstr "显示/隐藏侧栏"
+#. The command (host/sidebar), its top-level menu item and its bottom-bar button that show or hide the sidebar at its last tab.
+#: src/host/host/actions.rs
+msgid "Sidebar"
+msgstr "侧边栏"
 
-#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#. Why Sidebar (the bottom bar's sidebar button) is unavailable.
 #: src/bar_buttons.rs
 #, x-machine
 msgid "No panel is in the sidebar"
@@ -554,13 +554,12 @@ msgstr "关闭"
 msgid "adjust column"
 msgstr "调节栏"
 
-#. The command (host/adjust) and bottom-bar button that shows or hides the adjust column (picture, audio, subtitle and playback controls).
+#. The command (host/adjust), its top-level menu item and its bottom-bar button that show or hide the adjust column (picture, audio, subtitle and playback controls) at its last tab.
 #: src/host/host/actions.rs
-#, x-machine
-msgid "Adjust"
-msgstr "调节"
+msgid "Adjustments and Effects"
+msgstr "调整与效果"
 
-#. Why Adjust (the bottom bar's sliders button) is unavailable.
+#. Why Adjustments and Effects (the bottom bar's sliders button) is unavailable.
 #: src/ui/bar_buttons.rs
 #, x-machine
 msgid "No panel is in the adjust column"

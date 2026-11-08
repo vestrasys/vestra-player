@@ -142,7 +142,7 @@ export const MENU_IDS = [
  * every icon of the player's V-Line set, `@vestra/icons.slint` (draw one
  * in your own Slint with `Icon { name: "store"; }`). The player's tests check
  * that this list is its icon set. `"sliders"` (three sliders, the player's
- * Adjust button) is new in player 0.7.6 (SDK 1.6.11); older players refuse
+ * Adjustments and Effects button) is new in player 0.7.6 (SDK 1.6.11); older players refuse
  * it as a button icon with `invalid`.
  *
  * @example Check in a test that the button's icon exists
@@ -287,11 +287,8 @@ vestra.capture | capture.copy | Snapshot ▸ Copy Current Frame | Ctrl+C
 vestra.capture | capture.burst | Snapshot ▸ Burst… | Ctrl+G
 vestra.capture | capture.clip | Snapshot ▸ Export Clip…
 vestra.capture | capture.panel | Snapshot ▸ Capture… | Alt+S
-vestra.video | video.picture | Picture… | Alt+1
-vestra.audio | audio.workbench | Audio… | Alt+2
-vestra.subtitles | tune | Subtitles… | Alt+3
-vestra.playback | panel | Playback… | Alt+4
-vestra.playlist | playlist.visibility | Playlist | F6
+host | adjust | Adjustments and Effects
+host | sidebar | Sidebar
 vestra.marks | marks.list | Chapter and Bookmark List… | H
 host | fullscreen | Toggle Fullscreen | Escape
 vestra.workshop | workshop.open | Vestra Player AI…
@@ -304,8 +301,6 @@ host | previous | (Previous) | PageUp, Mouse:X2
 host | next | (Next) | PageDown, Mouse:X1
 host | enter-fullscreen | (Enter Fullscreen)
 host | exit-fullscreen | (Leave Fullscreen)
-host | sidebar | (Toggle Sidebar)
-host | adjust | (Adjust)
 host | volume-up | (Volume +) | ArrowUp, Mouse:WheelUp
 host | volume-down | (Volume −) | ArrowDown, Mouse:WheelDown
 host | mute | (Mute) | M
@@ -316,6 +311,11 @@ host | seek-forward | (Forward 5 s) | ArrowRight
 host | rate-normal | (Normal) | Z
 host | rate-down | (Slower 0.1) | X
 host | rate-up | (Faster 0.1) | C
+vestra.video | video.picture | (Picture…) | Alt+1
+vestra.audio | audio.workbench | (Audio…) | Alt+2
+vestra.subtitles | tune | (Subtitles…) | Alt+3
+vestra.playback | panel | (Playback…) | Alt+4
+vestra.playlist | playlist.visibility | (Playlist) | F6
 vestra.playback | reopen | (Reopen Current/Last File) | Ctrl+Y
 vestra.playback | copy-name | (File Name)
 vestra.playback | copy-folder | (Folder Path)
@@ -464,16 +464,16 @@ vestra.playback | backward-3 | (Back 60 s) | Shift+ArrowLeft
 vestra.playback | forward-3 | (Forward 60 s) | Shift+ArrowRight
 vestra.playback | backward-4 | (Back 300 s) | Ctrl+Alt+ArrowLeft
 vestra.playback | forward-4 | (Forward 300 s) | Ctrl+Alt+ArrowRight
-vestra.playlist | playlist.play | (Play) | Enter, P | panel
-vestra.playlist | playlist.list-add | (Add Files…) | Ctrl+I | panel
-vestra.playlist | playlist.list-add-folder | (Add Folder…) | Ctrl+O | panel
-vestra.playlist | playlist.list-link | (Add Link…) | Ctrl+U | panel
-vestra.playlist | playlist.remove | (Remove Selected) | Delete, Backspace | panel
+vestra.playlist | playlist.play | (Play) | Enter | panel
+vestra.playlist | playlist.list-add | (Add Files…)
+vestra.playlist | playlist.list-add-folder | (Add Folder…)
+vestra.playlist | playlist.list-link | (Add Link…)
+vestra.playlist | playlist.remove | (Remove Selected) | Delete | panel
 vestra.playlist | playlist.remove-unselected | (Remove Unselected) | Ctrl+Delete | panel
-vestra.playlist | playlist.remove-invalid | (Remove Invalid Items) | Ctrl+T | panel
+vestra.playlist | playlist.remove-invalid | (Remove Invalid Items)
 vestra.playlist | playlist.clear | (Remove All) | Alt+Delete | panel
 vestra.playlist | playlist.reveal | (Show in Finder) | Ctrl+F | panel
-vestra.playlist | playlist.move-top | (Move to Top) | Ctrl+Home | panel
+vestra.playlist | playlist.move-top | (Move to Top)
 vestra.playlist | playlist.move-up | (Move Up) | Ctrl+ArrowUp | panel
 vestra.playlist | playlist.move-down | (Move Down) | Ctrl+ArrowDown | panel
 vestra.playlist | playlist.move-bottom | (Move to Bottom) | Ctrl+End | panel
@@ -491,10 +491,10 @@ vestra.playlist | playlist.sort-path | (Sort by Path)
 vestra.playlist | playlist.sort-reverse | (Reverse Current Order)
 vestra.playlist | playlist.select-all | (Select All) | Ctrl+A | panel
 vestra.playlist | playlist.search | (Search) | Ctrl+S | panel
-vestra.playlist | playlist.list-open-list | (Open List File…) | F3 | panel
-vestra.playlist | playlist.list-save-list | (Save List…) | F2 | panel
-vestra.playlist | playlist.close | (Close List) | F6 | panel
-vestra.playlist | playlist.settings | (Playlist Settings…) | F5 | panel
+vestra.playlist | playlist.list-open-list | (Open List File…)
+vestra.playlist | playlist.list-save-list | (Save List…)
+vestra.playlist | playlist.close | (Close List)
+vestra.playlist | playlist.settings | (Playlist Settings…)
 vestra.subtitles | show | (Show Subtitles) | Alt+H
 vestra.subtitles | second-off | (Off)
 vestra.subtitles | second-position-top | (Top)

@@ -3,8 +3,7 @@
  * this plugin generates, for `player.open`.
  */
 import { failure, quiet } from "./errors.js";
-import { playerOf } from "./player.js";
-import { resolvedStream } from "./stream.js";
+import { resolvedPlayerStream } from "./player.js";
 import { windowOf } from "./window.js";
 const isFiles = (options) => "extensions" in options;
 const sameTypes = (a, b) => a.length === b.length && a.every((type, i) => type === b[i]);
@@ -111,7 +110,7 @@ export const resolvers = (scope) => ({
                 const stream = await options.resolve(url, signal);
                 if (stream?.kind !== "stream")
                     throw failure("invalid", 'a file resolver returns { kind: "stream", width, height, frame }');
-                return resolvedStream(scope, playerOf(runtime), stream, signal);
+                return resolvedPlayerStream(scope, stream, signal);
             })
             : runtime.host.sourceResolvers.register({ id: options.id, schemes: options.schemes, hosts: options.hosts }, ({ url, signal }) => options.resolve(url, signal));
         let disposed = false;

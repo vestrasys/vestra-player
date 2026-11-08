@@ -1,21 +1,27 @@
 /**
  * `ViewBase`: what windows, panels and settings pages share — callbacks, and
- * a {@link ViewWriter} (L1) with a {@link ViewBinder} (L2) over it. Every
- * view joins the update passes when made (doc/specs/sdk-refactor.md §1.2 in
- * the player repository; Step 2 moves that to the first `bind()`).
+ * a {@link ViewWriter} (L1) with a {@link ViewBinder} (L2) over it. A view
+ * joins the update passes on its first `bind()` (SDK 1.7.0,
+ * doc/specs/sdk-refactor.md §4 Step 2 in the player repository); until
+ * then `set()` goes straight to the writer, which sends whole values and
+ * keeps no row-patch bases for it.
  */
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
+import { failure } from "../errors.js";
 import { PATCH_FEATURE } from "../patch.js";
 import { ViewBinder } from "./binder.js";
-import { kebab, ViewWriter } from "./writer.js";
+import { DIRECT, kebab, ViewWriter } from "./writer.js";
 /** Property and callback plumbing shared by windows, panels and settings pages. */
 export class ViewBase {
     scope;
     handlers = new Map();
     #writer;
     #binder;
+    /** Its place in the update passes, from the first `bind()` on. */
     #binding;
+    /** Its place in the order of evaluation, kept from when it was made. */
+    #slot;
     closed = false;
     constructor(scope) {
         this.scope = scope;
@@ -26,7 +32,7 @@ export class ViewBase {
             patches: () => this.scope.runtime.features.has(PATCH_FEATURE),
         });
         this.#binder = new ViewBinder(scope, this.#writer, () => this.closed);
-        this.#binding = scope.runtime.bind(() => this.evaluate());
+        this.#slot = scope.runtime.passes.slot();
     }
     /** {@link ViewWriter.wired}: initial properties in wire form. */
     wired(values, refuse = false) {
@@ -44,7 +50,25 @@ export class ViewBase {
         this.#writer.set(props);
     }
     bind(props) {
+        if (!this.#binding && !this.closed) {
+            // The first bind: the view takes part in the update passes, and its
+            // writer compares and patches from now on.
+            this.#writer.track();
+            this.#binding = this.scope.runtime.bind(() => this.evaluate(), this.#slot);
+        }
         return this.#binder.bind(props);
+    }
+    /**
+     * `plugin.wire.view(v)` (SDK 1.7.0): the writer's direct writes, for a
+     * scope of the plugin that made this view.
+     */
+    [DIRECT](scope) {
+        if (scope.runtime !== this.scope.runtime)
+            throw failure("invalid", "view takes a window, panel or settings page of this plugin");
+        return {
+            write: (property, write) => this.#writer.direct(property, write),
+            writeRows: (property, ops) => this.#writer.directRows(property, ops),
+        };
     }
     /** {@link ViewBinder.snapshot}: current desired properties. */
     snapshot() {
@@ -73,7 +97,7 @@ export class ViewBase {
     async release() {
         this.closed = true;
         this.#writer.stop();
-        await this.#binding.dispose();
+        await this.#binding?.dispose();
     }
 }
 /** Find `export component X` / `export global Y` so most mounts need no names. */

@@ -55,6 +55,11 @@ export function stopReason(value) {
         ? value
         : undefined;
 }
+const SILENT = {
+    read: () => { },
+    changed: () => { },
+    invalidate: () => { },
+};
 /**
  * Per-plugin connection to the player. Scopes reach it through `Runtime`;
  * the flat RPC clients stay private here so protocol fields never reach
@@ -81,7 +86,21 @@ export class Connection {
     #warnedEvents = false;
     views = new Map();
     commands = new Map();
+    /**
+     * Command unregistrations in flight, by id: a command registered again
+     * with the id (`commands.add` or `plugin.wire.commands.register`) waits
+     * for its removal, or the player would refuse it with `conflict`.
+     */
+    removals = new Map();
     services = new Map();
+    /**
+     * How to read a state copy again, by the event that keeps it current: a
+     * mirror registers itself (`source.state` → the player's), an action that
+     * changed that state elsewhere asks for it (`reread`).
+     */
+    rereads = new Map();
+    /** The framework's ears ({@link StateSignals}); silent until `Runtime` sets them. */
+    signals = SILENT;
     /**
      * Set when the player stops the plugin (`PluginInstance.dispose`), before
      * the root scope is disposed: `DisposeInfo` and `plugin.stopReason`.
@@ -133,6 +152,12 @@ export class Connection {
     }
     can(capability) {
         return this.manifest.capabilities.includes(capability);
+    }
+    /** Read the state copy kept by `event` again, if one exists; never rejects. */
+    async reread(event) {
+        await this.rereads
+            .get(event)?.()
+            .catch(() => { });
     }
     /** Lazily created singletons shared by every scope of this plugin. */
     service(name, create) {
@@ -362,6 +387,15 @@ export class Connection {
             if (group.active > 0)
                 result.set(event, allWhys(group));
         return result;
+    }
+    /**
+     * One request by its method name, as given (`plugin.wire.request`, SDK
+     * 1.7.0): nothing added, nothing checked here, the player checks the
+     * capability. Every other part of the SDK uses the typed clients
+     * (`host`); `scripts/check-layers.mjs` keeps it so.
+     */
+    request(method, params) {
+        return this.#transport.request(method, params);
     }
     /** Raw transport events the host pushes without a subscription. */
     raw(event, listener) {

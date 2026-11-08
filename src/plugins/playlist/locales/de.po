@@ -550,10 +550,10 @@ msgstr "Wiedergabeliste in der Seitenleiste: hinzufügen, sortieren, wiederholen
 #, x-machine
 msgid ""
 "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
-"Entry points: \"Playlist\" (F6) in the context menu and \"Playlist: …\" in the command palette."
+"Entry points: F6, \"Sidebar\" in the context menu and \"Playlist: …\" in the command palette."
 msgstr ""
 "Eine Wiedergabeliste in der rechten Seitenleiste: Dateien, Ordner und Links hinzufügen, per Drag & Drop, sortieren und suchen, wiederholen und zufällig abspielen sowie beim Öffnen einer Datei ähnliche Dateien aus demselben Ordner hinzufügen; liest und schreibt M3U-, M3U8- und PLS-Listendateien und stellt die Liste nach einem Neustart wieder her.\n"
-"Zugang: „Wiedergabeliste“ (F6) im Kontextmenü und „Wiedergabeliste: …“ in der Befehlspalette."
+"Zugang: F6, „Seitenleiste“ im Kontextmenü und „Wiedergabeliste: …“ in der Befehlspalette."
 
 #: manifest.json
 #, x-machine
@@ -814,8 +814,8 @@ msgstr "Keine Treffer"
 
 #: ui/sidebar.slint:633
 #, x-machine
-msgid "Move to top (Ctrl+Home)"
-msgstr "Ganz nach oben (Ctrl+Home)"
+msgid "Move to top"
+msgstr "Ganz nach oben"
 
 #: ui/sidebar.slint:639
 #, x-machine

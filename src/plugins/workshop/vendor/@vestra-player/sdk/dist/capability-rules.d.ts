@@ -87,6 +87,27 @@ export interface MemberNeed {
  */
 export declare function memberNeeds(api: string, capabilities: readonly string[], rules?: CapabilityRules): MemberNeed[] | undefined;
 /**
+ * The requests of a call to a member of `ARGUMENT_APIS` (SDK 1.7.0), given
+ * the value of its first argument and the string fields of its second:
+ * a subscribed event's `events.subscribe`, nothing for an event that
+ * arrives unasked, or the named method. `undefined`: a method the player's
+ * table does not know (not checked).
+ *
+ * @param kind - What the argument names (`ARGUMENT_APIS`).
+ * @param name - The event or method name.
+ * @param params - String fields of the second argument (`method` only).
+ *
+ * @internal
+ */
+export declare function argumentRequests(kind: "event" | "method", name: string, params?: Readonly<Record<string, string>>, rules?: CapabilityRules): ApiRequest[] | undefined;
+/**
+ * Every capability a list of requests needs with the given manifest (see
+ * {@link memberNeeds}).
+ *
+ * @internal
+ */
+export declare function requestsNeed(requests: readonly ApiRequest[], capabilities: readonly string[], rules?: CapabilityRules): MemberNeed[];
+/**
  * `CAPABILITY_INFO` from the tables: the label, highlight and requirements
  * from the player's table; the members from `API_REQUESTS` (every member a
  * request of which needs the capability, in the table's order; requests

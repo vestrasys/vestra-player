@@ -459,6 +459,27 @@ const sdkFile = (file: string) =>
     "utf8",
   );
 
+// The plugin API declarations: `plugin/types.d.ts` plus, from SDK 1.6.21, the
+// `plugin/types/*.d.ts` files it re-exports (one per documentation category).
+const sdkTypes = () => {
+  const directory = new URL(
+    "../../node_modules/@vestra-player/sdk/dist/plugin/types/",
+    import.meta.url,
+  );
+  let parts: string[] = [];
+  try {
+    parts = readdirSync(directory)
+      .filter((name) => name.endsWith(".d.ts"))
+      .sort();
+  } catch {
+    // SDK ≤ 1.6.20: everything is in types.d.ts.
+  }
+  return [
+    sdkFile("plugin/types.d.ts"),
+    ...parts.map((name) => sdkFile(`plugin/types/${name}`)),
+  ].join("\n");
+};
+
 /** The text inside the `{ ... }` that follows `marker` (strings and comments skipped). */
 function braces(text: string, marker: string): string {
   const at = text.indexOf(marker);
@@ -764,6 +785,13 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "VideoUpscaling.state": ["video.upscaling.state"],
   "VideoUpscaling.set": ["video.upscaling.set"],
   "VideoUpscaling.onChange": ["event:video.upscaling.changed"],
+  // SDK 1.7.0: plugin.wire.commands.register (register, then update and
+  // unregister through the WireCommand it returns).
+  "WireCommands.register": [
+    "commands.register",
+    "commands.update",
+    "commands.unregister",
+  ],
 };
 
 /**
@@ -917,10 +945,8 @@ test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the playe
 
 test("SystemInfo.rendering has the values app.system reports (system.rs rendering_json)", () => {
   // SystemInfo's field (`Plugin.rendering` is the SDK 1.5.35 service).
-  const sdk = /readonly rendering\??: ("[^;]+);/.exec(
-    sdkFile("plugin/types.d.ts"),
-  )?.[1];
-  assert.ok(sdk, "SystemInfo.rendering in the SDK's types.d.ts");
+  const sdk = /readonly rendering\??: ("[^;]+);/.exec(sdkTypes())?.[1];
+  assert.ok(sdk, "SystemInfo.rendering in the SDK's plugin types");
   const system = host("src/system.rs");
   const body =
     /pub fn rendering_json\(gpu: bool\) -> Value \{\n([^\n]*)\n\}/.exec(
@@ -1018,9 +1044,9 @@ test("WireUpscalingState has the fields video.upscaling answers with (playback/u
 
 test("UpscalingDecodingCause names the player's causes (playback/upscaling.rs Cause::as_str; SDK 1.5.43, player 0.5.25)", () => {
   const sdk = /export type UpscalingDecodingCause = ([^;]+);/.exec(
-    sdkFile("plugin/types.d.ts"),
+    sdkTypes(),
   )?.[1];
-  assert.ok(sdk, "UpscalingDecodingCause in the SDK's types.d.ts");
+  assert.ok(sdk, "UpscalingDecodingCause in the SDK's plugin types");
   const own = /pub fn as_str\(self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
     host("src/playback/upscaling.rs"),
   )?.[1];
@@ -1032,9 +1058,9 @@ test("UpscalingDecodingCause names the player's causes (playback/upscaling.rs Ca
 
 test("UpscalingReasonCode names the player's upscaling reason codes (playback/upscaling.rs, platform; SDK 1.5.37, player 0.5.16)", () => {
   const sdk = /export type UpscalingReasonCode = ([^;]+);/.exec(
-    sdkFile("plugin/types.d.ts"),
+    sdkTypes(),
   )?.[1];
-  assert.ok(sdk, "UpscalingReasonCode in the SDK's types.d.ts");
+  assert.ok(sdk, "UpscalingReasonCode in the SDK's plugin types");
   const own = /pub fn code\(&self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
     host("src/playback/upscaling.rs"),
   )?.[1];
@@ -1060,9 +1086,9 @@ test("UpscalingReasonCode names the player's upscaling reason codes (playback/up
 
 test("RenderingReasonCode names the player's reason codes (playback/render_mode.rs Reason::code; SDK 1.5.35, player 0.5.13)", () => {
   const sdk = /export type RenderingReasonCode = ([^;]+);/.exec(
-    sdkFile("plugin/types.d.ts"),
+    sdkTypes(),
   )?.[1];
-  assert.ok(sdk, "RenderingReasonCode in the SDK's types.d.ts");
+  assert.ok(sdk, "RenderingReasonCode in the SDK's plugin types");
   const body = /pub fn code\(&self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
     host("src/playback/render_mode.rs"),
   )?.[1];
@@ -1220,10 +1246,8 @@ test("THEME_PALETTES are the player's palettes (theme.rs)", () => {
 });
 
 test("HostAction ids are the player's core actions (core_actions.rs ACTIONS)", () => {
-  const sdk = /export type HostAction = ([^;]+);/.exec(
-    sdkFile("plugin/types.d.ts"),
-  )?.[1];
-  assert.ok(sdk, "HostAction in the SDK's types.d.ts");
+  const sdk = /export type HostAction = ([^;]+);/.exec(sdkTypes())?.[1];
+  assert.ok(sdk, "HostAction in the SDK's plugin types");
   const actions = /pub const ACTIONS: \[&str; \d+\] = \[([^\]]*)\];/.exec(
     host("src/core_actions.rs"),
   )?.[1];
@@ -1260,7 +1284,7 @@ const SDK_UNREACHABLE_CODES = new Map<
 ]);
 
 test("the error codes the player returns are PluginError codes", () => {
-  const types = sdkFile("plugin/types.d.ts");
+  const types = sdkTypes();
   const table = types.slice(
     types.indexOf("| code | meaning |"),
     types.indexOf("export type PluginError"),
@@ -1272,7 +1296,7 @@ test("the error codes the player returns are PluginError codes", () => {
   );
   assert.ok(
     documented.has("capability"),
-    "the PluginError table in types.d.ts",
+    "the PluginError table in the SDK's plugin types",
   );
   const root = new URL("../../host/src/", import.meta.url);
   const returned = new Set(["invalid"]); // RpcError::invalid

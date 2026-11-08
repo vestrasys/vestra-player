@@ -1,0 +1,24 @@
+// A sidebar panel as in the SDK's panel-menu example: a std-widgets
+// `ListView` whose rows are a `TouchArea` each (no FocusScope of its own),
+// fewer rows than fit, so the panel is empty below them.
+import { ListView } from "std-widgets.slint";
+
+export global Bridge {
+    in-out property <int> selected: -1;
+}
+
+export component RowList inherits Rectangle {
+    background: #283746;
+    ListView {
+        for row[index] in 3: Rectangle {
+            height: 40px;
+            TouchArea {
+                pointer-event(event) => {
+                    if event.kind == PointerEventKind.down {
+                        Bridge.selected = index;
+                    }
+                }
+            }
+        }
+    }
+}

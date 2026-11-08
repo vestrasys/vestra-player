@@ -56,7 +56,7 @@ async function srtFile(text: string | Buffer) {
   return { path, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("menu per the redesign: Open ▸, Subtitle Track ▸, Subtitles…; the rest in the palette; views bind exactly their Slint callbacks", async () => {
+test("menu per the redesign: Open ▸, Subtitle Track ▸; Subtitles… and the rest in the palette; views bind exactly their Slint callbacks", async () => {
   const { host, window, stop } = await open();
   const declared = [...host.commands.values()]
     .filter(({ display }) => display.path.length)
@@ -68,7 +68,6 @@ test("menu per the redesign: Open ▸, Subtitle Track ▸, Subtitles…; the res
     // Group "domain" (menu sweep B5): no separator between Audio Track ▸, Subtitle Track ▸ and Snapshot ▸.
     ["选择字幕轨 > 不显示", 302, "domain", ""],
     ["选择字幕轨 > English · en", 303, "domain", ""],
-    ["字幕…", 793, "windows", "Alt+3"],
   ]);
   // Out of the menu, in the command palette with their keys (ids unchanged).
   const palette = [...host.commands.entries()]
@@ -81,7 +80,7 @@ test("menu per the redesign: Open ▸, Subtitle Track ▸, Subtitles…; the res
     ["refresh", ""], ["reload", "Ctrl+Alt+Y"], ["remove", ""], ["second-off", ""], ["second-position-aboveMain", ""],
     ["second-position-top", ""], ["settings", ""], ["shadow", ""], ["show", "Alt+H"], ["size-down", "Alt+PageDown"],
     ["size-up", "Alt+PageUp"], ["sync-earlier", "."], ["sync-input", ""], ["sync-later", ","], ["sync-reset", "/"],
-    ["track-cycle", "Alt+L"],
+    ["track-cycle", "Alt+L"], ["tune", "Alt+3"],
   ]);
   assert.deepEqual(host.conflicts, []);
   assert.equal(window.slot, "adjust");

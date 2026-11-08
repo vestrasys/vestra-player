@@ -222,10 +222,10 @@ When the format is invalid (unknown key name, wrong modifier order, symbol key w
 | Scope | When it applies | Implementation |
 | --- | --- | --- |
 | Global (default) | The main window or a floating panel window has focus, and the key was not consumed by the focused control (typing in an input box, arrow keys that a list handles itself, etc.) | The outermost `keys := FocusScope` in `host.slint` receives keys that bubble up. In Slint 1.16 keys go first to the focused control, and those not accepted are passed up level by level to the parent FocusScopes (`i-slint-core` `window.rs` `process_key_input`), so space and arrow keys in an input box do not fire bindings |
-| `focus: "panel"` | While focus is inside that plugin's panel, looked up **before** global | The host wraps a FocusScope around the panel (`focus-on-click` is true by default, so clicking empty space in the panel gives it focus); keys not accepted inside the panel are first looked up here in the "panel P" scope, and if none is found they bubble up to global |
+| `focus: "panel"` | While focus is inside that plugin's panel, looked up **before** global | The host wraps a FocusScope around the panel; keys not accepted inside the panel are first looked up here in the "panel P" scope, and if none is found they bubble up to global. The scope keeps `focus-on-click` (Slint's default), so clicking empty space in the panel gives it focus; a click that a control takes (a button, a row's `TouchArea`) leaves the focus where it was, since Slint offers a press to the children first. The panel gives the keys back to the video with `VestraFocus.release()` (`@vestra/focus.slint`, [architecture README](README.md) "Focus") |
 
 - Tool windows (plugin `windows.create`) do not fire any bindings, same as today; tool-window-scoped bindings are not done this round (§18 Q5).
-- Compared with today, global bindings also apply when focus is on empty space in the sidebar or bottom bar (today only when the video has focus). All places where shortcuts worked before still work.
+- Compared with today, global bindings also apply when focus is in the sidebar or bottom bar and the focused control does not take the key (today only when the video has focus). All places where shortcuts worked before still work.
 
 ### 3.4 Host data structures
 
@@ -254,7 +254,9 @@ impl Table {
 
 | Command | Default bindings | Menu | State |
 | --- | --- | --- | --- |
-| `host/fullscreen` Toggle Fullscreen | `Escape` (user ruling 2026-11-01, IA-CORE-04; `Enter`, `Alt+Enter`, `F11` up to 0.5.x; `Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 810` (700 until the slim menu of 2026-11-08: now alone between two separators, after the panel items and before Vestra Player AI…), checked = whether fullscreen | always available |
+| `host/fullscreen` Toggle Fullscreen | `Escape` (user ruling 2026-11-01, IA-CORE-04; `Enter`, `Alt+Enter`, `F11` up to 0.5.x; `Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 810` (700 until the slim menu of 2026-11-08: now alone between two separators, after the column toggles and the chapter list and before Vestra Player AI…), checked = whether fullscreen | always available |
+| `host/adjust` Adjustments and Effects | none (the panels' own commands have Alt+1…4) | top level since user ruling 2026-11-08, `group: "windows"`, `order: 791` (where Picture…, Audio…, Subtitles…, Playback… were; they are palette-only now); also the sliders button of the bottom-bar strip, same title; opens the adjust column at its last tab, checked = whether the column is wanted shown (host 0.7.6 to then: outside the menu, titled Adjust) | available while a panel is in the adjust column |
+| `host/sidebar` Sidebar | none (F6 is the playlist's) | top level since user ruling 2026-11-08, `group: "windows"`, `order: 800` (where Playlist was; `playlist.visibility` is palette-only now); also the rightmost button of the bottom-bar strip, same title; opens the sidebar at its last tab, checked = whether the sidebar is wanted shown (player 0.5.10 to then: outside the menu, titled Toggle Sidebar) | available while a panel is in the sidebar |
 | `host/palette` Command Palette… | `Ctrl+Shift+P` (⌘⇧P on macOS too) | top level since the slim menu (2026-11-08), `group: "settings-main"`, `order: 829`, directly above Options… (outside the menu from host 0.7.4 until then) | always available |
 | `host/enter-fullscreen` Enter Fullscreen | none | not in the menu | only available in windowed mode |
 | `host/exit-fullscreen` Leave Fullscreen | none (`Escape` up to 0.5.x) | not in the menu | only available in fullscreen |
