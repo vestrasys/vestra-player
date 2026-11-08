@@ -2,6 +2,9 @@
 
 ## 0.2.6
 
+- Menu sweep (menu redesign §4): the whole Playback ▸ Playlist ▸ submenu (Add Files/Link/Folder…, Repeat ▸, Shuffle, Open List File…, Save List…, When Opening a File ▸, Fast Advance to Next, Remember List, Confirm Before Removing All) leaves the right-click menu and is in the command palette only ("Playlist: …", "Repeat: …", "When Opening a File: …"), with ids, keys, radio and checked states unchanged; Playlist (F6) and Open ▸ Open Folder… stay. Who must change: nobody.
+- The description names the command palette instead of Playback ▸ Playlist, in all six languages.
+
 Who must change: nobody. What users see: in the command palette (Ctrl+Shift+P) playlist commands name what they are about, for example "Repeat: All" or "When Opening a File: Add Similar Files", and say where their control lives (the playlist, or Playlist Settings); lists of keys name the list commands the same way ("Sort: By Size"). Needs player 0.7.6.
 
 - Every command declares a `category` (SDK 1.6.4): Playlist, Repeat, When Opening a File or Sort, the labels of the submenus and popups the commands sit in, with their existing translations.

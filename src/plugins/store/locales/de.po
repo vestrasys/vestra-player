@@ -1200,16 +1200,12 @@ msgid ""
 "Added:\n"
 "{2}\n"
 "\n"
-"Current: {3}.\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"Current: {3}."
 msgstr ""
 "Neu:\n"
 "{2}\n"
 "\n"
-"Aktuell: {3}.\n"
-"\n"
-"Ein Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."
+"Aktuell: {3}."
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1300,14 +1296,10 @@ msgstr "Repository: {} ({}). Dieses Repository wird nicht von Vestra Player gepr
 #, x-machine
 msgid ""
 "It will be able to:\n"
-"{}\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"{}"
 msgstr ""
 "Es kann dann:\n"
-"{}\n"
-"\n"
-"Ein Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."
+"{}"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1737,7 +1729,7 @@ msgstr "Weiter verwenden"
 msgid "Choose a plugin package (.vxp)"
 msgstr "Plugin-Paket auswählen (.vxp)"
 
-#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:695
+#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:688
 #, x-machine
 msgid "Cancel"
 msgstr "Abbrechen"
@@ -1879,8 +1871,3 @@ msgstr "Mindestversion"
 #, x-machine
 msgid "Permissions ({})"
 msgstr "Berechtigungen ({})"
-
-#: ui/store.slint:668
-#, x-machine
-msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "Ein Plugin ist ein vollständiges Programm: Die obigen Berechtigungen beschränken nur, was es mit dem Player tun kann, nicht das Lesen und Schreiben von Dateien oder den Netzwerkzugriff."

@@ -989,9 +989,7 @@ msgid ""
 "Added:\n"
 "{2}\n"
 "\n"
-"Current: {3}.\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"Current: {3}."
 msgstr ""
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
@@ -1059,9 +1057,7 @@ msgstr ""
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid ""
 "It will be able to:\n"
-"{}\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"{}"
 msgstr ""
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
@@ -1380,7 +1376,7 @@ msgstr ""
 msgid "Choose a plugin package (.vxp)"
 msgstr ""
 
-#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:695
+#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:688
 msgid "Cancel"
 msgstr ""
 
@@ -1498,8 +1494,4 @@ msgstr ""
 
 #: ui/store.slint:654
 msgid "Permissions ({})"
-msgstr ""
-
-#: ui/store.slint:668
-msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
 msgstr ""

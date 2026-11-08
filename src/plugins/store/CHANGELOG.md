@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.15
+
+- The install and update confirmations end with the permission list (or the "Current: …" line); the closing sentence "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network." is gone (user ruling 2026-11-08). The same grey line under Permissions in the store window is gone too. The warnings for unofficial repositories and sideloaded packages are unchanged. Who must change: nobody.
+
 ## 0.2.14
 
 - Plugin Store… has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Plugins**, so the palette reads "Plugins: Plugin Store…" (or "Plugins: Plugin Store (2 updates)…"), next to Vestra Player AI…. Translated like the player's word for plugins (machine, marked `x-machine`). No `home`: the command opens its own window. Who must change: nobody. Title, id, menu path, button and order are unchanged.

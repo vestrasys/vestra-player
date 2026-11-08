@@ -88,8 +88,8 @@ msgstr "기본 단축키를 무시할까요?"
 
 #: ignore.ts:50
 #, x-machine
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "키보드 단축키에서 변경한 키만 작동하고, Space나 화살표 키 같은 기본 키는 작동하지 않습니다. 종료(⌘Q)와 전체 화면(Esc)은 영향을 받지 않습니다. 설정 ▸ 기본 단축키 무시에서 언제든 끌 수 있습니다."
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette."
+msgstr "키보드 단축키에서 변경한 키만 작동하고, Space나 화살표 키 같은 기본 키는 작동하지 않습니다. 종료(⌘Q)와 전체 화면(Esc)은 영향을 받지 않습니다. 키보드 단축키 페이지의 스위치나 명령 팔레트에서 언제든 끌 수 있습니다."
 
 #: ignore.ts:51
 #, x-machine
@@ -207,10 +207,10 @@ msgstr "키보드 단축키와 마우스 동작 보기 및 다시 지정"
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
 msgstr ""
 "옵션 창의 ‘키보드 및 마우스’ 범주에 플레이어와 모든 플러그인의 명령을 표시합니다. 명령이나 키로 검색하고, 다시 지정하거나 해제하고, 기본값을 복원하고, 충돌을 확인하고, 목록을 내보낼 수 있습니다. 비디오 위의 마우스 클릭과 휠에 명령을 지정할 수 있으며, 모든 기본 단축키를 한꺼번에 무시할 수도 있습니다.\n"
-"컨텍스트 메뉴에서 여세요: 설정 ▸ 키보드 단축키… / 마우스… / 기본 단축키 무시."
+"옵션 창(옵션…, F5)이나 명령 팔레트에서 여세요: 설정: 키보드 단축키… / 마우스… / 기본 단축키 무시."
 
 #: manifest.json
 #, x-machine
@@ -309,8 +309,8 @@ msgstr "마우스 동작을 변경했습니다: {} = (없음)"
 
 #: ui/keys.slint:113
 #, x-machine
-msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
-msgstr "기본 단축키를 무시하고 있습니다 (설정 ▸ 기본 단축키 무시)"
+msgid "Default shortcuts are ignored (see the switch on this page)"
+msgstr "기본 단축키를 무시하고 있습니다 (이 페이지의 스위치 참고)"
 
 #: ui/keys.slint:114
 #, x-machine

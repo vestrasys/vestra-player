@@ -2,6 +2,9 @@
 
 ## 0.3.4
 
+- Menu sweep (menu redesign §4): Options… (F5) moves from Settings ▸ to the top level (order 830, group `settings-main`, with About Vestra Player…); Settings ▸ Appearance ▸ and Settings ▸ Language ▸ leave the right-click menu and are in the command palette only ("Appearance: Vestra Dark", "Language: Follow System", …), with ids, radio and checked states unchanged. Who must change: nobody.
+- The description names Options… (F5), its Appearance and Language pages and the command palette instead of the Settings ▸ paths, in all six languages.
+
 - Translations only: the category text "Settings" added in 0.3.3 is now marked `x-machine` in de, es, fr, ja and ko. Who must change: nobody. No text or behaviour change.
 
 ## 0.3.3

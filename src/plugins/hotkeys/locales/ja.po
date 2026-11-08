@@ -88,8 +88,8 @@ msgstr "デフォルトのショートカットを無視しますか？"
 
 #: ignore.ts:50
 #, x-machine
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "「キーボードショートカット」で変更したキーだけが有効になり、Space や矢印キーなどのデフォルトのキーは使えなくなります。「終了」（⌘Q）と「フルスクリーン切り替え」（Esc）は影響を受けません。この設定は「設定 ▸ デフォルトのショートカットを無視」でいつでもオフにできます。"
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette."
+msgstr "「キーボードショートカット」で変更したキーだけが有効になり、Space や矢印キーなどのデフォルトのキーは使えなくなります。「終了」（⌘Q）と「フルスクリーン切り替え」（Esc）は影響を受けません。この設定は「キーボードショートカット」ページのスイッチ、またはコマンドパレットからいつでもオフにできます。"
 
 #: ignore.ts:51
 #, x-machine
@@ -207,10 +207,10 @@ msgstr "キーボードショートカットとマウス操作の確認と割り
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
 msgstr ""
 "オプションウインドウの「キーとマウス」カテゴリに、プレーヤーとすべてのプラグインのコマンドを一覧表示します。コマンドやキーで検索し、割り当て・割り当て解除・デフォルトへの復元、競合の確認、一覧の書き出しができます。ビデオ上のマウスクリックやホイールにコマンドを割り当てたり、デフォルトのショートカットをまとめて無視したりすることもできます。\n"
-"コンテキストメニューの「設定 ▸ キーボードショートカット… / マウス… / デフォルトのショートカットを無視」から開けます。"
+"オプションウインドウ（「オプション…」、F5）またはコマンドパレットの「設定: キーボードショートカット… / マウス… / デフォルトのショートカットを無視」から開けます。"
 
 #: manifest.json
 #, x-machine
@@ -309,8 +309,8 @@ msgstr "マウス操作を更新しました：{} = （なし）"
 
 #: ui/keys.slint:113
 #, x-machine
-msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
-msgstr "デフォルトのショートカットは無視されています（設定 ▸ デフォルトのショートカットを無視）"
+msgid "Default shortcuts are ignored (see the switch on this page)"
+msgstr "デフォルトのショートカットは無視されています（このページのスイッチを参照）"
 
 #: ui/keys.slint:114
 #, x-machine

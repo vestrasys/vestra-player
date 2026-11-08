@@ -6,12 +6,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
+#: bookmarks.ts:46 menu.ts:56 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 #, x-machine
 msgid "Bookmark {}"
 msgstr "Lesezeichen {}"
 
-#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
+#: chapters.ts:12 menu.ts:56 ui/marks.slint:55 ui/marks.slint:129
 #, x-machine
 msgid "Chapter {}"
 msgstr "Kapitel {}"
@@ -36,24 +36,24 @@ msgstr "{} Lesezeichen werden entfernt. Dies kann nicht rückgängig gemacht wer
 msgid "Clear Bookmarks"
 msgstr "Lesezeichen löschen"
 
-#: manifest.json
+#: manifest.json menu.ts:108 menu.ts:117 menu.ts:130 menu.ts:169 menu.ts:184 menu.ts:193 menu.ts:206 seekbar.ts:137 ui/marks.slint:70
 #, x-machine
-msgid "Chapters, Bookmarks and A-B Loop"
-msgstr "Kapitel, Lesezeichen und A-B-Wiederholung"
+msgid "Chapters and Bookmarks"
+msgstr "Kapitel und Lesezeichen"
 
 #: manifest.json
 #, x-machine
-msgid "Jump by chapter and bookmark; loop an A-B range"
-msgstr "Nach Kapiteln und Lesezeichen springen; einen A-B-Bereich wiederholen"
+msgid "Jump by chapter and bookmark"
+msgstr "Nach Kapiteln und Lesezeichen springen"
 
 #: manifest.json
 #, x-machine
 msgid ""
-"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
-"Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
+"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
+"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
 msgstr ""
-"Listet die Kapitel des Mediums auf; fügt für jede Datei Lesezeichen hinzu, benennt und verwaltet sie; springt zwischen Kapiteln und Lesezeichen und zeigt sie als Markierungen auf der Zeitleiste; legt einen A-B-Bereich fest und wiederholt ihn beliebig oft.\n"
-"Zu finden im Kontextmenü unter „Wiedergabe ▸ Kapitel und Lesezeichen“ und „Wiedergabe ▸ A-B-Wiederholung“."
+"Listet die Kapitel des Mediums auf; fügt für jede Datei Lesezeichen hinzu, benennt und verwaltet sie; springt zwischen Kapiteln und Lesezeichen und zeigt sie als Markierungen auf der Zeitleiste.\n"
+"Zu finden im Kontextmenü unter „Kapitel- und Lesezeichenliste…“ (H); die übrigen Befehle stehen in der Befehlspalette unter „Kapitel und Lesezeichen“. Die A-B-Wiederholung befindet sich im Bereich „Wiedergabe“ (Grundlegende Wiedergabe)."
 
 #: manifest.json
 #, x-machine
@@ -70,354 +70,139 @@ msgstr "Kapitel"
 msgid "Bookmarks"
 msgstr "Lesezeichen"
 
-#: manifest.json
-#, x-machine
-msgid "Loop"
-msgstr "Wiederholung"
-
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:59
+#: menu.ts:55
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:62
+#: menu.ts:58
 #, x-machine
 msgid "{}{}{}"
 msgstr "{}{}{}"
 
-#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
-#, x-machine
-msgid "Chapters and Bookmarks"
-msgstr "Kapitel und Lesezeichen"
-
-#: menu.ts:110
+#: menu.ts:107
 #, x-machine
 msgid "Chapter and Bookmark List…"
 msgstr "Kapitel- und Lesezeichenliste…"
 
-#: menu.ts:119 ui/marks.slint:208
+#: menu.ts:116 ui/marks.slint:208
 #, x-machine
 msgid "Add Bookmark"
 msgstr "Lesezeichen hinzufügen"
 
-#: menu.ts:126 osd.ts:51
+#: menu.ts:123 osd.ts:32
 #, x-machine
 msgid "Can't add bookmarks to this source"
 msgstr "Für diese Quelle können keine Lesezeichen hinzugefügt werden"
 
-#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
+#: menu.ts:123 menu.ts:135 menu.ts:176 menu.ts:198 ui/marks.slint:157
 #, x-machine
 msgid "No media open"
 msgstr "Keine Medien geöffnet"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Bookmark or Chapter"
 msgstr "Vorheriges Lesezeichen/Kapitel"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Bookmark or Chapter"
 msgstr "Nächstes Lesezeichen/Kapitel"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Chapter"
 msgstr "Vorheriges Kapitel"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Chapter"
 msgstr "Nächstes Kapitel"
 
-#: menu.ts:138 menu.ts:179 menu.ts:201
+#: menu.ts:135 menu.ts:176 menu.ts:198
 #, x-machine
 msgid "This source can't seek"
 msgstr "Diese Quelle unterstützt keine Sprünge"
 
-#: menu.ts:186
+#: menu.ts:183
 #, x-machine
 msgid "More Chapters… ({} in all)"
 msgstr "Weitere Kapitel… ({} insgesamt)"
 
-#: menu.ts:208
+#: menu.ts:205
 #, x-machine
 msgid "More Bookmarks… ({} in all)"
 msgstr "Weitere Lesezeichen… ({} insgesamt)"
 
-#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
-#, x-machine
-msgid "A-B Loop"
-msgstr "A-B-Wiederholung"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set Start Point"
-msgstr "Startpunkt setzen"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear Start Point"
-msgstr "Startpunkt entfernen"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Back 0.1 s"
-msgstr "Startpunkt 0,1 s früher"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Forward 0.1 s"
-msgstr "Startpunkt 0,1 s später"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set End Point"
-msgstr "Endpunkt setzen"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear End Point"
-msgstr "Endpunkt entfernen"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Back 0.1 s"
-msgstr "Endpunkt 0,1 s früher"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Forward 0.1 s"
-msgstr "Endpunkt 0,1 s später"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Back 0.1 s"
-msgstr "Bereich 0,1 s früher"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Forward 0.1 s"
-msgstr "Bereich 0,1 s später"
-
-#: menu.ts:250
-#, x-machine
-msgid "Loop Current Chapter or Bookmark Range"
-msgstr "Aktuelles Kapitel/Lesezeichen wiederholen"
-
-#: menu.ts:257 menu.ts:271 osd.ts:51
-#, x-machine
-msgid "This source doesn't support A-B loop"
-msgstr "Diese Quelle unterstützt keine A-B-Wiederholung"
-
-#: menu.ts:257
-#, x-machine
-msgid "Start point not set"
-msgstr "Kein Startpunkt gesetzt"
-
-#: menu.ts:257
-#, x-machine
-msgid "End point not set"
-msgstr "Kein Endpunkt gesetzt"
-
-#: menu.ts:257 menu.ts:271
-#, x-machine
-msgid "A-B range not set"
-msgstr "Kein A-B-Bereich gesetzt"
-
-#: menu.ts:265
-#, x-machine
-msgid "A-B Loop On/Off"
-msgstr "A-B-Wiederholung ein/aus"
-
-#: menu.ts:278 menu.ts:279
-#, x-machine
-msgid "Loop Count"
-msgstr "Anzahl Wiederholungen"
-
-#: menu.ts:278
-#, x-machine
-msgid "Endless"
-msgstr "Endlos"
-
-#: menu.ts:278
-#, x-machine
-msgid "Once"
-msgstr "1-mal"
-
-#: menu.ts:278
-#, x-machine
-msgid "2 Times"
-msgstr "2-mal"
-
-#: menu.ts:278
-#, x-machine
-msgid "3 Times"
-msgstr "3-mal"
-
-#: menu.ts:278
-#, x-machine
-msgid "5 Times"
-msgstr "5-mal"
-
-#: menu.ts:278
-#, x-machine
-msgid "10 Times"
-msgstr "10-mal"
-
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: {}"
 msgstr "Kapitel: {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: Chapter {}"
 msgstr "Kapitel: Kapitel {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark: {}"
 msgstr "Lesezeichen: {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark added: {} ({})"
 msgstr "Lesezeichen hinzugefügt: {} ({})"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "A bookmark already exists here"
 msgstr "Hier gibt es bereits ein Lesezeichen"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmarks full ({})"
 msgstr "Keine weiteren Lesezeichen möglich ({})"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous chapter"
 msgstr "Kein vorheriges Kapitel"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next chapter"
 msgstr "Kein nächstes Kapitel"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous bookmark or chapter"
 msgstr "Kein vorheriges Lesezeichen/Kapitel"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next bookmark or chapter"
 msgstr "Kein nächstes Lesezeichen/Kapitel"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Can't seek: {}"
 msgstr "Springen nicht möglich: {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: on"
 msgstr "Lesezeichen- und Kapitelmarkierungen auf der Zeitleiste: Ein"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: off"
 msgstr "Lesezeichen- und Kapitelmarkierungen auf der Zeitleiste: Aus"
 
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop: {} ~ {}"
-msgstr "A-B-Wiederholung: {} ~ {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B start: {}"
-msgstr "A-B-Start: {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B end: {}"
-msgstr "A-B-Ende: {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop ended"
-msgstr "A-B-Wiederholung beendet"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop off"
-msgstr "A-B-Wiederholung aus"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point is after the end point; end point cleared"
-msgstr "Der Startpunkt liegt nach dem Endpunkt; Endpunkt entfernt"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point must be after the start point"
-msgstr "Der Endpunkt muss nach dem Startpunkt liegen"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point cleared"
-msgstr "Startpunkt entfernt"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point cleared"
-msgstr "Endpunkt entfernt"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the beginning"
-msgstr "Anfang erreicht"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the end"
-msgstr "Ende erreicht"
-
-#: osd.ts:51
-#, x-machine
-msgid "Set the start and end points first"
-msgstr "Legen Sie zuerst Start- und Endpunkt fest"
-
-#: osd.ts:51
-#, x-machine
-msgid "No chapters or bookmarks to define a range"
-msgstr "Keine Kapitel oder Lesezeichen für einen Bereich vorhanden"
-
-#: osd.ts:51
-#, x-machine
-msgid "Range too short to loop"
-msgstr "Bereich zu kurz für eine Wiederholung"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: endless"
-msgstr "Anzahl Wiederholungen: endlos"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: {}"
-msgstr "Anzahl Wiederholungen: {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop failed: {}"
-msgstr "A-B-Wiederholung fehlgeschlagen: {}"
-
-#: seekbar.ts:147
+#: seekbar.ts:136
 #, x-machine
 msgid "Show Marks on Seek Bar"
 msgstr "Markierungen auf der Zeitleiste anzeigen"

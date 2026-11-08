@@ -587,8 +587,8 @@ msgstr "플러그인 셰이더가 꺼졌습니다: 셰이더가 켜져 있는 �
 #. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
 #: src/host/host/actions.rs
 #, x-machine
-msgid "Command Palette"
-msgstr "명령 팔레트"
+msgid "Command Palette…"
+msgstr "명령 팔레트…"
 
 #. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
 #: src/host/ui/command_palette.rs

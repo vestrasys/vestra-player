@@ -125,10 +125,10 @@ msgstr "오디오 전용일 때 앨범 커버를, 대기 중에는 로고를 표
 #, x-machine
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
-"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+"Entries: the Logo and Album Cover page in Options…; in the command palette, Audio: Show Album Cover for Audio Only and Appearance: Show Logo When Idle / Choose Logo Image…."
 msgstr ""
 "화면이 없는 오디오를 재생하는 동안 제목, 아티스트, 앨범과 함께 앨범 커버를 표시합니다. 열린 미디어가 없으면 로고(직접 고른 이미지로 바꿀 수 있음)를, 미디어를 여는 동안에는 로딩 화면을 표시합니다.\n"
-"메뉴: 오디오 ▸ 오디오 전용일 때 앨범 커버 표시, 설정 ▸ 모양."
+"여는 방법: 옵션…의 로고 및 앨범 커버 페이지; 명령 팔레트의 오디오: 오디오 전용일 때 앨범 커버 표시, 모양: 대기 중 로고 표시 / 로고 이미지 선택…."
 
 #: manifest.json
 #, x-machine

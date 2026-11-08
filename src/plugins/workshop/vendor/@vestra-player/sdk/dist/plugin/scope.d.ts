@@ -1,4 +1,5 @@
-import type { Change, Runtime } from "./runtime.ts";
+import type { Change } from "./passes.ts";
+import type { Runtime } from "./runtime.ts";
 import type { Disposable, DisposeInfo, Plugin, PluginError, Scope, StopReason } from "./types.ts";
 export declare class ScopeImpl implements Plugin {
     #private;

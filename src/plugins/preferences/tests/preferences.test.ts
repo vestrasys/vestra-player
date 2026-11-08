@@ -35,24 +35,26 @@ const other = () => {
   return host;
 };
 
-test("menu: Options… (F5, 830), one radio per palette from 840, the languages from 850", async () => {
+test("menu: Options… at the top level (F5, 830); palette only: one radio per palette from 840, the languages from 850", async () => {
   const { host } = await start();
   const options = host.command("options").declaration;
-  assert.deepEqual([options.path, options.order, options.group, options.bindings], [["@settings", "Options…"], 830, "settings-main", ["F5"]]);
+  assert.deepEqual([options.path, options.order, options.group, options.bindings], [["Options…"], 830, "settings-main", ["F5"]]);
+  // Menu sweep (B5): Appearance and Language have no menu path; the palette shows "Appearance: Vestra Dark".
+  for (const [id, c] of host.commands) if (id !== "options") assert.deepEqual(c.declaration.path, [], `${id} has no menu path`);
   const radios = THEMES.map((row) => host.command(`theme.${row.id}`).declaration);
   assert.deepEqual(
-    radios.map((d) => [d.path, d.order, d.group, d.radio]),
+    radios.map((d) => [d.title, d.order, d.group, d.radio]),
     [
-      [["@settings", "Appearance", "Vestra Dark"], 840, "settings-look", true],
-      [["@settings", "Appearance", "Vestra Light"], 841, "settings-look", true],
+      ["Vestra Dark", 840, "settings-look", true],
+      ["Vestra Light", 841, "settings-look", true],
     ],
   );
   const system = host.command("language.system").declaration;
-  assert.deepEqual([system.path, system.order, system.group, system.radio], [["@settings", "Language", "Follow System"], 850, "settings-look", true]);
+  assert.deepEqual([system.title, system.order, system.group, system.radio], ["Follow System", 850, "settings-look", true]);
   assert.deepEqual(
     LANGUAGES.map((row) => {
       const d = host.command(`language.${row.id}`).declaration;
-      return [d.path.at(-1), d.order, d.group];
+      return [d.title, d.order, d.group];
     }),
     [
       ["English", 851, "settings-language"],
@@ -98,12 +100,14 @@ test("palette: every command has a category in every language, and the radios na
 
 test("Simplified Chinese shows the texts of before", async () => {
   const { host } = await start(new TestHost(), "zh-Hans");
-  assert.deepEqual(host.command("options").display.path, ["设置", "选项…"]);
-  assert.deepEqual(host.command("theme.vestra").display.path, ["设置", "外观", "Vestra 深色"]);
-  assert.deepEqual(host.command("theme.vestra-light").display.path, ["设置", "外观", "Vestra 浅色"]);
-  assert.deepEqual(host.command("language.system").display.path, ["设置", "语言", "跟随系统"]);
+  assert.deepEqual(host.command("options").display.path, ["选项…"]);
+  // Menu sweep (B5): palette only, "外观: Vestra 深色" / "语言: 跟随系统".
+  const palette = (id: string) => [host.command(id).display.category, host.command(id).display.title];
+  assert.deepEqual(palette("theme.vestra"), ["外观", "Vestra 深色"]);
+  assert.deepEqual(palette("theme.vestra-light"), ["外观", "Vestra 浅色"]);
+  assert.deepEqual(palette("language.system"), ["语言", "跟随系统"]);
   // Each language keeps its own name.
-  assert.deepEqual(host.command("language.ja").display.path, ["设置", "语言", "日本語"]);
+  assert.deepEqual(palette("language.ja"), ["语言", "日本語"]);
   assert.equal(page(host).title, "外观");
   assert.equal(languagePage(host).title, "语言");
   await host.command("theme.vestra-light").run();
@@ -296,7 +300,7 @@ test("Language: the menu and the page save the choice for the next start", async
   assert.equal(plugin.i18n.locale, "fr");
   assert.equal(host.locale, "fr");
   assert.equal(p.title, shown("Language"));
-  assert.equal(host.command("language.system").display.path.at(-1), shown("Follow System"));
+  assert.equal(host.command("language.system").display.title, shown("Follow System"));
   // The page, the same choice again, and an unknown one.
   p.emit("pick", "system");
   p.emit("pick", "system");

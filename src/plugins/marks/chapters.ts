@@ -95,22 +95,3 @@ export function stepPoint(times: readonly number[], position: number, direction:
   const base = position + 0.5;
   return sorted.find((t) => t > base) ?? null;
 }
-
-/**
- * B23 current range: the span between the adjacent marks around `position`, the
- * start and end of the media counting as marks; `null` without marks.
- */
-export function segmentAt(
-  times: readonly number[],
-  position: number,
-  duration: number,
-): { a: number; b: number } | null {
-  if (!times.length) return null;
-  const points = [...new Set([0, ...times.filter((t) => t > 0 && t < duration), duration])].sort((a, b) => a - b);
-  for (let i = 0; i < points.length - 1; i++) {
-    const a = points[i]!;
-    const b = points[i + 1]!;
-    if (position >= a && position < b) return { a, b };
-  }
-  return null;
-}

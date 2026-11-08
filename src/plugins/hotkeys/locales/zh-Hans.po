@@ -70,8 +70,8 @@ msgid "Ignore default shortcuts?"
 msgstr "忽略默认快捷键？"
 
 #: ignore.ts:50
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "忽略后，只有你在快捷键设置中修改过的按键生效，Space、方向键等默认按键都将失效。「退出」（⌘Q）与「全屏」（Esc）不受影响，可随时从「设置 ▸ 忽略默认快捷键」关闭。"
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette."
+msgstr "忽略后，只有你在快捷键设置中修改过的按键生效，Space、方向键等默认按键都将失效。「退出」（⌘Q）与「全屏」（Esc）不受影响，可随时用「快捷键」页上的开关或在命令面板中关闭。"
 
 #: ignore.ts:51
 msgid "Ignore"
@@ -169,10 +169,10 @@ msgstr "查看和改绑快捷键与鼠标动作"
 #: manifest.json
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
 msgstr ""
 "在选项窗口的「快捷键与鼠标」分类里列出播放器和所有插件的命令，按命令或按键搜索，改绑、解绑、恢复默认，检查冲突，导出列表；可为视频区的鼠标点击和滚轮指定命令，也可一键忽略全部默认快捷键。\n"
-"入口在右键菜单「设置 ▸ 快捷键… / 鼠标… / 忽略默认快捷键」。"
+"入口在选项窗口（「选项…」，F5）或命令面板「设置: 快捷键… / 鼠标… / 忽略默认快捷键」。"
 
 #: manifest.json
 msgid "settings"
@@ -251,8 +251,8 @@ msgid "Mouse action updated: {} = (none)"
 msgstr "鼠标动作已更新：{} = （无）"
 
 #: ui/keys.slint:113
-msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
-msgstr "默认快捷键已忽略（设置 ▸ 忽略默认快捷键）"
+msgid "Default shortcuts are ignored (see the switch on this page)"
+msgstr "默认快捷键已忽略（见本页的开关）"
 
 #: ui/keys.slint:114
 msgid "The plugin is not loaded; this change works again when it is back"

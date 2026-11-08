@@ -1003,16 +1003,12 @@ msgid ""
 "Added:\n"
 "{2}\n"
 "\n"
-"Current: {3}.\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"Current: {3}."
 msgstr ""
 "新增：\n"
 "{2}\n"
 "\n"
-"当前 {3}。\n"
-"\n"
-"插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。"
+"当前 {3}。"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Update “{}” to {}?"
@@ -1089,14 +1085,10 @@ msgstr "仓库：{}（{}）。这个仓库未经 Vestra Player 审核，插件�
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid ""
 "It will be able to:\n"
-"{}\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"{}"
 msgstr ""
 "它将可以：\n"
-"{}\n"
-"\n"
-"插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。"
+"{}"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Unknown"
@@ -1458,7 +1450,7 @@ msgstr "继续使用"
 msgid "Choose a plugin package (.vxp)"
 msgstr "选择插件包（.vxp）"
 
-#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:695
+#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:688
 msgid "Cancel"
 msgstr "取消"
 
@@ -1577,7 +1569,3 @@ msgstr "最低播放器"
 #: ui/store.slint:654
 msgid "Permissions ({})"
 msgstr "权限（{}）"
-
-#: ui/store.slint:668
-msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。"

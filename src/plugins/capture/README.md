@@ -12,7 +12,7 @@ Saves and copies the current frame, captures bursts, exports video clips. Everyt
 
 ## Entries
 
-Right-click menu: Video ▸ Snapshot.
+Right-click menu: Snapshot ▸ (a top-level submenu after Audio Track and Subtitle Track).
 
 - Save Current Frame (Ctrl+E), Copy Current Frame (Ctrl+C)
 - Burst… (Ctrl+G) and Export Clip… open the tab at their page

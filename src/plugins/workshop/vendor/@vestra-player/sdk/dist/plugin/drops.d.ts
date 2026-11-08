@@ -1,4 +1,4 @@
-import type { Runtime } from "./runtime.ts";
+import type { Connection } from "./connection.ts";
 import type { ScopeImpl } from "./scope.ts";
 import type { Disposable, DropModifiers, Drops } from "./types.ts";
 type PanelDrop = {
@@ -16,11 +16,11 @@ type PanelDrop = {
 declare class DropService {
     #private;
     readonly handlers: Map<string, (paths: string[], modifiers: DropModifiers) => void>;
-    constructor(runtime: Runtime);
+    constructor(runtime: Connection);
     id(): string;
     /** The first listener asks the player for panel drops; the last stops them. */
     listen(scope: ScopeImpl, listener: (drop: PanelDrop) => void): Disposable;
 }
-export declare const dropsOf: (runtime: Runtime) => DropService;
+export declare const dropsOf: (runtime: Connection) => DropService;
 export declare const drops: (scope: ScopeImpl) => Drops;
 export {};

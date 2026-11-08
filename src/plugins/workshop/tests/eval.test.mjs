@@ -63,7 +63,7 @@ test("the harness: the agent reads the documentation tree, fixes a type error an
 
   // The system prompt: the checklist and where the reference is; no full reference inline.
   const system = mock.chats[0].body.messages[0].content;
-  for (const rule of ["Read the documentation before writing code", "<owner>.<name>", "vestra.", "import type", "typecheck with 0 errors", 'docs "/"', "docs_search", "including the notes between tool calls", "Keep progress notes to a minimum", "Leave no debugging files behind", "state.phase", "testing.d.ts", "The user's interface language is English"]) assert.ok(system.includes(rule), rule);
+  for (const rule of ["Read the documentation before writing code", "<owner>.<name>", "vestra.", "import type", "typecheck with 0 errors", 'docs "/"', "docs_search", "including the notes between tool calls", "Keep progress notes to a minimum", "Leave no debugging files behind", "state.phase", "testing/index.d.ts", "dist/plugin/types/", "The user's interface language is English"]) assert.ok(system.includes(rule), rule);
   assert.ok(system.length < 6000, `${system.length} characters`);
   // Without a player: no install tool.
   const tools = mock.chats[0].body.tools.map((t) => t.function.name).sort();

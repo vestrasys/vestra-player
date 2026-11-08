@@ -2,6 +2,7 @@ import type { BindingRef, JsonStore, Plugin } from "@vestra-player/sdk";
 import { exempt, refKey, sameRef } from "./keys.ts";
 import type { Osd } from "./main.ts";
 import type { BindingsModel } from "./model.ts";
+import { renameRefs } from "./renames.ts";
 import { type IgnoreRecord, jsonStore, readRecord } from "./store.ts";
 
 /**
@@ -29,6 +30,13 @@ export class IgnoreDefaults {
     this.#osd = osd;
     this.#store = jsonStore<IgnoreRecord>(plugin, "ignore-defaults", { version: 1, enabled: false, written: [] });
     this.#record = readRecord(this.#store.value);
+    // Commands that moved (src/host/src/command_renames.rs) keep their entry under the
+    // new id; otherwise the next sync drops it and turning the switch off skips them.
+    const written = renameRefs(this.#record.written);
+    if (written.length !== this.#record.written.length || written.some((ref, i) => !sameRef(ref, this.#record.written[i]!))) {
+      this.#record = { ...this.#record, written };
+      this.#store.save(this.#record);
+    }
     model.onWrite = (ref) => this.forget(ref);
     plugin.bindings.onChange(() => this.sync());
   }
@@ -47,7 +55,7 @@ export class IgnoreDefaults {
     const answer = await this.#plugin.dialogs.confirm({
       message: "Ignore default shortcuts?",
       detail:
-        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts.",
+        "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette.",
       confirm: "Ignore",
     });
     if (answer.confirmed) await this.set(true);

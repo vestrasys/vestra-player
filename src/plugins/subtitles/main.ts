@@ -969,7 +969,7 @@ export default async function activate(plugin: Plugin) {
   });
   // Subtitle Track ▸ (top level, proposal §4): Off (302), the tracks (303–310).
   plugin.commands.add({
-    id: "track-off", path: ["Subtitle Track", "Off"], order: 302, group: "subtitle-track", radio: true, ...idle,
+    id: "track-off", path: ["Subtitle Track", "Off"], order: 302, group: "domain", radio: true, ...idle,
     category: CATEGORY.track, home: "tune",
     checked: () => !subtitles.state?.selected,
     run: () => busy || announce(message("hiding"), select(null)),
@@ -1055,7 +1055,7 @@ export default async function activate(plugin: Plugin) {
       tracks.forEach((track, i) =>
         trackMenu.commands.add({
           id: `track-${i + 1}`, path: ["Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
-          group: "subtitle-track", radio: true, ...idle, category: CATEGORY.track, home: "tune",
+          group: "domain", radio: true, ...idle, category: CATEGORY.track, home: "tune",
           checked: () => track.id === subtitles.state?.selected?.id,
           run: () => busy || announce(message("switching"), select(track, s.sourceId)),
         }),

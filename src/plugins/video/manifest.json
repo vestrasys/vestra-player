@@ -12,7 +12,8 @@
     "ui.window",
     "ui.dialog",
     "ui.osd",
-    "rendering.manage"
+    "rendering.manage",
+    "video.upscaling"
   ],
   "name": "Picture Adjustments",
   "author": "Vestra Player",

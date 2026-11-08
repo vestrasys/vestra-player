@@ -175,35 +175,36 @@ test("settings: the spec defaults; a bad field falls back to its default, the ot
 const rows = (host: TestHost) =>
   [...host.commands.entries()].map(([id, c]) => [
     id,
-    c.display.path.join(" ▶ "),
+    c.display.title,
     c.declaration.order,
     c.declaration.group,
     c.declaration.bindings.join(","),
   ]);
 
-test("menus: paths, orders, groups and bindings as in the window chapter; no conflicts", async () => {
+test("palette only (menu sweep B5): no menu paths; titles, orders, groups and bindings as in the window chapter; no conflicts", async () => {
   const { host } = await start();
+  for (const [id, c] of host.commands) assert.deepEqual([c.declaration.path, c.display.path], [[], []], `${id} has no menu path`);
   assert.deepEqual(rows(host), [
-    ["mini", "Screen ▶ Mini Size", 710, "screen", "`"],
-    ["pip", "Screen ▶ Picture-in-Picture", 709, "screen", ""],
-    ["size.0.5", "Screen ▶ 0.5×", 711, "screen-size", "1"],
-    ["size.1", "Screen ▶ 1×", 712, "screen-size", "2"],
-    ["size.1.5", "Screen ▶ 1.5×", 713, "screen-size", "3"],
-    ["size.2", "Screen ▶ 2×", 714, "screen-size", "4"],
-    ["fit", "Screen ▶ Fit to Video Aspect Ratio", 715, "screen-size", "8"],
-    ["auto.off", "Screen ▶ When Playback Starts ▶ Don't Resize", 716, "screen-auto", ""],
-    ["auto.0.5", "Screen ▶ When Playback Starts ▶ 0.5×", 717, "screen-auto", ""],
-    ["auto.1", "Screen ▶ When Playback Starts ▶ 1×", 718, "screen-auto", ""],
-    ["auto.1.5", "Screen ▶ When Playback Starts ▶ 1.5×", 719, "screen-auto", ""],
-    ["auto.2", "Screen ▶ When Playback Starts ▶ 2×", 720, "screen-auto", ""],
-    ["auto.fit", "Screen ▶ When Playback Starts ▶ Fit to Video Aspect Ratio", 721, "screen-auto", ""],
-    ["auto.once", "Screen ▶ When Playback Starts ▶ Only Once", 722, "screen-auto-once", ""],
-    ["top.cycle", "Screen ▶ Always on Top ▶ Cycle Mode", 725, "screen-top", "Ctrl+T"],
-    ["top.never", "Screen ▶ Always on Top ▶ Never", 726, "screen-top-mode", ""],
-    ["top.always", "Screen ▶ Always on Top ▶ Always", 727, "screen-top-mode", ""],
-    ["top.playing", "Screen ▶ Always on Top ▶ While Playing", 728, "screen-top-mode", ""],
-    ["top.fullscreen", "Screen ▶ Always on Top ▶ While Playing in Fullscreen", 729, "screen-top-mode", ""],
-    ["hide-cursor", "Playback ▶ Hide Pointer While Playing", 241, "playback-options", ""],
+    ["mini", "Mini Size", 710, "screen", "`"],
+    ["pip", "Picture-in-Picture", 709, "screen", ""],
+    ["size.0.5", "0.5×", 711, "screen-size", "1"],
+    ["size.1", "1×", 712, "screen-size", "2"],
+    ["size.1.5", "1.5×", 713, "screen-size", "3"],
+    ["size.2", "2×", 714, "screen-size", "4"],
+    ["fit", "Fit to Video Aspect Ratio", 715, "screen-size", "8"],
+    ["auto.off", "Don't Resize", 716, "screen-auto", ""],
+    ["auto.0.5", "0.5×", 717, "screen-auto", ""],
+    ["auto.1", "1×", 718, "screen-auto", ""],
+    ["auto.1.5", "1.5×", 719, "screen-auto", ""],
+    ["auto.2", "2×", 720, "screen-auto", ""],
+    ["auto.fit", "Fit to Video Aspect Ratio", 721, "screen-auto", ""],
+    ["auto.once", "Only Once", 722, "screen-auto-once", ""],
+    ["top.cycle", "Cycle Mode", 725, "screen-top", "Ctrl+T"],
+    ["top.never", "Never", 726, "screen-top-mode", ""],
+    ["top.always", "Always", 727, "screen-top-mode", ""],
+    ["top.playing", "While Playing", 728, "screen-top-mode", ""],
+    ["top.fullscreen", "While Playing in Fullscreen", 729, "screen-top-mode", ""],
+    ["hide-cursor", "Hide Pointer While Playing", 241, "playback-options", ""],
   ]);
   for (const id of ["size.1", "auto.1", "top.never"]) assert.equal(host.command(id).declaration.radio, true);
   assert.equal(host.command("auto.once").declaration.radio, false);
@@ -261,7 +262,7 @@ test("menus: without system picture-in-picture there is no 画中画; ` is still
   const { host } = await start(withoutPip());
   assert.equal(host.commands.has("pip"), false);
   const mini = host.command("mini");
-  assert.deepEqual([mini.display.path.join(" ▶ "), mini.declaration.order, mini.declaration.group, mini.declaration.bindings], ["Screen ▶ Mini Size", 710, "screen", ["`"]]);
+  assert.deepEqual([mini.display.title, mini.declaration.order, mini.declaration.group, mini.declaration.bindings], ["Mini Size", 710, "screen", ["`"]]);
   assert.deepEqual(host.conflicts, []);
 });
 
@@ -944,8 +945,8 @@ test("H07: 画中画 appears once the main window reports support, and goes away
   host.setMainWindow({ pictureInPicture: { supported: true, active: false } });
   await host.settle();
   const pip = host.command("pip");
-  assert.deepEqual([pip.display.path.join(" ▶ "), pip.declaration.order, pip.declaration.group, pip.declaration.bindings], ["Screen ▶ Picture-in-Picture", 709, "screen", []]);
-  assert.equal(host.command("mini").display.path.join(" ▶ "), "Screen ▶ Mini Size");
+  assert.deepEqual([pip.display.title, pip.declaration.order, pip.declaration.group, pip.declaration.bindings], ["Picture-in-Picture", 709, "screen", []]);
+  assert.equal(host.command("mini").display.title, "Mini Size");
   assert.deepEqual(host.conflicts, []);
   await play(host);
   await host.press("`");
@@ -994,29 +995,30 @@ test("IA-WIN-01: 画中画 and 迷你尺寸 exclude each other: each leaves the 
 
 test("zh-Hans: the menus, the settings page and the OSD texts are the Chinese ones from before", async () => {
   const { host } = await start(new TestHost(), undefined, "zh-Hans");
+  // Menu sweep (B5): palette only, so the title (and the category) is what a Chinese user reads.
   assert.deepEqual(
-    [...host.commands.entries()].map(([id, c]) => [id, c.display.path.join(" ▶ ")]),
+    [...host.commands.entries()].map(([id, c]) => [id, c.display.title]),
     [
-      ["mini", "屏幕 ▶ 迷你尺寸"],
-      ["pip", "屏幕 ▶ 画中画"],
-      ["size.0.5", "屏幕 ▶ 0.5倍"],
-      ["size.1", "屏幕 ▶ 1倍"],
-      ["size.1.5", "屏幕 ▶ 1.5倍"],
-      ["size.2", "屏幕 ▶ 2倍"],
-      ["fit", "屏幕 ▶ 适应视频比例"],
-      ["auto.off", "屏幕 ▶ 开始播放时 ▶ 不调整"],
-      ["auto.0.5", "屏幕 ▶ 开始播放时 ▶ 0.5倍"],
-      ["auto.1", "屏幕 ▶ 开始播放时 ▶ 1倍"],
-      ["auto.1.5", "屏幕 ▶ 开始播放时 ▶ 1.5倍"],
-      ["auto.2", "屏幕 ▶ 开始播放时 ▶ 2倍"],
-      ["auto.fit", "屏幕 ▶ 开始播放时 ▶ 适应视频比例"],
-      ["auto.once", "屏幕 ▶ 开始播放时 ▶ 只调整一次"],
-      ["top.cycle", "屏幕 ▶ 置顶 ▶ 切换置顶方式"],
-      ["top.never", "屏幕 ▶ 置顶 ▶ 不置顶"],
-      ["top.always", "屏幕 ▶ 置顶 ▶ 总是置顶"],
-      ["top.playing", "屏幕 ▶ 置顶 ▶ 播放时置顶"],
-      ["top.fullscreen", "屏幕 ▶ 置顶 ▶ 全屏播放时置顶"],
-      ["hide-cursor", "播放 ▶ 播放时隐藏鼠标指针"],
+      ["mini", "迷你尺寸"],
+      ["pip", "画中画"],
+      ["size.0.5", "0.5倍"],
+      ["size.1", "1倍"],
+      ["size.1.5", "1.5倍"],
+      ["size.2", "2倍"],
+      ["fit", "适应视频比例"],
+      ["auto.off", "不调整"],
+      ["auto.0.5", "0.5倍"],
+      ["auto.1", "1倍"],
+      ["auto.1.5", "1.5倍"],
+      ["auto.2", "2倍"],
+      ["auto.fit", "适应视频比例"],
+      ["auto.once", "只调整一次"],
+      ["top.cycle", "切换置顶方式"],
+      ["top.never", "不置顶"],
+      ["top.always", "总是置顶"],
+      ["top.playing", "播放时置顶"],
+      ["top.fullscreen", "全屏播放时置顶"],
+      ["hide-cursor", "播放时隐藏鼠标指针"],
     ],
   );
   assert.equal(host.settingsPage(PAGE_ID).title, "窗口");

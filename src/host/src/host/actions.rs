@@ -70,8 +70,11 @@ impl Host {
         };
         let mut fullscreen =
             commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
+        // The slim menu (B5): alone between two separators, after the panel
+        // items (Picture… 791 … Playlist 800, the chapter list) and before
+        // Vestra Player AI… (820); its group is shared with nothing shown.
         fullscreen.group = "screen".into();
-        fullscreen.order = 700;
+        fullscreen.order = 810;
         // IA-CORE-04 (user ruling 2026-11-01): Escape toggles full screen,
         // its only default key (up to 0.5.x Enter, Alt+Enter and F11 did,
         // and Escape was Leave Fullscreen's). An Escape a menu, dialog or
@@ -104,13 +107,18 @@ impl Host {
         let mut sidebar = commands::Declaration::new("Toggle Sidebar", &[]);
         sidebar.localize(|_| i18n::tr("Toggle Sidebar"));
         core_actions::categorize(&mut sidebar, "Window");
-        // Host 0.7.4 (menu redesign §6): the command palette, outside the
-        // menu for now; Ctrl+Shift+P (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD), and
-        // the magnifier of the bottom-bar strip (step 3a, bar_buttons.rs).
-        let mut palette = commands::Declaration::new("Command Palette", &[]);
-        palette.localize(|_| i18n::tr("Command Palette"));
+        // Host 0.7.4 (menu redesign §6): the command palette; Ctrl+Shift+P
+        // (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD), and the magnifier of the
+        // bottom-bar strip (step 3a, bar_buttons.rs). The slim menu (B5): a
+        // top-level item, first of the settings group, directly above the
+        // preferences plugin's Options… (830, `settings-main`) and About
+        // Vestra Player…; the ellipsis because it opens a view.
+        let mut palette = commands::Declaration::new("Command Palette…", &["Command Palette…"]);
+        palette.localize(|_| i18n::tr("Command Palette…"));
         // The way to find every other command, next to About and Check for Updates.
         core_actions::categorize(&mut palette, "Help");
+        palette.group = "settings-main".into();
+        palette.order = 829;
         palette.bindings = vec!["Ctrl+Shift+P".into()];
         // Host 0.7.6 (menu redesign step 3b): the adjust column's toggle, the
         // sliders cell of the bottom-bar strip between the palette and the
@@ -789,8 +797,57 @@ mod tests {
             .into_iter()
             .find(|(id, ..)| *id == palette::PALETTE)
             .unwrap();
-        assert!(declaration.path.is_empty(), "outside the menu for now");
+        // The slim menu (B5): a top-level item directly above Options… (830,
+        // group settings-main), with an ellipsis like every item that opens
+        // a view.
+        assert_eq!(declaration.path, ["Command Palette…"]);
+        assert_eq!(declaration.shown_title(), "Command Palette…");
+        assert_eq!(
+            (declaration.order, declaration.group.as_str()),
+            (829, "settings-main")
+        );
         assert!(state.enabled);
+    }
+
+    /// The slim menu (B5): the player's top-level items sit where
+    /// doc/product/menus.md puts them. Toggle Fullscreen is alone between two
+    /// separators after the panel items (791–800) and before Vestra Player
+    /// AI… (820); Quit closes the menu; Play/Pause (core_actions.rs) opens
+    /// the domain group after Close.
+    #[test]
+    fn host_menu_items_have_their_slim_menu_places() {
+        let declarations = Host::host_declarations();
+        let place = |id: &str| {
+            declarations
+                .iter()
+                .find(|(each, ..)| *each == id)
+                .map(|(_, declaration, _)| {
+                    (
+                        declaration.path.clone(),
+                        declaration.order,
+                        declaration.group.clone(),
+                    )
+                })
+                .unwrap()
+        };
+        assert_eq!(
+            place("fullscreen"),
+            (
+                vec!["Toggle Fullscreen".to_owned()],
+                810,
+                "screen".to_owned()
+            )
+        );
+        assert_eq!(
+            place("quit"),
+            (vec!["Quit".to_owned()], 990, "exit".to_owned())
+        );
+        let in_menu: Vec<&str> = declarations
+            .iter()
+            .filter(|(_, declaration, _)| !declaration.path.is_empty())
+            .map(|(id, ..)| *id)
+            .collect();
+        assert_eq!(in_menu, ["fullscreen", "quit", "palette"]);
     }
 
     /// Menu redesign step 3b: Adjust (`host/adjust`) toggles the adjust

@@ -20,8 +20,8 @@ msgstr "Éléments lus récemment et reprise là où vous vous étiez arrêté"
 
 #: manifest.json
 #, x-machine
-msgid "Open ▸ Recently Played lists the files and links opened recently. Playback ▸ Resume Playback offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
-msgstr "Ouvrir ▸ Lus récemment liste les fichiers et liens ouverts récemment. Lecture ▸ Reprise de la lecture propose Ne pas reprendre, Reprendre automatiquement ou Toujours demander : la prochaine fois que le même fichier est ouvert, la lecture reprend là où elle s'était arrêtée."
+msgid "Open ▸ Recently Played lists the files and links opened recently. Resume Playback, in the command palette, offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
+msgstr "Ouvrir ▸ Lus récemment liste les fichiers et liens ouverts récemment. Reprise de la lecture, dans la palette de commandes, propose Ne pas reprendre, Reprendre automatiquement ou Toujours demander : la prochaine fois que le même fichier est ouvert, la lecture reprend là où elle s'était arrêtée."
 
 #: manifest.json
 #, x-machine

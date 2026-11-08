@@ -90,8 +90,8 @@ msgstr "Ignorer les raccourcis par défaut ?"
 
 #: ignore.ts:50
 #, x-machine
-msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time in Settings ▸ Ignore Default Shortcuts."
-msgstr "Seules les touches que vous avez modifiées dans Raccourcis clavier fonctionneront ; les touches par défaut comme Espace et les flèches cesseront de fonctionner. Quitter (⌘Q) et Plein écran (Esc) ne sont pas concernés. Vous pouvez désactiver cette option à tout moment dans Paramètres ▸ Ignorer les raccourcis par défaut."
+msgid "Only the keys you changed in Keyboard Shortcuts will work; default keys such as Space and the arrow keys stop working. Quit (⌘Q) and Toggle Fullscreen (Esc) are not affected. You can turn this off at any time with the switch on the Keyboard Shortcuts page or in the command palette."
+msgstr "Seules les touches que vous avez modifiées dans Raccourcis clavier fonctionneront ; les touches par défaut comme Espace et les flèches cesseront de fonctionner. Quitter (⌘Q) et Plein écran (Esc) ne sont pas concernés. Vous pouvez désactiver cette option à tout moment avec l'interrupteur de la page Raccourcis clavier ou dans la palette de commandes."
 
 #: ignore.ts:51
 #, x-machine
@@ -209,10 +209,10 @@ msgstr "Afficher et réassocier les raccourcis clavier et les actions de la sour
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the context menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
 msgstr ""
 "Liste les commandes du lecteur et de chaque plugin dans la catégorie Clavier et souris de la fenêtre des options : recherche par commande ou par touche, réassociation, dissociation, rétablissement des valeurs par défaut, vérification des conflits et exportation de la liste. Associe des commandes aux clics et à la molette de la souris sur la vidéo, et peut ignorer d'un coup tous les raccourcis par défaut.\n"
-"Accessible depuis le menu contextuel : Paramètres ▸ Raccourcis clavier… / Souris… / Ignorer les raccourcis par défaut."
+"Accessible depuis la fenêtre des options (Options…, F5) ou la palette de commandes : Paramètres : Raccourcis clavier… / Souris… / Ignorer les raccourcis par défaut."
 
 #: manifest.json
 #, x-machine
@@ -311,8 +311,8 @@ msgstr "Action de la souris modifiée : {} = (aucune)"
 
 #: ui/keys.slint:113
 #, x-machine
-msgid "Default shortcuts are ignored (Settings ▸ Ignore Default Shortcuts)"
-msgstr "Les raccourcis par défaut sont ignorés (Paramètres ▸ Ignorer les raccourcis par défaut)"
+msgid "Default shortcuts are ignored (see the switch on this page)"
+msgstr "Les raccourcis par défaut sont ignorés (voir l'interrupteur de cette page)"
 
 #: ui/keys.slint:114
 #, x-machine

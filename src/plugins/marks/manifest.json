@@ -1,6 +1,6 @@
 {
   "id": "vestra.marks",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -13,15 +13,14 @@
     "ui.dialog",
     "timeline.marks"
   ],
-  "name": "Chapters, Bookmarks and A-B Loop",
+  "name": "Chapters and Bookmarks",
   "author": "Vestra Player",
-  "punchline": "Jump by chapter and bookmark; loop an A-B range",
-  "description": "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\nFind it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\".",
+  "punchline": "Jump by chapter and bookmark",
+  "description": "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\nFind it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback).",
   "tags": [
     "Playback",
     "Chapters",
-    "Bookmarks",
-    "Loop"
+    "Bookmarks"
   ],
   "minPlayerVersion": "0.7.6"
 }

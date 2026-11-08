@@ -46,7 +46,9 @@ test("official install: confirm with permissions, download through a redirect, c
     assert.equal(confirm.message, "安装「YouTube」0.2.0？");
     assert.match(String(confirm.detail), /来自 Vestra Player 官方仓库，作者 zysilm。/);
     assert.match(String(confirm.detail), /· 读写剪贴板/);
-    assert.match(String(confirm.detail), /不限制它读写文件和联网/);
+    // It ends with the permission list: no closing note (user ruling 2026-11-08).
+    assert.match(String(confirm.detail), /· [^\n]*$/);
+    assert.doesNotMatch(String(confirm.detail), /完整的程序/);
     assert.deepEqual(installs(host)[0], {
       method: "install",
       id: "zysilm.youtube",
@@ -313,10 +315,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
     host.window("store").emit("act", "update");
     await until(host, () => host.osd.includes("已更新 YouTube 到 0.3.0"));
     assert.equal(host.confirmTexts.at(-1)!.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
-    assert.equal(
-      host.confirmTexts.at(-1)!.detail,
-      "新增：\n· 读写剪贴板\n\n当前 0.2.0。\n\n插件是完整的程序，以上权限只限制它使用播放器的功能，不限制它读写文件和联网。",
-    );
+    assert.equal(host.confirmTexts.at(-1)!.detail, "新增：\n· 读写剪贴板\n\n当前 0.2.0。");
     await until(host, () => !store.busy);
     // No Roll Back / Restore.
     assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);

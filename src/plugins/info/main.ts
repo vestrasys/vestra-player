@@ -244,7 +244,8 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "info.toggle",
     category: category.info,
-    path: ["Playback Info"],
+    // Menu sweep (B5): Playback Info, Playback Properties… and Check for Updates… are in the command palette only.
+    title: "Playback Info",
     order: 810,
     group: "windows",
     bindings: ["Tab"],
@@ -279,7 +280,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "info.properties",
     category: category.info,
-    path: ["Playback Properties…"],
+    title: "Playback Properties…",
     order: 811,
     group: "windows",
     bindings: ["Ctrl+F1"],
@@ -292,7 +293,8 @@ export default async function activate(plugin: Plugin) {
     category: category.help,
     path: ["About Vestra Player…"],
     order: 880,
-    group: "windows",
+    // Menu sweep (B5): the settings group, with Options… (830) and the host's Command Palette.
+    group: "settings-main",
     bindings: ["F1"],
     run: showAbout,
   });
@@ -301,7 +303,7 @@ export default async function activate(plugin: Plugin) {
     id: "info.update",
     category: category.help,
     home: "info.about", // the About window's Updates row
-    path: ["Check for Updates…"],
+    title: "Check for Updates…",
     order: 881,
     group: "windows",
     run: async () => {

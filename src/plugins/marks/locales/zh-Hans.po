@@ -5,11 +5,11 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
+#: bookmarks.ts:46 menu.ts:56 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 msgid "Bookmark {}"
 msgstr "书签 {}"
 
-#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
+#: chapters.ts:12 menu.ts:56 ui/marks.slint:55 ui/marks.slint:129
 msgid "Chapter {}"
 msgstr "章节 {}"
 
@@ -29,21 +29,21 @@ msgstr "将移除 {} 个书签，不能撤销。"
 msgid "Clear Bookmarks"
 msgstr "清空书签"
 
-#: manifest.json
-msgid "Chapters, Bookmarks and A-B Loop"
-msgstr "章节、书签与区段"
+#: manifest.json menu.ts:108 menu.ts:117 menu.ts:130 menu.ts:169 menu.ts:184 menu.ts:193 menu.ts:206 seekbar.ts:137 ui/marks.slint:70
+msgid "Chapters and Bookmarks"
+msgstr "章节/书签"
 
 #: manifest.json
-msgid "Jump by chapter and bookmark; loop an A-B range"
-msgstr "按章节和书签跳转，A-B 区段循环"
+msgid "Jump by chapter and bookmark"
+msgstr "按章节和书签跳转"
 
 #: manifest.json
 msgid ""
-"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
-"Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
+"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
+"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
 msgstr ""
-"列出媒体的章节，为每个文件添加、命名和管理书签，在章节与书签之间跳转并在进度条上显示标记；设定 A-B 区段并按次数循环播放。\n"
-"入口在右键菜单「播放 ▸ 章节/书签」与「播放 ▸ A-B 区段循环」。"
+"列出媒体的章节，为每个文件添加、命名和管理书签，在章节与书签之间跳转并在进度条上显示标记。\n"
+"入口在右键菜单「章节/书签列表…」（H）；其余命令在命令面板的「章节/书签」下。A-B 区段循环在「播放」面板（基础播放）中。"
 
 #: manifest.json
 msgid "Playback"
@@ -57,285 +57,113 @@ msgstr "章节"
 msgid "Bookmarks"
 msgstr "书签"
 
-#: manifest.json
-msgid "Loop"
-msgstr "循环"
-
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:59
+#: menu.ts:55
 msgid "{}"
 msgstr "{}"
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:62
+#: menu.ts:58
 msgid "{}{}{}"
 msgstr "{}{}{}"
 
-#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
-msgid "Chapters and Bookmarks"
-msgstr "章节/书签"
-
-#: menu.ts:110
+#: menu.ts:107
 msgid "Chapter and Bookmark List…"
 msgstr "章节/书签列表…"
 
-#: menu.ts:119 ui/marks.slint:208
+#: menu.ts:116 ui/marks.slint:208
 msgid "Add Bookmark"
 msgstr "添加书签"
 
-#: menu.ts:126 osd.ts:51
+#: menu.ts:123 osd.ts:32
 msgid "Can't add bookmarks to this source"
 msgstr "当前来源不能添加书签"
 
-#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
+#: menu.ts:123 menu.ts:135 menu.ts:176 menu.ts:198 ui/marks.slint:157
 msgid "No media open"
 msgstr "未打开媒体"
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Previous Bookmark or Chapter"
 msgstr "上一书签/章节"
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Next Bookmark or Chapter"
 msgstr "下一书签/章节"
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Previous Chapter"
 msgstr "上一章节"
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Next Chapter"
 msgstr "下一章节"
 
-#: menu.ts:138 menu.ts:179 menu.ts:201
+#: menu.ts:135 menu.ts:176 menu.ts:198
 msgid "This source can't seek"
 msgstr "当前来源不能跳转"
 
-#: menu.ts:186
+#: menu.ts:183
 msgid "More Chapters… ({} in all)"
 msgstr "更多章节…（共 {} 项）"
 
-#: menu.ts:208
+#: menu.ts:205
 msgid "More Bookmarks… ({} in all)"
 msgstr "更多书签…（共 {} 项）"
 
-#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
-msgid "A-B Loop"
-msgstr "A-B 区段循环"
-
-#: menu.ts:250
-msgid "Set Start Point"
-msgstr "设定起点"
-
-#: menu.ts:250
-msgid "Clear Start Point"
-msgstr "解除起点"
-
-#: menu.ts:250
-msgid "Start Point Back 0.1 s"
-msgstr "起点后退 0.1 秒"
-
-#: menu.ts:250
-msgid "Start Point Forward 0.1 s"
-msgstr "起点前进 0.1 秒"
-
-#: menu.ts:250
-msgid "Set End Point"
-msgstr "设定止点"
-
-#: menu.ts:250
-msgid "Clear End Point"
-msgstr "解除止点"
-
-#: menu.ts:250
-msgid "End Point Back 0.1 s"
-msgstr "止点后退 0.1 秒"
-
-#: menu.ts:250
-msgid "End Point Forward 0.1 s"
-msgstr "止点前进 0.1 秒"
-
-#: menu.ts:250
-msgid "Move Range Back 0.1 s"
-msgstr "区段整体后退 0.1 秒"
-
-#: menu.ts:250
-msgid "Move Range Forward 0.1 s"
-msgstr "区段整体前进 0.1 秒"
-
-#: menu.ts:250
-msgid "Loop Current Chapter or Bookmark Range"
-msgstr "循环当前章节/书签区段"
-
-#: menu.ts:257 menu.ts:271 osd.ts:51
-msgid "This source doesn't support A-B loop"
-msgstr "当前来源不支持区段循环"
-
-#: menu.ts:257
-msgid "Start point not set"
-msgstr "未设定起点"
-
-#: menu.ts:257
-msgid "End point not set"
-msgstr "未设定止点"
-
-#: menu.ts:257 menu.ts:271
-msgid "A-B range not set"
-msgstr "未设定区段"
-
-#: menu.ts:265
-msgid "A-B Loop On/Off"
-msgstr "区段循环 开/关"
-
-#: menu.ts:278 menu.ts:279
-msgid "Loop Count"
-msgstr "循环次数"
-
-#: menu.ts:278
-msgid "Endless"
-msgstr "无限"
-
-#: menu.ts:278
-msgid "Once"
-msgstr "1 次"
-
-#: menu.ts:278
-msgid "2 Times"
-msgstr "2 次"
-
-#: menu.ts:278
-msgid "3 Times"
-msgstr "3 次"
-
-#: menu.ts:278
-msgid "5 Times"
-msgstr "5 次"
-
-#: menu.ts:278
-msgid "10 Times"
-msgstr "10 次"
-
-#: osd.ts:51
+#: osd.ts:32
 msgid "Chapter: {}"
 msgstr "章节定位：{}"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Chapter: Chapter {}"
 msgstr "章节定位：章节 {}"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark: {}"
 msgstr "书签：定位到 {}"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark added: {} ({})"
 msgstr "书签：{} 已添加（{}）"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "A bookmark already exists here"
 msgstr "此处已有书签"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmarks full ({})"
 msgstr "书签已满（{} 个）"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No previous chapter"
 msgstr "没有上一个章节"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No next chapter"
 msgstr "没有下一个章节"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No previous bookmark or chapter"
 msgstr "没有上一个书签/章节"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No next bookmark or chapter"
 msgstr "没有下一个书签/章节"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Can't seek: {}"
 msgstr "无法跳转：{}"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark and chapter marks on the seek bar: on"
 msgstr "进度条上显示书签/章节标记：开"
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark and chapter marks on the seek bar: off"
 msgstr "进度条上显示书签/章节标记：关"
 
-#: osd.ts:51
-msgid "A-B loop: {} ~ {}"
-msgstr "A-B 循环：{} ~ {}"
-
-#: osd.ts:51
-msgid "A-B start: {}"
-msgstr "A-B 起点：{}"
-
-#: osd.ts:51
-msgid "A-B end: {}"
-msgstr "A-B 止点：{}"
-
-#: osd.ts:51
-msgid "A-B loop ended"
-msgstr "区段循环结束"
-
-#: osd.ts:51
-msgid "A-B loop off"
-msgstr "解除区段循环"
-
-#: osd.ts:51
-msgid "Start point is after the end point; end point cleared"
-msgstr "起点晚于止点，已清除止点"
-
-#: osd.ts:51
-msgid "End point must be after the start point"
-msgstr "止点必须晚于起点"
-
-#: osd.ts:51
-msgid "Start point cleared"
-msgstr "已解除起点"
-
-#: osd.ts:51
-msgid "End point cleared"
-msgstr "已解除止点"
-
-#: osd.ts:51
-msgid "Reached the beginning"
-msgstr "已到开头"
-
-#: osd.ts:51
-msgid "Reached the end"
-msgstr "已到结尾"
-
-#: osd.ts:51
-msgid "Set the start and end points first"
-msgstr "请先设定起点和止点"
-
-#: osd.ts:51
-msgid "No chapters or bookmarks to define a range"
-msgstr "没有章节或书签，无法确定区段"
-
-#: osd.ts:51
-msgid "Range too short to loop"
-msgstr "区段太短，无法循环"
-
-#: osd.ts:51
-msgid "Loop count: endless"
-msgstr "循环次数：无限"
-
-#: osd.ts:51
-msgid "Loop count: {}"
-msgstr "循环次数：{} 次"
-
-#: osd.ts:51
-msgid "A-B loop failed: {}"
-msgstr "区段循环失败：{}"
-
-#: seekbar.ts:147
+#: seekbar.ts:136
 msgid "Show Marks on Seek Bar"
 msgstr "在进度条上显示标记"
 

@@ -91,10 +91,10 @@ function replaceDetail(info: PluginInfo, name: string): Msg {
   );
 }
 
-/** What the plugin will be able to do, and what permissions do not limit. */
+/** What the plugin will be able to do. */
 const willBeAble = (capabilities: readonly string[]) =>
   msg(
-    "It will be able to:\n{}\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network.",
+    "It will be able to:\n{}",
     permissionList(capabilities),
   );
 
@@ -147,7 +147,7 @@ export async function installFromRepository(store: Store, item: Item, version: I
         ? {
             message: msg("Update “{}” to {}? The new version needs more permissions", name, version.version),
             detail: msg(
-              "Added:\n{2}\n\nCurrent: {3}.\n\nA plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network.",
+              "Added:\n{2}\n\nCurrent: {3}.",
               permissionList(added),
               current,
             ),

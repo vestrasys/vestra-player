@@ -6,12 +6,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
+#: bookmarks.ts:46 menu.ts:56 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 #, x-machine
 msgid "Bookmark {}"
 msgstr "ブックマーク {}"
 
-#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
+#: chapters.ts:12 menu.ts:56 ui/marks.slint:55 ui/marks.slint:129
 #, x-machine
 msgid "Chapter {}"
 msgstr "チャプター {}"
@@ -36,24 +36,24 @@ msgstr "{} 個のブックマークが削除されます。この操作は取り
 msgid "Clear Bookmarks"
 msgstr "ブックマークを消去"
 
-#: manifest.json
+#: manifest.json menu.ts:108 menu.ts:117 menu.ts:130 menu.ts:169 menu.ts:184 menu.ts:193 menu.ts:206 seekbar.ts:137 ui/marks.slint:70
 #, x-machine
-msgid "Chapters, Bookmarks and A-B Loop"
-msgstr "チャプター、ブックマーク、A-B リピート"
+msgid "Chapters and Bookmarks"
+msgstr "チャプターとブックマーク"
 
 #: manifest.json
 #, x-machine
-msgid "Jump by chapter and bookmark; loop an A-B range"
-msgstr "チャプターとブックマークで移動、A-B 区間のリピート"
+msgid "Jump by chapter and bookmark"
+msgstr "チャプターとブックマークで移動"
 
 #: manifest.json
 #, x-machine
 msgid ""
-"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
-"Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
+"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
+"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
 msgstr ""
-"メディアのチャプターを一覧表示し、ファイルごとにブックマークを追加・命名・管理できます。チャプターとブックマークの間を移動でき、シークバーにマークとして表示します。A-B 区間を設定して、指定した回数だけリピート再生できます。\n"
-"コンテキストメニューの「再生 ▸ チャプターとブックマーク」と「再生 ▸ A-B リピート」から使えます。"
+"メディアのチャプターを一覧表示し、ファイルごとにブックマークを追加・命名・管理できます。チャプターとブックマークの間を移動でき、シークバーにマークとして表示します。\n"
+"コンテキストメニューの「チャプターとブックマークの一覧…」（H）から使えます。その他のコマンドはコマンドパレットの「チャプターとブックマーク」にあります。A-B リピートは「再生」パネル（基本の再生）にあります。"
 
 #: manifest.json
 #, x-machine
@@ -70,354 +70,139 @@ msgstr "チャプター"
 msgid "Bookmarks"
 msgstr "ブックマーク"
 
-#: manifest.json
-#, x-machine
-msgid "Loop"
-msgstr "リピート"
-
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:59
+#: menu.ts:55
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:62
+#: menu.ts:58
 #, x-machine
 msgid "{}{}{}"
 msgstr "{}{}{}"
 
-#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
-#, x-machine
-msgid "Chapters and Bookmarks"
-msgstr "チャプターとブックマーク"
-
-#: menu.ts:110
+#: menu.ts:107
 #, x-machine
 msgid "Chapter and Bookmark List…"
 msgstr "チャプターとブックマークの一覧…"
 
-#: menu.ts:119 ui/marks.slint:208
+#: menu.ts:116 ui/marks.slint:208
 #, x-machine
 msgid "Add Bookmark"
 msgstr "ブックマークを追加"
 
-#: menu.ts:126 osd.ts:51
+#: menu.ts:123 osd.ts:32
 #, x-machine
 msgid "Can't add bookmarks to this source"
 msgstr "このソースにはブックマークを追加できません"
 
-#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
+#: menu.ts:123 menu.ts:135 menu.ts:176 menu.ts:198 ui/marks.slint:157
 #, x-machine
 msgid "No media open"
 msgstr "メディアが開かれていません"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Bookmark or Chapter"
 msgstr "前のブックマーク/チャプター"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Bookmark or Chapter"
 msgstr "次のブックマーク/チャプター"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Chapter"
 msgstr "前のチャプター"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Chapter"
 msgstr "次のチャプター"
 
-#: menu.ts:138 menu.ts:179 menu.ts:201
+#: menu.ts:135 menu.ts:176 menu.ts:198
 #, x-machine
 msgid "This source can't seek"
 msgstr "このソースはシークできません"
 
-#: menu.ts:186
+#: menu.ts:183
 #, x-machine
 msgid "More Chapters… ({} in all)"
 msgstr "その他のチャプター…（全 {} 件）"
 
-#: menu.ts:208
+#: menu.ts:205
 #, x-machine
 msgid "More Bookmarks… ({} in all)"
 msgstr "その他のブックマーク…（全 {} 件）"
 
-#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
-#, x-machine
-msgid "A-B Loop"
-msgstr "A-B リピート"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set Start Point"
-msgstr "開始点を設定"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear Start Point"
-msgstr "開始点を解除"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Back 0.1 s"
-msgstr "開始点を 0.1 秒戻す"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Forward 0.1 s"
-msgstr "開始点を 0.1 秒進める"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set End Point"
-msgstr "終了点を設定"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear End Point"
-msgstr "終了点を解除"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Back 0.1 s"
-msgstr "終了点を 0.1 秒戻す"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Forward 0.1 s"
-msgstr "終了点を 0.1 秒進める"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Back 0.1 s"
-msgstr "区間全体を 0.1 秒戻す"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Forward 0.1 s"
-msgstr "区間全体を 0.1 秒進める"
-
-#: menu.ts:250
-#, x-machine
-msgid "Loop Current Chapter or Bookmark Range"
-msgstr "現在のチャプター/ブックマーク区間をリピート"
-
-#: menu.ts:257 menu.ts:271 osd.ts:51
-#, x-machine
-msgid "This source doesn't support A-B loop"
-msgstr "このソースは A-B リピートに対応していません"
-
-#: menu.ts:257
-#, x-machine
-msgid "Start point not set"
-msgstr "開始点が設定されていません"
-
-#: menu.ts:257
-#, x-machine
-msgid "End point not set"
-msgstr "終了点が設定されていません"
-
-#: menu.ts:257 menu.ts:271
-#, x-machine
-msgid "A-B range not set"
-msgstr "A-B 区間が設定されていません"
-
-#: menu.ts:265
-#, x-machine
-msgid "A-B Loop On/Off"
-msgstr "A-B リピートのオン/オフ"
-
-#: menu.ts:278 menu.ts:279
-#, x-machine
-msgid "Loop Count"
-msgstr "リピート回数"
-
-#: menu.ts:278
-#, x-machine
-msgid "Endless"
-msgstr "無限"
-
-#: menu.ts:278
-#, x-machine
-msgid "Once"
-msgstr "1 回"
-
-#: menu.ts:278
-#, x-machine
-msgid "2 Times"
-msgstr "2 回"
-
-#: menu.ts:278
-#, x-machine
-msgid "3 Times"
-msgstr "3 回"
-
-#: menu.ts:278
-#, x-machine
-msgid "5 Times"
-msgstr "5 回"
-
-#: menu.ts:278
-#, x-machine
-msgid "10 Times"
-msgstr "10 回"
-
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: {}"
 msgstr "チャプター：{}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: Chapter {}"
 msgstr "チャプター：チャプター {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark: {}"
 msgstr "ブックマーク：{}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark added: {} ({})"
 msgstr "ブックマークを追加しました：{}（{}）"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "A bookmark already exists here"
 msgstr "この位置にはすでにブックマークがあります"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmarks full ({})"
 msgstr "ブックマークがいっぱいです（{} 個）"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous chapter"
 msgstr "前のチャプターはありません"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next chapter"
 msgstr "次のチャプターはありません"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous bookmark or chapter"
 msgstr "前のブックマーク/チャプターはありません"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next bookmark or chapter"
 msgstr "次のブックマーク/チャプターはありません"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Can't seek: {}"
 msgstr "シークできません：{}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: on"
 msgstr "シークバーのブックマーク/チャプターのマーク：オン"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: off"
 msgstr "シークバーのブックマーク/チャプターのマーク：オフ"
 
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop: {} ~ {}"
-msgstr "A-B リピート：{} 〜 {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B start: {}"
-msgstr "A-B 開始点：{}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B end: {}"
-msgstr "A-B 終了点：{}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop ended"
-msgstr "A-B リピートが終了しました"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop off"
-msgstr "A-B リピート：オフ"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point is after the end point; end point cleared"
-msgstr "開始点が終了点より後のため、終了点を解除しました"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point must be after the start point"
-msgstr "終了点は開始点より後にしてください"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point cleared"
-msgstr "開始点を解除しました"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point cleared"
-msgstr "終了点を解除しました"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the beginning"
-msgstr "先頭に達しました"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the end"
-msgstr "末尾に達しました"
-
-#: osd.ts:51
-#, x-machine
-msgid "Set the start and end points first"
-msgstr "先に開始点と終了点を設定してください"
-
-#: osd.ts:51
-#, x-machine
-msgid "No chapters or bookmarks to define a range"
-msgstr "区間を決めるチャプターやブックマークがありません"
-
-#: osd.ts:51
-#, x-machine
-msgid "Range too short to loop"
-msgstr "区間が短すぎるためリピートできません"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: endless"
-msgstr "リピート回数：無限"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: {}"
-msgstr "リピート回数：{} 回"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop failed: {}"
-msgstr "A-B リピートに失敗しました：{}"
-
-#: seekbar.ts:147
+#: seekbar.ts:136
 #, x-machine
 msgid "Show Marks on Seek Bar"
 msgstr "シークバーにマークを表示"

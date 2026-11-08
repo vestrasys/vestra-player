@@ -34,7 +34,7 @@ test("I09: top-level About Vestra Player… (880, windows, F1) opens the about w
   const { host, stop } = await start();
   try {
     assert.deepEqual(host.command("info.about").declaration, {
-      title: "About Vestra Player…", path: ["About Vestra Player…"], order: 880, group: "windows", radio: false, bindings: ["F1"], focus: null, repeat: false, category: { $vestraText: "Help" },
+      title: "About Vestra Player…", path: ["About Vestra Player…"], order: 880, group: "settings-main", radio: false, bindings: ["F1"], focus: null, repeat: false, category: { $vestraText: "Help" },
     });
     assert.deepEqual(host.conflicts, []);
     await host.press("F1");

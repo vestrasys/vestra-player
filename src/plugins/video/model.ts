@@ -284,6 +284,8 @@ export interface Render {
   shadersEnabled: boolean;
   shaders: string[];
   interpolation: boolean;
+  /** AI Upscaling (RTX Video Super Resolution) is chosen; asked for again at each start. */
+  upscaling: boolean;
 }
 export const defaultRender = (): Render => ({
   toneMapping: "auto",
@@ -292,6 +294,7 @@ export const defaultRender = (): Render => ({
   shadersEnabled: false,
   shaders: [],
   interpolation: false,
+  upscaling: false,
 });
 /** 100–400 nits in steps of 10; 203 (BT.2408 reference white) stays as it is. */
 export const peakOf = (n: number) => (n === PEAK_DEFAULT ? n : clamp(Math.round(n / 10) * 10, PEAK_MIN, PEAK_MAX));
@@ -489,6 +492,7 @@ export function parse(raw: unknown): Stored {
     shadersEnabled: rr.shadersEnabled === true,
     shaders: shaderList(rr.shaders),
     interpolation: rr.interpolation === true,
+    upscaling: rr.upscaling === true,
   };
   // 倍帧 and 运动补偿 exclude each other; a file with both keeps 倍帧.
   if (effects.frameBlend) render.interpolation = false;

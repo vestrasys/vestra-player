@@ -7,7 +7,8 @@
  * media), or a failure.
  */
 import { isAbsolute } from "node:path";
-import { failure, Latest, quiet } from "./runtime.js";
+import { Latest } from "./latest.js";
+import { failure, quiet } from "./errors.js";
 import { playerOf } from "./player.js";
 import { hasControl, VIDEO_PROCESSING_LIMITS } from "../processing.js";
 /** The handle id when `shaders()` is called without one. */

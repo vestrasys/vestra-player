@@ -1,8 +1,9 @@
 /** Menu commands: declaration, state sync (revisions hidden) and dispatch. */
-import { failure, Latest, quiet, uncertain } from "./runtime.js";
+import { Latest } from "./latest.js";
+import { failure, quiet, uncertain } from "./errors.js";
 import { checkBindings } from "./bindings.js";
 import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, MENU_IDS } from "../commands.js";
-import { ImageHandle } from "./ui.js";
+import { ImageHandle } from "./view/image.js";
 import { isTextValue, textProblem } from "../i18n.js";
 import { conditionJson, isCondition } from "./when.js";
 const value = (item) => typeof item === "function" ? item() : item;

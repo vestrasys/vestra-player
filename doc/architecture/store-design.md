@@ -104,7 +104,7 @@ The host's install library is the single source of truth: the store follows `pac
 - **Details**: icon (`iconUrl` downloaded and cached, then `ui.image`; when there is no icon or it fails, the Vestra Player logo bundled in the package, `assets/logo.png`), name, author, repository, summary, action buttons, hint bar; three tabs on the left, information and permissions in the right column.
   - "Description": README (`readmeUrl`, or the README in an installed plugin's package); "Changelog": `changelogUrl` or the CHANGELOG in the package; when missing, "The author provided no description" / "The author provided no changelog".
   - "Versions": the version history table (version, release date, `minPlayerVersion`, state: current / incompatible / revoked); each installable old version has an "Install" button at the end of its row.
-  - Right column "Permissions": the manifest's capabilities translated into plain language per §2.4, high-risk items in amber; at the end, a fixed grey line "A plugin is a complete program. These permissions only limit how it uses the player's features; they do not limit reading and writing files or network access." (1.6 item 4).
+  - Right column "Permissions": the manifest's capabilities translated into plain language per §2.4, high-risk items in amber (1.6 item 4).
 - With nothing selected the right side shows "Select a plugin on the left to see its details"; when the list is empty it shows the reason (offline with no cache, no filter results).
 - Bottom status line: the refresh result of each repository, the progress of ongoing downloads / installs and "Cancel".
 - "Install from Link…" expands a `UrlInputRow` above the list (already in the widget library, `confirm-text: "Install"`); Esc collapses it.
@@ -156,7 +156,7 @@ Every install is confirmed first (1.6 item 5 "manual confirmation by the user"; 
 
 | Scenario | message | detail | confirm |
 | --- | --- | --- | --- |
-| Install from the official repository | `Install “YouTube” 0.2.0?` | `From the Vestra Player official repository, author zysilm.\n\nIt will be able to:\n· Control playback…\n\nA plugin is a complete program. These permissions only limit how it uses the player's features; they do not limit reading and writing files or network access.` | Install |
+| Install from the official repository | `Install “YouTube” 0.2.0?` | `From the Vestra Player official repository, author zysilm.\n\nIt will be able to:\n· Control playback…` | Install |
 | Install from a third-party repository | `Install “X” 1.3.0 from an unofficial repository?` | `Repository: Foo (https://foo.example/). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.\n\nIt will be able to: …` | Install Anyway (`destructive`) |
 | Link / file (sideload) | `Install the plugin package “X” 1.0.0?` | `From <link or file name>; not reviewed by any repository and not updated automatically. … It will be able to: …` | Install Anyway (`destructive`) |
 | Update (same permissions) | `Update “X” to 0.2.1?` | `Current: 0.2.0.` | Update |

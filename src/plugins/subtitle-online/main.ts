@@ -555,15 +555,17 @@ export default async function activate(plugin: Plugin) {
   }
 
   // ------------------------------------------------------------ menu
-  // Command palette category (player 0.7.6): the submenu's name, a text value so `i18n extract`
-  // finds it, with the submenu's translations.
+  // Command palette category (player 0.7.6): the former submenu's name, a text value so `i18n extract`
+  // finds it, with its translations. Menu sweep (B5): Search and Download Subtitles… is the last
+  // item of Open ▸ (115, after Load External Audio… 114, before Recently Played ▸); the settings
+  // are in the command palette only.
   const category = plugin.i18n.text("Online Subtitles");
   plugin.commands.add({
-    id: "search", path: ["@subtitles", "Online Subtitles", "Search and Download Subtitles…"], order: 360, group: "subtitle-online", category,
+    id: "search", path: ["@open", "Search and Download Subtitles…"], order: 115, group: "open", category,
     run: showDownload,
   });
   plugin.commands.add({
-    id: "settings", path: ["@subtitles", "Online Subtitles", "Online Subtitle Settings…"], order: 361, group: "subtitle-online", category,
+    id: "settings", title: "Online Subtitle Settings…", order: 361, group: "subtitle-online", category,
     run: showSettings,
   });
 

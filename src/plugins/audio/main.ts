@@ -27,11 +27,12 @@ import type { ChannelMode, Settings, SyncKeep, TrackRow } from "./model.ts";
 
 /**
  * The right-click menu's Audio Track ▸ (menu redesign §4): a top-level submenu in the domain range,
- * where the Audio menu was (500); everything else of the old Audio ▸ lives in the Audio panel and the
- * command palette.
+ * right after Play/Pause (201) and before Subtitle Track ▸ (302) and Snapshot ▸ (420), as mockup 04
+ * orders them (menu sweep B5; it was 505, after both); everything else of the old Audio ▸ lives in
+ * the Audio panel and the command palette.
  */
 const TRACKS = "Audio Track";
-const TRACKS_ORDER = 505;
+const TRACKS_ORDER = 301;
 /** Audio… sits before Playlist (800) in the windows group, second of the four built-in panels (791–794 proposed for Picture…, Audio…, Subtitles…, Playback…). */
 const PANEL_ORDER = 792;
 

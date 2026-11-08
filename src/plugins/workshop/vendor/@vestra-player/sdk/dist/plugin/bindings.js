@@ -6,7 +6,7 @@
  *   binding  = { modifier "+" } input        modifiers in order Ctrl, Alt, Shift, Cmd
  *   input    = key | "Mouse:" mouse
  */
-import { failure } from "./runtime.js";
+import { failure } from "./errors.js";
 /**
  * The names a binding (`CommandOptions.bindings`, `Bindings.set`) is made
  * of, as the player's binding parser accepts them. A binding is

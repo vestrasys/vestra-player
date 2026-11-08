@@ -12,123 +12,123 @@ msgstr ""
 msgid "Forward {} s"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Playback…"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Open File…"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Open URL…"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Reopen Current/Last File"
 msgstr ""
 
-#: commands.ts:272 commands.ts:273
+#: commands.ts:273 commands.ts:274
 msgid "Copy to Clipboard"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "File Name"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Folder Path"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Full Path"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:820
+#: commands.ts:273 ui/panel.slint:1275
 msgid "Previous Keyframe"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:827
+#: commands.ts:273 ui/panel.slint:1282
 msgid "Next Keyframe"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Jump to Time…"
 msgstr ""
 
-#: commands.ts:272 ui/panel.slint:772 ui/panel.slint:775 ui/panel.slint:781
+#: commands.ts:273 ui/panel.slint:1227 ui/panel.slint:1230 ui/panel.slint:1236
 msgid "Jump to Start"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Seek Steps…"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "0.5×"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "1.5×"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "2×"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Custom…"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Disable Screen Saver While Playing"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Show Time on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:272
+#: commands.ts:273
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:273
+#: commands.ts:274
 msgid "File"
 msgstr ""
 
-#: commands.ts:273
+#: commands.ts:274
 msgid "Seek"
 msgstr ""
 
-#: commands.ts:273 ui/panel.slint:657 ui/panel.slint:675 ui/panel.slint:678 ui/panel.slint:705
+#: commands.ts:274 ui/panel.slint:1011 ui/panel.slint:1029 ui/panel.slint:1032 ui/panel.slint:1059
 msgid "Speed"
 msgstr ""
 
-#: commands.ts:273 panel.ts:56
+#: commands.ts:274 panel.ts:69
 msgid "Playback"
 msgstr ""
 
-#: commands.ts:283 ui/panel.slint:632
+#: commands.ts:284 ui/panel.slint:979
 msgid "Not supported by the current source"
 msgstr ""
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "No file to reopen"
 msgstr ""
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "No open file"
 msgstr ""
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "A network source has no file name"
 msgstr ""
 
-#: commands.ts:283 ui/panel.slint:650
+#: commands.ts:284 ui/panel.slint:997
 msgid "No video"
 msgstr ""
 
-#: commands.ts:283
+#: commands.ts:284
 msgid "Needs ffmpeg"
 msgstr ""
 
@@ -140,107 +140,275 @@ msgstr ""
 msgid "Open Media (replaces the current source)"
 msgstr ""
 
-#: main.ts:29
+#: loop-commands.ts:50 ui/panel.slint:1087
+msgid "Set Start Point"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1089
+msgid "Clear Start Point"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1090
+msgid "Start Point Back 0.1 s"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1091
+msgid "Start Point Forward 0.1 s"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1105
+msgid "Set End Point"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1107
+msgid "Clear End Point"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1108
+msgid "End Point Back 0.1 s"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1109
+msgid "End Point Forward 0.1 s"
+msgstr ""
+
+#: loop-commands.ts:50
+msgid "Move Range Back 0.1 s"
+msgstr ""
+
+#: loop-commands.ts:50
+msgid "Move Range Forward 0.1 s"
+msgstr ""
+
+#: loop-commands.ts:50 ui/panel.slint:1163
+msgid "Loop Current Chapter or Bookmark Range"
+msgstr ""
+
+#: loop-commands.ts:51 loop-commands.ts:66 ui/panel.slint:1071
+msgid "A-B Loop"
+msgstr ""
+
+#: loop-commands.ts:58 loop-commands.ts:72 main.ts:32 ui/panel.slint:999
+msgid "This source doesn't support A-B loop"
+msgstr ""
+
+#: loop-commands.ts:58 loop-commands.ts:72 ui/panel.slint:999
+msgid "No media open"
+msgstr ""
+
+#: loop-commands.ts:58
+msgid "Start point not set"
+msgstr ""
+
+#: loop-commands.ts:58
+msgid "End point not set"
+msgstr ""
+
+#: loop-commands.ts:58 loop-commands.ts:72
+msgid "A-B range not set"
+msgstr ""
+
+#: loop-commands.ts:65 ui/panel.slint:1075 ui/panel.slint:1122
+msgid "A-B Loop On/Off"
+msgstr ""
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "Endless"
+msgstr ""
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "Once"
+msgstr ""
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "2 Times"
+msgstr ""
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "3 Times"
+msgstr ""
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "5 Times"
+msgstr ""
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+msgid "10 Times"
+msgstr ""
+
+#: loop-commands.ts:80
+msgid "Loop Count"
+msgstr ""
+
+#: main.ts:32
 msgid "Seek: {} / {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Back {} s: {} / {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Forward {} s: {} / {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Jumped to the start"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Previous keyframe: {} / {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Next keyframe: {} / {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Already at the last keyframe"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Speed: {}x"
 msgstr ""
 
-#: main.ts:29 ui/bar.slint:95
+#: main.ts:32 ui/bar.slint:95
 msgid "Volume: {}%"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Open failed"
 msgstr ""
 
-#: main.ts:29 ui/open-url.slint:66
+#: main.ts:32 ui/open-url.slint:66
 msgid "Open failed: {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Reopened: {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Reopened the last file: {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Copied: {}"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Copy failed: {}"
 msgstr ""
 
-#: main.ts:29 ui/open-url.slint:65
+#: main.ts:32 ui/open-url.slint:65
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Disable screen saver while playing: On"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Disable screen saver while playing: Off"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show time on seek bar hover: On"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show time on seek bar hover: Off"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show thumbnail on seek bar hover: On"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr ""
 
-#: main.ts:29
+#: main.ts:32
+msgid "A-B loop: {} ~ {}"
+msgstr ""
+
+#: main.ts:32
+msgid "A-B start: {}"
+msgstr ""
+
+#: main.ts:32
+msgid "A-B end: {}"
+msgstr ""
+
+#: main.ts:32
+msgid "A-B loop ended"
+msgstr ""
+
+#: main.ts:32
+msgid "A-B loop off"
+msgstr ""
+
+#: main.ts:32
+msgid "Start point is after the end point; end point cleared"
+msgstr ""
+
+#: main.ts:32
+msgid "End point must be after the start point"
+msgstr ""
+
+#: main.ts:32
+msgid "Start point cleared"
+msgstr ""
+
+#: main.ts:32
+msgid "End point cleared"
+msgstr ""
+
+#: main.ts:32
+msgid "Reached the beginning"
+msgstr ""
+
+#: main.ts:32
+msgid "Reached the end"
+msgstr ""
+
+#: main.ts:32 ui/panel.slint:1122
+msgid "Set the start and end points first"
+msgstr ""
+
+#: main.ts:32
+msgid "No chapters or bookmarks to define a range"
+msgstr ""
+
+#: main.ts:32
+msgid "Range too short to loop"
+msgstr ""
+
+#: main.ts:32
+msgid "Loop count: endless"
+msgstr ""
+
+#: main.ts:32
+msgid "Loop count: {}"
+msgstr ""
+
+#: main.ts:32
+msgid "A-B loop failed: {}"
+msgstr ""
+
+#: main.ts:32
 msgid "Source operation failed: {}"
 msgstr ""
 
-#: main.ts:29 ui/panel.slint:735
+#: main.ts:32 ui/panel.slint:940 ui/panel.slint:1190
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr ""
 
-#: main.ts:29 ui/panel.slint:689
+#: main.ts:32 ui/panel.slint:1043
 msgid "Speed must be between 0.25× and 4×"
 msgstr ""
 
-#: main.ts:29 ui/panel.slint:449
+#: main.ts:32 ui/panel.slint:500
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr ""
 
@@ -254,8 +422,8 @@ msgstr ""
 
 #: manifest.json
 msgid ""
-"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\n"
-"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps."
+"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; an A-B loop that repeats a range a chosen number of times; time or thumbnail on seek bar hover; no screen saver while playing.\n"
+"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, A-B Loop, jump, frame and keyframe steps, seek steps."
 msgstr ""
 
 #: manifest.json
@@ -272,6 +440,10 @@ msgstr ""
 
 #: manifest.json
 msgid "speed"
+msgstr ""
+
+#: manifest.json
+msgid "loop"
 msgstr ""
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
@@ -361,92 +533,141 @@ msgid "Not a valid link"
 msgstr ""
 
 #. {} is a number of seconds ("30").
-#: ui/panel.slint:443
+#: ui/panel.slint:494
 msgid "{} s"
 msgstr ""
 
-#: ui/panel.slint:449
+#: ui/panel.slint:500
 msgid "Seek step"
 msgstr ""
 
-#: ui/panel.slint:450
+#: ui/panel.slint:501
 msgid "click: type a value · double-click: Default"
 msgstr ""
 
-#: ui/panel.slint:587 ui/panel.slint:701 ui/panel.slint:710
+#: ui/panel.slint:644 ui/panel.slint:1055 ui/panel.slint:1064
 msgid "1×"
 msgstr ""
 
 #. {} is the playback speed ("1.25"); the × reads "times".
-#: ui/panel.slint:618 ui/panel.slint:683
+#: ui/panel.slint:675 ui/panel.slint:1037
 msgid "{}×"
 msgstr ""
 
-#: ui/panel.slint:657 ui/panel.slint:718
+#: ui/panel.slint:822
+msgid "hold to repeat"
+msgstr ""
+
+#: ui/panel.slint:941
+msgid "Start point"
+msgstr ""
+
+#: ui/panel.slint:941
+msgid "End point"
+msgstr ""
+
+#: ui/panel.slint:942
+msgid "click: type a time"
+msgstr ""
+
+#: ui/panel.slint:1011 ui/panel.slint:1173
 msgid "Go to"
 msgstr ""
 
-#: ui/panel.slint:657 ui/panel.slint:770
+#: ui/panel.slint:1011 ui/panel.slint:1225
 msgid "Start"
 msgstr ""
 
-#: ui/panel.slint:657 ui/panel.slint:790 ui/panel.slint:807
+#: ui/panel.slint:1011 ui/panel.slint:1245 ui/panel.slint:1262
 msgid "Frame"
 msgstr ""
 
-#: ui/panel.slint:657 ui/panel.slint:816 ui/panel.slint:833
+#: ui/panel.slint:1011 ui/panel.slint:1271 ui/panel.slint:1288
 msgid "Keyframe"
 msgstr ""
 
-#: ui/panel.slint:689 ui/panel.slint:695
+#: ui/panel.slint:1043 ui/panel.slint:1049
 msgid "Playback speed"
 msgstr ""
 
-#: ui/panel.slint:690
+#: ui/panel.slint:1044
 msgid "click: type a value"
 msgstr ""
 
-#: ui/panel.slint:706
+#: ui/panel.slint:1060
 msgid "drag or scroll · double-click: 1×"
 msgstr ""
 
-#: ui/panel.slint:715
+#. the button that sets the loop's start point A at the current position.
+#: ui/panel.slint:1086
+msgid "Set A here"
+msgstr ""
+
+#: ui/panel.slint:1088
+msgid "at the current position"
+msgstr ""
+
+#. the button that sets the loop's end point B at the current position.
+#: ui/panel.slint:1104
+msgid "Set B here"
+msgstr ""
+
+#: ui/panel.slint:1106
+msgid "at the current position · the loop starts at once"
+msgstr ""
+
+#. the A-B loop's on/off switch.
+#: ui/panel.slint:1137
+msgid "Loop"
+msgstr ""
+
+#. how many times the A-B loop repeats (Endless, Once, 2 Times…).
+#: ui/panel.slint:1142
+msgid "Count"
+msgstr ""
+
+#. a short button: loop the current chapter or bookmark range.
+#: ui/panel.slint:1160
+msgid "Chapter"
+msgstr ""
+
+#: ui/panel.slint:1170
 msgid "Jump"
 msgstr ""
 
-#: ui/panel.slint:736 ui/panel.slint:760 ui/panel.slint:764
+#: ui/panel.slint:1191 ui/panel.slint:1215 ui/panel.slint:1219
 msgid "Jump to Time"
 msgstr ""
 
 #. the format of the time to jump to (hours, minutes, seconds).
-#: ui/panel.slint:750
+#: ui/panel.slint:1205
 msgid "hh:mm:ss"
 msgstr ""
 
-#: ui/panel.slint:758
+#: ui/panel.slint:1213
 msgid "Go"
 msgstr ""
 
-#: ui/panel.slint:787
+#: ui/panel.slint:1242
 msgid "Step"
 msgstr ""
 
-#: ui/panel.slint:794
+#: ui/panel.slint:1249
 msgid "Previous Frame"
 msgstr ""
 
-#: ui/panel.slint:801
+#: ui/panel.slint:1256
 msgid "Next Frame"
 msgstr ""
 
-#: ui/panel.slint:842
+#: ui/panel.slint:1297
 msgid "Seek steps"
 msgstr ""
 
-#: ui/panel.slint:876
+#: ui/panel.slint:1331
 msgid "Jump to keyframes only"
 msgstr ""
 
-#: ui/panel.slint:877
+#: ui/panel.slint:1332
 msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr ""

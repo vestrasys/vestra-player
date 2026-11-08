@@ -10,6 +10,7 @@ mod binding_manager;
 mod bindings;
 mod capabilities;
 mod clipboard;
+mod command_renames;
 mod commands;
 mod conditions;
 mod core_actions;
@@ -585,7 +586,13 @@ fn main() -> Result<()> {
     }
     host.register_host_commands()?;
     {
-        let renamed = core_actions::migrate_overlay(&mut host.ui_state.state.bindings);
+        // Commands whose full id changed (`command_renames`): keys and
+        // recent palette entries saved under the old id follow, once.
+        let renamed = {
+            let state = &mut host.ui_state.state;
+            let keys = command_renames::migrate_overlay(&mut state.bindings);
+            command_renames::migrate_recent(&mut state.palette_recent) || keys
+        };
         // Host 0.6.0: an override of Toggle Fullscreen gets its new
         // default Escape, once (`migrate_fullscreen_escape`).
         let holders = bindings::parse("Escape")
@@ -598,7 +605,7 @@ fn main() -> Result<()> {
             &holders,
         );
         if renamed || escape {
-            // Old playback-plugin keys now name the core actions, and the
+            // Saved ids now name the commands' current ids, and the
             // migrations are recorded; saved once.
             let now = host.now_ms();
             host.ui_state.touch(now);

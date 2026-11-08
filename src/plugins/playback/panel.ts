@@ -3,7 +3,8 @@ import type { PanelActions } from "./commands.ts";
 import { MAX_RATE, MIN_RATE, type Playback } from "./controller.ts";
 import { parseTime, rateText } from "./format.ts";
 import type { Keyframes } from "./keyframes.ts";
-import { DEFAULT_STEPS, parseStep, type SeekSteps, type SettingsStore, stepText } from "./settings.ts";
+import { type AbLoop, precise } from "./loop.ts";
+import { COUNTS, DEFAULT_STEPS, parseStep, type SeekSteps, type SettingsStore, stepText } from "./settings.ts";
 import { dragRate, positionOf, TICKS, tickOf } from "./speed.ts";
 import { Failure } from "./texts.ts";
 import { Keys } from "./tips.ts";
@@ -15,11 +16,21 @@ export type PanelOptions = {
   /** Save the seek steps and "Jump to keyframes only" and apply them (the player's step, the commands' titles). */
   applySteps: (steps: SeekSteps, keyframes: boolean) => Promise<void>;
   jumpToStart: () => Promise<void>;
+  /** B23 A-B Loop: the section after Speed. */
+  loop: AbLoop;
 };
+
+/** The A-B Loop section's mini timeline: chapter ticks as one Path in a 1000 × 1 view box. */
+export function tickPath(starts: readonly number[], duration: number | null): string {
+  if (!duration || duration <= 0) return "";
+  const columns = new Set<number>();
+  for (const start of starts) if (start > 0 && start < duration) columns.add(Math.round((start / duration) * 1000));
+  return [...columns].map((x) => `M${x} 0V1`).join("");
+}
 
 /**
  * The Playback panel in the adjust column (menu redesign §3.2, step 7): Speed,
- * Jump, Step and Seek steps. It replaces Playback ▸ Speed and Seek, the Jump to
+ * A-B Loop (mockup 32: moved here from the marks plugin), Jump, Step and Seek steps. It replaces Playback ▸ Speed and Seek, the Jump to
  * Time and custom speed windows and the Seek Steps window. A typed value
  * applies to the current source on Enter; a refused one stays open in its field,
  * marked, with the reason on the video. Nothing here belongs to a source.
@@ -30,6 +41,8 @@ export class PlaybackPanel implements PanelActions {
   #invalidStep = -1;
   #jumpInvalid = false;
   #rateInvalid = false;
+  /** A typed A or B point was refused. */
+  #abInvalid: "a" | "b" | null = null;
   /** Counters the panel watches (ui/panel.slint): a bump focuses, opens or closes a field. */
   #editJump = 0;
   #editRate = 0;
@@ -52,7 +65,7 @@ export class PlaybackPanel implements PanelActions {
   constructor(plugin: Plugin, options: PanelOptions) {
     this.#plugin = plugin;
     this.#o = options;
-    const { playback: p, keyframes, settings } = options;
+    const { playback: p, keyframes, settings, loop } = options;
     this.panel = plugin.panels.mount("adjust", "ui/panel.slint", { title: "Playback" });
     // The player's own actions (speed, frames, ← →) are in its binding table; this plugin's
     // commands come from `commands.keys`, read in `bind` so the caps follow every change.
@@ -67,6 +80,15 @@ export class PlaybackPanel implements PanelActions {
       }
       const rate = this.#draft ?? p.state.rate;
       const keyframe = keyframes.state();
+      const state = p.state;
+      const duration = state.duration && state.duration > 0 ? state.duration : null;
+      const at = (seconds: number | null | undefined) =>
+        duration === null || seconds === null || seconds === undefined ? 0 : Math.min(1, Math.max(0, seconds / duration));
+      // The span: the running loop (whoever set it), else this plugin's A and B (grey).
+      const running = state.loop ?? null;
+      const span = running ?? (loop.a !== null && loop.b !== null ? { a: loop.a, b: loop.b } : null);
+      const abBlocked = loop.blocked();
+      const abUsable = abBlocked === null;
       return {
         keys: {
           slower: keys.key("rate-down"),
@@ -86,6 +108,16 @@ export class PlaybackPanel implements PanelActions {
           forward3: own("forward-3"),
           back4: own("backward-4"),
           forward4: own("forward-4"),
+          seta: own("ab.set-a"),
+          cleara: own("ab.clear-a"),
+          aback: own("ab.a-back"),
+          aforward: own("ab.a-forward"),
+          setb: own("ab.set-b"),
+          clearb: own("ab.clear-b"),
+          bback: own("ab.b-back"),
+          bforward: own("ab.b-forward"),
+          abtoggle: own("ab.toggle"),
+          absegment: own("ab.segment"),
         },
         // Not greyed while a speed is being applied: the ruler keeps taking a drag (latest wins).
         canRate: p.can("rate"),
@@ -105,6 +137,33 @@ export class PlaybackPanel implements PanelActions {
         editJump: this.#editJump,
         editRate: this.#editRate,
         revealSteps: this.#revealSteps,
+        // B23 A-B Loop: the points ("" unset), the switch (any running loop), the count, the timeline.
+        abUsable,
+        abReason: abBlocked === "No media open" ? "media" : abBlocked ? "source" : "",
+        abA: loop.a === null ? "" : precise(loop.a),
+        abB: loop.b === null ? "" : precise(loop.b),
+        abOn: Boolean(running),
+        abCanLoop: abUsable && loop.toggleable(),
+        abCount: Math.max(0, COUNTS.indexOf(loop.count)),
+        // The pass being played of all passes: mpv's count is the jumps back, so count + 1 passes;
+        // the last one plays after the player dropped the loop (`finalPass`).
+        abStatus: running
+          ? running.count === null
+            ? "∞"
+            : `${Math.min(loop.pass, running.count + 1)} / ${running.count + 1}`
+          : loop.finalPass !== null
+            ? `${loop.finalPass} / ${loop.finalPass}`
+            : loop.a === null && abUsable && state.position !== null
+            ? precise(state.position)
+            : "",
+        abAt: at(state.position),
+        abAAt: at(loop.a),
+        abBAt: at(loop.b),
+        abSpan: span !== null && duration !== null,
+        abSpanA: at(span?.a),
+        abSpanB: at(span?.b),
+        abTicks: tickPath(loop.chapters, duration),
+        abInvalid: this.#abInvalid ?? "",
         done: this.#done,
       };
     });
@@ -143,6 +202,44 @@ export class PlaybackPanel implements PanelActions {
       if (typeof on !== "boolean" || on === settings.value.seekKeyframes) return;
       return this.#guard(options.applySteps(settings.value.seekSteps, on));
     });
+    // B23 A-B Loop: "a" or "b" for the point.
+    const point = (name: unknown) => (name === "a" || name === "b" ? name : null);
+    panel.on("abSet", (name: string) => {
+      const which = point(name);
+      if (which === "a") loop.setA();
+      else if (which === "b") loop.setB();
+    });
+    panel.on("abClear", (name: string) => {
+      const which = point(name);
+      if (which === "a") loop.clearA();
+      else if (which === "b") loop.clearB();
+    });
+    panel.on("abNudge", (name: string, direction: number) => {
+      const which = point(name);
+      if (!which || (direction !== 1 && direction !== -1)) return;
+      if (which === "a") loop.nudgeA(direction * 0.1);
+      else loop.nudgeB(direction * 0.1);
+    });
+    panel.on("abType", (name: string, typed: string) => {
+      const which = point(name);
+      if (!which || loop.blocked()) return;
+      // Not a time: refused like one outside the media (the reason on the video).
+      const seconds = parseTime(String(typed ?? "")) ?? Number.NaN;
+      if (loop.type(which, seconds)) this.#applied();
+      else {
+        this.#abInvalid = which;
+        plugin.update();
+      }
+    });
+    panel.on("abToggle", () => {
+      if (loop.toggleable()) loop.toggle();
+    });
+    panel.on("abCountChosen", (index: number) => {
+      const count = COUNTS[index];
+      if (count !== undefined && count !== loop.count) loop.setCount(count);
+      else plugin.update(); // the list shows the saved count again
+    });
+    panel.on("abSegment", () => loop.loopSegment());
     // Each text field reports its own focus: the panel holds the keyboard (keeps the fullscreen
     // column out) while any of them has it, whatever order the next field's focus and the last
     // one's blur arrive in. Leaving a field drops its mark.
@@ -154,6 +251,7 @@ export class PlaybackPanel implements PanelActions {
         if (name === "jump") this.#jumpInvalid = false;
         else if (name === "rate") this.#rateInvalid = false;
         else if (name === `step${this.#invalidStep}`) this.#invalidStep = -1;
+        else if (name === this.#abInvalid) this.#abInvalid = null;
         plugin.update();
       }
       panel.setInteraction({ focused: this.#focused.size > 0 });
@@ -182,16 +280,25 @@ export class PlaybackPanel implements PanelActions {
     this.#revealSteps++;
     this.#plugin.update();
   }
-  /** Another source: a refused time no longer applies to anything. */
+  /**
+   * Another source: a refused time no longer applies to anything. The A and B
+   * fields go with their points (unset now), so they report no blur: their focus
+   * marks go here.
+   */
   sourceChanged() {
-    if (!this.#jumpInvalid) return;
+    const a = this.#focused.delete("a");
+    const b = this.#focused.delete("b");
+    if (a || b) this.panel.setInteraction({ focused: this.#focused.size > 0 });
+    if (!this.#jumpInvalid && !this.#abInvalid) return;
     this.#jumpInvalid = false;
+    this.#abInvalid = null;
     this.#plugin.update();
   }
 
   /** A typed value was applied: the fields close and the time field empties. */
   #applied() {
     this.#invalidStep = -1;
+    this.#abInvalid = null;
     this.#jumpInvalid = this.#rateInvalid = false;
     this.#done++;
     this.#plugin.update();

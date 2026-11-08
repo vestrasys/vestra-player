@@ -32,7 +32,6 @@ export function loadingName(source: string | null, rules: PathRules = HOST_RULES
 }
 
 export const PAGE_ID = "logo-cover";
-const LOOK = ["@settings", "Appearance"] as const;
 
 /** The notices of this plugin (a union of literals, so `i18n extract` finds them). */
 type Notice =
@@ -225,15 +224,16 @@ export default async function activate(plugin: Plugin) {
   }
 
   /**
-   * Command palette categories ("Category: Title", player 0.7.6): the menu each command sits in.
-   * Text values, so `i18n extract` finds them; "Appearance" reuses the submenu's translation,
+   * Command palette categories ("Category: Title", player 0.7.6): the menu each command sat in
+   * (menu sweep B5: all four are in the command palette only, with no menu path).
+   * Text values, so `i18n extract` finds them; "Appearance" reuses the former submenu's translation,
    * "Audio" and "Reset" the player's words for those menus.
    */
   const category = { audio: plugin.i18n.text("Audio"), appearance: plugin.i18n.text("Appearance"), reset: plugin.i18n.text("Reset") };
   plugin.commands.add({
     id: "audio-cover",
     category: category.audio,
-    path: ["@audio", "Show Album Cover for Audio Only"],
+    title: "Show Album Cover for Audio Only",
     order: 530,
     group: "visual",
     checked: () => settings.value.audio.on,
@@ -242,7 +242,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "idle-logo",
     category: category.appearance,
-    path: [...LOOK, "Show Logo When Idle"],
+    title: "Show Logo When Idle",
     order: 845,
     group: "settings-logo",
     checked: () => settings.value.idle.on,
@@ -251,7 +251,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "choose-logo",
     category: category.appearance,
-    path: [...LOOK, "Choose Logo Image…"],
+    title: "Choose Logo Image…",
     order: 846,
     group: "settings-logo",
     busy: () => choosing,
@@ -260,7 +260,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "reset-logo",
     category: category.reset,
-    path: ["@reset", "Idle Logo"],
+    title: "Idle Logo",
     order: 850,
     group: "reset-appearance",
     enabled: () => logo.custom,

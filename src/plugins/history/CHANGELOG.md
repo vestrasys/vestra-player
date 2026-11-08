@@ -2,6 +2,9 @@
 
 ## 0.1.8
 
+- Menu sweep (menu redesign §4): Playback ▸ Resume Playback ▸ (all five items) leaves the right-click menu and is in the command palette only ("Resume Playback: …"), with ids, radio and checked states unchanged; Open ▸ Recently Played ▸ stays and is now the last line of Open ▸ (order 119, after a separator; it sat between Load External Audio… and Add Secondary Subtitle… at 114). Who must change: nobody.
+- The description places Resume Playback in the command palette, in all six languages.
+
 - Every command has a category for the player's command palette (Ctrl+Shift+P, player 0.7.6), which names a command "Category: Title": **Recently Played** (the records, "(No Entries)", Remove Invalid Entries, Clear Entries, Record Playback History) and **Resume Playback** (Don't Resume, Resume Automatically, Ask Every Time, Also Remember Audio Files, Clear All Saved Positions). Both are the submenus' own labels, so they read the same as the menu in every language of the plugin. No command names a `home`: the plugin has no window that holds these controls.
 - Remove Invalid Entries and Clear Entries, disabled while there are no records, now say why ("No recently played items"), so the palette still lists them instead of hiding them.
 - Requires player 0.7.6 (`minPlayerVersion`): older players refuse a command with a category. Who must change: nobody. Titles, ids, menu paths, keys and order are unchanged.

@@ -4,7 +4,7 @@ export interface Size {
   height: number;
 }
 
-/** H03: the scales of Screen ▸ 0.5× … 2×, with their menu titles. */
+/** H03: the scales of Window Size: 0.5× … 2× (command palette), with their titles. */
 export const SCALES = [
   { scale: 0.5, title: "0.5×" },
   { scale: 1, title: "1×" },

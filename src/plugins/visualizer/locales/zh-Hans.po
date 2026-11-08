@@ -102,10 +102,10 @@ msgstr "纯音频时显示专辑封面，空闲时显示徽标"
 #: manifest.json
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
-"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+"Entries: the Logo and Album Cover page in Options…; in the command palette, Audio: Show Album Cover for Audio Only and Appearance: Show Logo When Idle / Choose Logo Image…."
 msgstr ""
 "播放没有画面的音频时显示专辑封面与标题、艺术家、专辑；没有打开媒体时显示徽标（可换成自己的图片）；打开媒体期间显示加载画面。\n"
-"入口：「声音 ▸ 纯音频时显示专辑封面」「设置 ▸ 外观」。"
+"入口：「选项…」中的「徽标与专辑封面」页；命令面板中的「声音: 纯音频时显示专辑封面」与「外观: 空闲时显示徽标 / 选择徽标图片…」。"
 
 #: manifest.json
 msgid "audio"

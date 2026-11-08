@@ -3,8 +3,7 @@
  * activation, pause/epoch acknowledgements, input acknowledgements and pacing;
  * the plugin only renders frames.
  */
-import { failure, sleep, toError } from "./runtime.js";
-import { abortError } from "./player.js";
+import { abortError, failure, sleep, toError } from "./errors.js";
 /**
  * Frames of audio buffered ahead of the device before rendering pauses
  * (50 ms). Each pump refills the whole lead, so it must outlast one pump

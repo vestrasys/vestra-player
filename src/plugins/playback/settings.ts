@@ -25,7 +25,13 @@ export type Settings = {
   seekKeyframes: boolean;
   /** G-14: the bar's current-time label shows the remaining time. */
   remainingTime: boolean;
+  /** B23 A-B Loop: Loop Count (`null` = endless; a number = jumps back, the player's `count`). */
+  abCount: Count;
 };
+
+/** B23 loop count choices, in the Loop Count commands' and the panel's Count order. */
+export const COUNTS = [null, 1, 2, 3, 5, 10] as const;
+export type Count = (typeof COUNTS)[number];
 
 export const DEFAULT_STEPS: SeekSteps = [5, 30, 60, 300];
 /** `Settings.format` of this version. */
@@ -48,6 +54,7 @@ const defaults = (): Settings => ({
   seekSteps: [...DEFAULT_STEPS],
   seekKeyframes: true,
   remainingTime: false,
+  abCount: null,
 });
 
 const isObject = (value: unknown): value is Record<string, unknown> =>
@@ -103,6 +110,7 @@ export class SettingsStore {
     if (Array.isArray(steps) && steps.length === 4 && steps.every(validStep))
       this.#value.seekSteps = [...steps] as SeekSteps;
     if (typeof raw.seekKeyframes === "boolean") this.#value.seekKeyframes = raw.seekKeyframes;
+    if ((COUNTS as readonly unknown[]).includes(raw.abCount)) this.#value.abCount = raw.abCount as Count;
   }
 
   get value(): Readonly<Settings> {

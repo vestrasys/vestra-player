@@ -3,7 +3,8 @@
  * here; plugins see immutable states, conditional calls and media handles.
  */
 import { HostError } from "../wire.js";
-import { Latest, failure, quiet, sleep, uncertain } from "./runtime.js";
+import { Latest } from "./latest.js";
+import { abortError, failure, quiet, sleep, uncertain } from "./errors.js";
 import { openStream } from "./stream.js";
 const raws = new WeakMap();
 const empty = {
@@ -154,12 +155,6 @@ function sourceFailure(error) {
     return typeof error === "string"
         ? failure(error)
         : failure("backend", error.backend);
-}
-export function abortError() {
-    const error = new Error("aborted");
-    error.name = "AbortError";
-    error.code = "aborted";
-    return error;
 }
 /** One per plugin: the state store and the operation book client. */
 export class PlayerService {

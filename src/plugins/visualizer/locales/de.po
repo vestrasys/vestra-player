@@ -125,10 +125,10 @@ msgstr "Zeigt bei reinem Audio das Albumcover und im Leerlauf ein Logo"
 #, x-machine
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
-"Entries: Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance."
+"Entries: the Logo and Album Cover page in Options…; in the command palette, Audio: Show Album Cover for Audio Only and Appearance: Show Logo When Idle / Choose Logo Image…."
 msgstr ""
 "Während Audio ohne Bild läuft, wird das Albumcover mit Titel, Interpret und Album angezeigt; sind keine Medien geöffnet, ein Logo (durch ein eigenes Bild ersetzbar); während Medien geöffnet werden, ein Ladebildschirm.\n"
-"Menüeinträge: Audio ▸ Albumcover bei reinem Audio anzeigen, Einstellungen ▸ Darstellung."
+"Zugang: die Seite „Logo und Albumcover“ unter Optionen…; in der Befehlspalette „Audio: Albumcover bei reinem Audio anzeigen“ und „Darstellung: Logo im Leerlauf anzeigen / Logobild auswählen…“."
 
 #: manifest.json
 #, x-machine

@@ -94,11 +94,11 @@ async function manualCheck(host: TestHost) {
   return window;
 }
 
-test("J10: top-level Check for Updates… right after About (881, windows); Options ▸ General ▸ Updates, on by default", async () => {
+test("J10: Check for Updates… in the command palette only (881; menu sweep B5); Options ▸ General ▸ Updates, on by default", async () => {
   const { host, stop } = await start();
   try {
     assert.deepEqual(host.command("info.update").declaration, {
-      title: "Check for Updates…", path: ["Check for Updates…"], order: 881, group: "windows", radio: false, bindings: [], focus: null, repeat: false, category: { $vestraText: "Help" }, home: "info.about",
+      title: "Check for Updates…", path: [], order: 881, group: "windows", radio: false, bindings: [], focus: null, repeat: false, category: { $vestraText: "Help" }, home: "info.about",
     });
     assert.deepEqual(host.conflicts, []);
     const page = host.settingsPage("info.updates");
@@ -446,7 +446,7 @@ test("J10 in Simplified Chinese: menu, settings page and notice", async () => {
   net.routes.set(LATEST_URL, { body: latest("0.6.3") });
   const { host, stop } = await start({ locale: "zh-Hans" });
   try {
-    assert.deepEqual(host.command("info.update").display.path, ["检查更新…"]);
+    assert.deepEqual([host.command("info.update").display.path, host.command("info.update").display.title], [[], "检查更新…"]);
     assert.equal(host.settingsPage("info.updates").title, "更新");
     await until(() => host.osd.length === 1);
     assert.deepEqual(host.osd, ["Vestra Player 0.6.3 已发布。打开“关于 Vestra Player…”即可下载。"]);

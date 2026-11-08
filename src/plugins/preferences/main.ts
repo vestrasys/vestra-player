@@ -3,20 +3,19 @@ import { isLanguage, LANGUAGES } from "./languages.ts";
 import { DEFAULT_THEME, isTheme, THEMES, themeRows } from "./themes.ts";
 
 /**
- * Settings ▸ (Options… 830; Appearance ▸ 840–849, one radio per palette
- * from 840; Language ▸ 850–857, Follow System then one radio per language).
- * `@settings` is the player's Settings menu.
+ * Options… (830, top level, settings group; menu sweep B5). Palette only:
+ * Appearance (840–849, one radio per palette from 840) and Language (850–857,
+ * Follow System then one radio per language).
  */
-const SETTINGS = "@settings";
 export const PAGE_ID = "appearance";
 export const LANGUAGE_PAGE_ID = "language";
 
 /**
- * Preferences: Settings ▸ Options… (J04, F5) opens the player's options
+ * Preferences: Options… (J04, F5) opens the player's options
  * window; this plugin's own pages there are Appearance (H10: palette radio
  * with previews and Restore Defaults) and Language (Follow System or one
- * language, used from the next start), also reachable as Settings ▸
- * Appearance ▸ <palette> and Settings ▸ Language ▸ <language>. The palette
+ * language, used from the next start), also reachable in the command palette
+ * as Appearance: <palette> and Language: <language>. The palette
  * and the language are the player's (`plugin.appearance`): the player saves
  * them, and they stay when this plugin stops.
  */
@@ -98,7 +97,7 @@ export default async function activate(plugin: Plugin) {
   const HOME = "options";
   plugin.commands.add({
     id: "options",
-    path: [SETTINGS, "Options…"],
+    path: ["Options…"],
     category: category.settings,
     order: 830,
     group: "settings-main",
@@ -108,7 +107,7 @@ export default async function activate(plugin: Plugin) {
   THEMES.forEach((row, index) =>
     plugin.commands.add({
       id: `theme.${row.id}`,
-      path: [SETTINGS, "Appearance", row.title],
+      title: row.title,
       category: category.appearance,
       home: HOME,
       order: 840 + index,
@@ -120,7 +119,7 @@ export default async function activate(plugin: Plugin) {
   );
   plugin.commands.add({
     id: "language.system",
-    path: [SETTINGS, "Language", "Follow System"],
+    title: "Follow System",
     category: category.language,
     home: HOME,
     order: 850,
@@ -132,7 +131,8 @@ export default async function activate(plugin: Plugin) {
   LANGUAGES.forEach((row, index) =>
     plugin.commands.add({
       id: `language.${row.id}`,
-      path: [SETTINGS, "Language", /* i18n-ignore */ row.name],
+      // i18n-ignore: a language's own name is not translated
+      title: row.name,
       category: category.language,
       home: HOME,
       order: 851 + index,

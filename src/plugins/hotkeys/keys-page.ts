@@ -46,8 +46,8 @@ export type Line = Omit<Row, "selected"> & {
   sortKeys: string;
   /**
    * What the search box matches besides the keys, lower case: the name as shown plus the
-   * menu path and the category, so "Video" still finds Video ▸ Snapshot ▸ … now that the
-   * name is "Snapshot: Save Current Frame".
+   * menu path and the category, so "Open" still finds Open ▸ Open Folder… although the
+   * row reads "Playlist: Open Folder…".
    */
   search: string;
 };
@@ -175,7 +175,7 @@ export class KeysPage {
     });
   }
 
-  /** Settings ▸ Keyboard Shortcuts…: the options window on this page, with a fresh list. */
+  /** Keyboard Shortcuts… (command palette, Settings: …): the options window on this page, with a fresh list. */
   async show() {
     await this.#model.reload().catch((error) => this.#say(failure(error)));
     await this.#plugin.settings.show(KEYS_PAGE);

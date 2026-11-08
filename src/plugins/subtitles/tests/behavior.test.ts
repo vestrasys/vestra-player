@@ -65,8 +65,9 @@ test("menu per the redesign: Open ▸, Subtitle Track ▸, Subtitles…; the res
   assert.deepEqual(declared, [
     ["打开 > 打开字幕…", 113, "open", "Alt+O"],
     ["打开 > 添加次字幕…", 114, "open", ""],
-    ["选择字幕轨 > 不显示", 302, "subtitle-track", ""],
-    ["选择字幕轨 > English · en", 303, "subtitle-track", ""],
+    // Group "domain" (menu sweep B5): no separator between Audio Track ▸, Subtitle Track ▸ and Snapshot ▸.
+    ["选择字幕轨 > 不显示", 302, "domain", ""],
+    ["选择字幕轨 > English · en", 303, "domain", ""],
     ["字幕…", 793, "windows", "Alt+3"],
   ]);
   // Out of the menu, in the command palette with their keys (ids unchanged).
@@ -397,7 +398,7 @@ test("the track menu follows the real track list: names, loads and source change
   host.subtitles.tracks.push({ target: { kind: "embedded", id: 2 }, title: "English", language: "en", styleSupported: true, styleReason: null });
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   const titles = () =>
-    [...host.commands.values()].filter((c) => c.declaration.group === "subtitle-track").sort((a, b) => a.declaration.order - b.declaration.order).map((c) => c.display.path.at(-1));
+    [...host.commands.values()].filter((c) => c.declaration.path[0] === "Subtitle Track").sort((a, b) => a.declaration.order - b.declaration.order).map((c) => c.display.path.at(-1));
   try {
     assert.deepEqual(titles(), ["不显示", "English · en", "English · en (2)"], "equal names stay distinct paths");
     host.dialogAnswers.push([file.path]);

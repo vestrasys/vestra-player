@@ -2782,6 +2782,8 @@ export component W inherits Window {
         let mut files = Vec::new();
         walk(&root.join("plugins"), &mut files);
         assert!(files.len() >= 15, "found {files:?}");
+        // Every file is compiled, so one broken file does not hide another.
+        let mut failures = Vec::new();
         for file in files {
             let result = pollster::block_on(compiler().build_from_path(&file));
             let errors: Vec<_> = result
@@ -2793,8 +2795,11 @@ export component W inherits Window {
                 // compile it, so any real error in it still fails here.
                 .filter(|e| e != "No component found")
                 .collect();
-            assert!(errors.is_empty(), "{}: {errors:?}", file.display());
+            if !errors.is_empty() {
+                failures.push(format!("{}: {errors:?}", file.display()));
+            }
         }
+        assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 
     /// Player 0.5.10: a bottom bar placing `BarButtons` shares the shell's

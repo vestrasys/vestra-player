@@ -21,7 +21,7 @@ test("vendor/ matches a fresh build from the player's SDK (run `npm run vendor:s
 
 test("the reference is the SDK's own documentation tree, vendored with the package (no llms-full.txt)", async () => {
   const toolchain = new Toolchain(plugin, "/unused");
-  for (const file of ["dist/docs.js", "dist/docs-tree.json.gz", "dist/plugin/types.d.ts", "dist/plugin/testing.d.ts", "llms.txt"]) await fs.access(path.join(toolchain.sdk, file));
+  for (const file of ["dist/docs.js", "dist/docs-tree.json.gz", "dist/plugin/types.d.ts", "dist/plugin/testing/index.d.ts", "llms.txt"]) await fs.access(path.join(toolchain.sdk, file));
   await assert.rejects(fs.access(path.join(toolchain.sdk, "llms-full.txt")));
   assert.ok(toolchain.docsRoots().every((root) => root.startsWith(plugin)));
 });
@@ -51,8 +51,13 @@ test("the reference by its short name: sdk/… reads, lists and greps the SDK; w
   assert.equal(await run("read", { path: "sdk/llms.txt", limit: 3 }).then((t) => t.split("\n")[0]), index.split("\n")[0]);
   assert.equal(await run("read", { path: "@sdk/llms.txt", limit: 1 }).then((t) => t.split("\n")[0]), index.split("\n")[0]);
   assert.match(await run("ls", { path: "sdk/dist/plugin" }), /types\.d\.ts/);
-  const grep = await run("grep", { pattern: "interface TestHost|class TestHost", path: "sdk/dist/plugin/testing.d.ts", limit: 1 });
-  assert.match(grep, /^sdk\/dist\/plugin\/testing\.d\.ts:\d+: /);
+  // The places the prompt names (prompt.ts): the test host in testing/index.d.ts
+  // (since SDK 1.6.18), and the API types found by one grep in either layout,
+  // types.d.ts (up to 1.6.20) or types/<category>.d.ts (from 1.6.21).
+  const host = await run("grep", { pattern: "class TestHost\\b", path: "sdk/dist/plugin/testing/index.d.ts", limit: 1 });
+  assert.match(host, /^sdk\/dist\/plugin\/testing\/index\.d\.ts:\d+: export declare class TestHost /);
+  const api = await run("grep", { pattern: "^export interface Plugin\\b", path: "sdk/dist/plugin", glob: "types{,/*}.d.ts" });
+  assert.match(api, /^sdk\/dist\/plugin\/types(\/[\w-]+)?\.d\.ts:\d+: export interface Plugin /);
   await assert.rejects(run("write", { path: "sdk/llms.txt", content: "x" }), /read-only/);
   await assert.rejects(run("write", { path: "sdk/new.txt", content: "x" }), /read-only/);
   await assert.rejects(run("delete", { path: "sdk/llms.txt" }), /read-only/);

@@ -293,6 +293,8 @@ test("only Picture… is in the menu (Alt+1); every other command is in the pale
     ["Saturation +1%", 447, "video-color", "U"],
     ["Hue -1%", 448, "video-color", "I"],
     ["Hue +1%", 449, "video-color", "O"],
+    // The GPU switch comes last: it is added once the player's rendering state is read.
+    ["AI Upscaling", 461, "video-rendering", ""],
     ["GPU Rendering (Experimental)", 460, "video-rendering", ""],
   ];
   assert.deepEqual(
@@ -352,7 +354,7 @@ test("every command has a category for the command palette, and names Picture…
   host.openElsewhere("/movie.mp4");
   const { stop } = await start(host);
   const commands = [...host.commands.entries()];
-  assert.equal(commands.length, 84);
+  assert.equal(commands.length, 85);
   for (const [id, command] of commands) assert.ok(command.display.category, `${id} has a category`);
   const count = new Map<string, number>();
   for (const [, { display }] of commands) count.set(display.category!, (count.get(display.category!) ?? 0) + 1);
@@ -366,7 +368,7 @@ test("every command has a category for the command palette, and names Picture…
     Framing: 7,
     "Image Processing": 12,
     Rotation: 5,
-    Picture: 10,
+    Picture: 11,
   });
   // The palette names them as the menu did: the old submenu, "Reset" for the old Reset ▸ items.
   const category = (id: string) => host.command(id).display.category;
@@ -374,7 +376,7 @@ test("every command has a category for the command palette, and names Picture…
   assert.equal(category("video.hdr.peak"), "HDR Tone Mapping");
   assert.equal(category("video.hdr.settings"), "Pixel Shaders");
   for (const id of ["video.reset", "video.resetPanel", "video.frame.reset", "video.reframe.reset"]) assert.equal(category(id), "Reset", id);
-  for (const id of ["video.picture", "video.brightness.up", "video.gpu-rendering"]) assert.equal(category(id), "Picture", id);
+  for (const id of ["video.picture", "video.brightness.up", "video.gpu-rendering", "video.upscaling"]) assert.equal(category(id), "Picture", id);
   // Every control is in the panel that Picture… opens; the shader folder belongs to the Shader List window.
   const homes = new Map<string, string[]>();
   for (const [id, { declaration: d }] of commands) if (d.home) homes.set(d.home, [...(homes.get(d.home) ?? []), id]);
@@ -431,6 +433,7 @@ test("Simplified Chinese: the palette names commands with the menu's translation
     "复位: 画面",
     "复位: 画面面板",
     ...["亮度", "对比度", "饱和度", "色调"].flatMap((t) => [`画面: ${t} -1%`, `画面: ${t} +1%`]),
+    "画面: AI 超分辨率",
     "画面: GPU 渲染（实验性）",
   ]);
   assert.deepEqual(host.command("video.picture").display.path, ["画面…"]);
@@ -1560,12 +1563,12 @@ function setTransfer(host: TestHost, transfer: string | null) {
 const INVERT = "//!HOOK MAIN\n//!BIND HOOKED\nvec4 hook() { vec4 c = HOOKED_tex(HOOKED_pos); return vec4(1.0 - c.rgb, c.a); }\n";
 
 test("render model: lenient parse, 目标亮度 in steps of 10, plain .glsl/.hook names, 倍帧 wins over 运动补偿", () => {
-  assert.deepEqual(defaultLook().render, { toneMapping: "auto", targetPeak: 203, peakDetect: true, shadersEnabled: false, shaders: [], interpolation: false });
+  assert.deepEqual(defaultLook().render, { toneMapping: "auto", targetPeak: 203, peakDetect: true, shadersEnabled: false, shaders: [], interpolation: false, upscaling: false });
   const parsed = parse({
     version: 1,
     render: { toneMapping: "hable", targetPeak: 287, peakDetect: false, shadersEnabled: true, shaders: ["a.glsl", "../x.glsl", "a.glsl", ".h.glsl", "b.HOOK", 3, "c.txt"], interpolation: true },
   }).render;
-  assert.deepEqual(parsed, { toneMapping: "hable", targetPeak: 290, peakDetect: false, shadersEnabled: true, shaders: ["a.glsl", "b.HOOK"], interpolation: true });
+  assert.deepEqual(parsed, { toneMapping: "hable", targetPeak: 290, peakDetect: false, shadersEnabled: true, shaders: ["a.glsl", "b.HOOK"], interpolation: true, upscaling: false });
   assert.deepEqual(parse({ version: 1, render: { toneMapping: "aces", targetPeak: 9000 } }).render, { ...defaultLook().render, targetPeak: 400 });
   assert.equal(parse({ version: 1, effects: { frameBlend: true }, render: { interpolation: true } }).render.interpolation, false);
   assert.equal(shaderList(Array.from({ length: 20 }, (_, i) => `s${i}.glsl`)).length, 16);
@@ -1594,8 +1597,7 @@ test("E16: tone mapping, 目标亮度 and peak detection reach the render option
     assert.equal(host.osd.at(-1), "动态峰值检测: 关");
     await host.command("video.hdr.settings").run();
     const window = host.mounted();
-    await until(host, () => window.props["jump-serial"] === 1, "a jump");
-    assert.equal(window.props["jump-section"], 3, "HDR Settings… shows the Advanced section");
+    await until(host, () => window.props["advanced-serial"] === 1, "HDR Settings… asks the panel to show Advanced");
     await until(host, () => window.props["advanced-open"] === true, "Advanced open");
     await until(host, () => host.layout.adjust?.preferred === true, "the panel shown");
     assert.equal(window.props["tone-index"], 2);
@@ -1631,6 +1633,7 @@ test("E16: tone mapping, 目标亮度 and peak detection reach the render option
       shadersEnabled: false,
       shaders: [],
       interpolation: false,
+      upscaling: false,
     });
     host = new TestHost();
     ({ stop } = await start(host, data));
@@ -1676,7 +1679,7 @@ async function logged(run: () => Promise<void>): Promise<string[]> {
   }
   return lines;
 }
-const SAVED_RENDER = { toneMapping: "hable", targetPeak: 300, peakDetect: false, shadersEnabled: true, shaders: ["invert.glsl"], interpolation: true } as const;
+const SAVED_RENDER = { toneMapping: "hable", targetPeak: 300, peakDetect: false, shadersEnabled: true, shaders: ["invert.glsl"], interpolation: true, upscaling: false } as const;
 
 test("software rendering: nothing in the log, nothing sent after the first refusal; the saved options are kept for GPU rendering", async () => {
   await withData(async (data) => {
@@ -2176,7 +2179,17 @@ test("GPU rendering: while a switch is under way the item is busy with a reason 
 
 // ---------------------------------------------------------------- the Picture panel (adjust column)
 
-type Gpu = { shown: boolean; checked: boolean; enabled: boolean; busy: boolean; pending: boolean; reason: string };
+type Gpu = {
+  shown: boolean;
+  checked: boolean;
+  enabled: boolean;
+  busy: boolean;
+  pending: boolean;
+  ongpu: boolean;
+  nextgpu: boolean;
+  reason: string;
+  name: string;
+};
 const gpuOf = (host: TestHost) => host.mounted().props.gpu as Gpu;
 const keysOf = (host: TestHost) => host.mounted().props.keys as Record<string, string>;
 
@@ -2265,7 +2278,17 @@ test("panel: the GPU Rendering switch shows the player's state and switches like
   host.rendering.gpu = { available: false, reason: host.rendering.reason };
   const { stop } = await start(host);
   try {
-    await eventually(() => gpuOf(host), { shown: true, checked: false, enabled: false, busy: false, pending: false, reason: "This player has no GPU renderer on Windows yet" });
+    await eventually(() => gpuOf(host), {
+      shown: true,
+      checked: false,
+      enabled: false,
+      busy: false,
+      pending: false,
+      ongpu: false,
+      nextgpu: false,
+      reason: "This player has no GPU renderer on Windows yet",
+      name: "",
+    });
     await eventually(() => host.mounted().props["render-ready"], false, "HDR, shaders and interpolation greyed");
   } finally {
     await stop();
@@ -2273,11 +2296,11 @@ test("panel: the GPU Rendering switch shows the player's state and switches like
   const mac = new TestHost();
   const second = await start(mac);
   try {
-    await eventually(() => gpuOf(mac), { shown: true, checked: true, enabled: true, busy: false, pending: false, reason: "" });
+    await eventually(() => gpuOf(mac), { shown: true, checked: true, enabled: true, busy: false, pending: false, ongpu: true, nextgpu: true, reason: "", name: "" });
     mac.dialogAnswers.push({ confirmed: false, checked: false });
     mac.mounted().emit("run", "video.gpu-rendering");
     await until(mac, () => gpuOf(mac).pending, "the restart pending");
-    await eventually(() => gpuOf(mac), { shown: true, checked: false, enabled: true, busy: false, pending: true, reason: "" });
+    await eventually(() => gpuOf(mac), { shown: true, checked: false, enabled: true, busy: false, pending: true, ongpu: true, nextgpu: false, reason: "", name: "" });
     await eventually(() => mac.rendering.preference, "software");
     mac.mounted().emit("run", "video.gpu-rendering.restart");
     await until(mac, () => mac.rendering.restarts === 1, "Restart");
@@ -2286,7 +2309,178 @@ test("panel: the GPU Rendering switch shows the player's state and switches like
   }
 });
 
-test("panel: the Advanced section opens and closes, and the jump bar's request reaches the panel", async () => {
+// ---------------------------------------------------------------- AI Upscaling (RTX VSR) in the Rendering section
+
+type Upscaling = { checked: boolean; enabled: boolean; busy: boolean; kind: string; detail: string; from: number; to: number; gpu: string };
+const upOf = (host: TestHost) => host.mounted().props.upscaling as Upscaling;
+const upItem = (host: TestHost) => host.command("video.upscaling");
+const RTX = "NVIDIA GeForce RTX 4070 Laptop GPU";
+
+test("AI Upscaling: starting and showing the panel check no GPU; the switch upscales and is saved", async () => {
+  await withData(async (data) => {
+    const host = new TestHost();
+    host.openElsewhere("/movie.mp4");
+    const first = await start(host, data);
+    try {
+      await host.settle();
+      assert.equal(host.upscaling.checked, false, "starting woke no GPU");
+      assert.deepEqual(upOf(host), { checked: false, enabled: true, busy: false, kind: "off", detail: "", from: 0, to: 0, gpu: "" });
+      assert.deepEqual(
+        [upItem(host).display.title, upItem(host).display.category, upItem(host).declaration.order, upItem(host).state.checked],
+        ["AI Upscaling", "Picture", 461, false],
+      );
+      // The panel shows: nothing is read (that would wake a sleeping discrete GPU), nothing is
+      // followed; the row says Off with the switch usable, and the GPU line has no name.
+      await host.command("video.picture").run();
+      await host.settle();
+      assert.equal(host.upscaling.checked, false, "showing the panel woke no GPU");
+      assert.equal(host.listening.has("video.upscaling.changed"), false, "not followed before the state was read");
+      assert.deepEqual(upOf(host), { checked: false, enabled: true, busy: false, kind: "off", detail: "", from: 0, to: 0, gpu: "" });
+      assert.equal(gpuOf(host).name, "");
+      assert.equal(upItem(host).state.enabled, true);
+      // The panel's switch runs the command: now the GPU is checked, and the panel follows the player.
+      host.mounted().emit("run", "video.upscaling");
+      await until(host, () => upOf(host).kind === "upscaling", "upscaling");
+      assert.equal(host.upscaling.checked, true);
+      await until(host, () => host.listening.has("video.upscaling.changed"), "followed once read while the panel shows");
+      await eventually(() => gpuOf(host).name, RTX);
+      assert.deepEqual(upOf(host), { checked: true, enabled: true, busy: false, kind: "upscaling", detail: "", from: 1080, to: 2160, gpu: RTX });
+      assert.equal(host.upscaling.enabled, true);
+      assert.equal(upItem(host).state.checked, true);
+      assert.equal(host.osd.at(-1), "AI upscaling: on (Super Resolution must also be on in the NVIDIA app)");
+    } finally {
+      await first.stop();
+    }
+    assert.equal(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).render.upscaling, true, "saved");
+    // The next start asks for it again, without the panel.
+    const again = new TestHost();
+    const second = await start(again, data);
+    try {
+      await until(again, () => again.upscaling.enabled, "asked for again at start");
+      await eventually(() => upItem(again).state.checked, true);
+      await upItem(again).run();
+      await until(again, () => !again.upscaling.enabled, "off");
+      assert.equal(again.osd.at(-1), "AI upscaling: off");
+    } finally {
+      await second.stop();
+    }
+    assert.equal(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).render.upscaling, false);
+  });
+});
+
+test("AI Upscaling: saved on, the state is read at start and the panel follows it while shown", async () => {
+  await withData(async (data) => {
+    await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, render: { ...defaultLook().render, upscaling: true } }));
+    const host = new TestHost();
+    host.openElsewhere("/movie.mp4");
+    const { stop } = await start(host, data);
+    try {
+      await until(host, () => host.upscaling.enabled, "asked for again at start");
+      assert.equal(host.listening.has("video.upscaling.changed"), false, "no listener while the panel is hidden");
+      await host.command("video.picture").run();
+      await until(host, () => host.listening.has("video.upscaling.changed"), "followed while shown");
+      await until(host, () => upOf(host).kind === "upscaling", "upscaling");
+    } finally {
+      await stop();
+    }
+  });
+});
+
+test("AI Upscaling: not needed for a video shown at its size; waits while this panel's effects keep the frames in memory", async () => {
+  const { host, window, stop } = await playing();
+  try {
+    window.emit("run", "video.upscaling");
+    await until(host, () => upOf(host).kind === "upscaling", "on");
+    // A listener follows the player while the panel shows.
+    host.upscaling.factor = 1;
+    host.upscalingChanged();
+    await until(host, () => upOf(host).kind === "idle", "shown at its own size");
+    host.upscaling.factor = 2;
+    host.upscalingDecoding("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }]);
+    host.upscalingChanged();
+    await until(host, () => upOf(host).kind === "effects", "the picture effects keep the frames in memory");
+    assert.equal(upOf(host).checked, true);
+    host.upscalingDecoding("copy-back", [{ id: "someone.else", name: "Other" }]);
+    host.upscalingChanged();
+    await until(host, () => upOf(host).kind === "waiting", "another plugin's filter");
+    assert.match(upOf(host).detail, /Other/);
+  } finally {
+    await stop();
+  }
+});
+
+test("AI Upscaling: greyed with the reason where it cannot work, never asking the player under software rendering", async () => {
+  // Software rendering on Windows: it needs GPU rendering; nothing is asked.
+  const soft = new TestHost();
+  soft.videoRender.gpu = false;
+  soft.rendering.startedWith = "software";
+  soft.rendering.reason = { code: "default", message: "GPU rendering on Windows is experimental and off until it is turned on" };
+  soft.openElsewhere("/movie.mp4");
+  const first = await start(soft);
+  try {
+    await soft.command("video.picture").run();
+    await eventually(() => upOf(soft), { checked: false, enabled: false, busy: false, kind: "rendering", detail: "", from: 0, to: 0, gpu: "" });
+    assert.deepEqual([upItem(soft).state.enabled, upItem(soft).display.reason], [false, "Needs GPU rendering (currently software rendering)"]);
+    await eventually(() => gpuOf(soft).ongpu, false);
+    assert.equal(soft.upscaling.checked, false, "no GPU check under software rendering");
+  } finally {
+    await first.stop();
+  }
+  // No GPU renderer at all (Linux): not on this system.
+  const linux = new TestHost();
+  linux.videoRender.gpu = false;
+  linux.rendering.startedWith = "software";
+  linux.rendering.reason = { code: "no-gpu-backend", message: "this player has no GPU renderer on Linux yet" };
+  linux.rendering.gpu = { available: false, reason: linux.rendering.reason };
+  const second = await start(linux);
+  try {
+    await eventually(() => upOf(linux).kind, "platform");
+    assert.equal(upItem(linux).display.reason, "Not available on this system (Windows with an NVIDIA RTX GPU)");
+  } finally {
+    await second.stop();
+  }
+  // GPU rendering without an RTX GPU: the panel shows a usable switch (nothing read); turned on,
+  // the switch goes back off with the player's reason, and the command greys with it.
+  const amd = new TestHost();
+  amd.upscaling.reason = { code: "no-gpu", message: "no NVIDIA GPU (AMD Radeon 780M renders)" };
+  amd.openElsewhere("/movie.mp4");
+  const third = await start(amd);
+  try {
+    await amd.command("video.picture").run();
+    await amd.settle();
+    assert.equal(amd.upscaling.checked, false, "the panel alone woke no GPU");
+    assert.deepEqual([upOf(amd).kind, upOf(amd).enabled, upItem(amd).state.enabled], ["off", true, true]);
+    amd.mounted().emit("run", "video.upscaling");
+    await until(amd, () => upOf(amd).kind === "gpu", "not on this GPU");
+    assert.equal(upOf(amd).checked, false, "back off");
+    assert.equal(amd.osd.at(-1), "AI upscaling unavailable: no NVIDIA GPU (AMD Radeon 780M renders)");
+    assert.deepEqual([upOf(amd).enabled, upOf(amd).detail], [false, "no NVIDIA GPU (AMD Radeon 780M renders)"]);
+    assert.deepEqual([upItem(amd).state.enabled, upItem(amd).display.reason], [false, "Not available on this GPU: no NVIDIA GPU (AMD Radeon 780M renders)"]);
+  } finally {
+    await third.stop();
+  }
+});
+
+test("AI Upscaling: a refusal says why and keeps the switch off; Simplified Chinese wording", async () => {
+  const host = new TestHost();
+  host.upscaling.reason = { code: "driver", message: "the NVIDIA driver 512.15 is too old; update it to 530 or newer" };
+  const { stop } = await start(host, undefined, zh);
+  try {
+    // The palette item before anything was read: enabled; picking it checks the GPU.
+    assert.equal(upItem(host).state.enabled, true);
+    assert.equal(upItem(host).display.title, "AI 超分辨率");
+    await upItem(host).run();
+    await host.settle();
+    assert.equal(host.upscaling.enabled, false);
+    assert.equal(upItem(host).state.checked, false);
+    assert.equal(host.osd.at(-1), "AI 超分辨率不可用：the NVIDIA driver 512.15 is too old; update it to 530 or newer");
+    assert.equal(upItem(host).state.enabled, false, "greyed from now on");
+  } finally {
+    await stop();
+  }
+});
+
+test("panel: the Advanced section opens and closes; HDR Settings… opens it and asks the panel to show it", async () => {
   await withData(async (data) => {
     const { host, window, stop } = await playing(data);
     try {
@@ -2296,11 +2490,10 @@ test("panel: the Advanced section opens and closes, and the jump bar's request r
       window.emit("set-advanced", false);
       await until(host, () => window.props["advanced-open"] === false, "closed");
       await host.command("video.hdr.settings").run();
-      await until(host, () => window.props["jump-serial"] === 1, "one jump");
-      await eventually(() => window.props["jump-section"], 3);
+      await until(host, () => window.props["advanced-serial"] === 1, "one request");
       await eventually(() => window.props["advanced-open"], true, "HDR Settings… opens Advanced");
       await host.command("video.hdr.settings").run();
-      await until(host, () => window.props["jump-serial"] === 2, "every request jumps, also to the same section");
+      await until(host, () => window.props["advanced-serial"] === 2, "every request scrolls, also when Advanced shows");
     } finally {
       await stop();
     }
@@ -2336,4 +2529,26 @@ test("panel: Reset All (video.resetPanel) resets Colour, Effects and Geometry, n
   } finally {
     await stop();
   }
+});
+
+test("panel: on/off settings are sliding switches (std-widgets Switch, as Playback's Loop); the footer stays a check box", () => {
+  const slint = readFileSync(new URL("../picture.slint", import.meta.url), "utf8").replace(/\r\n/g, "\n");
+  assert.match(slint, /import \{[^}]*\bSwitch as StdSwitch\b[^}]*\} from "std-widgets\.slint";/);
+  const body = (name: string) => {
+    const at = slint.indexOf(`\ncomponent ${name} {`);
+    assert.notEqual(at, -1, name);
+    return slint.slice(at, slint.indexOf("\n}\n", at));
+  };
+  assert.match(body("Switch"), /knob := StdSwitch \{/);
+  assert.doesNotMatch(body("Switch"), /\bCheck \{/);
+  assert.match(body("CheckRow"), /\bCheck \{/);
+  // The rows the mockups (30, 31) draw as switches, by their label; the footer's master check box.
+  const control = (label: string) => {
+    const at = slint.indexOf(label);
+    assert.notEqual(at, -1, label);
+    return /(\w+) \{\s*$/.exec(slint.slice(Math.max(0, slint.lastIndexOf("{", at) - 40), slint.lastIndexOf("{", at) + 1))?.[1];
+  };
+  for (const label of ['text: @tr("GPU Rendering")', 'text: @tr("AI Upscaling")', 'text: @tr("Double rate")', 'text: @tr("Peak detection")', "text: root.shaders-text", "width: Layout.switch-column;\n                text: root.label;"])
+    assert.equal(control(label), "Switch", label);
+  assert.equal(control('text: @tr("Enable picture effects");\n                    checked'), "CheckRow");
 });

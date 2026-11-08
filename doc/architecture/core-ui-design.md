@@ -254,7 +254,8 @@ impl Table {
 
 | Command | Default bindings | Menu | State |
 | --- | --- | --- | --- |
-| `host/fullscreen` Toggle Fullscreen | `Escape` (user ruling 2026-11-01, IA-CORE-04; `Enter`, `Alt+Enter`, `F11` up to 0.5.x; `Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 700`, checked = whether fullscreen | always available |
+| `host/fullscreen` Toggle Fullscreen | `Escape` (user ruling 2026-11-01, IA-CORE-04; `Enter`, `Alt+Enter`, `F11` up to 0.5.x; `Mouse:LeftDoubleClick` until host 0.5.1) | top level, `group: "screen"`, `order: 810` (700 until the slim menu of 2026-11-08: now alone between two separators, after the panel items and before Vestra Player AI…), checked = whether fullscreen | always available |
+| `host/palette` Command Palette… | `Ctrl+Shift+P` (⌘⇧P on macOS too) | top level since the slim menu (2026-11-08), `group: "settings-main"`, `order: 829`, directly above Options… (outside the menu from host 0.7.4 until then) | always available |
 | `host/enter-fullscreen` Enter Fullscreen | none | not in the menu | only available in windowed mode |
 | `host/exit-fullscreen` Leave Fullscreen | none (`Escape` up to 0.5.x) | not in the menu | only available in fullscreen |
 | `host/quit` Quit | `Cmd+Q` (the menu shows it on macOS only: on Windows and Linux `Cmd` is the Windows / Super key, whose combinations the system takes, so menus show no `Cmd` binding, `platform::MENU_SHOWS_CMD`; there the close button and Alt+F4 quit) | top level, `group: "exit"`, `order: 990` | always available |

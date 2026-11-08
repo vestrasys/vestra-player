@@ -1202,16 +1202,12 @@ msgid ""
 "Added:\n"
 "{2}\n"
 "\n"
-"Current: {3}.\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"Current: {3}."
 msgstr ""
 "Ajoutées :\n"
 "{2}\n"
 "\n"
-"Actuelle : {3}.\n"
-"\n"
-"Un plugin est un programme complet : les autorisations ci-dessus limitent seulement ce qu'il peut faire avec le lecteur, pas la lecture et l'écriture de fichiers ni l'utilisation du réseau."
+"Actuelle : {3}."
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1302,14 +1298,10 @@ msgstr "Dépôt : {} ({}). Ce dépôt n'est pas vérifié par Vestra Player ; 
 #, x-machine
 msgid ""
 "It will be able to:\n"
-"{}\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"{}"
 msgstr ""
 "Il pourra :\n"
-"{}\n"
-"\n"
-"Un plugin est un programme complet : les autorisations ci-dessus limitent seulement ce qu'il peut faire avec le lecteur, pas la lecture et l'écriture de fichiers ni l'utilisation du réseau."
+"{}"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1739,7 +1731,7 @@ msgstr "Continuer à l'utiliser"
 msgid "Choose a plugin package (.vxp)"
 msgstr "Choisir un paquet de plugin (.vxp)"
 
-#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:695
+#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:688
 #, x-machine
 msgid "Cancel"
 msgstr "Annuler"
@@ -1881,8 +1873,3 @@ msgstr "Lecteur requis"
 #, x-machine
 msgid "Permissions ({})"
 msgstr "Autorisations ({})"
-
-#: ui/store.slint:668
-#, x-machine
-msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "Un plugin est un programme complet : les autorisations ci-dessus limitent seulement ce qu'il peut faire avec le lecteur, pas la lecture et l'écriture de fichiers ni l'utilisation du réseau."

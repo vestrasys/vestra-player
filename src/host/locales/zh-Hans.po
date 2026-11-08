@@ -490,8 +490,8 @@ msgstr "插件着色器已关闭：播放器在其开启时意外退出"
 #. The command (host/palette, Ctrl+Shift+P) that opens the command palette; Keyboard Shortcuts lists it.
 #: src/host/host/actions.rs
 #, x-machine
-msgid "Command Palette"
-msgstr "命令面板"
+msgid "Command Palette…"
+msgstr "命令面板…"
 
 #. A command palette row: the command's category (else its menu path, else its plugin's name), then its title.
 #: src/host/ui/command_palette.rs

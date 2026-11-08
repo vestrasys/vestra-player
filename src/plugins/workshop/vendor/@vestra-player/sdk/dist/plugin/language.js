@@ -1,6 +1,6 @@
 /** `plugin.i18n`: the interface language of this run and text values (read-only). */
 import { Catalog, isTextValue, LIST_STYLES, loadPackageCatalog, renderText, textKey, textProblem, } from "../i18n.js";
-import { failure } from "./runtime.js";
+import { failure } from "./errors.js";
 /** Copy arguments (arrays and objects only; texts are already frozen). */
 const copyArgs = (args) => Array.isArray(args) ? Object.freeze([...args]) : Object.freeze({ ...args });
 /** `plugin.i18n.text`: a plain, frozen text value (no translation here). */

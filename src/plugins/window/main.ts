@@ -8,10 +8,7 @@ import { AUTO_SIZES, type AutoSize as AutoChoice, ON_TOP, type OnTop as Mode, Pr
 import { Sizer, sizeReason } from "./size.ts";
 import { VideoSize } from "./video-size.ts";
 
-/** The player's Screen and Playback menus. */
-const SCREEN = "@screen";
-const PLAYBACK = "@playback";
-/** Screen ▸ Always on Top ▸ <mode>, in `ON_TOP` order. */
+/** Always on Top ▸ <mode>, in `ON_TOP` order. */
 const MODE_TITLES = {
   never: "Never",
   always: "Always",
@@ -24,17 +21,19 @@ const MODE_OSD = {
   playing: "Always on top: While playing",
   fullscreen: "Always on top: While playing in fullscreen",
 } as const satisfies Record<Mode, string>;
-/** Screen ▸ When Playback Starts ▸ <choice>, in `AUTO_SIZES` order. */
+/** When Playback Starts ▸ <choice>, in `AUTO_SIZES` order. */
 const AUTO_TITLES = ["Don't Resize", "0.5×", "1×", "1.5×", "2×", "Fit to Video Aspect Ratio"] as const;
 /** The settings page (Options ▸ Playback ▸ Window). */
 export const PAGE_ID = "window";
 
 /**
- * Main Window: Screen ▸ Picture-in-Picture (H07, where the system has it) /
+ * Main Window: Picture-in-Picture (H07, where the system has it) /
  * Mini Size (IA-WIN-01) / 0.5× … 2× (H03) / Fit to Video Aspect Ratio (H04) /
- * When Playback Starts (G-02) / Always on Top (H05, IA-WIN-03), Playback ▸
+ * When Playback Starts (G-02) / Always on Top (H05, IA-WIN-03),
  * Hide Pointer While Playing (B30, G-06), and the Window settings
- * page. The window itself belongs to the core (`plugin.window`); this plugin
+ * page. Menu sweep (B5): every command is in the command palette only
+ * ("Category: Title", with its key); none has a menu path.
+ * The window itself belongs to the core (`plugin.window`); this plugin
  * keeps the preferences in settings.json and applies them on activation. The
  * core undoes its effects on deactivation.
  */
@@ -67,14 +66,13 @@ export default async function activate(plugin: Plugin) {
 
   const reason = () => sizeReason(plugin, video);
 
-  // Screen ▸ Picture-in-Picture (709, no default key) / Mini Size (710, `): the first items, so
-  // the submenu sits with the host's Fullscreen (700, group "screen").
+  // Picture-in-Picture (709, no default key) / Mini Size (710, `).
   // IA-WIN-01: ` is Mini Size on every system (id `mini`, so a user's rebinding
   // stays with it); Picture-in-Picture is Vestra's own extra command (id `pip`). The two
   // exclude each other: one is left before the other starts.
   plugin.commands.add({
     id: "mini",
-    path: [SCREEN, "Mini Size"],
+    title: "Mini Size",
     category: category.window,
     order: 710,
     group: "screen",
@@ -103,7 +101,7 @@ export default async function activate(plugin: Plugin) {
   const pipCommand = () =>
     plugin.commands.add({
       id: "pip",
-      path: [SCREEN, "Picture-in-Picture"],
+      title: "Picture-in-Picture",
       category: category.window,
       order: 709,
       group: "screen",
@@ -131,7 +129,7 @@ export default async function activate(plugin: Plugin) {
   SCALES.forEach(({ scale, title }, index) =>
     plugin.commands.add({
       id: `size.${scale}`,
-      path: [SCREEN, title],
+      title,
       category: category.size,
       order: 711 + index,
       group: "screen-size",
@@ -146,7 +144,7 @@ export default async function activate(plugin: Plugin) {
   );
   plugin.commands.add({
     id: "fit",
-    path: [SCREEN, "Fit to Video Aspect Ratio"],
+    title: "Fit to Video Aspect Ratio",
     category: category.size,
     order: 715,
     group: "screen-size",
@@ -157,7 +155,7 @@ export default async function activate(plugin: Plugin) {
     run: () => sizer.fit(),
   });
 
-  // Screen ▸ When Playback Starts ▸ (716–722, G-02).
+  // When Playback Starts ▸ (716–722, G-02).
   const setAuto = (choice: AutoChoice, say = true) => {
     preferences.update({ autoSize: choice });
     if (!say) return;
@@ -172,7 +170,7 @@ export default async function activate(plugin: Plugin) {
   AUTO_SIZES.forEach((choice, index) =>
     plugin.commands.add({
       id: `auto.${choice}`,
-      path: [SCREEN, "When Playback Starts", AUTO_TITLES[index]!],
+      title: AUTO_TITLES[index]!,
       category: category.auto,
       order: 716 + index,
       group: "screen-auto",
@@ -183,7 +181,7 @@ export default async function activate(plugin: Plugin) {
   );
   plugin.commands.add({
     id: "auto.once",
-    path: [SCREEN, "When Playback Starts", "Only Once"],
+    title: "Only Once",
     category: category.auto,
     order: 722,
     group: "screen-auto-once",
@@ -191,7 +189,7 @@ export default async function activate(plugin: Plugin) {
     run: () => setAutoOnce(!preferences.value.autoSizeOnce),
   });
 
-  // Screen ▸ Always on Top ▸ (725–729).
+  // Always on Top ▸ (725–729).
   const setMode = (mode: Mode, say = true) => {
     preferences.update({ onTop: mode });
     void onTop.apply();
@@ -199,7 +197,7 @@ export default async function activate(plugin: Plugin) {
   };
   plugin.commands.add({
     id: "top.cycle",
-    path: [SCREEN, "Always on Top", "Cycle Mode"],
+    title: "Cycle Mode",
     category: category.top,
     order: 725,
     group: "screen-top",
@@ -209,7 +207,7 @@ export default async function activate(plugin: Plugin) {
   ON_TOP.forEach((mode, index) =>
     plugin.commands.add({
       id: `top.${mode}`,
-      path: [SCREEN, "Always on Top", MODE_TITLES[mode]],
+      title: MODE_TITLES[mode],
       category: category.top,
       order: 726 + index,
       group: "screen-top-mode",
@@ -219,7 +217,7 @@ export default async function activate(plugin: Plugin) {
     }),
   );
 
-  // Playback ▸ Hide Pointer While Playing (241, with playback's 240 / 242).
+  // Hide Pointer While Playing (241, with playback's 240 / 242).
   const cursor = (on: boolean) => window.setCursorAutoHide(on ? "playing" : "fullscreen").catch(() => {});
   const setHideCursor = async (on: boolean, say = true) => {
     preferences.update({ hideCursorWhilePlaying: on });
@@ -228,7 +226,7 @@ export default async function activate(plugin: Plugin) {
   };
   plugin.commands.add({
     id: "hide-cursor",
-    path: [PLAYBACK, "Hide Pointer While Playing"],
+    title: "Hide Pointer While Playing",
     category: category.window,
     order: 241,
     group: "playback-options",

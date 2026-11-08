@@ -6,57 +6,57 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:42
+#: main.ts:41
 #, x-machine
 msgid "Palette: Vestra Light"
 msgstr "팔레트: Vestra 라이트"
 
-#: main.ts:42
+#: main.ts:41
 #, x-machine
 msgid "Palette: Vestra Dark"
 msgstr "팔레트: Vestra 다크"
 
-#: main.ts:51
+#: main.ts:50
 #, x-machine
 msgid "Language: Follow System. Takes effect after restart"
 msgstr "언어: 시스템 설정 따르기. 다시 시작하면 적용됩니다"
 
-#: main.ts:52
+#: main.ts:51
 #, x-machine
 msgid "Language: {}. Takes effect after restart"
 msgstr "언어: {}. 다시 시작하면 적용됩니다"
 
-#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
+#: main.ts:58 main.ts:94 ui/appearance.slint:83
 #, x-machine
 msgid "Appearance"
 msgstr "모양"
 
-#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
+#: main.ts:72 main.ts:95 ui/language.slint:52
 #, x-machine
 msgid "Language"
 msgstr "언어"
 
-#: main.ts:94
+#: main.ts:93
 #, x-machine
 msgid "Settings"
 msgstr "설정"
 
-#: main.ts:101
+#: main.ts:100
 #, x-machine
 msgid "Options…"
 msgstr "옵션…"
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Dark"
 msgstr "Vestra 다크"
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 #, x-machine
 msgid "Vestra Light"
 msgstr "Vestra 라이트"
 
-#: main.ts:123 ui/language.slint:59
+#: main.ts:122 ui/language.slint:59
 #, x-machine
 msgid "Follow System"
 msgstr "시스템 설정 따르기"
@@ -73,8 +73,8 @@ msgstr "옵션 창 열기, 팔레트와 언어 변경"
 
 #: manifest.json
 #, x-machine
-msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
-msgstr "설정 ▸ 옵션…(F5)으로 플레이어의 옵션 창을 엽니다. 설정 ▸ 모양에서 팔레트(Vestra 다크, Vestra 라이트)를 고르며, 옵션 창에도 미리보기가 있는 모양 페이지가 있습니다. 설정 ▸ 언어에서 인터페이스 언어를 고르면 다음 실행부터 적용됩니다."
+msgid "Options… (F5) in the context menu opens the player's options window. Its Appearance page picks the palette (Vestra Dark, Vestra Light) with previews; its Language page picks the interface language, used from the next start. Both are also in the command palette (Appearance: …, Language: …)."
+msgstr "컨텍스트 메뉴의 옵션…(F5)으로 플레이어의 옵션 창을 엽니다. 모양 페이지에서 미리보기를 보며 팔레트(Vestra 다크, Vestra 라이트)를 고르고, 언어 페이지에서 인터페이스 언어를 고르면 다음 실행부터 적용됩니다. 둘 다 명령 팔레트(모양: …, 언어: …)에서도 고를 수 있습니다."
 
 #: manifest.json
 #, x-machine

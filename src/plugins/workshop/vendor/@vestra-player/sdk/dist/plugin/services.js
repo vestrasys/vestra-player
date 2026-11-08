@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, open, rename, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
-import { failure } from "./runtime.js";
+import { failure } from "./errors.js";
 import { systemServices } from "./local.js";
 import { playerOf, validStep } from "./player.js";
 const MAX_OUTPUT = 16 * 1024 * 1024;

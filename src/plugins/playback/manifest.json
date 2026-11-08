@@ -13,17 +13,19 @@
     "commands",
     "ui.osd",
     "clipboard",
-    "bindings.manage"
+    "bindings.manage",
+    "timeline.marks"
   ],
   "name": "Basic Playback",
   "author": "Vestra Player",
   "punchline": "Bottom control bar, open files and links, seek and speed",
-  "description": "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\nPlayback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps.",
+  "description": "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; an A-B loop that repeats a range a chosen number of times; time or thumbnail on seek bar hover; no screen saver while playing.\nPlayback… (Alt+4) in the right-click menu opens its panel beside the video: speed, A-B Loop, jump, frame and keyframe steps, seek steps.",
   "tags": [
     "playback",
     "control bar",
     "seek",
-    "speed"
+    "speed",
+    "loop"
   ],
   "minPlayerVersion": "0.7.6"
 }

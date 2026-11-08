@@ -1,4 +1,6 @@
-import { failure, Runtime, stopReason } from "./runtime.js";
+import { Runtime } from "./runtime.js";
+import { stopReason } from "./connection.js";
+import { failure } from "./errors.js";
 import { ScopeImpl } from "./scope.js";
 import { playerOf } from "./player.js";
 import { windowOf } from "./window.js";

@@ -11,7 +11,7 @@ Searches the web for subtitles for the current video and loads them right away.
 
 ## Where to find it
 
-Right-click menu, Subtitles ▸ Online Subtitles: Search and Download Subtitles…, Online Subtitle Settings…
+Right-click menu, Open ▸ Search and Download Subtitles… (the last item before Recently Played); command palette (Ctrl+Shift+P): Online Subtitles: Online Subtitle Settings…
 
 ## Before you start
 

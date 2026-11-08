@@ -21,7 +21,7 @@ const stats = {
   audio: { codec: "aac", sampleRate: 48000, channels: 2 },
 };
 
-test("top-level Playback Info entry in the windows group, Tab toggles the overlay; off by default", async () => {
+test("Playback Info in the command palette only (menu sweep B5), Tab toggles the overlay; off by default", async () => {
   const host = new TestHost();
   host.stats = stats;
   host.openElsewhere("/videos/movie.mp4");
@@ -30,7 +30,7 @@ test("top-level Playback Info entry in the windows group, Tab toggles the overla
   const command = host.command("info.toggle");
   assert.deepEqual(command.declaration, {
     title: "Playback Info",
-    path: ["Playback Info"],
+    path: [],
     order: 810,
     group: "windows",
     radio: false,
@@ -94,9 +94,9 @@ test("the overlay in Simplified Chinese is word for word that of before", async 
 
 test("Simplified Chinese shows the menus of before", async () => {
   const { host, stop } = await startPlugin(activate, { directory, locale: "zh-Hans" });
-  assert.deepEqual(host.command("info.toggle").display.path, ["播放信息"]);
+  assert.deepEqual([host.command("info.toggle").display.path, host.command("info.toggle").display.title], [[], "播放信息"]);
   assert.equal(host.command("info.brief").display.title, "简要信息");
-  assert.deepEqual(host.command("info.properties").display.path, ["播放属性…"]);
+  assert.deepEqual([host.command("info.properties").display.path, host.command("info.properties").display.title], [[], "播放属性…"]);
   assert.deepEqual(host.command("info.about").display.path, ["关于 Vestra Player…"]);
   await stop();
 });

@@ -5,14 +5,14 @@ import { join } from "node:path";
 import test from "node:test";
 import type { Text } from "@vestra-player/sdk";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
-import { currentChapter, segmentAt, stepPoint } from "../chapters.ts";
+import { currentChapter, stepPoint } from "../chapters.ts";
 import { clock, fit, mediaKey, parseTime, precise } from "../format.ts";
 import activate from "../main.ts";
 import { bookmarkLines, chapterLines } from "../menu.ts";
 import { LAYER_MAX, seekbarMarks } from "../seekbar.ts";
 import { timing } from "../store.ts";
 
-Object.assign(timing, { bookmarksWrite: 10, settingsWrite: 10, menuRebuild: 10, loopCommit: 30 });
+Object.assign(timing, { bookmarksWrite: 10, settingsWrite: 10, menuRebuild: 10 });
 const WAIT = 60; // longer than the shortened delays
 
 const directory = new URL("..", import.meta.url);
@@ -56,13 +56,14 @@ const at = async (host: TestHost, position: number) => {
   host.setSource({ position });
   await host.settle();
 };
+// Menu sweep (B5): the chapter and bookmark lines are palette only, so their text is the title.
 const menuLines = (host: TestHost, group: string) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.group === group)
     .sort((a, b) => a.declaration.order - b.declaration.order)
-    .map((c) => c.display.path.at(-1)!);
+    .map((c) => c.display.title);
 const idFor = (host: TestHost, title: string) =>
-  [...host.commands.entries()].find(([, c]) => c.display.path.at(-1) === title)![0];
+  [...host.commands.entries()].find(([, c]) => c.display.title === title)![0];
 const seeks = (host: TestHost) =>
   host
     .sent("source.submit")
@@ -96,7 +97,7 @@ test("formats: clock, m:ss.d, time input, menu byte limit", () => {
   assert.equal(fit("  a\tb\n ", 80), "a b");
 });
 
-test("points: previous from position − 1, next from position + 0.5, current chapter, segment", () => {
+test("points: previous from position − 1, next from position + 0.5, current chapter", () => {
   const times = [0, 10, 50];
   assert.equal(stepPoint(times, 52, -1), 50);
   assert.equal(stepPoint(times, 50.2, -1), 10);
@@ -110,10 +111,6 @@ test("points: previous from position − 1, next from position + 0.5, current ch
   assert.equal(currentChapter(chapters, 3.9), 0);
   assert.equal(currentChapter(chapters, 4), 1);
   assert.equal(currentChapter([], 4), -1);
-  assert.deepEqual(segmentAt([4, 10], 5, 20), { a: 4, b: 10 });
-  assert.deepEqual(segmentAt([4, 10], 2, 20), { a: 0, b: 4 });
-  assert.deepEqual(segmentAt([4, 10], 12, 20), { a: 10, b: 20 });
-  assert.equal(segmentAt([], 12, 20), null);
 });
 
 test("menu lines are numbered, unique and fit the 80-byte path segment", async () => {
@@ -486,176 +483,6 @@ test("B21 window: another source drops the selection and the typed text", async 
   assert.deepEqual(window.props.rows, []);
 });
 
-// ------------------------------------------------------------------ B23 A-B loop
-
-test("B23: [ then ] loops, \\ stops and restarts; the core gets {a,b} → null → {a,b}", async () => {
-  const host = new TestHost();
-  await start(host);
-  assert.equal(host.command("ab.set-a").state.reason, "No media open");
-  await play(host, file(), 600, 10);
-  await press(host, "[");
-  assert.equal(host.osd.at(-1), "A-B start: 0:10.0");
-  assert.deepEqual(loops(host), []);
-  await at(host, 20.04);
-  await press(host, "]");
-  assert.equal(host.osd.at(-1), "A-B loop: 0:10.0 ~ 0:20.0");
-  // Set at the position B: it starts from A.
-  assert.deepEqual(loops(host), [{ a: 10, b: 20 }]);
-  assert.deepEqual(seeks(host), [10]);
-  assert.equal(host.command("ab.toggle").state.checked, true);
-  await press(host, "\\");
-  assert.equal(host.osd.at(-1), "A-B loop off");
-  assert.equal(host.command("ab.toggle").state.checked, false);
-  await at(host, 15);
-  await press(host, "\\");
-  assert.deepEqual(loops(host), [{ a: 10, b: 20 }, null, { a: 10, b: 20 }]);
-  assert.deepEqual(seeks(host), [10]); // inside [A, B): no jump
-});
-
-test("B23: point rules — A past B clears B, B before A refused, B without A starts at 0", async () => {
-  const host = new TestHost();
-  await start(host);
-  await play(host, file(), 30, 5);
-  await press(host, "]");
-  assert.equal(host.osd.at(-1), "A-B loop: 0:00.0 ~ 0:05.0");
-  await at(host, 4.9);
-  await press(host, "[");
-  assert.equal(host.osd.at(-1), "Start point is after the end point; end point cleared");
-  assert.equal(host.command("ab.toggle").state.enabled, false);
-  assert.deepEqual(loops(host).at(-1), null);
-  await at(host, 5);
-  await press(host, "]");
-  assert.equal(host.osd.at(-1), "End point must be after the start point");
-  await at(host, 29.99);
-  await press(host, "]");
-  assert.deepEqual(loops(host).at(-1), { a: 4.9, b: 30 });
-  // Nudges stay inside [0, B − 0.2] and [A + 0.2, duration].
-  await press(host, "Alt+]");
-  assert.equal(host.osd.at(-1), "A-B loop: 0:04.9 ~ 0:30.0");
-  await press(host, "Ctrl+Alt+]");
-  assert.equal(host.osd.at(-1), "Reached the end");
-  await press(host, "{");
-  assert.equal(host.osd.at(-1), "A-B loop off");
-  assert.deepEqual(loops(host).at(-1), null);
-  assert.equal(host.command("ab.a-back").state.reason, "Start point not set");
-});
-
-test("B23: held nudges are committed once, after they pause", async () => {
-  const host = new TestHost();
-  await start(host);
-  await play(host, file(), 600, 10);
-  await press(host, "[");
-  await at(host, 20);
-  await press(host, "]");
-  const before = loops(host).length;
-  // Each press settles the test host (several timer rounds; one round is
-  // ~16 ms on Windows), so the burst needs a pause longer than five presses.
-  const loopCommit = timing.loopCommit;
-  timing.loopCommit = 1000;
-  try {
-    for (let i = 0; i < 5; i++) await host.press("Ctrl+]");
-    await host.settle();
-    assert.equal(host.osd.at(-1), "A-B loop: 0:10.0 ~ 0:19.5");
-    assert.equal(loops(host).length, before);
-    await host.settle(timing.loopCommit + WAIT);
-    assert.deepEqual(loops(host).slice(before), [{ a: 10, b: 19.5 }]);
-  } finally {
-    timing.loopCommit = loopCommit;
-  }
-  for (let i = 0; i < 3; i++) await host.press("Ctrl+Alt+[");
-  await host.settle(WAIT);
-  assert.deepEqual(loops(host).at(-1), { a: 9.7, b: 19.2 });
-  await press(host, "Ctrl+[");
-  await press(host, "Alt+[");
-  await press(host, "Alt+[");
-  assert.deepEqual(loops(host).at(-1), { a: 9.8, b: 19.2 });
-});
-
-test("B23: loop count is sent and remembered; when it runs out the switch turns off", async () => {
-  const data = mkdtempSync(join(scratch, "data-"));
-  const host = new TestHost();
-  await start(host, data);
-  assert.equal(host.command("ab.count.endless").state.checked, true);
-  await host.command("ab.count.2").run();
-  await host.settle(WAIT);
-  assert.equal(host.osd.at(-1), "Loop count: 2");
-  await play(host, file(), 600, 10);
-  await press(host, "[");
-  await at(host, 20);
-  await press(host, "]");
-  assert.deepEqual(loops(host).at(-1), { a: 10, b: 20, count: 2 });
-  // The player clears the loop after the last jump back.
-  host.setSource({ loop: null });
-  await host.settle(WAIT);
-  assert.equal(host.osd.at(-1), "A-B loop ended");
-  assert.equal(host.command("ab.toggle").state.checked, false);
-  assert.equal(host.command("ab.toggle").state.enabled, true); // A and B are kept
-  assert.deepEqual(JSON.parse(readFileSync(join(data, "marks.json"), "utf8")), { version: 1, abCount: 2, showOnSeekbar: true });
-  // Changing the count while looping re-sends the loop.
-  await press(host, "\\");
-  await host.command("ab.count.endless").run();
-  await host.settle(WAIT);
-  assert.deepEqual(loops(host).at(-1), { a: 10, b: 20 });
-});
-
-test("B23: a new source clears A and B; another plugin's loop shows and \\ stops it", async () => {
-  const host = new TestHost();
-  await start(host);
-  await play(host, file(), 600, 10);
-  await press(host, "[");
-  await at(host, 20);
-  await press(host, "]");
-  await play(host, file());
-  assert.equal(host.source.loop, null);
-  assert.equal(host.command("ab.toggle").state.checked, false);
-  assert.equal(host.command("ab.toggle").state.enabled, false);
-  assert.equal(host.command("ab.clear-a").state.enabled, false);
-  // Someone else loops 1–2.
-  host.setSource({ loop: { a: 1, b: 2, count: null } });
-  await host.settle(WAIT);
-  assert.equal(host.command("ab.toggle").state.checked, true);
-  assert.equal(host.osd.at(-1) === "A-B loop ended", false);
-  await press(host, "\\");
-  assert.deepEqual(loops(host).at(-1), null);
-  assert.equal(host.source.loop, null);
-});
-
-test("B23: Alt+\\ loops the chapter/bookmark span around the position", async () => {
-  const host = new TestHost();
-  await start(host);
-  await play(host, file(), 100, 30);
-  await press(host, "Alt+\\");
-  assert.equal(host.osd.at(-1), "No chapters or bookmarks to define a range");
-  host.chapters = [
-    { title: "a", start: 0 },
-    { title: "b", start: 25 },
-  ];
-  await play(host, file(), 100, 30);
-  await at(host, 60);
-  await press(host, "P");
-  await at(host, 40);
-  await press(host, "Alt+\\");
-  assert.deepEqual(loops(host).at(-1), { a: 25, b: 60 });
-  assert.equal(host.osd.at(-1), "A-B loop: 0:25.0 ~ 1:00.0");
-  await at(host, 70);
-  await press(host, "Alt+\\");
-  assert.deepEqual(loops(host).at(-1), { a: 60, b: 100 });
-});
-
-test("B23: a refused loop turns the switch off and says why", async () => {
-  const host = new TestHost();
-  await start(host);
-  await play(host, file(), 600, 10);
-  host.handle("player.setLoop", () => {
-    throw new HostError("unsupported", "the source cannot seek");
-  });
-  await press(host, "[");
-  await at(host, 20);
-  await press(host, "]");
-  assert.equal(host.osd.at(-1), "This source doesn't support A-B loop");
-  assert.equal(host.command("ab.toggle").state.checked, false);
-});
-
 // ------------------------------------------------------------------ B22 seek-bar marks
 
 const layer = (host: TestHost) => host.timeline.layers.get(host.manifestId) ?? [];
@@ -674,15 +501,12 @@ test("B22 marks: chapter names, cut titles, times inside the media, the first 10
       { time: 50, title: "BM 1", number: 0 },
       { time: 60, title: "", number: 2 },
     ],
-    a: 20,
-    b: null,
     duration: 600,
   });
   assert.deepEqual(
     marks.map((m) => [m.time, m.kind, [...host.translate(m.title)].length]),
     [
       [0, "chapter", 9],
-      [20, "marker", 1],
       [50, "chapter", 100],
       [50, "bookmark", 4],
       [60, "bookmark", 10],
@@ -690,13 +514,9 @@ test("B22 marks: chapter names, cut titles, times inside the media, the first 10
   );
   assert.equal(host.translate(marks[0]!.title), "Chapter 1");
   assert.equal(host.translate(marks.at(-1)!.title), "Bookmark 2");
-  // Only A set gives the marker; with B too the loop span is the player's to draw.
-  assert.equal(seekbarMarks(text, { chapters: [], bookmarks: [], a: 20, b: 30, duration: null }).length, 0);
   const many = seekbarMarks(text, {
     chapters: Array.from({ length: 1200 }, (_, i) => ({ title: `C${i}`, start: 1200 - i })),
     bookmarks: [],
-    a: null,
-    b: null,
     duration: null,
   });
   assert.equal(many.length, LAYER_MAX);
@@ -724,12 +544,7 @@ test("B22: chapters ∪ bookmarks on the seek bar, for the source they belong to
     [30, "bookmark", "Bookmark 1"],
     [60, "chapter", "Chapter 2"],
   ]);
-  // Only A: an `A` marker until B is set.
-  await at(host, 40);
-  await press(host, "[");
-  assert.deepEqual(published(host).at(2), [40, "marker", "A"]);
-  await at(host, 50);
-  await press(host, "]");
+  // A-B Loop moved to the playback plugin: no `A` marker comes from this plugin.
   assert.equal(published(host).some(([, kind]) => kind === "marker"), false);
   // A file without chapters or bookmarks: nothing left over, nothing re-sent.
   host.chapters = [];
@@ -791,56 +606,43 @@ test("B22: stopping the plugin clears its layer; other plugins' layers stay", as
 
 // ------------------------------------------------------------------ menus
 
-const fixedMenu = (host: TestHost, path: (c: ReturnType<TestHost["command"]>) => readonly unknown[]) =>
+/** The fixed commands by order: title (as declared or as shown), order, group, keys. */
+const fixedMenu = (host: TestHost, title: (c: ReturnType<TestHost["command"]>) => unknown) =>
   [...host.commands.values()]
     .filter((c) => c.declaration.order < 10000)
     .sort((a, b) => a.declaration.order - b.declaration.order)
-    .map((c) => [path(c).slice(1).join(" ▸ "), c.declaration.order, c.declaration.group, c.declaration.bindings.join(",")]);
+    .map((c) => [title(c), c.declaration.order, c.declaration.group, c.declaration.bindings.join(",")]);
 
-test("menu: orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
+test("menu: Chapter and Bookmark List… at the top level, the rest palette only; orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
   const host = new TestHost();
   await start(host);
-  // English source text, in the player's Playback menu.
-  assert.ok([...host.commands.values()].every((c) => c.declaration.path[0] === "@playback"));
-  assert.deepEqual(fixedMenu(host, (c) => c.declaration.path), [
-    ["Chapters and Bookmarks ▸ Chapter and Bookmark List…", 260, "marks-list", "H"],
-    ["Chapters and Bookmarks ▸ Add Bookmark", 261, "marks-edit", "P"],
-    ["Chapters and Bookmarks ▸ Previous Bookmark or Chapter", 262, "marks-edit", "Shift+PageUp"],
-    ["Chapters and Bookmarks ▸ Next Bookmark or Chapter", 263, "marks-edit", "Shift+PageDown"],
-    ["Chapters and Bookmarks ▸ Previous Chapter", 264, "marks-edit", "Ctrl+PageUp"],
-    ["Chapters and Bookmarks ▸ Next Chapter", 265, "marks-edit", "Ctrl+PageDown"],
-    ["A-B Loop ▸ Set Start Point", 270, "ab-a", "["],
-    ["A-B Loop ▸ Clear Start Point", 271, "ab-a", "{"],
-    ["A-B Loop ▸ Start Point Back 0.1 s", 272, "ab-a", "Ctrl+["],
-    ["A-B Loop ▸ Start Point Forward 0.1 s", 273, "ab-a", "Alt+["],
-    ["A-B Loop ▸ Set End Point", 274, "ab-b", "]"],
-    ["A-B Loop ▸ Clear End Point", 275, "ab-b", "}"],
-    ["A-B Loop ▸ End Point Back 0.1 s", 276, "ab-b", "Ctrl+]"],
-    ["A-B Loop ▸ End Point Forward 0.1 s", 277, "ab-b", "Alt+]"],
-    ["A-B Loop ▸ Move Range Back 0.1 s", 278, "ab-both", "Ctrl+Alt+["],
-    ["A-B Loop ▸ Move Range Forward 0.1 s", 279, "ab-both", "Ctrl+Alt+]"],
-    ["A-B Loop ▸ Loop Current Chapter or Bookmark Range", 280, "ab-toggle", "Alt+\\"],
-    ["A-B Loop ▸ A-B Loop On/Off", 281, "ab-toggle", "\\"],
-    ["A-B Loop ▸ Loop Count ▸ Endless", 282, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ Once", 283, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 2 Times", 284, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 3 Times", 285, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 5 Times", 286, "ab-count", ""],
-    ["A-B Loop ▸ Loop Count ▸ 10 Times", 287, "ab-count", ""],
+  // Menu sweep (B5): only the list command has a menu path (top level, after Playlist 800, windows group).
+  const list = host.command("marks.list");
+  assert.deepEqual(list.declaration.path, ["Chapter and Bookmark List…"]);
+  assert.deepEqual(list.display.path, ["Chapter and Bookmark List…"]);
+  for (const [id, c] of host.commands) if (id !== "marks.list") assert.deepEqual(c.declaration.path, [], `${id} is palette only`);
+  assert.deepEqual(fixedMenu(host, (c) => c.declaration.title), [
+    ["Add Bookmark", 261, "marks-edit", "P"],
+    ["Previous Bookmark or Chapter", 262, "marks-edit", "Shift+PageUp"],
+    ["Next Bookmark or Chapter", 263, "marks-edit", "Shift+PageDown"],
+    ["Previous Chapter", 264, "marks-edit", "Ctrl+PageUp"],
+    ["Next Chapter", 265, "marks-edit", "Ctrl+PageDown"],
+    ["Chapter and Bookmark List…", 801, "windows", "H"],
   ]);
   assert.deepEqual(
-    fixedMenu(host, (c) => c.display.path),
-    fixedMenu(host, (c) => c.declaration.path),
+    fixedMenu(host, (c) => c.display.title),
+    fixedMenu(host, (c) => c.declaration.title),
   );
   const option = host.command("marks.seekbar").declaration;
-  assert.deepEqual([option.path.slice(1).join(" ▸ "), option.order, option.group, option.bindings.join(",")], [
-    "Chapters and Bookmarks ▸ Show Marks on Seek Bar",
+  assert.deepEqual([option.path, option.title, option.order, option.group, option.bindings.join(",")], [
+    [],
+    "Show Marks on Seek Bar",
     30000,
     "marks-option",
     "",
   ]);
-  for (const id of ["ab.a-back", "ab.a-forward", "ab.b-back", "ab.b-forward", "ab.back", "ab.forward"])
-    assert.equal(host.command(id).declaration.repeat, true, id);
+  // A-B Loop moved to the playback plugin (its Playback panel): none of its commands is here.
+  assert.deepEqual([...host.commands.keys()].filter((id) => id.startsWith("ab.")), []);
   assert.deepEqual(host.conflicts, []);
 });
 
@@ -862,8 +664,8 @@ async function withEveryCommand(locale?: "zh-Hans") {
 test("palette: every command has a category (its submenu); listed items have the window as their home", async () => {
   const host = await withEveryCommand();
   const commands = [...host.commands.entries()];
-  // 7 fixed + 50 chapters + More + 50 bookmarks + More; 12 A-B + 6 counts.
-  assert.equal(commands.length, 7 + 51 + 51 + 18);
+  // 7 fixed + 50 chapters + More + 50 bookmarks + More (A-B Loop is the playback plugin's).
+  assert.equal(commands.length, 7 + 51 + 51);
   const counts = new Map<unknown, number>();
   for (const [id, c] of commands) {
     const category = c.declaration.category;
@@ -871,7 +673,7 @@ test("palette: every command has a category (its submenu); listed items have the
     assert.equal(c.display.category, category, id);
     counts.set(category, (counts.get(category) ?? 0) + 1);
   }
-  assert.deepEqual(Object.fromEntries(counts), { "Chapters and Bookmarks": 109, "A-B Loop": 12, "Loop Count": 6 });
+  assert.deepEqual(Object.fromEntries(counts), { "Chapters and Bookmarks": 109 });
   const homes = commands.filter(([, c]) => c.declaration.home !== undefined);
   assert.ok(homes.every(([, c]) => c.declaration.home === "marks.list"));
   assert.deepEqual(
@@ -885,8 +687,6 @@ test("palette: the categories read as the submenus in zh-Hans", async () => {
   const shown = (id: string) => host.command(id).display.category;
   for (const id of ["marks.list", "marks.add", "marks.next", "chapter.0", "chapter.more", "bookmark.0", "bookmark.more", "marks.seekbar"])
     assert.equal(shown(id), "章节/书签", id);
-  for (const id of ["ab.set-a", "ab.segment", "ab.toggle"]) assert.equal(shown(id), "A-B 区段循环", id);
-  assert.equal(shown("ab.count.2"), "循环次数");
 });
 
 // ------------------------------------------------------------------ Simplified Chinese
@@ -894,36 +694,22 @@ test("palette: the categories read as the submenus in zh-Hans", async () => {
 test("zh-Hans: the menus read as before the migration", async () => {
   const host = new TestHost();
   await start(host, undefined, "zh-Hans");
-  assert.ok([...host.commands.values()].every((c) => c.display.path[0] === "播放"));
-  assert.deepEqual(fixedMenu(host, (c) => c.display.path), [
-    ["章节/书签 ▸ 章节/书签列表…", 260, "marks-list", "H"],
-    ["章节/书签 ▸ 添加书签", 261, "marks-edit", "P"],
-    ["章节/书签 ▸ 上一书签/章节", 262, "marks-edit", "Shift+PageUp"],
-    ["章节/书签 ▸ 下一书签/章节", 263, "marks-edit", "Shift+PageDown"],
-    ["章节/书签 ▸ 上一章节", 264, "marks-edit", "Ctrl+PageUp"],
-    ["章节/书签 ▸ 下一章节", 265, "marks-edit", "Ctrl+PageDown"],
-    ["A-B 区段循环 ▸ 设定起点", 270, "ab-a", "["],
-    ["A-B 区段循环 ▸ 解除起点", 271, "ab-a", "{"],
-    ["A-B 区段循环 ▸ 起点后退 0.1 秒", 272, "ab-a", "Ctrl+["],
-    ["A-B 区段循环 ▸ 起点前进 0.1 秒", 273, "ab-a", "Alt+["],
-    ["A-B 区段循环 ▸ 设定止点", 274, "ab-b", "]"],
-    ["A-B 区段循环 ▸ 解除止点", 275, "ab-b", "}"],
-    ["A-B 区段循环 ▸ 止点后退 0.1 秒", 276, "ab-b", "Ctrl+]"],
-    ["A-B 区段循环 ▸ 止点前进 0.1 秒", 277, "ab-b", "Alt+]"],
-    ["A-B 区段循环 ▸ 区段整体后退 0.1 秒", 278, "ab-both", "Ctrl+Alt+["],
-    ["A-B 区段循环 ▸ 区段整体前进 0.1 秒", 279, "ab-both", "Ctrl+Alt+]"],
-    ["A-B 区段循环 ▸ 循环当前章节/书签区段", 280, "ab-toggle", "Alt+\\"],
-    ["A-B 区段循环 ▸ 区段循环 开/关", 281, "ab-toggle", "\\"],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 无限", 282, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 1 次", 283, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 2 次", 284, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 3 次", 285, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 5 次", 286, "ab-count", ""],
-    ["A-B 区段循环 ▸ 循环次数 ▸ 10 次", 287, "ab-count", ""],
+  // Menu sweep (B5): the list command is the only menu item; the rest show as "分类: 标题" in the palette.
+  assert.deepEqual(host.command("marks.list").display.path, ["章节/书签列表…"]);
+  assert.deepEqual(
+    [...new Set([...host.commands.values()].map((c) => c.display.category))].sort(),
+    ["章节/书签"],
+  );
+  assert.deepEqual(fixedMenu(host, (c) => c.display.title), [
+    ["添加书签", 261, "marks-edit", "P"],
+    ["上一书签/章节", 262, "marks-edit", "Shift+PageUp"],
+    ["下一书签/章节", 263, "marks-edit", "Shift+PageDown"],
+    ["上一章节", 264, "marks-edit", "Ctrl+PageUp"],
+    ["下一章节", 265, "marks-edit", "Ctrl+PageDown"],
+    ["章节/书签列表…", 801, "windows", "H"],
   ]);
-  assert.deepEqual(host.command("marks.seekbar").display.path.slice(1), ["章节/书签", "在进度条上显示标记"]);
+  assert.deepEqual([host.command("marks.seekbar").display.category, host.command("marks.seekbar").display.title], ["章节/书签", "在进度条上显示标记"]);
   assert.equal(host.translate(host.command("marks.add").state.reason!), "未打开媒体");
-  assert.equal(host.translate(host.command("ab.set-a").state.reason!), "未打开媒体");
 });
 
 test("zh-Hans: OSD texts and the clear dialog read as before the migration", async () => {
@@ -953,21 +739,6 @@ test("zh-Hans: OSD texts and the clear dialog read as before the migration", asy
   await at(host, 30);
   await press(host, "Shift+PageDown");
   assert.equal(host.osd.at(-1), "没有下一个书签/章节");
-  await press(host, "[");
-  assert.equal(host.osd.at(-1), "A-B 起点：0:30.0");
-  await at(host, 40);
-  await press(host, "]");
-  assert.equal(host.osd.at(-1), "A-B 循环：0:30.0 ~ 0:40.0");
-  await press(host, "\\");
-  assert.equal(host.osd.at(-1), "解除区段循环");
-  await press(host, "{");
-  assert.equal(host.osd.at(-1), "已解除起点");
-  await host.command("ab.count.3").run();
-  await host.settle(WAIT);
-  assert.equal(host.osd.at(-1), "循环次数：3 次");
-  await host.command("ab.count.endless").run();
-  await host.settle(WAIT);
-  assert.equal(host.osd.at(-1), "循环次数：无限");
   await host.command("marks.seekbar").run();
   await host.settle(WAIT);
   assert.equal(host.osd.at(-1), "进度条上显示书签/章节标记：关");

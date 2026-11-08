@@ -1,8 +1,8 @@
 /** Subtitle selection, external SRT resources and this plugin's style layer. */
 import { createHash } from "node:crypto";
 import { isTextValue, textProblem } from "../i18n.js";
-import { Latest, failure, sleep, uncertain } from "./runtime.js";
-import { abortError } from "./player.js";
+import { Latest } from "./latest.js";
+import { abortError, failure, sleep, uncertain } from "./errors.js";
 /**
  * The player's limits on subtitle files a plugin loads with
  * {@link Subtitles.load}, which `TestHost` enforces with the player's codes.

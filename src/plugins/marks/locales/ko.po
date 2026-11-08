@@ -6,12 +6,12 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
+#: bookmarks.ts:46 menu.ts:56 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 #, x-machine
 msgid "Bookmark {}"
 msgstr "북마크 {}"
 
-#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
+#: chapters.ts:12 menu.ts:56 ui/marks.slint:55 ui/marks.slint:129
 #, x-machine
 msgid "Chapter {}"
 msgstr "챕터 {}"
@@ -36,24 +36,24 @@ msgstr "북마크 {}개가 제거됩니다. 되돌릴 수 없습니다."
 msgid "Clear Bookmarks"
 msgstr "북마크 지우기"
 
-#: manifest.json
+#: manifest.json menu.ts:108 menu.ts:117 menu.ts:130 menu.ts:169 menu.ts:184 menu.ts:193 menu.ts:206 seekbar.ts:137 ui/marks.slint:70
 #, x-machine
-msgid "Chapters, Bookmarks and A-B Loop"
-msgstr "챕터, 북마크, A-B 구간 반복"
+msgid "Chapters and Bookmarks"
+msgstr "챕터 및 북마크"
 
 #: manifest.json
 #, x-machine
-msgid "Jump by chapter and bookmark; loop an A-B range"
-msgstr "챕터와 북마크로 이동하고 A-B 구간을 반복합니다"
+msgid "Jump by chapter and bookmark"
+msgstr "챕터와 북마크로 이동합니다"
 
 #: manifest.json
 #, x-machine
 msgid ""
-"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
-"Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
+"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
+"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
 msgstr ""
-"미디어의 챕터를 표시하고, 파일마다 북마크를 추가하고 이름을 붙여 관리합니다. 챕터와 북마크 사이를 이동하고 탐색 막대에 표시하며, A-B 구간을 지정해 정한 횟수만큼 반복합니다.\n"
-"컨텍스트 메뉴의 ‘재생 ▸ 챕터 및 북마크’와 ‘재생 ▸ A-B 구간 반복’에서 찾을 수 있습니다."
+"미디어의 챕터를 표시하고, 파일마다 북마크를 추가하고 이름을 붙여 관리합니다. 챕터와 북마크 사이를 이동하고 탐색 막대에 표시합니다.\n"
+"컨텍스트 메뉴의 ‘챕터 및 북마크 목록…’(H)에서 찾을 수 있으며, 나머지 명령은 명령 팔레트의 ‘챕터 및 북마크’에 있습니다. A-B 구간 반복은 ‘재생’ 패널(기본 재생)에 있습니다."
 
 #: manifest.json
 #, x-machine
@@ -70,354 +70,139 @@ msgstr "챕터"
 msgid "Bookmarks"
 msgstr "북마크"
 
-#: manifest.json
-#, x-machine
-msgid "Loop"
-msgstr "반복"
-
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:59
+#: menu.ts:55
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:62
+#: menu.ts:58
 #, x-machine
 msgid "{}{}{}"
 msgstr "{}{}{}"
 
-#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
-#, x-machine
-msgid "Chapters and Bookmarks"
-msgstr "챕터 및 북마크"
-
-#: menu.ts:110
+#: menu.ts:107
 #, x-machine
 msgid "Chapter and Bookmark List…"
 msgstr "챕터 및 북마크 목록…"
 
-#: menu.ts:119 ui/marks.slint:208
+#: menu.ts:116 ui/marks.slint:208
 #, x-machine
 msgid "Add Bookmark"
 msgstr "북마크 추가"
 
-#: menu.ts:126 osd.ts:51
+#: menu.ts:123 osd.ts:32
 #, x-machine
 msgid "Can't add bookmarks to this source"
 msgstr "이 소스에는 북마크를 추가할 수 없습니다"
 
-#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
+#: menu.ts:123 menu.ts:135 menu.ts:176 menu.ts:198 ui/marks.slint:157
 #, x-machine
 msgid "No media open"
 msgstr "열린 미디어가 없습니다"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Bookmark or Chapter"
 msgstr "이전 북마크/챕터"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Bookmark or Chapter"
 msgstr "다음 북마크/챕터"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Previous Chapter"
 msgstr "이전 챕터"
 
-#: menu.ts:132
+#: menu.ts:129
 #, x-machine
 msgid "Next Chapter"
 msgstr "다음 챕터"
 
-#: menu.ts:138 menu.ts:179 menu.ts:201
+#: menu.ts:135 menu.ts:176 menu.ts:198
 #, x-machine
 msgid "This source can't seek"
 msgstr "이 소스에서는 탐색할 수 없습니다"
 
-#: menu.ts:186
+#: menu.ts:183
 #, x-machine
 msgid "More Chapters… ({} in all)"
 msgstr "챕터 더 보기… (모두 {}개)"
 
-#: menu.ts:208
+#: menu.ts:205
 #, x-machine
 msgid "More Bookmarks… ({} in all)"
 msgstr "북마크 더 보기… (모두 {}개)"
 
-#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
-#, x-machine
-msgid "A-B Loop"
-msgstr "A-B 구간 반복"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set Start Point"
-msgstr "시작 지점 설정"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear Start Point"
-msgstr "시작 지점 해제"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Back 0.1 s"
-msgstr "시작 지점 0.1초 뒤로"
-
-#: menu.ts:250
-#, x-machine
-msgid "Start Point Forward 0.1 s"
-msgstr "시작 지점 0.1초 앞으로"
-
-#: menu.ts:250
-#, x-machine
-msgid "Set End Point"
-msgstr "끝 지점 설정"
-
-#: menu.ts:250
-#, x-machine
-msgid "Clear End Point"
-msgstr "끝 지점 해제"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Back 0.1 s"
-msgstr "끝 지점 0.1초 뒤로"
-
-#: menu.ts:250
-#, x-machine
-msgid "End Point Forward 0.1 s"
-msgstr "끝 지점 0.1초 앞으로"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Back 0.1 s"
-msgstr "구간 전체 0.1초 뒤로"
-
-#: menu.ts:250
-#, x-machine
-msgid "Move Range Forward 0.1 s"
-msgstr "구간 전체 0.1초 앞으로"
-
-#: menu.ts:250
-#, x-machine
-msgid "Loop Current Chapter or Bookmark Range"
-msgstr "현재 챕터/북마크 구간 반복"
-
-#: menu.ts:257 menu.ts:271 osd.ts:51
-#, x-machine
-msgid "This source doesn't support A-B loop"
-msgstr "이 소스는 A-B 구간 반복을 지원하지 않습니다"
-
-#: menu.ts:257
-#, x-machine
-msgid "Start point not set"
-msgstr "시작 지점이 설정되지 않았습니다"
-
-#: menu.ts:257
-#, x-machine
-msgid "End point not set"
-msgstr "끝 지점이 설정되지 않았습니다"
-
-#: menu.ts:257 menu.ts:271
-#, x-machine
-msgid "A-B range not set"
-msgstr "A-B 구간이 설정되지 않았습니다"
-
-#: menu.ts:265
-#, x-machine
-msgid "A-B Loop On/Off"
-msgstr "A-B 구간 반복 켜기/끄기"
-
-#: menu.ts:278 menu.ts:279
-#, x-machine
-msgid "Loop Count"
-msgstr "반복 횟수"
-
-#: menu.ts:278
-#, x-machine
-msgid "Endless"
-msgstr "무한"
-
-#: menu.ts:278
-#, x-machine
-msgid "Once"
-msgstr "1회"
-
-#: menu.ts:278
-#, x-machine
-msgid "2 Times"
-msgstr "2회"
-
-#: menu.ts:278
-#, x-machine
-msgid "3 Times"
-msgstr "3회"
-
-#: menu.ts:278
-#, x-machine
-msgid "5 Times"
-msgstr "5회"
-
-#: menu.ts:278
-#, x-machine
-msgid "10 Times"
-msgstr "10회"
-
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: {}"
 msgstr "챕터: {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Chapter: Chapter {}"
 msgstr "챕터: 챕터 {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark: {}"
 msgstr "북마크: {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark added: {} ({})"
 msgstr "북마크 추가됨: {} ({})"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "A bookmark already exists here"
 msgstr "이 위치에 이미 북마크가 있습니다"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmarks full ({})"
 msgstr "북마크가 가득 찼습니다 ({}개)"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous chapter"
 msgstr "이전 챕터가 없습니다"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next chapter"
 msgstr "다음 챕터가 없습니다"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No previous bookmark or chapter"
 msgstr "이전 북마크/챕터가 없습니다"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "No next bookmark or chapter"
 msgstr "다음 북마크/챕터가 없습니다"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Can't seek: {}"
 msgstr "탐색할 수 없습니다: {}"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: on"
 msgstr "탐색 막대에 북마크/챕터 표시: 켬"
 
-#: osd.ts:51
+#: osd.ts:32
 #, x-machine
 msgid "Bookmark and chapter marks on the seek bar: off"
 msgstr "탐색 막대에 북마크/챕터 표시: 끔"
 
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop: {} ~ {}"
-msgstr "A-B 구간 반복: {} ~ {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B start: {}"
-msgstr "A-B 시작: {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B end: {}"
-msgstr "A-B 끝: {}"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop ended"
-msgstr "A-B 구간 반복이 끝났습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop off"
-msgstr "A-B 구간 반복 끔"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point is after the end point; end point cleared"
-msgstr "시작 지점이 끝 지점보다 뒤여서 끝 지점을 해제했습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point must be after the start point"
-msgstr "끝 지점은 시작 지점보다 뒤여야 합니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "Start point cleared"
-msgstr "시작 지점을 해제했습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "End point cleared"
-msgstr "끝 지점을 해제했습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the beginning"
-msgstr "처음에 도달했습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "Reached the end"
-msgstr "끝에 도달했습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "Set the start and end points first"
-msgstr "먼저 시작 지점과 끝 지점을 설정하세요"
-
-#: osd.ts:51
-#, x-machine
-msgid "No chapters or bookmarks to define a range"
-msgstr "구간을 정할 챕터나 북마크가 없습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "Range too short to loop"
-msgstr "구간이 너무 짧아 반복할 수 없습니다"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: endless"
-msgstr "반복 횟수: 무한"
-
-#: osd.ts:51
-#, x-machine
-msgid "Loop count: {}"
-msgstr "반복 횟수: {}회"
-
-#: osd.ts:51
-#, x-machine
-msgid "A-B loop failed: {}"
-msgstr "A-B 구간 반복 실패: {}"
-
-#: seekbar.ts:147
+#: seekbar.ts:136
 #, x-machine
 msgid "Show Marks on Seek Bar"
 msgstr "탐색 막대에 마커 표시"

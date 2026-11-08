@@ -1200,16 +1200,12 @@ msgid ""
 "Added:\n"
 "{2}\n"
 "\n"
-"Current: {3}.\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"Current: {3}."
 msgstr ""
 "Agregados:\n"
 "{2}\n"
 "\n"
-"Actual: {3}.\n"
-"\n"
-"Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
+"Actual: {3}."
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1300,14 +1296,10 @@ msgstr "Repositorio: {} ({}). Vestra Player no revisa este repositorio; sus comp
 #, x-machine
 msgid ""
 "It will be able to:\n"
-"{}\n"
-"\n"
-"A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
+"{}"
 msgstr ""
 "Podrá:\n"
-"{}\n"
-"\n"
-"Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."
+"{}"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
@@ -1737,7 +1729,7 @@ msgstr "Seguir usando"
 msgid "Choose a plugin package (.vxp)"
 msgstr "Elige un paquete de complemento (.vxp)"
 
-#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:695
+#: ui/settings.slint:46 ui/settings.slint:138 ui/store.slint:688
 #, x-machine
 msgid "Cancel"
 msgstr "Cancelar"
@@ -1879,8 +1871,3 @@ msgstr "Versión mín. del reproductor"
 #, x-machine
 msgid "Permissions ({})"
 msgstr "Permisos ({})"
-
-#: ui/store.slint:668
-#, x-machine
-msgid "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network."
-msgstr "Un complemento es un programa completo: los permisos anteriores solo limitan lo que puede hacer con el reproductor, no la lectura y escritura de archivos ni el uso de la red."

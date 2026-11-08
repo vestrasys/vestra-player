@@ -1,8 +1,7 @@
 import type { Chapter, I18n, MarkKind, Plugin, Text, TimelineLayer } from "@vestra-player/sdk";
 import { type Bookmarks, bookmarkName } from "./bookmarks.ts";
 import { chapterName, type Chapters, hasMedia } from "./chapters.ts";
-import type { AbLoop } from "./loop.ts";
-import { MARKS, MARKS_CATEGORY } from "./menu.ts";
+import { MARKS_CATEGORY } from "./menu.ts";
 import type { Osd } from "./osd.ts";
 import type { Settings } from "./store.ts";
 
@@ -14,18 +13,16 @@ export type SeekbarMark = { time: number; kind: MarkKind; title: string | Text }
 
 /**
  * B22: what this plugin puts on the seek bar: chapter starts and bookmarks
- * (named as in the menu: "Chapter N" / "Bookmark N" without a title) and,
- * while only A is set, an `A` marker (B23). Times outside the media are left
- * out (the player would refuse the whole layer), then the first 1000 by time
- * are kept.
+ * (named as in the menu: "Chapter N" / "Bookmark N" without a title). The A-B
+ * loop's `A` marker is the playback plugin's (B23 moved there). Times outside
+ * the media are left out (the player would refuse the whole layer), then the
+ * first 1000 by time are kept.
  */
 export function seekbarMarks(
   text: I18n["text"],
   input: {
     chapters: readonly Chapter[];
     bookmarks: readonly { time: number; title: string; number: number }[];
-    a: number | null;
-    b: number | null;
     duration: number | null;
   },
 ): SeekbarMark[] {
@@ -35,7 +32,6 @@ export function seekbarMarks(
     ...input.chapters.map((chapter, i) => ({ time: chapter.start, kind: "chapter" as const, title: title(chapterName(text, chapter, i)) })),
     ...input.bookmarks.map((bookmark) => ({ time: bookmark.time, kind: "bookmark" as const, title: title(bookmarkName(text, bookmark)) })),
   ];
-  if (input.a !== null && input.b === null) marks.push({ time: input.a, kind: "marker", title: "A" });
   const { duration } = input;
   return marks
     .filter((mark) => Number.isFinite(mark.time) && mark.time >= 0 && (duration === null || mark.time <= duration))
@@ -45,7 +41,7 @@ export function seekbarMarks(
 
 /**
  * B22 publishing: this plugin's timeline layer follows the chapters, the
- * bookmarks, A and the Show Marks on Seek Bar switch (`marks.json`
+ * bookmarks and the Show Marks on Seek Bar switch (`marks.json`
  * `showOnSeekbar`). Each write is conditional on the source it was built for
  * (`ifCurrent`); the player clears every layer on a new source, and this
  * publishes again once the new one is ready. Switched off: an empty layer.
@@ -55,7 +51,6 @@ export class SeekbarMarks {
   readonly #settings: Settings;
   readonly #chapters: Chapters;
   readonly #bookmarks: Bookmarks;
-  readonly #loop: AbLoop;
   readonly #layer: TimelineLayer;
   readonly #osd: Osd;
   #scheduled = false;
@@ -69,20 +64,17 @@ export class SeekbarMarks {
     settings: Settings,
     chapters: Chapters,
     bookmarks: Bookmarks,
-    loop: AbLoop,
     osd: Osd,
   ) {
     this.#plugin = plugin;
     this.#settings = settings;
     this.#chapters = chapters;
     this.#bookmarks = bookmarks;
-    this.#loop = loop;
     this.#osd = osd;
     this.#layer = plugin.timeline.layer();
     const schedule = () => this.schedule();
     chapters.onChange(schedule);
     bookmarks.onChange(schedule);
-    loop.onPoints(schedule);
   }
 
   get shown(): boolean {
@@ -119,8 +111,7 @@ export class SeekbarMarks {
     }
     const media = hasMedia(state);
     const show = this.shown;
-    const loop = this.#loop;
-    const inputs = JSON.stringify([media, show, state.duration, this.#chapters.version, this.#bookmarks.version, loop.a, loop.b]);
+    const inputs = JSON.stringify([media, show, state.duration, this.#chapters.version, this.#bookmarks.version]);
     if (inputs === this.#inputs) return;
     this.#inputs = inputs;
     const marks =
@@ -128,8 +119,6 @@ export class SeekbarMarks {
         ? seekbarMarks(this.#plugin.i18n.text, {
             chapters: this.#chapters.list,
             bookmarks: this.#bookmarks.items,
-            a: loop.a,
-            b: loop.b,
             duration: state.duration,
           })
         : [];
@@ -140,11 +129,11 @@ export class SeekbarMarks {
   }
 }
 
-/** Playback ▸ Chapters and Bookmarks ▸ Show Marks on Seek Bar (B22, order 30000: after the chapter and bookmark lines). */
+/** Show Marks on Seek Bar (B22, command palette only; order 30000: after the chapter and bookmark lines). */
 export function addSeekbarCommand(plugin: Plugin, seekbar: SeekbarMarks) {
   plugin.commands.add({
     id: "marks.seekbar",
-    path: [...MARKS, "Show Marks on Seek Bar"],
+    title: "Show Marks on Seek Bar",
     category: MARKS_CATEGORY,
     order: 30000,
     group: "marks-option",

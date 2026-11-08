@@ -4,47 +4,47 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:42
+#: main.ts:41
 msgid "Palette: Vestra Light"
 msgstr ""
 
-#: main.ts:42
+#: main.ts:41
 msgid "Palette: Vestra Dark"
 msgstr ""
 
-#: main.ts:51
+#: main.ts:50
 msgid "Language: Follow System. Takes effect after restart"
 msgstr ""
 
-#: main.ts:52
+#: main.ts:51
 msgid "Language: {}. Takes effect after restart"
 msgstr ""
 
-#: main.ts:59 main.ts:95 main.ts:111 ui/appearance.slint:83
+#: main.ts:58 main.ts:94 ui/appearance.slint:83
 msgid "Appearance"
 msgstr ""
 
-#: main.ts:73 main.ts:96 main.ts:123 main.ts:135 ui/language.slint:52
+#: main.ts:72 main.ts:95 ui/language.slint:52
 msgid "Language"
 msgstr ""
 
-#: main.ts:94
+#: main.ts:93
 msgid "Settings"
 msgstr ""
 
-#: main.ts:101
+#: main.ts:100
 msgid "Options…"
 msgstr ""
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 msgid "Vestra Dark"
 msgstr ""
 
-#: main.ts:111 ui/appearance.slint:72
+#: main.ts:110 ui/appearance.slint:72
 msgid "Vestra Light"
 msgstr ""
 
-#: main.ts:123 ui/language.slint:59
+#: main.ts:122 ui/language.slint:59
 msgid "Follow System"
 msgstr ""
 
@@ -57,7 +57,7 @@ msgid "Open the options window, change the palette and the language"
 msgstr ""
 
 #: manifest.json
-msgid "Settings ▸ Options… (F5) opens the player's options window. Settings ▸ Appearance picks the palette (Vestra Dark, Vestra Light); the options window also has an Appearance page with previews. Settings ▸ Language picks the interface language, used from the next start."
+msgid "Options… (F5) in the context menu opens the player's options window. Its Appearance page picks the palette (Vestra Dark, Vestra Light) with previews; its Language page picks the interface language, used from the next start. Both are also in the command palette (Appearance: …, Language: …)."
 msgstr ""
 
 #: manifest.json

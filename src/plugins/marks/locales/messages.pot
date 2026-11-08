@@ -1,14 +1,14 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.marks 0.1.7\n"
+"Project-Id-Version: vestra.marks 0.1.8\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: bookmarks.ts:46 menu.ts:60 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
+#: bookmarks.ts:46 menu.ts:56 ui/marks.slint:56 ui/marks.slint:129 ui/marks.slint:186
 msgid "Bookmark {}"
 msgstr ""
 
-#: chapters.ts:12 menu.ts:60 ui/marks.slint:55 ui/marks.slint:129
+#: chapters.ts:12 menu.ts:56 ui/marks.slint:55 ui/marks.slint:129
 msgid "Chapter {}"
 msgstr ""
 
@@ -28,18 +28,18 @@ msgstr ""
 msgid "Clear Bookmarks"
 msgstr ""
 
-#: manifest.json
-msgid "Chapters, Bookmarks and A-B Loop"
+#: manifest.json menu.ts:108 menu.ts:117 menu.ts:130 menu.ts:169 menu.ts:184 menu.ts:193 menu.ts:206 seekbar.ts:137 ui/marks.slint:70
+msgid "Chapters and Bookmarks"
 msgstr ""
 
 #: manifest.json
-msgid "Jump by chapter and bookmark; loop an A-B range"
+msgid "Jump by chapter and bookmark"
 msgstr ""
 
 #: manifest.json
 msgid ""
-"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar; sets an A-B range and loops it a chosen number of times.\n"
-"Find it in the context menu under \"Playback ▸ Chapters and Bookmarks\" and \"Playback ▸ A-B Loop\"."
+"Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
+"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
 msgstr ""
 
 #: manifest.json
@@ -54,285 +54,113 @@ msgstr ""
 msgid "Bookmarks"
 msgstr ""
 
-#: manifest.json
-msgid "Loop"
-msgstr ""
-
 #. a chapter or bookmark menu line made of the user's own title and its time; keep "{}".
-#: menu.ts:59
+#: menu.ts:55
 msgid "{}"
 msgstr ""
 
 #. a menu line: chapter number ("01  ", or nothing for a bookmark), "Chapter N" / "Bookmark N", then "    01:23"; usually kept as is.
-#: menu.ts:62
+#: menu.ts:58
 msgid "{}{}{}"
 msgstr ""
 
-#: menu.ts:110 menu.ts:111 menu.ts:119 menu.ts:120 menu.ts:132 menu.ts:133 menu.ts:171 menu.ts:172 menu.ts:186 menu.ts:187 menu.ts:195 menu.ts:196 menu.ts:208 menu.ts:209 seekbar.ts:147 seekbar.ts:148 ui/marks.slint:70
-msgid "Chapters and Bookmarks"
-msgstr ""
-
-#: menu.ts:110
+#: menu.ts:107
 msgid "Chapter and Bookmark List…"
 msgstr ""
 
-#: menu.ts:119 ui/marks.slint:208
+#: menu.ts:116 ui/marks.slint:208
 msgid "Add Bookmark"
 msgstr ""
 
-#: menu.ts:126 osd.ts:51
+#: menu.ts:123 osd.ts:32
 msgid "Can't add bookmarks to this source"
 msgstr ""
 
-#: menu.ts:126 menu.ts:138 menu.ts:179 menu.ts:201 menu.ts:257 menu.ts:271 ui/marks.slint:157
+#: menu.ts:123 menu.ts:135 menu.ts:176 menu.ts:198 ui/marks.slint:157
 msgid "No media open"
 msgstr ""
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Previous Bookmark or Chapter"
 msgstr ""
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Next Bookmark or Chapter"
 msgstr ""
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Previous Chapter"
 msgstr ""
 
-#: menu.ts:132
+#: menu.ts:129
 msgid "Next Chapter"
 msgstr ""
 
-#: menu.ts:138 menu.ts:179 menu.ts:201
+#: menu.ts:135 menu.ts:176 menu.ts:198
 msgid "This source can't seek"
 msgstr ""
 
-#: menu.ts:186
+#: menu.ts:183
 msgid "More Chapters… ({} in all)"
 msgstr ""
 
-#: menu.ts:208
+#: menu.ts:205
 msgid "More Bookmarks… ({} in all)"
 msgstr ""
 
-#: menu.ts:250 menu.ts:251 menu.ts:265 menu.ts:266 menu.ts:278
-msgid "A-B Loop"
-msgstr ""
-
-#: menu.ts:250
-msgid "Set Start Point"
-msgstr ""
-
-#: menu.ts:250
-msgid "Clear Start Point"
-msgstr ""
-
-#: menu.ts:250
-msgid "Start Point Back 0.1 s"
-msgstr ""
-
-#: menu.ts:250
-msgid "Start Point Forward 0.1 s"
-msgstr ""
-
-#: menu.ts:250
-msgid "Set End Point"
-msgstr ""
-
-#: menu.ts:250
-msgid "Clear End Point"
-msgstr ""
-
-#: menu.ts:250
-msgid "End Point Back 0.1 s"
-msgstr ""
-
-#: menu.ts:250
-msgid "End Point Forward 0.1 s"
-msgstr ""
-
-#: menu.ts:250
-msgid "Move Range Back 0.1 s"
-msgstr ""
-
-#: menu.ts:250
-msgid "Move Range Forward 0.1 s"
-msgstr ""
-
-#: menu.ts:250
-msgid "Loop Current Chapter or Bookmark Range"
-msgstr ""
-
-#: menu.ts:257 menu.ts:271 osd.ts:51
-msgid "This source doesn't support A-B loop"
-msgstr ""
-
-#: menu.ts:257
-msgid "Start point not set"
-msgstr ""
-
-#: menu.ts:257
-msgid "End point not set"
-msgstr ""
-
-#: menu.ts:257 menu.ts:271
-msgid "A-B range not set"
-msgstr ""
-
-#: menu.ts:265
-msgid "A-B Loop On/Off"
-msgstr ""
-
-#: menu.ts:278 menu.ts:279
-msgid "Loop Count"
-msgstr ""
-
-#: menu.ts:278
-msgid "Endless"
-msgstr ""
-
-#: menu.ts:278
-msgid "Once"
-msgstr ""
-
-#: menu.ts:278
-msgid "2 Times"
-msgstr ""
-
-#: menu.ts:278
-msgid "3 Times"
-msgstr ""
-
-#: menu.ts:278
-msgid "5 Times"
-msgstr ""
-
-#: menu.ts:278
-msgid "10 Times"
-msgstr ""
-
-#: osd.ts:51
+#: osd.ts:32
 msgid "Chapter: {}"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Chapter: Chapter {}"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark: {}"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark added: {} ({})"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "A bookmark already exists here"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmarks full ({})"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No previous chapter"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No next chapter"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No previous bookmark or chapter"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "No next bookmark or chapter"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Can't seek: {}"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark and chapter marks on the seek bar: on"
 msgstr ""
 
-#: osd.ts:51
+#: osd.ts:32
 msgid "Bookmark and chapter marks on the seek bar: off"
 msgstr ""
 
-#: osd.ts:51
-msgid "A-B loop: {} ~ {}"
-msgstr ""
-
-#: osd.ts:51
-msgid "A-B start: {}"
-msgstr ""
-
-#: osd.ts:51
-msgid "A-B end: {}"
-msgstr ""
-
-#: osd.ts:51
-msgid "A-B loop ended"
-msgstr ""
-
-#: osd.ts:51
-msgid "A-B loop off"
-msgstr ""
-
-#: osd.ts:51
-msgid "Start point is after the end point; end point cleared"
-msgstr ""
-
-#: osd.ts:51
-msgid "End point must be after the start point"
-msgstr ""
-
-#: osd.ts:51
-msgid "Start point cleared"
-msgstr ""
-
-#: osd.ts:51
-msgid "End point cleared"
-msgstr ""
-
-#: osd.ts:51
-msgid "Reached the beginning"
-msgstr ""
-
-#: osd.ts:51
-msgid "Reached the end"
-msgstr ""
-
-#: osd.ts:51
-msgid "Set the start and end points first"
-msgstr ""
-
-#: osd.ts:51
-msgid "No chapters or bookmarks to define a range"
-msgstr ""
-
-#: osd.ts:51
-msgid "Range too short to loop"
-msgstr ""
-
-#: osd.ts:51
-msgid "Loop count: endless"
-msgstr ""
-
-#: osd.ts:51
-msgid "Loop count: {}"
-msgstr ""
-
-#: osd.ts:51
-msgid "A-B loop failed: {}"
-msgstr ""
-
-#: seekbar.ts:147
+#: seekbar.ts:136
 msgid "Show Marks on Seek Bar"
 msgstr ""
 

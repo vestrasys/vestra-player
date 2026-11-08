@@ -16,152 +16,152 @@ msgstr "{} s zurück"
 msgid "Forward {} s"
 msgstr "{} s vorwärts"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Playback…"
 msgstr "Wiedergabe…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Open File…"
 msgstr "Datei öffnen…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Open URL…"
 msgstr "URL öffnen…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Reopen Current/Last File"
 msgstr "Aktuelle/letzte Datei erneut öffnen"
 
-#: commands.ts:272 commands.ts:273
+#: commands.ts:273 commands.ts:274
 #, x-machine
 msgid "Copy to Clipboard"
 msgstr "In die Zwischenablage kopieren"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "File Name"
 msgstr "Dateiname"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Folder Path"
 msgstr "Ordnerpfad"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Full Path"
 msgstr "Vollständiger Pfad"
 
-#: commands.ts:272 ui/panel.slint:820
+#: commands.ts:273 ui/panel.slint:1275
 #, x-machine
 msgid "Previous Keyframe"
 msgstr "Vorheriges Schlüsselbild"
 
-#: commands.ts:272 ui/panel.slint:827
+#: commands.ts:273 ui/panel.slint:1282
 #, x-machine
 msgid "Next Keyframe"
 msgstr "Nächstes Schlüsselbild"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Jump to Time…"
 msgstr "Zu Zeitpunkt springen…"
 
-#: commands.ts:272 ui/panel.slint:772 ui/panel.slint:775 ui/panel.slint:781
+#: commands.ts:273 ui/panel.slint:1227 ui/panel.slint:1230 ui/panel.slint:1236
 #, x-machine
 msgid "Jump to Start"
 msgstr "Zum Anfang springen"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Seek Steps…"
 msgstr "Sprungweiten…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "0.5×"
 msgstr "0,5×"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "1.5×"
 msgstr "1,5×"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Custom…"
 msgstr "Benutzerdefiniert…"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Disable Screen Saver While Playing"
 msgstr "Bildschirmschoner bei Wiedergabe deaktivieren"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Show Time on Seek Bar Hover"
 msgstr "Zeit beim Überfahren der Zeitleiste anzeigen"
 
-#: commands.ts:272
+#: commands.ts:273
 #, x-machine
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "Vorschaubild beim Überfahren der Zeitleiste anzeigen"
 
-#: commands.ts:273
+#: commands.ts:274
 #, x-machine
 msgid "File"
 msgstr "Datei"
 
-#: commands.ts:273
+#: commands.ts:274
 #, x-machine
 msgid "Seek"
 msgstr "Springen"
 
-#: commands.ts:273 ui/panel.slint:657 ui/panel.slint:675 ui/panel.slint:678 ui/panel.slint:705
+#: commands.ts:274 ui/panel.slint:1011 ui/panel.slint:1029 ui/panel.slint:1032 ui/panel.slint:1059
 #, x-machine
 msgid "Speed"
 msgstr "Geschwindigkeit"
 
-#: commands.ts:273 panel.ts:56
+#: commands.ts:274 panel.ts:69
 #, x-machine
 msgid "Playback"
 msgstr "Wiedergabe"
 
-#: commands.ts:283 ui/panel.slint:632
+#: commands.ts:284 ui/panel.slint:979
 #, x-machine
 msgid "Not supported by the current source"
 msgstr "Von der aktuellen Quelle nicht unterstützt"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "No file to reopen"
 msgstr "Keine Datei zum erneuten Öffnen"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "No open file"
 msgstr "Keine Datei geöffnet"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "A network source has no file name"
 msgstr "Eine Netzwerkquelle hat keinen Dateinamen"
 
-#: commands.ts:283 ui/panel.slint:650
+#: commands.ts:284 ui/panel.slint:997
 #, x-machine
 msgid "No video"
 msgstr "Kein Video"
 
-#: commands.ts:283
+#: commands.ts:284
 #, x-machine
 msgid "Needs ffmpeg"
 msgstr "Erfordert ffmpeg"
@@ -176,132 +176,342 @@ msgstr "Medien öffnen"
 msgid "Open Media (replaces the current source)"
 msgstr "Medien öffnen (ersetzt die aktuelle Quelle)"
 
-#: main.ts:29
+#: loop-commands.ts:50 ui/panel.slint:1087
+#, x-machine
+msgid "Set Start Point"
+msgstr "Startpunkt setzen"
+
+#: loop-commands.ts:50 ui/panel.slint:1089
+#, x-machine
+msgid "Clear Start Point"
+msgstr "Startpunkt entfernen"
+
+#: loop-commands.ts:50 ui/panel.slint:1090
+#, x-machine
+msgid "Start Point Back 0.1 s"
+msgstr "Startpunkt 0,1 s früher"
+
+#: loop-commands.ts:50 ui/panel.slint:1091
+#, x-machine
+msgid "Start Point Forward 0.1 s"
+msgstr "Startpunkt 0,1 s später"
+
+#: loop-commands.ts:50 ui/panel.slint:1105
+#, x-machine
+msgid "Set End Point"
+msgstr "Endpunkt setzen"
+
+#: loop-commands.ts:50 ui/panel.slint:1107
+#, x-machine
+msgid "Clear End Point"
+msgstr "Endpunkt entfernen"
+
+#: loop-commands.ts:50 ui/panel.slint:1108
+#, x-machine
+msgid "End Point Back 0.1 s"
+msgstr "Endpunkt 0,1 s früher"
+
+#: loop-commands.ts:50 ui/panel.slint:1109
+#, x-machine
+msgid "End Point Forward 0.1 s"
+msgstr "Endpunkt 0,1 s später"
+
+#: loop-commands.ts:50
+#, x-machine
+msgid "Move Range Back 0.1 s"
+msgstr "Bereich 0,1 s früher"
+
+#: loop-commands.ts:50
+#, x-machine
+msgid "Move Range Forward 0.1 s"
+msgstr "Bereich 0,1 s später"
+
+#: loop-commands.ts:50 ui/panel.slint:1163
+#, x-machine
+msgid "Loop Current Chapter or Bookmark Range"
+msgstr "Aktuelles Kapitel/Lesezeichen wiederholen"
+
+#: loop-commands.ts:51 loop-commands.ts:66 ui/panel.slint:1071
+#, x-machine
+msgid "A-B Loop"
+msgstr "A-B-Wiederholung"
+
+#: loop-commands.ts:58 loop-commands.ts:72 main.ts:32 ui/panel.slint:999
+#, x-machine
+msgid "This source doesn't support A-B loop"
+msgstr "Diese Quelle unterstützt keine A-B-Wiederholung"
+
+#: loop-commands.ts:58 loop-commands.ts:72 ui/panel.slint:999
+#, x-machine
+msgid "No media open"
+msgstr "Keine Medien geöffnet"
+
+#: loop-commands.ts:58
+#, x-machine
+msgid "Start point not set"
+msgstr "Kein Startpunkt gesetzt"
+
+#: loop-commands.ts:58
+#, x-machine
+msgid "End point not set"
+msgstr "Kein Endpunkt gesetzt"
+
+#: loop-commands.ts:58 loop-commands.ts:72
+#, x-machine
+msgid "A-B range not set"
+msgstr "Kein A-B-Bereich gesetzt"
+
+#: loop-commands.ts:65 ui/panel.slint:1075 ui/panel.slint:1122
+#, x-machine
+msgid "A-B Loop On/Off"
+msgstr "A-B-Wiederholung ein/aus"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "Endless"
+msgstr "Endlos"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "Once"
+msgstr "1-mal"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "2 Times"
+msgstr "2-mal"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "3 Times"
+msgstr "3-mal"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "5 Times"
+msgstr "5-mal"
+
+#: loop-commands.ts:79 ui/panel.slint:1153
+#, x-machine
+msgid "10 Times"
+msgstr "10-mal"
+
+#: loop-commands.ts:80
+#, x-machine
+msgid "Loop Count"
+msgstr "Anzahl Wiederholungen"
+
+#: main.ts:32
 #, x-machine
 msgid "Seek: {} / {}"
 msgstr "Springen: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Back {} s: {} / {}"
 msgstr "{} s zurück: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Forward {} s: {} / {}"
 msgstr "{} s vorwärts: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Jumped to the start"
 msgstr "Zum Anfang gesprungen"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Previous keyframe: {} / {}"
 msgstr "Vorheriges Schlüsselbild: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Next keyframe: {} / {}"
 msgstr "Nächstes Schlüsselbild: {} / {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Already at the last keyframe"
 msgstr "Bereits am letzten Schlüsselbild"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Speed: {}x"
 msgstr "Geschwindigkeit: {}x"
 
-#: main.ts:29 ui/bar.slint:95
+#: main.ts:32 ui/bar.slint:95
 #, x-machine
 msgid "Volume: {}%"
 msgstr "Lautstärke: {} %"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Open failed"
 msgstr "Öffnen fehlgeschlagen"
 
-#: main.ts:29 ui/open-url.slint:66
+#: main.ts:32 ui/open-url.slint:66
 #, x-machine
 msgid "Open failed: {}"
 msgstr "Öffnen fehlgeschlagen: {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Reopened: {}"
 msgstr "Erneut geöffnet: {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Reopened the last file: {}"
 msgstr "Letzte Datei erneut geöffnet: {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Copied: {}"
 msgstr "Kopiert: {}"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Copy failed: {}"
 msgstr "Kopieren fehlgeschlagen: {}"
 
-#: main.ts:29 ui/open-url.slint:65
+#: main.ts:32 ui/open-url.slint:65
 #, x-machine
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr "Nur die erste Zeile wird geöffnet; fügen Sie mehrere Links der Wiedergabeliste hinzu"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Disable screen saver while playing: On"
 msgstr "Bildschirmschoner bei Wiedergabe deaktivieren: Ein"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Disable screen saver while playing: Off"
 msgstr "Bildschirmschoner bei Wiedergabe deaktivieren: Aus"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show time on seek bar hover: On"
 msgstr "Zeit beim Überfahren der Zeitleiste: Ein"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show time on seek bar hover: Off"
 msgstr "Zeit beim Überfahren der Zeitleiste: Aus"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show thumbnail on seek bar hover: On"
 msgstr "Vorschaubild beim Überfahren der Zeitleiste: Ein"
 
-#: main.ts:29
+#: main.ts:32
 #, x-machine
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr "Vorschaubild beim Überfahren der Zeitleiste: Aus"
 
-#: main.ts:29
+#: main.ts:32
+#, x-machine
+msgid "A-B loop: {} ~ {}"
+msgstr "A-B-Wiederholung: {} ~ {}"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B start: {}"
+msgstr "A-B-Start: {}"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B end: {}"
+msgstr "A-B-Ende: {}"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B loop ended"
+msgstr "A-B-Wiederholung beendet"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B loop off"
+msgstr "A-B-Wiederholung aus"
+
+#: main.ts:32
+#, x-machine
+msgid "Start point is after the end point; end point cleared"
+msgstr "Der Startpunkt liegt nach dem Endpunkt; Endpunkt entfernt"
+
+#: main.ts:32
+#, x-machine
+msgid "End point must be after the start point"
+msgstr "Der Endpunkt muss nach dem Startpunkt liegen"
+
+#: main.ts:32
+#, x-machine
+msgid "Start point cleared"
+msgstr "Startpunkt entfernt"
+
+#: main.ts:32
+#, x-machine
+msgid "End point cleared"
+msgstr "Endpunkt entfernt"
+
+#: main.ts:32
+#, x-machine
+msgid "Reached the beginning"
+msgstr "Anfang erreicht"
+
+#: main.ts:32
+#, x-machine
+msgid "Reached the end"
+msgstr "Ende erreicht"
+
+#: main.ts:32 ui/panel.slint:1122
+#, x-machine
+msgid "Set the start and end points first"
+msgstr "Legen Sie zuerst Start- und Endpunkt fest"
+
+#: main.ts:32
+#, x-machine
+msgid "No chapters or bookmarks to define a range"
+msgstr "Keine Kapitel oder Lesezeichen für einen Bereich vorhanden"
+
+#: main.ts:32
+#, x-machine
+msgid "Range too short to loop"
+msgstr "Bereich zu kurz für eine Wiederholung"
+
+#: main.ts:32
+#, x-machine
+msgid "Loop count: endless"
+msgstr "Anzahl Wiederholungen: endlos"
+
+#: main.ts:32
+#, x-machine
+msgid "Loop count: {}"
+msgstr "Anzahl Wiederholungen: {}"
+
+#: main.ts:32
+#, x-machine
+msgid "A-B loop failed: {}"
+msgstr "A-B-Wiederholung fehlgeschlagen: {}"
+
+#: main.ts:32
 #, x-machine
 msgid "Source operation failed: {}"
 msgstr "Vorgang der Quelle fehlgeschlagen: {}"
 
-#: main.ts:29 ui/panel.slint:735
+#: main.ts:32 ui/panel.slint:940 ui/panel.slint:1190
 #, x-machine
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "Geben Sie eine Zeit innerhalb der Dauer der Quelle im Format HH:MM:SS.mmm ein"
 
-#: main.ts:29 ui/panel.slint:689
+#: main.ts:32 ui/panel.slint:1043
 #, x-machine
 msgid "Speed must be between 0.25× and 4×"
 msgstr "Die Geschwindigkeit muss zwischen 0.25× und 4× liegen"
 
-#: main.ts:29 ui/panel.slint:449
+#: main.ts:32 ui/panel.slint:500
 #, x-machine
 msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr "Bereich 0.1–3600 s, höchstens eine Nachkommastelle"
@@ -319,11 +529,11 @@ msgstr "Untere Steuerleiste, Dateien und Links öffnen, Springen und Geschwindig
 #: manifest.json
 #, x-machine
 msgid ""
-"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\n"
-"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps."
+"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; an A-B loop that repeats a range a chosen number of times; time or thumbnail on seek bar hover; no screen saver while playing.\n"
+"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, A-B Loop, jump, frame and keyframe steps, seek steps."
 msgstr ""
-"Die Steuerleiste unten im Hauptfenster (Zeitleiste, Wiedergabetasten, Lautstärke); Datei öffnen, Link öffnen, letzte Datei erneut öffnen; mehrere Sprungweiten, Sprünge zu Schlüsselbildern, Sprung zu einem Zeitpunkt, feste und benutzerdefinierte Geschwindigkeiten; Zeit oder Vorschaubild beim Überfahren der Zeitleiste; kein Bildschirmschoner während der Wiedergabe.\n"
-"Wiedergabe… (Alt+4) im Kontextmenü öffnet sein Bedienfeld neben dem Video: Geschwindigkeit, Springen, Bild- und Schlüsselbildschritte, Sprungweiten."
+"Die Steuerleiste unten im Hauptfenster (Zeitleiste, Wiedergabetasten, Lautstärke); Datei öffnen, Link öffnen, letzte Datei erneut öffnen; mehrere Sprungweiten, Sprünge zu Schlüsselbildern, Sprung zu einem Zeitpunkt, feste und benutzerdefinierte Geschwindigkeiten; eine A-B-Wiederholung, die einen Bereich beliebig oft wiederholt; Zeit oder Vorschaubild beim Überfahren der Zeitleiste; kein Bildschirmschoner während der Wiedergabe.\n"
+"Wiedergabe… (Alt+4) im Kontextmenü öffnet sein Bedienfeld neben dem Video: Geschwindigkeit, A-B-Wiederholung, Springen, Bild- und Schlüsselbildschritte, Sprungweiten."
 
 #: manifest.json
 #, x-machine
@@ -344,6 +554,11 @@ msgstr "Springen"
 #, x-machine
 msgid "speed"
 msgstr "Geschwindigkeit"
+
+#: manifest.json
+#, x-machine
+msgid "loop"
+msgstr "Wiederholung"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
 #: ui/bar.slint:84
@@ -453,114 +668,174 @@ msgid "Not a valid link"
 msgstr "Kein gültiger Link"
 
 #. {} is a number of seconds ("30").
-#: ui/panel.slint:443
+#: ui/panel.slint:494
 #, x-machine
 msgid "{} s"
 msgstr "{} s"
 
-#: ui/panel.slint:449
+#: ui/panel.slint:500
 #, x-machine
 msgid "Seek step"
 msgstr "Sprungweite"
 
-#: ui/panel.slint:450
+#: ui/panel.slint:501
 #, x-machine
 msgid "click: type a value · double-click: Default"
 msgstr "Klick: Wert eingeben · Doppelklick: Standard"
 
-#: ui/panel.slint:587 ui/panel.slint:701 ui/panel.slint:710
+#: ui/panel.slint:644 ui/panel.slint:1055 ui/panel.slint:1064
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. {} is the playback speed ("1.25"); the × reads "times".
-#: ui/panel.slint:618 ui/panel.slint:683
+#: ui/panel.slint:675 ui/panel.slint:1037
 #, x-machine
 msgid "{}×"
 msgstr "{}×"
 
-#: ui/panel.slint:657 ui/panel.slint:718
+#: ui/panel.slint:822
+#, x-machine
+msgid "hold to repeat"
+msgstr "gedrückt halten zum Wiederholen"
+
+#: ui/panel.slint:941
+#, x-machine
+msgid "Start point"
+msgstr "Startpunkt"
+
+#: ui/panel.slint:941
+#, x-machine
+msgid "End point"
+msgstr "Endpunkt"
+
+#: ui/panel.slint:942
+#, x-machine
+msgid "click: type a time"
+msgstr "Klicken: Zeit eingeben"
+
+#: ui/panel.slint:1011 ui/panel.slint:1173
 #, x-machine
 msgid "Go to"
 msgstr "Gehe zu"
 
-#: ui/panel.slint:657 ui/panel.slint:770
+#: ui/panel.slint:1011 ui/panel.slint:1225
 #, x-machine
 msgid "Start"
 msgstr "Anfang"
 
-#: ui/panel.slint:657 ui/panel.slint:790 ui/panel.slint:807
+#: ui/panel.slint:1011 ui/panel.slint:1245 ui/panel.slint:1262
 #, x-machine
 msgid "Frame"
 msgstr "Bild"
 
-#: ui/panel.slint:657 ui/panel.slint:816 ui/panel.slint:833
+#: ui/panel.slint:1011 ui/panel.slint:1271 ui/panel.slint:1288
 #, x-machine
 msgid "Keyframe"
 msgstr "Schlüsselbild"
 
-#: ui/panel.slint:689 ui/panel.slint:695
+#: ui/panel.slint:1043 ui/panel.slint:1049
 #, x-machine
 msgid "Playback speed"
 msgstr "Wiedergabegeschwindigkeit"
 
-#: ui/panel.slint:690
+#: ui/panel.slint:1044
 #, x-machine
 msgid "click: type a value"
 msgstr "Klick: Wert eingeben"
 
-#: ui/panel.slint:706
+#: ui/panel.slint:1060
 #, x-machine
 msgid "drag or scroll · double-click: 1×"
 msgstr "Ziehen oder scrollen · Doppelklick: 1×"
 
-#: ui/panel.slint:715
+#. the button that sets the loop's start point A at the current position.
+#: ui/panel.slint:1086
+#, x-machine
+msgid "Set A here"
+msgstr "A hier setzen"
+
+#: ui/panel.slint:1088
+#, x-machine
+msgid "at the current position"
+msgstr "an der aktuellen Position"
+
+#. the button that sets the loop's end point B at the current position.
+#: ui/panel.slint:1104
+#, x-machine
+msgid "Set B here"
+msgstr "B hier setzen"
+
+#: ui/panel.slint:1106
+#, x-machine
+msgid "at the current position · the loop starts at once"
+msgstr "an der aktuellen Position · die Wiederholung beginnt sofort"
+
+#. the A-B loop's on/off switch.
+#: ui/panel.slint:1137
+#, x-machine
+msgid "Loop"
+msgstr "Wiederholung"
+
+#. how many times the A-B loop repeats (Endless, Once, 2 Times…).
+#: ui/panel.slint:1142
+#, x-machine
+msgid "Count"
+msgstr "Anzahl"
+
+#. a short button: loop the current chapter or bookmark range.
+#: ui/panel.slint:1160
+#, x-machine
+msgid "Chapter"
+msgstr "Kapitel"
+
+#: ui/panel.slint:1170
 #, x-machine
 msgid "Jump"
 msgstr "Springen"
 
-#: ui/panel.slint:736 ui/panel.slint:760 ui/panel.slint:764
+#: ui/panel.slint:1191 ui/panel.slint:1215 ui/panel.slint:1219
 #, x-machine
 msgid "Jump to Time"
 msgstr "Zu Zeitpunkt springen"
 
 #. the format of the time to jump to (hours, minutes, seconds).
-#: ui/panel.slint:750
+#: ui/panel.slint:1205
 #, x-machine
 msgid "hh:mm:ss"
 msgstr "hh:mm:ss"
 
-#: ui/panel.slint:758
+#: ui/panel.slint:1213
 #, x-machine
 msgid "Go"
 msgstr "Springen"
 
-#: ui/panel.slint:787
+#: ui/panel.slint:1242
 #, x-machine
 msgid "Step"
 msgstr "Schritt"
 
-#: ui/panel.slint:794
+#: ui/panel.slint:1249
 #, x-machine
 msgid "Previous Frame"
 msgstr "Vorheriges Bild"
 
-#: ui/panel.slint:801
+#: ui/panel.slint:1256
 #, x-machine
 msgid "Next Frame"
 msgstr "Nächstes Bild"
 
-#: ui/panel.slint:842
+#: ui/panel.slint:1297
 #, x-machine
 msgid "Seek steps"
 msgstr "Sprungweiten"
 
-#: ui/panel.slint:876
+#: ui/panel.slint:1331
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "Nur zu Schlüsselbildern springen"
 
-#: ui/panel.slint:877
+#: ui/panel.slint:1332
 #, x-machine
 msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr "Sprünge und Suchleiste landen auf Schlüsselbildern: schnell bei jeder Datei, bis zu einem Schlüsselbildabstand daneben"

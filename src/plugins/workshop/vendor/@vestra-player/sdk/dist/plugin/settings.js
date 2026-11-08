@@ -1,6 +1,6 @@
 /** Pages of the player's options window (`plugin.settings`, `ui.settings`). */
-import { failure, quiet } from "./runtime.js";
-import { exported, ViewBase } from "./ui.js";
+import { failure, quiet } from "./errors.js";
+import { exported, ViewBase } from "./view/base.js";
 const CATEGORIES = [
     "general",
     "playback",

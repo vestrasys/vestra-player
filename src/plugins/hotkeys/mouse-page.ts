@@ -63,7 +63,7 @@ export class MousePage {
     page.bind(() => this.#props());
   }
 
-  /** Settings ▸ Mouse…: the options window on this page, with a fresh list. */
+  /** Mouse… (command palette, Settings: …): the options window on this page, with a fresh list. */
   async show() {
     await this.#model.reload().catch((error) => this.#say(failure(error)));
     await this.#plugin.settings.show(MOUSE_PAGE);

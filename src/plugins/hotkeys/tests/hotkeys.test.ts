@@ -1,12 +1,14 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import test from "node:test";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { commandText, exempt, fromSlintKey, inputOf, label, sameKey } from "../keys.ts";
 import activate from "../main.ts";
+import { COMMAND_RENAMES, renameRefs } from "../renames.ts";
 import { timing } from "../store.ts";
 
 Object.assign(timing, { reload: 5, write: 5 });
@@ -42,9 +44,12 @@ const key = (text: string, mods: Partial<{ control: boolean; alt: boolean; shift
   fromSlintKey({ text, control: false, alt: false, shift: false, meta: false, ...mods });
 const overlay = (host: TestHost) => Object.fromEntries(host.bindings.overlay);
 type Row = { key: string; command: string; keys: string; state: number; selected: boolean; conflicts: unknown[] };
-const PLAY = "Playback ▸ Play/Pause";
-const VOLUME_UP = "Audio ▸ Volume +";
-const MUTE = "Audio ▸ Mute";
+// Menu sweep (B5, SDK 1.6.17): Play/Pause is a top-level item; the other core commands have no
+// menu path (command palette only). The test host gives them no category, so their rows read
+// the bare title; the player names them "Category: Title" (see the palette-only test below).
+const PLAY = "Play/Pause";
+const VOLUME_UP = "Volume +";
+const MUTE = "Mute";
 const KEYS = "Settings: Keyboard Shortcuts…"; // the category (player 0.7.6), not the menu path
 const DEFAULT = 0;
 const CHANGED = 1;
@@ -135,14 +140,14 @@ test("labels, same key, safe exits", () => {
 
 // ------------------------------------------------------------------ menu
 
-test("menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts, no bindings of its own", async () => {
+test("palette only (menu sweep B5): Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts without a menu path, no bindings of its own", async () => {
   const host = new TestHost();
   await start(host);
   const decl = (id: string) => host.command(id).declaration;
-  assert.deepEqual(decl("keys").path, ["@settings", "Keyboard Shortcuts…"]);
-  assert.deepEqual(decl("mouse").path, ["@settings", "Mouse…"]);
-  assert.deepEqual(decl("ignore-defaults").path, ["@settings", "Ignore Default Shortcuts"]);
-  assert.deepEqual(host.command("keys").display.path, ["Settings", "Keyboard Shortcuts…"]);
+  assert.deepEqual([decl("keys").path, decl("keys").title], [[], "Keyboard Shortcuts…"]);
+  assert.deepEqual([decl("mouse").path, decl("mouse").title], [[], "Mouse…"]);
+  assert.deepEqual([decl("ignore-defaults").path, decl("ignore-defaults").title], [[], "Ignore Default Shortcuts"]);
+  assert.deepEqual([host.command("keys").display.path, host.command("keys").display.title], [[], "Keyboard Shortcuts…"]);
   assert.deepEqual(
     ["keys", "mouse", "ignore-defaults"].map((id) => [decl(id).order, decl(id).group]),
     [
@@ -173,9 +178,11 @@ test("menu: Settings ▸ Keyboard Shortcuts… / Mouse… / Ignore Default Short
 test("menu and pages in Simplified Chinese, as before the English source texts", async () => {
   const host = new TestHost();
   await start(host, undefined, "zh-Hans");
-  assert.deepEqual(host.command("keys").display.path, ["设置", "快捷键…"]);
-  assert.deepEqual(host.command("mouse").display.path, ["设置", "鼠标…"]);
-  assert.deepEqual(host.command("ignore-defaults").display.path, ["设置", "忽略默认快捷键"]);
+  // Menu sweep (B5): palette only, "设置: 快捷键…".
+  const palette = (id: string) => [host.command(id).display.path, host.command(id).display.category, host.command(id).display.title];
+  assert.deepEqual(palette("keys"), [[], "设置", "快捷键…"]);
+  assert.deepEqual(palette("mouse"), [[], "设置", "鼠标…"]);
+  assert.deepEqual(palette("ignore-defaults"), [[], "设置", "忽略默认快捷键"]);
   assert.equal(host.settingsPage("hotkeys.keyboard").title, "快捷键");
   assert.equal(host.settingsPage("hotkeys.mouse").title, "鼠标");
 });
@@ -439,6 +446,51 @@ test("J01: commands with a category are named \"Category: Title\", in the interf
   }
 });
 
+test("J01: palette-only core commands (menu sweep B5) are listed; with a category they read \"Category: Title\"", async () => {
+  // The test host's table (SDK 1.6.17): Play/Pause top level, the rest without a menu path.
+  const host = new TestHost();
+  await start(host);
+  await openKeys(host);
+  const core = (id: string) => host.coreCommands.get(`host/${id}`)!.declaration.path;
+  assert.deepEqual(core("play-pause"), ["Play/Pause"]);
+  for (const id of ["mute", "volume-up", "seek-forward", "frame-back", "rate-up", "previous", "next"]) assert.deepEqual(core(id), [], id);
+  // Every one of them has a row, keys and all; without a category the row is the title.
+  assert.deepEqual(row(host, MUTE)!.keys, "M");
+  assert.deepEqual(row(host, "Forward 5 s")!.keys, "ArrowRight"); // as the host labels it
+  assert.deepEqual(row(host, "Previous Frame")!.keys, "D");
+  assert.equal(row(host, "Previous")!.state, DEFAULT);
+  await emit(host, "keys", "select", "host/mute");
+  assert.equal(page(host, "keys").props["edit-command"], MUTE);
+  for (const stop of [...running]) await stop();
+
+  // The player (0.7.6) gives its own commands a category: the row, the search, the edit
+  // area, the OSD and the export say "Audio: Mute" (B1 ruling), never a menu path.
+  const withCategory = new TestHost();
+  withCategory.handle("bindings.list", () => ({
+    commands: [
+      { plugin: "host", command: "play-pause", title: "Play/Pause", path: ["Play/Pause"], category: "Playback", scope: "global", defaults: ["Space"], current: ["Space"], overridden: false, shadowed: [], labels: ["Space"] },
+      { plugin: "host", command: "mute", title: "Mute", path: [], category: "Audio", scope: "global", defaults: ["M"], current: ["M"], overridden: false, shadowed: [], labels: ["M"] },
+    ],
+    orphans: [],
+  }));
+  await start(withCategory);
+  const window = await openKeys(withCategory);
+  assert.deepEqual(rows(withCategory).map((r) => [r.command, r.keys]), [["Audio: Mute", "M"], ["Playback: Play/Pause", "Space"]]);
+  window.emit("search", "audio");
+  await withCategory.settle(WAIT);
+  assert.deepEqual(rows(withCategory).map((r) => r.command), ["Audio: Mute"]);
+  window.emit("search", "");
+  await withCategory.settle(WAIT);
+  await capture(withCategory, "host/mute", "n");
+  assert.equal(window.props["edit-command"], "Audio: Mute");
+  // The stubbed list does not follow the write; the name is what matters here.
+  assert.match(withCategory.osd.at(-1)!, /^Shortcut updated: Audio: Mute = M/);
+  const csv = join(scratch, "keys-category.csv");
+  withCategory.dialogAnswers.push([csv]);
+  await emit(withCategory, "keys", "export");
+  assert.ok(readFileSync(csv, "utf8").includes("\nAudio: Mute,"));
+});
+
 test("J01: search matches the menu path and the category too; a panel's command says so in its row", async () => {
   const command = (id: string, path: string[] | null, scope: "global" | "panel", key: string) => ({
     plugin: "vestra.playlist", command: id, title: "Add Files…", path, category: "Playlist", scope,
@@ -521,14 +573,14 @@ test("J01: the exported list in Simplified Chinese has the words of before", asy
   assert.deepEqual(host.fileDialogs.at(-1), { kind: "saveFile", title: "导出快捷键列表", fileName: "Vestra Player 快捷键.csv" });
   const text = readFileSync(csv, "utf8");
   assert.ok(text.startsWith("\u{feff}命令,快捷键,范围,来源,状态\n"));
-  assert.match(text, /\n播放 ▸ 播放\/暂停,Space,全局,宿主,默认\n/);
+  assert.match(text, /\n播放\/暂停,Space,全局,宿主,默认\n/);
   assert.match(text, /,N,全局,宿主,已修改\n/);
   const txt = join(scratch, "keys-zh.txt");
   host.dialogAnswers.push([txt]);
   await emit(host, "keys", "export");
   const plain = readFileSync(txt, "utf8");
   assert.ok(plain.startsWith("Vestra Player 快捷键列表\n\n命令\t快捷键\t范围\t来源\t状态\n"));
-  assert.match(plain, /播放 ▸ 播放\/暂停\tSpace\t全局\t宿主\t默认/);
+  assert.match(plain, /播放\/暂停\tSpace\t全局\t宿主\t默认/);
 });
 
 test("J01: the list follows changes made elsewhere; the selection stays", async () => {
@@ -578,10 +630,11 @@ test("J02: mouse rows show the command each input runs; choosing moves the input
     "host/volume-up": ["ArrowUp"],
     "host/seek-forward": ["ArrowRight", "Mouse:WheelUp"],
   });
-  assert.equal(host.osd.at(-1)!.startsWith("Mouse action updated: Wheel up = Playback ▸ Seek ▸ "), true);
+  // Seek is palette only (B5): named by its title, which carries the step.
+  assert.equal(host.osd.at(-1), "Mouse action updated: Wheel up = Forward 5 s");
   const updated = window.props.message as { kind: string; input: unknown; text: string };
   assert.deepEqual([updated.kind, updated.input], ["mouse-updated", { prefix: "", mouse: 7, text: "" }]);
-  assert.ok(updated.text.startsWith("Playback ▸ Seek ▸ "));
+  assert.equal(updated.text, "Forward 5 s");
   await host.press("Mouse:WheelUp");
   assert.equal(host.coreRuns.at(-1), "seek-forward");
   assert.equal(mouseRows()[7]!.resettable, true);
@@ -631,7 +684,7 @@ test("J02: the mouse OSD message in Simplified Chinese names the input in Chines
   await emit(host, "mouse", "setModifier", 1); // Ctrl
   await emit(host, "mouse", "pick", 7);
   await emit(host, "mouse", "choose", "host/mute");
-  assert.match(host.osd.at(-1)!, /^鼠标动作已更新：Ctrl\+滚轮上推 = .+静音/);
+  assert.equal(host.osd.at(-1), "鼠标动作已更新：Ctrl+滚轮上推 = 静音");
   await emit(host, "mouse", "setModifier", 0);
   await emit(host, "mouse", "pick", 8);
   await emit(host, "mouse", "choose", "");
@@ -774,9 +827,9 @@ test("OSD messages and dialogs in Simplified Chinese, as before", async () => {
 
   await openKeys(host);
   await capture(host, "host/play-pause", "k");
-  assert.equal(host.osd.at(-1), "快捷键已更新：播放 ▸ 播放/暂停 = Space, K");
+  assert.equal(host.osd.at(-1), "快捷键已更新：播放/暂停 = Space, K");
   await emit(host, "keys", "unbindAll");
-  assert.equal(host.osd.at(-1), "快捷键已更新：播放 ▸ 播放/暂停 = （无）");
+  assert.equal(host.osd.at(-1), "快捷键已更新：播放/暂停 = （无）");
   host.dialogAnswers.push({ confirmed: true, checked: false });
   await emit(host, "keys", "resetAll");
   assert.deepEqual(
@@ -882,4 +935,107 @@ test("J03: checked at start; a half-finished switch-off is completed", async () 
   await host.settle(WAIT);
   assert.deepEqual(overlay(host), { "host/mute": ["N"] });
   assert.deepEqual(JSON.parse(readFileSync(join(data, "ignore-defaults.json"), "utf8")).written, []);
+});
+
+// ------------------------------------------------------------------ J03 renames
+
+test("J03 record: renames.ts is exactly the host's COMMAND_RENAMES (when the repository's host source is there)", (t) => {
+  // The plugin cannot import host code, so renames.ts is a copy; this catches the two drifting apart.
+  const source = fileURLToPath(new URL("../../../host/src/command_renames.rs", import.meta.url));
+  if (!existsSync(source)) {
+    t.skip(`host source not found (${source}): a packaged plugin, nothing to compare`);
+    return;
+  }
+  const rust = readFileSync(source, "utf8");
+  const declared = /pub const COMMAND_RENAMES: \[\(&str, &str\); (\d+)\] = \[([\s\S]*?)\n\];/.exec(rust);
+  assert.ok(declared, "COMMAND_RENAMES not found in command_renames.rs");
+  const body = declared[2]!.replace(/\/\/[^\n]*/g, "");
+  const pairs = [...body.matchAll(/\(\s*"([^"]*)"\s*,\s*"([^"]*)"\s*,?\s*\)/g)].map((m) => [m[1], m[2]]);
+  assert.equal(pairs.length, Number(declared[1]), "every pair of the host table was parsed");
+  assert.deepEqual(
+    COMMAND_RENAMES.map(([old, now]) => [old, now]),
+    pairs,
+    "renames.ts differs from src/host/src/command_renames.rs: copy the host table",
+  );
+});
+
+test("J03 record: moved commands are renamed by the host's table, once; unknown ids are kept", () => {
+  // The same 30 pairs as src/host/src/command_renames.rs: 12 core actions, 18 A-B Loop commands.
+  assert.equal(COMMAND_RENAMES.length, 30);
+  assert.equal(COMMAND_RENAMES.filter(([old]) => old.startsWith("vestra.marks/ab.")).length, 18);
+  for (const [, now] of COMMAND_RENAMES) assert.ok(!COMMAND_RENAMES.some(([old]) => old === now), `${now} renamed again`);
+  const ref = (global: string) => ({ plugin: global.slice(0, global.indexOf("/")), command: global.slice(global.indexOf("/") + 1) });
+  const before = [
+    "vestra.marks/ab.set-a",
+    "vestra.playback/toggle-pause",
+    "vestra.marks/chapter.next",
+    "vestra.marks/ab.toggle",
+    "vestra.playback/ab.toggle", // already there: one entry stays
+    "host/play-pause", // likewise
+    "other.plugin/ab.set-a",
+    "vestra.marks/ab.count.10",
+  ].map(ref);
+  const after = renameRefs(before);
+  assert.deepEqual(
+    after.map((each) => `${each.plugin}/${each.command}`),
+    [
+      "vestra.playback/ab.set-a",
+      "host/play-pause",
+      "vestra.marks/chapter.next",
+      "vestra.playback/ab.toggle",
+      "other.plugin/ab.set-a",
+      "vestra.playback/ab.count.10",
+    ],
+  );
+  assert.deepEqual(renameRefs(after), after, "idempotent");
+});
+
+test("J03: an A-B Loop command ignored under vestra.marks is restored under vestra.playback when the switch goes off", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const AB = ["ab.set-a", "ab.set-b", "ab.segment"];
+  writeFileSync(
+    join(data, "ignore-defaults.json"),
+    JSON.stringify({
+      version: 1,
+      enabled: true,
+      written: [
+        ...AB.map((command) => ({ plugin: "vestra.marks", command })),
+        { plugin: "vestra.playback", command: "ab.set-a" }, // a duplicate after the rename
+        { plugin: "host", command: "stop" },
+      ],
+    }),
+  );
+  const host = new TestHost();
+  // Basic Playback's A-B Loop commands, as another plugin's (the binding table keys them by full id).
+  const keys: Record<string, string> = { "ab.set-a": "[", "ab.set-b": "]", "ab.segment": "Alt+\\" };
+  for (const command of AB) {
+    host.coreCommands.set(`vestra.playback/${command}`, {
+      declaration: { title: command, path: ["A-B Loop", command], order: 270, group: "ab", bindings: [keys[command]] },
+      display: { title: command, path: ["A-B Loop", command] },
+      state: { enabled: true, checked: false, busy: false, reason: null },
+      revision: 1,
+      async run() {},
+    } as unknown as Parameters<typeof host.coreCommands.set>[1]);
+    // The host moved the empty overrides at start (command_renames.rs).
+    host.bindings.overlay.set(`vestra.playback/${command}`, []);
+  }
+  host.bindings.overlay.set("host/stop", []);
+  await start(host, data);
+  await host.settle(WAIT);
+  const written = () =>
+    (JSON.parse(readFileSync(join(data, "ignore-defaults.json"), "utf8")).written as { plugin: string; command: string }[]).map(
+      (ref) => `${ref.plugin}/${ref.command}`,
+    );
+  const recorded = written();
+  for (const command of AB) assert.equal(recorded.filter((id) => id === `vestra.playback/${command}`).length, 1, command);
+  assert.ok(!recorded.some((id) => id.startsWith("vestra.marks/")));
+  assert.ok(recorded.includes("host/stop"));
+  for (const command of AB) assert.deepEqual(overlay(host)[`vestra.playback/${command}`], [], "still ignored");
+
+  await host.command("ignore-defaults").run(); // off: no question
+  await host.settle(WAIT);
+  assert.equal(host.command("ignore-defaults").state.checked, false);
+  for (const command of AB) assert.equal(host.bindings.overlay.has(`vestra.playback/${command}`), false, `${command} has its defaults back`);
+  assert.equal(host.bindings.overlay.has("host/stop"), false);
+  assert.deepEqual(written(), []);
 });

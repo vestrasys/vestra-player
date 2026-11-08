@@ -6,183 +6,178 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:50 main.ts:240 ui/page.slint:34
+#: main.ts:49 main.ts:238 ui/page.slint:34
 #, x-machine
 msgid "Window"
 msgstr "Ventana"
 
-#: main.ts:51
+#: main.ts:50
 #, x-machine
 msgid "Window Size"
 msgstr "Tamaño de la ventana"
 
-#: main.ts:52
+#: main.ts:51
 #, x-machine
 msgid "Size on Open"
 msgstr "Tamaño al iniciar la reproducción"
 
-#: main.ts:53 main.ts:202 main.ts:212
+#: main.ts:52
 #, x-machine
 msgid "Always on Top"
 msgstr "Siempre visible"
 
-#: main.ts:77
+#: main.ts:75
 #, x-machine
 msgid "Mini Size"
 msgstr "Tamaño mini"
 
-#: main.ts:85 main.ts:113
+#: main.ts:83 main.ts:111
 #, x-machine
 msgid "Switching picture-in-picture"
 msgstr "Cambiando imagen en imagen"
 
-#: main.ts:85 main.ts:113 main.ts:143 main.ts:156
+#: main.ts:83 main.ts:111 main.ts:141 main.ts:154
 #, x-machine
 msgid "Resizing the window"
 msgstr "Cambiando el tamaño de la ventana"
 
-#: main.ts:85 main.ts:143 main.ts:156
+#: main.ts:83 main.ts:141 main.ts:154
 #, x-machine
 msgid "Not available in fullscreen"
 msgstr "No disponible en pantalla completa"
 
-#: main.ts:85 main.ts:113 main.ts:143 main.ts:156 pip.ts:42 size.ts:124
+#: main.ts:83 main.ts:111 main.ts:141 main.ts:154 pip.ts:42 size.ts:124
 #, x-machine
 msgid "No video"
 msgstr "No hay video"
 
-#: main.ts:106
+#: main.ts:104
 #, x-machine
 msgid "Picture-in-Picture"
 msgstr "Imagen en imagen"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 #, x-machine
 msgid "1×"
 msgstr "1×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:134 main.ts:175 ui/page.slint:44
+#: main.ts:132 main.ts:173 ui/page.slint:44
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: main.ts:149 main.ts:175
+#: main.ts:147 main.ts:173
 #, x-machine
 msgid "Fit to Video Aspect Ratio"
 msgstr "Ajustar a la relación de aspecto del video"
 
-#: main.ts:164
+#: main.ts:162
 #, x-machine
 msgid "When playback starts: Don't resize the window"
 msgstr "Al iniciar la reproducción: no cambiar el tamaño de la ventana"
 
-#: main.ts:165
+#: main.ts:163
 #, x-machine
 msgid "When playback starts: Fit to video aspect ratio"
 msgstr "Al iniciar la reproducción: ajustar a la relación de aspecto del video"
 
-#: main.ts:166
+#: main.ts:164
 #, x-machine
 msgid "When playback starts: {}×"
 msgstr "Al iniciar la reproducción: {}×"
 
-#: main.ts:170
+#: main.ts:168
 #, x-machine
 msgid "Resize only once when playback starts: On"
 msgstr "Cambiar el tamaño solo una vez al iniciar la reproducción: activado"
 
-#: main.ts:170
+#: main.ts:168
 #, x-machine
 msgid "Resize only once when playback starts: Off"
 msgstr "Cambiar el tamaño solo una vez al iniciar la reproducción: desactivado"
 
-#: main.ts:175 main.ts:186
-#, x-machine
-msgid "When Playback Starts"
-msgstr "Al iniciar la reproducción"
-
-#: main.ts:175
+#: main.ts:173
 #, x-machine
 msgid "Don't Resize"
 msgstr "No cambiar el tamaño"
 
-#: main.ts:186
+#: main.ts:184
 #, x-machine
 msgid "Only Once"
 msgstr "Solo una vez"
 
-#: main.ts:198
+#: main.ts:196
 #, x-machine
 msgid "Always on top: Off"
 msgstr "Siempre visible: desactivado"
 
-#: main.ts:198
+#: main.ts:196
 #, x-machine
 msgid "Always on top: Always"
 msgstr "Siempre visible: siempre"
 
-#: main.ts:198
+#: main.ts:196
 #, x-machine
 msgid "Always on top: While playing"
 msgstr "Siempre visible: durante la reproducción"
 
-#: main.ts:198
+#: main.ts:196
 #, x-machine
 msgid "Always on top: While playing in fullscreen"
 msgstr "Siempre visible: durante la reproducción en pantalla completa"
 
-#: main.ts:202
+#: main.ts:200
 #, x-machine
 msgid "Cycle Mode"
 msgstr "Alternar modo"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:212 ui/page.slint:66
+#: main.ts:210 ui/page.slint:66
 #, x-machine
 msgid "Never"
 msgstr "Nunca"
 
 #. one row of radio buttons on a 412-point-wide page; keep them short.
-#: main.ts:212 ui/page.slint:66
+#: main.ts:210 ui/page.slint:66
 #, x-machine
 msgid "Always"
 msgstr "Siempre"
 
-#: main.ts:212
+#: main.ts:210
 #, x-machine
 msgid "While Playing"
 msgstr "Durante la reproducción"
 
-#: main.ts:212
+#: main.ts:210
 #, x-machine
 msgid "While Playing in Fullscreen"
 msgstr "Durante la reproducción en pantalla completa"
 
-#: main.ts:226
+#: main.ts:224
 #, x-machine
 msgid "Hide pointer while playing: On"
 msgstr "Ocultar puntero durante la reproducción: activado"
 
-#: main.ts:226
+#: main.ts:224
 #, x-machine
 msgid "Hide pointer while playing: Off"
 msgstr "Ocultar puntero durante la reproducción: desactivado"
 
-#: main.ts:231
+#: main.ts:229
 #, x-machine
 msgid "Hide Pointer While Playing"
 msgstr "Ocultar puntero durante la reproducción"

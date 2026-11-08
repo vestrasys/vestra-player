@@ -26,8 +26,9 @@ function zhHost() {
 
 test("Simplified Chinese: the menus show the old words", async () => {
   const { host, stop } = await startPlugin(activate, { directory, locale: "zh-Hans" });
-  assert.deepEqual(host.command("search").display.path, ["字幕", "在线字幕", "搜索与下载字幕…"]);
-  assert.deepEqual(host.command("settings").display.path, ["字幕", "在线字幕", "在线字幕设置…"]);
+  // Menu sweep (B5): the search is in Open ▸, the settings in the command palette only.
+  assert.deepEqual(host.command("search").display.path, ["打开", "搜索与下载字幕…"]);
+  assert.deepEqual([host.command("settings").display.path, host.command("settings").display.title], [[], "在线字幕设置…"]);
   await stop();
 });
 

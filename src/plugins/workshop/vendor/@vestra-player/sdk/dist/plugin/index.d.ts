@@ -6,7 +6,7 @@
  * @internal
  */
 import type { Transport } from "../wire.ts";
-import type { PluginManifest, RuntimeOptions } from "./runtime.ts";
+import type { PluginManifest, RuntimeOptions } from "./connection.ts";
 import type { Plugin } from "./types.ts";
 export type * from "./types.ts";
 export type { PluginManifest, RuntimeOptions };

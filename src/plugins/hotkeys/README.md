@@ -11,8 +11,8 @@ View and change the keyboard shortcuts and mouse actions of the player and of ev
 
 ## Entry points
 
-- Context menu Settings ▸ Keyboard Shortcuts… / Mouse…, or the Keys and Mouse category of the options window.
-- Context menu Settings ▸ Ignore Default Shortcuts.
+- Command palette (Ctrl+Shift+P): Settings: Keyboard Shortcuts… / Mouse…, or the Keys and Mouse category of the options window (Options…, F5).
+- Command palette: Settings: Ignore Default Shortcuts (also a switch on the Keyboard Shortcuts page). None of the three is in the right-click menu.
 
 ## Languages
 
