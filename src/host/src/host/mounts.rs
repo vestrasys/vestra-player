@@ -638,6 +638,9 @@ impl Host {
         // set while building: a failed candidate leaves the old one).
         self.bind_window_events(&shell, candidate_generation);
         self.theme_view(&shell);
+        // Same native window (or, without an old shell, the new main one):
+        // tool windows created later stay owned by it.
+        platform::set_main_window(&shell);
         // Emulator key capture stays: the window was neither hidden
         // nor unfocused, and the new tree gives the video area the
         // focus (its `init`); each key is still checked against the
