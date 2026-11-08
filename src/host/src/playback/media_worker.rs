@@ -1140,8 +1140,13 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                     .as_ref()
                     .map(|p| (p.processing.audio.as_slice(), p.processing.audio_offset_ms))
                     .unwrap_or((&[], 0));
-                let af =
-                    crate::playback::offline_audio::audio(resources, offset, request.time, *end)?;
+                let af = crate::playback::offline_audio::audio_from(
+                    resources,
+                    offset,
+                    request.time,
+                    *end,
+                    audio_base(seek, offset),
+                )?;
                 let stream = audio
                     .stream_index
                     .context("frozen audio stream mapping unavailable")?;
@@ -1339,8 +1344,21 @@ fn seek_plan(request: &RenderRequest, format_name: &str) -> Option<Seek> {
     } else {
         0.
     };
-    let at = request.time - window - audio;
+    // Whole seconds: a sample boundary at every integer rate (`audio_base`).
+    let at = (request.time - window - audio).floor();
     (at > 0.).then_some(Seek { at, preroll })
+}
+
+/// Where the audio graph's timeline starts after an input seek
+/// (`offline_audio::audio_from`): the seek point shifted by a negative audio
+/// offset (audio played earlier), in whole seconds, rounded down so it is
+/// never after the first decoded sample; 0 without a seek.
+fn audio_base(seek: Option<Seek>, offset_ms: i32) -> f64 {
+    seek.map_or(0., |seek| {
+        (seek.at + f64::from(offset_ms.min(0)) / 1000.)
+            .floor()
+            .max(0.)
+    })
 }
 
 /// The R6 ceilings as filters after the range trim: a frame-rate cap only
@@ -1385,8 +1403,13 @@ fn publish(
         .context("temporary output could not be flushed")?;
     temp.persist_noclobber(&destination)
         .map_err(|error| anyhow::anyhow!("no-clobber publication failed: {}", error.error))?;
-    if let Some((_, total)) = control.progress() {
-        // FFmpeg's last report may stop short of the clip's nominal length.
+    // FFmpeg's last report may stop short of the clip's length, and a clip
+    // written before its first report has none at all.
+    if let Some(total) = control
+        .progress()
+        .map(|(_, total)| total)
+        .or(range.map(|(start, end)| end - start))
+    {
         control.set_progress(total, total);
     }
     Ok(Outcome::Completed { destination, range })
@@ -1820,6 +1843,11 @@ mod tests {
             control.snapshot().1
         );
         assert_eq!(control.facts()["preroll"], preroll);
+        assert!(
+            control
+                .progress()
+                .is_some_and(|(done, total)| done == total)
+        );
         assert!(progress.is_some_and(|(done, _)| done > 0.));
         // The reference: the graph the worker builds, decoded from 0 s.
         let filter = if effects.is_some() {
@@ -2063,6 +2091,119 @@ mod tests {
     }
 
     #[test]
+    fn a_far_seek_starts_the_audio_timeline_at_the_seek() {
+        let seek = |at| {
+            Some(Seek {
+                at,
+                preroll: SEEK_PREROLL,
+            })
+        };
+        assert_eq!(audio_base(None, 0), 0.);
+        // 30 min: the audio timeline starts there, not at 0 s.
+        assert_eq!(audio_base(seek(1799.), 0), 1799.);
+        // A positive offset plays audio later: the first sample is later
+        // still, so the seek point is early enough. A negative one starts it
+        // earlier, in whole seconds.
+        assert_eq!(audio_base(seek(1799.), 400), 1799.);
+        assert_eq!(audio_base(seek(1799.), -500), 1798.);
+        assert_eq!(audio_base(seek(0.), -500), 0.);
+        let graph =
+            crate::playback::offline_audio::audio_from(&[], 0, 1800., 1801.5, 1799.).unwrap();
+        assert!(
+            graph.contains(
+                "asetpts=PTS+(0-1799)/TB,aresample=48000:async=1:first_pts=0,apad,atrim=start=1:end=2.5,"
+            ),
+            "{graph}"
+        );
+        // From 0 s the graph is the one before seeking existed.
+        assert_eq!(
+            crate::playback::offline_audio::audio_from(&[], 400, 2., 3., 0.).unwrap(),
+            "anull,asetpts=PTS+(0.4)/TB,aresample=48000:async=1:first_pts=0,apad,atrim=start=2:end=3,asetpts=PTS-STARTPTS"
+        );
+        // A base after the interval or between seconds is refused.
+        assert!(crate::playback::offline_audio::audio_from(&[], 0, 1., 2., 2.).is_err());
+        assert!(crate::playback::offline_audio::audio_from(&[], 0, 1., 2., 0.5).is_err());
+        // Seek points are whole seconds.
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        std::fs::write(&source, b"bytes").unwrap();
+        let request = real::request(
+            &source,
+            137.933,
+            dir.path().join("o"),
+            Output::Mp4 {
+                end: 151.1,
+                audio: Some(real::audio(1)),
+                encoding: Encoding::default(),
+            },
+        );
+        assert_eq!(seek_plan(&request, "mov,mp4"), seek(136.));
+    }
+
+    /// A clip 30 min into a file: the export seeks there and completes with
+    /// its audio (the resampler starts at the seek, so it holds no 30 min of
+    /// padding), and a job finished before FFmpeg's first progress report
+    /// still ends at total/total.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_far_seek_exports_with_audio() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("long.mp4");
+        let made = Command::new(real::ffmpeg())
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("color=c=gray:size=64x64:rate=2")
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000"])
+            .args([
+                "-t",
+                "1830",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-g",
+                "20",
+            ])
+            .args([
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "32k",
+                "-shortest",
+            ])
+            .arg(&source)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let destination = dir.path().join("far.mp4");
+        let started = std::time::Instant::now();
+        let (control, _) = real::run_job(real::request(
+            &source,
+            1800.,
+            destination.clone(),
+            Output::Mp4 {
+                end: 1802.,
+                audio: Some(real::audio(1)),
+                encoding: Encoding::default(),
+            },
+        ));
+        assert!(
+            matches!(control.snapshot().1, Some(Outcome::Completed { .. })),
+            "{:?}",
+            control.snapshot().1
+        );
+        assert_eq!(control.facts()["preroll"], SEEK_PREROLL);
+        assert!(started.elapsed() < Duration::from_secs(60));
+        let (done, total) = control.progress().expect("progress after completion");
+        assert_eq!(done, total);
+        let pcm = decoded(&destination, "0:a:0", "pcm");
+        // 2 s of 48 kHz stereo 16-bit, and not silence.
+        assert!(pcm.len() >= 380_000, "{}", pcm.len());
+        assert!(pcm.iter().any(|b| *b != 0));
+    }
+
+    #[test]
     fn the_seek_follows_the_chain_s_history() {
         const MP4: &str = "mov,mp4,m4a,3gp,3g2,mj2";
         use crate::playback::effects::{AudioNode, Resource, VideoNode};
@@ -2142,7 +2283,7 @@ mod tests {
                 500,
                 30.
             ),
-            seek(28.5, SEEK_PREROLL)
+            seek(28., SEEK_PREROLL)
         );
         assert_eq!(
             with(mp4(), vec![], vec![], -500, 30.),
