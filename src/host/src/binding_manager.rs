@@ -231,7 +231,8 @@ impl Host {
         })
     }
     /// `commands.keys` (`plugin.commands.keys`, player 0.7.6): the current
-    /// key labels of each of `owner`'s own commands, as menus and the
+    /// key labels of each of `owner`'s own commands and of the player's own
+    /// (`host/<id>`, SDK 1.6.16), as menus and the
     /// command palette show them (`bindings::label`: the user's keys, none
     /// when cleared, ⌘ on macOS). Noted as what it has, so `notify_tick`
     /// pushes only a later change.
@@ -248,10 +249,11 @@ impl Host {
     fn keys_data(&self, keys: Value) -> Value {
         json!({"keys":keys,"revision":self.input.borrow().table.revision()})
     }
-    /// `owner`'s manifest id (running or in standby) and its key labels.
+    /// `owner`'s manifest id (running or in standby) and its key labels
+    /// (`labels_with_host`).
     fn keys_of(&self, owner: u64) -> (Option<String>, Value) {
         let input = self.input.borrow();
-        let (declared_by, labels) = input.table.labels_of(owner);
+        let (declared_by, labels) = labels_with_host(&input.table, owner);
         let manifest = self
             .plugins
             .get(&owner)
@@ -477,9 +479,55 @@ fn same_but_process(a: &Value, b: &Value) -> bool {
         })
 }
 
+/// The key labels `commands.keys` gives `owner`: its own commands', by
+/// local id, and the player's own commands' as `host/<id>` (SDK 1.6.16: a
+/// panel shows the keys of Volume + and Mute; a local id has no `/`, so
+/// the two never meet). Never another plugin's. With the manifest id that
+/// declared `owner`'s commands.
+fn labels_with_host(
+    table: &bindings::Table,
+    owner: u64,
+) -> (
+    Option<&str>,
+    std::collections::BTreeMap<String, Vec<String>>,
+) {
+    let (declared_by, mut labels) = table.labels_of(owner);
+    let (_, host) = table.labels_of(bindings::HOST);
+    labels.extend(
+        host.into_iter()
+            .map(|(id, keys)| (format!("host/{id}"), keys)),
+    );
+    (declared_by, labels)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// `plugin.commands.keys` reads the player's own commands' keys as
+    /// `host/<id>` beside the plugin's own, never another plugin's.
+    #[test]
+    fn a_plugin_reads_its_own_keys_and_the_players() {
+        let mut table = bindings::Table::default();
+        table
+            .declare(bindings::HOST, "mute", "host", &["M".into()], false, false)
+            .unwrap();
+        table
+            .declare(bindings::HOST, "quit", "host", &[], false, false)
+            .unwrap();
+        table
+            .declare(4, "eq", "p.audio", &["E".into()], false, false)
+            .unwrap();
+        table
+            .declare(5, "other", "p.other", &["K".into()], false, false)
+            .unwrap();
+        let (manifest, labels) = labels_with_host(&table, 4);
+        assert_eq!(manifest, Some("p.audio"));
+        assert_eq!(
+            json!(labels),
+            json!({"eq": ["E"], "host/mute": ["M"], "host/quit": []})
+        );
+    }
 
     #[test]
     fn references_are_identifiers() {

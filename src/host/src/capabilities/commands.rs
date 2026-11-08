@@ -104,8 +104,9 @@ impl Capability for Commands {
                 }
                 Ok(Some(Value::Null))
             }
-            // Player 0.7.6 (`plugin.commands.keys`): only the caller's own
-            // commands; changes come as the `commands.keys` event.
+            // Player 0.7.6 (`plugin.commands.keys`): the caller's own
+            // commands and the player's (`host/<id>`, SDK 1.6.16), never
+            // another plugin's; changes come as the `commands.keys` event.
             "commands.keys" => Ok(Some(host.command_keys(reply.owner))),
             "commands.unregister" => {
                 let id = string(params, "id")?;
