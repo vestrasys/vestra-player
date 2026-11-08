@@ -300,8 +300,21 @@ async function checkStatic() {
       problem(`${component.name}: inventory/vendor need vxp`);
     if (!component.deps && !packages && !component.license)
       problem(`${component.name}: no license`);
-    if (component.license && !spdxAllowed(component.license, allowed))
-      problem(`${component.name}: ${component.license} is not allowed`);
+    // `allowed_licenses` widens the policy for this component's own license
+    // only (a bundled image under CC-BY-3.0); the packages of an
+    // inventory/vendor component are still held to [policy].allowed.
+    if (component.allowed_licenses && packages)
+      problem(
+        `${component.name}: allowed_licenses applies to the component's own license, not to inventory/vendor packages`,
+      );
+    const componentAllowed = new Set([
+      ...allowed,
+      ...(component.allowed_licenses ?? []),
+    ]);
+    if (component.license && !spdxAllowed(component.license, componentAllowed))
+      problem(
+        `${component.name}: ${component.license} is not allowed (by [policy].allowed or the component's allowed_licenses)`,
+      );
     if (
       !packages &&
       !component.license_files?.length &&
