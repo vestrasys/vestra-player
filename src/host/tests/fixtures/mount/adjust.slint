@@ -1,0 +1,32 @@
+// A panel for the adjust column (menu redesign step 3b): one slider that
+// changes what is playing, and a reset button. The test fixture of
+// `ui.mount("adjust", …)`; the SDK's examples/adjust-panel is the plugin.
+import { Slider } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+
+export global AdjustBridge {
+    in-out property <float> level: 50;
+    callback changed(float);
+    callback reset();
+}
+
+export component LevelPanel inherits Rectangle {
+    background: Theme.bg-list;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 8px;
+        alignment: start;
+        Text { text: "Level " + round(AdjustBridge.level); color: Theme.text; }
+        Slider {
+            minimum: 0;
+            maximum: 100;
+            value <=> AdjustBridge.level;
+            changed(value) => { AdjustBridge.changed(value); }
+        }
+        TouchArea {
+            height: 21px;
+            clicked => { AdjustBridge.reset(); }
+            Text { text: "Reset"; color: Theme.accent; }
+        }
+    }
+}

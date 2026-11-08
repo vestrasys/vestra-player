@@ -136,7 +136,9 @@ export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video
  * The icons a bottom-bar button may name (`CommandOptions.button.icon`):
  * every icon of the player's V-Line set, `@vestra/icons.slint` (draw one
  * in your own Slint with `Icon { name: "store"; }`). The player's tests check
- * that this list is its icon set.
+ * that this list is its icon set. `"sliders"` (three sliders, the player's
+ * Adjust button) is new in player 0.7.6 (SDK 1.6.11); older players refuse
+ * it as a button icon with `invalid`.
  *
  * @example Check in a test that the button's icon exists
  * The test fails before release if the plugin's bar button names an icon
@@ -154,7 +156,7 @@ export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video
  *
  * @category Testing
  */
-export declare const BAR_BUTTON_ICONS: readonly ["play", "pause", "stop", "back", "forward", "open", "volume", "mute", "playlist", "detach", "attach", "close", "failed", "move-top", "move-up", "move-down", "move-bottom", "search", "chapter", "bookmark", "check-task", "check-box", "menu-check", "submenu", "scroll-up", "scroll-down", "caret-down", "sort-asc", "sort-desc", "tag-remove", "preview-play", "add", "remove", "sort", "fullscreen", "exit-fullscreen", "store", "ai"];
+export declare const BAR_BUTTON_ICONS: readonly ["play", "pause", "stop", "back", "forward", "open", "volume", "mute", "playlist", "detach", "attach", "close", "failed", "move-top", "move-up", "move-down", "move-bottom", "search", "chapter", "bookmark", "check-task", "check-box", "menu-check", "submenu", "scroll-up", "scroll-down", "caret-down", "sort-asc", "sort-desc", "tag-remove", "preview-play", "add", "remove", "sort", "fullscreen", "exit-fullscreen", "store", "ai", "sliders"];
 /**
  * The player's limits on bottom-bar buttons (`CommandOptions.button`), the
  * same values as the player's (its tests check that they agree). A button

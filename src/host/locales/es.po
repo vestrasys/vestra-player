@@ -644,3 +644,21 @@ msgstr "ejecutar sin cerrar"
 #, x-machine
 msgid "close"
 msgstr "cerrar"
+
+#. The adjust column (menu redesign step 3b), between the video and the sidebar: in host messages ("The {} is used by …").
+#: src/ui/composition.rs
+#, x-machine
+msgid "adjust column"
+msgstr "columna de ajustes"
+
+#. The command (host/adjust) and bottom-bar button that shows or hides the adjust column (picture, audio, subtitle and playback controls).
+#: src/host/host/actions.rs
+#, x-machine
+msgid "Adjust"
+msgstr "Ajustes"
+
+#. Why Adjust (the bottom bar's sliders button) is unavailable.
+#: src/ui/bar_buttons.rs
+#, x-machine
+msgid "No panel is in the adjust column"
+msgstr "No hay ningún panel en la columna de ajustes"

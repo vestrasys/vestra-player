@@ -2050,7 +2050,8 @@ export component W inherits Window {
         // Two columns (docked and fullscreen overlay), four branches each.
         assert_eq!(source.matches(": Owner1").count(), 2 * compiled.len());
         let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json_in(&specs, true, sender, 1, None).unwrap();
+        let shell = crate::ui::composition::compile_json_in(&specs, [true, false], sender, 1, None)
+            .unwrap();
         let titles = order
             .iter()
             .map(|owner| format!("Tab {owner}"))
@@ -2279,7 +2280,7 @@ export component T inherits Window {
         let new = replace_shell(Some(&old), focus_video, |window| {
             let shell = crate::ui::composition::compile_json_in(
                 &bar_and_sidebar(),
-                false,
+                [false; 2],
                 sender.clone(),
                 2,
                 window,
@@ -2307,7 +2308,7 @@ export component T inherits Window {
         new.window().set_fullscreen(true);
         native_calls();
         let last = replace_shell(Some(&new), focus_video, |window| {
-            crate::ui::composition::compile_json_in(&[], false, sender.clone(), 3, window)
+            crate::ui::composition::compile_json_in(&[], [false; 2], sender.clone(), 3, window)
         })
         .unwrap();
         drop(new);
@@ -2341,7 +2342,7 @@ export component T inherits Window {
         let failed = replace_shell(Some(&old), focus_video, |window| {
             let _shell = crate::ui::composition::compile_json_in(
                 &bar_and_sidebar(),
-                false,
+                [false; 2],
                 sender.clone(),
                 2,
                 window,

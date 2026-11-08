@@ -942,6 +942,7 @@ export const HOST_ZH_HANS = {
     "bottom bar": "底栏",
     sidebar: "侧栏",
     "video backdrop": "视频背景",
+    "adjust column": "调节栏",
     "The {} is used by {}": "{}已被 {} 使用",
     "{} is resolved by {}": "{} 已由 {} 解析",
     "File type .{}": "文件类型 .{}",

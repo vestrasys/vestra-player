@@ -8,12 +8,17 @@ use anyhow::{Context, Result, bail};
 use serde_json::Value as Json;
 use slint_interpreter::{ComponentDefinition, ComponentInstance, Value};
 
+use crate::ui::sidebar_tabs::Column;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum Slot {
     Bottom,
     Sidebar,
     /// Behind the host's video input layer, shown while there is no video (R-U3).
     Backdrop,
+    /// The adjust column (menu redesign step 3b): controls for what is
+    /// playing, between the video and the sidebar.
+    Adjust,
 }
 
 impl Slot {
@@ -22,6 +27,7 @@ impl Slot {
         match self {
             Self::Bottom => Some("bottom-visible"),
             Self::Sidebar => Some("sidebar-visible"),
+            Self::Adjust => Some("adjust-visible"),
             Self::Backdrop => None,
         }
     }
@@ -31,7 +37,14 @@ impl Slot {
             Self::Bottom => "bottom",
             Self::Sidebar => "sidebar",
             Self::Backdrop => "backdrop",
+            Self::Adjust => "adjust",
         }
+    }
+    /// The slot of a wire name (`ui.mount`'s `slot`).
+    pub fn parse(name: &str) -> Option<Self> {
+        [Self::Bottom, Self::Sidebar, Self::Backdrop, Self::Adjust]
+            .into_iter()
+            .find(|slot| slot.name() == name)
     }
     /// What the user calls it, in host messages.
     pub fn label(self) -> String {
@@ -39,7 +52,13 @@ impl Slot {
             Self::Bottom => crate::i18n::tr("bottom bar"),
             Self::Sidebar => crate::i18n::tr("sidebar"),
             Self::Backdrop => crate::i18n::tr("video backdrop"),
+            Self::Adjust => crate::i18n::tr("adjust column"),
         }
+    }
+    /// A column of tabs (the sidebar, the adjust column): any number of
+    /// plugins mount there, one tab each.
+    pub fn tabbed(self) -> bool {
+        matches!(self, Self::Sidebar | Self::Adjust)
     }
 }
 
@@ -143,8 +162,8 @@ fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()
     Ok(())
 }
 
-/// The shell's slot properties and the sidebar's tab properties (also in
-/// a shell without tabs, so the host binds them alike).
+/// The shell's slot properties and the tab properties of its columns (also
+/// in a shell without tabs, so the host binds them alike).
 const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
     in property <bool> sidebar-visible: true;\n\
     in property <bool> sidebar-overlay: false;\n\
@@ -154,19 +173,38 @@ const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
     in property <[string]> sidebar-titles;\n\
     callback sidebar-tab(int);\n\
     callback sidebar-overflow(float, float);\n\
-    callback sidebar-detach();";
+    callback sidebar-detach();\n\
+    in property <bool> adjust-visible: false;\n\
+    in property <bool> adjust-overlay: false;\n\
+    in property <bool> adjust-popped: false;\n\
+    in-out property <int> adjust-active: 0;\n\
+    in property <int> adjust-shown: -1;\n\
+    in property <[string]> adjust-titles;\n\
+    in property <[string]> adjust-keys;\n\
+    callback adjust-tab(int);\n\
+    callback adjust-overflow(float, float);\n\
+    callback adjust-dismiss();";
 
 /// The height of the host's sidebar tab strip (the playlist's, ui-spec §5.2).
 pub const TAB_STRIP_HEIGHT: f64 = 31.0;
 
-/// What fills a sidebar column (docked, fullscreen overlay, floating window):
-/// the one panel as before, or the tab strip over one branch per compiled
-/// panel (sidebar-tabs.md: the front tabs, not every tab), the one whose
-/// owner is `sidebar-shown` drawn, so switching between compiled tabs only
-/// changes a property. A tab without a compiled panel (a placeholder) shows
-/// nothing until the host compiles it. A click on a tab gives the keys to
-/// `keys` (the column's FocusScope): the panel that had them is gone.
-fn sidebar_content(tabs: &[&CompileSpec], tabbed: bool, keys: &str, detached: &str) -> String {
+/// What fills a column of tabs (docked, overlay, the sidebar's floating
+/// window): the one panel as before (the sidebar with one tab), or the tab
+/// strip over one branch per compiled panel (sidebar-tabs.md: the front
+/// tabs, not every tab), the one whose owner is `<column>-shown` drawn, so
+/// switching between compiled tabs only changes a property. A tab without a
+/// compiled panel (a placeholder) shows nothing until the host compiles it.
+/// A click on a tab gives the keys to `keys` (the column's FocusScope): the
+/// panel that had them is gone. The adjust column's strip has the keys
+/// under its titles and no detach button; `background`: the panels' ground.
+fn column_content(
+    column: Column,
+    tabs: &[&CompileSpec],
+    tabbed: bool,
+    keys: &str,
+    detached: &str,
+    background: &str,
+) -> String {
     match tabs {
         [] if !tabbed => return String::new(),
         [spec] if !tabbed => {
@@ -177,37 +215,51 @@ fn sidebar_content(tabs: &[&CompileSpec], tabbed: bool, keys: &str, detached: &s
         }
         _ => {}
     }
+    let p = column.prefix();
     let views = tabs
         .iter()
         .map(|spec| {
             format!(
-                "if root.sidebar-shown == {0}: Owner{0}View {{ width: parent.width; height: parent.height; }}",
+                "if root.{p}-shown == {0}: Owner{0}View {{ width: parent.width; height: parent.height; }}",
                 spec.owner
             )
         })
         .collect::<Vec<_>>()
         .join(" ");
+    let strip = match column {
+        Column::Sidebar => format!("detached: {detached}; detach => {{ root.sidebar-detach(); }}"),
+        Column::Adjust => "keys: root.adjust-keys; detachable: false;".to_owned(),
+    };
     // Placed by hand, not in a layout: a layout here would pass its size
     // constraints up to the window (it shrank to its minimum height).
     format!(
         "SidebarTabs {{ x: 0px; y: 0px; width: parent.width; height: {TAB_STRIP_HEIGHT}px; \
-         titles: root.sidebar-titles; active: root.sidebar-active; detached: {detached}; \
-         tab(index) => {{ root.sidebar-active = index; {keys}.focus(); root.sidebar-tab(index); }} \
-         overflow(x, y) => {{ root.sidebar-overflow(x, y); }} \
-         detach => {{ root.sidebar-detach(); }} }} \
+         titles: root.{p}-titles; active: root.{p}-active; {strip} \
+         tab(index) => {{ root.{p}-active = index; {keys}.focus(); root.{p}-tab(index); }} \
+         overflow(x, y) => {{ root.{p}-overflow(x, y); }} }} \
          Rectangle {{ x: 0px; y: {TAB_STRIP_HEIGHT}px; width: parent.width; \
-         height: parent.height - {TAB_STRIP_HEIGHT}px; background: Theme.bg-list; {views} }}"
+         height: parent.height - {TAB_STRIP_HEIGHT}px; background: {background}; clip: true; {views} }}"
     )
 }
 
-/// Whether a sidebar of these compiled panels draws the tab strip: two or
-/// more tabs, compiled or not.
-fn default_tabbed(specs: &[CompileSpec]) -> bool {
-    specs
-        .iter()
-        .filter(|spec| spec.slot == Slot::Sidebar)
-        .count()
-        > 1
+/// [`column_content`] for the sidebar.
+fn sidebar_content(tabs: &[&CompileSpec], tabbed: bool, keys: &str, detached: &str) -> String {
+    column_content(
+        Column::Sidebar,
+        tabs,
+        tabbed,
+        keys,
+        detached,
+        "Theme.bg-list",
+    )
+}
+
+/// Whether the columns of these compiled panels draw their tab strips (by
+/// `Column::index`): the sidebar with two or more tabs, the adjust column
+/// with any.
+fn default_tabbed(specs: &[CompileSpec]) -> [bool; 2] {
+    let count = |slot| specs.iter().filter(|spec| spec.slot == slot).count();
+    [count(Slot::Sidebar) > 1, count(Slot::Adjust) > 0]
 }
 
 /// Generated source is ordinary Slint, not a layout protocol. Imports use
@@ -216,12 +268,20 @@ fn default_tabbed(specs: &[CompileSpec]) -> bool {
 /// imported from the same underlying file remain shared, so independent owners
 /// must not import a shared stateful global (including through dependencies).
 pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
-    shell_source_tabbed(specs, default_tabbed(specs))
+    shell_source_columns(specs, default_tabbed(specs))
 }
 
-/// [`shell_source`] with the tab strip drawn when `tabbed`, also over one
-/// compiled panel (the other tabs are placeholders).
+/// [`shell_source`] with the sidebar's tab strip drawn when `tabbed`, also
+/// over one compiled panel (the other tabs are placeholders).
 pub fn shell_source_tabbed(specs: &[CompileSpec], tabbed: bool) -> Result<String> {
+    let [_, adjust] = default_tabbed(specs);
+    shell_source_columns(specs, [tabbed, adjust])
+}
+
+/// [`shell_source`] with each column (by `Column::index`) drawn with its
+/// tab strip when `tabbed`, also with no compiled panel (every tab a
+/// placeholder).
+pub fn shell_source_columns(specs: &[CompileSpec], tabbed: [bool; 2]) -> Result<String> {
     shell_source_with(specs, tabbed, bar_reports_min(specs))
 }
 
@@ -336,7 +396,7 @@ fn bar_strip(min: &str) -> String {
 /// the whole bar.
 fn shell_source_with(
     specs: &[CompileSpec],
-    tabbed: bool,
+    tabbed: [bool; 2],
     bar_room: Option<&str>,
 ) -> Result<String> {
     let mut owners = BTreeSet::new();
@@ -344,7 +404,7 @@ fn shell_source_with(
     let mut files = BTreeSet::new();
     let mut source = String::new();
     for spec in specs {
-        if !owners.insert(spec.owner) || (spec.slot != Slot::Sidebar && !slots.insert(spec.slot)) {
+        if !owners.insert(spec.owner) || (!spec.slot.tabbed() && !slots.insert(spec.slot)) {
             bail!("this shell requires unique owners and at most one bottom bar and one backdrop");
         }
         if !files.insert(dunce::canonicalize(&spec.file).context("composition file unavailable")?) {
@@ -370,12 +430,19 @@ fn shell_source_with(
         .iter()
         .filter(|spec| spec.slot == Slot::Sidebar)
         .collect::<Vec<_>>();
+    let adjust_tabs = specs
+        .iter()
+        .filter(|spec| spec.slot == Slot::Adjust)
+        .collect::<Vec<_>>();
     // With tabs (two or more, compiled or not) the column and its strip
     // exist even while no panel is compiled (every front tab a placeholder).
-    let tabbed = tabbed || tabs.len() > 1;
-    if tabbed {
+    let tabbed_adjust = tabbed[1] || !adjust_tabs.is_empty();
+    let tabbed = tabbed[0] || tabs.len() > 1;
+    if tabbed || tabbed_adjust {
         source.push_str("import { SidebarTabs } from \"sidebar-tabs.slint\";\n");
     }
+    let adjust = adjust_column(&adjust_tabs, tabbed_adjust);
+    replace_marker(&mut shell, "// VESTRA-MOUNT-ADJUST", &adjust.docked)?;
     let column = tabbed || !tabs.is_empty();
     let sidebar = if !column {
         String::new()
@@ -411,6 +478,9 @@ fn shell_source_with(
             sidebar_content(&tabs, tabbed, "overlay-keys", "false")
         )
     };
+    // The adjust column's overlay (fullscreen, narrow window) beside the
+    // sidebar's: they never overlap, the sidebar outermost.
+    let overlay = format!("{overlay}\n{}", adjust.overlay);
     replace_marker(&mut shell, "// VESTRA-MOUNT-OVERLAY", &overlay)?;
     let bottom = specs
         .iter()
@@ -419,7 +489,7 @@ fn shell_source_with(
             format!(
                 "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible ? 0px : bottom-keys.height; vertical-stretch: 0; \
                  bottom-keys := FocusScope {{ visible: root.bottom-visible; x: 0px; \
-                 width: parent.width - (root.host-fullscreen && root.sidebar-popped ? root.sidebar-pop-width * 1px : 0px); \
+                 width: parent.width - (root.host-fullscreen ? root.columns-popped-width * 1px : 0px); \
                  height: min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); \
                  y: root.host-fullscreen ? -self.height : 0px; {} \
                  TouchArea {{ changed has-hover => {{ root.bottom-hover = self.has-hover; }} \
@@ -461,6 +531,77 @@ fn shell_source_with(
     replace_marker(&mut shell, "// VESTRA-MOUNT-BACKDROP", &backdrop)?;
     source.push_str(&shell);
     Ok(source)
+}
+
+/// The adjust column's two places in the shell (menu redesign §3.3).
+struct AdjustColumn {
+    /// Docked between the video column and the sidebar, with its splitter.
+    docked: String,
+    /// Over the video's right side while the window is too narrow to dock
+    /// it (300 px, the list colour at 90 %, a shadow on its left), or, in
+    /// fullscreen, sliding out from the right edge left of the sidebar's
+    /// overlay (G-01). Esc inside it closes it in a window (fullscreen keeps
+    /// Esc for Toggle Fullscreen). Its hover area reports to the host.
+    overlay: String,
+}
+
+/// [`AdjustColumn`] for the adjust panels `tabs` (the compiled ones); the
+/// column exists while `tabbed` (it has tabs, compiled or not). It always
+/// draws its strip: text tabs with the keys under them, no detach.
+fn adjust_column(tabs: &[&CompileSpec], tabbed: bool) -> AdjustColumn {
+    if !tabbed {
+        return AdjustColumn {
+            docked: String::new(),
+            overlay: String::new(),
+        };
+    }
+    let keys = key_forward("panel:adjust");
+    // The splitter's right edge: the window's, less a docked sidebar.
+    let docked = format!(
+        "if root.adjust-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
+         TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
+         moved => {{ if self.pressed {{ root.adjust-width = clamp(root.width / 1px - (root.sidebar-visible ? root.sidebar-actual + 3 : 0) - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 280, max(280, root.width / 1px * 0.5)); }} }} \
+         pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.adjust-resized(root.adjust-actual); }} }} }} }}\n\
+         if root.adjust-visible: adjust-keys := FocusScope {{ width: root.adjust-actual * 1px; horizontal-stretch: 0; {keys} {} }}",
+        column_content(
+            Column::Adjust,
+            tabs,
+            true,
+            "adjust-keys",
+            "false",
+            "Theme.bg-list"
+        )
+    );
+    let overlay = format!(
+        "if root.adjust-overlay: Rectangle {{ \
+         x: root.host-fullscreen ? root.width : (root.video-x + root.video-width) * 1px - self.width; \
+         y: root.host-fullscreen ? 0px : root.video-y * 1px; \
+         width: (root.host-fullscreen ? root.adjust-pop-width : min(300, root.video-width)) * 1px; \
+         height: root.host-fullscreen ? root.height : root.video-height * 1px; \
+         drop-shadow-blur: root.host-fullscreen ? 0px : 12px; drop-shadow-offset-x: -2px; \
+         drop-shadow-color: root.host-fullscreen ? transparent : #00000080; \
+         background: root.host-fullscreen ? transparent : Theme.bg-list.with-alpha(0.9); \
+         states [ popped when root.host-fullscreen && root.adjust-popped: {{ \
+         x: root.width - self.width - (root.sidebar-popped ? root.sidebar-pop-width * 1px : 0px); \
+         in {{ animate x {{ duration: 150ms; easing: ease-out; }} }} \
+         out {{ animate x {{ duration: 150ms; easing: ease-in; }} }} }} ] \
+         TouchArea {{ changed has-hover => {{ root.adjust-hover = self.has-hover; }} \
+         changed mouse-x => {{ root.window-input(\"activity\"); }} \
+         changed mouse-y => {{ root.window-input(\"activity\"); }} \
+         adjust-overlay-keys := FocusScope {{ \
+         key-pressed(event) => {{ if !root.host-fullscreen && event.text == Key.Escape {{ root.adjust-dismiss(); return accept; }} \
+         if root.key-input(\"panel:adjust\", event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta, event.repeat) {{ return accept; }} reject }} \
+         {} }} }} }}",
+        column_content(
+            Column::Adjust,
+            tabs,
+            true,
+            "adjust-overlay-keys",
+            "false",
+            "root.host-fullscreen ? Theme.bg-list : transparent"
+        )
+    );
+    AdjustColumn { docked, overlay }
 }
 
 /// The detached sidebar (C14): the same components and bridge globals in a
@@ -595,8 +736,11 @@ fn compile_definition(specs: &[CompileSpec]) -> Result<ComponentDefinition> {
     compile_definition_tabbed(specs, default_tabbed(specs))
 }
 
-fn compile_definition_tabbed(specs: &[CompileSpec], tabbed: bool) -> Result<ComponentDefinition> {
-    build(shell_source_tabbed(specs, tabbed)?, "HostWindow")
+fn compile_definition_tabbed(
+    specs: &[CompileSpec],
+    tabbed: [bool; 2],
+) -> Result<ComponentDefinition> {
+    build(shell_source_columns(specs, tabbed)?, "HostWindow")
 }
 
 /// Call on the UI thread. Returns an unshown instance, letting the caller keep
@@ -717,11 +861,12 @@ pub fn compile_json(
 /// window's strong reference to it; the native window is already visible),
 /// and must not `hide()` the old shell, which shares the window. A caller
 /// that fails after this returned puts the old tree back with
-/// [`crate::ui::view::ShownTree::restore`]. `tabbed`: the sidebar draws its
-/// tab strip (two or more tabs, of which only `specs`' are compiled).
+/// [`crate::ui::view::ShownTree::restore`]. `tabbed`: each column (by
+/// `Column::index`) draws its tab strip (the sidebar with two or more tabs,
+/// the adjust column with any, of which only `specs`' are compiled).
 pub fn compile_json_in(
     specs: &[CompileSpec],
-    tabbed: bool,
+    tabbed: [bool; 2],
     events: mpsc::SyncSender<JsonCallback>,
     shell_generation: u64,
     window: Option<&slint::Window>,
@@ -1274,6 +1419,335 @@ mod tests {
             "FloatingPanel",
         )
         .unwrap();
+    }
+
+    fn adjust_spec(owner: u64) -> CompileSpec {
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        CompileSpec {
+            owner,
+            file: base.join("adjust.slint"),
+            component: "LevelPanel".into(),
+            global: Some("AdjustBridge".into()),
+            slot: Slot::Adjust,
+        }
+    }
+
+    /// Menu redesign step 3b: `[video][adjust][sidebar]`. The adjust column
+    /// sits between the video column and the sidebar, docked with its own
+    /// splitter, and has one overlay (over a narrow window's video, and the
+    /// fullscreen slide-out left of the sidebar's); its strip always shows,
+    /// with the keys under the titles and no detach button.
+    #[test]
+    fn the_adjust_column_sits_between_the_video_and_the_sidebar() {
+        let mut specs = tab_specs();
+        specs.push(adjust_spec(40));
+        let source = shell_source(&specs).unwrap();
+        // Both columns: the adjust column docked before the sidebar.
+        let adjust = source
+            .find("if root.adjust-visible: adjust-keys := FocusScope")
+            .unwrap();
+        let sidebar = source
+            .find("if root.sidebar-visible: sidebar-keys := FocusScope")
+            .unwrap();
+        assert!(adjust < sidebar);
+        assert!(source.find("bottom-content := Owner10View").unwrap() < adjust);
+        // One branch docked, one in the overlay, keyed by its owner.
+        assert_eq!(
+            source
+                .matches("if root.adjust-shown == 40: Owner40View")
+                .count(),
+            2
+        );
+        assert!(source.contains("key-input(\"panel:adjust\""));
+        // GUI check of 3b: a panel wider than its column is clipped to it
+        // (docked and in the overlay), never drawn over the sidebar.
+        assert_eq!(
+            source
+                .matches("clip: true; if root.adjust-shown == 40")
+                .count(),
+            2
+        );
+        assert!(source.contains("keys: root.adjust-keys; detachable: false;"));
+        assert!(!source.contains("root.adjust-detach"));
+        // The overlay comes after the sidebar's (G-01), before the title
+        // strip and the menu layer (G-19); Esc closes it in a window.
+        let overlay = source.find("if root.adjust-overlay: Rectangle").unwrap();
+        assert!(source.find("if root.sidebar-overlay:").unwrap() < overlay);
+        assert!(overlay < source.find("title-strip := TitleStrip {").unwrap());
+        assert!(source.contains("root.adjust-dismiss()"));
+        assert!(source.contains("root.adjust-hover = self.has-hover"));
+        // The fullscreen bar ends at both popped-out columns.
+        assert!(source.contains("root.columns-popped-width"));
+        let definition = build(source, "HostWindow").unwrap();
+        for callback in [
+            "adjust-tab",
+            "adjust-overflow",
+            "adjust-dismiss",
+            "adjust-resized",
+        ] {
+            assert!(
+                definition.callbacks().any(|name| name == callback),
+                "{callback}"
+            );
+        }
+        for property in [
+            "adjust-keys",
+            "adjust-width",
+            "adjust-actual",
+            "adjust-pop-width",
+        ] {
+            assert!(
+                definition.properties().any(|(name, _)| name == property),
+                "{property}"
+            );
+        }
+        assert!(definition.global_properties("Owner40Bridge").is_some());
+        // The adjust column alone: one tab still draws the strip.
+        let alone = shell_source(&[specs[0].clone(), adjust_spec(40)]).unwrap();
+        assert_eq!(alone.matches("SidebarTabs {").count(), 2);
+        assert!(!alone.contains("sidebar-keys"));
+        build(alone, "HostWindow").unwrap();
+        // Every adjust tab a placeholder (none compiled yet, the column not
+        // opened): the column and its strip exist, with no branch.
+        let placeholders = shell_source_columns(&specs[..1], [false, true]).unwrap();
+        assert!(placeholders.contains("adjust-keys := FocusScope"));
+        assert!(!placeholders.contains("adjust-shown =="));
+        build(placeholders, "HostWindow").unwrap();
+        // No adjust tab at all: no column.
+        assert!(
+            !shell_source(&specs[..2])
+                .unwrap()
+                .contains("adjust-keys := FocusScope")
+        );
+        // The bare shell keeps the adjust properties, so the host binds them alike.
+        build(shell_source(&[]).unwrap(), "HostWindow").unwrap();
+        assert_eq!(Slot::parse("adjust"), Some(Slot::Adjust));
+        assert_eq!(Slot::parse("top"), None);
+        assert!(Slot::Adjust.tabbed() && !Slot::Bottom.tabbed());
+    }
+
+    /// The adjust column's place in the shell: docked at 317 between a
+    /// video of the rest and the sidebar; in a narrow window over the
+    /// video's right side, 300 wide; in fullscreen slid out left of the
+    /// sidebar's overlay (headless, laid out by Slint).
+    #[test]
+    fn the_adjust_column_lays_out_docked_over_the_video_and_in_fullscreen() {
+        use slint::ComponentHandle as _;
+        struct Headless;
+        impl slint::platform::Platform for Headless {
+            fn create_window_adapter(
+                &self,
+            ) -> std::result::Result<
+                std::rc::Rc<dyn slint::platform::WindowAdapter>,
+                slint::PlatformError,
+            > {
+                Ok(
+                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                        Default::default(),
+                    ),
+                )
+            }
+        }
+        thread_local! {
+            static PLATFORM: () = { let _ = slint::platform::set_platform(Box::new(Headless)); };
+        }
+        PLATFORM.with(|_| {});
+        let mut specs = tab_specs();
+        specs.push(adjust_spec(40));
+        let instance = compile_definition(&specs).unwrap().create().unwrap();
+        let number = |name: &str| match instance.get_property(name).unwrap() {
+            Value::Number(n) => n,
+            other => panic!("{name}: {other:?}"),
+        };
+        let set = |name: &str, on: bool| instance.set_property(name, Value::Bool(on)).unwrap();
+        instance
+            .window()
+            .set_size(slint::LogicalSize::new(1400., 800.));
+        set("sidebar-visible", true);
+        set("adjust-visible", true);
+        crate::ui::view::settle_layout(instance.window());
+        // 1400 - 317 - 3 - 317 - 3 = 760 of video.
+        assert_eq!(number("adjust-actual"), 317.);
+        assert_eq!(number("video-width"), 760.);
+        // Narrow: the policy floats it over the video; the video gets the width back.
+        set("adjust-visible", false);
+        set("adjust-overlay", true);
+        set("adjust-popped", true);
+        crate::ui::view::settle_layout(instance.window());
+        assert_eq!(number("video-width"), 1080.);
+        // Half the window at most, 280 at least.
+        instance
+            .set_property("adjust-width", Value::Number(1000.))
+            .unwrap();
+        assert_eq!(number("adjust-actual"), 700.);
+        instance
+            .set_property("adjust-width", Value::Number(10.))
+            .unwrap();
+        assert_eq!(number("adjust-actual"), 280.);
+        // Fullscreen: both popped out cover their widths at the right edge.
+        instance
+            .set_property("adjust-width", Value::Number(317.))
+            .unwrap();
+        set("host-fullscreen", true);
+        set("sidebar-overlay", true);
+        set("sidebar-popped", true);
+        set("sidebar-visible", false);
+        crate::ui::view::settle_layout(instance.window());
+        assert_eq!(number("adjust-pop-width"), 317.);
+        assert_eq!(number("columns-popped-width"), 317. + 317.);
+        let pop = crate::ui::window_state::adjust_overlay_width(1400., 317., 317.);
+        assert_eq!(number("adjust-pop-width"), pop);
+    }
+
+    /// Menu redesign, open question 1: what the adjust column's first
+    /// opening costs (its panels compile on demand). The shell holds the
+    /// real playback bar, visualizer backdrop and playlist sidebar; the
+    /// adjust panels are the Picture Adjustments and Audio Workbench windows
+    /// made panels (the step 4 panels reuse about 80% of them) and two
+    /// playlist copies as stand-ins for the Subtitles and Playback panels.
+    /// Release build, headless: `cargo test --release --locked -- --ignored
+    /// the_adjust_columns_first_opening_cost --nocapture`.
+    #[test]
+    #[ignore = "measurement"]
+    #[allow(clippy::disallowed_macros)] // the numbers for the terminal
+    fn the_adjust_columns_first_opening_cost() {
+        use slint::ComponentHandle as _;
+        struct Headless;
+        impl slint::platform::Platform for Headless {
+            fn create_window_adapter(
+                &self,
+            ) -> std::result::Result<
+                std::rc::Rc<dyn slint::platform::WindowAdapter>,
+                slint::PlatformError,
+            > {
+                Ok(
+                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                        Default::default(),
+                    ),
+                )
+            }
+        }
+        let _ = slint::platform::set_platform(Box::new(Headless));
+        let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
+        let spec = |owner, file: PathBuf, component: &str, global: &str, slot| CompileSpec {
+            owner,
+            file,
+            component: component.into(),
+            global: Some(global.into()),
+            slot,
+        };
+        let base = vec![
+            spec(
+                1,
+                plugins.join("playback/ui/bar.slint"),
+                "PlaybackBar",
+                "PlaybackBridge",
+                Slot::Bottom,
+            ),
+            spec(
+                2,
+                plugins.join("visualizer/ui/backdrop.slint"),
+                "Backdrop",
+                "Art",
+                Slot::Backdrop,
+            ),
+            spec(
+                3,
+                plugins.join("playlist/ui/sidebar.slint"),
+                "PlaylistSidebar",
+                "PlaylistBridge",
+                Slot::Sidebar,
+            ),
+        ];
+        // Each panel in a file of its own (they import only the libraries):
+        // a window becomes a Rectangle with a bridge global.
+        let dir = tempfile::tempdir().unwrap();
+        let panel = |from: &str, window: Option<&str>, name: &str| -> PathBuf {
+            let mut text = std::fs::read_to_string(plugins.join(from)).unwrap();
+            if let Some(window) = window {
+                text = text
+                    .replace(
+                        &format!("export component {window} inherits Window {{"),
+                        &format!(
+                            "export global {name}Bridge {{ in property <int> n; }}\n\
+                             export component {name} inherits Rectangle {{"
+                        ),
+                    )
+                    .lines()
+                    .filter(|line| !line.trim_start().starts_with("title: @tr("))
+                    .collect::<Vec<_>>()
+                    .join("\n");
+            }
+            let path = dir.path().join(format!("{name}.slint"));
+            std::fs::write(&path, text).unwrap();
+            path
+        };
+        let adjust = [
+            spec(
+                10,
+                panel("video/picture.slint", Some("PictureWindow"), "Picture"),
+                "Picture",
+                "PictureBridge",
+                Slot::Adjust,
+            ),
+            spec(
+                11,
+                panel("audio/ui/workbench.slint", Some("AudioWorkbench"), "Audio"),
+                "Audio",
+                "AudioBridge",
+                Slot::Adjust,
+            ),
+            spec(
+                12,
+                panel("playlist/ui/sidebar.slint", None, "Subtitles"),
+                "PlaylistSidebar",
+                "PlaylistBridge",
+                Slot::Adjust,
+            ),
+            spec(
+                13,
+                panel("playlist/ui/sidebar.slint", None, "Playback"),
+                "PlaylistSidebar",
+                "PlaylistBridge",
+                Slot::Adjust,
+            ),
+        ];
+        let median = |mut runs: Vec<f64>| {
+            runs.sort_by(f64::total_cmp);
+            runs[runs.len() / 2]
+        };
+        let time = |specs: &[CompileSpec], tabbed: [bool; 2]| {
+            let mut compile = Vec::new();
+            let mut whole = Vec::new();
+            for _ in 0..7 {
+                let started = std::time::Instant::now();
+                let definition = compile_definition_tabbed(specs, tabbed).unwrap();
+                compile.push(started.elapsed().as_secs_f64() * 1000.);
+                let instance = definition.create().unwrap();
+                instance
+                    .window()
+                    .set_size(slint::LogicalSize::new(1400., 800.));
+                instance
+                    .set_property("adjust-visible", Value::Bool(true))
+                    .unwrap();
+                crate::ui::view::settle_layout(instance.window());
+                whole.push(started.elapsed().as_secs_f64() * 1000.);
+            }
+            (median(compile), median(whole))
+        };
+        let (closed, closed_whole) = time(&base, [false, true]);
+        println!(
+            "adjust column closed (placeholders): compile {closed:.0} ms, whole {closed_whole:.0} ms"
+        );
+        for count in 1..=adjust.len() {
+            let mut specs = base.clone();
+            specs.extend(adjust[..count].iter().cloned());
+            let (compile, whole) = time(&specs, [false, true]);
+            println!(
+                "{count} adjust panel(s): compile {compile:.0} ms, whole {whole:.0} ms (+{:.0} ms over closed)",
+                whole - closed_whole
+            );
+        }
     }
 
     /// A new video picture must not touch the

@@ -208,6 +208,8 @@ export class Runtime {
     /** The plugin was disposed: no safety pass is armed any more. */
     #stopped = false;
     #events = new Map();
+    /** The missing `events` warning was given (once per plugin). */
+    #warnedEvents = false;
     views = new Map();
     commands = new Map();
     services = new Map();
@@ -617,6 +619,10 @@ export class Runtime {
             group.active++;
             group.whys.set(token, listenerWhy(this.callSite()));
         }
+        if (created && needs === "events" && !this.can(needs))
+            group.unheard = true;
+        if (!mirror && group.unheard)
+            this.#warnUnheard(event);
         if (created && (needs === null || this.can(needs))) {
             group.told = group.active > 0;
             const whys = group.told ? allWhys(group) : undefined;
@@ -658,6 +664,8 @@ export class Runtime {
         const group = this.#events.get(event);
         if (!group)
             return { dispose: async () => { } };
+        if (group.unheard)
+            this.#warnUnheard(event);
         group.active++;
         const token = {};
         group.whys.set(token, why ?? listenerWhy(this.callSite()));
@@ -674,6 +682,19 @@ export class Runtime {
                     this.#tell(event, group);
             },
         };
+    }
+    /**
+     * A development warning, once per plugin, no behaviour change (SDK
+     * 1.6.12): the plugin follows `event` (an `onChange`, a `bind` that reads
+     * the state) without the `events` capability, so changes made elsewhere
+     * (the user, the player, another plugin) never reach it; the state moves
+     * only after its own calls.
+     */
+    #warnUnheard(event) {
+        if (this.#warnedEvents)
+            return;
+        this.#warnedEvents = true;
+        console.warn(`[${this.manifest.id}] follows ${event} (onChange, or a bind() that reads the state) without the "events" capability: changes made elsewhere will not reach it, only its own calls refresh the state. Declare "events" in manifest.json.`);
     }
     /**
      * Tell the player when `group` changes between mirror and listener, and

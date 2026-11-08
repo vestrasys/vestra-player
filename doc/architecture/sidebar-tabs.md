@@ -2,6 +2,8 @@
 
 2026-11-03. Status: **implemented** (option B; see [Implementation](#implementation-2026-11-03) for where it differs from the proposal below). User ruling 2026-11-03: **only the foreground sidebar tab keeps its plugin active; background tabs do not keep plugins running**, so they stand by after idle like any Normal plugin and wake when their tab is shown (the MV3-style idle-stop ruling applied to panels). Builds on [panel-slots.md](panel-slots.md) (step 1, sidebar tabs) and [supervisor.md](supervisor.md) (standby and wake).
 
+Since 2026-11-07 (menu redesign step 3b) the same rules run per column: the adjust column has its own tabs, front set and current tab ([adjust-column.md](adjust-column.md)); the code below is parameterised by `sidebar_tabs::Column`.
+
 ## Problem
 
 The user wants any number of plugins to be able to add a sidebar panel, with VS Code-style overflow: the strip shows the tabs that fit (about 3 at the normal width) and a `»` menu lists all of them. Memory must stay bounded.

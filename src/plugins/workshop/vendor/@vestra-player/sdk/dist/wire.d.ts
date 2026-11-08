@@ -288,7 +288,10 @@ export interface LayoutPanel {
     /** The tab label: the mount's `title`, else the plugin's name. */
     title: string;
 }
-/** One position (bottom bar or sidebar) as `layout.state` reports it. */
+/**
+ * One position (the bottom bar, the sidebar or, from player 0.7.6, the
+ * adjust column) as `layout.state` reports it.
+ */
 export interface LayoutSlot {
     /** The current tab's panel (the only panel of the bottom bar). */
     owner: number;
@@ -696,14 +699,24 @@ export declare function createWire(transport: Transport): {
         state: () => Promise<{
             bottom: LayoutSlot | null;
             sidebar: LayoutSlot | null;
+            /** Player 0.7.6 (absent from older players). */
+            adjust?: LayoutSlot | null;
             backdrop?: LayoutBackdrop | null;
         }>;
         set: (options: {
-            slot: "bottom" | "sidebar";
+            /** `"adjust"`: player 0.7.6 (older players refuse it with `invalid`). */
+            slot: "bottom" | "sidebar" | "adjust";
             visible?: boolean;
             detached?: boolean;
             /** The plugin id of the panel whose tab becomes the current one. */
             active?: string;
+            /**
+             * With `visible: true`: `false` switches the position on without
+             * popping a column out in fullscreen (`toggle()`, SDK 1.6.13; player
+             * 0.7.6). Absent: reveal, as `show()` and `setVisible` do. Older
+             * players ignore it.
+             */
+            reveal?: boolean;
         }) => Promise<void>;
     };
     events: {
@@ -727,7 +740,8 @@ export declare function createWire(transport: Transport): {
             images: string[];
         }>;
         mount: (options: {
-            slot: "bottom" | "sidebar" | "backdrop";
+            /** `"adjust"`: player 0.7.6 (older players refuse it with `invalid`). */
+            slot: "bottom" | "sidebar" | "backdrop" | "adjust";
             file: string;
             component: string;
             global: string;

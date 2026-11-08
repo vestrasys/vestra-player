@@ -17,12 +17,38 @@ pub const LEAVE_MS: u64 = 500;
 pub const VIDEO_MIN_WIDTH: f64 = 318.0;
 pub const SPLITTER_WIDTH: f64 = 3.0;
 pub const SIDEBAR_MIN_WIDTH: f64 = 317.0;
+/// Menu redesign §3.3: the adjust column is at least 280 wide, at most half
+/// the window (317 by default, `ui_state::ADJUST_WIDTH`).
+pub const ADJUST_MIN_WIDTH: f64 = 280.0;
+/// Docked, the adjust column leaves the video at least this wide; in a
+/// narrower window it floats over the video instead (§3.3, provisional).
+pub const ADJUST_DOCKED_VIDEO: f64 = 480.0;
+/// The adjust column floating over the video of a narrow window.
+pub const ADJUST_OVER_VIDEO_WIDTH: f64 = 300.0;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot {
     Bottom,
     Sidebar,
+    /// The adjust column (menu redesign step 3b).
+    Adjust,
 }
+
+impl Slot {
+    /// The tab column this slot is.
+    fn column(self) -> Option<usize> {
+        match self {
+            Self::Bottom => None,
+            Self::Sidebar => Some(SIDEBAR),
+            Self::Adjust => Some(ADJUST),
+        }
+    }
+}
+
+/// Indexes of the two tab columns in [`Policy`]'s arrays (the order of
+/// `sidebar_tabs::Column`).
+const SIDEBAR: usize = 0;
+const ADJUST: usize = 1;
 
 #[derive(Clone, Copy, Debug)]
 pub struct Viewport {
@@ -41,6 +67,22 @@ pub fn sidebar_width(width: f64, user: f64) -> f64 {
 /// at least the minimum video width uncovered.
 pub fn overlay_width(width: f64, user: f64) -> f64 {
     user.min(width - VIDEO_MIN_WIDTH).max(0.0)
+}
+
+/// The adjust column's width for a window `width` wide and a user width:
+/// at least 280, at most half the window (host.slint's `adjust-actual`).
+pub fn adjust_width(width: f64, user: f64) -> f64 {
+    user.min((width * 0.5).max(ADJUST_MIN_WIDTH))
+        .max(ADJUST_MIN_WIDTH)
+}
+
+/// The fullscreen adjust overlay's width, left of a popped-out sidebar
+/// `beside` wide: its width, leaving at least the minimum video width
+/// uncovered (host.slint's `adjust-pop-width`).
+pub fn adjust_overlay_width(width: f64, user: f64, beside: f64) -> f64 {
+    adjust_width(width, user)
+        .min(width - VIDEO_MIN_WIDTH - beside)
+        .max(0.0)
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -87,6 +129,14 @@ pub struct Snapshot {
     /// Actual allocated sidebar width, zero whenever the sidebar is not shown
     /// docked (hidden, floating, or the fullscreen overlay, which takes none).
     pub sidebar_width: f64,
+    /// The adjust column (menu redesign step 3b): `overlay` in fullscreen
+    /// and while it floats over the video of a narrow window.
+    pub adjust: Option<Visibility>,
+    /// Its docked width, zero whenever it is not shown docked.
+    pub adjust_width: f64,
+    /// It floats over the video: the window is too narrow to dock it
+    /// beside a video at least [`ADJUST_DOCKED_VIDEO`] wide.
+    pub adjust_over_video: bool,
     /// The fullscreen bar's pending hide (the leave delay running); absent
     /// while it is held or already hidden.
     pub next_deadline_ms: Option<u64>,
@@ -97,12 +147,15 @@ pub enum Error {
     Invalid,
     Occupied,
     MissingOwner,
+    /// The adjust column does not detach (menu redesign, open question 2).
+    Docked,
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Invalid => "invalid viewport",
+            Self::Docked => "the adjust column cannot be detached",
             Self::Occupied => "visibility slot is already attached",
             Self::MissingOwner => {
                 "visibility slot is absent or belongs to another owner generation"
@@ -146,31 +199,42 @@ impl Tabs {
     }
 }
 
-/// G-01: the attached sidebar in fullscreen is an overlay at the right edge,
-/// collapsed or popped out.
+/// G-01: the attached columns in fullscreen are overlays at the right edge,
+/// the sidebar outermost, the adjust column left of it; collapsed or popped
+/// out. The right edge pops out every column shown by preference; a
+/// column's toggle pops out that one.
 #[derive(Clone, Copy, Debug, Default)]
 struct Overlay {
-    open: bool,
-    /// The pointer has been over the popped-out panel since it opened (a
+    /// The columns popped out (by `SIDEBAR` / `ADJUST`).
+    open: [bool; 2],
+    /// The pointer has been over a popped-out panel since it opened (a
     /// panel popped out by its toggle waits for that before it can leave).
     entered: bool,
-    /// When the pointer was first seen over the video, left of the panel,
-    /// after being over it.
+    /// When the pointer was first seen over the video, left of the panels,
+    /// after being over them.
     left_at: Option<u64>,
+}
+
+impl Overlay {
+    fn any(&self) -> bool {
+        self.open.iter().any(|open| *open)
+    }
 }
 
 #[derive(Clone)]
 pub struct Policy {
     bottom: Option<Attachment>,
-    sidebar: Option<Tabs>,
+    /// The tab columns, by `SIDEBAR` / `ADJUST`.
+    columns: [Option<Tabs>; 2],
     fullscreen: bool,
     last_activity_ms: u64,
     menu_open: bool,
     dialog_open: bool,
     sidebar_user_width: f64,
+    adjust_user_width: f64,
     /// G-04: the pointer is over the panel (host-owned, never cleared by a
-    /// plugin's `setInteraction`), by slot: bottom, sidebar.
-    hover: [bool; 2],
+    /// plugin's `setInteraction`), by slot: bottom, sidebar, adjust.
+    hover: [bool; 3],
     overlay: Overlay,
     bar: Bar,
 }
@@ -196,13 +260,14 @@ impl Policy {
     pub fn new(now_ms: u64) -> Self {
         Self {
             bottom: None,
-            sidebar: None,
+            columns: [None, None],
             fullscreen: false,
             last_activity_ms: now_ms,
             menu_open: false,
             dialog_open: false,
             sidebar_user_width: SIDEBAR_MIN_WIDTH,
-            hover: [false; 2],
+            adjust_user_width: crate::ui::ui_state::ADJUST_WIDTH,
+            hover: [false; 3],
             overlay: Overlay::default(),
             bar: Bar::default(),
         }
@@ -219,15 +284,48 @@ impl Policy {
         self.sidebar_user_width
     }
 
-    /// Float or dock the whole sidebar; `owner` is any of its panels.
+    /// The adjust column's width the user dragged to (or restored).
+    pub fn set_adjust_width(&mut self, width: f64) {
+        if width.is_finite() {
+            self.adjust_user_width = width.max(ADJUST_MIN_WIDTH);
+        }
+    }
+
+    pub fn adjust_user_width(&self) -> f64 {
+        self.adjust_user_width
+    }
+
+    /// Float or dock the whole sidebar; `owner` is any of its panels. The
+    /// adjust column does not detach.
     pub fn set_detached(&mut self, owner: u64, detached: bool) -> Result<()> {
-        self.tabs_mut(owner)?.detached = detached;
-        self.overlay = Overlay::default();
+        let (column, tabs) = self.tabs_mut(owner)?;
+        if column == ADJUST {
+            return Err(Error::Docked);
+        }
+        tabs.detached = detached;
+        self.overlay.open[SIDEBAR] = false;
+        if !self.overlay.any() {
+            self.overlay = Overlay::default();
+        }
         Ok(())
     }
 
-    fn tabs_mut(&mut self, owner: u64) -> Result<&mut Tabs> {
-        self.sidebar
+    /// The column holding `owner`'s tab, and its tabs.
+    fn tabs_mut(&mut self, owner: u64) -> Result<(usize, &mut Tabs)> {
+        self.columns
+            .iter_mut()
+            .enumerate()
+            .find_map(|(column, tabs)| {
+                tabs.as_mut()
+                    .filter(|tabs| tabs.has(owner))
+                    .map(|tabs| (column, tabs))
+            })
+            .ok_or(Error::MissingOwner)
+    }
+
+    fn column_tabs_mut(&mut self, slot: Slot, owner: u64) -> Result<&mut Tabs> {
+        let column = slot.column().ok_or(Error::MissingOwner)?;
+        self.columns[column]
             .as_mut()
             .filter(|tabs| tabs.has(owner))
             .ok_or(Error::MissingOwner)
@@ -240,9 +338,10 @@ impl Policy {
             .ok_or(Error::MissingOwner)
     }
 
-    /// The bottom bar takes one panel. The sidebar takes another tab; the
-    /// first one sets the slot's `preferred` and `detached` (the slot's
-    /// remembered state) and becomes the current tab.
+    /// The bottom bar takes one panel. A column (the sidebar, the adjust
+    /// column) takes another tab; the first one sets the column's
+    /// `preferred` and `detached` (its remembered state) and becomes the
+    /// current tab.
     pub fn attach(
         &mut self,
         slot: Slot,
@@ -250,53 +349,59 @@ impl Policy {
         preferred: bool,
         detached: bool,
     ) -> Result<()> {
-        match slot {
-            Slot::Bottom => {
-                if self.bottom.is_some() {
-                    return Err(Error::Occupied);
-                }
-                self.bottom = Some(Attachment {
-                    owner,
+        let Some(column) = slot.column() else {
+            if self.bottom.is_some() {
+                return Err(Error::Occupied);
+            }
+            self.bottom = Some(Attachment {
+                owner,
+                preferred,
+                locks: Locks::default(),
+            });
+            return Ok(());
+        };
+        if self.columns.iter().flatten().any(|tabs| tabs.has(owner)) {
+            return Err(Error::Occupied);
+        }
+        match &mut self.columns[column] {
+            Some(tabs) => tabs.panels.push((owner, Locks::default())),
+            empty => {
+                *empty = Some(Tabs {
+                    panels: vec![(owner, Locks::default())],
+                    active: owner,
                     preferred,
-                    locks: Locks::default(),
+                    detached: detached && column == SIDEBAR,
                 });
             }
-            Slot::Sidebar => match &mut self.sidebar {
-                Some(tabs) if tabs.has(owner) => return Err(Error::Occupied),
-                Some(tabs) => tabs.panels.push((owner, Locks::default())),
-                None => {
-                    self.sidebar = Some(Tabs {
-                        panels: vec![(owner, Locks::default())],
-                        active: owner,
-                        preferred,
-                        detached,
-                    });
-                }
-            },
         }
         Ok(())
     }
 
-    /// Put the sidebar's tabs in this order; tabs it does not list keep
-    /// their relative order after the listed ones.
-    pub fn order_sidebar(&mut self, order: &[u64]) {
-        if let Some(tabs) = &mut self.sidebar {
+    /// Put a column's tabs in this order; tabs it does not list keep their
+    /// relative order after the listed ones.
+    pub fn order_column(&mut self, slot: Slot, order: &[u64]) {
+        if let Some(tabs) = slot.column().and_then(|c| self.columns[c].as_mut()) {
             tabs.panels.sort_by_key(|(owner, _)| {
                 order.iter().position(|o| o == owner).unwrap_or(usize::MAX)
             });
         }
     }
 
-    /// Make `owner`'s panel the current sidebar tab.
+    /// Put the sidebar's tabs in this order (`order_column`).
+    pub fn order_sidebar(&mut self, order: &[u64]) {
+        self.order_column(Slot::Sidebar, order);
+    }
+
+    /// Make `owner`'s panel the current tab of its column.
     pub fn set_active(&mut self, owner: u64) -> Result<()> {
-        self.tabs_mut(owner)?.active = owner;
+        self.tabs_mut(owner)?.1.active = owner;
         Ok(())
     }
 
-    /// A sidebar tab's plugin woke from standby as `to` (sidebar-tabs.md):
-    /// the tab keeps its place, locks and current state.
+    /// A tab's plugin woke from standby as `to` (sidebar-tabs.md): the tab
+    /// keeps its place, locks and current state.
     pub fn rekey(&mut self, from: u64, to: u64) {
-        if let Some(tabs) = &mut self.sidebar {
+        for tabs in self.columns.iter_mut().flatten() {
             for (owner, _) in &mut tabs.panels {
                 if *owner == from {
                     *owner = to;
@@ -308,28 +413,46 @@ impl Policy {
         }
     }
 
-    /// The sidebar's panels in tab order (empty without a sidebar).
-    pub fn sidebar_panels(&self) -> Vec<u64> {
-        self.sidebar
+    /// A column's panels in tab order (empty without any).
+    pub fn panels(&self, slot: Slot) -> Vec<u64> {
+        slot.column()
+            .and_then(|c| self.columns[c].as_ref())
             .iter()
             .flat_map(|tabs| tabs.panels.iter().map(|(owner, _)| *owner))
             .collect()
     }
 
+    /// A column's own state: (preferred, detached).
+    pub fn column_state(&self, slot: Slot) -> Option<(bool, bool)> {
+        slot.column()
+            .and_then(|c| self.columns[c].as_ref())
+            .map(|tabs| (tabs.preferred, tabs.detached))
+    }
+
+    /// A column's current tab.
+    pub fn active(&self, slot: Slot) -> Option<u64> {
+        slot.column()
+            .and_then(|c| self.columns[c].as_ref())
+            .map(|tabs| tabs.active)
+    }
+
+    /// The sidebar's panels in tab order (empty without a sidebar).
+    pub fn sidebar_panels(&self) -> Vec<u64> {
+        self.panels(Slot::Sidebar)
+    }
+
     /// The sidebar slot's own state: (preferred, detached).
     pub fn sidebar_state(&self) -> Option<(bool, bool)> {
-        self.sidebar
-            .as_ref()
-            .map(|tabs| (tabs.preferred, tabs.detached))
+        self.column_state(Slot::Sidebar)
     }
 
     /// The current sidebar tab.
     pub fn sidebar_active(&self) -> Option<u64> {
-        self.sidebar.as_ref().map(|tabs| tabs.active)
+        self.active(Slot::Sidebar)
     }
 
     /// Removing the current tab makes the next one current (the previous
-    /// one when it was the last); the slot keeps its state while a tab is
+    /// one when it was the last); a column keeps its state while a tab is
     /// left.
     pub fn remove_owner(&mut self, owner: u64) {
         if self
@@ -338,14 +461,21 @@ impl Policy {
         {
             self.bottom = None;
         }
-        if let Some(tabs) = &mut self.sidebar
-            && let Some(index) = tabs.panels.iter().position(|(o, _)| *o == owner)
-        {
+        for column in [SIDEBAR, ADJUST] {
+            let Some(tabs) = &mut self.columns[column] else {
+                continue;
+            };
+            let Some(index) = tabs.panels.iter().position(|(o, _)| *o == owner) else {
+                continue;
+            };
             tabs.panels.remove(index);
             match tabs.panels.get(index).or(tabs.panels.last()) {
                 None => {
-                    self.sidebar = None;
-                    self.overlay = Overlay::default();
+                    self.columns[column] = None;
+                    self.overlay.open[column] = false;
+                    if !self.overlay.any() {
+                        self.overlay = Overlay::default();
+                    }
                 }
                 Some((next, _)) if tabs.active == owner => tabs.active = *next,
                 Some(_) => {}
@@ -353,9 +483,11 @@ impl Policy {
         }
     }
 
-    /// G-01: in fullscreen, turning the attached sidebar on pops it out at
-    /// once (until the pointer has been over it and left, or 3 seconds pass
-    /// without activity); turning it off collapses it at once.
+    /// Show or hide a slot and, for a column shown, reveal it (a plugin's
+    /// `show()` or `setVisible(true)`): G-01, in fullscreen an attached
+    /// column pops out at once (until the pointer has been over it and left,
+    /// or 3 seconds pass without activity), also when it was already on and
+    /// collapsed. Turning a column off slides it in at once.
     pub fn set_preferred(
         &mut self,
         slot: Slot,
@@ -363,23 +495,44 @@ impl Policy {
         preferred: bool,
         now_ms: u64,
     ) -> Result<()> {
-        let current = match slot {
-            Slot::Bottom => &mut self.bottom_mut(owner)?.preferred,
-            Slot::Sidebar => &mut self.tabs_mut(owner)?.preferred,
+        self.set_column(slot, owner, preferred, true, now_ms)
+    }
+
+    /// Switch a slot on or off as a toggle does (the bottom bar's Adjust and
+    /// Sidebar buttons, Toggle Sidebar, Esc in the adjust overlay, a plugin's
+    /// `toggle()`; user ruling 2026-11-08): the same in every mode. In
+    /// fullscreen "on" means the right edge reveals the column; switching it on
+    /// never pops it out, switching it off slides it in at once.
+    pub fn switch(&mut self, slot: Slot, owner: u64, on: bool, now_ms: u64) -> Result<()> {
+        self.set_column(slot, owner, on, false, now_ms)
+    }
+
+    fn set_column(
+        &mut self,
+        slot: Slot,
+        owner: u64,
+        preferred: bool,
+        reveal: bool,
+        now_ms: u64,
+    ) -> Result<()> {
+        let Some(column) = slot.column() else {
+            self.bottom_mut(owner)?.preferred = preferred;
+            return Ok(());
         };
-        let shown = !*current && preferred;
-        *current = preferred;
-        if slot == Slot::Sidebar {
-            if !preferred {
+        let tabs = self.column_tabs_mut(slot, owner)?;
+        tabs.preferred = preferred;
+        if !preferred {
+            self.overlay.open[column] = false;
+            if !self.overlay.any() {
                 self.overlay = Overlay::default();
-            } else if shown && self.overlay_ready() {
-                self.overlay = Overlay {
-                    open: true,
-                    entered: false,
-                    left_at: None,
-                };
-                self.activity(now_ms);
             }
+        } else if reveal && !self.overlay.open[column] && self.overlay_ready(column) {
+            // Revealed on purpose (`show()`, `setVisible(true)`): pops out,
+            // also when it was wanted shown but collapsed.
+            self.overlay.open[column] = true;
+            self.overlay.entered = false;
+            self.overlay.left_at = None;
+            self.activity(now_ms);
         }
         Ok(())
     }
@@ -387,16 +540,15 @@ impl Policy {
     /// Setters do not invent timestamps. A released gesture counts as activity
     /// when the host calls activity(release_now) first; the fullscreen bar's
     /// leave delay starts at the next `tick` or `bottom_band`.
-    /// A sidebar panel's locks count only while its tab is current.
+    /// A column panel's locks count only while its tab is current.
     pub fn set_locks(&mut self, slot: Slot, owner: u64, locks: Locks) -> Result<()> {
-        match slot {
-            Slot::Bottom => self.bottom_mut(owner)?.locks = locks,
-            Slot::Sidebar => {
-                let tabs = self.tabs_mut(owner)?;
-                if let Some(entry) = tabs.panels.iter_mut().find(|(o, _)| *o == owner) {
-                    entry.1 = locks;
-                }
-            }
+        if slot.column().is_none() {
+            self.bottom_mut(owner)?.locks = locks;
+            return Ok(());
+        }
+        let tabs = self.column_tabs_mut(slot, owner)?;
+        if let Some(entry) = tabs.panels.iter_mut().find(|(o, _)| *o == owner) {
+            entry.1 = locks;
         }
         Ok(())
     }
@@ -418,46 +570,70 @@ impl Policy {
     }
 
     /// G-04: whether the pointer is over a slot's panel (the bottom bar, or
-    /// the popped-out sidebar). Hovering locks the panel like a plugin's
+    /// a popped-out column). Hovering locks the panel like a plugin's
     /// interaction lock. The host samples it every tick.
     pub fn set_hover(&mut self, slot: Slot, hovered: bool) {
         self.hover[slot as usize] = hovered;
-        if slot == Slot::Sidebar && hovered && self.overlay.open {
+        if hovered && slot.column().is_some_and(|c| self.overlay.open[c]) {
             self.overlay.entered = true;
             self.overlay.left_at = None;
         }
     }
 
+    /// The width the popped-out columns cover at the right of a viewport
+    /// `width` wide: the sidebar's, then the adjust column's left of it.
+    fn overlay_extent(&self, width: f64) -> f64 {
+        let sidebar = if self.overlay.open[SIDEBAR] {
+            overlay_width(width, self.sidebar_user_width)
+        } else {
+            0.0
+        };
+        let adjust = if self.overlay.open[ADJUST] {
+            adjust_overlay_width(width, self.adjust_user_width, sidebar)
+        } else {
+            0.0
+        };
+        sidebar + adjust
+    }
+
     /// G-01: the pointer is over the video at `x` (window coordinates) in a
-    /// viewport `width` wide. At the right edge the fullscreen sidebar pops
-    /// out; left of the popped-out panel the leave delay starts.
+    /// viewport `width` wide. At the right edge the fullscreen columns pop
+    /// out; left of the popped-out panels the leave delay starts.
     pub fn pointer(&mut self, x: f64, width: f64, now_ms: u64) {
-        if !x.is_finite() || !width.is_finite() || !self.overlay_ready() {
+        let ready = [self.overlay_ready(SIDEBAR), self.overlay_ready(ADJUST)];
+        if !x.is_finite() || !width.is_finite() || !ready.iter().any(|r| *r) {
             return;
         }
         if x >= width - EDGE_PX {
-            if !self.overlay.open {
-                self.overlay = Overlay {
-                    open: true,
-                    entered: true,
-                    left_at: None,
-                };
-                self.activity(now_ms);
+            if self.overlay.open != ready {
+                let opening = !self.overlay.any();
+                self.overlay.open = ready;
+                self.overlay.entered = true;
+                self.overlay.left_at = None;
+                if opening {
+                    self.activity(now_ms);
+                }
             }
-        } else if self.overlay.open
+        } else if self.overlay.any()
             && self.overlay.entered
             && self.overlay.left_at.is_none()
-            && !self.hover[Slot::Sidebar as usize]
-            && x < width - overlay_width(width, self.sidebar_user_width)
+            && !self.column_hovered()
+            && x < width - self.overlay_extent(width)
         {
             self.overlay.left_at = Some(now_ms);
         }
     }
 
+    /// The pointer is over a popped-out column.
+    fn column_hovered(&self) -> bool {
+        (self.overlay.open[SIDEBAR] && self.hover[Slot::Sidebar as usize])
+            || (self.overlay.open[ADJUST] && self.hover[Slot::Adjust as usize])
+    }
+
     /// FS-BAR-1: where the pointer is for the fullscreen bar's band. The band
     /// is the bar's own rectangle: from `height - band_height` (the bar's
-    /// laid-out height, also while hidden) to the bottom edge, left of a
-    /// popped-out sidebar. `over_bar`: the pointer is over the shown bar;
+    /// laid-out height, also while hidden) to the bottom edge, left of the
+    /// popped-out columns. `over_bar`: the pointer is over the shown bar;
     /// `over_video`: the pointer over the video at (x, y), window logical
     /// px. Outside fullscreen there is no band. The host samples it every
     /// tick, before `tick`.
@@ -470,8 +646,8 @@ impl Policy {
         now_ms: u64,
     ) {
         let right = viewport.width
-            - if self.overlay.open && self.overlay_ready() {
-                overlay_width(viewport.width, self.sidebar_user_width)
+            - if self.fullscreen {
+                self.overlay_extent(viewport.width)
             } else {
                 0.0
             };
@@ -516,19 +692,24 @@ impl Policy {
         self.bar.shown = self.fullscreen && self.bar_shown(now_ms);
     }
 
-    /// Apply the timed transitions (the popped-out sidebar collapsing, the
+    /// Apply the timed transitions (the popped-out columns collapsing, the
     /// fullscreen bar's leave delay). The host calls this every tick before
     /// `evaluate`.
     pub fn tick(&mut self, now_ms: u64) {
         self.update_bar(now_ms);
-        if !self.overlay.open {
+        if !self.overlay.any() {
             return;
         }
-        if !self.overlay_ready() {
+        for column in [SIDEBAR, ADJUST] {
+            if !self.overlay_ready(column) {
+                self.overlay.open[column] = false;
+            }
+        }
+        if !self.overlay.any() {
             self.overlay = Overlay::default();
             return;
         }
-        if self.sidebar_locked() {
+        if self.columns_locked() {
             return;
         }
         let left = self
@@ -541,26 +722,27 @@ impl Policy {
         }
     }
 
-    /// The attached sidebar can pop out: fullscreen, shown by preference,
+    /// An attached column can pop out: fullscreen, shown by preference,
     /// not floating.
-    fn overlay_ready(&self) -> bool {
+    fn overlay_ready(&self, column: usize) -> bool {
         self.fullscreen
-            && self
-                .sidebar
+            && self.columns[column]
                 .as_ref()
                 .is_some_and(|tabs| tabs.preferred && !tabs.detached)
     }
 
-    /// The popped-out sidebar stays: pointer over it, the panel's own
-    /// interaction locks, or a menu or dialog open.
-    fn sidebar_locked(&self) -> bool {
+    /// The popped-out columns stay: pointer over one, the current panel's
+    /// own interaction locks, or a menu or dialog open.
+    fn columns_locked(&self) -> bool {
         self.menu_open
             || self.dialog_open
-            || self.hover[Slot::Sidebar as usize]
-            || self
-                .sidebar
-                .as_ref()
-                .is_some_and(|tabs| tabs.active_locks().active())
+            || self.column_hovered()
+            || [SIDEBAR, ADJUST].into_iter().any(|column| {
+                self.overlay.open[column]
+                    && self.columns[column]
+                        .as_ref()
+                        .is_some_and(|tabs| tabs.active_locks().active())
+            })
     }
 
     fn bottom_locked(&self) -> bool {
@@ -631,7 +813,7 @@ impl Policy {
         });
         // Compress the video to its minimum before hiding the docked sidebar.
         let has_space = viewport.width >= VIDEO_MIN_WIDTH + SPLITTER_WIDTH + SIDEBAR_MIN_WIDTH;
-        let sidebar = self.sidebar.as_ref().map(|tabs| {
+        let sidebar = self.columns[SIDEBAR].as_ref().map(|tabs| {
             let reason = if !tabs.preferred {
                 Some(Reason::UserHidden)
             } else if tabs.detached {
@@ -639,7 +821,7 @@ impl Policy {
                 None
             } else if !has_space {
                 Some(Reason::Space)
-            } else if self.fullscreen && !self.overlay.open {
+            } else if self.fullscreen && !self.overlay.open[SIDEBAR] {
                 // G-01: the overlay is collapsed (the right edge pops it out).
                 Some(Reason::Fullscreen)
             } else {
@@ -652,6 +834,39 @@ impl Policy {
                 reason,
                 overlay: self.fullscreen && !tabs.detached,
                 detached: tabs.detached,
+            }
+        });
+        let sidebar_width = if sidebar.is_some_and(|v| v.effective && !v.detached && !v.overlay) {
+            sidebar_width(viewport.width, self.sidebar_user_width)
+        } else {
+            0.0
+        };
+        // The adjust column docks left of the sidebar while the video keeps
+        // at least `ADJUST_DOCKED_VIDEO`; in a narrower window it floats
+        // over the video and takes no width (menu redesign §3.3).
+        let docked_adjust = adjust_width(viewport.width, self.adjust_user_width);
+        let beside = if sidebar_width > 0.0 {
+            sidebar_width + SPLITTER_WIDTH
+        } else {
+            0.0
+        };
+        let over_video = !self.fullscreen
+            && viewport.width - beside - docked_adjust - SPLITTER_WIDTH < ADJUST_DOCKED_VIDEO;
+        let adjust = self.columns[ADJUST].as_ref().map(|tabs| {
+            let reason = if !tabs.preferred {
+                Some(Reason::UserHidden)
+            } else if self.fullscreen && !self.overlay.open[ADJUST] {
+                Some(Reason::Fullscreen)
+            } else {
+                None
+            };
+            Visibility {
+                owner: tabs.active,
+                preferred: tabs.preferred,
+                effective: reason.is_none(),
+                reason,
+                overlay: self.fullscreen || over_video,
+                detached: false,
             }
         });
         let next_deadline_ms = if self.fullscreen
@@ -670,11 +885,14 @@ impl Policy {
             fullscreen: self.fullscreen,
             bottom,
             sidebar,
-            sidebar_width: if sidebar.is_some_and(|v| v.effective && !v.detached && !v.overlay) {
-                sidebar_width(viewport.width, self.sidebar_user_width)
+            sidebar_width,
+            adjust,
+            adjust_width: if adjust.is_some_and(|v| v.effective && !v.overlay) {
+                docked_adjust
             } else {
                 0.0
             },
+            adjust_over_video: adjust.is_some_and(|v| v.effective && v.overlay) && over_video,
             next_deadline_ms,
         })
     }
@@ -1363,6 +1581,280 @@ mod tests {
         assert!(!policy.evaluate(roomy(), u64::MAX).unwrap().fullscreen);
     }
 
+    fn both_columns() -> Policy {
+        let mut policy = attached();
+        policy.attach(Slot::Adjust, 5, true, false).unwrap();
+        policy.attach(Slot::Adjust, 6, true, false).unwrap();
+        policy
+    }
+
+    /// Menu redesign §3.3: `[video][adjust][sidebar]`, both open at once;
+    /// the adjust column docks while the video keeps 480 px, else it floats
+    /// over the video (300 px) and takes no width; the sidebar keeps its
+    /// own rules.
+    #[test]
+    fn the_adjust_column_docks_beside_a_wide_video_and_floats_over_a_narrow_one() {
+        let mut policy = both_columns();
+        let roomy = policy.evaluate(viewport(1400.0, 800.0), 0).unwrap();
+        let adjust = roomy.adjust.unwrap();
+        assert!(adjust.effective && !adjust.overlay && !adjust.detached);
+        assert_eq!(adjust.owner, 5);
+        assert_eq!(roomy.adjust_width, 317.0);
+        assert_eq!(roomy.sidebar_width, 317.0);
+        assert!(!roomy.adjust_over_video);
+        // 1400 - 320 - 320 = 760 of video. At 1120 the video is exactly 480.
+        let edge = policy.evaluate(viewport(1120.0, 800.0), 0).unwrap();
+        assert!(!edge.adjust_over_video && edge.adjust_width == 317.0);
+        let narrow = policy.evaluate(viewport(1119.0, 800.0), 0).unwrap();
+        assert!(narrow.adjust_over_video && narrow.adjust.unwrap().overlay);
+        assert!(narrow.adjust.unwrap().effective);
+        assert_eq!(narrow.adjust_width, 0.0, "the overlay takes no width");
+        assert!(
+            narrow.sidebar.unwrap().effective,
+            "the sidebar stays docked"
+        );
+        // Without the sidebar the adjust column has more room.
+        policy.set_preferred(Slot::Sidebar, 2, false, 0).unwrap();
+        let alone = policy.evaluate(viewport(1116.0, 800.0), 0).unwrap();
+        assert!(!alone.adjust_over_video && alone.adjust_width == 317.0);
+        // Narrower still: the sidebar hides for want of space as before;
+        // the adjust overlay is still there.
+        policy.set_preferred(Slot::Sidebar, 2, true, 0).unwrap();
+        let tiny = policy.evaluate(viewport(600.0, 400.0), 0).unwrap();
+        assert_eq!(tiny.sidebar.unwrap().reason, Some(Reason::Space));
+        assert!(tiny.adjust_over_video && tiny.adjust.unwrap().effective);
+        // Width: at least 280, at most half the window.
+        policy.set_adjust_width(900.0);
+        assert_eq!(
+            policy
+                .evaluate(viewport(2000.0, 800.0), 0)
+                .unwrap()
+                .adjust_width,
+            900.0
+        );
+        assert_eq!(
+            policy
+                .evaluate(viewport(1700.0, 800.0), 0)
+                .unwrap()
+                .adjust_width,
+            850.0
+        );
+        policy.set_adjust_width(100.0);
+        assert_eq!(policy.adjust_user_width(), ADJUST_MIN_WIDTH);
+        assert_eq!(adjust_width(400.0, 100.0), ADJUST_MIN_WIDTH);
+        // Hidden by preference: no width, no overlay.
+        policy.set_preferred(Slot::Adjust, 6, false, 0).unwrap();
+        let hidden = policy.evaluate(viewport(600.0, 400.0), 0).unwrap();
+        assert_eq!(hidden.adjust.unwrap().reason, Some(Reason::UserHidden));
+        assert!(!hidden.adjust_over_video);
+    }
+
+    #[test]
+    fn the_adjust_column_has_its_own_tabs_and_never_detaches() {
+        let mut policy = both_columns();
+        assert_eq!(policy.panels(Slot::Adjust), [5, 6]);
+        assert_eq!(policy.sidebar_panels(), [2]);
+        assert_eq!(
+            policy.attach(Slot::Adjust, 2, true, false),
+            Err(Error::Occupied),
+            "one tab per plugin, in one column"
+        );
+        policy.set_active(6).unwrap();
+        assert_eq!(policy.active(Slot::Adjust), Some(6));
+        assert_eq!(
+            policy.sidebar_active(),
+            Some(2),
+            "the sidebar keeps its tab"
+        );
+        assert_eq!(policy.set_detached(5, true), Err(Error::Docked));
+        assert_eq!(policy.column_state(Slot::Adjust), Some((true, false)));
+        policy.order_column(Slot::Adjust, &[6, 5]);
+        assert_eq!(policy.panels(Slot::Adjust), [6, 5]);
+        policy.rekey(6, 60);
+        assert_eq!(policy.active(Slot::Adjust), Some(60));
+        policy.remove_owner(60);
+        assert_eq!(policy.active(Slot::Adjust), Some(5));
+        policy.remove_owner(5);
+        assert_eq!(policy.column_state(Slot::Adjust), None);
+        assert!(policy.evaluate(roomy(), 0).unwrap().adjust.is_none());
+        // A first panel brings the column's remembered state; never detached.
+        policy.attach(Slot::Adjust, 7, false, true).unwrap();
+        assert_eq!(policy.column_state(Slot::Adjust), Some((false, false)));
+    }
+
+    /// G-01 with two columns: the right edge pops out both, the sidebar
+    /// outermost; a column's own toggle pops out that one; the leave delay
+    /// starts left of both, and the fullscreen bar's band ends there.
+    #[test]
+    fn fullscreen_columns_slide_out_from_the_right_edge_sidebar_outermost() {
+        let mut policy = both_columns();
+        policy.set_fullscreen(true, 0);
+        let collapsed = policy.evaluate(screen(), 0).unwrap();
+        assert_eq!(collapsed.adjust.unwrap().reason, Some(Reason::Fullscreen));
+        assert!(collapsed.adjust.unwrap().overlay && !collapsed.adjust_over_video);
+        policy.pointer(1919.0, 1920.0, 100);
+        let open = policy.evaluate(screen(), 100).unwrap();
+        assert!(open.sidebar.unwrap().effective && open.adjust.unwrap().effective);
+        assert_eq!(open.adjust_width, 0.0);
+        // Both 317 wide: the panels cover 1286..1920.
+        assert_eq!(policy.overlay_extent(1920.0), 634.0);
+        at(&mut policy, 1300.0, 1050.0, 200);
+        assert!(!bar(&policy, 200).effective, "under the adjust column");
+        at(&mut policy, 1285.0, 1050.0, 300);
+        assert!(bar(&policy, 300).effective);
+        away(&mut policy, 400);
+        // Over the adjust overlay: it stays; then left of both: the delay.
+        policy.set_hover(Slot::Adjust, true);
+        policy.tick(9000);
+        assert!(
+            policy
+                .evaluate(screen(), 9000)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective
+        );
+        policy.set_hover(Slot::Adjust, false);
+        policy.pointer(1400.0, 1920.0, 9000);
+        policy.activity(9000);
+        policy.tick(9600);
+        assert!(
+            policy
+                .evaluate(screen(), 9600)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective,
+            "still over the adjust column"
+        );
+        policy.pointer(1200.0, 1920.0, 9600);
+        policy.activity(9600);
+        policy.tick(10_100);
+        let gone = policy.evaluate(screen(), 10_100).unwrap();
+        assert!(!gone.adjust.unwrap().effective && !gone.sidebar.unwrap().effective);
+        // Its toggle (Alt+n, the Adjust button) pops out the adjust column
+        // alone, at once.
+        policy
+            .set_preferred(Slot::Adjust, 5, false, 11_000)
+            .unwrap();
+        policy.set_preferred(Slot::Adjust, 5, true, 11_000).unwrap();
+        let alone = policy.evaluate(screen(), 11_000).unwrap();
+        assert!(alone.adjust.unwrap().effective);
+        assert_eq!(alone.sidebar.unwrap().reason, Some(Reason::Fullscreen));
+        assert_eq!(policy.overlay_extent(1920.0), 317.0);
+        // The edge then brings the sidebar out too.
+        policy.pointer(1919.0, 1920.0, 11_100);
+        assert!(
+            policy
+                .evaluate(screen(), 11_100)
+                .unwrap()
+                .sidebar
+                .unwrap()
+                .effective
+        );
+        // Turning the adjust column off collapses only it.
+        policy
+            .set_preferred(Slot::Adjust, 5, false, 11_200)
+            .unwrap();
+        let left = policy.evaluate(screen(), 11_200).unwrap();
+        assert!(left.sidebar.unwrap().effective);
+        assert_eq!(left.adjust.unwrap().reason, Some(Reason::UserHidden));
+        // A lock of the current adjust panel holds the overlay.
+        policy.set_preferred(Slot::Adjust, 5, true, 12_000).unwrap();
+        policy
+            .set_locks(
+                Slot::Adjust,
+                5,
+                Locks {
+                    dragging: true,
+                    ..Locks::default()
+                },
+            )
+            .unwrap();
+        policy.tick(40_000);
+        assert!(
+            policy
+                .evaluate(screen(), 40_000)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective
+        );
+        // Leaving fullscreen: docked again.
+        policy.set_fullscreen(false, 41_000);
+        let docked = policy.evaluate(screen(), 41_000).unwrap();
+        assert!(docked.adjust.unwrap().effective && !docked.adjust.unwrap().overlay);
+        assert_eq!(adjust_overlay_width(1000.0, 317.0, 400.0), 282.0);
+        assert_eq!(adjust_overlay_width(700.0, 317.0, 400.0), 0.0);
+    }
+
+    /// User ruling 2026-11-08: a toggle (the bottom bar's buttons, Toggle
+    /// Sidebar, Alt+n, `toggle()`) switches a column on and off in fullscreen
+    /// as in a window. On: the right edge reveals it, nothing pops out. Off:
+    /// the edge does not reveal it, and a popped-out one slides in at once.
+    /// A plugin's `show()` (`set_preferred`) still pops it out.
+    #[test]
+    fn in_fullscreen_a_toggle_switches_a_column_without_popping_it_out() {
+        let mut policy = both_columns();
+        policy.switch(Slot::Adjust, 5, false, 0).unwrap();
+        policy.set_fullscreen(true, 0);
+        // On: not popped out, the edge reveals it.
+        policy.switch(Slot::Adjust, 5, true, 100).unwrap();
+        let on = policy.evaluate(screen(), 100).unwrap().adjust.unwrap();
+        assert!(on.preferred && !on.effective);
+        assert_eq!(on.reason, Some(Reason::Fullscreen));
+        policy.pointer(1919.0, 1920.0, 200);
+        assert!(
+            policy
+                .evaluate(screen(), 200)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective
+        );
+        // Off while popped out: slides in at once; the sidebar stays out.
+        policy.switch(Slot::Adjust, 5, false, 300).unwrap();
+        let off = policy.evaluate(screen(), 300).unwrap();
+        assert_eq!(off.adjust.unwrap().reason, Some(Reason::UserHidden));
+        assert!(off.sidebar.unwrap().effective);
+        // Off: the edge does not reveal it.
+        policy.tick(10_000);
+        policy.pointer(1919.0, 1920.0, 10_100);
+        let edge = policy.evaluate(screen(), 10_100).unwrap();
+        assert!(!edge.adjust.unwrap().effective && edge.sidebar.unwrap().effective);
+        // A plugin's show() reveals a column that is on but collapsed.
+        policy.switch(Slot::Adjust, 5, true, 20_000).unwrap();
+        policy.tick(30_000);
+        assert!(
+            !policy
+                .evaluate(screen(), 30_000)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective
+        );
+        policy.set_preferred(Slot::Adjust, 5, true, 30_000).unwrap();
+        assert!(
+            policy
+                .evaluate(screen(), 30_000)
+                .unwrap()
+                .adjust
+                .unwrap()
+                .effective
+        );
+        // Windowed, a switch is the plain preference.
+        policy.set_fullscreen(false, 40_000);
+        policy.switch(Slot::Sidebar, 2, false, 40_000).unwrap();
+        assert_eq!(
+            policy
+                .evaluate(screen(), 40_000)
+                .unwrap()
+                .sidebar
+                .unwrap()
+                .reason,
+            Some(Reason::UserHidden)
+        );
+    }
     #[test]
     fn a_tab_whose_plugin_woke_under_a_new_owner_keeps_its_place_and_state() {
         let mut policy = attached();
