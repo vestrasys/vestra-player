@@ -11,7 +11,7 @@ msgstr ""
 msgid "External subtitle"
 msgstr "외부 자막"
 
-#: main.ts:124 main.ts:999
+#: main.ts:124 main.ts:1009
 #, x-machine
 msgid "Track {}"
 msgstr "트랙 {}"
@@ -21,7 +21,7 @@ msgstr "트랙 {}"
 msgid "Embedded {}"
 msgstr "내장 {}"
 
-#: main.ts:132 main.ts:1006
+#: main.ts:132 main.ts:1016
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
@@ -51,17 +51,17 @@ msgstr "보조 자막 위치"
 msgid "Subtitle Style"
 msgstr "자막 스타일"
 
-#: main.ts:149 main.ts:1317 ui/panel.slint:657
+#: main.ts:149 main.ts:1327 ui/panel.slint:693
 #, x-machine
 msgid "Subtitle Sync"
 msgstr "자막 싱크"
 
-#: main.ts:150 main.ts:1278 main.ts:1282 main.ts:1286
+#: main.ts:150
 #, x-machine
 msgid "Seek"
 msgstr "탐색"
 
-#: main.ts:151 ui/panel.slint:659 ui/panel.slint:830
+#: main.ts:151 ui/panel.slint:699 ui/panel.slint:873
 #, x-machine
 msgid "Reset"
 msgstr "재설정"
@@ -86,377 +86,377 @@ msgstr "자막 싱크: {}초 느리게"
 msgid "Add Secondary Subtitle"
 msgstr "보조 자막 추가"
 
-#: main.ts:318 ui/panel.slint:523
+#: main.ts:318 ui/panel.slint:558
 #, x-machine
 msgid "Open Subtitle"
 msgstr "자막 열기"
 
-#: main.ts:747
+#: main.ts:750
 #, x-machine
 msgid "Subtitles Off"
 msgstr "자막 끄기"
 
-#: main.ts:749
+#: main.ts:752
 #, x-machine
 msgid "Secondary Off"
 msgstr "보조 자막 끄기"
 
-#: main.ts:940
+#: main.ts:950
 #, x-machine
 msgid "Open Subtitle…"
 msgstr "자막 열기…"
 
-#: main.ts:940 main.ts:948 main.ts:956 main.ts:962 main.ts:970 main.ts:1040 main.ts:1048 main.ts:1324 main.ts:1336
+#: main.ts:950 main.ts:958 main.ts:966 main.ts:972 main.ts:980 main.ts:1050 main.ts:1058 main.ts:1334 main.ts:1346
 #, x-machine
 msgid "Subtitle operation in progress"
 msgstr "자막 작업 진행 중"
 
-#: main.ts:946
+#: main.ts:956
 #, x-machine
 msgid "Add Secondary Subtitle…"
 msgstr "보조 자막 추가…"
 
-#: main.ts:948
+#: main.ts:958
 #, x-machine
 msgid "No media to play"
 msgstr "재생할 미디어가 없습니다"
 
-#: main.ts:956 ui/panel.slint:489
+#: main.ts:966 ui/panel.slint:524
 #, x-machine
 msgid "Show Subtitles"
 msgstr "자막 표시"
 
-#: main.ts:962 main.ts:1047
+#: main.ts:972 main.ts:1057
 #, x-machine
 msgid "Subtitle Track"
 msgstr "자막 트랙"
 
-#: main.ts:962 main.ts:970
+#: main.ts:972 main.ts:980
 #, x-machine
 msgid "Off"
 msgstr "끔"
 
-#: main.ts:977 ui/panel.slint:561
+#: main.ts:987 ui/panel.slint:596
 #, x-machine
 msgid "Top"
 msgstr "위쪽"
 
-#: main.ts:977 ui/panel.slint:561
+#: main.ts:987 ui/panel.slint:597
 #, x-machine
 msgid "Above Main Subtitle"
 msgstr "주 자막 위"
 
-#: main.ts:1013
+#: main.ts:1023
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: main.ts:1040
+#: main.ts:1050
 #, x-machine
 msgid "Only text subtitles can be secondary"
 msgstr "텍스트 자막만 보조 자막으로 쓸 수 있습니다"
 
-#: main.ts:1040
+#: main.ts:1050
 #, x-machine
 msgid "Already the primary subtitle"
 msgstr "이미 주 자막입니다"
 
-#: main.ts:1056
+#: main.ts:1066
 #, x-machine
 msgid "Cycle"
 msgstr "순환"
 
-#: main.ts:1059
+#: main.ts:1069
 #, x-machine
 msgid "No subtitle tracks"
 msgstr "자막 트랙이 없습니다"
 
-#: main.ts:1075 ui/panel.slint:709
+#: main.ts:1085 ui/panel.slint:749
 #, x-machine
 msgid "Size +"
 msgstr "크기 +"
 
-#: main.ts:1077
+#: main.ts:1087
 #, x-machine
 msgid "Subtitle size: larger ({})"
 msgstr "자막 크기: 크게 ({})"
 
-#: main.ts:1080 ui/panel.slint:695
+#: main.ts:1090 ui/panel.slint:735
 #, x-machine
 msgid "Size −"
 msgstr "크기 −"
 
-#: main.ts:1082
+#: main.ts:1092
 #, x-machine
 msgid "Subtitle size: smaller ({})"
 msgstr "자막 크기: 작게 ({})"
 
-#: main.ts:1085 ui/panel.slint:741
+#: main.ts:1095 ui/panel.slint:784
 #, x-machine
 msgid "Move Up"
 msgstr "위로 이동"
 
-#: main.ts:1087
+#: main.ts:1097
 #, x-machine
 msgid "Subtitle position: up ({}%)"
 msgstr "자막 위치: 위로 ({}%)"
 
-#: main.ts:1090 ui/panel.slint:726
+#: main.ts:1100 ui/panel.slint:769
 #, x-machine
 msgid "Move Down"
 msgstr "아래로 이동"
 
-#: main.ts:1092
+#: main.ts:1102
 #, x-machine
 msgid "Subtitle position: down ({}%)"
 msgstr "자막 위치: 아래로 ({}%)"
 
-#: main.ts:1095
+#: main.ts:1105
 #, x-machine
 msgid "Subtitle Position"
 msgstr "자막 위치"
 
-#: main.ts:1099
+#: main.ts:1109
 #, x-machine
 msgid "Subtitle position: default ({}%)"
 msgstr "자막 위치: 기본값 ({}%)"
 
-#: main.ts:1104 ui/panel.slint:768 ui/panel.slint:792 ui/settings.slint:119
+#: main.ts:1114 ui/panel.slint:811 ui/panel.slint:835 ui/settings.slint:119
 #, x-machine
 msgid "Bold"
 msgstr "굵게"
 
-#: main.ts:1109
+#: main.ts:1119
 #, x-machine
 msgid "Bold subtitles"
 msgstr "자막 굵게"
 
-#: main.ts:1109
+#: main.ts:1119
 #, x-machine
 msgid "Bold subtitles off"
 msgstr "자막 굵게 끔"
 
-#: main.ts:1113 ui/panel.slint:773 ui/panel.slint:776
+#: main.ts:1123 ui/panel.slint:816 ui/panel.slint:819
 #, x-machine
 msgid "Shadow"
 msgstr "그림자"
 
-#: main.ts:1118
+#: main.ts:1128
 #, x-machine
 msgid "Subtitle shadow: on ({})"
 msgstr "자막 그림자: 켬 ({})"
 
-#: main.ts:1118
+#: main.ts:1128
 #, x-machine
 msgid "Subtitle shadow: off"
 msgstr "자막 그림자: 끔"
 
-#: main.ts:1122 ui/panel.slint:784
+#: main.ts:1132 ui/panel.slint:827
 #, x-machine
 msgid "Opaque Box"
 msgstr "불투명 배경"
 
-#: main.ts:1127
+#: main.ts:1137
 #, x-machine
 msgid "Opaque subtitle box: on"
 msgstr "자막 불투명 배경: 켬"
 
-#: main.ts:1127
+#: main.ts:1137
 #, x-machine
 msgid "Opaque subtitle box: off"
 msgstr "자막 불투명 배경: 끔"
 
-#: main.ts:1137
+#: main.ts:1147
 #, x-machine
 msgid "ASS/SSA animated subtitles: on"
 msgstr "ASS/SSA 애니메이션 자막: 켬"
 
-#: main.ts:1137
+#: main.ts:1147
 #, x-machine
 msgid "ASS/SSA animated subtitles: off"
 msgstr "ASS/SSA 애니메이션 자막: 끔"
 
-#: main.ts:1143
+#: main.ts:1153
 #, x-machine
 msgid "Original ASS/SSA Styles"
 msgstr "ASS/SSA 원본 스타일"
 
-#: main.ts:1178
+#: main.ts:1188
 #, x-machine
 msgid "Secondary subtitle position: top"
 msgstr "보조 자막 위치: 위쪽"
 
-#: main.ts:1178
+#: main.ts:1188
 #, x-machine
 msgid "Secondary subtitle position: above the main subtitle"
 msgstr "보조 자막 위치: 주 자막 위"
 
-#: main.ts:1214 main.ts:1279 main.ts:1283 main.ts:1287 ui/panel.slint:446
+#: main.ts:1224 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:481
 #, x-machine
 msgid "Reading subtitles…"
 msgstr "자막 읽는 중…"
 
-#: main.ts:1252 main.ts:1279 main.ts:1283 main.ts:1287 ui/panel.slint:447
+#: main.ts:1262 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:482
 #, x-machine
 msgid "The current media cannot seek"
 msgstr "현재 미디어에서는 탐색할 수 없습니다"
 
-#: main.ts:1252 main.ts:1263 main.ts:1279 main.ts:1283 main.ts:1287 ui/panel.slint:447
+#: main.ts:1262 main.ts:1273 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:482
 #, x-machine
 msgid "No text subtitles available"
 msgstr "사용할 수 있는 텍스트 자막이 없습니다"
 
-#: main.ts:1259
+#: main.ts:1269
 #, x-machine
 msgid "ffmpeg is needed to read embedded subtitles"
 msgstr "내장 자막을 읽으려면 ffmpeg가 필요합니다"
 
-#: main.ts:1259
+#: main.ts:1269
 #, x-machine
 msgid "Reading embedded subtitles timed out"
 msgstr "내장 자막을 읽는 동안 시간이 초과되었습니다"
 
-#: main.ts:1259
+#: main.ts:1269
 #, x-machine
 msgid "Cannot read embedded subtitles"
 msgstr "내장 자막을 읽을 수 없습니다"
 
-#: main.ts:1269
+#: main.ts:1279
 #, x-machine
 msgid "No previous dialogue"
 msgstr "이전 대사가 없습니다"
 
-#: main.ts:1269
+#: main.ts:1279
 #, x-machine
 msgid "No next dialogue"
 msgstr "다음 대사가 없습니다"
 
-#: main.ts:1269
+#: main.ts:1279
 #, x-machine
 msgid "No dialogue to jump to"
 msgstr "이동할 대사가 없습니다"
 
-#: main.ts:1270
+#: main.ts:1280
 #, x-machine
 msgid "Seek: previous dialogue {}"
 msgstr "탐색: 이전 대사 {}"
 
-#: main.ts:1270
+#: main.ts:1280
 #, x-machine
 msgid "Seek: next dialogue {}"
 msgstr "탐색: 다음 대사 {}"
 
-#: main.ts:1270
+#: main.ts:1280
 #, x-machine
 msgid "Seek: start of current dialogue {}"
 msgstr "탐색: 현재 대사 시작 {}"
 
-#: main.ts:1278 ui/panel.slint:670
+#: main.ts:1288 ui/panel.slint:710
 #, x-machine
 msgid "Previous Dialogue"
 msgstr "이전 대사"
 
-#: main.ts:1282 ui/panel.slint:680
+#: main.ts:1292 ui/panel.slint:720
 #, x-machine
 msgid "Next Dialogue"
 msgstr "다음 대사"
 
-#: main.ts:1286
+#: main.ts:1296
 #, x-machine
 msgid "Current Subtitle Start"
 msgstr "현재 자막 시작"
 
-#: main.ts:1306
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.05 s"
 msgstr "0.05초 빠르게"
 
-#: main.ts:1306
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.1 s"
 msgstr "0.1초 빠르게"
 
-#: main.ts:1306
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.25 s"
 msgstr "0.25초 빠르게"
 
-#: main.ts:1306
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.5 s"
 msgstr "0.5초 빠르게"
 
-#: main.ts:1306
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 1 s"
 msgstr "1초 빠르게"
 
-#: main.ts:1306
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 5 s"
 msgstr "5초 빠르게"
 
-#: main.ts:1310
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.05 s"
 msgstr "0.05초 느리게"
 
-#: main.ts:1310
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.1 s"
 msgstr "0.1초 느리게"
 
-#: main.ts:1310
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.25 s"
 msgstr "0.25초 느리게"
 
-#: main.ts:1310
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.5 s"
 msgstr "0.5초 느리게"
 
-#: main.ts:1310
+#: main.ts:1320
 #, x-machine
 msgid "Later 1 s"
 msgstr "1초 느리게"
 
-#: main.ts:1310
+#: main.ts:1320
 #, x-machine
 msgid "Later 5 s"
 msgstr "5초 느리게"
 
-#: main.ts:1321
+#: main.ts:1331
 #, x-machine
 msgid "Adjust Sync…"
 msgstr "싱크 조정…"
 
-#: main.ts:1324 ui/panel.slint:533
+#: main.ts:1334 ui/panel.slint:568
 #, x-machine
 msgid "Reload Subtitles"
 msgstr "자막 다시 불러오기"
 
-#: main.ts:1328
+#: main.ts:1338
 #, x-machine
 msgid "Refresh Subtitle Tracks"
 msgstr "자막 트랙 새로 고침"
 
-#: main.ts:1334
+#: main.ts:1344
 #, x-machine
 msgid "Remove External Subtitle"
 msgstr "외부 자막 제거"
 
-#: main.ts:1336
+#: main.ts:1346
 #, x-machine
 msgid "No external subtitle selected"
 msgstr "선택된 외부 자막이 없습니다"
 
-#: main.ts:1339
+#: main.ts:1349
 #, x-machine
 msgid "Subtitle Settings…"
 msgstr "자막 설정…"
 
-#: main.ts:1342
+#: main.ts:1352
 #, x-machine
 msgid "Subtitles…"
 msgstr "자막…"
@@ -490,666 +490,671 @@ msgstr "스타일"
 msgid "sync"
 msgstr "싱크"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The operation was cancelled or the media changed."
 msgstr "작업이 취소되었거나 미디어가 바뀌었습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle tracks changed. Adjust again."
 msgstr "자막 트랙이 바뀌었습니다. 다시 조정하세요."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The player refused the subtitle (file too large or invalid)."
 msgstr "플레이어가 자막을 거부했습니다 (파일이 너무 크거나 올바르지 않음)."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The player is busy. Try again later."
 msgstr "플레이어가 사용 중입니다. 나중에 다시 시도하세요."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The current media does not support this."
 msgstr "현재 미디어에서 지원하지 않습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The player cannot load this subtitle."
 msgstr "플레이어에서 이 자막을 불러올 수 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle operation failed."
 msgstr "자막 작업에 실패했습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cancelled."
 msgstr "취소했습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle tracks refreshed."
 msgstr "자막 트랙을 새로 고쳤습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle tracks refreshed. Subtitle files loaded from the video's folder: {}"
 msgstr "자막 트랙을 새로 고쳤습니다. 동영상 폴더에서 자막 파일을 불러왔습니다: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle files loaded from the video's folder: {}"
 msgstr "동영상 폴더에서 자막 파일을 불러왔습니다: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {}"
 msgstr "자막: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (waiting to take effect)"
 msgstr "자막: {} (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (could not confirm it took effect)"
 msgstr "자막: {} (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {}. Secondary subtitle turned off (it is now the primary)"
 msgstr "자막: {}. 보조 자막을 껐습니다 (이제 주 자막임)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (waiting to take effect). Secondary subtitle turned off (it is now the primary)"
 msgstr "자막: {} (적용 대기 중). 보조 자막을 껐습니다 (이제 주 자막임)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (could not confirm it took effect). Secondary subtitle turned off (it is now the primary)"
 msgstr "자막: {} (적용 여부를 확인하지 못함). 보조 자막을 껐습니다 (이제 주 자막임)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles hidden"
 msgstr "자막 숨김"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle tracks changed. Choose again."
 msgstr "자막 트랙이 바뀌었습니다. 다시 선택하세요."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot use it as the secondary subtitle: only text subtitles can be secondary"
 msgstr "보조 자막으로 쓸 수 없습니다: 텍스트 자막만 보조 자막으로 쓸 수 있습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot use it as the secondary subtitle: it is already the primary subtitle"
 msgstr "보조 자막으로 쓸 수 없습니다: 이미 주 자막입니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {}"
 msgstr "보조 자막: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} (waiting to take effect)"
 msgstr "보조 자막: {} (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} (could not confirm it took effect)"
 msgstr "보조 자막: {} (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: off"
 msgstr "보조 자막: 끔"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitle file chosen."
 msgstr "자막 파일을 선택하지 않았습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {}"
 msgstr "자막을 열었습니다: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} (waiting to take effect)"
 msgstr "자막을 열었습니다: {} (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} (could not confirm it took effect)"
 msgstr "자막을 열었습니다: {} (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} ({} tracks)"
 msgstr "자막을 열었습니다: {} (트랙 {}개)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr "자막을 열었습니다: {} (트랙 {}개) (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr "자막을 열었습니다: {} (트랙 {}개) (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} ({} tracks)"
 msgstr "보조 자막: {} (트랙 {}개)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr "보조 자막: {} (트랙 {}개) (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr "보조 자막: {} (트랙 {}개) (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle loaded, but it cannot be the secondary subtitle"
 msgstr "자막을 불러왔지만 보조 자막으로 쓸 수 없습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (waiting to take effect)"
 msgstr "자막을 불러왔지만 보조 자막으로 쓸 수 없습니다 (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (could not confirm it took effect)"
 msgstr "자막을 불러왔지만 보조 자막으로 쓸 수 없습니다 (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitles to show."
 msgstr "표시할 자막이 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles shown"
 msgstr "자막 표시"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} ({}/{})"
 msgstr "자막: {} ({}/{})"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} ({}/{}) (waiting to take effect)"
 msgstr "자막: {} ({}/{}) (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} ({}/{}) (could not confirm it took effect)"
 msgstr "자막: {} ({}/{}) (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: off"
 msgstr "자막: 끔"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitle selected."
 msgstr "선택한 자막이 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Embedded subtitles need no reload"
 msgstr "내장 자막은 다시 불러올 필요가 없습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "This subtitle was not loaded by the Subtitles plugin and cannot be reloaded"
 msgstr "이 자막은 자막 플러그인에서 불러온 것이 아니어서 다시 불러올 수 없습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: subtitle file {} not found"
 msgstr "다시 불러올 수 없습니다: 자막 파일을 찾을 수 없음 ({})"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the content of subtitle file {} changed"
 msgstr "다시 불러올 수 없습니다: 자막 파일 {}의 내용이 바뀌었습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: {}"
 msgstr "다시 불러올 수 없습니다: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: cannot read the subtitle file."
 msgstr "다시 불러올 수 없습니다: 자막 파일을 읽을 수 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "다시 불러올 수 없습니다: 자막 파일은 1바이트에서 8MiB 사이의 일반 파일이어야 합니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file is empty or larger than 8 MiB."
 msgstr "다시 불러올 수 없습니다: 자막 파일이 비어 있거나 8MiB보다 큽니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: image subtitle files are not supported yet"
 msgstr "다시 불러올 수 없습니다: 이미지 자막 파일은 아직 지원하지 않습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: unknown subtitle format"
 msgstr "다시 불러올 수 없습니다: 알 수 없는 자막 형식"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file has no subtitles."
 msgstr "다시 불러올 수 없습니다: 자막 파일에 자막이 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file is larger than 2 MiB"
 msgstr "다시 불러올 수 없습니다: 자막 파일이 2MiB보다 큽니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle unchanged"
 msgstr "자막이 바뀌지 않았습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Reloaded subtitle {}"
 msgstr "자막을 다시 불러왔습니다: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle reloaded automatically"
 msgstr "자막을 자동으로 다시 불러왔습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Select a subtitle track first."
 msgstr "먼저 자막 트랙을 선택하세요."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The current subtitle track cannot be adjusted."
 msgstr "현재 자막 트랙은 조정할 수 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitle font available."
 msgstr "사용할 수 있는 자막 글꼴이 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle style updated"
 msgstr "자막 스타일을 변경했습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle style updated (waiting to take effect)"
 msgstr "자막 스타일을 변경했습니다 (적용 대기 중)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle style updated (could not confirm it took effect)"
 msgstr "자막 스타일을 변경했습니다 (적용 여부를 확인하지 못함)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Default style restored."
 msgstr "기본 스타일을 복원했습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The selected subtitle changed. Choose again."
 msgstr "선택한 자막이 바뀌었습니다. 다시 선택하세요."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "External subtitle removed."
 msgstr "외부 자막을 제거했습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The media changed; the running operation was cancelled."
 msgstr "미디어가 바뀌어 진행 중인 작업을 취소했습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Enter seconds, for example 1.25 or -0.5."
 msgstr "초 단위로 입력하세요(예: 1.25 또는 -0.5)."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The sync value must be between −{} and {} s"
 msgstr "싱크 값은 −{}~{}초 사이여야 합니다"
 
-#: messages.ts:152
+#: messages.ts:153
+#, x-machine
+msgid "Sync set in seconds ({} s). For milliseconds, type {} ms."
+msgstr "싱크를 초 단위로 설정했습니다({}초). 밀리초는 {} ms로 입력하세요."
+
+#: messages.ts:153
 #, x-machine
 msgid "Switching subtitle track…"
 msgstr "자막 트랙 전환 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Removing subtitle…"
 msgstr "자막 제거 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Switching secondary subtitle…"
 msgstr "보조 자막 전환 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Choose a subtitle file…"
 msgstr "자막 파일을 선택하세요…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Choose a secondary subtitle file…"
 msgstr "보조 자막 파일을 선택하세요…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Switching subtitle display…"
 msgstr "자막 표시 전환 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Hiding subtitles…"
 msgstr "자막 숨기는 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Turning off the secondary subtitle…"
 msgstr "보조 자막 끄는 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Reloading subtitle…"
 msgstr "자막 다시 불러오는 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Refreshing…"
 msgstr "새로 고치는 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Applying subtitle style…"
 msgstr "자막 스타일 적용 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Restoring the default style…"
 msgstr "기본 스타일 복원 중…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot read the subtitle file."
 msgstr "자막 파일을 읽을 수 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "자막 파일은 1바이트에서 8MiB 사이의 일반 파일이어야 합니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file is empty or larger than 8 MiB."
 msgstr "자막 파일이 비어 있거나 8MiB보다 큽니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Image subtitle files are not supported yet"
 msgstr "이미지 자막 파일은 아직 지원하지 않습니다"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Unknown subtitle format"
 msgstr "알 수 없는 자막 형식"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file has no subtitles."
 msgstr "자막 파일에 자막이 없습니다."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file is larger than 2 MiB"
 msgstr "자막 파일이 2MiB보다 큽니다"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 #, x-machine
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
 msgstr "자막 인코딩이 잘못되었을 수 있습니다. 자막 설정에서 기본 인코딩을 변경하세요"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 #, x-machine
 msgid "Fonts embedded in the subtitle were ignored"
 msgstr "자막에 포함된 글꼴을 무시했습니다"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 #, x-machine
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "비디오 프레임 속도를 알 수 없어 MicroDVD 자막을 23.976으로 변환했습니다"
 
-#: ui/panel.slint:458 ui/panel.slint:498
+#: ui/panel.slint:493 ui/panel.slint:533
 #, x-machine
 msgid "Primary"
 msgstr "기본"
 
-#: ui/panel.slint:458 ui/panel.slint:542
+#: ui/panel.slint:493 ui/panel.slint:577
 #, x-machine
 msgid "Secondary"
 msgstr "보조"
 
-#: ui/panel.slint:458 ui/panel.slint:558 ui/panel.slint:722
+#: ui/panel.slint:493 ui/panel.slint:593 ui/panel.slint:765
 #, x-machine
 msgid "Position"
 msgstr "위치"
 
-#: ui/panel.slint:458 ui/panel.slint:571
+#: ui/panel.slint:493 ui/panel.slint:607
 #, x-machine
 msgid "Delay"
 msgstr "지연"
 
-#: ui/panel.slint:458 ui/panel.slint:664
+#: ui/panel.slint:493 ui/panel.slint:704
 #, x-machine
 msgid "Lines"
 msgstr "대사"
 
-#: ui/panel.slint:458 ui/panel.slint:691
+#: ui/panel.slint:493 ui/panel.slint:731
 #, x-machine
 msgid "Size"
 msgstr "크기"
 
-#: ui/panel.slint:458 ui/panel.slint:761
+#: ui/panel.slint:493 ui/panel.slint:804
 #, x-machine
 msgid "Look"
 msgstr "모양"
 
-#: ui/panel.slint:482
+#: ui/panel.slint:517
 #, x-machine
 msgid "Show subtitles"
 msgstr "자막 표시"
 
-#: ui/panel.slint:495
+#: ui/panel.slint:530
 #, x-machine
 msgid "Tracks"
 msgstr "트랙"
 
-#: ui/panel.slint:512
+#: ui/panel.slint:547
 #, x-machine
 msgid "Cycle Subtitle Tracks"
 msgstr "자막 트랙 순환"
 
-#: ui/panel.slint:521
+#: ui/panel.slint:556
 #, x-machine
 msgid "Load…"
 msgstr "불러오기…"
 
-#: ui/panel.slint:521 ui/panel.slint:523
+#: ui/panel.slint:556 ui/panel.slint:558
 #, x-machine
 msgid "Cancel"
 msgstr "취소"
 
-#: ui/panel.slint:530
+#: ui/panel.slint:565
 #, x-machine
 msgid "Reload"
 msgstr "다시 불러오기"
 
-#: ui/panel.slint:535
+#: ui/panel.slint:570
 #, x-machine
 msgid "for subtitle files you opened"
 msgstr "직접 연 자막 파일만"
 
-#: ui/panel.slint:568
+#: ui/panel.slint:604
 #, x-machine
 msgid "Sync"
 msgstr "싱크"
 
 #. {} is the sync step in seconds ("0.5"); the button moves the subtitles earlier.
-#: ui/panel.slint:574
+#: ui/panel.slint:610
 #, x-machine
 msgid "−{}"
 msgstr "−{}"
 
-#: ui/panel.slint:576
+#: ui/panel.slint:612
 #, x-machine
 msgid "Earlier"
 msgstr "빠르게"
 
-#: ui/panel.slint:593
+#: ui/panel.slint:629
 #, x-machine
 msgid "Subtitle delay"
 msgstr "자막 지연"
 
-#: ui/panel.slint:594
+#: ui/panel.slint:630
 #, x-machine
 msgid "click: type a value · later is positive"
 msgstr "클릭: 값 입력 · 양수는 느리게"
 
 #. {} is the subtitle delay in seconds with its sign ("+1.25").
-#: ui/panel.slint:599 ui/settings.slint:214
+#: ui/panel.slint:635 ui/settings.slint:214
 #, x-machine
 msgid "{} s"
 msgstr "{}초"
 
 #. {} is the sync step in seconds ("0.5"); the button moves the subtitles later.
-#: ui/panel.slint:641
+#: ui/panel.slint:677
 #, x-machine
 msgid "+{}"
 msgstr "+{}"
 
-#: ui/panel.slint:643
+#: ui/panel.slint:679
 #, x-machine
 msgid "Later"
 msgstr "느리게"
 
-#: ui/panel.slint:650
+#: ui/panel.slint:686
 #, x-machine
 msgid "Reset Sync"
 msgstr "싱크 재설정"
 
-#: ui/panel.slint:666
+#: ui/panel.slint:706
 #, x-machine
 msgid "Previous"
 msgstr "이전"
 
-#: ui/panel.slint:675
+#: ui/panel.slint:715
 #, x-machine
 msgid "Next"
 msgstr "다음"
 
-#: ui/panel.slint:688
+#: ui/panel.slint:728
 #, x-machine
 msgid "Style"
 msgstr "스타일"
 
-#: ui/panel.slint:702 ui/panel.slint:716
+#: ui/panel.slint:742 ui/panel.slint:756
 #, x-machine
 msgid "Subtitle size"
 msgstr "자막 크기"
 
-#: ui/panel.slint:703 ui/panel.slint:735
+#: ui/panel.slint:743 ui/panel.slint:778
 #, x-machine
 msgid "double-click: Default"
 msgstr "더블클릭: 기본값"
 
 #. {} is where the subtitle sits, 100 at the bottom edge.
-#: ui/panel.slint:732
+#: ui/panel.slint:775
 #, x-machine
 msgid "{}%"
 msgstr "{}%"
 
-#: ui/panel.slint:734
+#: ui/panel.slint:777
 #, x-machine
 msgid "Subtitle position"
 msgstr "자막 위치"
 
-#: ui/panel.slint:748 ui/panel.slint:755
+#: ui/panel.slint:791 ui/panel.slint:798
 #, x-machine
 msgid "Reset Position"
 msgstr "위치 재설정"
 
-#: ui/panel.slint:781
+#: ui/panel.slint:824
 #, x-machine
 msgid "Box"
 msgstr "배경"
 
-#: ui/panel.slint:786
+#: ui/panel.slint:829
 #, x-machine
 msgid "replaces outline and shadow"
 msgstr "윤곽선과 그림자 대신 표시"
 
-#: ui/panel.slint:797
+#: ui/panel.slint:840
 #, x-machine
 msgid "Keep original ASS/SSA styles"
 msgstr "ASS/SSA 원본 스타일 유지"
 
-#: ui/panel.slint:798
+#: ui/panel.slint:841
 #, x-machine
 msgid "ASS/SSA subtitles keep the fonts, colours and positions of their file"
 msgstr "ASS/SSA 자막은 파일의 글꼴, 색상, 위치를 그대로 사용합니다"
 
-#: ui/panel.slint:806
+#: ui/panel.slint:849
 #, x-machine
 msgid "Font, Colour and Outline…"
 msgstr "글꼴, 색상 및 윤곽선…"
 
-#: ui/panel.slint:807 ui/settings.slint:21
+#: ui/panel.slint:850 ui/settings.slint:21
 #, x-machine
 msgid "Subtitle Settings"
 msgstr "자막 설정"
 
-#: ui/panel.slint:832
+#: ui/panel.slint:875
 #, x-machine
 msgid "Reset the subtitle style and sync"
 msgstr "자막 스타일과 싱크 재설정"

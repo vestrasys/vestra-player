@@ -65,12 +65,9 @@ test("menu per the redesign: Open ▸, Subtitle Track ▸, Subtitles…; the res
   assert.deepEqual(declared, [
     ["打开 > 打开字幕…", 113, "open", "Alt+O"],
     ["打开 > 添加次字幕…", 114, "open", ""],
-    ["播放 > 跳转 > 上一句对白", 217, "jump-subtitle", "Home"],
-    ["播放 > 跳转 > 下一句对白", 217, "jump-subtitle", "End"],
-    ["播放 > 跳转 > 当前字幕起点", 217, "jump-subtitle", "Ctrl+Home"],
     ["选择字幕轨 > 不显示", 302, "subtitle-track", ""],
     ["选择字幕轨 > English · en", 303, "subtitle-track", ""],
-    ["字幕…", 603, "adjust", "Alt+3"],
+    ["字幕…", 793, "windows", "Alt+3"],
   ]);
   // Out of the menu, in the command palette with their keys (ids unchanged).
   const palette = [...host.commands.entries()]
@@ -78,7 +75,8 @@ test("menu per the redesign: Open ▸, Subtitle Track ▸, Subtitles…; the res
     .map(([id, { declaration: d }]) => [id, d.bindings.join(",")] as const)
     .sort((a, b) => a[0].localeCompare(b[0]));
   assert.deepEqual(palette, [
-    ["ass-original", ""], ["bold", "Alt+B"], ["box", ""], ["move-down", ""], ["move-reset", "Alt+Home"], ["move-up", ""],
+    ["ass-original", ""], ["bold", "Alt+B"], ["box", ""], ["dialogue-current", "Ctrl+Home"], ["dialogue-next", "End"],
+    ["dialogue-previous", "Home"], ["move-down", ""], ["move-reset", "Alt+Home"], ["move-up", ""],
     ["refresh", ""], ["reload", "Ctrl+Alt+Y"], ["remove", ""], ["second-off", ""], ["second-position-aboveMain", ""],
     ["second-position-top", ""], ["settings", ""], ["shadow", ""], ["show", "Alt+H"], ["size-down", "Alt+PageDown"],
     ["size-up", "Alt+PageUp"], ["sync-earlier", "."], ["sync-input", ""], ["sync-later", ","], ["sync-reset", "/"],
@@ -593,6 +591,14 @@ test("D05: a sync value typed in the panel applies in seconds; bad input keeps t
   await host.settle();
   assert.equal(shownStatus(window.props), "请输入秒数，例如 1.25 或 -0.5。");
   assert.equal(window.props["sync-value"], "-0.3", "the value in effect stays");
+  window.emit("apply-sync", "250"); // a number of milliseconds typed without the unit
+  await until(host, () => shownStatus(window.props).includes("250 ms"));
+  assert.equal(shownStatus(window.props), "已按秒设置同步（250 秒）。如需毫秒，请输入 250 ms。");
+  await host.settle(170);
+  assert.equal(offset(), 250000, "applied as seconds, as typed");
+  assert.equal(shownStatus(window.props), "已按秒设置同步（250 秒）。如需毫秒，请输入 250 ms。", "the hint outlasts the style write");
+  window.emit("apply-sync", "-0.3");
+  await host.settle(170);
   window.emit("apply-sync", "601");
   await host.settle();
   assert.equal(shownStatus(window.props), "同步值须在 −600 至 600 秒之间");

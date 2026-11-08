@@ -678,7 +678,8 @@ export default async function activate(plugin: Plugin) {
         guard(ticket, pinned.sourceId);
         await subtitles.setStyle(requested, { ifCurrent: pinned });
         guard(ticket, pinned.sourceId);
-        status = message(confirmed("styleUpdated", subtitles.state?.styleConfirmation));
+        status = syncHint ?? message(confirmed("styleUpdated", subtitles.state?.styleConfirmation));
+        syncHint = null;
       });
     }, 100);
     return desired;
@@ -726,6 +727,8 @@ export default async function activate(plugin: Plugin) {
   };
   /** The first key of one of this plugin's commands ("" without one): the panel's key caps. */
   const keyOf = (id: string) => plugin.commands.keys(id)[0] ?? "";
+  /** The "value is in seconds" hint of a typed sync value, shown once its style write lands. */
+  let syncHint: Status | null = null;
   /** Bumped by Adjust Sync… (the command): the panel opens its sync value for typing. */
   let editSync = 0;
   panel.bind(() => {
@@ -840,6 +843,13 @@ export default async function activate(plugin: Plugin) {
       return;
     }
     applySync(parsed.value);
+    // A large number without a unit may have been meant as milliseconds (the window took ms before 0.4.11).
+    const plain = String(typed).trim().replace(/^[+−-]/, "");
+    if (/^\d+$/.test(plain) && Number(plain) > 60) {
+      syncHint = message("syncSecondsHint", [Number(plain), Number(plain)]);
+      status = syncHint;
+      plugin.update();
+    }
   });
   panel.on("previousLine", () => jump("previous"));
   panel.on("nextLine", () => jump("next"));
@@ -1275,15 +1285,15 @@ export default async function activate(plugin: Plugin) {
   }
   const dialogue = { enabled: () => !cueReading && !dialogueBlocked(), busy: () => cueReading, reason: () => (cueReading ? "Reading subtitles…" : dialogueBlocked()) };
   plugin.commands.add({
-    id: "dialogue-previous", path: ["@playback", "Seek", "Previous Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek, home: "tune",
+    id: "dialogue-previous", title: "Previous Dialogue", category: CATEGORY.seek, home: "tune",
     bindings: ["Home"], repeat: true, ...dialogue, run: () => jump("previous"),
   });
   plugin.commands.add({
-    id: "dialogue-next", path: ["@playback", "Seek", "Next Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek, home: "tune",
+    id: "dialogue-next", title: "Next Dialogue", category: CATEGORY.seek, home: "tune",
     bindings: ["End"], repeat: true, ...dialogue, run: () => jump("next"),
   });
   plugin.commands.add({
-    id: "dialogue-current", path: ["@playback", "Seek", "Current Subtitle Start"], order: 217, group: "jump-subtitle", category: CATEGORY.seek,
+    id: "dialogue-current", title: "Current Subtitle Start", category: CATEGORY.seek, home: "tune",
     bindings: ["Ctrl+Home"], ...dialogue, run: () => jump("current"),
   });
 
@@ -1339,7 +1349,7 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({ id: "settings", title: "Subtitle Settings…", category: CATEGORY.subtitles, home: "tune", run: showSettings });
   // Subtitles… (Alt+3, proposal §3.2): the Subtitles panel in the adjust column; again closes the column.
   plugin.commands.add({
-    id: "tune", path: ["Subtitles…"], order: 603, group: "adjust", bindings: ["Alt+3"], category: CATEGORY.subtitles,
+    id: "tune", path: ["Subtitles…"], order: 793, group: "windows", bindings: ["Alt+3"], category: CATEGORY.subtitles,
     checked: () => (panel.state?.preferred ?? false) && (panel.state?.active ?? false),
     run: togglePanel,
   });

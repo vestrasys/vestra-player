@@ -25,7 +25,7 @@ test("English by default: menus, on-screen messages and window status", async ()
   const host = sourceHost();
   const { stop } = await startPlugin(activate, { directory, host });
   assert.deepEqual(host.command("load").declaration.path, ["@open", "Open Subtitle…"]);
-  assert.deepEqual(host.command("dialogue-next").declaration.path, ["@playback", "Seek", "Next Dialogue"]);
+  assert.deepEqual(host.command("dialogue-next").display, { title: "Next Dialogue", path: [] });
   assert.deepEqual(host.command("track-off").declaration.path, ["Subtitle Track", "Off"]);
   assert.deepEqual(host.command("tune").display, { title: "Subtitles…", path: ["Subtitles…"] });
   assert.deepEqual(host.command("sync-earlier").display, { title: "Earlier 0.5 s", path: [] });
@@ -111,7 +111,7 @@ test("every command has a category for the command palette, translated, and cont
     "sync-reset": ["Reset", "tune"],
     "dialogue-previous": ["Seek", "tune"],
     "dialogue-next": ["Seek", "tune"],
-    "dialogue-current": ["Seek", null],
+    "dialogue-current": ["Seek", "tune"],
     "sync-earlier": ["Subtitle Sync", "tune"],
     "sync-later": ["Subtitle Sync", "tune"],
     "sync-input": ["Subtitle Sync", "tune"],

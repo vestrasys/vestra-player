@@ -78,6 +78,7 @@ export const STATUS = {
   mediaSwitched: "The media changed; the running operation was cancelled.",
   syncSeconds: "Enter seconds, for example 1.25 or -0.5.",
   syncRange: "The sync value must be between −{} and {} s",
+  syncSecondsHint: "Sync set in seconds ({} s). For milliseconds, type {} ms.",
   switching: "Switching subtitle track…",
   removing: "Removing subtitle…",
   switchingSecondary: "Switching secondary subtitle…",
