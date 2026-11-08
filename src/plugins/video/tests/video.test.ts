@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { readFileSync } from "node:fs";
+import { isDeepStrictEqual } from "node:util";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
@@ -37,7 +38,7 @@ async function playing(dataDirectory?: string, locale: Locale = "en") {
   host.openElsewhere("/movie.mp4");
   const started = await start(host, dataDirectory, locale);
   await host.command("video.picture").run();
-  return { ...started, host, window: host.window("picture") };
+  return { ...started, host, window: host.mounted() };
 }
 /** `player.stats()` with a picture at `fps` (`undefined` = no picture). */
 function setFps(host: TestHost, fps: number | null | undefined) {
@@ -66,6 +67,16 @@ async function until(host: TestHost, predicate: () => boolean | Promise<boolean>
     await new Promise((done) => setTimeout(done, 5));
   }
   assert.fail(`timed out waiting for ${what}`);
+}
+/** Wait until `read()` deep-equals `expected` (the value asserted is the value waited on). */
+async function eventually(read: () => unknown, expected: unknown, message?: string) {
+  let last: unknown;
+  for (let i = 0; i < 1200; i++) {
+    last = read();
+    if (isDeepStrictEqual(last, expected)) return;
+    await new Promise((done) => setTimeout(done, 5));
+  }
+  assert.deepStrictEqual(last, expected, message);
 }
 const same = (a: unknown, b: unknown) => JSON.stringify(a) === JSON.stringify(b);
 const blendNode = (host: TestHost, fps: number) => () => same(chain(host).at(-1), { kind: "frameBlend", fps });
@@ -170,7 +181,7 @@ test("flip happens before rotation: a quarter turn moves the flip to the other a
 
 test("settings parse leniently; an unknown version starts from the defaults", () => {
   const base = defaultLook();
-  assert.deepEqual(parse(null), { picture: base.picture, effects: base.effects, deinterlace: base.deinterlace, reframe: base.reframe, display: base.display, render: base.render, tab: 0 });
+  assert.deepEqual(parse(null), { picture: base.picture, effects: base.effects, deinterlace: base.deinterlace, reframe: base.reframe, display: base.display, render: base.render, advanced: false });
   const parsed = parse({
     version: 1,
     picture: { brightness: 500, hue: 12.6, blurEnabled: true, blurStrength: "x" },
@@ -178,6 +189,7 @@ test("settings parse leniently; an unknown version starts from the defaults", ()
     deinterlace: { mode: "off", output: "sideways" },
     reframe: { mode: "pad", ratio: 9, x: 120, y: 10 },
     tab: 3,
+    advanced: true,
   });
   assert.equal(parsed.picture.brightness, 100);
   assert.equal(parsed.picture.hue, 13);
@@ -188,13 +200,19 @@ test("settings parse leniently; an unknown version starts from the defaults", ()
   assert.deepEqual(parsed.effects.deblock, base.effects.deblock);
   assert.deepEqual(parsed.deinterlace, { mode: "off", output: "frame" });
   assert.deepEqual(parsed.reframe, { mode: "pad", ratio: 4, x: 100, y: 10 });
-  assert.equal(parsed.tab, 3);
-  assert.equal(parse({ version: 2, picture: { brightness: 40 }, tab: 2 }).picture.brightness, 0);
-  const written = serialize({ ...base, geometry: { flipH: true, flipV: true, rotate: 90 } }, 2);
+  assert.equal(parsed.advanced, true);
+  assert.equal("tab" in parsed, false, "the old window page is not read");
+  assert.equal(parse({ version: 1, advanced: "yes" }).advanced, false);
+  // Migration from 1.1.12: the old window left on its Advanced page opens the Advanced section.
+  assert.equal(parse({ version: 1, tab: 3 }).advanced, true);
+  assert.equal(parse({ version: 1, tab: 2 }).advanced, false);
+  assert.equal(parse({ version: 1, tab: 3, advanced: false }).advanced, false, "a saved choice wins");
+  assert.equal(parse({ version: 2, picture: { brightness: 40 }, advanced: true }).picture.brightness, 0);
+  const written = serialize({ ...base, geometry: { flipH: true, flipV: true, rotate: 90 } }, true);
   assert.equal(written.version, 1);
   assert.equal("geometry" in written, false, "flip and rotation are per source");
-  const { tab, ...again } = parse(JSON.parse(JSON.stringify(written)));
-  assert.equal(tab, 2);
+  const { advanced, ...again } = parse(JSON.parse(JSON.stringify(written)));
+  assert.equal(advanced, true);
   assert.deepEqual(again, { picture: base.picture, effects: base.effects, deinterlace: base.deinterlace, reframe: base.reframe, display: base.display, render: base.render });
 });
 
@@ -204,68 +222,69 @@ test("field-output frame drops: more than 5 % of the frames since the last count
   assert.equal(droppedTooMany({ shown: 100, dropped: 5 }, { shown: 100, dropped: 5 }), false);
 });
 
-// ---------------------------------------------------------------- menu
+// ---------------------------------------------------------------- commands and menu
 
-test("menu under 视频 follows the chapter's allocation; GPU items are enabled under GPU rendering", async () => {
+test("only Picture… is in the menu (Alt+1); every other command is in the palette with its order, group and keys", async () => {
   const host = new TestHost();
   host.openElsewhere("/movie.mp4");
   const { stop } = await start(host);
-  const declared = [...host.commands.values()].map(({ declaration: d }) => [d.path[0], d.path.slice(1).join(" ▸ "), d.order, d.group, d.bindings.join(",")]);
   const ratios = ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
   const expected = [
-    ["Pixel Shaders ▸ Use Shaders", 402, "video-source", "Shift+P"],
-    ["Pixel Shaders ▸ Shader List…", 402, "video-source", ""],
-    ["Pixel Shaders ▸ Open Shader Folder", 402, "video-source", ""],
-    ["Pixel Shaders ▸ Reload Shaders", 402, "video-source", ""],
-    ...["Auto", "Off", "BT.2390", "Hable", "Mobius", "Reinhard", "Clip"].map((t) => [`Pixel Shaders ▸ HDR Tone Mapping ▸ ${t}`, 402, "video-hdr", ""]),
-    ["Pixel Shaders ▸ HDR Tone Mapping ▸ Dynamic Peak Detection", 402, "video-hdr-peak", ""],
-    ["Pixel Shaders ▸ HDR Settings…", 402, "video-hdr", ""],
-    ["Deinterlace ▸ Cycle", 403, "video-source", "Ctrl+I"],
-    ["Deinterlace ▸ Auto", 403, "video-source", ""],
-    ["Deinterlace ▸ Always", 403, "video-source", ""],
-    ["Deinterlace ▸ Never", 403, "video-source", ""],
-    ["Deinterlace ▸ Output ▸ By Frame", 403, "video-deinterlace-output", ""],
-    ["Deinterlace ▸ Output ▸ By Field (Double Rate)", 403, "video-deinterlace-output", ""],
-    ["Aspect ▸ Keep Aspect Ratio", 404, "video-display", ""],
-    ["Aspect ▸ Ignore Aspect Ratio", 404, "video-display", ""],
-    ["Aspect ▸ Fill Window (Crop Excess)", 404, "video-display", ""],
-    ["Aspect ▸ Cycle Aspect Ratio", 404, "video-aspect", "Shift+F6"],
-    ["Aspect ▸ Default (Source)", 404, "video-aspect", ""],
-    ...ratios.map((r) => [`Aspect ▸ ${r}`, 404, "video-aspect", ""]),
-    ["Aspect ▸ Custom (x:y)", 404, "video-aspect", ""],
-    ["Aspect ▸ Custom Aspect Ratio…", 404, "video-aspect", ""],
-    ["Crop/Stretch ▸ None", 405, "video-display", ""],
-    ...ratios.map((r) => [`Crop/Stretch ▸ Stretch to ${r}`, 405, "video-display", ""]),
-    ...ratios.map((r) => [`Crop/Stretch ▸ Crop to ${r}`, 405, "video-display", ""]),
-    ...["Move Left", "Move Right", "Move Up", "Move Down"].map((t) => [`Crop/Stretch ▸ ${t}`, 405, "video-reframe-position", ""]),
-    ["@reset", "Crop Position", 442, "reset-video", ""],
-    ["Framing ▸ Zoom In", 406, "video-display", "Numpad9,Alt+Plus"],
-    ["Framing ▸ Zoom Out", 406, "video-display", "Numpad1,Alt+-"],
-    ["Framing ▸ Pan →", 406, "video-frame-pan", "Ctrl+Numpad6,Alt+ArrowRight"],
-    ["Framing ▸ Pan ←", 406, "video-frame-pan", "Ctrl+Numpad4,Alt+ArrowLeft"],
-    ["Framing ▸ Pan ↑", 406, "video-frame-pan", "Ctrl+Numpad8,Alt+ArrowUp"],
-    ["Framing ▸ Pan ↓", 406, "video-frame-pan", "Ctrl+Numpad2,Alt+ArrowDown"],
-    ["Framing ▸ Center Frame", 406, "video-frame-pan", "Ctrl+Numpad5"],
-    ["@reset", "Framing", 441, "reset-video", "Numpad5,Alt+Backspace"],
-    ["Image Processing ▸ Flip Vertically", 408, "video-effects", "Ctrl+P"],
-    ["Image Processing ▸ Flip Horizontally", 408, "video-effects", "Ctrl+Z"],
-    ["Image Processing ▸ Gaussian Blur", 408, "video-sharpness", "Ctrl+B"],
-    ["Image Processing ▸ Sharpen", 408, "video-sharpness", "Ctrl+R"],
-    ["Image Processing ▸ Edge Sharpen", 408, "video-sharpness", ""],
-    ["Image Processing ▸ Deblock", 408, "video-cleanup", "Ctrl+H"],
-    ["Image Processing ▸ Deband", 408, "video-cleanup", ""],
-    ["Image Processing ▸ 3D Denoise", 408, "video-cleanup", "Ctrl+N"],
-    ["Image Processing ▸ Gradual Denoise", 408, "video-cleanup", ""],
-    ["Image Processing ▸ Temporal Denoise", 408, "video-cleanup", "Ctrl+M"],
-    ["Image Processing ▸ Frame Doubling", 408, "video-frames", ""],
-    ["Image Processing ▸ Motion Interpolation", 408, "video-frames", ""],
-    ["Rotation ▸ Cycle", 409, "video-effects", "Alt+K"],
-    ["Rotation ▸ No Rotation", 409, "video-effects", ""],
-    ["Rotation ▸ 90°", 409, "video-effects", ""],
-    ["Rotation ▸ 180°", 409, "video-effects", ""],
-    ["Rotation ▸ 270°", 409, "video-effects", ""],
-    ["Picture Adjustments…", 440, "video-color", ""],
-    ["@reset", "Picture", 440, "reset-video", "Q"],
+    ["Use Shaders", 402, "video-source", "Shift+P"],
+    ["Shader List…", 402, "video-source", ""],
+    ["Open Shader Folder", 402, "video-source", ""],
+    ["Reload Shaders", 402, "video-source", ""],
+    ...["Auto", "Off", "BT.2390", "Hable", "Mobius", "Reinhard", "Clip"].map((t) => [t, 402, "video-hdr", ""]),
+    ["Dynamic Peak Detection", 402, "video-hdr-peak", ""],
+    ["HDR Settings…", 402, "video-hdr", ""],
+    ["Cycle", 403, "video-source", "Ctrl+I"],
+    ["Auto", 403, "video-source", ""],
+    ["Always", 403, "video-source", ""],
+    ["Never", 403, "video-source", ""],
+    ["By Frame", 403, "video-deinterlace-output", ""],
+    ["By Field (Double Rate)", 403, "video-deinterlace-output", ""],
+    ["Keep Aspect Ratio", 404, "video-display", ""],
+    ["Ignore Aspect Ratio", 404, "video-display", ""],
+    ["Fill Window (Crop Excess)", 404, "video-display", ""],
+    ["Cycle Aspect Ratio", 404, "video-aspect", "Shift+F6"],
+    ["Default (Source)", 404, "video-aspect", ""],
+    ...ratios.map((r) => [r, 404, "video-aspect", ""]),
+    ["Custom (x:y)", 404, "video-aspect", ""],
+    ["Custom Aspect Ratio…", 404, "video-aspect", ""],
+    ["None", 405, "video-display", ""],
+    ...ratios.map((r) => [`Stretch to ${r}`, 405, "video-display", ""]),
+    ...ratios.map((r) => [`Crop to ${r}`, 405, "video-display", ""]),
+    ...["Move Left", "Move Right", "Move Up", "Move Down"].map((t) => [t, 405, "video-reframe-position", ""]),
+    ["Crop Position", 442, "reset-video", ""],
+    // The mpv-style Alt keys come first: the panel's key caps show the first key.
+    ["Zoom In", 406, "video-display", "Alt+Plus,Numpad9"],
+    ["Zoom Out", 406, "video-display", "Alt+-,Numpad1"],
+    ["Pan →", 406, "video-frame-pan", "Alt+ArrowRight,Ctrl+Numpad6"],
+    ["Pan ←", 406, "video-frame-pan", "Alt+ArrowLeft,Ctrl+Numpad4"],
+    ["Pan ↑", 406, "video-frame-pan", "Alt+ArrowUp,Ctrl+Numpad8"],
+    ["Pan ↓", 406, "video-frame-pan", "Alt+ArrowDown,Ctrl+Numpad2"],
+    ["Center Frame", 406, "video-frame-pan", "Ctrl+Numpad5"],
+    ["Framing", 441, "reset-video", "Alt+Backspace,Numpad5"],
+    ["Flip Vertically", 408, "video-effects", "Ctrl+P"],
+    ["Flip Horizontally", 408, "video-effects", "Ctrl+Z"],
+    ["Gaussian Blur", 408, "video-sharpness", "Ctrl+B"],
+    ["Sharpen", 408, "video-sharpness", "Ctrl+R"],
+    ["Edge Sharpen", 408, "video-sharpness", ""],
+    ["Deblock", 408, "video-cleanup", "Ctrl+H"],
+    ["Deband", 408, "video-cleanup", ""],
+    ["3D Denoise", 408, "video-cleanup", "Ctrl+N"],
+    ["Gradual Denoise", 408, "video-cleanup", ""],
+    ["Temporal Denoise", 408, "video-cleanup", "Ctrl+M"],
+    ["Frame Doubling", 408, "video-frames", ""],
+    ["Motion Interpolation", 408, "video-frames", ""],
+    ["Cycle", 409, "video-effects", "Alt+K"],
+    ["No Rotation", 409, "video-effects", ""],
+    ["90°", 409, "video-effects", ""],
+    ["180°", 409, "video-effects", ""],
+    ["270°", 409, "video-effects", ""],
+    ["Picture…", 791, "windows", "Alt+1"],
+    ["Picture", 440, "reset-video", "Q"],
+    ["Picture Panel", 443, "reset-video", ""],
     ["Brightness -1%", 442, "video-color", "W"],
     ["Brightness +1%", 443, "video-color", "E"],
     ["Contrast -1%", 444, "video-color", "R"],
@@ -277,10 +296,12 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     ["GPU Rendering (Experimental)", 460, "video-rendering", ""],
   ];
   assert.deepEqual(
-    declared,
-    // The resets are in the Reset menu (user ruling 2026-11-01), with the same ids and keys.
-    expected.map((row) => (row[0] === "@reset" ? row : ["@video", ...row])),
+    [...host.commands.values()].map(({ declaration: d, display }) => [display.title, d.order, d.group, d.bindings.join(",")]),
+    expected,
   );
+  // The Video ▸ submenu and Reset ▸ Picture / Framing / Crop Position are gone: no path but Picture…'s.
+  const paths = [...host.commands.entries()].filter(([, { declaration: d }]) => d.path.length > 0).map(([id, { declaration: d }]) => [id, d.path]);
+  assert.deepEqual(paths, [["video.picture", ["Picture…"]]], "Picture… at the top of the context menu");
   assert.deepEqual(host.conflicts, []);
   await host.settle();
   for (const id of ["video.shader.use", "video.interpolation"])
@@ -288,7 +309,7 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
   assert.equal(host.command("video.hdr.auto").state.checked, true);
   assert.equal(host.command("video.hdr.peak").state.checked, true);
   assert.deepEqual(host.command("video.frame-blend").state, { enabled: true, checked: false, busy: false, reason: null });
-  assert.equal(host.command("video.aspect.custom").state.enabled, false, "自定义 waits for a ratio");
+  assert.equal(host.command("video.aspect.custom").state.enabled, false, "Custom waits for a ratio");
   assert.equal(host.command("video.fit.keep").state.checked, true);
   assert.equal(host.command("video.aspect.default").state.checked, true);
   assert.equal(host.command("video.deinterlace.auto").state.checked, true);
@@ -301,18 +322,37 @@ test("menu under 视频 follows the chapter's allocation; GPU items are enabled 
     );
   assert.equal(host.command("video.reframe.none").state.checked, true);
   assert.equal(host.command("video.rotate.0").state.checked, true);
-  await host.command("video.picture").run();
-  await host.command("video.picture").run();
-  assert.equal(host.sent("ui.open").length, 1, "the window opens once");
   await stop();
 });
 
-test("every command has a category (the submenu label) for the command palette, and controls in a window name it as home", async () => {
+test("Picture… opens the adjust column at the Picture tab and closes it again (Alt+1); no window", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  try {
+    await host.settle();
+    const panel = host.mounted();
+    assert.equal(panel.slot, "adjust");
+    assert.equal(panel.component, "Picture");
+    assert.deepEqual(host.layout.adjust?.panels?.map((p) => p.title), ["Picture"]);
+    assert.equal(host.layout.adjust?.preferred, false, "the column starts closed");
+    await host.press("Alt+1");
+    await until(host, () => host.layout.adjust?.preferred === true, "the column to open");
+    assert.equal(host.layout.adjust?.owner, 1, "at the Picture tab");
+    await host.command("video.picture").run();
+    await until(host, () => host.layout.adjust?.preferred === false, "the column to close");
+    assert.equal(host.sent("ui.open").length, 0, "the Picture Adjustments window is gone");
+  } finally {
+    await stop();
+  }
+});
+
+test("every command has a category for the command palette, and names Picture… as its home", async () => {
   const host = new TestHost();
   host.openElsewhere("/movie.mp4");
   const { stop } = await start(host);
   const commands = [...host.commands.entries()];
-  assert.equal(commands.length, 83);
+  assert.equal(commands.length, 84);
   for (const [id, command] of commands) assert.ok(command.display.category, `${id} has a category`);
   const count = new Map<string, number>();
   for (const [, { display }] of commands) count.set(display.category!, (count.get(display.category!) ?? 0) + 1);
@@ -322,101 +362,78 @@ test("every command has a category (the submenu label) for the command palette, 
     Deinterlace: 6,
     Aspect: 12,
     "Crop/Stretch": 15,
-    Reset: 3,
+    Reset: 4,
     Framing: 7,
     "Image Processing": 12,
     Rotation: 5,
     Picture: 10,
   });
-  // The category is the submenu label (Deinterlace ▸ Output keeps "Deinterlace"); "Reset" in the
-  // Reset menu; "Picture" directly under Video.
-  for (const [id, { declaration: d, display }] of commands) {
-    const [menu, ...rest] = d.path as string[];
-    const parent = rest.length > 1 ? rest.at(-2) : menu === "@reset" ? "Reset" : "Picture";
-    assert.equal(display.category, parent === "Output" ? "Deinterlace" : parent, id);
-  }
+  // The palette names them as the menu did: the old submenu, "Reset" for the old Reset ▸ items.
+  const category = (id: string) => host.command(id).display.category;
+  assert.equal(category("video.deinterlace.output.field"), "Deinterlace");
+  assert.equal(category("video.hdr.peak"), "HDR Tone Mapping");
+  assert.equal(category("video.hdr.settings"), "Pixel Shaders");
+  for (const id of ["video.reset", "video.resetPanel", "video.frame.reset", "video.reframe.reset"]) assert.equal(category(id), "Reset", id);
+  for (const id of ["video.picture", "video.brightness.up", "video.gpu-rendering"]) assert.equal(category(id), "Picture", id);
+  // Every control is in the panel that Picture… opens; the shader folder belongs to the Shader List window.
   const homes = new Map<string, string[]>();
   for (const [id, { declaration: d }] of commands) if (d.home) homes.set(d.home, [...(homes.get(d.home) ?? []), id]);
-  assert.deepEqual([...homes.keys()].sort(), ["video.hdr.settings", "video.picture", "video.shader.list"]);
-  for (const home of homes.keys()) assert.ok(host.commands.has(home), `${home} is a command of the plugin`);
+  assert.deepEqual([...homes.keys()].sort(), ["video.picture", "video.shader.list"]);
   assert.deepEqual(homes.get("video.shader.list"), ["video.shader.folder"]);
-  const tones = ["auto", "off", "bt.2390", "hable", "mobius", "reinhard", "clip"];
-  assert.deepEqual(homes.get("video.hdr.settings"), ["video.shader.use", ...tones.map((t) => `video.hdr.${t}`)]);
-  const inWindow = ["video.brightness.up", "video.hue.down", "video.sharpen", "video.denoise.temporal", "video.interpolation", "video.rotate.90", "video.flip.vertical"];
-  for (const id of [...inWindow, "video.deinterlace.cycle", "video.fit.keep", "video.aspect.edit", "video.reframe.crop.1", "video.frame.zoom-in", "video.frame.reset"])
-    assert.equal(host.command(id).declaration.home, "video.picture", id);
-  const outside = ["video.picture", "video.reset", "video.reframe.reset", "video.reframe.left", "video.frame.left", "video.frame.centre", "video.hdr.peak", "video.shader.reload"];
-  for (const id of [...outside, "video.gpu-rendering"]) assert.equal(host.command(id).declaration.home, undefined, `${id} has no window control`);
+  const without = commands.filter(([, { declaration: d }]) => !d.home).map(([id]) => id);
+  assert.deepEqual(without, ["video.shader.reload", "video.picture"], "Reload Shaders has no control; Picture… opens the panel");
   await stop();
 });
 
-test("Simplified Chinese: command categories use the menu's translations", async () => {
+test("Simplified Chinese: the palette names commands with the menu's translations", async () => {
   const host = new TestHost();
   const { stop } = await start(host, undefined, zh);
-  const shown = (id: string) => host.command(id).display.category;
-  assert.equal(shown("video.shader.use"), "像素着色");
-  assert.equal(shown("video.hdr.peak"), "HDR 色调映射");
-  assert.equal(shown("video.deinterlace.output.field"), "反交错");
-  assert.equal(shown("video.aspect.0"), "比例");
-  assert.equal(shown("video.reframe.none"), "裁剪/拉伸");
-  assert.equal(shown("video.frame.zoom-in"), "帧位");
-  assert.equal(shown("video.sharpen"), "图像处理");
-  assert.equal(shown("video.rotate.90"), "图像旋转");
-  assert.equal(shown("video.brightness.up"), "画面");
-  assert.equal(shown("video.reset"), "复位", "the Reset menu's own label");
-  await stop();
-});
-
-test("Simplified Chinese: the 视频 menu shows the titles of before", async () => {
-  const host = new TestHost();
-  const { stop } = await start(host, undefined, zh);
-  const shown = [...host.commands.values()].map(({ display }) => display.path.join(" ▸ "));
+  const shown = [...host.commands.values()].map(({ display }) => `${display.category}: ${display.title}`);
   const ratios = ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
-  assert.deepEqual(
-    shown,
-    [
-      "像素着色 ▸ 使用着色器",
-      "像素着色 ▸ 着色器列表…",
-      "像素着色 ▸ 打开着色器文件夹",
-      "像素着色 ▸ 重新载入着色器",
-      ...["自动", "关", "BT.2390", "Hable", "Mobius", "Reinhard", "裁剪"].map((t) => `像素着色 ▸ HDR 色调映射 ▸ ${t}`),
-      "像素着色 ▸ HDR 色调映射 ▸ 动态峰值检测",
-      "像素着色 ▸ HDR 设置…",
-      "反交错 ▸ 按序切换",
-      "反交错 ▸ 自动",
-      "反交错 ▸ 总是使用",
-      "反交错 ▸ 不使用",
-      "反交错 ▸ 输出 ▸ 按帧",
-      "反交错 ▸ 输出 ▸ 按场（倍帧率）",
-      "比例 ▸ 保持宽高比",
-      "比例 ▸ 不保持宽高比",
-      "比例 ▸ 填满窗口（裁去多余）",
-      "比例 ▸ 依次切换比例",
-      "比例 ▸ 默认（按来源）",
-      ...ratios.map((r) => `比例 ▸ ${r}`),
-      "比例 ▸ 自定义（x:y）",
-      "比例 ▸ 自定义比例…",
-      "裁剪/拉伸 ▸ 不使用",
-      ...ratios.map((r) => `裁剪/拉伸 ▸ 按 ${r} 拉伸`),
-      ...ratios.map((r) => `裁剪/拉伸 ▸ 按 ${r} 裁剪`),
-      ...["左移", "右移", "上移", "下移"].map((t) => `裁剪/拉伸 ▸ ${t}`),
-      "复位 ▸ 裁剪位置",
-      "帧位 ▸ 全帧 +",
-      "帧位 ▸ 全帧 -",
-      "帧位 ▸ 偏移 →",
-      "帧位 ▸ 偏移 ←",
-      "帧位 ▸ 偏移 ↑",
-      "帧位 ▸ 偏移 ↓",
-      "帧位 ▸ 帧位居中",
-      "复位 ▸ 帧位",
-      ...["上下翻转", "左右翻转", "高斯模糊", "锐化", "边缘锐化", "去块", "消色带", "3D 降噪", "渐进降噪", "瞬态降噪", "倍帧", "运动补偿"].map((t) => `图像处理 ▸ ${t}`),
-      ...["按序切换", "不旋转", "90°", "180°", "270°"].map((t) => `图像旋转 ▸ ${t}`),
-      "画面调节…",
-      "复位 ▸ 画面",
-      ...["亮度", "对比度", "饱和度", "色调"].flatMap((t) => [`${t} -1%`, `${t} +1%`]),
-      "GPU 渲染（实验性）",
-    ].map((path) => (path.startsWith("复位 ▸ ") ? path : `视频 ▸ ${path}`)),
-  );
+  assert.deepEqual(shown, [
+    "像素着色: 使用着色器",
+    "像素着色: 着色器列表…",
+    "像素着色: 打开着色器文件夹",
+    "像素着色: 重新载入着色器",
+    ...["自动", "关", "BT.2390", "Hable", "Mobius", "Reinhard", "裁剪"].map((t) => `HDR 色调映射: ${t}`),
+    "HDR 色调映射: 动态峰值检测",
+    "像素着色: HDR 设置…",
+    "反交错: 按序切换",
+    "反交错: 自动",
+    "反交错: 总是使用",
+    "反交错: 不使用",
+    "反交错: 按帧",
+    "反交错: 按场（倍帧率）",
+    "比例: 保持宽高比",
+    "比例: 不保持宽高比",
+    "比例: 填满窗口（裁去多余）",
+    "比例: 依次切换比例",
+    "比例: 默认（按来源）",
+    ...ratios.map((r) => `比例: ${r}`),
+    "比例: 自定义（x:y）",
+    "比例: 自定义比例…",
+    "裁剪/拉伸: 不使用",
+    ...ratios.map((r) => `裁剪/拉伸: 按 ${r} 拉伸`),
+    ...ratios.map((r) => `裁剪/拉伸: 按 ${r} 裁剪`),
+    ...["左移", "右移", "上移", "下移"].map((t) => `裁剪/拉伸: ${t}`),
+    "复位: 裁剪位置",
+    "帧位: 全帧 +",
+    "帧位: 全帧 -",
+    "帧位: 偏移 →",
+    "帧位: 偏移 ←",
+    "帧位: 偏移 ↑",
+    "帧位: 偏移 ↓",
+    "帧位: 帧位居中",
+    "复位: 帧位",
+    ...["上下翻转", "左右翻转", "高斯模糊", "锐化", "边缘锐化", "去块", "消色带", "3D 降噪", "渐进降噪", "瞬态降噪", "倍帧", "运动补偿"].map((t) => `图像处理: ${t}`),
+    ...["按序切换", "不旋转", "90°", "180°", "270°"].map((t) => `图像旋转: ${t}`),
+    "画面: 画面…",
+    "复位: 画面",
+    "复位: 画面面板",
+    ...["亮度", "对比度", "饱和度", "色调"].flatMap((t) => [`画面: ${t} -1%`, `画面: ${t} +1%`]),
+    "画面: GPU 渲染（实验性）",
+  ]);
+  assert.deepEqual(host.command("video.picture").display.path, ["画面…"]);
   // The player translates the reason with the plugin's catalog.
   assert.equal(host.translate(host.command("video.aspect.custom").state.reason!), "先用「自定义比例…」输入");
   await stop();
@@ -425,13 +442,16 @@ test("Simplified Chinese: the 视频 menu shows the titles of before", async () 
 test("every text of the plugin is translated into Simplified Chinese", () => {
   const read = (file: string) => readFileSync(new URL(`../locales/${file}`, import.meta.url), "utf8");
   const ids = [...read("messages.pot").matchAll(/^msgid "(.+)"$/gm)].map((m) => m[1]);
-  assert.ok(ids.includes("Picture Adjustments") && ids.includes("Enabled {}/{} (run in order)"));
+  assert.ok(ids.includes("Picture…") && ids.includes("Enabled {}/{} (run in order)"));
   // Ratios are not texts.
   assert.ok(!ids.includes("16:9"));
   const po = read("zh-Hans.po");
   assert.doesNotMatch(po, /msgstr(\[0\])? ""\n\n/);
   assert.match(po, /msgid "Needs GPU rendering \(currently software rendering\)"\nmsgstr "需要 GPU 渲染（当前为软件渲染）"/);
-  assert.match(po, /msgid "Target \{\} nits"\nmsgstr "目标亮度 \{\} 尼特"/);
+  assert.match(po, /msgid "\{\} nits"\nmsgstr "\{\} 尼特"/);
+  assert.match(po, /msgid "Picture…"\nmsgstr "画面…"/);
+  // The other five languages are complete too (machine translations are marked x-machine).
+  for (const lang of ["de", "es", "fr", "ja", "ko"]) assert.doesNotMatch(read(`${lang}.po`), /msgstr(\[0\])? ""\n\n/, lang);
 });
 
 // ---------------------------------------------------------------- colour
@@ -602,7 +622,7 @@ test("Reset (Q) also turns every image-processing switch off, keeps strengths an
     host.openElsewhere("/movie.mp4");
     const { stop } = await start(host, data);
     await host.command("video.picture").run();
-    const window = host.window("picture");
+    const window = host.mounted();
     await host.command("video.deinterlace.off").run();
     await host.command("video.reframe.crop.1").run();
     await host.press("Ctrl+P");
@@ -935,7 +955,7 @@ test("E12: pad or crop to a ratio, move the picture in 5% steps, reset the posit
 
 // ---------------------------------------------------------------- settings
 
-test("global settings and the last page survive a restart; flip and rotation do not", async () => {
+test("global settings and the open Advanced section survive a restart; flip and rotation do not", async () => {
   await withData(async (data) => {
     let { host, window, stop } = await playing(data);
     await host.press("O");
@@ -943,16 +963,17 @@ test("global settings and the last page survive a restart; flip and rotation do 
     await host.press("Ctrl+P");
     await host.press("Ctrl+I");
     await host.command("video.reframe.pad.4").run();
-    window.emit("tab-changed", 2);
+    window.emit("set-advanced", true);
     window.emit("commit", "edge", 70);
     await stop();
     const saved = JSON.parse(await readFile(join(data, "settings.json"), "utf8"));
     assert.equal(saved.version, 1);
     assert.equal(saved.picture.hue, 1);
-    assert.equal(saved.tab, 2);
+    assert.equal(saved.advanced, true);
+    assert.equal("tab" in saved, false);
     ({ host, window, stop } = await playing(data));
     await host.settle();
-    assert.equal(window.props["tab-index"], 2);
+    assert.equal(window.props["advanced-open"], true);
     assert.equal(window.props.hue, 1);
     assert.equal(window.props["sharpen-enabled"], true);
     assert.equal(window.props["edge-strength"], 70);
@@ -994,14 +1015,14 @@ test("headless: a missing on-screen display does not break the command or the wi
   await host.press("E");
   await host.settle();
   assert.equal(eq(host).brightness, 0.01);
-  assert.equal(host.window("picture").props.status, "");
+  assert.equal(host.mounted().props.status, "");
   await stop();
 });
 
 test("empty media keeps edits and the ready source gets the latest values", async () => {
   const { host, stop } = await start();
   await host.command("video.picture").run();
-  const window = host.window("picture");
+  const window = host.mounted();
   window.emit("adjust", "contrast", 35);
   await host.settle();
   assert.equal(host.sent("processing.replace").length, 0);
@@ -1077,7 +1098,7 @@ test("E18: 倍帧 reads the source rate without frameBlend, then adds it last; a
   host.openElsewhere("/pan24.mp4");
   const { stop } = await start(host);
   await host.command("video.picture").run();
-  const window = host.window("picture");
+  const window = host.mounted();
   await host.command("video.frame-blend").run();
   assert.equal(host.osd.at(-1), "Frame doubling: on");
   assert.equal(host.command("video.frame-blend").state.checked, true);
@@ -1122,7 +1143,7 @@ test("E18: an unknown rate blends to 60; no picture adds nothing; 启用画面�
     assert.equal(node(host, "frameBlend"), undefined, "an unknown rate is read again first");
     await until(host, blendNode(host, 60), "the last try counting an unknown rate as 60");
     await host.command("video.picture").run();
-    host.window("picture").emit("toggle-effect", false);
+    host.mounted().emit("toggle-effect", false);
     await host.settle();
     assert.deepEqual(chain(host), []);
     await stop();
@@ -1210,12 +1231,12 @@ test("E11: 自定义比例… only accepts a valid ratio, joins the menu and the
     assert.equal(host.osd.at(-1), "宽高比：自定义 - 21:9");
     assert.equal(host.videoView.values.aspect, 2.3333);
     const custom = host.command("video.aspect.custom");
-    assert.deepEqual(custom.declaration.path.at(-1), { $vestraText: "Custom ({})", args: ["21:9"] });
-    assert.equal(custom.display.path.at(-1), "自定义（21:9）");
+    assert.deepEqual(custom.declaration.title, { $vestraText: "Custom ({})", args: ["21:9"] });
+    assert.equal(custom.display.title, "自定义（21:9）");
     assert.deepEqual([custom.state.checked, custom.state.enabled, custom.state.reason], [true, true, null]);
     // The window words its 自定义（21:9） choice from the ratio.
-    assert.equal(host.window("picture").props["custom-ratio"], "21:9");
-    assert.equal(host.window("picture").props["aspect-index"], 6);
+    assert.equal(host.mounted().props["custom-ratio"], "21:9");
+    assert.equal(host.mounted().props["aspect-index"], 6);
     await host.press("Shift+F6");
     assert.equal(host.osd.at(-1), "宽高比：默认");
     await host.command("video.aspect.4").run();
@@ -1246,7 +1267,7 @@ test("E11: another plugin owning the display layer: silent at start, a reason on
   const { stop } = await start(host);
   await host.command("video.picture").run();
   await host.settle();
-  const window = host.window("picture");
+  const window = host.mounted();
   assert.deepEqual(host.osd, []);
   assert.deepEqual([window.props.status, window.props.detail, window.props.conflict], ["view", "", true]);
   assert.equal(window.props.failed, true);
@@ -1274,7 +1295,6 @@ test("E13: keypad and Alt keys zoom by ×1.05 up to 400 % and pan by 1 %, with O
   assert.deepEqual(host.osd, ["Framing: larger (105%)", "Framing: larger (110%)"]);
   assert.equal(host.videoView.values.zoom, 1.1025);
   assert.equal(window.props["zoom-percent"], 110);
-  assert.ok(Math.abs((window.props["zoom-level"] as number) - Math.log2(1.1025)) < 1e-9);
   await host.press("Numpad1");
   assert.equal(host.osd.at(-1), "Framing: smaller (105%)");
   for (let i = 0; i < 3; i++) await host.press("Alt+ArrowLeft");
@@ -1302,18 +1322,24 @@ test("E13: keypad and Alt keys zoom by ×1.05 up to 400 % and pan by 1 %, with O
   await stop();
 });
 
-test("E13: the 缩放 slider is logarithmic and follows the drag; 默认 resets; a new source starts unzoomed, silently", async () => {
+test("E13: the panel's zoom, pan and crop buttons run their commands; a new source starts unzoomed, silently", async () => {
   const { host, window, stop } = await playing();
-  window.emit("adjust", "zoom", 1);
+  window.emit("run", "video.frame.zoom-in");
+  await until(host, () => window.props["zoom-percent"] === 105, "the zoom shown");
+  assert.equal(host.videoView.values.zoom, 1.05);
+  window.emit("run", "video.frame.right");
+  await until(host, () => window.props["pan-x"] === 1, "the pan shown");
+  assert.equal(host.osd.at(-1), "Framing: move right (1%, 0%)", "as the key");
+  window.emit("run", "video.frame.centre");
+  await until(host, () => window.props["pan-x"] === 0, "centred");
+  window.emit("run", "video.frame.reset");
+  await until(host, () => window.props["zoom-percent"] === 100, "reset");
+  window.emit("run", "video.reframe.right");
+  await until(host, () => host.osd.at(-1) === "Crop position (55%, 50%)", "the crop moved");
+  window.emit("run", "video.reframe.reset");
+  await until(host, () => host.osd.at(-1) === "Crop position (50%, 50%)", "the crop centred");
+  window.emit("run", "no.such.command");
   await host.settle();
-  assert.equal(host.videoView.values.zoom, 2);
-  window.emit("commit", "zoom", -3);
-  await host.settle();
-  assert.equal(host.videoView.values.zoom, 0.25);
-  window.emit("reset-field", "zoom");
-  await host.settle();
-  assert.equal(host.videoView.values.zoom, 1);
-  assert.equal(window.props["zoom-level"], 0);
   await host.press("Alt+Plus");
   await host.press("Alt+ArrowUp");
   await host.command("video.aspect.1").run();
@@ -1371,14 +1397,24 @@ test("E16: tone mapping, 目标亮度 and peak detection reach the render option
     assert.equal(host.videoRender.values.peakDetect, false);
     assert.equal(host.osd.at(-1), "动态峰值检测: 关");
     await host.command("video.hdr.settings").run();
-    const window = host.window("picture");
-    assert.equal(window.props["tab-index"], 3, "HDR 设置… opens the 高级 page");
+    const window = host.mounted();
+    await until(host, () => window.props["jump-serial"] === 1, "a jump");
+    assert.equal(window.props["jump-section"], 3, "HDR Settings… shows the Advanced section");
+    await until(host, () => window.props["advanced-open"] === true, "Advanced open");
+    await until(host, () => host.layout.adjust?.preferred === true, "the panel shown");
     assert.equal(window.props["tone-index"], 2);
     assert.deepEqual([window.props["peak-nits"], window.props["not-hdr"]], [203, true], "the window words 目标亮度 203 尼特 · 当前片源不是 HDR");
     assert.equal(window.props["render-ready"], true);
     window.emit("adjust", "targetPeak", 296.4);
     await host.settle();
     assert.equal(host.videoRender.values.targetPeak, 300, "follows the drag in steps of 10");
+    window.emit("reset-field", "targetPeak");
+    await until(host, () => host.videoRender.values.targetPeak === 203, "the double-click default");
+    window.emit("toggle", "peakDetect", true);
+    await until(host, () => host.videoRender.values.peakDetect === true, "peak detection from the panel");
+    window.emit("toggle", "peakDetect", false);
+    await until(host, () => host.videoRender.values.peakDetect === false, "and off again");
+    window.emit("adjust", "targetPeak", 296.4);
     window.emit("choose", "toneMapping", 1);
     await host.settle();
     assert.equal(host.videoRender.values.toneMapping, "off");
@@ -1420,7 +1456,7 @@ test("software rendering: the GPU items are disabled with the reason, the list a
     assert.equal(host.command(id).state.reason, SOFTWARE, id);
   }
   for (const id of ["video.shader.list", "video.shader.folder"]) assert.equal(host.command(id).state.enabled, true, id);
-  const window = host.window("picture");
+  const window = host.mounted();
   assert.equal(window.props["render-ready"], false);
   assert.equal(window.props.status, "", "not a failure in the status line");
   assert.deepEqual(host.osd, []);
@@ -1464,7 +1500,7 @@ test("software rendering: nothing in the log, nothing sent after the first refus
       assert.equal(host.command("video.hdr.hable").state.checked, true, "the saved choice still shows");
       // the window's 目标亮度 control is greyed; a stray edit is saved but not sent
       await host.command("video.picture").run();
-      host.window("picture").emit("adjust", "targetPeak", 250);
+      host.mounted().emit("adjust", "targetPeak", 250);
       await host.settle();
       await stop();
     });
@@ -1616,7 +1652,7 @@ test("E17: a shader that does not compile shows in the status line and on screen
     assert.deepEqual(host.videoRender.values.shaders, [join(folder, "broken.glsl")]);
     host.failVideoRender("failed", "shader compile failed: ERROR: 0:2: Use of undeclared identifier 'nope'");
     await host.settle();
-    const window = host.window("picture");
+    const window = host.mounted();
     assert.equal(window.props.status, "shader");
     assert.equal(window.props.detail, "shader compile failed: ERROR: 0:2: Use of undeclared identifier 'nope'");
     assert.equal(window.props.failed, true);
@@ -1648,7 +1684,7 @@ test("E18: 运动补偿 and 倍帧 exclude each other, with OSD; the window does
   await until(host, blendNode(host, 48), "the 24 fps rate read");
   assert.deepEqual(chain(host).at(-1), { kind: "frameBlend", fps: 48 });
   await host.command("video.picture").run();
-  const window = host.window("picture");
+  const window = host.mounted();
   window.emit("toggle", "interpolation", true);
   await host.settle();
   assert.equal(host.osd.at(-1), "运动补偿: 开（已关闭倍帧）");
@@ -1669,7 +1705,7 @@ test("render options owned by another plugin: silent at start, a reason on use, 
   const { stop } = await start(host, undefined, zh);
   await host.command("video.picture").run();
   await host.settle();
-  const window = host.window("picture");
+  const window = host.mounted();
   assert.deepEqual(host.osd, []);
   assert.deepEqual([window.props.status, window.props.detail, window.props.conflict], ["render-conflict", "", true]);
   assert.equal(host.command("video.interpolation").state.enabled, true, "a conflict is not software rendering");
@@ -1687,7 +1723,7 @@ test("render options owned by another plugin: silent at start, a reason on use, 
 
 // ---------------------------------------------------------------- GPU Rendering (Experimental): the player's renderer choice
 const gpuItem = (host: TestHost) => host.command("video.gpu-rendering");
-const gpuTitle = (host: TestHost) => gpuItem(host).declaration.path.at(-1);
+const gpuTitle = (host: TestHost) => gpuItem(host).declaration.title;
 const restartItem = "video.gpu-rendering.restart";
 /** The item's state with the reason as the menu shows it (the player's message is passed as data). */
 const shownState = (host: TestHost) => ({ ...gpuItem(host).state, reason: gpuItem(host).display.reason ?? null });
@@ -1747,7 +1783,7 @@ test("GPU rendering: switching off waits for a restart; Later keeps the choice; 
   assert.deepEqual([host.confirms[0]!.confirm, host.confirms[0]!.cancel], ["Restart Now", "Later"]);
   assert.equal(host.rendering.restarts, 0, "Later does not restart");
   assert.equal(host.osd.at(-1), "GPU rendering: off (applies at the next start)");
-  assert.deepEqual(host.command(restartItem).declaration.path, ["@video", "Restart Player to Apply"], "the restart stays offered");
+  assert.equal(host.command(restartItem).declaration.title, "Restart Player to Apply", "the restart stays offered");
   assert.equal(host.command(restartItem).declaration.order, 460);
   // Back to the mode this run started with: nothing waits, no dialog.
   await gpuItem(host).run();
@@ -1832,11 +1868,11 @@ test("GPU rendering: a restart the player cannot start is said; the choice stays
 test("GPU rendering: Simplified Chinese titles, dialog and on-screen text", async () => {
   const host = new TestHost();
   const { stop } = await start(host, undefined, zh);
-  assert.equal(gpuItem(host).display.path.join(" ▸ "), "视频 ▸ GPU 渲染（实验性）");
+  assert.equal(gpuItem(host).display.title, "GPU 渲染（实验性）");
   host.dialogAnswers.push({ confirmed: false, checked: false });
   await gpuItem(host).run();
   await host.settle();
-  assert.equal(gpuItem(host).display.path.join(" ▸ "), "视频 ▸ GPU 渲染（重启后生效）");
+  assert.equal(gpuItem(host).display.title, "GPU 渲染（重启后生效）");
   assert.equal(host.confirmTexts.at(-1)!.message, "现在重启 Vestra Player 以应用更改？");
   assert.equal(host.confirmTexts.at(-1)!.cancel, "稍后");
   assert.equal(host.osd.at(-1), "GPU 渲染: 关（下次启动时生效）");
@@ -1941,4 +1977,171 @@ test("GPU rendering: while a switch is under way the item is busy with a reason 
   assert.equal(gpuItem(host).state.busy, false);
   assert.equal(shownState(host).reason, null);
   await stop();
+});
+
+// ---------------------------------------------------------------- the Picture panel (adjust column)
+
+type Gpu = { shown: boolean; checked: boolean; enabled: boolean; busy: boolean; pending: boolean; reason: string };
+const gpuOf = (host: TestHost) => host.mounted().props.gpu as Gpu;
+const keysOf = (host: TestHost) => host.mounted().props.keys as Record<string, string>;
+
+test("panel key caps show each command's current first key and follow the user's changes", async () => {
+  const host = new TestHost();
+  host.systemInfo.os = "windows";
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  try {
+    await eventually(() => keysOf(host), {
+      brightnessdown: "W",
+      brightnessup: "E",
+      contrastdown: "R",
+      contrastup: "T",
+      saturationdown: "Y",
+      saturationup: "U",
+      huedown: "I",
+      hueup: "O",
+      sharpen: "Ctrl+R",
+      edge: "",
+      blur: "Ctrl+B",
+      deblock: "Ctrl+H",
+      deband: "",
+      denoise: "Ctrl+N",
+      doubling: "",
+      interpolation: "",
+      aspect: "Shift+F6",
+      rotate: "Alt+K",
+      flipv: "Ctrl+P",
+      fliph: "Ctrl+Z",
+      zoomout: "Alt+-",
+      zoomin: "Alt++",
+      panleft: "Alt+←",
+      panup: "Alt+↑",
+      pandown: "Alt+↓",
+      panright: "Alt+→",
+      centre: "Ctrl+Num5",
+      framing: "Alt+Backspace",
+      deinterlace: "Ctrl+I",
+      shaders: "Shift+P",
+      gpu: "",
+      reset: "Q",
+      resetpanel: "",
+    });
+    // The denoise cap is the shown mode's: Temporal has Ctrl+M, Gradual none.
+    host.mounted().emit("choose", "denoiseMode", 2);
+    await eventually(() => keysOf(host).denoise, "Ctrl+M");
+    host.mounted().emit("choose", "denoiseMode", 1);
+    await eventually(() => keysOf(host).denoise, "");
+    host.rebind("video.brightness.down", ["Ctrl+Shift+W"]);
+    await eventually(() => keysOf(host).brightnessdown, "Ctrl+Shift+W");
+    host.rebind("video.reset", []);
+    await eventually(() => keysOf(host).reset, "", "a cleared key shows no cap");
+    host.rebind("video.edge", ["Ctrl+Alt+E"]);
+    await eventually(() => keysOf(host).edge, "Ctrl+Alt+E", "a key the user adds shows too");
+  } finally {
+    await stop();
+  }
+});
+
+test("panel: a slider's double-click resets that slider only; Q resets colours and effects only", async () => {
+  const { host, window, stop } = await playing();
+  try {
+    window.emit("commit", "saturation", -56);
+    window.emit("commit", "contrast", 4);
+    await until(host, () => window.props.saturation === -56 && window.props.contrast === 4, "the colours set");
+    window.emit("reset-field", "saturation");
+    await until(host, () => window.props.saturation === 0, "saturation back to 0");
+    await eventually(() => window.props.contrast, 4, "contrast kept");
+    window.emit("toggle", "sharpen", true);
+    await until(host, () => window.props["sharpen-enabled"] === true, "sharpen on");
+    await host.command("video.flip.vertical").run();
+    await until(host, () => window.props["flip-v"] === true, "flipped");
+    await host.press("Q");
+    await until(host, () => window.props.contrast === 0, "Q");
+    await eventually(() => window.props["sharpen-enabled"], false, "image processing off");
+    await eventually(() => window.props["flip-v"], true, "Q leaves the geometry");
+    await eventually(() => host.osd.at(-1), "Picture reset; image processing off");
+  } finally {
+    await stop();
+  }
+});
+
+test("panel: the GPU Rendering switch shows the player's state and switches like the command", async () => {
+  const host = new TestHost();
+  host.videoRender.gpu = false;
+  host.rendering.startedWith = "software";
+  host.rendering.reason = { code: "no-gpu-backend", message: "This player has no GPU renderer on Windows yet" };
+  host.rendering.gpu = { available: false, reason: host.rendering.reason };
+  const { stop } = await start(host);
+  try {
+    await eventually(() => gpuOf(host), { shown: true, checked: false, enabled: false, busy: false, pending: false, reason: "This player has no GPU renderer on Windows yet" });
+    await eventually(() => host.mounted().props["render-ready"], false, "HDR, shaders and interpolation greyed");
+  } finally {
+    await stop();
+  }
+  const mac = new TestHost();
+  const second = await start(mac);
+  try {
+    await eventually(() => gpuOf(mac), { shown: true, checked: true, enabled: true, busy: false, pending: false, reason: "" });
+    mac.dialogAnswers.push({ confirmed: false, checked: false });
+    mac.mounted().emit("run", "video.gpu-rendering");
+    await until(mac, () => gpuOf(mac).pending, "the restart pending");
+    await eventually(() => gpuOf(mac), { shown: true, checked: false, enabled: true, busy: false, pending: true, reason: "" });
+    await eventually(() => mac.rendering.preference, "software");
+    mac.mounted().emit("run", "video.gpu-rendering.restart");
+    await until(mac, () => mac.rendering.restarts === 1, "Restart");
+  } finally {
+    await second.stop();
+  }
+});
+
+test("panel: the Advanced section opens and closes, and the jump bar's request reaches the panel", async () => {
+  await withData(async (data) => {
+    const { host, window, stop } = await playing(data);
+    try {
+      await eventually(() => window.props["advanced-open"], false, "closed by default");
+      window.emit("set-advanced", true);
+      await until(host, () => window.props["advanced-open"] === true, "open");
+      window.emit("set-advanced", false);
+      await until(host, () => window.props["advanced-open"] === false, "closed");
+      await host.command("video.hdr.settings").run();
+      await until(host, () => window.props["jump-serial"] === 1, "one jump");
+      await eventually(() => window.props["jump-section"], 3);
+      await eventually(() => window.props["advanced-open"], true, "HDR Settings… opens Advanced");
+      await host.command("video.hdr.settings").run();
+      await until(host, () => window.props["jump-serial"] === 2, "every request jumps, also to the same section");
+    } finally {
+      await stop();
+    }
+  });
+});
+
+test("panel: Reset All (video.resetPanel) resets Colour, Effects and Geometry, not the Advanced preferences", async () => {
+  const { host, window, stop } = await playing();
+  try {
+    window.emit("commit", "contrast", 30);
+    window.emit("toggle", "sharpen", true);
+    window.emit("choose", "fit", 2);
+    window.emit("choose", "aspect", 2);
+    window.emit("choose", "reframe", 2);
+    window.emit("choose", "rotate", 1);
+    window.emit("toggle", "flipH", true);
+    window.emit("choose", "deinterlace", 1);
+    window.emit("choose", "toneMapping", 3);
+    window.emit("run", "video.frame.zoom-in");
+    window.emit("run", "video.frame.right");
+    window.emit("run", "video.reframe.right");
+    await until(host, () => window.props["pan-x"] === 1 && window.props["zoom-percent"] === 105, "everything set");
+    assert.equal(host.command("video.resetPanel").declaration.home, "video.picture");
+    assert.deepEqual(host.command("video.resetPanel").declaration.bindings, [], "no default key");
+    window.emit("run", "video.resetPanel");
+    await until(host, () => host.osd.at(-1) === "Picture panel reset", "the reset said");
+    const shown = () => [window.props.contrast, window.props["sharpen-enabled"], window.props["fit-index"], window.props["aspect-index"], window.props["reframe-index"], window.props["rotate-index"], window.props["flip-h"], window.props["zoom-percent"], window.props["pan-x"]];
+    await eventually(shown, [0, false, 0, 0, 0, 0, false, 100, 0]);
+    await eventually(() => [window.props["deinterlace-index"], window.props["tone-index"]], [1, 3], "the Advanced preferences stay");
+    await eventually(() => [host.videoView.values.zoom, host.videoView.values.panX, host.videoView.values.aspect, host.videoView.values.fit], [1, 0, null, "keep"]);
+    await eventually(() => host.command("video.reframe.none").state.checked, true);
+    await eventually(() => kinds(host).filter((k) => k !== "deinterlace"), [], "no colour, effect, crop or transform node left");
+  } finally {
+    await stop();
+  }
 });

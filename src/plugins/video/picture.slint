@@ -1,107 +1,327 @@
+// The Picture panel in the adjust column (menu redesign step 4, PROPOSAL.md §3.2): one scrolling
+// column with four sections, Colour, Effects, Geometry and Advanced; the bar at the top only jumps
+// to a section and lights the one in view. Every row is a layout and every text one line (elided,
+// the full text in a tooltip), so nothing overlaps when a row changes; rows that come and go are
+// persistent elements shown with `visible` (only the Advanced fold is an `if`, opened by a click).
+// Key caps come from `plugin.commands.keys` (`Keys`): the user's current keys, "" for none.
+// The file keeps its name and the names `Picture` / `PictureBridge`, which the host's measurement
+// of the adjust column's first opening uses (composition.rs).
+import { ScrollView } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { Button, Slider, ToolTipArea } from "@vestra/widgets.slint";
+import { Button, Check, Choice, KeyHint, Slider, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
 
-// Widths (window 301, content 285 after the 8px side padding; totals include the 6px spacing):
-//   色彩 / 效果 rows   label or check 65 + slider 154 + 默认 41            = 272
-//   降噪 row           check 65 + mode 60 + slider 88 + 默认 41            = 272
-//   翻转 row           label 65 + 2 × toggle 46 (3 apart)                  = 166
-//   旋转 row           label 65 + 4 × toggle 46 (3 apart)                  = 264
-//   裁剪/拉伸 row      label 65 + mode 72 + ratio 76                        = 225
-//   倍帧 row           check 65 + note 84 + check 100                       = 261
-//   宽高比 row         label 65 + choice 154 + … 21                         = 252
-//   缩放 row           label 65 + slider 154 + 默认 41                      = 272
-//   反交错 row         label 65 + mode 90 + output 104                      = 271
-//   HDR row            label 65 + choice 90 + slider 100                    = 267
-//   HDR note row       label 65 + note 214                                  = 285
-//   着色器 row         label 65 + check 50 + count 70 + 列表… 50            = 253
-//   presets row        4 × 69 (3 apart)                                     = 285
-//   tab strip          4 × 74 (no padding)                                  = 296 of 301
-// Height: tabs 31 + padding 10 + pages 168 (7 × 24) + 6 + status 22 + padding 8 = 245.
+// The first key of each command shown in the panel ("" without one).
+export struct Keys {
+    brightnessdown: string,
+    brightnessup: string,
+    contrastdown: string,
+    contrastup: string,
+    saturationdown: string,
+    saturationup: string,
+    huedown: string,
+    hueup: string,
+    sharpen: string,
+    edge: string,
+    blur: string,
+    deblock: string,
+    deband: string,
+    denoise: string,
+    doubling: string,
+    interpolation: string,
+    aspect: string,
+    rotate: string,
+    flipv: string,
+    fliph: string,
+    zoomout: string,
+    zoomin: string,
+    panleft: string,
+    panup: string,
+    pandown: string,
+    panright: string,
+    centre: string,
+    framing: string,
+    deinterlace: string,
+    shaders: string,
+    gpu: string,
+    reset: string,
+    // Reset All (`video.resetPanel`, no default key).
+    resetpanel: string,
+}
 
-// 12px box + 11px text, sized like the 51×13 panel switches.
-component Check {
-    in-out property <bool> checked;
+// The renderer switch (`plugin.rendering`): `reason` is the player's own message while it is greyed.
+export struct Gpu {
+    shown: bool,
+    checked: bool,
+    enabled: bool,
+    busy: bool,
+    pending: bool,
+    reason: string,
+}
+
+export global PictureBridge {
+    // Colour
+    in-out property <float> brightness: 0;
+    in-out property <float> contrast: 0;
+    in-out property <float> saturation: 0;
+    in-out property <float> hue: 0;
+    in-out property <float> gamma: 0;
+    // Effects
+    in property <bool> blur-enabled;
+    in-out property <float> blur-strength: 3;
+    in property <bool> sharpen-enabled;
+    in-out property <float> sharpen-strength: 50;
+    in property <bool> edge-enabled;
+    in-out property <float> edge-strength: 50;
+    // The denoise row shows one mode at a time (0 3D, 1 Gradual, 2 Temporal).
+    in property <int> denoise-index: 0;
+    in property <bool> denoise-enabled;
+    in-out property <float> denoise-strength: 40;
+    in property <bool> deblock-enabled;
+    in-out property <float> deblock-strength: 25;
+    in property <bool> deband-enabled;
+    in-out property <float> deband-strength: 40;
+    in property <bool> blend-enabled;
+    // The source is smooth enough: frame doubling adds nothing.
+    in property <bool> blend-enough;
+    in property <bool> interpolation;
+    // Geometry
+    in property <int> fit-index: 0;
+    // The last custom ratio typed ("" = none); it adds a choice after the presets.
+    in property <string> custom-ratio;
+    in-out property <int> aspect-index: 0;
+    in-out property <int> reframe-index: 0;
+    in-out property <int> ratio-index: 1;
+    in property <int> rotate-index: 0;
+    in property <bool> flip-v;
+    in property <bool> flip-h;
+    in property <int> zoom-percent: 100;
+    in property <int> pan-x: 0;
+    in property <int> pan-y: 0;
+    // Advanced
+    in-out property <bool> advanced-open;
+    in-out property <int> deinterlace-index: 0;
+    in property <int> output-index: 0;
+    // GPU render options (HDR, shaders, motion interpolation); greyed with a reason under software rendering.
+    in property <bool> render-ready: true;
+    in-out property <int> tone-index: 0;
+    in-out property <float> target-peak: 203;
+    // The target brightness as saved (the slider's value while dragging is not rounded); the source is known to be SDR.
+    in property <int> peak-nits: 203;
+    in property <bool> peak-detect: true;
+    in property <bool> not-hdr;
+    in property <bool> shaders-enabled;
+    in property <int> shader-count: 0;
+    in property <Gpu> gpu;
+    // Bottom
+    in property <bool> effect-enabled: true;
+    in property <bool> failed;
+    // What failed: "no-picture", "filter", "view", "shader", "render-conflict", "render" ("" = nothing).
+    in property <string> status;
+    // The player's message; with `conflict`, another plugin owns the display or the render options.
+    in property <string> detail;
+    in property <bool> conflict;
+    in property <Keys> keys;
+    // The plugin asks for a section (HDR Settings… opens Advanced): a new `jump-serial` jumps to `jump-section`.
+    in property <int> jump-section;
+    in property <int> jump-serial;
+
+    // (field, value) while dragging; commit on release.
+    callback adjust(string, float);
+    callback commit(string, float);
+    // A slider's double-click: back to its default.
+    callback reset-field(string);
+    callback preset(string);
+    callback toggle-effect(bool);
+    callback toggle(string, bool);
+    callback choose(string, int);
+    // One of the plugin's commands, by id (the zoom, pan and crop buttons, Reset All, the GPU switch).
+    callback run(string);
+    callback set-advanced(bool);
+    callback retry();
+    callback custom-aspect();
+    callback shader-list();
+}
+
+// Glyphs of this panel, in the V-Line style of @vestra/icons.slint (1.5px round-capped lines), 14×12 boxes.
+global Glyphs {
+    out property <string> left: "M 8.5 2.5 L 5 6 L 8.5 9.5";
+    out property <string> right: "M 5.5 2.5 L 9 6 L 5.5 9.5";
+    out property <string> up: "M 3.5 7.5 L 7 4 L 10.5 7.5";
+    out property <string> down: "M 3.5 4.5 L 7 8 L 10.5 4.5";
+    out property <string> centre: "M 8.2 6 A 1.2 1.2 0 1 1 5.8 6 A 1.2 1.2 0 1 1 8.2 6 Z";
+    out property <string> reset: "M 3.5 3 A 4.5 4.5 0 1 1 2.5 7 M 3.5 0.8 V 3 H 5.7";
+    out property <string> minus: "M 3.5 6 H 10.5";
+    out property <string> plus: "M 3.5 6 H 10.5 M 7 2.5 V 9.5";
+    out property <string> flipv: "M 7 1 V 11 M 4.5 3.5 L 7 1 L 9.5 3.5 M 4.5 8.5 L 7 11 L 9.5 8.5";
+    out property <string> fliph: "M 1.5 6 H 12.5 M 4 3.5 L 1.5 6 L 4 8.5 M 10 3.5 L 12.5 6 L 10 8.5";
+    out property <string> info: "M 11.5 6 A 4.5 4.5 0 1 1 2.5 6 A 4.5 4.5 0 1 1 11.5 6 Z M 7 5.5 V 8.5 M 7 3.6 L 7 3.65";
+    out property <string> more: "M 3.5 6 L 3.5 6.05 M 7 6 L 7 6.05 M 10.5 6 L 10.5 6.05";
+}
+
+// Width of the label column: labels elide there, the whole label is in the row's tooltip.
+global Layout {
+    out property <length> column: 64px;
+    out property <length> row: 24px;
+}
+
+// A row label: one line, elided.
+component Name inherits Text {
+    in property <bool> enabled: true;
+    width: Layout.column;
+    color: root.enabled ? Theme.text : Theme.text-dim;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+// A section heading with a rule after it.
+component Head {
     in property <string> text;
+    min-height: 22px;
+    HorizontalLayout {
+        spacing: 6px;
+        padding-top: 4px;
+        Text {
+            text: root.text;
+            color: Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        VerticalLayout {
+            horizontal-stretch: 1;
+            alignment: center;
+            Rectangle { height: 1px; background: Theme.line; }
+        }
+    }
+}
+
+// A key cap, centred in its row (nothing and no room when `text` is "").
+component Cap {
+    in property <string> text;
+    VerticalLayout {
+        alignment: center;
+        KeyHint { text: root.text; }
+    }
+}
+
+// The panel slider: the library Slider (its track, keys and focus) with a tick at the default in
+// the middle; the pointer is this element's, so a double-click returns the slider to its default.
+component Fader {
+    in-out property <float> value;
+    in property <float> minimum: 0;
+    in property <float> maximum: 100;
+    in property <bool> enabled: true;
+    // A tick in the middle, where the default (0) is.
+    in property <bool> centre;
+    callback edited(float);
+    callback committed(float);
+    callback reset();
+    min-width: 40px;
+    horizontal-stretch: 1;
+    min-height: 14px;
+    function set-from(x: length) {
+        slider.set-value(root.minimum + clamp((x - 7px) / max(1px, root.width - 14px), 0, 1) * (root.maximum - root.minimum));
+    }
+    Rectangle {
+        visible: root.centre;
+        x: (root.width - 1px) / 2;
+        y: (root.height - 8px) / 2;
+        width: 1px;
+        height: 8px;
+        background: Theme.text-dim;
+    }
+    slider := Slider {
+        width: 100%;
+        height: 100%;
+        panel: true;
+        minimum: root.minimum;
+        maximum: root.maximum;
+        enabled: root.enabled;
+        value <=> root.value;
+        changed(v) => { root.edited(v); }
+        released(v) => { root.committed(v); }
+    }
+    TouchArea {
+        enabled: root.enabled;
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down { root.set-from(self.mouse-x); }
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.up { root.committed(root.value); }
+        }
+        moved => { if self.pressed { root.set-from(self.mouse-x); } }
+        double-clicked => { root.reset(); }
+    }
+}
+
+// A check box with a one-line label (elided); a click anywhere on it asks for the other state, and
+// the plugin sets `checked` (the library Check's plugin-decided mode).
+component Switch {
+    in property <string> text;
+    in property <bool> checked;
     in property <bool> enabled: true;
     callback toggled(bool);
     min-height: Theme.checkbox-row-height;
-    accessible-role: checkbox;
-    accessible-checked: root.checked;
-    accessible-label: root.text;
-    accessible-enabled: root.enabled;
+    horizontal-stretch: 1;
     HorizontalLayout {
         spacing: 4px;
-        alignment: start;
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 12px;
-                height: 12px;
-                background: Theme.bg-bar;
-                border-color: !root.enabled ? Theme.icon-disabled : touch.has-hover ? Theme.text-list : Theme.text-dim;
-                border-width: 1px;
-                if root.checked: Rectangle {
-                    width: 6px;
-                    height: 6px;
-                    background: root.enabled ? Theme.playing : Theme.icon-disabled;
-                }
-            }
+        box := Check {
+            text: "";
+            panel: true;
+            self-toggle: false;
+            checked: root.checked;
+            enabled: root.enabled;
+            toggled(on) => { root.toggled(on); }
         }
         Text {
+            horizontal-stretch: 1;
             text: root.text;
             color: root.enabled ? Theme.text : Theme.text-dim;
             font-size: Theme.font-body;
             vertical-alignment: center;
+            overflow: elide;
         }
     }
-    touch := TouchArea {
+    TouchArea {
         enabled: root.enabled;
-        clicked => {
-            root.checked = !root.checked;
-            root.toggled(root.checked);
-        }
+        clicked => { box.toggle(); }
     }
 }
 
-// Right-aligned row label; `column` is the window's label column (65px, wider for longer translations).
-component Label inherits Text {
-    in property <length> column: 65px;
-    width: root.column;
-    color: Theme.text;
-    font-size: Theme.font-body;
-    horizontal-alignment: right;
-    vertical-alignment: center;
+// A segmented choice: a bar of equal parts (`Segment`, written out at each use), the current one lit.
+component SegmentBar inherits Rectangle {
+    min-height: 22px;
+    horizontal-stretch: 1;
+    border-radius: Theme.radius-control;
+    background: Theme.bg-bar;
+    HorizontalLayout {
+        padding: 1px;
+        spacing: 1px;
+        @children
+    }
 }
 
-// 46×22 switch button; `checked` is the pressed (on) state.
-component Toggle {
+// One part of a SegmentBar; its label elides.
+component Segment inherits Rectangle {
     in property <string> text;
-    in property <bool> checked;
+    in property <bool> selected;
     in property <bool> enabled: true;
     callback clicked();
-    width: max(46px, toggle-label.preferred-width + 8px);
-    height: 22px;
-    accessible-role: button;
-    accessible-label: root.text;
-    accessible-checkable: true;
-    accessible-checked: root.checked;
-    accessible-enabled: root.enabled;
-    Rectangle {
-        border-radius: Theme.radius-control;
-        border-width: root.checked ? 1px : 0px;
-        border-color: Theme.playing;
-        background: !root.enabled ? Theme.button-disabled
-            : root.checked ? Theme.selected-bg
-            : touch.pressed ? Theme.button-press
-            : touch.has-hover ? Theme.button-hover : Theme.button-bg;
-    }
-    toggle-label := Text {
+    horizontal-stretch: 1;
+    min-width: 20px;
+    border-radius: Theme.radius-control;
+    background: root.selected ? (root.enabled ? Theme.selected-bg : Theme.button-disabled)
+        : touch.has-hover && root.enabled ? Theme.hover-bg : transparent;
+    Text {
+        x: 3px;
+        width: parent.width - 6px;
+        height: parent.height;
         text: root.text;
-        color: !root.enabled ? Theme.text-dim : root.checked ? Theme.text : Theme.text-list;
+        color: !root.enabled ? Theme.text-dim : root.selected ? Theme.text : Theme.text-list;
         font-size: Theme.font-body;
         horizontal-alignment: center;
         vertical-alignment: center;
+        overflow: elide;
     }
     touch := TouchArea {
         enabled: root.enabled;
@@ -109,767 +329,806 @@ component Toggle {
     }
 }
 
-// One popup row of a Choice: radio dot for the current item, menu-style hover.
-component ChoiceItem {
-    in property <string> text;
-    in property <bool> selected;
-    callback picked();
-    height: 20px;
-    Rectangle { background: touch.has-hover ? Theme.press-bg : transparent; }
-    HorizontalLayout {
-        padding-left: 5px;
-        spacing: 4px;
-        VerticalLayout {
-            alignment: center;
-            Rectangle {
-                width: 6px;
-                height: 6px;
-                border-radius: 3px;
-                background: root.selected ? Theme.playing : transparent;
-            }
-        }
-        Text {
-            text: root.text;
-            color: touch.has-hover ? Theme.accent : Theme.text-list;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-    }
-    touch := TouchArea { clicked => { root.picked(); } }
-}
-
-// Compact 21px drop-down with an 11px label; the list opens below it. With `window-height`
-// set, a list that would run past the window's bottom is moved up to end there.
-component Choice {
-    in property <[string]> model;
-    in-out property <int> current-index;
+// A 22px glyph button with a tooltip that names it and its key.
+component Glyph {
+    in property <string> glyph;
+    in property <string> tip;
+    in property <string> key;
     in property <bool> enabled: true;
-    in property <length> window-height: 0px;
-    callback selected(int);
-    private property <length> list-height: root.model.length * 20px + 2px;
-    height: 21px;
-    accessible-role: combobox;
-    accessible-enabled: root.enabled;
-    accessible-value: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
-    Rectangle {
-        border-radius: Theme.radius-control;
-        background: !root.enabled ? Theme.button-disabled
-            : touch.pressed ? Theme.button-press
-            : touch.has-hover ? Theme.button-hover : Theme.button-bg;
-    }
-    HorizontalLayout {
-        padding-left: 6px;
-        padding-right: 5px;
-        spacing: 2px;
-        Text {
-            horizontal-stretch: 1;
-            text: root.current-index >= 0 && root.current-index < root.model.length ? root.model[root.current-index] : "";
-            color: root.enabled ? Theme.text-list : Theme.text-dim;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-            overflow: elide;
-        }
-        // The drop-down arrow: a small V.
-        VerticalLayout {
-            horizontal-stretch: 0;
-            alignment: center;
-            Icon { name: "caret-down"; color: root.enabled ? Theme.text-dim : Theme.icon-disabled; }
-        }
-    }
-    touch := TouchArea {
-        enabled: root.enabled;
-        clicked => { list.show(); }
-    }
-    list := PopupWindow {
-        x: 0;
-        y: root.window-height > 0px
-            ? max(-root.absolute-position.y, min(root.height, root.window-height - root.absolute-position.y - root.list-height))
-            : root.height;
-        width: root.width;
+    in property <bool> checked;
+    callback clicked();
+    width: 22px;
+    height: 22px;
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
+        keys: [{ key: root.key, text: "" }];
         Rectangle {
-            background: Theme.bg-list;
-            border-color: Theme.line;
-            border-width: 1px;
-            VerticalLayout {
-                padding: 1px;
-                for name[index] in root.model: ChoiceItem {
-                    text: name;
-                    selected: index == root.current-index;
-                    picked => {
-                        root.current-index = index;
-                        root.selected(index);
-                    }
-                }
+            border-radius: Theme.radius-control;
+            background: root.checked ? Theme.selected-bg : transparent;
+            border-width: root.checked ? 1px : 0px;
+            border-color: Theme.playing;
+            Button {
+                width: 100%;
+                height: 100%;
+                icon: root.glyph;
+                stroked: true;
+                enabled: root.enabled;
+                accessible-label: root.tip;
+                clicked => { root.clicked(); }
             }
         }
     }
 }
 
-// Colour row: label 65 (right, 11px) + panel slider 154 + 默认 41×18, 24px pitch.
-component ColorRow {
+// Colour row: label, slider with its centre tick, the value, the minus and plus keys.
+component ColourRow {
     in property <string> label;
     in-out property <float> value;
-    in property <float> minimum: -100;
-    in property <float> maximum: 100;
+    in property <string> down;
+    in property <string> up;
     callback edited(float);
     callback committed(float);
     callback reset();
-    in property <length> column: 65px;
-    height: 24px;
-    HorizontalLayout {
-        spacing: 6px;
-        Label { text: root.label; column: root.column; }
-        Slider {
-            width: 154px;
-            panel: true;
-            minimum: root.minimum;
-            maximum: root.maximum;
-            value <=> root.value;
-            changed(v) => { root.edited(v); }
-            released(v) => { root.committed(v); }
-        }
-        VerticalLayout {
-            alignment: center;
-            Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset(); } }
+    height: Layout.row;
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.label;
+        keys: [{ key: root.down, text: "−" }, { key: root.up, text: "+" }];
+        detail: @tr("· double-click: Default");
+        HorizontalLayout {
+            spacing: 6px;
+            Name { text: root.label; }
+            Fader {
+                centre: true;
+                minimum: -100;
+                maximum: 100;
+                value <=> root.value;
+                edited(v) => { root.edited(v); }
+                committed(v) => { root.committed(v); }
+                reset => { root.reset(); }
+            }
+            Text {
+                width: 26px;
+                text: round(root.value);
+                color: Theme.text-list;
+                font-size: Theme.font-body;
+                horizontal-alignment: right;
+                vertical-alignment: center;
+            }
+            HorizontalLayout {
+                spacing: 3px;
+                Cap { text: root.down; }
+                Cap { text: root.up; }
+            }
         }
     }
 }
 
-// Effect row: switch 65 + strength slider 154 (greyed while off) + 默认 41. `tip` explains on hover.
-component EffectRow {
+// Effect row: switch with its label, the strength (greyed while off), the key. No tooltip:
+// `EffectRow` adds one where the row has something to explain.
+component EffectLine {
     in property <string> label;
-    in property <string> tip;
-    in-out property <bool> checked;
+    in property <string> key;
+    in property <bool> checked;
     in-out property <float> value;
     in property <float> maximum: 100;
     callback toggled(bool);
     callback edited(float);
     callback committed(float);
     callback reset();
-    in property <length> column: 65px;
-    height: 24px;
+    height: Layout.row;
+    HorizontalLayout {
+        spacing: 6px;
+        Switch {
+            horizontal-stretch: 0;
+            width: Layout.column;
+            text: root.label;
+            checked: root.checked;
+            toggled(on) => { root.toggled(on); }
+        }
+        Fader {
+            maximum: root.maximum;
+            enabled: root.checked;
+            value <=> root.value;
+            edited(v) => { root.edited(v); }
+            committed(v) => { root.committed(v); }
+            reset => { root.reset(); }
+        }
+        Cap { text: root.key; }
+    }
+}
+
+// An effect row whose tooltip explains it (with its key and the double-click).
+component EffectRow {
+    in property <string> label;
+    in property <string> tip;
+    in property <string> key;
+    in property <bool> checked;
+    in-out property <float> value;
+    in property <float> maximum: 100;
+    callback toggled(bool);
+    callback edited(float);
+    callback committed(float);
+    callback reset();
+    height: Layout.row;
     ToolTipArea {
         width: 100%;
         height: 100%;
         text: root.tip;
+        keys: [{ key: root.key, text: "" }];
+        detail: @tr("· double-click: Default");
+        EffectLine {
+            label: root.label;
+            key: root.key;
+            checked: root.checked;
+            maximum: root.maximum;
+            value <=> root.value;
+            toggled(on) => { root.toggled(on); }
+            edited(v) => { root.edited(v); }
+            committed(v) => { root.committed(v); }
+            reset => { root.reset(); }
+        }
+    }
+}
+
+// A row: label, control(s), key cap; no tooltip (`Row` adds one where the row has something to say).
+component Line {
+    in property <string> label;
+    in property <string> key;
+    in property <bool> enabled: true;
+    height: Layout.row;
+    HorizontalLayout {
+        spacing: 6px;
+        Name { text: root.label; enabled: root.enabled; }
         HorizontalLayout {
-            spacing: 6px;
-            alignment: start;
-            Check {
-                width: root.column;
-                text: root.label;
-                checked <=> root.checked;
-                toggled(on) => { root.toggled(on); }
-            }
-            Slider {
-                width: 154px;
-                panel: true;
-                minimum: 0;
-                maximum: root.maximum;
-                enabled: root.checked;
-                value <=> root.value;
-                changed(v) => { root.edited(v); }
-                released(v) => { root.committed(v); }
-            }
-            VerticalLayout {
-                alignment: center;
-                Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset(); } }
-            }
+            horizontal-stretch: 1;
+            spacing: 4px;
+            @children
         }
+        Cap { text: root.key; }
     }
 }
 
-// One 74×31 page tab of the strip (same strip as the audio workbench).
-component Tab {
-    in property <string> text;
-    in property <bool> selected;
-    callback picked();
-    width: max(74px, tab-label.preferred-width + 12px);
-    height: 31px;
-    accessible-role: tab;
-    accessible-label: root.text;
-    // Hover lights a rounded plate; the selected tab has a 28px gradient stroke under its label.
-    Rectangle {
-        x: 3px;
-        y: 4px;
-        width: parent.width - 6px;
-        height: parent.height - 8px;
-        border-radius: Theme.radius-control;
-        background: !root.selected && touch.has-hover ? Theme.hover-bg : transparent;
-    }
-    if root.selected: Rectangle {
-        x: (parent.width - 28px) / 2;
-        y: parent.height - 3px;
-        width: 28px;
-        height: 2px;
-        border-radius: 1px;
-        background: Theme.accent-fill;
-    }
-    tab-label := Text {
-        text: root.text;
-        color: root.selected ? Theme.text : Theme.text-dim;
-        font-size: Theme.font-tab;
-        horizontal-alignment: center;
-        vertical-alignment: center;
-    }
-    touch := TouchArea { clicked => { root.picked(); } }
-}
-
-export component PictureWindow inherits Window {
-    title: @tr("Picture Adjustments");
-    // 301px, wider only when a translation needs it.
-    width: max(301px, tab-strip.min-width, max(color-page.min-width, effect-page.min-width, view-page.min-width, advanced-page.min-width, status-row.min-width) + 16px);
-    height: 245px;
-    background: Theme.bg-panel;
-    // 色彩
-    in-out property <float> brightness: 0;
-    in-out property <float> contrast: 0;
-    in-out property <float> saturation: 0;
-    in-out property <float> hue: 0;
-    in-out property <float> gamma: 0;
-    // 效果
-    in-out property <bool> blur-enabled: false;
-    in-out property <float> blur-strength: 3;
-    in-out property <bool> sharpen-enabled;
-    in-out property <float> sharpen-strength: 50;
-    in-out property <bool> edge-enabled;
-    in-out property <float> edge-strength: 50;
-    in-out property <int> denoise-index: 0;
-    in-out property <bool> denoise-enabled;
-    in-out property <float> denoise-strength: 40;
-    in-out property <bool> deblock-enabled;
-    in-out property <float> deblock-strength: 25;
-    in-out property <bool> deband-enabled;
-    in-out property <float> deband-strength: 40;
-    in-out property <bool> blend-enabled;
-    // The source is smooth enough: 倍帧 adds nothing.
-    in property <bool> blend-enough;
-    // 画面
-    in-out property <bool> flip-v;
-    in-out property <bool> flip-h;
-    in-out property <int> rotate-index: 0;
-    in-out property <int> reframe-index: 0;
-    in-out property <int> ratio-index: 1;
-    // The last 自定义 ratio typed ("" = none); it adds a choice after the presets.
-    in property <string> custom-ratio;
-    private property <[string]> aspect-names: root.custom-ratio == ""
-        ? [@tr("Default (Source)"), "4:3", "16:9", "16:10", "1.85:1", "2.35:1"]
-        : [@tr("Default (Source)"), "4:3", "16:9", "16:10", "1.85:1", "2.35:1", @tr("Custom ({})", root.custom-ratio)];
-    in-out property <int> aspect-index: 0;
-    in-out property <int> fit-index: 0;
-    // log2 of the zoom: −2…2 is 25 %…400 %, 0 (the middle) is 100 %.
-    in-out property <float> zoom-level: 0;
-    in property <int> zoom-percent: 100;
-    // 高级
-    in-out property <int> deinterlace-index: 0;
-    in-out property <int> output-index: 0;
-    // GPU render options (高级 HDR / 着色器, 效果 运动补偿); greyed with `render-reason` under software rendering.
-    in property <bool> render-ready: true;
-    private property <string> render-reason: @tr("Needs GPU rendering (currently software rendering)");
-    in-out property <int> tone-index: 0;
-    in-out property <float> target-peak: 203;
-    // 目标亮度 as saved (the slider's value while dragging is not rounded); the source is known to be SDR.
-    in property <int> peak-nits: 203;
-    in property <bool> not-hdr;
-    in-out property <bool> shaders-enabled;
-    in property <int> shader-count: 0;
-    in-out property <bool> interpolation;
-    // shared
-    in-out property <int> tab-index: 0;
-    in-out property <bool> effect-enabled: true;
-    in property <bool> failed;
-    // What failed: "no-picture", "filter", "view", "shader", "render-conflict", "render" ("" = nothing).
-    in property <string> status;
-    // The player's message; with `conflict`, another plugin owns the display or the render options.
+// A Line whose tooltip names or explains the row, with its key.
+component Row {
+    in property <string> label;
+    in property <string> tip;
+    in property <string> key;
+    in property <bool> enabled: true;
     in property <string> detail;
-    in property <bool> conflict;
-    private property <string> status-text: root.status == "no-picture" ? @tr("No picture in the current source")
-        : root.status == "filter" ? @tr("Picture processing failed")
-        : root.status == "view" ? @tr("Display unavailable")
-        : root.status == "shader" ? @tr("Shader failed to load")
-        : root.status == "render-conflict" ? @tr("Render options unavailable")
-        : root.status == "render" ? @tr("Render settings failed")
-        : "";
-    private property <string> detail-text: !root.conflict ? root.detail
-        : root.status == "view" ? @tr("Another plugin controls the display")
-        : @tr("Another plugin controls the render options");
-    callback adjust(string, float);
-    callback commit(string, float);
-    callback reset-field(string);
-    callback preset(string);
-    callback toggle-effect(bool);
-    callback toggle(string, bool);
-    callback choose(string, int);
-    callback tab-changed(int);
-    callback retry();
-    callback custom-aspect();
-    callback shader-list();
-    private property <[string]> tab-names: [@tr("Color"), @tr("Effects"), @tr("Picture"), @tr("Advanced")];
-    // The label column: 65px, or the widest label (a check adds its 12px box and 4px gap).
-    private property <length> column: max(65px, label-measure.preferred-width, check-measure.preferred-width + 16px);
-    Rectangle {
-        visible: false;
-        width: 0;
-        height: 0;
-        label-measure := VerticalLayout {
-            for text in [@tr("Brightness"), @tr("Contrast"), @tr("Saturation"), @tr("Hue"), @tr("Gamma"), @tr("Flip"), @tr("Rotate"),
-                @tr("Crop/stretch"), @tr("Aspect ratio"), @tr("Display"), @tr("Zoom"), @tr("Deinterlace"), @tr("HDR"), @tr("Shaders")]: Text {
-                text: text;
-                font-size: Theme.font-body;
-            }
-        }
-        effects-measure := Text { text: @tr("Enable picture effects"); font-size: Theme.font-body; }
-        check-measure := VerticalLayout {
-            for text in [@tr("Blur"), @tr("Sharpen"), @tr("Edges"), @tr("Denoise"), @tr("Deblock"), @tr("Deband"), @tr("Doubling")]: Text {
-                text: text;
-                font-size: Theme.font-body;
-            }
+    height: Layout.row;
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip != "" ? root.tip : root.label;
+        keys: [{ key: root.key, text: "" }];
+        detail: root.detail;
+        Line {
+            label: root.label;
+            key: root.key;
+            enabled: root.enabled;
+            @children
         }
     }
+}
+
+export component Picture inherits Rectangle {
+    background: Theme.bg-panel;
+    private property <string> render-reason: @tr("Needs GPU rendering (currently software rendering)");
+    private property <string> status-text: PictureBridge.status == "no-picture" ? @tr("No picture in the current source")
+        : PictureBridge.status == "filter" ? @tr("Picture processing failed")
+        : PictureBridge.status == "view" ? @tr("Display unavailable")
+        : PictureBridge.status == "shader" ? @tr("Shader failed to load")
+        : PictureBridge.status == "render-conflict" ? @tr("Render options unavailable")
+        : PictureBridge.status == "render" ? @tr("Render settings failed")
+        : "";
+    private property <string> detail-text: !PictureBridge.conflict ? PictureBridge.detail
+        : PictureBridge.status == "view" ? @tr("Another plugin controls the display")
+        : @tr("Another plugin controls the render options");
+    private property <[string]> aspect-names: PictureBridge.custom-ratio == ""
+        ? [@tr("Default (Source)"), "4:3", "16:9", "16:10", "1.85:1", "2.35:1"]
+        : [@tr("Default (Source)"), "4:3", "16:9", "16:10", "1.85:1", "2.35:1", @tr("Custom ({})", PictureBridge.custom-ratio)];
+    // The section the bar lights: the one picked last until the user scrolls, else the one at the top.
+    private property <int> picked: -1;
+    private property <length> top: -scroll.viewport-y + 8px;
+    private property <int> section: root.picked >= 0 ? root.picked
+        : root.top >= advanced-head.y ? 3 : root.top >= geometry-head.y ? 2 : root.top >= effects-head.y ? 1 : 0;
+    private property <int> serial: PictureBridge.jump-serial;
+    private property <Keys> keys: PictureBridge.keys;
+
+    function jump(index: int) {
+        if index == 3 && !PictureBridge.advanced-open {
+            PictureBridge.advanced-open = true;
+            PictureBridge.set-advanced(true);
+        }
+        root.picked = index;
+        scroll.viewport-y = -max(0px, min(
+            index == 0 ? 0px : index == 1 ? effects-head.y : index == 2 ? geometry-head.y : advanced-head.y,
+            content.preferred-height - scroll.visible-height));
+    }
+    changed serial => { root.jump(PictureBridge.jump-section); }
+    init => {
+        if root.serial > 0 { root.jump(PictureBridge.jump-section); }
+    }
+
     VerticalLayout {
-        // Page tabs, 31px; the last picked page is remembered by the plugin.
-        Rectangle {
-            height: 31px;
-            background: Theme.bg-bar;
-            tab-strip := HorizontalLayout {
-                for name[index] in root.tab-names: Tab {
-                    text: name;
-                    selected: index == root.tab-index;
-                    picked => {
-                        root.tab-index = index;
-                        root.tab-changed(index);
-                    }
-                }
-                Rectangle { horizontal-stretch: 1; }
+        // The jump bar.
+        HorizontalLayout {
+            vertical-stretch: 0;
+            padding-left: 10px;
+            padding-right: 10px;
+            padding-top: 8px;
+            padding-bottom: 4px;
+            SegmentBar {
+                Segment { text: @tr("Colour"); selected: root.section == 0; clicked => { root.jump(0); } }
+                Segment { text: @tr("Effects"); selected: root.section == 1; clicked => { root.jump(1); } }
+                Segment { text: @tr("Geometry"); selected: root.section == 2; clicked => { root.jump(2); } }
+                Segment { text: @tr("Advanced"); selected: root.section == 3; clicked => { root.jump(3); } }
             }
         }
-        VerticalLayout {
-            padding: 8px;
-            padding-top: 10px;
-            spacing: 6px;
-            Rectangle {
-                height: 168px;
-                // 色彩
-                color-page := VerticalLayout {
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    visible: root.tab-index == 0;
-                    ColorRow { column: root.column; label: @tr("Brightness"); value <=> root.brightness; edited(v) => { root.adjust("brightness", v); } committed(v) => { root.commit("brightness", v); } reset => { root.reset-field("brightness"); } }
-                    ColorRow { column: root.column; label: @tr("Contrast"); value <=> root.contrast; edited(v) => { root.adjust("contrast", v); } committed(v) => { root.commit("contrast", v); } reset => { root.reset-field("contrast"); } }
-                    ColorRow { column: root.column; label: @tr("Saturation"); value <=> root.saturation; edited(v) => { root.adjust("saturation", v); } committed(v) => { root.commit("saturation", v); } reset => { root.reset-field("saturation"); } }
-                    ColorRow { column: root.column; label: @tr("Hue"); value <=> root.hue; edited(v) => { root.adjust("hue", v); } committed(v) => { root.commit("hue", v); } reset => { root.reset-field("hue"); } }
-                    ColorRow { column: root.column; label: @tr("Gamma"); value <=> root.gamma; edited(v) => { root.adjust("gamma", v); } committed(v) => { root.commit("gamma", v); } reset => { root.reset-field("gamma"); } }
-                    Rectangle { height: 8px; }
-                    HorizontalLayout {
-                        spacing: 3px;
+
+        scroll := ScrollView {
+            vertical-stretch: 1;
+            viewport-width: content.width;
+            viewport-height: content.preferred-height;
+            scrolled => { root.picked = -1; }
+            content := VerticalLayout {
+                width: scroll.width - 12px;
+                padding-left: 10px;
+                padding-right: 4px;
+                padding-top: 2px;
+                padding-bottom: 10px;
+                spacing: 4px;
+                alignment: start;
+
+                // ---------------------------------------------------------------- Colour
+                colour-head := Head { text: @tr("Colour"); }
+                ColourRow {
+                    label: @tr("Brightness");
+                    down: root.keys.brightnessdown;
+                    up: root.keys.brightnessup;
+                    value <=> PictureBridge.brightness;
+                    edited(v) => { PictureBridge.adjust("brightness", v); }
+                    committed(v) => { PictureBridge.commit("brightness", v); }
+                    reset => { PictureBridge.reset-field("brightness"); }
+                }
+                ColourRow {
+                    label: @tr("Contrast");
+                    down: root.keys.contrastdown;
+                    up: root.keys.contrastup;
+                    value <=> PictureBridge.contrast;
+                    edited(v) => { PictureBridge.adjust("contrast", v); }
+                    committed(v) => { PictureBridge.commit("contrast", v); }
+                    reset => { PictureBridge.reset-field("contrast"); }
+                }
+                ColourRow {
+                    label: @tr("Saturation");
+                    down: root.keys.saturationdown;
+                    up: root.keys.saturationup;
+                    value <=> PictureBridge.saturation;
+                    edited(v) => { PictureBridge.adjust("saturation", v); }
+                    committed(v) => { PictureBridge.commit("saturation", v); }
+                    reset => { PictureBridge.reset-field("saturation"); }
+                }
+                ColourRow {
+                    label: @tr("Hue");
+                    down: root.keys.huedown;
+                    up: root.keys.hueup;
+                    value <=> PictureBridge.hue;
+                    edited(v) => { PictureBridge.adjust("hue", v); }
+                    committed(v) => { PictureBridge.commit("hue", v); }
+                    reset => { PictureBridge.reset-field("hue"); }
+                }
+                ColourRow {
+                    label: @tr("Gamma");
+                    value <=> PictureBridge.gamma;
+                    edited(v) => { PictureBridge.adjust("gamma", v); }
+                    committed(v) => { PictureBridge.commit("gamma", v); }
+                    reset => { PictureBridge.reset-field("gamma"); }
+                }
+                HorizontalLayout {
+                    spacing: 3px;
+                    padding-top: 2px;
+                    // Four equal buttons that fit the narrowest column (the library default is 66 px).
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Original"); clicked => { PictureBridge.preset("original"); } }
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Vivid"); clicked => { PictureBridge.preset("vivid"); } }
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Cinema"); clicked => { PictureBridge.preset("cinema"); } }
+                    Button { horizontal-stretch: 1; min-width: 20px; text: @tr("Soft"); clicked => { PictureBridge.preset("soft"); } }
+                }
+
+                // ---------------------------------------------------------------- Effects
+                effects-head := Head { text: @tr("Effects"); }
+                EffectLine {
+                    label: @tr("Sharpen");
+                    key: root.keys.sharpen;
+                    checked: PictureBridge.sharpen-enabled;
+                    value <=> PictureBridge.sharpen-strength;
+                    toggled(on) => { PictureBridge.toggle("sharpen", on); }
+                    edited(v) => { PictureBridge.adjust("sharpen", v); }
+                    committed(v) => { PictureBridge.commit("sharpen", v); }
+                    reset => { PictureBridge.reset-field("sharpen"); }
+                }
+                EffectRow {
+                    label: @tr("Edges");
+                    tip: @tr("Wide-radius sharpening that mainly strengthens outlines");
+                    key: root.keys.edge;
+                    checked: PictureBridge.edge-enabled;
+                    value <=> PictureBridge.edge-strength;
+                    toggled(on) => { PictureBridge.toggle("edge", on); }
+                    edited(v) => { PictureBridge.adjust("edge", v); }
+                    committed(v) => { PictureBridge.commit("edge", v); }
+                    reset => { PictureBridge.reset-field("edge"); }
+                }
+                EffectRow {
+                    label: @tr("Blur");
+                    tip: @tr("Gaussian Blur");
+                    key: root.keys.blur;
+                    maximum: 10;
+                    checked: PictureBridge.blur-enabled;
+                    value <=> PictureBridge.blur-strength;
+                    toggled(on) => { PictureBridge.toggle("blur", on); }
+                    edited(v) => { PictureBridge.adjust("blurStrength", v); }
+                    committed(v) => { PictureBridge.commit("blurStrength", v); }
+                    reset => { PictureBridge.reset-field("blurStrength"); }
+                }
+                EffectRow {
+                    label: @tr("Deblock");
+                    tip: @tr("Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4");
+                    key: root.keys.deblock;
+                    checked: PictureBridge.deblock-enabled;
+                    value <=> PictureBridge.deblock-strength;
+                    toggled(on) => { PictureBridge.toggle("deblock", on); }
+                    edited(v) => { PictureBridge.adjust("deblock", v); }
+                    committed(v) => { PictureBridge.commit("deblock", v); }
+                    reset => { PictureBridge.reset-field("deblock"); }
+                }
+                EffectLine {
+                    label: @tr("Deband");
+                    key: root.keys.deband;
+                    checked: PictureBridge.deband-enabled;
+                    value <=> PictureBridge.deband-strength;
+                    toggled(on) => { PictureBridge.toggle("deband", on); }
+                    edited(v) => { PictureBridge.adjust("deband", v); }
+                    committed(v) => { PictureBridge.commit("deband", v); }
+                    reset => { PictureBridge.reset-field("deband"); }
+                }
+                // Denoise: the switch and strength of the mode shown below it (each mode keeps its own).
+                EffectLine {
+                    label: @tr("Denoise");
+                    key: root.keys.denoise;
+                    checked: PictureBridge.denoise-enabled;
+                    value <=> PictureBridge.denoise-strength;
+                    toggled(on) => { PictureBridge.toggle("denoise", on); }
+                    edited(v) => { PictureBridge.adjust("denoise", v); }
+                    committed(v) => { PictureBridge.commit("denoise", v); }
+                    reset => { PictureBridge.reset-field("denoise"); }
+                }
+                HorizontalLayout {
+                    padding-left: Layout.column + 6px;
+                    height: Layout.row;
+                    VerticalLayout {
                         alignment: center;
-                        Button { text: @tr("Original"); width: max(69px, self.preferred-width); clicked => { root.preset("original"); } }
-                        Button { text: @tr("Vivid"); width: max(69px, self.preferred-width); clicked => { root.preset("vivid"); } }
-                        Button { text: @tr("Cinema"); width: max(69px, self.preferred-width); clicked => { root.preset("cinema"); } }
-                        Button { text: @tr("Soft"); width: max(69px, self.preferred-width); clicked => { root.preset("soft"); } }
-                    }
-                    Rectangle { }
-                }
-                // 效果
-                effect-page := VerticalLayout {
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    visible: root.tab-index == 1;
-                    EffectRow {
-                        column: root.column;
-                        label: @tr("Blur");
-                        maximum: 10;
-                        checked <=> root.blur-enabled;
-                        value <=> root.blur-strength;
-                        toggled(on) => { root.toggle("blur", on); }
-                        edited(v) => { root.adjust("blurStrength", v); }
-                        committed(v) => { root.commit("blurStrength", v); }
-                        reset => { root.reset-field("blurStrength"); }
-                    }
-                    EffectRow {
-                        column: root.column;
-                        label: @tr("Sharpen");
-                        checked <=> root.sharpen-enabled;
-                        value <=> root.sharpen-strength;
-                        toggled(on) => { root.toggle("sharpen", on); }
-                        edited(v) => { root.adjust("sharpen", v); }
-                        committed(v) => { root.commit("sharpen", v); }
-                        reset => { root.reset-field("sharpen"); }
-                    }
-                    EffectRow {
-                        column: root.column;
-                        label: @tr("Edges");
-                        tip: @tr("Wide-radius sharpening that mainly strengthens outlines");
-                        checked <=> root.edge-enabled;
-                        value <=> root.edge-strength;
-                        toggled(on) => { root.toggle("edge", on); }
-                        edited(v) => { root.adjust("edge", v); }
-                        committed(v) => { root.commit("edge", v); }
-                        reset => { root.reset-field("edge"); }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Check {
-                            width: root.column;
-                            text: @tr("Denoise");
-                            checked <=> root.denoise-enabled;
-                            toggled(on) => { root.toggle("denoise", on); }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Choice {
-                                width: 60px;
-                                model: [@tr("3D"), @tr("Gradual"), @tr("Temporal")];
-                                current-index <=> root.denoise-index;
-                                selected(i) => { root.choose("denoiseMode", i); }
-                            }
-                        }
-                        Slider {
-                            width: 88px;
-                            panel: true;
-                            minimum: 0;
-                            maximum: 100;
-                            enabled: root.denoise-enabled;
-                            value <=> root.denoise-strength;
-                            changed(v) => { root.adjust("denoise", v); }
-                            released(v) => { root.commit("denoise", v); }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset-field("denoise"); } }
-                        }
-                    }
-                    EffectRow {
-                        column: root.column;
-                        label: @tr("Deblock");
-                        tip: @tr("Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4");
-                        checked <=> root.deblock-enabled;
-                        value <=> root.deblock-strength;
-                        toggled(on) => { root.toggle("deblock", on); }
-                        edited(v) => { root.adjust("deblock", v); }
-                        committed(v) => { root.commit("deblock", v); }
-                        reset => { root.reset-field("deblock"); }
-                    }
-                    EffectRow {
-                        column: root.column;
-                        label: @tr("Deband");
-                        checked <=> root.deband-enabled;
-                        value <=> root.deband-strength;
-                        toggled(on) => { root.toggle("deband", on); }
-                        edited(v) => { root.adjust("deband", v); }
-                        committed(v) => { root.commit("deband", v); }
-                        reset => { root.reset-field("deband"); }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        ToolTipArea {
-                            width: root.column;
-                            text: @tr("Doubles the frame rate (up to 60), blending each in-between frame from its neighbours");
-                            Check {
-                                width: 100%;
-                                height: 100%;
-                                text: @tr("Doubling");
-                                checked <=> root.blend-enabled;
-                                toggled(on) => { root.toggle("frameBlend", on); }
-                            }
-                        }
-                        Text {
-                            width: 84px;
-                            text: root.blend-enough ? @tr("Rate already high enough") : "";
-                            color: Theme.text-dim;
-                            font-size: Theme.font-xs;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                        ToolTipArea {
-                            width: max(100px, interpolation-check.preferred-width);
-                            text: root.render-ready ? @tr("GPU interpolation to the display refresh rate; excludes frame doubling") : root.render-reason;
-                            interpolation-check := Check {
-                                width: 100%;
-                                height: 100%;
-                                text: @tr("Interpolation");
-                                enabled: root.render-ready;
-                                checked <=> root.interpolation;
-                                toggled(on) => { root.toggle("interpolation", on); }
-                            }
+                        SegmentBar {
+                            Segment { text: @tr("3D"); selected: PictureBridge.denoise-index == 0; clicked => { PictureBridge.choose("denoiseMode", 0); } }
+                            Segment { text: @tr("Gradual"); selected: PictureBridge.denoise-index == 1; clicked => { PictureBridge.choose("denoiseMode", 1); } }
+                            Segment { text: @tr("Temporal"); selected: PictureBridge.denoise-index == 2; clicked => { PictureBridge.choose("denoiseMode", 2); } }
                         }
                     }
                 }
-                // 画面
-                view-page := VerticalLayout {
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    visible: root.tab-index == 2;
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Label { column: root.column; text: @tr("Flip"); }
-                        HorizontalLayout {
-                            spacing: 3px;
-                            padding-top: 1px;
-                            padding-bottom: 1px;
-                            Toggle {
-                                text: @tr("Vert.");
-                                checked: root.flip-v;
-                                clicked => {
-                                    root.flip-v = !root.flip-v;
-                                    root.toggle("flipV", root.flip-v);
-                                }
-                            }
-                            Toggle {
-                                text: @tr("Horiz.");
-                                checked: root.flip-h;
-                                clicked => {
-                                    root.flip-h = !root.flip-h;
-                                    root.toggle("flipH", root.flip-h);
-                                }
-                            }
-                        }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Label { column: root.column; text: @tr("Rotate"); }
-                        HorizontalLayout {
-                            spacing: 3px;
-                            padding-top: 1px;
-                            padding-bottom: 1px;
-                            for name[index] in ["0°", "90°", "180°", "270°"]: Toggle {
-                                text: name;
-                                checked: index == root.rotate-index;
-                                clicked => {
-                                    root.rotate-index = index;
-                                    root.choose("rotate", index);
-                                }
-                            }
-                        }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Label { column: root.column; text: @tr("Crop/stretch"); }
-                        VerticalLayout {
-                            alignment: center;
-                            Choice {
-                                width: 72px;
-                                model: [@tr("None"), @tr("Stretch"), @tr("Crop")];
-                                current-index <=> root.reframe-index;
-                                selected(i) => { root.choose("reframe", i); }
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            Choice {
-                                width: 76px;
-                                model: ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
-                                current-index <=> root.ratio-index;
-                                selected(i) => { root.choose("ratio", i); }
-                            }
-                        }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Label { column: root.column; text: @tr("Aspect ratio"); }
-                        VerticalLayout {
-                            alignment: center;
-                            Choice {
-                                width: 154px;
-                                window-height: root.height;
-                                model: root.aspect-names;
-                                current-index <=> root.aspect-index;
-                                selected(i) => { root.choose("aspect", i); }
-                            }
-                        }
-                        VerticalLayout {
-                            alignment: center;
-                            ToolTipArea {
-                                width: 21px;
-                                height: 21px;
-                                text: @tr("Custom Aspect Ratio…");
-                                Toggle { text: "…"; width: 21px; height: 21px; clicked => { root.custom-aspect(); } }
-                            }
-                        }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Label { column: root.column; text: @tr("Display"); }
-                        VerticalLayout {
-                            alignment: center;
-                            Choice {
-                                width: 154px;
-                                window-height: root.height;
-                                model: [@tr("Keep Aspect Ratio"), @tr("Ignore Aspect Ratio"), @tr("Fill Window")];
-                                current-index <=> root.fit-index;
-                                selected(i) => { root.choose("fit", i); }
-                            }
-                        }
-                    }
+                Rectangle {
+                    height: Layout.row;
                     ToolTipArea {
-                        height: 24px;
-                        text: @tr("Zoom {}%", root.zoom-percent);
-                        HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-                            Label { column: root.column; text: @tr("Zoom"); }
-                            Slider {
-                                width: 154px;
-                                panel: true;
-                                minimum: -2;
-                                maximum: 2;
-                                value <=> root.zoom-level;
-                                changed(v) => { root.adjust("zoom", v); }
-                                released(v) => { root.commit("zoom", v); }
-                            }
-                            VerticalLayout {
-                                alignment: center;
-                                Button { text: @tr("Default"); small: true; width: max(41px, self.preferred-width); clicked => { root.reset-field("zoom"); } }
-                            }
-                        }
-                    }
-                    Rectangle { }
-                }
-                // 高级
-                advanced-page := VerticalLayout {
-                    x: 0; y: 0; width: parent.width; height: parent.height;
-                    visible: root.tab-index == 3;
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Label { column: root.column; text: @tr("Deinterlace"); }
-                        VerticalLayout {
-                            alignment: center;
-                            Choice {
-                                width: 90px;
-                                model: [@tr("Auto"), @tr("Always"), @tr("Never")];
-                                current-index <=> root.deinterlace-index;
-                                selected(i) => { root.choose("deinterlace", i); }
-                            }
-                        }
-                        // Auto (index 0) is the player's deinterlacer, always at field rate: Output applies to Always.
-                        ToolTipArea {
-                            width: 104px;
-                            text: root.deinterlace-index == 0 ? @tr("Auto outputs by field (double rate); this setting applies to Always") : "";
-                            VerticalLayout {
-                                alignment: center;
-                                Choice {
-                                    width: 104px;
-                                    enabled: root.deinterlace-index != 0;
-                                    model: [@tr("By Frame"), @tr("By Field (Double Rate)")];
-                                    current-index <=> root.output-index;
-                                    selected(i) => { root.choose("output", i); }
-                                }
-                            }
-                        }
-                    }
-                    // E16: tone mapping (only HDR sources are mapped) + 目标亮度 100–400 nits.
-                    ToolTipArea {
-                        height: 24px;
-                        text: root.render-ready ? @tr("Tone mapping of HDR sources (PQ / HLG) on SDR displays; the slider sets the target brightness") : root.render-reason;
-                        HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-                            Label { column: root.column; text: @tr("HDR"); color: root.render-ready ? Theme.text : Theme.text-dim; }
-                            VerticalLayout {
-                                alignment: center;
-                                Choice {
-                                    width: 90px;
-                                    enabled: root.render-ready;
-                                    window-height: root.height;
-                                    model: [@tr("Auto"), @tr("Off"), "BT.2390", "Hable", "Mobius", "Reinhard", @tr("Clip")];
-                                    current-index <=> root.tone-index;
-                                    selected(i) => { root.choose("toneMapping", i); }
-                                }
-                            }
-                            Slider {
-                                width: 100px;
-                                panel: true;
-                                enabled: root.render-ready;
-                                minimum: 100;
-                                maximum: 400;
-                                value <=> root.target-peak;
-                                changed(v) => { root.adjust("targetPeak", v); }
-                                released(v) => { root.commit("targetPeak", v); }
-                            }
-                        }
-                    }
-                    HorizontalLayout {
-                        height: 24px;
-                        spacing: 6px;
-                        alignment: start;
-                        Label { column: root.column; text: ""; }
-                        Text {
-                            width: 214px;
-                            text: !root.render-ready ? root.render-reason : root.not-hdr ? @tr("Target {} nits · Not an HDR source", root.peak-nits) : @tr("Target {} nits", root.peak-nits);
-                            color: Theme.text-dim;
-                            font-size: Theme.font-xs;
-                            vertical-alignment: center;
-                            overflow: elide;
-                        }
-                    }
-                    // E17: switch + count + the list window (usable without GPU rendering, to arrange it beforehand).
-                    ToolTipArea {
-                        height: 24px;
-                        text: root.render-ready ? @tr("mpv user shaders (.glsl), run in list order") : root.render-reason;
-                        HorizontalLayout {
-                            spacing: 6px;
-                            alignment: start;
-                            Label { column: root.column; text: @tr("Shaders"); color: root.render-ready ? Theme.text : Theme.text-dim; }
-                            Check {
-                                width: max(50px, self.preferred-width);
-                                text: @tr("Enable");
-                                enabled: root.render-ready;
-                                checked <=> root.shaders-enabled;
-                                toggled(on) => { root.toggle("shaders", on); }
-                            }
-                            Text { width: max(70px, self.preferred-width); text: @tr("{n} shader" | "{n} shaders" % root.shader-count); color: Theme.text-dim; font-size: Theme.font-body; vertical-alignment: center; overflow: elide; }
-                            VerticalLayout {
-                                alignment: center;
-                                Button { text: @tr("List…"); small: true; width: max(50px, self.preferred-width); clicked => { root.shader-list(); } }
-                            }
-                        }
-                    }
-                    Rectangle { }
-                }
-            }
-            status-row := HorizontalLayout {
-                height: 22px;
-                spacing: 6px;
-                Check {
-                    // Never narrower than its box and label: the status text beside it elides instead.
-                    min-width: effects-measure.preferred-width + 16px;
-                    text: @tr("Enable picture effects");
-                    checked <=> root.effect-enabled;
-                    toggled(on) => { root.toggle-effect(on); }
-                }
-                ToolTipArea {
-                    text: root.detail-text;
-                    // As wide as the room left, so a long message elides instead of running under the check.
-                    Text {
                         width: 100%;
                         height: 100%;
+                        text: PictureBridge.blend-enough ? @tr("Rate already high enough")
+                            : @tr("Doubles the frame rate (up to 60), blending each in-between frame from its neighbours");
+                        keys: [{ key: root.keys.doubling, text: "" }];
+                        HorizontalLayout {
+                            spacing: 6px;
+                            Switch {
+                                text: @tr("Frame Doubling");
+                                checked: PictureBridge.blend-enabled;
+                                toggled(on) => { PictureBridge.toggle("frameBlend", on); }
+                            }
+                            Cap { text: root.keys.doubling; }
+                        }
+                    }
+                }
+                Rectangle {
+                    height: Layout.row;
+                    ToolTipArea {
+                        width: 100%;
+                        height: 100%;
+                        text: PictureBridge.render-ready ? @tr("GPU interpolation to the display refresh rate; excludes frame doubling") : root.render-reason;
+                        keys: [{ key: root.keys.interpolation, text: "" }];
+                        HorizontalLayout {
+                            spacing: 6px;
+                            Switch {
+                                text: @tr("Motion Interpolation");
+                                enabled: PictureBridge.render-ready;
+                                checked: PictureBridge.interpolation;
+                                toggled(on) => { PictureBridge.toggle("interpolation", on); }
+                            }
+                            Cap { text: root.keys.interpolation; }
+                        }
+                    }
+                }
+
+                // ---------------------------------------------------------------- Geometry
+                geometry-head := Head { text: @tr("Geometry"); }
+                Row {
+                    label: @tr("Fit");
+                    tip: PictureBridge.fit-index == 1 ? @tr("Ignore Aspect Ratio") : PictureBridge.fit-index == 2 ? @tr("Fill Window") : @tr("Keep Aspect Ratio");
+                    VerticalLayout {
+                        alignment: center;
+                        SegmentBar {
+                            Segment { text: @tr("Keep"); selected: PictureBridge.fit-index == 0; clicked => { PictureBridge.choose("fit", 0); } }
+                            Segment { text: @tr("Stretch"); selected: PictureBridge.fit-index == 1; clicked => { PictureBridge.choose("fit", 1); } }
+                            Segment { text: @tr("Fill"); selected: PictureBridge.fit-index == 2; clicked => { PictureBridge.choose("fit", 2); } }
+                        }
+                    }
+                }
+                Row {
+                    label: @tr("Aspect");
+                    tip: @tr("Aspect ratio");
+                    key: root.keys.aspect;
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        Choice {
+                            window-height: root.height;
+                            model: root.aspect-names;
+                            current-index <=> PictureBridge.aspect-index;
+                            selected(index) => { PictureBridge.choose("aspect", index); }
+                        }
+                    }
+                    VerticalLayout {
+                        alignment: center;
+                        Glyph {
+                            glyph: Glyphs.more;
+                            tip: @tr("Custom Aspect Ratio…");
+                            clicked => { PictureBridge.custom-aspect(); }
+                        }
+                    }
+                }
+                Row {
+                    label: @tr("Crop");
+                    tip: @tr("Crop/Stretch");
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        Choice {
+                            model: [@tr("None"), @tr("Stretch"), @tr("Crop")];
+                            current-index <=> PictureBridge.reframe-index;
+                            selected(index) => { PictureBridge.choose("reframe", index); }
+                        }
+                    }
+                    VerticalLayout {
+                        horizontal-stretch: 1;
+                        alignment: center;
+                        Choice {
+                            enabled: PictureBridge.reframe-index != 0;
+                            window-height: root.height;
+                            model: ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
+                            current-index <=> PictureBridge.ratio-index;
+                            selected(index) => { PictureBridge.choose("ratio", index); }
+                        }
+                    }
+                }
+                // The crop position (a crop or stretch shows part of the picture, or places it).
+                HorizontalLayout {
+                    padding-left: Layout.column + 6px;
+                    spacing: 2px;
+                    alignment: start;
+                    Glyph { glyph: Glyphs.left; tip: @tr("Move Left"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.left"); } }
+                    Glyph { glyph: Glyphs.up; tip: @tr("Move Up"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.up"); } }
+                    Glyph { glyph: Glyphs.down; tip: @tr("Move Down"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.down"); } }
+                    Glyph { glyph: Glyphs.right; tip: @tr("Move Right"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.right"); } }
+                    Glyph { glyph: Glyphs.reset; tip: @tr("Reset Crop Position"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.reset"); } }
+                }
+                Line {
+                    label: @tr("Rotate");
+                    key: root.keys.rotate;
+                    VerticalLayout {
+                        alignment: center;
+                        SegmentBar {
+                            Segment { text: "0°"; selected: PictureBridge.rotate-index == 0; clicked => { PictureBridge.choose("rotate", 0); } }
+                            Segment { text: "90°"; selected: PictureBridge.rotate-index == 1; clicked => { PictureBridge.choose("rotate", 1); } }
+                            Segment { text: "180°"; selected: PictureBridge.rotate-index == 2; clicked => { PictureBridge.choose("rotate", 2); } }
+                            Segment { text: "270°"; selected: PictureBridge.rotate-index == 3; clicked => { PictureBridge.choose("rotate", 3); } }
+                        }
+                    }
+                }
+                Line {
+                    label: @tr("Flip");
+                    Glyph {
+                        glyph: Glyphs.flipv;
+                        tip: @tr("Flip Vertically");
+                        key: root.keys.flipv;
+                        checked: PictureBridge.flip-v;
+                        clicked => { PictureBridge.toggle("flipV", !PictureBridge.flip-v); }
+                    }
+                    Glyph {
+                        glyph: Glyphs.fliph;
+                        tip: @tr("Flip Horizontally");
+                        key: root.keys.fliph;
+                        checked: PictureBridge.flip-h;
+                        clicked => { PictureBridge.toggle("flipH", !PictureBridge.flip-h); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                Line {
+                    label: @tr("Zoom");
+                    Glyph { glyph: Glyphs.minus; tip: @tr("Zoom Out"); key: root.keys.zoomout; clicked => { PictureBridge.run("video.frame.zoom-out"); } }
+                    Text {
+                        width: 40px;
+                        text: @tr("{}%", PictureBridge.zoom-percent);
+                        color: Theme.text-list;
+                        font-size: Theme.font-body;
+                        horizontal-alignment: center;
+                        vertical-alignment: center;
+                    }
+                    Glyph { glyph: Glyphs.plus; tip: @tr("Zoom In"); key: root.keys.zoomin; clicked => { PictureBridge.run("video.frame.zoom-in"); } }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                Row {
+                    label: @tr("Pan");
+                    // TRANSLATORS: {0} and {1} are the picture's offset in percent, across and down.
+                    tip: @tr("Pan ({0}%, {1}%)", PictureBridge.pan-x, PictureBridge.pan-y);
+                    key: root.keys.framing;
+                    detail: @tr("· resets zoom and pan");
+                    Glyph { glyph: Glyphs.left; tip: @tr("Pan ←"); key: root.keys.panleft; clicked => { PictureBridge.run("video.frame.left"); } }
+                    Glyph { glyph: Glyphs.up; tip: @tr("Pan ↑"); key: root.keys.panup; clicked => { PictureBridge.run("video.frame.up"); } }
+                    Glyph { glyph: Glyphs.down; tip: @tr("Pan ↓"); key: root.keys.pandown; clicked => { PictureBridge.run("video.frame.down"); } }
+                    Glyph { glyph: Glyphs.right; tip: @tr("Pan →"); key: root.keys.panright; clicked => { PictureBridge.run("video.frame.right"); } }
+                    Glyph { glyph: Glyphs.centre; tip: @tr("Center Frame"); key: root.keys.centre; clicked => { PictureBridge.run("video.frame.centre"); } }
+                    Glyph { glyph: Glyphs.reset; tip: @tr("Reset Framing"); key: root.keys.framing; clicked => { PictureBridge.run("video.frame.reset"); } }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+
+                // ---------------------------------------------------------------- Advanced (closed by default)
+                advanced-head := Rectangle {
+                    min-height: 22px;
+                    HorizontalLayout {
+                        spacing: 5px;
+                        padding-top: 4px;
+                        VerticalLayout {
+                            alignment: center;
+                            Icon { name: PictureBridge.advanced-open ? "caret-down" : "submenu"; color: Theme.text-dim; }
+                        }
+                        Text {
+                            text: @tr("Advanced");
+                            color: Theme.text-dim;
+                            font-size: Theme.font-body;
+                            vertical-alignment: center;
+                            overflow: elide;
+                        }
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            Rectangle { height: 1px; background: Theme.line; }
+                        }
+                    }
+                    TouchArea {
+                        clicked => {
+                            PictureBridge.advanced-open = !PictureBridge.advanced-open;
+                            PictureBridge.set-advanced(PictureBridge.advanced-open);
+                        }
+                    }
+                }
+                if PictureBridge.advanced-open: VerticalLayout {
+                    spacing: 4px;
+                    Line {
+                        label: @tr("Deinterlace");
+                        key: root.keys.deinterlace;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            Choice {
+                                model: [@tr("Auto"), @tr("Always"), @tr("Never")];
+                                current-index <=> PictureBridge.deinterlace-index;
+                                selected(index) => { PictureBridge.choose("deinterlace", index); }
+                            }
+                        }
+                    }
+                    // Auto (index 0) is the player's deinterlacer, always at field rate: Output applies to Always.
+                    HorizontalLayout {
+                        padding-left: Layout.column + 6px;
+                        height: Layout.row;
+                        ToolTipArea {
+                            text: PictureBridge.deinterlace-index == 0 ? @tr("Auto outputs by field (double rate); this setting applies to Always")
+                                : @tr("By Field (Double Rate)");
+                            Switch {
+                                width: 100%;
+                                height: 100%;
+                                text: @tr("Double rate");
+                                enabled: PictureBridge.deinterlace-index == 1;
+                                checked: PictureBridge.deinterlace-index == 0 || PictureBridge.output-index == 1;
+                                toggled(on) => { PictureBridge.choose("output", on ? 1 : 0); }
+                            }
+                        }
+                    }
+                    Row {
+                        label: @tr("HDR");
+                        tip: !PictureBridge.render-ready ? root.render-reason
+                            : PictureBridge.not-hdr ? @tr("Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source")
+                            : @tr("Tone mapping of HDR sources (PQ / HLG) on SDR displays");
+                        enabled: PictureBridge.render-ready;
+                        VerticalLayout {
+                            horizontal-stretch: 1;
+                            alignment: center;
+                            Choice {
+                                enabled: PictureBridge.render-ready;
+                                window-height: root.height;
+                                model: [@tr("Auto"), @tr("Off"), "BT.2390", "Hable", "Mobius", "Reinhard", @tr("Clip")];
+                                current-index <=> PictureBridge.tone-index;
+                                selected(index) => { PictureBridge.choose("toneMapping", index); }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        padding-left: Layout.column + 6px;
+                        height: Layout.row;
+                        ToolTipArea {
+                            text: PictureBridge.render-ready ? @tr("Target brightness") : root.render-reason;
+                            detail: @tr("· double-click: Default");
+                            HorizontalLayout {
+                                spacing: 6px;
+                                Fader {
+                                    enabled: PictureBridge.render-ready;
+                                    minimum: 100;
+                                    maximum: 400;
+                                    value <=> PictureBridge.target-peak;
+                                    edited(v) => { PictureBridge.adjust("targetPeak", v); }
+                                    committed(v) => { PictureBridge.commit("targetPeak", v); }
+                                    reset => { PictureBridge.reset-field("targetPeak"); }
+                                }
+                                Text {
+                                    width: 54px;
+                                    text: @tr("{} nits", PictureBridge.peak-nits);
+                                    color: PictureBridge.render-ready ? Theme.text-list : Theme.text-dim;
+                                    font-size: Theme.font-body;
+                                    horizontal-alignment: right;
+                                    vertical-alignment: center;
+                                    overflow: elide;
+                                }
+                            }
+                        }
+                    }
+                    HorizontalLayout {
+                        padding-left: Layout.column + 6px;
+                        height: Layout.row;
+                        ToolTipArea {
+                            text: PictureBridge.render-ready ? @tr("Dynamic Peak Detection") : root.render-reason;
+                            Switch {
+                                width: 100%;
+                                height: 100%;
+                                text: @tr("Peak detection");
+                                enabled: PictureBridge.render-ready;
+                                checked: PictureBridge.peak-detect;
+                                toggled(on) => { PictureBridge.toggle("peakDetect", on); }
+                            }
+                        }
+                    }
+                    // Shaders: the switch needs GPU rendering; the list stays usable to arrange it beforehand.
+                    Row {
+                        label: @tr("Shaders");
+                        tip: PictureBridge.render-ready ? @tr("mpv user shaders (.glsl), run in list order") : root.render-reason;
+                        key: root.keys.shaders;
+                        enabled: PictureBridge.render-ready;
+                        Switch {
+                            text: @tr("{n} shader" | "{n} shaders" % PictureBridge.shader-count);
+                            enabled: PictureBridge.render-ready;
+                            checked: PictureBridge.shaders-enabled;
+                            toggled(on) => { PictureBridge.toggle("shaders", on); }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            Button { text: @tr("List…"); small: true; clicked => { PictureBridge.shader-list(); } }
+                        }
+                    }
+                    // The player's renderer for the next start; Restart shows while a restart would change it.
+                    Rectangle {
+                        height: Layout.row;
+                        visible: PictureBridge.gpu.shown;
+                        ToolTipArea {
+                            width: 100%;
+                            height: 100%;
+                            text: PictureBridge.gpu.busy ? @tr("Switching…")
+                                : !PictureBridge.gpu.enabled && PictureBridge.gpu.reason != "" ? PictureBridge.gpu.reason
+                                : PictureBridge.gpu.pending ? @tr("Restart Vestra Player to apply")
+                                : @tr("Draw the video on the GPU from the next start");
+                            keys: [{ key: root.keys.gpu, text: "" }];
+                            HorizontalLayout {
+                                spacing: 6px;
+                                Switch {
+                                    text: @tr("GPU Rendering (Experimental)");
+                                    enabled: PictureBridge.gpu.enabled && !PictureBridge.gpu.busy;
+                                    checked: PictureBridge.gpu.checked;
+                                    toggled(on) => { PictureBridge.run("video.gpu-rendering"); }
+                                }
+                                VerticalLayout {
+                                    alignment: center;
+                                    width: PictureBridge.gpu.pending ? restart.preferred-width : 0px;
+                                    visible: PictureBridge.gpu.pending;
+                                    restart := Button {
+                                        text: @tr("Restart");
+                                        small: true;
+                                        enabled: !PictureBridge.gpu.busy;
+                                        clicked => { PictureBridge.run("video.gpu-rendering.restart"); }
+                                    }
+                                }
+                                Cap { text: root.keys.gpu; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // A failure of the chain, the display or the render options: one line, the player's message in the tip.
+        Rectangle {
+            vertical-stretch: 0;
+            height: PictureBridge.failed ? 26px : 0px;
+            visible: PictureBridge.failed;
+            ToolTipArea {
+                text: root.detail-text != "" ? root.detail-text : root.status-text;
+                HorizontalLayout {
+                    padding-left: 10px;
+                    padding-right: 10px;
+                    spacing: 6px;
+                    Text {
+                        horizontal-stretch: 1;
                         text: root.status-text;
                         color: Theme.accent;
                         font-size: Theme.font-body;
-                        horizontal-alignment: right;
                         vertical-alignment: center;
                         overflow: elide;
                     }
-                }
-                if root.failed: VerticalLayout {
-                    alignment: center;
-                    Button { text: @tr("Retry"); small: true; width: max(41px, self.preferred-width); clicked => { root.retry(); } }
+                    VerticalLayout {
+                        alignment: center;
+                        Button { text: @tr("Retry"); small: true; clicked => { PictureBridge.retry(); } }
+                    }
                 }
             }
+        }
+
+        // Bottom: the master switch and Reset All (Colour, Effects and Geometry; not the Advanced preferences).
+        Rectangle { vertical-stretch: 0; height: 1px; background: Theme.line; }
+        HorizontalLayout {
+            vertical-stretch: 0;
+            padding: 8px;
+            padding-left: 10px;
+            spacing: 6px;
+            ToolTipArea {
+                horizontal-stretch: 1;
+                min-height: Theme.button-height;
+                text: @tr("Enable picture effects");
+                Switch {
+                    width: 100%;
+                    height: 100%;
+                    text: @tr("Enable picture effects");
+                    checked: PictureBridge.effect-enabled;
+                    toggled(on) => { PictureBridge.toggle-effect(on); }
+                }
+            }
+            ToolTipArea {
+                horizontal-stretch: 0;
+                width: reset-all.preferred-width;
+                min-height: Theme.button-height;
+                text: @tr("Colour, effects and geometry back to their defaults; the Advanced settings stay");
+                keys: [{ key: root.keys.resetpanel, text: "" }];
+                reset-all := Button {
+                    width: 100%;
+                    height: 100%;
+                    text: @tr("Reset All");
+                    clicked => { PictureBridge.run("video.resetPanel"); }
+                }
+            }
+            Cap { text: root.keys.resetpanel; }
         }
     }
 }

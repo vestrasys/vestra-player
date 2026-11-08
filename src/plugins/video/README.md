@@ -10,15 +10,14 @@ Adjusts the picture's color, effects, aspect ratio and how it is shown.
 - **Aspect ratio and crop**: keep or ignore the aspect ratio, fill the window; common and custom ratios; crop or stretch to a ratio.
 - **Framing**: zoom and pan the picture.
 - **GPU render options**: HDR tone mapping, pixel shaders, motion interpolation.
-- **GPU rendering switch**: Video ▸ GPU Rendering (Experimental) chooses GPU or software rendering for the next start and offers a restart (Video ▸ Restart Player to Apply while one is pending); greyed out with the player's reason where the GPU cannot be chosen (Windows for now), but always usable while checked.
+- **GPU rendering switch**: GPU Rendering (Experimental) in the panel's Advanced section chooses GPU or software rendering for the next start and offers a restart (a Restart button while one is pending); greyed out with the player's reason where the GPU cannot be chosen (Windows for now), but always usable while checked.
 - Color, effect and aspect settings carry over between files and restarts; flip, rotation and framing apply to the current file only.
 
 ## Entries
 
-- Right-click menu Video: Pixel Shaders, Deinterlace (Ctrl+I), Aspect (Shift+F6), Crop/Stretch, Framing, Image Processing, Rotation (Alt+K), Picture Adjustments…, GPU Rendering (Experimental).
-- Right-click menu Reset: Picture (Q), Framing (Numpad5, Alt+Backspace), Crop Position.
-- Brightness W/E, contrast R/T, saturation Y/U, hue I/O.
-- The Picture Adjustments… window has four tabs: Color, Effects, Picture, Advanced.
+- **Picture…** (Alt+1, top level of the right-click menu) opens the **Picture** tab of the adjust column beside the video, and closes it when that tab shows. One scrolling column: Colour, Effects, Geometry and a closed Advanced section; the bar at the top jumps to them. Each control shows its key; a slider's double-click returns it to its default.
+- Every other command (colour steps, effects, aspect, crop/stretch, framing, rotation, deinterlace, HDR, shaders, the resets) is in the command palette (Ctrl+Shift+P) with its keys, named "Category: Title".
+- Brightness W/E, contrast R/T, saturation Y/U, hue I/O; Q resets the picture (the panel's Reset All).
 
 ## Limits
 

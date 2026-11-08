@@ -7,6 +7,7 @@ import {
   FITS,
   MAX_SHADERS,
   PAN_STEP,
+  PEAK_DEFAULT,
   TONE_MAPPINGS,
   ZOOM_STEP,
   DEINTERLACE_OUTPUTS,
@@ -15,7 +16,6 @@ import {
   RATIOS,
   REFRAME_MODES,
   ROTATIONS,
-  TABS,
   aspectIndex,
   aspectMessage,
   blendFps,
@@ -116,7 +116,7 @@ const ROTATION_TITLES = [
 ] as const satisfies readonly { degrees: Rotation; title: string }[];
 /** E16, E17 and 运动补偿 are GPU render options; software rendering (and Windows for now) refuses them. */
 const SOFTWARE = "Needs GPU rendering (currently software rendering)";
-/** Deinterlace Auto is the player's deinterlacer, always at field rate: Output is greyed (menu reason; the window has the same tip). */
+/** Deinterlace Auto is the player's deinterlacer, always at field rate: Output is greyed (the command's reason; the panel has the same tip). */
 const AUTO_OUTPUT = "Auto outputs by field (double rate); this setting applies to Always";
 /** The renderer switch (render modes §8.4): its title, and the title while a restart would change the renderer. */
 const GPU_TITLE = "GPU Rendering (Experimental)";
@@ -142,27 +142,30 @@ const signed = (n: number) => (n > 0 ? `+${n}` : `${n}`);
 const pause = (ms: number) => new Promise<void>((done) => void setTimeout(done, ms).unref?.());
 
 /**
- * Picture tool: one four-page window, one owned video filter, the display layer
- * (aspect, fit, zoom, pan) and the 视频 ▸ menu. Colour, effects, deinterlace, crop/pad,
- * aspect and fit are global (`settings.json`); flip, rotation, zoom and pan belong to
- * the current source and reset when it changes.
+ * Picture tool: the Picture panel in the adjust column (Alt+1), one owned video filter, the
+ * display layer (aspect, fit, zoom, pan) and the render options. Colour, effects, deinterlace,
+ * crop/pad, aspect and fit are global (`settings.json`); flip, rotation, zoom and pan belong to
+ * the current source and reset when it changes. Every command is in the command palette; only
+ * Picture… is in the menu.
  */
 export default async function activate(plugin: Plugin) {
   const { player } = plugin;
   const store = settingsStore(plugin);
-  const { tab: savedTab, ...saved } = parse(store.value);
+  const { advanced: savedAdvanced, ...saved } = parse(store.value);
   const look: Look = { ...defaultLook(), ...saved };
-  let tab = savedTab;
+  /** The panel's Advanced section is open (saved). */
+  let advanced = savedAdvanced;
   let enabled = true;
   /** E13 zoom and pan: per source, never saved. */
   let frame: Frame = centred();
 
   const filter = plugin.video.filter("picture");
   const view = plugin.video.view();
-  const pictureWindow = plugin.windows.create("picture.slint");
+  // The adjust column's Picture tab (player 0.7.6); the tab's key is Picture…'s (Alt+1).
+  const panel = plugin.panels.mount("adjust", "picture.slint", { title: "Picture" });
   const aspectWindow = plugin.windows.create("ui/aspect.slint");
   const shadersWindow = plugin.windows.create("ui/shaders.slint");
-  const persist = () => store.save(serialize(look, tab));
+  const persist = () => store.save(serialize(look, advanced));
 
   // E16, E17, E18 运动补偿: GPU render options, global and saved; not part of the chain, so
   // 启用画面效果 leaves them alone. Under software rendering every set is refused (`unsupported`),
@@ -209,7 +212,7 @@ export default async function activate(plugin: Plugin) {
     }
     const announce = renderAnnounce;
     renderAnnounce = false;
-    // A compile error arrives after `applied`, when the window is usually closed: always said.
+    // A compile error arrives after `applied`, when the panel is usually closed: always said.
     if (shaderFailed(status.error)) shown(plugin.osd.show("Shader failed to load"));
     else if (announce && status.error.code === "conflict") shown(plugin.osd.show("Render options unavailable: another plugin controls them"));
     else if (announce && status.error.code !== "unsupported")
@@ -327,8 +330,14 @@ export default async function activate(plugin: Plugin) {
   const toggleOf = (field: Strength): Toggle =>
     field === "denoise" ? effects.denoise[effects.denoise.shown] : effects[field];
 
-  // ---------------------------------------------------------------- window
-  pictureWindow.bind(() => {
+  // ---------------------------------------------------------------- panel
+  /** The commands the panel's buttons run (`run`, by command id), filled where they are added. */
+  const runs = new Map<string, () => unknown>();
+  /** The first key of one of this plugin's commands, "" without one (the user's current keys). */
+  const keyOf = (id: string) => plugin.commands.keys(id)[0] ?? "";
+  /** The renderer switch as the panel shows it (set once the rendering state is read, below). */
+  let gpuView = () => ({ shown: false, checked: false, enabled: false, busy: false, pending: false, reason: "" });
+  panel.bind(() => {
     const denoise = effects.denoise[effects.denoise.shown];
     return {
       ...look.picture,
@@ -345,29 +354,69 @@ export default async function activate(plugin: Plugin) {
       debandStrength: effects.deband.strength,
       blendEnabled: effects.frameBlend,
       blendEnough: blendEnough(),
+      interpolation: look.render.interpolation,
+      fitIndex: FITS.findIndex((f) => f.id === look.display.fit),
       customRatio: look.display.customAspect,
       aspectIndex: aspectIndex(look.display),
-      fitIndex: FITS.findIndex((f) => f.id === look.display.fit),
-      zoomLevel: Math.log2(frame.zoom),
-      zoomPercent: percent(frame.zoom),
-      flipV: look.geometry.flipV,
-      flipH: look.geometry.flipH,
-      rotateIndex: ROTATIONS.indexOf(look.geometry.rotate),
       reframeIndex: REFRAME_MODES.indexOf(look.reframe.mode),
       ratioIndex: look.reframe.ratio,
+      rotateIndex: ROTATIONS.indexOf(look.geometry.rotate),
+      flipV: look.geometry.flipV,
+      flipH: look.geometry.flipH,
+      zoomPercent: percent(frame.zoom),
+      panX: percent(frame.panX),
+      panY: percent(frame.panY),
+      advancedOpen: advanced,
       deinterlaceIndex: DEINTERLACE_MODES.findIndex((m) => m.id === look.deinterlace.mode),
       outputIndex: DEINTERLACE_OUTPUTS.findIndex((m) => m.id === look.deinterlace.output),
       renderReady: gpuReady(),
       toneIndex: TONE_MAPPINGS.findIndex((t) => t.id === look.render.toneMapping),
       targetPeak: look.render.targetPeak,
       peakNits: look.render.targetPeak,
+      peakDetect: look.render.peakDetect,
       notHdr: notHdr(),
       shadersEnabled: look.render.shadersEnabled,
       shaderCount: look.render.shaders.length,
-      interpolation: look.render.interpolation,
-      tabIndex: tab,
+      gpu: gpuView(),
       effectEnabled: enabled,
       ...statusLine(filter.status, view.status, render.status),
+      // Read here, so the caps follow every key change (`commands.keys`).
+      keys: {
+        brightnessdown: keyOf("video.brightness.down"),
+        brightnessup: keyOf("video.brightness.up"),
+        contrastdown: keyOf("video.contrast.down"),
+        contrastup: keyOf("video.contrast.up"),
+        saturationdown: keyOf("video.saturation.down"),
+        saturationup: keyOf("video.saturation.up"),
+        huedown: keyOf("video.hue.down"),
+        hueup: keyOf("video.hue.up"),
+        sharpen: keyOf("video.sharpen"),
+        edge: keyOf("video.edge"),
+        blur: keyOf("video.gaussian"),
+        deblock: keyOf("video.deblock"),
+        deband: keyOf("video.deband"),
+        // The denoise switch is the shown mode's (3D Ctrl+N, Temporal Ctrl+M).
+        denoise: keyOf(EFFECTS.find((row) => row.toggle === effects.denoise.shown)!.id),
+        doubling: keyOf("video.frame-blend"),
+        interpolation: keyOf("video.interpolation"),
+        aspect: keyOf("video.aspect.cycle"),
+        rotate: keyOf("video.rotate.cycle"),
+        flipv: keyOf("video.flip.vertical"),
+        fliph: keyOf("video.flip.horizontal"),
+        zoomout: keyOf("video.frame.zoom-out"),
+        zoomin: keyOf("video.frame.zoom-in"),
+        panleft: keyOf("video.frame.left"),
+        panup: keyOf("video.frame.up"),
+        pandown: keyOf("video.frame.down"),
+        panright: keyOf("video.frame.right"),
+        centre: keyOf("video.frame.centre"),
+        framing: keyOf("video.frame.reset"),
+        deinterlace: keyOf("video.deinterlace.cycle"),
+        shaders: keyOf("video.shader.use"),
+        gpu: keyOf("video.gpu-rendering"),
+        reset: keyOf("video.reset"),
+        resetpanel: keyOf("video.resetPanel"),
+      },
     };
   });
   /** Store a slider value; how it takes effect (null when the field is unknown). */
@@ -376,32 +425,29 @@ export default async function activate(plugin: Plugin) {
     if (field === "blurStrength") look.picture.blurStrength = clamp(value, 0, 10);
     else if ((colors as string[]).includes(field)) look.picture[field as Color] = clamp(value, -100, 100);
     else if ((strengths as string[]).includes(field)) toggleOf(field as Strength).strength = clamp(Math.round(value), 0, 100);
-    else if (field === "zoom") frame.zoom = zoomOf(2 ** clamp(value, -2, 2));
     else if (field === "targetPeak") look.render.targetPeak = peakOf(value);
     else return null;
-    return field === "zoom" ? "view" : field === "targetPeak" ? "render" : (strengths as string[]).includes(field) ? "rebuild" : "live";
+    return field === "targetPeak" ? "render" : (strengths as string[]).includes(field) ? "rebuild" : "live";
   };
   // eq, hue and gblur change in place while playing; the other filters rebuild, so they wait for release.
-  // Zoom (a display property) and 目标亮度 (a render option) follow the drag. The first move away
-  // from the defaults adds the eq node (one rebuild); from then on the drag updates it in place,
-  // also through 0, and the release removes it when every colour is back at its default.
-  pictureWindow.on("adjust", (field: string, value: number) => {
+  // The target brightness (a render option) follows the drag. The first move away from the defaults
+  // adds the eq node (one rebuild); from then on the drag updates it in place, also through 0, and
+  // the release removes it when every colour is back at its default.
+  panel.on("adjust", (field: string, value: number) => {
     const kind = storeValue(field, value);
-    if (kind === "view") showView();
-    else if (kind === "render") renderChanged();
+    if (kind === "render") renderChanged();
     else if (kind === "live") change(true);
   });
-  pictureWindow.on("commit", (field: string, value: number) => {
+  panel.on("commit", (field: string, value: number) => {
     const kind = storeValue(field, value);
-    if (kind === "view") showView();
-    else if (kind === "render") renderChanged();
+    if (kind === "render") renderChanged();
     else if (kind) change();
   });
-  pictureWindow.on("resetField", (field: string) => {
-    if (field === "zoom") {
-      frame = centred();
-      showView();
-      return;
+  /** A slider's double-click: that slider back to its default. */
+  panel.on("resetField", (field: string) => {
+    if (field === "targetPeak") {
+      look.render.targetPeak = PEAK_DEFAULT;
+      return renderChanged();
     }
     if (field === "blurStrength") look.picture.blurStrength = defaults.blurStrength;
     else if ((colors as string[]).includes(field)) look.picture[field as Color] = defaults[field as Color];
@@ -411,29 +457,32 @@ export default async function activate(plugin: Plugin) {
     else return;
     change();
   });
-  pictureWindow.on("preset", (name: string) => {
+  panel.on("preset", (name: string) => {
     const preset = presets[name];
     if (!preset) return;
     look.picture = { ...preset };
     change();
   });
-  pictureWindow.on("toggleEffect", (on: boolean) => {
+  panel.on("toggleEffect", (on: boolean) => {
     enabled = on === true;
     apply();
     if (wantsMeasure()) void measure();
   });
-  pictureWindow.on("toggle", (field: string, on: boolean) => {
+  panel.on("toggle", (field: string, on: boolean) => {
     const value = on === true;
     if (field === "blur") look.picture.blurEnabled = value;
     else if (field === "frameBlend") return setBlend(value, false);
     else if (field === "interpolation") return setInterpolation(value, false);
     else if (field === "shaders") return setShaders(value, false);
-    else if (field === "flipV" || field === "flipH") look.geometry[field] = value;
+    else if (field === "peakDetect") {
+      look.render.peakDetect = value;
+      return renderChanged(true);
+    } else if (field === "flipV" || field === "flipH") look.geometry[field] = value;
     else if ((strengths as string[]).includes(field)) toggleOf(field as Strength).on = value;
     else return;
     change();
   });
-  pictureWindow.on("choose", (field: string, index: number) => {
+  panel.on("choose", (field: string, index: number) => {
     if (!Number.isInteger(index) || index < 0) return;
     if (field === "denoiseMode" && index < DENOISE_MODES.length) {
       effects.denoise.shown = DENOISE_MODES[index]!;
@@ -457,14 +506,15 @@ export default async function activate(plugin: Plugin) {
     } else return;
     change();
   });
-  pictureWindow.on("customAspect", () => openCustom());
-  pictureWindow.on("shaderList", () => openShaders());
-  pictureWindow.on("tabChanged", (index: number) => {
-    if (!Number.isInteger(index) || index < 0 || index >= TABS || index === tab) return;
-    tab = index;
+  // The zoom, pan and crop buttons, Reset All and the GPU switch run their commands (OSD included).
+  panel.on("run", (id: string) => void runs.get(String(id))?.());
+  panel.on("setAdvanced", (open: boolean) => {
+    advanced = open === true;
     persist();
   });
-  pictureWindow.on("retry", () => {
+  panel.on("customAspect", () => openCustom());
+  panel.on("shaderList", () => openShaders());
+  panel.on("retry", () => {
     if (filter.status.state === "failed") filter.retry();
     if (view.status.state === "failed") showView();
     if (render.status.state === "failed" && gpuReady()) applyRender(true, true);
@@ -545,14 +595,20 @@ export default async function activate(plugin: Plugin) {
     void aspectWindow.show();
   };
 
-  /** 画面调节…; HDR 设置… opens it on the 高级 page. */
-  const showWindow = (page?: number) => {
-    if (page !== undefined && page !== tab) {
-      tab = page;
+  /**
+   * Opens the panel at a section (0 Colour … 3 Advanced, which opens): HDR Settings… shows the
+   * HDR row. The panel jumps whenever `jumpSerial` changes, also to the section it was at.
+   */
+  let jumps = 0;
+  const showSection = async (section: number) => {
+    if (section === 3 && !advanced) {
+      advanced = true;
       persist();
-      plugin.update();
     }
-    return pictureWindow.show();
+    jumps += 1;
+    panel.set({ jumpSection: section, jumpSerial: jumps });
+    plugin.update();
+    await panel.show();
   };
 
   // ---------------------------------------------------------------- actions (menu and keys)
@@ -565,7 +621,8 @@ export default async function activate(plugin: Plugin) {
    * crop/stretch, aspect, framing, deinterlace and the pixel shaders / HDR options have their
    * own items and are left alone.
    */
-  const reset = () => {
+  /** The colours to their defaults and every image-processing switch off; whether a switch was on. */
+  const clearPicture = () => {
     const processing =
       look.picture.blurEnabled || switches().some((t) => t.on) || effects.frameBlend || look.render.interpolation;
     look.picture = { ...defaults };
@@ -573,9 +630,29 @@ export default async function activate(plugin: Plugin) {
     switchBlend(false);
     const interpolation = look.render.interpolation;
     look.render.interpolation = false;
+    return { processing, interpolation };
+  };
+  const reset = () => {
+    const { processing, interpolation } = clearPicture();
     change();
     if (interpolation) applyRender(true);
     shown(plugin.osd.show(processing ? "Picture reset; image processing off" : "Picture reset"));
+  };
+  /**
+   * The panel's Reset All (coordinator ruling 2026-11-08): what Q resets, plus the Geometry section:
+   * fit, aspect, crop/stretch and its position, rotation, flip, zoom and pan. The Advanced
+   * preferences (deinterlace, HDR, shaders, GPU rendering) stay; so does the custom ratio typed last.
+   */
+  const resetPanel = () => {
+    const { interpolation } = clearPicture();
+    look.geometry = upright();
+    look.reframe = { ...look.reframe, mode: "none", x: 50, y: 50 };
+    look.display = { ...look.display, aspect: null, fit: "keep" };
+    frame = centred();
+    change();
+    if (interpolation) applyRender(true);
+    displayChanged(true);
+    shown(plugin.osd.show("Picture panel reset"));
   };
   const step = (texts: Step, field: Color, delta: number) => {
     look.picture[field] = clamp(Math.round(look.picture[field]) + delta, -100, 100);
@@ -849,13 +926,14 @@ export default async function activate(plugin: Plugin) {
   });
   shadersWindow.on("openFolder", () => void openShaderFolder());
 
-  // ---------------------------------------------------------------- menu 视频 ▸ (@video)
-  const { commands } = plugin;
+  // ---------------------------------------------------------------- commands
+  // Menu redesign step 4: the Video ▸ submenu and Reset ▸ Picture / Framing / Crop Position are
+  // gone; their commands (same ids and keys) live in the command palette, and their controls in
+  // the Picture panel, which Picture… (Alt+1, also in the context menu) opens and closes.
   /**
    * Command categories (player 0.7.6): the command palette names a command "Category: Title".
-   * Each is the item's submenu label (the same text and translation), "Reset" for the Reset
-   * menu (the player's own label) and "Picture" for the items directly under Video. Text
-   * values, so the catalog keeps them once the menu paths go.
+   * They are the old submenu labels (the same texts and translations), "Reset" for the old Reset
+   * menu's items (the player's own word) and "Picture" for the items that were directly under Video.
    */
   const category = {
     shaders: plugin.i18n.text("Pixel Shaders"),
@@ -869,19 +947,18 @@ export default async function activate(plugin: Plugin) {
     reset: plugin.i18n.text("Reset"),
     picture: plugin.i18n.text("Picture"),
   };
-  /** `home`: the command that opens the window holding this command's control. */
+  /** `home`: the command that opens the panel holding this command's control (Picture…). */
   const inPicture = { home: "video.picture" } as const;
-  /** Picture Adjustments… on the Advanced page (tone mapping, the shader switch). */
-  const inAdvanced = { home: "video.hdr.settings" } as const;
-  // 402 像素着色 (E17, E16): GPU render options, disabled with the reason under software rendering.
-  // The list and the folder stay usable, so shaders can be arranged beforehand.
+  const { commands } = plugin;
+  // 402 Pixel Shaders (E17, E16): GPU render options, disabled with the reason under software
+  // rendering. The list and the folder stay usable, so shaders can be arranged beforehand.
   const gpu = { enabled: gpuReady, reason: gpuReason };
   const pixel = { order: 402 } as const;
   commands.add({
     id: "video.shader.use",
-    path: ["@video", "Pixel Shaders", "Use Shaders"],
+    title: "Use Shaders",
     category: category.shaders,
-    ...inAdvanced,
+    ...inPicture,
     ...pixel,
     group: "video-source",
     bindings: ["Shift+P"],
@@ -890,15 +967,15 @@ export default async function activate(plugin: Plugin) {
     run: () => setShaders(!look.render.shadersEnabled, true),
   });
   const shaders = { category: category.shaders, ...pixel, group: "video-source" } as const;
-  commands.add({ id: "video.shader.list", path: ["@video", "Pixel Shaders", "Shader List…"], ...shaders, run: openShaders });
-  commands.add({ id: "video.shader.folder", path: ["@video", "Pixel Shaders", "Open Shader Folder"], ...shaders, home: "video.shader.list", run: openShaderFolder });
-  commands.add({ id: "video.shader.reload", path: ["@video", "Pixel Shaders", "Reload Shaders"], ...shaders, ...gpu, run: reloadShaders });
+  commands.add({ id: "video.shader.list", title: "Shader List…", ...shaders, ...inPicture, run: openShaders });
+  commands.add({ id: "video.shader.folder", title: "Open Shader Folder", ...shaders, home: "video.shader.list", run: openShaderFolder });
+  commands.add({ id: "video.shader.reload", title: "Reload Shaders", ...shaders, ...gpu, run: reloadShaders });
   for (const { id, label } of TONE_MAPPINGS)
     commands.add({
       id: `video.hdr.${id}`,
-      path: ["@video", "Pixel Shaders", "HDR Tone Mapping", label],
+      title: label,
       category: category.hdr,
-      ...inAdvanced,
+      ...inPicture,
       ...pixel,
       group: "video-hdr",
       radio: true,
@@ -908,28 +985,31 @@ export default async function activate(plugin: Plugin) {
     });
   commands.add({
     id: "video.hdr.peak",
-    path: ["@video", "Pixel Shaders", "HDR Tone Mapping", "Dynamic Peak Detection"],
+    title: "Dynamic Peak Detection",
     category: category.hdr,
+    ...inPicture,
     ...pixel,
     group: "video-hdr-peak",
     checked: () => look.render.peakDetect,
     ...gpu,
     run: switchPeak,
   });
+  // Opens the panel at its HDR rows (Advanced).
   commands.add({
     id: "video.hdr.settings",
-    path: ["@video", "Pixel Shaders", "HDR Settings…"],
+    title: "HDR Settings…",
     category: category.shaders,
+    ...inPicture,
     ...pixel,
     group: "video-hdr",
     ...gpu,
-    run: () => showWindow(3),
+    run: () => showSection(3),
   });
-  // 403 反交错 (E10): Auto is the player's per-frame deinterlacer at field rate, Always is BWDIF
+  // 403 Deinterlace (E10): Auto is the player's per-frame deinterlacer at field rate, Always is BWDIF
   // with the Output setting (greyed under Auto).
   commands.add({
     id: "video.deinterlace.cycle",
-    path: ["@video", "Deinterlace", "Cycle"],
+    title: "Cycle",
     category: category.deinterlace,
     ...inPicture,
     order: 403,
@@ -943,7 +1023,7 @@ export default async function activate(plugin: Plugin) {
   for (const { id, label } of DEINTERLACE_MODES)
     commands.add({
       id: `video.deinterlace.${id}`,
-      path: ["@video", "Deinterlace", label],
+      title: label,
       category: category.deinterlace,
       ...inPicture,
       order: 403,
@@ -955,7 +1035,7 @@ export default async function activate(plugin: Plugin) {
   for (const { id, label } of DEINTERLACE_OUTPUTS)
     commands.add({
       id: `video.deinterlace.output.${id}`,
-      path: ["@video", "Deinterlace", "Output", label],
+      title: label,
       category: category.deinterlace,
       ...inPicture,
       order: 403,
@@ -966,11 +1046,11 @@ export default async function activate(plugin: Plugin) {
       checked: () => look.deinterlace.output === id,
       run: () => setOutput(id),
     });
-  // 404 比例 (E11): display mode, then the aspect ratios.
+  // 404 Aspect (E11): display mode, then the aspect ratios.
   for (const { id, menu } of FITS)
     commands.add({
       id: `video.fit.${id}`,
-      path: ["@video", "Aspect", menu],
+      title: menu,
       category: category.aspect,
       ...inPicture,
       order: 404,
@@ -981,7 +1061,7 @@ export default async function activate(plugin: Plugin) {
     });
   commands.add({
     id: "video.aspect.cycle",
-    path: ["@video", "Aspect", "Cycle Aspect Ratio"],
+    title: "Cycle Aspect Ratio",
     category: category.aspect,
     ...inPicture,
     order: 404,
@@ -991,7 +1071,7 @@ export default async function activate(plugin: Plugin) {
   });
   commands.add({
     id: "video.aspect.default",
-    path: ["@video", "Aspect", "Default (Source)"],
+    title: "Default (Source)",
     category: category.aspect,
     ...inPicture,
     order: 404,
@@ -1004,7 +1084,7 @@ export default async function activate(plugin: Plugin) {
     commands.add({
       id: `video.aspect.${i}`,
       // i18n-ignore: a ratio (4:3), the same in every language
-      path: ["@video", "Aspect", label],
+      title: label,
       category: category.aspect,
       ...inPicture,
       order: 404,
@@ -1014,7 +1094,7 @@ export default async function activate(plugin: Plugin) {
       run: () => setAspect(aspect),
     }),
   );
-  // The 自定义 item shows its ratio in the title, so it is re-added (with 自定义比例… after it) when that changes.
+  // The Custom item shows its ratio in the title, so it is re-added (with Custom Aspect Ratio… after it) when that changes.
   let custom = plugin.scope();
   let rebuilding: Promise<void> = Promise.resolve();
   const rebuild = async () => {
@@ -1038,15 +1118,11 @@ export default async function activate(plugin: Plugin) {
       checked: () => aspectIndex(look.display) === RATIOS.length + 1,
       run: () => setAspect(parseAspect(text)),
     };
-    if (text)
-      custom.commands.add({
-        ...item,
-        path: ["@video", "Aspect", plugin.i18n.text("Custom ({})", [text])],
-      });
-    else custom.commands.add({ ...item, path: ["@video", "Aspect", "Custom (x:y)"], enabled: false, reason: "Enter one with Custom Aspect Ratio… first" });
+    if (text) custom.commands.add({ ...item, title: plugin.i18n.text("Custom ({})", [text]) });
+    else custom.commands.add({ ...item, title: "Custom (x:y)", enabled: false, reason: "Enter one with Custom Aspect Ratio… first" });
     custom.commands.add({
       id: "video.aspect.edit",
-      path: ["@video", "Aspect", "Custom Aspect Ratio…"],
+      title: "Custom Aspect Ratio…",
       category: category.aspect,
       ...inPicture,
       order: 404,
@@ -1055,10 +1131,10 @@ export default async function activate(plugin: Plugin) {
     });
   };
   addCustom();
-  // 405 裁剪/拉伸 (E12).
+  // 405 Crop/Stretch (E12).
   commands.add({
     id: "video.reframe.none",
-    path: ["@video", "Crop/Stretch", "None"],
+    title: "None",
     category: category.crop,
     ...inPicture,
     order: 405,
@@ -1071,7 +1147,7 @@ export default async function activate(plugin: Plugin) {
     RATIOS.forEach((row, ratio) =>
       commands.add({
         id: `video.reframe.${mode}.${ratio}`,
-        path: ["@video", "Crop/Stretch", mode === "pad" ? row.pad : row.crop],
+        title: mode === "pad" ? row.pad : row.crop,
         category: category.crop,
         ...inPicture,
         order: 405,
@@ -1087,65 +1163,71 @@ export default async function activate(plugin: Plugin) {
     { id: "up", title: "Move Up", dx: 0, dy: -POSITION_STEP },
     { id: "down", title: "Move Down", dx: 0, dy: POSITION_STEP },
   ] as const;
-  for (const { id, title, dx, dy } of positions)
+  for (const { id, title, dx, dy } of positions) {
+    runs.set(`video.reframe.${id}`, () => move(dx, dy));
     commands.add({
       id: `video.reframe.${id}`,
-      path: ["@video", "Crop/Stretch", title],
+      title,
       category: category.crop,
+      ...inPicture,
       order: 405,
       group: "video-reframe-position",
       repeat: true,
       run: () => move(dx, dy),
     });
-  // Resets live in the Reset menu (user ruling 2026-11-01); the ids stay, so keys keep working.
+  }
+  // The resets keep their ids, keys and "Reset: …" names; their controls are the panel's ↺ buttons.
   commands.add({
     id: "video.reframe.reset",
-    path: ["@reset", "Crop Position"],
+    title: "Crop Position",
     category: category.reset,
+    ...inPicture,
     order: 442,
     group: "reset-video",
     repeat: false,
     run: () => move(0, 0),
   });
-  // 406 帧位 (E13): keypad keys plus mpv-style Alt keys for keyboards without one.
+  runs.set("video.reframe.reset", () => move(0, 0));
+  // 406 Framing (E13): mpv-style Alt keys first (the panel shows the first key), keypad keys too.
   const frames = [
-    { id: "zoom-in", title: "Zoom In", group: "video-display", bindings: ["Numpad9", "Alt+Plus"], run: () => zoomBy(ZOOM_STEP), repeat: true },
-    { id: "zoom-out", title: "Zoom Out", group: "video-display", bindings: ["Numpad1", "Alt+-"], run: () => zoomBy(1 / ZOOM_STEP), repeat: true },
-    { id: "right", title: "Pan →", group: "video-frame-pan", bindings: ["Ctrl+Numpad6", "Alt+ArrowRight"], run: () => panBy(PAN_STEP, 0, PAN.right), repeat: true },
-    { id: "left", title: "Pan ←", group: "video-frame-pan", bindings: ["Ctrl+Numpad4", "Alt+ArrowLeft"], run: () => panBy(-PAN_STEP, 0, PAN.left), repeat: true },
-    { id: "up", title: "Pan ↑", group: "video-frame-pan", bindings: ["Ctrl+Numpad8", "Alt+ArrowUp"], run: () => panBy(0, -PAN_STEP, PAN.up), repeat: true },
-    { id: "down", title: "Pan ↓", group: "video-frame-pan", bindings: ["Ctrl+Numpad2", "Alt+ArrowDown"], run: () => panBy(0, PAN_STEP, PAN.down), repeat: true },
+    { id: "zoom-in", title: "Zoom In", group: "video-display", bindings: ["Alt+Plus", "Numpad9"], run: () => zoomBy(ZOOM_STEP), repeat: true },
+    { id: "zoom-out", title: "Zoom Out", group: "video-display", bindings: ["Alt+-", "Numpad1"], run: () => zoomBy(1 / ZOOM_STEP), repeat: true },
+    { id: "right", title: "Pan →", group: "video-frame-pan", bindings: ["Alt+ArrowRight", "Ctrl+Numpad6"], run: () => panBy(PAN_STEP, 0, PAN.right), repeat: true },
+    { id: "left", title: "Pan ←", group: "video-frame-pan", bindings: ["Alt+ArrowLeft", "Ctrl+Numpad4"], run: () => panBy(-PAN_STEP, 0, PAN.left), repeat: true },
+    { id: "up", title: "Pan ↑", group: "video-frame-pan", bindings: ["Alt+ArrowUp", "Ctrl+Numpad8"], run: () => panBy(0, -PAN_STEP, PAN.up), repeat: true },
+    { id: "down", title: "Pan ↓", group: "video-frame-pan", bindings: ["Alt+ArrowDown", "Ctrl+Numpad2"], run: () => panBy(0, PAN_STEP, PAN.down), repeat: true },
     { id: "centre", title: "Center Frame", group: "video-frame-pan", bindings: ["Ctrl+Numpad5"], run: () => resetFrame(true), repeat: false },
   ] as const;
-  for (const { id, title, group, bindings, run, repeat } of frames)
+  for (const { id, title, group, bindings, run, repeat } of frames) {
+    runs.set(`video.frame.${id}`, run);
     commands.add({
       id: `video.frame.${id}`,
-      path: ["@video", "Framing", title],
+      title,
       category: category.framing,
-      // The window's Zoom slider; it has no pan control.
-      ...(id === "zoom-in" || id === "zoom-out" ? inPicture : {}),
+      ...inPicture,
       order: 406,
       group,
       bindings: [...bindings],
       repeat,
       run,
     });
+  }
   commands.add({
     id: "video.frame.reset",
-    path: ["@reset", "Framing"],
+    title: "Framing",
     category: category.reset,
-    // The Zoom row's Default button resets the framing the same way.
     ...inPicture,
     order: 441,
     group: "reset-video",
-    bindings: ["Numpad5", "Alt+Backspace"],
+    bindings: ["Alt+Backspace", "Numpad5"],
     repeat: false,
     run: () => resetFrame(false),
   });
-  // 408 图像处理 (E04–E06, E08; 高斯模糊 moved here, same id and key).
+  runs.set("video.frame.reset", () => resetFrame(false));
+  // 408 Image Processing (E04–E06, E08; Gaussian blur too, same id and key).
   commands.add({
     id: "video.flip.vertical",
-    path: ["@video", "Image Processing", "Flip Vertically"],
+    title: "Flip Vertically",
     category: category.processing,
     ...inPicture,
     order: 408,
@@ -1156,7 +1238,7 @@ export default async function activate(plugin: Plugin) {
   });
   commands.add({
     id: "video.flip.horizontal",
-    path: ["@video", "Image Processing", "Flip Horizontally"],
+    title: "Flip Horizontally",
     category: category.processing,
     ...inPicture,
     order: 408,
@@ -1167,7 +1249,7 @@ export default async function activate(plugin: Plugin) {
   });
   commands.add({
     id: "video.gaussian",
-    path: ["@video", "Image Processing", "Gaussian Blur"],
+    title: "Gaussian Blur",
     category: category.processing,
     ...inPicture,
     order: 408,
@@ -1193,7 +1275,7 @@ export default async function activate(plugin: Plugin) {
     const toggle = toggles[row.toggle];
     commands.add({
       id: row.id,
-      path: ["@video", "Image Processing", row.title],
+      title: row.title,
       category: category.processing,
       ...inPicture,
       order: 408,
@@ -1203,10 +1285,10 @@ export default async function activate(plugin: Plugin) {
       run: () => switchEffect(toggle(), row),
     });
   }
-  // E18: 倍帧 adds frameBlend once the source rate is known; 运动补偿 is a GPU render option.
+  // E18: frame doubling adds frameBlend once the source rate is known; motion interpolation is a GPU render option.
   commands.add({
     id: "video.frame-blend",
-    path: ["@video", "Image Processing", "Frame Doubling"],
+    title: "Frame Doubling",
     category: category.processing,
     ...inPicture,
     order: 408,
@@ -1216,7 +1298,7 @@ export default async function activate(plugin: Plugin) {
   });
   commands.add({
     id: "video.interpolation",
-    path: ["@video", "Image Processing", "Motion Interpolation"],
+    title: "Motion Interpolation",
     category: category.processing,
     ...inPicture,
     order: 408,
@@ -1225,10 +1307,10 @@ export default async function activate(plugin: Plugin) {
     ...gpu,
     run: () => setInterpolation(!look.render.interpolation, true),
   });
-  // 409 图像旋转 (E09).
+  // 409 Rotation (E09).
   commands.add({
     id: "video.rotate.cycle",
-    path: ["@video", "Rotation", "Cycle"],
+    title: "Cycle",
     category: category.rotation,
     ...inPicture,
     order: 409,
@@ -1239,7 +1321,7 @@ export default async function activate(plugin: Plugin) {
   for (const { degrees, title } of ROTATION_TITLES)
     commands.add({
       id: `video.rotate.${degrees}`,
-      path: ["@video", "Rotation", title],
+      title,
       category: category.rotation,
       ...inPicture,
       order: 409,
@@ -1248,29 +1330,45 @@ export default async function activate(plugin: Plugin) {
       checked: () => look.geometry.rotate === degrees,
       run: () => rotate(degrees),
     });
-  // 440–449 the window and the colour keys.
+  // Picture… opens the panel (the adjust column at the Picture tab) and closes it when that tab
+  // shows (Alt+1, as Alt+2…4 for the other built-in panels). The only item of this plugin in the
+  // menu: at the top level of the context menu, before Playlist.
   commands.add({
     id: "video.picture",
-    path: ["@video", "Picture Adjustments…"],
+    path: ["Picture…"],
     category: category.picture,
-    order: 440,
-    group: "video-color",
-    run: () => showWindow(),
+    order: 791,
+    group: "windows",
+    bindings: ["Alt+1"],
+    run: () => panel.toggle(),
   });
   commands.add({
     id: "video.reset",
-    path: ["@reset", "Picture"],
+    title: "Picture",
     category: category.reset,
+    ...inPicture,
     order: 440,
     group: "reset-video",
     bindings: ["Q"],
     run: reset,
   });
+  runs.set("video.reset", reset);
+  // The panel's Reset All: no default key; in the palette as "Reset: Picture Panel".
+  commands.add({
+    id: "video.resetPanel",
+    title: "Picture Panel",
+    category: category.reset,
+    ...inPicture,
+    order: 443,
+    group: "reset-video",
+    run: resetPanel,
+  });
+  runs.set("video.resetPanel", resetPanel);
   for (const { field, keys, order, down, up } of steps) {
     // All colour steps repeat while held.
     commands.add({
       id: `video.${field}.down`,
-      path: ["@video", down.title],
+      title: down.title,
       category: category.picture,
       ...inPicture,
       order,
@@ -1281,7 +1379,7 @@ export default async function activate(plugin: Plugin) {
     });
     commands.add({
       id: `video.${field}.up`,
-      path: ["@video", up.title],
+      title: up.title,
       category: category.picture,
       ...inPicture,
       order: order + 1,
@@ -1294,9 +1392,10 @@ export default async function activate(plugin: Plugin) {
   apply();
   applyRender();
 
-  // 460 GPU Rendering (Experimental): the player's renderer choice (`plugin.rendering`). The player
-  // keeps the choice and applies it at the next start; this item only shows and changes it. A
-  // title cannot change in place, so the item lives in a child scope rebuilt when it changes.
+  // 460 GPU Rendering (Experimental): the player's renderer choice (`plugin.rendering`), a switch in
+  // the panel's Advanced section and a command. The player keeps the choice and applies it at the
+  // next start; the switch only shows and changes it. A title cannot change in place, so the
+  // command lives in a child scope rebuilt when it changes.
   let rendering: RenderingState | null = await plugin.rendering.state().catch(() => null);
   let renderingMenu: Scope | null = null;
   let renderingTitle: string | null = null;
@@ -1318,8 +1417,10 @@ export default async function activate(plugin: Plugin) {
     renderingMenu = plugin.scope();
     renderingMenu.commands.add({
       id: "video.gpu-rendering",
-      path: ["@video", title],
+      // GPU_PENDING_TITLE or GPU_TITLE, written out so that the catalog finds them.
+      title: title === GPU_PENDING_TITLE ? "GPU Rendering (Restart to Apply)" : "GPU Rendering (Experimental)",
       category: category.picture,
+      ...inPicture,
       order: 460,
       group: "video-rendering",
       checked: () => rendering !== null && gpuChosen(rendering),
@@ -1336,14 +1437,24 @@ export default async function activate(plugin: Plugin) {
     if (rendering?.restartPending)
       renderingMenu.commands.add({
         id: "video.gpu-rendering.restart",
-        path: ["@video", "Restart Player to Apply"],
+        title: "Restart Player to Apply",
         category: category.picture,
+        ...inPicture,
         order: 460,
         group: "video-rendering",
         busy: () => restarting || switching,
         run: restartNow,
       });
   };
+  // The panel's switch: the same state as the command; the reason is the player's own message.
+  gpuView = () => ({
+    shown: rendering !== null,
+    checked: rendering !== null && gpuChosen(rendering),
+    enabled: switchable(),
+    busy: switching || restarting,
+    pending: rendering?.restartPending ?? false,
+    reason: rendering?.gpu.reason?.message ?? "",
+  });
   let renderingQueue: Promise<void> = Promise.resolve();
   const showRendering = () => (renderingQueue = renderingQueue.then(buildRendering, buildRendering));
   /** Read the state again (the SDK has no menu-open event): on a new source and around every switch. */
@@ -1357,6 +1468,7 @@ export default async function activate(plugin: Plugin) {
   const switchRendering = async () => {
     if (switching) return;
     switching = true;
+    plugin.update();
     try {
       const now = await plugin.rendering.state().catch(() => rendering);
       if (now === null) return;
@@ -1385,6 +1497,7 @@ export default async function activate(plugin: Plugin) {
       else await offerRestart(on);
     } finally {
       switching = false;
+      plugin.update();
     }
   };
   /** The choice waits for a restart: offer it now; Later (or no dialog) keeps it for the next start. */
@@ -1410,14 +1523,18 @@ export default async function activate(plugin: Plugin) {
   const restartNow = async () => {
     if (restarting) return;
     restarting = true;
+    plugin.update();
     try {
       await plugin.rendering.restartPlayer();
     } catch (error) {
       if (!stopped) shown(plugin.osd.show("Could not restart the player: {}", [(error as PluginError).message]));
     } finally {
       restarting = false;
+      if (!stopped) plugin.update();
     }
   };
+  runs.set("video.gpu-rendering", switchRendering);
+  runs.set("video.gpu-rendering.restart", restartNow);
   let renderingSource = player.state.sourceId;
   player.onChange((state) => {
     if (state.sourceId === renderingSource) return;
@@ -1428,7 +1545,7 @@ export default async function activate(plugin: Plugin) {
 }
 
 /**
- * The window's status line, as data the window words: `status` names a failure ("" when none), the
+ * The panel's status line, as data the panel words: `status` names a failure ("" when none), the
  * detail in a tooltip is the player's message, or `conflict` when another plugin owns the layer. The
  * chain first, then the display layer, then the render options. Software rendering is not a failure
  * here: the GPU controls are greyed with the reason instead.
