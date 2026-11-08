@@ -409,7 +409,7 @@ test("panel: idle, set A and B, nudge, clear, the switch, the count, the chapter
   assert.equal(panel.props["ab-status"], "∞");
 
   // The count: 5 times re-sends the loop; the pass follows the jumps back.
-  panel.emit("abCount", 4);
+  panel.emit("abCountChosen", 4);
   await eventually(() => panel.props["ab-count"], 4);
   assert.deepEqual(loops(host).at(-1), { a: 242.8, b: 289, count: 5 });
   assert.equal(panel.props["ab-status"], "1 / 5");

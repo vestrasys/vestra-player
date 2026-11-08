@@ -230,7 +230,7 @@ export class PlaybackPanel implements PanelActions {
     panel.on("abToggle", () => {
       if (loop.toggleable()) loop.toggle();
     });
-    panel.on("abCount", (index: number) => {
+    panel.on("abCountChosen", (index: number) => {
       const count = COUNTS[index];
       if (count !== undefined && count !== loop.count) loop.setCount(count);
       else plugin.update(); // the list shows the saved count again

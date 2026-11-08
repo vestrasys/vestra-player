@@ -128,7 +128,7 @@ export global PlaybackPanelBridge {
     callback ab-nudge(string, int);
     callback ab-type(string, string);
     callback ab-toggle();
-    callback ab-count(int);
+    callback ab-count-chosen(int);
     callback ab-segment();
     // A text field ("jump", "rate", "step0"–"step3", "a", "b") took or lost the focus; any focused one keeps the fullscreen column out.
     callback focus-changed(string, bool);
@@ -1152,7 +1152,7 @@ export component PlaybackPanel inherits Rectangle {
                         popup-min-width: 90px;
                         model: [@tr("Endless"), @tr("Once"), @tr("2 Times"), @tr("3 Times"), @tr("5 Times"), @tr("10 Times")];
                         current-index: PlaybackPanelBridge.ab-count;
-                        selected(index) => { PlaybackPanelBridge.ab-count(index); }
+                        selected(index) => { PlaybackPanelBridge.ab-count-chosen(index); }
                     }
                 }
                 Btn {
