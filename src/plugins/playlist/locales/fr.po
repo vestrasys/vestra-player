@@ -552,10 +552,10 @@ msgstr "Liste de lecture en barre latérale : ajout, tri, répétition et lectu
 #, x-machine
 msgid ""
 "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
-"Entry points: \"Playlist\" (F6) in the context menu and \"Playlist: …\" in the command palette."
+"Entry points: F6, \"Sidebar\" in the context menu and \"Playlist: …\" in the command palette."
 msgstr ""
 "Une liste de lecture dans la barre latérale droite : ajout de fichiers, de dossiers et de liens, glisser-déposer, tri et recherche, répétition et lecture aléatoire, et ajout des fichiers similaires du même dossier à l'ouverture d'un fichier ; lit et écrit les listes M3U, M3U8 et PLS et restaure la liste après un redémarrage.\n"
-"Points d'accès : « Liste de lecture » (F6) dans le menu contextuel et « Liste de lecture : … » dans la palette de commandes."
+"Points d'accès : F6, « Barre latérale » dans le menu contextuel et « Liste de lecture : … » dans la palette de commandes."
 
 #: manifest.json
 #, x-machine

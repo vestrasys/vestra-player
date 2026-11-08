@@ -189,7 +189,8 @@ test("menu positions follow the round allocation table; list keys only work with
   const app = await start();
   try {
     // As a Simplified Chinese user sees the menus (the declarations are English, see below). Menu
-    // sweep (B5): the former Playback ▸ Playlist ▸ items (230–244) are palette only, shown as "(title)".
+    // sweep (B5): the former Playback ▸ Playlist ▸ items (230–244) are palette only, shown as "(title)";
+    // Playlist (F6) too (user ruling 2026-11-08: the player's Sidebar opens the sidebar).
     const declared = [...app.host.commands.values()].map(({ declaration: d, display }) => [
       display.path.join("/") || `(${display.title})`,
       d.order,
@@ -198,7 +199,7 @@ test("menu positions follow the round allocation table; list keys only work with
       d.focus ?? "",
     ]);
     assert.deepEqual(declared, [
-      ["播放列表", 800, "windows", "F6", ""],
+      ["(播放列表)", 0, "domain", "F6", ""],
       ["打开/打开文件夹…", 110, "open", "F2", ""],
       ["(添加文件…)", 230, "domain", "", ""],
       ["(添加链接…)", 231, "domain", "", ""],

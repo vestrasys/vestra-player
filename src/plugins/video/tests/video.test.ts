@@ -224,7 +224,7 @@ test("field-output frame drops: more than 5 % of the frames since the last count
 
 // ---------------------------------------------------------------- commands and menu
 
-test("only Picture… is in the menu (Alt+1); every other command is in the palette with its order, group and keys", async () => {
+test("no command is in the menu (the player's Adjustments and Effects opens the column); every command is in the palette with its order, group and keys", async () => {
   const host = new TestHost();
   host.openElsewhere("/movie.mp4");
   const { stop } = await start(host);
@@ -282,7 +282,7 @@ test("only Picture… is in the menu (Alt+1); every other command is in the pale
     ["90°", 409, "video-effects", ""],
     ["180°", 409, "video-effects", ""],
     ["270°", 409, "video-effects", ""],
-    ["Picture…", 791, "windows", "Alt+1"],
+    ["Picture…", 0, "domain", "Alt+1"],
     ["Picture", 440, "reset-video", "Q"],
     ["Picture Panel", 443, "reset-video", ""],
     ["Brightness -1%", 442, "video-color", "W"],
@@ -301,9 +301,10 @@ test("only Picture… is in the menu (Alt+1); every other command is in the pale
     [...host.commands.values()].map(({ declaration: d, display }) => [display.title, d.order, d.group, d.bindings.join(",")]),
     expected,
   );
-  // The Video ▸ submenu and Reset ▸ Picture / Framing / Crop Position are gone: no path but Picture…'s.
+  // The Video ▸ submenu and Reset ▸ Picture / Framing / Crop Position are gone, and Picture… left the menu
+  // too (user ruling 2026-11-08): no path at all.
   const paths = [...host.commands.entries()].filter(([, { declaration: d }]) => d.path.length > 0).map(([id, { declaration: d }]) => [id, d.path]);
-  assert.deepEqual(paths, [["video.picture", ["Picture…"]]], "Picture… at the top of the context menu");
+  assert.deepEqual(paths, [], "nothing in the context menu");
   assert.deepEqual(host.conflicts, []);
   await host.settle();
   for (const id of ["video.shader.use", "video.interpolation"])
@@ -436,7 +437,8 @@ test("Simplified Chinese: the palette names commands with the menu's translation
     "画面: AI 超分辨率",
     "画面: GPU 渲染（实验性）",
   ]);
-  assert.deepEqual(host.command("video.picture").display.path, ["画面…"]);
+  assert.deepEqual(host.command("video.picture").display.path, []);
+  assert.equal(host.command("video.picture").display.title, "画面…");
   // The player translates the reason with the plugin's catalog.
   assert.equal(host.translate(host.command("video.aspect.custom").state.reason!), "先用「自定义比例…」输入");
   await stop();

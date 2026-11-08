@@ -13,6 +13,7 @@
 - The volume slider and mute are always enabled (an empty device list does not mean no output: the player leaves mpv's `auto` device out). Only when the player refuses a volume or mute change (no audio output) do they grey out, with the player's reason in the tooltip; the next source, an output change or a device list read enables them again.
 - Capabilities: `ui.mount` replaces `ui.window`. The plugin's name is **Audio** (was Audio Workbench).
 - Who must change: nobody. Keys a user bound keep working (same ids). A user who used the Audio ▸ submenu finds its items in the Audio panel (Alt+2) or by name in the command palette (Ctrl+Shift+P).
+- **Audio…** (`audio.workbench`, Alt+2) leaves the right-click menu and is in the command palette only (user ruling 2026-11-08): the right-click menu's player items **Adjustments and Effects** and **Sidebar** (named like the bottom-bar buttons) open the adjust column and the sidebar at their last tab instead. Title, category, id and key are unchanged. Who must change: nobody.
 
 ## 1.5.10
 

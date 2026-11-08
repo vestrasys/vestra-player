@@ -472,10 +472,10 @@ msgstr "Charger des sous-titres externes, choisir les pistes, ajuster le style e
 #, x-machine
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Subtitles… (Alt+3) in the right-click menu opens its panel beside the video."
+"Its panel is beside the video: press Alt+3, or right-click Adjustments and Effects and pick the Subtitles tab."
 msgstr ""
 "Choisir et changer de piste de sous-titres, charger des sous-titres SRT, ASS/SSA, WebVTT, SAMI et MicroDVD (l'encodage est détecté), y compris ceux qui portent le nom d'une vidéo locale à son ouverture, afficher un sous-titre secondaire ; ajuster la taille, la position, la police, la couleur, le contour, l'ombre, le fond et la synchronisation ; naviguer de réplique en réplique ; recharger automatiquement les fichiers de sous-titres externes lorsqu'ils changent.\n"
-"Sous-titres… (Alt+3) dans le menu contextuel ouvre son panneau à côté de la vidéo."
+"Son panneau se trouve à côté de la vidéo : Alt+3, ou clic droit sur « Réglages et effets » puis l'onglet Sous-titres."
 
 #: manifest.json
 #, x-machine

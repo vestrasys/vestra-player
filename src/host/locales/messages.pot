@@ -239,11 +239,12 @@ msgstr ""
 msgid "Enter Fullscreen"
 msgstr ""
 
-#: src/main.rs
-msgid "Toggle Sidebar"
+#. The command (host/sidebar), its top-level menu item and its bottom-bar button that show or hide the sidebar at its last tab.
+#: src/host/host/actions.rs
+msgid "Sidebar"
 msgstr ""
 
-#. Why Toggle Sidebar (the bottom bar's sidebar button) is unavailable.
+#. Why Sidebar (the bottom bar's sidebar button) is unavailable.
 #: src/bar_buttons.rs
 msgid "No panel is in the sidebar"
 msgstr ""
@@ -531,12 +532,12 @@ msgstr ""
 msgid "adjust column"
 msgstr ""
 
-#. The command (host/adjust) and bottom-bar button that shows or hides the adjust column (picture, audio, subtitle and playback controls).
+#. The command (host/adjust), its top-level menu item and its bottom-bar button that show or hide the adjust column (picture, audio, subtitle and playback controls) at its last tab.
 #: src/host/host/actions.rs
-msgid "Adjust"
+msgid "Adjustments and Effects"
 msgstr ""
 
-#. Why Adjust (the bottom bar's sliders button) is unavailable.
+#. Why Adjustments and Effects (the bottom bar's sliders button) is unavailable.
 #: src/ui/bar_buttons.rs
 msgid "No panel is in the adjust column"
 msgstr ""

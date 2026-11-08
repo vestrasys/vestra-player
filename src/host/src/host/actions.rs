@@ -70,9 +70,10 @@ impl Host {
         };
         let mut fullscreen =
             commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
-        // The slim menu (B5): alone between two separators, after the panel
-        // items (Picture… 791 … Playlist 800, the chapter list) and before
-        // Vestra Player AI… (820); its group is shared with nothing shown.
+        // The slim menu (B5): alone between two separators, after the column
+        // toggles (Adjustments and Effects 791, Sidebar 800, the chapter
+        // list) and before Vestra Player AI… (820); its group is shared with
+        // nothing shown.
         fullscreen.group = "screen".into();
         fullscreen.order = 810;
         // IA-CORE-04 (user ruling 2026-11-01): Escape toggles full screen,
@@ -102,11 +103,17 @@ impl Host {
         // Windows and Linux menus show no `Cmd` binding (`label_shown`).
         quit.bindings = vec!["Cmd+Q".into()];
         // Player 0.5.10: the bottom bar's sidebar toggle (the rightmost cell
-        // of the player's strip, bar_buttons.rs); outside the menu, no default key
-        // (F6 is the playlist's), bindable in Keyboard Shortcuts.
-        let mut sidebar = commands::Declaration::new("Toggle Sidebar", &[]);
-        sidebar.localize(|_| i18n::tr("Toggle Sidebar"));
+        // of the player's strip, bar_buttons.rs); no default key (F6 is the
+        // playlist's), bindable in Keyboard Shortcuts. User ruling
+        // 2026-11-08: a top-level menu item named like its strip button, in
+        // the windows group where Playlist (800) was; it reopens the sidebar
+        // at its last tab. One title for the menu, the strip and the palette,
+        // as Command Palette….
+        let mut sidebar = commands::Declaration::new("Sidebar", &["Sidebar"]);
+        sidebar.localize(|_| i18n::tr("Sidebar"));
         core_actions::categorize(&mut sidebar, "Window");
+        sidebar.group = "windows".into();
+        sidebar.order = 800;
         // Host 0.7.4 (menu redesign §6): the command palette; Ctrl+Shift+P
         // (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD), and the magnifier of the
         // bottom-bar strip (step 3a, bar_buttons.rs). The slim menu (B5): a
@@ -122,11 +129,17 @@ impl Host {
         palette.bindings = vec!["Ctrl+Shift+P".into()];
         // Host 0.7.6 (menu redesign step 3b): the adjust column's toggle, the
         // sliders cell of the bottom-bar strip between the palette and the
-        // sidebar toggle; outside the menu, no default key (the panels'
-        // own commands have Alt+1…4), bindable in Keyboard Shortcuts.
-        let mut adjust = commands::Declaration::new("Adjust", &[]);
-        adjust.localize(|_| i18n::tr("Adjust"));
+        // sidebar toggle; no default key (the panels' own commands have
+        // Alt+1…4), bindable in Keyboard Shortcuts. User ruling 2026-11-08:
+        // a top-level menu item named like its strip button, in the windows
+        // group where the four panel items (791–794) were; it reopens the
+        // column at its last tab.
+        let mut adjust =
+            commands::Declaration::new("Adjustments and Effects", &["Adjustments and Effects"]);
+        adjust.localize(|_| i18n::tr("Adjustments and Effects"));
         core_actions::categorize(&mut adjust, "Window");
+        adjust.group = "windows".into();
+        adjust.order = 791;
         vec![
             ("fullscreen", fullscreen, state(true, Some(false))),
             ("enter-fullscreen", enter, state(true, None)),
@@ -810,10 +823,12 @@ mod tests {
     }
 
     /// The slim menu (B5): the player's top-level items sit where
-    /// doc/product/menus.md puts them. Toggle Fullscreen is alone between two
-    /// separators after the panel items (791–800) and before Vestra Player
-    /// AI… (820); Quit closes the menu; Play/Pause (core_actions.rs) opens
-    /// the domain group after Close.
+    /// doc/product/menus.md puts them. The two column toggles open the
+    /// windows group (user ruling 2026-11-08: Adjustments and Effects 791,
+    /// Sidebar 800, where the four panel items and Playlist were); Toggle
+    /// Fullscreen is alone between two separators after them and before
+    /// Vestra Player AI… (820); Quit closes the menu; Play/Pause
+    /// (core_actions.rs) opens the domain group after Close.
     #[test]
     fn host_menu_items_have_their_slim_menu_places() {
         let declarations = Host::host_declarations();
@@ -842,27 +857,50 @@ mod tests {
             place("quit"),
             (vec!["Quit".to_owned()], 990, "exit".to_owned())
         );
+        assert_eq!(
+            place("adjust"),
+            (
+                vec!["Adjustments and Effects".to_owned()],
+                791,
+                "windows".to_owned()
+            )
+        );
+        assert_eq!(
+            place("sidebar"),
+            (vec!["Sidebar".to_owned()], 800, "windows".to_owned())
+        );
         let in_menu: Vec<&str> = declarations
             .iter()
             .filter(|(_, declaration, _)| !declaration.path.is_empty())
             .map(|(id, ..)| *id)
             .collect();
-        assert_eq!(in_menu, ["fullscreen", "quit", "palette"]);
+        assert_eq!(
+            in_menu,
+            ["fullscreen", "quit", "sidebar", "palette", "adjust"]
+        );
     }
 
-    /// Menu redesign step 3b: Adjust (`host/adjust`) toggles the adjust
-    /// column; outside the menu, no default key, checkable (its dot), and
-    /// disabled until a panel is in the column.
+    /// Menu redesign step 3b: Adjustments and Effects (`host/adjust`) and
+    /// Sidebar (`host/sidebar`) toggle their columns; no default key,
+    /// checkable (the dot), and disabled until a panel is in the column.
+    /// User ruling 2026-11-08: the menu item, the strip button and the
+    /// palette row share one title.
     #[test]
-    fn adjust_is_a_checkable_host_command_without_a_key() {
-        let (_, declaration, state) = Host::host_declarations()
-            .into_iter()
-            .find(|(id, ..)| *id == bar_buttons::ADJUST)
-            .unwrap();
-        assert!(declaration.path.is_empty() && declaration.bindings.is_empty());
-        assert_eq!(state.checked, Some(false));
-        assert!(!state.enabled);
-        assert_eq!(declaration.shown_title(), "Adjust");
+    fn column_toggles_are_checkable_host_commands_without_a_key() {
+        for (id, title) in [
+            (bar_buttons::ADJUST, "Adjustments and Effects"),
+            (bar_buttons::SIDEBAR, "Sidebar"),
+        ] {
+            let (_, declaration, state) = Host::host_declarations()
+                .into_iter()
+                .find(|(each, ..)| *each == id)
+                .unwrap();
+            assert!(declaration.bindings.is_empty(), "{id}");
+            assert_eq!(state.checked, Some(false), "{id}");
+            assert!(!state.enabled, "{id}");
+            assert_eq!(declaration.shown_title(), title);
+            assert_eq!(declaration.shown_path(), [title]);
+        }
     }
 
     /// M1 (coordinator decision 2026-11-01): the user's own profile has

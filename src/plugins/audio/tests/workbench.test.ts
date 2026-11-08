@@ -61,7 +61,7 @@ function hold(host: TestHost, then: (params: Record<string, unknown>) => unknown
   };
 }
 
-test("the right-click menu keeps Load External Audio…, Audio Track ▸ and Audio…; the rest is in the panel, and editing commands wait for a selected track", async () => {
+test("the right-click menu keeps Load External Audio… and Audio Track ▸; Audio… and the rest are in the palette, and editing commands wait for a selected track", async () => {
   const { host, stop } = await startPlugin(activate, { directory });
   await host.settle();
   assert.deepEqual(
@@ -75,7 +75,7 @@ test("the right-click menu keeps Load External Audio…, Audio Track ▸ and Aud
     ]),
     [
       ["@open ▸ Load External Audio…", 114, "open", "", false, false],
-      ["Audio…", 792, "windows", "Alt+2", false, false],
+      ["Audio…", 0, "domain", "Alt+2", false, false],
       ["Cycle Tracks", 0, "domain", "Alt+A", false, false],
       ...["Stereo", "Left Channel", "Right Channel", "Mono Mix", "Swap Left and Right"].map((label) => [label, 0, "domain", "", true, false]),
       ["Equalizer", 0, "domain", "Shift+E", false, false],
@@ -1000,7 +1000,7 @@ test("zh-Hans: the menu, the palette names, the reasons and the on-screen messag
     [...host.commands.values()].map(({ display }) => (display.path.length ? display.path.join(" ▸ ") : `${display.category}: ${display.title}`)),
     [
       "打开 ▸ 载入外部音频…",
-      "声音…",
+      "声音: 声音…",
       "音轨: 按序切换",
       ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => `声道: ${label}`),
       "声音: 均衡器",

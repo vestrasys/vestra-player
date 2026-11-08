@@ -439,7 +439,7 @@ msgstr ""
 #: manifest.json
 msgid ""
 "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
-"Entry points: \"Playlist\" (F6) in the context menu and \"Playlist: …\" in the command palette."
+"Entry points: F6, \"Sidebar\" in the context menu and \"Playlist: …\" in the command palette."
 msgstr ""
 
 #: manifest.json

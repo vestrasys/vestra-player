@@ -2,11 +2,11 @@
 
 > This table records the current implementation and corresponds to the top-level structure in [UI spec](ui-spec.md) §6.2. Menu redesign (user rulings 2026-11-07/08, design `menu-redesign` proposal v2 §4, mockup 04): the built-in task panels replaced the Video, Audio, Subtitles and Playback submenus, and the right-click menu keeps only what has no panel home. Everything else stays a command with its id, key and state, reachable from the **command palette** (Ctrl+Shift+P, the 🔍 button, or Command Palette… in the menu) as "Category: Title".
 
-The product's context menu tree is merged from the commands registered by the 16 built-in plugins (`youtube` and `bilibili` live in the plugin repository and are installed through the store; their two items only exist once they are installed), the host's core actions, and the host's own commands (Toggle Fullscreen, Command Palette…, Quit). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table so that nothing is duplicated and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)). A command that a panel or an Options page already covers does **not** get a menu entry: it is registered without `path` and lives in the palette.
+The product's context menu tree is merged from the commands registered by the 16 built-in plugins (`youtube` and `bilibili` live in the plugin repository and are installed through the store; their two items only exist once they are installed), the host's core actions, and the host's own commands (Adjustments and Effects, Sidebar, Toggle Fullscreen, Command Palette…, Quit). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table so that nothing is duplicated and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)). A command that a panel or an Options page already covers does **not** get a menu entry: it is registered without `path` and lives in the palette.
 
 ## Menu tree
 
-2026-11-08, baseline branch `b5-menu` (B5 of the menu redesign). Compiled from the snapshot exported by `OUT=<file> node --test tests/menus-snapshot.test.ts` (run in `src/`; it covers every plugin under `src/plugins`). Menu `order` values are listed per item below; the separators come from each item's group (open · domain · windows · screen · windows · settings-main · exit), not from fixed number ranges — the four panels (791–794, group `windows`) and Fullscreen (810, group `screen`) sit outside the ranges the proposal once gave. Checked, radio and initially disabled states come from each command's `state` in the same test host.
+2026-11-08, baseline branch `b5-menu` (B5 of the menu redesign). Compiled from the snapshot exported by `OUT=<file> node --test tests/menus-snapshot.test.ts` (run in `src/`; it covers every plugin under `src/plugins`). Menu `order` values are listed per item below; the separators come from each item's group (open · domain · windows · screen · windows · settings-main · exit), not from fixed number ranges — the two column toggles (791 and 800, group `windows`) and Fullscreen (810, group `screen`) sit outside the ranges the proposal once gave. Checked, radio and initially disabled states come from each command's `state` in the same test host.
 
 The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
@@ -39,11 +39,8 @@ The labels below are the English interface text (the English source text of each
 | Snapshot ▸ Export Clip… | capture | | 428 |
 | Snapshot ▸ —— Capture… | capture | Alt+S | 440, group `capture-tab`; opens the Capture sidebar tab (results, settings). Snapshot Settings… is palette-only |
 | —— | | | |
-| Picture… | video | Alt+1 | 791, group `windows`; the Picture panel in the adjust column (Rendering · Colour · Effects · Geometry · Advanced, one flat panel) |
-| Audio… | audio | Alt+2 | 792; the Audio panel |
-| Subtitles… | subtitles | Alt+3 | 793; the Subtitles panel |
-| Playback… | playback | Alt+4 | 794; the Playback panel (speed ruler, A-B Loop, jump, frame and keyframe steps, seek steps) |
-| Playlist | playlist | F6 | 800; checked |
+| Adjustments and Effects | host | | 791, group `windows` (id `adjust`); checked; shows or hides the adjust column at its last tab (Picture, Audio, Subtitles, Playback); the same name as the bottom-bar sliders button. Replaced Picture… · Audio… · Subtitles… · Playback… (791–794) here (user ruling 2026-11-08); disabled while no panel is in the column |
+| Sidebar | host | | 800 (id `sidebar`); checked; shows or hides the sidebar at its last tab; the same name as the bottom-bar sidebar button. Replaced Playlist (800) here (user ruling 2026-11-08); disabled while no panel is in the sidebar |
 | Chapter and Bookmark List… | marks | H | 801; top level since B5 (was Playback ▸ Chapters and Bookmarks ▸). Becomes a Chapters sidebar tab in proposal step 8 |
 | —— | | | |
 | Fullscreen | host | Esc | 810, group `screen`; checked; key `Toggle Fullscreen` (id `fullscreen`); Esc is its only default (user ruling 2026-11-01). "Enter Fullscreen" and "Leave Fullscreen" are not in the menu and have no default key |
@@ -57,7 +54,7 @@ The labels below are the English interface text (the English source text of each
 | —— | | | |
 | Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | 990, group `exit`; key `Quit` |
 
-Top level: 20 entries plus third-party anchors; 33 fixed items in all, the rest are dynamic lists. Items with the same `order` sort by plugin id, which is why Open ▸ Load External Audio… (audio, 114) comes before Add Secondary Subtitle… (subtitles, 114); mockup 04 drew them the other way round.
+Top level: 17 entries plus third-party anchors; 30 fixed items in all, the rest are dynamic lists. Items with the same `order` sort by plugin id, which is why Open ▸ Load External Audio… (audio, 114) comes before Add Secondary Subtitle… (subtitles, 114); mockup 04 drew them the other way round.
 
 ## Commands outside the menu
 
@@ -74,6 +71,8 @@ Every command below keeps its id, default key, category and checked/radio state.
 | capture | Save Current Frame As…; Save/Copy Rendered Frame (Ctrl+Alt+E · Ctrl+Alt+C) and As…; Save/Copy Video Frame Only; Export Tasks…; Capture as PNG · JPEG · BMP; Include Subtitles in Rendered Frame; Snapshot Settings…; Snapshot Folder… · Open Snapshot Folder; Show Last Capture in Folder; Copy Last Snapshot; Set Clip Start · Set Clip End; Export Clip Range (Ctrl+Shift+E); Toggle range marks (Ctrl+Shift+R) | Capture sidebar tab (Snapshot: Save and Copy only; Clips; Results; Settings with format, effects, Burst, folder); keyboard commands stay in the palette |
 | marks | Add Bookmark (P); Previous/Next Bookmark or Chapter (Shift+PgUp/PgDn); Previous/Next Chapter (Ctrl+PgUp/PgDn); the dynamic chapter and bookmark entries; Show Marks on Seek Bar | Chapter and Bookmark List… window (H) now; the Chapters sidebar tab in proposal step 8 |
 | playback (A-B Loop, from marks) | A-B Loop ▸ (all: `[` `]` `{` `}`, Ctrl/Alt+`[`/`]`, Ctrl+Alt+`[`/`]`, Alt+\, `\`, Loop Count ▸); the 18 `ab.*` commands moved from `vestra.marks` to `vestra.playback` with the same ids and keys, and user overrides are migrated | Playback panel A-B Loop section (mini timeline, A and B rows with nudges and clear, Loop switch, Count, ↺ Chapter); palette (categories A-B Loop and Loop Count) |
+| video · audio · subtitles · playback | Picture… (Alt+1) · Audio… (Alt+2) · Subtitles… (Alt+3) · Playback… (Alt+4), `video.picture` · `audio.workbench` · `tune` · `panel` (left 2026-11-08, user ruling) | Adjustments and Effects (menu and bottom-bar button) at the column's last tab, then the tab; the keys open their own tab |
+| playlist | Playlist (F6), `playlist.visibility` (left 2026-11-08, user ruling) | Sidebar (menu and bottom-bar button) at the sidebar's last tab, then the Playlist tab; F6 opens the Playlist tab |
 | playlist | Playback ▸ Playlist ▸ (Add Files… · Add Link… · Add Folder…, Repeat ▸ Off · All · One, Shuffle, Open List File… · Save List…, When Opening a File ▸, Fast Advance to Next, Remember List, Confirm Before Removing All) | Playlist sidebar (Add ＋ button, list context menu); Repeat and Shuffle go to the playlist footer in proposal step 8; the four settings are palette-only until an Options ▸ Playback ▸ Playlist page |
 | history | Resume Playback ▸ Don't Resume · Resume Automatically · Ask Every Time, Also Remember Audio Files, Clear All Saved Positions | Palette until the Options ▸ Playback ▸ Resume page (proposal step 9) |
 | window | Hide Pointer While Playing; Screen ▸ Picture-in-Picture, Mini Size (`` ` ``), 0.5× · 1× · 1.5× · 2× (1 · 2 · 3 · 4), Fit to Video Aspect Ratio (8), When Playback Starts ▸, Always on Top ▸ Cycle Mode (Ctrl+T) · modes | Palette (category Screen / Window); the "Options ▸ Playback ▸ Window" page holds the settings |
@@ -117,7 +116,7 @@ Menus merge by English key ([i18n §5](../architecture/i18n.md#5-declarations-an
 
 ## UI forms
 
-Slots: `bottom` (the control bar), `adjust` (one column of task panels beside the video, Alt+1–4, the Adjust button), `sidebar` (tabs, always rightmost, the Sidebar button), `backdrop` (video-area layers), plus tool windows (`ui.window`, owned by the main window since host 0.7.7: they stay above it, hide and restore with it, and have no taskbar button or minimize button). The bottom bar's right end is the host-owned button strip: `[plugin buttons…][»][🔍][Adjust][Sidebar]`.
+Slots: `bottom` (the control bar), `adjust` (one column of task panels beside the video, Alt+1–4, Adjustments and Effects in the menu and on the bottom bar), `sidebar` (tabs, always rightmost, Sidebar in the menu and on the bottom bar), `backdrop` (video-area layers), plus tool windows (`ui.window`, owned by the main window since host 0.7.7: they stay above it, hide and restore with it, and have no taskbar button or minimize button). The bottom bar's right end is the host-owned button strip: `[plugin buttons…][»][🔍][Adjustments and Effects][Sidebar]`.
 
 | Plugin | UI |
 | --- | --- |

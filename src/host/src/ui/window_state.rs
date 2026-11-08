@@ -498,8 +498,8 @@ impl Policy {
         self.set_column(slot, owner, preferred, true, now_ms)
     }
 
-    /// Switch a slot on or off as a toggle does (the bottom bar's Adjust and
-    /// Sidebar buttons, Toggle Sidebar, Esc in the adjust overlay, a plugin's
+    /// Switch a slot on or off as a toggle does (the Adjustments and Effects and
+    /// Sidebar buttons and menu items, Esc in the adjust overlay, a plugin's
     /// `toggle()`; user ruling 2026-11-08): the same in every mode. In
     /// fullscreen "on" means the right edge reveals the column; switching it on
     /// never pops it out, switching it off slides it in at once.

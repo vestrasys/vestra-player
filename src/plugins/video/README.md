@@ -16,7 +16,7 @@ Adjusts the picture's color, effects, aspect ratio and how it is shown.
 
 ## Entries
 
-- **Picture…** (Alt+1, top level of the right-click menu) opens the **Picture** tab of the adjust column beside the video, and closes it when that tab shows. One scrolling column: Rendering, Colour (with the presets in its heading), Effects (Frames' Doubling and Interpolate among the chips), Geometry and Advanced, a disclosure row closed by default that sums up its values. HDR Settings… opens Advanced and scrolls to it. Each control shows its key; a slider's double-click returns it to its default.
+- **Picture…** (Alt+1; in the command palette, and the right-click menu's Adjustments and Effects opens the column at its last tab) opens the **Picture** tab of the adjust column beside the video, and closes it when that tab shows. One scrolling column: Rendering, Colour (with the presets in its heading), Effects (Frames' Doubling and Interpolate among the chips), Geometry and Advanced, a disclosure row closed by default that sums up its values. HDR Settings… opens Advanced and scrolls to it. Each control shows its key; a slider's double-click returns it to its default.
 - Every other command (colour steps, effects, aspect, crop/stretch, framing, rotation, deinterlace, HDR, shaders, the resets) is in the command palette (Ctrl+Shift+P) with its keys, named "Category: Title".
 - Brightness W/E, contrast R/T, saturation Y/U, hue I/O; Q resets the picture (the panel's Reset All).
 - **Effects** in the panel are on/off chips; a strength slider shows for each effect that is on. The Denoise chip switches the three denoisers together (on: the ones that were on last, or 3D); the Denoise card has each one's own switch and strength.

@@ -550,10 +550,10 @@ msgstr "Lista de reproducción en la barra lateral: agregar, ordenar, repetir y 
 #, x-machine
 msgid ""
 "A playlist in the right sidebar: add files, folders and links, drag and drop, sort and search, repeat and shuffle, and add the similar files of the same folder when a file is opened; reads and writes M3U, M3U8 and PLS list files and restores the list after a restart.\n"
-"Entry points: \"Playlist\" (F6) in the context menu and \"Playlist: …\" in the command palette."
+"Entry points: F6, \"Sidebar\" in the context menu and \"Playlist: …\" in the command palette."
 msgstr ""
 "Una lista de reproducción en la barra lateral derecha: agrega archivos, carpetas y enlaces, admite arrastrar y soltar, ordena y busca, repite y reproduce en orden aleatorio, y agrega los archivos similares de la misma carpeta al abrir un archivo; lee y escribe listas M3U, M3U8 y PLS y restaura la lista tras reiniciar.\n"
-"Accesos: «Lista de reproducción» (F6) en el menú contextual y «Lista de reproducción: …» en la paleta de comandos."
+"Accesos: F6, «Barra lateral» en el menú contextual y «Lista de reproducción: …» en la paleta de comandos."
 
 #: manifest.json
 #, x-machine

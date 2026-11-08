@@ -612,6 +612,12 @@ mod tests {
         assert_eq!(row("mute").label, "Audio: Mute");
         assert_eq!(row("mute").place, "");
         assert_eq!(row("sidebar").global, "host/sidebar");
+        // The column toggles (user ruling 2026-11-08): top-level items named
+        // like their strip buttons.
+        assert_eq!(row("sidebar").label, "Window: Sidebar");
+        assert_eq!(row("sidebar").place, "Menu");
+        assert_eq!(row("adjust").label, "Window: Adjustments and Effects");
+        assert_eq!(row("adjust").place, "Menu");
     }
 
     #[test]

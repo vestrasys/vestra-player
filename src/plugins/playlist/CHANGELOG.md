@@ -9,6 +9,7 @@ Who must change: nobody. What users see: in the command palette (Ctrl+Shift+P) p
 
 - Every command declares a `category` (SDK 1.6.4): Playlist, Repeat, When Opening a File or Sort, the labels of the submenus and popups the commands sit in, with their existing translations.
 - Commands whose control is in the playlist panel (the list commands, Add, Open and Save List) declare `home` "playlist.visibility"; the options that are also on the settings page (Repeat, Shuffle, When Opening a File, Fast Advance to Next, Remember List, Confirm Before Removing All) declare `home` "playlist.settings".
+- **Playlist** (`playlist.visibility`, F6) leaves the right-click menu and is in the command palette only (user ruling 2026-11-08): the right-click menu's player items **Adjustments and Effects** and **Sidebar** (named like the bottom-bar buttons) open the adjust column and the sidebar at their last tab instead. Title, category, id, key and checked state are unchanged. The description says so. Who must change: nobody.
 
 ## 0.2.5
 

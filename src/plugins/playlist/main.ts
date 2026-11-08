@@ -608,13 +608,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       ...extra,
     });
 
-  // Main menu (allocation table: Open ▸ 110, windows 800); the former Playback ▸ Playlist ▸ items (230–249) are palette only.
+  // Main menu (allocation table: Open ▸ 110); the former Playback ▸ Playlist ▸ items (230–249) are palette only.
+  // Playlist (F6) is palette only too (user ruling 2026-11-08): the menu's Sidebar (the player's) opens
+  // the sidebar at its last tab.
   plugin.commands.add({
     id: "playlist.visibility",
-    path: ["Playlist"],
+    title: "Playlist",
     category: categories.playlist,
-    group: "windows",
-    order: 800,
     bindings: ["F6"],
     // With tabs: checked while the sidebar is shown on the playlist's tab; F6 brings the tab
     // forward from another tab, hides the sidebar on it, shows the sidebar on it when hidden.

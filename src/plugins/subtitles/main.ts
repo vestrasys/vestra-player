@@ -1348,8 +1348,9 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({ id: "settings", title: "Subtitle Settings…", category: CATEGORY.subtitles, home: "tune", run: showSettings });
   // Subtitles… (Alt+3, proposal §3.2): the Subtitles panel in the adjust column; again closes the column.
+  // Palette only (user ruling 2026-11-08): the menu's Adjustments and Effects (the player's) opens the column.
   plugin.commands.add({
-    id: "tune", path: ["Subtitles…"], order: 793, group: "windows", bindings: ["Alt+3"], category: CATEGORY.subtitles,
+    id: "tune", title: "Subtitles…", bindings: ["Alt+3"], category: CATEGORY.subtitles,
     checked: () => (panel.state?.preferred ?? false) && (panel.state?.active ?? false),
     run: togglePanel,
   });
