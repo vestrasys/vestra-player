@@ -481,6 +481,37 @@ export interface MarkdownWire {
     images: Record<string, string>;
 }
 /**
+ * One mounted panel of the plugin under test ({@link TestHost.mounted},
+ * {@link TestHost.panels}): a {@link FakeWindow} record with its slot,
+ * component and interaction locks.
+ *
+ * @remarks
+ * One per slot the plugin mounted (SDK 1.6.15), kept in
+ * {@link TestHost.panels}; disposing a panel removes only its own.
+ *
+ * @example Check the adjust panel's locks
+ * The plugin's adjust panel reports a drag; the test reads the locks it
+ * sent. `mounted(slot)` picks one of the plugin's panels by slot.
+ * ```ts
+ * import assert from "node:assert/strict";
+ * declare const host: TestHost;
+ * // ---cut---
+ * const panel: FakePanel = host.mounted("adjust");
+ * assert.deepEqual(panel.locks, { focused: false, dragging: true, popupOpen: false });
+ * ```n *
+ * @capability None.
+ * @since 1.6.15
+ * @category Testing
+ */
+export type FakePanel = Omit<FakeWindow, "callbacks" | "userClose"> & {
+    /** `"bottom"`, `"sidebar"`, `"adjust"` or `"backdrop"`. */
+    slot: string;
+    /** The exported component the SDK found in the file. */
+    component: string;
+    /** The last `panel.setInteraction(...)` locks, `null` before any. */
+    locks: Json;
+};
+/**
  * An in-memory fake Vestra Player for plugin tests.
  *
  * The plugin under test talks to it over the real wire protocol (the host is
@@ -597,17 +628,16 @@ export declare class TestHost implements Transport {
     /** Tool windows by id (see {@link TestHost.window}). */
     readonly windows: Map<string, FakeWindow>;
     /**
-     * The plugin's mounted panel (bottom bar, sidebar or backdrop), or `null`.
-     * See {@link TestHost.mounted}.
+     * The plugin's mounted panels by slot, in mount order (SDK 1.6.15: one
+     * panel per slot). See {@link TestHost.mounted}.
      */
-    panel: (Omit<FakeWindow, "callbacks" | "userClose"> & {
-        /** `"bottom"`, `"sidebar"`, `"adjust"` or `"backdrop"`. */
-        slot: string;
-        /** The exported component the SDK found in the file. */
-        component: string;
-        /** The last `panel.setInteraction(...)` locks, `null` before any. */
-        locks: Json;
-    }) | null;
+    readonly panels: Map<string, FakePanel>;
+    /**
+     * The plugin's mounted panel (bottom bar, sidebar, adjust column or
+     * backdrop), the last mounted when it has several, or `null`. See
+     * {@link TestHost.mounted}.
+     */
+    get panel(): FakePanel | null;
     /** The plugin's commands by local id (see {@link TestHost.command}). */
     readonly commands: Map<string, FakeCommand>;
     /** The player's 14 core actions (`host/<id>`), kept apart from the plugin's `commands`. */
@@ -2814,9 +2844,11 @@ export declare class TestHost implements Transport {
      */
     window(id: string): FakeWindow;
     /**
-     * The plugin's mounted panel (bottom bar, sidebar or backdrop). Throws when
-     * none is mounted. Its `props` use Slint (kebab-case) names; `emit` fires a
-     * callback on the panel's global.
+     * The plugin's mounted panel (bottom bar, sidebar, adjust column or
+     * backdrop): the one in `slot`, or without it the only one (SDK 1.6.15: a
+     * plugin mounts one panel per slot; with several, name the slot). Throws
+     * when there is none. Its `props` use Slint (kebab-case) names; `emit`
+     * fires a callback on the panel's global.
      *
      * @example Select a row in the plugin's sidebar panel
      * The test checks the panel sits in the sidebar and selects its third
@@ -2835,14 +2867,7 @@ export declare class TestHost implements Transport {
      * @capability None.
      * @since 1.0.0
      */
-    mounted(): Omit<FakeWindow, "callbacks" | "userClose"> & {
-        /** `"bottom"`, `"sidebar"`, `"adjust"` or `"backdrop"`. */
-        slot: string;
-        /** The exported component the SDK found in the file. */
-        component: string;
-        /** The last `panel.setInteraction(...)` locks, `null` before any. */
-        locks: Json;
-    };
+    mounted(slot?: "bottom" | "sidebar" | "adjust" | "backdrop"): FakePanel;
     /**
      * The parameters of every request of one wire method, oldest first.
      *

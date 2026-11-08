@@ -330,6 +330,8 @@ const SLOT_LABELS = {
     backdrop: "video backdrop",
     adjust: "adjust column",
 };
+/** The view a panel's writes are kept under (the player's, per slot). */
+const mountView = (slot) => slot === "bottom" ? "$mount" : `$mount:${slot}`;
 /** Texts only the test host uses, with their Chinese of SDK 1.5.8. */
 const TEST_ZH_HANS = {
     "this site": "这个网站",
@@ -521,10 +523,18 @@ export class TestHost {
     /** Tool windows by id (see {@link TestHost.window}). */
     windows = new Map();
     /**
-     * The plugin's mounted panel (bottom bar, sidebar or backdrop), or `null`.
-     * See {@link TestHost.mounted}.
+     * The plugin's mounted panels by slot, in mount order (SDK 1.6.15: one
+     * panel per slot). See {@link TestHost.mounted}.
      */
-    panel = null;
+    panels = new Map();
+    /**
+     * The plugin's mounted panel (bottom bar, sidebar, adjust column or
+     * backdrop), the last mounted when it has several, or `null`. See
+     * {@link TestHost.mounted}.
+     */
+    get panel() {
+        return [...this.panels.values()].at(-1) ?? null;
+    }
     /** The plugin's commands by local id (see {@link TestHost.command}). */
     commands = new Map();
     /** The player's 14 core actions (`host/<id>`), kept apart from the plugin's `commands`. */
@@ -3627,9 +3637,11 @@ export class TestHost {
         return window;
     }
     /**
-     * The plugin's mounted panel (bottom bar, sidebar or backdrop). Throws when
-     * none is mounted. Its `props` use Slint (kebab-case) names; `emit` fires a
-     * callback on the panel's global.
+     * The plugin's mounted panel (bottom bar, sidebar, adjust column or
+     * backdrop): the one in `slot`, or without it the only one (SDK 1.6.15: a
+     * plugin mounts one panel per slot; with several, name the slot). Throws
+     * when there is none. Its `props` use Slint (kebab-case) names; `emit`
+     * fires a callback on the panel's global.
      *
      * @example Select a row in the plugin's sidebar panel
      * The test checks the panel sits in the sidebar and selects its third
@@ -3648,10 +3660,26 @@ export class TestHost {
      * @capability None.
      * @since 1.0.0
      */
-    mounted() {
+    mounted(slot) {
+        if (slot !== undefined) {
+            const panel = this.panels.get(slot);
+            if (!panel)
+                throw new Error(`no panel mounted in the ${slot}`);
+            return panel;
+        }
+        if (this.panels.size > 1)
+            throw new Error(`panels are mounted in ${[...this.panels.keys()].join(", ")}: name the slot`);
         if (!this.panel)
             throw new Error("no panel mounted");
         return this.panel;
+    }
+    /** The panel a request is about: its `slot`, else the only one. */
+    #panelFor(p) {
+        const slot = typeof p.slot === "string" ? p.slot : undefined;
+        const panel = slot ? this.panels.get(slot) : this.panel;
+        if (!panel)
+            throw new HostError("missing", "owner has no ready mount");
+        return panel;
     }
     /**
      * The parameters of every request of one wire method, oldest first.
@@ -4260,16 +4288,18 @@ export class TestHost {
         // A sidebar panel is never live (player 0.7.3): the current tab keeps
         // the plugin running as busy work, a background tab not at all. The
         // adjust column's current tab only while the column is open (0.7.6).
-        if (this.panel?.slot === "sidebar") {
-            if (this.layout.sidebar?.owner === 1)
-                reasons.push("its sidebar tab is the current tab");
+        for (const panel of this.panels.values()) {
+            if (panel.slot === "sidebar") {
+                if (this.layout.sidebar?.owner === 1)
+                    reasons.push("its sidebar tab is the current tab");
+            }
+            else if (panel.slot === "adjust") {
+                if (this.layout.adjust?.owner === 1 && this.layout.adjust.preferred)
+                    reasons.push("its adjust tab is the current tab");
+            }
+            else
+                reasons.push("a mounted panel");
         }
-        else if (this.panel?.slot === "adjust") {
-            if (this.layout.adjust?.owner === 1 && this.layout.adjust.preferred)
-                reasons.push("its adjust tab is the current tab");
-        }
-        else if (this.panel)
-            reasons.push("a mounted panel");
         for (const [id, window] of this.windows)
             if (window.visible)
                 reasons.push(`an open window (${id})`);
@@ -4501,10 +4531,11 @@ export class TestHost {
                 throw new HostError("missing", "view not found");
         },
         "ui.mount": (p) => {
-            if (this.panel)
-                throw new HostError("conflict", "owner already mounted");
             if (!(String(p.slot) in SLOT_LABELS))
                 throw new HostError("invalid", "unknown mount slot");
+            // One panel per slot and plugin (player 0.7.6).
+            if (this.panels.has(String(p.slot)))
+                throw new HostError("conflict", "this plugin already has a panel in this slot");
             // Like the player: one panel in the bottom bar and the backdrop, any
             // number of tabs in the sidebar (player 0.7.3; 0.4.x to 0.7.2 took 8)
             // and in the adjust column (player 0.7.6).
@@ -4520,10 +4551,11 @@ export class TestHost {
                 ]));
             const properties = this.#initialValues(this.#shownValues(p.properties));
             this.#seeImages(properties);
-            this.#resetWrites("$mount");
+            const panelSlot = String(p.slot);
+            this.#resetWrites(mountView(panelSlot));
             const host = this;
-            this.panel = {
-                slot: String(p.slot),
+            this.panels.set(panelSlot, {
+                slot: panelSlot,
                 file: String(p.file),
                 component: String(p.component),
                 visible: true,
@@ -4532,11 +4564,12 @@ export class TestHost {
                 emit(callback, ...args) {
                     host.emit("ui.callback", {
                         view: "$mount",
+                        slot: panelSlot,
                         callback: kebab(callback),
                         args,
                     });
                 },
-            };
+            });
             if (p.slot === "backdrop") {
                 this.backdrop = { owner: this.manifestId, effective: true };
                 return { status: "ready", prepareMs: 0, shellGeneration: 1 };
@@ -4551,18 +4584,24 @@ export class TestHost {
             });
             return { status: "ready", prepareMs: 0, shellGeneration: 1 };
         },
-        "ui.unmount": () => {
-            if (this.panel?.slot === "backdrop")
-                this.backdrop = null;
-            else if (this.panel)
-                this.#removePanel(this.panel.slot, 1);
-            this.panel = null;
+        "ui.unmount": (p) => {
+            // The slot's panel, or without one every panel (as the player).
+            const slots = typeof p.slot === "string" ? [p.slot] : [...this.panels.keys()];
+            for (const slot of slots) {
+                if (!this.panels.delete(slot))
+                    continue;
+                if (slot === "backdrop")
+                    this.backdrop = null;
+                else
+                    this.#removePanel(slot, 1);
+            }
         },
         "ui.menu": (p) => {
-            if (!this.panel)
+            if (!this.panels.size)
                 throw new HostError("unavailable", "panel not shown");
-            const tabs = this.panel.slot === "sidebar" || this.panel.slot === "adjust"
-                ? this.layout[this.panel.slot]
+            const panel = this.#panelFor(p);
+            const tabs = panel.slot === "sidebar" || panel.slot === "adjust"
+                ? this.layout[panel.slot]
                 : null;
             if (tabs && tabs.owner !== 1)
                 throw new HostError("unavailable", "the panel's tab is not the current one");
@@ -4613,8 +4652,9 @@ export class TestHost {
                     : collapsed
                         ? "fullscreen"
                         : null;
-                if (this.panel?.slot === slot)
-                    this.panel.visible = p.visible;
+                const panel = this.panels.get(slot);
+                if (panel)
+                    panel.visible = p.visible;
             }
             if (typeof p.detached === "boolean")
                 state.detached = p.detached;
@@ -4880,9 +4920,9 @@ export class TestHost {
             this.emit("sequence.step", { direction });
         },
         "ui.setMount": (p) => {
-            const panel = this.mounted();
+            const panel = this.#panelFor(p);
             const property = String(p.property);
-            const next = this.#write("$mount", property, p, panel.props[property]);
+            const next = this.#write(mountView(panel.slot), property, p, panel.props[property]);
             // A part of a value sent in parts is held until the last (player 0.6.0).
             if (next !== undefined)
                 panel.props[property] = next;
@@ -5122,7 +5162,10 @@ export class TestHost {
             })));
             return { applied: true };
         },
-        "ui.interaction": (p) => void (this.mounted().locks = p),
+        "ui.interaction": (p) => {
+            const { slot: _, ...locks } = p;
+            this.#panelFor(p).locks = locks;
+        },
         "dialogs.confirm": (p) => {
             this.confirms.push(p);
             const shown = (field, formatted = false) => p[field] === undefined

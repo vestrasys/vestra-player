@@ -1082,7 +1082,8 @@ impl Host {
         }
         // The adjust column's current tab counts only while the column is
         // wanted shown (its panel is not needed while it is closed).
-        if self.mounts.get(&owner).is_some_and(|m| {
+        // Any of its panels (one per slot) being a current tab.
+        if self.mounts.values().filter(|m| m.plugin == owner).any(|m| {
             crate::host::policy_slot(m.spec.slot).is_some_and(|column| {
                 let open = column != crate::ui::window_state::Slot::Adjust
                     || self
@@ -1091,7 +1092,7 @@ impl Host {
                         .is_some_and(|(preferred, _)| preferred);
                 open && crate::ui::sidebar_tabs::shown_tab(
                     m.spec.slot,
-                    owner,
+                    m.spec.owner,
                     self.policy.active(column),
                 )
             })

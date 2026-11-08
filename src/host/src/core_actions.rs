@@ -178,17 +178,16 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         categorize(&mut declaration, category);
         declaration
     };
+    // Menu redesign step 4 (playback's panel, request of its author): the
+    // seek, frame and speed actions leave Playback ▸ Seek and Speed for the
+    // command palette, found by category and title ("Seek: Next Frame"),
+    // with their keys unchanged; the Playback panel has their controls.
+    let palette = |category: &str, title: &str, shown: String, bindings: &[&str], repeat: bool| {
+        make(category, &[title], shown, 0, "domain", bindings, repeat).without_path()
+    };
     let (backward, backward_shown) = seek_title(false, step);
     let (forward, forward_shown) = seek_title(true, step);
-    let mut normal = make(
-        "Speed",
-        &["Playback", "Speed", "Normal"],
-        tr("Normal"),
-        220,
-        "domain",
-        &["Z"],
-        false,
-    );
+    let mut normal = palette("Speed", "Normal", tr("Normal"), &["Z"], false);
     normal.radio = true;
     vec![
         (
@@ -243,76 +242,28 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
         ),
         (
             "frame-back",
-            make(
-                "Seek",
-                &["Playback", "Seek", "Previous Frame"],
-                tr("Previous Frame"),
-                204,
-                "frame",
-                &["D"],
-                true,
-            ),
+            palette("Seek", "Previous Frame", tr("Previous Frame"), &["D"], true),
         ),
         (
             "frame-forward",
-            make(
-                "Seek",
-                &["Playback", "Seek", "Next Frame"],
-                tr("Next Frame"),
-                205,
-                "frame",
-                &["F"],
-                true,
-            ),
+            palette("Seek", "Next Frame", tr("Next Frame"), &["F"], true),
         ),
         (
             "seek-backward",
-            make(
-                "Seek",
-                &["Playback", "Seek", &backward],
-                backward_shown,
-                210,
-                "step",
-                &["ArrowLeft"],
-                true,
-            ),
+            palette("Seek", &backward, backward_shown, &["ArrowLeft"], true),
         ),
         (
             "seek-forward",
-            make(
-                "Seek",
-                &["Playback", "Seek", &forward],
-                forward_shown,
-                211,
-                "step",
-                &["ArrowRight"],
-                true,
-            ),
+            palette("Seek", &forward, forward_shown, &["ArrowRight"], true),
         ),
         ("rate-normal", normal),
         (
             "rate-down",
-            make(
-                "Speed",
-                &["Playback", "Speed", "Slower 0.1"],
-                tr("Slower 0.1"),
-                221,
-                "domain",
-                &["X"],
-                false,
-            ),
+            palette("Speed", "Slower 0.1", tr("Slower 0.1"), &["X"], false),
         ),
         (
             "rate-up",
-            make(
-                "Speed",
-                &["Playback", "Speed", "Faster 0.1"],
-                tr("Faster 0.1"),
-                222,
-                "domain",
-                &["C"],
-                false,
-            ),
+            palette("Speed", "Faster 0.1", tr("Faster 0.1"), &["C"], false),
         ),
         (
             "volume-up",
@@ -875,7 +826,24 @@ mod tests {
         assert_eq!(find("stop").path, ["Close"]);
         assert_eq!(find("stop").bindings, ["F4"]);
         assert_eq!(find("stop").group, "open");
-        assert_eq!(find("seek-backward").path, ["Playback", "Seek", "Back 5 s"]);
+        // Menu redesign step 4: seek, frame and speed are palette only, with
+        // their titles, keys and categories.
+        for id in [
+            "frame-back",
+            "frame-forward",
+            "seek-backward",
+            "seek-forward",
+            "rate-down",
+            "rate-up",
+            "rate-normal",
+        ] {
+            assert!(find(id).path.is_empty(), "{id}");
+            assert!(find(id).shown_path().is_empty(), "{id}");
+            assert!(!find(id).bindings.is_empty(), "{id}");
+        }
+        assert_eq!(find("seek-backward").shown_title(), "Back 5 s");
+        assert_eq!(find("seek-backward").category.as_deref(), Some("Seek"));
+        assert_eq!(find("rate-up").category.as_deref(), Some("Speed"));
         assert_eq!(find("seek-backward").bindings, ["ArrowLeft"]);
         assert!(
             find("seek-forward").repeat && find("volume-up").repeat && find("frame-forward").repeat
@@ -888,14 +856,6 @@ mod tests {
         );
         assert_eq!(find("volume-down").path, ["Audio", "Volume −"]);
         assert!(find("rate-normal").radio);
-        assert_eq!(
-            (
-                find("rate-normal").order,
-                find("rate-down").order,
-                find("rate-up").order
-            ),
-            (220, 221, 222)
-        );
         assert_eq!(find("mute").order, 503);
         assert_eq!(
             declarations_titles(10.5),

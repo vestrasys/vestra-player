@@ -597,7 +597,8 @@ mod tests {
         assert_eq!(row("stop").label, "Playback: Close");
         assert_eq!(row("stop").place, "Menu");
         assert_eq!(row("seek-backward").label, "Seek: Back 5 s");
-        assert_eq!(row("seek-backward").place, "Playback ▸ Seek ▸");
+        // Palette only (menu redesign step 4): no place, found by "Seek".
+        assert_eq!(row("seek-backward").place, "");
         assert_eq!(row("rate-normal").label, "Speed: Normal");
         assert_eq!(row("volume-up").label, "Audio: Volume +");
         assert_eq!(row("fullscreen").label, "Window: Toggle Fullscreen");
