@@ -1,3 +1,5 @@
+import assert from "node:assert/strict";
+import { isDeepStrictEqual } from "node:util";
 import { stat } from "node:fs/promises";
 import { HostError } from "@vestra-player/sdk/testing";
 import type { TestHost } from "@vestra-player/sdk/testing";
@@ -85,4 +87,28 @@ export function words(host: TestHost) {
     return t(template, s.kind === "saved" || s.kind === "started" ? [s.count] : s.kind === "exported" ? [s.name] : s.kind.endsWith("failed") ? [why] : undefined);
   };
   return { reason, progress, status, STATES, STATUS };
+}
+
+/**
+ * Wait until `read()` gives `expected` (deep, strict equality), then pass; fail
+ * after about 6 s with the last value and `message`. The tab's values arrive in
+ * the plugin's own updates, after the condition a test waited for: assert on
+ * the value itself, never right after waiting on another one. A value already
+ * there passes at once; a read that throws (a row not there yet) is retried.
+ */
+export async function eventually(read: () => unknown, expected: unknown, message?: string) {
+  let last: unknown;
+  let failure: unknown;
+  for (let i = 0; i < 1200; i++) {
+    try {
+      last = read();
+      failure = undefined;
+      if (isDeepStrictEqual(last, expected)) return;
+    } catch (error) {
+      failure = error;
+    }
+    await new Promise((done) => setTimeout(done, 5));
+  }
+  if (failure) throw failure;
+  assert.deepStrictEqual(last, expected, message);
 }

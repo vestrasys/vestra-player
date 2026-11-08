@@ -14,7 +14,7 @@ import { timelineWindow } from "../clip.ts";
 
 /** The end of the small timeline's window around a range (the keyframe probe reads that far). */
 const timelineEnd = (start: number, end: number) => timelineWindow(start, end, 600).to;
-import { words } from "./fakes.ts";
+import { eventually, words } from "./fakes.ts";
 
 /** A job as the test host records it. */
 type MediaJob = NonNullable<ReturnType<TestHost["jobs"]["get"]>>;
@@ -161,7 +161,7 @@ test("English by default: menus, the tab's title, OSD and the clip's dialog are 
     await host.command("capture.format.jpeg").run();
     await host.settle();
     assert.equal(host.osd.at(-1), "Snapshot format: JPEG");
-    assert.deepEqual(tab(host)["audio-labels"], ["No Audio", "Current Track", "Track 7 · en", "Track 8"]);
+    await eventually(() => tab(host)["audio-labels"], ["No Audio", "Current Track", "Track 7 · en", "Track 8"]);
     host.dialogAnswers.push(null);
     host.mounted().emit("export-as", "1", "4");
     await until(() => statusOf(host, "clip-status") === "No save location chosen.");
@@ -169,7 +169,7 @@ test("English by default: menus, the tab's title, OSD and the clip's dialog are 
     assert.equal(host.sent("dialogs.open").at(-1)!.fileName, "source-one_00.01.000-00.04.000.mp4", "{name}_{start}-{end}");
     host.mounted().emit("export-clip", "5", "1");
     await until(() => statusOf(host, "clip-status") === REASON.endBeforeStart);
-    assert.deepEqual(tab(host)["clip-status"], { kind: "error", reason: "endBeforeStart", raw: "", count: 0, name: "" }, "data, not words");
+    await eventually(() => tab(host)["clip-status"], { kind: "error", reason: "endBeforeStart", raw: "", count: 0, name: "" }, "data, not words");
   } finally {
     await stop();
   }
@@ -247,10 +247,10 @@ test("Ctrl+E saves the raw current frame into the capture folder with no dialog 
     await until(() => rows(host).length === 1 && rows(host)[0]!.state !== "running");
     const [row] = rows(host);
     assert.deepEqual([row!.kind, row!.name, row!.id.startsWith("r"), row!.openable], ["image", basename(outcome.destination), true, true], "the file the host confirmed");
-    assert.equal(tab(host).unseen, 1, "the Results sub-tab counts it while another page shows");
+    await eventually(() => tab(host).unseen, 1, "the Results sub-tab counts it while another page shows");
     host.mounted().emit("set-page", 2);
     await host.settle();
-    assert.equal(tab(host).unseen, 0);
+    await eventually(() => tab(host).unseen, 0);
   } finally {
     await stop();
     await cleanup();
@@ -364,10 +364,10 @@ test("the chosen capture folder and the tab's choices are kept in the data direc
     ready(restart);
     const second = await startPlugin(activate, { directory, host: restart, dataDirectory: data });
     await restart.settle();
-    assert.equal(tab(restart).folder, folder);
-    assert.equal(tab(restart)["burst-open"], true);
-    assert.equal(tab(restart)["template-image"], "{name}-{n}");
-    assert.equal(tab(restart)["last-index"], 2);
+    await eventually(() => tab(restart).folder, folder);
+    await eventually(() => tab(restart)["burst-open"], true);
+    await eventually(() => tab(restart)["template-image"], "{name}-{n}");
+    await eventually(() => tab(restart)["last-index"], 2);
     assert.equal(restart.command("capture.last30").display.title, "Export Last 60 Seconds");
     await second.stop();
     await rm(folder, { recursive: true, force: true }); // a removed folder falls back to the default
@@ -401,16 +401,16 @@ test("lazy activation: the Snapshot items are player conditions; a background ta
     assert.deepEqual(SNAPSHOTS.map((id) => host.command(id).state.enabled), SNAPSHOTS.map(() => true));
     assert.deepEqual(host.keepsRunning, []);
     assert.equal(host.listening.has("source.state"), false, "the background tab does not follow playback");
-    assert.equal(tab(host).mode, undefined, "nothing of the player's state was sent");
+    await eventually(() => tab(host).mode, undefined, "nothing of the player's state was sent");
     // The user shows the tab: it reads the player's state now, and follows it.
     host.selectTab("vestra.capture");
     await host.settle();
-    assert.equal(tab(host).mode, "local");
-    assert.equal(tab(host)["can-clip"], true);
+    await eventually(() => tab(host).mode, "local");
+    await eventually(() => tab(host)["can-clip"], true);
     assert.equal(host.listening.has("source.state"), true);
     host.setSource({ phase: "loading" });
     await host.settle();
-    assert.equal(tab(host).mode, "none", "followed while it shows");
+    await eventually(() => tab(host).mode, "none", "followed while it shows");
     host.selectTab("vestra.playlist");
     // The layout is read after the event; the binding then runs again without reading the player's state.
     await until(() => !host.listening.has("source.state"));
@@ -425,18 +425,18 @@ test("tab states: no media, a plugin's stream, a network source, a local file", 
   const { stop } = await start(host, "en");
   try {
     await host.settle();
-    assert.deepEqual([tab(host).mode, tab(host)["can-capture"], tab(host)["can-clip"]], ["none", false, false]);
+    await eventually(() => [tab(host).mode, tab(host)["can-capture"], tab(host)["can-clip"]], ["none", false, false]);
     host.openElsewhere("https://example.test/live.m3u8");
     host.setSource({ position: 2, duration: 30 });
     await host.settle();
-    assert.deepEqual([tab(host).mode, tab(host)["can-capture"], tab(host)["can-clip"], tab(host)["can-last"]], ["network", true, false, false]);
+    await eventually(() => [tab(host).mode, tab(host)["can-capture"], tab(host)["can-clip"], tab(host)["can-last"]], ["network", true, false, false]);
     host.setSource({ kind: "producer", phase: "ready" });
     await host.settle();
-    assert.deepEqual([tab(host).mode, tab(host)["can-capture"]], ["stream", false]);
+    await eventually(() => [tab(host).mode, tab(host)["can-capture"]], ["stream", false]);
     ready(host);
     host.setSource({ kind: "media" });
     await host.settle();
-    assert.deepEqual([tab(host).mode, tab(host)["can-capture"], tab(host)["can-clip"], tab(host)["can-last"]], ["local", true, true, true]);
+    await eventually(() => [tab(host).mode, tab(host)["can-capture"], tab(host)["can-clip"], tab(host)["can-last"]], ["local", true, true, true]);
   } finally {
     await stop();
   }
@@ -478,18 +478,18 @@ test("clip, Precise: Export saves into the folder with the template's name and t
   const { folder, cleanup } = await withFolder(host);
   try {
     const panel = host.mounted();
-    assert.deepEqual(tab(host)["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en", "音轨 8"]);
+    await eventually(() => tab(host)["audio-labels"], ["无声音", "当前音轨", "音轨 7 · en", "音轨 8"]);
     panel.emit("set-method", 1);
     panel.emit("set-preset", 2);
     panel.emit("set-audio", 2);
     panel.emit("set-processed", true);
     panel.emit("clip-edited", "0:01", "0:04.5");
     await host.settle();
-    assert.equal(tab(host)["clip-name"], "source-one_00.01.000-00.04.500.mp4", "the name the Export button gives");
-    assert.equal(tab(host)["field-error"], "");
-    assert.equal(tab(host).estimate && (tab(host).estimate as { length: string }).length, "3.5");
-    assert.equal((tab(host).note as { method: string }).method, "precise");
-    assert.equal(tab(host)["preset-index"], 2, "Small file");
+    await eventually(() => tab(host)["clip-name"], "source-one_00.01.000-00.04.500.mp4", "the name the Export button gives");
+    await eventually(() => tab(host)["field-error"], "");
+    await eventually(() => tab(host).estimate && (tab(host).estimate as { length: string }).length, "3.5");
+    await eventually(() => (tab(host).note as { method: string }).method, "precise");
+    await eventually(() => tab(host)["preset-index"], 2, "Small file");
     panel.emit("export-clip", "0:01", "0:04.5");
     await until(() => host.sent("jobs.start").length === 1 && statusOf(host, "clip-status") === "已开始导出，可在结果中查看。");
     assert.equal(host.sent("dialogs.open").length, 1, "only the folder dialog: Export asks for nothing");
@@ -503,8 +503,8 @@ test("clip, Precise: Export saves into the folder with the template's name and t
     assert.deepEqual(job.encoding, { crf: 26, speed: "balanced", maxHeight: 1080, audioBitrate: 128, threads: "auto" });
     // The progress card and the row while it runs.
     await until(() => (tab(host).card as { shown: boolean }).shown);
-    assert.equal((tab(host).card as { name: string }).name, "source-one_00.01.000-00.04.500.mp4");
-    assert.equal((tab(host).card as { percent: number }).percent, -1, "no percentage before the first progress");
+    await eventually(() => (tab(host).card as { name: string }).name, "source-one_00.01.000-00.04.500.mp4");
+    await eventually(() => (tab(host).card as { percent: number }).percent, -1, "no percentage before the first progress");
     await setJob(1, { status: "running", progress: { done: 1.75, total: 3.5 } } as never);
     await until(() => (tab(host).card as { percent: number }).percent === 50 && rows(host)[0]?.state === "running" && (rows(host)[0] as unknown as { percent: number }).percent === 50);
     const destination = join(folder, "source-one_00.01.000-00.04.500.mp4");
@@ -512,9 +512,9 @@ test("clip, Precise: Export saves into the folder with the template's name and t
     await setJob(1, { status: "completed", publicationStarted: true, progress: null, outcome: { destination, start: 1, end: 4.52 } } as never);
     await until(() => host.osd.at(-1) === `片段已导出为 ${destination}` && statusOf(host, "clip-status") === "已导出 source-one_00.01.000-00.04.500.mp4");
     await until(() => rows(host).length === 1 && rows(host)[0]!.state === "completed");
-    assert.equal((tab(host).card as { shown: boolean }).shown, false);
-    assert.deepEqual([rows(host)[0]!.kind, (rows(host)[0] as unknown as { method: string; badge: string }).method, (rows(host)[0] as unknown as { badge: string }).badge], ["clip", "precise", "3.5"]);
-    assert.equal((rows(host)[0] as unknown as { range: string }).range, "00:01.000–00:04.520", "R2: the range the file holds");
+    await eventually(() => (tab(host).card as { shown: boolean }).shown, false);
+    await eventually(() => [rows(host)[0]!.kind, (rows(host)[0] as unknown as { method: string; badge: string }).method, (rows(host)[0] as unknown as { badge: string }).badge], ["clip", "precise", "3.5"]);
+    await eventually(() => (rows(host)[0] as unknown as { range: string }).range, "00:01.000–00:04.520", "R2: the range the file holds");
     // R5: the message's buttons, and what they do.
     assert.deepEqual(host.osdActions.at(-1), [{ title: "在文件夹中显示", command: "capture.revealLast" }, { title: "在页签中显示", command: "capture.tasks" }]);
     await host.pressOsdAction(0);
@@ -537,19 +537,19 @@ test("Export Clip… only opens the Clip section; Export Clip Range (Ctrl+Shift+
   const { cleanup } = await withFolder(host);
   try {
     await host.settle();
-    assert.equal((tab(host).keys as { clip: string }).clip, "⇧⌘E", "the Export button shows Export Clip Range's key");
+    await eventually(() => (tab(host).keys as { clip: string }).clip, "⇧⌘E", "the Export button shows Export Clip Range's key");
     // No range yet: the key opens the Clip section with the position → +10 s, and exports nothing.
     await host.press("Ctrl+Shift+E");
     await host.settle();
     assert.equal(host.layout.sidebar?.owner, 1, "the tab is in front");
-    assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:02.000", "00:12.000"]);
-    assert.equal(tab(host).page, 1, "the Clip page");
+    await eventually(() => [tab(host)["clip-start"], tab(host)["clip-end"]], ["00:02.000", "00:12.000"]);
+    await eventually(() => tab(host).page, 1, "the Clip page");
     assert.equal(host.sent("jobs.start").length, 0);
     // Export Clip… never exports, also while the tab shows.
     await host.command("capture.clip").run();
     await host.settle();
     assert.equal(host.sent("jobs.start").length, 0);
-    assert.equal(tab(host).page, 1);
+    await eventually(() => tab(host).page, 1);
     // With a range, the key exports it.
     await host.press("Ctrl+Shift+E");
     await until(() => host.sent("jobs.start").length === 1);
@@ -560,7 +560,7 @@ test("Export Clip… only opens the Clip section; Export Clip Range (Ctrl+Shift+
     const sets = host.sent("ui.setMount").length;
     await host.command("capture.clip").run();
     await host.settle();
-    assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:02.000", "00:12.000"], "nothing written over the typed fields");
+    await eventually(() => [tab(host)["clip-start"], tab(host)["clip-end"]], ["00:02.000", "00:12.000"], "nothing written over the typed fields");
     assert.ok(host.sent("ui.setMount").length > sets && host.sent("ui.setMount").slice(sets).every((p) => !/clip-?start/i.test(JSON.stringify(p))));
     await host.press("Ctrl+Shift+E");
     await until(() => host.osd.at(-1) === "导出失败：结束时间必须晚于开始时间。");
@@ -578,11 +578,11 @@ test("field errors: a time that is none, an end before the start; Export is refu
     const panel = host.mounted();
     panel.emit("clip-edited", "1:7x", "4");
     await host.settle();
-    assert.deepEqual([tab(host)["field-error"], tab(host)["error-field"]], ["time", "start"]);
+    await eventually(() => [tab(host)["field-error"], tab(host)["error-field"]], ["time", "start"]);
     panel.emit("clip-edited", "0:05", "0:04");
     await host.settle();
-    assert.deepEqual([tab(host)["field-error"], tab(host)["error-field"]], ["endBeforeStart", "end"]);
-    assert.equal(tab(host)["clip-name"], "");
+    await eventually(() => [tab(host)["field-error"], tab(host)["error-field"]], ["endBeforeStart", "end"]);
+    await eventually(() => tab(host)["clip-name"], "");
     panel.emit("export-clip", "0:05", "0:04");
     await until(() => statusOf(host, "clip-status") === "结束时间必须晚于开始时间。");
     assert.equal(host.sent("snapshot.capture").length, 0);
@@ -597,18 +597,18 @@ test("Use A-B range copies the loop once; without a loop it says how to set one"
   const { stop } = await start(host);
   try {
     await host.settle();
-    assert.deepEqual(tab(host).ab, { shown: false, a: "", b: "" });
+    await eventually(() => tab(host).ab, { shown: false, a: "", b: "" });
     host.mounted().emit("use-ab");
     await until(() => statusOf(host, "clip-status") === words(host).reason("noLoop", ""));
     host.setSource({ loop: { a: 3.5, b: 9.25, count: null } });
     await host.settle();
-    assert.deepEqual(tab(host).ab, { shown: true, a: "00:03.500", b: "00:09.250" });
+    await eventually(() => tab(host).ab, { shown: true, a: "00:03.500", b: "00:09.250" });
     host.mounted().emit("use-ab");
     await host.settle();
-    assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:03.500", "00:09.250"]);
+    await eventually(() => [tab(host)["clip-start"], tab(host)["clip-end"]], ["00:03.500", "00:09.250"]);
     host.setSource({ loop: { a: 1, b: 2, count: null } });
     await host.settle();
-    assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:03.500", "00:09.250"], "a copy, not a link");
+    await eventually(() => [tab(host)["clip-start"], tab(host)["clip-end"]], ["00:03.500", "00:09.250"], "a copy, not a link");
   } finally {
     await stop();
   }
@@ -632,7 +632,7 @@ test("Last N s (Ctrl+Shift+R): the seconds before the position into the folder; 
     assert.equal(host.sent("snapshot.capture")[0]!.time, 0, "max(0, 20 − 30)");
     assert.equal(host.sent("jobs.start")[0]!.end, 20);
     assert.equal(host.osd.at(-1), "Exporting the last 30 seconds");
-    assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:00.000", "00:20.000"], "empty fields show what was exported");
+    await eventually(() => [tab(host)["clip-start"], tab(host)["clip-end"]], ["00:00.000", "00:20.000"], "empty fields show what was exported");
     await setJob(1, { status: "cancelled", outcome: { cancelled: true } });
     // A range the user typed is kept; Last N s exports its own range all the same.
     host.mounted().emit("clip-edited", "0:03", "0:07");
@@ -640,7 +640,7 @@ test("Last N s (Ctrl+Shift+R): the seconds before the position into the folder; 
     host.mounted().emit("last");
     await until(() => host.sent("jobs.start").length === 2);
     assert.deepEqual([host.sent("snapshot.capture")[1]!.time, host.sent("jobs.start")[1]!.end], [0, 25]);
-    assert.equal(tab(host)["clip-end"], "00:20.000", "the typed fields were not written over (00:25.000 would be)");
+    await eventually(() => tab(host)["clip-end"], "00:20.000", "the typed fields were not written over (00:25.000 would be)");
     host.setSource({ position: 20 });
     await setJob(2, { status: "cancelled", outcome: { cancelled: true } });
     host.mounted().emit("clip-edited", "", "");
@@ -671,7 +671,7 @@ test("the clip guard is taken before the first await; a rejected source releases
   await host.settle();
   assert.equal(host.sent("source.state").length - reads, 1, "duplicate entry excluded before the source read");
   assert.equal(statusOf(host, "clip-status"), "当前画面无法导出，请先打开本地视频文件。");
-  assert.equal(tab(host)["clip-busy"], false);
+  await eventually(() => tab(host)["clip-busy"], false);
   panel.emit("export-clip", "0", "1");
   await host.settle();
   assert.equal(host.sent("source.state").length - reads, 2, "guard released after rejection");
@@ -693,8 +693,8 @@ test("one running and four queued; the sixth is refused; queued input keeps its 
     }
     assert.equal(host.sent("jobs.start").length, 1, "only one accepted task starts its worker");
     await host.settle();
-    assert.equal(tab(host)["queue-full"], true);
-    assert.equal((tab(host).card as { queued: number }).queued, 4);
+    await eventually(() => tab(host)["queue-full"], true);
+    await eventually(() => (tab(host).card as { queued: number }).queued, 4);
     await host.press("Ctrl+E");
     await until(() => host.osd.at(-1) === "截图失败：已有一个导出在进行、四个在排队，请稍候。");
     assert.equal(host.sent("snapshot.capture").length, 5, "the sixth entry freezes nothing");
@@ -708,11 +708,11 @@ test("one running and four queued; the sixth is refused; queued input keeps its 
     assert.equal((host.snapshots.get(3) as { sourceStamp: { generation: number } }).sourceStamp.generation, 1, "queued input not refreshed");
     assert.equal(host.snapshots.has(1), false, "a completed task releases its input");
     await until(() => rows(host).some((row) => row.id.startsWith("r") && row.name === "source-one_00.02.000.png"));
-    assert.ok(rows(host).some((row) => row.name === "source-one_00.02.000 (2).png"), "queued frames never share a name");
+    await eventually(() => !!(rows(host).some((row) => row.name === "source-one_00.02.000 (2).png")), true, "queued frames never share a name");
     host.mounted().emit("cancel-task", "t3");
     await until(() => rows(host).some((row) => row.id === "t3" && row.state === "cancelled"));
     assert.equal(host.sent("jobs.cancel").length, 1, "the active job is cancelled");
-    assert.equal(rows(host).find((row) => row.id === "t3")!.retryable, true);
+    await eventually(() => rows(host).find((row) => row.id === "t3")!.retryable, true);
     host.mounted().emit("remove-result", "t3");
     await until(() => !rows(host).some((row) => row.id === "t3"));
   } finally {
@@ -729,9 +729,9 @@ test("burst: the folder from the template under the capture folder, one snapshot
   try {
     await host.press("Ctrl+G");
     await host.settle();
-    assert.equal(tab(host)["burst-open"], true, "Ctrl+G opens the burst row");
-    assert.equal(tab(host)["burst-start"], "00:02.000", "from the position");
-    assert.equal(tab(host)["folder-shown"], folder);
+    await eventually(() => tab(host)["burst-open"], true, "Ctrl+G opens the burst row");
+    await eventually(() => tab(host)["burst-start"], "00:02.000", "from the position");
+    await eventually(() => tab(host)["folder-shown"], folder);
     host.mounted().emit("start-burst", "1", "3", "0.5", false, false, false);
     await until(() => statusOf(host, "burst-status") === "已保存 3 张" && host.osd.at(-1)!.startsWith("连拍已保存"));
     assert.equal(host.sent("snapshot.capture").length, 1);
@@ -762,7 +762,7 @@ test("a failed task keeps its input; retry from Results reuses it after the sour
     await setJob(1, { status: "failed", outcome: { error: { code: "space", message: "disk full" } } });
     await until(() => host.osd.at(-1) === "截图失败：磁盘空间不足");
     await until(() => rows(host)[0]?.state === "failed");
-    assert.deepEqual([rows(host)[0]!.reason, rows(host)[0]!.retryable], ["space", true]);
+    await eventually(() => [rows(host)[0]!.reason, rows(host)[0]!.retryable], ["space", true]);
     host.openElsewhere("/contract/source-two.mp4");
     host.mounted().emit("retry-task", "t1");
     await until(() => host.sent("jobs.start").length === 2 && statusOf(host, "results-status") === "已重新开始。");
@@ -803,11 +803,11 @@ test("typed times survive other actions; Now writes only its own field", async (
     host.mounted().emit("clip-edited", "5", "9");
     host.mounted().emit("clip-now", "end");
     await host.settle();
-    assert.equal(tab(host)["clip-end"], "00:02.000");
-    assert.equal(tab(host)["clip-start"], "5", "what the user typed");
+    await eventually(() => tab(host)["clip-end"], "00:02.000");
+    await eventually(() => tab(host)["clip-start"], "5", "what the user typed");
     await host.command("capture.clipStart").run();
     await host.settle();
-    assert.equal(tab(host)["clip-start"], "00:02.000");
+    await eventually(() => tab(host)["clip-start"], "00:02.000");
     assert.equal(host.osd.at(-1), "片段起点：00:02.000");
   } finally {
     await stop();
@@ -865,11 +865,11 @@ test("key caps follow the user's keys (commands.keys)", async () => {
   const { stop } = await start(host);
   try {
     await host.settle();
-    assert.deepEqual(tab(host).keys, { save: "Ctrl+E", copy: "Ctrl+C", savescreen: "Ctrl+Alt+E", copyscreen: "Ctrl+Alt+C", burst: "Ctrl+G", clip: "Ctrl+Shift+E", panel: "Alt+S", last: "Ctrl+Shift+R" });
+    await eventually(() => tab(host).keys, { save: "Ctrl+E", copy: "Ctrl+C", savescreen: "Ctrl+Alt+E", copyscreen: "Ctrl+Alt+C", burst: "Ctrl+G", clip: "Ctrl+Shift+E", panel: "Alt+S", last: "Ctrl+Shift+R" });
     host.rebind("capture.save", ["Ctrl+Shift+S"]);
     host.rebind("capture.copy", []);
     await until(() => (tab(host).keys as { save: string }).save === "Ctrl+Shift+S");
-    assert.equal((tab(host).keys as { copy: string }).copy, "", "a cleared key shows no cap");
+    await eventually(() => (tab(host).keys as { copy: string }).copy, "", "a cleared key shows no cap");
   } finally {
     await stop();
   }
@@ -898,13 +898,13 @@ test("results persist across restarts (finished only); a moved file says so; Cle
     const again = new TestHost();
     const second = await startPlugin(activate, { directory, host: again, dataDirectory: data, locale: "zh-Hans" });
     await until(() => rows(again).length === 1);
-    assert.deepEqual([rows(again)[0]!.name, rows(again)[0]!.state], [basename(destination), "completed"], "the failed task stayed in its session");
+    await eventually(() => [rows(again)[0]!.name, rows(again)[0]!.state], [basename(destination), "completed"], "the failed task stayed in its session");
     await second.stop();
     await rm(destination);
     const third = new TestHost();
     const after = await startPlugin(activate, { directory, host: third, dataDirectory: data, locale: "zh-Hans" });
     await until(() => rows(third)[0]?.state === "gone");
-    assert.equal(rows(third)[0]!.openable, false);
+    await eventually(() => rows(third)[0]!.openable, false);
     third.mounted().emit("clear-finished");
     await until(() => rows(third).length === 0);
     await after.stop();
@@ -924,14 +924,14 @@ test("file-name templates: edits rename the next capture; a chip adds a variable
     panel.emit("template-edited", "image", "shot {name}");
     panel.emit("insert-variable", "image", "{pos}");
     await host.settle();
-    assert.equal(tab(host)["template-image"], "shot {name}{pos}");
-    assert.equal((tab(host).previews as { image: string }).image, "shot source-one05.09.412.png", "the preview names the playing file");
+    await eventually(() => tab(host)["template-image"], "shot {name}{pos}");
+    await eventually(() => (tab(host).previews as { image: string }).image, "shot source-one05.09.412.png", "the preview names the playing file");
     await host.press("Ctrl+E");
     await until(() => host.sent("jobs.start").length === 1);
     assert.equal(host.sent("jobs.start")[0]!.destination, join(folder, "shot source-one00.02.000.png"));
     panel.emit("reset-template", "image");
     await host.settle();
-    assert.equal(tab(host)["template-image"], "{name}_{pos}");
+    await eventually(() => tab(host)["template-image"], "{name}_{pos}");
   } finally {
     await stop();
     await cleanup();
@@ -962,12 +962,12 @@ test("Fast (R1): the default; keyframes from ffprobe on the player's clock; a st
     await until(() => host.osd.at(-1) === `Snapshot folder: ${folder}`);
     const panel = host.mounted();
     await host.settle();
-    assert.equal(tab(host)["method-index"], 0, "Fast is the default");
-    assert.deepEqual(tab(host).support, { fast: true, encode: true, progress: true });
+    await eventually(() => tab(host)["method-index"], 0, "Fast is the default");
+    await eventually(() => tab(host).support, { fast: true, encode: true, progress: true });
     panel.emit("clip-edited", "4:02.3", "4:19");
     // The codec probe and the keyframe probe answer separately: wait for the note and the name they give.
     await until(() => (tab(host).note as { snapped: boolean; container: string }).snapped && (tab(host).note as { container: string }).container === "mp4" && tab(host)["clip-name"] === "movie_04.00.000-04.19.000.mp4");
-    assert.deepEqual(tab(host).note, { method: "fast", start: "04:00.000", end: "04:19.000", early: "2.3", snapped: true, container: "mp4" });
+    await eventually(() => tab(host).note, { method: "fast", start: "04:00.000", end: "04:19.000", early: "2.3", snapped: true, container: "mp4" });
     const line = tab(host).timeline as { key: number; gota: number; wanta: number; ticks: string };
     assert.ok(line.key >= 0 && line.gota < line.wanta && line.ticks.includes("M"));
     const probe = host.tools.calls.find((call) => call.args.includes("-read_intervals"))!;
@@ -994,8 +994,8 @@ test("Fast (R1): the default; keyframes from ffprobe on the player's clock; a st
     // Precise: the exact frame; the seek bar follows.
     panel.emit("set-method", 1);
     await host.settle();
-    assert.deepEqual([(tab(host).note as { method: string; start: string }).method, (tab(host).note as { start: string }).start], ["precise", "04:02.300"]);
-    assert.equal(tab(host)["clip-name"], "movie_04.02.300-04.19.000.mp4");
+    await eventually(() => [(tab(host).note as { method: string; start: string }).method, (tab(host).note as { start: string }).start], ["precise", "04:02.300"]);
+    await eventually(() => tab(host)["clip-name"], "movie_04.02.300-04.19.000.mp4");
     await until(() => host.timeline.rangeLayers.get("vestra.capture")?.[0]?.start === 242.3);
     // In the background the range goes.
     host.mountOther("sidebar", "vestra.playlist", { title: "Playlist" });
@@ -1124,7 +1124,7 @@ test("Save and Copy take the frame as mpv does: the subtitles shown, the effects
     host.mounted().emit("set-snapshot-effects", true);
     await host.settle();
     assert.deepEqual(await saved(() => host.press("Ctrl+E")), ["processed", false], "the effects without subtitles");
-    assert.equal(tab(host)["snapshot-effects"], true);
+    await eventually(() => tab(host)["snapshot-effects"], true);
   } finally {
     await stop();
     await cleanup();
@@ -1138,13 +1138,13 @@ test("real pages: the last sub-tab is remembered; commands select their page; Bu
   const first = await start(host, "en", data);
   try {
     await host.settle();
-    assert.equal(tab(host).page, 0, "Snapshot first");
+    await eventually(() => tab(host).page, 0, "Snapshot first");
     await host.command("capture.tasks").run();
     await host.settle();
-    assert.equal(tab(host).page, 2, "Export Tasks… shows Results");
+    await eventually(() => tab(host).page, 2, "Export Tasks… shows Results");
     await host.press("Ctrl+G");
     await host.settle();
-    assert.deepEqual([tab(host).page, tab(host)["burst-open"]], [3, true], "Burst… shows Settings with its row open");
+    await eventually(() => [tab(host).page, tab(host)["burst-open"]], [3, true], "Burst… shows Settings with its row open");
     assert.equal(host.command("capture.burst").state.checked, true);
     host.mounted().emit("set-page", 1);
     await host.settle();
@@ -1155,10 +1155,10 @@ test("real pages: the last sub-tab is remembered; commands select their page; Bu
     ready(again);
     const second = await startPlugin(activate, { directory, host: again, dataDirectory: data, locale: "en" });
     await again.settle();
-    assert.equal(tab(again).page, 1, "the Clip page again after a restart");
+    await eventually(() => tab(again).page, 1, "the Clip page again after a restart");
     await again.command("capture.settings").run();
     await again.settle();
-    assert.equal(tab(again).page, 3);
+    await eventually(() => tab(again).page, 3);
     await second.stop();
   } finally {
     await rm(data, { recursive: true, force: true });

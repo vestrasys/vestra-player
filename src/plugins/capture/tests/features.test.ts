@@ -6,7 +6,7 @@ import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { newFakes, stills, watchHost, words } from "./fakes.ts";
+import { eventually, newFakes, stills, watchHost, words } from "./fakes.ts";
 
 const fakes = newFakes();
 const directory = new URL("..", import.meta.url);
@@ -178,10 +178,10 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     assert.equal(jpeg.state.checked, true);
     assert.equal(host.command("capture.format.png").state.checked, false);
     const settings = host.mounted();
-    assert.equal(tab(host)["format-index"], 1);
+    await eventually(() => tab(host)["format-index"], 1);
     settings.emit("set-quality", 80);
     await host.settle();
-    assert.equal(tab(host).quality, 80);
+    await eventually(() => tab(host).quality, 80);
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
     const target = join(folder, "source-one_00.02.000.jpg");
@@ -205,7 +205,7 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     const again = await startPlugin(activate, { directory, host: restart, dataDirectory: data, locale: "zh-Hans" });
     assert.equal(restart.command("capture.format.bmp").state.checked, true);
     await restart.settle();
-    assert.equal(tab(restart).quality, 80);
+    await eventually(() => tab(restart).quality, 80);
     await again.stop();
   } finally {
     await stop();
@@ -267,7 +267,7 @@ test("F07: bursts use the shared format; the dialog's combo box changes it", asy
   try {
     await host.press("Ctrl+G");
     const burst = host.mounted();
-    assert.equal(tab(host)["format-index"], 0);
+    await eventually(() => tab(host)["format-index"], 0);
     burst.emit("choose-format", 1);
     await host.settle();
     assert.equal(lastOsd(host), "截图格式：JPEG");
