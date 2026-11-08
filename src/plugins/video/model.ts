@@ -89,6 +89,20 @@ export function switchDenoise(denoise: Effects["denoise"], on: boolean, last: re
   return [...restore];
 }
 
+/** The denoisers that are on, in the fixed order. */
+export const activeDenoise = (denoise: Effects["denoise"]): DenoiseMode[] => DENOISE_MODES.filter((mode) => denoise[mode].on);
+
+/**
+ * The set the Denoise chip remembers after one denoiser was switched by itself (the Denoise
+ * card's rows, Ctrl+N, Ctrl+M): when that turned the last one off, the set that was on before
+ * (`before`, read with `activeDenoise` before the switch), so the chip brings back what the user
+ * had last; otherwise `last` unchanged. Whichever path turns the last denoiser off updates the
+ * memory this way, not only the chip itself.
+ */
+export function rememberDenoise(denoise: Effects["denoise"], before: readonly DenoiseMode[], last: readonly DenoiseMode[]): DenoiseMode[] {
+  return before.length > 0 && activeDenoise(denoise).length === 0 ? [...before] : [...last];
+}
+
 /**
  * hqdn3d weights per strength point (luma/chroma spatial, luma/chroma temporal).
  * 3D keeps hqdn3d's own 4:3:6:4.5 ratio (40 = its defaults); 渐进 is a milder

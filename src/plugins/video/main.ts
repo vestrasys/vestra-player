@@ -16,6 +16,7 @@ import {
   RATIOS,
   REFRAME_MODES,
   ROTATIONS,
+  activeDenoise,
   aspectIndex,
   aspectMessage,
   blendFps,
@@ -36,6 +37,7 @@ import {
   peakOf,
   presets,
   reframeMessage,
+  rememberDenoise,
   serialize,
   switchDenoise,
   upright,
@@ -348,6 +350,15 @@ export default async function activate(plugin: Plugin) {
   };
   /** The denoisers the panel's Denoise chip turns back on (see `switchDenoise`); this session only. */
   let lastDenoise: DenoiseMode[] = [];
+  /**
+   * One switch (a card row, Ctrl+N, Ctrl+M) applied to a toggle: when it turns the last denoiser
+   * off, the chip remembers the set that was on (`rememberDenoise`), whatever the path.
+   */
+  const switchToggle = (toggle: Toggle, on: boolean) => {
+    const before = activeDenoise(effects.denoise);
+    toggle.on = on;
+    lastDenoise = rememberDenoise(effects.denoise, before, lastDenoise);
+  };
 
   // ---------------------------------------------------------------- panel
   /** The commands the panel's buttons run (`run`, by command id), filled where they are added. */
@@ -508,7 +519,7 @@ export default async function activate(plugin: Plugin) {
     } else if (field === "flipV" || field === "flipH") look.geometry[field] = value;
     // The Denoise chip: the master switch over the three denoisers (`switchDenoise`).
     else if (field === "denoise") lastDenoise = switchDenoise(effects.denoise, value, lastDenoise);
-    else if ((strengths as string[]).includes(field)) toggleOf(field as Strength).on = value;
+    else if ((strengths as string[]).includes(field)) switchToggle(toggleOf(field as Strength), value);
     else return;
     change();
   });
@@ -550,12 +561,18 @@ export default async function activate(plugin: Plugin) {
   // The zoom, pan and crop buttons, Reset All and the GPU switch run their commands (OSD included).
   panel.on("run", (id: string) => void runs.get(String(id))?.());
   // The geometry editor: a drag, a corner or the wheel asks for a framing (zoom, pan) and the
-  // video follows at once, without an OSD (the editor shows the numbers).
-  panel.on("frameEdit", (zoom: number, panX: number, panY: number) => {
+  // video follows at once, without an OSD (the editor shows the numbers). A drag is one user
+  // action: its first edit announces (a refusal says "Display unavailable" once), the moves
+  // until `done` (the release) do not, so an occupied display does not say so on every frame.
+  let editing = false;
+  panel.on("frameEdit", (zoom: number, panX: number, panY: number, done: boolean) => {
     const next = framed(frame, Number(zoom), Number(panX), Number(panY));
-    if (next.zoom === frame.zoom && next.panX === frame.panX && next.panY === frame.panY) return;
-    frame = next;
-    showView(true);
+    const changed = next.zoom !== frame.zoom || next.panX !== frame.panX || next.panY !== frame.panY;
+    if (changed) {
+      frame = next;
+      showView(!editing);
+    }
+    editing = done !== true && (editing || changed);
   });
   // The editor's crop box (or, when stretching, the picture inside the bars) dragged to x, y
   // (0–100 %, 50 centred). A crop moves live while dragging; stretching (pad) rebuilds the
@@ -737,7 +754,7 @@ export default async function activate(plugin: Plugin) {
     shown(degrees === 0 ? plugin.osd.show("Rotation: none") : plugin.osd.show("Rotation: {}°", [degrees]));
   };
   const switchEffect = (toggle: Toggle, texts: Switch) => {
-    toggle.on = !toggle.on;
+    switchToggle(toggle, !toggle.on);
     change();
     shown(plugin.osd.show(toggle.on ? texts.on : texts.off));
   };

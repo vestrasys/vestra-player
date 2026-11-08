@@ -8,7 +8,7 @@ import { isDeepStrictEqual } from "node:util";
 import type { Locale } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { aspectIndex, aspectMessage, blendFps, defaultLook, defaults, droppedTooMany, eqNeutral, framed, framesIndex, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, presets, serialize, shaderList, switchDenoise } from "../model.ts";
+import { activeDenoise, aspectIndex, aspectMessage, blendFps, defaultLook, defaults, droppedTooMany, eqNeutral, framed, framesIndex, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, presets, rememberDenoise, serialize, shaderList, switchDenoise } from "../model.ts";
 import type { Look, Picture } from "../model.ts";
 
 const directory = new URL("..", import.meta.url);
@@ -755,6 +755,19 @@ test("panel model: the Denoise chip is a master switch; the editor's framing is 
   assert.deepEqual([denoise.d3.on, denoise.gradual.on, denoise.temporal.on], [false, false, true]);
   assert.deepEqual(switchDenoise(denoise, false, ["gradual"]), ["temporal"]);
   assert.deepEqual(switchDenoise(denoise, false, ["gradual"]), ["gradual"], "off with none on keeps what was remembered");
+  // A single denoiser switched (the card, Ctrl+N / Ctrl+M): the memory follows the last one off.
+  denoise.d3.on = true;
+  denoise.temporal.on = true;
+  let before = activeDenoise(denoise);
+  assert.deepEqual(before, ["d3", "temporal"]);
+  denoise.d3.on = false;
+  assert.deepEqual(rememberDenoise(denoise, before, ["gradual"]), ["gradual"], "one still on: the memory is untouched");
+  before = activeDenoise(denoise);
+  denoise.temporal.on = false;
+  assert.deepEqual(rememberDenoise(denoise, before, ["gradual"]), ["temporal"], "the last one off: the set that was on is remembered");
+  assert.deepEqual(rememberDenoise(denoise, [], ["gradual"]), ["gradual"], "nothing was on: the memory is untouched");
+  denoise.gradual.on = true;
+  assert.deepEqual(rememberDenoise(denoise, [], ["d3"]), ["d3"], "switched on: the memory is untouched");
 
   const frame = { zoom: 1.5, panX: 0.2, panY: -0.1 };
   assert.deepEqual(framed(frame, 9, 3, -3), { zoom: 4, panX: 1, panY: -1 });
@@ -798,11 +811,11 @@ test("Picture panel: the Denoise chip, the Frames choice, the editor's framing a
   assert.equal(host.videoRender.values.interpolation, false);
   // The editor's drag and wheel: the framing, kept in range, applied at once without an OSD.
   const osd = host.osd.length;
-  window.emit("frame-edit", 1.5, 0.25, -0.125);
+  window.emit("frame-edit", 1.5, 0.25, -0.125, true);
   await until(host, () => window.props["zoom-percent"] === 150, "the zoom");
   assert.deepEqual([host.videoView.values.zoom, host.videoView.values.panX, host.videoView.values.panY], [1.5, 0.25, -0.125]);
   assert.deepEqual([window.props.zoom, window.props["pan-x-value"], window.props["pan-x"], window.props["pan-y"]], [1.5, 0.25, 25, -12]);
-  window.emit("frame-edit", 10, -5, 0);
+  window.emit("frame-edit", 10, -5, 0, true);
   await until(host, () => window.props["zoom-percent"] === 400, "the most");
   assert.deepEqual([host.videoView.values.zoom, host.videoView.values.panX], [4, -1]);
   assert.equal(host.osd.length, osd, "no OSD for the editor's own edits");
@@ -828,6 +841,94 @@ test("Picture panel: the Denoise chip, the Frames choice, the editor's framing a
   window.emit("choose", "rotate", 3);
   await until(host, () => window.props["rotate-index"] === 3, "270°");
   assert.equal(node(host, "transform")!.rotate, 270);
+  await stop();
+});
+
+test("Picture panel: the Denoise chip remembers the set that was on whichever path turned the last denoiser off", async () => {
+  const { host, window, stop } = await playing();
+  const on = () => [window.props["d3-enabled"], window.props["gradual-enabled"], window.props["temporal-enabled"]];
+  // The chip: 3D. In the card: Temporal on, 3D off, then Temporal off (the last one, by the card).
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["d3-enabled"] === true, "3D on");
+  window.emit("toggle", "temporal", true);
+  await until(host, () => window.props["temporal-enabled"] === true, "Temporal on");
+  window.emit("toggle", "d3", false);
+  await until(host, () => window.props["d3-enabled"] === false, "3D off");
+  window.emit("toggle", "temporal", false);
+  await until(host, () => window.props["temporal-enabled"] === false, "all off");
+  assert.deepEqual(on(), [false, false, false]);
+  // The chip brings back Temporal (what was on last), not 3D (what the chip itself turned on).
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["temporal-enabled"] === true, "Temporal again");
+  assert.deepEqual(on(), [false, false, true]);
+  // The same through the keys: Ctrl+N adds 3D, Ctrl+M takes Temporal away, Ctrl+N the last one.
+  await host.press("Ctrl+N");
+  await until(host, () => window.props["d3-enabled"] === true, "3D by key");
+  await host.press("Ctrl+M");
+  await until(host, () => window.props["temporal-enabled"] === false, "Temporal off by key");
+  await host.press("Ctrl+N");
+  await until(host, () => window.props["d3-enabled"] === false, "all off by key");
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["d3-enabled"] === true, "3D again");
+  assert.deepEqual(on(), [true, false, false], "the key's set, not the card's");
+  assert.equal(chain(host).filter((n) => n.kind === "denoise").length, 1);
+  // Another effect's switch leaves the memory alone.
+  window.emit("toggle", "denoise", false);
+  await until(host, () => window.props["d3-enabled"] === false, "off");
+  window.emit("toggle", "sharpen", true);
+  await until(host, () => window.props["sharpen-enabled"] === true, "sharpen");
+  window.emit("toggle", "sharpen", false);
+  await until(host, () => window.props["sharpen-enabled"] === false, "sharpen off");
+  window.emit("toggle", "denoise", true);
+  await until(host, () => window.props["d3-enabled"] === true, "3D once more");
+  assert.deepEqual(on(), [true, false, false]);
+  await stop();
+});
+
+test("Picture panel: an editor drag on an occupied display says 'Display unavailable' once, not on every move", async () => {
+  const host = new TestHost();
+  host.setVideoViewOwner("probe.plugin");
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  await host.command("video.picture").run();
+  await host.settle();
+  const window = host.mounted();
+  assert.deepEqual(host.osd, [], "silent at start");
+  // One drag: moves (`done` false), then the release (`done` true): one notice.
+  window.emit("frame-edit", 1.1, 0, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.2, 0.1, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.3, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.3, 0.2, 0, true);
+  await host.settle();
+  assert.deepEqual(host.osd, ["Display unavailable: another plugin controls the display"]);
+  assert.equal(host.videoView.owner, "probe.plugin");
+  // The next drag is a new action: one more; a wheel notch (`done` at once) is one each.
+  window.emit("frame-edit", 1.4, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.5, 0.2, 0, true);
+  await host.settle();
+  window.emit("frame-edit", 1.6, 0.2, 0, true);
+  await host.settle();
+  assert.equal(host.osd.length, 3);
+  // A drag that changes nothing at first still announces on its first real change.
+  window.emit("frame-edit", 1.6, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.7, 0.2, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 1.7, 0.2, 0, true);
+  await host.settle();
+  assert.equal(host.osd.length, 4);
+  // Once the display is free, the drag applies without a notice.
+  host.setVideoViewOwner(null);
+  window.emit("frame-edit", 2, 0.5, 0, false);
+  await host.settle();
+  window.emit("frame-edit", 2, 0.5, 0, true);
+  await host.settle();
+  assert.equal(host.osd.length, 4);
+  assert.deepEqual([host.videoView.values.zoom, host.videoView.values.panX], [2, 0.5]);
   await stop();
 });
 

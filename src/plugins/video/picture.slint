@@ -156,8 +156,9 @@ export global PictureBridge {
     callback choose(string, int);
     // One of the plugin's commands, by id (the editor's keys and buttons, Reset All, the GPU switch).
     callback run(string);
-    // The geometry editor: a framing asked for by a drag, a corner or the wheel (zoom, pan x, pan y).
-    callback frame-edit(float, float, float);
+    // The geometry editor: a framing asked for by a drag, a corner or the wheel (zoom, pan x, pan y);
+    // `done` on release (and for a wheel notch), so the plugin treats a drag as one action.
+    callback frame-edit(float, float, float, bool);
     // The editor's crop box (or the picture inside the bars) dragged to x, y in %; `done` on release.
     callback crop-at(float, float, bool);
     callback set-advanced(bool);
@@ -760,6 +761,10 @@ component Editor inherits Rectangle {
     private property <float> start-px;
     private property <float> start-py;
     private property <float> start-dist: 1;
+    // The crop position at the press: the plugin's value follows every move (`crop-at`), so the
+    // drag adds its displacement to this, never to the moving value.
+    private property <float> start-cx: 50;
+    private property <float> start-cy: 50;
     private property <float> live-zoom: 1;
     private property <float> live-px;
     private property <float> live-py;
@@ -817,12 +822,12 @@ component Editor inherits Rectangle {
     }
     // A new zoom about the picture's centre: the pan is a fraction of the zoomed size, so it
     // scales back by the same factor and the centre stays where it is.
-    function zoom-to(zoom: float) {
+    function zoom-to(zoom: float, done: bool) {
         let next = clamp(zoom, 0.25, 4);
         root.live-px = clamp(root.start-px * root.start-zoom / next, -1, 1);
         root.live-py = clamp(root.start-py * root.start-zoom / next, -1, 1);
         root.live-zoom = next;
-        PictureBridge.frame-edit(next, root.live-px, root.live-py);
+        PictureBridge.frame-edit(next, root.live-px, root.live-py, done);
     }
     function press(x: length, y: length) {
         root.start-x = x;
@@ -830,8 +835,10 @@ component Editor inherits Rectangle {
         if root.crop-mode {
             editor-keys.focus();
             if root.mode != 0 {
-                root.live-cx = PictureBridge.crop-x;
-                root.live-cy = PictureBridge.crop-y;
+                root.start-cx = PictureBridge.crop-x;
+                root.start-cy = PictureBridge.crop-y;
+                root.live-cx = root.start-cx;
+                root.live-cy = root.start-cy;
                 root.drag = 3;
             }
         } else {
@@ -852,24 +859,28 @@ component Editor inherits Rectangle {
             let off-y = root.start-py * root.vh + (y - root.start-y);
             root.live-px = clamp((abs(off-x) < 4px ? 0px : off-x) / max(1px, root.vw), -1, 1);
             root.live-py = clamp((abs(off-y) < 4px ? 0px : off-y) / max(1px, root.vh), -1, 1);
-            PictureBridge.frame-edit(root.live-zoom, root.live-px, root.live-py);
+            PictureBridge.frame-edit(root.live-zoom, root.live-px, root.live-py, false);
         } else if root.drag == 2 {
-            root.zoom-to(root.start-zoom * root.distance(x, y) / root.start-dist);
+            root.zoom-to(root.start-zoom * root.distance(x, y) / root.start-dist, false);
         } else if root.drag == 3 {
             let free-x = root.ow - root.iw;
             let free-y = root.oh - root.ih;
             if free-x > 1px {
-                root.live-cx = clamp(PictureBridge.crop-x + (x - root.start-x) / free-x * 100, 0, 100);
+                root.live-cx = clamp(root.start-cx + (x - root.start-x) / free-x * 100, 0, 100);
             }
             if free-y > 1px {
-                root.live-cy = clamp(PictureBridge.crop-y + (y - root.start-y) / free-y * 100, 0, 100);
+                root.live-cy = clamp(root.start-cy + (y - root.start-y) / free-y * 100, 0, 100);
             }
             PictureBridge.crop-at(round(root.live-cx), round(root.live-cy), false);
         }
     }
+    // The end of a drag: the pointer released, or the grab cancelled (another window took the
+    // pointer, the focus left); either way the last live values are committed and the drag ends.
     function release() {
         if root.drag == 3 {
             PictureBridge.crop-at(round(root.live-cx), round(root.live-cy), true);
+        } else if root.drag != 0 {
+            PictureBridge.frame-edit(root.live-zoom, root.live-px, root.live-py, true);
         }
         root.drag = 0;
     }
@@ -1004,6 +1015,7 @@ component Editor inherits Rectangle {
         pointer-event(event) => {
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.down { root.press(self.mouse-x, self.mouse-y); }
             if event.button == PointerEventButton.left && event.kind == PointerEventKind.up { root.release(); }
+            if event.kind == PointerEventKind.cancel { root.release(); }
         }
         moved => {
             if self.pressed { root.drag-to(self.mouse-x, self.mouse-y); }
@@ -1016,7 +1028,7 @@ component Editor inherits Rectangle {
             root.start-zoom = PictureBridge.zoom;
             root.start-px = PictureBridge.pan-x-value;
             root.start-py = PictureBridge.pan-y-value;
-            root.zoom-to(root.start-zoom * pow(1.05, clamp(event.delta-y / 60px, -3, 3)));
+            root.zoom-to(root.start-zoom * pow(1.05, clamp(event.delta-y / 60px, -3, 3)), true);
             accept
         }
         double-clicked => {
@@ -1030,21 +1042,27 @@ component Editor inherits Rectangle {
         height: 0;
         focus-on-click: false;
         key-pressed(event) => {
+            // Only plain keys: Ctrl / Alt / Meta (and Shift with an arrow) are the player's and
+            // other plugins' shortcuts, which pass through. "+" is Shift+= on many keyboards.
+            if event.modifiers.control || event.modifiers.alt || event.modifiers.meta { return reject; }
             if root.crop-mode {
                 if event.text == Key.Escape || event.text == Key.Return {
                     root.crop-mode = false;
                     return accept;
                 }
+                if event.modifiers.shift { return reject; }
                 if event.text == Key.LeftArrow { PictureBridge.run("video.reframe.left"); return accept; }
                 if event.text == Key.RightArrow { PictureBridge.run("video.reframe.right"); return accept; }
                 if event.text == Key.UpArrow { PictureBridge.run("video.reframe.up"); return accept; }
                 if event.text == Key.DownArrow { PictureBridge.run("video.reframe.down"); return accept; }
                 return reject;
             }
-            if event.text == Key.LeftArrow { PictureBridge.run("video.frame.left"); return accept; }
-            if event.text == Key.RightArrow { PictureBridge.run("video.frame.right"); return accept; }
-            if event.text == Key.UpArrow { PictureBridge.run("video.frame.up"); return accept; }
-            if event.text == Key.DownArrow { PictureBridge.run("video.frame.down"); return accept; }
+            if !event.modifiers.shift {
+                if event.text == Key.LeftArrow { PictureBridge.run("video.frame.left"); return accept; }
+                if event.text == Key.RightArrow { PictureBridge.run("video.frame.right"); return accept; }
+                if event.text == Key.UpArrow { PictureBridge.run("video.frame.up"); return accept; }
+                if event.text == Key.DownArrow { PictureBridge.run("video.frame.down"); return accept; }
+            }
             if event.text == "+" || event.text == "=" { PictureBridge.run("video.frame.zoom-in"); return accept; }
             if event.text == "-" { PictureBridge.run("video.frame.zoom-out"); return accept; }
             reject
