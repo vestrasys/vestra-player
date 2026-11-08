@@ -6,7 +6,7 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:56 main.ts:64 main.ts:346 main.ts:527 main.ts:606
+#: main.ts:56 main.ts:64 main.ts:346 main.ts:531 main.ts:610
 #, x-machine
 msgid "{}"
 msgstr "{}"
@@ -46,7 +46,7 @@ msgstr "オーディオ"
 msgid "Audio Track"
 msgstr "音声トラック"
 
-#: main.ts:76 ui/workbench.slint:207 ui/workbench.slint:353
+#: main.ts:76 ui/workbench.slint:236 ui/workbench.slint:389
 #, x-machine
 msgid "Channels"
 msgstr "チャンネル"
@@ -71,7 +71,7 @@ msgstr "音声の同期"
 msgid "Audio Processing"
 msgstr "音声処理"
 
-#: main.ts:128 main.ts:714
+#: main.ts:128 main.ts:718
 #, x-machine
 msgid "Audio sync: {} s"
 msgstr "音声の同期：{} 秒"
@@ -171,12 +171,12 @@ msgstr "読み込み中…"
 msgid "No Audio Tracks"
 msgstr "音声トラックなし"
 
-#: main.ts:345 main.ts:606
+#: main.ts:345 main.ts:610
 #, x-machine
 msgid "Unnamed device"
 msgstr "名前のないデバイス"
 
-#: main.ts:345 main.ts:604
+#: main.ts:345 main.ts:608
 #, x-machine
 msgid "Selected device"
 msgstr "選択したデバイス"
@@ -186,7 +186,7 @@ msgstr "選択したデバイス"
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: main.ts:349 main.ts:603 ui/workbench.slint:42
+#: main.ts:349 main.ts:607 ui/workbench.slint:46
 #, x-machine
 msgid "System Default"
 msgstr "システムのデフォルト"
@@ -226,207 +226,207 @@ msgstr "出力デバイスが切断されたため、システムのデフォル
 msgid "Device not connected"
 msgstr "デバイスが接続されていません"
 
-#: main.ts:536 main.ts:632 main.ts:657
+#: main.ts:540 main.ts:636 main.ts:661
 #, x-machine
 msgid "Loading"
 msgstr "読み込み中"
 
-#: main.ts:536 main.ts:657 ui/workbench.slint:37
+#: main.ts:540 main.ts:661 ui/workbench.slint:41
 #, x-machine
 msgid "No audio tracks"
 msgstr "音声トラックはありません"
 
-#: main.ts:596
+#: main.ts:600
 #, x-machine
 msgid "No output devices available"
 msgstr "使用できる出力デバイスはありません"
 
-#: main.ts:609
+#: main.ts:613
 #, x-machine
 msgid "{} (not connected)"
 msgstr "{}（未接続）"
 
-#: main.ts:615
+#: main.ts:619
 #, x-machine
 msgid "{}: device not connected, using System Default"
 msgstr "{}：デバイスが接続されていないため、システムのデフォルトを使用しています"
 
-#: main.ts:625
+#: main.ts:629
 #, x-machine
 msgid "Load External Audio…"
 msgstr "外部オーディオを読み込む…"
 
-#: main.ts:632
+#: main.ts:636
 #, x-machine
 msgid "No file is playing"
 msgstr "再生中のファイルはありません"
 
-#: main.ts:632
+#: main.ts:636
 #, x-machine
 msgid "Generated video cannot take external audio"
 msgstr "生成されたビデオには外部オーディオを読み込めません"
 
-#: main.ts:643
+#: main.ts:647
 #, x-machine
 msgid "Audio…"
 msgstr "オーディオ…"
 
-#: main.ts:652
+#: main.ts:656
 #, x-machine
 msgid "Cycle Tracks"
 msgstr "トラックを順に切り替え"
 
-#: main.ts:663 ui/workbench.slint:192 ui/workbench.slint:195
+#: main.ts:667 ui/workbench.slint:221 ui/workbench.slint:224
 #, x-machine
 msgid "Stereo"
 msgstr "ステレオ"
 
-#: main.ts:663 ui/workbench.slint:195
+#: main.ts:667 ui/workbench.slint:224
 #, x-machine
 msgid "Left Channel"
 msgstr "左チャンネル"
 
-#: main.ts:663 ui/workbench.slint:195
+#: main.ts:667 ui/workbench.slint:224
 #, x-machine
 msgid "Right Channel"
 msgstr "右チャンネル"
 
-#: main.ts:663 ui/workbench.slint:195
+#: main.ts:667 ui/workbench.slint:224
 #, x-machine
 msgid "Mono Mix"
 msgstr "モノラルミックス"
 
-#: main.ts:663 ui/workbench.slint:195
+#: main.ts:667 ui/workbench.slint:224
 #, x-machine
 msgid "Swap Left and Right"
 msgstr "左右を入れ替え"
 
-#: main.ts:669 main.ts:679 main.ts:692 main.ts:705 main.ts:712 main.ts:734 main.ts:746 main.ts:758 ui/workbench.slint:584
+#: main.ts:673 main.ts:683 main.ts:696 main.ts:709 main.ts:716 main.ts:738 main.ts:750 main.ts:762 ui/workbench.slint:639
 #, x-machine
 msgid "No audio track selected"
 msgstr "音声トラックが選択されていません"
 
-#: main.ts:669 ui/workbench.slint:357
+#: main.ts:673 ui/workbench.slint:393
 #, x-machine
 msgid "The current track is mono"
 msgstr "現在のトラックはモノラルです"
 
-#: main.ts:675 ui/workbench.slint:210 ui/workbench.slint:487
+#: main.ts:679 ui/workbench.slint:239 ui/workbench.slint:538
 #, x-machine
 msgid "Equalizer"
 msgstr "イコライザ"
 
-#: main.ts:682
+#: main.ts:686
 #, x-machine
 msgid "Equalizer: On"
 msgstr "イコライザ：オン"
 
-#: main.ts:682
+#: main.ts:686
 #, x-machine
 msgid "Equalizer: Off"
 msgstr "イコライザ：オフ"
 
-#: main.ts:688 ui/workbench.slint:190
+#: main.ts:692 ui/workbench.slint:219
 #, x-machine
 msgid "Flat"
 msgstr "フラット"
 
-#: main.ts:688 ui/workbench.slint:190
+#: main.ts:692 ui/workbench.slint:219
 #, x-machine
 msgid "Voice"
 msgstr "ボイス"
 
-#: main.ts:688 ui/workbench.slint:190
+#: main.ts:692 ui/workbench.slint:219
 #, x-machine
 msgid "Music"
 msgstr "ミュージック"
 
-#: main.ts:688 ui/workbench.slint:190
+#: main.ts:692 ui/workbench.slint:219
 #, x-machine
 msgid "Cinema"
 msgstr "シネマ"
 
-#: main.ts:695
+#: main.ts:699
 #, x-machine
 msgid "Equalizer preset: Flat"
 msgstr "イコライザのプリセット：フラット"
 
-#: main.ts:695
+#: main.ts:699
 #, x-machine
 msgid "Equalizer preset: Voice"
 msgstr "イコライザのプリセット：ボイス"
 
-#: main.ts:695
+#: main.ts:699
 #, x-machine
 msgid "Equalizer preset: Music"
 msgstr "イコライザのプリセット：ミュージック"
 
-#: main.ts:695
+#: main.ts:699
 #, x-machine
 msgid "Equalizer preset: Cinema"
 msgstr "イコライザのプリセット：シネマ"
 
-#: main.ts:705
+#: main.ts:709
 #, x-machine
 msgid "50 ms Earlier"
 msgstr "50 ms 早く"
 
-#: main.ts:705
+#: main.ts:709
 #, x-machine
 msgid "50 ms Later"
 msgstr "50 ms 遅く"
 
-#: main.ts:708 main.ts:755 ui/workbench.slint:605
+#: main.ts:712 main.ts:759 ui/workbench.slint:660
 #, x-machine
 msgid "Reset"
 msgstr "リセット"
 
-#: main.ts:720 ui/workbench.slint:475
+#: main.ts:724 ui/workbench.slint:526
 #, x-machine
 msgid "Don't Keep"
 msgstr "保持しない"
 
-#: main.ts:720 ui/workbench.slint:475
+#: main.ts:724 ui/workbench.slint:526
 #, x-machine
 msgid "Keep for This Run"
 msgstr "起動中のみ保持"
 
-#: main.ts:720 ui/workbench.slint:475
+#: main.ts:724 ui/workbench.slint:526
 #, x-machine
 msgid "Always Keep"
 msgstr "常に保持"
 
-#: main.ts:730 ui/workbench.slint:532
+#: main.ts:734 ui/workbench.slint:587
 #, x-machine
 msgid "Normalize"
 msgstr "ノーマライズ"
 
-#: main.ts:737
+#: main.ts:741
 #, x-machine
 msgid "Normalize: On"
 msgstr "ノーマライズ：オン"
 
-#: main.ts:737
+#: main.ts:741
 #, x-machine
 msgid "Normalize: Off"
 msgstr "ノーマライズ：オフ"
 
-#: main.ts:742 ui/workbench.slint:546
+#: main.ts:746 ui/workbench.slint:601
 #, x-machine
 msgid "Crystalizer"
 msgstr "クリスタライザ"
 
-#: main.ts:750
+#: main.ts:754
 #, x-machine
 msgid "Crystalizer: On"
 msgstr "クリスタライザ：オン"
 
-#: main.ts:750
+#: main.ts:754
 #, x-machine
 msgid "Crystalizer: Off"
 msgstr "クリスタライザ：オフ"
 
-#: main.ts:761
+#: main.ts:765
 #, x-machine
 msgid "Audio processing reset"
 msgstr "音声処理をリセットしました"
@@ -465,157 +465,157 @@ msgstr "音声トラック"
 msgid "output device"
 msgstr "出力デバイス"
 
-#: ui/workbench.slint:190
+#: ui/workbench.slint:219
 #, x-machine
 msgid "Custom"
 msgstr "カスタム"
 
-#: ui/workbench.slint:192
+#: ui/workbench.slint:221
 #, x-machine
 msgid "L"
 msgstr "左"
 
-#: ui/workbench.slint:192
+#: ui/workbench.slint:221
 #, x-machine
 msgid "R"
 msgstr "右"
 
-#: ui/workbench.slint:192
+#: ui/workbench.slint:221
 #, x-machine
 msgid "Mono"
 msgstr "モノラル"
 
-#: ui/workbench.slint:192
+#: ui/workbench.slint:221
 #, x-machine
 msgid "Swap"
 msgstr "入替"
 
-#: ui/workbench.slint:199
+#: ui/workbench.slint:228
 #, x-machine
 msgid "{} ms"
 msgstr "{} ms"
 
-#: ui/workbench.slint:204 ui/workbench.slint:254
+#: ui/workbench.slint:233 ui/workbench.slint:283
 #, x-machine
 msgid "Volume"
 msgstr "音量"
 
-#: ui/workbench.slint:205 ui/workbench.slint:297
+#: ui/workbench.slint:234 ui/workbench.slint:333
 #, x-machine
 msgid "Track"
 msgstr "トラック"
 
-#: ui/workbench.slint:206 ui/workbench.slint:335
+#: ui/workbench.slint:235 ui/workbench.slint:371
 #, x-machine
 msgid "Output"
 msgstr "出力"
 
-#: ui/workbench.slint:208 ui/workbench.slint:401
+#: ui/workbench.slint:237 ui/workbench.slint:452
 #, x-machine
 msgid "Delay"
 msgstr "遅延"
 
-#: ui/workbench.slint:209 ui/workbench.slint:470
+#: ui/workbench.slint:238 ui/workbench.slint:521
 #, x-machine
 msgid "Keep"
 msgstr "保持"
 
-#: ui/workbench.slint:284
+#: ui/workbench.slint:313
 #, x-machine
 msgid "{}%"
 msgstr "{}%"
 
-#: ui/workbench.slint:293
+#: ui/workbench.slint:329
 #, x-machine
 msgid "TRACK"
 msgstr "トラック"
 
-#: ui/workbench.slint:300
+#: ui/workbench.slint:336
 #, x-machine
 msgid "next"
 msgstr "次へ"
 
-#: ui/workbench.slint:320
+#: ui/workbench.slint:356
 #, x-machine
 msgid "Load…"
 msgstr "読み込む…"
 
-#: ui/workbench.slint:323
+#: ui/workbench.slint:359
 #, x-machine
 msgid "Load audio files with the same name as the video automatically"
 msgstr "動画と同じ名前の音声ファイルを自動で読み込む"
 
-#: ui/workbench.slint:326
+#: ui/workbench.slint:362
 #, x-machine
 msgid "Same name"
 msgstr "同名"
 
-#: ui/workbench.slint:389
+#: ui/workbench.slint:440
 #, x-machine
 msgid "SYNC"
 msgstr "同期"
 
-#: ui/workbench.slint:393
+#: ui/workbench.slint:444
 #, x-machine
 msgid "Audio sync"
 msgstr "音声の同期"
 
-#: ui/workbench.slint:395
+#: ui/workbench.slint:446
 #, x-machine
 msgid "earlier"
 msgstr "早く"
 
-#: ui/workbench.slint:396
+#: ui/workbench.slint:447
 #, x-machine
 msgid "later"
 msgstr "遅く"
 
-#: ui/workbench.slint:483
+#: ui/workbench.slint:534
 #, x-machine
 msgid "EQUALIZER"
 msgstr "イコライザ"
 
-#: ui/workbench.slint:525
+#: ui/workbench.slint:580
 #, x-machine
 msgid "PROCESSING"
 msgstr "処理"
 
-#: ui/workbench.slint:563
+#: ui/workbench.slint:618
 #, x-machine
 msgid "{} dB"
 msgstr "{} dB"
 
-#: ui/workbench.slint:583
+#: ui/workbench.slint:638
 #, x-machine
 msgid "Loading audio…"
 msgstr "オーディオを読み込み中…"
 
-#: ui/workbench.slint:585
+#: ui/workbench.slint:640
 #, x-machine
 msgid "Applying…"
 msgstr "適用中…"
 
-#: ui/workbench.slint:586
+#: ui/workbench.slint:641
 #, x-machine
 msgid "Audio processing failed"
 msgstr "音声処理に失敗しました"
 
-#: ui/workbench.slint:587
+#: ui/workbench.slint:642
 #, x-machine
 msgid "Applied"
 msgstr "適用しました"
 
-#: ui/workbench.slint:588
+#: ui/workbench.slint:643
 #, x-machine
 msgid "Ready"
 msgstr "準備完了"
 
-#: ui/workbench.slint:598
+#: ui/workbench.slint:653
 #, x-machine
 msgid "Retry"
 msgstr "再試行"
 
-#: ui/workbench.slint:601
+#: ui/workbench.slint:656
 #, x-machine
 msgid "Equalizer, Normalize and Crystalizer back to neutral; sync and channels are kept"
 msgstr "イコライザ、ノーマライズ、クリスタライザを初期状態に戻します。同期とチャンネルはそのまま"

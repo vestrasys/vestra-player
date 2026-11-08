@@ -17,6 +17,10 @@ export struct Keys {
     equalizer: string,
     normalize: string,
     clarity: string,
+    // The player's own: host/volume-down, host/volume-up, host/mute.
+    voldown: string,
+    volup: string,
+    mute: string,
 }
 
 export global AudioBridge {
@@ -157,6 +161,31 @@ component VSlider {
     }
 }
 
+// One segment of the Channels row: lit when current; reports the pointer for the row's one tooltip.
+component Segment inherits Rectangle {
+    in property <string> text;
+    in property <bool> current;
+    in property <bool> available;
+    callback picked();
+    callback pointed();
+    horizontal-stretch: 1;
+    border-radius: Theme.radius-control;
+    background: root.current ? Theme.button-bg : touch.has-hover && root.available ? Theme.hover-bg : transparent;
+    Text {
+        text: root.text;
+        color: !root.available ? Theme.icon-disabled : root.current ? Theme.text : Theme.text-dim;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+        overflow: elide;
+    }
+    touch := TouchArea {
+        enabled: root.available;
+        changed has-hover => { if self.has-hover { root.pointed(); } }
+        clicked => { if !root.current { root.picked(); } }
+    }
+}
+
 // One band: the slider over its frequency, which shows the gain while the pointer is on the band
 // (the same Text: nothing is created or removed while hovering). Double-click: 0 dB.
 component Band {
@@ -287,6 +316,13 @@ export component Audio inherits Rectangle {
                         horizontal-alignment: right;
                         vertical-alignment: center;
                     }
+                    HorizontalLayout {
+                        spacing: 2px;
+                        horizontal-stretch: 0;
+                        VerticalLayout { alignment: center; KeyHint { text: AudioBridge.keys.voldown; } }
+                        VerticalLayout { alignment: center; KeyHint { text: AudioBridge.keys.volup; } }
+                        VerticalLayout { alignment: center; KeyHint { text: AudioBridge.keys.mute; } }
+                    }
                 }
 
                 // ---------------------------------------------------------------- Track
@@ -360,25 +396,40 @@ export component Audio inherits Rectangle {
                             background: Theme.bg-bar;
                             HorizontalLayout {
                                 padding: 2px;
-                                for name[index] in root.channel-short: Rectangle {
-                                    horizontal-stretch: 1;
-                                    border-radius: Theme.radius-control;
-                                    background: index == AudioBridge.channel-index ? Theme.button-bg
-                                        : segment.has-hover && AudioBridge.channels-available ? Theme.hover-bg : transparent;
-                                    Text {
-                                        text: name;
-                                        color: !AudioBridge.channels-available ? Theme.icon-disabled
-                                            : index == AudioBridge.channel-index ? Theme.text : Theme.text-dim;
-                                        font-size: Theme.font-body;
-                                        horizontal-alignment: center;
-                                        vertical-alignment: center;
-                                        overflow: elide;
-                                    }
-                                    segment := TouchArea {
-                                        enabled: AudioBridge.channels-available;
-                                        changed has-hover => { if self.has-hover { root.channel-hovered = index; } }
-                                        clicked => { if index != AudioBridge.channel-index { AudioBridge.channel-selected(index); } }
-                                    }
+                                Segment {
+                                    text: root.channel-short[0];
+                                    current: AudioBridge.channel-index == 0;
+                                    available: AudioBridge.channels-available;
+                                    pointed => { root.channel-hovered = 0; }
+                                    picked => { AudioBridge.channel-selected(0); }
+                                }
+                                Segment {
+                                    text: root.channel-short[1];
+                                    current: AudioBridge.channel-index == 1;
+                                    available: AudioBridge.channels-available;
+                                    pointed => { root.channel-hovered = 1; }
+                                    picked => { AudioBridge.channel-selected(1); }
+                                }
+                                Segment {
+                                    text: root.channel-short[2];
+                                    current: AudioBridge.channel-index == 2;
+                                    available: AudioBridge.channels-available;
+                                    pointed => { root.channel-hovered = 2; }
+                                    picked => { AudioBridge.channel-selected(2); }
+                                }
+                                Segment {
+                                    text: root.channel-short[3];
+                                    current: AudioBridge.channel-index == 3;
+                                    available: AudioBridge.channels-available;
+                                    pointed => { root.channel-hovered = 3; }
+                                    picked => { AudioBridge.channel-selected(3); }
+                                }
+                                Segment {
+                                    text: root.channel-short[4];
+                                    current: AudioBridge.channel-index == 4;
+                                    available: AudioBridge.channels-available;
+                                    pointed => { root.channel-hovered = 4; }
+                                    picked => { AudioBridge.channel-selected(4); }
                                 }
                             }
                         }
@@ -512,13 +563,17 @@ export component Audio inherits Rectangle {
                 }
                 HorizontalLayout {
                     padding-top: 2px;
-                    // A fixed model (the ten bands of model.ts); the gains are read by index.
-                    for caption[index] in ["31", "62", "125", "250", "500", "1k", "2k", "4k", "8k", "16k"]: Band { // i18n-ignore: frequencies
-                        caption: caption;
-                        gain: AudioBridge.gain-values[index];
-                        available: AudioBridge.source-ready;
-                        edited(gain) => { AudioBridge.gain-changed(index, gain); }
-                    }
+                    // The ten bands of model.ts, written out (no `for` inside the scroll view).
+                    Band { caption: "31"; gain: AudioBridge.gain-values[0]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(0, g); } } // i18n-ignore: frequency
+                    Band { caption: "62"; gain: AudioBridge.gain-values[1]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(1, g); } } // i18n-ignore: frequency
+                    Band { caption: "125"; gain: AudioBridge.gain-values[2]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(2, g); } } // i18n-ignore: frequency
+                    Band { caption: "250"; gain: AudioBridge.gain-values[3]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(3, g); } } // i18n-ignore: frequency
+                    Band { caption: "500"; gain: AudioBridge.gain-values[4]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(4, g); } } // i18n-ignore: frequency
+                    Band { caption: "1k"; gain: AudioBridge.gain-values[5]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(5, g); } } // i18n-ignore: frequency
+                    Band { caption: "2k"; gain: AudioBridge.gain-values[6]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(6, g); } } // i18n-ignore: frequency
+                    Band { caption: "4k"; gain: AudioBridge.gain-values[7]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(7, g); } } // i18n-ignore: frequency
+                    Band { caption: "8k"; gain: AudioBridge.gain-values[8]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(8, g); } } // i18n-ignore: frequency
+                    Band { caption: "16k"; gain: AudioBridge.gain-values[9]; available: AudioBridge.source-ready; edited(g) => { AudioBridge.gain-changed(9, g); } } // i18n-ignore: frequency
                 }
 
                 // ---------------------------------------------------------------- Processing

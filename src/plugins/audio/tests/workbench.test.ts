@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import test from "node:test";
 import { HostError, LOCALES, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
@@ -1275,17 +1276,31 @@ test("Audio… (Alt+2) opens the adjust column at the Audio tab, and closes it f
   await stop();
 });
 
+/** Wait (up to 2 s of host time) until `read()` deep-equals `expected`, then assert that same value. */
+async function until(host: TestHost, read: () => unknown, expected: unknown) {
+  for (let i = 0; i < 40 && !isDeepStrictEqual(read(), expected); i++) await host.settle(50);
+  assert.deepEqual(read(), expected);
+}
+
 test("the panel shows each command's current key: the default, a user's own, none once cleared", async () => {
   const { host, window, stop } = await open();
-  await host.settle();
-  // The test host writes keys as the player does on macOS (⌥ Alt, ⇧ Shift, ⌘ Ctrl).
-  assert.deepEqual(window.props.keys, { track: "⌥A", earlier: ">", later: "<", reset: "?", equalizer: "⇧E", normalize: "⇧N", clarity: "⇧C" });
+  const keys = () => ({ ...(window.props.keys as Record<string, string>) });
+  // The test host writes keys as the player does on macOS (⌥ Alt, ⇧ Shift, ⌘ Ctrl). The player's own
+  // keys (host/…) may arrive after the plugin's: wait for the whole set.
+  const shown = {
+    track: "⌥A", earlier: ">", later: "<", reset: "?", equalizer: "⇧E", normalize: "⇧N", clarity: "⇧C",
+    voldown: "↓", volup: "↑", mute: "M",
+  };
+  await until(host, keys, shown);
   host.rebind("audio.equalizer", ["Ctrl+E"]);
-  await host.settle();
-  assert.equal((window.props.keys as Record<string, string>).equalizer, "⌘E");
+  await until(host, keys, { ...shown, equalizer: "⌘E" });
   host.rebind("audio.sync.reset", []);
-  await host.settle();
-  assert.equal((window.props.keys as Record<string, string>).reset, "");
+  await until(host, keys, { ...shown, equalizer: "⌘E", reset: "" });
+  // The player's volume keys follow the user's too.
+  host.rebind("host/mute", ["Shift+M"]);
+  await until(host, keys, { ...shown, equalizer: "⌘E", reset: "", mute: "⇧M" });
+  host.rebind("host/volume-up", []);
+  await until(host, keys, { ...shown, equalizer: "⌘E", reset: "", mute: "⇧M", volup: "" });
   await stop();
 });
 

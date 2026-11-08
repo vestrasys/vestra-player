@@ -501,7 +501,7 @@ export default async function activate(plugin: Plugin) {
   });
 
   // ---------------------------------------------------------------- panel
-  /** The first key of one of this plugin's commands, "" without one (the key caps and tooltips). */
+  /** The first key of one of this plugin's commands or the player's (`host/…`, SDK 1.6.16), "" without one. */
   const keyOf = (id: string) => plugin.commands.keys(id)[0] ?? "";
   panel.bind(() => {
     const list = tracks();
@@ -520,6 +520,10 @@ export default async function activate(plugin: Plugin) {
         equalizer: keyOf("audio.equalizer"),
         normalize: keyOf("audio.normalize"),
         clarity: keyOf("audio.clarity"),
+        // The player's volume keys beside the volume slider (an older player reads none).
+        voldown: keyOf("host/volume-down"),
+        volup: keyOf("host/volume-up"),
+        mute: keyOf("host/mute"),
       },
       volume: Math.min(volumeDraft ?? state.volume, 100),
       muted: state.muted,
