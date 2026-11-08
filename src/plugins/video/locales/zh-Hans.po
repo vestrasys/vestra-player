@@ -5,842 +5,842 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:165 main.ts:948 main.ts:1347
+#: main.ts:168 main.ts:1015 main.ts:1414
 msgid "Picture"
 msgstr "画面"
 
-#: main.ts:216 picture.slint:524
+#: main.ts:219 picture.slint:1086
 msgid "Shader failed to load"
 msgstr "着色器载入失败"
 
-#: main.ts:217
+#: main.ts:220
 msgid "Render options unavailable: another plugin controls them"
 msgstr "渲染选项不可用：另一个插件正在控制渲染选项"
 
-#: main.ts:220
+#: main.ts:223
 msgid "Render options unavailable: {}"
 msgstr "渲染选项不可用：{}"
 
-#: main.ts:534
+#: main.ts:600
 msgid "Display unavailable: another plugin controls the display"
 msgstr "画面显示不可用：另一个插件正在控制画面显示"
 
-#: main.ts:536
+#: main.ts:602
 msgid "Display unavailable: {}"
 msgstr "画面显示不可用：{}"
 
-#: main.ts:546
+#: main.ts:612
 msgid "Aspect ratio: Default"
 msgstr "宽高比：默认"
 
-#: main.ts:546
+#: main.ts:612
 msgid "Aspect ratio: {}"
 msgstr "宽高比：{}"
 
-#: main.ts:546
+#: main.ts:612
 msgid "Aspect ratio: Custom - {}"
 msgstr "宽高比：自定义 - {}"
 
-#: main.ts:551 main.ts:1053 picture.slint:764
+#: main.ts:617 main.ts:1120 picture.slint:1596
 msgid "Keep Aspect Ratio"
 msgstr "保持宽高比"
 
-#: main.ts:551 main.ts:1053 picture.slint:764
+#: main.ts:617 main.ts:1120 picture.slint:1596
 msgid "Ignore Aspect Ratio"
 msgstr "不保持宽高比"
 
-#: main.ts:551 picture.slint:764
+#: main.ts:617 picture.slint:1596
 msgid "Fill Window"
 msgstr "填满窗口"
 
-#: main.ts:557
+#: main.ts:623
 msgid "Framing: larger ({}%)"
 msgstr "帧位调整：增加尺寸 ({}%)"
 
-#: main.ts:557
+#: main.ts:623
 msgid "Framing: smaller ({}%)"
 msgstr "帧位调整：减少尺寸 ({}%)"
 
-#: main.ts:564
+#: main.ts:630
 msgid "Framing: move right ({}%, {}%)"
 msgstr "帧位调整：向右位移 ({}%, {}%)"
 
-#: main.ts:564
+#: main.ts:630
 msgid "Framing: move left ({}%, {}%)"
 msgstr "帧位调整：向左位移 ({}%, {}%)"
 
-#: main.ts:564
+#: main.ts:630
 msgid "Framing: move up ({}%, {}%)"
 msgstr "帧位调整：向上位移 ({}%, {}%)"
 
-#: main.ts:564
+#: main.ts:630
 msgid "Framing: move down ({}%, {}%)"
 msgstr "帧位调整：向下位移 ({}%, {}%)"
 
-#: main.ts:569
+#: main.ts:635
 msgid "Framing: centered"
 msgstr "帧位调整：位移到中间"
 
-#: main.ts:569
+#: main.ts:635
 msgid "Framing: reset"
 msgstr "帧位调整：重置"
 
-#: main.ts:639
+#: main.ts:706
 msgid "Picture reset; image processing off"
 msgstr "画面调节已复位，图像处理已关闭"
 
-#: main.ts:639
+#: main.ts:706
 msgid "Picture reset"
 msgstr "画面调节已复位"
 
-#: main.ts:655
+#: main.ts:722
 msgid "Picture panel reset"
 msgstr "画面面板已复位"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Brightness -1% ({}%)"
 msgstr "亮度 -1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Brightness +1% ({}%)"
 msgstr "亮度 +1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Contrast -1% ({}%)"
 msgstr "对比度 -1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Contrast +1% ({}%)"
 msgstr "对比度 +1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Saturation -1% ({}%)"
 msgstr "饱和度 -1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Saturation +1% ({}%)"
 msgstr "饱和度 +1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Hue -1% ({}%)"
 msgstr "色调 -1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Hue +1% ({}%)"
 msgstr "色调 +1% ({}%)"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Brightness -1% ({}%) (picture effects off)"
 msgstr "亮度 -1% ({}%)（画面效果已关闭）"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Brightness +1% ({}%) (picture effects off)"
 msgstr "亮度 +1% ({}%)（画面效果已关闭）"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Contrast -1% ({}%) (picture effects off)"
 msgstr "对比度 -1% ({}%)（画面效果已关闭）"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Contrast +1% ({}%) (picture effects off)"
 msgstr "对比度 +1% ({}%)（画面效果已关闭）"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Saturation -1% ({}%) (picture effects off)"
 msgstr "饱和度 -1% ({}%)（画面效果已关闭）"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Saturation +1% ({}%) (picture effects off)"
 msgstr "饱和度 +1% ({}%)（画面效果已关闭）"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Hue -1% ({}%) (picture effects off)"
 msgstr "色调 -1% ({}%)（画面效果已关闭）"
 
-#: main.ts:660
+#: main.ts:727
 msgid "Hue +1% ({}%) (picture effects off)"
 msgstr "色调 +1% ({}%)（画面效果已关闭）"
 
-#: main.ts:666
+#: main.ts:733
 msgid "Flip vertically: on"
 msgstr "上下翻转: 开"
 
-#: main.ts:666
+#: main.ts:733
 msgid "Flip vertically: off"
 msgstr "上下翻转: 关"
 
-#: main.ts:667
+#: main.ts:734
 msgid "Flip horizontally: on"
 msgstr "左右翻转: 开"
 
-#: main.ts:667
+#: main.ts:734
 msgid "Flip horizontally: off"
 msgstr "左右翻转: 关"
 
-#: main.ts:672
+#: main.ts:739
 msgid "Rotation: none"
 msgstr "图像旋转: 不旋转"
 
-#: main.ts:672
+#: main.ts:739
 msgid "Rotation: {}°"
 msgstr "图像旋转: {}°"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Sharpen: on"
 msgstr "锐化: 开"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Edge sharpen: on"
 msgstr "边缘锐化: 开"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Deblock: on"
 msgstr "去块: 开"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Deband: on"
 msgstr "消色带: 开"
 
-#: main.ts:677
+#: main.ts:744
 msgid "3D denoise: on"
 msgstr "3D 降噪: 开"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Gradual denoise: on"
 msgstr "渐进降噪: 开"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Temporal denoise: on"
 msgstr "瞬态降噪: 开"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Sharpen: off"
 msgstr "锐化: 关"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Edge sharpen: off"
 msgstr "边缘锐化: 关"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Deblock: off"
 msgstr "去块: 关"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Deband: off"
 msgstr "消色带: 关"
 
-#: main.ts:677
+#: main.ts:744
 msgid "3D denoise: off"
 msgstr "3D 降噪: 关"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Gradual denoise: off"
 msgstr "渐进降噪: 关"
 
-#: main.ts:677
+#: main.ts:744
 msgid "Temporal denoise: off"
 msgstr "瞬态降噪: 关"
 
-#: main.ts:682
+#: main.ts:749
 msgid "Deinterlace: auto"
 msgstr "反交错: 自动"
 
-#: main.ts:682
+#: main.ts:749
 msgid "Deinterlace: always"
 msgstr "反交错: 总是使用"
 
-#: main.ts:682
+#: main.ts:749
 msgid "Deinterlace: never"
 msgstr "反交错: 不使用"
 
-#: main.ts:687
+#: main.ts:754
 msgid "Deinterlace output: by frame"
 msgstr "反交错输出: 按帧"
 
-#: main.ts:687
+#: main.ts:754
 msgid "Deinterlace output: by field (double rate)"
 msgstr "反交错输出: 按场（倍帧率）"
 
-#: main.ts:694
+#: main.ts:761
 msgid "Crop/stretch: none"
 msgstr "裁剪/拉伸: 不使用"
 
-#: main.ts:694
+#: main.ts:761
 msgid "Crop/stretch: stretch to {}"
 msgstr "裁剪/拉伸: 按 {} 拉伸"
 
-#: main.ts:694
+#: main.ts:761
 msgid "Crop/stretch: crop to {}"
 msgstr "裁剪/拉伸: 按 {} 裁剪"
 
-#: main.ts:701
+#: main.ts:768
 msgid "Crop position ({}%, {}%)"
 msgstr "裁剪位置 ({}%, {}%)"
 
-#: main.ts:716
+#: main.ts:783
 msgid "Frame doubling: off"
 msgstr "倍帧: 关"
 
-#: main.ts:716
+#: main.ts:783
 msgid "Frame doubling: on (motion interpolation turned off)"
 msgstr "倍帧: 开（已关闭运动补偿）"
 
-#: main.ts:716
+#: main.ts:783
 msgid "Frame doubling: on"
 msgstr "倍帧: 开"
 
-#: main.ts:716
+#: main.ts:783
 msgid "Frame doubling: on (picture effects off)"
 msgstr "倍帧: 开（画面效果已关闭）"
 
-#: main.ts:736
+#: main.ts:803
 msgid "Motion interpolation: off"
 msgstr "运动补偿: 关"
 
-#: main.ts:736
+#: main.ts:803
 msgid "Motion interpolation: on (frame doubling turned off)"
 msgstr "运动补偿: 开（已关闭倍帧）"
 
-#: main.ts:736
+#: main.ts:803
 msgid "Motion interpolation: on"
 msgstr "运动补偿: 开"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: auto (not an HDR source)"
 msgstr "HDR 色调映射: 自动（当前片源不是 HDR）"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: off (not an HDR source)"
 msgstr "HDR 色调映射: 关（当前片源不是 HDR）"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: BT.2390 (not an HDR source)"
 msgstr "HDR 色调映射: BT.2390（当前片源不是 HDR）"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: Hable (not an HDR source)"
 msgstr "HDR 色调映射: Hable（当前片源不是 HDR）"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: Mobius (not an HDR source)"
 msgstr "HDR 色调映射: Mobius（当前片源不是 HDR）"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: Reinhard (not an HDR source)"
 msgstr "HDR 色调映射: Reinhard（当前片源不是 HDR）"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: clip (not an HDR source)"
 msgstr "HDR 色调映射: 裁剪（当前片源不是 HDR）"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: auto"
 msgstr "HDR 色调映射: 自动"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: off"
 msgstr "HDR 色调映射: 关"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: BT.2390"
 msgstr "HDR 色调映射: BT.2390"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: Hable"
 msgstr "HDR 色调映射: Hable"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: Mobius"
 msgstr "HDR 色调映射: Mobius"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: Reinhard"
 msgstr "HDR 色调映射: Reinhard"
 
-#: main.ts:744
+#: main.ts:811
 msgid "HDR tone mapping: clip"
 msgstr "HDR 色调映射: 裁剪"
 
-#: main.ts:749
+#: main.ts:816
 msgid "Dynamic peak detection: on"
 msgstr "动态峰值检测: 开"
 
-#: main.ts:749
+#: main.ts:816
 msgid "Dynamic peak detection: off"
 msgstr "动态峰值检测: 关"
 
-#: main.ts:757
+#: main.ts:824
 msgid "Pixel shaders: off"
 msgstr "像素着色: 关"
 
-#: main.ts:758
+#: main.ts:825
 msgid "Pixel shaders: no shaders"
 msgstr "像素着色: 没有着色器"
 
-#: main.ts:759
+#: main.ts:826
 msgid "Pixel shaders: on ({})"
 msgstr "像素着色: 开 ({})"
 
-#: main.ts:810
+#: main.ts:877
 msgid "Many frames dropped with field output, try frame output; many dropped with frame doubling, consider turning it off"
 msgstr "反交错按场输出丢帧较多，可改为按帧；倍帧丢帧较多，建议关闭"
 
-#: main.ts:810
+#: main.ts:877
 msgid "Many frames dropped with field output, try frame output"
 msgstr "反交错按场输出丢帧较多，可改为按帧"
 
-#: main.ts:810
+#: main.ts:877
 msgid "Many frames dropped with frame doubling, consider turning it off"
 msgstr "倍帧丢帧较多，建议关闭"
 
-#: main.ts:844 main.ts:860
+#: main.ts:911 main.ts:927
 msgid "At most {} shaders"
 msgstr "最多 {} 个着色器"
 
-#: main.ts:855
+#: main.ts:922
 msgid "Add Shader (.glsl)"
 msgstr "添加着色器（.glsl）"
 
-#: main.ts:858
+#: main.ts:925
 msgid "Only .glsl or .hook shader files can be added"
 msgstr "只能添加 .glsl 或 .hook 着色器文件"
 
-#: main.ts:865
+#: main.ts:932
 msgid "Could not copy the shader: {}"
 msgstr "着色器复制失败：{}"
 
-#: main.ts:874
+#: main.ts:941
 msgid "Could not open the shader folder: {}"
 msgstr "无法打开着色器文件夹：{}"
 
 #. {} is a list of file names.
-#: main.ts:883
+#: main.ts:950
 msgid "Removed missing shaders: {}"
 msgstr "已移除不存在的着色器：{}"
 
 #. {} is a list of file names.
-#: main.ts:884
+#: main.ts:951
 msgid "Shaders reloaded ({})"
 msgstr "已重新载入着色器 ({})"
 
-#: main.ts:939
+#: main.ts:1006
 msgid "Pixel Shaders"
 msgstr "像素着色"
 
-#: main.ts:940
+#: main.ts:1007
 msgid "HDR Tone Mapping"
 msgstr "HDR 色调映射"
 
-#: main.ts:941 picture.slint:925
+#: main.ts:1008 picture.slint:1640
 msgid "Deinterlace"
 msgstr "反交错"
 
-#: main.ts:942 picture.slint:775
+#: main.ts:1009 picture.slint:1572
 msgid "Aspect"
 msgstr "比例"
 
-#: main.ts:943 picture.slint:799
+#: main.ts:1010
 msgid "Crop/Stretch"
 msgstr "裁剪/拉伸"
 
-#: main.ts:944 main.ts:1217
+#: main.ts:1011 main.ts:1284
 msgid "Framing"
 msgstr "帧位"
 
-#: main.ts:945
+#: main.ts:1012
 msgid "Image Processing"
 msgstr "图像处理"
 
-#: main.ts:946
+#: main.ts:1013
 msgid "Rotation"
 msgstr "图像旋转"
 
-#: main.ts:947
+#: main.ts:1014
 msgid "Reset"
 msgstr "复位"
 
-#: main.ts:959
+#: main.ts:1026
 msgid "Use Shaders"
 msgstr "使用着色器"
 
-#: main.ts:966 main.ts:972 main.ts:983 main.ts:994 main.ts:1005 main.ts:1307 picture.slint:520 ui/shaders.slint:131
+#: main.ts:1033 main.ts:1039 main.ts:1050 main.ts:1061 main.ts:1072 main.ts:1374 picture.slint:1082 ui/shaders.slint:131
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "需要 GPU 渲染（当前为软件渲染）"
 
-#: main.ts:970
+#: main.ts:1037
 msgid "Shader List…"
 msgstr "着色器列表…"
 
-#: main.ts:971
+#: main.ts:1038
 msgid "Open Shader Folder"
 msgstr "打开着色器文件夹"
 
-#: main.ts:972
+#: main.ts:1039
 msgid "Reload Shaders"
 msgstr "重新载入着色器"
 
-#: main.ts:976 main.ts:1026 picture.slint:931 picture.slint:966
+#: main.ts:1043 main.ts:1093 picture.slint:1646 picture.slint:1681
 msgid "Auto"
 msgstr "自动"
 
-#: main.ts:976 picture.slint:966
+#: main.ts:1043 picture.slint:1420 picture.slint:1546 picture.slint:1681
 msgid "Off"
 msgstr "关"
 
-#: main.ts:976
+#: main.ts:1043
 msgid "BT.2390"
 msgstr "BT.2390"
 
-#: main.ts:976
+#: main.ts:1043
 msgid "Hable"
 msgstr "Hable"
 
-#: main.ts:976
+#: main.ts:1043
 msgid "Mobius"
 msgstr "Mobius"
 
-#: main.ts:976
+#: main.ts:1043
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:976 picture.slint:966
+#: main.ts:1043 picture.slint:1681
 msgid "Clip"
 msgstr "裁剪"
 
-#: main.ts:988 picture.slint:1005
+#: main.ts:1055 picture.slint:1722
 msgid "Dynamic Peak Detection"
 msgstr "动态峰值检测"
 
-#: main.ts:1000
+#: main.ts:1067
 msgid "HDR Settings…"
 msgstr "HDR 设置…"
 
-#: main.ts:1012 main.ts:1313
+#: main.ts:1079 main.ts:1380
 msgid "Cycle"
 msgstr "按序切换"
 
-#: main.ts:1026 picture.slint:931
+#: main.ts:1093 picture.slint:1646
 msgid "Always"
 msgstr "总是使用"
 
-#: main.ts:1026 picture.slint:931
+#: main.ts:1093 picture.slint:1646
 msgid "Never"
 msgstr "不使用"
 
-#: main.ts:1038
+#: main.ts:1105
 msgid "By Frame"
 msgstr "按帧"
 
-#: main.ts:1038 picture.slint:943
+#: main.ts:1105 picture.slint:1658
 msgid "By Field (Double Rate)"
 msgstr "按场（倍帧率）"
 
-#: main.ts:1045 picture.slint:942
+#: main.ts:1112 picture.slint:1657
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr "自动按场输出（倍帧率）；此设置用于“总是使用”"
 
-#: main.ts:1053
+#: main.ts:1120
 msgid "Fill Window (Crop Excess)"
 msgstr "填满窗口（裁去多余）"
 
-#: main.ts:1064
+#: main.ts:1131
 msgid "Cycle Aspect Ratio"
 msgstr "依次切换比例"
 
-#: main.ts:1074 picture.slint:532 picture.slint:533
+#: main.ts:1141 picture.slint:1094 picture.slint:1095
 msgid "Default (Source)"
 msgstr "默认（按来源）"
 
-#: main.ts:1121 picture.slint:533
+#: main.ts:1188 picture.slint:1095
 msgid "Custom ({})"
 msgstr "自定义（{}）"
 
-#: main.ts:1122
+#: main.ts:1189
 msgid "Custom (x:y)"
 msgstr "自定义（x:y）"
 
-#: main.ts:1122
+#: main.ts:1189
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "先用「自定义比例…」输入"
 
-#: main.ts:1125 picture.slint:792
+#: main.ts:1192 picture.slint:1589
 msgid "Custom Aspect Ratio…"
 msgstr "自定义比例…"
 
-#: main.ts:1137 picture.slint:804
+#: main.ts:1204
 msgid "None"
 msgstr "不使用"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Stretch to 4:3"
 msgstr "按 4:3 拉伸"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Stretch to 16:9"
 msgstr "按 16:9 拉伸"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Stretch to 16:10"
 msgstr "按 16:10 拉伸"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Stretch to 1.85:1"
 msgstr "按 1.85:1 拉伸"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Stretch to 2.35:1"
 msgstr "按 2.35:1 拉伸"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Crop to 4:3"
 msgstr "按 4:3 裁剪"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Crop to 16:9"
 msgstr "按 16:9 裁剪"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Crop to 16:10"
 msgstr "按 16:10 裁剪"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Crop to 1.85:1"
 msgstr "按 1.85:1 裁剪"
 
-#: main.ts:1150
+#: main.ts:1217
 msgid "Crop to 2.35:1"
 msgstr "按 2.35:1 裁剪"
 
-#: main.ts:1170 picture.slint:826
+#: main.ts:1237
 msgid "Move Left"
 msgstr "左移"
 
-#: main.ts:1170 picture.slint:829
+#: main.ts:1237
 msgid "Move Right"
 msgstr "右移"
 
-#: main.ts:1170 picture.slint:827 ui/shaders.slint:91 ui/shaders.slint:114
+#: main.ts:1237 ui/shaders.slint:91 ui/shaders.slint:114
 msgid "Move Up"
 msgstr "上移"
 
-#: main.ts:1170 picture.slint:828 ui/shaders.slint:91 ui/shaders.slint:115
+#: main.ts:1237 ui/shaders.slint:91 ui/shaders.slint:115
 msgid "Move Down"
 msgstr "下移"
 
-#: main.ts:1182
+#: main.ts:1249
 msgid "Crop Position"
 msgstr "裁剪位置"
 
-#: main.ts:1205 picture.slint:874
+#: main.ts:1272
 msgid "Zoom In"
 msgstr "全帧 +"
 
-#: main.ts:1205 picture.slint:865
+#: main.ts:1272
 msgid "Zoom Out"
 msgstr "全帧 -"
 
-#: main.ts:1205 picture.slint:886
+#: main.ts:1272
 msgid "Pan →"
 msgstr "偏移 →"
 
-#: main.ts:1205 picture.slint:883
+#: main.ts:1272
 msgid "Pan ←"
 msgstr "偏移 ←"
 
-#: main.ts:1205 picture.slint:884
+#: main.ts:1272
 msgid "Pan ↑"
 msgstr "偏移 ↑"
 
-#: main.ts:1205 picture.slint:885
+#: main.ts:1272
 msgid "Pan ↓"
 msgstr "偏移 ↓"
 
-#: main.ts:1205 picture.slint:887
+#: main.ts:1272 picture.slint:1508
 msgid "Center Frame"
 msgstr "帧位居中"
 
-#: main.ts:1230 picture.slint:849
+#: main.ts:1297 picture.slint:1484
 msgid "Flip Vertically"
 msgstr "上下翻转"
 
-#: main.ts:1241 picture.slint:856
+#: main.ts:1308 picture.slint:1491
 msgid "Flip Horizontally"
 msgstr "左右翻转"
 
-#: main.ts:1252 picture.slint:667
+#: main.ts:1319 picture.slint:1248 picture.slint:1309
 msgid "Gaussian Blur"
 msgstr "高斯模糊"
 
-#: main.ts:1262
+#: main.ts:1329
 msgid "Gaussian blur: on"
 msgstr "高斯模糊: 开"
 
-#: main.ts:1262
+#: main.ts:1329
 msgid "Gaussian blur: off"
 msgstr "高斯模糊: 关"
 
-#: main.ts:1278 picture.slint:645
+#: main.ts:1345 picture.slint:1229 picture.slint:1230 picture.slint:1288 picture.slint:1289
 msgid "Sharpen"
 msgstr "锐化"
 
-#: main.ts:1278
+#: main.ts:1345
 msgid "Edge Sharpen"
 msgstr "边缘锐化"
 
-#: main.ts:1278 picture.slint:678
+#: main.ts:1345 picture.slint:1256 picture.slint:1257 picture.slint:1319
 msgid "Deblock"
 msgstr "去块"
 
-#: main.ts:1278 picture.slint:689
+#: main.ts:1345 picture.slint:1265 picture.slint:1266 picture.slint:1329 picture.slint:1330
 msgid "Deband"
 msgstr "消色带"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1375
 msgid "3D Denoise"
 msgstr "3D 降噪"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1386
 msgid "Gradual Denoise"
 msgstr "渐进降噪"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1397
 msgid "Temporal Denoise"
 msgstr "瞬态降噪"
 
-#: main.ts:1291 picture.slint:732
+#: main.ts:1358
 msgid "Frame Doubling"
 msgstr "倍帧"
 
-#: main.ts:1301 picture.slint:750
+#: main.ts:1368
 msgid "Motion Interpolation"
 msgstr "运动补偿"
 
-#: main.ts:1324
+#: main.ts:1391
 msgid "No Rotation"
 msgstr "不旋转"
 
-#: main.ts:1324
+#: main.ts:1391
 msgid "90°"
 msgstr "90°"
 
-#: main.ts:1324
+#: main.ts:1391
 msgid "180°"
 msgstr "180°"
 
-#: main.ts:1324
+#: main.ts:1391
 msgid "270°"
 msgstr "270°"
 
-#: main.ts:1338
+#: main.ts:1405
 msgid "Picture…"
 msgstr "画面…"
 
-#: main.ts:1359
+#: main.ts:1426
 msgid "Picture Panel"
 msgstr "画面面板"
 
-#: main.ts:1371
+#: main.ts:1438
 msgid "Brightness -1%"
 msgstr "亮度 -1%"
 
-#: main.ts:1371
+#: main.ts:1438
 msgid "Contrast -1%"
 msgstr "对比度 -1%"
 
-#: main.ts:1371
+#: main.ts:1438
 msgid "Saturation -1%"
 msgstr "饱和度 -1%"
 
-#: main.ts:1371
+#: main.ts:1438
 msgid "Hue -1%"
 msgstr "色调 -1%"
 
-#: main.ts:1382
+#: main.ts:1449
 msgid "Brightness +1%"
 msgstr "亮度 +1%"
 
-#: main.ts:1382
+#: main.ts:1449
 msgid "Contrast +1%"
 msgstr "对比度 +1%"
 
-#: main.ts:1382
+#: main.ts:1449
 msgid "Saturation +1%"
 msgstr "饱和度 +1%"
 
-#: main.ts:1382
+#: main.ts:1449
 msgid "Hue +1%"
 msgstr "色调 +1%"
 
 #. {} is the player's own message, already in the interface language.
-#: main.ts:1408
+#: main.ts:1475
 msgid "{}"
 msgstr "{}"
 
-#: main.ts:1421
+#: main.ts:1488
 msgid "GPU Rendering (Restart to Apply)"
 msgstr "GPU 渲染（重启后生效）"
 
-#: main.ts:1421 picture.slint:1048
+#: main.ts:1488 picture.slint:1767
 msgid "GPU Rendering (Experimental)"
 msgstr "GPU 渲染（实验性）"
 
-#: main.ts:1431 picture.slint:1040
+#: main.ts:1498 picture.slint:1757
 msgid "Switching…"
 msgstr "正在切换…"
 
-#: main.ts:1440
+#: main.ts:1507
 msgid "Restart Player to Apply"
 msgstr "重启播放器以应用"
 
-#: main.ts:1485
+#: main.ts:1552
 msgid "GPU rendering unavailable: {}"
 msgstr "GPU 渲染不可用：{}"
 
-#: main.ts:1486
+#: main.ts:1553
 msgid "Could not save the rendering choice: {}"
 msgstr "无法保存渲染方式：{}"
 
-#: main.ts:1495
+#: main.ts:1562
 msgid "GPU rendering chosen; the next start still uses software rendering: {}"
 msgstr "已选择 GPU 渲染，但下次启动仍将使用软件渲染：{}"
 
-#: main.ts:1496
+#: main.ts:1563
 msgid "GPU rendering: on"
 msgstr "GPU 渲染: 开"
 
-#: main.ts:1496
+#: main.ts:1563
 msgid "GPU rendering: off"
 msgstr "GPU 渲染: 关"
 
-#: main.ts:1507
+#: main.ts:1574
 msgid "Restart Vestra Player now to apply?"
 msgstr "现在重启 Vestra Player 以应用更改？"
 
-#: main.ts:1508
+#: main.ts:1575
 msgid "Vestra Player will draw on the GPU from the restart on. A local file continues where it is. If you choose Later, GPU rendering starts the next time you open Vestra Player."
 msgstr "重启后 Vestra Player 将使用 GPU 绘制画面，本地文件会从当前位置继续播放。选择「稍后」则在下次打开 Vestra Player 时开始使用 GPU 渲染。"
 
-#: main.ts:1508
+#: main.ts:1575
 msgid "Vestra Player will use software rendering from the restart on. A local file continues where it is. If you choose Later, software rendering starts the next time you open Vestra Player."
 msgstr "重启后 Vestra Player 将使用软件渲染，本地文件会从当前位置继续播放。选择「稍后」则在下次打开 Vestra Player 时开始使用软件渲染。"
 
-#: main.ts:1511
+#: main.ts:1578
 msgid "Restart Now"
 msgstr "立即重启"
 
-#: main.ts:1512
+#: main.ts:1579
 msgid "Later"
 msgstr "稍后"
 
-#: main.ts:1517
+#: main.ts:1584
 msgid "GPU rendering: on (applies at the next start)"
 msgstr "GPU 渲染: 开（下次启动时生效）"
 
-#: main.ts:1517
+#: main.ts:1584
 msgid "GPU rendering: off (applies at the next start)"
 msgstr "GPU 渲染: 关（下次启动时生效）"
 
-#: main.ts:1530
+#: main.ts:1597
 msgid "Could not restart the player: {}"
 msgstr "无法重启播放器：{}"
 
@@ -876,265 +876,310 @@ msgstr "色彩"
 msgid "filters"
 msgstr "滤镜"
 
-#: picture.slint:380 picture.slint:462 picture.slint:977
+#: picture.slint:403 picture.slint:550 picture.slint:587 picture.slint:1692
 msgid "· double-click: Default"
 msgstr "· 双击：默认值"
 
-#: picture.slint:521
+#: picture.slint:466
+msgid "· click: on or off"
+msgstr "· 单击：开 / 关"
+
+#: picture.slint:989
+msgid "Pick a ratio below"
+msgstr "在下方选择比例"
+
+#: picture.slint:989
+msgid "Screen"
+msgstr "屏幕"
+
+#: picture.slint:1083
 msgid "No picture in the current source"
 msgstr "当前来源没有画面"
 
-#: picture.slint:522
+#: picture.slint:1084
 msgid "Picture processing failed"
 msgstr "画面处理失败"
 
-#: picture.slint:523
+#: picture.slint:1085
 msgid "Display unavailable"
 msgstr "画面显示不可用"
 
-#: picture.slint:525
+#: picture.slint:1087
 msgid "Render options unavailable"
 msgstr "渲染选项不可用"
 
-#: picture.slint:526
+#: picture.slint:1088
 msgid "Render settings failed"
 msgstr "渲染设置失败"
 
-#: picture.slint:529
+#: picture.slint:1091
 msgid "Another plugin controls the display"
 msgstr "另一个插件正在控制画面显示"
 
-#: picture.slint:530
+#: picture.slint:1092
 msgid "Another plugin controls the render options"
 msgstr "另一个插件正在控制渲染选项"
 
-#: picture.slint:566 picture.slint:588
-msgid "Colour"
-msgstr "色彩"
-
-#: picture.slint:567 picture.slint:643
-msgid "Effects"
-msgstr "效果"
-
-#: picture.slint:568 picture.slint:761
-msgid "Geometry"
-msgstr "几何"
-
-#: picture.slint:569 picture.slint:903
-msgid "Advanced"
-msgstr "高级"
-
-#: picture.slint:590
-msgid "Brightness"
-msgstr "亮度"
-
-#: picture.slint:599
-msgid "Contrast"
-msgstr "对比度"
-
-#: picture.slint:608
-msgid "Saturation"
-msgstr "饱和度"
-
-#: picture.slint:617
-msgid "Hue"
-msgstr "色调"
-
-#: picture.slint:626
-msgid "Gamma"
-msgstr "Gamma"
-
-#: picture.slint:636
-msgid "Original"
-msgstr "原始"
-
-#: picture.slint:637
-msgid "Vivid"
-msgstr "鲜艳"
-
-#: picture.slint:638
-msgid "Cinema"
-msgstr "电影"
-
-#: picture.slint:639
-msgid "Soft"
-msgstr "柔和"
-
-#: picture.slint:655
-msgid "Edges"
-msgstr "边缘锐化"
-
-#: picture.slint:656
-msgid "Wide-radius sharpening that mainly strengthens outlines"
-msgstr "大范围锐化，主要增强轮廓"
-
-#: picture.slint:666
-msgid "Blur"
-msgstr "高斯模糊"
-
-#: picture.slint:679
-msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
-msgstr "小于 50 为弱、50 及以上为强；对低码率 MPEG-2/MPEG-4 效果最明显"
-
-#: picture.slint:700
-msgid "Denoise"
-msgstr "降噪"
-
-#: picture.slint:715
+#: picture.slint:1105 picture.slint:1278 picture.slint:1374
 msgid "3D"
 msgstr "3D"
 
-#: picture.slint:716
+#: picture.slint:1107 picture.slint:1385
 msgid "Gradual"
 msgstr "渐进"
 
-#: picture.slint:717
+#: picture.slint:1109 picture.slint:1278 picture.slint:1396
 msgid "Temporal"
 msgstr "瞬态"
 
-#: picture.slint:726
+#: picture.slint:1113
+msgid "{} with bars"
+msgstr "{}（加黑边）"
+
+#: picture.slint:1144 picture.slint:1166
+msgid "Colour"
+msgstr "色彩"
+
+#: picture.slint:1145 picture.slint:1223
+msgid "Effects"
+msgstr "效果"
+
+#: picture.slint:1146 picture.slint:1458
+msgid "Geometry"
+msgstr "几何"
+
+#: picture.slint:1147 picture.slint:1618
+msgid "Advanced"
+msgstr "高级"
+
+#: picture.slint:1168
+msgid "Brightness"
+msgstr "亮度"
+
+#: picture.slint:1177
+msgid "Contrast"
+msgstr "对比度"
+
+#: picture.slint:1186
+msgid "Saturation"
+msgstr "饱和度"
+
+#: picture.slint:1195
+msgid "Hue"
+msgstr "色调"
+
+#: picture.slint:1204
+msgid "Gamma"
+msgstr "Gamma"
+
+#: picture.slint:1214
+msgid "Original"
+msgstr "原始"
+
+#: picture.slint:1215
+msgid "Vivid"
+msgstr "鲜艳"
+
+#: picture.slint:1216
+msgid "Cinema"
+msgstr "电影"
+
+#: picture.slint:1217
+msgid "Soft"
+msgstr "柔和"
+
+#: picture.slint:1238 picture.slint:1298
+msgid "Edges"
+msgstr "边缘锐化"
+
+#: picture.slint:1239 picture.slint:1299
+msgid "Wide-radius sharpening that mainly strengthens outlines"
+msgstr "大范围锐化，主要增强轮廓"
+
+#: picture.slint:1247 picture.slint:1308
+msgid "Blur"
+msgstr "高斯模糊"
+
+#: picture.slint:1276 picture.slint:1358
+msgid "Denoise"
+msgstr "降噪"
+
+#: picture.slint:1277
+msgid "Denoise: turns the denoisers on or off"
+msgstr "降噪：打开或关闭降噪器"
+
+#: picture.slint:1320
+msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
+msgstr "小于 50 为弱、50 及以上为强；对低码率 MPEG-2/MPEG-4 效果最明显"
+
+#: picture.slint:1410
+msgid "Frames"
+msgstr "帧"
+
+#: picture.slint:1416
+msgid "Neither frame doubling nor motion interpolation"
+msgstr "不倍帧，也不运动补偿"
+
+#: picture.slint:1427
 msgid "Rate already high enough"
 msgstr "当前帧率已足够"
 
-#: picture.slint:727
+#: picture.slint:1428
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr "把帧率提高到 2 倍（最高 60），中间帧由前后两帧混合生成"
 
-#: picture.slint:745
+#: picture.slint:1433
+msgid "Doubling"
+msgstr "倍帧"
+
+#: picture.slint:1440
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr "GPU 按显示器刷新率插帧；与倍帧互斥"
 
-#: picture.slint:763
-msgid "Fit"
-msgstr "适应"
+#: picture.slint:1445
+msgid "Interpolate"
+msgstr "运动补偿"
 
-#: picture.slint:768
-msgid "Keep"
-msgstr "保持"
+#: picture.slint:1464
+msgid "Rotate Left"
+msgstr "向左旋转"
 
-#: picture.slint:769 picture.slint:804
-msgid "Stretch"
-msgstr "拉伸"
+#: picture.slint:1469
+msgid "Rotate Right"
+msgstr "向右旋转"
 
-#: picture.slint:770
-msgid "Fill"
-msgstr "填满"
+#: picture.slint:1499
+msgid "Leave Crop Mode"
+msgstr "退出裁剪模式"
 
-#: picture.slint:776
-msgid "Aspect ratio"
-msgstr "宽高比"
+#: picture.slint:1499
+msgid "Crop: pick a ratio, then drag the box"
+msgstr "裁剪：选一个比例，再拖动裁剪框"
 
-#: picture.slint:798 picture.slint:804
-msgid "Crop"
-msgstr "裁剪"
-
-#: picture.slint:830
-msgid "Reset Crop Position"
-msgstr "复位裁剪位置"
-
-#: picture.slint:833
-msgid "Rotate"
-msgstr "旋转"
-
-#: picture.slint:846
-msgid "Flip"
-msgstr "翻转"
-
-#: picture.slint:864
-msgid "Zoom"
-msgstr "缩放"
-
-#: picture.slint:868
-msgid "{}%"
-msgstr "{}%"
-
-#: picture.slint:878
-msgid "Pan"
-msgstr "偏移"
-
-#. {0} and {1} are the picture's offset in percent, across and down.
-#: picture.slint:880
-msgid "Pan ({0}%, {1}%)"
-msgstr "偏移（{0}%, {1}%）"
-
-#: picture.slint:882
-msgid "· resets zoom and pan"
-msgstr "· 复位缩放和偏移"
-
-#: picture.slint:888
+#: picture.slint:1509
 msgid "Reset Framing"
 msgstr "复位帧位"
 
-#: picture.slint:947
+#: picture.slint:1517
+msgid "Zoom {}%"
+msgstr "缩放 {}%"
+
+#. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
+#: picture.slint:1522
+msgid "Offset {0}, {1}"
+msgstr "偏移 {0}, {1}"
+
+#: picture.slint:1524
+msgid "Crop {}"
+msgstr "裁剪 {}"
+
+#. the crop box's position in percent, across and down (50 = centred).
+#: picture.slint:1529
+msgid "at {0}%, {1}%"
+msgstr "位于 {0}%, {1}%"
+
+#: picture.slint:1540
+msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
+msgstr "按比例裁剪；在编辑器里拖动裁剪框，选择保留的部分"
+
+#: picture.slint:1558
+msgid "Stretch to the ratio: add bars instead of cutting the picture"
+msgstr "拉伸到该比例：加黑边，而不是裁掉画面"
+
+#: picture.slint:1562
+msgid "Add bars instead of cutting"
+msgstr "加黑边，不裁剪"
+
+#: picture.slint:1573
+msgid "Aspect ratio"
+msgstr "宽高比"
+
+#: picture.slint:1595
+msgid "Fit"
+msgstr "适应"
+
+#: picture.slint:1600
+msgid "Keep"
+msgstr "保持"
+
+#: picture.slint:1601
+msgid "Stretch"
+msgstr "拉伸"
+
+#: picture.slint:1602
+msgid "Fill"
+msgstr "填满"
+
+#: picture.slint:1662
 msgid "Double rate"
 msgstr "倍帧率"
 
-#: picture.slint:955
+#: picture.slint:1670
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:957
+#: picture.slint:1672
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射 · 当前片源不是 HDR"
 
-#: picture.slint:958
+#: picture.slint:1673
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射"
 
-#: picture.slint:976
+#: picture.slint:1691
 msgid "Target brightness"
 msgstr "目标亮度"
 
-#: picture.slint:991
+#: picture.slint:1708
 msgid "{} nits"
 msgstr "{} 尼特"
 
-#: picture.slint:1009
+#: picture.slint:1726
 msgid "Peak detection"
 msgstr "峰值检测"
 
-#: picture.slint:1018
+#: picture.slint:1735
 msgid "Shaders"
 msgstr "着色器"
 
-#: picture.slint:1019
+#: picture.slint:1736
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr "mpv 用户着色器（.glsl），按列表顺序执行"
 
-#: picture.slint:1023
+#: picture.slint:1740
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] "{n} 个着色器"
 
-#: picture.slint:1030
+#: picture.slint:1747
 msgid "List…"
 msgstr "列表…"
 
-#: picture.slint:1042
+#: picture.slint:1759
 msgid "Restart Vestra Player to apply"
 msgstr "重启 Vestra Player 后生效"
 
-#: picture.slint:1043
+#: picture.slint:1760
 msgid "Draw the video on the GPU from the next start"
 msgstr "从下次启动起用 GPU 绘制视频"
 
-#: picture.slint:1058
+#: picture.slint:1777
 msgid "Restart"
 msgstr "重启"
 
-#: picture.slint:1093
+#: picture.slint:1814
 msgid "Retry"
 msgstr "重试"
 
-#: picture.slint:1109 picture.slint:1113
+#: picture.slint:1830 picture.slint:1834
 msgid "Enable picture effects"
 msgstr "启用画面效果"
 
-#: picture.slint:1122
+#: picture.slint:1843
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr "色彩、效果和几何恢复默认；高级设置保留"
 
-#: picture.slint:1127
+#: picture.slint:1848
 msgid "Reset All"
 msgstr "全部复位"
 

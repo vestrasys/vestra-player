@@ -3,6 +3,9 @@
 // to a section and lights the one in view. Every row is a layout and every text one line (elided,
 // the full text in a tooltip), so nothing overlaps when a row changes; rows that come and go are
 // persistent elements shown with `visible` (only the Advanced fold is an `if`, opened by a click).
+// Effects are on/off chips with a strength row per effect that is on, the Denoise card and the
+// Frames choice; Geometry is the editor (`Editor`: a still picture placed by the real settings).
+// Lists are written out (no `for` in the scrolling column: the host's slint_lists test).
 // Key caps come from `plugin.commands.keys` (`Keys`): the user's current keys, "" for none.
 // The file keeps its name and the names `Picture` / `PictureBridge`, which the host's measurement
 // of the adjust column's first opening uses (composition.rs).
@@ -26,7 +29,9 @@ export struct Keys {
     blur: string,
     deblock: string,
     deband: string,
-    denoise: string,
+    d3: string,
+    gradual: string,
+    temporal: string,
     doubling: string,
     interpolation: string,
     aspect: string,
@@ -73,28 +78,42 @@ export global PictureBridge {
     in-out property <float> sharpen-strength: 50;
     in property <bool> edge-enabled;
     in-out property <float> edge-strength: 50;
-    // The denoise row shows one mode at a time (0 3D, 1 Gradual, 2 Temporal).
-    in property <int> denoise-index: 0;
-    in property <bool> denoise-enabled;
-    in-out property <float> denoise-strength: 40;
+    // The three denoisers: independent filters, each with its own switch and strength.
+    in property <bool> d3-enabled;
+    in-out property <float> d3-strength: 40;
+    in property <bool> gradual-enabled;
+    in-out property <float> gradual-strength: 40;
+    in property <bool> temporal-enabled;
+    in-out property <float> temporal-strength: 40;
     in property <bool> deblock-enabled;
     in-out property <float> deblock-strength: 25;
     in property <bool> deband-enabled;
     in-out property <float> deband-strength: 40;
-    in property <bool> blend-enabled;
+    // Frames: 0 off, 1 frame doubling, 2 motion interpolation (they exclude each other).
+    in property <int> frames-index: 0;
     // The source is smooth enough: frame doubling adds nothing.
     in property <bool> blend-enough;
-    in property <bool> interpolation;
     // Geometry
     in property <int> fit-index: 0;
     // The last custom ratio typed ("" = none); it adds a choice after the presets.
     in property <string> custom-ratio;
     in-out property <int> aspect-index: 0;
-    in-out property <int> reframe-index: 0;
-    in-out property <int> ratio-index: 1;
+    // The aspect override as a number (0 = the source's own), the source's width / height (0 = not known).
+    in property <float> display-aspect: 0;
+    in property <float> source-aspect: 0;
+    // Crop/stretch: 0 none, 1 stretch (pad), 2 crop; the ratio (index and value); its position, 0–100 % (50 centred).
+    in property <int> reframe-index: 0;
+    in property <int> ratio-index: 1;
+    in property <float> ratio-aspect: 1.7778;
+    in property <int> crop-x: 50;
+    in property <int> crop-y: 50;
     in property <int> rotate-index: 0;
     in property <bool> flip-v;
     in property <bool> flip-h;
+    // Framing: zoom 0.25–4, pan −1–1 (fractions of the shown picture, as mpv's video-pan), and the same in percent.
+    in property <float> zoom: 1;
+    in property <float> pan-x-value: 0;
+    in property <float> pan-y-value: 0;
     in property <int> zoom-percent: 100;
     in property <int> pan-x: 0;
     in property <int> pan-y: 0;
@@ -135,8 +154,12 @@ export global PictureBridge {
     callback toggle-effect(bool);
     callback toggle(string, bool);
     callback choose(string, int);
-    // One of the plugin's commands, by id (the zoom, pan and crop buttons, Reset All, the GPU switch).
+    // One of the plugin's commands, by id (the editor's keys and buttons, Reset All, the GPU switch).
     callback run(string);
+    // The geometry editor: a framing asked for by a drag, a corner or the wheel (zoom, pan x, pan y).
+    callback frame-edit(float, float, float);
+    // The editor's crop box (or the picture inside the bars) dragged to x, y in %; `done` on release.
+    callback crop-at(float, float, bool);
     callback set-advanced(bool);
     callback retry();
     callback custom-aspect();
@@ -145,14 +168,12 @@ export global PictureBridge {
 
 // Glyphs of this panel, in the V-Line style of @vestra/icons.slint (1.5px round-capped lines), 14×12 boxes.
 global Glyphs {
-    out property <string> left: "M 8.5 2.5 L 5 6 L 8.5 9.5";
-    out property <string> right: "M 5.5 2.5 L 9 6 L 5.5 9.5";
-    out property <string> up: "M 3.5 7.5 L 7 4 L 10.5 7.5";
-    out property <string> down: "M 3.5 4.5 L 7 8 L 10.5 4.5";
-    out property <string> centre: "M 8.2 6 A 1.2 1.2 0 1 1 5.8 6 A 1.2 1.2 0 1 1 8.2 6 Z";
+    // Quarter turns: an open arc with the arrow head at its start.
+    out property <string> rotl: "M 2.5 4.5 A 4.6 4.6 0 1 1 3.4 9 M 2.5 1.5 V 4.5 H 5.5";
+    out property <string> rotr: "M 11.5 4.5 A 4.6 4.6 0 1 0 10.6 9 M 11.5 1.5 V 4.5 H 8.5";
+    out property <string> crop: "M 4 0.8 V 8.5 H 13 M 1 3.5 H 10 V 11.2";
+    out property <string> centre: "M 7 0.8 V 3.5 M 7 8.5 V 11.2 M 1.5 6 H 4.5 M 9.5 6 H 12.5 M 8.2 6 A 1.2 1.2 0 1 1 5.8 6 A 1.2 1.2 0 1 1 8.2 6 Z";
     out property <string> reset: "M 3.5 3 A 4.5 4.5 0 1 1 2.5 7 M 3.5 0.8 V 3 H 5.7";
-    out property <string> minus: "M 3.5 6 H 10.5";
-    out property <string> plus: "M 3.5 6 H 10.5 M 7 2.5 V 9.5";
     out property <string> flipv: "M 7 1 V 11 M 4.5 3.5 L 7 1 L 9.5 3.5 M 4.5 8.5 L 7 11 L 9.5 8.5";
     out property <string> fliph: "M 1.5 6 H 12.5 M 4 3.5 L 1.5 6 L 4 8.5 M 10 3.5 L 12.5 6 L 10 8.5";
     out property <string> info: "M 11.5 6 A 4.5 4.5 0 1 1 2.5 6 A 4.5 4.5 0 1 1 11.5 6 Z M 7 5.5 V 8.5 M 7 3.6 L 7 3.65";
@@ -414,71 +435,178 @@ component ColourRow {
     }
 }
 
-// Effect row: switch with its label, the strength (greyed while off), the key. No tooltip:
-// `EffectRow` adds one where the row has something to explain.
-component EffectLine {
-    in property <string> label;
+// A strength value as shown beside its slider (Gaussian blur's 0–10 with one decimal).
+component Amount inherits Text {
+    in property <float> value;
+    in property <bool> decimal;
+    width: 26px;
+    text: root.decimal ? round(root.value * 10) / 10 : round(root.value);
+    color: Theme.text-list;
+    font-size: Theme.font-body;
+    horizontal-alignment: right;
+    vertical-alignment: center;
+}
+
+// An effect chip of the Effects grid: a dot (filled while on), the name, and the key cap when
+// the command has a key. A click, or Space while focused (Tab), asks for the other state; the
+// plugin sets `checked`.
+component Chip {
+    in property <string> text;
+    in property <string> tip;
     in property <string> key;
+    // The tooltip's keys: the chip's own key unless set.
+    in property <[ToolTipKey]> tip-keys: [{ key: root.key, text: "" }];
     in property <bool> checked;
-    in-out property <float> value;
-    in property <float> maximum: 100;
     callback toggled(bool);
-    callback edited(float);
-    callback committed(float);
-    callback reset();
-    height: Layout.row;
-    HorizontalLayout {
-        spacing: 6px;
-        Switch {
-            horizontal-stretch: 0;
-            width: Layout.column;
-            text: root.label;
-            checked: root.checked;
-            toggled(on) => { root.toggled(on); }
+    height: 26px;
+    min-width: 40px;
+    horizontal-stretch: 1;
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
+        keys: root.tip-keys;
+        detail: @tr("· click: on or off");
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            border-radius: Theme.radius-control;
+            background: touch.pressed ? Theme.press-bg : touch.has-hover ? Theme.hover-bg : root.checked ? Theme.selected-bg : Theme.bg-bar;
+            border-width: 1px;
+            border-color: root.checked ? Theme.accent : transparent;
+            HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 5px;
+                spacing: 6px;
+                VerticalLayout {
+                    alignment: center;
+                    Rectangle {
+                        width: 7px;
+                        height: 7px;
+                        border-radius: 3.5px;
+                        background: root.checked ? Theme.accent : transparent;
+                        border-width: root.checked ? 0px : 1px;
+                        border-color: Theme.text-dim;
+                    }
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    text: root.text;
+                    color: root.checked ? Theme.text : Theme.text-list;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Cap { text: root.key; }
+            }
+            touch := TouchArea {
+                clicked => { root.toggled(!root.checked); }
+            }
         }
-        Fader {
-            maximum: root.maximum;
-            enabled: root.checked;
-            value <=> root.value;
-            edited(v) => { root.edited(v); }
-            committed(v) => { root.committed(v); }
-            reset => { root.reset(); }
+    }
+    // The focus ring, 2px outside the chip.
+    Rectangle {
+        visible: chip-keys.has-focus;
+        x: -2px;
+        y: -2px;
+        width: root.width + 4px;
+        height: root.height + 4px;
+        border-radius: Theme.radius-control + 2px;
+        border-width: 1px;
+        border-color: Theme.accent;
+    }
+    chip-keys := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if event.text == Key.Space {
+                root.toggled(!root.checked);
+                return accept;
+            }
+            reject
         }
-        Cap { text: root.key; }
     }
 }
 
-// An effect row whose tooltip explains it (with its key and the double-click).
-component EffectRow {
+// One effect's strength under the chips, there only while the effect is on (the value is kept
+// while it is off): label, slider, value. A double-click on the slider returns the default.
+component StrengthRow {
     in property <string> label;
     in property <string> tip;
     in property <string> key;
-    in property <bool> checked;
+    in property <bool> shown;
     in-out property <float> value;
     in property <float> maximum: 100;
-    callback toggled(bool);
     callback edited(float);
     callback committed(float);
     callback reset();
-    height: Layout.row;
+    height: root.shown ? 24px : 0px;
+    visible: root.shown;
     ToolTipArea {
         width: 100%;
         height: 100%;
         text: root.tip;
         keys: [{ key: root.key, text: "" }];
         detail: @tr("· double-click: Default");
-        EffectLine {
+        HorizontalLayout {
             width: 100%;
             height: 100%;
-            label: root.label;
-            key: root.key;
-            checked: root.checked;
-            maximum: root.maximum;
-            value <=> root.value;
-            toggled(on) => { root.toggled(on); }
-            edited(v) => { root.edited(v); }
-            committed(v) => { root.committed(v); }
-            reset => { root.reset(); }
+            padding-top: 2px;
+            padding-bottom: 2px;
+            spacing: 6px;
+            Name { text: root.label; }
+            Fader {
+                maximum: root.maximum;
+                value <=> root.value;
+                edited(v) => { root.edited(v); }
+                committed(v) => { root.committed(v); }
+                reset => { root.reset(); }
+            }
+            Amount { value: root.value; decimal: root.maximum <= 10; }
+        }
+    }
+}
+
+// A denoiser's row in the Denoise card: its own switch, and its strength while it is on.
+component DenoiseRow {
+    in property <string> label;
+    in property <string> tip;
+    in property <string> key;
+    in property <bool> checked;
+    in-out property <float> value;
+    callback toggled(bool);
+    callback edited(float);
+    callback committed(float);
+    callback reset();
+    height: 22px;
+    ToolTipArea {
+        width: 100%;
+        height: 100%;
+        text: root.tip;
+        keys: [{ key: root.key, text: "" }];
+        detail: root.checked ? @tr("· double-click: Default") : "";
+        HorizontalLayout {
+            width: 100%;
+            height: 100%;
+            spacing: 6px;
+            Switch {
+                horizontal-stretch: 0;
+                width: Layout.column;
+                text: root.label;
+                checked: root.checked;
+                toggled(on) => { root.toggled(on); }
+            }
+            Fader {
+                visible: root.checked;
+                value <=> root.value;
+                edited(v) => { root.edited(v); }
+                committed(v) => { root.committed(v); }
+                reset => { root.reset(); }
+            }
+            Amount { visible: root.checked; value: root.value; }
         }
     }
 }
@@ -526,6 +654,432 @@ component Row {
     }
 }
 
+// The still as the video shows it, filling this element: the crop window of the source
+// (crop), or the source between bars (stretch), flipped, then turned (the user flips first, as
+// the plugin's transform node says). Rotation and mirroring use Slint transforms, which the
+// software renderer ignores (there the still is shown upright and unmirrored).
+component Still {
+    in property <float> source-aspect;
+    // 0 none, 1 stretch (pad), 2 crop.
+    in property <int> mode;
+    in property <float> ratio;
+    // The crop or bars position, 0–100 %.
+    in property <float> pos-x: 50;
+    in property <float> pos-y: 50;
+    in property <int> rotate-index;
+    in property <bool> flip-h;
+    in property <bool> flip-v;
+    private property <bool> quarter: root.rotate-index == 1 || root.rotate-index == 3;
+    // The part of the still a crop keeps: across (ratio narrower than the source) or down.
+    private property <bool> crop-across: root.mode == 2 && root.ratio < root.source-aspect;
+    private property <bool> crop-down: root.mode == 2 && root.ratio > root.source-aspect;
+    turned := Rectangle {
+        width: root.quarter ? root.height : root.width;
+        height: root.quarter ? root.width : root.height;
+        x: (root.width - self.width) / 2;
+        y: (root.height - self.height) / 2;
+        background: root.mode == 1 ? #000000 : transparent;
+        transform-rotation: root.rotate-index * 90deg;
+        transform-origin: { x: self.width / 2, y: self.height / 2 };
+        Rectangle {
+            width: 100%;
+            height: 100%;
+            transform-scale-x: root.flip-h ? -100% : 100%;
+            transform-scale-y: root.flip-v ? -100% : 100%;
+            transform-origin: { x: self.width / 2, y: self.height / 2 };
+            Image {
+                source: @image-url("assets/still.jpg");
+                image-fit: fill;
+                // Stretch: the source between bars along the longer side of the ratio.
+                width: root.mode == 1 && root.source-aspect < root.ratio ? parent.width * root.source-aspect / root.ratio : parent.width;
+                height: root.mode == 1 && root.source-aspect > root.ratio ? parent.height * root.ratio / root.source-aspect : parent.height;
+                x: (parent.width - self.width) * root.pos-x / 100;
+                y: (parent.height - self.height) * root.pos-y / 100;
+                source-clip-width: root.crop-across ? round(self.source.width * root.ratio / root.source-aspect) : self.source.width;
+                source-clip-height: root.crop-down ? round(self.source.height * root.source-aspect / root.ratio) : self.source.height;
+                source-clip-x: round((self.source.width - self.source-clip-width) * root.pos-x / 100);
+                source-clip-y: round((self.source.height - self.source-clip-height) * root.pos-y / 100);
+            }
+        }
+    }
+}
+
+// A corner handle of the editor's picture frame, lit while the pointer is on it.
+component Handle inherits Rectangle {
+    in property <bool> lit;
+    width: 7px;
+    height: 7px;
+    background: root.lit ? Theme.accent : #ffffff;
+    border-width: 1px;
+    border-color: Theme.accent;
+}
+
+// The geometry editor (Picture panel, Geometry): a fixed screen frame and, inside it, the
+// picture as the video shows it, from the real settings (crop/stretch, rotation, flip, aspect,
+// fit, zoom, pan). It is a still image, not the live video (user ruling 2026-11-08); every
+// change goes to the real video at once (`frame-edit`, `crop-at`, `run`) and the still follows
+// the plugin's values. What the screen cuts off shows dimmed.
+//   Move mode: drag the picture to pan (it snaps to the centre), drag a corner to zoom about
+//   the picture's centre, the wheel zooms, a double-click centres.
+//   Crop mode (`crop-mode`): the source alone with the crop box. The plugin's crop is a ratio
+//   and a position (no free edges), so the box is set by the ratio chips and dragged to move it
+//   (when stretching, the picture is dragged between the bars). Esc or Enter leaves.
+//   Keys while focused (Tab, or entering crop mode): the arrows pan (crop mode: move the box),
+//   + and − zoom; they are the plugin's commands, so the OSD says what changed.
+component Editor inherits Rectangle {
+    in-out property <bool> crop-mode;
+    out property <bool> has-focus: editor-keys.has-focus;
+    public function take-focus() { editor-keys.focus(); }
+    height: 160px;
+    border-radius: Theme.radius-control;
+    background: Theme.bg-video;
+    clip: true;
+
+    // The screen: 16:9, about two thirds of the width, centred.
+    private property <float> screen: 16 / 9;
+    private property <length> sw: root.width * 0.64;
+    private property <length> sh: root.sw / root.screen;
+    private property <length> sx: (root.width - root.sw) / 2;
+    private property <length> sy: (root.height - root.sh) / 2;
+
+    // Shapes: the source (the still's own 16:9 until the plugin knows the source's), the crop
+    // or stretch ratio, the picture as shown (after rotation; an aspect override replaces it).
+    private property <float> src-aspect: PictureBridge.source-aspect > 0 ? PictureBridge.source-aspect : 16 / 9;
+    private property <int> mode: PictureBridge.reframe-index;
+    private property <float> ratio: PictureBridge.ratio-aspect;
+    private property <bool> quarter: PictureBridge.rotate-index == 1 || PictureBridge.rotate-index == 3;
+    private property <float> framed: root.mode == 0 ? root.src-aspect : root.ratio;
+    private property <float> shown: PictureBridge.display-aspect > 0 ? PictureBridge.display-aspect : root.quarter ? 1 / root.framed : root.framed;
+
+    // A drag in progress: 0 none, 1 pan, 2 zoom (a corner), 3 the crop box. While one is, the
+    // editor draws from its own values (`live-…`), so the picture follows the pointer at once.
+    private property <int> drag;
+    private property <length> start-x;
+    private property <length> start-y;
+    private property <float> start-zoom: 1;
+    private property <float> start-px;
+    private property <float> start-py;
+    private property <float> start-dist: 1;
+    private property <float> live-zoom: 1;
+    private property <float> live-px;
+    private property <float> live-py;
+    private property <float> live-cx: 50;
+    private property <float> live-cy: 50;
+    private property <bool> framing: root.drag == 1 || root.drag == 2;
+    private property <float> cur-zoom: root.framing ? root.live-zoom : PictureBridge.zoom;
+    private property <float> cur-px: root.framing ? root.live-px : PictureBridge.pan-x-value;
+    private property <float> cur-py: root.framing ? root.live-py : PictureBridge.pan-y-value;
+    private property <float> pos-x: root.drag == 3 ? root.live-cx : PictureBridge.crop-x;
+    private property <float> pos-y: root.drag == 3 ? root.live-cy : PictureBridge.crop-y;
+
+    // Move mode: the picture fitted in the screen (Keep: inside; Stretch: the screen; Fill:
+    // covering it), then zoomed and moved by the pan (a fraction of the zoomed size, as mpv).
+    private property <length> base-w: PictureBridge.fit-index == 1 ? root.sw
+        : (PictureBridge.fit-index == 2) == (root.shown >= root.screen) ? root.sh * root.shown : root.sw;
+    private property <length> base-h: PictureBridge.fit-index == 1 ? root.sh : root.base-w / root.shown;
+    private property <length> vw: root.base-w * root.cur-zoom;
+    private property <length> vh: root.base-h * root.cur-zoom;
+    private property <length> cx: root.sx + root.sw / 2 + root.cur-px * root.vw;
+    private property <length> cy: root.sy + root.sh / 2 + root.cur-py * root.vh;
+    private property <length> vx: root.cx - root.vw / 2;
+    private property <length> vy: root.cy - root.vh / 2;
+
+    // Crop mode: the outer shape fitted in the screen (crop: the source; stretch: the ratio with
+    // its bars) and the inner one that moves (crop: the window; stretch: the source).
+    private property <float> outer: root.mode == 1 ? root.ratio : root.src-aspect;
+    private property <float> inner: root.mode == 1 ? root.src-aspect : root.ratio;
+    private property <length> ow: root.outer >= root.screen ? root.sw : root.sh * root.outer;
+    private property <length> oh: root.ow / root.outer;
+    private property <length> ox: root.sx + (root.sw - root.ow) / 2;
+    private property <length> oy: root.sy + (root.sh - root.oh) / 2;
+    private property <length> iw: root.inner >= root.outer ? root.ow : root.oh * root.inner;
+    private property <length> ih: root.inner >= root.outer ? root.ow / root.inner : root.oh;
+    private property <length> ix: root.ox + (root.ow - root.iw) * root.pos-x / 100;
+    private property <length> iy: root.oy + (root.oh - root.ih) * root.pos-y / 100;
+
+    // The corner under the pointer (1 top left, 2 top right, 3 bottom left, 4 bottom right).
+    private property <int> corner: root.drag == 2 ? root.corner-at(root.start-x, root.start-y)
+        : !touch.has-hover || root.crop-mode || root.drag != 0 ? 0 : root.corner-at(touch.mouse-x, touch.mouse-y);
+
+    pure function corner-at(x: length, y: length) -> int {
+        let near-left = abs(x - root.vx) <= 6px;
+        let near-right = abs(x - root.vx - root.vw) <= 6px;
+        let near-top = abs(y - root.vy) <= 6px;
+        let near-bottom = abs(y - root.vy - root.vh) <= 6px;
+        if near-top && near-left { return 1; }
+        if near-top && near-right { return 2; }
+        if near-bottom && near-left { return 3; }
+        if near-bottom && near-right { return 4; }
+        return 0;
+    }
+    pure function distance(x: length, y: length) -> float {
+        return sqrt(pow((x - root.cx) / 1px, 2) + pow((y - root.cy) / 1px, 2));
+    }
+    // A new zoom about the picture's centre: the pan is a fraction of the zoomed size, so it
+    // scales back by the same factor and the centre stays where it is.
+    function zoom-to(zoom: float) {
+        let next = clamp(zoom, 0.25, 4);
+        root.live-px = clamp(root.start-px * root.start-zoom / next, -1, 1);
+        root.live-py = clamp(root.start-py * root.start-zoom / next, -1, 1);
+        root.live-zoom = next;
+        PictureBridge.frame-edit(next, root.live-px, root.live-py);
+    }
+    function press(x: length, y: length) {
+        root.start-x = x;
+        root.start-y = y;
+        if root.crop-mode {
+            editor-keys.focus();
+            if root.mode != 0 {
+                root.live-cx = PictureBridge.crop-x;
+                root.live-cy = PictureBridge.crop-y;
+                root.drag = 3;
+            }
+        } else {
+            root.start-zoom = PictureBridge.zoom;
+            root.start-px = PictureBridge.pan-x-value;
+            root.start-py = PictureBridge.pan-y-value;
+            root.live-zoom = root.start-zoom;
+            root.live-px = root.start-px;
+            root.live-py = root.start-py;
+            root.start-dist = max(1, root.distance(x, y));
+            root.drag = root.corner-at(x, y) != 0 ? 2 : 1;
+        }
+    }
+    function drag-to(x: length, y: length) {
+        if root.drag == 1 {
+            // The picture follows the pointer and snaps to the centre within 4 px.
+            let off-x = root.start-px * root.vw + (x - root.start-x);
+            let off-y = root.start-py * root.vh + (y - root.start-y);
+            root.live-px = clamp((abs(off-x) < 4px ? 0px : off-x) / max(1px, root.vw), -1, 1);
+            root.live-py = clamp((abs(off-y) < 4px ? 0px : off-y) / max(1px, root.vh), -1, 1);
+            PictureBridge.frame-edit(root.live-zoom, root.live-px, root.live-py);
+        } else if root.drag == 2 {
+            root.zoom-to(root.start-zoom * root.distance(x, y) / root.start-dist);
+        } else if root.drag == 3 {
+            let free-x = root.ow - root.iw;
+            let free-y = root.oh - root.ih;
+            if free-x > 1px {
+                root.live-cx = clamp(PictureBridge.crop-x + (x - root.start-x) / free-x * 100, 0, 100);
+            }
+            if free-y > 1px {
+                root.live-cy = clamp(PictureBridge.crop-y + (y - root.start-y) / free-y * 100, 0, 100);
+            }
+            PictureBridge.crop-at(round(root.live-cx), round(root.live-cy), false);
+        }
+    }
+    function release() {
+        if root.drag == 3 {
+            PictureBridge.crop-at(round(root.live-cx), round(root.live-cy), true);
+        }
+        root.drag = 0;
+    }
+
+    // ---------------------------------------------------------------- move mode
+    // The whole picture, dimmed; then the part inside the screen at full strength.
+    Still {
+        visible: !root.crop-mode;
+        x: root.vx;
+        y: root.vy;
+        width: root.vw;
+        height: root.vh;
+        opacity: 0.22;
+        source-aspect: root.src-aspect;
+        mode: root.mode;
+        ratio: root.ratio;
+        pos-x: PictureBridge.crop-x;
+        pos-y: PictureBridge.crop-y;
+        rotate-index: PictureBridge.rotate-index;
+        flip-h: PictureBridge.flip-h;
+        flip-v: PictureBridge.flip-v;
+    }
+    Rectangle {
+        visible: !root.crop-mode;
+        x: root.sx;
+        y: root.sy;
+        width: root.sw;
+        height: root.sh;
+        clip: true;
+        Still {
+            x: root.vx - root.sx;
+            y: root.vy - root.sy;
+            width: root.vw;
+            height: root.vh;
+            source-aspect: root.src-aspect;
+            mode: root.mode;
+            ratio: root.ratio;
+            pos-x: PictureBridge.crop-x;
+            pos-y: PictureBridge.crop-y;
+            rotate-index: PictureBridge.rotate-index;
+            flip-h: PictureBridge.flip-h;
+            flip-v: PictureBridge.flip-v;
+        }
+    }
+    // The picture's frame and its corner handles.
+    Rectangle {
+        visible: !root.crop-mode;
+        x: root.vx;
+        y: root.vy;
+        width: root.vw;
+        height: root.vh;
+        border-width: 1px;
+        border-color: #ffffff;
+    }
+    Handle { visible: !root.crop-mode; x: root.vx - 3px; y: root.vy - 3px; lit: root.corner == 1; }
+    Handle { visible: !root.crop-mode; x: root.vx + root.vw - 4px; y: root.vy - 3px; lit: root.corner == 2; }
+    Handle { visible: !root.crop-mode; x: root.vx - 3px; y: root.vy + root.vh - 4px; lit: root.corner == 3; }
+    Handle { visible: !root.crop-mode; x: root.vx + root.vw - 4px; y: root.vy + root.vh - 4px; lit: root.corner == 4; }
+
+    // ---------------------------------------------------------------- crop mode
+    // Crop: the source dimmed, the window at full strength. Stretch: the bars' frame and the
+    // source inside it. No ratio yet: the source alone.
+    Image {
+        visible: root.crop-mode && root.mode != 1;
+        x: root.ox;
+        y: root.oy;
+        width: root.ow;
+        height: root.oh;
+        source: @image-url("assets/still.jpg");
+        image-fit: fill;
+        opacity: root.mode == 2 ? 0.35 : 1;
+    }
+    Rectangle {
+        visible: root.crop-mode && root.mode == 1;
+        x: root.ox;
+        y: root.oy;
+        width: root.ow;
+        height: root.oh;
+        background: #000000;
+        border-width: 1px;
+        border-color: Theme.text-dim;
+    }
+    Rectangle {
+        visible: root.crop-mode && root.mode != 0;
+        x: root.ix;
+        y: root.iy;
+        width: root.iw;
+        height: root.ih;
+        clip: true;
+        Image {
+            x: root.mode == 2 ? root.ox - root.ix : 0px;
+            y: root.mode == 2 ? root.oy - root.iy : 0px;
+            width: root.mode == 2 ? root.ow : root.iw;
+            height: root.mode == 2 ? root.oh : root.ih;
+            source: @image-url("assets/still.jpg");
+            image-fit: fill;
+        }
+    }
+    Rectangle {
+        visible: root.crop-mode && root.mode != 0;
+        x: root.ix;
+        y: root.iy;
+        width: root.iw;
+        height: root.ih;
+        border-width: 1px;
+        border-color: #ffffff;
+    }
+
+    // The screen, fixed, on top.
+    Rectangle {
+        x: root.sx;
+        y: root.sy;
+        width: root.sw;
+        height: root.sh;
+        border-width: 1px;
+        border-color: Theme.text-dim;
+        Text {
+            x: 4px;
+            y: 2px;
+            text: root.crop-mode && root.mode == 0 ? @tr("Pick a ratio below") : @tr("Screen");
+            color: Theme.text-dim;
+            font-family: Theme.font-mono;
+            font-size: Theme.font-xs;
+        }
+    }
+
+    touch := TouchArea {
+        mouse-cursor: root.drag == 1 || root.drag == 3 ? MouseCursor.grabbing
+            : root.corner == 1 || root.corner == 4 ? MouseCursor.nwse-resize
+            : root.corner == 2 || root.corner == 3 ? MouseCursor.nesw-resize
+            : root.crop-mode && root.mode == 0 ? MouseCursor.default : MouseCursor.grab;
+        pointer-event(event) => {
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.down { root.press(self.mouse-x, self.mouse-y); }
+            if event.button == PointerEventButton.left && event.kind == PointerEventKind.up { root.release(); }
+        }
+        moved => {
+            if self.pressed { root.drag-to(self.mouse-x, self.mouse-y); }
+        }
+        // The wheel zooms by the keys' 5 % a notch, about the picture's centre.
+        scroll-event(event) => {
+            if root.crop-mode || root.drag != 0 || event.delta-y == 0 {
+                return reject;
+            }
+            root.start-zoom = PictureBridge.zoom;
+            root.start-px = PictureBridge.pan-x-value;
+            root.start-py = PictureBridge.pan-y-value;
+            root.zoom-to(root.start-zoom * pow(1.05, clamp(event.delta-y / 60px, -3, 3)));
+            accept
+        }
+        double-clicked => {
+            if !root.crop-mode { PictureBridge.run("video.frame.centre"); }
+        }
+    }
+    editor-keys := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        focus-on-click: false;
+        key-pressed(event) => {
+            if root.crop-mode {
+                if event.text == Key.Escape || event.text == Key.Return {
+                    root.crop-mode = false;
+                    return accept;
+                }
+                if event.text == Key.LeftArrow { PictureBridge.run("video.reframe.left"); return accept; }
+                if event.text == Key.RightArrow { PictureBridge.run("video.reframe.right"); return accept; }
+                if event.text == Key.UpArrow { PictureBridge.run("video.reframe.up"); return accept; }
+                if event.text == Key.DownArrow { PictureBridge.run("video.reframe.down"); return accept; }
+                return reject;
+            }
+            if event.text == Key.LeftArrow { PictureBridge.run("video.frame.left"); return accept; }
+            if event.text == Key.RightArrow { PictureBridge.run("video.frame.right"); return accept; }
+            if event.text == Key.UpArrow { PictureBridge.run("video.frame.up"); return accept; }
+            if event.text == Key.DownArrow { PictureBridge.run("video.frame.down"); return accept; }
+            if event.text == "+" || event.text == "=" { PictureBridge.run("video.frame.zoom-in"); return accept; }
+            if event.text == "-" { PictureBridge.run("video.frame.zoom-out"); return accept; }
+            reject
+        }
+    }
+    // The focus ring (pink), inside the editor's edge.
+    Rectangle {
+        visible: editor-keys.has-focus;
+        border-radius: Theme.radius-control;
+        border-width: 1px;
+        border-color: Theme.accent;
+    }
+}
+
+// A thin upright rule between groups of the editor toolbar.
+component Rule {
+    width: 9px;
+    Rectangle {
+        x: 4px;
+        y: (parent.height - 14px) / 2;
+        width: 1px;
+        height: 14px;
+        background: Theme.line;
+    }
+}
+
+// One figure of the editor readout: dim monospace, one line.
+component Readout inherits Text {
+    color: Theme.text-dim;
+    font-family: Theme.font-mono;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
 export component Picture inherits Rectangle {
     background: Theme.bg-panel;
     private property <string> render-reason: @tr("Needs GPU rendering (currently software rendering)");
@@ -549,6 +1103,22 @@ export component Picture inherits Rectangle {
         : root.top >= advanced-head.y ? 3 : root.top >= geometry-head.y ? 2 : root.top >= effects-head.y ? 1 : 0;
     private property <int> serial: PictureBridge.jump-serial;
     private property <Keys> keys: PictureBridge.keys;
+    // Denoise: any of the three on (the chip and the card), and which ones ("3D + Temporal").
+    private property <bool> any-denoise: PictureBridge.d3-enabled || PictureBridge.gradual-enabled || PictureBridge.temporal-enabled;
+    private property <string> denoise-first: PictureBridge.d3-enabled ? @tr("3D") : "";
+    private property <string> denoise-second: root.denoise-first
+        + (PictureBridge.gradual-enabled ? (root.denoise-first != "" ? " + " : "") + @tr("Gradual") : "");
+    private property <string> denoise-summary: root.denoise-second
+        + (PictureBridge.temporal-enabled ? (root.denoise-second != "" ? " + " : "") + @tr("Temporal") : "");
+    // The readout's crop: "—", the ratio, or the ratio stretched to (with bars).
+    private property <string> ratio-label: ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"][PictureBridge.ratio-index];
+    private property <string> crop-text: PictureBridge.reframe-index == 0 ? "—"
+        : PictureBridge.reframe-index == 1 ? @tr("{} with bars", root.ratio-label) : root.ratio-label;
+
+    // +3, 0, -2 (a figure of the readout).
+    pure function signed(n: int) -> string {
+        return n > 0 ? "+" + n : "" + n;
+    }
 
     function jump(index: int) {
         if index == 3 && !PictureBridge.advanced-open {
@@ -651,138 +1221,353 @@ export component Picture inherits Rectangle {
                 }
 
                 // ---------------------------------------------------------------- Effects
+                // Six chips (click: on or off); under them a strength row for each effect that
+                // is on, the Denoise card while any denoiser is on, and the Frames choice.
                 effects-head := Head { text: @tr("Effects"); }
-                EffectLine {
-                    label: @tr("Sharpen");
-                    key: root.keys.sharpen;
-                    checked: PictureBridge.sharpen-enabled;
-                    value <=> PictureBridge.sharpen-strength;
-                    toggled(on) => { PictureBridge.toggle("sharpen", on); }
-                    edited(v) => { PictureBridge.adjust("sharpen", v); }
-                    committed(v) => { PictureBridge.commit("sharpen", v); }
-                    reset => { PictureBridge.reset-field("sharpen"); }
+                GridLayout {
+                    spacing: 6px;
+                    Chip {
+                        row: 0;
+                        col: 0;
+                        text: @tr("Sharpen");
+                        tip: @tr("Sharpen");
+                        key: root.keys.sharpen;
+                        checked: PictureBridge.sharpen-enabled;
+                        toggled(on) => { PictureBridge.toggle("sharpen", on); }
+                    }
+                    Chip {
+                        row: 0;
+                        col: 1;
+                        text: @tr("Edges");
+                        tip: @tr("Wide-radius sharpening that mainly strengthens outlines");
+                        key: root.keys.edge;
+                        checked: PictureBridge.edge-enabled;
+                        toggled(on) => { PictureBridge.toggle("edge", on); }
+                    }
+                    Chip {
+                        row: 1;
+                        col: 0;
+                        text: @tr("Blur");
+                        tip: @tr("Gaussian Blur");
+                        key: root.keys.blur;
+                        checked: PictureBridge.blur-enabled;
+                        toggled(on) => { PictureBridge.toggle("blur", on); }
+                    }
+                    Chip {
+                        row: 1;
+                        col: 1;
+                        text: @tr("Deblock");
+                        tip: @tr("Deblock");
+                        key: root.keys.deblock;
+                        checked: PictureBridge.deblock-enabled;
+                        toggled(on) => { PictureBridge.toggle("deblock", on); }
+                    }
+                    Chip {
+                        row: 2;
+                        col: 0;
+                        text: @tr("Deband");
+                        tip: @tr("Deband");
+                        key: root.keys.deband;
+                        checked: PictureBridge.deband-enabled;
+                        toggled(on) => { PictureBridge.toggle("deband", on); }
+                    }
+                    // The master switch of the three denoisers (lit while any is on); it has no
+                    // key of its own, so the tip names the denoisers' keys.
+                    Chip {
+                        row: 2;
+                        col: 1;
+                        text: @tr("Denoise");
+                        tip: @tr("Denoise: turns the denoisers on or off");
+                        tip-keys: [{ key: root.keys.d3, text: @tr("3D") }, { key: root.keys.temporal, text: @tr("Temporal") }];
+                        checked: root.any-denoise;
+                        toggled(on) => { PictureBridge.toggle("denoise", on); }
+                    }
                 }
-                EffectRow {
-                    label: @tr("Edges");
-                    tip: @tr("Wide-radius sharpening that mainly strengthens outlines");
-                    key: root.keys.edge;
-                    checked: PictureBridge.edge-enabled;
-                    value <=> PictureBridge.edge-strength;
-                    toggled(on) => { PictureBridge.toggle("edge", on); }
-                    edited(v) => { PictureBridge.adjust("edge", v); }
-                    committed(v) => { PictureBridge.commit("edge", v); }
-                    reset => { PictureBridge.reset-field("edge"); }
+                // The strengths of the effects that are on (each row 0 px high while off, and
+                // no spacing between them, so nothing shows for an effect that is off).
+                VerticalLayout {
+                    spacing: 0px;
+                    StrengthRow {
+                        label: @tr("Sharpen");
+                        tip: @tr("Sharpen");
+                        key: root.keys.sharpen;
+                        shown: PictureBridge.sharpen-enabled;
+                        value <=> PictureBridge.sharpen-strength;
+                        edited(v) => { PictureBridge.adjust("sharpen", v); }
+                        committed(v) => { PictureBridge.commit("sharpen", v); }
+                        reset => { PictureBridge.reset-field("sharpen"); }
+                    }
+                    StrengthRow {
+                        label: @tr("Edges");
+                        tip: @tr("Wide-radius sharpening that mainly strengthens outlines");
+                        key: root.keys.edge;
+                        shown: PictureBridge.edge-enabled;
+                        value <=> PictureBridge.edge-strength;
+                        edited(v) => { PictureBridge.adjust("edge", v); }
+                        committed(v) => { PictureBridge.commit("edge", v); }
+                        reset => { PictureBridge.reset-field("edge"); }
+                    }
+                    StrengthRow {
+                        label: @tr("Blur");
+                        tip: @tr("Gaussian Blur");
+                        key: root.keys.blur;
+                        maximum: 10;
+                        shown: PictureBridge.blur-enabled;
+                        value <=> PictureBridge.blur-strength;
+                        edited(v) => { PictureBridge.adjust("blurStrength", v); }
+                        committed(v) => { PictureBridge.commit("blurStrength", v); }
+                        reset => { PictureBridge.reset-field("blurStrength"); }
+                    }
+                    StrengthRow {
+                        label: @tr("Deblock");
+                        tip: @tr("Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4");
+                        key: root.keys.deblock;
+                        shown: PictureBridge.deblock-enabled;
+                        value <=> PictureBridge.deblock-strength;
+                        edited(v) => { PictureBridge.adjust("deblock", v); }
+                        committed(v) => { PictureBridge.commit("deblock", v); }
+                        reset => { PictureBridge.reset-field("deblock"); }
+                    }
+                    StrengthRow {
+                        label: @tr("Deband");
+                        tip: @tr("Deband");
+                        key: root.keys.deband;
+                        shown: PictureBridge.deband-enabled;
+                        value <=> PictureBridge.deband-strength;
+                        edited(v) => { PictureBridge.adjust("deband", v); }
+                        committed(v) => { PictureBridge.commit("deband", v); }
+                        reset => { PictureBridge.reset-field("deband"); }
+                    }
                 }
-                EffectRow {
-                    label: @tr("Blur");
-                    tip: @tr("Gaussian Blur");
-                    key: root.keys.blur;
-                    maximum: 10;
-                    checked: PictureBridge.blur-enabled;
-                    value <=> PictureBridge.blur-strength;
-                    toggled(on) => { PictureBridge.toggle("blur", on); }
-                    edited(v) => { PictureBridge.adjust("blurStrength", v); }
-                    committed(v) => { PictureBridge.commit("blurStrength", v); }
-                    reset => { PictureBridge.reset-field("blurStrength"); }
+                // Denoise: one card, a row per denoiser (three independent filters, each with
+                // its own switch and strength); the title line sums up which are on.
+                Rectangle {
+                    visible: root.any-denoise;
+                    height: root.any-denoise ? card.preferred-height : 0px;
+                    border-radius: Theme.radius-control;
+                    border-width: 1px;
+                    border-color: Theme.line;
+                    background: Theme.bg-list;
+                    card := VerticalLayout {
+                        padding-left: 8px;
+                        padding-right: 8px;
+                        padding-top: 4px;
+                        padding-bottom: 4px;
+                        spacing: 0px;
+                        HorizontalLayout {
+                            height: 20px;
+                            spacing: 6px;
+                            Text {
+                                text: @tr("Denoise");
+                                color: Theme.text;
+                                font-size: Theme.font-body;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                horizontal-stretch: 1;
+                                text: root.denoise-summary;
+                                color: Theme.text-dim;
+                                font-size: Theme.font-body;
+                                horizontal-alignment: right;
+                                vertical-alignment: center;
+                                overflow: elide;
+                            }
+                        }
+                        DenoiseRow {
+                            label: @tr("3D");
+                            tip: @tr("3D Denoise");
+                            key: root.keys.d3;
+                            checked: PictureBridge.d3-enabled;
+                            value <=> PictureBridge.d3-strength;
+                            toggled(on) => { PictureBridge.toggle("d3", on); }
+                            edited(v) => { PictureBridge.adjust("d3", v); }
+                            committed(v) => { PictureBridge.commit("d3", v); }
+                            reset => { PictureBridge.reset-field("d3"); }
+                        }
+                        DenoiseRow {
+                            label: @tr("Gradual");
+                            tip: @tr("Gradual Denoise");
+                            key: root.keys.gradual;
+                            checked: PictureBridge.gradual-enabled;
+                            value <=> PictureBridge.gradual-strength;
+                            toggled(on) => { PictureBridge.toggle("gradual", on); }
+                            edited(v) => { PictureBridge.adjust("gradual", v); }
+                            committed(v) => { PictureBridge.commit("gradual", v); }
+                            reset => { PictureBridge.reset-field("gradual"); }
+                        }
+                        DenoiseRow {
+                            label: @tr("Temporal");
+                            tip: @tr("Temporal Denoise");
+                            key: root.keys.temporal;
+                            checked: PictureBridge.temporal-enabled;
+                            value <=> PictureBridge.temporal-strength;
+                            toggled(on) => { PictureBridge.toggle("temporal", on); }
+                            edited(v) => { PictureBridge.adjust("temporal", v); }
+                            committed(v) => { PictureBridge.commit("temporal", v); }
+                            reset => { PictureBridge.reset-field("temporal"); }
+                        }
+                    }
                 }
-                EffectRow {
-                    label: @tr("Deblock");
-                    tip: @tr("Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4");
-                    key: root.keys.deblock;
-                    checked: PictureBridge.deblock-enabled;
-                    value <=> PictureBridge.deblock-strength;
-                    toggled(on) => { PictureBridge.toggle("deblock", on); }
-                    edited(v) => { PictureBridge.adjust("deblock", v); }
-                    committed(v) => { PictureBridge.commit("deblock", v); }
-                    reset => { PictureBridge.reset-field("deblock"); }
-                }
-                EffectLine {
-                    label: @tr("Deband");
-                    key: root.keys.deband;
-                    checked: PictureBridge.deband-enabled;
-                    value <=> PictureBridge.deband-strength;
-                    toggled(on) => { PictureBridge.toggle("deband", on); }
-                    edited(v) => { PictureBridge.adjust("deband", v); }
-                    committed(v) => { PictureBridge.commit("deband", v); }
-                    reset => { PictureBridge.reset-field("deband"); }
-                }
-                // Denoise: the switch and strength of the mode shown below it (each mode keeps its own).
-                EffectLine {
-                    label: @tr("Denoise");
-                    key: root.keys.denoise;
-                    checked: PictureBridge.denoise-enabled;
-                    value <=> PictureBridge.denoise-strength;
-                    toggled(on) => { PictureBridge.toggle("denoise", on); }
-                    edited(v) => { PictureBridge.adjust("denoise", v); }
-                    committed(v) => { PictureBridge.commit("denoise", v); }
-                    reset => { PictureBridge.reset-field("denoise"); }
-                }
-                HorizontalLayout {
-                    padding-left: Layout.column + 6px;
-                    height: Layout.row;
+                // Frame doubling and motion interpolation exclude each other: one choice.
+                Line {
+                    label: @tr("Frames");
                     VerticalLayout {
                         alignment: center;
                         SegmentBar {
-                            Segment { text: @tr("3D"); selected: PictureBridge.denoise-index == 0; clicked => { PictureBridge.choose("denoiseMode", 0); } }
-                            Segment { text: @tr("Gradual"); selected: PictureBridge.denoise-index == 1; clicked => { PictureBridge.choose("denoiseMode", 1); } }
-                            Segment { text: @tr("Temporal"); selected: PictureBridge.denoise-index == 2; clicked => { PictureBridge.choose("denoiseMode", 2); } }
-                        }
-                    }
-                }
-                Rectangle {
-                    height: Layout.row;
-                    ToolTipArea {
-                        width: 100%;
-                        height: 100%;
-                        text: PictureBridge.blend-enough ? @tr("Rate already high enough")
-                            : @tr("Doubles the frame rate (up to 60), blending each in-between frame from its neighbours");
-                        keys: [{ key: root.keys.doubling, text: "" }];
-                        HorizontalLayout {
-                            width: 100%;
-                            height: 100%;
-                            spacing: 6px;
-                            Switch {
-                                text: @tr("Frame Doubling");
-                                checked: PictureBridge.blend-enabled;
-                                toggled(on) => { PictureBridge.toggle("frameBlend", on); }
+                            ToolTipArea {
+                                horizontal-stretch: 1;
+                                text: @tr("Neither frame doubling nor motion interpolation");
+                                Segment {
+                                    width: 100%;
+                                    height: 100%;
+                                    text: @tr("Off");
+                                    selected: PictureBridge.frames-index == 0;
+                                    clicked => { PictureBridge.choose("frames", 0); }
+                                }
                             }
-                            Cap { text: root.keys.doubling; }
-                        }
-                    }
-                }
-                Rectangle {
-                    height: Layout.row;
-                    ToolTipArea {
-                        width: 100%;
-                        height: 100%;
-                        text: PictureBridge.render-ready ? @tr("GPU interpolation to the display refresh rate; excludes frame doubling") : root.render-reason;
-                        keys: [{ key: root.keys.interpolation, text: "" }];
-                        HorizontalLayout {
-                            width: 100%;
-                            height: 100%;
-                            spacing: 6px;
-                            Switch {
-                                text: @tr("Motion Interpolation");
-                                enabled: PictureBridge.render-ready;
-                                checked: PictureBridge.interpolation;
-                                toggled(on) => { PictureBridge.toggle("interpolation", on); }
+                            ToolTipArea {
+                                horizontal-stretch: 1;
+                                text: PictureBridge.blend-enough ? @tr("Rate already high enough")
+                                    : @tr("Doubles the frame rate (up to 60), blending each in-between frame from its neighbours");
+                                keys: [{ key: root.keys.doubling, text: "" }];
+                                Segment {
+                                    width: 100%;
+                                    height: 100%;
+                                    text: @tr("Doubling");
+                                    selected: PictureBridge.frames-index == 1;
+                                    clicked => { PictureBridge.choose("frames", 1); }
+                                }
                             }
-                            Cap { text: root.keys.interpolation; }
+                            ToolTipArea {
+                                horizontal-stretch: 1;
+                                text: PictureBridge.render-ready ? @tr("GPU interpolation to the display refresh rate; excludes frame doubling") : root.render-reason;
+                                keys: [{ key: root.keys.interpolation, text: "" }];
+                                Segment {
+                                    width: 100%;
+                                    height: 100%;
+                                    text: @tr("Interpolate");
+                                    enabled: PictureBridge.render-ready;
+                                    selected: PictureBridge.frames-index == 2;
+                                    clicked => { PictureBridge.choose("frames", 2); }
+                                }
+                            }
                         }
                     }
                 }
 
                 // ---------------------------------------------------------------- Geometry
+                // The editor (see `Editor`), its toolbar, one line of numbers, the crop ratios
+                // (crop mode only), then Aspect and Fit.
                 geometry-head := Head { text: @tr("Geometry"); }
-                Row {
-                    label: @tr("Fit");
-                    tip: PictureBridge.fit-index == 1 ? @tr("Ignore Aspect Ratio") : PictureBridge.fit-index == 2 ? @tr("Fill Window") : @tr("Keep Aspect Ratio");
-                    VerticalLayout {
-                        alignment: center;
-                        SegmentBar {
-                            Segment { text: @tr("Keep"); selected: PictureBridge.fit-index == 0; clicked => { PictureBridge.choose("fit", 0); } }
-                            Segment { text: @tr("Stretch"); selected: PictureBridge.fit-index == 1; clicked => { PictureBridge.choose("fit", 1); } }
-                            Segment { text: @tr("Fill"); selected: PictureBridge.fit-index == 2; clicked => { PictureBridge.choose("fit", 2); } }
+                editor := Editor { }
+                HorizontalLayout {
+                    spacing: 2px;
+                    Glyph {
+                        glyph: Glyphs.rotl;
+                        tip: @tr("Rotate Left");
+                        clicked => { PictureBridge.choose("rotate", PictureBridge.rotate-index == 0 ? 3 : PictureBridge.rotate-index - 1); }
+                    }
+                    Glyph {
+                        glyph: Glyphs.rotr;
+                        tip: @tr("Rotate Right");
+                        key: root.keys.rotate;
+                        clicked => { PictureBridge.choose("rotate", PictureBridge.rotate-index == 3 ? 0 : PictureBridge.rotate-index + 1); }
+                    }
+                    Text {
+                        width: 30px;
+                        text: (PictureBridge.rotate-index * 90) + "°";
+                        color: Theme.text-dim;
+                        font-family: Theme.font-mono;
+                        font-size: Theme.font-body;
+                        vertical-alignment: center;
+                    }
+                    Rule { }
+                    Glyph {
+                        glyph: Glyphs.flipv;
+                        tip: @tr("Flip Vertically");
+                        key: root.keys.flipv;
+                        checked: PictureBridge.flip-v;
+                        clicked => { PictureBridge.toggle("flipV", !PictureBridge.flip-v); }
+                    }
+                    Glyph {
+                        glyph: Glyphs.fliph;
+                        tip: @tr("Flip Horizontally");
+                        key: root.keys.fliph;
+                        checked: PictureBridge.flip-h;
+                        clicked => { PictureBridge.toggle("flipH", !PictureBridge.flip-h); }
+                    }
+                    Rule { }
+                    Glyph {
+                        glyph: Glyphs.crop;
+                        tip: editor.crop-mode ? @tr("Leave Crop Mode") : @tr("Crop: pick a ratio, then drag the box");
+                        key: editor.crop-mode ? "Esc" : "";
+                        checked: editor.crop-mode;
+                        clicked => {
+                            editor.crop-mode = !editor.crop-mode;
+                            if editor.crop-mode { editor.take-focus(); }
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Glyph { glyph: Glyphs.centre; tip: @tr("Center Frame"); key: root.keys.centre; clicked => { PictureBridge.run("video.frame.centre"); } }
+                    Glyph { glyph: Glyphs.reset; tip: @tr("Reset Framing"); key: root.keys.framing; clicked => { PictureBridge.run("video.frame.reset"); } }
+                }
+                // The numbers, one dim monospace line; the crop ratios below it in crop mode.
+                VerticalLayout {
+                    spacing: 0px;
+                    HorizontalLayout {
+                        height: 18px;
+                        spacing: 10px;
+                        Readout { text: @tr("Zoom {}%", PictureBridge.zoom-percent); }
+                        Readout {
+                            visible: !editor.crop-mode || PictureBridge.reframe-index == 0;
+                            width: self.visible ? self.preferred-width : 0px;
+                            // TRANSLATORS: {0} and {1} are the picture's offset in percent, across and down (+3, -2).
+                            text: @tr("Offset {0}, {1}", root.signed(PictureBridge.pan-x), root.signed(PictureBridge.pan-y));
+                        }
+                        Readout { text: @tr("Crop {}", root.crop-text); }
+                        Readout {
+                            visible: editor.crop-mode && PictureBridge.reframe-index != 0;
+                            horizontal-stretch: 1;
+                            // TRANSLATORS: the crop box's position in percent, across and down (50 = centred).
+                            text: @tr("at {0}%, {1}%", PictureBridge.crop-x, PictureBridge.crop-y);
+                        }
+                    }
+                    Rectangle {
+                        visible: editor.crop-mode;
+                        height: editor.crop-mode ? crop-rows.preferred-height : 0px;
+                        crop-rows := VerticalLayout {
+                            padding-top: 4px;
+                            spacing: 4px;
+                            ToolTipArea {
+                                height: Layout.row;
+                                text: @tr("Crop to a ratio; drag the box in the editor to choose the part kept");
+                                VerticalLayout {
+                                    width: 100%;
+                                    height: 100%;
+                                    alignment: center;
+                                    SegmentBar {
+                                        Segment { text: @tr("Off"); selected: PictureBridge.reframe-index == 0; clicked => { PictureBridge.choose("crop", 0); } }
+                                        Segment { text: "4:3"; selected: PictureBridge.reframe-index != 0 && PictureBridge.ratio-index == 0; clicked => { PictureBridge.choose("crop", 1); } }
+                                        Segment { text: "16:9"; selected: PictureBridge.reframe-index != 0 && PictureBridge.ratio-index == 1; clicked => { PictureBridge.choose("crop", 2); } }
+                                        Segment { text: "16:10"; selected: PictureBridge.reframe-index != 0 && PictureBridge.ratio-index == 2; clicked => { PictureBridge.choose("crop", 3); } }
+                                        Segment { text: "1.85"; selected: PictureBridge.reframe-index != 0 && PictureBridge.ratio-index == 3; clicked => { PictureBridge.choose("crop", 4); } }
+                                        Segment { text: "2.35"; selected: PictureBridge.reframe-index != 0 && PictureBridge.ratio-index == 4; clicked => { PictureBridge.choose("crop", 5); } }
+                                    }
+                                }
+                            }
+                            // Crop/Stretch's other half: the ratio by adding bars instead of cutting.
+                            ToolTipArea {
+                                height: Theme.checkbox-row-height;
+                                text: @tr("Stretch to the ratio: add bars instead of cutting the picture");
+                                Switch {
+                                    width: 100%;
+                                    height: 100%;
+                                    text: @tr("Add bars instead of cutting");
+                                    enabled: PictureBridge.reframe-index != 0;
+                                    checked: PictureBridge.reframe-index == 1;
+                                    toggled(on) => { PictureBridge.choose("reframe", on ? 1 : 2); }
+                                }
+                            }
                         }
                     }
                 }
@@ -810,98 +1595,16 @@ export component Picture inherits Rectangle {
                     }
                 }
                 Row {
-                    label: @tr("Crop");
-                    tip: @tr("Crop/Stretch");
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        alignment: center;
-                        Choice {
-                            model: [@tr("None"), @tr("Stretch"), @tr("Crop")];
-                            current-index <=> PictureBridge.reframe-index;
-                            selected(index) => { PictureBridge.choose("reframe", index); }
-                        }
-                    }
-                    VerticalLayout {
-                        horizontal-stretch: 1;
-                        alignment: center;
-                        Choice {
-                            enabled: PictureBridge.reframe-index != 0;
-                            window-height: root.height;
-                            model: ["4:3", "16:9", "16:10", "1.85:1", "2.35:1"];
-                            current-index <=> PictureBridge.ratio-index;
-                            selected(index) => { PictureBridge.choose("ratio", index); }
-                        }
-                    }
-                }
-                // The crop position (a crop or stretch shows part of the picture, or places it).
-                HorizontalLayout {
-                    padding-left: Layout.column + 6px;
-                    spacing: 2px;
-                    alignment: start;
-                    Glyph { glyph: Glyphs.left; tip: @tr("Move Left"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.left"); } }
-                    Glyph { glyph: Glyphs.up; tip: @tr("Move Up"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.up"); } }
-                    Glyph { glyph: Glyphs.down; tip: @tr("Move Down"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.down"); } }
-                    Glyph { glyph: Glyphs.right; tip: @tr("Move Right"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.right"); } }
-                    Glyph { glyph: Glyphs.reset; tip: @tr("Reset Crop Position"); enabled: PictureBridge.reframe-index != 0; clicked => { PictureBridge.run("video.reframe.reset"); } }
-                }
-                Line {
-                    label: @tr("Rotate");
-                    key: root.keys.rotate;
+                    label: @tr("Fit");
+                    tip: PictureBridge.fit-index == 1 ? @tr("Ignore Aspect Ratio") : PictureBridge.fit-index == 2 ? @tr("Fill Window") : @tr("Keep Aspect Ratio");
                     VerticalLayout {
                         alignment: center;
                         SegmentBar {
-                            Segment { text: "0°"; selected: PictureBridge.rotate-index == 0; clicked => { PictureBridge.choose("rotate", 0); } }
-                            Segment { text: "90°"; selected: PictureBridge.rotate-index == 1; clicked => { PictureBridge.choose("rotate", 1); } }
-                            Segment { text: "180°"; selected: PictureBridge.rotate-index == 2; clicked => { PictureBridge.choose("rotate", 2); } }
-                            Segment { text: "270°"; selected: PictureBridge.rotate-index == 3; clicked => { PictureBridge.choose("rotate", 3); } }
+                            Segment { text: @tr("Keep"); selected: PictureBridge.fit-index == 0; clicked => { PictureBridge.choose("fit", 0); } }
+                            Segment { text: @tr("Stretch"); selected: PictureBridge.fit-index == 1; clicked => { PictureBridge.choose("fit", 1); } }
+                            Segment { text: @tr("Fill"); selected: PictureBridge.fit-index == 2; clicked => { PictureBridge.choose("fit", 2); } }
                         }
                     }
-                }
-                Line {
-                    label: @tr("Flip");
-                    Glyph {
-                        glyph: Glyphs.flipv;
-                        tip: @tr("Flip Vertically");
-                        key: root.keys.flipv;
-                        checked: PictureBridge.flip-v;
-                        clicked => { PictureBridge.toggle("flipV", !PictureBridge.flip-v); }
-                    }
-                    Glyph {
-                        glyph: Glyphs.fliph;
-                        tip: @tr("Flip Horizontally");
-                        key: root.keys.fliph;
-                        checked: PictureBridge.flip-h;
-                        clicked => { PictureBridge.toggle("flipH", !PictureBridge.flip-h); }
-                    }
-                    Rectangle { horizontal-stretch: 1; }
-                }
-                Line {
-                    label: @tr("Zoom");
-                    Glyph { glyph: Glyphs.minus; tip: @tr("Zoom Out"); key: root.keys.zoomout; clicked => { PictureBridge.run("video.frame.zoom-out"); } }
-                    Text {
-                        width: 40px;
-                        text: @tr("{}%", PictureBridge.zoom-percent);
-                        color: Theme.text-list;
-                        font-size: Theme.font-body;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
-                    }
-                    Glyph { glyph: Glyphs.plus; tip: @tr("Zoom In"); key: root.keys.zoomin; clicked => { PictureBridge.run("video.frame.zoom-in"); } }
-                    Rectangle { horizontal-stretch: 1; }
-                }
-                Row {
-                    label: @tr("Pan");
-                    // TRANSLATORS: {0} and {1} are the picture's offset in percent, across and down.
-                    tip: @tr("Pan ({0}%, {1}%)", PictureBridge.pan-x, PictureBridge.pan-y);
-                    key: root.keys.framing;
-                    detail: @tr("· resets zoom and pan");
-                    Glyph { glyph: Glyphs.left; tip: @tr("Pan ←"); key: root.keys.panleft; clicked => { PictureBridge.run("video.frame.left"); } }
-                    Glyph { glyph: Glyphs.up; tip: @tr("Pan ↑"); key: root.keys.panup; clicked => { PictureBridge.run("video.frame.up"); } }
-                    Glyph { glyph: Glyphs.down; tip: @tr("Pan ↓"); key: root.keys.pandown; clicked => { PictureBridge.run("video.frame.down"); } }
-                    Glyph { glyph: Glyphs.right; tip: @tr("Pan →"); key: root.keys.panright; clicked => { PictureBridge.run("video.frame.right"); } }
-                    Glyph { glyph: Glyphs.centre; tip: @tr("Center Frame"); key: root.keys.centre; clicked => { PictureBridge.run("video.frame.centre"); } }
-                    Glyph { glyph: Glyphs.reset; tip: @tr("Reset Framing"); key: root.keys.framing; clicked => { PictureBridge.run("video.frame.reset"); } }
-                    Rectangle { horizontal-stretch: 1; }
                 }
 
                 // ---------------------------------------------------------------- Advanced (closed by default)

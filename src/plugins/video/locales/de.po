@@ -6,1050 +6,1050 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:165 main.ts:948 main.ts:1347
+#: main.ts:168 main.ts:1015 main.ts:1414
 #, x-machine
 msgid "Picture"
 msgstr "Bild"
 
-#: main.ts:216 picture.slint:524
+#: main.ts:219 picture.slint:1086
 #, x-machine
 msgid "Shader failed to load"
 msgstr "Shader konnte nicht geladen werden"
 
-#: main.ts:217
+#: main.ts:220
 #, x-machine
 msgid "Render options unavailable: another plugin controls them"
 msgstr "Renderoptionen nicht verfügbar: Ein anderes Plugin steuert sie"
 
-#: main.ts:220
+#: main.ts:223
 #, x-machine
 msgid "Render options unavailable: {}"
 msgstr "Renderoptionen nicht verfügbar: {}"
 
-#: main.ts:534
+#: main.ts:600
 #, x-machine
 msgid "Display unavailable: another plugin controls the display"
 msgstr "Anzeige nicht verfügbar: Ein anderes Plugin steuert die Anzeige"
 
-#: main.ts:536
+#: main.ts:602
 #, x-machine
 msgid "Display unavailable: {}"
 msgstr "Anzeige nicht verfügbar: {}"
 
-#: main.ts:546
+#: main.ts:612
 #, x-machine
 msgid "Aspect ratio: Default"
 msgstr "Seitenverhältnis: Standard"
 
-#: main.ts:546
+#: main.ts:612
 #, x-machine
 msgid "Aspect ratio: {}"
 msgstr "Seitenverhältnis: {}"
 
-#: main.ts:546
+#: main.ts:612
 #, x-machine
 msgid "Aspect ratio: Custom - {}"
 msgstr "Seitenverhältnis: Benutzerdefiniert – {}"
 
-#: main.ts:551 main.ts:1053 picture.slint:764
+#: main.ts:617 main.ts:1120 picture.slint:1596
 #, x-machine
 msgid "Keep Aspect Ratio"
 msgstr "Seitenverhältnis beibehalten"
 
-#: main.ts:551 main.ts:1053 picture.slint:764
+#: main.ts:617 main.ts:1120 picture.slint:1596
 #, x-machine
 msgid "Ignore Aspect Ratio"
 msgstr "Seitenverhältnis ignorieren"
 
-#: main.ts:551 picture.slint:764
+#: main.ts:617 picture.slint:1596
 #, x-machine
 msgid "Fill Window"
 msgstr "Fenster füllen"
 
-#: main.ts:557
+#: main.ts:623
 #, x-machine
 msgid "Framing: larger ({}%)"
 msgstr "Bildausschnitt: größer ({} %)"
 
-#: main.ts:557
+#: main.ts:623
 #, x-machine
 msgid "Framing: smaller ({}%)"
 msgstr "Bildausschnitt: kleiner ({} %)"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move right ({}%, {}%)"
 msgstr "Bildausschnitt: nach rechts ({} %, {} %)"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move left ({}%, {}%)"
 msgstr "Bildausschnitt: nach links ({} %, {} %)"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move up ({}%, {}%)"
 msgstr "Bildausschnitt: nach oben ({} %, {} %)"
 
-#: main.ts:564
+#: main.ts:630
 #, x-machine
 msgid "Framing: move down ({}%, {}%)"
 msgstr "Bildausschnitt: nach unten ({} %, {} %)"
 
-#: main.ts:569
+#: main.ts:635
 #, x-machine
 msgid "Framing: centered"
 msgstr "Bildausschnitt: zentriert"
 
-#: main.ts:569
+#: main.ts:635
 #, x-machine
 msgid "Framing: reset"
 msgstr "Bildausschnitt: zurückgesetzt"
 
-#: main.ts:639
+#: main.ts:706
 #, x-machine
 msgid "Picture reset; image processing off"
 msgstr "Bildeinstellungen zurückgesetzt, Bildverarbeitung aus"
 
-#: main.ts:639
+#: main.ts:706
 #, x-machine
 msgid "Picture reset"
 msgstr "Bildeinstellungen zurückgesetzt"
 
-#: main.ts:655
+#: main.ts:722
 #, x-machine
 msgid "Picture panel reset"
 msgstr "Bild-Bereich zurückgesetzt"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness -1% ({}%)"
 msgstr "Helligkeit −1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness +1% ({}%)"
 msgstr "Helligkeit +1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast -1% ({}%)"
 msgstr "Kontrast −1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast +1% ({}%)"
 msgstr "Kontrast +1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation -1% ({}%)"
 msgstr "Sättigung −1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation +1% ({}%)"
 msgstr "Sättigung +1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue -1% ({}%)"
 msgstr "Farbton −1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue +1% ({}%)"
 msgstr "Farbton +1 % ({} %)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness -1% ({}%) (picture effects off)"
 msgstr "Helligkeit −1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Brightness +1% ({}%) (picture effects off)"
 msgstr "Helligkeit +1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast -1% ({}%) (picture effects off)"
 msgstr "Kontrast −1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Contrast +1% ({}%) (picture effects off)"
 msgstr "Kontrast +1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation -1% ({}%) (picture effects off)"
 msgstr "Sättigung −1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Saturation +1% ({}%) (picture effects off)"
 msgstr "Sättigung +1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue -1% ({}%) (picture effects off)"
 msgstr "Farbton −1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:660
+#: main.ts:727
 #, x-machine
 msgid "Hue +1% ({}%) (picture effects off)"
 msgstr "Farbton +1 % ({} %) (Bildeffekte aus)"
 
-#: main.ts:666
+#: main.ts:733
 #, x-machine
 msgid "Flip vertically: on"
 msgstr "Vertikal spiegeln: Ein"
 
-#: main.ts:666
+#: main.ts:733
 #, x-machine
 msgid "Flip vertically: off"
 msgstr "Vertikal spiegeln: Aus"
 
-#: main.ts:667
+#: main.ts:734
 #, x-machine
 msgid "Flip horizontally: on"
 msgstr "Horizontal spiegeln: Ein"
 
-#: main.ts:667
+#: main.ts:734
 #, x-machine
 msgid "Flip horizontally: off"
 msgstr "Horizontal spiegeln: Aus"
 
-#: main.ts:672
+#: main.ts:739
 #, x-machine
 msgid "Rotation: none"
 msgstr "Drehung: keine"
 
-#: main.ts:672
+#: main.ts:739
 #, x-machine
 msgid "Rotation: {}°"
 msgstr "Drehung: {}°"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Sharpen: on"
 msgstr "Schärfen: Ein"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Edge sharpen: on"
 msgstr "Kantenschärfung: Ein"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deblock: on"
 msgstr "Deblocking: Ein"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deband: on"
 msgstr "Debanding: Ein"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "3D denoise: on"
 msgstr "3D-Rauschunterdrückung: Ein"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Gradual denoise: on"
 msgstr "Graduelle Rauschunterdrückung: Ein"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Temporal denoise: on"
 msgstr "Temporale Rauschunterdrückung: Ein"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Sharpen: off"
 msgstr "Schärfen: Aus"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Edge sharpen: off"
 msgstr "Kantenschärfung: Aus"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deblock: off"
 msgstr "Deblocking: Aus"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Deband: off"
 msgstr "Debanding: Aus"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "3D denoise: off"
 msgstr "3D-Rauschunterdrückung: Aus"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Gradual denoise: off"
 msgstr "Graduelle Rauschunterdrückung: Aus"
 
-#: main.ts:677
+#: main.ts:744
 #, x-machine
 msgid "Temporal denoise: off"
 msgstr "Temporale Rauschunterdrückung: Aus"
 
-#: main.ts:682
+#: main.ts:749
 #, x-machine
 msgid "Deinterlace: auto"
 msgstr "Deinterlacing: Automatisch"
 
-#: main.ts:682
+#: main.ts:749
 #, x-machine
 msgid "Deinterlace: always"
 msgstr "Deinterlacing: Immer"
 
-#: main.ts:682
+#: main.ts:749
 #, x-machine
 msgid "Deinterlace: never"
 msgstr "Deinterlacing: Nie"
 
-#: main.ts:687
+#: main.ts:754
 #, x-machine
 msgid "Deinterlace output: by frame"
 msgstr "Deinterlacing-Ausgabe: pro Vollbild"
 
-#: main.ts:687
+#: main.ts:754
 #, x-machine
 msgid "Deinterlace output: by field (double rate)"
 msgstr "Deinterlacing-Ausgabe: pro Halbbild (doppelte Rate)"
 
-#: main.ts:694
+#: main.ts:761
 #, x-machine
 msgid "Crop/stretch: none"
 msgstr "Zuschneiden/Strecken: keines"
 
-#: main.ts:694
+#: main.ts:761
 #, x-machine
 msgid "Crop/stretch: stretch to {}"
 msgstr "Zuschneiden/Strecken: auf {} strecken"
 
-#: main.ts:694
+#: main.ts:761
 #, x-machine
 msgid "Crop/stretch: crop to {}"
 msgstr "Zuschneiden/Strecken: auf {} zuschneiden"
 
-#: main.ts:701
+#: main.ts:768
 #, x-machine
 msgid "Crop position ({}%, {}%)"
 msgstr "Zuschnittposition ({} %, {} %)"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: off"
 msgstr "Bildverdopplung: Aus"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: on (motion interpolation turned off)"
 msgstr "Bildverdopplung: Ein (Bewegungsinterpolation ausgeschaltet)"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: on"
 msgstr "Bildverdopplung: Ein"
 
-#: main.ts:716
+#: main.ts:783
 #, x-machine
 msgid "Frame doubling: on (picture effects off)"
 msgstr "Bildverdopplung: Ein (Bildeffekte aus)"
 
-#: main.ts:736
+#: main.ts:803
 #, x-machine
 msgid "Motion interpolation: off"
 msgstr "Bewegungsinterpolation: Aus"
 
-#: main.ts:736
+#: main.ts:803
 #, x-machine
 msgid "Motion interpolation: on (frame doubling turned off)"
 msgstr "Bewegungsinterpolation: Ein (Bildverdopplung ausgeschaltet)"
 
-#: main.ts:736
+#: main.ts:803
 #, x-machine
 msgid "Motion interpolation: on"
 msgstr "Bewegungsinterpolation: Ein"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: auto (not an HDR source)"
 msgstr "HDR-Tone-Mapping: Automatisch (keine HDR-Quelle)"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: off (not an HDR source)"
 msgstr "HDR-Tone-Mapping: Aus (keine HDR-Quelle)"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: BT.2390 (not an HDR source)"
 msgstr "HDR-Tone-Mapping: BT.2390 (keine HDR-Quelle)"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Hable (not an HDR source)"
 msgstr "HDR-Tone-Mapping: Hable (keine HDR-Quelle)"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Mobius (not an HDR source)"
 msgstr "HDR-Tone-Mapping: Mobius (keine HDR-Quelle)"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Reinhard (not an HDR source)"
 msgstr "HDR-Tone-Mapping: Reinhard (keine HDR-Quelle)"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: clip (not an HDR source)"
 msgstr "HDR-Tone-Mapping: Abschneiden (keine HDR-Quelle)"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: auto"
 msgstr "HDR-Tone-Mapping: Automatisch"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: off"
 msgstr "HDR-Tone-Mapping: Aus"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: BT.2390"
 msgstr "HDR-Tone-Mapping: BT.2390"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Hable"
 msgstr "HDR-Tone-Mapping: Hable"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Mobius"
 msgstr "HDR-Tone-Mapping: Mobius"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: Reinhard"
 msgstr "HDR-Tone-Mapping: Reinhard"
 
-#: main.ts:744
+#: main.ts:811
 #, x-machine
 msgid "HDR tone mapping: clip"
 msgstr "HDR-Tone-Mapping: Abschneiden"
 
-#: main.ts:749
+#: main.ts:816
 #, x-machine
 msgid "Dynamic peak detection: on"
 msgstr "Dynamische Spitzenerkennung: Ein"
 
-#: main.ts:749
+#: main.ts:816
 #, x-machine
 msgid "Dynamic peak detection: off"
 msgstr "Dynamische Spitzenerkennung: Aus"
 
-#: main.ts:757
+#: main.ts:824
 #, x-machine
 msgid "Pixel shaders: off"
 msgstr "Pixel-Shader: Aus"
 
-#: main.ts:758
+#: main.ts:825
 #, x-machine
 msgid "Pixel shaders: no shaders"
 msgstr "Pixel-Shader: keine Shader"
 
-#: main.ts:759
+#: main.ts:826
 #, x-machine
 msgid "Pixel shaders: on ({})"
 msgstr "Pixel-Shader: Ein ({})"
 
-#: main.ts:810
+#: main.ts:877
 #, x-machine
 msgid "Many frames dropped with field output, try frame output; many dropped with frame doubling, consider turning it off"
 msgstr "Viele verworfene Bilder bei Halbbildausgabe, versuchen Sie die Vollbildausgabe; viele verworfene Bilder bei Bildverdopplung, schalten Sie sie besser aus"
 
-#: main.ts:810
+#: main.ts:877
 #, x-machine
 msgid "Many frames dropped with field output, try frame output"
 msgstr "Viele verworfene Bilder bei Halbbildausgabe, versuchen Sie die Vollbildausgabe"
 
-#: main.ts:810
+#: main.ts:877
 #, x-machine
 msgid "Many frames dropped with frame doubling, consider turning it off"
 msgstr "Viele verworfene Bilder bei Bildverdopplung, schalten Sie sie besser aus"
 
-#: main.ts:844 main.ts:860
+#: main.ts:911 main.ts:927
 #, x-machine
 msgid "At most {} shaders"
 msgstr "Höchstens {} Shader"
 
-#: main.ts:855
+#: main.ts:922
 #, x-machine
 msgid "Add Shader (.glsl)"
 msgstr "Shader hinzufügen (.glsl)"
 
-#: main.ts:858
+#: main.ts:925
 #, x-machine
 msgid "Only .glsl or .hook shader files can be added"
 msgstr "Nur .glsl- oder .hook-Shaderdateien können hinzugefügt werden"
 
-#: main.ts:865
+#: main.ts:932
 #, x-machine
 msgid "Could not copy the shader: {}"
 msgstr "Shader konnte nicht kopiert werden: {}"
 
-#: main.ts:874
+#: main.ts:941
 #, x-machine
 msgid "Could not open the shader folder: {}"
 msgstr "Shader-Ordner konnte nicht geöffnet werden: {}"
 
 #. {} is a list of file names.
-#: main.ts:883
+#: main.ts:950
 #, x-machine
 msgid "Removed missing shaders: {}"
 msgstr "Fehlende Shader entfernt: {}"
 
 #. {} is a list of file names.
-#: main.ts:884
+#: main.ts:951
 #, x-machine
 msgid "Shaders reloaded ({})"
 msgstr "Shader neu geladen ({})"
 
-#: main.ts:939
+#: main.ts:1006
 #, x-machine
 msgid "Pixel Shaders"
 msgstr "Pixel-Shader"
 
-#: main.ts:940
+#: main.ts:1007
 #, x-machine
 msgid "HDR Tone Mapping"
 msgstr "HDR-Tone-Mapping"
 
-#: main.ts:941 picture.slint:925
+#: main.ts:1008 picture.slint:1640
 #, x-machine
 msgid "Deinterlace"
 msgstr "Deinterlacing"
 
-#: main.ts:942 picture.slint:775
+#: main.ts:1009 picture.slint:1572
 #, x-machine
 msgid "Aspect"
 msgstr "Seitenverhältnis"
 
-#: main.ts:943 picture.slint:799
+#: main.ts:1010
 #, x-machine
 msgid "Crop/Stretch"
 msgstr "Zuschneiden/Strecken"
 
-#: main.ts:944 main.ts:1217
+#: main.ts:1011 main.ts:1284
 #, x-machine
 msgid "Framing"
 msgstr "Bildausschnitt"
 
-#: main.ts:945
+#: main.ts:1012
 #, x-machine
 msgid "Image Processing"
 msgstr "Bildverarbeitung"
 
-#: main.ts:946
+#: main.ts:1013
 #, x-machine
 msgid "Rotation"
 msgstr "Drehung"
 
-#: main.ts:947
+#: main.ts:1014
 #, x-machine
 msgid "Reset"
 msgstr "Zurücksetzen"
 
-#: main.ts:959
+#: main.ts:1026
 #, x-machine
 msgid "Use Shaders"
 msgstr "Shader verwenden"
 
-#: main.ts:966 main.ts:972 main.ts:983 main.ts:994 main.ts:1005 main.ts:1307 picture.slint:520 ui/shaders.slint:131
+#: main.ts:1033 main.ts:1039 main.ts:1050 main.ts:1061 main.ts:1072 main.ts:1374 picture.slint:1082 ui/shaders.slint:131
 #, x-machine
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "Erfordert GPU-Rendering (derzeit Software-Rendering)"
 
-#: main.ts:970
+#: main.ts:1037
 #, x-machine
 msgid "Shader List…"
 msgstr "Shader-Liste…"
 
-#: main.ts:971
+#: main.ts:1038
 #, x-machine
 msgid "Open Shader Folder"
 msgstr "Shader-Ordner öffnen"
 
-#: main.ts:972
+#: main.ts:1039
 #, x-machine
 msgid "Reload Shaders"
 msgstr "Shader neu laden"
 
-#: main.ts:976 main.ts:1026 picture.slint:931 picture.slint:966
+#: main.ts:1043 main.ts:1093 picture.slint:1646 picture.slint:1681
 #, x-machine
 msgid "Auto"
 msgstr "Automatisch"
 
-#: main.ts:976 picture.slint:966
+#: main.ts:1043 picture.slint:1420 picture.slint:1546 picture.slint:1681
 #, x-machine
 msgid "Off"
 msgstr "Aus"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "BT.2390"
 msgstr "BT.2390"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "Hable"
 msgstr "Hable"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "Mobius"
 msgstr "Mobius"
 
-#: main.ts:976
+#: main.ts:1043
 #, x-machine
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:976 picture.slint:966
+#: main.ts:1043 picture.slint:1681
 #, x-machine
 msgid "Clip"
 msgstr "Abschneiden"
 
-#: main.ts:988 picture.slint:1005
+#: main.ts:1055 picture.slint:1722
 #, x-machine
 msgid "Dynamic Peak Detection"
 msgstr "Dynamische Spitzenerkennung"
 
-#: main.ts:1000
+#: main.ts:1067
 #, x-machine
 msgid "HDR Settings…"
 msgstr "HDR-Einstellungen…"
 
-#: main.ts:1012 main.ts:1313
+#: main.ts:1079 main.ts:1380
 #, x-machine
 msgid "Cycle"
 msgstr "Durchschalten"
 
-#: main.ts:1026 picture.slint:931
+#: main.ts:1093 picture.slint:1646
 #, x-machine
 msgid "Always"
 msgstr "Immer"
 
-#: main.ts:1026 picture.slint:931
+#: main.ts:1093 picture.slint:1646
 #, x-machine
 msgid "Never"
 msgstr "Nie"
 
-#: main.ts:1038
+#: main.ts:1105
 #, x-machine
 msgid "By Frame"
 msgstr "Pro Vollbild"
 
-#: main.ts:1038 picture.slint:943
+#: main.ts:1105 picture.slint:1658
 #, x-machine
 msgid "By Field (Double Rate)"
 msgstr "Pro Halbbild (2× Rate)"
 
-#: main.ts:1045 picture.slint:942
+#: main.ts:1112 picture.slint:1657
 #, x-machine
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr "Automatisch gibt pro Halbbild aus (2× Rate); diese Einstellung gilt für „Immer“"
 
-#: main.ts:1053
+#: main.ts:1120
 #, x-machine
 msgid "Fill Window (Crop Excess)"
 msgstr "Fenster füllen (Überstand abschneiden)"
 
-#: main.ts:1064
+#: main.ts:1131
 #, x-machine
 msgid "Cycle Aspect Ratio"
 msgstr "Seitenverhältnis durchschalten"
 
-#: main.ts:1074 picture.slint:532 picture.slint:533
+#: main.ts:1141 picture.slint:1094 picture.slint:1095
 #, x-machine
 msgid "Default (Source)"
 msgstr "Standard (Quelle)"
 
-#: main.ts:1121 picture.slint:533
+#: main.ts:1188 picture.slint:1095
 #, x-machine
 msgid "Custom ({})"
 msgstr "Benutzerdefiniert ({})"
 
-#: main.ts:1122
+#: main.ts:1189
 #, x-machine
 msgid "Custom (x:y)"
 msgstr "Benutzerdefiniert (x:y)"
 
-#: main.ts:1122
+#: main.ts:1189
 #, x-machine
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "Zuerst unter „Benutzerdefiniertes Seitenverhältnis…“ eingeben"
 
-#: main.ts:1125 picture.slint:792
+#: main.ts:1192 picture.slint:1589
 #, x-machine
 msgid "Custom Aspect Ratio…"
 msgstr "Benutzerdefiniertes Seitenverhältnis…"
 
-#: main.ts:1137 picture.slint:804
+#: main.ts:1204
 #, x-machine
 msgid "None"
 msgstr "Keines"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 4:3"
 msgstr "Auf 4:3 strecken"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 16:9"
 msgstr "Auf 16:9 strecken"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 16:10"
 msgstr "Auf 16:10 strecken"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 1.85:1"
 msgstr "Auf 1.85:1 strecken"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Stretch to 2.35:1"
 msgstr "Auf 2.35:1 strecken"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 4:3"
 msgstr "Auf 4:3 zuschneiden"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 16:9"
 msgstr "Auf 16:9 zuschneiden"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 16:10"
 msgstr "Auf 16:10 zuschneiden"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 1.85:1"
 msgstr "Auf 1.85:1 zuschneiden"
 
-#: main.ts:1150
+#: main.ts:1217
 #, x-machine
 msgid "Crop to 2.35:1"
 msgstr "Auf 2.35:1 zuschneiden"
 
-#: main.ts:1170 picture.slint:826
+#: main.ts:1237
 #, x-machine
 msgid "Move Left"
 msgstr "Nach links"
 
-#: main.ts:1170 picture.slint:829
+#: main.ts:1237
 #, x-machine
 msgid "Move Right"
 msgstr "Nach rechts"
 
-#: main.ts:1170 picture.slint:827 ui/shaders.slint:91 ui/shaders.slint:114
+#: main.ts:1237 ui/shaders.slint:91 ui/shaders.slint:114
 #, x-machine
 msgid "Move Up"
 msgstr "Nach oben"
 
-#: main.ts:1170 picture.slint:828 ui/shaders.slint:91 ui/shaders.slint:115
+#: main.ts:1237 ui/shaders.slint:91 ui/shaders.slint:115
 #, x-machine
 msgid "Move Down"
 msgstr "Nach unten"
 
-#: main.ts:1182
+#: main.ts:1249
 #, x-machine
 msgid "Crop Position"
 msgstr "Zuschnittposition"
 
-#: main.ts:1205 picture.slint:874
+#: main.ts:1272
 #, x-machine
 msgid "Zoom In"
 msgstr "Vergrößern"
 
-#: main.ts:1205 picture.slint:865
+#: main.ts:1272
 #, x-machine
 msgid "Zoom Out"
 msgstr "Verkleinern"
 
-#: main.ts:1205 picture.slint:886
+#: main.ts:1272
 #, x-machine
 msgid "Pan →"
 msgstr "Verschieben →"
 
-#: main.ts:1205 picture.slint:883
+#: main.ts:1272
 #, x-machine
 msgid "Pan ←"
 msgstr "Verschieben ←"
 
-#: main.ts:1205 picture.slint:884
+#: main.ts:1272
 #, x-machine
 msgid "Pan ↑"
 msgstr "Verschieben ↑"
 
-#: main.ts:1205 picture.slint:885
+#: main.ts:1272
 #, x-machine
 msgid "Pan ↓"
 msgstr "Verschieben ↓"
 
-#: main.ts:1205 picture.slint:887
+#: main.ts:1272 picture.slint:1508
 #, x-machine
 msgid "Center Frame"
 msgstr "Bild zentrieren"
 
-#: main.ts:1230 picture.slint:849
+#: main.ts:1297 picture.slint:1484
 #, x-machine
 msgid "Flip Vertically"
 msgstr "Vertikal spiegeln"
 
-#: main.ts:1241 picture.slint:856
+#: main.ts:1308 picture.slint:1491
 #, x-machine
 msgid "Flip Horizontally"
 msgstr "Horizontal spiegeln"
 
-#: main.ts:1252 picture.slint:667
+#: main.ts:1319 picture.slint:1248 picture.slint:1309
 #, x-machine
 msgid "Gaussian Blur"
 msgstr "Gaußscher Weichzeichner"
 
-#: main.ts:1262
+#: main.ts:1329
 #, x-machine
 msgid "Gaussian blur: on"
 msgstr "Gaußscher Weichzeichner: Ein"
 
-#: main.ts:1262
+#: main.ts:1329
 #, x-machine
 msgid "Gaussian blur: off"
 msgstr "Gaußscher Weichzeichner: Aus"
 
-#: main.ts:1278 picture.slint:645
+#: main.ts:1345 picture.slint:1229 picture.slint:1230 picture.slint:1288 picture.slint:1289
 #, x-machine
 msgid "Sharpen"
 msgstr "Schärfen"
 
-#: main.ts:1278
+#: main.ts:1345
 #, x-machine
 msgid "Edge Sharpen"
 msgstr "Kantenschärfung"
 
-#: main.ts:1278 picture.slint:678
+#: main.ts:1345 picture.slint:1256 picture.slint:1257 picture.slint:1319
 #, x-machine
 msgid "Deblock"
 msgstr "Deblocking"
 
-#: main.ts:1278 picture.slint:689
+#: main.ts:1345 picture.slint:1265 picture.slint:1266 picture.slint:1329 picture.slint:1330
 #, x-machine
 msgid "Deband"
 msgstr "Debanding"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1375
 #, x-machine
 msgid "3D Denoise"
 msgstr "3D-Rauschunterdrückung"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1386
 #, x-machine
 msgid "Gradual Denoise"
 msgstr "Graduelle Rauschunterdrückung"
 
-#: main.ts:1278
+#: main.ts:1345 picture.slint:1397
 #, x-machine
 msgid "Temporal Denoise"
 msgstr "Temporale Rauschunterdrückung"
 
-#: main.ts:1291 picture.slint:732
+#: main.ts:1358
 #, x-machine
 msgid "Frame Doubling"
 msgstr "Bildverdopplung"
 
-#: main.ts:1301 picture.slint:750
+#: main.ts:1368
 #, x-machine
 msgid "Motion Interpolation"
 msgstr "Bewegungsinterpolation"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "No Rotation"
 msgstr "Keine Drehung"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "90°"
 msgstr "90°"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "180°"
 msgstr "180°"
 
-#: main.ts:1324
+#: main.ts:1391
 #, x-machine
 msgid "270°"
 msgstr "270°"
 
-#: main.ts:1338
+#: main.ts:1405
 #, x-machine
 msgid "Picture…"
 msgstr "Bild…"
 
-#: main.ts:1359
+#: main.ts:1426
 #, x-machine
 msgid "Picture Panel"
 msgstr "Bild-Bereich"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Brightness -1%"
 msgstr "Helligkeit −1 %"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Contrast -1%"
 msgstr "Kontrast −1 %"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Saturation -1%"
 msgstr "Sättigung −1 %"
 
-#: main.ts:1371
+#: main.ts:1438
 #, x-machine
 msgid "Hue -1%"
 msgstr "Farbton −1 %"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Brightness +1%"
 msgstr "Helligkeit +1 %"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Contrast +1%"
 msgstr "Kontrast +1 %"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Saturation +1%"
 msgstr "Sättigung +1 %"
 
-#: main.ts:1382
+#: main.ts:1449
 #, x-machine
 msgid "Hue +1%"
 msgstr "Farbton +1 %"
 
 #. {} is the player's own message, already in the interface language.
-#: main.ts:1408
+#: main.ts:1475
 #, x-machine
 msgid "{}"
 msgstr "{}"
 
-#: main.ts:1421
+#: main.ts:1488
 #, x-machine
 msgid "GPU Rendering (Restart to Apply)"
 msgstr "GPU-Rendering (Neustart zum Anwenden)"
 
-#: main.ts:1421 picture.slint:1048
+#: main.ts:1488 picture.slint:1767
 #, x-machine
 msgid "GPU Rendering (Experimental)"
 msgstr "GPU-Rendering (experimentell)"
 
-#: main.ts:1431 picture.slint:1040
+#: main.ts:1498 picture.slint:1757
 #, x-machine
 msgid "Switching…"
 msgstr "Wird umgeschaltet…"
 
-#: main.ts:1440
+#: main.ts:1507
 #, x-machine
 msgid "Restart Player to Apply"
 msgstr "Player neu starten, um anzuwenden"
 
-#: main.ts:1485
+#: main.ts:1552
 #, x-machine
 msgid "GPU rendering unavailable: {}"
 msgstr "GPU-Rendering nicht verfügbar: {}"
 
-#: main.ts:1486
+#: main.ts:1553
 #, x-machine
 msgid "Could not save the rendering choice: {}"
 msgstr "Die Rendering-Auswahl konnte nicht gespeichert werden: {}"
 
-#: main.ts:1495
+#: main.ts:1562
 #, x-machine
 msgid "GPU rendering chosen; the next start still uses software rendering: {}"
 msgstr "GPU-Rendering gewählt; der nächste Start verwendet trotzdem Software-Rendering: {}"
 
-#: main.ts:1496
+#: main.ts:1563
 #, x-machine
 msgid "GPU rendering: on"
 msgstr "GPU-Rendering: Ein"
 
-#: main.ts:1496
+#: main.ts:1563
 #, x-machine
 msgid "GPU rendering: off"
 msgstr "GPU-Rendering: Aus"
 
-#: main.ts:1507
+#: main.ts:1574
 #, x-machine
 msgid "Restart Vestra Player now to apply?"
 msgstr "Vestra Player jetzt neu starten, um die Änderung anzuwenden?"
 
-#: main.ts:1508
+#: main.ts:1575
 #, x-machine
 msgid "Vestra Player will draw on the GPU from the restart on. A local file continues where it is. If you choose Later, GPU rendering starts the next time you open Vestra Player."
 msgstr "Nach dem Neustart zeichnet Vestra Player auf der GPU. Eine lokale Datei wird an derselben Stelle fortgesetzt. Mit „Später“ beginnt das GPU-Rendering beim nächsten Start von Vestra Player."
 
-#: main.ts:1508
+#: main.ts:1575
 #, x-machine
 msgid "Vestra Player will use software rendering from the restart on. A local file continues where it is. If you choose Later, software rendering starts the next time you open Vestra Player."
 msgstr "Nach dem Neustart verwendet Vestra Player Software-Rendering. Eine lokale Datei wird an derselben Stelle fortgesetzt. Mit „Später“ beginnt das Software-Rendering beim nächsten Start von Vestra Player."
 
-#: main.ts:1511
+#: main.ts:1578
 #, x-machine
 msgid "Restart Now"
 msgstr "Jetzt neu starten"
 
-#: main.ts:1512
+#: main.ts:1579
 #, x-machine
 msgid "Later"
 msgstr "Später"
 
-#: main.ts:1517
+#: main.ts:1584
 #, x-machine
 msgid "GPU rendering: on (applies at the next start)"
 msgstr "GPU-Rendering: Ein (gilt ab dem nächsten Start)"
 
-#: main.ts:1517
+#: main.ts:1584
 #, x-machine
 msgid "GPU rendering: off (applies at the next start)"
 msgstr "GPU-Rendering: Aus (gilt ab dem nächsten Start)"
 
-#: main.ts:1530
+#: main.ts:1597
 #, x-machine
 msgid "Could not restart the player: {}"
 msgstr "Der Player konnte nicht neu gestartet werden: {}"
@@ -1093,330 +1093,386 @@ msgstr "Farbe"
 msgid "filters"
 msgstr "Filter"
 
-#: picture.slint:380 picture.slint:462 picture.slint:977
+#: picture.slint:403 picture.slint:550 picture.slint:587 picture.slint:1692
 #, x-machine
 msgid "· double-click: Default"
 msgstr "· Doppelklick: Standard"
 
-#: picture.slint:521
+#: picture.slint:466
+#, x-machine
+msgid "· click: on or off"
+msgstr "· Klick: ein / aus"
+
+#: picture.slint:989
+#, x-machine
+msgid "Pick a ratio below"
+msgstr "Unten ein Verhältnis wählen"
+
+#: picture.slint:989
+#, x-machine
+msgid "Screen"
+msgstr "Bildschirm"
+
+#: picture.slint:1083
 #, x-machine
 msgid "No picture in the current source"
 msgstr "Die aktuelle Quelle hat kein Bild"
 
-#: picture.slint:522
+#: picture.slint:1084
 #, x-machine
 msgid "Picture processing failed"
 msgstr "Bildverarbeitung fehlgeschlagen"
 
-#: picture.slint:523
+#: picture.slint:1085
 #, x-machine
 msgid "Display unavailable"
 msgstr "Anzeige nicht verfügbar"
 
-#: picture.slint:525
+#: picture.slint:1087
 #, x-machine
 msgid "Render options unavailable"
 msgstr "Renderoptionen nicht verfügbar"
 
-#: picture.slint:526
+#: picture.slint:1088
 #, x-machine
 msgid "Render settings failed"
 msgstr "Rendereinstellungen fehlgeschlagen"
 
-#: picture.slint:529
+#: picture.slint:1091
 #, x-machine
 msgid "Another plugin controls the display"
 msgstr "Ein anderes Plugin steuert die Anzeige"
 
-#: picture.slint:530
+#: picture.slint:1092
 #, x-machine
 msgid "Another plugin controls the render options"
 msgstr "Ein anderes Plugin steuert die Renderoptionen"
 
-#: picture.slint:566 picture.slint:588
-#, x-machine
-msgid "Colour"
-msgstr "Farbe"
-
-#: picture.slint:567 picture.slint:643
-#, x-machine
-msgid "Effects"
-msgstr "Effekte"
-
-#: picture.slint:568 picture.slint:761
-#, x-machine
-msgid "Geometry"
-msgstr "Geometrie"
-
-#: picture.slint:569 picture.slint:903
-#, x-machine
-msgid "Advanced"
-msgstr "Erweitert"
-
-#: picture.slint:590
-#, x-machine
-msgid "Brightness"
-msgstr "Helligkeit"
-
-#: picture.slint:599
-#, x-machine
-msgid "Contrast"
-msgstr "Kontrast"
-
-#: picture.slint:608
-#, x-machine
-msgid "Saturation"
-msgstr "Sättigung"
-
-#: picture.slint:617
-#, x-machine
-msgid "Hue"
-msgstr "Farbton"
-
-#: picture.slint:626
-#, x-machine
-msgid "Gamma"
-msgstr "Gamma"
-
-#: picture.slint:636
-#, x-machine
-msgid "Original"
-msgstr "Original"
-
-#: picture.slint:637
-#, x-machine
-msgid "Vivid"
-msgstr "Lebendig"
-
-#: picture.slint:638
-#, x-machine
-msgid "Cinema"
-msgstr "Kino"
-
-#: picture.slint:639
-#, x-machine
-msgid "Soft"
-msgstr "Weich"
-
-#: picture.slint:655
-#, x-machine
-msgid "Edges"
-msgstr "Kanten"
-
-#: picture.slint:656
-#, x-machine
-msgid "Wide-radius sharpening that mainly strengthens outlines"
-msgstr "Schärfung mit großem Radius, die vor allem Konturen verstärkt"
-
-#: picture.slint:666
-#, x-machine
-msgid "Blur"
-msgstr "Weichzeichnen"
-
-#: picture.slint:679
-#, x-machine
-msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
-msgstr "Unter 50 schwach, ab 50 stark; am deutlichsten bei MPEG-2/MPEG-4 mit niedriger Bitrate"
-
-#: picture.slint:700
-#, x-machine
-msgid "Denoise"
-msgstr "Entrauschen"
-
-#: picture.slint:715
+#: picture.slint:1105 picture.slint:1278 picture.slint:1374
 #, x-machine
 msgid "3D"
 msgstr "3D"
 
-#: picture.slint:716
+#: picture.slint:1107 picture.slint:1385
 #, x-machine
 msgid "Gradual"
 msgstr "Graduell"
 
-#: picture.slint:717
+#: picture.slint:1109 picture.slint:1278 picture.slint:1396
 #, x-machine
 msgid "Temporal"
 msgstr "Temporal"
 
-#: picture.slint:726
+#: picture.slint:1113
+#, x-machine
+msgid "{} with bars"
+msgstr "{} mit Balken"
+
+#: picture.slint:1144 picture.slint:1166
+#, x-machine
+msgid "Colour"
+msgstr "Farbe"
+
+#: picture.slint:1145 picture.slint:1223
+#, x-machine
+msgid "Effects"
+msgstr "Effekte"
+
+#: picture.slint:1146 picture.slint:1458
+#, x-machine
+msgid "Geometry"
+msgstr "Geometrie"
+
+#: picture.slint:1147 picture.slint:1618
+#, x-machine
+msgid "Advanced"
+msgstr "Erweitert"
+
+#: picture.slint:1168
+#, x-machine
+msgid "Brightness"
+msgstr "Helligkeit"
+
+#: picture.slint:1177
+#, x-machine
+msgid "Contrast"
+msgstr "Kontrast"
+
+#: picture.slint:1186
+#, x-machine
+msgid "Saturation"
+msgstr "Sättigung"
+
+#: picture.slint:1195
+#, x-machine
+msgid "Hue"
+msgstr "Farbton"
+
+#: picture.slint:1204
+#, x-machine
+msgid "Gamma"
+msgstr "Gamma"
+
+#: picture.slint:1214
+#, x-machine
+msgid "Original"
+msgstr "Original"
+
+#: picture.slint:1215
+#, x-machine
+msgid "Vivid"
+msgstr "Lebendig"
+
+#: picture.slint:1216
+#, x-machine
+msgid "Cinema"
+msgstr "Kino"
+
+#: picture.slint:1217
+#, x-machine
+msgid "Soft"
+msgstr "Weich"
+
+#: picture.slint:1238 picture.slint:1298
+#, x-machine
+msgid "Edges"
+msgstr "Kanten"
+
+#: picture.slint:1239 picture.slint:1299
+#, x-machine
+msgid "Wide-radius sharpening that mainly strengthens outlines"
+msgstr "Schärfung mit großem Radius, die vor allem Konturen verstärkt"
+
+#: picture.slint:1247 picture.slint:1308
+#, x-machine
+msgid "Blur"
+msgstr "Weichzeichnen"
+
+#: picture.slint:1276 picture.slint:1358
+#, x-machine
+msgid "Denoise"
+msgstr "Entrauschen"
+
+#: picture.slint:1277
+#, x-machine
+msgid "Denoise: turns the denoisers on or off"
+msgstr "Entrauschen: schaltet die Entrauscher ein oder aus"
+
+#: picture.slint:1320
+#, x-machine
+msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
+msgstr "Unter 50 schwach, ab 50 stark; am deutlichsten bei MPEG-2/MPEG-4 mit niedriger Bitrate"
+
+#: picture.slint:1410
+#, x-machine
+msgid "Frames"
+msgstr "Bilder"
+
+#: picture.slint:1416
+#, x-machine
+msgid "Neither frame doubling nor motion interpolation"
+msgstr "Weder Bildverdopplung noch Bewegungsinterpolation"
+
+#: picture.slint:1427
 #, x-machine
 msgid "Rate already high enough"
 msgstr "Rate schon hoch genug"
 
-#: picture.slint:727
+#: picture.slint:1428
 #, x-machine
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr "Verdoppelt die Bildrate (bis 60); jedes Zwischenbild wird aus seinen Nachbarn gemischt"
 
-#: picture.slint:745
+#: picture.slint:1433
+#, x-machine
+msgid "Doubling"
+msgstr "Verdoppeln"
+
+#: picture.slint:1440
 #, x-machine
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr "GPU-Interpolation auf die Bildwiederholrate des Bildschirms; schließt Bildverdopplung aus"
 
-#: picture.slint:763
+#: picture.slint:1445
 #, x-machine
-msgid "Fit"
-msgstr "Anpassen"
+msgid "Interpolate"
+msgstr "Interpolieren"
 
-#: picture.slint:768
+#: picture.slint:1464
 #, x-machine
-msgid "Keep"
-msgstr "Beibehalten"
+msgid "Rotate Left"
+msgstr "Nach links drehen"
 
-#: picture.slint:769 picture.slint:804
+#: picture.slint:1469
 #, x-machine
-msgid "Stretch"
-msgstr "Strecken"
+msgid "Rotate Right"
+msgstr "Nach rechts drehen"
 
-#: picture.slint:770
+#: picture.slint:1499
 #, x-machine
-msgid "Fill"
-msgstr "Füllen"
+msgid "Leave Crop Mode"
+msgstr "Zuschneidemodus verlassen"
 
-#: picture.slint:776
+#: picture.slint:1499
 #, x-machine
-msgid "Aspect ratio"
-msgstr "Bildformat"
+msgid "Crop: pick a ratio, then drag the box"
+msgstr "Zuschneiden: Verhältnis wählen, dann den Rahmen ziehen"
 
-#: picture.slint:798 picture.slint:804
-#, x-machine
-msgid "Crop"
-msgstr "Schneiden"
-
-#: picture.slint:830
-#, x-machine
-msgid "Reset Crop Position"
-msgstr "Zuschnittposition zurücksetzen"
-
-#: picture.slint:833
-#, x-machine
-msgid "Rotate"
-msgstr "Drehen"
-
-#: picture.slint:846
-#, x-machine
-msgid "Flip"
-msgstr "Spiegeln"
-
-#: picture.slint:864
-#, x-machine
-msgid "Zoom"
-msgstr "Zoom"
-
-#: picture.slint:868
-#, x-machine
-msgid "{}%"
-msgstr "{} %"
-
-#: picture.slint:878
-#, x-machine
-msgid "Pan"
-msgstr "Verschieben"
-
-#. {0} and {1} are the picture's offset in percent, across and down.
-#: picture.slint:880
-#, x-machine
-msgid "Pan ({0}%, {1}%)"
-msgstr "Verschiebung ({0} %, {1} %)"
-
-#: picture.slint:882
-#, x-machine
-msgid "· resets zoom and pan"
-msgstr "· setzt Zoom und Verschiebung zurück"
-
-#: picture.slint:888
+#: picture.slint:1509
 #, x-machine
 msgid "Reset Framing"
 msgstr "Bildausschnitt zurücksetzen"
 
-#: picture.slint:947
+#: picture.slint:1517
+#, x-machine
+msgid "Zoom {}%"
+msgstr "Zoom {} %"
+
+#. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
+#: picture.slint:1522
+#, x-machine
+msgid "Offset {0}, {1}"
+msgstr "Versatz {0}, {1}"
+
+#: picture.slint:1524
+#, x-machine
+msgid "Crop {}"
+msgstr "Zuschnitt {}"
+
+#. the crop box's position in percent, across and down (50 = centred).
+#: picture.slint:1529
+#, x-machine
+msgid "at {0}%, {1}%"
+msgstr "bei {0} %, {1} %"
+
+#: picture.slint:1540
+#, x-machine
+msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
+msgstr "Auf ein Verhältnis zuschneiden; den Rahmen im Editor ziehen, um den behaltenen Teil zu wählen"
+
+#: picture.slint:1558
+#, x-machine
+msgid "Stretch to the ratio: add bars instead of cutting the picture"
+msgstr "Auf das Verhältnis strecken: Balken hinzufügen statt das Bild zu beschneiden"
+
+#: picture.slint:1562
+#, x-machine
+msgid "Add bars instead of cutting"
+msgstr "Balken statt Beschnitt"
+
+#: picture.slint:1573
+#, x-machine
+msgid "Aspect ratio"
+msgstr "Bildformat"
+
+#: picture.slint:1595
+#, x-machine
+msgid "Fit"
+msgstr "Anpassen"
+
+#: picture.slint:1600
+#, x-machine
+msgid "Keep"
+msgstr "Beibehalten"
+
+#: picture.slint:1601
+#, x-machine
+msgid "Stretch"
+msgstr "Strecken"
+
+#: picture.slint:1602
+#, x-machine
+msgid "Fill"
+msgstr "Füllen"
+
+#: picture.slint:1662
 #, x-machine
 msgid "Double rate"
 msgstr "2× Rate"
 
-#: picture.slint:955
+#: picture.slint:1670
 #, x-machine
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:957
+#: picture.slint:1672
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr "Tone-Mapping von HDR-Quellen (PQ / HLG) auf SDR-Bildschirmen · keine HDR-Quelle"
 
-#: picture.slint:958
+#: picture.slint:1673
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr "Tone-Mapping von HDR-Quellen (PQ / HLG) auf SDR-Bildschirmen"
 
-#: picture.slint:976
+#: picture.slint:1691
 #, x-machine
 msgid "Target brightness"
 msgstr "Zielhelligkeit"
 
-#: picture.slint:991
+#: picture.slint:1708
 #, x-machine
 msgid "{} nits"
 msgstr "{} Nits"
 
-#: picture.slint:1009
+#: picture.slint:1726
 #, x-machine
 msgid "Peak detection"
 msgstr "Spitzenerkennung"
 
-#: picture.slint:1018
+#: picture.slint:1735
 #, x-machine
 msgid "Shaders"
 msgstr "Shader"
 
-#: picture.slint:1019
+#: picture.slint:1736
 #, x-machine
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr "mpv-Benutzer-Shader (.glsl), in Listenreihenfolge ausgeführt"
 
-#: picture.slint:1023
+#: picture.slint:1740
 #, x-machine
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] "{n} Shader"
 msgstr[1] "{n} Shader"
 
-#: picture.slint:1030
+#: picture.slint:1747
 #, x-machine
 msgid "List…"
 msgstr "Liste…"
 
-#: picture.slint:1042
+#: picture.slint:1759
 #, x-machine
 msgid "Restart Vestra Player to apply"
 msgstr "Vestra Player neu starten, um es anzuwenden"
 
-#: picture.slint:1043
+#: picture.slint:1760
 #, x-machine
 msgid "Draw the video on the GPU from the next start"
 msgstr "Ab dem nächsten Start das Video auf der GPU zeichnen"
 
-#: picture.slint:1058
+#: picture.slint:1777
 #, x-machine
 msgid "Restart"
 msgstr "Neu starten"
 
-#: picture.slint:1093
+#: picture.slint:1814
 #, x-machine
 msgid "Retry"
 msgstr "Wiederholen"
 
-#: picture.slint:1109 picture.slint:1113
+#: picture.slint:1830 picture.slint:1834
 #, x-machine
 msgid "Enable picture effects"
 msgstr "Bildeffekte aktivieren"
 
-#: picture.slint:1122
+#: picture.slint:1843
 #, x-machine
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr "Farbe, Effekte und Geometrie auf Standard; die erweiterten Einstellungen bleiben"
 
-#: picture.slint:1127
+#: picture.slint:1848
 #, x-machine
 msgid "Reset All"
 msgstr "Alles zurücksetzen"
