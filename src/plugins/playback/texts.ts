@@ -7,13 +7,12 @@ import type { CommandState, TemplateArgs } from "@vestra-player/sdk";
  * translates them with `locales/<lang>.po`.
  */
 
-/** Menu path segments (`commands.add` path). `@open`, `@playback` are the player's menus. */
+/** The player's menus a path starts in. */
+export type Anchor = "@open" | "@playback";
+
+/** Menu path segments and the titles of commands outside the menu (`commands.add` `path` and `title`). */
 export type MenuText =
-  | "@open"
-  | "@playback"
-  // The player's own submenus of Playback (doc/architecture/i18n.md §5).
-  | "Seek"
-  | "Speed"
+  | "Playback…"
   | "Open File…"
   | "Open URL…"
   | "Reopen Current/Last File"
@@ -83,15 +82,16 @@ export type OsdText =
 export type Osd = (text: OsdText, args?: TemplateArgs) => void;
 
 /**
- * A failure the plugin itself words. `kind` picks the sentence (the tool
- * windows show it from their Slint file); `detail` is the player's message
+ * A failure the plugin itself words. `kind` picks the sentence, shown on the
+ * video (the Playback panel marks the refused field); `detail` is the player's message
  * for `source`, shown as it is.
  */
-export type FailureKind = "source" | "time-range" | "rate-range";
+export type FailureKind = "source" | "time-range" | "rate-range" | "step-range";
 const FAILURES = {
   source: "Source operation failed: {}",
   "time-range": "Enter a time within the source's duration as HH:MM:SS.mmm",
   "rate-range": "Speed must be between 0.25× and 4×",
+  "step-range": "Range 0.1–3600 s, at most one decimal place",
 } as const;
 type FailureText = (typeof FAILURES)[FailureKind];
 

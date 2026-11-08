@@ -117,3 +117,14 @@ export class SettingsStore {
     this.#store.save(next);
   }
 }
+
+/** `2.5`, `10`: no trailing zeros. */
+export const stepText = (seconds: number) => String(Math.round(seconds * 10) / 10);
+
+/** A typed seek step as seconds, or `null` when empty, not a number, out of range or finer than 0.1. */
+export function parseStep(text: string): number | null {
+  const trimmed = text.trim();
+  if (!/^\d+(\.\d)?$/.test(trimmed)) return null;
+  const value = Number(trimmed);
+  return validStep(value) ? value : null;
+}

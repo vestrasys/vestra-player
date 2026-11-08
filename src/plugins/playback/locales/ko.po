@@ -6,157 +6,162 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: commands.ts:69
+#: commands.ts:87
 #, x-machine
 msgid "Back {} s"
 msgstr "{}초 뒤로"
 
-#: commands.ts:69
+#: commands.ts:87
 #, x-machine
 msgid "Forward {} s"
 msgstr "{}초 앞으로"
 
-#: commands.ts:246 commands.ts:247
+#: commands.ts:272
 #, x-machine
-msgid "Seek"
-msgstr "탐색"
+msgid "Playback…"
+msgstr "재생…"
 
-#: commands.ts:246 commands.ts:247
-#, x-machine
-msgid "Speed"
-msgstr "속도"
-
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Open File…"
 msgstr "파일 열기…"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Open URL…"
 msgstr "URL 열기…"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Reopen Current/Last File"
 msgstr "현재/마지막 파일 다시 열기"
 
-#: commands.ts:246 commands.ts:247
+#: commands.ts:272 commands.ts:273
 #, x-machine
 msgid "Copy to Clipboard"
 msgstr "클립보드에 복사"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "File Name"
 msgstr "파일 이름"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Folder Path"
 msgstr "폴더 경로"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Full Path"
 msgstr "전체 경로"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:678
 #, x-machine
 msgid "Previous Keyframe"
 msgstr "이전 키프레임"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:685
 #, x-machine
 msgid "Next Keyframe"
 msgstr "다음 키프레임"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Jump to Time…"
 msgstr "시간으로 이동…"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:630 ui/panel.slint:633 ui/panel.slint:639
 #, x-machine
 msgid "Jump to Start"
 msgstr "처음으로 이동"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Seek Steps…"
 msgstr "탐색 간격…"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:526 ui/panel.slint:529
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:555 ui/panel.slint:558
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:564 ui/panel.slint:567
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Custom…"
 msgstr "사용자 지정…"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Disable Screen Saver While Playing"
 msgstr "재생 중 화면 보호기 끄기"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Show Time on Seek Bar Hover"
 msgstr "탐색 막대에 마우스를 올리면 시간 표시"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "탐색 막대에 마우스를 올리면 썸네일 표시"
 
-#: commands.ts:247
+#: commands.ts:273
 #, x-machine
 msgid "File"
 msgstr "파일"
 
-#: commands.ts:247
+#: commands.ts:273
+#, x-machine
+msgid "Seek"
+msgstr "탐색"
+
+#: commands.ts:273 ui/panel.slint:462 ui/panel.slint:480 ui/panel.slint:483
+#, x-machine
+msgid "Speed"
+msgstr "속도"
+
+#: commands.ts:273 panel.ts:47
 #, x-machine
 msgid "Playback"
 msgstr "재생"
 
-#: commands.ts:256
+#: commands.ts:283 ui/panel.slint:437
 #, x-machine
 msgid "Not supported by the current source"
 msgstr "현재 소스에서는 지원되지 않습니다"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "No file to reopen"
 msgstr "다시 열 파일이 없습니다"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "No open file"
 msgstr "열린 파일이 없습니다"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "A network source has no file name"
 msgstr "네트워크 소스에는 파일 이름이 없습니다"
 
-#: commands.ts:256
+#: commands.ts:283 ui/panel.slint:455
 #, x-machine
 msgid "No video"
 msgstr "비디오가 없습니다"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "Needs ffmpeg"
 msgstr "ffmpeg 필요"
@@ -171,130 +176,135 @@ msgstr "미디어 열기"
 msgid "Open Media (replaces the current source)"
 msgstr "미디어 열기 (현재 소스를 대체함)"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Seek: {} / {}"
 msgstr "탐색: {} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Back {} s: {} / {}"
 msgstr "{}초 뒤로: {} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Forward {} s: {} / {}"
 msgstr "{}초 앞으로: {} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Jumped to the start"
 msgstr "처음으로 이동했습니다"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Previous keyframe: {} / {}"
 msgstr "이전 키프레임: {} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Next keyframe: {} / {}"
 msgstr "다음 키프레임: {} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Already at the last keyframe"
 msgstr "이미 마지막 키프레임입니다"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Speed: {}x"
 msgstr "재생 속도: {}x"
 
-#: main.ts:30 ui/bar.slint:91
+#: main.ts:29 ui/bar.slint:95
 #, x-machine
 msgid "Volume: {}%"
 msgstr "볼륨: {}%"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Open failed"
 msgstr "열기 실패"
 
-#: main.ts:30 ui/open-url.slint:66
+#: main.ts:29 ui/open-url.slint:66
 #, x-machine
 msgid "Open failed: {}"
 msgstr "열기 실패: {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Reopened: {}"
 msgstr "다시 열었습니다: {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Reopened the last file: {}"
 msgstr "마지막 파일을 다시 열었습니다: {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Copied: {}"
 msgstr "복사했습니다: {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Copy failed: {}"
 msgstr "복사 실패: {}"
 
-#: main.ts:30 ui/open-url.slint:65
+#: main.ts:29 ui/open-url.slint:65
 #, x-machine
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr "첫 줄만 엽니다. 여러 링크를 열려면 재생목록에 추가하세요"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Disable screen saver while playing: On"
 msgstr "재생 중 화면 보호기 끄기: 켬"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Disable screen saver while playing: Off"
 msgstr "재생 중 화면 보호기 끄기: 끔"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show time on seek bar hover: On"
 msgstr "탐색 막대 시간 표시: 켬"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show time on seek bar hover: Off"
 msgstr "탐색 막대 시간 표시: 끔"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show thumbnail on seek bar hover: On"
 msgstr "탐색 막대 썸네일 표시: 켬"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr "탐색 막대 썸네일 표시: 끔"
 
-#: main.ts:30 ui/prompt.slint:17
+#: main.ts:29
 #, x-machine
 msgid "Source operation failed: {}"
 msgstr "소스 작업 실패: {}"
 
-#: main.ts:30 ui/prompt.slint:18
+#: main.ts:29 ui/panel.slint:593
 #, x-machine
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "소스 길이 안의 시간을 HH:MM:SS.mmm 형식으로 입력하세요"
 
-#: main.ts:30 ui/prompt.slint:19
+#: main.ts:29 ui/panel.slint:499
 #, x-machine
 msgid "Speed must be between 0.25× and 4×"
 msgstr "속도는 0.25×에서 4× 사이여야 합니다"
+
+#: main.ts:29 ui/panel.slint:416
+#, x-machine
+msgid "Range 0.1–3600 s, at most one decimal place"
+msgstr "범위 0.1–3600초, 소수점 이하 한 자리까지"
 
 #: manifest.json
 #, x-machine
@@ -308,8 +318,12 @@ msgstr "하단 컨트롤 바, 파일 및 링크 열기, 탐색과 속도"
 
 #: manifest.json
 #, x-machine
-msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
-msgstr "기본 창 아래쪽의 컨트롤 바(탐색 막대, 재생 버튼, 볼륨), 파일 열기, 링크 열기, 마지막 파일 다시 열기, 여러 단계의 탐색 간격, 키프레임 탐색, 지정한 시간으로 이동, 고정 및 사용자 지정 재생 속도, 탐색 막대에 마우스를 올리면 시간 또는 썸네일 표시, 재생 중 화면 보호기 끄기를 제공합니다."
+msgid ""
+"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\n"
+"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps."
+msgstr ""
+"기본 창 아래쪽의 컨트롤 바(탐색 막대, 재생 버튼, 볼륨), 파일 열기, 링크 열기, 마지막 파일 다시 열기, 여러 단계의 탐색 간격, 키프레임 탐색, 지정한 시간으로 이동, 고정 및 사용자 지정 재생 속도, 탐색 막대에 마우스를 올리면 시간 또는 썸네일 표시, 재생 중 화면 보호기 끄기를 제공합니다.\n"
+"오른쪽 클릭 메뉴의 재생…(Alt+4)으로 동영상 옆에 패널을 엽니다: 속도, 이동, 프레임·키프레임 단위 이동, 탐색 간격."
 
 #: manifest.json
 #, x-machine
@@ -332,72 +346,72 @@ msgid "speed"
 msgstr "속도"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:80
+#: ui/bar.slint:84
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 #, x-machine
 msgid "Pause"
 msgstr "일시 정지"
 
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 #, x-machine
 msgid "Play"
 msgstr "재생"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:87
 #, x-machine
 msgid "Stop"
 msgstr "정지"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:89
 #, x-machine
 msgid "Previous"
 msgstr "이전"
 
-#: ui/bar.slint:86
+#: ui/bar.slint:90
 #, x-machine
 msgid "Next"
 msgstr "다음"
 
-#: ui/bar.slint:87
+#: ui/bar.slint:91
 #, x-machine
 msgid "Open file"
 msgstr "파일 열기"
 
-#: ui/bar.slint:88
+#: ui/bar.slint:92
 #, x-machine
 msgid "Leave fullscreen"
 msgstr "전체 화면 종료"
 
-#: ui/bar.slint:88
+#: ui/bar.slint:92
 #, x-machine
 msgid "Fullscreen"
 msgstr "전체 화면"
 
-#: ui/bar.slint:89
+#: ui/bar.slint:93
 #, x-machine
 msgid "Click to show the elapsed time"
 msgstr "클릭하면 경과 시간 표시"
 
-#: ui/bar.slint:89
+#: ui/bar.slint:93
 #, x-machine
 msgid "Click to show the remaining time"
 msgstr "클릭하면 남은 시간 표시"
 
-#: ui/bar.slint:90
+#: ui/bar.slint:94
 #, x-machine
 msgid "Unmute"
 msgstr "음소거 해제"
 
-#: ui/bar.slint:90 ui/bar.slint:420
+#: ui/bar.slint:94 ui/bar.slint:468
 #, x-machine
 msgid "Mute"
 msgstr "음소거"
 
-#: ui/bar.slint:420
+#: ui/bar.slint:468
 #, x-machine
 msgctxt "accessibility"
 msgid "Unmute"
@@ -438,98 +452,195 @@ msgstr "클립보드의 주소를 기본으로 사용"
 msgid "Not a valid link"
 msgstr "올바른 링크가 아닙니다"
 
-#: ui/prompt.slint:16
+#. {} is a number of seconds ("30").
+#: ui/panel.slint:410
 #, x-machine
-msgid "The source changed; open this window again"
-msgstr "소스가 바뀌었습니다. 이 창을 다시 여세요"
+msgid "{} s"
+msgstr "{}초"
 
-#: ui/prompt.slint:21
+#: ui/panel.slint:416
 #, x-machine
-msgid "Custom Speed"
-msgstr "사용자 지정 속도"
+msgid "Seek step"
+msgstr "탐색 간격"
 
-#: ui/prompt.slint:21
+#: ui/panel.slint:417
+#, x-machine
+msgid "click: type a value · double-click: Default"
+msgstr "클릭: 값 입력 · 더블클릭: 기본값"
+
+#: ui/panel.slint:462 ui/panel.slint:576
+#, x-machine
+msgid "Go to"
+msgstr "이동"
+
+#: ui/panel.slint:462 ui/panel.slint:628
+#, x-machine
+msgid "Start"
+msgstr "처음"
+
+#: ui/panel.slint:462 ui/panel.slint:648 ui/panel.slint:665
+#, x-machine
+msgid "Frame"
+msgstr "프레임"
+
+#: ui/panel.slint:462 ui/panel.slint:674 ui/panel.slint:691
+#, x-machine
+msgid "Keyframe"
+msgstr "키프레임"
+
+#: ui/panel.slint:487
+#, x-machine
+msgid "Slower 0.1"
+msgstr "0.1 느리게"
+
+#. {} is the playback speed ("1.25"); the × reads "times".
+#: ui/panel.slint:493
+#, x-machine
+msgid "{}×"
+msgstr "{}×"
+
+#: ui/panel.slint:499 ui/panel.slint:513
+#, x-machine
+msgid "Playback speed"
+msgstr "재생 속도"
+
+#: ui/panel.slint:500
+#, x-machine
+msgid "click: type a value"
+msgstr "클릭: 값 입력"
+
+#: ui/panel.slint:507
+#, x-machine
+msgid "Faster 0.1"
+msgstr "0.1 빠르게"
+
+#: ui/panel.slint:535
+#, x-machine
+msgid "1×"
+msgstr "1×"
+
+#: ui/panel.slint:539
+#, x-machine
+msgid "Normal"
+msgstr "보통"
+
+#: ui/panel.slint:546 ui/panel.slint:549
+#, x-machine
+msgid "1.25×"
+msgstr "1.25×"
+
+#: ui/panel.slint:573
+#, x-machine
+msgid "Jump"
+msgstr "이동"
+
+#: ui/panel.slint:594 ui/panel.slint:618 ui/panel.slint:622
 #, x-machine
 msgid "Jump to Time"
 msgstr "시간으로 이동"
 
-#: ui/prompt.slint:44
+#. the format of the time to jump to (hours, minutes, seconds).
+#: ui/panel.slint:608
 #, x-machine
-msgid "Speed (0.25–4×)"
-msgstr "속도 (0.25–4×)"
+msgid "hh:mm:ss"
+msgstr "시:분:초"
 
-#: ui/prompt.slint:44
-#, x-machine
-msgid "Time (h:mm:ss.ms)"
-msgstr "시간 (h:mm:ss.ms)"
-
-#: ui/prompt.slint:60 ui/time-jump.slint:165
-#, x-machine
-msgid "OK"
-msgstr "확인"
-
-#: ui/prompt.slint:60
+#: ui/panel.slint:616
 #, x-machine
 msgid "Go"
 msgstr "이동"
 
-#. the unit after a number of seconds.
-#: ui/time-jump.slint:36
+#: ui/panel.slint:645
 #, x-machine
-msgid "s"
-msgstr "초"
+msgid "Step"
+msgstr "단계 이동"
 
-#: ui/time-jump.slint:42
+#: ui/panel.slint:652
 #, x-machine
-msgid "Default"
-msgstr "기본값"
+msgid "Previous Frame"
+msgstr "이전 프레임"
 
-#: ui/time-jump.slint:71
+#: ui/panel.slint:659
 #, x-machine
-msgid "Seek Steps"
+msgid "Next Frame"
+msgstr "다음 프레임"
+
+#: ui/panel.slint:700
+#, x-machine
+msgid "Seek steps"
 msgstr "탐색 간격"
 
-#: ui/time-jump.slint:82 ui/time-jump.slint:110
-#, x-machine
-msgid "Left/Right arrow keys:"
-msgstr "왼쪽/오른쪽 화살표 키:"
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:118
-#, x-machine
-msgid "Ctrl + Left/Right arrow keys:"
-msgstr "Ctrl + 왼쪽/오른쪽 화살표 키:"
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:126
-#, x-machine
-msgid "Shift + Left/Right arrow keys:"
-msgstr "Shift + 왼쪽/오른쪽 화살표 키:"
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:134
-#, x-machine
-msgid "Ctrl + Alt + Left/Right arrow keys:"
-msgstr "Ctrl + Alt + 왼쪽/오른쪽 화살표 키:"
-
-#: ui/time-jump.slint:103
-#, x-machine
-msgid "Set how far each seek key moves during playback."
-msgstr "재생 중 각 탐색 키로 이동할 시간을 설정합니다."
-
-#: ui/time-jump.slint:142
+#: ui/panel.slint:734
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "키프레임으로만 이동"
 
-#: ui/time-jump.slint:147
+#: ui/panel.slint:735
 #, x-machine
-msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
-msgstr "방향키와 탐색 바에 적용됩니다. 바를 클릭하거나 드래그하면 포인터 위치 또는 그 이전의 키프레임으로 이동합니다."
+msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
+msgstr "탐색 간격과 탐색 막대가 키프레임으로 이동합니다: 어떤 파일에서도 빠르지만 최대 키프레임 간격 하나만큼 어긋납니다"
 
-#: ui/time-jump.slint:154
 #, x-machine
-msgid "Range 0.1–3600 s, at most one decimal place"
-msgstr "범위 0.1–3600초, 소수점 이하 한 자리까지"
+#~ msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
+#~ msgstr "기본 창 아래쪽의 컨트롤 바(탐색 막대, 재생 버튼, 볼륨), 파일 열기, 링크 열기, 마지막 파일 다시 열기, 여러 단계의 탐색 간격, 키프레임 탐색, 지정한 시간으로 이동, 고정 및 사용자 지정 재생 속도, 탐색 막대에 마우스를 올리면 시간 또는 썸네일 표시, 재생 중 화면 보호기 끄기를 제공합니다."
 
-#: ui/time-jump.slint:169
 #, x-machine
-msgid "Cancel"
-msgstr "취소"
+#~ msgid "The source changed; open this window again"
+#~ msgstr "소스가 바뀌었습니다. 이 창을 다시 여세요"
+
+#, x-machine
+#~ msgid "Custom Speed"
+#~ msgstr "사용자 지정 속도"
+
+#, x-machine
+#~ msgid "Speed (0.25–4×)"
+#~ msgstr "속도 (0.25–4×)"
+
+#, x-machine
+#~ msgid "Time (h:mm:ss.ms)"
+#~ msgstr "시간 (h:mm:ss.ms)"
+
+#, x-machine
+#~ msgid "OK"
+#~ msgstr "확인"
+
+#. the unit after a number of seconds.
+#, x-machine
+#~ msgid "s"
+#~ msgstr "초"
+
+#, x-machine
+#~ msgid "Default"
+#~ msgstr "기본값"
+
+#, x-machine
+#~ msgid "Seek Steps"
+#~ msgstr "탐색 간격"
+
+#, x-machine
+#~ msgid "Left/Right arrow keys:"
+#~ msgstr "왼쪽/오른쪽 화살표 키:"
+
+#, x-machine
+#~ msgid "Ctrl + Left/Right arrow keys:"
+#~ msgstr "Ctrl + 왼쪽/오른쪽 화살표 키:"
+
+#, x-machine
+#~ msgid "Shift + Left/Right arrow keys:"
+#~ msgstr "Shift + 왼쪽/오른쪽 화살표 키:"
+
+#, x-machine
+#~ msgid "Ctrl + Alt + Left/Right arrow keys:"
+#~ msgstr "Ctrl + Alt + 왼쪽/오른쪽 화살표 키:"
+
+#, x-machine
+#~ msgid "Set how far each seek key moves during playback."
+#~ msgstr "재생 중 각 탐색 키로 이동할 시간을 설정합니다."
+
+#, x-machine
+#~ msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
+#~ msgstr "방향키와 탐색 바에 적용됩니다. 바를 클릭하거나 드래그하면 포인터 위치 또는 그 이전의 키프레임으로 이동합니다."
+
+#, x-machine
+#~ msgid "Cancel"
+#~ msgstr "취소"

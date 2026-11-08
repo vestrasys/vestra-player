@@ -409,7 +409,7 @@ test("0.2.2 exact mode: ffprobe first, then the parts two at a time; cells are t
     host.stats = { ...host.stats, video: SMALL_VIDEO };
     fakeExact(host, [0, 10], { short: { ss: "10.000", by: 1 } });
     const { stop } = await start(host, data);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     await until(() => partRuns(host).length === 2);
     assert.deepEqual(host.tools.calls.slice(0, 3).map((c) => c.tool), ["ffprobe", "ffmpeg", "ffmpeg"]);
@@ -462,7 +462,7 @@ test("0.2.2 exact mode: a part ended for a drag is made again whole; a pass that
       return parts(args);
     });
     const { stop } = await start(host);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     await until(() => partRuns(host).length === WORKERS);
     // Coarse to fine over the parts: the first and the third (at 20 s) run first.
@@ -508,7 +508,7 @@ test("0.2.2 exact mode: a part ended for a drag is made again whole; a pass that
     again.stats = { ...again.stats, video: SMALL_VIDEO };
     fakeExact(again, [0, 10], { fail: true });
     const second = await start(again, data);
-    const bar2 = again.mounted();
+    const bar2 = again.mounted("bottom");
     await generating(again, time);
     await until(async () => {
       await time.advance(50);
@@ -541,10 +541,10 @@ test("0.2.2 exact mode: a part ended for a drag is made again whole; a pass that
     fakeExact(third, [0, 10]); // the pass would work now, but it is not tried
     const last = await start(third, data);
     await generating(third, time);
-    third.mounted().emit("pointing", true);
+    third.mounted("bottom").emit("pointing", true);
     await until(async () => {
       await time.advance(500);
-      return (third.mounted().props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9";
+      return (third.mounted("bottom").props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9";
     });
     assert.deepEqual(third.tools.calls.filter((c) => c.tool === "ffprobe").length, 0, "no keyframe list, no exact run");
     assert.equal(partRuns(third).length, 0);
@@ -571,7 +571,7 @@ test("0.2.2 exact mode: a part slower than twice its estimate ends the pass; the
       return parts(args);
     });
     const { stop } = await start(host);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     await until(async () => {
       await time.advance(50);
@@ -985,7 +985,7 @@ test("I07 dragging the seek line pauses generation; it goes on a moment after th
     const releases: (() => void)[] = [];
     fakeFfmpeg(host, () => new Promise<void>((resolve) => releases.push(resolve)));
     const { stop } = await start(host);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     await until(() => cellRuns(host).length === WORKERS);
     bar.emit("dragging", true);
@@ -1027,7 +1027,7 @@ test("I07 the bar gets the sheets and the cell map; the next session reuses them
     playing(host, media.file);
     fakeFfmpeg(host);
     const first = await start(host, data);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     assert.equal(bar.props["hover-thumbnail"], true, "on by default for a local video");
     assert.equal(bar.props["preview-count"], 0);
     await generating(host, time);
@@ -1060,8 +1060,8 @@ test("I07 the bar gets the sheets and the cell map; the next session reuses them
     fakeFfmpeg(again);
     const second = await start(again, data);
     await generating(again, time);
-    again.mounted().emit("pointing", true);
-    await until(() => (again.mounted().props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9");
+    again.mounted("bottom").emit("pointing", true);
+    await until(() => (again.mounted("bottom").props["preview-map"] as number[]).join() === "0,1,2,3,4,5,6,7,8,9");
     assert.equal(ffmpegRuns(again).length, 0, "a finished sprite is shown as it is");
     await second.stop();
   } finally {
@@ -1081,7 +1081,7 @@ test("0.2.3 while the pointer is on the bar a changed sheet goes out at most eve
     const releases: (() => void)[] = [];
     fakeFfmpeg(host, () => new Promise<void>((resolve) => releases.push(resolve)));
     const { stop } = await start(host);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     await until(() => releases.length === WORKERS);
     const sheet = () => JSON.stringify(bar.props["preview-sheet-a"] ?? null);
@@ -1161,7 +1161,7 @@ test("0.2.3 a sheet without new cells keeps its image reference across a hand-ov
     const releases: (() => void)[] = [];
     fakeFfmpeg(host, () => new Promise<void>((resolve) => releases.push(resolve)));
     const { stop } = await start(host);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     await until(() => releases.length === WORKERS);
     const ref = (sheet: "a" | "b") => JSON.stringify(bar.props[`preview-sheet-${sheet}`] ?? null);
@@ -1225,7 +1225,7 @@ test("I07 a new source ends the old one's work at once; its own sprite starts fr
       for (const release of releases.splice(0)) release();
       await time.advance(5000);
       assert.equal(cellRuns(host).length, WORKERS, "nothing for the old source, nothing before the new one shows");
-      assert.equal(host.mounted().props["preview-count"], 0);
+      assert.equal(host.mounted("bottom").props["preview-count"], 0);
       host.setSource({ phase: "ready", duration: 20 });
       await generating(host, time);
       await until(() => cellRuns(host).length > WORKERS);
@@ -1249,7 +1249,7 @@ test("I07 only local files with video: network sources and audio show the time o
     playing(host, "https://example.com/a.mp4");
     fakeFfmpeg(host);
     const { stop } = await start(host);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     assert.equal(bar.props["hover-thumbnail"], false);
     host.stats = { ...host.stats, video: null };
@@ -1275,7 +1275,7 @@ test("I07 failed cells show their neighbours; after five in a row the source is 
       throw new HostError("failed", "Invalid data found when processing input");
     });
     const { stop } = await start(host);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     await generating(host, time);
     await time.advance(1000);
     await until(() => bar.props["hover-thumbnail"] === false);
@@ -1308,7 +1308,7 @@ test("I07 one bad position fails only its own cell: the rest of its run is made,
       return real(args);
     });
     const { stop } = await start(host, data);
-    const bar = host.mounted();
+    const bar = host.mounted("bottom");
     bar.emit("pointing", true);
     await generating(host, time);
     await until(async () => {
@@ -1342,7 +1342,7 @@ test("I07 ffmpeg gone after the start: the run fails as unavailable and the opti
     const { stop } = await start(host);
     await generating(host, time);
     await until(() => host.command("hover-thumbnail").state.reason === NEEDS_FFMPEG);
-    await until(() => host.mounted().props["hover-thumbnail"] === false);
+    await until(() => host.mounted("bottom").props["hover-thumbnail"] === false);
     const runs = cellRuns(host).length; // the two workers' first cells
     assert.ok(runs <= WORKERS, String(runs));
     await time.advance(10_000);

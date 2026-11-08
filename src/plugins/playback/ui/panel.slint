@@ -1,0 +1,760 @@
+// The Playback panel in the adjust column (menu redesign §3.2, mockup 03 left): Speed, Jump, Step
+// and Seek steps in one column, 317px by default and usable from 280px. It replaces Playback ▸
+// Speed and Seek, the Jump to Time and custom speed windows and the Seek Steps window.
+// Every row is a layout and every text one line (elided, its whole wording in a tooltip); the
+// elements are always there and change only their values, never per hover. Key caps come from the
+// player's binding table (`plugin.commands.keys` for this plugin's commands, `plugin.bindings` for
+// the player's own); an empty one takes no room. Every text is @tr (English source;
+// locales/<lang>.po translate it); the plugin passes data.
+import { LineEdit, ScrollView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Check, KeyHint, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
+
+// The first key of each command, "" without one. back1 / forward1 are the player's ← / →.
+export struct Keys {
+    slower: string,
+    faster: string,
+    normal: string,
+    jump: string,
+    start: string,
+    frameback: string,
+    frameforward: string,
+    keyback: string,
+    keyforward: string,
+    back1: string,
+    forward1: string,
+    back2: string,
+    forward2: string,
+    back3: string,
+    forward3: string,
+    back4: string,
+    forward4: string,
+}
+
+export global PlaybackPanelBridge {
+    in property <Keys> keys;
+    // The speed can change now; the speed as "1.25" (no trailing zeros).
+    in property <bool> can-rate;
+    in property <string> rate-text: "1";
+    // The preset that matches the speed (0.5, 1, 1.25, 1.5, 2 → 0–4), -1 for none.
+    in property <int> preset: 1;
+    // Jump to a time (a seekable source with a duration), Jump to Start, a frame step.
+    in property <bool> can-jump;
+    in property <bool> can-start;
+    in property <bool> can-frame;
+    // Keyframe steps; else why not: "video" (no video) or "source" (the source cannot).
+    in property <bool> can-keyframe;
+    in property <string> keyframe-reason;
+    // The four seek steps in seconds ("5", "2.5").
+    in property <[string]> steps: ["5", "30", "60", "300"];
+    in property <bool> keyframes-only: true;
+    // The typed value was refused: the seek step row (0–3, -1 none), the time, the speed.
+    in property <int> invalid-step: -1;
+    in property <bool> jump-invalid;
+    in property <bool> rate-invalid;
+    // Bumped by the commands: G focuses the time, Custom… types the speed, Seek Steps… shows the steps.
+    in property <int> edit-jump;
+    in property <int> edit-rate;
+    in property <int> reveal-steps;
+    // Bumped when a typed value was applied: the fields close and the time field empties.
+    in property <int> done;
+
+    // -1 slower, +1 faster (the player's X / C).
+    callback rate-step(int);
+    callback set-preset(int);
+    // The typed speed ("1.3").
+    callback apply-rate(string);
+    // The typed time ("1:02:03.5").
+    callback apply-jump(string);
+    callback jump-start();
+    // -1 back, +1 forward.
+    callback frame-step(int);
+    callback keyframe-step(int);
+    // A seek step row (0–3) and its typed seconds; reset-step gives the row its default.
+    callback apply-step(int, string);
+    callback reset-step(int);
+    callback set-keyframes-only(bool);
+    // A text field took or lost the focus (keeps the fullscreen column out).
+    callback focus-changed(bool);
+}
+
+// Glyphs of this panel only, in the V-Line style of @vestra/icons.slint (1.5px round-capped lines), 14×12 boxes.
+global Glyphs {
+    out property <string> previous: "M 9.5 2 L 4.5 6 L 9.5 10 Z";
+    out property <string> next: "M 4.5 2 L 9.5 6 L 4.5 10 Z";
+    out property <string> start: "M 3.5 2 V 10 M 11 2 L 6 6 L 11 10 Z";
+    out property <string> minus: "M 3 6 H 11";
+    out property <string> plus: "M 3 6 H 11 M 7 2 V 10";
+}
+
+component Glyph inherits Path {
+    in property <string> glyph;
+    in property <brush> color: Theme.text-list;
+    width: 14px;
+    height: 12px;
+    viewbox-width: 14;
+    viewbox-height: 12;
+    commands: self.glyph;
+    fill: transparent;
+    stroke: self.color;
+    stroke-width: 1.5px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+}
+
+// One line of text that never wraps: it takes the width its row leaves and elides there, with
+// its whole wording in a tooltip when it does not fit.
+component Line {
+    in property <string> text;
+    in property <brush> color: Theme.text-list;
+    in property <length> min: 0px;
+    min-height: 16px;
+    min-width: root.min;
+    preferred-width: root.min;
+    horizontal-stretch: 1;
+    ToolTipArea {
+        text: label.preferred-width > root.width ? root.text : "";
+        label := Text {
+            width: root.width;
+            text: root.text;
+            color: root.color;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// A row's label in the label column (elided, the whole label in a tooltip).
+component RowLabel inherits Line {
+    in property <length> column;
+    color: Theme.text;
+    min: root.column;
+    width: root.column;
+    horizontal-stretch: 0;
+}
+
+// A section heading: its name and a line to the right edge.
+component Heading {
+    in property <string> text;
+    min-height: 24px;
+    HorizontalLayout {
+        spacing: 8px;
+        padding-top: 6px;
+        Text {
+            text: root.text.to-uppercase();
+            color: Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 0;
+        }
+        VerticalLayout {
+            alignment: center;
+            padding-top: 1px;
+            Rectangle { height: 1px; background: Theme.line; }
+        }
+    }
+}
+
+// A compact button (21px): a glyph and/or a label, and its key cap inside when `key` is given
+// (proposal §3.5); the tooltip names it with its keys. `on` draws the current choice.
+component Btn {
+    in property <string> text;
+    in property <string> glyph;
+    in property <string> key;
+    in property <bool> enabled: true;
+    in property <bool> on;
+    in property <string> tip;
+    in property <[ToolTipKey]> tip-keys;
+    in property <string> tip-detail;
+    callback clicked();
+    min-height: Theme.button-height;
+    preferred-height: Theme.button-height;
+    min-width: max(22px, row.min-width);
+    preferred-width: max(22px, row.preferred-width);
+    horizontal-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.text != "" ? root.text : root.tip;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    ToolTipArea {
+        text: root.tip;
+        keys: root.tip-keys;
+        detail: root.tip-detail;
+        Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: root.on ? 1px : 0px;
+            border-color: root.enabled ? Theme.accent : Theme.accent-disabled;
+            background: !root.enabled ? Theme.button-disabled
+                : touch.pressed ? Theme.button-press
+                : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+            // No spacing of its own: a part that is not there (no glyph, no label, no key) takes no room.
+            row := HorizontalLayout {
+                padding-left: root.text == "" ? 4px : 6px;
+                padding-right: root.text == "" ? 4px : 6px;
+                alignment: center;
+                Rectangle {
+                    visible: root.glyph != "";
+                    width: !self.visible ? 0px : root.text != "" ? 18px : 14px;
+                    HorizontalLayout {
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: center;
+                            Glyph { glyph: root.glyph; color: root.enabled ? Theme.text-list : Theme.icon-disabled; }
+                        }
+                    }
+                }
+                label := Text {
+                    text: root.text;
+                    color: !root.enabled ? Theme.text-dim : root.on ? Theme.text : Theme.text-list;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                VerticalLayout {
+                    alignment: center;
+                    padding-left: root.key != "" ? 5px : 0px;
+                    KeyHint { text: root.key; }
+                }
+            }
+            touch := TouchArea {
+                enabled: root.enabled;
+                clicked => { root.clicked(); }
+            }
+        }
+    }
+}
+
+// The key caps at a row's right end (up to two: `a`, `b`, each with what it does), in a tooltip
+// that names them. A key that is not bound takes no room.
+component Caps {
+    in property <string> tip;
+    in property <string> a;
+    in property <string> a-text;
+    in property <string> b;
+    in property <string> b-text;
+    visible: root.a != "" || root.b != "";
+    horizontal-stretch: 0;
+    width: self.visible ? row.preferred-width : 0px;
+    ToolTipArea {
+        text: root.tip;
+        keys: [{ key: root.a, text: root.a-text }, { key: root.b, text: root.b-text }];
+        row := HorizontalLayout {
+            alignment: end;
+            VerticalLayout {
+                alignment: center;
+                KeyHint { text: root.a; }
+            }
+            VerticalLayout {
+                alignment: center;
+                padding-left: root.a != "" && root.b != "" ? 3px : 0px;
+                KeyHint { text: root.b; }
+            }
+        }
+    }
+}
+
+// A value that a click opens for typing: Enter applies (the plugin answers with `done`, or marks
+// it `invalid` and the field stays open), Esc or leaving the field keeps the old value. A double
+// click restores the default when `resettable`.
+component EditValue {
+    in property <string> text;
+    // What the field starts with.
+    in property <string> value;
+    in property <bool> enabled: true;
+    in property <bool> invalid;
+    in property <bool> resettable;
+    in property <string> tip;
+    in property <string> tip-detail;
+    in property <length> box: 64px;
+    in property <int> done;
+    callback apply(string);
+    callback reset();
+    callback focus-changed(bool);
+    private property <bool> typing;
+    // A click on a resettable value, waiting to see whether a second one follows.
+    private property <bool> pending;
+    changed done => { root.stop(); }
+    public function start() {
+        if !root.enabled { return; }
+        root.typing = true;
+        field.text = root.value;
+        field.focus();
+        field.select-all();
+    }
+    function stop() {
+        root.typing = false;
+        field.clear-focus();
+    }
+    min-width: root.box;
+    preferred-width: max(root.box, label.preferred-width + 14px);
+    height: Theme.input-height;
+    horizontal-stretch: 0;
+    Rectangle {
+        visible: !root.typing;
+        border-radius: Theme.radius-control;
+        border-width: 1px;
+        border-color: touch.has-hover && root.enabled ? Theme.accent : Theme.line;
+        background: Theme.bg-list;
+        area := ToolTipArea {
+            text: root.tip;
+            detail: root.enabled ? root.tip-detail : "";
+            label := Text {
+                width: area.width;
+                height: area.height;
+                text: root.text;
+                color: root.enabled ? Theme.text : Theme.text-dim;
+                font-size: Theme.font-body;
+                horizontal-alignment: center;
+                vertical-alignment: center;
+            }
+            touch := TouchArea {
+                enabled: root.enabled;
+                mouse-cursor: MouseCursor.text;
+                // A resettable value waits a moment: a second click makes it a double click (Default),
+                // not typing.
+                clicked => {
+                    if root.resettable { root.pending = true; } else { root.start(); }
+                }
+                double-clicked => {
+                    if root.resettable {
+                        root.pending = false;
+                        root.reset();
+                    }
+                }
+            }
+        }
+    }
+    Timer {
+        interval: 300ms;
+        running: root.pending;
+        triggered => {
+            root.pending = false;
+            root.start();
+        }
+    }
+    // The refused value: an accent ring around the open field.
+    Rectangle {
+        visible: root.typing && root.invalid;
+        x: -2px;
+        y: -2px;
+        width: parent.width + 4px;
+        height: parent.height + 4px;
+        border-radius: Theme.radius-control + 2px;
+        border-width: 1px;
+        border-color: Theme.accent;
+    }
+    FocusScope {
+        visible: root.typing;
+        focus-on-click: false;
+        focus-on-tab-navigation: false;
+        capture-key-pressed(event) => {
+            if event.text == Key.Escape { root.stop(); return accept; }
+            return reject;
+        }
+        field := LineEdit {
+            width: parent.width;
+            height: parent.height;
+            font-size: Theme.font-body;
+            horizontal-alignment: center;
+            enabled: root.typing;
+            accepted(text) => { root.apply(text); }
+            changed has-focus => {
+                root.focus-changed(self.has-focus);
+                if !self.has-focus { root.typing = false; }
+            }
+        }
+    }
+}
+
+// A check box with a one-line label (elided, the whole label in a tooltip). The plugin owns the
+// state: a click asks with `toggled` and the plugin sets `checked`.
+component CheckRow {
+    in property <string> text;
+    in property <bool> checked;
+    in property <string> tip;
+    callback toggled(bool);
+    min-height: Theme.checkbox-row-height;
+    HorizontalLayout {
+        spacing: 5px;
+        box := Check {
+            text: "";
+            self-toggle: false;
+            checked: root.checked;
+            horizontal-stretch: 0;
+            toggled(on) => { root.toggled(on); }
+        }
+        label-area := ToolTipArea {
+            text: root.tip != "" ? root.tip : (label.preferred-width > self.width ? root.text : "");
+            horizontal-stretch: 1;
+            label := Text {
+                width: label-area.width;
+                height: label-area.height;
+                text: root.text;
+                color: Theme.text;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            TouchArea {
+                clicked => { box.toggle(); }
+            }
+        }
+    }
+}
+
+// One seek step: the back key, the seconds (click to type, double click for the default), the
+// forward key; centred, the keys written on both sides.
+component StepRow {
+    in property <int> index;
+    in property <string> value;
+    in property <string> back;
+    in property <string> forward;
+    in property <int> done;
+    callback focus-changed(bool);
+    private property <bool> refused: PlaybackPanelBridge.invalid-step == root.index;
+    HorizontalLayout {
+        spacing: 6px;
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            alignment: end;
+            VerticalLayout {
+                alignment: center;
+                KeyHint { text: root.back; }
+            }
+        }
+        EditValue {
+            // TRANSLATORS: {} is a number of seconds ("30").
+            text: @tr("{} s", root.value);
+            value: root.value;
+            box: 70px;
+            invalid: root.refused;
+            resettable: true;
+            done: root.done;
+            tip: root.refused ? @tr("Range 0.1–3600 s, at most one decimal place") : @tr("Seek step");
+            tip-detail: @tr("click: type a value · double-click: Default");
+            apply(text) => { PlaybackPanelBridge.apply-step(root.index, text); }
+            reset => { PlaybackPanelBridge.reset-step(root.index); }
+            focus-changed(on) => { root.focus-changed(on); }
+        }
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            alignment: start;
+            VerticalLayout {
+                alignment: center;
+                KeyHint { text: root.forward; }
+            }
+        }
+    }
+}
+
+export component PlaybackPanel inherits Rectangle {
+    background: Theme.bg-panel;
+    // The label column: the widest label, 52–84px (a longer translation elides, whole in its tooltip).
+    private property <length> column: clamp(label-measure.preferred-width, 52px, 84px);
+    private property <string> unsupported: @tr("Not supported by the current source");
+    private property <int> jump-request: PlaybackPanelBridge.edit-jump;
+    private property <int> rate-request: PlaybackPanelBridge.edit-rate;
+    private property <int> steps-request: PlaybackPanelBridge.reveal-steps;
+    private property <int> done: PlaybackPanelBridge.done;
+    changed jump-request => {
+        jump-field.focus();
+        jump-field.select-all();
+    }
+    changed rate-request => { rate-value.start(); }
+    changed steps-request => {
+        scroll.viewport-y = -min(steps-heading.y, max(0px, content.preferred-height - scroll.visible-height));
+    }
+    changed done => {
+        jump-field.text = "";
+        jump-field.clear-focus();
+    }
+    // Why the keyframe steps cannot run.
+    private property <string> keyframe-why: PlaybackPanelBridge.keyframe-reason == "video" ? @tr("No video") : root.unsupported;
+
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Speed"), @tr("Go to"), @tr("Start"), @tr("Frame"), @tr("Keyframe")]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+    }
+
+    scroll := ScrollView {
+        viewport-width: content.width;
+        viewport-height: content.preferred-height;
+        content := VerticalLayout {
+            width: scroll.visible-width;
+            padding: 10px;
+            padding-top: 8px;
+            spacing: 6px;
+            alignment: start;
+
+            // ------------------------------------------------------------ Speed
+            Heading { text: @tr("Speed"); }
+            HorizontalLayout {
+                spacing: 4px;
+                RowLabel { column: root.column; text: @tr("Speed"); }
+                Btn {
+                    glyph: Glyphs.minus;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    tip: PlaybackPanelBridge.can-rate ? @tr("Slower 0.1") : root.unsupported;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.slower, text: "" }];
+                    clicked => { PlaybackPanelBridge.rate-step(-1); }
+                }
+                rate-value := EditValue {
+                    // TRANSLATORS: {} is the playback speed ("1.25"); the × reads "times".
+                    text: @tr("{}×", PlaybackPanelBridge.rate-text);
+                    value: PlaybackPanelBridge.rate-text;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    invalid: PlaybackPanelBridge.rate-invalid;
+                    done: root.done;
+                    tip: !PlaybackPanelBridge.can-rate ? root.unsupported
+                        : PlaybackPanelBridge.rate-invalid ? @tr("Speed must be between 0.25× and 4×") : @tr("Playback speed");
+                    tip-detail: @tr("click: type a value");
+                    apply(text) => { PlaybackPanelBridge.apply-rate(text); }
+                    focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+                }
+                Btn {
+                    glyph: Glyphs.plus;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    tip: PlaybackPanelBridge.can-rate ? @tr("Faster 0.1") : root.unsupported;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.faster, text: "" }];
+                    clicked => { PlaybackPanelBridge.rate-step(1); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Caps {
+                    tip: @tr("Playback speed");
+                    a: PlaybackPanelBridge.keys.slower;
+                    a-text: "−";
+                    b: PlaybackPanelBridge.keys.faster;
+                    b-text: "+";
+                }
+            }
+            // Equal widths whatever the labels: the same preferred width, the same stretch.
+            HorizontalLayout {
+                spacing: 4px;
+                Btn {
+                    horizontal-stretch: 1;
+                    preferred-width: 30px;
+                    text: @tr("0.5×");
+                    on: PlaybackPanelBridge.preset == 0;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    tip: PlaybackPanelBridge.can-rate ? @tr("0.5×") : root.unsupported;
+                    clicked => { PlaybackPanelBridge.set-preset(0); }
+                }
+                Btn {
+                    horizontal-stretch: 1;
+                    preferred-width: 30px;
+                    text: @tr("1×");
+                    key: PlaybackPanelBridge.keys.normal;
+                    on: PlaybackPanelBridge.preset == 1;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    tip: PlaybackPanelBridge.can-rate ? @tr("Normal") : root.unsupported;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.normal, text: "" }];
+                    clicked => { PlaybackPanelBridge.set-preset(1); }
+                }
+                Btn {
+                    horizontal-stretch: 1;
+                    preferred-width: 30px;
+                    text: @tr("1.25×");
+                    on: PlaybackPanelBridge.preset == 2;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    tip: PlaybackPanelBridge.can-rate ? @tr("1.25×") : root.unsupported;
+                    clicked => { PlaybackPanelBridge.set-preset(2); }
+                }
+                Btn {
+                    horizontal-stretch: 1;
+                    preferred-width: 30px;
+                    text: @tr("1.5×");
+                    on: PlaybackPanelBridge.preset == 3;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    tip: PlaybackPanelBridge.can-rate ? @tr("1.5×") : root.unsupported;
+                    clicked => { PlaybackPanelBridge.set-preset(3); }
+                }
+                Btn {
+                    horizontal-stretch: 1;
+                    preferred-width: 30px;
+                    text: @tr("2×");
+                    on: PlaybackPanelBridge.preset == 4;
+                    enabled: PlaybackPanelBridge.can-rate;
+                    tip: PlaybackPanelBridge.can-rate ? @tr("2×") : root.unsupported;
+                    clicked => { PlaybackPanelBridge.set-preset(4); }
+                }
+            }
+
+            // ------------------------------------------------------------ Jump
+            Heading { text: @tr("Jump"); }
+            HorizontalLayout {
+                spacing: 4px;
+                RowLabel { column: root.column; text: @tr("Go to"); }
+                Rectangle {
+                    horizontal-stretch: 1;
+                    min-width: 60px;
+                    height: Theme.input-height;
+                    // The refused time: an accent ring around the field.
+                    Rectangle {
+                        visible: PlaybackPanelBridge.jump-invalid;
+                        x: -2px;
+                        y: -2px;
+                        width: parent.width + 4px;
+                        height: parent.height + 4px;
+                        border-radius: Theme.radius-control + 2px;
+                        border-width: 1px;
+                        border-color: Theme.accent;
+                    }
+                    ToolTipArea {
+                        text: PlaybackPanelBridge.jump-invalid ? @tr("Enter a time within the source's duration as HH:MM:SS.mmm")
+                            : PlaybackPanelBridge.can-jump ? @tr("Jump to Time") : root.unsupported;
+                        FocusScope {
+                            focus-on-click: false;
+                            focus-on-tab-navigation: false;
+                            capture-key-pressed(event) => {
+                                if event.text == Key.Escape { jump-field.clear-focus(); return accept; }
+                                return reject;
+                            }
+                            jump-field := LineEdit {
+                                width: parent.width;
+                                height: parent.height;
+                                font-size: Theme.font-body;
+                                enabled: PlaybackPanelBridge.can-jump;
+                                // TRANSLATORS: the format of the time to jump to (hours, minutes, seconds).
+                                placeholder-text: @tr("hh:mm:ss");
+                                accepted(text) => { PlaybackPanelBridge.apply-jump(text); }
+                                changed has-focus => { PlaybackPanelBridge.focus-changed(self.has-focus); }
+                            }
+                        }
+                    }
+                }
+                Btn {
+                    text: @tr("Go");
+                    enabled: PlaybackPanelBridge.can-jump;
+                    tip: PlaybackPanelBridge.can-jump ? @tr("Jump to Time") : root.unsupported;
+                    clicked => { PlaybackPanelBridge.apply-jump(jump-field.text); }
+                }
+                Caps {
+                    tip: @tr("Jump to Time");
+                    a: PlaybackPanelBridge.keys.jump;
+                }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                RowLabel { column: root.column; text: @tr("Start"); }
+                Btn {
+                    text: @tr("Jump to Start");
+                    glyph: Glyphs.start;
+                    enabled: PlaybackPanelBridge.can-start;
+                    tip: PlaybackPanelBridge.can-start ? @tr("Jump to Start") : root.unsupported;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.start, text: "" }];
+                    clicked => { PlaybackPanelBridge.jump-start(); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Caps {
+                    tip: @tr("Jump to Start");
+                    a: PlaybackPanelBridge.keys.start;
+                }
+            }
+
+            // ------------------------------------------------------------ Step
+            Heading { text: @tr("Step"); }
+            HorizontalLayout {
+                spacing: 4px;
+                RowLabel { column: root.column; text: @tr("Frame"); }
+                Btn {
+                    glyph: Glyphs.previous;
+                    enabled: PlaybackPanelBridge.can-frame;
+                    tip: PlaybackPanelBridge.can-frame ? @tr("Previous Frame") : root.unsupported;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.frameback, text: "" }];
+                    clicked => { PlaybackPanelBridge.frame-step(-1); }
+                }
+                Btn {
+                    glyph: Glyphs.next;
+                    enabled: PlaybackPanelBridge.can-frame;
+                    tip: PlaybackPanelBridge.can-frame ? @tr("Next Frame") : root.unsupported;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.frameforward, text: "" }];
+                    clicked => { PlaybackPanelBridge.frame-step(1); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Caps {
+                    tip: @tr("Frame");
+                    a: PlaybackPanelBridge.keys.frameback;
+                    a-text: "◀";
+                    b: PlaybackPanelBridge.keys.frameforward;
+                    b-text: "▶";
+                }
+            }
+            HorizontalLayout {
+                spacing: 4px;
+                RowLabel { column: root.column; text: @tr("Keyframe"); }
+                Btn {
+                    glyph: Glyphs.previous;
+                    enabled: PlaybackPanelBridge.can-keyframe;
+                    tip: PlaybackPanelBridge.can-keyframe ? @tr("Previous Keyframe") : root.keyframe-why;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.keyback, text: "" }];
+                    clicked => { PlaybackPanelBridge.keyframe-step(-1); }
+                }
+                Btn {
+                    glyph: Glyphs.next;
+                    enabled: PlaybackPanelBridge.can-keyframe;
+                    tip: PlaybackPanelBridge.can-keyframe ? @tr("Next Keyframe") : root.keyframe-why;
+                    tip-keys: [{ key: PlaybackPanelBridge.keys.keyforward, text: "" }];
+                    clicked => { PlaybackPanelBridge.keyframe-step(1); }
+                }
+                Rectangle { horizontal-stretch: 1; }
+                Caps {
+                    tip: @tr("Keyframe");
+                    a: PlaybackPanelBridge.keys.keyback;
+                    a-text: "◀";
+                    b: PlaybackPanelBridge.keys.keyforward;
+                    b-text: "▶";
+                }
+            }
+
+            // ------------------------------------------------------------ Seek steps
+            steps-heading := Heading { text: @tr("Seek steps"); }
+            StepRow {
+                index: 0;
+                value: PlaybackPanelBridge.steps[0];
+                back: PlaybackPanelBridge.keys.back1;
+                forward: PlaybackPanelBridge.keys.forward1;
+                done: root.done;
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+            }
+            StepRow {
+                index: 1;
+                value: PlaybackPanelBridge.steps[1];
+                back: PlaybackPanelBridge.keys.back2;
+                forward: PlaybackPanelBridge.keys.forward2;
+                done: root.done;
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+            }
+            StepRow {
+                index: 2;
+                value: PlaybackPanelBridge.steps[2];
+                back: PlaybackPanelBridge.keys.back3;
+                forward: PlaybackPanelBridge.keys.forward3;
+                done: root.done;
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+            }
+            StepRow {
+                index: 3;
+                value: PlaybackPanelBridge.steps[3];
+                back: PlaybackPanelBridge.keys.back4;
+                forward: PlaybackPanelBridge.keys.forward4;
+                done: root.done;
+                focus-changed(on) => { PlaybackPanelBridge.focus-changed(on); }
+            }
+            CheckRow {
+                text: @tr("Jump to keyframes only");
+                tip: @tr("The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off");
+                checked: PlaybackPanelBridge.keyframes-only;
+                toggled(on) => { PlaybackPanelBridge.set-keyframes-only(on); }
+            }
+        }
+    }
+}

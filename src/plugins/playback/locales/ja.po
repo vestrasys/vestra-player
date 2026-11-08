@@ -6,157 +6,162 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: commands.ts:69
+#: commands.ts:87
 #, x-machine
 msgid "Back {} s"
 msgstr "{} 秒戻る"
 
-#: commands.ts:69
+#: commands.ts:87
 #, x-machine
 msgid "Forward {} s"
 msgstr "{} 秒進む"
 
-#: commands.ts:246 commands.ts:247
+#: commands.ts:272
 #, x-machine
-msgid "Seek"
-msgstr "シーク"
+msgid "Playback…"
+msgstr "再生…"
 
-#: commands.ts:246 commands.ts:247
-#, x-machine
-msgid "Speed"
-msgstr "速度"
-
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Open File…"
 msgstr "ファイルを開く…"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Open URL…"
 msgstr "URL を開く…"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Reopen Current/Last File"
 msgstr "現在/最後のファイルを開き直す"
 
-#: commands.ts:246 commands.ts:247
+#: commands.ts:272 commands.ts:273
 #, x-machine
 msgid "Copy to Clipboard"
 msgstr "クリップボードにコピー"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "File Name"
 msgstr "ファイル名"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Folder Path"
 msgstr "フォルダのパス"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Full Path"
 msgstr "フルパス"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:678
 #, x-machine
 msgid "Previous Keyframe"
 msgstr "前のキーフレーム"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:685
 #, x-machine
 msgid "Next Keyframe"
 msgstr "次のキーフレーム"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Jump to Time…"
 msgstr "指定時間へ移動…"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:630 ui/panel.slint:633 ui/panel.slint:639
 #, x-machine
 msgid "Jump to Start"
 msgstr "先頭へ移動"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Seek Steps…"
 msgstr "シーク幅…"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:526 ui/panel.slint:529
 #, x-machine
 msgid "0.5×"
 msgstr "0.5×"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:555 ui/panel.slint:558
 #, x-machine
 msgid "1.5×"
 msgstr "1.5×"
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:564 ui/panel.slint:567
 #, x-machine
 msgid "2×"
 msgstr "2×"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Custom…"
 msgstr "カスタム…"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Disable Screen Saver While Playing"
 msgstr "再生中はスクリーンセーバーを無効にする"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Show Time on Seek Bar Hover"
 msgstr "シークバーにポインタを置くと時間を表示"
 
-#: commands.ts:246
+#: commands.ts:272
 #, x-machine
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr "シークバーにポインタを置くとサムネールを表示"
 
-#: commands.ts:247
+#: commands.ts:273
 #, x-machine
 msgid "File"
 msgstr "ファイル"
 
-#: commands.ts:247
+#: commands.ts:273
+#, x-machine
+msgid "Seek"
+msgstr "シーク"
+
+#: commands.ts:273 ui/panel.slint:462 ui/panel.slint:480 ui/panel.slint:483
+#, x-machine
+msgid "Speed"
+msgstr "速度"
+
+#: commands.ts:273 panel.ts:47
 #, x-machine
 msgid "Playback"
 msgstr "再生"
 
-#: commands.ts:256
+#: commands.ts:283 ui/panel.slint:437
 #, x-machine
 msgid "Not supported by the current source"
 msgstr "現在のソースではこの操作はできません"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "No file to reopen"
 msgstr "開き直すファイルがありません"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "No open file"
 msgstr "開いているファイルはありません"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "A network source has no file name"
 msgstr "ネットワークソースにはファイル名がありません"
 
-#: commands.ts:256
+#: commands.ts:283 ui/panel.slint:455
 #, x-machine
 msgid "No video"
 msgstr "ビデオがありません"
 
-#: commands.ts:256
+#: commands.ts:283
 #, x-machine
 msgid "Needs ffmpeg"
 msgstr "ffmpeg が必要です"
@@ -171,130 +176,135 @@ msgstr "メディアを開く"
 msgid "Open Media (replaces the current source)"
 msgstr "メディアを開く（現在のソースを置き換えます）"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Seek: {} / {}"
 msgstr "シーク：{} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Back {} s: {} / {}"
 msgstr "{} 秒戻る：{} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Forward {} s: {} / {}"
 msgstr "{} 秒進む：{} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Jumped to the start"
 msgstr "先頭へ移動しました"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Previous keyframe: {} / {}"
 msgstr "前のキーフレーム：{} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Next keyframe: {} / {}"
 msgstr "次のキーフレーム：{} / {}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Already at the last keyframe"
 msgstr "すでに最後のキーフレームです"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Speed: {}x"
 msgstr "速度：{}x"
 
-#: main.ts:30 ui/bar.slint:91
+#: main.ts:29 ui/bar.slint:95
 #, x-machine
 msgid "Volume: {}%"
 msgstr "音量：{}%"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Open failed"
 msgstr "開けませんでした"
 
-#: main.ts:30 ui/open-url.slint:66
+#: main.ts:29 ui/open-url.slint:66
 #, x-machine
 msgid "Open failed: {}"
 msgstr "開けませんでした：{}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Reopened: {}"
 msgstr "開き直しました：{}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Reopened the last file: {}"
 msgstr "最後のファイルを開き直しました：{}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Copied: {}"
 msgstr "コピーしました：{}"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Copy failed: {}"
 msgstr "コピーに失敗しました：{}"
 
-#: main.ts:30 ui/open-url.slint:65
+#: main.ts:29 ui/open-url.slint:65
 #, x-machine
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr "開くのは 1 行目だけです。複数のリンクを開くには、プレイリストに追加してください"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Disable screen saver while playing: On"
 msgstr "再生中はスクリーンセーバーを無効にする：オン"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Disable screen saver while playing: Off"
 msgstr "再生中はスクリーンセーバーを無効にする：オフ"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show time on seek bar hover: On"
 msgstr "シークバーにポインタを置くと時間を表示：オン"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show time on seek bar hover: Off"
 msgstr "シークバーにポインタを置くと時間を表示：オフ"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show thumbnail on seek bar hover: On"
 msgstr "シークバーにポインタを置くとサムネールを表示：オン"
 
-#: main.ts:30
+#: main.ts:29
 #, x-machine
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr "シークバーにポインタを置くとサムネールを表示：オフ"
 
-#: main.ts:30 ui/prompt.slint:17
+#: main.ts:29
 #, x-machine
 msgid "Source operation failed: {}"
 msgstr "ソースの操作に失敗しました：{}"
 
-#: main.ts:30 ui/prompt.slint:18
+#: main.ts:29 ui/panel.slint:593
 #, x-machine
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr "ソースの長さの範囲内で時間を HH:MM:SS.mmm 形式で入力してください"
 
-#: main.ts:30 ui/prompt.slint:19
+#: main.ts:29 ui/panel.slint:499
 #, x-machine
 msgid "Speed must be between 0.25× and 4×"
 msgstr "速度は 0.25× から 4× の間で指定してください"
+
+#: main.ts:29 ui/panel.slint:416
+#, x-machine
+msgid "Range 0.1–3600 s, at most one decimal place"
+msgstr "範囲は 0.1〜3600 秒、小数点以下は 1 桁まで"
 
 #: manifest.json
 #, x-machine
@@ -308,8 +318,12 @@ msgstr "下部のコントロールバー、ファイルとリンクを開く、
 
 #: manifest.json
 #, x-machine
-msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
-msgstr "メインウインドウ下部のコントロールバー（シークバー、再生ボタン、音量）。ファイルやリンクを開く、最後のファイルを開き直す。複数段階のシーク幅、キーフレーム単位のシーク、指定時間への移動、固定およびカスタムの再生速度。シークバーにポインタを置いたときの時間やサムネールの表示。再生中のスクリーンセーバーの無効化。"
+msgid ""
+"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\n"
+"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps."
+msgstr ""
+"メインウインドウ下部のコントロールバー（シークバー、再生ボタン、音量）。ファイルやリンクを開く、最後のファイルを開き直す。複数段階のシーク幅、キーフレーム単位のシーク、指定時間への移動、固定およびカスタムの再生速度。シークバーにポインタを置いたときの時間やサムネールの表示。再生中のスクリーンセーバーの無効化。\n"
+"右クリックメニューの「再生…」(Alt+4) で動画の横にパネルを開きます: 速度、ジャンプ、フレーム／キーフレーム送り、シーク幅。"
 
 #: manifest.json
 #, x-machine
@@ -332,72 +346,72 @@ msgid "speed"
 msgstr "速度"
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:80
+#: ui/bar.slint:84
 #, x-machine
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 #, x-machine
 msgid "Pause"
 msgstr "一時停止"
 
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 #, x-machine
 msgid "Play"
 msgstr "再生"
 
-#: ui/bar.slint:83
+#: ui/bar.slint:87
 #, x-machine
 msgid "Stop"
 msgstr "停止"
 
-#: ui/bar.slint:85
+#: ui/bar.slint:89
 #, x-machine
 msgid "Previous"
 msgstr "前へ"
 
-#: ui/bar.slint:86
+#: ui/bar.slint:90
 #, x-machine
 msgid "Next"
 msgstr "次へ"
 
-#: ui/bar.slint:87
+#: ui/bar.slint:91
 #, x-machine
 msgid "Open file"
 msgstr "ファイルを開く"
 
-#: ui/bar.slint:88
+#: ui/bar.slint:92
 #, x-machine
 msgid "Leave fullscreen"
 msgstr "フルスクリーンを終了"
 
-#: ui/bar.slint:88
+#: ui/bar.slint:92
 #, x-machine
 msgid "Fullscreen"
 msgstr "フルスクリーン"
 
-#: ui/bar.slint:89
+#: ui/bar.slint:93
 #, x-machine
 msgid "Click to show the elapsed time"
 msgstr "クリックすると経過時間を表示"
 
-#: ui/bar.slint:89
+#: ui/bar.slint:93
 #, x-machine
 msgid "Click to show the remaining time"
 msgstr "クリックすると残り時間を表示"
 
-#: ui/bar.slint:90
+#: ui/bar.slint:94
 #, x-machine
 msgid "Unmute"
 msgstr "ミュート解除"
 
-#: ui/bar.slint:90 ui/bar.slint:420
+#: ui/bar.slint:94 ui/bar.slint:468
 #, x-machine
 msgid "Mute"
 msgstr "ミュート"
 
-#: ui/bar.slint:420
+#: ui/bar.slint:468
 #, x-machine
 msgctxt "accessibility"
 msgid "Unmute"
@@ -438,98 +452,195 @@ msgstr "クリップボードのアドレスをデフォルトで使用"
 msgid "Not a valid link"
 msgstr "有効なリンクではありません"
 
-#: ui/prompt.slint:16
+#. {} is a number of seconds ("30").
+#: ui/panel.slint:410
 #, x-machine
-msgid "The source changed; open this window again"
-msgstr "ソースが変わりました。このウインドウをもう一度開いてください"
+msgid "{} s"
+msgstr "{} 秒"
 
-#: ui/prompt.slint:21
+#: ui/panel.slint:416
 #, x-machine
-msgid "Custom Speed"
-msgstr "カスタム速度"
+msgid "Seek step"
+msgstr "シーク幅"
 
-#: ui/prompt.slint:21
+#: ui/panel.slint:417
+#, x-machine
+msgid "click: type a value · double-click: Default"
+msgstr "クリック: 値を入力 · ダブルクリック: 既定値"
+
+#: ui/panel.slint:462 ui/panel.slint:576
+#, x-machine
+msgid "Go to"
+msgstr "移動先"
+
+#: ui/panel.slint:462 ui/panel.slint:628
+#, x-machine
+msgid "Start"
+msgstr "先頭"
+
+#: ui/panel.slint:462 ui/panel.slint:648 ui/panel.slint:665
+#, x-machine
+msgid "Frame"
+msgstr "フレーム"
+
+#: ui/panel.slint:462 ui/panel.slint:674 ui/panel.slint:691
+#, x-machine
+msgid "Keyframe"
+msgstr "キーフレーム"
+
+#: ui/panel.slint:487
+#, x-machine
+msgid "Slower 0.1"
+msgstr "0.1 遅く"
+
+#. {} is the playback speed ("1.25"); the × reads "times".
+#: ui/panel.slint:493
+#, x-machine
+msgid "{}×"
+msgstr "{}×"
+
+#: ui/panel.slint:499 ui/panel.slint:513
+#, x-machine
+msgid "Playback speed"
+msgstr "再生速度"
+
+#: ui/panel.slint:500
+#, x-machine
+msgid "click: type a value"
+msgstr "クリック: 値を入力"
+
+#: ui/panel.slint:507
+#, x-machine
+msgid "Faster 0.1"
+msgstr "0.1 速く"
+
+#: ui/panel.slint:535
+#, x-machine
+msgid "1×"
+msgstr "1×"
+
+#: ui/panel.slint:539
+#, x-machine
+msgid "Normal"
+msgstr "標準"
+
+#: ui/panel.slint:546 ui/panel.slint:549
+#, x-machine
+msgid "1.25×"
+msgstr "1.25×"
+
+#: ui/panel.slint:573
+#, x-machine
+msgid "Jump"
+msgstr "ジャンプ"
+
+#: ui/panel.slint:594 ui/panel.slint:618 ui/panel.slint:622
 #, x-machine
 msgid "Jump to Time"
 msgstr "指定時間へ移動"
 
-#: ui/prompt.slint:44
+#. the format of the time to jump to (hours, minutes, seconds).
+#: ui/panel.slint:608
 #, x-machine
-msgid "Speed (0.25–4×)"
-msgstr "速度（0.25〜4×）"
+msgid "hh:mm:ss"
+msgstr "時:分:秒"
 
-#: ui/prompt.slint:44
-#, x-machine
-msgid "Time (h:mm:ss.ms)"
-msgstr "時間（h:mm:ss.ms）"
-
-#: ui/prompt.slint:60 ui/time-jump.slint:165
-#, x-machine
-msgid "OK"
-msgstr "OK"
-
-#: ui/prompt.slint:60
+#: ui/panel.slint:616
 #, x-machine
 msgid "Go"
 msgstr "移動"
 
-#. the unit after a number of seconds.
-#: ui/time-jump.slint:36
+#: ui/panel.slint:645
 #, x-machine
-msgid "s"
-msgstr "秒"
+msgid "Step"
+msgstr "コマ送り"
 
-#: ui/time-jump.slint:42
+#: ui/panel.slint:652
 #, x-machine
-msgid "Default"
-msgstr "デフォルト"
+msgid "Previous Frame"
+msgstr "前のフレーム"
 
-#: ui/time-jump.slint:71
+#: ui/panel.slint:659
 #, x-machine
-msgid "Seek Steps"
+msgid "Next Frame"
+msgstr "次のフレーム"
+
+#: ui/panel.slint:700
+#, x-machine
+msgid "Seek steps"
 msgstr "シーク幅"
 
-#: ui/time-jump.slint:82 ui/time-jump.slint:110
-#, x-machine
-msgid "Left/Right arrow keys:"
-msgstr "左/右矢印キー："
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:118
-#, x-machine
-msgid "Ctrl + Left/Right arrow keys:"
-msgstr "Ctrl + 左/右矢印キー："
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:126
-#, x-machine
-msgid "Shift + Left/Right arrow keys:"
-msgstr "Shift + 左/右矢印キー："
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:134
-#, x-machine
-msgid "Ctrl + Alt + Left/Right arrow keys:"
-msgstr "Ctrl + Alt + 左/右矢印キー："
-
-#: ui/time-jump.slint:103
-#, x-machine
-msgid "Set how far each seek key moves during playback."
-msgstr "再生中、各シークキーで移動する幅を設定します。"
-
-#: ui/time-jump.slint:142
+#: ui/panel.slint:734
 #, x-machine
 msgid "Jump to keyframes only"
 msgstr "キーフレームにのみジャンプ"
 
-#: ui/time-jump.slint:147
+#: ui/panel.slint:735
 #, x-machine
-msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
-msgstr "矢印キーとシークバーに適用されます。バーをクリックまたはドラッグすると、ポインター位置またはその直前のキーフレームに移動します。"
+msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
+msgstr "シーク幅とシークバーはキーフレームに移動します: どのファイルでも速く、最大でキーフレーム間隔 1 つ分ずれます"
 
-#: ui/time-jump.slint:154
 #, x-machine
-msgid "Range 0.1–3600 s, at most one decimal place"
-msgstr "範囲は 0.1〜3600 秒、小数点以下は 1 桁まで"
+#~ msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
+#~ msgstr "メインウインドウ下部のコントロールバー（シークバー、再生ボタン、音量）。ファイルやリンクを開く、最後のファイルを開き直す。複数段階のシーク幅、キーフレーム単位のシーク、指定時間への移動、固定およびカスタムの再生速度。シークバーにポインタを置いたときの時間やサムネールの表示。再生中のスクリーンセーバーの無効化。"
 
-#: ui/time-jump.slint:169
 #, x-machine
-msgid "Cancel"
-msgstr "キャンセル"
+#~ msgid "The source changed; open this window again"
+#~ msgstr "ソースが変わりました。このウインドウをもう一度開いてください"
+
+#, x-machine
+#~ msgid "Custom Speed"
+#~ msgstr "カスタム速度"
+
+#, x-machine
+#~ msgid "Speed (0.25–4×)"
+#~ msgstr "速度（0.25〜4×）"
+
+#, x-machine
+#~ msgid "Time (h:mm:ss.ms)"
+#~ msgstr "時間（h:mm:ss.ms）"
+
+#, x-machine
+#~ msgid "OK"
+#~ msgstr "OK"
+
+#. the unit after a number of seconds.
+#, x-machine
+#~ msgid "s"
+#~ msgstr "秒"
+
+#, x-machine
+#~ msgid "Default"
+#~ msgstr "デフォルト"
+
+#, x-machine
+#~ msgid "Seek Steps"
+#~ msgstr "シーク幅"
+
+#, x-machine
+#~ msgid "Left/Right arrow keys:"
+#~ msgstr "左/右矢印キー："
+
+#, x-machine
+#~ msgid "Ctrl + Left/Right arrow keys:"
+#~ msgstr "Ctrl + 左/右矢印キー："
+
+#, x-machine
+#~ msgid "Shift + Left/Right arrow keys:"
+#~ msgstr "Shift + 左/右矢印キー："
+
+#, x-machine
+#~ msgid "Ctrl + Alt + Left/Right arrow keys:"
+#~ msgstr "Ctrl + Alt + 左/右矢印キー："
+
+#, x-machine
+#~ msgid "Set how far each seek key moves during playback."
+#~ msgstr "再生中、各シークキーで移動する幅を設定します。"
+
+#, x-machine
+#~ msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
+#~ msgstr "矢印キーとシークバーに適用されます。バーをクリックまたはドラッグすると、ポインター位置またはその直前のキーフレームに移動します。"
+
+#, x-machine
+#~ msgid "Cancel"
+#~ msgstr "キャンセル"

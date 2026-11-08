@@ -11,7 +11,8 @@ import { NO_VIDEO } from "../keyframes.ts";
 import { HOST_RULES, isLocalPath, type PathRules } from "../local-path.ts";
 import { FIRST_LINE_ONLY, parseAddress } from "../open-url.ts";
 import { displayName } from "../reopen.ts";
-import { parseStep, stepText } from "../time-jump.ts";
+import { parseStep, stepText } from "../settings.ts";
+import { eventually } from "./eventually.ts";
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
   // The Chinese texts are what the plugin showed before English became the source.
@@ -253,7 +254,7 @@ test("settings: a bad field falls back to its default; a file that is not an obj
     const first = await start(new TestHost(), data);
     assert.equal(first.host.command("prevent-sleep").state.checked, false);
     assert.equal(first.host.command("hover-time").state.checked, false);
-    assert.equal(first.host.mounted().props["hover-time"], false);
+    assert.equal(first.host.mounted("bottom").props["hover-time"], false);
     await first.stop();
 
     writeFileSync(join(data, "settings.json"), "[1, 2]");
@@ -367,8 +368,6 @@ test("A10 a plugin stream is not remembered and cannot be reloaded; repeats whil
 
 // ------------------------------------------------------------------ B06
 
-const TIME_JUMP = "playback-time-jump";
-
 test("B06 step input: 0.1–3600 seconds with at most one decimal; titles drop trailing zeros", () => {
   for (const [text, value] of [["5", 5], [" 2.5 ", 2.5], ["0.1", 0.1], ["3600", 3600], ["10.0", 10]] as const)
     assert.equal(parseStep(text), value, text);
@@ -377,125 +376,112 @@ test("B06 step input: 0.1–3600 seconds with at most one decimal; titles drop t
   assert.equal(stepText(2.5), "2.5");
 });
 
-test("B06 the window saves four steps: tier 1 goes to the core, tiers 2–4 retitle their commands", async () => {
+test("B06 the panel's seek steps: a typed step saves and applies, tier 1 goes to the core, tiers 2–4 retitle their commands", async () => {
   const data = mkdtempSync(join(tmpdir(), "playback-steps-"));
   try {
     const first = await start(withMedia(new TestHost(), "/movie.mp4"), data);
     const { host } = first;
     // Every start gives the core the pair: step 5 and "Jump to keyframes only" on by default.
-    await until(() => host.sent("player.setStepSeek").length === 1);
-    assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
+    await eventually(() => host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
     assert.equal(host.stepSeekKeyframes, true);
-    // Works with nothing open, and shows the saved values.
+    // Seek Steps… (palette only) works with nothing open: the panel in front at its Seek steps.
     await host.press("F4");
     await host.command("time-jump").run();
-    await host.settle();
-    const window = host.window(TIME_JUMP);
-    const values = () => [window.props.value1, window.props.value2, window.props.value3, window.props.value4, window.props.keyframes];
-    await until(() => window.visible && values().every((value) => value !== undefined));
-    assert.equal(window.file, "ui/time-jump.slint");
-    assert.deepEqual(values(), ["5", "30", "60", "300", true]);
+    const panel = host.mounted("adjust");
+    assert.equal(panel.file, "ui/panel.slint");
+    await eventually(() => panel.props["reveal-steps"], 1);
+    await eventually(() => [host.layout.adjust?.preferred, host.layout.adjust?.owner], [true, 1]);
+    await eventually(() => [panel.props.steps, panel.props["keyframes-only"]], [["5", "30", "60", "300"], true]);
     assert.equal(host.translate("Jump to keyframes only"), "仅跳转到关键帧");
 
-    // An invalid row is marked and nothing is saved or applied, the checkbox included.
-    window.emit("confirm", "10", "abc", "4000", "300", false);
-    const marks = () => [window.props.invalid1, window.props.invalid2, window.props.invalid3, window.props.invalid4, window.props["out-of-range"]];
-    await until(() => window.props["out-of-range"] === true && window.props.invalid3 === true);
-    assert.deepEqual(marks(), [false, true, true, false, true]);
-    assert.equal(host.translate("Range 0.1–3600 s, at most one decimal place"), "范围 0.1–3600 秒，最多一位小数");
-    assert.equal(window.visible, true);
+    // A refused value is marked in its row and said on the video; nothing is saved or applied.
+    panel.emit("applyStep", 2, "4000");
+    await eventually(() => panel.props["invalid-step"], 2);
+    await eventually(() => lastOsd(host), "范围 0.1–3600 秒，最多一位小数");
     assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
-    assert.equal(host.stepSeekKeyframes, true);
-    // Default restores only its own row.
-    window.emit("reset", 1);
-    await host.settle();
-    assert.equal(window.props.value2, "30");
-    assert.equal(window.props.invalid2, false);
-    assert.equal(window.props.invalid3, true);
+    for (const bad of ["abc", "0.05", ""]) panel.emit("applyStep", 1, bad);
+    await eventually(() => panel.props["invalid-step"], 1);
+    // Leaving the field drops the mark.
+    panel.emit("focusChanged", false);
+    await eventually(() => panel.props["invalid-step"], -1);
 
-    // OK with the box cleared: the pair goes to the core and is saved with the steps.
-    window.emit("confirm", "10", "2.5", "90", "300", false);
-    await until(() => !window.visible && host.sent("player.setStepSeek").length === 2);
-    assert.deepEqual(host.sent("player.setStepSeek").at(-1), { seconds: 10, keyframes: false });
-    assert.equal(host.stepSeek, 10);
-    assert.equal(host.stepSeekKeyframes, false);
+    // Typed steps and the switch: the pair goes to the core and is saved with the steps.
+    panel.emit("applyStep", 0, "10");
+    await eventually(() => host.sent("player.setStepSeek").at(-1), { seconds: 10, keyframes: true });
+    panel.emit("applyStep", 1, " 2.5 ");
+    panel.emit("applyStep", 2, "90");
+    panel.emit("setKeyframesOnly", false);
+    await eventually(() => host.sent("player.setStepSeek").at(-1), { seconds: 10, keyframes: false });
+    await eventually(() => panel.props.steps, ["10", "2.5", "90", "300"]);
+    await eventually(() => panel.props["keyframes-only"], false);
+    await eventually(() => host.stepSeek, 10);
     const titles = () =>
-      ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).display.path.at(-1));
-    // The tiers' child scope is made again with the new titles; wait until it is back.
-    await until(() => {
-      try {
-        return titles()[1] === "前进2.5秒";
-      } catch {
-        return false;
-      }
-    });
-    // Any seconds are translated: the title is a text value with the seconds as data.
-    assert.deepEqual(titles(),["后退2.5秒", "前进2.5秒", "后退90秒", "前进90秒", "后退300秒", "前进300秒"]);
-    assert.deepEqual(host.command("forward-3").declaration.bindings, ["Shift+ArrowRight"]);
-    assert.equal(host.command("forward-3").declaration.order, 215);
+      ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).display.title);
+    // The tiers' child scope is made again with the new titles; any seconds are translated (a text value).
+    await eventually(titles, ["后退2.5秒", "前进2.5秒", "后退90秒", "前进90秒", "后退300秒", "前进300秒"]);
+    await eventually(
+      () => [host.command("forward-3").declaration.bindings, host.command("forward-3").display.path, host.command("forward-3").declaration.home],
+      [["Shift+ArrowRight"], [], "panel"],
+    );
     // Registered again with their category.
-    for (const id of ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"])
-      assert.equal(host.command(id).display.category, "跳转", id);
-    assert.deepEqual(host.conflicts, []);
-    await saved(join(data, "settings.json"), (value) => JSON.stringify(value.seekSteps) === "[10,2.5,90,300]" && value.seekKeyframes === false);
+    await eventually(
+      () => ["backward-2", "forward-2", "backward-3", "forward-3", "backward-4", "forward-4"].map((id) => host.command(id).display.category),
+      Array(6).fill("跳转"),
+    );
+    await eventually(() => host.conflicts, []);
+    // A double click on a value gives its row the default back.
+    panel.emit("resetStep", 2);
+    await eventually(() => panel.props.steps, ["10", "2.5", "60", "300"]);
+    await saved(join(data, "settings.json"), (value) => JSON.stringify(value.seekSteps) === "[10,2.5,60,300]" && value.seekKeyframes === false);
 
     host.openElsewhere("/movie.mp4");
     host.setSource({ duration: 100, position: 50 });
     await host.settle();
     await host.press("ArrowLeft"); // the core's tier 1 with the new step
-    await host.settle(80);
-    assert.equal(lastOsd(host), "后退 10秒: 00:40 / 01:40");
+    await eventually(() => lastOsd(host), "后退 10秒: 00:40 / 01:40");
     await host.press("Shift+ArrowRight");
-    await host.settle(80);
-    assert.equal(host.source.position, 100);
-    assert.equal(lastOsd(host), "前进 90秒: 01:40 / 01:40");
+    await eventually(() => lastOsd(host), "前进 60秒: 01:40 / 01:40");
     await first.stop();
 
-    // Next launch: the pair is given to the core again, the titles and the checkbox are restored.
+    // Next launch: the pair is given to the core again, the titles and the switch are restored.
     const second = await start(new TestHost(), data);
-    await until(() => second.host.sent("player.setStepSeek").length === 1);
-    assert.deepEqual(second.host.sent("player.setStepSeek"), [{ seconds: 10, keyframes: false }]);
-    assert.equal(second.host.command("backward-2").display.path.at(-1), "后退2.5秒");
-    await second.host.command("time-jump").run();
-    const reopened = second.host.window(TIME_JUMP);
-    await until(() => reopened.visible && reopened.props.keyframes !== undefined && reopened.props.value1 !== undefined);
-    assert.deepEqual([reopened.props.value1, reopened.props.keyframes], ["10", false]);
+    await eventually(() => second.host.sent("player.setStepSeek"), [{ seconds: 10, keyframes: false }]);
+    await eventually(() => second.host.command("backward-2").display.title, "后退2.5秒");
+    const reopened = second.host.mounted("adjust");
+    await eventually(() => [reopened.props.steps, reopened.props["keyframes-only"]], [["10", "2.5", "60", "300"], false]);
     await second.stop();
 
-    // A set with one value out of range falls back as a whole; a checkbox value that is not a boolean, to on.
+    // A set with one value out of range falls back as a whole; a switch value that is not a boolean, to on.
     writeFileSync(join(data, "settings.json"), JSON.stringify({ seekSteps: [10, 30, 60, 9999], seekKeyframes: "no" }));
     const third = await start(new TestHost(), data);
-    await until(() => third.host.sent("player.setStepSeek").length === 1);
-    assert.deepEqual(third.host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
-    assert.equal(third.host.command("forward-4").display.path.at(-1), "前进300秒");
+    await eventually(() => third.host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
+    await eventually(() => third.host.command("forward-4").display.title, "前进300秒");
     await third.stop();
   } finally {
     rmSync(data, { recursive: true, force: true });
   }
 });
 
-test("B06 cancel and Escape close the window without saving, the checkbox included", async () => {
+test("B06 a refused or abandoned seek step saves nothing", async () => {
   const data = mkdtempSync(join(tmpdir(), "playback-steps-cancel-"));
   try {
     const { host, stop } = await start(new TestHost(), data);
-    await until(() => host.sent("player.setStepSeek").length === 1);
-    await host.command("time-jump").run();
-    const window = host.window(TIME_JUMP);
-    await until(() => window.visible && window.props.keyframes === true);
-    // The view's own edits (a cleared box, another step), then Cancel.
-    window.props.keyframes = false;
-    window.props.value2 = "45";
-    assert.deepEqual([window.props.keyframes, window.props.value2], [false, "45"]);
-    window.emit("cancel");
-    await until(() => !window.visible);
+    await eventually(() => host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
+    const panel = host.mounted("adjust");
+    panel.emit("applyStep", 1, "1.25");
+    await eventually(() => panel.props["invalid-step"], 1);
+    // Esc or leaving the field keeps the old value; the switch set to what it is changes nothing.
+    panel.emit("focusChanged", false);
+    panel.emit("setKeyframesOnly", true);
+    // Rows outside 0–3 are ignored.
+    panel.emit("applyStep", 7, "10");
+    panel.emit("resetStep", -1);
+    await eventually(() => panel.props["invalid-step"], -1);
     await host.settle(400); // past storage.json's debounce: nothing may be written
-    assert.deepEqual(host.sent("player.setStepSeek"), [{ seconds: 5, keyframes: true }]);
-    assert.equal(host.stepSeekKeyframes, true);
-    assert.equal(host.command("forward-2").display.path.at(-1), "前进30秒");
-    assert.equal(existsSync(join(data, "settings.json")), false);
-    // Opening again shows the saved values, not the cancelled ones.
-    await host.command("time-jump").run();
-    await until(() => window.visible && window.props.keyframes === true && window.props.value2 === "30");
+    assert.deepEqual(
+      [host.sent("player.setStepSeek"), host.command("forward-2").display.title, existsSync(join(data, "settings.json")), panel.props.steps],
+      [[{ seconds: 5, keyframes: true }], "前进30秒", false, ["5", "30", "60", "300"]],
+    );
     await stop();
   } finally {
     rmSync(data, { recursive: true, force: true });
@@ -579,13 +565,11 @@ test("B06 keyframes off: tiers 2–4 keep the plugin's exact seeks and its own t
   await until(() => host.coreSeeks.length === 1);
   assert.deepEqual(host.coreSeeks[0], { action: "seek-backward", seconds: 5, keyframes: false, landed: 37 });
 
-  // Turned on in the window: the next press of a tier goes to the core.
-  await host.command("time-jump").run();
-  const window = host.window(TIME_JUMP);
-  await until(() => window.visible && window.props.keyframes === false && window.props.value1 === "5");
-  window.emit("confirm", "5", "30", "60", "300", true);
-  await until(() => !window.visible && host.sent("player.setStepSeek").length === 2);
-  assert.deepEqual(host.sent("player.setStepSeek").at(-1), { seconds: 5, keyframes: true });
+  // Turned on in the panel: the next press of a tier goes to the core.
+  const panel = host.mounted("adjust");
+  await eventually(() => panel.props["keyframes-only"], false);
+  panel.emit("setKeyframesOnly", true);
+  await eventually(() => host.sent("player.setStepSeek").at(-1), { seconds: 5, keyframes: true });
   host.setSource({ position: 12 });
   await host.settle();
   const shown = ownOsd(host).length;
@@ -805,7 +789,7 @@ test("B29 the switch turns it off and on and is saved; off at launch asks for no
 
 test("I06 the bar gets the duration and the hover option; the option is saved", async () => {
   const { host, stop } = await start(withMedia());
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   assert.equal(bar.props.duration, 100);
   assert.equal(bar.props["hover-time"], false);
   await host.command("hover-time").run();

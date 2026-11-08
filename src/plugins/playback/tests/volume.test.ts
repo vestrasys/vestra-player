@@ -39,7 +39,7 @@ async function withData(name: string, body: (data: string) => Promise<void>) {
 test("volume: the bar's volume comes back after a restart, before anything is opened", () =>
   withData("volume", async (data) => {
     const first = await start(data);
-    first.host.mounted().emit("volume-released", 35);
+    first.host.mounted("bottom").emit("volume-released", 35);
     await until(() => read(data)?.volume === 35);
     assert.deepEqual(read(data), { volume: 35, muted: false });
     await first.stop();
@@ -47,7 +47,7 @@ test("volume: the bar's volume comes back after a restart, before anything is op
     const second = await start(data);
     await until(() => output(second.host).volume === 35);
     // The bar follows the player's state in a later write: wait for it.
-    await until(() => second.host.mounted().props.volume === 35);
+    await until(() => second.host.mounted("bottom").props.volume === 35);
     assert.equal(second.plugin.player.state.phase, "empty", "nothing is opened");
     // The first file plays at the remembered volume.
     second.host.openElsewhere("/movie.mp4");
@@ -60,9 +60,9 @@ test("volume: the bar's volume comes back after a restart, before anything is op
 test("volume: mute is remembered with the volume", () =>
   withData("mute", async (data) => {
     const first = await start(data);
-    first.host.mounted().emit("volume-released", 40);
+    first.host.mounted("bottom").emit("volume-released", 40);
     await until(() => output(first.host).volume === 40);
-    first.host.mounted().emit("action", "mute");
+    first.host.mounted("bottom").emit("action", "mute");
     await until(() => read(data)?.muted === true);
     assert.deepEqual(read(data), { volume: 40, muted: true });
     await first.stop();
@@ -70,9 +70,9 @@ test("volume: mute is remembered with the volume", () =>
     const second = await start(data);
     await until(() => output(second.host).muted);
     assert.deepEqual(output(second.host), { volume: 40, muted: true });
-    await until(() => second.host.mounted().props.muted === true);
+    await until(() => second.host.mounted("bottom").props.muted === true);
     // Unmuting is remembered too.
-    second.host.mounted().emit("action", "mute");
+    second.host.mounted("bottom").emit("action", "mute");
     await until(() => read(data)?.muted === false);
     await second.stop();
   }));
@@ -80,7 +80,7 @@ test("volume: mute is remembered with the volume", () =>
 test("volume: a drag is written once, when the slider is released", () =>
   withData("drag", async (data) => {
     const app = await start(data);
-    const bar = app.host.mounted();
+    const bar = app.host.mounted("bottom");
     for (const value of [90, 80, 70, 60]) {
       bar.emit("volume-changed", value);
       await pause(OUTPUT_SAVE_MS / 2);
@@ -112,7 +112,7 @@ test("volume: applied once at start; later changes by others are adopted and sav
     const second = await start(data);
     await until(() => output(second.host).volume === 150);
     // The slider shows a boost at its right end (written after the player's state changes).
-    await until(() => second.host.mounted().props.volume === 100);
+    await until(() => second.host.mounted("bottom").props.volume === 100);
     await second.stop();
   }));
 
@@ -156,7 +156,7 @@ test("volume: a broken file is set aside and the player's volume stands", () =>
       assert.deepEqual(output(app.host), { volume: 100, muted: false });
       assert.equal(existsSync(file(data)), false, "the broken file is renamed");
       // The next change is saved normally.
-      app.host.mounted().emit("volume-released", 25);
+      app.host.mounted("bottom").emit("volume-released", 25);
       await until(() => read(data)?.volume === 25);
       await app.stop();
       for (const name of readdirSync(data)) rmSync(join(data, name));
