@@ -13,7 +13,9 @@ const SDK_DIRECTORY = fileURLToPath(new URL("..", import.meta.url));
 export const WAKE_EVENTS = [
     "packages.changed",
     "bindings.changed",
-    // Player 0.7.6: sent only to the plugin whose own keys changed.
+    // Player 0.7.6: sent to a plugin whose own keys changed and, from SDK
+    // 1.6.16, to every listener when a player command (`host/<id>`) is
+    // rebound, which wakes each parked listener.
     "commands.keys",
     "appearance.changed",
     "resolvers.fileTypes",

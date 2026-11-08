@@ -2557,8 +2557,9 @@ export declare class TestHost implements Transport {
      */
     get conflicts(): string[][];
     /**
-     * Change the keys of one of the plugin's commands as the user does in
-     * Keyboard Shortcuts (SDK 1.6.6): `inputs` replaces its keys (`[]`
+     * Change the keys of one of the plugin's commands, or of one of the
+     * player's core commands by its `host/<id>` (SDK 1.6.16), as the user
+     * does in Keyboard Shortcuts (SDK 1.6.6): `inputs` replaces its keys (`[]`
      * clears them, as Ignore Default Shortcuts does for every default),
      * `null` gives it its own defaults back. It writes
      * {@link TestHost.bindings | bindings.overlay}, and the plugin hears it
@@ -2580,7 +2581,8 @@ export declare class TestHost implements Transport {
      * ```
      *
      * @capability None.
-     * @throws `Error` `command` is not a command of the plugin.
+     * @throws `Error` `command` is neither a command of the plugin nor a
+     *   core command.
      * @since 1.6.6
      */
     rebind(command: string, inputs: readonly string[] | null): void;

@@ -348,8 +348,9 @@ export type CommandDeclaration = {
 };
 /**
  * `commands.keys` (player 0.7.6): each of the plugin's own commands, by
- * local id, with the labels of its current keys; the answer to the request
- * and the data of the event of that name.
+ * local id, and (SDK 1.6.16) each of the player's own as `host/<id>`, with
+ * the labels of its current keys; the answer to the request and the data of
+ * the event of that name.
  */
 export type CommandKeys = {
     keys: Record<string, string[]>;

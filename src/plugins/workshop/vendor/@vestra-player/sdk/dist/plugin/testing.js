@@ -3244,8 +3244,9 @@ export class TestHost {
         return this.coreCommands.has(id) ? id : `${this.manifestId}/${id}`;
     }
     /**
-     * Change the keys of one of the plugin's commands as the user does in
-     * Keyboard Shortcuts (SDK 1.6.6): `inputs` replaces its keys (`[]`
+     * Change the keys of one of the plugin's commands, or of one of the
+     * player's core commands by its `host/<id>` (SDK 1.6.16), as the user
+     * does in Keyboard Shortcuts (SDK 1.6.6): `inputs` replaces its keys (`[]`
      * clears them, as Ignore Default Shortcuts does for every default),
      * `null` gives it its own defaults back. It writes
      * {@link TestHost.bindings | bindings.overlay}, and the plugin hears it
@@ -3267,11 +3268,12 @@ export class TestHost {
      * ```
      *
      * @capability None.
-     * @throws `Error` `command` is not a command of the plugin.
+     * @throws `Error` `command` is neither a command of the plugin nor a
+     *   core command.
      * @since 1.6.6
      */
     rebind(command, inputs) {
-        if (!this.commands.has(command))
+        if (!this.commands.has(command) && !this.coreCommands.has(command))
             throw new Error(`test host: no command ${command}`);
         const key = this.#bindingKey(command);
         if (inputs === null)
@@ -3287,15 +3289,19 @@ export class TestHost {
     #keysRevision = 0;
     /**
      * `commands.keys` as the player answers it: each of the plugin's own
-     * commands with the labels of the keys it holds now (the overlay, else
-     * its defaults; not a key an earlier command holds), as menus write
-     * them on `systemInfo.os`.
+     * commands, and the player's core commands as `host/<id>` (SDK 1.6.16),
+     * with the labels of the keys it holds now (the overlay, else its
+     * defaults; not a key an earlier command holds), as menus write them on
+     * `systemInfo.os`.
      */
     #keys() {
         const claims = this.#claims();
         const mac = this.systemInfo.os === "macos";
         const keys = {};
-        for (const [id, { declaration }] of this.commands) {
+        for (const [id, { declaration }] of [
+            ...this.commands,
+            ...this.coreCommands,
+        ]) {
             const scope = declaration.focus ? "panel" : "global";
             const current = this.bindings.overlay.get(this.#bindingKey(id)) ??
                 declaration.bindings ??

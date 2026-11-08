@@ -274,7 +274,7 @@ test("downgrade: 1.5.10's model.ts (origin/main before the panel) reads the new 
   try {
     const file = join(dir, "model.ts");
     await writeFile(file, source);
-    const old = (await import(pathToFileURL(file).href)) as { parse: (raw: unknown) => { settings: { gains: number[] } } };
+    const old = (await import(pathToFileURL(file).href)) as { parse: (raw: unknown) => { settings: { gains: number[] } } }; // boundary-reviewed: the package's own model.ts from git history, in a temporary file
     const curve = [5, 4, 2, -1, -3, -2, 0, 2, 4, 6];
     const saved = spreadBack(curve);
     const read = old.parse(saved).settings.gains;
