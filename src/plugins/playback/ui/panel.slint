@@ -853,6 +853,54 @@ component NudgeBtn {
     }
 }
 
+// "Set A here" / "Set B here": an outlined button while the point is not set, greyed with the reason
+// in its tooltip while A-B cannot run. A component of its own, like Btn: written as a bare Rectangle
+// under the row's `if`, its ToolTipArea got no size, so the label and the click area were empty.
+component SetBtn {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <string> tip;
+    in property <[ToolTipKey]> tip-keys;
+    in property <string> tip-detail;
+    callback clicked();
+    min-height: Theme.button-height;
+    preferred-height: Theme.button-height;
+    min-width: 64px;
+    preferred-width: max(64px, row.preferred-width);
+    horizontal-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    ToolTipArea {
+        text: root.tip;
+        keys: root.tip-keys;
+        detail: root.tip-detail;
+        Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: 1px;
+            border-color: !root.enabled ? Theme.icon-disabled : touch.has-hover ? Theme.accent : Theme.text-dim;
+            background: !root.enabled ? transparent : touch.pressed ? Theme.button-press
+                : touch.has-hover ? Theme.button-hover : transparent;
+            row := HorizontalLayout {
+                padding-left: 8px;
+                padding-right: 8px;
+                Text {
+                    text: root.text;
+                    color: root.enabled ? Theme.text-list : Theme.text-dim;
+                    font-size: Theme.font-body;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            touch := TouchArea {
+                enabled: root.enabled;
+                clicked => { root.clicked(); }
+            }
+        }
+    }
+}
+
 // A point's row: its badge, then either a "Set A here" button (the point at the position, its key
 // beside it) or its time (click to type one), the ‹ › nudges and × clear; its set key at the right.
 component AbPointRow {
@@ -896,39 +944,13 @@ component AbPointRow {
                 }
             }
         }
-        if !root.has: Rectangle {
-            min-width: 64px;
-            preferred-width: max(64px, set-label.preferred-width + 16px);
-            height: Theme.button-height;
-            horizontal-stretch: 0;
-            border-radius: Theme.radius-control;
-            border-width: 1px;
-            border-color: set-touch.has-hover && root.usable ? Theme.accent : Theme.text-dim;
-            background: !root.usable ? transparent : set-touch.pressed ? Theme.button-press
-                : set-touch.has-hover ? Theme.button-hover : transparent;
-            accessible-role: button;
-            accessible-label: root.set-tip;
-            accessible-enabled: root.usable;
-            accessible-action-default => { if root.usable { PlaybackPanelBridge.ab-set(root.point); } }
-            ToolTipArea {
-                text: root.usable ? root.set-tip : root.why;
-                keys: [{ key: root.set-key, text: "" }];
-                detail: root.usable ? root.set-detail : "";
-                set-label := Text {
-                    x: 8px;
-                    width: parent.width - 16px;
-                    height: parent.height;
-                    text: root.set-text;
-                    color: root.usable ? Theme.text-list : Theme.text-dim;
-                    font-size: Theme.font-body;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-                set-touch := TouchArea {
-                    enabled: root.usable;
-                    clicked => { PlaybackPanelBridge.ab-set(root.point); }
-                }
-            }
+        if !root.has: SetBtn {
+            text: root.set-text;
+            enabled: root.usable;
+            tip: root.usable ? root.set-tip : root.why;
+            tip-keys: [{ key: root.set-key, text: "" }];
+            tip-detail: root.usable ? root.set-detail : "";
+            clicked => { PlaybackPanelBridge.ab-set(root.point); }
         }
         if root.has: EditValue {
             text: root.value;

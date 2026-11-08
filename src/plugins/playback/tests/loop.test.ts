@@ -517,6 +517,39 @@ test("panel: the last pass also ends on a seek out of the range or a new source"
   await eventually(() => panel.props["ab-status"], "0:00.0");
 });
 
+test("panel: a playing seekable MKV shows Set A here / Set B here, usable; a click sets A, then B starts the loop", async () => {
+  const host = new TestHost();
+  await start(host);
+  const panel = host.mounted("adjust");
+  await play(host, file(), 231, 14.1);
+  // Both rows show their set button (no point yet), not greyed; the timeline shows the position.
+  await eventually(
+    () => [panel.props["ab-usable"], panel.props["ab-reason"], panel.props["ab-a"], panel.props["ab-b"], panel.props["ab-status"]],
+    [true, "", "", "", "0:14.1"],
+  );
+  panel.emit("abSet", "a");
+  await eventually(() => panel.props["ab-a"], "0:14.1");
+  await at(host, 20);
+  panel.emit("abSet", "b");
+  await eventually(() => [panel.props["ab-b"], panel.props["ab-on"]], ["0:20.0", true]);
+});
+
+test("panel.slint: the Set A / Set B button is its own component with its label and click area", () => {
+  // 0.7.6 drew it as a bare Rectangle under the row's `if`: its ToolTipArea got no size, so the
+  // label and the click area were empty ("two boxes"). The test host does not run Slint.
+  const slint = readFileSync(new URL("../ui/panel.slint", import.meta.url), "utf8");
+  const use = slint.slice(slint.indexOf("if !root.has: SetBtn {"), slint.indexOf("if root.has: EditValue {"));
+  assert.ok(use.length > 0, "the row's set button is a SetBtn");
+  assert.match(use, /text: root\.set-text;/);
+  assert.match(use, /clicked => \{ PlaybackPanelBridge\.ab-set\(root\.point\); \}/);
+  // Disabled: greyed (dim label, dim outline), the reason in the tooltip.
+  assert.match(use, /enabled: root\.usable;\s*tip: root\.usable \? root\.set-tip : root\.why;/);
+  const body = slint.slice(slint.indexOf("component SetBtn {"), slint.indexOf("component AbPointRow {"));
+  assert.match(body, /ToolTipArea \{/);
+  assert.match(body, /row := HorizontalLayout \{[\s\S]*text: root\.text;/);
+  assert.match(body, /touch := TouchArea \{\s*enabled: root\.enabled;\s*clicked => \{ root\.clicked\(\); \}/);
+});
+
 test("panel: a source that cannot loop greys the section with its reason", async () => {
   const host = new TestHost();
   await start(host);
