@@ -10,6 +10,7 @@ import {
 import { clippable, Failure, frameName, parseRange, parseTime, tabMode, uniqueFolder } from "../model.ts";
 import { DEFAULT_TEMPLATES, insertVariable, NAME_LIMIT, normalTemplate, renderName, safeName, TEMPLATE_LIMIT } from "../names.ts";
 import { RESULT_LIMIT, savedOf } from "../results.ts";
+import { timeLeft } from "../tasks.ts";
 import { actualRange, clipExport, hostSupport, jobProgress } from "../seams.ts";
 import { settingsOf } from "../settings.ts";
 import type { PlayerState } from "@vestra-player/sdk";
@@ -244,4 +245,15 @@ test("stored results: valid ones only, newest first, at most twenty", () => {
   assert.equal(list[0]!.thumb, "evil.jpg", "a thumbnail is a file name inside the data directory");
   assert.deepEqual(savedOf(null), []);
   assert.deepEqual(savedOf({ list: [{ ...item(1), method: "lossy", count: -3 }] })[0]!.method, "");
+});
+
+test("time left: from the rate measured since the progress first moved, nothing before 1.5 s of it, nothing while the file is checked", () => {
+  const at = 1_000_000;
+  // Ten seconds of 4K encoding start-up behind it: not counted.
+  const task = { progress: { done: 0.4, total: 9.8 }, rateFrom: { at, done: 0.4 } };
+  assert.equal(timeLeft(task, at + 1000), -1, "under 1.5 s of measuring");
+  assert.equal(timeLeft({ ...task, progress: { done: 1.4, total: 9.8 } }, at + 2000), 17, "0.5 s of media per second: 8.4 s left take 17 s");
+  assert.equal(timeLeft({ ...task, progress: { done: 0.4, total: 9.8 } }, at + 5000), -1, "no progress since: no rate");
+  assert.equal(timeLeft({ progress: { done: 9.8, total: 9.8 }, rateFrom: { at, done: 1 } }, at + 9000), -1, "done: the player checks the file");
+  assert.equal(timeLeft({ progress: null, rateFrom: undefined }, at), -1, "unknown progress (preroll, seek)");
 });

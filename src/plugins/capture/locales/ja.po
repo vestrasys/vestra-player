@@ -176,7 +176,7 @@ msgstr "このファイルのビットレートが不明です。別の画質を
 msgid "The file or folder was moved or deleted."
 msgstr "ファイルまたはフォルダーは移動または削除されました。"
 
-#: main.ts:135 main.ts:140 main.ts:809 main.ts:1067 ui/parts.slint:69
+#: main.ts:135 main.ts:140 main.ts:810 main.ts:1068 ui/parts.slint:69
 #, x-machine
 msgid "The Capture tab could not open."
 msgstr "「キャプチャ」タブを開けませんでした。"
@@ -196,238 +196,238 @@ msgstr "連写に失敗しました：{}"
 msgid "Export failed: {}"
 msgstr "書き出しに失敗しました：{}"
 
-#: main.ts:144 ui/tab.slint:750 ui/tab.slint:1282
+#: main.ts:145 ui/tab.slint:757 ui/tab.slint:1290
 #, x-machine
 msgid "Clip"
 msgstr "クリップ"
 
-#: main.ts:188 ui/tab.slint:659
+#: main.ts:189 ui/tab.slint:661
 #, x-machine
 msgid "Show in Folder"
 msgstr "フォルダーに表示"
 
-#: main.ts:189 ui/tab.slint:649 ui/tab.slint:797
+#: main.ts:190 ui/tab.slint:651 ui/tab.slint:804
 #, x-machine
 msgid "Copy"
 msgstr "コピー"
 
-#: main.ts:189
+#: main.ts:190
 #, x-machine
 msgid "Show in Tab"
 msgstr "タブに表示"
 
-#: main.ts:316
+#: main.ts:317
 #, x-machine
 msgid "Snapshot format: {}"
 msgstr "スナップショットの形式：{}"
 
-#: main.ts:331
+#: main.ts:332
 #, x-machine
 msgid "Choose Snapshot Folder"
 msgstr "スナップショットのフォルダを選択"
 
-#: main.ts:333
+#: main.ts:334
 #, x-machine
 msgid "Please choose an existing folder."
 msgstr "既存のフォルダを選択してください。"
 
-#: main.ts:336
+#: main.ts:337
 #, x-machine
 msgid "Snapshot folder: {}"
 msgstr "スナップショットのフォルダ：{}"
 
-#: main.ts:397
+#: main.ts:398
 #, x-machine
 msgid "The previous snapshot is still being processed"
 msgstr "前のスナップショットをまだ処理中です"
 
-#: main.ts:420
+#: main.ts:421
 #, x-machine
 msgid "Snapshot queued"
 msgstr "スナップショットをキューに追加しました"
 
-#: main.ts:428
+#: main.ts:429
 #, x-machine
 msgid "Save Rendered Frame As"
 msgstr "レンダリング後のフレームを別名で保存"
 
-#: main.ts:428
+#: main.ts:429
 #, x-machine
 msgid "Save Current Frame As"
 msgstr "現在のフレームを別名で保存"
 
-#: main.ts:440
+#: main.ts:441
 #, x-machine
 msgid "Frame copied without subtitles: they cannot be drawn into a frame"
 msgstr "字幕なしでフレームをコピーしました：字幕はフレームに描画できません"
 
-#: main.ts:440 main.ts:952 main.ts:1108
+#: main.ts:441 main.ts:953 main.ts:1109
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "フレームをクリップボードにコピーしました"
 
-#: main.ts:595
+#: main.ts:596
 #, x-machine
 msgid "Export Clip"
 msgstr "クリップを書き出す"
 
-#: main.ts:630
+#: main.ts:631
 #, x-machine
 msgid "Exporting the last {} seconds"
 msgstr "最後の {} 秒を書き出しています"
 
-#: main.ts:665
+#: main.ts:666
 #, x-machine
 msgid "Capture"
 msgstr "キャプチャ"
 
-#: main.ts:1016 main.ts:1131 ui/tab.slint:1094
+#: main.ts:1017 main.ts:1132 ui/tab.slint:1102
 #, x-machine
 msgid "Export"
 msgstr "エクスポート"
 
-#: main.ts:1023 main.ts:1024 manifest.json ui/tab.slint:750 ui/tab.slint:1275
+#: main.ts:1024 main.ts:1025 manifest.json ui/tab.slint:757 ui/tab.slint:1283
 #, x-machine
 msgid "Snapshot"
 msgstr "スナップショット"
 
-#: main.ts:1023 main.ts:1024 ui/tab.slint:792
+#: main.ts:1024 main.ts:1025 ui/tab.slint:799
 #, x-machine
 msgid "Save Current Frame"
 msgstr "現在のフレームを保存"
 
-#: main.ts:1023 main.ts:1024 ui/tab.slint:802
+#: main.ts:1024 main.ts:1025 ui/tab.slint:809
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "現在のフレームをコピー"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Burst…"
 msgstr "連写…"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Export Clip…"
 msgstr "クリップを書き出す…"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Capture…"
 msgstr "キャプチャ…"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "現在のフレームを別名で保存…"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "レンダリング後のフレームを保存"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "レンダリング後のフレームを別名で保存…"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "レンダリング後のフレームをコピー"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Export Tasks…"
 msgstr "書き出しタスク…"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Capture as PNG"
 msgstr "PNG でキャプチャ"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "JPEG でキャプチャ"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Capture as BMP"
 msgstr "BMP でキャプチャ"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "レンダリング後のフレームに字幕を含める"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "スナップショットの設定…"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "スナップショットのフォルダ…"
 
-#: main.ts:1023 main.ts:1024 ui/tab.slint:1148
+#: main.ts:1024 main.ts:1025 ui/tab.slint:1156
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "スナップショットのフォルダを開く"
 
-#: main.ts:1023 main.ts:1024 ui/tab.slint:931
+#: main.ts:1024 main.ts:1025 ui/tab.slint:939
 #, x-machine
 msgid "Set Clip Start"
 msgstr "クリップの開始を設定"
 
-#: main.ts:1023 main.ts:1024 ui/tab.slint:943
+#: main.ts:1024 main.ts:1025 ui/tab.slint:951
 #, x-machine
 msgid "Set Clip End"
 msgstr "クリップの終了を設定"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Export Clip Range"
 msgstr "クリップ範囲を書き出す"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Show Last Capture in Folder"
 msgstr "最新のキャプチャをフォルダーに表示"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Copy Last Snapshot"
 msgstr "最新のスナップショットをコピー"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Save Video Frame Only"
 msgstr "映像のフレームだけを保存"
 
-#: main.ts:1023 main.ts:1024
+#: main.ts:1024 main.ts:1025
 #, x-machine
 msgid "Copy Video Frame Only"
 msgstr "映像のフレームだけをコピー"
 
-#: main.ts:1023 main.ts:1024 main.ts:1136 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
+#: main.ts:1024 main.ts:1025 main.ts:1137 ui/tab.slint:799 ui/tab.slint:809 ui/tab.slint:817 ui/tab.slint:889
 #, x-machine
 msgid "No frame to capture"
 msgstr "キャプチャできるフレームがありません"
 
-#: main.ts:1114
+#: main.ts:1115
 #, x-machine
 msgid "Clip start: {}"
 msgstr "クリップの開始：{}"
 
-#: main.ts:1119
+#: main.ts:1120
 #, x-machine
 msgid "Clip end: {}"
 msgstr "クリップの終了：{}"
 
 #. {} is 10, 30, 60 or 120.
-#: main.ts:1130 ui/tab.slint:967
+#: main.ts:1131 ui/tab.slint:975
 #, x-machine
 msgid "Export Last {} Seconds"
 msgstr "最後の {} 秒を書き出す"
@@ -481,22 +481,22 @@ msgstr "トラック {} · {}"
 msgid "Track {}"
 msgstr "トラック {}"
 
-#: seams.ts:82
+#: seams.ts:83
 #, x-machine
 msgid "Frame saved as {}"
 msgstr "フレームを {} として保存しました"
 
-#: seams.ts:82
+#: seams.ts:83
 #, x-machine
 msgid "Frame saved without subtitles as {}"
 msgstr "字幕なしでフレームを保存しました：{}"
 
-#: seams.ts:82
+#: seams.ts:83
 #, x-machine
 msgid "Clip exported as {}"
 msgstr "クリップを {} として書き出しました"
 
-#: seams.ts:82
+#: seams.ts:83
 #, x-machine
 msgid "Burst of {0} frames saved to {1}"
 msgstr "{0} 枚の連写を {1} に保存しました"
@@ -579,32 +579,32 @@ msgstr "書き出しを開始しました。「結果」で確認できます。
 msgid "Restarted."
 msgstr "もう一度開始しました。"
 
-#: ui/parts.slint:112 ui/tab.slint:898
+#: ui/parts.slint:112 ui/tab.slint:906
 #, x-machine
 msgid "Fast"
 msgstr "高速"
 
-#: ui/parts.slint:113 ui/tab.slint:906
+#: ui/parts.slint:113 ui/tab.slint:914
 #, x-machine
 msgid "Precise"
 msgstr "正確"
 
-#: ui/parts.slint:119 ui/tab.slint:1008 ui/tab.slint:1009
+#: ui/parts.slint:119 ui/tab.slint:1016 ui/tab.slint:1017
 #, x-machine
 msgid "Same as source"
 msgstr "ソースと同じ"
 
-#: ui/parts.slint:120 ui/tab.slint:984 ui/tab.slint:1008 ui/tab.slint:1009
+#: ui/parts.slint:120 ui/tab.slint:992 ui/tab.slint:1016 ui/tab.slint:1017
 #, x-machine
 msgid "High quality"
 msgstr "高画質"
 
-#: ui/parts.slint:121 ui/tab.slint:1008 ui/tab.slint:1009
+#: ui/parts.slint:121 ui/tab.slint:1016 ui/tab.slint:1017
 #, x-machine
 msgid "Small file"
 msgstr "小さいファイル"
 
-#: ui/parts.slint:122 ui/tab.slint:1008
+#: ui/parts.slint:122 ui/tab.slint:1016
 #, x-machine
 msgid "Custom"
 msgstr "カスタム"
@@ -634,7 +634,7 @@ msgstr "{} 日前"
 
 #. {} is a number of seconds.
 #. {} is a clip's length in seconds ("3.5") or a burst's number of frames.
-#: ui/parts.slint:141 ui/tab.slint:575 ui/tab.slint:1328
+#: ui/parts.slint:141 ui/tab.slint:575 ui/tab.slint:1336
 #, x-machine
 msgid "{} s"
 msgstr "{} 秒"
@@ -691,481 +691,486 @@ msgstr "待機中 · {1} から {0} 枚"
 msgid "Queued · {}"
 msgstr "待機中 · {}"
 
+#. {} is a percentage.
+#: ui/tab.slint:606 ui/tab.slint:872
+#, x-machine
+msgid "Finishing…"
+msgstr "仕上げ中…"
+
 #. {0} is a percentage, {1} seconds.
-#: ui/tab.slint:607
+#: ui/tab.slint:609
 #, x-machine
 msgid "Exporting · {0} % · about {1} s left"
 msgstr "書き出し中 · {0}% · 残り約 {1} 秒"
 
 #. {} is a percentage.
-#: ui/tab.slint:609
+#: ui/tab.slint:611
 #, x-machine
 msgid "Exporting · {} %"
 msgstr "書き出し中 · {}%"
 
 #. {0} is a task state (Exporting), {1} the time spent (0:12).
 #. what the closed Advanced rows hold now: an audio choice and a quality.
-#: ui/tab.slint:611 ui/tab.slint:983
+#: ui/tab.slint:613 ui/tab.slint:991
 #, x-machine
 msgid "{0} · {1}"
 msgstr "{0} · {1}"
 
 #. {} is the number of frames (2–20).
-#: ui/tab.slint:613 ui/tab.slint:615 ui/tab.slint:616
+#: ui/tab.slint:615 ui/tab.slint:617 ui/tab.slint:618
 #, x-machine
 msgid "{} MB"
 msgstr "{} MB"
 
 #. {} is the number of frames (2–20).
-#: ui/tab.slint:615
+#: ui/tab.slint:617
 #, x-machine
 msgid "Burst · {} frames"
 msgstr "連続撮影 · {} 枚"
 
-#: ui/tab.slint:634 ui/tab.slint:846
+#: ui/tab.slint:636 ui/tab.slint:853
 #, x-machine
 msgid "Cancel"
 msgstr "キャンセル"
 
-#: ui/tab.slint:639
+#: ui/tab.slint:641
 #, x-machine
 msgid "Retry"
 msgstr "再試行"
 
-#: ui/tab.slint:644 ui/tab.slint:654
+#: ui/tab.slint:646 ui/tab.slint:656
 #, x-machine
 msgid "Open"
 msgstr "開く"
 
-#: ui/tab.slint:654
+#: ui/tab.slint:656
 #, x-machine
 msgid "Open Folder"
 msgstr "フォルダーを開く"
 
-#: ui/tab.slint:664
+#: ui/tab.slint:666
 #, x-machine
 msgid "Remove from List"
 msgstr "一覧から削除"
 
-#: ui/tab.slint:713
+#: ui/tab.slint:720
 #, x-machine
 msgid "Fast cut copies the streams: lossless and done in seconds, but a clip can only start on a keyframe."
 msgstr "高速カットはストリームをコピーします。無劣化で数秒で終わりますが、クリップはキーフレームからしか始められません。"
 
 #. {0} and {2} are times, {1} seconds.
-#: ui/tab.slint:717
+#: ui/tab.slint:724
 #, x-machine
 msgid "It will start at {0}, {1} s before your start, and end at {2}."
 msgstr "{0} から始まり（指定した開始より {1} 秒前）、{2} で終わります。"
 
 #. {0} and {1} are times.
-#: ui/tab.slint:719
+#: ui/tab.slint:726
 #, x-machine
 msgid "It will start at {0} and end at {1}."
 msgstr "{0} から始まり、{1} で終わります。"
 
-#: ui/tab.slint:720
+#: ui/tab.slint:727
 #, x-machine
 msgid "It starts on the keyframe at or before your start."
 msgstr "指定した開始位置かその前のキーフレームから始まります。"
 
-#: ui/tab.slint:721
+#: ui/tab.slint:728
 #, x-machine
 msgid "Its streams do not fit in MP4, so it is saved as MKV."
 msgstr "ストリームが MP4 に収まらないため、MKV で保存します。"
 
-#: ui/tab.slint:722
+#: ui/tab.slint:729
 #, x-machine
 msgid "Pick Precise to start on the exact frame."
 msgstr "正確なフレームから始めるには「正確」を選んでください。"
 
-#: ui/tab.slint:723
+#: ui/tab.slint:730
 #, x-machine
 msgid "Precise re-encodes from the exact frame, and can include video effects and subtitles."
 msgstr "「正確」は正確なフレームから再エンコードし、映像効果と字幕も含められます。"
 
 #. {0} and {1} are times.
-#: ui/tab.slint:725
+#: ui/tab.slint:732
 #, x-machine
 msgid "Precise re-encodes from the exact frame {0} to {1}, and can include video effects and subtitles."
 msgstr "「正確」は {0} のフレームから {1} まで再エンコードし、映像効果と字幕も含められます。"
 
 #. {0} seconds of media, {1} megabytes ("46" or "55–80"), {2} a time span ("2 s", "about 1–3 min").
-#: ui/tab.slint:730
+#: ui/tab.slint:737
 #, x-machine
 msgid "Length {0} s · ≈ {1} MB · ≈ {2}"
 msgstr "長さ {0} 秒 · 約 {1} MB · 約 {2}"
 
 #. {0} seconds of media, {1} a time span ("2 s", "about 1–3 min").
-#: ui/tab.slint:732
+#: ui/tab.slint:739
 #, x-machine
 msgid "Length {0} s · ≈ {1}"
 msgstr "長さ {0} 秒 · 約 {1}"
 
-#: ui/tab.slint:751
+#: ui/tab.slint:758
 #, x-machine
 msgid "Results ({})"
 msgstr "結果（{}）"
 
-#: ui/tab.slint:751
+#: ui/tab.slint:758
 #, x-machine
 msgid "Results"
 msgstr "結果"
 
-#: ui/tab.slint:751
+#: ui/tab.slint:758
 #, x-machine
 msgid "Settings"
 msgstr "設定"
 
-#: ui/tab.slint:761
+#: ui/tab.slint:768
 #, x-machine
 msgid "Show or hide this tab"
 msgstr "このタブを表示/非表示"
 
-#: ui/tab.slint:787
+#: ui/tab.slint:794
 #, x-machine
 msgid "Save"
 msgstr "保存"
 
-#: ui/tab.slint:809 ui/tab.slint:880
+#: ui/tab.slint:816 ui/tab.slint:888
 #, x-machine
 msgid "This picture is made by a plugin"
 msgstr "この映像はプラグインが生成しています"
 
-#: ui/tab.slint:811
+#: ui/tab.slint:818
 #, x-machine
 msgid "Source size, with the subtitles shown and the video effects"
 msgstr "元のサイズ、表示中の字幕と映像効果を含む"
 
-#: ui/tab.slint:812
+#: ui/tab.slint:819
 #, x-machine
 msgid "Source size, with the subtitles shown"
 msgstr "元のサイズ、表示中の字幕を含む"
 
 #. {} is the file or folder name.
-#: ui/tab.slint:843
+#: ui/tab.slint:850
 #, x-machine
 msgid "Exporting {}"
 msgstr "{} を書き出し中"
 
-#. {} is a percentage.
-#: ui/tab.slint:865
+#: ui/tab.slint:873
 #, x-machine
 msgid "{} %"
 msgstr "{}%"
 
 #. {} is a number of seconds.
-#: ui/tab.slint:867
+#: ui/tab.slint:875
 #, x-machine
 msgid "about {} s left"
 msgstr "残り約 {} 秒"
 
 #. {} is the number of exports waiting (1–4).
-#: ui/tab.slint:870
+#: ui/tab.slint:878
 #, x-machine
 msgid "+{} queued"
 msgstr "ほか {} 件待機中"
 
-#: ui/tab.slint:885
+#: ui/tab.slint:893
 #, x-machine
 msgid "There is no file to cut."
 msgstr "カットするファイルがありません。"
 
-#: ui/tab.slint:886
+#: ui/tab.slint:894
 #, x-machine
 msgid "Frames can still be saved; open a local file to cut clips."
 msgstr "フレームは保存できます。クリップを切り出すにはローカルファイルを開いてください。"
 
-#: ui/tab.slint:887
+#: ui/tab.slint:895
 #, x-machine
 msgid "Open a local video file to save frames, bursts and clips."
 msgstr "ローカルの動画ファイルを開くと、フレーム、連続撮影、クリップを保存できます。"
 
-#: ui/tab.slint:899
+#: ui/tab.slint:907
 #, x-machine
 msgid "lossless"
 msgstr "無劣化"
 
-#: ui/tab.slint:899
+#: ui/tab.slint:907
 #, x-machine
 msgid "no re-encode · lossless"
 msgstr "再エンコードなし · 無劣化"
 
-#: ui/tab.slint:907
+#: ui/tab.slint:915
 #, x-machine
 msgid "re-encode"
 msgstr "再エンコード"
 
-#: ui/tab.slint:907
+#: ui/tab.slint:915
 #, x-machine
 msgid "re-encode · any frame"
 msgstr "再エンコード · 任意のフレーム"
 
-#: ui/tab.slint:923 ui/tab.slint:1223 ui/tab.slint:1261
+#: ui/tab.slint:931 ui/tab.slint:1231 ui/tab.slint:1269
 #, x-machine
 msgid "Start"
 msgstr "開始"
 
-#: ui/tab.slint:931 ui/tab.slint:943 ui/tab.slint:1266
+#: ui/tab.slint:939 ui/tab.slint:951 ui/tab.slint:1274
 #, x-machine
 msgid "Now"
 msgstr "現在"
 
-#: ui/tab.slint:935
+#: ui/tab.slint:943
 #, x-machine
 msgid "End"
 msgstr "終了"
 
-#: ui/tab.slint:950
+#: ui/tab.slint:958
 #, x-machine
 msgid "Use A-B range"
 msgstr "A-B 範囲を使う"
 
-#: ui/tab.slint:953
+#: ui/tab.slint:961
 #, x-machine
 msgid "Copy the A-B loop into Start and End"
 msgstr "A-B リピートを開始と終了にコピー"
 
 #. {0} and {1} are the A and B times of the loop.
-#: ui/tab.slint:955
+#: ui/tab.slint:963
 #, x-machine
 msgid "A {0} · B {1}"
 msgstr "A {0} · B {1}"
 
 #. {} is 10, 30, 60 or 120.
-#: ui/tab.slint:961
+#: ui/tab.slint:969
 #, x-machine
 msgid "Last {} s"
 msgstr "最後の {} 秒"
 
-#: ui/tab.slint:980
+#: ui/tab.slint:988
 #, x-machine
 msgid "Advanced"
 msgstr "詳細"
 
-#: ui/tab.slint:984 ui/tab.slint:1005
+#: ui/tab.slint:992 ui/tab.slint:1013
 #, x-machine
 msgid "Same as source (stream copy)"
 msgstr "ソースと同じ（ストリームコピー）"
 
-#: ui/tab.slint:995 ui/tab.slint:1058
+#: ui/tab.slint:1003 ui/tab.slint:1066
 #, x-machine
 msgid "Audio"
 msgstr "音声"
 
-#: ui/tab.slint:1004
+#: ui/tab.slint:1012
 #, x-machine
 msgid "Quality"
 msgstr "画質"
 
-#: ui/tab.slint:1013
+#: ui/tab.slint:1021
 #, x-machine
 msgid "High quality (H.264 + AAC in MP4)"
 msgstr "高画質（MP4、H.264 + AAC）"
 
-#: ui/tab.slint:1019
+#: ui/tab.slint:1027
 #, x-machine
 msgid "Resolution"
 msgstr "解像度"
 
-#: ui/tab.slint:1021 ui/tab.slint:1031
+#: ui/tab.slint:1029 ui/tab.slint:1039
 #, x-machine
 msgid "Source"
 msgstr "ソース"
 
-#: ui/tab.slint:1028
+#: ui/tab.slint:1036
 #, x-machine
 msgid "Frame rate"
 msgstr "フレームレート"
 
-#: ui/tab.slint:1031
+#: ui/tab.slint:1039
 #, x-machine
 msgid "{} fps"
 msgstr "{} fps"
 
-#: ui/tab.slint:1038
+#: ui/tab.slint:1046
 #, x-machine
 msgid "Source bitrate"
 msgstr "ソースのビットレート"
 
-#: ui/tab.slint:1038
+#: ui/tab.slint:1046
 #, x-machine
 msgid "Quality number {}"
 msgstr "品質値 {}"
 
-#: ui/tab.slint:1049
+#: ui/tab.slint:1057
 #, x-machine
 msgid "Speed"
 msgstr "速度"
 
-#: ui/tab.slint:1051
+#: ui/tab.slint:1059
 #, x-machine
 msgid "Faster"
 msgstr "速い"
 
-#: ui/tab.slint:1051
+#: ui/tab.slint:1059
 #, x-machine
 msgid "Balanced"
 msgstr "バランス"
 
-#: ui/tab.slint:1051
+#: ui/tab.slint:1059
 #, x-machine
 msgid "Smaller"
 msgstr "小さく"
 
-#: ui/tab.slint:1061
+#: ui/tab.slint:1069
 #, x-machine
 msgid "AAC {} kb/s"
 msgstr "AAC {} kbps"
 
-#: ui/tab.slint:1070
+#: ui/tab.slint:1078
 #, x-machine
 msgid "Reset"
 msgstr "リセット"
 
-#: ui/tab.slint:1076 ui/tab.slint:1200 ui/tab.slint:1268
+#: ui/tab.slint:1084 ui/tab.slint:1208 ui/tab.slint:1276
 #, x-machine
 msgid "Include video effects"
 msgstr "ビデオエフェクトを含める"
 
-#: ui/tab.slint:1082
+#: ui/tab.slint:1090
 #, x-machine
 msgid "Burn in subtitles"
 msgstr "字幕を焼き込む"
 
-#: ui/tab.slint:1087
+#: ui/tab.slint:1095
 #, x-machine
 msgid "Effects and subtitles: Precise only"
 msgstr "効果と字幕：「正確」のみ"
 
-#: ui/tab.slint:1101
+#: ui/tab.slint:1109
 #, x-machine
 msgid "Export as {} into the snapshot folder"
 msgstr "{} としてスナップショットフォルダーに書き出す"
 
-#: ui/tab.slint:1102
+#: ui/tab.slint:1110
 #, x-machine
 msgid "Export the range into the snapshot folder"
 msgstr "範囲をスナップショットフォルダーに書き出す"
 
-#: ui/tab.slint:1108
+#: ui/tab.slint:1116
 #, x-machine
 msgid "Export As…"
 msgstr "名前を付けて書き出す…"
 
-#: ui/tab.slint:1110
+#: ui/tab.slint:1118
 #, x-machine
 msgid "Export the range into a file you choose"
 msgstr "範囲を選んだファイルに書き出す"
 
-#: ui/tab.slint:1123
+#: ui/tab.slint:1131
 #, x-machine
 msgid "Use Precise"
 msgstr "「正確」を使う"
 
-#: ui/tab.slint:1140
+#: ui/tab.slint:1148
 #, x-machine
 msgid "No snapshots or clips yet."
 msgstr "スナップショットやクリップはまだありません。"
 
-#: ui/tab.slint:1150
+#: ui/tab.slint:1158
 #, x-machine
 msgid "Clear Finished"
 msgstr "完了したものを消去"
 
-#: ui/tab.slint:1167
+#: ui/tab.slint:1175
 #, x-machine
 msgid "Save to"
 msgstr "保存先"
 
-#: ui/tab.slint:1174
+#: ui/tab.slint:1182
 #, x-machine
 msgid "Save to the media folder when possible"
 msgstr "可能な場合はメディアと同じフォルダに保存"
 
-#: ui/tab.slint:1179
+#: ui/tab.slint:1187
 #, x-machine
 msgid "Snapshots"
 msgstr "スナップショット"
 
-#: ui/tab.slint:1182
+#: ui/tab.slint:1190
 #, x-machine
 msgid "Format"
 msgstr "形式"
 
-#: ui/tab.slint:1197
+#: ui/tab.slint:1205
 #, x-machine
 msgid "Quality: JPEG only"
 msgstr "画質：JPEG のみ"
 
-#: ui/tab.slint:1210 ui/tab.slint:1289
+#: ui/tab.slint:1218 ui/tab.slint:1297
 #, x-machine
 msgid "Burst"
 msgstr "連写"
 
 #. {0} is the number of frames, {1} the interval in seconds.
-#: ui/tab.slint:1214
+#: ui/tab.slint:1222
 #, x-machine
 msgid "{0} frames · every {1} s · from now"
 msgstr "{0} 枚 · {1} 秒ごと · 現在位置から"
 
 #. {0} is the number of frames, {1} the interval in seconds, {2} the start time.
-#: ui/tab.slint:1216
+#: ui/tab.slint:1224
 #, x-machine
 msgid "{0} frames · every {1} s · from {2}"
 msgstr "{0} 枚 · {1} 秒ごと · {2} から"
 
-#: ui/tab.slint:1228
+#: ui/tab.slint:1236
 #, x-machine
 msgid "Start the burst"
 msgstr "連続撮影を開始"
 
-#: ui/tab.slint:1240
+#: ui/tab.slint:1248
 #, x-machine
 msgid "Count"
 msgstr "枚数"
 
-#: ui/tab.slint:1246
+#: ui/tab.slint:1254
 #, x-machine
 msgid "frames (2–20)"
 msgstr "枚（2〜20）"
 
-#: ui/tab.slint:1250
+#: ui/tab.slint:1258
 #, x-machine
 msgid "Interval"
 msgstr "間隔"
 
-#: ui/tab.slint:1256
+#: ui/tab.slint:1264
 #, x-machine
 msgid "s (0.1–10)"
 msgstr "秒（0.1〜10）"
 
-#: ui/tab.slint:1258
+#: ui/tab.slint:1266
 #, x-machine
 msgid "Start at the current position"
 msgstr "現在の位置から開始"
 
-#: ui/tab.slint:1269
+#: ui/tab.slint:1277
 #, x-machine
 msgid "Capture subtitles too"
 msgstr "字幕もキャプチャ"
 
-#: ui/tab.slint:1273
+#: ui/tab.slint:1281
 #, x-machine
 msgid "File names"
 msgstr "ファイル名"
 
-#: ui/tab.slint:1298
+#: ui/tab.slint:1306
 #, x-machine
 msgid "Click a variable to add it to the template you edited last. Existing files are never overwritten: a number is added."
 msgstr "変数をクリックすると、最後に編集したテンプレートに追加されます。既存のファイルは上書きされず、番号が付きます。"
 
-#: ui/tab.slint:1322
+#: ui/tab.slint:1330
 #, x-machine
 msgid "Clips"
 msgstr "クリップ"
 
-#: ui/tab.slint:1325
+#: ui/tab.slint:1333
 #, x-machine
 msgid "Last clip length"
 msgstr "「最後の N 秒」の長さ"

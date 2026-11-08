@@ -20,7 +20,7 @@ import type { Saved } from "./results.ts";
 import { hostSupport, rangeMarker, showDone } from "./seams.ts";
 import type { HostSupport, OsdAction } from "./seams.ts";
 import { openSettings } from "./settings.ts";
-import { Tasks, terminal } from "./tasks.ts";
+import { Tasks, terminal, timeLeft } from "./tasks.ts";
 import type { Task } from "./tasks.ts";
 
 /**
@@ -138,7 +138,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   }
   /** "Snapshot failed: …", "Burst failed: …", "Export failed: …" with the reason, or the player's or system's own message. */
   const sayFailed = (kind: Kind, { reason, raw }: Problem) => shown(osd.show(FAILED[kind], [reason ? text(REASON[reason]) : cut(raw)]));
-  const tasks = new Tasks(plugin, (task) => void finished(task));
+  // A failure while reporting a finished task goes to the log (it would otherwise be lost: no message, no result row).
+  const tasks = new Tasks(plugin, (task) => void finished(task).catch((error) => console.error(`[capture] finishing task ${task.id}: ${message(error)}`)));
   const exporter = capturer(plugin, tasks);
   const copier = clipboard(plugin);
   const marker = rangeMarker(plugin, text("Clip"));
@@ -216,7 +217,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         const { spec } = task;
         const progress = tasks.progressOf(task);
         const share = task.progress && task.progress.total > 0 ? task.progress.done / task.progress.total : null;
-        const left = share !== null && share > 0 && task.started ? Math.round(((Date.now() - task.started) / 1000) * (1 / share - 1)) : -1;
+        const left = timeLeft(task);
         return {
           id: `t${task.id}`,
           kind: spec.kind,
@@ -289,7 +290,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       method: spec.kind === "clip" ? (spec.method ?? "precise") : "",
       preset: spec.kind === "clip" && spec.method !== "fast" && spec.encode ? presetOf(spec.encode) : spec.kind === "clip" && spec.method !== "fast" ? "high" : "",
       percent: share === null ? -1 : Math.round(share * 100),
-      left: share !== null && share > 0 && task.started ? Math.round(((Date.now() - task.started) / 1000) * (1 / share - 1)) : -1,
+      left: timeLeft(task),
       elapsed: elapsed(task.started),
       queued: tasks.queued(),
     };

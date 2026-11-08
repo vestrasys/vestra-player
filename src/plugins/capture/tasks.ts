@@ -30,6 +30,8 @@ export interface Task {
   ended?: number;
   /** The running job's progress in seconds of media (R4); `null` while unknown. */
   progress: { done: number; total: number } | null;
+  /** When the progress first moved, and how far it was then (the time-left estimate measures from here). */
+  rateFrom?: { at: number; done: number };
   /** A finished clip's range as written (R2; the range asked for until then). */
   actual?: { start: number; end: number };
 }
@@ -71,6 +73,21 @@ export function jobError(error: { code: string; message: string }, spec?: Spec):
     default:
       return "exportFailed";
   }
+}
+
+/**
+ * Seconds left of a running export, from the rate measured since its progress
+ * first moved; -1 (none shown) until there is a rate worth the name (1.5 s of
+ * it and some progress), and at the end, while the player checks the file.
+ */
+export function timeLeft(task: Pick<Task, "progress" | "rateFrom">, now = Date.now()): number {
+  const progress = task.progress;
+  const from = task.rateFrom;
+  if (!progress || !from || progress.done >= progress.total) return -1;
+  const seconds = (now - from.at) / 1000;
+  const moved = progress.done - from.done;
+  if (seconds < 1.5 || moved <= 0) return -1;
+  return Math.max(1, Math.round((progress.total - progress.done) / (moved / seconds)));
 }
 
 /** One running and up to four queued tasks; history of twenty; failed input kept five minutes. */
@@ -218,6 +235,10 @@ export class Tasks {
       // A job the player has not started yet is still this task's preparation (the task left the plugin's queue).
       task.status = TERMINAL.includes(state.status) ? "running" : state.status === "queued" ? "preparing" : state.status;
       task.progress = jobProgress(state);
+      // The rate is measured from the first progress that moved: not from the start, which includes
+      // freezing the input, the seek and the encoder's start-up (GUI check: a 4K Precise cut said
+      // "about 391 s left" 14 s in and finished within a minute).
+      if (task.progress && task.progress.done > 0 && !task.rateFrom) task.rateFrom = { at: Date.now(), done: task.progress.done };
     };
     show(job.state);
     // Past the export's await: the row's status changed outside SDK-invoked code.

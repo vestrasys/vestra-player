@@ -79,7 +79,8 @@ export interface OsdAction {
  * command palette.
  */
 export function showDone(plugin: Plugin, text: "Frame saved as {}" | "Frame saved without subtitles as {}" | "Clip exported as {}" | "Burst of {0} frames saved to {1}", args: (string | number)[], actions: OsdAction[]) {
-  void plugin.osd.show(text, args, { actions: actions.slice(0, 2) }).catch(() => {});
+  // A refusal is logged: a "saved" message that does not show is otherwise invisible (GUI check 2026-11-08).
+  void plugin.osd.show(text, args, { actions: actions.slice(0, 2) }).catch((error: Error) => console.error(`[capture] osd: ${error.message}`));
 }
 
 /**

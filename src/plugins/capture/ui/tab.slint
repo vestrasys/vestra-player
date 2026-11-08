@@ -602,6 +602,8 @@ component ResultItem inherits Rectangle {
                             // TRANSLATORS: {} is a time or a time range.
                             : @tr("Queued · {}", root.entry.range))
                         : root.running ? (root.entry.total > 1 ? @tr("{0} · {1}/{2}", Words.state(root.entry.state), root.entry.done, root.entry.total)
+                            // The player checks the file after the last frame: no time left to say.
+                            : root.entry.percent >= 100 ? @tr("Finishing…")
                             : root.entry.percent >= 0 ? (root.entry.left >= 0
                                 // TRANSLATORS: {0} is a percentage, {1} seconds.
                                 ? @tr("Exporting · {0} % · about {1} s left", root.entry.percent, root.entry.left)
@@ -681,16 +683,21 @@ component Heading inherits Text {
 }
 
 // One line of text with its full wording in a tooltip when it does not fit.
+// It takes the width its row leaves (never its text's) and elides there, so a long name
+// never pushes out of its row (GUI check: the export card's title ran out to the left).
 component Line {
     in property <string> text;
     in property <brush> color: Theme.text-dim;
     in property <TextHorizontalAlignment> align: left;
     min-height: 16px;
     preferred-height: 16px;
+    min-width: 0px;
+    preferred-width: 0px;
+    horizontal-stretch: 1;
     ToolTipArea {
-        text: label.width > root.width ? root.text : "";
+        text: label.preferred-width > root.width ? root.text : "";
         label := Text {
-            width: max(root.width, self.preferred-width);
+            width: root.width;
             text: root.text;
             color: root.color;
             font-size: Theme.font-body;
@@ -862,7 +869,8 @@ export component CaptureTab inherits Rectangle {
                                 text: (CaptureBridge.card.method != "" ? Words.method(CaptureBridge.card.method)
                                         + (CaptureBridge.card.preset != "" ? " · " + Words.preset(CaptureBridge.card.preset) : "") + " · " : "")
                                     // TRANSLATORS: {} is a percentage.
-                                    + (CaptureBridge.card.percent >= 0 ? @tr("{} %", CaptureBridge.card.percent)
+                                    + (CaptureBridge.card.percent >= 100 ? @tr("Finishing…")
+                                    : CaptureBridge.card.percent >= 0 ? @tr("{} %", CaptureBridge.card.percent)
                                         // TRANSLATORS: {} is a number of seconds.
                                         + (CaptureBridge.card.left >= 0 ? " · " + @tr("about {} s left", CaptureBridge.card.left) : "")
                                         : CaptureBridge.card.elapsed)
