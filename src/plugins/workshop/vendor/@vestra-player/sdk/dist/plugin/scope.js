@@ -184,10 +184,10 @@ export class ScopeImpl {
             this.update();
     }
     /**
-     * Run a listener that pushes its own values (`player.on`, SDK 1.7.0)
-     * like `run`, except that no full pass follows it: what it writes to
-     * `plugin.state` runs the passes for its readers, and for anything else
-     * the plugin calls `update()`. Its reads are not counted as a binding's.
+     * Run a listener that pushes its own values (`player.on`) like `run`, except
+     * that no full pass follows it: what it writes to `plugin.state` runs the
+     * passes for its readers, and for anything else the plugin calls `update()`.
+     * Its reads are not counted as a binding's.
      */
     runQuiet(handler, ...args) {
         if (this.disposed)

@@ -3,9 +3,9 @@ export declare const PATCH_FEATURE = "ui.patch";
 /** The most operations one patch carries (the player's `MAX_PATCH_OPS`). */
 export declare const PATCH_OPS = 1024;
 /**
- * The most operations one diff plans (SDK 1.5.46): its patch is sent as
- * several of at most {@link PATCH_OPS} each (`chunkOps`); more is sent whole
- * (in parts, which the player writes at once).
+ * The most operations one diff plans: its patch is sent as several of at most
+ * {@link PATCH_OPS} each (`chunkOps`); more is sent whole (in parts, which the
+ * player writes at once).
  */
 export declare const DIFF_OPS: number;
 /**
@@ -107,11 +107,11 @@ export declare function applyOps<T>(rows: T[], ops: readonly ({
     to: number;
 })[]): T[];
 /**
- * The bytes of rows one write carries at most (SDK 1.5.46, player 0.6.0):
- * half the 1 MiB protocol line, which leaves room for the request around
- * them. A larger whole write is sent as its first rows and `insert`
- * patches of the rest; a larger patch as several patches, each applying on
- * the one before (the player's doc/architecture/large-lists.md §4).
+ * The bytes of rows one write carries at most: half the 1 MiB protocol line,
+ * which leaves room for the request around them. A larger whole write is sent
+ * as its first rows and `insert` patches of the rest; a larger patch as several
+ * patches, each applying on the one before (the player's
+ * doc/architecture/large-lists.md §4).
  */
 export declare const CHUNK_BYTES: number;
 /** The bytes a row adds to a write (its JSON and a separator). */

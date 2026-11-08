@@ -256,7 +256,7 @@ Optional: adding "Related" at the end of the README, linking to the main player 
 <p align="center">(5 badges)</p>
 <p align="center">
   <a href="https://vestrasys.github.io/vestra-player-sdk/">Docs</a> ·
-  <a href="https://vestrasys.github.io/vestra-player-sdk/documents/Getting_started.html">Getting started</a> ·
+  <a href="https://vestrasys.github.io/vestra-player-sdk/documents/Tutorial.html">Tutorial</a> ·
   <a href="https://github.com/vestrasys/vestra-player-sdk/tree/main/examples">Examples</a> ·
   <a href="https://github.com/vestrasys/vestra-player-sdk/blob/main/CHANGELOG.md">Changelog</a> ·
   <a href="https://github.com/vestrasys/vestra-player-sdk/blob/main/README.zh-CN.md">简体中文</a>

@@ -1,7 +1,7 @@
 /**
- * `plugin.when`: conditions on the player's own state that the player
- * evaluates for a command's `enabled` and `checked` (player 0.5.21). The
- * wire form is `commands.register` / `commands.update` `when`.
+ * `plugin.when`: conditions on the player's own state that the player evaluates
+ * for a command's `enabled` and `checked`. The wire form is `commands.register`
+ * / `commands.update` `when`.
  */
 import type { Condition, LanguagePreference, PlayerState, ThemeId, When } from "./types.ts";
 /** A condition in the wire form: an object of exactly one key. */

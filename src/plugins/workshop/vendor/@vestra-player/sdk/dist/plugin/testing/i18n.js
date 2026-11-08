@@ -9,7 +9,7 @@
 import { HostError } from "../../wire.js";
 import { THEMES } from "../appearance.js";
 import { format as formatTemplate, HOST_GROUPS, HOST_ZH_HANS, LOCALES, isTextValue, menuKeys, renderTemplateArgs, renderText, resolveTexts, textKey, textProblem, } from "../../i18n.js";
-/** Texts only the test host uses, with their Chinese of SDK 1.5.8. */
+/** Texts only the test host uses, with their Chinese. */
 export const TEST_ZH_HANS = {
     "this site": "这个网站",
     "External SRT": "外部 SRT",

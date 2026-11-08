@@ -97,15 +97,12 @@ export const COMMAND_LIMITS = {
 };
 /**
  * The player's built-in top-level menus, by id. Write `@<id>` as the first
- * segment of a command path (`["@video", "Blur"]`, see `CommandOptions.path`) to put a
- * command into that menu whatever language the player's menus are in. The
- * player stores the menu's title (视频 today); later segments are titles.
- * Needs player 0.3.0 (`"minPlayerVersion": "0.3.0"`); older players show
- * `@video` as a menu of its own. `reset` (SDK 1.5.51) needs player 0.6.3:
- * the Reset menu, directly below Settings, gathers every command that puts
- * something back to its default; older players refuse `@reset` with
- * `invalid`. The player's tests check that this list agrees with the
- * player's.
+ * segment of a command path (`["@video", "Blur"]`, see `CommandOptions.path`)
+ * to put a command into that menu whatever language the player's menus are in.
+ * Later segments are titles.
+ * `reset`: the Reset menu, directly below Settings, gathers every command that
+ * puts something back to its default. The player's tests check that this list
+ * agrees with the player's.
  *
  * @example Put a command into the built-in Video menu
  * "Blur" appears in the player's Video menu in every interface language.
@@ -138,12 +135,11 @@ export const MENU_IDS = [
     "reset",
 ];
 /**
- * The icons a bottom-bar button may name (`CommandOptions.button.icon`):
- * every icon of the player's V-Line set, `@vestra/icons.slint` (draw one
- * in your own Slint with `Icon { name: "store"; }`). The player's tests check
- * that this list is its icon set. `"sliders"` (three sliders, the player's
- * Adjustments and Effects button) is new in player 0.7.6 (SDK 1.6.11); older players refuse
- * it as a button icon with `invalid`.
+ * The icons a bottom-bar button may name (`CommandOptions.button.icon`): every
+ * icon of the player's V-Line set, `@vestra/icons.slint` (draw one in your own
+ * Slint with `Icon { name: "store"; }`). The player's tests check that this
+ * list is its icon set. `"sliders"` (three sliders, the player's Adjustments
+ * and Effects button).
  *
  * @example Check in a test that the button's icon exists
  * The test fails before release if the plugin's bar button names an icon
@@ -203,13 +199,11 @@ export const BAR_BUTTON_ICONS = [
     "sliders",
 ];
 /**
- * The player's limits on bottom-bar buttons (`CommandOptions.button`), the
- * same values as the player's (its tests check that they agree). A button
- * past `perPlugin` has none (its command still registers and its menu entry
- * stays). `total` is what the strip holds: the `total` lowest by order,
- * plugin id and declaration order; the rest are in the strip's » menu, in
- * the same order (older players keep the `total` highest and leave the
- * others out).
+ * The player's limits on bottom-bar buttons (`CommandOptions.button`), the same
+ * values as the player's (its tests check that they agree). A button past
+ * `perPlugin` has none (its command still registers and its menu entry stays).
+ * `total` is what the strip holds: the `total` lowest by order, plugin id and
+ * declaration order; the rest are in the strip's » menu, in the same order.
  *
  * @since 1.5.29
  *
@@ -236,8 +230,8 @@ export const BAR_BUTTON_LIMITS = {
  * @example Add an item to the built-in Snapshot submenu
  * "Copy Snapshot" appears in Snapshot ▸ next to the built-in capture
  * plugin's items. Paths merge by their English keys, so a command whose
- * path starts with the submenu's keys (`["Snapshot"]`, a top-level submenu
- * since player 0.7.6) lands in the same submenu whatever the interface
+ * path starts with the submenu's keys (`["Snapshot"]`, a top-level submenu)
+ * lands in the same submenu whatever the interface
  * language.
  * ```ts
  * import type { Plugin } from "@vestra-player/sdk";
@@ -663,9 +657,9 @@ export function commandClient(transport) {
         /** Remove the command from the menu and the binding table; the id is free again. */
         unregister: (id) => transport.request("commands.unregister", { id }),
         /**
-         * The key labels of the plugin's own commands, as menus show them
-         * (player 0.7.6); later changes come as the `commands.keys` event, in
-         * the same shape. `revision` orders answers and events.
+         * The key labels of the plugin's own commands, as menus show them; later
+         * changes come as the `commands.keys` event, in the same shape. `revision`
+         * orders answers and events.
          */
         keys: () => transport.request("commands.keys", {}),
         update: (id, revision, state, when) => transport.request("commands.update", {

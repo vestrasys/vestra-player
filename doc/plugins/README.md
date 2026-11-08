@@ -4,10 +4,9 @@ Everything a plugin author needs is on the SDK's documentation site, [vestrasys.
 
 | To | Read |
 | --- | --- |
-| Write a first plugin | [Getting started](https://vestrasys.github.io/vestra-player-sdk/documents/Getting_started.html) |
-| Understand how plugins run, commands, playback, processing, the user interface | [Concepts](https://vestrasys.github.io/vestra-player-sdk/documents/Concepts.html) |
-| Do one task (translate, test, publish, ...) | [How-to guides](https://vestrasys.github.io/vestra-player-sdk/documents/How-to_guides.html) |
-| Follow the interface and menu rules | [Guidelines](https://vestrasys.github.io/vestra-player-sdk/documents/Guidelines.html) |
+| Write a first plugin, and understand how plugins run | [Tutorial](https://vestrasys.github.io/vestra-player-sdk/documents/Tutorial.html) |
+| Do one task (translate, test, publish, ...) | [Guides](https://vestrasys.github.io/vestra-player-sdk/documents/Guides.html) |
+| Follow the interface and menu rules | [Design rules](https://vestrasys.github.io/vestra-player-sdk/documents/Design_rules.html) |
 | Read complete example plugins | [Examples](https://vestrasys.github.io/vestra-player-sdk/documents/Examples.html) |
 | Look up capabilities, limits, menu keys, bindings, platforms, theme, the CLI | [Reference](https://vestrasys.github.io/vestra-player-sdk/documents/Reference.html) |
 | Look up one interface or member | [API](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html) |

@@ -14,9 +14,9 @@ import { fileURLToPath } from "node:url";
 /** The SDK's own files (`src/` or `dist/`): left out of a call site. */
 const SDK_DIRECTORY = fileURLToPath(new URL("..", import.meta.url));
 /**
- * Events the player wakes a stopped plugin for (player 0.5.21): a listener
- * of one does not keep the plugin running. They follow deliberate changes
- * (an install, a key edit, the palette, a resolver), not playback.
+ * Events the player wakes a stopped plugin for: a listener of one does not keep
+ * the plugin running. They follow deliberate changes (an install, a key edit,
+ * the palette, a resolver), not playback.
  */
 export const WAKE_EVENTS = [
     "packages.changed",
@@ -29,9 +29,9 @@ export const WAKE_EVENTS = [
     "resolvers.fileTypes",
 ];
 /**
- * The player's answers to a declaration that refuse that one declaration
- * (a command's path, texts or count): during activation they skip it
- * instead of failing the plugin (`Connection.declaring`, SDK 1.5.49).
+ * The player's answers to a declaration that refuse that one declaration (a
+ * command's path, texts or count): during activation they skip it instead of
+ * failing the plugin (`Connection.declaring`).
  */
 const DECLARATION_REFUSALS = new Set([
     "invalid",
@@ -112,8 +112,8 @@ export class Connection {
     locale;
     /**
      * Protocol additions the player advertises at start-up (`features` in the
-     * handshake's app data, player 0.6.0): `ui.patch` (row patches of
-     * property writes). Not part of the plugin API; empty for older players.
+     * handshake's app data): `ui.patch` (row patches of property writes). Not
+     * part of the plugin API.
      */
     features;
     constructor(transport, manifest, directory, dataDirectory, app, options = {}) {
@@ -178,13 +178,13 @@ export class Connection {
         return work;
     }
     /**
-     * A declaration the player checks on its own (`what`: "command x"),
-     * started like `starting`. In the player's runner a refusal of it during
-     * activation (`invalid`, `conflict`, `limit`) does not fail the plugin:
-     * it is logged, skipped and reported to the scope once activation
-     * completes, so an `onError` added anywhere in `activate` hears it (SDK
-     * 1.5.49; VS Code logs a bad contribution and activates the extension).
-     * Under `strictDeclarations` (TestHost) it fails activation as before.
+     * A declaration the player checks on its own (`what`: "command x"), started
+     * like `starting`. In the player's runner a refusal of it during activation
+     * (`invalid`, `conflict`, `limit`) does not fail the plugin: it is logged,
+     * skipped and reported to the scope once activation completes, so an
+     * `onError` added anywhere in `activate` hears it (VS Code logs a bad
+     * contribution and activates the extension). Under `strictDeclarations`
+     * (TestHost) it fails activation as before.
      */
     declaring(work, what, report) {
         if (!this.#activating || this.#strict)
@@ -341,11 +341,10 @@ export class Connection {
         };
     }
     /**
-     * A development warning, once per plugin, no behaviour change (SDK
-     * 1.6.12): the plugin follows `event` (an `onChange`, a `bind` that reads
-     * the state) without the `events` capability, so changes made elsewhere
-     * (the user, the player, another plugin) never reach it; the state moves
-     * only after its own calls.
+     * A development warning, once per plugin, no behaviour change: the plugin
+     * follows `event` (an `onChange`, a `bind` that reads the state) without the
+     * `events` capability, so changes made elsewhere (the user, the player,
+     * another plugin) never reach it; the state moves only after its own calls.
      */
     #warnUnheard(event) {
         if (this.#warnedEvents)
@@ -389,10 +388,10 @@ export class Connection {
         return result;
     }
     /**
-     * One request by its method name, as given (`plugin.wire.request`, SDK
-     * 1.7.0): nothing added, nothing checked here, the player checks the
-     * capability. Every other part of the SDK uses the typed clients
-     * (`host`); `scripts/check-layers.mjs` keeps it so.
+     * One request by its method name, as given (`plugin.wire.request`): nothing
+     * added, nothing checked here, the player checks the capability. Every other
+     * part of the SDK uses the typed clients (`host`); `scripts/check-layers.mjs`
+     * keeps it so.
      */
     request(method, params) {
         return this.#transport.request(method, params);

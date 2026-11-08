@@ -244,7 +244,7 @@ export { LOCALES };
  * recorded.
  *
  * @capability None.
- * @see [Test a plugin](../../../docs/how-to/testing.md)
+ * @see [Test a plugin](../../../docs/guides/testing.md)
  * @since 1.0.0
  * @category Testing
  */
@@ -286,8 +286,8 @@ export class TestHost {
     /** Tool windows by id (see {@link TestHost.window}). */
     windows = new Map();
     /**
-     * The plugin's mounted panels by slot, in mount order (SDK 1.6.15: one
-     * panel per slot). See {@link TestHost.mounted}.
+     * The plugin's mounted panels by slot, in mount order (one panel per slot).
+     * See {@link TestHost.mounted}.
      */
     panels = new Map();
     /**
@@ -333,15 +333,15 @@ export class TestHost {
      */
     osd = [];
     /**
-     * The action buttons of each `osd.show` message, in step with `osd`
-     * (index for index): each button's title as shown and its command; `[]`
-     * for a message without actions (SDK 1.6.9).
+     * The action buttons of each `osd.show` message, in step with `osd` (index
+     * for index): each button's title as shown and its command; `[]` for a
+     * message without actions.
      */
     osdActions = [];
     /**
-     * Press button `index` of the newest OSD message, as the user does
-     * (player 0.7.6): its command runs as if picked from a menu, and settles.
-     * A disabled or busy command does nothing, as in the player.
+     * Press button `index` of the newest OSD message, as the user does: its
+     * command runs as if picked from a menu, and settles. A disabled or busy
+     * command does nothing, as in the player.
      *
      * @param index - 0 or 1.
      *
@@ -382,11 +382,10 @@ export class TestHost {
      * messages, dialog texts, settings page and panel titles show its
      * translations, the way the player shows them.
      *
-     * The player's own texts (core actions' messages and menus, its
-     * refusals) are English, or the player's Simplified Chinese for
-     * `"zh-Hans"`. While `locale` was never set they stay in Chinese, as
-     * players up to 0.4.2 showed them, so tests written for SDK 1.5.8 keep
-     * passing; set `locale` to test what a user sees now.
+     * The player's own texts (core actions' messages and menus, its refusals) are
+     * English, or the player's Simplified Chinese for `"zh-Hans"`. While `locale`
+     * was never set they stay in Chinese; set `locale` to test what a user sees
+     * now.
      *
      * @example Check a menu path in Simplified Chinese
      * The test starts the plugin with a Chinese interface and checks the
@@ -668,8 +667,7 @@ export class TestHost {
                 .sort((a, b) => a.time - b.time);
         },
         /**
-         * Each plugin's ranges by plugin id; layers without ranges are absent
-         * (SDK 1.6.9).
+         * Each plugin's ranges by plugin id; layers without ranges are absent.
          */
         rangeLayers: new Map(),
         /** Every layer's ranges merged, sorted by start, with the plugin's id. */
@@ -744,10 +742,10 @@ export class TestHost {
     }
     /**
      * Runtime images written to views (`plugin.ui.image`,
-     * `plugin.ui.remoteImage`), whole values and (SDK 1.5.19) images nested
-     * in rows, newest last. The SDK refuses images of released scopes before
-     * anything is sent. The test host does not read the files, so it does not
-     * check the player's per-view budget (`IMAGE_LIMITS.viewBytes`).
+     * `plugin.ui.remoteImage`), whole values and images nested in rows, newest
+     * last. The SDK refuses images of released scopes before anything is sent.
+     * The test host does not read the files, so it does not check the player's
+     * per-view budget (`IMAGE_LIMITS.viewBytes`).
      */
     images = [];
     /**
@@ -1080,14 +1078,13 @@ export class TestHost {
             this.videoRender.values = { ...RENDER_DEFAULTS, shaders: [] };
     }
     /**
-     * What the player pushes when mpv cannot compile a shader (code `failed`)
-     * or switches to software rendering (`unsupported`, which also sets
-     * `videoRender.gpu` to false and `rendering.reason` to `window-fallback`
-     * with `message`). Pushed only when this plugin is the owner.
-     * `previous-crash` (SDK 1.5.54) is a shortcut that only sets the handle's
-     * status and reaches `onError`: the real player never pushes it, it
-     * refuses the `set` request itself. To test that, set
-     * {@link TestHost.previousCrash}.
+     * What the player pushes when mpv cannot compile a shader (code `failed`) or
+     * switches to software rendering (`unsupported`, which also sets
+     * `videoRender.gpu` to false and `rendering.reason` to `window-fallback` with
+     * `message`). Pushed only when this plugin is the owner. `previous-crash` is
+     * a shortcut that only sets the handle's status and reaches `onError`: the
+     * real player never pushes it, it refuses the `set` request itself. To test
+     * that, set {@link TestHost.previousCrash}.
      *
      * @example Make a shader fail to compile
      * The plugin's render options report `failed`, as when mpv rejects a
@@ -1113,11 +1110,11 @@ export class TestHost {
         return failVideoRender(this, this.#inner, code, message);
     }
     /**
-     * The shader channel (`plugin.video.shaders(id)`, SDK 1.5.39): the lists
-     * the player holds for this plugin's handles by id (the real paths, after
-     * following links), and how many shaders other plugins hold, which count
-     * against {@link VIDEO_PROCESSING_LIMITS}`.shaders` (`limit`). Files must
-     * be under {@link TestHost.fileRoots}; under software rendering
+     * The shader channel (`plugin.video.shaders(id)`): the lists the player holds
+     * for this plugin's handles by id (the real paths, after following links),
+     * and how many shaders other plugins hold, which count against
+     * {@link VIDEO_PROCESSING_LIMITS}`.shaders` (`limit`). Files must be under
+     * {@link TestHost.fileRoots}; under software rendering
      * (`videoRender.gpu = false`) a non-empty list fails with `unsupported`.
      *
      * @since 1.5.39
@@ -1139,11 +1136,10 @@ export class TestHost {
      * rendering (`unsupported`; use {@link TestHost.failVideoRender}, which
      * also tells the handles). Pushed only to a handle that holds shaders.
      *
-     * `code` (SDK 1.5.54, default `failed`) is the error code pushed.
-     * `previous-crash` is a shortcut that only sets the handle's status and
-     * reaches `onError`: the real player (0.6.3) never pushes it, it refuses
-     * the `set` request itself after an abnormal end. To test that, set
-     * {@link TestHost.previousCrash}.
+     * `code` (default `failed`) is the error code pushed. `previous-crash` is a
+     * shortcut that only sets the handle's status and reaches `onError`: the real
+     * player never pushes it, it refuses the `set` request itself after
+     * an abnormal end. To test that, set {@link TestHost.previousCrash}.
      *
      * @capability None.
      *
@@ -1174,11 +1170,10 @@ export class TestHost {
         return failVideoShaders(this, this.#inner, id, message, code);
     }
     /**
-     * Play a run after an abnormal end with plugin shaders on (player 0.6.3):
-     * while set, a non-empty `video.shaders` list and a render options
-     * `set` with a non-empty `shaders` list are refused with
-     * `previous-crash` and this message; clearing still works. `null`
-     * (default): shaders apply.
+     * Play a run after an abnormal end with plugin shaders on: while set, a
+     * non-empty `video.shaders` list and a render options `set` with a non-empty
+     * `shaders` list are refused with `previous-crash` and this message; clearing
+     * still works. `null` (default): shaders apply.
      *
      * @example Check that the plugin stops retrying while shaders are off
      * The plugin's shader handle turns `failed` with `previous-crash`, as
@@ -1487,10 +1482,10 @@ export class TestHost {
         },
     };
     /**
-     * The player's rendering choice behind `plugin.rendering` (player
-     * 0.5.13). The mode drawing now is {@link TestHost.videoRender |
-     * videoRender.gpu}, as for `plugin.app.system()`; the rest is preset here
-     * and changed by the plugin's calls, as the player would:
+     * The player's rendering choice behind `plugin.rendering`. The mode drawing
+     * now is {@link TestHost.videoRender | videoRender.gpu}, as for
+     * `plugin.app.system()`; the rest is preset here and changed by the plugin's
+     * calls, as the player would:
      *
      * - `setPreference` saves `preference` and never changes the mode. It
      *   refuses `"gpu"` while `gpu.available` is false: with `unsupported`
@@ -1545,8 +1540,8 @@ export class TestHost {
         restarts: 0,
     };
     /**
-     * The GPU's video upscaler behind `plugin.video.upscaling` (player
-     * 0.5.16), answered as the player would:
+     * The GPU's video upscaler behind `plugin.video.upscaling`, answered as the
+     * player would:
      *
      * - `state()` and `set(true)` set `checked` (the player's one GPU check; a
      *   plugin that should not wake the GPU while it starts can assert it is
@@ -1609,10 +1604,10 @@ export class TestHost {
     };
     /**
      * Make the upscaler's reason `decoding` with `cause`, with the player's
-     * message (player 0.5.25), and set `upscaling.hwdecCurrent` to match
-     * (`d3d11va-copy`, `no`, `nvdec`). `plugins` are named for `copy-back`
-     * only, as the player does. Returns the reason; call
-     * {@link TestHost.upscalingChanged} to tell a listening plugin.
+     * message, and set `upscaling.hwdecCurrent` to match (`d3d11va-copy`, `no`,
+     * `nvdec`). `plugins` are named for `copy-back` only, as the player does.
+     * Returns the reason; call {@link TestHost.upscalingChanged} to tell a
+     * listening plugin.
      *
      * @example Test the window's advice for each cause
      * The plugin's window explains why upscaling waits. The test fakes the
@@ -1636,10 +1631,9 @@ export class TestHost {
     }
     /**
      * Send `video.upscaling.changed` with the state {@link TestHost.upscaling}
-     * describes now (without `enabled`), as the player does when it changes
-     * (player 0.5.25); a plugin listening with
-     * `plugin.video.upscaling.onChange` receives it. Nothing reaches a plugin
-     * that does not listen.
+     * describes now (without `enabled`), as the player does when it changes; a
+     * plugin listening with `plugin.video.upscaling.onChange` receives it.
+     * Nothing reaches a plugin that does not listen.
      *
      * @capability None.
      *
@@ -1733,7 +1727,7 @@ export class TestHost {
     // ------------------------------------------------------------ core actions
     /** The `player.setStepSeek` value in effect (default 5). */
     stepSeek = 5;
-    /** The `player.setStepSeek` `keyframes` in effect (default `false`, SDK 1.5.19). */
+    /** The `player.setStepSeek` `keyframes` in effect (default `false`). */
     stepSeekKeyframes = false;
     /**
      * Test data: the keyframe times (seconds, ascending) of the current
@@ -1976,10 +1970,10 @@ export class TestHost {
     /**
      * Simulate the user changing the main window (resizing, maximizing or
      * restoring it, entering or leaving fullscreen, closing the
-     * picture-in-picture window) and broadcast it. `maximized` (SDK 1.5.52)
-     * reads `false` while fullscreen, as player 0.6.3 reports it. Like the player, entering fullscreen collapses an attached, visible
-     * sidebar (`effective: false`, `reason: "fullscreen"`) and leaving
-     * fullscreen docks it again.
+     * picture-in-picture window) and broadcast it. `maximized` reads `false`
+     * while fullscreen. Like the player, entering fullscreen collapses an
+     * attached, visible sidebar (`effective: false`, `reason: "fullscreen"`) and
+     * leaving fullscreen docks it again.
      *
      * @example Go fullscreen, report picture-in-picture support, maximize
      * The plugin sees the main window fullscreen at 1920×1080, then learns
@@ -2010,9 +2004,9 @@ export class TestHost {
     }
     /**
      * The pointer reached the right edge in fullscreen (`true`) or left the
-     * popped-out columns (`false`): the attached sidebar and the adjust column
-     * (SDK 1.6.13), those switched on, pop out or collapse (reference §6.3). No
-     * effect outside fullscreen, or on a column switched off or floating.
+     * popped-out columns (`false`): the attached sidebar and the adjust column,
+     * those switched on, pop out or collapse (reference §6.3). No effect outside
+     * fullscreen, or on a column switched off or floating.
      *
      * @capability None.
      *
@@ -2108,18 +2102,18 @@ export class TestHost {
     /**
      * Press a binding like the host's table would: panel-focus bindings first
      * when `panel` is true, then global ones; within a scope the earliest
-     * registration first (the player's own commands before the plugin's), as
-     * the conflict rule orders them. A disabled command lets the key pass to
-     * the next command bound to it (SDK 1.5.12, as player 0.4.3): the one it
-     * shadowed, then the global scope. The first enabled one runs; `press`
-     * resolves after it ran (`"ran"`). When only disabled commands hold the
-     * key, the first of them decides, as in the player: with a `reason` it
-     * shows the reason on the OSD and eats the key (`"reason"`, see
-     * `host.osd`); without one the key goes on to the focused control
-     * (`"passed"`, nothing runs). Unlike the player, which only logs a key
-     * that reaches a busy command, `press` then rejects, so a test notices. Rejects when nothing is bound. Bindings use the
-     * reference syntax (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`), and user
-     * overrides in `bindings.overlay` apply.
+     * registration first (the player's own commands before the plugin's), as the
+     * conflict rule orders them. A disabled command lets the key pass to the next
+     * command bound to it: the one it shadowed, then the global
+     * scope. The first enabled one runs; `press` resolves after it ran (`"ran"`).
+     * When only disabled commands hold the key, the first of them decides, as in
+     * the player: with a `reason` it shows the reason on the OSD and eats the key
+     * (`"reason"`, see `host.osd`); without one the key goes on to the focused
+     * control (`"passed"`, nothing runs). Unlike the player, which only logs a
+     * key that reaches a busy command, `press` then rejects, so a test notices.
+     * Rejects when nothing is bound. Bindings use the reference syntax
+     * (`"Space"`, `"Ctrl+O"`, `"Mouse:WheelUp"`), and user overrides in
+     * `bindings.overlay` apply.
      *
      * @returns What the key did: `"ran"`, `"reason"` or `"passed"`.
      *
@@ -2166,14 +2160,13 @@ export class TestHost {
             .map(([key, ids]) => [key.split(" ")[1], ...ids]);
     }
     /**
-     * Change the keys of one of the plugin's commands, or of one of the
-     * player's core commands by its `host/<id>` (SDK 1.6.16), as the user
-     * does in Keyboard Shortcuts (SDK 1.6.6): `inputs` replaces its keys (`[]`
-     * clears them, as Ignore Default Shortcuts does for every default),
-     * `null` gives it its own defaults back. It writes
-     * {@link TestHost.bindings | bindings.overlay}, and the plugin hears it
-     * as from the player: `bindings.changed` and, when what
-     * `plugin.commands.keys` reads changed, `commands.keys`.
+     * Change the keys of one of the plugin's commands, or of one of the player's
+     * core commands by its `host/<id>`, as the user does in Keyboard Shortcuts:
+     * `inputs` replaces its keys (`[]` clears them, as Ignore Default Shortcuts
+     * does for every default), `null` gives it its own defaults back. It writes
+     * {@link TestHost.bindings | bindings.overlay}, and the plugin hears it as
+     * from the player: `bindings.changed` and, when what `plugin.commands.keys`
+     * reads changed, `commands.keys`.
      *
      * @example Check that a key hint follows a rebinding
      * The view showed W for Brightness −; after the user moves it to
@@ -2222,17 +2215,15 @@ export class TestHost {
     /** Every `packages.setEnabled` / `uninstall` / `install`, newest last. */
     packageCalls = [];
     /**
-     * Packages `validate` and `validateArchive` accept: path (directory or
-     * `.vxp` file) → its manifest. Other paths fail with `missing`. `install`
-     * adds or upgrades the entry in {@link TestHost.packages} following the
-     * player's source rules: the same source upgrades, another source needs
-     * `replace` (`conflict` otherwise), a built-in id is `unsupported`. As
-     * player 0.6.4 and later, the installed entry's `state` follows
-     * {@link "@vestra-player/sdk"!InstallOptions.enabled}: a first install
-     * runs, an update of a `disabled` entry stays `disabled` unless `enabled`
-     * is `true`, and `enabled: false` installs it `disabled`. Set
-     * {@link TestHost.installKeepsDisabled} to `false` for the older players'
-     * rule (every install runs).
+     * Packages `validate` and `validateArchive` accept: path (directory or `.vxp`
+     * file) → its manifest. Other paths fail with `missing`. `install` adds or
+     * upgrades the entry in {@link TestHost.packages} following the player's
+     * source rules: the same source upgrades, another source needs `replace`
+     * (`conflict` otherwise), a built-in id is `unsupported`. The installed
+     * entry's `state` follows
+     * {@link "@vestra-player/sdk"!InstallOptions.enabled}: a first install runs,
+     * an update of a `disabled` entry stays `disabled` unless `enabled` is
+     * `true`, and `enabled: false` installs it `disabled`.
      *
      * @example Offer a package file the plugin can install
      * The plugin can validate and install `/downloads/someone.demo-1.0.0.vxp`
@@ -2250,25 +2241,20 @@ export class TestHost {
      */
     candidates = new Map();
     /**
-     * Which player's install rule `packages.install` plays. `true` (default,
-     * SDK 1.5.55): player 0.6.4 and later, where an update or reinstall
-     * keeps a `disabled` plugin disabled unless the plugin passes
-     * {@link "@vestra-player/sdk"!InstallOptions.enabled}. `false`: players
-     * up to 0.6.3, where every install runs the plugin and `enabled` is
-     * ignored (it is still checked and recorded in
-     * {@link TestHost.packageCalls}). A test written for the older rule that
-     * updates a disabled plugin sets it to `false`; one that keeps testing
-     * both runs once with each.
+     * Which install rule `packages.install` plays. `true` (default): an update
+     * or reinstall keeps a `disabled` plugin disabled unless the plugin passes
+     * {@link "@vestra-player/sdk"!InstallOptions.enabled}. `false`: every
+     * install runs the plugin and `enabled` is ignored (it is still checked and
+     * recorded in {@link TestHost.packageCalls}).
      *
-     * @example Keep a test written for players up to 0.6.3
+     * @example Every install runs
      * The plugin under test installs an update over a plugin the user
-     * disabled and expects it to run afterwards, as players up to 0.6.3 do.
-     * With `false` the host plays that rule; the default plays player 0.6.4,
-     * where the update stays disabled.
+     * disabled and expects it to run afterwards. With `false` the host plays
+     * that rule; the default keeps the update disabled.
      * ```ts
      * declare const host: TestHost;
      * // ---cut---
-     * host.installKeepsDisabled = false; // every install runs, as before 0.6.4
+     * host.installKeepsDisabled = false; // every install runs
      * ```
      *
      * @capability None.
@@ -2450,10 +2436,10 @@ export class TestHost {
     }
     /**
      * The plugin's mounted panel (bottom bar, sidebar, adjust column or
-     * backdrop): the one in `slot`, or without it the only one (SDK 1.6.15: a
-     * plugin mounts one panel per slot; with several, name the slot). Throws
-     * when there is none. Its `props` use Slint (kebab-case) names; `emit`
-     * fires a callback on the panel's global.
+     * backdrop): the one in `slot`, or without it the only one (a plugin mounts
+     * one panel per slot; with several, name the slot). Throws when there is
+     * none. Its `props` use Slint (kebab-case) names; `emit` fires a callback on
+     * the panel's global.
      *
      * @example Select a row in the plugin's sidebar panel
      * The test checks the panel sits in the sidebar and selects its third
@@ -2508,12 +2494,12 @@ export class TestHost {
      * for: on a loaded machine it can finish after `settle()` returns. Poll
      * the result you assert on instead (second example).
      *
-     * `settle()` does not wait for the SDK's once-a-second full update pass
-     * (SDK 1.5.45). After `setSource` (or another player state change) only
-     * the bindings that read a changed field of `plugin.player.state` run
-     * again; state the plugin changed outside a handler without
-     * `plugin.update()` shows only in the next full pass. Have the plugin
-     * call `plugin.update()` after such a change, or wait `settle(1000)`.
+     * `settle()` does not wait for the SDK's once-a-second full update pass.
+     * After `setSource` (or another player state change) only the bindings that
+     * read a changed field of `plugin.player.state` run again; state the plugin
+     * changed outside a handler without `plugin.update()` shows only in the next
+     * full pass. Have the plugin call `plugin.update()` after such a change, or
+     * wait `settle(1000)`.
      *
      * @param ms - Extra time to wait, for debounces and timers (default 0).
      *
@@ -2581,19 +2567,17 @@ export class TestHost {
     }
     // ------------------------------------------------------------ simulated host
     /**
-     * Why the player would keep this plugin running while nothing uses it
-     * (lazy activation, player 0.5.21), one line per reason: an event it
-     * listens to that is not one the player wakes it for (with what listens
-     * and where it was added), its panel in the bottom bar or the backdrop,
-     * its open windows (these as the player's log says them), and, from
-     * player 0.7.3, its sidebar tab while that is the current tab. The
-     * player counts the current tab as busy work, not as something live: it
-     * keeps the plugin running only while the tab is shown, and a sidebar
-     * panel in a background tab is no reason at all (the plugin may go to
-     * standby; showing the tab starts it again). Empty: the player may stop
-     * it while idle and start it again on its next use. Filter chains,
-     * streams, jobs and the like (which also keep a plugin running) are not
-     * listed.
+     * Why the player would keep this plugin running while nothing uses it (lazy
+     * activation), one line per reason: an event it listens to that is not one
+     * the player wakes it for (with what listens and where it was added), its
+     * panel in the bottom bar or the backdrop, its open windows (these as the
+     * player's log says them), and its sidebar tab while that is the current tab.
+     * The player counts the current tab as busy work, not as something live: it
+     * keeps the plugin running only while the tab is shown, and a sidebar panel
+     * in a background tab is no reason at all (the plugin may go to standby;
+     * showing the tab starts it again). Empty: the player may stop it while idle
+     * and start it again on its next use. Filter chains, streams, jobs and the
+     * like (which also keep a plugin running) are not listed.
      *
      * @capability None.
      * @since 1.5.40
@@ -2641,21 +2625,19 @@ export class TestHost {
  * Rejects when `manifest.json` cannot be read or parsed, when `activate`
  * throws, or when a registration made during activation fails (for example
  * `limit`, `conflict`, `invalid`). Stricter than the player's runner for
- * commands (SDK 1.5.49): there the SDK logs a command declaration the
- * player refuses during activation, skips it and activates the rest of the
- * plugin (`onError` hears it); `startPlugin` fails, so a test shows the
- * bad declaration.
+ * commands: there the SDK logs a command declaration the player refuses during
+ * activation, skips it and activates the rest of the plugin (`onError` hears
+ * it); `startPlugin` fails, so a test shows the bad declaration.
  *
  * @param activate - The plugin's default-exported `activate` function.
  * @param options - Where the plugin lives and how to start it.
  * @returns `host`: the {@link TestHost}; `plugin`: the object passed to
- *   `activate` (call the plugin API on it directly); `stop()`: dispose the
- *   plugin like the player stopping it (scopes released, stores flushed),
- *   wait until the host is idle and remove the host's temporary files;
- *   `stop({ reason })` (SDK 1.5.54): `reason` is the `StopReason` the player
- *   sends; `disconnect()` (SDK 1.5.54) stops it as when the player is lost
- *   (`host-lost`, requests refused with `disabled`). Removing the
- *   temporary files never fails a test.
+ * `activate` (call the plugin API on it directly); `stop()`: dispose the plugin
+ * like the player stopping it (scopes released, stores flushed), wait until the
+ * host is idle and remove the host's temporary files; `stop({ reason })`:
+ * `reason` is the `StopReason` the player sends; `disconnect()` stops it as
+ * when the player is lost (`host-lost`, requests refused with `disabled`).
+ * Removing the temporary files never fails a test.
  *
  * @example Test that a setting survives a restart
  * The test turns on the 10-step option, stops the plugin, starts it again
@@ -2703,7 +2685,7 @@ export class TestHost {
  * to call directly, and `stop` to end it like the player.
  *
  * @capability None.
- * @see [Test a plugin](../../../docs/how-to/testing.md)
+ * @see [Test a plugin](../../../docs/guides/testing.md)
  * @since 1.0.0
  * @category Testing
  */
@@ -2773,18 +2755,18 @@ export async function startPlugin(activate, options = {}) {
         plugin: instance.plugin,
         /**
          * Stop the plugin, wait for the host, and remove temporary files.
-         * `stop({ reason })` (SDK 1.5.54): `reason` is the reason the player
-         * gives (`plugin.stopReason`, the `onDispose` cleanups'
-         * `info.reason`); `stop()`: none (`undefined`), as with players up to
-         * 0.6.3. It still takes no declared parameter, so it can be passed as
-         * a callback (`t.after(stop)`, `promise.then(stop)`).
+         * `stop({ reason })`: `reason` is the reason the player gives
+         * (`plugin.stopReason`, the `onDispose` cleanups' `info.reason`); `stop()`:
+         * none (`undefined`). It still
+         * takes no declared parameter, so it can be passed as a callback
+         * (`t.after(stop)`, `promise.then(stop)`).
          */
         stop,
         /**
-         * Lose the player (SDK 1.5.54): as when it crashes or is killed, the
-         * runner stops the plugin with reason `host-lost`; requests still
-         * waiting for their answer and every later request are refused with
-         * `disabled`. Then waits and removes the temporary files like `stop`.
+         * Lose the player: as when it crashes or is killed, the runner stops the
+         * plugin with reason `host-lost`; requests still waiting for their answer
+         * and every later request are refused with `disabled`. Then waits and
+         * removes the temporary files like `stop`.
          */
         async disconnect() {
             host.loseConnection();

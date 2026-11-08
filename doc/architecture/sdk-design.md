@@ -21,17 +21,17 @@ export default async function activate(plugin: Plugin) {
 
 ## 2. Modules and handles at a glance
 
-Moved to the SDK site, which is generated from the SDK's own types and stays current: the modules and their handles are in the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html) and [How a plugin runs: Handles and scopes](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html#handles-and-scopes); the capability each module needs is in [Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html).
+Moved to the SDK site, which is generated from the SDK's own types and stays current: the modules and their handles are in the [API reference](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html) and [Tutorial](https://vestrasys.github.io/vestra-player-sdk/documents/Tutorial.html); the capability each module needs is in [Capabilities](https://vestrasys.github.io/vestra-player-sdk/documents/Capabilities.html).
 
 Naming choices: user-visible domain nouns (`player`, `filter`, `panel`, `stream`, `snapshot`, `job`, `resolver`); host-internal names (`processing`, `producer`, `source`, `mount`, `$mount`) do not appear in the plugin API. There is no `ctx`: the object a plugin receives is simply called `plugin`, and a feature module receives a `Scope` or a specific handle.
 
 ## 3. Lifecycle and release
 
-Activation, declaring as registering, scopes, stopping and what each handle releases: [How a plugin runs](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html) (sections Activation, Handles and scopes, Stopping).
+Activation, declaring as registering, scopes, stopping and what each handle releases: [Tutorial](https://vestrasys.github.io/vestra-player-sdk/documents/Tutorial.html).
 
 ## 4. State sync: values, bindings and update passes
 
-`set`, `bind`, update passes, one write in flight per target and name conversion: [How a plugin runs: The update pass](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html#the-update-pass) and [Windows, panels, settings pages, dialogs and the OSD](https://vestrasys.github.io/vestra-player-sdk/documents/Windows,_panels,_settings_pages,_dialogs_and_the_OSD.html). Since SDK 1.5.45 a pass re-runs only the bindings that read the changed state ([large-lists.md §3](large-lists.md#3-p2-precise-invalidation-sdk-only-shipped-in-sdk-1545)).
+`set`, `bind`, update passes, one write in flight per target and name conversion: [Open a tool window and remember its state](https://vestrasys.github.io/vestra-player-sdk/documents/Open_a_tool_window_and_remember_its_state.html). Since SDK 1.5.45 a pass re-runs only the bindings that read the changed state ([large-lists.md §3](large-lists.md#3-p2-precise-invalidation-sdk-only-shipped-in-sdk-1545)).
 
 This is a deliberately small "reactive" system: no virtual DOM and no framework, only "evaluate, compare, send changes"; plugin state is plain variables. The read tracking added in 1.5.45 only decides which bindings a pass re-runs; it does not change what a plugin writes.
 
@@ -75,11 +75,11 @@ The root cause of the audio workbench getting stuck on "result of the previous o
 
 ## 6. Explicit conditional submission
 
-Default conditions and `ifCurrent`: [Playback state, controls and sources: Conditional controls](https://vestrasys.github.io/vestra-player-sdk/documents/Playback_state,_controls_and_sources.html#conditional-controls).
+Default conditions and `ifCurrent`: [Control playback: Control it, and handle `stale`](https://vestrasys.github.io/vestra-player-sdk/documents/Control_playback.html#control-it-and-handle).
 
 ## 7. Error model
 
-Error codes, `onError` and recovery: [Error codes](https://vestrasys.github.io/vestra-player-sdk/documents/Error_codes.html) and [How a plugin runs: Failures and recovery](https://vestrasys.github.io/vestra-player-sdk/documents/How_a_plugin_runs.html#failures-and-recovery).
+Error codes, `onError` and recovery: [Error codes](https://vestrasys.github.io/vestra-player-sdk/documents/Error_codes.html) and [Troubleshooting](https://vestrasys.github.io/vestra-player-sdk/documents/Troubleshooting.html).
 
 The runner's `unhandledRejection` handler only logs, in both runners, so a forgotten `await` crashes neither a plugin's own process nor the shared runner.
 

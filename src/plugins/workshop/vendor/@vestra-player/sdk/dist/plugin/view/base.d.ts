@@ -18,8 +18,8 @@ export declare abstract class ViewBase implements View {
     set(props: Props): void;
     bind(props: () => Props): import("../types.ts").Disposable;
     /**
-     * `plugin.wire.view(v)` (SDK 1.7.0): the writer's direct writes, for a
-     * scope of the plugin that made this view.
+     * `plugin.wire.view(v)`: the writer's direct writes, for a scope of the
+     * plugin that made this view.
      */
     [DIRECT](scope: ScopeImpl): DirectWrites;
     /** {@link ViewBinder.snapshot}: current desired properties. */

@@ -11,8 +11,8 @@ export declare class Internals {
     /** The plugin's translations for `locale` (see `loadCatalog`). */
     catalog: Catalog;
     /**
-     * Row patches (player 0.6.0): the `seq` of each property's last write, by
-     * view and property (none: 0, the initial properties).
+     * Row patches: the `seq` of each property's last write, by view and property
+     * (none: 0, the initial properties).
      */
     readonly writes: Map<string, number>;
     /** The parts of a whole value held until its last part, by view and property. */

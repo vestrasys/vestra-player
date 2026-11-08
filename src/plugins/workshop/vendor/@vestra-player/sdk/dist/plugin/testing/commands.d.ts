@@ -8,11 +8,10 @@ export declare function bindingClaims(host: TestHost, inner: Internals): Map<str
 /** `host/<id>` for core commands, `<manifest id>/<id>` for the plugin's. */
 export declare function bindingKey(host: TestHost, _inner: Internals, id: string): string;
 /**
- * `commands.keys` as the player answers it: each of the plugin's own
- * commands, and the player's core commands as `host/<id>` (SDK 1.6.16),
- * with the labels of the keys it holds now (the overlay, else its
- * defaults; not a key an earlier command holds), as menus write them on
- * `systemInfo.os`.
+ * `commands.keys` as the player answers it: each of the plugin's own commands,
+ * and the player's core commands as `host/<id>`, with the labels of the keys it
+ * holds now (the overlay, else its defaults; not a key an earlier command
+ * holds), as menus write them on `systemInfo.os`.
  */
 export declare function commandKeys(host: TestHost, inner: Internals): {
     keys: Record<string, string[]>;
