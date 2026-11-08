@@ -305,8 +305,12 @@ fn main() -> Result<()> {
     if !headless {
         // Windows: the main window draws at the display's vertical blanks
         // (`frame_pacing.rs`), not on Slint's timer.
+        // Every window: the tool windows are owned by the main window
+        // (`platform::window_attributes`, Windows).
         let winit = || {
-            let selector = slint::BackendSelector::new().backend_name("winit".into());
+            let selector = slint::BackendSelector::new()
+                .backend_name("winit".into())
+                .with_winit_window_attributes_hook(platform::window_attributes);
             if frame_pacing::hooked() {
                 selector.with_winit_custom_application_handler(frame_pacing::Handler)
             } else {
@@ -729,6 +733,8 @@ fn main() -> Result<()> {
         }
         host.video_texture.replace(texture);
         platform::shown(&window);
+        // The windows created from here on are its tool windows.
+        platform::set_main_window(&window);
         frame_pacing::follow(&window);
         // Interpolation (`video.render()`) resamples to the main display's rate.
         let displays = platform::displays();
@@ -819,6 +825,7 @@ fn main() -> Result<()> {
                 host.mount_callbacks();
                 host.prepare_mount_tick();
                 host.window_tick();
+                platform::tool_windows_tick();
                 host.activation_tick();
                 host.on_demand_tick();
                 host.power_tick();
