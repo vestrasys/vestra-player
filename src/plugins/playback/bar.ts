@@ -213,29 +213,29 @@ export function wireBar(
 ) {
   const { player } = scope;
   // G-07: tooltips name the keys the user has bound (read again when bindings change).
-  const keys = new Keys(scope, () => scope.update());
+  const keys = new Keys(scope);
   void keys.refresh();
   // B22: the seek line's span in physical px, which the bar reports when its
   // width (or the scale factor) changes. The first report is taken at once
   // (there are no ticks before it); later ones wait for a pause of
   // SPAN_DEBOUNCE_MS, the last winning, so a window resize does not rebuild
   // and send the ticks every frame (they stretch with the line meanwhile).
-  let span = 0;
+  // I07: `pointing`, the pointer is on the seek line (hover or drag): the preview's sheets go out.
+  // Both in `plugin.state`: a change re-runs the bar's binding.
+  const st = scope.state({ span: 0, pointing: false });
   let pending: ReturnType<typeof setTimeout> | null = null;
-  const takeSpan = (px: number) => {
-    if (px === span) return;
-    span = px;
-    scope.update();
-  };
   bar.on("spanChanged", (reported: number) => {
     const px = Math.floor(reported);
     if (!(px > 0)) return;
     if (pending !== null) clearTimeout(pending);
     pending = null;
-    if (span === 0) return takeSpan(px);
+    if (st.span === 0) {
+      st.span = px;
+      return;
+    }
     pending = setTimeout(() => {
       pending = null;
-      takeSpan(px);
+      st.span = px;
     }, SPAN_DEBOUNCE_MS);
   });
   scope.onDispose(() => {
@@ -244,8 +244,8 @@ export function wireBar(
   let drawn: { marks: readonly TimelineMark[]; duration: number | null; span: number; shown: SeekMarks } | null = null;
   const marks = (duration: number | null) => {
     const current = scope.timeline.marks;
-    if (drawn?.marks !== current || drawn.duration !== duration || drawn.span !== span)
-      drawn = { marks: current, duration, span, shown: seekMarks(current, duration, span) };
+    if (drawn?.marks !== current || drawn.duration !== duration || drawn.span !== st.span)
+      drawn = { marks: current, duration, span: st.span, shown: seekMarks(current, duration, st.span) };
     return drawn.shown;
   };
   // Timeline ranges, read in the binding: a change of anyone's ranges rebinds.
@@ -253,24 +253,21 @@ export function wireBar(
   let ranged: Ranged | null = null;
   const ranges = (duration: number | null) => {
     const current = scope.timeline.ranges;
-    if (ranged?.ranges !== current || ranged.duration !== duration || ranged.span !== span)
-      ranged = { ranges: current, duration, span, shown: seekRanges(current, duration, span) };
+    if (ranged?.ranges !== current || ranged.duration !== duration || ranged.span !== st.span)
+      ranged = { ranges: current, duration, span: st.span, shown: seekRanges(current, duration, st.span) };
     return ranged.shown;
   };
   const p = playback;
   let volumeDragging = false;
-  // I07: the pointer is on the seek line (hover or drag): the preview's sheets go out.
-  let pointing = false;
   bar.on("pointing", (on: boolean) => {
-    pointing = on;
+    st.pointing = on;
     thumbnails.pointing(on); // 0.2.3: new sheets are handed over less often meanwhile
     locks();
-    scope.update();
   });
   bar.bind(() => {
     const state = player.state;
-    const position = p.draft ?? state.position;
-    const volume = p.volumeDraft ?? state.volume;
+    const position = p.ui.draft ?? state.position;
+    const volume = p.ui.volumeDraft ?? state.volume;
     const remaining = settings.value.remainingTime;
     const left = remaining && position !== null && state.duration !== null;
     const shown = marks(state.duration);
@@ -284,7 +281,7 @@ export function wireBar(
       duration: state.duration ?? 0,
       hoverTime: settings.value.hoverTime,
       // I07: the picture box, and the sprite the bar crops the pointer's cell from (hover and drag).
-      ...previewProps(thumbnails.active(state), thumbnails.preview, pointing),
+      ...previewProps(thumbnails.active(state), thumbnails.preview, st.pointing),
       // B22: everyone's marks, and the A-B loop (whoever set it).
       marks: shown.rows,
       chapterTicks: shown.chapterTicks,
@@ -302,12 +299,12 @@ export function wireBar(
       canStop: p.can("close"),
       canPrevious: state.can.previous,
       canNext: state.can.next,
-      canOpen: !p.selecting,
+      canOpen: !p.ui.selecting,
       muted: state.muted,
       // G-13b: the slider runs 0–100; a louder volume (set elsewhere) shows at the right end.
       volume: Math.min(volume, 100),
-      canMute: !p.muteBusy && p.volumeDraft === null,
-      canVolume: !p.muteBusy,
+      canMute: !p.ui.muteBusy && p.ui.volumeDraft === null,
+      canVolume: !p.ui.muteBusy,
       // UI-BAR-05: the fullscreen button shows enter or leave.
       fullscreen: scope.window.state.fullscreen,
       // G-14: which time the label shows (the tooltip offers the other).
@@ -320,15 +317,15 @@ export function wireBar(
   // where the player sees the pointer over neither, so without this the
   // fullscreen bar would start hiding under it.
   const locks = () =>
-    bar.setInteraction({ focused: false, dragging: p.dragging || volumeDragging, popupOpen: pointing });
+    bar.setInteraction({ focused: false, dragging: p.dragging || volumeDragging, popupOpen: st.pointing });
 
   bar.on("action", async (id: string) => {
     if (id === "open") return p.open();
     if (!CORE.has(id)) return;
     // Mute waits for a volume drag to land, and the slider waits for the mute.
     if (id === "mute") {
-      if (p.muteBusy || p.volumeDraft !== null) return;
-      p.muteBusy = true;
+      if (p.ui.muteBusy || p.ui.volumeDraft !== null) return;
+      p.ui.muteBusy = true;
     }
     try {
       await scope.host.run(id as HostAction);
@@ -337,7 +334,7 @@ export function wireBar(
       if ((error as { code?: string })?.code === "unavailable") return;
       throw sourceFailure(error);
     } finally {
-      if (id === "mute") p.muteBusy = false;
+      if (id === "mute") p.ui.muteBusy = false;
     }
   });
   // G-14: the choice is saved (`remainingTime`) and kept across restarts.
@@ -366,7 +363,7 @@ export function wireBar(
     // auto-hide while dragging.
     if (dragging) p.startDrag(settings.value.seekKeyframes);
     else {
-      if (p.draft !== null && !p.blockedGesture) p.notify("Seek: {} / {}", p.positionArgs(p.draft));
+      if (p.ui.draft !== null && !p.blockedGesture) p.notify("Seek: {} / {}", p.positionArgs(p.ui.draft));
       p.endDrag();
     }
     locks();

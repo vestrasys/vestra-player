@@ -86,42 +86,45 @@ export function openStore<T>(
 
 /**
  * `settings.json`: a file that is not an object is set aside by the store;
- * single bad or missing fields fall back to their defaults.
+ * single bad or missing fields fall back to their defaults. The value is kept
+ * in `plugin.state`: the bar, the panel and the commands that read a setting
+ * follow its change.
  */
 export class SettingsStore {
   readonly #store: JsonStore<Record<string, unknown>>;
-  #value: Settings;
+  readonly #st: { value: Settings };
 
   constructor(scope: Scope) {
     this.#store = openStore<Record<string, unknown>>(scope, "settings", { defaults: {}, validate: isObject });
     const raw = this.#store.value;
-    this.#value = defaults();
+    const value = defaults();
     const openUrl = raw.openUrl;
     if (isObject(openUrl) && typeof openUrl.pasteFromClipboard === "boolean")
-      this.#value.openUrl.pasteFromClipboard = openUrl.pasteFromClipboard;
-    if (typeof raw.preventSleep === "boolean") this.#value.preventSleep = raw.preventSleep;
-    if (typeof raw.hoverTime === "boolean") this.#value.hoverTime = raw.hoverTime;
+      value.openUrl.pasteFromClipboard = openUrl.pasteFromClipboard;
+    if (typeof raw.preventSleep === "boolean") value.preventSleep = raw.preventSleep;
+    if (typeof raw.hoverTime === "boolean") value.hoverTime = raw.hoverTime;
     // An older file's `false` was the old default: the new default (on) wins; its `true` stays.
     if (typeof raw.hoverThumbnail === "boolean" && (raw.format === SETTINGS_FORMAT || raw.hoverThumbnail))
-      this.#value.hoverThumbnail = raw.hoverThumbnail;
-    if (typeof raw.remainingTime === "boolean") this.#value.remainingTime = raw.remainingTime;
+      value.hoverThumbnail = raw.hoverThumbnail;
+    if (typeof raw.remainingTime === "boolean") value.remainingTime = raw.remainingTime;
     // A wrong length or any value out of range: the whole set falls back.
     const steps = raw.seekSteps;
     if (Array.isArray(steps) && steps.length === 4 && steps.every(validStep))
-      this.#value.seekSteps = [...steps] as SeekSteps;
-    if (typeof raw.seekKeyframes === "boolean") this.#value.seekKeyframes = raw.seekKeyframes;
-    if ((COUNTS as readonly unknown[]).includes(raw.abCount)) this.#value.abCount = raw.abCount as Count;
+      value.seekSteps = [...steps] as SeekSteps;
+    if (typeof raw.seekKeyframes === "boolean") value.seekKeyframes = raw.seekKeyframes;
+    if ((COUNTS as readonly unknown[]).includes(raw.abCount)) value.abCount = raw.abCount as Count;
+    this.#st = scope.state({ value });
   }
 
   get value(): Readonly<Settings> {
-    return this.#value;
+    return this.#st.value;
   }
 
   /** Apply `change` to a copy and save it (written shortly after; a failed write keeps it for this run). */
   update(change: (settings: Settings) => void) {
-    const next = structuredClone(this.#value);
+    const next = structuredClone(this.#st.value);
     change(next);
-    this.#value = next;
+    this.#st.value = next;
     this.#store.save(next);
   }
 }

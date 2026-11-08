@@ -474,14 +474,16 @@ export interface UpdateProps {
 export class Updater {
   readonly plugin: Plugin;
   readonly #settings: { value: UpdateSettings; save(next: UpdateSettings): void };
-  #state: UpdateState = "";
-  #error: UpdateError | null = null;
+  /**
+   * What the About window and the settings page show (`props`, `auto`): a write
+   * re-runs their bindings. `settings` follows the stored value (`#save`);
+   * `received` is written at most ten times a second while a download runs.
+   */
+  readonly #st: { state: UpdateState; error: UpdateError | null; received: number; installer: string; settings: UpdateSettings };
   #checking: Promise<void> | null = null;
   /** The user asked for the check in flight (it may have started as the automatic one): its result and any failure are shown. */
   #manual = false;
   #download: AbortController | null = null;
-  #received = 0;
-  #installer = "";
   /** This system's `downloads` key; `undefined` until asked. */
   #platform: string | null | undefined;
   /** The unreadable player version already logged. */
@@ -500,10 +502,11 @@ export class Updater {
       // No data directory: nothing is remembered between runs.
     }
     this.#settings = settings;
+    this.#st = plugin.state({ state: "" as UpdateState, error: null as UpdateError | null, received: 0, installer: "", settings: settings.value });
     const latest = settings.value.latest;
     if (latest) {
       const state = this.#stateFor(latest);
-      this.#state = state === "available" || settings.value.lastCheck ? state : "";
+      this.#st.state = state === "available" || settings.value.lastCheck ? state : "";
     }
     plugin.onDispose(() => {
       this.#disposed = true;
@@ -512,11 +515,12 @@ export class Updater {
     });
   }
 
-  get settings() {
-    return this.#settings;
+  /** The automatic check is on (Options ▸ General ▸ Updates). */
+  get auto() {
+    return this.#st.settings.auto;
   }
   get state() {
-    return this.#state;
+    return this.#st.state;
   }
 
   /** `release` against this player; `null` when the player's version cannot be read (logged once). */
@@ -537,7 +541,9 @@ export class Updater {
     return order === null ? "unknown" : order > 0 ? "available" : "current";
   }
   #save(patch: Partial<UpdateSettings>) {
-    this.#settings.save({ ...this.#settings.value, ...patch });
+    const next = { ...this.#st.settings, ...patch };
+    this.#settings.save(next);
+    this.#st.settings = next;
   }
   /** This system's `downloads` key, from the player (else from Node). */
   async #platformKey() {
@@ -552,13 +558,13 @@ export class Updater {
   }
   /** When the next automatic check is due: a day after the last check, an hour after a failed one. */
   #due() {
-    const value = this.#settings.value;
+    const value = this.#st.settings;
     return value.lastCheck + (value.lastFailed ? timing.retry : timing.interval);
   }
 
   /** Turn the automatic check on or off (the settings page). */
   setAuto(on: boolean) {
-    if (this.#settings.value.auto === on) return;
+    if (this.#st.settings.auto === on) return;
     this.#save({ auto: on });
     this.schedule();
   }
@@ -567,7 +573,7 @@ export class Updater {
   schedule() {
     clearTimeout(this.#timer);
     this.#timer = undefined;
-    if (this.#disposed || !this.#settings.value.auto) return;
+    if (this.#disposed || !this.#st.settings.auto) return;
     const due = this.#due() - deps.now();
     const delay = Math.min(2 ** 31 - 1, Math.max(timing.firstCheck, due));
     this.#timer = setTimeout(() => void this.autoCheck(), delay);
@@ -578,7 +584,7 @@ export class Updater {
   /** The automatic check: quiet on failure (logged); one OSD notice per new version. */
   async autoCheck() {
     this.#timer = undefined;
-    if (this.#disposed || !this.#settings.value.auto) return;
+    if (this.#disposed || !this.#st.settings.auto) return;
     if (deps.now() < this.#due()) return this.schedule();
     await this.check(false);
     this.schedule();
@@ -596,7 +602,7 @@ export class Updater {
     if (this.#download) return Promise.resolve();
     if (manual) {
       this.#manual = true;
-      this.#set("checking");
+      this.#st.state = "checking";
     }
     if (this.#checking) return this.#checking;
     this.#save({ lastCheck: deps.now() });
@@ -611,8 +617,8 @@ export class Updater {
         this.#save({ lastFailed: true });
         if (this.#disposed || this.#download) return;
         if (this.#manual) {
-          this.#error = failure;
-          this.#set("failed");
+          this.#st.error = failure;
+          this.#st.state = "failed";
         }
         return;
       }
@@ -622,22 +628,23 @@ export class Updater {
         console.warn(`[info] update check: read ${release.version} while a download runs; left for the next check`);
         return;
       }
-      const previous = this.#settings.value.latest;
+      const previous = this.#st.settings.latest;
       this.#save({ latest: release });
-      this.#error = null;
+      this.#st.error = null;
       const state = this.#stateFor(release);
       if (state !== "available") {
-        this.#installer = "";
-        return this.#set(state);
+        this.#st.installer = "";
+        this.#st.state = state;
+        return;
       }
       // A manual check shows it in the window: no notice for this version later either.
-      if (!this.#manual && this.#settings.value.notified !== release.version) this.#notify(release);
+      if (!this.#manual && this.#st.settings.notified !== release.version) this.#notify(release);
       this.#save({ notified: release.version });
       // The installer downloaded for the same release stays ready to run.
       const same = previous?.version === release.version && previous.installer?.sha256 === release.installer?.sha256;
-      if (this.#installer && same) return this.#set("downloaded");
-      this.#installer = "";
-      this.#set("available");
+      const kept = this.#st.installer !== "" && same;
+      if (!kept) this.#st.installer = "";
+      this.#st.state = kept ? "downloaded" : "available";
     })().finally(() => {
       this.#checking = null;
       this.#manual = false;
@@ -652,14 +659,9 @@ export class Updater {
       .catch(() => {});
   }
 
-  #set(state: UpdateState) {
-    this.#state = state;
-    this.plugin.update();
-  }
-
   /** The About window's action button. */
   async action() {
-    const latest = this.#settings.value.latest;
+    const latest = this.#st.settings.latest;
     switch (this.props().updateButton) {
       case "check":
         return this.check(true);
@@ -677,7 +679,7 @@ export class Updater {
 
   /** Open the release notes in the browser. */
   async releaseNotes() {
-    const latest = this.#settings.value.latest;
+    const latest = this.#st.settings.latest;
     await this.plugin.system.openUrl(latest?.notesUrl ?? `${RELEASES_URL}/latest`).catch((error) => console.warn(`[info] release notes: ${(error as Error).message}`));
   }
 
@@ -686,9 +688,9 @@ export class Updater {
     const installer = release.installer;
     if (this.#download || !installer) return;
     const controller = (this.#download = new AbortController());
-    this.#received = 0;
-    this.#error = null;
-    this.#set("downloading");
+    this.#st.received = 0;
+    this.#st.error = null;
+    this.#st.state = "downloading";
     // A busy command keeps the plugin running while the transfer runs (lazy activation).
     // TRANSLATORS: why "Check for Updates…" is greyed out: an installer is being downloaded.
     this.command?.set({ busy: true, reason: "Downloading the update…" });
@@ -701,29 +703,28 @@ export class Updater {
         release.version,
         deps.downloads(),
         (received) => {
-          this.#received = received;
           // At most ten window updates a second.
           const now = Date.now();
           if (now - this.#lastDraw >= 100 || received === installer.size) {
             this.#lastDraw = now;
-            this.plugin.update();
+            this.#st.received = received;
           }
         },
         controller.signal,
       );
-      this.#installer = path;
-      this.#set("downloaded");
+      this.#st.installer = path;
+      this.#st.state = "downloaded";
     } catch (error) {
       const failure = error instanceof UpdateError ? error : new UpdateError("disk", String(error));
       console.warn(`[info] update download: ${failure.code}: ${failure.message}`);
       if (this.#disposed) return;
-      this.#received = 0;
+      this.#st.received = 0;
       if (failure.code === "cancelled") {
-        this.#error = null;
-        this.#set("available");
+        this.#st.error = null;
+        this.#st.state = "available";
       } else {
-        this.#error = failure;
-        this.#set("download-failed");
+        this.#st.error = failure;
+        this.#st.state = "download-failed";
       }
     } finally {
       this.#download = null;
@@ -733,27 +734,27 @@ export class Updater {
 
   /** Start the downloaded installer (Windows: the setup program; macOS: the disk image opens). Checked again first. */
   async run() {
-    const installer = this.#settings.value.latest?.installer;
-    if (!installer || !this.#installer) return;
+    const installer = this.#st.settings.latest?.installer;
+    if (!installer || !this.#st.installer) return;
     const fail = (error: UpdateError) => {
-      this.#error = error;
-      this.#installer = "";
-      this.#set("download-failed");
+      this.#st.error = error;
+      this.#st.installer = "";
+      this.#st.state = "download-failed";
     };
-    if (!isInstallerFor(this.#installer, await this.#platformKey())) return fail(new UpdateError("invalid", `${this.#installer} is not an installer for this system`));
-    if (!(await matches(this.#installer, installer))) return fail(new UpdateError("sha256", "the downloaded file changed"));
+    if (!isInstallerFor(this.#st.installer, await this.#platformKey())) return fail(new UpdateError("invalid", `${this.#st.installer} is not an installer for this system`));
+    if (!(await matches(this.#st.installer, installer))) return fail(new UpdateError("sha256", "the downloaded file changed"));
     try {
-      await this.plugin.system.openPath(this.#installer);
+      await this.plugin.system.openPath(this.#st.installer);
     } catch (error) {
       console.warn(`[info] run installer: ${(error as Error).message}`);
-      this.#error = new UpdateError("open", (error as Error).message);
-      this.#set("download-failed");
+      this.#st.error = new UpdateError("open", (error as Error).message);
+      this.#st.state = "download-failed";
     }
   }
 
   props(): UpdateProps {
-    const latest = this.#settings.value.latest;
-    const state = this.#state;
+    const latest = this.#st.settings.latest;
+    const state = this.#st.state;
     const action =
       state === "checking"
         ? ""
@@ -771,11 +772,11 @@ export class Updater {
       latestVersion: latest?.version ?? "",
       latestDate: latest?.published ?? "",
       updateButton: action,
-      updateError: this.#error?.code ?? "",
-      updateDetail: this.#error?.detail ?? "",
-      received: this.#received,
+      updateError: this.#st.error?.code ?? "",
+      updateDetail: this.#st.error?.detail ?? "",
+      received: this.#st.received,
       total: latest?.installer?.size ?? 0,
-      installerPath: this.#installer,
+      installerPath: this.#st.installer,
       hasNotes: !!latest,
     };
   }

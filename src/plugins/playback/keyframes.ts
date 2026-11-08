@@ -13,25 +13,27 @@ export const NO_VIDEO = "No video";
  * so releasing a held key stops at once.
  */
 export class Keyframes {
-  busy = false;
-  /** `stats().video !== null` for the source with this id. */
-  #video: { sourceId: number; video: boolean } | null = null;
+  /**
+   * In `plugin.state`: the answer and the step in flight re-run only the
+   * commands, the panel and the thumbnails that read them.
+   * `video`: `stats().video !== null` for the source with this id.
+   */
+  readonly #st: { video: { sourceId: number; video: boolean } | null; busy: boolean };
   #asking: number | null = null;
   readonly #scope: Scope;
   readonly #playback: Playback;
-  readonly #update: () => void;
 
-  constructor(scope: Scope, playback: Playback, update: () => void) {
+  constructor(scope: Scope, playback: Playback) {
     this.#scope = scope;
     this.#playback = playback;
-    this.#update = update;
+    this.#st = scope.state({ video: null as { sourceId: number; video: boolean } | null, busy: false });
   }
 
   /** Call on every state change: asks `stats()` once per source on its first ready. */
   observe(state: PlayerState) {
     const { sourceId } = state;
     if (state.phase !== "ready" || state.kind !== "media" || sourceId === null) return;
-    if (this.#video?.sourceId === sourceId || this.#asking === sourceId) return;
+    if (this.#st.video?.sourceId === sourceId || this.#asking === sourceId) return;
     this.#asking = sourceId;
     this.#scope.player.stats().then(
       (stats) => this.#answer(sourceId, stats.video !== null),
@@ -42,28 +44,29 @@ export class Keyframes {
   #answer(sourceId: number, video: boolean) {
     if (this.#asking === sourceId) this.#asking = null;
     if (this.#scope.player.state.sourceId !== sourceId) return;
-    this.#video = { sourceId, video };
-    this.#update();
+    this.#st.video = { sourceId, video };
   }
 
   /** Whether the source with this id has video; `null` until `stats()` answered. */
   video(sourceId: number): boolean | null {
-    return this.#video?.sourceId === sourceId ? this.#video.video : null;
+    const known = this.#st.video;
+    return known?.sourceId === sourceId ? known.video : null;
   }
 
   state(): State {
     const s = this.#scope.player.state;
     let reason: Reason | null = null;
     if (s.kind !== "media" || s.phase !== "ready" || !s.can.seek || s.position === null) reason = UNSUPPORTED;
-    else if (this.#video?.sourceId !== s.sourceId || !this.#video.video) reason = NO_VIDEO;
-    return { enabled: reason === null && !this.busy, checked: null, busy: this.busy, reason };
+    else if (this.#st.video?.sourceId !== s.sourceId || !this.#st.video.video) reason = NO_VIDEO;
+    const busy = this.#st.busy;
+    return { enabled: reason === null && !busy, checked: null, busy, reason };
   }
 
   async run(direction: "backward" | "forward") {
     if (!this.state().enabled) return;
     const { player } = this.#scope;
     const before = player.state;
-    this.busy = true;
+    this.#st.busy = true;
     try {
       await player.step("keyframe", direction, { ifCurrent: before });
     } catch (error) {
@@ -71,7 +74,7 @@ export class Keyframes {
       if ((error as { code?: string })?.code === "stale") return;
       throw sourceFailure(error);
     } finally {
-      this.busy = false;
+      this.#st.busy = false;
     }
     const after = player.state.position ?? 0;
     const p = this.#playback;
