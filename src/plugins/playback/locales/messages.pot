@@ -1,130 +1,134 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.playback 0.2.16\n"
+"Project-Id-Version: vestra.playback 0.2.18\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: commands.ts:69
+#: commands.ts:87
 msgid "Back {} s"
 msgstr ""
 
-#: commands.ts:69
+#: commands.ts:87
 msgid "Forward {} s"
 msgstr ""
 
-#: commands.ts:246 commands.ts:247
-msgid "Seek"
+#: commands.ts:272
+msgid "Playback…"
 msgstr ""
 
-#: commands.ts:246 commands.ts:247
-msgid "Speed"
-msgstr ""
-
-#: commands.ts:246
+#: commands.ts:272
 msgid "Open File…"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Open URL…"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Reopen Current/Last File"
 msgstr ""
 
-#: commands.ts:246 commands.ts:247
+#: commands.ts:272 commands.ts:273
 msgid "Copy to Clipboard"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "File Name"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Folder Path"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Full Path"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:820
 msgid "Previous Keyframe"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:827
 msgid "Next Keyframe"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Jump to Time…"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272 ui/panel.slint:772 ui/panel.slint:775 ui/panel.slint:781
 msgid "Jump to Start"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Seek Steps…"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "0.5×"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "1.5×"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "2×"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Custom…"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Disable Screen Saver While Playing"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Show Time on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:246
+#: commands.ts:272
 msgid "Show Thumbnail on Seek Bar Hover"
 msgstr ""
 
-#: commands.ts:247
+#: commands.ts:273
 msgid "File"
 msgstr ""
 
-#: commands.ts:247
+#: commands.ts:273
+msgid "Seek"
+msgstr ""
+
+#: commands.ts:273 ui/panel.slint:657 ui/panel.slint:675 ui/panel.slint:678 ui/panel.slint:705
+msgid "Speed"
+msgstr ""
+
+#: commands.ts:273 panel.ts:56
 msgid "Playback"
 msgstr ""
 
-#: commands.ts:256
+#: commands.ts:283 ui/panel.slint:632
 msgid "Not supported by the current source"
 msgstr ""
 
-#: commands.ts:256
+#: commands.ts:283
 msgid "No file to reopen"
 msgstr ""
 
-#: commands.ts:256
+#: commands.ts:283
 msgid "No open file"
 msgstr ""
 
-#: commands.ts:256
+#: commands.ts:283
 msgid "A network source has no file name"
 msgstr ""
 
-#: commands.ts:256
+#: commands.ts:283 ui/panel.slint:650
 msgid "No video"
 msgstr ""
 
-#: commands.ts:256
+#: commands.ts:283
 msgid "Needs ffmpeg"
 msgstr ""
 
@@ -136,104 +140,108 @@ msgstr ""
 msgid "Open Media (replaces the current source)"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Seek: {} / {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Back {} s: {} / {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Forward {} s: {} / {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Jumped to the start"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Previous keyframe: {} / {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Next keyframe: {} / {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Already at the last keyframe"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Speed: {}x"
 msgstr ""
 
-#: main.ts:30 ui/bar.slint:91
+#: main.ts:29 ui/bar.slint:95
 msgid "Volume: {}%"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Open failed"
 msgstr ""
 
-#: main.ts:30 ui/open-url.slint:66
+#: main.ts:29 ui/open-url.slint:66
 msgid "Open failed: {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Reopened: {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Reopened the last file: {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Copied: {}"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Copy failed: {}"
 msgstr ""
 
-#: main.ts:30 ui/open-url.slint:65
+#: main.ts:29 ui/open-url.slint:65
 msgid "Only the first line is opened; to open several links, add them to the playlist"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Disable screen saver while playing: On"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Disable screen saver while playing: Off"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Show time on seek bar hover: On"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Show time on seek bar hover: Off"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Show thumbnail on seek bar hover: On"
 msgstr ""
 
-#: main.ts:30
+#: main.ts:29
 msgid "Show thumbnail on seek bar hover: Off"
 msgstr ""
 
-#: main.ts:30 ui/prompt.slint:17
+#: main.ts:29
 msgid "Source operation failed: {}"
 msgstr ""
 
-#: main.ts:30 ui/prompt.slint:18
+#: main.ts:29 ui/panel.slint:735
 msgid "Enter a time within the source's duration as HH:MM:SS.mmm"
 msgstr ""
 
-#: main.ts:30 ui/prompt.slint:19
+#: main.ts:29 ui/panel.slint:689
 msgid "Speed must be between 0.25× and 4×"
+msgstr ""
+
+#: main.ts:29 ui/panel.slint:449
+msgid "Range 0.1–3600 s, at most one decimal place"
 msgstr ""
 
 #: manifest.json
@@ -245,7 +253,9 @@ msgid "Bottom control bar, open files and links, seek and speed"
 msgstr ""
 
 #: manifest.json
-msgid "The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing."
+msgid ""
+"The control bar at the bottom of the main window (seek bar, play buttons, volume); open a file, open a link, reopen the last file; several seek steps, keyframe seeks, jump to a time, fixed and custom speeds; time or thumbnail on seek bar hover; no screen saver while playing.\n"
+"Playback… (Alt+4) in the right-click menu opens its panel beside the video: speed, jump, frame and keyframe steps, seek steps."
 msgstr ""
 
 #: manifest.json
@@ -265,59 +275,59 @@ msgid "speed"
 msgstr ""
 
 #. a tooltip: a button's action and its key, e.g. "Pause (Space)".
-#: ui/bar.slint:80
+#: ui/bar.slint:84
 msgid "{} ({})"
 msgstr ""
 
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 msgid "Pause"
 msgstr ""
 
-#: ui/bar.slint:82
+#: ui/bar.slint:86
 msgid "Play"
 msgstr ""
 
-#: ui/bar.slint:83
+#: ui/bar.slint:87
 msgid "Stop"
 msgstr ""
 
-#: ui/bar.slint:85
+#: ui/bar.slint:89
 msgid "Previous"
 msgstr ""
 
-#: ui/bar.slint:86
+#: ui/bar.slint:90
 msgid "Next"
 msgstr ""
 
-#: ui/bar.slint:87
+#: ui/bar.slint:91
 msgid "Open file"
 msgstr ""
 
-#: ui/bar.slint:88
+#: ui/bar.slint:92
 msgid "Leave fullscreen"
 msgstr ""
 
-#: ui/bar.slint:88
+#: ui/bar.slint:92
 msgid "Fullscreen"
 msgstr ""
 
-#: ui/bar.slint:89
+#: ui/bar.slint:93
 msgid "Click to show the elapsed time"
 msgstr ""
 
-#: ui/bar.slint:89
+#: ui/bar.slint:93
 msgid "Click to show the remaining time"
 msgstr ""
 
-#: ui/bar.slint:90
+#: ui/bar.slint:94
 msgid "Unmute"
 msgstr ""
 
-#: ui/bar.slint:90 ui/bar.slint:420
+#: ui/bar.slint:94 ui/bar.slint:468
 msgid "Mute"
 msgstr ""
 
-#: ui/bar.slint:420
+#: ui/bar.slint:468
 msgctxt "accessibility"
 msgid "Unmute"
 msgstr ""
@@ -350,79 +360,93 @@ msgstr ""
 msgid "Not a valid link"
 msgstr ""
 
-#: ui/prompt.slint:16
-msgid "The source changed; open this window again"
+#. {} is a number of seconds ("30").
+#: ui/panel.slint:443
+msgid "{} s"
 msgstr ""
 
-#: ui/prompt.slint:21
-msgid "Custom Speed"
+#: ui/panel.slint:449
+msgid "Seek step"
 msgstr ""
 
-#: ui/prompt.slint:21
+#: ui/panel.slint:450
+msgid "click: type a value · double-click: Default"
+msgstr ""
+
+#: ui/panel.slint:587 ui/panel.slint:701 ui/panel.slint:710
+msgid "1×"
+msgstr ""
+
+#. {} is the playback speed ("1.25"); the × reads "times".
+#: ui/panel.slint:618 ui/panel.slint:683
+msgid "{}×"
+msgstr ""
+
+#: ui/panel.slint:657 ui/panel.slint:718
+msgid "Go to"
+msgstr ""
+
+#: ui/panel.slint:657 ui/panel.slint:770
+msgid "Start"
+msgstr ""
+
+#: ui/panel.slint:657 ui/panel.slint:790 ui/panel.slint:807
+msgid "Frame"
+msgstr ""
+
+#: ui/panel.slint:657 ui/panel.slint:816 ui/panel.slint:833
+msgid "Keyframe"
+msgstr ""
+
+#: ui/panel.slint:689 ui/panel.slint:695
+msgid "Playback speed"
+msgstr ""
+
+#: ui/panel.slint:690
+msgid "click: type a value"
+msgstr ""
+
+#: ui/panel.slint:706
+msgid "drag or scroll · double-click: 1×"
+msgstr ""
+
+#: ui/panel.slint:715
+msgid "Jump"
+msgstr ""
+
+#: ui/panel.slint:736 ui/panel.slint:760 ui/panel.slint:764
 msgid "Jump to Time"
 msgstr ""
 
-#: ui/prompt.slint:44
-msgid "Speed (0.25–4×)"
+#. the format of the time to jump to (hours, minutes, seconds).
+#: ui/panel.slint:750
+msgid "hh:mm:ss"
 msgstr ""
 
-#: ui/prompt.slint:44
-msgid "Time (h:mm:ss.ms)"
-msgstr ""
-
-#: ui/prompt.slint:60 ui/time-jump.slint:165
-msgid "OK"
-msgstr ""
-
-#: ui/prompt.slint:60
+#: ui/panel.slint:758
 msgid "Go"
 msgstr ""
 
-#. the unit after a number of seconds.
-#: ui/time-jump.slint:36
-msgid "s"
+#: ui/panel.slint:787
+msgid "Step"
 msgstr ""
 
-#: ui/time-jump.slint:42
-msgid "Default"
+#: ui/panel.slint:794
+msgid "Previous Frame"
 msgstr ""
 
-#: ui/time-jump.slint:71
-msgid "Seek Steps"
+#: ui/panel.slint:801
+msgid "Next Frame"
 msgstr ""
 
-#: ui/time-jump.slint:82 ui/time-jump.slint:110
-msgid "Left/Right arrow keys:"
+#: ui/panel.slint:842
+msgid "Seek steps"
 msgstr ""
 
-#: ui/time-jump.slint:82 ui/time-jump.slint:118
-msgid "Ctrl + Left/Right arrow keys:"
-msgstr ""
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:126
-msgid "Shift + Left/Right arrow keys:"
-msgstr ""
-
-#: ui/time-jump.slint:82 ui/time-jump.slint:134
-msgid "Ctrl + Alt + Left/Right arrow keys:"
-msgstr ""
-
-#: ui/time-jump.slint:103
-msgid "Set how far each seek key moves during playback."
-msgstr ""
-
-#: ui/time-jump.slint:142
+#: ui/panel.slint:876
 msgid "Jump to keyframes only"
 msgstr ""
 
-#: ui/time-jump.slint:147
-msgid "Applies to the arrow keys and the seek bar: a click or drag on the bar lands on the keyframe at or before the pointer."
-msgstr ""
-
-#: ui/time-jump.slint:154
-msgid "Range 0.1–3600 s, at most one decimal place"
-msgstr ""
-
-#: ui/time-jump.slint:169
-msgid "Cancel"
+#: ui/panel.slint:877
+msgid "The seek steps and the seek bar land on keyframes: fast on any file, up to one keyframe interval off"
 msgstr ""

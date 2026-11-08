@@ -6,460 +6,460 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=2; plural=(n != 1);\n"
 
-#: main.ts:118
+#: main.ts:122
 #, x-machine
 msgid "External subtitle"
 msgstr "Subtítulo externo"
 
-#: main.ts:120 main.ts:957
+#: main.ts:124 main.ts:1009
 #, x-machine
 msgid "Track {}"
 msgstr "Pista {}"
 
-#: main.ts:121
+#: main.ts:125
 #, x-machine
 msgid "Embedded {}"
 msgstr "Incrustado {}"
 
-#: main.ts:128 main.ts:964
+#: main.ts:132 main.ts:1016
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:137 manifest.json
+#: main.ts:135 main.ts:142 manifest.json
 #, x-machine
 msgid "Subtitles"
 msgstr "Subtítulos"
 
-#: main.ts:140
+#: main.ts:145
 #, x-machine
 msgid "Subtitle Tracks"
 msgstr "Pistas de subtítulos"
 
-#: main.ts:141 main.ts:928 main.ts:935 main.ts:994
+#: main.ts:146
 #, x-machine
 msgid "Secondary Subtitle"
 msgstr "Subtítulo secundario"
 
-#: main.ts:142
+#: main.ts:147
 #, x-machine
 msgid "Secondary Subtitle Position"
 msgstr "Posición del subtítulo secundario"
 
-#: main.ts:143 main.ts:1033 main.ts:1038 main.ts:1043 main.ts:1048 main.ts:1062 main.ts:1071 main.ts:1080
+#: main.ts:148
 #, x-machine
 msgid "Subtitle Style"
 msgstr "Estilo de subtítulos"
 
-#: main.ts:144 main.ts:1275
+#: main.ts:149 main.ts:1327 ui/panel.slint:693
 #, x-machine
 msgid "Subtitle Sync"
 msgstr "Sincronización de subtítulos"
 
-#: main.ts:145 main.ts:1236 main.ts:1240 main.ts:1244
+#: main.ts:150
 #, x-machine
 msgid "Seek"
 msgstr "Saltar"
 
-#: main.ts:146
+#: main.ts:151 ui/panel.slint:699 ui/panel.slint:873
 #, x-machine
 msgid "Reset"
 msgstr "Restablecer"
 
-#: main.ts:187
+#: main.ts:192
 #, x-machine
 msgid "Subtitle sync: 0 s"
 msgstr "Sincronización de subtítulos: 0 s"
 
-#: main.ts:188
+#: main.ts:193
 #, x-machine
 msgid "Subtitle sync: {} s earlier"
 msgstr "Sincronización de subtítulos: {} s antes"
 
-#: main.ts:188
+#: main.ts:193
 #, x-machine
 msgid "Subtitle sync: {} s later"
 msgstr "Sincronización de subtítulos: {} s después"
 
-#: main.ts:313
+#: main.ts:318
 #, x-machine
 msgid "Add Secondary Subtitle"
 msgstr "Agregar subtítulo secundario"
 
-#: main.ts:313
+#: main.ts:318 ui/panel.slint:558
 #, x-machine
 msgid "Open Subtitle"
 msgstr "Abrir subtítulo"
 
-#: main.ts:727
+#: main.ts:750
 #, x-machine
 msgid "Subtitles Off"
 msgstr "Subtítulos desactivados"
 
-#: main.ts:730
+#: main.ts:752
 #, x-machine
 msgid "Secondary Off"
 msgstr "Secundario desactivado"
 
-#: main.ts:904
+#: main.ts:950
 #, x-machine
 msgid "Open Subtitle…"
 msgstr "Abrir subtítulo…"
 
-#: main.ts:904 main.ts:912 main.ts:916 main.ts:921 main.ts:928 main.ts:997 main.ts:1005 main.ts:1290
+#: main.ts:950 main.ts:958 main.ts:966 main.ts:972 main.ts:980 main.ts:1050 main.ts:1058 main.ts:1334 main.ts:1346
 #, x-machine
 msgid "Subtitle operation in progress"
 msgstr "Operación de subtítulos en curso"
 
-#: main.ts:910
+#: main.ts:956
 #, x-machine
 msgid "Add Secondary Subtitle…"
 msgstr "Agregar subtítulo secundario…"
 
-#: main.ts:912
+#: main.ts:958
 #, x-machine
 msgid "No media to play"
 msgstr "No hay ningún medio que reproducir"
 
-#: main.ts:916
+#: main.ts:966 ui/panel.slint:524
 #, x-machine
 msgid "Show Subtitles"
 msgstr "Mostrar subtítulos"
 
-#: main.ts:921 main.ts:1004 main.ts:1013
+#: main.ts:972 main.ts:1057
 #, x-machine
 msgid "Subtitle Track"
 msgstr "Pista de subtítulos"
 
-#: main.ts:921 main.ts:928
+#: main.ts:972 main.ts:980
 #, x-machine
 msgid "Off"
 msgstr "Desactivado"
 
-#: main.ts:935
-#, x-machine
-msgid "Position"
-msgstr "Posición"
-
-#: main.ts:935
+#: main.ts:987 ui/panel.slint:596
 #, x-machine
 msgid "Top"
 msgstr "Arriba"
 
-#: main.ts:935
+#: main.ts:987 ui/panel.slint:597
 #, x-machine
 msgid "Above Main Subtitle"
 msgstr "Encima del subtítulo principal"
 
-#: main.ts:971
+#: main.ts:1023
 #, x-machine
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: main.ts:997
+#: main.ts:1050
 #, x-machine
 msgid "Only text subtitles can be secondary"
 msgstr "Solo los subtítulos de texto pueden ser secundarios"
 
-#: main.ts:997
+#: main.ts:1050
 #, x-machine
 msgid "Already the primary subtitle"
 msgstr "Ya es el subtítulo principal"
 
-#: main.ts:1013
+#: main.ts:1066
 #, x-machine
 msgid "Cycle"
 msgstr "Alternar"
 
-#: main.ts:1016
+#: main.ts:1069
 #, x-machine
 msgid "No subtitle tracks"
 msgstr "No hay pistas de subtítulos"
 
-#: main.ts:1033
+#: main.ts:1085 ui/panel.slint:749
 #, x-machine
 msgid "Size +"
 msgstr "Tamaño +"
 
-#: main.ts:1035
+#: main.ts:1087
 #, x-machine
 msgid "Subtitle size: larger ({})"
 msgstr "Tamaño de subtítulos: mayor ({})"
 
-#: main.ts:1038
+#: main.ts:1090 ui/panel.slint:735
 #, x-machine
 msgid "Size −"
 msgstr "Tamaño −"
 
-#: main.ts:1040
+#: main.ts:1092
 #, x-machine
 msgid "Subtitle size: smaller ({})"
 msgstr "Tamaño de subtítulos: menor ({})"
 
-#: main.ts:1043
+#: main.ts:1095 ui/panel.slint:784
 #, x-machine
 msgid "Move Up"
 msgstr "Subir"
 
-#: main.ts:1045
+#: main.ts:1097
 #, x-machine
 msgid "Subtitle position: up ({}%)"
 msgstr "Posición de subtítulos: arriba ({}%)"
 
-#: main.ts:1048
+#: main.ts:1100 ui/panel.slint:769
 #, x-machine
 msgid "Move Down"
 msgstr "Bajar"
 
-#: main.ts:1050
+#: main.ts:1102
 #, x-machine
 msgid "Subtitle position: down ({}%)"
 msgstr "Posición de subtítulos: abajo ({}%)"
 
-#: main.ts:1053
+#: main.ts:1105
 #, x-machine
 msgid "Subtitle Position"
 msgstr "Posición de subtítulos"
 
-#: main.ts:1057
+#: main.ts:1109
 #, x-machine
 msgid "Subtitle position: default ({}%)"
 msgstr "Posición de subtítulos: predeterminada ({}%)"
 
-#: main.ts:1062 ui/settings.slint:119
+#: main.ts:1114 ui/panel.slint:811 ui/panel.slint:835 ui/settings.slint:119
 #, x-machine
 msgid "Bold"
 msgstr "Negrita"
 
-#: main.ts:1067
+#: main.ts:1119
 #, x-machine
 msgid "Bold subtitles"
 msgstr "Subtítulos en negrita"
 
-#: main.ts:1067
+#: main.ts:1119
 #, x-machine
 msgid "Bold subtitles off"
 msgstr "Subtítulos sin negrita"
 
-#: main.ts:1071
+#: main.ts:1123 ui/panel.slint:816 ui/panel.slint:819
 #, x-machine
 msgid "Shadow"
 msgstr "Sombra"
 
-#: main.ts:1076
+#: main.ts:1128
 #, x-machine
 msgid "Subtitle shadow: on ({})"
 msgstr "Sombra de subtítulos: activada ({})"
 
-#: main.ts:1076
+#: main.ts:1128
 #, x-machine
 msgid "Subtitle shadow: off"
 msgstr "Sombra de subtítulos: desactivada"
 
-#: main.ts:1080
+#: main.ts:1132 ui/panel.slint:827
 #, x-machine
 msgid "Opaque Box"
 msgstr "Cuadro opaco"
 
-#: main.ts:1085
+#: main.ts:1137
 #, x-machine
 msgid "Opaque subtitle box: on"
 msgstr "Cuadro opaco de subtítulos: activado"
 
-#: main.ts:1085
+#: main.ts:1137
 #, x-machine
 msgid "Opaque subtitle box: off"
 msgstr "Cuadro opaco de subtítulos: desactivado"
 
-#: main.ts:1095
+#: main.ts:1147
 #, x-machine
 msgid "ASS/SSA animated subtitles: on"
 msgstr "Subtítulos animados ASS/SSA: activados"
 
-#: main.ts:1095
+#: main.ts:1147
 #, x-machine
 msgid "ASS/SSA animated subtitles: off"
 msgstr "Subtítulos animados ASS/SSA: desactivados"
 
-#: main.ts:1101
+#: main.ts:1153
 #, x-machine
 msgid "Original ASS/SSA Styles"
 msgstr "Estilos ASS/SSA originales"
 
-#: main.ts:1136
+#: main.ts:1188
 #, x-machine
 msgid "Secondary subtitle position: top"
 msgstr "Posición del subtítulo secundario: arriba"
 
-#: main.ts:1136
+#: main.ts:1188
 #, x-machine
 msgid "Secondary subtitle position: above the main subtitle"
 msgstr "Posición del subtítulo secundario: encima del subtítulo principal"
 
-#: main.ts:1172 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1224 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:481
 #, x-machine
 msgid "Reading subtitles…"
 msgstr "Leyendo subtítulos…"
 
-#: main.ts:1210 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1262 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:482
 #, x-machine
 msgid "The current media cannot seek"
 msgstr "El medio actual no permite saltar"
 
-#: main.ts:1210 main.ts:1221 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1262 main.ts:1273 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:482
 #, x-machine
 msgid "No text subtitles available"
 msgstr "No hay subtítulos de texto disponibles"
 
-#: main.ts:1217
+#: main.ts:1269
 #, x-machine
 msgid "ffmpeg is needed to read embedded subtitles"
 msgstr "Se necesita ffmpeg para leer los subtítulos incrustados"
 
-#: main.ts:1217
+#: main.ts:1269
 #, x-machine
 msgid "Reading embedded subtitles timed out"
 msgstr "Se agotó el tiempo al leer los subtítulos incrustados"
 
-#: main.ts:1217
+#: main.ts:1269
 #, x-machine
 msgid "Cannot read embedded subtitles"
 msgstr "No se pueden leer los subtítulos incrustados"
 
-#: main.ts:1227
+#: main.ts:1279
 #, x-machine
 msgid "No previous dialogue"
 msgstr "No hay diálogo anterior"
 
-#: main.ts:1227
+#: main.ts:1279
 #, x-machine
 msgid "No next dialogue"
 msgstr "No hay diálogo siguiente"
 
-#: main.ts:1227
+#: main.ts:1279
 #, x-machine
 msgid "No dialogue to jump to"
 msgstr "No hay ningún diálogo al que saltar"
 
-#: main.ts:1228
+#: main.ts:1280
 #, x-machine
 msgid "Seek: previous dialogue {}"
 msgstr "Saltar: diálogo anterior {}"
 
-#: main.ts:1228
+#: main.ts:1280
 #, x-machine
 msgid "Seek: next dialogue {}"
 msgstr "Saltar: diálogo siguiente {}"
 
-#: main.ts:1228
+#: main.ts:1280
 #, x-machine
 msgid "Seek: start of current dialogue {}"
 msgstr "Saltar: inicio del diálogo actual {}"
 
-#: main.ts:1236
+#: main.ts:1288 ui/panel.slint:710
 #, x-machine
 msgid "Previous Dialogue"
 msgstr "Diálogo anterior"
 
-#: main.ts:1240
+#: main.ts:1292 ui/panel.slint:720
 #, x-machine
 msgid "Next Dialogue"
 msgstr "Diálogo siguiente"
 
-#: main.ts:1244
+#: main.ts:1296
 #, x-machine
 msgid "Current Subtitle Start"
 msgstr "Inicio del subtítulo actual"
 
-#: main.ts:1264 main.ts:1268 main.ts:1279
-#, x-machine
-msgid "Sync"
-msgstr "Sincronización"
-
-#: main.ts:1264
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.05 s"
 msgstr "0.05 s antes"
 
-#: main.ts:1264
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.1 s"
 msgstr "0.1 s antes"
 
-#: main.ts:1264
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.25 s"
 msgstr "0.25 s antes"
 
-#: main.ts:1264
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 0.5 s"
 msgstr "0.5 s antes"
 
-#: main.ts:1264
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 1 s"
 msgstr "1 s antes"
 
-#: main.ts:1264
+#: main.ts:1316
 #, x-machine
 msgid "Earlier 5 s"
 msgstr "5 s antes"
 
-#: main.ts:1268
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.05 s"
 msgstr "0.05 s después"
 
-#: main.ts:1268
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.1 s"
 msgstr "0.1 s después"
 
-#: main.ts:1268
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.25 s"
 msgstr "0.25 s después"
 
-#: main.ts:1268
+#: main.ts:1320
 #, x-machine
 msgid "Later 0.5 s"
 msgstr "0.5 s después"
 
-#: main.ts:1268
+#: main.ts:1320
 #, x-machine
 msgid "Later 1 s"
 msgstr "1 s después"
 
-#: main.ts:1268
+#: main.ts:1320
 #, x-machine
 msgid "Later 5 s"
 msgstr "5 s después"
 
-#: main.ts:1279
+#: main.ts:1331
 #, x-machine
 msgid "Adjust Sync…"
 msgstr "Ajustar sincronización…"
 
-#: main.ts:1290
+#: main.ts:1334 ui/panel.slint:568
 #, x-machine
 msgid "Reload Subtitles"
 msgstr "Recargar subtítulos"
 
-#: main.ts:1290
+#: main.ts:1338
 #, x-machine
 msgid "Refresh Subtitle Tracks"
 msgstr "Actualizar pistas de subtítulos"
 
-#: main.ts:1290
+#: main.ts:1344
 #, x-machine
-msgid "Subtitle Tuning…"
-msgstr "Ajuste fino de subtítulos…"
+msgid "Remove External Subtitle"
+msgstr "Quitar subtítulo externo"
 
-#: main.ts:1290
+#: main.ts:1346
+#, x-machine
+msgid "No external subtitle selected"
+msgstr "No hay ningún subtítulo externo seleccionado"
+
+#: main.ts:1349
 #, x-machine
 msgid "Subtitle Settings…"
 msgstr "Configuración de subtítulos…"
+
+#: main.ts:1352
+#, x-machine
+msgid "Subtitles…"
+msgstr "Subtítulos…"
 
 #: manifest.json
 #, x-machine
@@ -470,10 +470,10 @@ msgstr "Carga subtítulos externos, elige pistas, ajusta el estilo y la sincroni
 #, x-machine
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Find it in the right-click menu under Subtitles."
+"Subtitles… (Alt+3) in the right-click menu opens its panel beside the video."
 msgstr ""
 "Elige y cambia pistas de subtítulos, carga subtítulos SRT, ASS/SSA, WebVTT, SAMI y MicroDVD (la codificación se detecta), también los que tienen el mismo nombre que un vídeo local al abrirlo, muestra un subtítulo secundario; ajusta el tamaño, la posición, la fuente, el color, el contorno, la sombra y el cuadro de fondo, y la sincronización; salta por diálogos; recarga automáticamente los archivos de subtítulos externos cuando cambian.\n"
-"Está en el menú contextual, en Subtítulos."
+"Subtítulos… (Alt+3) en el menú contextual abre su panel junto al vídeo."
 
 #: manifest.json
 #, x-machine
@@ -490,480 +490,674 @@ msgstr "estilo"
 msgid "sync"
 msgstr "sincronización"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The operation was cancelled or the media changed."
 msgstr "Se canceló la operación o cambió el medio."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle tracks changed. Adjust again."
 msgstr "Las pistas de subtítulos cambiaron. Vuelve a ajustar."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The player refused the subtitle (file too large or invalid)."
 msgstr "El reproductor rechazó el subtítulo (archivo demasiado grande o no válido)."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The player is busy. Try again later."
 msgstr "El reproductor está ocupado. Inténtalo más tarde."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The current media does not support this."
 msgstr "El medio actual no lo admite."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The player cannot load this subtitle."
 msgstr "El reproductor no puede cargar este subtítulo."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle operation failed."
 msgstr "Error en la operación de subtítulos."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cancelled."
 msgstr "Cancelado."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle tracks refreshed."
 msgstr "Pistas de subtítulos actualizadas."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle tracks refreshed. Subtitle files loaded from the video's folder: {}"
 msgstr "Pistas de subtítulos actualizadas. Archivos de subtítulos cargados desde la carpeta del vídeo: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle files loaded from the video's folder: {}"
 msgstr "Archivos de subtítulos cargados desde la carpeta del vídeo: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {}"
 msgstr "Subtítulos: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (waiting to take effect)"
 msgstr "Subtítulos: {} (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (could not confirm it took effect)"
 msgstr "Subtítulos: {} (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {}. Secondary subtitle turned off (it is now the primary)"
 msgstr "Subtítulos: {}. Subtítulo secundario desactivado (ahora es el principal)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (waiting to take effect). Secondary subtitle turned off (it is now the primary)"
 msgstr "Subtítulos: {} (pendiente de aplicarse). Subtítulo secundario desactivado (ahora es el principal)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} (could not confirm it took effect). Secondary subtitle turned off (it is now the primary)"
 msgstr "Subtítulos: {} (no se pudo confirmar que se aplicara). Subtítulo secundario desactivado (ahora es el principal)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles hidden"
 msgstr "Subtítulos ocultos"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle tracks changed. Choose again."
 msgstr "Las pistas de subtítulos cambiaron. Vuelve a elegir."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot use it as the secondary subtitle: only text subtitles can be secondary"
 msgstr "No se puede usar como subtítulo secundario: solo los subtítulos de texto pueden ser secundarios"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot use it as the secondary subtitle: it is already the primary subtitle"
 msgstr "No se puede usar como subtítulo secundario: ya es el subtítulo principal"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {}"
 msgstr "Subtítulo secundario: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} (waiting to take effect)"
 msgstr "Subtítulo secundario: {} (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} (could not confirm it took effect)"
 msgstr "Subtítulo secundario: {} (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: off"
 msgstr "Subtítulo secundario: desactivado"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitle file chosen."
 msgstr "No se eligió ningún archivo de subtítulos."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {}"
 msgstr "Subtítulo abierto: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} (waiting to take effect)"
 msgstr "Subtítulo abierto: {} (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} (could not confirm it took effect)"
 msgstr "Subtítulo abierto: {} (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} ({} tracks)"
 msgstr "Subtítulo abierto: {} ({} pistas)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr "Subtítulo abierto: {} ({} pistas) (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Opened subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr "Subtítulo abierto: {} ({} pistas) (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} ({} tracks)"
 msgstr "Subtítulo secundario: {} ({} pistas)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr "Subtítulo secundario: {} ({} pistas) (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Secondary subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr "Subtítulo secundario: {} ({} pistas) (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle loaded, but it cannot be the secondary subtitle"
 msgstr "Subtítulo cargado, pero no puede ser el subtítulo secundario"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (waiting to take effect)"
 msgstr "Subtítulo cargado, pero no puede ser el subtítulo secundario (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (could not confirm it took effect)"
 msgstr "Subtítulo cargado, pero no puede ser el subtítulo secundario (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitles to show."
 msgstr "No hay subtítulos que mostrar."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles shown"
 msgstr "Subtítulos visibles"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} ({}/{})"
 msgstr "Subtítulos: {} ({}/{})"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} ({}/{}) (waiting to take effect)"
 msgstr "Subtítulos: {} ({}/{}) (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: {} ({}/{}) (could not confirm it took effect)"
 msgstr "Subtítulos: {} ({}/{}) (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitles: off"
 msgstr "Subtítulos: desactivados"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitle selected."
 msgstr "No hay ningún subtítulo seleccionado."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Embedded subtitles need no reload"
 msgstr "Los subtítulos incrustados no necesitan recargarse"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "This subtitle was not loaded by the Subtitles plugin and cannot be reloaded"
 msgstr "Este subtítulo no lo cargó el complemento Subtítulos y no se puede recargar"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: subtitle file {} not found"
 msgstr "No se puede recargar: no se encontró el archivo de subtítulos {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the content of subtitle file {} changed"
 msgstr "No se puede recargar: cambió el contenido del archivo de subtítulos {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: {}"
 msgstr "No se puede recargar: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: cannot read the subtitle file."
 msgstr "No se puede recargar: no se puede leer el archivo de subtítulos."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "No se puede recargar: el archivo de subtítulos debe ser un archivo normal de entre 1 byte y 8 MiB."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file is empty or larger than 8 MiB."
 msgstr "No se puede recargar: el archivo de subtítulos está vacío o supera los 8 MiB."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: image subtitle files are not supported yet"
 msgstr "No se puede recargar: los archivos de subtítulos de imagen aún no son compatibles"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: unknown subtitle format"
 msgstr "No se puede recargar: formato de subtítulos desconocido"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file has no subtitles."
 msgstr "No se puede recargar: el archivo de subtítulos no contiene subtítulos."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot reload: the subtitle file is larger than 2 MiB"
 msgstr "No se puede recargar: el archivo de subtítulos supera los 2 MiB"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle unchanged"
 msgstr "Subtítulo sin cambios"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Reloaded subtitle {}"
 msgstr "Subtítulo recargado: {}"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle reloaded automatically"
 msgstr "Subtítulo recargado automáticamente"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Select a subtitle track first."
 msgstr "Selecciona primero una pista de subtítulos."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The current subtitle track cannot be adjusted."
 msgstr "La pista de subtítulos actual no se puede ajustar."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "No subtitle font available."
 msgstr "No hay ninguna fuente de subtítulos disponible."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle style updated"
 msgstr "Estilo de subtítulos actualizado"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle style updated (waiting to take effect)"
 msgstr "Estilo de subtítulos actualizado (pendiente de aplicarse)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Subtitle style updated (could not confirm it took effect)"
 msgstr "Estilo de subtítulos actualizado (no se pudo confirmar que se aplicara)"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Default style restored."
 msgstr "Estilo predeterminado restaurado."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The selected subtitle changed. Choose again."
 msgstr "El subtítulo seleccionado cambió. Vuelve a elegir."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "External subtitle removed."
 msgstr "Subtítulo externo eliminado."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The media changed; the running operation was cancelled."
 msgstr "El medio cambió; se canceló la operación en curso."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
-msgid "Enter whole milliseconds, for example 1250 or -500."
-msgstr "Escribe milisegundos enteros, por ejemplo 1250 o -500."
+msgid "Enter seconds, for example 1.25 or -0.5."
+msgstr "Introduzca segundos, por ejemplo 1.25 o -0.5."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
-msgid "The sync value must be between −{} and {} ms"
-msgstr "El valor de sincronización debe estar entre −{} y {} ms"
+msgid "The sync value must be between −{} and {} s"
+msgstr "El valor de sincronización debe estar entre −{} y {} s"
 
-#: messages.ts:152
+#: messages.ts:153
+#, x-machine
+msgid "Sync set in seconds ({} s). For milliseconds, type {} ms."
+msgstr "Sincronización ajustada en segundos ({} s). Para milisegundos, escriba {} ms."
+
+#: messages.ts:153
 #, x-machine
 msgid "Switching subtitle track…"
 msgstr "Cambiando la pista de subtítulos…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Removing subtitle…"
 msgstr "Quitando el subtítulo…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Switching secondary subtitle…"
 msgstr "Cambiando el subtítulo secundario…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Choose a subtitle file…"
 msgstr "Elige un archivo de subtítulos…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Choose a secondary subtitle file…"
 msgstr "Elige un archivo de subtítulos secundario…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Switching subtitle display…"
 msgstr "Cambiando la visualización de subtítulos…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Hiding subtitles…"
 msgstr "Ocultando subtítulos…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Turning off the secondary subtitle…"
 msgstr "Desactivando el subtítulo secundario…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Reloading subtitle…"
 msgstr "Recargando el subtítulo…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Refreshing…"
 msgstr "Actualizando…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Applying subtitle style…"
 msgstr "Aplicando el estilo de subtítulos…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Restoring the default style…"
 msgstr "Restaurando el estilo predeterminado…"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Cannot read the subtitle file."
 msgstr "No se puede leer el archivo de subtítulos."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "El archivo de subtítulos debe ser un archivo normal de entre 1 byte y 8 MiB."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file is empty or larger than 8 MiB."
 msgstr "El archivo de subtítulos está vacío o supera los 8 MiB."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Image subtitle files are not supported yet"
 msgstr "Los archivos de subtítulos de imagen aún no son compatibles"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "Unknown subtitle format"
 msgstr "Formato de subtítulos desconocido"
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file has no subtitles."
 msgstr "El archivo de subtítulos no contiene subtítulos."
 
-#: messages.ts:152
+#: messages.ts:153
 #, x-machine
 msgid "The subtitle file is larger than 2 MiB"
 msgstr "El archivo de subtítulos supera los 2 MiB"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 #, x-machine
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
 msgstr "La codificación de los subtítulos puede ser incorrecta; cambia la codificación predeterminada en Configuración de subtítulos"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 #, x-machine
 msgid "Fonts embedded in the subtitle were ignored"
 msgstr "Se ignoraron las fuentes incrustadas en el subtítulo"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 #, x-machine
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "Fotogramas por segundo del video desconocidos; el subtítulo MicroDVD se convirtió a 23.976"
 
-#: ui/settings.slint:21
+#: ui/panel.slint:493 ui/panel.slint:533
+#, x-machine
+msgid "Primary"
+msgstr "Principal"
+
+#: ui/panel.slint:493 ui/panel.slint:577
+#, x-machine
+msgid "Secondary"
+msgstr "Secundario"
+
+#: ui/panel.slint:493 ui/panel.slint:593 ui/panel.slint:765
+#, x-machine
+msgid "Position"
+msgstr "Posición"
+
+#: ui/panel.slint:493 ui/panel.slint:607
+#, x-machine
+msgid "Delay"
+msgstr "Retardo"
+
+#: ui/panel.slint:493 ui/panel.slint:704
+#, x-machine
+msgid "Lines"
+msgstr "Diálogos"
+
+#: ui/panel.slint:493 ui/panel.slint:731
+#, x-machine
+msgid "Size"
+msgstr "Tamaño"
+
+#: ui/panel.slint:493 ui/panel.slint:804
+#, x-machine
+msgid "Look"
+msgstr "Aspecto"
+
+#: ui/panel.slint:517
+#, x-machine
+msgid "Show subtitles"
+msgstr "Mostrar subtítulos"
+
+#: ui/panel.slint:530
+#, x-machine
+msgid "Tracks"
+msgstr "Pistas"
+
+#: ui/panel.slint:547
+#, x-machine
+msgid "Cycle Subtitle Tracks"
+msgstr "Alternar pistas de subtítulos"
+
+#: ui/panel.slint:556
+#, x-machine
+msgid "Load…"
+msgstr "Cargar…"
+
+#: ui/panel.slint:556 ui/panel.slint:558
+#, x-machine
+msgid "Cancel"
+msgstr "Cancelar"
+
+#: ui/panel.slint:565
+#, x-machine
+msgid "Reload"
+msgstr "Recargar"
+
+#: ui/panel.slint:570
+#, x-machine
+msgid "for subtitle files you opened"
+msgstr "para archivos de subtítulos que haya abierto"
+
+#: ui/panel.slint:604
+#, x-machine
+msgid "Sync"
+msgstr "Sincronización"
+
+#. {} is the sync step in seconds ("0.5"); the button moves the subtitles earlier.
+#: ui/panel.slint:610
+#, x-machine
+msgid "−{}"
+msgstr "−{}"
+
+#: ui/panel.slint:612
+#, x-machine
+msgid "Earlier"
+msgstr "Antes"
+
+#: ui/panel.slint:629
+#, x-machine
+msgid "Subtitle delay"
+msgstr "Retardo de subtítulos"
+
+#: ui/panel.slint:630
+#, x-machine
+msgid "click: type a value · later is positive"
+msgstr "clic: escribir un valor · positivo es después"
+
+#. {} is the subtitle delay in seconds with its sign ("+1.25").
+#: ui/panel.slint:635 ui/settings.slint:214
+#, x-machine
+msgid "{} s"
+msgstr "{} s"
+
+#. {} is the sync step in seconds ("0.5"); the button moves the subtitles later.
+#: ui/panel.slint:677
+#, x-machine
+msgid "+{}"
+msgstr "+{}"
+
+#: ui/panel.slint:679
+#, x-machine
+msgid "Later"
+msgstr "Después"
+
+#: ui/panel.slint:686
+#, x-machine
+msgid "Reset Sync"
+msgstr "Restablecer sincronización"
+
+#: ui/panel.slint:706
+#, x-machine
+msgid "Previous"
+msgstr "Anterior"
+
+#: ui/panel.slint:715
+#, x-machine
+msgid "Next"
+msgstr "Siguiente"
+
+#: ui/panel.slint:728
+#, x-machine
+msgid "Style"
+msgstr "Estilo"
+
+#: ui/panel.slint:742 ui/panel.slint:756
+#, x-machine
+msgid "Subtitle size"
+msgstr "Tamaño de subtítulos"
+
+#: ui/panel.slint:743 ui/panel.slint:778
+#, x-machine
+msgid "double-click: Default"
+msgstr "doble clic: predeterminado"
+
+#. {} is where the subtitle sits, 100 at the bottom edge.
+#: ui/panel.slint:775
+#, x-machine
+msgid "{}%"
+msgstr "{} %"
+
+#: ui/panel.slint:777
+#, x-machine
+msgid "Subtitle position"
+msgstr "Posición de subtítulos"
+
+#: ui/panel.slint:791 ui/panel.slint:798
+#, x-machine
+msgid "Reset Position"
+msgstr "Restablecer posición"
+
+#: ui/panel.slint:824
+#, x-machine
+msgid "Box"
+msgstr "Cuadro"
+
+#: ui/panel.slint:829
+#, x-machine
+msgid "replaces outline and shadow"
+msgstr "sustituye contorno y sombra"
+
+#: ui/panel.slint:840
+#, x-machine
+msgid "Keep original ASS/SSA styles"
+msgstr "Mantener estilos ASS/SSA originales"
+
+#: ui/panel.slint:841
+#, x-machine
+msgid "ASS/SSA subtitles keep the fonts, colours and positions of their file"
+msgstr "Los subtítulos ASS/SSA conservan las fuentes, colores y posiciones de su archivo"
+
+#: ui/panel.slint:849
+#, x-machine
+msgid "Font, Colour and Outline…"
+msgstr "Fuente, color y contorno…"
+
+#: ui/panel.slint:850 ui/settings.slint:21
 #, x-machine
 msgid "Subtitle Settings"
 msgstr "Configuración de subtítulos"
+
+#: ui/panel.slint:875
+#, x-machine
+msgid "Reset the subtitle style and sync"
+msgstr "Restablecer estilo y sincronización de subtítulos"
 
 #: ui/settings.slint:80 ui/settings.slint:95
 #, x-machine
@@ -1010,7 +1204,7 @@ msgstr "Paso de sincronización"
 msgid "Default encoding"
 msgstr "Codificación predeterminada"
 
-#: ui/settings.slint:87 ui/settings.slint:103 ui/settings.slint:136 ui/settings.slint:148 ui/settings.slint:160 ui/settings.slint:182 ui/settings.slint:194 ui/settings.slint:205 ui/settings.slint:218 ui/settings.slint:238 ui/tune.slint:75 ui/tune.slint:119 ui/tune.slint:127 ui/tune.slint:147
+#: ui/settings.slint:87 ui/settings.slint:103 ui/settings.slint:136 ui/settings.slint:148 ui/settings.slint:160 ui/settings.slint:182 ui/settings.slint:194 ui/settings.slint:205 ui/settings.slint:218 ui/settings.slint:238
 #, x-machine
 msgid "Default"
 msgstr "Predeterminada"
@@ -1049,11 +1243,6 @@ msgstr "Mantener estilos originales"
 #, x-machine
 msgid "Use subtitle settings"
 msgstr "Usar la configuración de subtítulos"
-
-#: ui/settings.slint:214
-#, x-machine
-msgid "{} s"
-msgstr "{} s"
 
 #: ui/settings.slint:227
 #, x-machine
@@ -1104,88 +1293,3 @@ msgstr "Cargar automáticamente archivos de subtítulos con el mismo nombre"
 #, x-machine
 msgid "Reset All"
 msgstr "Restablecer todo"
-
-#: ui/sync.slint:10
-#, x-machine
-msgid "Adjust Sync"
-msgstr "Ajustar sincronización"
-
-#: ui/sync.slint:29 ui/sync.slint:79
-#, x-machine
-msgid "Positive delays the subtitles, negative advances them."
-msgstr "Un valor positivo retrasa los subtítulos; uno negativo los adelanta."
-
-#: ui/sync.slint:41
-#, x-machine
-msgid "Sync value (ms):"
-msgstr "Valor de sincronización (ms):"
-
-#: ui/sync.slint:71
-#, x-machine
-msgid "Apply"
-msgstr "Aplicar"
-
-#: ui/tune.slint:21
-#, x-machine
-msgid "Subtitle Tuning"
-msgstr "Ajuste fino de subtítulos"
-
-#: ui/tune.slint:64 ui/tune.slint:115
-#, x-machine
-msgid "Size {}"
-msgstr "Tamaño {}"
-
-#: ui/tune.slint:64 ui/tune.slint:123
-#, x-machine
-msgid "Position {}%"
-msgstr "Posición {}%"
-
-#: ui/tune.slint:64 ui/tune.slint:137
-#, x-machine
-msgid "Sync {}"
-msgstr "Sincronización {}"
-
-#: ui/tune.slint:71 ui/tune.slint:93
-#, x-machine
-msgid "Cancel"
-msgstr "Cancelar"
-
-#: ui/tune.slint:71 ui/tune.slint:93
-#, x-machine
-msgid "Load…"
-msgstr "Cargar…"
-
-#: ui/tune.slint:73 ui/tune.slint:124
-#, x-machine
-msgid "Up"
-msgstr "Arriba"
-
-#: ui/tune.slint:74 ui/tune.slint:125
-#, x-machine
-msgid "Down"
-msgstr "Abajo"
-
-#: ui/tune.slint:133
-#, x-machine
-msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr "En segundos. Un valor positivo retrasa los subtítulos; uno negativo los adelanta. Haz clic para escribir un valor."
-
-#: ui/tune.slint:145
-#, x-machine
-msgid "Later"
-msgstr "Después"
-
-#: ui/tune.slint:146
-#, x-machine
-msgid "Earlier"
-msgstr "Antes"
-
-#: ui/tune.slint:159
-#, x-machine
-msgid "Remove"
-msgstr "Quitar"
-
-#: ui/tune.slint:160
-#, x-machine
-msgid "Settings…"
-msgstr "Configuración…"

@@ -34,15 +34,15 @@ function sourceHost() {
 async function open(host = sourceHost()) {
   const started = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.command("tune").run();
-  return { ...started, window: host.window("subtitle-tune") };
+  return { ...started, window: host.mounted() };
 }
 async function openSettings(host: TestHost) {
   await host.command("settings").run();
   return host.window("subtitle-settings");
 }
-async function openSync(host: TestHost) {
-  await host.command("sync-input").run();
-  return host.window("subtitle-sync");
+/** Settles until `check` holds (about 1 s at most); the caller then asserts that same value. */
+async function until(host: TestHost, check: () => boolean) {
+  for (let i = 0; i < 100 && !check(); i++) await host.settle(10);
 }
 /** Simulate another source being opened: the subtitle state moves to generation 2. */
 function switchSource(host: TestHost) {
@@ -56,70 +56,95 @@ async function srtFile(text: string | Buffer) {
   return { path, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("menu per the allocation table; windows bind exactly their Slint callbacks", async () => {
+test("menu per the redesign: Open ▸, Subtitle Track ▸, Subtitles…; the rest in the palette; views bind exactly their Slint callbacks", async () => {
   const { host, window, stop } = await open();
   const declared = [...host.commands.values()]
+    .filter(({ display }) => display.path.length)
     .map(({ declaration: d, display }) => [display.path.join(" > "), d.order, d.group, d.bindings.join(",")] as const)
     .sort((a, b) => a[1] - b[1]);
   assert.deepEqual(declared, [
     ["打开 > 打开字幕…", 113, "open", "Alt+O"],
     ["打开 > 添加次字幕…", 114, "open", ""],
-    ["播放 > 跳转 > 上一句对白", 217, "jump-subtitle", "Home"],
-    ["播放 > 跳转 > 下一句对白", 217, "jump-subtitle", "End"],
-    ["播放 > 跳转 > 当前字幕起点", 217, "jump-subtitle", "Ctrl+Home"],
-    ["字幕 > 显示字幕", 301, "domain", "Alt+H"],
-    ["字幕 > 选择字幕轨 > 不显示", 302, "subtitle-track", ""],
-    ["字幕 > 选择字幕轨 > English · en", 303, "subtitle-track", ""],
-    ["字幕 > 选择字幕轨 > 依次切换", 311, "subtitle-cycle", "Alt+L"],
-    ["字幕 > 次字幕 > 不显示", 312, "subtitle-second", ""],
-    ["字幕 > 次字幕 > 位置 > 顶部", 321, "subtitle-second-pos", ""],
-    ["字幕 > 次字幕 > 位置 > 主字幕上方", 321, "subtitle-second-pos", ""],
-    ["字幕 > 字幕样式 > 粗体", 324, "style-font", "Alt+B"],
-    ["字幕 > 字幕样式 > 字号 +", 325, "style-font", "Alt+PageUp"],
-    ["字幕 > 字幕样式 > 字号 −", 326, "style-font", "Alt+PageDown"],
-    ["字幕 > 字幕样式 > 上移", 330, "style-move", ""],
-    ["复位 > 字幕位置", 330, "reset-subtitles", "Alt+Home"],
-    ["字幕 > 字幕样式 > 下移", 331, "style-move", ""],
-    ["复位 > 字幕同步", 331, "reset-subtitles", "/"],
-    ["字幕 > 字幕样式 > 阴影", 335, "style-box", ""],
-    ["字幕 > 字幕样式 > 字幕边框不透明", 336, "style-box", ""],
-    ["字幕 > 开启 ASS/SSA 原样式", 337, "subtitle-render", ""],
-    ["字幕 > 同步 > 超前 0.5 秒", 339, "subtitle-sync", "."],
-    ["字幕 > 同步 > 滞后 0.5 秒", 340, "subtitle-sync", ","],
-    ["字幕 > 同步 > 手动调整同步…", 342, "subtitle-sync-input", ""],
-    ["字幕 > 重载字幕", 370, "subtitle-tools", "Ctrl+Alt+Y"],
-    ["字幕 > 刷新字幕轨", 371, "subtitle-tools", ""],
-    ["字幕 > 字幕微调…", 372, "subtitle-tools", ""],
-    ["字幕 > 字幕设置…", 373, "subtitle-tools", ""],
+    ["选择字幕轨 > 不显示", 302, "subtitle-track", ""],
+    ["选择字幕轨 > English · en", 303, "subtitle-track", ""],
+    ["字幕…", 793, "windows", "Alt+3"],
+  ]);
+  // Out of the menu, in the command palette with their keys (ids unchanged).
+  const palette = [...host.commands.entries()]
+    .filter(([, { display }]) => !display.path.length)
+    .map(([id, { declaration: d }]) => [id, d.bindings.join(",")] as const)
+    .sort((a, b) => a[0].localeCompare(b[0]));
+  assert.deepEqual(palette, [
+    ["ass-original", ""], ["bold", "Alt+B"], ["box", ""], ["dialogue-current", "Ctrl+Home"], ["dialogue-next", "End"],
+    ["dialogue-previous", "Home"], ["move-down", ""], ["move-reset", "Alt+Home"], ["move-up", ""],
+    ["refresh", ""], ["reload", "Ctrl+Alt+Y"], ["remove", ""], ["second-off", ""], ["second-position-aboveMain", ""],
+    ["second-position-top", ""], ["settings", ""], ["shadow", ""], ["show", "Alt+H"], ["size-down", "Alt+PageDown"],
+    ["size-up", "Alt+PageUp"], ["sync-earlier", "."], ["sync-input", ""], ["sync-later", ","], ["sync-reset", "/"],
+    ["track-cycle", "Alt+L"],
   ]);
   assert.deepEqual(host.conflicts, []);
+  assert.equal(window.slot, "adjust");
+  assert.equal(window.component, "SubtitlesPanel");
   const settings = await openSettings(host);
-  const sync = await openSync(host);
-  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/tune.slint", "ui/settings.slint", "ui/sync.slint"]);
-  for (const [name, view] of [["tune", window], ["settings", settings], ["sync", sync]] as const) {
-    const slint = await readFile(new URL(`../ui/${name}.slint`, import.meta.url), "utf8");
-    const callbacks = [...slint.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!);
-    assert.deepEqual([...view.callbacks].sort(), callbacks.sort(), name);
-  }
+  assert.deepEqual(host.sent("ui.open").map((o) => o.file), ["ui/settings.slint"]);
+  // The callbacks of the view: the settings window's, or the panel's bridge global (not its parts').
+  const callbacks = async (file: string) => {
+    const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
+    const view = file === "panel" ? slint.slice(slint.indexOf("export global SubtitlesBridge"), slint.indexOf("\n}\n", slint.indexOf("export global SubtitlesBridge"))) : slint;
+    return [...view.matchAll(/callback\s+([\w-]+)\s*\(/g)].map((m) => m[1]!).sort();
+  };
+  assert.deepEqual([...settings.callbacks].sort(), await callbacks("settings"), "settings");
+  // The panel's handlers (callbacks are not on the wire): every callback of its bridge has a `panel.on`.
+  const main = await readFile(new URL("../main.ts", import.meta.url), "utf8");
+  const kebab = (name: string) => name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
+  const bound = [...main.matchAll(/panel\.on\("(\w+)"/g)].map((m) => kebab(m[1]!)).sort();
+  assert.deepEqual(bound, await callbacks("panel"), "panel");
   assert.deepEqual(window.props["track-labels"], ["关闭字幕", "English · en"]);
   assert.equal(window.props["selected-track"], 1);
   assert.equal(window.props["can-style"], true);
-  assert.equal(window.props["sync-seconds"], "0");
+  assert.equal(window.props["sync-text"], "0.0");
+  assert.equal(window.props["step-text"], "0.5");
+  assert.equal(window.props["position-percent"], 95);
   assert.equal(host.command("show").state.checked, true);
   assert.equal(host.command("track-1").state.checked, true);
   assert.equal(host.commands.has("track-2"), false, "one item per real track");
   await stop();
 });
 
-test("window text is short Chinese with no debug strings", async () => {
+test("Subtitles… (Alt+3) opens the adjust column at the panel and closes it again; keys show beside the controls", async () => {
+  const host = sourceHost();
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
+  assert.equal(host.layout.adjust?.preferred, false, "the column starts closed");
+  await host.press("Alt+3");
+  await host.settle();
+  assert.equal(host.layout.adjust?.preferred, true);
+  assert.equal(host.command("tune").state.checked, true);
+  await host.press("Alt+3");
+  await host.settle();
+  assert.equal(host.layout.adjust?.preferred, false);
+  assert.equal(host.command("tune").state.checked, false);
+  // The key caps (the test host is a Mac: labels such as ⌥H); the player's first answer comes a moment later.
+  const keys = () => (host.mounted().props["keys"] ?? {}) as Record<string, string>;
+  await until(host, () => keys().show !== "" && keys().show !== undefined);
+  assert.ok(keys().show);
+  assert.equal(keys().shadow, "", "a command without a key shows no cap");
+  host.rebind("shadow", ["Shift+S"]);
+  await until(host, () => keys().shadow !== "");
+  assert.notEqual(keys().shadow, "", "a key the user gives shows");
+  host.rebind("bold", []);
+  await until(host, () => keys().bold === "");
+  assert.equal(keys().bold, "", "a key the user cleared hides its cap");
+  await stop();
+});
+
+test("panel text is short Chinese with no debug strings", async () => {
   const { host, window, stop } = await open();
   const settings = await openSettings(host);
-  const sync = await openSync(host);
-  for (const view of [window, settings, sync])
+  for (const view of [window, settings])
     for (const [name, value] of Object.entries(view.props))
       if (typeof value === "string" && name !== "track-labels")
         assert.doesNotMatch(value, /generation|revision|applied|waiting|uncertain|ready|媒体版本|\n/, name);
-  for (const file of ["tune", "settings", "sync"]) {
+  for (const file of ["panel", "settings"]) {
     const slint = await readFile(new URL(`../ui/${file}.slint`, import.meta.url), "utf8");
     assert.doesNotMatch(slint, /#[0-9a-f]{3,8}\b/i, `${file}: colours come from Theme`);
     assert.doesNotMatch(slint, /font-size:\s*\d/, `${file}: font sizes come from Theme`);
@@ -146,8 +171,9 @@ test("a slider burst is merged into one style write with the latest values", asy
   window.emit("size-step", 1);
   window.emit("position-step", 1);
   await host.settle();
-  assert.equal(window.props["sync-seconds"], "+1"); // shown before the host confirms
+  assert.equal(window.props["sync-text"], "+1.0"); // shown before the host confirms
   assert.equal(window.props["subtitle-size"], 38);
+  assert.equal(window.props["position-percent"], 94, "mpv's sub-pos: 100 is the bottom edge");
   await host.settle(170);
   const styles = host.sent("subtitles.style");
   assert.equal(styles.length, 1);
@@ -247,13 +273,16 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
     assert.equal(host.osd.at(-1), "打开字幕：actual.srt", "the menu entry reports on screen");
     assert.deepEqual(host.subtitleLoads.map((l) => [l.format, l.title, l.select]), [["srt", "actual.srt", "primary"]]);
     assert.equal(window.props["selected-track"], 2);
-    assert.equal(window.props["can-remove"], true);
+    assert.equal(window.props["can-reload"], true);
+    assert.equal(host.command("remove").state.enabled, true);
 
-    window.emit("remove-selected");
+    await host.command("remove").run();
     await host.settle();
     assert.equal(host.subtitles.tracks.length, 1);
     assert.equal(shownStatus(window.props), "已移除外部字幕。");
-    assert.equal(window.props["can-remove"], false);
+    assert.equal(host.osd.at(-1), "已移除外部字幕。");
+    assert.equal(host.command("remove").state.enabled, false);
+    assert.equal(window.props["can-reload"], false);
   } finally {
     await stop();
     await file.cleanup();
@@ -513,7 +542,7 @@ test("D02: one track toggles with 关闭; no track disables the command", async 
   await stop();
 });
 
-test("D06/D07: size and position keys share the tune window's edits and report on screen", async () => {
+test("D06/D07: size and position keys share the panel's edits and report on screen", async () => {
   const { host, window, stop } = await open();
   await host.press("Alt+PageUp");
   assert.equal(host.osd.at(-1), "字幕尺寸：增加(38)");
@@ -544,38 +573,103 @@ test("D06/D07: size and position keys share the tune window's edits and report o
   await stop();
 });
 
-test("D05: typed sync values apply in whole ms; bad input reverts with a reason", async () => {
-  const { host, stop } = await open();
-  const sync = await openSync(host);
-  assert.equal(sync.props["value-text"], "0");
-  assert.equal(sync.props["can-style"], true);
-  sync.emit("apply", "1250");
+test("D05: a sync value typed in the panel applies in seconds; bad input keeps the value with a reason", async () => {
+  const { host, window, stop } = await open();
+  const offset = () => host.subtitles.presentation.effective?.style.offsetMs;
+  assert.equal(window.props["sync-value"], "0");
+  window.emit("apply-sync", "1.25");
   await host.settle(170);
-  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 1250);
+  assert.equal(offset(), 1250);
   assert.equal(host.osd.at(-1), "字幕同步: 滞后 1.25 秒");
-  assert.equal(sync.props["value-text"], "1250");
-  sync.emit("apply", "−300"); // U+2212 minus
+  assert.equal(window.props["sync-text"], "+1.25");
+  assert.equal(window.props["sync-value"], "1.25");
+  window.emit("apply-sync", "−0,3 s"); // U+2212 minus, a decimal comma, the unit
   await host.settle(170);
-  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -300);
-  sync.emit("apply", "abc");
+  assert.equal(offset(), -300);
+  assert.equal(window.props["sync-text"], "−0.3");
+  window.emit("apply-sync", "abc");
   await host.settle();
-  assert.equal(shownStatus(sync.props), "请输入整数毫秒，例如 1250 或 -500。");
-  assert.equal(sync.props["value-text"], "-300", "the field goes back to the value in effect");
-  sync.emit("apply", "99999999");
-  await host.settle();
-  assert.equal(shownStatus(sync.props), "同步值须在 −600000 至 600000 毫秒之间");
-  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, -300);
-  sync.emit("nudge", "-300", 1);
+  assert.equal(shownStatus(window.props), "请输入秒数，例如 1.25 或 -0.5。");
+  assert.equal(window.props["sync-value"], "-0.3", "the value in effect stays");
+  window.emit("apply-sync", "250"); // a number of milliseconds typed without the unit
+  await until(host, () => shownStatus(window.props).includes("250 ms"));
+  assert.equal(shownStatus(window.props), "已按秒设置同步（250 秒）。如需毫秒，请输入 250 ms。");
   await host.settle(170);
-  assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 200);
-  assert.equal(sync.props["value-text"], "200");
+  assert.equal(offset(), 250000, "applied as seconds, as typed");
+  assert.equal(shownStatus(window.props), "已按秒设置同步（250 秒）。如需毫秒，请输入 250 ms。", "the hint outlasts the style write");
+  window.emit("apply-sync", "-0.3");
+  await host.settle(170);
+  window.emit("apply-sync", "601");
+  await host.settle();
+  assert.equal(shownStatus(window.props), "同步值须在 −600 至 600 秒之间");
+  assert.equal(offset(), -300);
+  window.emit("sync-step", 1); // ↑ in the field, or +0.5
+  await host.settle(170);
+  assert.equal(offset(), 200);
+  assert.equal(window.props["sync-value"], "0.2");
   await host.press("/");
   await host.settle(170);
-  assert.equal(sync.props["value-text"], "0", "the field follows key edits");
+  assert.equal(window.props["sync-text"], "0.0", "the value follows key edits");
   await host.command("track-off").run();
   await host.settle();
-  assert.equal(sync.props["can-style"], false);
-  assert.equal(sync.props["style-reason"], "请先选择字幕轨。");
+  assert.equal(window.props["can-style"], false);
+  assert.equal(window.props["style-reason"], "请先选择字幕轨。");
+  await stop();
+});
+
+test("Adjust Sync… shows the panel and opens its sync value for typing", async () => {
+  const host = sourceHost();
+  const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
+  await host.command("sync-input").run();
+  await host.settle();
+  assert.equal(host.layout.adjust?.preferred, true);
+  assert.equal(host.mounted().props["edit-sync"], 1);
+  await host.command("sync-input").run();
+  await host.settle();
+  assert.equal(host.layout.adjust?.preferred, true, "it shows the panel, never closes it");
+  assert.equal(host.mounted().props["edit-sync"], 2);
+  host.mounted().emit("focus-changed", true);
+  await host.settle();
+  assert.equal((host.mounted().locks as { focused?: boolean }).focused, true);
+  await stop();
+});
+
+test("the panel's own controls: show, secondary position, bold / shadow / box, ASS styles, lines and Reset", async () => {
+  const { host, window, stop } = await open();
+  const style = () => host.subtitles.presentation.effective?.style;
+  window.emit("toggle-bold");
+  window.emit("toggle-shadow");
+  window.emit("toggle-box");
+  await host.settle(170);
+  assert.deepEqual([style()?.bold, style()?.shadow, style()?.box], [true, 2, 50]);
+  assert.deepEqual([window.props["bold"], window.props["shadow"], window.props["boxed"]], [true, true, true]);
+  window.emit("set-ass-original", false);
+  await host.settle(170);
+  assert.equal(style()?.assOverride, "force");
+  assert.equal(window.props["ass-original"], false);
+  window.emit("set-secondary-position", 1);
+  await host.settle(170);
+  assert.equal(window.props["secondary-position"], 1);
+  assert.equal(host.command("second-position-aboveMain").state.checked, true);
+  window.emit("reset-field", "position");
+  window.emit("position-step", -1);
+  await host.settle(170);
+  assert.equal(window.props["position-percent"], 96, "↓ moves the subtitle down");
+  assert.equal(window.props["can-lines"], false, "an embedded track of a file the test host cannot read");
+  assert.equal(window.props["lines-reason"], "text");
+  window.emit("reset-all");
+  await host.settle();
+  assert.equal(host.subtitles.presentation.effective, null);
+  assert.equal(window.props["bold"], false);
+  window.emit("toggle-shown");
+  await host.settle();
+  assert.equal(host.subtitles.selection.target, null);
+  assert.equal(window.props["shown"], false);
+  assert.equal(shownStatus(window.props), "隐藏字幕");
+  window.emit("toggle-shown");
+  await host.settle();
+  assert.deepEqual(host.subtitles.selection.target, embedded);
+  assert.equal(window.props["shown"], true);
   await stop();
 });
 
@@ -592,10 +686,9 @@ test("D05: the 同步单位 changes the step and the menu titles, and is saved",
     assert.equal(settings.props["sync-step-index"], 3);
     settings.emit("change-sync-step", 1);
     await host.settle();
-    const title = (id: string) => host.command(id).display.path.at(-1);
+    const title = (id: string) => host.command(id).display.title;
     assert.equal(title("sync-earlier"), "超前 0.1 秒");
     assert.equal(title("sync-later"), "滞后 0.1 秒");
-    assert.equal(host.command("sync-earlier").declaration.order, 339);
     await host.press(".");
     assert.equal(host.osd.at(-1), "字幕同步: 超前 0.1 秒");
     await host.settle(170);
@@ -605,7 +698,7 @@ test("D05: the 同步单位 changes the step and the menu titles, and is saved",
     assert.equal(JSON.parse(await readFile(join(data, "settings.json"), "utf8")).syncStepMs, 100);
     host = sourceHost();
     started = await startPlugin(activate, { directory, host, dataDirectory: data, locale: "zh-Hans" });
-    assert.equal(host.command("sync-later").display.path.at(-1), "滞后 0.1 秒");
+    assert.equal(host.command("sync-later").display.title, "滞后 0.1 秒");
     await started.stop();
   } finally {
     await rm(data, { recursive: true, force: true });
@@ -649,7 +742,7 @@ test("A09: Ctrl+Alt+Y re-reads a changed file, replaces the track, keeps the syn
     assert.notDeepEqual(host.subtitles.selection.target, firstTarget, "the new track is selected");
     assert.equal(host.subtitles.selection.target?.kind, "external");
     assert.equal(host.subtitles.presentation.effective?.style.offsetMs, 500, "sync is unchanged");
-    assert.equal(window.props["can-remove"], true);
+    assert.equal(window.props["can-reload"], true);
     await rm(file.path);
     await withOsd(host, () => host.press("Ctrl+Alt+Y"));
     assert.equal(host.osd.at(-1), "无法重载：找不到字幕文件 actual.srt");

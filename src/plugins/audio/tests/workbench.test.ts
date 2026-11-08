@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { mkdir, mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { isDeepStrictEqual } from "node:util";
 import test from "node:test";
 import { HostError, LOCALES, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
@@ -33,7 +34,7 @@ async function open(host = new TestHost()) {
   host.setSource({ audioTracks: [track(1)] });
   const started = await startPlugin(activate, { directory, host });
   await host.command("audio.workbench").run();
-  return { ...started, window: host.window("audio-workbench") };
+  return { ...started, window: host.mounted() };
 }
 
 /** Holds every replace until `release()`; then runs `then` for each held request. */
@@ -60,32 +61,41 @@ function hold(host: TestHost, then: (params: Record<string, unknown>) => unknown
   };
 }
 
-test("menu under Audio follows the allocation, and editing commands wait for a selected track", async () => {
+test("the right-click menu keeps Load External Audio…, Audio Track ▸ and Audio…; the rest is in the panel, and editing commands wait for a selected track", async () => {
   const { host, stop } = await startPlugin(activate, { directory });
   await host.settle();
   assert.deepEqual(
-    [...host.commands.values()].map(({ declaration: d }) => [d.path.join(" ▸ "), d.order, d.group, d.bindings.join(","), d.radio, d.repeat]),
+    [...host.commands.values()].map(({ declaration: d, display }) => [
+      d.path.length ? d.path.join(" ▸ ") : display.title,
+      d.order,
+      d.group,
+      d.bindings.join(","),
+      d.radio,
+      d.repeat,
+    ]),
     [
       ["@open ▸ Load External Audio…", 114, "open", "", false, false],
-      ["@audio ▸ Audio Workbench…", 510, "audio-tools", "", false, false],
-      ["@audio ▸ Audio Track ▸ Cycle Tracks", 512, "audio-track-cycle", "Alt+A", false, false],
-      ...["Stereo", "Left Channel", "Right Channel", "Mono Mix", "Swap Left and Right"].map((label) => [`@audio ▸ Audio Track ▸ ${label}`, 512, "audio-channels", "", true, false]),
-      ["@audio ▸ Equalizer", 513, "audio-eq", "Shift+E", false, false],
-      ...presets.map((p) => [`@audio ▸ Preset ▸ ${p.label}`, 514, "audio-eq", "", true, false]),
-      ["@audio ▸ Audio Sync ▸ 50 ms Earlier", 515, "audio-eq", ">", false, true],
-      ["@audio ▸ Audio Sync ▸ 50 ms Later", 515, "audio-eq", "<", false, true],
-      ["@reset ▸ Audio Sync", 530, "reset-audio", "?", false, true],
-      ["@audio ▸ Audio Sync ▸ Don't Keep", 515, "audio-sync-keep", "", true, false],
-      ["@audio ▸ Audio Sync ▸ Keep for This Run", 515, "audio-sync-keep", "", true, false],
-      ["@audio ▸ Audio Sync ▸ Always Keep", 515, "audio-sync-keep", "", true, false],
-      ["@audio ▸ Processing ▸ Normalize", 516, "audio-eq", "Shift+N", false, false],
-      ["@audio ▸ Processing ▸ Crystalizer", 516, "audio-eq", "Shift+C", false, false],
-      ["@reset ▸ Audio Processing", 531, "reset-audio", "", false, false],
-      ["@audio ▸ Audio Track ▸ No Audio Tracks", 511, "audio-tools", "", false, false],
-      ["@audio ▸ Output Device ▸ No Output Devices", 512, "audio-tools", "", false, false],
+      ["Audio…", 792, "windows", "Alt+2", false, false],
+      ["Cycle Tracks", 0, "domain", "Alt+A", false, false],
+      ...["Stereo", "Left Channel", "Right Channel", "Mono Mix", "Swap Left and Right"].map((label) => [label, 0, "domain", "", true, false]),
+      ["Equalizer", 0, "domain", "Shift+E", false, false],
+      ...presets.map((p) => [p.label, 0, "domain", "", true, false]),
+      ["50 ms Earlier", 0, "domain", ">", false, true],
+      ["50 ms Later", 0, "domain", "<", false, true],
+      ["Reset", 0, "domain", "?", false, true],
+      ["Don't Keep", 0, "domain", "", true, false],
+      ["Keep for This Run", 0, "domain", "", true, false],
+      ["Always Keep", 0, "domain", "", true, false],
+      ["Normalize", 0, "domain", "Shift+N", false, false],
+      ["Crystalizer", 0, "domain", "Shift+C", false, false],
+      ["Reset", 0, "domain", "", false, false],
+      ["Audio Track ▸ No Audio Tracks", 505, "domain", "", false, false],
     ],
   );
-  assert.equal(host.command("audio.device.none").state.enabled, false);
+  assert.equal(host.mounted().slot, "adjust");
+  assert.equal(host.layout.adjust?.panels?.[0]?.title, "Audio");
+  assert.equal(host.layout.adjust?.preferred, false, "the adjust column starts closed");
+  assert.equal(host.commands.has("audio.device.none"), false, "no devices: nothing to list, the drop-down says so");
   assert.equal(host.command("audio.track.none").state.enabled, false);
   assert.equal(host.command("audio.load").state.reason, "No file is playing");
   assert.equal(host.command("audio.track.cycle").state.reason, "No audio tracks");
@@ -110,8 +120,7 @@ test("menu under Audio follows the allocation, and editing commands wait for a s
   assert.equal(host.command("audio.sync.keep.none").state.checked, true);
   assert.equal(host.command("audio.sync.keep.always").state.enabled, true, "the keep mode needs no track");
   assert.equal(host.command("audio.preset.0").state.checked, true);
-  await host.command("audio.workbench").run();
-  const window = host.window("audio-workbench");
+  const window = host.mounted();
   assert.equal(window.props.status, "no-track");
   assert.equal(window.props["source-ready"], false);
   window.emit("delay-changed", 500); // disabled controls: ignored
@@ -134,7 +143,7 @@ test("edits round like the host: EQ ±6 dB in 0.1 dB, delay to 10 ms, crystalize
   const { host, window, stop } = await open();
   window.emit("gain-changed", 0, 9.87);
   window.emit("gain-changed", 1, -2.345);
-  window.emit("gain-changed", 6, 3); // no such band
+  window.emit("gain-changed", 10, 3); // no such band
   window.emit("gain-changed", 2, Number.NaN); // rejected, nothing changes
   window.emit("delay-changed", 104.9);
   window.emit("clarity-changed", 5); // the crystalizer is off: the slider is greyed out, nothing changes
@@ -142,13 +151,13 @@ test("edits round like the host: EQ ±6 dB in 0.1 dB, delay to 10 ms, crystalize
   window.emit("clarity-changed", 7);
   window.emit("normalize-changed", true);
   await host.settle();
-  assert.deepEqual(window.props["gain-values"], [6, -2.3, 0, 0, 0, 0]);
+  assert.deepEqual(window.props["gain-values"], [6, -2.3, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert.equal(window.props["delay-ms"], 100);
   assert.equal(window.props["clarity-db"], 6);
   assert.equal(window.props["normalize-enabled"], true);
   assert.deepEqual(own(host)?.nodes, [
-    { kind: "equalizer", frequency: 60, q: 1, gainDb: 6 },
-    { kind: "equalizer", frequency: 170, q: 1, gainDb: -2.3 },
+    { kind: "equalizer", frequency: 31, q: 1, gainDb: 6 },
+    { kind: "equalizer", frequency: 62, q: 1, gainDb: -2.3 },
     { kind: "treble", frequency: 3000, slope: 0.5, gainDb: 6 },
     { kind: "dynaudnorm", enabled: true, maxGain: 4, peak: 0.9 },
   ]);
@@ -181,7 +190,7 @@ test("a burst of edits keeps one change in flight and ends on the last value", a
   await stop();
 });
 
-test("presets change the EQ only and the window follows them after a drag; reset clears the chain", async () => {
+test("presets change the EQ only and the panel follows them after a drag; its Reset clears the processing and keeps the sync", async () => {
   const { host, window, stop } = await open();
   window.emit("gain-changed", 3, -4); // the user dragged a band slider
   window.emit("delay-changed", 250);
@@ -196,16 +205,20 @@ test("presets change the EQ only and the window follows them after a drag; reset
   assert.equal(host.command("audio.preset.2").state.checked, true);
   window.emit("reset-requested");
   await host.settle();
-  assert.deepEqual(window.props["gain-values"], [0, 0, 0, 0, 0, 0]);
-  assert.equal(window.props["delay-ms"], 0);
+  assert.deepEqual(window.props["gain-values"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
+  assert.equal(window.props["delay-ms"], 250, "the panel's Reset keeps the sync, as Reset Audio Processing");
   assert.deepEqual(own(host)?.nodes ?? [], []);
-  assert.equal(own(host)?.offsetMs ?? 0, 0);
+  assert.equal(own(host)?.offsetMs, 250);
   assert.equal(host.command("audio.preset.0").state.checked, true);
+  window.emit("delay-reset"); // the ↺ beside the delay
+  await host.settle();
+  assert.equal(own(host)?.offsetMs ?? 0, 0);
+  assert.equal(window.props["delay-ms"], 0);
   window.emit("delay-changed", 40);
   await host.settle();
   await host.command("audio.reset").run();
   await host.settle();
-  assert.equal(own(host)?.offsetMs, 40, "Reset ▸ Audio Processing leaves the sync alone");
+  assert.equal(own(host)?.offsetMs, 40, "Reset Audio Processing leaves the sync alone");
   assert.equal(window.props["delay-ms"], 40);
   await host.command("audio.sync.reset").run();
   await host.settle();
@@ -238,7 +251,7 @@ test("Reset ▸ Audio Processing clears the equalizer, Normalize and Crystalizer
   assert.equal(host.command("audio.normalize").state.checked, false);
   assert.equal(host.command("audio.clarity").state.checked, false);
   assert.equal(host.command("audio.preset.0").state.checked, true);
-  assert.deepEqual(window.props["gain-values"], [0, 0, 0, 0, 0, 0]);
+  assert.deepEqual(window.props["gain-values"], [0, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert.equal(window.props["delay-ms"], 120);
   await stop();
 });
@@ -257,8 +270,8 @@ test("under Don't Keep another load of a source resets only the delay; an old su
   await gate.release();
   assert.equal(latest(host).expectedGeneration, 2);
   assert.equal(latest(host).offsetMs, 0);
-  assert.deepEqual(latest(host).nodes, [{ kind: "equalizer", frequency: 60, q: 1, gainDb: 3 }], "the equalizer is global");
-  assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0]);
+  assert.deepEqual(latest(host).nodes, [{ kind: "equalizer", frequency: 31, q: 1, gainDb: 3 }], "the equalizer is global");
+  assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert.equal(window.props.status, "applied");
   await stop();
 });
@@ -271,8 +284,8 @@ test("a track switch in the same source keeps the delay and the effects", async 
   host.setSource({ audioTracks: [track(1, false), track(2)] });
   await host.settle();
   assert.equal(own(host)?.offsetMs, 500);
-  assert.deepEqual(own(host)?.nodes, [{ kind: "equalizer", frequency: 60, q: 1, gainDb: 3 }]);
-  assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0]);
+  assert.deepEqual(own(host)?.nodes, [{ kind: "equalizer", frequency: 31, q: 1, gainDb: 3 }]);
+  assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert.equal(window.props["delay-ms"], 500);
   assert.equal(window.props.status, "applied");
   await stop();
@@ -390,7 +403,7 @@ test("Shift+E bypasses the bands but keeps their gains; presets and band edits t
   assert.equal(host.osd.at(-1), "Equalizer: Off");
   assert.equal(host.command("audio.equalizer").state.checked, false);
   assert.equal(window.props["equalizer-enabled"], false);
-  assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0]);
+  assert.deepEqual(window.props["gain-values"], [3, 0, 0, 0, 0, 0, 0, 0, 0, 0]);
   assert.deepEqual(own(host)?.nodes, [{ kind: "treble", frequency: 3000, slope: 0.5, gainDb: 2 }]);
   await host.press("Shift+E");
   await host.settle();
@@ -503,7 +516,7 @@ test("G09: Keep for This Run keeps the delay across sources; Always Keep also ke
     started = await startPlugin(activate, { directory, dataDirectory: data });
     assert.equal(started.host.command("audio.sync.keep.session").state.checked, true, "the mode itself is saved");
     await started.host.command("audio.workbench").run();
-    assert.equal(started.host.window("audio-workbench").props["delay-ms"], 0);
+    assert.equal(started.host.mounted().props["delay-ms"], 0);
 
     // Always Keep: the delay is written and comes back.
     await started.host.command("audio.sync.keep.always").run();
@@ -514,7 +527,7 @@ test("G09: Keep for This Run keeps the delay across sources; Always Keep also ke
     await started.host.press("<");
     await started.stop();
     const saved = JSON.parse(await readFile(join(data, "settings.json"), "utf8"));
-    assert.equal(saved.version, 1);
+    assert.equal(saved.version, 2);
     assert.equal(saved.syncKeep, "always");
     assert.equal(saved.syncMs, 100);
     const host = new TestHost();
@@ -524,7 +537,7 @@ test("G09: Keep for This Run keeps the delay across sources; Always Keep also ke
     await host.settle();
     assert.equal(own(host)?.offsetMs, 100);
     await host.command("audio.workbench").run();
-    const window = host.window("audio-workbench");
+    const window = host.mounted();
     assert.equal(window.props["delay-ms"], 100);
     assert.equal(window.props["sync-keep-index"], 2);
     window.emit("sync-keep-selected", 0);
@@ -535,7 +548,7 @@ test("G09: Keep for This Run keeps the delay across sources; Always Keep also ke
   }
 });
 
-test("G11: Shift+C switches the crystalizer at the remembered strength; menu, window and OSD agree", async () => {
+test("G11: Shift+C switches the crystalizer at the remembered strength; commands, panel and OSD agree", async () => {
   const { host, window, stop } = await open();
   assert.equal(window.props["clarity-enabled"], false);
   assert.equal(window.props["clarity-db"], 3, "default strength 3 dB");
@@ -560,7 +573,7 @@ test("G11: Shift+C switches the crystalizer at the remembered strength; menu, wi
   await host.settle();
   assert.equal(host.command("audio.clarity").state.checked, true, "on at 0 dB stays checked");
   assert.deepEqual(own(host)?.nodes ?? [], [], "but makes no node");
-  window.emit("clarity-reset");
+  window.emit("reset-requested"); // the panel's Reset: Crystalizer off, at the default strength
   await host.settle();
   assert.equal(window.props["clarity-enabled"], false);
   assert.equal(window.props["clarity-db"], 3);
@@ -571,7 +584,7 @@ test("G11: Shift+C switches the crystalizer at the remembered strength; menu, wi
   await stop();
 });
 
-test("global settings and the last page survive a restart", async () => {
+test("global settings survive a restart; the old window's page is dropped", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
   try {
     let host = new TestHost();
@@ -581,22 +594,21 @@ test("global settings and the last page survive a restart", async () => {
     await host.command("audio.preset.1").run();
     await host.press("Shift+C");
     await host.command("audio.workbench").run();
-    host.window("audio-workbench").emit("tab-changed", 1);
-    host.window("audio-workbench").emit("delay-changed", 400); // Don't Keep: not saved
+    host.mounted().emit("delay-changed", 400); // Don't Keep: not saved
     await started.stop();
     host = new TestHost();
     host.openElsewhere("/movie.mp4");
     host.setSource({ audioTracks: [track(1)] });
     started = await startPlugin(activate, { directory, host, dataDirectory: data });
     await host.command("audio.workbench").run();
-    const window = host.window("audio-workbench");
-    assert.equal(window.props["tab-index"], 1);
+    const window = host.mounted();
     assert.equal(window.props["preset-index"], 1);
     assert.equal(window.props["clarity-enabled"], true);
     assert.equal(window.props["delay-ms"], 0);
     assert.equal(window.props.status, "applied", "saved settings are applied at start");
-    assert.equal((own(host)?.nodes as unknown[]).length, 7);
+    assert.equal((own(host)?.nodes as unknown[]).length, 11, "Voice: ten bands, and the crystalizer");
     await started.stop();
+    assert.equal("tab" in JSON.parse(await readFile(join(data, "settings.json"), "utf8")), false);
   } finally {
     await rm(data, { recursive: true, force: true });
   }
@@ -632,8 +644,8 @@ test("G03: the Audio Track menu lists the tracks, follows the list and switches 
   await host.settle();
   const items = () =>
     [...host.commands.values()]
-      .filter(({ declaration: d }) => d.path[1] === "Audio Track" && d.order === 511)
-      .map(({ display }) => display.path[2]);
+      .filter(({ declaration: d }) => d.path[0] === "Audio Track" && d.order === 505)
+      .map(({ display }) => display.path[1]);
   assert.deepEqual(items(), ["1. 日语 [jpn] (aac)", "2. English [eng] (aac)"]);
   assert.equal(host.command("audio.track.1").state.checked, true);
   assert.equal(host.command("audio.track.1").declaration.radio, true);
@@ -728,7 +740,7 @@ test("A11: Load External Audio… adds and selects the file once; failures and a
   host.setSource({ audioTracks: [track(1)] });
   const { stop } = await startPlugin(activate, { directory, host });
   await host.command("audio.workbench").run();
-  const window = host.window("audio-workbench");
+  const window = host.mounted();
   assert.equal(host.command("audio.load").state.enabled, true);
   assert.equal(window.props["can-load"], true);
   host.dialogAnswers.push(null); // cancelled: nothing happens
@@ -790,7 +802,7 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
     await host.settle();
     assert.equal(host.sent("audio.addTrack").length, 0, "off by default");
     await host.command("audio.workbench").run();
-    host.window("audio-workbench").emit("auto-load-changed", true);
+    host.mounted().emit("auto-load-changed", true);
     await host.settle(20);
     assert.deepEqual(host.sent("audio.addTrack").map((p) => [p.path, p.select]), [
       [join(folder, "film.ac3"), false],
@@ -829,8 +841,8 @@ const PHONES = { id: "coreaudio/USB-1", name: "USB 耳机" };
 const device = (name: string, disconnected = false) => (disconnected ? `${name} (not connected)` : name);
 const deviceItems = (host: TestHost) =>
   [...host.commands.entries()]
-    .filter(([, { declaration: d }]) => d.path[1] === "Output Device")
-    .map(([id, { declaration: d, display, state }]) => [display.path[2], d.order, d.group, d.radio, state.enabled, state.checked, state.reason, id] as const);
+    .filter(([id, { declaration: d }]) => id.startsWith("audio.device.") && d.path.length === 0)
+    .map(([id, { declaration: d, display, state }]) => [display.title, d.order, d.group, d.radio, state.enabled, state.checked, state.reason, id] as const);
 const deviceCommand = (host: TestHost, title: string) => host.command(deviceItems(host).find((item) => item[0] === title)![7]);
 const savedJson = async (path: string) => JSON.parse(await readFile(path, "utf8")) as Record<string, unknown>;
 /** The player noticed a plug or unplug (it checks every second): what `audioOutput` becomes. */
@@ -840,7 +852,7 @@ function plug(host: TestHost, devices: { id: string; name: string }[]) {
   host.setSource({ audioOutput: { requested, active: requested !== null && devices.some((d) => d.id === requested) ? requested : null } });
 }
 
-test("G16: Output Device lists System Default and the devices; choosing one switches, says so and is saved", async () => {
+test("G16: the palette lists System Default and the devices (no menu); choosing one switches, says so and is saved", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-audio-"));
   try {
     const host = new TestHost();
@@ -848,9 +860,9 @@ test("G16: Output Device lists System Default and the devices; choosing one swit
     const { stop } = await startPlugin(activate, { directory, host, dataDirectory: data });
     await host.settle();
     assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
-      ["System Default", 512, "audio-tools", true, true, true, null],
-      ["MacBook Air 扬声器", 512, "audio-tools", true, true, false, null],
-      ["USB 耳机", 512, "audio-tools", true, true, false, null],
+      ["System Default", 0, "domain", true, true, true, null],
+      ["MacBook Air 扬声器", 0, "domain", true, true, false, null],
+      ["USB 耳机", 0, "domain", true, true, false, null],
     ]);
     assert.equal(host.sent("player.setAudioDevice").length, 0, "System Default at start sends nothing");
     await deviceCommand(host, "USB 耳机").run();
@@ -860,9 +872,9 @@ test("G16: Output Device lists System Default and the devices; choosing one swit
     assert.equal(host.osd.at(-1), "Audio output: USB 耳机");
     assert.equal(deviceCommand(host, "USB 耳机").state.checked, true);
     assert.equal(deviceCommand(host, "System Default").state.checked, false);
-    // No source is needed, and the window shows the same choice.
+    // No source is needed, and the panel shows the same choice.
     await host.command("audio.workbench").run();
-    const window = host.window("audio-workbench");
+    const window = host.mounted();
     assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name)]);
     assert.equal(window.props["device-index"], 2);
     assert.equal(window.props["devices-available"], true);
@@ -902,12 +914,12 @@ test("G16: unplugging the chosen device falls back with an OSD; plugging it back
   assert.equal(host.osd.at(-1), "Output device disconnected, using System Default");
   // The check mark stays on the choice, now disabled and listed after the connected ones.
   assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
-    ["System Default", 512, "audio-tools", true, true, false, null],
-    ["MacBook Air 扬声器", 512, "audio-tools", true, true, false, null],
-    ["USB 耳机", 512, "audio-tools", true, false, true, "Device not connected"],
+    ["System Default", 0, "domain", true, true, false, null],
+    ["MacBook Air 扬声器", 0, "domain", true, true, false, null],
+    ["USB 耳机", 0, "domain", true, false, true, "Device not connected"],
   ]);
   await host.command("audio.workbench").run();
-  const window = host.window("audio-workbench");
+  const window = host.mounted();
   assert.deepEqual(listed(host, window.props["device-rows"]), ["System Default", device(SPEAKERS.name), device(PHONES.name, true)]);
   assert.equal(window.props["device-index"], 2);
   assert.equal(host.translate(window.props["device-tip"] as never), `${PHONES.name}: device not connected, using System Default`);
@@ -942,7 +954,7 @@ test("G16: the saved device is restored at start without an OSD, also while it i
     started = await startPlugin(activate, { directory, host, dataDirectory: data });
     await host.settle();
     assert.deepEqual(host.source.audioOutput, { requested: PHONES.id, active: null });
-    assert.deepEqual(deviceItems(host).at(-1)!.slice(0, 7), ["USB 耳机", 512, "audio-tools", true, false, true, "Device not connected"]);
+    assert.deepEqual(deviceItems(host).at(-1)!.slice(0, 7), ["USB 耳机", 0, "domain", true, false, true, "Device not connected"]);
     assert.deepEqual(host.osd, []);
     plug(host, [SPEAKERS, PHONES]);
     await host.settle();
@@ -954,18 +966,16 @@ test("G16: the saved device is restored at start without an OSD, also while it i
   }
 });
 
-test("G16: a device plugged in later shows up within 5 s; no list means one disabled item", async () => {
+test("G16: a device plugged in later shows up within 5 s; without a list the palette has none and the drop-down says so", async () => {
   const host = new TestHost();
   host.handle("player.audioDevices", () => {
     throw new HostError("unavailable", "no audio output");
   });
   const { stop } = await startPlugin(activate, { directory, host });
   await host.settle();
-  assert.deepEqual(deviceItems(host).map((item) => item.slice(0, 7)), [
-    ["No Output Devices", 512, "audio-tools", false, false, null, null],
-  ]);
+  assert.deepEqual(deviceItems(host), []);
   await host.command("audio.workbench").run();
-  const window = host.window("audio-workbench");
+  const window = host.mounted();
   assert.deepEqual(listed(host, window.props["device-rows"]), ["No output devices available"]);
   assert.equal(host.translate(window.props["device-tip"] as never), "No output devices available");
   assert.equal(window.props["devices-available"], false);
@@ -980,33 +990,34 @@ test("G16: a device plugged in later shows up within 5 s; no list means one disa
 
 // ---------------------------------------------------------------- i18n: a Simplified Chinese user sees the texts of before
 
-test("zh-Hans: the menu, its reasons and the on-screen messages read as before the English source", async () => {
+test("zh-Hans: the menu, the palette names, the reasons and the on-screen messages read as before the English source", async () => {
   const host = new TestHost();
   host.audioDevices = [SPEAKERS, PHONES];
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.settle();
+  // A menu item by its path, a palette-only command as the palette names it ("Category: Title").
   assert.deepEqual(
-    [...host.commands.values()].map((command) => command.display.path.join(" ▸ ")),
+    [...host.commands.values()].map(({ display }) => (display.path.length ? display.path.join(" ▸ ") : `${display.category}: ${display.title}`)),
     [
       "打开 ▸ 载入外部音频…",
-      "声音 ▸ 音频工作台…",
-      "声音 ▸ 音轨 ▸ 按序切换",
-      ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => `声音 ▸ 音轨 ▸ ${label}`),
-      "声音 ▸ 均衡器",
-      ...["平直", "人声", "音乐", "影院"].map((label) => `声音 ▸ 预设 ▸ ${label}`),
-      "声音 ▸ 声音同步 ▸ 超前 50 毫秒",
-      "声音 ▸ 声音同步 ▸ 滞后 50 毫秒",
-      "复位 ▸ 声音同步",
-      "声音 ▸ 声音同步 ▸ 不保持",
-      "声音 ▸ 声音同步 ▸ 本次运行内保持",
-      "声音 ▸ 声音同步 ▸ 始终保持",
-      "声音 ▸ 声音处理 ▸ 规格化",
-      "声音 ▸ 声音处理 ▸ 晶化",
-      "复位 ▸ 声音处理",
-      "声音 ▸ 音轨 ▸ 没有音轨",
-      "声音 ▸ 输出设备 ▸ 系统默认",
-      "声音 ▸ 输出设备 ▸ MacBook Air 扬声器",
-      "声音 ▸ 输出设备 ▸ USB 耳机",
+      "声音…",
+      "音轨: 按序切换",
+      ...["立体声", "左声道", "右声道", "单声道混合", "左右互换"].map((label) => `声道: ${label}`),
+      "声音: 均衡器",
+      ...["平直", "人声", "音乐", "影院"].map((label) => `均衡器预设: ${label}`),
+      "声音同步: 超前 50 毫秒",
+      "声音同步: 滞后 50 毫秒",
+      "声音同步: 复位",
+      "声音同步: 不保持",
+      "声音同步: 本次运行内保持",
+      "声音同步: 始终保持",
+      "声音处理: 规格化",
+      "声音处理: 晶化",
+      "声音处理: 复位",
+      "音轨 ▸ 没有音轨",
+      "输出设备: 系统默认",
+      "输出设备: MacBook Air 扬声器",
+      "输出设备: USB 耳机",
     ],
   );
   const reason = (id: string) => host.translate(host.command(id).state.reason!);
@@ -1084,7 +1095,7 @@ test("zh-Hans: the menu, its reasons and the on-screen messages read as before t
   ]);
   assert.deepEqual(
     ["audio.track.1", "audio.track.2", "audio.track.3"].map((id) => host.command(id).display.path.join(" ▸ ")),
-    ["声音 ▸ 音轨 ▸ 1. 日语 [jpn] (aac)", "声音 ▸ 音轨 ▸ 音轨 2 (aac)", "声音 ▸ 音轨 ▸ 3. movie.jpn.mka（外部）"],
+    ["音轨 ▸ 1. 日语 [jpn] (aac)", "音轨 ▸ 音轨 2 (aac)", "音轨 ▸ 3. movie.jpn.mka（外部）"],
   );
   host.setSource({ audioTracks: [track(1)] });
   await host.settle();
@@ -1111,9 +1122,9 @@ test("zh-Hans: a track without title or codec, an external one, and unnamed devi
     deviceItems(host).map((item) => item[0]),
     ["系统默认", "未命名设备", "未命名设备 (2)", "USB 耳机", "USB 耳机 (2)"],
   );
-  // The window's lists arrive translated, with the words its .slint file used to put in.
+  // The panel's lists arrive translated, with the words its .slint file used to put in.
   await host.command("audio.workbench").run();
-  const window = host.window("audio-workbench");
+  const window = host.mounted();
   assert.deepEqual(listed(host, window.props["track-rows"]), ["音轨 1", "音轨 2 (opus)（外部）"]);
   assert.deepEqual(listed(host, window.props["device-rows"]), ["系统默认", "未命名设备", "未命名设备", "USB 耳机", "USB 耳机"]);
   assert.equal(host.translate(window.props["device-tip"] as never), "系统默认");
@@ -1156,7 +1167,7 @@ test("G03: every Audio Track menu item fits the player's menu path segment in ev
           assert.doesNotMatch(segment, /^\s|\s$/u, `${locale}: ${JSON.stringify(segment)}`);
         }
       }
-      const labels = items.map((item) => item.display.path[2]!);
+      const labels = items.map((item) => item.display.path[1]!);
       assert.equal(new Set(labels).size, labels.length, `${locale}: distinct items`);
       shown.set(locale, labels);
     } finally {
@@ -1180,9 +1191,9 @@ test("G03: every Audio Track menu item fits the player's menu path segment in ev
 const palette = (host: TestHost) =>
   Object.fromEntries([...host.commands.entries()].map(([id, { declaration: d, display }]) => [id, [display.category, d.home ?? null]]));
 
-test("palette: every command has a category, in every state and language, and names the window it lives in", async () => {
+test("palette: every command has a category, in every state and language, and names the panel it lives in", async () => {
   for (const locale of LOCALES) {
-    // Without tracks or devices (the placeholders), then with both.
+    // Without tracks or devices (the track placeholder), then with both.
     const shown = async (setup: (host: TestHost) => void) => {
       const host = new TestHost();
       setup(host);
@@ -1199,7 +1210,7 @@ test("palette: every command has a category, in every state and language, and na
     });
     for (const [id, [category]] of Object.entries({ ...before, ...after }))
       assert.ok(typeof category === "string" && category.trim() !== "", `${locale}: ${id} has no category`);
-    assert.ok("audio.track.none" in before && "audio.device.none" in before);
+    assert.ok("audio.track.none" in before && !("audio.device.none" in before));
     assert.ok("audio.track.1" in after && "audio.track.2" in after && "audio.device.2" in after);
   }
 
@@ -1218,26 +1229,147 @@ test("palette: every command has a category, in every state and language, and na
     ...Object.fromEntries(presets.map((_, i) => [`audio.preset.${i}`, ["Equalizer Preset", home]])),
     "audio.sync.earlier": ["Audio Sync", home],
     "audio.sync.later": ["Audio Sync", home],
-    "audio.sync.reset": ["Reset", home],
+    "audio.sync.reset": ["Audio Sync", home],
     "audio.sync.keep.none": ["Audio Sync", home],
     "audio.sync.keep.session": ["Audio Sync", home],
     "audio.sync.keep.always": ["Audio Sync", home],
     "audio.normalize": ["Audio Processing", home],
     "audio.clarity": ["Audio Processing", home],
-    "audio.reset": ["Reset", null],
+    "audio.reset": ["Audio Processing", home],
     "audio.track.1": ["Audio Track", home],
     "audio.device.0": ["Output Device", home],
     "audio.device.1": ["Output Device", home],
   });
   await stop();
 
-  // The categories read as the menus do: the submenu labels' translations, "Audio" the player's.
+  // The categories read as the menus did: the old submenu labels' translations, "Audio" the player's.
   const zh = new TestHost();
   const started = await startPlugin(activate, { directory, host: zh, locale: "zh-Hans" });
   await zh.settle();
   assert.deepEqual(
     [...new Set(Object.values(palette(zh)).map(([category]) => category))],
-    ["声音", "音轨", "声道", "均衡器预设", "声音同步", "复位", "声音处理", "输出设备"],
+    ["声音", "音轨", "声道", "均衡器预设", "声音同步", "声音处理"],
   );
   await started.stop();
+});
+
+// ---------------------------------------------------------------- the Audio panel (adjust column, menu redesign step 5)
+
+test("Audio… (Alt+2) opens the adjust column at the Audio tab, and closes it from there; the panel's commands name it as their home", async () => {
+  const host = new TestHost();
+  host.mountOther("adjust", "vestra.video", { title: "Picture" });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  assert.equal(host.layout.adjust?.preferred, false);
+  host.selectTab("vestra.video");
+  await host.settle();
+  assert.equal(await host.press("Alt+2"), "ran");
+  await host.settle();
+  assert.equal(host.layout.adjust?.preferred, true, "Alt+2 opens the column");
+  assert.equal(host.layout.adjust?.owner, 1, "at the Audio tab");
+  await host.command("audio.workbench").run();
+  await host.settle();
+  assert.equal(host.layout.adjust?.preferred, false, "again on the shown tab: closed");
+  assert.equal(host.command("audio.workbench").display.title, "Audio…");
+  for (const id of ["audio.equalizer", "audio.sync.reset", "audio.reset", "audio.track.cycle", "audio.load", "audio.channels.left"])
+    assert.equal(host.command(id).declaration.home, "audio.workbench", id);
+  await stop();
+});
+
+/** Wait (up to 2 s of host time) until `read()` deep-equals `expected`, then assert that same value. */
+async function until(host: TestHost, read: () => unknown, expected: unknown) {
+  for (let i = 0; i < 40 && !isDeepStrictEqual(read(), expected); i++) await host.settle(50);
+  assert.deepEqual(read(), expected);
+}
+
+test("the panel shows each command's current key: the default, a user's own, none once cleared", async () => {
+  const { host, window, stop } = await open();
+  const keys = () => ({ ...(window.props.keys as Record<string, string>) });
+  // The test host writes keys as the player does on macOS (⌥ Alt, ⇧ Shift, ⌘ Ctrl). The player's own
+  // keys (host/…) may arrive after the plugin's: wait for the whole set.
+  const shown = {
+    track: "⌥A", earlier: ">", later: "<", reset: "?", equalizer: "⇧E", normalize: "⇧N", clarity: "⇧C",
+    voldown: "↓", volup: "↑", mute: "M",
+  };
+  await until(host, keys, shown);
+  host.rebind("audio.equalizer", ["Ctrl+E"]);
+  await until(host, keys, { ...shown, equalizer: "⌘E" });
+  host.rebind("audio.sync.reset", []);
+  await until(host, keys, { ...shown, equalizer: "⌘E", reset: "" });
+  // The player's volume keys follow the user's too.
+  host.rebind("host/mute", ["Shift+M"]);
+  await until(host, keys, { ...shown, equalizer: "⌘E", reset: "", mute: "⇧M" });
+  host.rebind("host/volume-up", []);
+  await until(host, keys, { ...shown, equalizer: "⌘E", reset: "", mute: "⇧M", volup: "" });
+  await stop();
+});
+
+test("activated before a file is open, the panel follows the file opened later (events)", async () => {
+  const { host, stop } = await startPlugin(activate, { directory });
+  const panel = host.mounted();
+  await host.settle();
+  assert.equal(panel.props["source-ready"], false);
+  host.openElsewhere("/movie.mp4");
+  host.setSource({ audioTracks: [track(1)] });
+  await host.settle();
+  assert.equal(panel.props["source-ready"], true);
+  await stop();
+});
+
+test("the panel's volume slider and mute set the player's output; −50 / +50 step the sync without on-screen text", async () => {
+  const host = new TestHost();
+  host.audioDevices = [SPEAKERS];
+  const { window, stop } = await open(host);
+  await host.settle();
+  assert.equal(window.props["can-volume"], true);
+  assert.equal(window.props["volume-reason"], "");
+  assert.equal(window.props.volume, 100);
+  assert.equal(window.props.muted, false);
+  window.emit("volume-changed", 42.4);
+  await host.settle();
+  assert.deepEqual(host.sent("playback.set").at(-1), { property: "volume", value: 42 });
+  assert.equal(window.props.volume, 42);
+  host.setSource({ output: { volume: 150, muted: false } }); // louder, set elsewhere: the slider's right end
+  await host.settle();
+  assert.equal(window.props.volume, 100);
+  window.emit("mute-toggled");
+  await host.settle();
+  assert.equal(window.props.muted, true);
+  const shown = host.osd.length;
+  window.emit("sync-stepped", -1);
+  window.emit("sync-stepped", -1);
+  window.emit("sync-stepped", 7); // not a step: ignored
+  await host.settle();
+  assert.equal(window.props["delay-ms"], -100);
+  window.emit("sync-stepped", 1);
+  await host.settle();
+  assert.equal(own(host)?.offsetMs, -50);
+  assert.equal(host.osd.length, shown, "the panel shows the value itself");
+  await stop();
+});
+
+test("the volume stays enabled with an empty device list; a refused change greys it out with the reason until the next source", async () => {
+  const { host, window, stop } = await open(); // the test host lists no output device (as with mpv's `auto` only)
+  await host.settle();
+  assert.equal(window.props["can-volume"], true, "an empty device list does not mean no output");
+  host.handle("playback.set", () => {
+    throw new HostError("unavailable", "no audio output");
+  });
+  window.emit("volume-changed", 30);
+  await host.settle();
+  assert.equal(window.props["can-volume"], false);
+  assert.equal(host.translate(window.props["volume-reason"] as never), "no audio output");
+  const sent = host.sent("playback.set").length;
+  window.emit("mute-toggled"); // greyed out: nothing is sent
+  await host.settle();
+  assert.equal(host.sent("playback.set").length, sent);
+  host.reset("playback.set");
+  host.openElsewhere("/next.mp4");
+  host.setSource({ audioTracks: [track(1)] });
+  await host.settle();
+  assert.equal(window.props["can-volume"], true, "the next source tries again");
+  window.emit("volume-changed", 30);
+  await host.settle();
+  assert.deepEqual(host.sent("playback.set").at(-1), { property: "volume", value: 30 });
+  await stop();
 });

@@ -3,22 +3,21 @@ import { wireBar } from "./bar.ts";
 import { addCommands } from "./commands.ts";
 import { Playback } from "./controller.ts";
 import { copyToClipboard } from "./copy.ts";
-import { parseTime, rateText, time } from "./format.ts";
 import { OpenUrl } from "./open-url.ts";
 import { OutputMemory } from "./output-memory.ts";
 import { Keyframes } from "./keyframes.ts";
-import { Prompt } from "./prompt.ts";
 import { Reopener } from "./reopen.ts";
+import { PlaybackPanel } from "./panel.ts";
 import { type SeekSteps, SettingsStore } from "./settings.ts";
 import { Thumbnails } from "./thumbs.ts";
-import { Failure, type Osd } from "./texts.ts";
-import { TimeJump } from "./time-jump.ts";
+import type { Osd } from "./texts.ts";
 
 /**
  * Playback: the bottom bar and the commands around the core's basic actions
  * (play/pause, stop, ±N seconds, frames, previous/next, speed ±, volume and
  * mute are the player's own, run from the bar with `host.run`): open, the
- * Jump to Time and custom speed windows, and the 播放控制 chapter's features (Open
+ * Playback panel in the adjust column (speed, jump, steps and the seek steps;
+ * Playback…, Alt+4), and the 播放控制 chapter's features (Open
  * URL, Reopen Current/Last File, Copy to Clipboard, keyframes, seek steps, Jump
  * to Start, Disable Screen Saver While Playing, the seek bar's hover time and
  * thumbnail), and the seek line's marks (B22: `timeline.marks` and the A-B loop).
@@ -31,27 +30,6 @@ export default async function activate(plugin: Plugin) {
   // i18n-ignore: the player's (or the SDK's) own message
   const raw = (text: string) => void plugin.osd.show(text).catch(() => {});
   const playback = new Playback(player, plugin.dialogs, () => plugin.update(), osd, raw);
-
-  const jump = new Prompt(
-    plugin,
-    "playback-jump",
-    "jump",
-    () => time(player.state.position),
-    (value) => {
-      const seconds = parseTime(value);
-      if (seconds === null || !playback.canSeek() || seconds > player.state.duration!)
-        throw new Failure("time-range");
-      const target = playback.seek(seconds);
-      if (target !== null) playback.notify("Seek: {} / {}", playback.positionArgs(target));
-    },
-  );
-  const customRate = new Prompt(
-    plugin,
-    "playback-rate",
-    "rate",
-    () => rateText(player.state.rate),
-    (value) => playback.setRate(value.trim() ? Number(value) : Number.NaN),
-  );
 
   const settings = new SettingsStore(plugin);
   // The last volume and mute come back once at start; later changes by anyone are saved.
@@ -79,20 +57,29 @@ export default async function activate(plugin: Plugin) {
           .catch((error) => playback.report(error))
       : playback.seekBy(delta);
   let commands: { setSteps(steps: SeekSteps): Promise<void> } | null = null;
-  const timeJump = new TimeJump(plugin, settings, async (steps) => {
+  // B06: the seek steps and "Jump to keyframes only", saved and applied at once (the
+  // Playback panel's Seek steps): the core's step, and the tier 2–4 titles when they changed.
+  const applySteps = async (steps: SeekSteps, seekKeyframes: boolean) => {
+    const changed = steps.some((step, index) => step !== settings.value.seekSteps[index]);
+    settings.update((s) => {
+      s.seekSteps = steps;
+      s.seekKeyframes = seekKeyframes;
+    });
     await stepSeek();
-    await commands?.setSteps(steps);
-  });
+    if (changed) await commands?.setSteps(steps);
+  };
+  const jumpToStart = () => playback.jumpToStart();
+  const panel = new PlaybackPanel(plugin, { playback, keyframes, settings, applySteps, jumpToStart });
 
-  commands = addCommands(plugin, plugin.i18n, playback, jump, customRate, {
+  commands = addCommands(plugin, plugin.i18n, playback, {
     openUrl,
     reopener,
     keyframes,
-    timeJump,
+    panel,
     sleep: () => void sleep().catch((error) => playback.report(error)),
     settings,
     copy: (kind) => copyToClipboard(plugin.clipboard, player.state, kind, osd),
-    jumpToStart: () => playback.jumpToStart(),
+    jumpToStart,
     thumbnails,
     seekBy,
   });
@@ -128,10 +115,7 @@ export default async function activate(plugin: Plugin) {
       playback.dragging = false;
       bar.setInteraction({ focused: false, dragging: false, popupOpen: false });
     }
-    if (replaced) {
-      await jump.invalidate();
-      await customRate.invalidate();
-    }
+    if (replaced) panel.sourceChanged();
   });
 }
 

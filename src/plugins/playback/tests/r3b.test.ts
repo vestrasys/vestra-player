@@ -30,7 +30,7 @@ function withMedia(host: TestHost, source: string, duration = 1000) {
 test("B22 the seek line gets everyone's marks as fractions with their time text; a new source clears them", async () => {
   const host = withMedia(new TestHost(), "/movie.mkv", 200);
   const { stop } = await start(host);
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   assert.deepEqual(bar.props.marks, []);
   host.setTimelineLayer("vestra.marks", [
     { time: 0, kind: "chapter", title: "开头" },
@@ -76,12 +76,12 @@ test("B22 the seek line gets everyone's marks as fractions with their time text;
 test("B22 span reports during a resize are debounced: the first at once, then the last after a pause", async () => {
   const host = withMedia(new TestHost(), "/movie.mkv", 200);
   const { stop } = await start(host);
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   host.setTimelineLayer("vestra.marks", [{ time: 100, kind: "bookmark", title: null }]);
   await until(() => (bar.props.marks as unknown[]).length === 1);
   bar.emit("spanChanged", 400);
   await until(() => bar.props["tick-span"] === 400);
-  const sent = () => host.mounted().props["bookmark-ticks"];
+  const sent = () => host.mounted("bottom").props["bookmark-ticks"];
   assert.equal(sent(), "M200 0V1");
   // A drag of the window edge: a report a frame.
   for (const px of [401, 405, 410, 420, 431]) {
@@ -288,7 +288,7 @@ test("B22 4096 marks with 100-character titles reach the bar within the player's
   // Before 0.2.6 the bar's `marks` (4 fields a row) was refused from about 3277 marks.
   const host = withMedia(new TestHost(), "/movie.mkv", 10_000);
   const { stop } = await start(host);
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   const title = `"长"${"标".repeat(96)}\\`;
   for (let layer = 0; layer < 5; layer++)
     host.setTimelineLayer(
@@ -313,7 +313,7 @@ test("B22 4096 marks with 100-character titles reach the bar within the player's
 test("B22 the A-B loop is drawn whoever set it, and goes with the source", async () => {
   const host = withMedia(new TestHost(), "/movie.mkv", 200);
   const { stop } = await start(host);
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   assert.equal(bar.props["has-loop"], false);
   host.setSource({ loop: { a: 20, b: 50, count: null } });
   await until(() => bar.props["has-loop"] === true);
@@ -359,7 +359,7 @@ test("B22 the bar draws marks as one Path per kind in Theme colours and finds th
   assert.match(slint, /PlaybackBridge\.marks\[seek-bar\.near-mark\]\.tip/);
   // The lower-bound search closes a range of MAX_MARKS rows: floor(log2 n) + 1 halvings.
   assert.equal((slint.match(/= root\.narrow\(/g) ?? []).length, Math.floor(Math.log2(MAX_MARKS)) + 1);
-  for (const file of ["bar.slint", "open-url.slint", "prompt.slint", "time-jump.slint"])
+  for (const file of ["bar.slint", "open-url.slint", "panel.slint"])
     assert.doesNotMatch(readFileSync(new URL(`../ui/${file}`, import.meta.url), "utf8"), /#[0-9a-fA-F]{6}/, file);
 });
 
@@ -424,7 +424,7 @@ test("Ranges: none drawn without ranges, a known duration or the bar's span", ()
 test("Ranges: the bar follows everyone's ranges, and a new source clears them", async () => {
   const host = withMedia(new TestHost(), "/movie.mkv", 200);
   const { stop } = await start(host);
-  const bar = host.mounted();
+  const bar = host.mounted("bottom");
   assert.equal(bar.props["selection-ranges"], "");
   assert.equal(bar.props["region-ranges"], "");
   bar.emit("spanChanged", 400);

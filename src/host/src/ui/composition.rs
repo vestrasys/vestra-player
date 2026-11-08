@@ -1602,9 +1602,8 @@ mod tests {
     /// Menu redesign, open question 1: what the adjust column's first
     /// opening costs (its panels compile on demand). The shell holds the
     /// real playback bar, visualizer backdrop and playlist sidebar; the
-    /// adjust panels are the Picture Adjustments and Audio Workbench windows
-    /// made panels (the step 4 panels reuse about 80% of them) and two
-    /// playlist copies as stand-ins for the Subtitles and Playback panels.
+    /// adjust panels are the four built-in ones of step 4 (Picture, Audio,
+    /// Subtitles, Playback), as their plugins mount them.
     /// Release build, headless: `cargo test --release --locked -- --ignored
     /// the_adjust_columns_first_opening_cost --nocapture`.
     #[test]
@@ -1659,56 +1658,35 @@ mod tests {
                 Slot::Sidebar,
             ),
         ];
-        // Each panel in a file of its own (they import only the libraries):
-        // a window becomes a Rectangle with a bridge global.
-        let dir = tempfile::tempdir().unwrap();
-        let panel = |from: &str, window: Option<&str>, name: &str| -> PathBuf {
-            let mut text = std::fs::read_to_string(plugins.join(from)).unwrap();
-            if let Some(window) = window {
-                text = text
-                    .replace(
-                        &format!("export component {window} inherits Window {{"),
-                        &format!(
-                            "export global {name}Bridge {{ in property <int> n; }}\n\
-                             export component {name} inherits Rectangle {{"
-                        ),
-                    )
-                    .lines()
-                    .filter(|line| !line.trim_start().starts_with("title: @tr("))
-                    .collect::<Vec<_>>()
-                    .join("\n");
-            }
-            let path = dir.path().join(format!("{name}.slint"));
-            std::fs::write(&path, text).unwrap();
-            path
-        };
+        // The four built-in adjust panels (menu redesign step 4), as their
+        // plugins mount them.
         let adjust = [
             spec(
                 10,
-                panel("video/picture.slint", Some("PictureWindow"), "Picture"),
+                plugins.join("video/picture.slint"),
                 "Picture",
                 "PictureBridge",
                 Slot::Adjust,
             ),
             spec(
                 11,
-                panel("audio/ui/workbench.slint", Some("AudioWorkbench"), "Audio"),
+                plugins.join("audio/ui/workbench.slint"),
                 "Audio",
                 "AudioBridge",
                 Slot::Adjust,
             ),
             spec(
                 12,
-                panel("playlist/ui/sidebar.slint", None, "Subtitles"),
-                "PlaylistSidebar",
-                "PlaylistBridge",
+                plugins.join("subtitles/ui/panel.slint"),
+                "SubtitlesPanel",
+                "SubtitlesBridge",
                 Slot::Adjust,
             ),
             spec(
                 13,
-                panel("playlist/ui/sidebar.slint", None, "Playback"),
-                "PlaylistSidebar",
-                "PlaylistBridge",
+                plugins.join("playback/ui/panel.slint"),
+                "PlaybackPanel",
+                "PlaybackPanelBridge",
                 Slot::Adjust,
             ),
         ];

@@ -43,6 +43,11 @@ export type DenoiseMode = (typeof DENOISE_MODES)[number];
 export interface Effects {
   sharpen: Toggle;
   edge: Toggle;
+  /**
+   * Three independent denoisers. `shown` was the old panel's "which one the row edits"; the
+   * panel now shows all three, and the field is only kept (read and written) so settings files
+   * stay as they were.
+   */
   denoise: Record<DenoiseMode, Toggle> & { shown: DenoiseMode };
   deblock: Toggle;
   deband: Toggle;
@@ -62,6 +67,41 @@ export const defaultEffects = (): Effects => ({
   deband: { on: false, strength: 40 },
   frameBlend: false,
 });
+
+/**
+ * The Picture panel's Denoise chip: one master switch over the three denoisers (they stay
+ * independent filters, each with its own switch and strength in the Denoise card; Ctrl+N and
+ * Ctrl+M still switch 3D and Temporal alone). The chip is lit while any of them is on.
+ * - Off (any on): every denoiser off; the ones that were on are remembered (`last`).
+ * - On (all off): the remembered set comes back, or 3D alone when there is none (first use,
+ *   or after Reset). Strengths are never touched, as with any switch.
+ * Returns the set to remember from now on; `denoise` is changed in place.
+ */
+export function switchDenoise(denoise: Effects["denoise"], on: boolean, last: readonly DenoiseMode[]): DenoiseMode[] {
+  const active = DENOISE_MODES.filter((mode) => denoise[mode].on);
+  if (!on) {
+    for (const mode of DENOISE_MODES) denoise[mode].on = false;
+    return active.length > 0 ? active : [...last];
+  }
+  if (active.length > 0) return active;
+  const restore = last.length > 0 ? last : (["d3"] as const);
+  for (const mode of restore) denoise[mode].on = true;
+  return [...restore];
+}
+
+/** The denoisers that are on, in the fixed order. */
+export const activeDenoise = (denoise: Effects["denoise"]): DenoiseMode[] => DENOISE_MODES.filter((mode) => denoise[mode].on);
+
+/**
+ * The set the Denoise chip remembers after one denoiser was switched by itself (the Denoise
+ * card's rows, Ctrl+N, Ctrl+M): when that turned the last one off, the set that was on before
+ * (`before`, read with `activeDenoise` before the switch), so the chip brings back what the user
+ * had last; otherwise `last` unchanged. Whichever path turns the last denoiser off updates the
+ * memory this way, not only the chip itself.
+ */
+export function rememberDenoise(denoise: Effects["denoise"], before: readonly DenoiseMode[], last: readonly DenoiseMode[]): DenoiseMode[] {
+  return before.length > 0 && activeDenoise(denoise).length === 0 ? [...before] : [...last];
+}
 
 /**
  * hqdn3d weights per strength point (luma/chroma spatial, luma/chroma temporal).
@@ -159,6 +199,23 @@ export interface Frame {
 export const centred = (): Frame => ({ zoom: 1, panX: 0, panY: 0 });
 export const ZOOM_STEP = 1.05;
 export const PAN_STEP = 0.01;
+export const ZOOM_MIN = 0.25;
+export const ZOOM_MAX = 4;
+/**
+ * A framing the Picture panel's geometry editor asks for (a drag, a corner, the wheel): zoom
+ * kept to 0.25–4 (4 decimals), pan to −1–1 (3 decimals, finer than the keys' 1 % steps so a
+ * drag moves smoothly). Anything not a number keeps the current value.
+ */
+export function framed(current: Frame, zoom: number, panX: number, panY: number): Frame {
+  const keep = (value: number, fallback: number) => (Number.isFinite(value) ? value : fallback);
+  return {
+    zoom: Math.round(clamp(keep(zoom, current.zoom), ZOOM_MIN, ZOOM_MAX) * 10000) / 10000,
+    panX: Math.round(clamp(keep(panX, current.panX), -1, 1) * 1000) / 1000,
+    panY: Math.round(clamp(keep(panY, current.panY), -1, 1) * 1000) / 1000,
+  };
+}
+/** The editor's frames choice: 0 off, 1 frame doubling, 2 motion interpolation (they exclude each other, E18). */
+export const framesIndex = (effects: Effects, render: Render) => (effects.frameBlend ? 1 : render.interpolation ? 2 : 0);
 export const ASPECT_MIN = 0.25;
 export const ASPECT_MAX = 4;
 
@@ -350,9 +407,9 @@ export interface Stored {
   reframe: Reframe;
   display: Display;
   render: Render;
-  tab: number;
+  /** The Picture panel's Advanced section is open (closed by default). */
+  advanced: boolean;
 }
-export const TABS = 4;
 
 type Raw = Record<string, unknown>;
 const record = (value: unknown): Raw =>
@@ -373,7 +430,7 @@ const oneOf = <T extends string>(value: unknown, allowed: readonly T[], fallback
 export function parse(raw: unknown): Stored {
   const value = record(raw);
   const base = defaultLook();
-  if (value.version !== undefined && value.version !== 1) return { ...stored(base), tab: 0 };
+  if (value.version !== undefined && value.version !== 1) return { ...stored(base), advanced: false };
   const p = record(value.picture);
   const picture: Picture = {
     brightness: num(p.brightness, 0, -100, 100),
@@ -435,11 +492,13 @@ export function parse(raw: unknown): Stored {
   };
   // 倍帧 and 运动补偿 exclude each other; a file with both keeps 倍帧.
   if (effects.frameBlend) render.interpolation = false;
-  const tab = typeof value.tab === "number" && Number.isInteger(value.tab) && value.tab >= 0 && value.tab < TABS ? value.tab : 0;
-  return { picture, effects, deinterlace, reframe, display, render, tab };
+  // Settings from before 1.1.13 have no `advanced` but the old window's page (`tab`): one left on
+  // its Advanced page (3) opens the panel's Advanced section; the other pages are not read.
+  const advanced = typeof value.advanced === "boolean" ? value.advanced : value.tab === 3;
+  return { picture, effects, deinterlace, reframe, display, render, advanced };
 }
 
-const stored = (look: Look): Omit<Stored, "tab"> => ({
+const stored = (look: Look): Omit<Stored, "advanced"> => ({
   picture: look.picture,
   effects: look.effects,
   deinterlace: look.deinterlace,
@@ -449,9 +508,9 @@ const stored = (look: Look): Omit<Stored, "tab"> => ({
 });
 
 /** The display settings are written as `view` (`view.aspect`, `view.customAspect`, `view.fit`). */
-export const serialize = (look: Look, tab: number) => {
+export const serialize = (look: Look, advanced: boolean) => {
   const { display, ...rest } = structuredClone(stored(look));
-  return { version: 1, ...rest, view: display, tab };
+  return { version: 1, ...rest, view: display, advanced };
 };
 
 // ---------------------------------------------------------------- frame drops (E10 field output)

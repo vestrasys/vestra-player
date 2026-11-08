@@ -1,0 +1,10 @@
+{
+  "name": "vestra-video",
+  "private": true,
+  "type": "module",
+  "vestra": {
+    "assets": [
+      "licenses"
+    ]
+  }
+}

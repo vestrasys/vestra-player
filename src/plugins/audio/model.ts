@@ -1,6 +1,9 @@
 import type { AudioNode, AudioTrack } from "@vestra-player/sdk";
 
-export const bands = [60, 170, 350, 1000, 3500, 10000] as const;
+/** The ten equalizer bands (ISO octave centres, as the panel labels them). */
+export const bands = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000] as const;
+/** The six bands of settings.json up to 1.5.10 (version 1), read once and spread over the ten (`spread`). */
+export const OLD_BANDS = [60, 170, 350, 1000, 3500, 10000] as const;
 /** Crystalizer (a 3 kHz treble shelf): a switch plus a remembered strength. */
 export type Clarity = { on: boolean; db: number };
 /**
@@ -25,12 +28,15 @@ export type Settings = {
   clarity: Clarity;
   channels: ChannelMode;
 };
-/** The window's preset list (ui/workbench.slint) has the same names in the same order. */
+/**
+ * The panel's preset list (ui/workbench.slint) has the same names in the same order. The gains are
+ * the six-band presets of 1.5.10 spread over the ten bands (`spread`), so a saved preset stays that preset.
+ */
 export const presets = [
-  { label: "Flat", osd: "Equalizer preset: Flat", gains: [0, 0, 0, 0, 0, 0] },
-  { label: "Voice", osd: "Equalizer preset: Voice", gains: [-3, -2, 1, 3, 2, -1] },
-  { label: "Music", osd: "Equalizer preset: Music", gains: [3, 2, -1, 0, 2, 3] },
-  { label: "Cinema", osd: "Equalizer preset: Cinema", gains: [4, 2, -1, 1, 2, 2] },
+  { label: "Flat", osd: "Equalizer preset: Flat", gains: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0] },
+  { label: "Voice", osd: "Equalizer preset: Voice", gains: [-3, -3, -2.3, -0.4, 1.7, 3, 2.4, 1.6, -0.4, -1] },
+  { label: "Music", osd: "Equalizer preset: Music", gains: [3, 3, 2.3, 0.4, -0.7, 0, 1.1, 2.1, 2.8, 3] },
+  { label: "Cinema", osd: "Equalizer preset: Cinema", gains: [4, 3.9, 2.6, 0.4, -0.3, 1, 1.6, 2, 2, 2] },
 ] as const;
 export const CLARITY_DB = 3;
 export const neutralClarity = (): Clarity => ({ on: false, db: CLARITY_DB });
@@ -79,7 +85,7 @@ export const presetOf = (settings: Settings) => presets.findIndex((_, index) => 
 
 /**
  * Neutral or bypassed bands and effects are left out, so neutral settings are an empty chain.
- * Order: channels → equalizer × 6 → treble (crystalizer) → dynaudnorm (normalize). A mono track keeps
+ * Order: channels → equalizer × 10 → treble (crystalizer) → dynaudnorm (normalize). A mono track keeps
  * the channel mode but gets no channels node.
  */
 export function nodes(value: Settings, track: { mono: boolean } = { mono: false }): AudioNode[] {
@@ -95,20 +101,56 @@ export function nodes(value: Settings, track: { mono: boolean } = { mono: false 
   ];
 }
 
-/** What `settings.json` holds (version 1). Fields this version does not know are kept as they are. */
+/**
+ * What `settings.json` holds. Version 2 keeps the ten equalizer gains in `gains10` and still writes
+ * `gains` as the six-band curve of version 1 (`narrow`), so an older plugin (up to 1.5.10, which
+ * reads only `gains`) plays a close curve instead of a flat one. Fields this version does not know
+ * are kept as they are.
+ */
 export type Stored = {
   settings: Settings;
   syncKeep: SyncKeep;
   /** A11: load same-named audio files next to a local source (not selected). */
   autoLoad: boolean;
-  tab: number;
   /** G16: the chosen output device id (`null` = System Default) and its last known name. */
   device: string | null;
   deviceName: string | null;
   extra: Record<string, unknown>;
 };
-export const TABS = 3;
-const KNOWN = new Set(["version", "equalizer", "gains", "normalize", "clarity", "channels", "autoLoadExternal", "syncKeep", "syncMs", "tab", "device", "deviceName"]);
+// "tab" was the Audio Workbench window's page (up to 1.5.10): read no more, and dropped at the next save.
+const KNOWN = new Set(["version", "equalizer", "gains", "gains10", "normalize", "clarity", "channels", "autoLoadExternal", "syncKeep", "syncMs", "tab", "device", "deviceName"]);
+
+/**
+ * Six gains of version 1 (60 Hz–10 kHz) spread over the ten bands: each band takes the gain the old
+ * curve had at its frequency, interpolated on a logarithmic frequency scale, the ends held, in 0.1 dB.
+ */
+export function spread(old: readonly number[]): number[] {
+  const at = OLD_BANDS.map(Math.log2);
+  return bands.map((frequency) => {
+    const x = Math.log2(frequency);
+    if (x <= at[0]!) return old[0]!;
+    if (x >= at.at(-1)!) return old.at(-1)!;
+    const i = at.findIndex((v, k) => x >= v && x <= at[k + 1]!);
+    const t = (x - at[i]!) / (at[i + 1]! - at[i]!);
+    return Math.round((old[i]! + (old[i + 1]! - old[i]!) * t) * 10) / 10;
+  });
+}
+
+/**
+ * The ten gains as six of version 1 (`spread`'s inverse): each old band takes the ten-band curve's
+ * value at its frequency, interpolated on a logarithmic frequency scale, in 0.1 dB.
+ */
+export function narrow(gains: readonly number[]): number[] {
+  const at = bands.map(Math.log2);
+  return OLD_BANDS.map((frequency) => {
+    const x = Math.log2(frequency);
+    if (x <= at[0]!) return gains[0]!;
+    if (x >= at.at(-1)!) return gains.at(-1)!;
+    const i = at.findIndex((v, k) => x >= v && x <= at[k + 1]!);
+    const t = (x - at[i]!) / (at[i + 1]! - at[i]!);
+    return Math.round((gains[i]! + (gains[i + 1]! - gains[i]!) * t) * 10) / 10;
+  });
+}
 
 const number = (value: unknown, fallback: number, read: (value: unknown) => number) => {
   try {
@@ -121,14 +163,19 @@ const number = (value: unknown, fallback: number, read: (value: unknown) => numb
 /**
  * Parse `settings.json` leniently: any broken field falls back to its default.
  * A legacy numeric `clarity` (the old clarity slider) migrates to the crystalizer switch:
- * above 0 is on at that strength, 0 is off at the default strength.
+ * above 0 is on at that strength, 0 is off at the default strength. Six gains (version 1) are spread
+ * over the ten bands.
  */
 export function parse(raw: unknown): Stored {
   const value = raw && typeof raw === "object" && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
   const base = neutral();
-  const gains = Array.isArray(value.gains) && value.gains.length === bands.length
-    ? value.gains.map((gain) => number(gain, 0, (g) => tenth(g, -6, 6)))
-    : base.gains;
+  const read = (list: unknown[]) => list.map((gain) => number(gain, 0, (g) => tenth(g, -6, 6)));
+  const six = Array.isArray(value.gains) && value.gains.length === OLD_BANDS.length ? read(value.gains) : null;
+  const ten = Array.isArray(value.gains10) && value.gains10.length === bands.length ? read(value.gains10) : null;
+  // `gains10` while `gains` is still its six-band curve; an older plugin that changed the curve
+  // since wrote `gains` only (and kept `gains10` as it was), so its curve wins, spread.
+  const sameCurve = ten !== null && (six === null || narrow(ten).every((gain, i) => gain === six[i]));
+  const gains = sameCurve ? ten! : six !== null ? spread(six) : base.gains;
   let clarity = neutralClarity();
   if (typeof value.clarity === "number") {
     const db = number(value.clarity, 0, (v) => tenth(v, 0, 6));
@@ -147,27 +194,26 @@ export function parse(raw: unknown): Stored {
     delayMs: syncKeep === "always" ? number(value.syncMs, 0, delay) : 0,
     channels: channelModes.find((m) => m.id === channels)?.id ?? "stereo",
   };
-  const tab = typeof value.tab === "number" && Number.isInteger(value.tab) && value.tab >= 0 && value.tab < TABS ? value.tab : 0;
   const extra = Object.fromEntries(Object.entries(value).filter(([key]) => !KNOWN.has(key)));
   const device = deviceId(value.device);
   const deviceName = device !== null && typeof value.deviceName === "string" && value.deviceName.trim() ? value.deviceName.slice(0, 200) : null;
-  return { settings, syncKeep, autoLoad: value.autoLoadExternal === true, tab, device, deviceName, extra };
+  return { settings, syncKeep, autoLoad: value.autoLoadExternal === true, device, deviceName, extra };
 }
 
 /** The JSON written back; `syncMs` only while Always Keep. */
-export function serialize({ settings, syncKeep, autoLoad, tab, device, deviceName, extra }: Stored) {
+export function serialize({ settings, syncKeep, autoLoad, device, deviceName, extra }: Stored) {
   return {
     ...extra,
-    version: 1,
+    version: 2,
     equalizer: settings.equalizer,
-    gains: settings.gains,
+    gains: narrow(settings.gains),
+    gains10: settings.gains,
     normalize: settings.normalize,
     clarity: { ...settings.clarity },
     channels: { mode: settings.channels },
     autoLoadExternal: autoLoad,
     syncKeep,
     ...(syncKeep === "always" ? { syncMs: settings.delayMs } : {}),
-    tab,
     device,
     ...(device !== null && deviceName ? { deviceName } : {}),
   };

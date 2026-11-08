@@ -1,11 +1,10 @@
 import { readdir } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
-import type { AudioDevice, AudioTrack, Plugin, PlayerState, PluginError, Scope } from "@vestra-player/sdk";
+import type { AudioDevice, AudioTrack, Panel, Plugin, PlayerState, PluginError, Scope } from "@vestra-player/sdk";
 import {
   DEVICE_POLL_MS,
   SELECTED_DEVICE,
   SYNC_STEP_MS,
-  TABS,
   channelModes,
   cleanName,
   clip,
@@ -13,8 +12,6 @@ import {
   delay,
   deviceTitles,
   matches,
-  neutral,
-  neutralClarity,
   neutralProcessing,
   nodes,
   parse,
@@ -28,8 +25,15 @@ import {
 } from "./model.ts";
 import type { ChannelMode, Settings, SyncKeep, TrackRow } from "./model.ts";
 
-/** The player's Audio menu. */
-const AUDIO = "@audio";
+/**
+ * The right-click menu's Audio Track ▸ (menu redesign §4): a top-level submenu in the domain range,
+ * where the Audio menu was (500); everything else of the old Audio ▸ lives in the Audio panel and the
+ * command palette.
+ */
+const TRACKS = "Audio Track";
+const TRACKS_ORDER = 505;
+/** Audio… sits before Playlist (800) in the windows group, second of the four built-in panels (791–794 proposed for Picture…, Audio…, Subtitles…, Playback…). */
+const PANEL_ORDER = 792;
 
 /** Template arguments that are data (file names, device names, errors) are cut so the message fits the OSD's 200 characters. */
 const arg = (text: string) => clip(text, 120);
@@ -37,7 +41,7 @@ const arg = (text: string) => clip(text, 120);
 const quiet = (shown: Promise<void>) => void shown.catch(() => undefined);
 
 /**
- * Audio workbench: one window and one owned audio chain, plus the track menu.
+ * Audio: one panel in the adjust column (Audio…, Alt+2) and one owned audio chain, plus the track menu.
  * The equalizer, presets, normalize, crystalizer and channels are global and
  * saved in `settings.json`; only the audio sync follows the source, as its keep mode says.
  */
@@ -53,7 +57,7 @@ export default async function activate(plugin: Plugin) {
     return row.external ? text("{} (external)", [label]) : label;
   };
   /**
-   * The same track in the window's Track list (a text value the player translates): its data,
+   * The same track in the panel's Track list (a text value the player translates): its data,
    * or "Track 2 (opus)"; an external one says so in one sentence ("Track 2 (opus) (external)").
    */
   const trackItem = (row: TrackRow) => {
@@ -62,9 +66,9 @@ export default async function activate(plugin: Plugin) {
     return row.external ? text("Track {} (external)", [row.n]) : text("Track {}", [row.n]);
   };
   /**
-   * Command palette categories ("Category: Title", player 0.7.6): one per submenu, "Audio" for
-   * the top-level items, "Reset" for the Reset menu's. Text values, so `i18n extract` finds them;
-   * the submenu ones reuse the menu labels and so their translations.
+   * Command palette categories ("Category: Title", player 0.7.6): one per former submenu, "Audio" for
+   * the rest. Text values, so `i18n extract` finds them; most reuse the old menu labels and so their
+   * translations.
    */
   const category = {
     audio: text("Audio"),
@@ -74,18 +78,17 @@ export default async function activate(plugin: Plugin) {
     preset: text("Equalizer Preset"),
     sync: text("Audio Sync"),
     processing: text("Audio Processing"),
-    reset: text("Reset"),
   };
-  /** Where a command's control also lives: the Audio Workbench window (palette, player 0.7.6). */
+  /** Where a command's control lives: the Audio panel, opened by Audio… (palette and the tab's key, player 0.7.6). */
   const HOME = "audio.workbench";
   const filter = plugin.audio.filter("workbench");
-  const workbenchWindow = plugin.windows.create("ui/workbench.slint", { id: "audio-workbench" });
+  // "adjust": the panel changes what is heard; once it is closed, nobody keeps looking at it.
+  const panel: Panel = plugin.panels.mount("adjust", "ui/workbench.slint", { title: "Audio" });
   const store = settingsStore(plugin);
   const stored = parse(store.value);
   let settings = stored.settings;
   let syncKeep: SyncKeep = stored.syncKeep;
   let autoLoad = stored.autoLoad;
-  let tab = stored.tab;
   let device = stored.device;
   let deviceName = stored.deviceName;
   let source: number | null = null;
@@ -93,7 +96,7 @@ export default async function activate(plugin: Plugin) {
   // A change was requested, or saved settings are in effect: "Applied" then means something.
   let touched = nodes(settings).length > 0 || settings.delayMs !== 0;
   /** Writes after 300 ms; the SDK writes what is pending when the plugin stops. */
-  const persist = () => store.save(serialize({ settings, syncKeep, autoLoad, tab, device, deviceName, extra: stored.extra }));
+  const persist = () => store.save(serialize({ settings, syncKeep, autoLoad, device, deviceName, extra: stored.extra }));
 
   // Channel count of the selected track (`stats()`), read when the source or the track changes.
   let channelCount: number | null = null;
@@ -105,7 +108,7 @@ export default async function activate(plugin: Plugin) {
   };
   const busy = () => filter.status.state === "applying";
   const apply = () => filter.set({ nodes: nodes(settings, { mono: mono() }), delayMs: settings.delayMs });
-  /** Menu and window edits are ignored without a selected track, like the disabled controls. */
+  /** Command and panel edits are ignored without a selected track, like the disabled controls. */
   const edit = (next: Settings) => {
     if (!ready()) return false;
     settings = next;
@@ -268,8 +271,7 @@ export default async function activate(plugin: Plugin) {
     return next ? selectTrack(next.id) : undefined;
   };
 
-  // The track items are rebuilt when the list changes (one child scope); the rest of the
-  // Audio Track ▸ submenu sits after them at order 512.
+  // The track items of Audio Track ▸ are rebuilt when the list changes (one child scope).
   let trackScope: Scope = plugin.scope();
   let trackKey: string | null = null;
   let rebuilding = Promise.resolve();
@@ -285,10 +287,9 @@ export default async function activate(plugin: Plugin) {
       if (!list || list.length === 0) {
         trackScope.commands.add({
           id: "audio.track.none",
-          path: [AUDIO, "Audio Track", loadingTracks() ? "Loading…" : "No Audio Tracks"],
+          path: [TRACKS, loadingTracks() ? "Loading…" : "No Audio Tracks"],
           category: category.track,
-          order: 511,
-          group: "audio-tools",
+          order: TRACKS_ORDER,
           enabled: false,
           run: () => undefined,
         });
@@ -297,11 +298,10 @@ export default async function activate(plugin: Plugin) {
       list.forEach((t: AudioTrack, index) =>
         trackScope.commands.add({
           id: `audio.track.${t.id}`,
-          path: [AUDIO, "Audio Track", labels![index]!],
+          path: [TRACKS, labels![index]!],
           category: category.track,
           home: HOME,
-          order: 511,
-          group: "audio-tools",
+          order: TRACKS_ORDER,
           radio: true,
           checked: () => tracks().some((x) => x.id === t.id && x.selected),
           run: () => selectTrack(t.id),
@@ -315,6 +315,17 @@ export default async function activate(plugin: Plugin) {
   // The device list is read at start and every 5 s (the player pushes no list changes);
   // the choice is saved here and handed to the player at start (it keeps it for one run).
   let devices: AudioDevice[] | null = null; // null: the player lists none (headless, ao=null)
+  /**
+   * Why the player refused the last volume or mute change (it has no audio output), `null` while it
+   * took it. The device list cannot tell: the player leaves mpv's `auto` device out, so a working
+   * output may list none. Cleared by the next source, an output change or a device list read.
+   */
+  let volumeRefused: string | null = null;
+  const volumeWorks = () => {
+    if (volumeRefused === null) return;
+    volumeRefused = null;
+    plugin.update();
+  };
   /** The chosen device is not connected: its return gets an OSD, its loss already had one or none. */
   let lost = false;
   let switching = 0;
@@ -323,7 +334,7 @@ export default async function activate(plugin: Plugin) {
   /** A device's name; `null` for an unknown one (shown as "Selected device"). */
   const nameOf = (id: string) => devices?.find((d) => d.id === id)?.name ?? (id === device ? deviceName : null);
   /**
-   * The menu and window entries: System Default, the devices, and the chosen one while it is
+   * The palette and panel entries: System Default, the devices, and the chosen one while it is
    * not connected. `name` is `null` for System Default and for an unknown device.
    */
   const deviceEntries = () => {
@@ -348,6 +359,7 @@ export default async function activate(plugin: Plugin) {
       list = null;
     }
     devices = list && list.length > 0 ? list : null;
+    if (devices) volumeWorks();
     // Keep the saved name current, so a disconnected device still shows what it is called.
     const found = device === null ? undefined : devices?.find((d) => d.id === device);
     if (found && found.name !== deviceName) {
@@ -417,18 +429,15 @@ export default async function activate(plugin: Plugin) {
       deviceKey = key;
       await deviceScope.dispose();
       deviceScope = plugin.scope();
-      const at = { order: 512, group: "audio-tools" } as const;
-      if (!entries) {
-        deviceScope.commands.add({ id: "audio.device.none", path: [AUDIO, "Output Device", "No Output Devices"], category: category.device, ...at, enabled: false, run: () => undefined });
-        return;
-      }
+      // In the command palette only (the panel's Output drop-down is the control); without devices
+      // there is nothing to list, and the drop-down says so.
+      if (!entries) return;
       entries.forEach((entry, index) =>
         deviceScope.commands.add({
           id: `audio.device.${index}`,
-          path: [AUDIO, "Output Device", entry.title],
+          title: entry.title,
           category: category.device,
           home: HOME,
-          ...at,
           radio: true,
           enabled: entry.connected,
           reason: entry.connected ? null : "Device not connected",
@@ -453,16 +462,73 @@ export default async function activate(plugin: Plugin) {
   devicePoll.unref?.();
   plugin.onDispose(() => clearInterval(devicePoll));
 
-  // ---------------------------------------------------------------- window
-  workbenchWindow.bind(() => {
+  // ---------------------------------------------------------------- volume (the player's)
+  // The panel's slider sets the player's volume like the bottom bar's (0–100; a louder volume set
+  // elsewhere shows at the right end). While a change is on its way the slider shows it, not the
+  // older state, so a drag does not jump back.
+  let volumeDraft: number | null = null;
+  let volumeTicket = 0;
+  const setVolume = async (value: number) => {
+    if (volumeRefused !== null || typeof value !== "number" || !Number.isFinite(value)) return;
+    const ticket = ++volumeTicket;
+    volumeDraft = Math.round(Math.min(100, Math.max(0, value)));
+    try {
+      await player.setOutput({ volume: volumeDraft });
+    } catch (error) {
+      // Refused (no audio output): the controls grey out with the player's reason; the state stays.
+      refuse(error);
+    } finally {
+      if (ticket === volumeTicket) {
+        volumeDraft = null;
+        plugin.update();
+      }
+    }
+  };
+  const toggleMute = () => (volumeRefused === null ? player.setOutput({ muted: !player.state.muted }).catch(refuse) : undefined);
+  function refuse(error: unknown) {
+    volumeRefused = clip(String((error as Error)?.message || "unavailable"), 120);
+    plugin.update();
+  }
+  // A new source or a change of the output may bring the output back.
+  let outputSource = player.state.sourceId;
+  let outputActive = player.state.audioOutput?.active ?? null;
+  player.onChange((state) => {
+    const active = state.audioOutput?.active ?? null;
+    if (state.sourceId === outputSource && active === outputActive) return;
+    outputSource = state.sourceId;
+    outputActive = active;
+    volumeWorks();
+  });
+
+  // ---------------------------------------------------------------- panel
+  /** The first key of one of this plugin's commands or the player's (`host/…`, SDK 1.6.16), "" without one. */
+  const keyOf = (id: string) => plugin.commands.keys(id)[0] ?? "";
+  panel.bind(() => {
     const list = tracks();
+    const state = player.state;
     return {
       status: describe(),
       sourceReady: ready(),
       isBusy: busy(),
       hasError: filter.status.state === "failed",
       errorDetail: filter.status.state === "failed" ? filter.status.error.message : "",
-      tabIndex: tab,
+      keys: {
+        track: keyOf("audio.track.cycle"),
+        earlier: keyOf("audio.sync.earlier"),
+        later: keyOf("audio.sync.later"),
+        reset: keyOf("audio.sync.reset"),
+        equalizer: keyOf("audio.equalizer"),
+        normalize: keyOf("audio.normalize"),
+        clarity: keyOf("audio.clarity"),
+        // The player's volume keys beside the volume slider (an older player reads none).
+        voldown: keyOf("host/volume-down"),
+        volup: keyOf("host/volume-up"),
+        mute: keyOf("host/mute"),
+      },
+      volume: Math.min(volumeDraft ?? state.volume, 100),
+      muted: state.muted,
+      canVolume: volumeRefused === null,
+      volumeReason: volumeRefused === null ? "" : text("{}", [volumeRefused]),
       equalizerEnabled: settings.equalizer,
       presetIndex: presetOf(settings),
       gainValues: settings.gains,
@@ -482,47 +548,48 @@ export default async function activate(plugin: Plugin) {
       ...deviceProps(),
     };
   });
-  workbenchWindow.on("tabChanged", (index: number) => {
-    if (!Number.isInteger(index) || index < 0 || index >= TABS || index === tab) return;
-    tab = index;
-    persist();
-  });
-  workbenchWindow.on("gainChanged", (index: number, value: number) => {
+  panel.on("volumeChanged", (value: number) => void setVolume(value));
+  panel.on("muteToggled", () => void toggleMute());
+  panel.on("gainChanged", (index: number, value: number) => {
     if (!Number.isInteger(index) || index < 0 || index >= settings.gains.length) return;
     const gains = [...settings.gains];
     gains[index] = tenth(value, -6, 6);
     edit({ ...settings, equalizer: true, gains });
   });
-  workbenchWindow.on("equalizerChanged", (on: boolean) => edit({ ...settings, equalizer: on === true }));
-  workbenchWindow.on("delayChanged", (value: number) => edit({ ...settings, delayMs: delay(value) }));
-  workbenchWindow.on("delayReset", () => edit({ ...settings, delayMs: 0 }));
-  workbenchWindow.on("normalizeChanged", (on: boolean) => edit({ ...settings, normalize: on === true }));
-  workbenchWindow.on("clarityToggled", (on: boolean) => edit({ ...settings, clarity: { ...settings.clarity, on: on === true } }));
-  workbenchWindow.on("clarityChanged", (value: number) => {
+  panel.on("equalizerChanged", (on: boolean) => edit({ ...settings, equalizer: on === true }));
+  panel.on("delayChanged", (value: number) => edit({ ...settings, delayMs: delay(value) }));
+  panel.on("delayReset", () => edit({ ...settings, delayMs: 0 }));
+  // The panel's −50 / +50: like > and <, without the on-screen text (the panel shows the value).
+  panel.on("syncStepped", (steps: number) => {
+    if (steps === -1 || steps === 1) edit({ ...settings, delayMs: delay(settings.delayMs + steps * SYNC_STEP_MS) });
+  });
+  panel.on("normalizeChanged", (on: boolean) => edit({ ...settings, normalize: on === true }));
+  panel.on("clarityToggled", (on: boolean) => edit({ ...settings, clarity: { ...settings.clarity, on: on === true } }));
+  panel.on("clarityChanged", (value: number) => {
     if (settings.clarity.on) edit({ ...settings, clarity: { on: true, db: tenth(value, 0, 6) } });
   });
-  workbenchWindow.on("clarityReset", () => edit({ ...settings, clarity: neutralClarity() }));
-  workbenchWindow.on("syncKeepSelected", (index: number) => {
+  panel.on("syncKeepSelected", (index: number) => {
     const keep = Number.isInteger(index) ? syncKeeps[index] : undefined;
     if (keep) setKeep(keep.id);
   });
-  workbenchWindow.on("presetSelected", (index: number) => preset(index));
-  workbenchWindow.on("resetRequested", () => edit(neutral()));
-  workbenchWindow.on("retryRequested", () => {
+  panel.on("presetSelected", (index: number) => preset(index));
+  // Reset at the bottom: the processing only, as the Reset Audio Processing command (sync has its ↺, channels are a choice).
+  panel.on("resetRequested", () => edit(neutralProcessing(settings)));
+  panel.on("retryRequested", () => {
     if (ready() && !busy()) filter.retry();
   });
-  workbenchWindow.on("trackSelected", (index: number) => {
+  panel.on("trackSelected", (index: number) => {
     const chosen = Number.isInteger(index) ? tracks()[index] : undefined;
     if (chosen) void selectTrack(chosen.id);
   });
-  workbenchWindow.on("loadRequested", () => loadExternal());
-  workbenchWindow.on("channelSelected", (index: number) => {
+  panel.on("loadRequested", () => loadExternal());
+  panel.on("channelSelected", (index: number) => {
     const mode = Number.isInteger(index) ? channelModes[index] : undefined;
-    // The window gives no on-screen text; only the menu does.
+    // The panel gives no on-screen text; only the commands do.
     if (mode && !mono()) edit({ ...settings, channels: mode.id });
   });
-  workbenchWindow.on("autoLoadChanged", (on: boolean) => setAutoLoad(on === true));
-  workbenchWindow.on("deviceSelected", (index: number) => {
+  panel.on("autoLoadChanged", (on: boolean) => setAutoLoad(on === true));
+  panel.on("deviceSelected", (index: number) => {
     const entry = Number.isInteger(index) ? deviceEntries()?.[index] : undefined;
     if (entry?.connected) void chooseDevice(entry.id);
   });
@@ -553,7 +620,10 @@ export default async function activate(plugin: Plugin) {
     };
   }
 
-  // ---------------------------------------------------------------- menu Open ▸ 114, Audio ▸ 510–529
+  // ---------------------------------------------------------------- commands
+  // In the right-click menu: Open ▸ Load External Audio… (114), Audio Track ▸ (`TRACKS`) and Audio…
+  // (`PANEL_ORDER`). Everything else is in the Audio panel and, by name, in the command palette
+  // ("Category: Title", with the panel as its home); ids and keys are those of the old Audio ▸ menu.
   plugin.commands.add({
     id: "audio.load",
     path: ["@open", "Load External Audio…"],
@@ -570,21 +640,22 @@ export default async function activate(plugin: Plugin) {
   const editing = { enabled: ready, busy, reason };
   // Repeating keys must not be swallowed while a change is applying (the filter keeps the last value).
   const repeating = { enabled: ready, reason, repeat: true };
+  // Opens the adjust column at the Audio tab, and closes it when that tab is already shown (Alt+2,
+  // like the player's own Alt+1…4 for its other panels).
   plugin.commands.add({
     id: "audio.workbench",
-    path: [AUDIO, "Audio Workbench…"],
+    path: ["Audio…"],
     category: category.audio,
-    order: 510,
-    group: "audio-tools",
-    run: () => workbenchWindow.show(),
+    order: PANEL_ORDER,
+    group: "windows",
+    bindings: ["Alt+2"],
+    run: () => panel.toggle(),
   });
   plugin.commands.add({
     id: "audio.track.cycle",
-    path: [AUDIO, "Audio Track", "Cycle Tracks"],
+    title: "Cycle Tracks",
     category: category.track,
     home: HOME,
-    order: 512,
-    group: "audio-track-cycle",
     bindings: ["Alt+A"],
     enabled: () => tracks().length > 0,
     reason: () => (tracks().length > 0 ? null : noTracks()),
@@ -593,11 +664,9 @@ export default async function activate(plugin: Plugin) {
   for (const { id, label } of channelModes)
     plugin.commands.add({
       id: `audio.channels.${id}`,
-      path: [AUDIO, "Audio Track", label],
+      title: label,
       category: category.channels,
       home: HOME,
-      order: 512,
-      group: "audio-channels",
       radio: true,
       enabled: () => ready() && !mono(),
       busy,
@@ -607,11 +676,9 @@ export default async function activate(plugin: Plugin) {
     });
   plugin.commands.add({
     id: "audio.equalizer",
-    path: [AUDIO, "Equalizer"],
+    title: "Equalizer",
     category: category.audio,
     home: HOME,
-    order: 513,
-    group: "audio-eq",
     bindings: ["Shift+E"],
     ...editing,
     checked: () => settings.equalizer,
@@ -622,11 +689,9 @@ export default async function activate(plugin: Plugin) {
   presets.forEach(({ label, osd }, index) =>
     plugin.commands.add({
       id: `audio.preset.${index}`,
-      path: [AUDIO, "Preset", label],
+      title: label,
       category: category.preset,
       home: HOME,
-      order: 514,
-      group: "audio-eq",
       radio: true,
       ...editing,
       checked: () => matches(settings, index),
@@ -641,14 +706,12 @@ export default async function activate(plugin: Plugin) {
     { id: "audio.sync.later", title: "50 ms Later", binding: "<", run: () => syncBy(1) },
   ] as const;
   for (const { id, title, binding, run } of syncSteps)
-    plugin.commands.add({ id, path: [AUDIO, "Audio Sync", title], category: category.sync, home: HOME, order: 515, group: "audio-eq", bindings: [binding], ...repeating, run });
+    plugin.commands.add({ id, title, category: category.sync, home: HOME, bindings: [binding], ...repeating, run });
   plugin.commands.add({
     id: "audio.sync.reset",
-    path: ["@reset", "Audio Sync"],
-    category: category.reset,
+    title: "Reset",
+    category: category.sync,
     home: HOME,
-    order: 530,
-    group: "reset-audio",
     bindings: ["?"],
     ...repeating,
     run: () => {
@@ -658,11 +721,9 @@ export default async function activate(plugin: Plugin) {
   syncKeeps.forEach(({ id, label }) =>
     plugin.commands.add({
       id: `audio.sync.keep.${id}`,
-      path: [AUDIO, "Audio Sync", label],
+      title: label,
       category: category.sync,
       home: HOME,
-      order: 515,
-      group: "audio-sync-keep",
       radio: true,
       checked: () => syncKeep === id,
       run: () => setKeep(id),
@@ -670,11 +731,9 @@ export default async function activate(plugin: Plugin) {
   );
   plugin.commands.add({
     id: "audio.normalize",
-    path: [AUDIO, "Processing", "Normalize"],
+    title: "Normalize",
     category: category.processing,
     home: HOME,
-    order: 516,
-    group: "audio-eq",
     bindings: ["Shift+N"],
     ...editing,
     checked: () => settings.normalize,
@@ -684,11 +743,9 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "audio.clarity",
-    path: [AUDIO, "Processing", "Crystalizer"],
+    title: "Crystalizer",
     category: category.processing,
     home: HOME,
-    order: 516,
-    group: "audio-eq",
     bindings: ["Shift+C"],
     ...editing,
     checked: () => settings.clarity.on,
@@ -699,18 +756,17 @@ export default async function activate(plugin: Plugin) {
   });
   plugin.commands.add({
     id: "audio.reset",
-    path: ["@reset", "Audio Processing"],
-    category: category.reset,
-    order: 531,
-    group: "reset-audio",
+    title: "Reset",
+    category: category.processing,
+    home: HOME,
     ...editing,
-    // The processing only: Audio Sync has its own item, channels are a radio choice.
+    // The processing only (the panel's Reset): the sync has its own reset, channels are a choice.
     run: () => {
       if (edit(neutralProcessing(settings))) quiet(plugin.osd.show("Audio processing reset"));
     },
   });
 
-  /** The window's status line, as a state its Slint file puts into words. */
+  /** The panel's status line, as a state its Slint file puts into words. */
   function describe() {
     if (!ready()) return player.state.phase === "loading" ? "loading" : "no-track";
     const status = filter.status;

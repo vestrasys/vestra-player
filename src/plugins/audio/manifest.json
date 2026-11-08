@@ -1,6 +1,6 @@
 {
   "id": "vestra.audio",
-  "version": "1.5.10",
+  "version": "1.5.11",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [
@@ -8,15 +8,15 @@
     "playback.read",
     "events",
     "processing.audio",
-    "ui.window",
+    "ui.mount",
     "ui.osd",
     "ui.dialog",
     "playback.control"
   ],
-  "name": "Audio Workbench",
+  "name": "Audio",
   "author": "Vestra Player",
   "punchline": "Equalizer, audio sync, channels, audio tracks and output device",
-  "description": "A six-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\nSettings are kept across files and restarts; find it under Audio in the right-click menu and in the Audio Workbench… window.",
+  "description": "A ten-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\nSettings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Audio Track in the right-click menu.",
   "tags": [
     "audio",
     "equalizer",

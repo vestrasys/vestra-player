@@ -5,383 +5,387 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:118
+#: main.ts:122
 msgid "External subtitle"
 msgstr "外部字幕"
 
-#: main.ts:120 main.ts:957
+#: main.ts:124 main.ts:1009
 msgid "Track {}"
 msgstr "字幕轨 {}"
 
-#: main.ts:121
+#: main.ts:125
 msgid "Embedded {}"
 msgstr "内嵌 {}"
 
-#: main.ts:128 main.ts:964
+#: main.ts:132 main.ts:1016
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:137 manifest.json
+#: main.ts:135 main.ts:142 manifest.json
 msgid "Subtitles"
 msgstr "字幕"
 
-#: main.ts:140
+#: main.ts:145
 #, x-machine
 msgid "Subtitle Tracks"
 msgstr "字幕轨"
 
-#: main.ts:141 main.ts:928 main.ts:935 main.ts:994
+#: main.ts:146
 msgid "Secondary Subtitle"
 msgstr "次字幕"
 
-#: main.ts:142
+#: main.ts:147
 #, x-machine
 msgid "Secondary Subtitle Position"
 msgstr "次字幕位置"
 
-#: main.ts:143 main.ts:1033 main.ts:1038 main.ts:1043 main.ts:1048 main.ts:1062 main.ts:1071 main.ts:1080
+#: main.ts:148
 msgid "Subtitle Style"
 msgstr "字幕样式"
 
-#: main.ts:144 main.ts:1275
+#: main.ts:149 main.ts:1327 ui/panel.slint:693
 msgid "Subtitle Sync"
 msgstr "字幕同步"
 
-#: main.ts:145 main.ts:1236 main.ts:1240 main.ts:1244
+#: main.ts:150
 msgid "Seek"
 msgstr "跳转"
 
-#: main.ts:146
+#: main.ts:151 ui/panel.slint:699 ui/panel.slint:873
 msgid "Reset"
 msgstr "复位"
 
-#: main.ts:187
+#: main.ts:192
 msgid "Subtitle sync: 0 s"
 msgstr "字幕同步: 0 秒"
 
-#: main.ts:188
+#: main.ts:193
 msgid "Subtitle sync: {} s earlier"
 msgstr "字幕同步: 超前 {} 秒"
 
-#: main.ts:188
+#: main.ts:193
 msgid "Subtitle sync: {} s later"
 msgstr "字幕同步: 滞后 {} 秒"
 
-#: main.ts:313
+#: main.ts:318
 msgid "Add Secondary Subtitle"
 msgstr "添加次字幕"
 
-#: main.ts:313
+#: main.ts:318 ui/panel.slint:558
 msgid "Open Subtitle"
 msgstr "打开字幕"
 
-#: main.ts:727
+#: main.ts:750
 msgid "Subtitles Off"
 msgstr "关闭字幕"
 
-#: main.ts:730
+#: main.ts:752
 msgid "Secondary Off"
 msgstr "关闭次字幕"
 
-#: main.ts:904
+#: main.ts:950
 msgid "Open Subtitle…"
 msgstr "打开字幕…"
 
-#: main.ts:904 main.ts:912 main.ts:916 main.ts:921 main.ts:928 main.ts:997 main.ts:1005 main.ts:1290
+#: main.ts:950 main.ts:958 main.ts:966 main.ts:972 main.ts:980 main.ts:1050 main.ts:1058 main.ts:1334 main.ts:1346
 msgid "Subtitle operation in progress"
 msgstr "字幕操作进行中"
 
-#: main.ts:910
+#: main.ts:956
 msgid "Add Secondary Subtitle…"
 msgstr "添加次字幕…"
 
-#: main.ts:912
+#: main.ts:958
 msgid "No media to play"
 msgstr "没有可播放的媒体"
 
-#: main.ts:916
+#: main.ts:966 ui/panel.slint:524
 msgid "Show Subtitles"
 msgstr "显示字幕"
 
-#: main.ts:921 main.ts:1004 main.ts:1013
+#: main.ts:972 main.ts:1057
 msgid "Subtitle Track"
 msgstr "选择字幕轨"
 
-#: main.ts:921 main.ts:928
+#: main.ts:972 main.ts:980
 msgid "Off"
 msgstr "不显示"
 
-#: main.ts:935
-msgid "Position"
-msgstr "位置"
-
-#: main.ts:935
+#: main.ts:987 ui/panel.slint:596
 msgid "Top"
 msgstr "顶部"
 
-#: main.ts:935
+#: main.ts:987 ui/panel.slint:597
 msgid "Above Main Subtitle"
 msgstr "主字幕上方"
 
-#: main.ts:971
+#: main.ts:1023
 msgid "{} ({})"
 msgstr "{} ({})"
 
-#: main.ts:997
+#: main.ts:1050
 msgid "Only text subtitles can be secondary"
 msgstr "次字幕仅支持文本字幕"
 
-#: main.ts:997
+#: main.ts:1050
 msgid "Already the primary subtitle"
 msgstr "已作为主字幕"
 
-#: main.ts:1013
+#: main.ts:1066
 msgid "Cycle"
 msgstr "依次切换"
 
-#: main.ts:1016
+#: main.ts:1069
 msgid "No subtitle tracks"
 msgstr "没有字幕轨"
 
-#: main.ts:1033
+#: main.ts:1085 ui/panel.slint:749
 msgid "Size +"
 msgstr "字号 +"
 
-#: main.ts:1035
+#: main.ts:1087
 msgid "Subtitle size: larger ({})"
 msgstr "字幕尺寸：增加({})"
 
-#: main.ts:1038
+#: main.ts:1090 ui/panel.slint:735
 msgid "Size −"
 msgstr "字号 −"
 
-#: main.ts:1040
+#: main.ts:1092
 msgid "Subtitle size: smaller ({})"
 msgstr "字幕尺寸：减小({})"
 
-#: main.ts:1043
+#: main.ts:1095 ui/panel.slint:784
 msgid "Move Up"
 msgstr "上移"
 
-#: main.ts:1045
+#: main.ts:1097
 msgid "Subtitle position: up ({}%)"
 msgstr "字幕位置：上移({}%)"
 
-#: main.ts:1048
+#: main.ts:1100 ui/panel.slint:769
 msgid "Move Down"
 msgstr "下移"
 
-#: main.ts:1050
+#: main.ts:1102
 msgid "Subtitle position: down ({}%)"
 msgstr "字幕位置：下移({}%)"
 
-#: main.ts:1053
+#: main.ts:1105
 msgid "Subtitle Position"
 msgstr "字幕位置"
 
-#: main.ts:1057
+#: main.ts:1109
 msgid "Subtitle position: default ({}%)"
 msgstr "字幕位置：默认({}%)"
 
-#: main.ts:1062 ui/settings.slint:119
+#: main.ts:1114 ui/panel.slint:811 ui/panel.slint:835 ui/settings.slint:119
 msgid "Bold"
 msgstr "粗体"
 
-#: main.ts:1067
+#: main.ts:1119
 msgid "Bold subtitles"
 msgstr "粗体字幕"
 
-#: main.ts:1067
+#: main.ts:1119
 msgid "Bold subtitles off"
 msgstr "禁用粗体字幕"
 
-#: main.ts:1071
+#: main.ts:1123 ui/panel.slint:816 ui/panel.slint:819
 msgid "Shadow"
 msgstr "阴影"
 
-#: main.ts:1076
+#: main.ts:1128
 msgid "Subtitle shadow: on ({})"
 msgstr "字幕阴影：开({})"
 
-#: main.ts:1076
+#: main.ts:1128
 msgid "Subtitle shadow: off"
 msgstr "字幕阴影：关"
 
-#: main.ts:1080
+#: main.ts:1132 ui/panel.slint:827
 msgid "Opaque Box"
 msgstr "字幕边框不透明"
 
-#: main.ts:1085
+#: main.ts:1137
 msgid "Opaque subtitle box: on"
 msgstr "字幕边框不透明：开"
 
-#: main.ts:1085
+#: main.ts:1137
 msgid "Opaque subtitle box: off"
 msgstr "字幕边框不透明：关"
 
-#: main.ts:1095
+#: main.ts:1147
 msgid "ASS/SSA animated subtitles: on"
 msgstr "ASS/SSA 动态字幕：开"
 
-#: main.ts:1095
+#: main.ts:1147
 msgid "ASS/SSA animated subtitles: off"
 msgstr "ASS/SSA 动态字幕：关"
 
-#: main.ts:1101
+#: main.ts:1153
 msgid "Original ASS/SSA Styles"
 msgstr "开启 ASS/SSA 原样式"
 
-#: main.ts:1136
+#: main.ts:1188
 msgid "Secondary subtitle position: top"
 msgstr "次字幕位置：顶部"
 
-#: main.ts:1136
+#: main.ts:1188
 msgid "Secondary subtitle position: above the main subtitle"
 msgstr "次字幕位置：主字幕上方"
 
-#: main.ts:1172 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1224 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:481
 msgid "Reading subtitles…"
 msgstr "正在读取字幕…"
 
-#: main.ts:1210 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1262 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:482
 msgid "The current media cannot seek"
 msgstr "当前媒体不能跳转"
 
-#: main.ts:1210 main.ts:1221 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1262 main.ts:1273 main.ts:1289 main.ts:1293 main.ts:1297 ui/panel.slint:482
 msgid "No text subtitles available"
 msgstr "没有可用的文本字幕"
 
-#: main.ts:1217
+#: main.ts:1269
 msgid "ffmpeg is needed to read embedded subtitles"
 msgstr "需要 ffmpeg 才能读取内嵌字幕"
 
-#: main.ts:1217
+#: main.ts:1269
 msgid "Reading embedded subtitles timed out"
 msgstr "读取内嵌字幕超时"
 
-#: main.ts:1217
+#: main.ts:1269
 msgid "Cannot read embedded subtitles"
 msgstr "无法读取内嵌字幕"
 
-#: main.ts:1227
+#: main.ts:1279
 msgid "No previous dialogue"
 msgstr "没有上一句对白"
 
-#: main.ts:1227
+#: main.ts:1279
 msgid "No next dialogue"
 msgstr "没有下一句对白"
 
-#: main.ts:1227
+#: main.ts:1279
 msgid "No dialogue to jump to"
 msgstr "没有可跳转的对白"
 
-#: main.ts:1228
+#: main.ts:1280
 msgid "Seek: previous dialogue {}"
 msgstr "定位：上一对白位置 {}"
 
-#: main.ts:1228
+#: main.ts:1280
 msgid "Seek: next dialogue {}"
 msgstr "定位：下一对白位置 {}"
 
-#: main.ts:1228
+#: main.ts:1280
 msgid "Seek: start of current dialogue {}"
 msgstr "定位：当前对白起点 {}"
 
-#: main.ts:1236
+#: main.ts:1288 ui/panel.slint:710
 msgid "Previous Dialogue"
 msgstr "上一句对白"
 
-#: main.ts:1240
+#: main.ts:1292 ui/panel.slint:720
 msgid "Next Dialogue"
 msgstr "下一句对白"
 
-#: main.ts:1244
+#: main.ts:1296
 msgid "Current Subtitle Start"
 msgstr "当前字幕起点"
 
-#: main.ts:1264 main.ts:1268 main.ts:1279
-msgid "Sync"
-msgstr "同步"
-
-#: main.ts:1264
+#: main.ts:1316
 msgid "Earlier 0.05 s"
 msgstr "超前 0.05 秒"
 
-#: main.ts:1264
+#: main.ts:1316
 msgid "Earlier 0.1 s"
 msgstr "超前 0.1 秒"
 
-#: main.ts:1264
+#: main.ts:1316
 msgid "Earlier 0.25 s"
 msgstr "超前 0.25 秒"
 
-#: main.ts:1264
+#: main.ts:1316
 msgid "Earlier 0.5 s"
 msgstr "超前 0.5 秒"
 
-#: main.ts:1264
+#: main.ts:1316
 msgid "Earlier 1 s"
 msgstr "超前 1 秒"
 
-#: main.ts:1264
+#: main.ts:1316
 msgid "Earlier 5 s"
 msgstr "超前 5 秒"
 
-#: main.ts:1268
+#: main.ts:1320
 msgid "Later 0.05 s"
 msgstr "滞后 0.05 秒"
 
-#: main.ts:1268
+#: main.ts:1320
 msgid "Later 0.1 s"
 msgstr "滞后 0.1 秒"
 
-#: main.ts:1268
+#: main.ts:1320
 msgid "Later 0.25 s"
 msgstr "滞后 0.25 秒"
 
-#: main.ts:1268
+#: main.ts:1320
 msgid "Later 0.5 s"
 msgstr "滞后 0.5 秒"
 
-#: main.ts:1268
+#: main.ts:1320
 msgid "Later 1 s"
 msgstr "滞后 1 秒"
 
-#: main.ts:1268
+#: main.ts:1320
 msgid "Later 5 s"
 msgstr "滞后 5 秒"
 
-#: main.ts:1279
+#: main.ts:1331
 msgid "Adjust Sync…"
 msgstr "手动调整同步…"
 
-#: main.ts:1290
+#: main.ts:1334 ui/panel.slint:568
 msgid "Reload Subtitles"
 msgstr "重载字幕"
 
-#: main.ts:1290
+#: main.ts:1338
 msgid "Refresh Subtitle Tracks"
 msgstr "刷新字幕轨"
 
-#: main.ts:1290
-msgid "Subtitle Tuning…"
-msgstr "字幕微调…"
+#: main.ts:1344
+#, x-machine
+msgid "Remove External Subtitle"
+msgstr "移除外部字幕"
 
-#: main.ts:1290
+#: main.ts:1346
+#, x-machine
+msgid "No external subtitle selected"
+msgstr "未选择外部字幕"
+
+#: main.ts:1349
 msgid "Subtitle Settings…"
 msgstr "字幕设置…"
+
+#: main.ts:1352
+#, x-machine
+msgid "Subtitles…"
+msgstr "字幕…"
 
 #: manifest.json
 msgid "Load external subtitles, pick tracks, adjust style and sync"
 msgstr "载入外部字幕、选择轨道、调整样式与同步"
 
 #: manifest.json
+#, x-machine
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Find it in the right-click menu under Subtitles."
+"Subtitles… (Alt+3) in the right-click menu opens its panel beside the video."
 msgstr ""
 "选择和切换字幕轨，载入 SRT、ASS/SSA、WebVTT、SAMI、MicroDVD 字幕（自动识别编码），打开本地视频时也载入同名字幕文件，显示次字幕；调整字号、位置、字体、颜色、描边、阴影与背景框，调整同步；按对白跳转；外部字幕文件改动后自动重载。\n"
-"入口在右键菜单「字幕」。"
+"右键菜单「字幕…」（Alt+3）在视频旁打开字幕面板。"
 
 #: manifest.json
 msgid "subtitles"
@@ -395,385 +399,574 @@ msgstr "样式"
 msgid "sync"
 msgstr "同步"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The operation was cancelled or the media changed."
 msgstr "操作已取消或媒体已切换。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The subtitle tracks changed. Adjust again."
 msgstr "字幕轨已变化，请重新调整。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The player refused the subtitle (file too large or invalid)."
 msgstr "播放器拒绝了该字幕（文件过大或内容无效）。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The player is busy. Try again later."
 msgstr "播放器忙，请稍后再试。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The current media does not support this."
 msgstr "当前媒体不支持此操作。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The player cannot load this subtitle."
 msgstr "播放器无法载入此字幕。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The subtitle operation failed."
 msgstr "字幕操作失败。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cancelled."
 msgstr "已取消。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle tracks refreshed."
 msgstr "字幕轨已刷新。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle tracks refreshed. Subtitle files loaded from the video's folder: {}"
 msgstr "字幕轨已刷新。已从视频所在文件夹载入字幕文件：{}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle files loaded from the video's folder: {}"
 msgstr "已从视频所在文件夹载入字幕文件：{}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {}"
 msgstr "字幕：{}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {} (waiting to take effect)"
 msgstr "字幕：{}（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {} (could not confirm it took effect)"
 msgstr "字幕：{}（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {}. Secondary subtitle turned off (it is now the primary)"
 msgstr "字幕：{}。次字幕已关闭（已改为主字幕）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {} (waiting to take effect). Secondary subtitle turned off (it is now the primary)"
 msgstr "字幕：{}（等待生效）。次字幕已关闭（已改为主字幕）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {} (could not confirm it took effect). Secondary subtitle turned off (it is now the primary)"
 msgstr "字幕：{}（未能确认是否生效）。次字幕已关闭（已改为主字幕）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles hidden"
 msgstr "隐藏字幕"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The subtitle tracks changed. Choose again."
 msgstr "字幕轨已变化，请重新选择。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot use it as the secondary subtitle: only text subtitles can be secondary"
 msgstr "无法设为次字幕：次字幕仅支持文本字幕"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot use it as the secondary subtitle: it is already the primary subtitle"
 msgstr "无法设为次字幕：已作为主字幕"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Secondary subtitle: {}"
 msgstr "次字幕：{}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Secondary subtitle: {} (waiting to take effect)"
 msgstr "次字幕：{}（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Secondary subtitle: {} (could not confirm it took effect)"
 msgstr "次字幕：{}（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Secondary subtitle: off"
 msgstr "次字幕：关闭"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "No subtitle file chosen."
 msgstr "未选择字幕文件。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Opened subtitle: {}"
 msgstr "打开字幕：{}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Opened subtitle: {} (waiting to take effect)"
 msgstr "打开字幕：{}（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Opened subtitle: {} (could not confirm it took effect)"
 msgstr "打开字幕：{}（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Opened subtitle: {} ({} tracks)"
 msgstr "打开字幕：{}（{} 条轨）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Opened subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr "打开字幕：{}（{} 条轨）（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Opened subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr "打开字幕：{}（{} 条轨）（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Secondary subtitle: {} ({} tracks)"
 msgstr "次字幕：{}（{} 条轨）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Secondary subtitle: {} ({} tracks) (waiting to take effect)"
 msgstr "次字幕：{}（{} 条轨）（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Secondary subtitle: {} ({} tracks) (could not confirm it took effect)"
 msgstr "次字幕：{}（{} 条轨）（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle loaded, but it cannot be the secondary subtitle"
 msgstr "已载入字幕，但无法设为次字幕"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (waiting to take effect)"
 msgstr "已载入字幕，但无法设为次字幕（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle loaded, but it cannot be the secondary subtitle (could not confirm it took effect)"
 msgstr "已载入字幕，但无法设为次字幕（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "No subtitles to show."
 msgstr "没有可显示的字幕。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles shown"
 msgstr "显示字幕"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {} ({}/{})"
 msgstr "字幕：{}（{}/{}）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {} ({}/{}) (waiting to take effect)"
 msgstr "字幕：{}（{}/{}）（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: {} ({}/{}) (could not confirm it took effect)"
 msgstr "字幕：{}（{}/{}）（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitles: off"
 msgstr "字幕：关闭"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "No subtitle selected."
 msgstr "没有选中的字幕。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Embedded subtitles need no reload"
 msgstr "内嵌字幕无需重载"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "This subtitle was not loaded by the Subtitles plugin and cannot be reloaded"
 msgstr "此字幕不是由字幕插件载入，无法重载"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: subtitle file {} not found"
 msgstr "无法重载：找不到字幕文件 {}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: the content of subtitle file {} changed"
 msgstr "无法重载：字幕文件 {} 的内容已变化"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: {}"
 msgstr "无法重载：{}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: cannot read the subtitle file."
 msgstr "无法重载：无法读取字幕文件。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: the subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "无法重载：字幕文件须为 1 字节至 8 MiB 的普通文件。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: the subtitle file is empty or larger than 8 MiB."
 msgstr "无法重载：字幕文件为空或超过 8 MiB。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: image subtitle files are not supported yet"
 msgstr "无法重载：暂不支持图形字幕文件"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: unknown subtitle format"
 msgstr "无法重载：无法识别的字幕格式"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: the subtitle file has no subtitles."
 msgstr "无法重载：字幕文件里没有字幕。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot reload: the subtitle file is larger than 2 MiB"
 msgstr "无法重载：字幕文件超过 2 MiB"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle unchanged"
 msgstr "字幕未改变"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Reloaded subtitle {}"
 msgstr "已重载字幕 {}"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle reloaded automatically"
 msgstr "字幕已自动重载"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Select a subtitle track first."
 msgstr "请先选择字幕轨。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The current subtitle track cannot be adjusted."
 msgstr "当前字幕轨不支持调整。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "No subtitle font available."
 msgstr "没有可用的字幕字体。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle style updated"
 msgstr "字幕样式已更新"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle style updated (waiting to take effect)"
 msgstr "字幕样式已更新（等待生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Subtitle style updated (could not confirm it took effect)"
 msgstr "字幕样式已更新（未能确认是否生效）"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Default style restored."
 msgstr "已恢复默认样式。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The selected subtitle changed. Choose again."
 msgstr "选中的字幕已变化，请重新选择。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "External subtitle removed."
 msgstr "已移除外部字幕。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The media changed; the running operation was cancelled."
 msgstr "媒体已切换，已取消进行中的操作。"
 
-#: messages.ts:152
-msgid "Enter whole milliseconds, for example 1250 or -500."
-msgstr "请输入整数毫秒，例如 1250 或 -500。"
+#: messages.ts:153
+#, x-machine
+msgid "Enter seconds, for example 1.25 or -0.5."
+msgstr "请输入秒数，例如 1.25 或 -0.5。"
 
-#: messages.ts:152
-msgid "The sync value must be between −{} and {} ms"
-msgstr "同步值须在 −{} 至 {} 毫秒之间"
+#: messages.ts:153
+#, x-machine
+msgid "The sync value must be between −{} and {} s"
+msgstr "同步值须在 −{} 至 {} 秒之间"
 
-#: messages.ts:152
+#: messages.ts:153
+#, x-machine
+msgid "Sync set in seconds ({} s). For milliseconds, type {} ms."
+msgstr "已按秒设置同步（{} 秒）。如需毫秒，请输入 {} ms。"
+
+#: messages.ts:153
 msgid "Switching subtitle track…"
 msgstr "正在切换字幕轨…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Removing subtitle…"
 msgstr "正在移除字幕…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Switching secondary subtitle…"
 msgstr "正在切换次字幕…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Choose a subtitle file…"
 msgstr "请选择字幕文件…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Choose a secondary subtitle file…"
 msgstr "请选择次字幕文件…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Switching subtitle display…"
 msgstr "正在切换字幕显示…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Hiding subtitles…"
 msgstr "正在隐藏字幕…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Turning off the secondary subtitle…"
 msgstr "正在关闭次字幕…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Reloading subtitle…"
 msgstr "正在重载字幕…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Refreshing…"
 msgstr "正在刷新…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Applying subtitle style…"
 msgstr "正在应用字幕样式…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Restoring the default style…"
 msgstr "正在恢复默认样式…"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Cannot read the subtitle file."
 msgstr "无法读取字幕文件。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The subtitle file must be a regular file of 1 byte to 8 MiB."
 msgstr "字幕文件须为 1 字节至 8 MiB 的普通文件。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The subtitle file is empty or larger than 8 MiB."
 msgstr "字幕文件为空或超过 8 MiB。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Image subtitle files are not supported yet"
 msgstr "暂不支持图形字幕文件"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "Unknown subtitle format"
 msgstr "无法识别的字幕格式"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The subtitle file has no subtitles."
 msgstr "字幕文件里没有字幕。"
 
-#: messages.ts:152
+#: messages.ts:153
 msgid "The subtitle file is larger than 2 MiB"
 msgstr "字幕文件超过 2 MiB"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 msgid "The subtitle encoding may be wrong; change the default encoding in Subtitle Settings"
 msgstr "字幕编码可能不正确，可在字幕设置中更改默认编码"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 msgid "Fonts embedded in the subtitle were ignored"
 msgstr "已忽略字幕内嵌字体"
 
-#: messages.ts:152 messages.ts:153
+#: messages.ts:153 messages.ts:154
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "视频帧率未知，已按 23.976 换算 MicroDVD 字幕"
 
-#: ui/settings.slint:21
+#: ui/panel.slint:493 ui/panel.slint:533
+#, x-machine
+msgid "Primary"
+msgstr "主字幕"
+
+#: ui/panel.slint:493 ui/panel.slint:577
+#, x-machine
+msgid "Secondary"
+msgstr "次字幕"
+
+#: ui/panel.slint:493 ui/panel.slint:593 ui/panel.slint:765
+msgid "Position"
+msgstr "位置"
+
+#: ui/panel.slint:493 ui/panel.slint:607
+#, x-machine
+msgid "Delay"
+msgstr "延迟"
+
+#: ui/panel.slint:493 ui/panel.slint:704
+#, x-machine
+msgid "Lines"
+msgstr "对白"
+
+#: ui/panel.slint:493 ui/panel.slint:731
+#, x-machine
+msgid "Size"
+msgstr "字号"
+
+#: ui/panel.slint:493 ui/panel.slint:804
+#, x-machine
+msgid "Look"
+msgstr "外观"
+
+#: ui/panel.slint:517
+#, x-machine
+msgid "Show subtitles"
+msgstr "显示字幕"
+
+#: ui/panel.slint:530
+#, x-machine
+msgid "Tracks"
+msgstr "字幕轨"
+
+#: ui/panel.slint:547
+#, x-machine
+msgid "Cycle Subtitle Tracks"
+msgstr "依次切换字幕轨"
+
+#: ui/panel.slint:556
+msgid "Load…"
+msgstr "载入…"
+
+#: ui/panel.slint:556 ui/panel.slint:558
+msgid "Cancel"
+msgstr "取消"
+
+#: ui/panel.slint:565
+#, x-machine
+msgid "Reload"
+msgstr "重载"
+
+#: ui/panel.slint:570
+#, x-machine
+msgid "for subtitle files you opened"
+msgstr "仅限你打开的字幕文件"
+
+#: ui/panel.slint:604
+msgid "Sync"
+msgstr "同步"
+
+#. {} is the sync step in seconds ("0.5"); the button moves the subtitles earlier.
+#: ui/panel.slint:610
+#, x-machine
+msgid "−{}"
+msgstr "−{}"
+
+#: ui/panel.slint:612
+msgid "Earlier"
+msgstr "快"
+
+#: ui/panel.slint:629
+#, x-machine
+msgid "Subtitle delay"
+msgstr "字幕延迟"
+
+#: ui/panel.slint:630
+#, x-machine
+msgid "click: type a value · later is positive"
+msgstr "单击：输入数值 · 正值为延后"
+
+#. {} is the subtitle delay in seconds with its sign ("+1.25").
+#: ui/panel.slint:635 ui/settings.slint:214
+msgid "{} s"
+msgstr "{} 秒"
+
+#. {} is the sync step in seconds ("0.5"); the button moves the subtitles later.
+#: ui/panel.slint:677
+#, x-machine
+msgid "+{}"
+msgstr "+{}"
+
+#: ui/panel.slint:679
+msgid "Later"
+msgstr "慢"
+
+#: ui/panel.slint:686
+#, x-machine
+msgid "Reset Sync"
+msgstr "复位同步"
+
+#: ui/panel.slint:706
+#, x-machine
+msgid "Previous"
+msgstr "上一句"
+
+#: ui/panel.slint:715
+#, x-machine
+msgid "Next"
+msgstr "下一句"
+
+#: ui/panel.slint:728
+#, x-machine
+msgid "Style"
+msgstr "样式"
+
+#: ui/panel.slint:742 ui/panel.slint:756
+#, x-machine
+msgid "Subtitle size"
+msgstr "字幕字号"
+
+#: ui/panel.slint:743 ui/panel.slint:778
+#, x-machine
+msgid "double-click: Default"
+msgstr "双击：默认"
+
+#. {} is where the subtitle sits, 100 at the bottom edge.
+#: ui/panel.slint:775
+#, x-machine
+msgid "{}%"
+msgstr "{}%"
+
+#: ui/panel.slint:777
+#, x-machine
+msgid "Subtitle position"
+msgstr "字幕位置"
+
+#: ui/panel.slint:791 ui/panel.slint:798
+#, x-machine
+msgid "Reset Position"
+msgstr "复位位置"
+
+#: ui/panel.slint:824
+#, x-machine
+msgid "Box"
+msgstr "边框"
+
+#: ui/panel.slint:829
+#, x-machine
+msgid "replaces outline and shadow"
+msgstr "替代描边和阴影"
+
+#: ui/panel.slint:840
+#, x-machine
+msgid "Keep original ASS/SSA styles"
+msgstr "保留 ASS/SSA 原样式"
+
+#: ui/panel.slint:841
+#, x-machine
+msgid "ASS/SSA subtitles keep the fonts, colours and positions of their file"
+msgstr "ASS/SSA 字幕沿用文件自带的字体、颜色和位置"
+
+#: ui/panel.slint:849
+#, x-machine
+msgid "Font, Colour and Outline…"
+msgstr "字体、颜色和描边…"
+
+#: ui/panel.slint:850 ui/settings.slint:21
 msgid "Subtitle Settings"
 msgstr "字幕设置"
+
+#: ui/panel.slint:875
+#, x-machine
+msgid "Reset the subtitle style and sync"
+msgstr "复位字幕样式和同步"
 
 #: ui/settings.slint:80 ui/settings.slint:95
 msgid "Font"
@@ -811,7 +1004,7 @@ msgstr "同步单位"
 msgid "Default encoding"
 msgstr "默认编码"
 
-#: ui/settings.slint:87 ui/settings.slint:103 ui/settings.slint:136 ui/settings.slint:148 ui/settings.slint:160 ui/settings.slint:182 ui/settings.slint:194 ui/settings.slint:205 ui/settings.slint:218 ui/settings.slint:238 ui/tune.slint:75 ui/tune.slint:119 ui/tune.slint:127 ui/tune.slint:147
+#: ui/settings.slint:87 ui/settings.slint:103 ui/settings.slint:136 ui/settings.slint:148 ui/settings.slint:160 ui/settings.slint:182 ui/settings.slint:194 ui/settings.slint:205 ui/settings.slint:218 ui/settings.slint:238
 msgid "Default"
 msgstr "默认"
 
@@ -842,10 +1035,6 @@ msgstr "保留原样式"
 #: ui/settings.slint:201
 msgid "Use subtitle settings"
 msgstr "统一为字幕设置"
-
-#: ui/settings.slint:214
-msgid "{} s"
-msgstr "{} 秒"
 
 #: ui/settings.slint:227
 msgid "Simplified Chinese (GB18030)"
@@ -886,71 +1075,3 @@ msgstr "自动载入同名字幕文件"
 #: ui/settings.slint:268
 msgid "Reset All"
 msgstr "全部默认"
-
-#: ui/sync.slint:10
-msgid "Adjust Sync"
-msgstr "手动调整同步"
-
-#: ui/sync.slint:29 ui/sync.slint:79
-msgid "Positive delays the subtitles, negative advances them."
-msgstr "正值字幕滞后，负值超前。"
-
-#: ui/sync.slint:41
-msgid "Sync value (ms):"
-msgstr "同步值(毫秒)："
-
-#: ui/sync.slint:71
-msgid "Apply"
-msgstr "应用"
-
-#: ui/tune.slint:21
-msgid "Subtitle Tuning"
-msgstr "字幕微调"
-
-#: ui/tune.slint:64 ui/tune.slint:115
-msgid "Size {}"
-msgstr "字号 {}"
-
-#: ui/tune.slint:64 ui/tune.slint:123
-msgid "Position {}%"
-msgstr "位置 {}%"
-
-#: ui/tune.slint:64 ui/tune.slint:137
-msgid "Sync {}"
-msgstr "同步 {}"
-
-#: ui/tune.slint:71 ui/tune.slint:93
-msgid "Cancel"
-msgstr "取消"
-
-#: ui/tune.slint:71 ui/tune.slint:93
-msgid "Load…"
-msgstr "载入…"
-
-#: ui/tune.slint:73 ui/tune.slint:124
-msgid "Up"
-msgstr "上"
-
-#: ui/tune.slint:74 ui/tune.slint:125
-msgid "Down"
-msgstr "下"
-
-#: ui/tune.slint:133
-msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr "单位：秒。正值字幕滞后，负值超前。点击输入数值。"
-
-#: ui/tune.slint:145
-msgid "Later"
-msgstr "慢"
-
-#: ui/tune.slint:146
-msgid "Earlier"
-msgstr "快"
-
-#: ui/tune.slint:159
-msgid "Remove"
-msgstr "移除"
-
-#: ui/tune.slint:160
-msgid "Settings…"
-msgstr "设置…"

@@ -1,7 +1,24 @@
 import type { BindingInfo, Plugin } from "@vestra-player/sdk";
 
-/** The bar elements whose tooltip names a key (G-07). */
-export type TipKey = "play-pause" | "stop" | "previous" | "next" | "mute" | "open" | "fullscreen";
+/**
+ * The bar elements whose tooltip names a key (G-07), and the player's own
+ * actions whose keys the Playback panel shows (speed, frames, the first seek step).
+ */
+export type TipKey =
+  | "play-pause"
+  | "stop"
+  | "previous"
+  | "next"
+  | "mute"
+  | "open"
+  | "fullscreen"
+  | "rate-down"
+  | "rate-up"
+  | "rate-normal"
+  | "frame-back"
+  | "frame-forward"
+  | "seek-backward"
+  | "seek-forward";
 
 /**
  * The commands' default keys as the menu labels them, used until (or when) the
@@ -16,6 +33,13 @@ export const DEFAULT_KEYS: Record<TipKey, string> = {
   open: "Ctrl+O",
   // Player 0.6.0: Toggle Fullscreen is Escape only by default (Enter, Alt+Enter and F11 removed).
   fullscreen: "Escape",
+  "rate-down": "X",
+  "rate-up": "C",
+  "rate-normal": "Z",
+  "frame-back": "D",
+  "frame-forward": "F",
+  "seek-backward": "←",
+  "seek-forward": "→",
 };
 
 /** The host's menu text of a command's first active keyboard binding (`null`: none). */
@@ -65,6 +89,13 @@ export class Keys {
       mute: host("mute"),
       open: find((info) => info.plugin === this.#plugin.id && info.command === "open"),
       fullscreen: host("fullscreen"),
+      "rate-down": host("rate-down"),
+      "rate-up": host("rate-up"),
+      "rate-normal": host("rate-normal"),
+      "frame-back": host("frame-back"),
+      "frame-forward": host("frame-forward"),
+      "seek-backward": host("seek-backward"),
+      "seek-forward": host("seek-forward"),
     };
     this.#changed();
   }
