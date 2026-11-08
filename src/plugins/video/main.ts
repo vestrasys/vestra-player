@@ -1,7 +1,17 @@
 import { existsSync } from "node:fs";
 import { copyFile, mkdir, readdir } from "node:fs/promises";
 import { basename, join, resolve } from "node:path";
-import type { FilterStatus, Plugin, PluginError, RenderingPreference, RenderingState, Scope } from "@vestra-player/sdk";
+import type {
+  Disposable,
+  FilterStatus,
+  PanelState,
+  Plugin,
+  PluginError,
+  RenderingPreference,
+  RenderingState,
+  Scope,
+  UpscalingState,
+} from "@vestra-player/sdk";
 import {
   DEINTERLACE_MODES,
   FITS,
@@ -365,8 +375,22 @@ export default async function activate(plugin: Plugin) {
   const runs = new Map<string, () => unknown>();
   /** The first key of one of this plugin's commands, "" without one (the user's current keys). */
   const keyOf = (id: string) => plugin.commands.keys(id)[0] ?? "";
+  /** The upscaler's state as last read (`plugin.video.upscaling`, below); null until then. */
+  let upscaling: UpscalingState | null = null;
   /** The renderer switch as the panel shows it (set once the rendering state is read, below). */
-  let gpuView = () => ({ shown: false, checked: false, enabled: false, busy: false, pending: false, reason: "" });
+  let gpuView = () => ({
+    shown: false,
+    checked: false,
+    enabled: false,
+    busy: false,
+    pending: false,
+    ongpu: false,
+    nextgpu: false,
+    reason: "",
+    name: "",
+  });
+  /** The AI Upscaling switch as the panel shows it (set below, with the rendering state). */
+  let upscalingView = () => ({ checked: false, enabled: false, busy: false, kind: "off", detail: "", from: 0, to: 0, gpu: "" });
   panel.bind(() => {
     const { d3, gradual, temporal } = effects.denoise;
     return {
@@ -419,6 +443,7 @@ export default async function activate(plugin: Plugin) {
       shadersEnabled: look.render.shadersEnabled,
       shaderCount: look.render.shaders.length,
       gpu: gpuView(),
+      upscaling: upscalingView(),
       effectEnabled: enabled,
       ...statusLine(filter.status, view.status, render.status),
       // Read here, so the caps follow every key change (`commands.keys`).
@@ -677,17 +702,18 @@ export default async function activate(plugin: Plugin) {
   };
 
   /**
-   * Opens the panel at a section (0 Colour … 3 Advanced, which opens): HDR Settings… shows the
-   * HDR row. The panel jumps whenever `jumpSerial` changes, also to the section it was at.
+   * HDR Settings…: opens the panel with its Advanced section open (and remembered so), scrolled
+   * so that the section's row is at the top (HDR is its second setting). The panel scrolls
+   * whenever `advancedSerial` changes, also when it already shows Advanced.
    */
-  let jumps = 0;
-  const showSection = async (section: number) => {
-    if (section === 3 && !advanced) {
+  let reveals = 0;
+  const showAdvanced = async () => {
+    if (!advanced) {
       advanced = true;
       persist();
     }
-    jumps += 1;
-    panel.set({ jumpSection: section, jumpSerial: jumps });
+    reveals += 1;
+    panel.set({ advancedSerial: reveals });
     plugin.update();
     await panel.show();
   };
@@ -1085,7 +1111,7 @@ export default async function activate(plugin: Plugin) {
     ...pixel,
     group: "video-hdr",
     ...gpu,
-    run: () => showSection(3),
+    run: showAdvanced,
   });
   // 403 Deinterlace (E10): Auto is the player's per-frame deinterlacer at field rate, Always is BWDIF
   // with the Output setting (greyed under Auto).
@@ -1475,7 +1501,7 @@ export default async function activate(plugin: Plugin) {
   applyRender();
 
   // 460 GPU Rendering (Experimental): the player's renderer choice (`plugin.rendering`), a switch in
-  // the panel's Advanced section and a command. The player keeps the choice and applies it at the
+  // the panel's Rendering section and a command. The player keeps the choice and applies it at the
   // next start; the switch only shows and changes it. A title cannot change in place, so the
   // command lives in a child scope rebuilt when it changes.
   let rendering: RenderingState | null = await plugin.rendering.state().catch(() => null);
@@ -1528,14 +1554,27 @@ export default async function activate(plugin: Plugin) {
         run: restartNow,
       });
   };
-  // The panel's switch: the same state as the command; the reason is the player's own message.
+  // The panel's switch: the same state as the command, with its status line (mockup 31). The
+  // reason is the player's own message: why the GPU cannot be chosen, or what still rules it out
+  // at the next start although it is chosen. The player's state has no GPU name; the upscaler's
+  // state has one once it was read (`gpu`, the GPU that renders).
   gpuView = () => ({
     shown: rendering !== null,
     checked: rendering !== null && gpuChosen(rendering),
     enabled: switchable(),
     busy: switching || restarting,
     pending: rendering?.restartPending ?? false,
-    reason: rendering?.gpu.reason?.message ?? "",
+    ongpu: rendering?.mode === "gpu",
+    nextgpu: rendering?.nextMode === "gpu",
+    reason:
+      rendering === null
+        ? ""
+        : !rendering.gpu.available && rendering.gpu.reason
+          ? rendering.gpu.reason.message
+          : gpuChosen(rendering) && rendering.nextMode !== "gpu"
+            ? rendering.nextReason.message
+            : "",
+    name: upscaling?.gpu ?? "",
   });
   let renderingQueue: Promise<void> = Promise.resolve();
   const showRendering = () => (renderingQueue = renderingQueue.then(buildRendering, buildRendering));
@@ -1617,6 +1656,146 @@ export default async function activate(plugin: Plugin) {
   };
   runs.set("video.gpu-rendering", switchRendering);
   runs.set("video.gpu-rendering.restart", restartNow);
+
+  // 461 AI Upscaling: the GPU's video upscaler, NVIDIA RTX Video Super Resolution
+  // (`plugin.video.upscaling`; user ruling 2026-11-08: this plugin offers it, under GPU Rendering
+  // in the panel's Rendering section and as a command; there is no separate upscaling plugin).
+  // The choice is saved and asked for again at each start (the player keeps a request for one run).
+  // The player's first GPU check wakes a sleeping discrete GPU, so the state is read only when it
+  // is needed: at start when upscaling is on, when the panel shows, and when the user switches;
+  // while the panel shows, the player's changes are followed (a listener would keep this plugin
+  // running, so only then). Under software rendering nothing is asked: it needs GPU rendering.
+  let upscalingBusy = false;
+  const softwareNow = () => rendering?.mode === "software";
+  /** What the status line says (`Upscaling.kind` in picture.slint) and the player's message. */
+  const upscalingStatus = (): { kind: string; detail: string } => {
+    const on = look.render.upscaling;
+    if (rendering?.mode === "software")
+      // No GPU renderer on this system at all (Linux): not on this system; else it needs GPU rendering.
+      return { kind: rendering.gpu.reason?.code === "no-gpu-backend" ? "platform" : "rendering", detail: "" };
+    const reason = upscaling?.reason ?? null;
+    if (upscaling === null || reason?.code === "unchecked") return { kind: on ? "on" : "off", detail: "" };
+    if (reason) {
+      const { code, message } = reason;
+      if (code === "platform") return { kind: "platform", detail: message };
+      if (code === "no-gpu" || code === "driver" || code === "gpu-unsupported" || code === "adapter") return { kind: "gpu", detail: message };
+      if (code === "rendering" && rendering?.mode !== "gpu") return { kind: "rendering", detail: message };
+      if (!on) return { kind: "off", detail: "" };
+      // This plugin's own filters keep the frames in memory (copy-back decoding): say so.
+      if (code === "decoding" && reason.cause === "copy-back" && reason.plugins?.some((p) => p.id === plugin.id))
+        return { kind: "effects", detail: message };
+      // Can pass during the run (another file, GPU rendering still starting).
+      if (code === "decoding" || code === "rendering") return { kind: "waiting", detail: message };
+      return { kind: "other", detail: message };
+    }
+    if (!on) return { kind: "off", detail: "" };
+    return { kind: upscaling.requested ? "upscaling" : "idle", detail: "" };
+  };
+  /** It cannot work in this run: greyed (a checked switch stays usable, to turn it off). */
+  const upscalingBlocked = () => ["platform", "rendering", "gpu"].includes(upscalingStatus().kind);
+  const upscalingReason = () => {
+    if (upscalingBusy) return SWITCHING;
+    if (look.render.upscaling || !upscalingBlocked()) return null;
+    const { kind, detail } = upscalingStatus();
+    if (kind === "platform") return "Not available on this system (Windows with an NVIDIA RTX GPU)";
+    if (kind === "rendering") return SOFTWARE;
+    return plugin.i18n.text("Not available on this GPU: {}", [detail]);
+  };
+  upscalingView = () => {
+    const { kind, detail } = upscalingStatus();
+    const upscaled = kind === "upscaling" && upscaling !== null;
+    return {
+      checked: look.render.upscaling,
+      enabled: look.render.upscaling || !upscalingBlocked(),
+      busy: upscalingBusy,
+      kind,
+      detail,
+      from: upscaled ? (upscaling?.video?.displayHeight ?? 0) : 0,
+      to: upscaled ? (upscaling?.area?.height ?? 0) : 0,
+      gpu: upscaling?.gpu ?? "",
+    };
+  };
+  const readUpscaling = async () => {
+    if (softwareNow()) return;
+    const next = await plugin.video.upscaling.state().catch(() => null);
+    if (stopped) return;
+    if (next) upscaling = next;
+    plugin.update();
+  };
+  const switchUpscaling = async () => {
+    if (upscalingBusy) return;
+    const on = !look.render.upscaling;
+    // Greyed with the reason; nothing to ask.
+    if (on && upscalingBlocked()) return;
+    upscalingBusy = true;
+    plugin.update();
+    try {
+      if (on) {
+        try {
+          upscaling = await plugin.video.upscaling.set(true);
+        } catch (error) {
+          // `unsupported`: it cannot work in this run (the reason greys the switch from now on).
+          const refused = error as PluginError;
+          upscaling = await plugin.video.upscaling.state().catch(() => upscaling);
+          // The player's reason as the state gives it (the refusal's message wraps it).
+          if (!stopped) shown(plugin.osd.show("AI upscaling unavailable: {}", [upscaling?.reason?.message ?? refused.message]));
+          return;
+        }
+        look.render.upscaling = true;
+        persist();
+        // No program can read the NVIDIA app's switch (the SDK's advice): said once, here.
+        shown(plugin.osd.show("AI upscaling: on (Super Resolution must also be on in the NVIDIA app)"));
+      } else {
+        look.render.upscaling = false;
+        persist();
+        upscaling = await plugin.video.upscaling.set(false).catch(() => upscaling);
+        shown(plugin.osd.show("AI upscaling: off"));
+      }
+    } finally {
+      upscalingBusy = false;
+      if (!stopped) plugin.update();
+    }
+  };
+  runs.set("video.upscaling", switchUpscaling);
+  commands.add({
+    id: "video.upscaling",
+    title: "AI Upscaling",
+    category: category.picture,
+    ...inPicture,
+    order: 461,
+    group: "video-rendering",
+    checked: () => look.render.upscaling,
+    enabled: () => upscalingBusy || look.render.upscaling || !upscalingBlocked(),
+    reason: upscalingReason,
+    busy: () => upscalingBusy,
+    run: switchUpscaling,
+  });
+  // Saved on: ask again for this run (this checks the GPU, which the user wants on).
+  if (look.render.upscaling && !softwareNow())
+    void plugin.video.upscaling.set(true).then(
+      (state) => {
+        upscaling = state;
+        if (!stopped) plugin.update();
+      },
+      () => void readUpscaling(),
+    );
+  // While the panel shows: its status follows the player (the factor, the reason, the decoder).
+  let following: Disposable | null = null;
+  const followPanel = (state: PanelState | null) => {
+    const visible = state?.effective === true && !softwareNow() && !stopped;
+    if (visible && following === null) {
+      following = plugin.video.upscaling.onChange((next) => {
+        upscaling = next;
+        plugin.update();
+      });
+      void readUpscaling();
+    } else if (!visible && following !== null) {
+      following.dispose();
+      following = null;
+    }
+  };
+  panel.onChange(followPanel);
+  followPanel(panel.state);
   let renderingSource = player.state.sourceId;
   player.onChange((state) => {
     if (state.sourceId === renderingSource) return;

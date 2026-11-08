@@ -10,12 +10,13 @@ Adjusts the picture's color, effects, aspect ratio and how it is shown.
 - **Aspect ratio and crop**: keep or ignore the aspect ratio, fill the window; common and custom ratios; crop or stretch to a ratio.
 - **Framing**: zoom and pan the picture.
 - **GPU render options**: HDR tone mapping, pixel shaders, motion interpolation.
-- **GPU rendering switch**: GPU Rendering (Experimental) in the panel's Advanced section chooses GPU or software rendering for the next start and offers a restart (a Restart button while one is pending); greyed out with the player's reason where the GPU cannot be chosen (Windows for now), but always usable while checked.
+- **GPU rendering switch**: GPU Rendering (Experimental) at the top of the panel (Rendering) chooses GPU or software rendering for the next start and offers a restart (a Restart button while one is pending); a status line says what draws now (on the GPU, restart to apply, software rendering and why); greyed out with the player's reason where the GPU cannot be chosen, but always usable while checked.
+- **AI Upscaling** (NVIDIA RTX Video Super Resolution, `plugin.video.upscaling`): a switch under GPU Rendering and the palette command Picture: AI Upscaling; saved and asked for again at each start. It needs Windows, an NVIDIA RTX GPU, GPU rendering and Super Resolution turned on in the NVIDIA app; elsewhere it is greyed out with the reason. The status line says what it does (Upscaling 1080p → 2160p on the GPU) or why it waits (the picture effects keep the frames in memory, which the upscaler cannot use).
 - Color, effect and aspect settings carry over between files and restarts; flip, rotation and framing apply to the current file only.
 
 ## Entries
 
-- **Picture…** (Alt+1, top level of the right-click menu) opens the **Picture** tab of the adjust column beside the video, and closes it when that tab shows. One scrolling column: Colour, Effects, Geometry and a closed Advanced section; the bar at the top jumps to them. Each control shows its key; a slider's double-click returns it to its default.
+- **Picture…** (Alt+1, top level of the right-click menu) opens the **Picture** tab of the adjust column beside the video, and closes it when that tab shows. One scrolling column: Rendering, Colour (with the presets in its heading), Effects (Frames' Doubling and Interpolate among the chips), Geometry and Advanced, a disclosure row closed by default that sums up its values. HDR Settings… opens Advanced and scrolls to it. Each control shows its key; a slider's double-click returns it to its default.
 - Every other command (colour steps, effects, aspect, crop/stretch, framing, rotation, deinterlace, HDR, shaders, the resets) is in the command palette (Ctrl+Shift+P) with its keys, named "Category: Title".
 - Brightness W/E, contrast R/T, saturation Y/U, hue I/O; Q resets the picture (the panel's Reset All).
 - **Effects** in the panel are on/off chips; a strength slider shows for each effect that is on. The Denoise chip switches the three denoisers together (on: the ones that were on last, or 3D); the Denoise card has each one's own switch and strength.
