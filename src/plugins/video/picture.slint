@@ -799,8 +799,8 @@ component Editor inherits Rectangle {
     private property <length> oy: root.sy + (root.sh - root.oh) / 2;
     private property <length> iw: root.inner >= root.outer ? root.ow : root.oh * root.inner;
     private property <length> ih: root.inner >= root.outer ? root.ow / root.inner : root.oh;
-    private property <length> ix: root.ox + (root.ow - root.iw) * root.pos-x / 100;
-    private property <length> iy: root.oy + (root.oh - root.ih) * root.pos-y / 100;
+    private property <length> inner-x: root.ox + (root.ow - root.iw) * root.pos-x / 100;
+    private property <length> inner-y: root.oy + (root.oh - root.ih) * root.pos-y / 100;
 
     // The corner under the pointer (1 top left, 2 top right, 3 bottom left, 4 bottom right).
     private property <int> corner: root.drag == 2 ? root.corner-at(root.start-x, root.start-y)
@@ -965,14 +965,14 @@ component Editor inherits Rectangle {
     }
     Rectangle {
         visible: root.crop-mode && root.mode != 0;
-        x: root.ix;
-        y: root.iy;
+        x: root.inner-x;
+        y: root.inner-y;
         width: root.iw;
         height: root.ih;
         clip: true;
         Image {
-            x: root.mode == 2 ? root.ox - root.ix : 0px;
-            y: root.mode == 2 ? root.oy - root.iy : 0px;
+            x: root.mode == 2 ? root.ox - root.inner-x : 0px;
+            y: root.mode == 2 ? root.oy - root.inner-y : 0px;
             width: root.mode == 2 ? root.ow : root.iw;
             height: root.mode == 2 ? root.oh : root.ih;
             source: @image-url("assets/still.jpg");
@@ -981,8 +981,8 @@ component Editor inherits Rectangle {
     }
     Rectangle {
         visible: root.crop-mode && root.mode != 0;
-        x: root.ix;
-        y: root.iy;
+        x: root.inner-x;
+        y: root.inner-y;
         width: root.iw;
         height: root.ih;
         border-width: 1px;
