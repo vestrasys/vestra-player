@@ -483,7 +483,8 @@ impl Policy {
         }
     }
 
-    /// Show or hide a slot and, for a column shown, reveal it (a plugin's`n    /// `show()` or `setVisible(true)`): G-01, in fullscreen an attached
+    /// Show or hide a slot and, for a column shown, reveal it (a plugin's
+    /// `show()` or `setVisible(true)`): G-01, in fullscreen an attached
     /// column pops out at once (until the pointer has been over it and left,
     /// or 3 seconds pass without activity), also when it was already on and
     /// collapsed. Turning a column off slides it in at once.
@@ -498,7 +499,8 @@ impl Policy {
     }
 
     /// Switch a slot on or off as a toggle does (the bottom bar's Adjust and
-    /// Sidebar buttons, Toggle Sidebar, Esc in the adjust overlay, a plugin's`n    /// `toggle()`; user ruling 2026-11-08): the same in every mode. In
+    /// Sidebar buttons, Toggle Sidebar, Esc in the adjust overlay, a plugin's
+    /// `toggle()`; user ruling 2026-11-08): the same in every mode. In
     /// fullscreen "on" means the right edge reveals the column; switching it on
     /// never pops it out, switching it off slides it in at once.
     pub fn switch(&mut self, slot: Slot, owner: u64, on: bool, now_ms: u64) -> Result<()> {
