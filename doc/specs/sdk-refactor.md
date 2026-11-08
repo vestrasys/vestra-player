@@ -356,6 +356,8 @@ Two items of the inventory are **not** batches (ruling 9):
 
 ## 5. SDK documentation refactor
 
+> **As built (1.7.2, 2026-11-08, user ruling).** After 1.7.0 the user found the seven-group tree too large and wordy. SDK 1.7.2 reduced it to four groups — Tutorial (one page), Guides (how-to + task tutorials + a design-rules page), Reference (generated tables kept), Examples — deleted `explanation/` and `upgrading/`, removed every player/SDK version-history sentence from docs and published TSDoc (`@since` tags stay), and added site redirects plus doc-tree aliases for every old title and file path. The generated-block mechanism and the two generated tables of §5.1 are unchanged. The group list in the next paragraph describes 1.7.0.
+
 Ruling 4 applies. The documentation tree keeps its Diátaxis groups (`scripts/doc-structure.mjs` `GROUPS`: tutorials, how-to, reference, explanation, guidelines, examples, upgrading) and its generated-block mechanism (`scripts/doc-tables.mjs`: `<!-- generated:<name> -->` blocks, one generator per `scripts/doc-tables/<name>.mjs`, `npm run docs:check` fails on drift).
 
 ### 5.1 Generated reference pages
