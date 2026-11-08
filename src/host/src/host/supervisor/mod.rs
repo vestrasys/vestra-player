@@ -1080,8 +1080,21 @@ impl Host {
         if self.source_state_replies.iter().any(|(o, _)| *o == owner) {
             busy.insert(Busy::SourceState);
         }
+        // The adjust column's current tab counts only while the column is
+        // wanted shown (its panel is not needed while it is closed).
         if self.mounts.get(&owner).is_some_and(|m| {
-            crate::ui::sidebar_tabs::shown_tab(m.spec.slot, owner, self.policy.sidebar_active())
+            crate::host::policy_slot(m.spec.slot).is_some_and(|column| {
+                let open = column != crate::ui::window_state::Slot::Adjust
+                    || self
+                        .policy
+                        .column_state(column)
+                        .is_some_and(|(preferred, _)| preferred);
+                open && crate::ui::sidebar_tabs::shown_tab(
+                    m.spec.slot,
+                    owner,
+                    self.policy.active(column),
+                )
+            })
         }) {
             busy.insert(Busy::ShownTab);
         }

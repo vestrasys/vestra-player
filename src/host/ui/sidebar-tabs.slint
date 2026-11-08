@@ -1,7 +1,9 @@
-// The sidebar's tab strip (panel-slots.md step 1), drawn by the host above
-// the current panel while the sidebar holds two or more: the playlist's tab
-// strip (ui-spec §5.2) with one tab per panel. The detach/attach button at
-// its right end acts on the whole sidebar. There is no close button: next
+// The tab strip of a column (panel-slots.md step 1), drawn by the host above
+// the current panel: the sidebar's while it holds two or more, the adjust
+// column's always (menu redesign step 3b, with the keys under the titles
+// and no detach button). The playlist's tab strip (ui-spec §5.2) with one
+// tab per panel. The detach/attach button at the sidebar strip's right end
+// acts on the whole sidebar. There is no close button: next
 // to the window's own close button it closed the player when missed (user
 // ruling 2026-11-07); the bottom bar's sidebar button, F6 and the menus
 // hide the sidebar.
@@ -35,13 +37,17 @@ component StripButton {
 
 // One tab: the current one has the 28px gradient stroke under its label
 // (1px above the bottom edge); the others are dimmed, with the rounded
-// hover background on hover.
+// hover background on hover. `key` (the adjust column): the key that opens
+// it, in small monospace type under the label ("" for none: the label alone).
 component Tab {
     in property <string> text;
+    in property <string> key;
     in property <bool> current;
     callback clicked();
+    private property <bool> keyed: root.key != "";
     accessible-role: tab;
     accessible-label: root.text;
+    accessible-description: root.key;
     accessible-item-selected: root.current;
     accessible-action-default => { root.clicked(); }
     // Hover plate and current-tab bar: persistent, hidden by `visible` (no
@@ -66,11 +72,26 @@ component Tab {
     }
     Text {
         x: 4px;
+        y: 0px;
         width: parent.width - 8px;
-        height: 100%;
+        height: root.keyed ? 18px : parent.height;
         text: root.text;
         color: root.current ? Theme.text : Theme.text-dim;
         font-size: Theme.font-tab;
+        horizontal-alignment: center;
+        vertical-alignment: root.keyed ? bottom : center;
+        overflow: elide;
+    }
+    Text {
+        visible: root.keyed;
+        x: 4px;
+        y: 17px;
+        width: parent.width - 8px;
+        height: 11px;
+        text: root.key;
+        color: Theme.text-dim;
+        font-family: Theme.font-mono;
+        font-size: Theme.font-xs;
         horizontal-alignment: center;
         vertical-alignment: center;
         overflow: elide;
@@ -112,6 +133,10 @@ export component SidebarTabs inherits Rectangle {
     in property <[string]> titles;
     in property <int> active;
     in property <bool> detached;
+    // The adjust column (menu redesign step 3b): the key under each title
+    // (by index; missing or "" for none), and no detach button.
+    in property <[string]> keys;
+    in property <bool> detachable: true;
     // A tab was clicked (its index), the overflow button (the menu's
     // origin, window coordinates), the detach/attach button.
     callback tab(int);
@@ -120,8 +145,8 @@ export component SidebarTabs inherits Rectangle {
     height: 31px;
     background: Theme.bg-bar;
     accessible-role: tab-list;
-    // The room beside the detach button (25px and 3px).
-    private property <length> room: max(0px, self.width - 28px);
+    // The room beside the detach button (25px and 3px), or the 3px margin.
+    private property <length> room: max(0px, self.width - (root.detachable ? 28px : 3px));
     // Tabs stay at least 72px wide (sidebar-tabs.md); the ones that do not
     // fit go into the `»` menu, which takes 25px of the room.
     // `overflowing`, `shown` (the places for tabs) and `last` (the tab in the
@@ -146,6 +171,7 @@ export component SidebarTabs inherits Rectangle {
         width: root.tab-width;
         height: root.height;
         text: title;
+        key: index < root.keys.length ? root.keys[index] : "";
         current: index == root.active;
         clicked => { root.tab(index); }
     }
@@ -157,6 +183,7 @@ export component SidebarTabs inherits Rectangle {
         clicked(x, y) => { root.overflow(x / 1px, y / 1px); }
     }
     StripButton {
+        visible: root.detachable;
         x: root.width - 28px;
         y: 0px;
         height: root.height;

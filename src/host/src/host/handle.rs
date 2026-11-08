@@ -198,7 +198,12 @@ impl Host {
                         Some(menu::Token::Tab(owner)) => {
                             self.close_menu();
                             if self.policy.set_active(owner).is_ok() {
-                                self.remember_sidebar(true);
+                                let column = self
+                                    .mounts
+                                    .get(&owner)
+                                    .and_then(|m| sidebar_tabs::Column::of(m.spec.slot))
+                                    .unwrap_or(sidebar_tabs::Column::Sidebar);
+                                self.remember_column(column, true);
                                 self.window_tick();
                             }
                         }
@@ -292,24 +297,29 @@ impl Host {
                     self.close_floating();
                 }
             }
-            Event::SidebarTab(generation, index) => {
+            Event::Tab(generation, column, index) => {
                 if !self.window_generation_live(generation) {
                     return;
                 }
                 // The index is in that window's tab order.
                 let tabs = match &self.floating {
-                    Some(floating) if floating.generation == generation => &floating.owners,
-                    _ => &self.shell_tabs,
+                    Some(floating)
+                        if floating.generation == generation
+                            && column == sidebar_tabs::Column::Sidebar =>
+                    {
+                        &floating.owners
+                    }
+                    _ => &self.columns[column.index()].tabs,
                 };
                 if let Some(&owner) = tabs.get(index)
                     && self.policy.set_active(owner).is_ok()
                 {
-                    self.tab_clicked = true;
-                    self.remember_sidebar(true);
+                    self.columns[column.index()].tab_clicked = true;
+                    self.remember_column(column, true);
                     self.window_tick();
                 }
             }
-            Event::SidebarOverflow(generation, x, y) => {
+            Event::TabOverflow(generation, column, x, y) => {
                 if !self.window_generation_live(generation) || !x.is_finite() || !y.is_finite() {
                     return;
                 }
@@ -320,7 +330,22 @@ impl Host {
                     let _ = window.set_property("menu-origin-x", x.into());
                     let _ = window.set_property("menu-origin-y", y.into());
                 }
-                self.open_menu(generation, MenuMode::Tabs);
+                self.open_menu(generation, MenuMode::Tabs(column));
+            }
+            Event::AdjustResized(generation, width) => {
+                if generation != self.shell_generation {
+                    return;
+                }
+                self.policy.set_adjust_width(width);
+                let mut slot = self.adjust_slot();
+                slot.width = self.policy.adjust_user_width();
+                self.ui_state.state.adjust_slot = Some(slot);
+                self.ui_state.touch(self.now_ms());
+            }
+            Event::AdjustDismiss(generation) => {
+                if generation == self.shell_generation {
+                    self.set_adjust_visible(false);
+                }
             }
             Event::SidebarDetach(generation) => {
                 if !self.window_generation_live(generation) {

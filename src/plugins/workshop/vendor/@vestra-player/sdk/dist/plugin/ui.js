@@ -917,10 +917,18 @@ class PanelHandle extends ViewBase {
             throw failure("invalid", "the player shows the backdrop by itself");
         await layoutOf(this.scope.runtime).read();
         const state = this.state;
+        // A switch, the same in every mode (user ruling 2026-11-08): off when
+        // on and current, else on at this tab. `reveal: false`: in fullscreen
+        // nothing pops out, the right edge reveals it (player 0.7.6; older
+        // players ignore it and pop it out).
         if (state?.preferred && state.active)
             await layoutOf(this.scope.runtime).set(this.#slot, { visible: false });
         else
-            await this.show();
+            await layoutOf(this.scope.runtime).set(this.#slot, {
+                active: this.scope.runtime.manifest.id,
+                visible: true,
+                reveal: false,
+            });
     }
     async showMenu(items, at) {
         await this.ready;
@@ -991,7 +999,8 @@ class LayoutService {
     state = {
         bottom: null,
         sidebar: null,
-        tabs: { bottom: null, sidebar: null },
+        adjust: null,
+        tabs: { bottom: null, sidebar: null, adjust: null },
         backdrop: null,
     };
     #listeners = new Set();
@@ -1051,10 +1060,16 @@ class LayoutService {
                         active: panel.owner === slot.owner,
                     })))
                     : null;
+                const adjust = raw.adjust ?? null;
                 const next = {
                     bottom: view(raw.bottom),
                     sidebar: view(raw.sidebar),
-                    tabs: { bottom: tabs(raw.bottom), sidebar: tabs(raw.sidebar) },
+                    adjust: view(adjust),
+                    tabs: {
+                        bottom: tabs(raw.bottom),
+                        sidebar: tabs(raw.sidebar),
+                        adjust: tabs(adjust),
+                    },
                     backdrop: raw.backdrop
                         ? Object.freeze({ effective: raw.backdrop.effective === true })
                         : null,
@@ -1110,7 +1125,11 @@ function slot(scope, name) {
         async toggle() {
             await service().read();
             const current = service().state[name];
-            await service().set(name, { visible: !(current?.preferred ?? true) });
+            // A switch (see Panel.toggle): nothing pops out in fullscreen.
+            await service().set(name, {
+                visible: !(current?.preferred ?? true),
+                reveal: false,
+            });
         },
         setDetached: (detached) => service().set(name, { detached }),
         activate: (plugin) => service().set(name, { active: plugin }),
@@ -1145,6 +1164,7 @@ export const panels = (scope) => ({
     mount: (position, file, options = {}) => new PanelHandle(scope, position, file, options),
     bottom: slot(scope, "bottom"),
     sidebar: slot(scope, "sidebar"),
+    adjust: slot(scope, "adjust"),
     backdrop: backdrop(scope),
 });
 export const dialogs = (scope) => {

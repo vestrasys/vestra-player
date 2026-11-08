@@ -94,6 +94,14 @@ export component HostWindow inherits Window {
     in-out property <float> sidebar-width: 317;
     // Video at least 318px, splitter 3px, sidebar at least 317px.
     out property <float> sidebar-actual: clamp(root.sidebar-width, 317, max(317, root.width / 1px - 321));
+    // The adjust column (menu redesign step 3b, between the video and the
+    // sidebar): the user's width, at least 280, at most half the window
+    // (window_state::adjust_width); the host docks it only while the video
+    // keeps 480px, else it floats over the video.
+    in-out property <float> adjust-width: 317;
+    out property <float> adjust-actual: clamp(root.adjust-width, 280, max(280, root.width / 1px * 0.5));
+    callback adjust-resized(float);
+    in-out property <bool> adjust-hover: false;
     out property <float> logical-width: root.width / 1px;
     out property <float> logical-height: root.height / 1px;
     // The video column (without the bottom bar, sidebar and splitter).
@@ -152,6 +160,11 @@ export component HostWindow inherits Window {
     // The fullscreen sidebar overlay's width: the user's width, leaving at
     // least the minimum video width (318) uncovered.
     out property <float> sidebar-pop-width: max(0, min(root.sidebar-width, root.width / 1px - 318));
+    // The fullscreen adjust overlay's width, left of a popped-out sidebar
+    // (window_state::adjust_overlay_width), and what the popped-out columns
+    // cover at the right edge (the fullscreen bar ends there).
+    out property <float> adjust-pop-width: max(0, min(root.adjust-actual, root.width / 1px - 318 - (root.sidebar-popped ? root.sidebar-pop-width : 0)));
+    out property <float> columns-popped-width: (root.sidebar-popped ? root.sidebar-pop-width : 0) + (root.adjust-popped ? root.adjust-pop-width : 0);
     // The fullscreen title strip (title-strip.slint): where it applies, whether
     // it is out, the keys in its tooltips (the host sets them); whether the
     // pointer is over it, sampled by the host every tick; its buttons.
@@ -377,6 +390,7 @@ export component HostWindow inherits Window {
                 }
                 // VESTRA-MOUNT-BOTTOM
             }
+            // VESTRA-MOUNT-ADJUST
             // VESTRA-MOUNT-SIDEBAR
         }
         // VESTRA-MOUNT-OVERLAY
