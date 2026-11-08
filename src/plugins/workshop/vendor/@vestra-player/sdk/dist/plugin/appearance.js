@@ -1,5 +1,5 @@
 /** The player's palette (`plugin.appearance`; `ui.theme` to change it). */
-import { failure } from "./runtime.js";
+import { failure } from "./errors.js";
 import { windowOf } from "./window.js";
 import { LOCALES } from "../i18n.js";
 const preference = (value) => value === "system" || LOCALES.includes(value)

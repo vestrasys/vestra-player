@@ -1,5 +1,5 @@
 import type { Json } from "../wire.ts";
-import type { Runtime } from "./runtime.ts";
+import type { Connection } from "./connection.ts";
 import type { ScopeImpl } from "./scope.ts";
 import type { MarkdownOptions, MarkdownRef } from "./types.ts";
 export declare const MARKDOWN_LIMITS: Readonly<{
@@ -43,5 +43,5 @@ export declare function httpsDownload(url: string, options: {
  * `<dataDirectory>/.vestra-cache/images/` (the Markdown limits: 4 MB, 10 s,
  * 4 at a time per plugin, 32 MB of cache, a day). Rejects `unavailable`.
  */
-export declare function remoteImageFile(runtime: Runtime, url: string): Promise<string>;
+export declare function remoteImageFile(runtime: Connection, url: string): Promise<string>;
 export declare function markdown(scope: ScopeImpl, text: string, options?: MarkdownOptions): Promise<MarkdownRef>;

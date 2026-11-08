@@ -1,5 +1,6 @@
 /** Seek-bar marks (`plugin.timeline`): one layer per plugin, merged by the player. */
-import { failure, Latest, quiet } from "./runtime.js";
+import { Latest } from "./latest.js";
+import { failure, quiet } from "./errors.js";
 /**
  * The player's limits on one plugin's timeline layer
  * ({@link TimelineLayer}). A list over them fails with code `invalid`,

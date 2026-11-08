@@ -7,7 +7,7 @@
 import { createHash } from "node:crypto";
 import { mkdir, readdir, rename, stat, unlink, utimes, writeFile, } from "node:fs/promises";
 import { isAbsolute, join } from "node:path";
-import { failure } from "./runtime.js";
+import { failure } from "./errors.js";
 export const MARKDOWN_LIMITS = Object.freeze({
     /** Text bytes (UTF-8). */
     textBytes: 256 * 1024,

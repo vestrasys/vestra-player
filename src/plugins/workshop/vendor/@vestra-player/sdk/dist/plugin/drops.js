@@ -1,5 +1,5 @@
 /** File drops (`plugin.drops`, `Panel.onDrop`; capability `ui.drop`). */
-import { failure } from "./runtime.js";
+import { failure } from "./errors.js";
 const modifiers = (raw) => Object.freeze({
     alt: raw?.alt === true,
     shift: raw?.shift === true,

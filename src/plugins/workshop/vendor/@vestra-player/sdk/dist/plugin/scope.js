@@ -1,8 +1,11 @@
 /** Scopes own handles. Disposal runs newest first and never throws. */
-import { failure, toError } from "./runtime.js";
+import { failure, toError } from "./errors.js";
 import { commands } from "./commands.js";
 import { WHEN } from "./when.js";
-import { dialogs, panels, ui, windows } from "./ui.js";
+import { dialogs } from "./services/dialogs.js";
+import { ui } from "./view/image.js";
+import { panels } from "./view/panel.js";
+import { windows } from "./view/window.js";
 import { timeline } from "./timeline.js";
 import { drops } from "./drops.js";
 import { appearance } from "./appearance.js";

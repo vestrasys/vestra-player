@@ -1,7 +1,7 @@
 /** Package validation, install and uninstall (`plugins.manage`). */
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
-import { failure, sleep, uncertain } from "./runtime.js";
+import { failure, sleep, uncertain } from "./errors.js";
 const TERMINAL = [
     "committed",
     "cancelled",

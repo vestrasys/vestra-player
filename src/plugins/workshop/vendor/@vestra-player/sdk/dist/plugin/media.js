@@ -1,4 +1,4 @@
-import { failure, sleep, uncertain } from "./runtime.js";
+import { failure, sleep, uncertain } from "./errors.js";
 import { playerOf } from "./player.js";
 const TERMINAL = ["completed", "failed", "cancelled"];
 /** The player's sets for each {@link ExportEncoding} field. */

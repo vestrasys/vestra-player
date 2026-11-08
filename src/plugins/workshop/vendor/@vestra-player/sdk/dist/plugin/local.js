@@ -9,8 +9,7 @@
 import { spawn } from "node:child_process";
 import { access, constants, stat } from "node:fs/promises";
 import { delimiter, isAbsolute, join } from "node:path";
-import { failure } from "./runtime.js";
-import { abortError } from "./player.js";
+import { abortError, failure } from "./errors.js";
 /** SIGTERM first, SIGKILL if the process is still there after this long. */
 const KILL_AFTER_MS = 300;
 const lastLine = (text) => text

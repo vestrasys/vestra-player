@@ -9,7 +9,8 @@
  * The first plugin to call one owns it; the owner's `dispose` (or the plugin
  * stopping) puts the defaults back.
  */
-import { failure, Latest, quiet } from "./runtime.js";
+import { Latest } from "./latest.js";
+import { failure, quiet } from "./errors.js";
 import { playerOf } from "./player.js";
 import { isAbsolute } from "node:path";
 export const VIEW_DEFAULTS = Object.freeze({

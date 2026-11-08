@@ -2,7 +2,7 @@
  * Source resolvers: page URLs to stream URLs, or local files to a stream
  * this plugin generates, for `player.open`.
  */
-import { failure, quiet } from "./runtime.js";
+import { failure, quiet } from "./errors.js";
 import { playerOf } from "./player.js";
 import { resolvedStream } from "./stream.js";
 import { windowOf } from "./window.js";

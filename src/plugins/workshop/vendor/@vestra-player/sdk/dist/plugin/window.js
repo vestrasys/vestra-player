@@ -1,5 +1,5 @@
 /** The main window (`plugin.window`) and the player's own facts (`plugin.app`). */
-import { failure } from "./runtime.js";
+import { failure } from "./errors.js";
 const view = (facts) => Object.freeze({
     fullscreen: facts.fullscreen === true,
     // Players before 0.6.3 do not send it; never maximized in fullscreen.

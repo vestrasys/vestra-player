@@ -1,6 +1,6 @@
 /** On-screen display: a transient line and a persistent information block. */
-import { Latest } from "./runtime.js";
-import { failure } from "./runtime.js";
+import { Latest } from "./latest.js";
+import { failure } from "./errors.js";
 import { isTextValue, textProblem } from "../i18n.js";
 /**
  * The player's limits on the on-screen display ({@link Osd}), counted on
