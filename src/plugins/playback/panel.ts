@@ -28,6 +28,19 @@ export function tickPath(starts: readonly number[], duration: number | null): st
   return [...columns].map((x) => `M${x} 0V1`).join("");
 }
 
+/** The first values of the panel's own state (`PlaybackPanel.#st`). */
+const FIRST = {
+  invalidStep: -1,
+  jumpInvalid: false,
+  rateInvalid: false,
+  abInvalid: null as "a" | "b" | null,
+  editJump: 0,
+  editRate: 0,
+  revealSteps: 0,
+  done: 0,
+  draft: undefined as number | undefined,
+};
+
 /**
  * The Playback panel in the adjust column (menu redesign §3.2, step 7): Speed,
  * A-B Loop (mockup 32: moved here from the marks plugin), Jump, Step and Seek steps. It replaces Playback ▸ Speed and Seek, the Jump to
@@ -37,24 +50,18 @@ export function tickPath(starts: readonly number[], duration: number | null): st
  */
 export class PlaybackPanel implements PanelActions {
   readonly panel: Panel;
-  /** The refused value: the seek step row (-1 none), the time, the speed. */
-  #invalidStep = -1;
-  #jumpInvalid = false;
-  #rateInvalid = false;
-  /** A typed A or B point was refused. */
-  #abInvalid: "a" | "b" | null = null;
-  /** Counters the panel watches (ui/panel.slint): a bump focuses, opens or closes a field. */
-  #editJump = 0;
-  #editRate = 0;
-  #revealSteps = 0;
-  #done = 0;
   /**
-   * The speed the ruler asked for and the player has not reached yet (a drag, a tick, a
-   * double click), shown at once; `undefined` shows the player's. While a speed is being
-   * applied the latest ask waits and replaces any older one (latest wins), so a drag never
-   * queues one request per pointer move and never ends on a stale value.
+   * What the panel shows besides the player's state, in `plugin.state` (a write
+   * re-runs the panel's binding):
+   * - `invalidStep`, `jumpInvalid`, `rateInvalid`: the refused value: the seek step row (-1 none), the time, the speed;
+   * - `abInvalid`: a typed A or B point was refused;
+   * - `editJump`, `editRate`, `revealSteps`, `done`: counters the panel watches (ui/panel.slint): a bump focuses, opens or closes a field;
+   * - `draft`: the speed the ruler asked for and the player has not reached yet (a drag, a tick, a
+   *   double click), shown at once; `undefined` shows the player's. While a speed is being
+   *   applied the latest ask waits and replaces any older one (latest wins), so a drag never
+   *   queues one request per pointer move and never ends on a stale value.
    */
-  #draft: number | undefined;
+  readonly #st: typeof FIRST;
   #dragging = false;
   #pumping = false;
   /** The text fields that have the keyboard now (normally one; two for a moment while it moves). */
@@ -65,20 +72,16 @@ export class PlaybackPanel implements PanelActions {
   constructor(plugin: Plugin, options: PanelOptions) {
     this.#plugin = plugin;
     this.#o = options;
+    this.#st = plugin.state(FIRST);
     const { playback: p, keyframes, settings, loop } = options;
     this.panel = plugin.panels.mount("adjust", "ui/panel.slint", { title: "Playback" });
     // The player's own actions (speed, frames, ← →) are in its binding table; this plugin's
     // commands come from `commands.keys`, read in `bind` so the caps follow every change.
-    const keys = new Keys(plugin, () => plugin.update());
+    const keys = new Keys(plugin);
     void keys.refresh();
     const own = (id: string) => plugin.commands.keys(id)[0] ?? "";
     this.panel.bind(() => {
-      // A source that cannot change speed ends any drag: nothing is pending, nothing to show.
-      if (this.#draft !== undefined && !p.can("rate")) {
-        this.#draft = undefined;
-        this.#dragging = false;
-      }
-      const rate = this.#draft ?? p.state.rate;
+      const rate = this.#st.draft ?? p.state.rate;
       const keyframe = keyframes.state();
       const state = p.state;
       const duration = state.duration && state.duration > 0 ? state.duration : null;
@@ -125,18 +128,18 @@ export class PlaybackPanel implements PanelActions {
         ratePosition: positionOf(rate),
         tick: tickOf(rate),
         canJump: p.canSeek(),
-        canStart: p.canRestart() && !p.restartBusy,
+        canStart: p.canRestart() && !p.ui.restartBusy,
         canFrame: p.canStep(),
         canKeyframe: keyframe.enabled,
         keyframeReason: keyframe.reason === "No video" ? "video" : keyframe.reason ? "source" : "",
         steps: settings.value.seekSteps.map(stepText),
         keyframesOnly: settings.value.seekKeyframes,
-        invalidStep: this.#invalidStep,
-        jumpInvalid: this.#jumpInvalid,
-        rateInvalid: this.#rateInvalid,
-        editJump: this.#editJump,
-        editRate: this.#editRate,
-        revealSteps: this.#revealSteps,
+        invalidStep: this.#st.invalidStep,
+        jumpInvalid: this.#st.jumpInvalid,
+        rateInvalid: this.#st.rateInvalid,
+        editJump: this.#st.editJump,
+        editRate: this.#st.editRate,
+        revealSteps: this.#st.revealSteps,
         // B23 A-B Loop: the points ("" unset), the switch (any running loop), the count, the timeline.
         abUsable,
         abReason: abBlocked === "No media open" ? "media" : abBlocked ? "source" : "",
@@ -163,8 +166,8 @@ export class PlaybackPanel implements PanelActions {
         abSpanA: at(span?.a),
         abSpanB: at(span?.b),
         abTicks: tickPath(loop.chapters, duration),
-        abInvalid: this.#abInvalid ?? "",
-        done: this.#done,
+        abInvalid: this.#st.abInvalid ?? "",
+        done: this.#st.done,
       };
     });
     const panel = this.panel;
@@ -180,10 +183,7 @@ export class PlaybackPanel implements PanelActions {
     });
     panel.on("speedRelease", () => {
       this.#dragging = false;
-      if (!this.#pumping && this.#draft !== undefined) {
-        this.#draft = undefined;
-        plugin.update();
-      }
+      if (!this.#pumping) this.#st.draft = undefined;
     });
     panel.on("speedNormal", () => this.#ask(1));
     panel.on("applyRate", (typed: string) => this.#applyRate(String(typed ?? "")));
@@ -226,10 +226,7 @@ export class PlaybackPanel implements PanelActions {
       // Not a time: refused like one outside the media (the reason on the video).
       const seconds = parseTime(String(typed ?? "")) ?? Number.NaN;
       if (loop.type(which, seconds)) this.#applied();
-      else {
-        this.#abInvalid = which;
-        plugin.update();
-      }
+      else this.#st.abInvalid = which;
     });
     panel.on("abToggle", () => {
       if (loop.toggleable()) loop.toggle();
@@ -237,7 +234,6 @@ export class PlaybackPanel implements PanelActions {
     panel.on("abCountChosen", (index: number) => {
       const count = COUNTS[index];
       if (count !== undefined && count !== loop.count) loop.setCount(count);
-      else plugin.update(); // the list shows the saved count again
     });
     panel.on("abSegment", () => loop.loopSegment());
     // Each text field reports its own focus: the panel holds the keyboard (keeps the fullscreen
@@ -248,11 +244,10 @@ export class PlaybackPanel implements PanelActions {
       if (focused === true) this.#focused.add(name);
       else {
         this.#focused.delete(name);
-        if (name === "jump") this.#jumpInvalid = false;
-        else if (name === "rate") this.#rateInvalid = false;
-        else if (name === `step${this.#invalidStep}`) this.#invalidStep = -1;
-        else if (name === this.#abInvalid) this.#abInvalid = null;
-        plugin.update();
+        if (name === "jump") this.#st.jumpInvalid = false;
+        else if (name === "rate") this.#st.rateInvalid = false;
+        else if (name === `step${this.#st.invalidStep}`) this.#st.invalidStep = -1;
+        else if (name === this.#st.abInvalid) this.#st.abInvalid = null;
       }
       panel.setInteraction({ focused: this.#focused.size > 0 });
     });
@@ -267,18 +262,15 @@ export class PlaybackPanel implements PanelActions {
   }
   async focusJump() {
     await this.panel.show();
-    this.#editJump++;
-    this.#plugin.update();
+    this.#st.editJump++;
   }
   async typeRate() {
     await this.panel.show();
-    this.#editRate++;
-    this.#plugin.update();
+    this.#st.editRate++;
   }
   async revealSteps() {
     await this.panel.show();
-    this.#revealSteps++;
-    this.#plugin.update();
+    this.#st.revealSteps++;
   }
   /**
    * Another source: a refused time no longer applies to anything. The A and B
@@ -289,19 +281,22 @@ export class PlaybackPanel implements PanelActions {
     const a = this.#focused.delete("a");
     const b = this.#focused.delete("b");
     if (a || b) this.panel.setInteraction({ focused: this.#focused.size > 0 });
-    if (!this.#jumpInvalid && !this.#abInvalid) return;
-    this.#jumpInvalid = false;
-    this.#abInvalid = null;
-    this.#plugin.update();
+    this.#st.jumpInvalid = false;
+    this.#st.abInvalid = null;
+  }
+  /** Every state change: a source that cannot change speed ends any drag; nothing is pending, nothing to show. */
+  observe() {
+    if (this.#st.draft === undefined || this.#o.playback.can("rate")) return;
+    this.#st.draft = undefined;
+    this.#dragging = false;
   }
 
   /** A typed value was applied: the fields close and the time field empties. */
   #applied() {
-    this.#invalidStep = -1;
-    this.#abInvalid = null;
-    this.#jumpInvalid = this.#rateInvalid = false;
-    this.#done++;
-    this.#plugin.update();
+    this.#st.invalidStep = -1;
+    this.#st.abInvalid = null;
+    this.#st.jumpInvalid = this.#st.rateInvalid = false;
+    this.#st.done++;
   }
   /** A typed value was refused: its field stays open and marked; the reason shows on the video. */
   #refused(kind: "time-range" | "rate-range" | "step-range", mark: () => void) {
@@ -316,7 +311,7 @@ export class PlaybackPanel implements PanelActions {
     const text = typed.trim();
     const value = Number(text.replace(/[x×]$/i, "").trim());
     if (!text || !Number.isFinite(value) || value < MIN_RATE || value > MAX_RATE)
-      return this.#refused("rate-range", () => (this.#rateInvalid = true));
+      return this.#refused("rate-range", () => (this.#st.rateInvalid = true));
     this.#applied();
     this.#ask(value);
   }
@@ -326,7 +321,7 @@ export class PlaybackPanel implements PanelActions {
     if (!p.canSeek()) return;
     const seconds = parseTime(typed);
     if (seconds === null || seconds > p.state.duration!)
-      return this.#refused("time-range", () => (this.#jumpInvalid = true));
+      return this.#refused("time-range", () => (this.#st.jumpInvalid = true));
     const target = p.seek(seconds);
     if (target !== null) p.notify("Seek: {} / {}", p.positionArgs(target));
     this.#applied();
@@ -336,7 +331,7 @@ export class PlaybackPanel implements PanelActions {
     const { settings } = this.#o;
     if (!(Number.isInteger(row) && row >= 0 && row < 4)) return;
     const seconds = parseStep(typed);
-    if (seconds === null) return this.#refused("step-range", () => (this.#invalidStep = row));
+    if (seconds === null) return this.#refused("step-range", () => (this.#st.invalidStep = row));
     const steps = [...settings.value.seekSteps] as SeekSteps;
     steps[row] = seconds;
     this.#applied();
@@ -346,8 +341,7 @@ export class PlaybackPanel implements PanelActions {
   /** The ruler asks for a speed: shown at once, applied latest-wins. */
   #ask(rate: number) {
     if (!this.#o.playback.can("rate")) return;
-    this.#draft = rate;
-    this.#plugin.update();
+    this.#st.draft = rate;
     void this.#pump();
   }
   async #pump() {
@@ -356,12 +350,12 @@ export class PlaybackPanel implements PanelActions {
     const p = this.#o.playback;
     try {
       let sent: number | undefined;
-      while (this.#draft !== undefined && this.#draft !== sent) {
+      while (this.#st.draft !== undefined && this.#st.draft !== sent) {
         // A speed set another way (a palette command) is still applying: wait for it rather
         // than drop the ask (`setRate` returns without sending while busy).
-        while (p.rateBusy && p.can("rate")) await new Promise((resolve) => setTimeout(resolve, 10));
+        while (p.ui.rateBusy && p.can("rate")) await new Promise((resolve) => setTimeout(resolve, 10));
         if (!p.can("rate")) break;
-        sent = this.#draft;
+        sent = this.#st.draft;
         if (Math.abs(sent - p.state.rate) < 1e-6) continue;
         try {
           await p.setRate(sent);
@@ -372,8 +366,7 @@ export class PlaybackPanel implements PanelActions {
       }
     } finally {
       this.#pumping = false;
-      if (!this.#dragging) this.#draft = undefined;
-      this.#plugin.update();
+      if (!this.#dragging) this.#st.draft = undefined;
     }
   }
 
@@ -391,6 +384,5 @@ export class PlaybackPanel implements PanelActions {
     } catch (error) {
       this.#o.playback.report(error);
     }
-    this.#plugin.update();
   }
 }

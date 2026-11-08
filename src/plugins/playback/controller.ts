@@ -1,4 +1,4 @@
-import type { Conditional, Dialogs, Player, Scrub, TemplateArgs } from "@vestra-player/sdk";
+import type { Conditional, Dialogs, Player, Scope, Scrub, TemplateArgs } from "@vestra-player/sdk";
 import { rateText, time } from "./format.ts";
 import { errorMessage, Failure, type Osd, type OsdText, sourceFailure } from "./texts.ts";
 
@@ -21,19 +21,28 @@ export const MAX_RATE = 4;
  * Feedback (results and failures) goes to the on-screen display.
  */
 export class Playback {
-  selecting = false;
-  /** Jump to Start is replaying an ended source. */
-  restartBusy = false;
-  rateBusy = false;
-  /** The bar's mute (a core action) is in flight: the volume slider waits. */
-  muteBusy = false;
+  /**
+   * What the bar, the panel and the commands show of this object, in
+   * `plugin.state`: a write re-runs exactly the bindings that read the field.
+   */
+  readonly ui: {
+    /** The Open dialog is up. */
+    selecting: boolean;
+    /** Jump to Start is replaying an ended source. */
+    restartBusy: boolean;
+    rateBusy: boolean;
+    /** The bar's mute (a core action) is in flight: the volume slider waits. */
+    muteBusy: boolean;
+    /** Position shown while seeking. */
+    draft: number | null;
+    /** Volume shown while a slider value is being applied. */
+    volumeDraft: number | null;
+  };
   dragging = false;
-  /** Position shown while seeking, and the newest requested target. */
-  draft: number | null = null;
+  /** The newest requested seek target. */
   seekTarget: number | null = null;
   /** After a cancelled or invalidated drag, pointer moves are ignored until the next press. */
   blockedGesture = false;
-  volumeDraft: number | null = null;
   #volumeRequest = 0;
   #scrub: Scrub | undefined;
   /**
@@ -47,15 +56,14 @@ export class Playback {
   #gestureLanded = false;
   readonly #player: Player;
   readonly #dialogs: Dialogs;
-  readonly #update: () => void;
   readonly #osd: Osd;
   readonly #raw: (text: string) => void;
 
   /** `raw` shows a message that is not this plugin's text (the player's error messages). */
-  constructor(player: Player, dialogs: Dialogs, update: () => void, osd: Osd, raw: (text: string) => void) {
-    this.#player = player;
-    this.#dialogs = dialogs;
-    this.#update = update;
+  constructor(scope: Scope, osd: Osd, raw: (text: string) => void) {
+    this.#player = scope.player;
+    this.#dialogs = scope.dialogs;
+    this.ui = scope.state({ selecting: false, restartBusy: false, rateBusy: false, muteBusy: false, draft: null as number | null, volumeDraft: null as number | null });
     this.#osd = osd;
     this.#raw = raw;
   }
@@ -96,7 +104,6 @@ export class Playback {
   report(error: unknown) {
     if (error instanceof Failure) error.show(this.#osd);
     else this.#raw(errorMessage(error));
-    this.#update();
   }
   /** `["00:37", "01:40"]`: the position and the duration, for seek feedback ("… {} / {}"). */
   positionArgs(seconds: number): [string, string] {
@@ -106,7 +113,7 @@ export class Playback {
   clearSeek() {
     this.#scrub?.end();
     this.#scrub = undefined;
-    this.draft = null;
+    this.ui.draft = null;
     this.seekTarget = null;
   }
   /**
@@ -137,9 +144,8 @@ export class Playback {
    */
   endDrag() {
     if (this.#gestureLanded && this.seekTarget !== null) {
-      this.seekTarget = this.draft = null;
+      this.seekTarget = this.ui.draft = null;
       this.#gestureLanded = false;
-      this.#update();
     }
   }
   /** An exact seek within the current gesture (a new one when none is active); returns the clamped target. */
@@ -152,7 +158,7 @@ export class Playback {
   }
   #seek(target: number | null, keyframes: boolean): number | null {
     if (target === null) return null;
-    this.draft = this.seekTarget = target;
+    this.ui.draft = this.seekTarget = target;
     this.#gestureLanded = false;
     if (!this.#scrub?.active) this.#scrub = this.#player.scrub();
     const scrub = this.#scrub;
@@ -163,8 +169,7 @@ export class Playback {
         // While dragging the pointer owns the draft: the release (`endDrag`) or its own seek clears it.
         if (this.dragging) this.#gestureLanded = true;
         else {
-          this.seekTarget = this.draft = null;
-          this.#update();
+          this.seekTarget = this.ui.draft = null;
         }
       },
       (error) => {
@@ -186,8 +191,8 @@ export class Playback {
   }
 
   async open() {
-    if (this.selecting) return;
-    this.selecting = true;
+    if (this.ui.selecting) return;
+    this.ui.selecting = true;
     try {
       const path = await this.#dialogs.openFile({
         title: this.state.phase === "empty" ? "Open Media" : "Open Media (replaces the current source)",
@@ -197,50 +202,49 @@ export class Playback {
         await source(this.#player.open(path));
       }
     } finally {
-      this.selecting = false;
+      this.ui.selecting = false;
     }
   }
   /** B09: back to 0:00, keeping pause or play; after the end, replay like Space. */
   async jumpToStart() {
-    if (!this.canRestart() || this.restartBusy) return;
+    if (!this.canRestart() || this.ui.restartBusy) return;
     if (this.state.phase === "ended") {
       this.clearSeek();
-      this.restartBusy = true;
+      this.ui.restartBusy = true;
       try {
         await source(this.#player.restart());
       } finally {
-        this.restartBusy = false;
+        this.ui.restartBusy = false;
       }
     } else if (this.seek(0) === null) return;
     this.notify("Jumped to the start");
   }
   async setRate(rate: number, options?: Conditional) {
-    if (!this.can("rate") || this.rateBusy) return;
+    if (!this.can("rate") || this.ui.rateBusy) return;
     if (!Number.isFinite(rate) || rate < MIN_RATE || rate > MAX_RATE) throw new Failure("rate-range");
     this.clearSeek();
-    this.rateBusy = true;
+    this.ui.rateBusy = true;
     try {
       await source(this.#player.setRate(rate, options));
       this.notify("Speed: {}x", [rateText(rate)]);
     } finally {
-      this.rateBusy = false;
+      this.ui.rateBusy = false;
     }
   }
   /** Latest value wins; the target volume is applied before unmuting, never an old loud one. */
   setVolume(value: number, announce = false) {
-    if (this.muteBusy || !Number.isFinite(value)) return;
-    const volume = (this.volumeDraft = Math.max(0, Math.min(100, Math.round(value))));
+    if (this.ui.muteBusy || !Number.isFinite(value)) return;
+    const volume = (this.ui.volumeDraft = Math.max(0, Math.min(100, Math.round(value))));
     if (announce) this.notify("Volume: {}%", [volume]);
     const request = ++this.#volumeRequest;
     this.#player.setOutput({ volume, muted: false }).then(
       (applied) => {
         if (applied && request === this.#volumeRequest) {
-          this.volumeDraft = null;
-          this.#update();
+          this.ui.volumeDraft = null;
         }
       },
       (error) => {
-        this.volumeDraft = null;
+        this.ui.volumeDraft = null;
         this.report(error);
       },
     );

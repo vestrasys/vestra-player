@@ -313,7 +313,7 @@ export default async function activate(plugin: Plugin) {
   });
   // Options ▸ General ▸ Updates: the automatic check on or off.
   const page = plugin.settings.page("ui/updates.slint", { id: "info.updates", category: "general", title: "Updates", order: 20 });
-  page.bind(() => ({ autoCheck: updater.settings.value.auto }));
+  page.bind(() => ({ autoCheck: updater.auto }));
   page.on("toggleAuto", (on: boolean) => updater.setAuto(on));
   updater.schedule();
   plugin.onDispose(() => {

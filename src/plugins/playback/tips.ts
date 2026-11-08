@@ -52,15 +52,15 @@ export function firstKey(info: BindingInfo): string | null {
 /**
  * The bar elements' keys from the binding table (`plugin.bindings`), so a key
  * the user rebinds shows in the tooltip; the labels are the host's menu text.
+ * Kept in `plugin.state`: a binding that reads a key follows a new table.
  */
 export class Keys {
-  #keys: Record<TipKey, string | null> = { ...DEFAULT_KEYS };
+  readonly #st: { keys: Record<TipKey, string | null> };
   readonly #plugin: Plugin;
-  readonly #changed: () => void;
 
-  constructor(plugin: Plugin, changed: () => void) {
+  constructor(plugin: Plugin) {
     this.#plugin = plugin;
-    this.#changed = changed;
+    this.#st = plugin.state({ keys: { ...DEFAULT_KEYS } as Record<TipKey, string | null> });
     try {
       plugin.bindings.onChange(() => void this.refresh());
     } catch {
@@ -81,7 +81,7 @@ export class Keys {
       return info ? firstKey(info) : null;
     };
     const host = (id: string) => find((info) => info.plugin === "host" && info.command === id);
-    this.#keys = {
+    this.#st.keys = {
       "play-pause": host("play-pause"),
       stop: host("stop"),
       previous: host("previous"),
@@ -97,12 +97,11 @@ export class Keys {
       "seek-backward": host("seek-backward"),
       "seek-forward": host("seek-forward"),
     };
-    this.#changed();
   }
 
   /** The key's menu text, "" when the command has no key. */
   key(key: TipKey) {
-    return this.#keys[key] ?? "";
+    return this.#st.keys[key] ?? "";
   }
 }
 
