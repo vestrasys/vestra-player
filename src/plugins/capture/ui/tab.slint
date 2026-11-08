@@ -708,6 +708,16 @@ component Line {
     }
 }
 
+// One variable chip of the file-name templates: a click adds the variable to the template last focused.
+// Written out one by one (no `for`): a fixed set of seven, not a list.
+component Chip inherits Button {
+    in property <string> variable;
+    in property <string> target;
+    small: true;
+    text: root.variable;
+    clicked => { CaptureBridge.insert-variable(root.target, root.variable); }
+}
+
 export component CaptureTab inherits Rectangle {
     background: Theme.bg-panel;
     // The width classes of design §5: wide ≥ 400 px; narrow < 317 px (key caps move to the tooltips).
@@ -1309,20 +1319,17 @@ export component CaptureTab inherits Rectangle {
                             HorizontalLayout {
                                 spacing: 3px;
                                 alignment: start;
-                                for variable in ["{name}", "{pos}", "{start}", "{end}"]: Button {
-                                    small: true;
-                                    text: variable;
-                                    clicked => { CaptureBridge.insert-variable(root.chip-target, variable); }
-                                }
+                                Chip { variable: "{name}"; target: root.chip-target; }
+                                Chip { variable: "{pos}"; target: root.chip-target; }
+                                Chip { variable: "{start}"; target: root.chip-target; }
+                                Chip { variable: "{end}"; target: root.chip-target; }
                             }
                             HorizontalLayout {
                                 spacing: 3px;
                                 alignment: start;
-                                for variable in ["{date}", "{time}", "{n}"]: Button {
-                                    small: true;
-                                    text: variable;
-                                    clicked => { CaptureBridge.insert-variable(root.chip-target, variable); }
-                                }
+                                Chip { variable: "{date}"; target: root.chip-target; }
+                                Chip { variable: "{time}"; target: root.chip-target; }
+                                Chip { variable: "{n}"; target: root.chip-target; }
                             }
                         }
                     }
