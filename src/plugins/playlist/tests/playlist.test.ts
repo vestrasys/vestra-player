@@ -1210,25 +1210,30 @@ test("Prober: ffprobe runs with a 10 s timeout and removal aborts the run", asyn
   }
 });
 
-// Focus rules (user ruling 2026-11-08): the list keeps only its own keys and passes every other
-// key on to the player; only a click on a row (or the search box's Esc/↓) gives it the focus.
-test("list focus: the list's keys are ↑ ↓ PgUp PgDn Home End Enter Esc; the player's keys go on", async () => {
+// Focus rules (user ruling 2026-11-08): only a click on a row (or the search box's Esc/↓) gives
+// the list the focus. While it has it, the list itself takes the standard list keys ↑ ↓ PgUp PgDn
+// Home End (navigation), Enter (play) and Esc (keys back to the video), as list views do; its key
+// bindings take no global key, and every other key goes on to the player.
+test("list focus: the list takes ↑ ↓ PgUp PgDn Home End Enter Esc; its bindings take no global key", async () => {
   const app = await start();
   try {
-    // List key bindings (`focus: "panel"`) never take a player key (coordinator ruling
-    // 2026-11-08): neither the player's and other built-ins' keys nor this plugin's own global ones.
+    // List key bindings (`focus: "panel"`) contain no global key (coordinator ruling 2026-11-08):
+    // neither the player's and other built-ins' default keys nor this plugin's own global ones.
     const commands = [...app.host.commands.values()].map(({ declaration: d }) => d);
     const panelKeys = commands.filter((d) => d.focus === "panel").flatMap((d) => d.bindings ?? []);
     const ownGlobal = commands.filter((d) => d.focus !== "panel").flatMap((d) => d.bindings ?? []);
     assert.deepEqual(ownGlobal.toSorted(), ["F2", "F6"], "Open Folder… and Playlist");
     assert.ok(panelKeys.includes("Enter") && panelKeys.includes("Delete") && panelKeys.includes("Ctrl+A"));
-    const playerKeys = [
-      ...["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Escape"],
-      ...["P", "Ctrl+I", "Ctrl+O", "F3", "Ctrl+U", "Backspace", "Ctrl+T", "Ctrl+Home", "F5", "Home", "End"],
+    // Global default keys of the player and the other built-ins (the ones a list key could clash with).
+    const globalKeys = [
+      ...["Space", "ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown", "PageUp", "PageDown", "Home", "End", "Escape"],
+      ...["P", "Ctrl+I", "Ctrl+O", "F3", "Ctrl+U", "Backspace", "Ctrl+T", "Ctrl+Home", "F5"],
     ];
-    for (const key of [...playerKeys, ...ownGlobal]) {
+    for (const key of [...globalKeys, ...ownGlobal]) {
       assert.ok(!panelKeys.includes(key), `${key} is not a list binding`);
     }
+    // Enter is a list binding but no global key (it only names the key in the list menu).
+    assert.ok(!globalKeys.includes("Enter"));
     // The commands that lost their keys stay (list menu, palette).
     for (const id of ["list-add", "list-add-folder", "list-link", "remove-invalid", "move-top", "list-open-list", "list-save-list", "close", "settings"]) {
       assert.deepEqual(app.command(id).declaration.bindings ?? [], [], id);
@@ -1244,11 +1249,18 @@ test("list focus: the list's keys are ↑ ↓ PgUp PgDn Home End Enter Esc; the 
   const slint = await readFile(new URL("../ui/sidebar.slint", import.meta.url), "utf8");
   const scope = slint.slice(slint.indexOf("list-focus := FocusScope {"));
   const handler = scope.slice(scope.indexOf("key-pressed(event) => {"), scope.indexOf("return reject;\n        }"));
-  // The Slint handler accepts exactly these keys (unmodified, Shift extends) and rejects the rest.
-  assert.deepEqual(
-    [...handler.matchAll(/event\.text == Key\.(\w+)/g)].map((m) => m[1]),
-    ["Return", "Escape", "UpArrow", "DownArrow", "PageUp", "PageDown", "Home", "End"],
-  );
+  // The Slint list consumes exactly the navigation keys, Enter and Esc (unmodified; Shift extends
+  // the selection) and rejects every other key, which goes on to the bindings and the player. Of
+  // the global keys it covers only the navigation keys and Esc: standard list behaviour while the
+  // list has focus, not a list shortcut.
+  const consumed = [...handler.matchAll(/event\.text == Key\.(\w+)/g)].map((m) => m[1]);
+  assert.deepEqual(consumed, ["Return", "Escape", "UpArrow", "DownArrow", "PageUp", "PageDown", "Home", "End"]);
+  const navigation = ["UpArrow", "DownArrow", "PageUp", "PageDown", "Home", "End"];
+  assert.deepEqual(consumed.filter((key) => key !== "Return" && key !== "Escape"), navigation);
+  for (const key of navigation) {
+    assert.match(handler, new RegExp(`Key\\.${key} \\{ PlaylistBridge\\.select-step\\(`), `${key} moves the selection`);
+  }
+  assert.match(scope.slice(handler.length + scope.indexOf(handler)), /^\s*return reject;\n\s*\}/, "the rest goes on");
   // Enter plays and Esc only gives the keys back to the video (`VestraFocus.release()`, at once).
   assert.match(slint, /^import \{ VestraFocus \} from "@vestra\/focus\.slint";$/m);
   assert.match(handler, /Key\.Return[^{]*\{\s+PlaylistBridge\.play-selected\(\);\s+VestraFocus\.release\(\);\s+return accept;/);

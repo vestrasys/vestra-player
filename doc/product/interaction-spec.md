@@ -889,7 +889,7 @@ The unit tests compare both the result of `siblings` and, one by one, the step r
 4. Open a network link: the list is unchanged.
 5. "Open Folder…" and choose a folder: the list is replaced with the contents of that folder and the first item plays.
 
-### IA-PL-02 Playlist settings page and F5 with focus in the list (P2)
+### IA-PL-02 Playlist settings page (P2)
 
 **Status**: implemented (`ui/settings.slint`; the manifest has `ui.settings`, page id `playlist`, category "Playback", order 30).
 
@@ -901,12 +901,12 @@ The unit tests compare both the result of `siblings` and, one by one, the step r
    - Insert at the drop position when dropping on the list (off by default);
    - Repeat (drop-down), Shuffle, Fast Advance to Next, Remember List, Confirm Before Removing All (checkboxes).
    The page and the existing checkable items in the menu stay in sync both ways.
-2. With focus in the list, F5 opens this page (the list command "Playlist Settings…", not in the menu, `focus: "panel"`); without focus in the list, F5 is still the global "Options…".
-3. After manual play (double-click, Enter, P), focus stays in the list.
+2. The list command "Playlist Settings…" opens this page; it has no key and is in the palette only (coordinator ruling 2026-11-08: F5 is the player's "Options…" everywhere, the list focus included).
+3. Manual play (double-click, Enter) gives the keys back to the video (`VestraFocus.release()`), so the arrows and Space control the player again; Esc in the list does the same.
 
-**Cross-platform**: on Apple keyboards F5 needs fn.
+**Cross-platform**: none.
 
-**Acceptance**: with focus in the list press F5: the Options window opens on the "Playlist" page; change "When Opening a File" on the page, and the menu radio dot follows.
+**Acceptance**: run "Playlist: Playlist Settings…" from the palette: the Options window opens on the "Playlist" page; change "When Opening a File" on the page, and the menu radio dot follows. With focus in the list, F5 opens Options… as anywhere else.
 
 ### IA-PL-03 Focus frame for the keyboard cursor (P3)
 
@@ -1383,11 +1383,11 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | # | Scenario | Specification | Item |
 | --- | --- | --- | --- |
 | K-01 | Video area has focus | The global binding table is in effect; the video area gets focus on startup | |
-| K-02 | Playlist has focus | Bindings with `focus: "panel"` take precedence (Enter / P play, Del, Ctrl+↑↓ / Home / End, F6 close, F5 list settings, etc., see "when the playlist has focus" in menus.md); keys that match nothing go to the global table | |
+| K-02 | Playlist has focus (only after a single click on a row, or the search box's Esc/↓) | The list takes ↑ ↓ PgUp PgDn Home End, Enter and Esc itself (unmodified); every other key goes to the bindings with `focus: "panel"` (Delete, Ctrl+A, Ctrl+S, Ctrl+↑↓ / Ctrl+End, Ctrl+0–9, etc., none of them a global key; see "When the playlist has focus" in menus.md), then to the global table. The wheel, the bar's buttons and a drag do not change the focus | |
 | K-03 | ↑↓ / Home / End with focus in the list | Move the selection, Shift extends the selection; the view follows | G-08 |
 | K-04 | ←→ with focus in the list | Go to the global table, ±5 second seek | |
-| K-05 | F5 with focus in the list | Opens "Playlist Settings" | IA-PL-02 |
-| K-06 | Focus after manual play | Stays in the list | IA-PL-02 |
+| K-05 | F5 with focus in the list | Global "Options…" (the list has no F5 binding; coordinator ruling 2026-11-08) | IA-PL-02 |
+| K-06 | Focus after manual play (double-click, Enter), Esc in the list, or a click on the video | Goes back to the video | IA-PL-02 |
 | K-07 | Bottom bar has focus | The bottom bar has a `FocusScope`; the buttons themselves do not take focus | |
 | K-08 | Tool windows (Picture Adjustments, Audio Workbench, etc.) | Do not fire any binding | |
 | K-09 | Floating playlist window | Both global and list bindings are in effect | |
@@ -1440,7 +1440,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | L-07 | Windowed | Divider | 3 px; video at least 318, panel at least 317 | |
 | L-08 | Windowed | Auto-hide | Hidden for lack of space only when the window is narrower than 638 | G-18 |
 | L-09 | Windowed | Relation to the window size | Squeezes the video; the window width is unchanged | |
-| L-10 | All | Double-click, Enter, P | Play | |
+| L-10 | All | Double-click, Enter | Play | |
 | L-11 | All | Selection and keyboard cursor | Selected rows have a background colour; keyboard cursor dashed frame (not implemented) | IA-PL-03 |
 | L-12 | All | Playing / played | Playing uses `Theme.playing`, played uses `text-played` | |
 | L-13 | All | Columns | "number. title", duration right-aligned; type icon (not implemented) | IA-PL-04 |

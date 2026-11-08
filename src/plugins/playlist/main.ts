@@ -726,11 +726,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
 
   // List commands (context menu, bottom-bar popups and keys while the list has focus).
-  // Coordinator ruling 2026-11-08: while the list has focus its keys never take a player key
-  // away; the list commands whose keys are the player's (P, Ctrl+I, Ctrl+O, Ctrl+U, Backspace,
-  // Ctrl+T, Ctrl+Home, F2, F3, F5, F6) have none and stay in the list menu and the palette.
-  // Enter is caught by the list itself (play, then the keys go back to the video); its
-  // binding here names the key in the list menu.
+  // Coordinator ruling 2026-11-08: while the list has focus it uses the navigation keys
+  // (↑ ↓ PgUp PgDn Home End, handled in sidebar.slint) and Esc (gives the keys back to the
+  // video); no other list shortcut shadows a player key. The list commands whose keys were the
+  // player's (P, Ctrl+I, Ctrl+O, Ctrl+U, Backspace, Ctrl+T, Ctrl+Home, F2, F3, F5, F6) have none
+  // and stay in the list menu and the palette. Enter (not a player key) is caught by the list
+  // itself (play, then the keys go back to the video); its binding here names the key in the
+  // list menu.
   const play = listCommand("play", "Play", canPlay, playSelected, ["Enter"], {
     busy: () => player.busy(),
   });

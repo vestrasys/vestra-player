@@ -1298,7 +1298,7 @@ test("G-11: with 「追加」 a drop on the video area adds to the end; while an
   }
 });
 
-test("IA-PL-02: the 播放列表 settings page follows the menu both ways; F5 with list focus opens it", async () => {
+test("IA-PL-02: the 播放列表 settings page follows the menu both ways; Playlist Settings… opens it, F5 stays Options… with list focus", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-playlist-page-"));
   const app = await start({ data });
   try {

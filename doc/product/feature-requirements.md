@@ -642,33 +642,33 @@ Boundaries: playlist cooperates only through the core. It does not call history 
 | **Playback ▸ Playlist ▸ Remember List** | 243 | options | | C17, checkbox, on by default |
 | Playlist (checkbox) | 800 | windows | F6 | Existing |
 
-**Commands with list focus** (`focus: "panel"`, not in the main menu; they appear in the list context menu / ADD / SORT):
+**List commands** (not in the main menu; they appear in the list context menu / ADD / SORT; a key works only while the list or its search box has focus, `focus: "panel"`). Coordinator ruling 2026-11-08 (playlist 0.2.6): no list key is a global key; the commands whose keys collided (P, Ctrl+I, Ctrl+O, Ctrl+U, Backspace, Ctrl+T, Ctrl+Home, F2, F3, F5, F6) have none and are reached from the list menu and the palette. See [menus](menus.md#when-the-playlist-has-focus) for the focus rules and the navigation keys the list handles itself:
 
 | Command | Binding | Appears in | ID |
 | --- | --- | --- | --- |
-| Play | Enter, P | Context menu | Existing |
-| Add Files… | **Ctrl+I** (no key now) | Context menu, ADD | C03 |
-| **Add Folder…** | Ctrl+O | Context menu, ADD | C04 |
-| Add Link… | **Ctrl+U** | Context menu, ADD | C03 |
-| Remove Selected | Delete, Backspace | Context menu | Existing |
+| Play | Enter | Context menu | Existing |
+| Add Files… | (no key; Ctrl+I stays Deinterlace: Cycle) | Context menu, ADD | C03 |
+| **Add Folder…** | (no key; Ctrl+O stays Open File…) | Context menu, ADD | C04 |
+| Add Link… | (no key; Ctrl+U stays Open URL…) | Context menu, ADD | C03 |
+| Remove Selected | Delete (Backspace stays Jump to Start) | Context menu | Existing |
 | **Remove Unselected** | Ctrl+Delete | Context menu | C07 |
-| **Remove Invalid Items** | Ctrl+T | Context menu | C07 |
+| **Remove Invalid Items** | (no key; Ctrl+T stays Always on Top: Cycle Mode) | Context menu | C07 |
 | Remove All | **Alt+Delete** | Context menu | Existing command, key added |
 | **Show in Finder** | Ctrl+F | Context menu | C23 |
 | Select All | Ctrl+A | Context menu | Existing |
 | **Search** | Ctrl+S | Context menu | C21 |
-| **Open List File…** | F3 | Context menu | C18 |
-| **Save List…** | F2 | Context menu | C18 |
+| **Open List File…** | (no key; F3 stays Open File…) | Context menu | C18 |
+| **Save List…** | (no key; F2 stays Open Folder…) | Context menu | C18 |
 | **Ascending / Descending** (radio) | Ctrl+1 / Ctrl+2 | SORT | C11 |
 | **By Title / File Name / Extension / Size / Duration / Date / Random Order / Folder** | Ctrl+3 … Ctrl+0 | SORT | C11 |
 | Sort by Path | | SORT | Existing |
 | Reverse Current Order (the former "Sort Reversed", renamed) | | SORT | Existing |
-| Close List | F6 | Context menu | Existing |
-| Playlist Settings… | F5 | (not in a menu) | interaction-spec IA-PL-02: opens "Options ▸ Playback ▸ Playlist" |
+| Close List | (no key; global F6, Playlist, hides the list too) | Context menu | Existing |
+| Playlist Settings… | (no key; F5 stays Options…) | Palette only | interaction-spec IA-PL-02: opens "Options ▸ Playback ▸ Playlist" |
 
 **Conflicts and trade-offs**:
 
-1. With list focus, `focus: "panel"` is looked up before global, so the following keys act as list commands while the list has focus: Ctrl+O (global "Open File"), F3 (global "Open File"), F2 (global "Open Folder"), F5 (global "Options…", changed to open the playlist settings page). After focus leaves the list, the global meaning applies again.
+1. With list focus, `focus: "panel"` is looked up before global, but no list binding is a global key, so no global command is shadowed by a list command. While the list has focus the list itself (in `sidebar.slint`) takes only the standard list keys: ↑ ↓ PgUp PgDn Home End move the selection (covering Volume ±, Previous/Next and Previous/Next Dialogue), Enter plays, Esc gives the keys back to the video (covering Toggle Fullscreen). Every other key, Space and ← → included, reaches the player. The list gets the focus only from a single click on a row; playing (double-click, Enter), Esc and a click on the video give it back to the video; the wheel, the buttons and a drag leave the focus unchanged.
 2. **Remove Unselected is bound only to Ctrl+Delete** (forward delete), not Ctrl+Backspace: the latter equals ⌘⌫, which is "Move to Trash" in Finder, and users could easily think it deletes files from disk. ⌘⌫ is not bound in the list.
 3. The list context menu is single-level with at most 32 items (reference §6.3). Following the table above, the context menu has 13 commands + 6 separators = 19 items, and the sort items are in the SORT popup menu (12 items); both are within the limit.
 
@@ -838,19 +838,19 @@ Host rules: on release over the video area, `paths` are grouped by extension (ke
 
 **Requirement**: add the media files in a folder (including subfolders) to the current list without playing.
 
-**Entry point**: "Playback ▸ Playlist ▸ Add Folder…"; the list's ADD popup menu and context menu; Ctrl+O with list focus.
+**Entry point**: "Playback ▸ Playlist ▸ Add Folder…"; the list's ADD popup menu and context menu; the palette (no key: Ctrl+O stays Open File…, coordinator ruling 2026-11-08).
 
 **Behavior details**: scan rules, limit, de-duplication, OSD and busy state are exactly the same as A03 (one shared scan function). Differences: nothing plays; when the list was empty, the first added row is selected (consistent with "Add Files"). Dialog title "Add Folder to Playlist". While scanning, both "Add Folder…" and "Open Folder…" show busy.
 
 **Core dependencies**: the existing `dialogs.openDirectory`.
 
-**Acceptance**: with list focus, press Ctrl+O and pick a directory: rows are added at the end, nothing plays; the same de-duplication and limit behavior as A03.
+**Acceptance**: choose "Add Folder…" from the ADD popup menu and pick a directory: rows are added at the end, nothing plays; the same de-duplication and limit behavior as A03.
 
 ### C07 Remove unselected / remove invalid items
 
 **Requirement**: with one command, keep the selection and delete the other rows; with one command, delete the rows whose files no longer exist. Only the list changes; nothing on disk is touched.
 
-**Entry point**: list context menu "Remove Unselected" (Ctrl+Delete), "Remove Invalid Items" (Ctrl+T).
+**Entry point**: list context menu "Remove Unselected" (Ctrl+Delete), "Remove Invalid Items" (no key; Ctrl+T stays Always on Top: Cycle Mode).
 
 **Behavior details**:
 
@@ -937,7 +937,7 @@ Host rules: on release over the video area, `paths` are grouped by extension (ke
 
 **Requirement**: read `.m3u` `.m3u8` `.pls` list files into the playlist; save the current list in one of these three formats.
 
-**Entry point**: "Playback ▸ Playlist ▸ Open List File… / Save List…"; the list context menu; F3 / F2 with list focus; drag and drop (A15).
+**Entry point**: "Playback ▸ Playlist ▸ Open List File… / Save List…"; the list context menu; the palette (no key: F3 / F2 stay Open File… / Open Folder…); drag and drop (A15).
 
 **Behavior details (open)**:
 
@@ -1082,7 +1082,7 @@ The top-level "Subtitles ▸" uses 300–399 (`doc/product/menus.md`). Existing 
 | Subtitles ▸ Subtitle Settings… | 373 | subtitle-tools | Alt+F | D10 existing window, shortcut added |
 
 Conflict check (against the current bindings in menus.md):
-- Home / End / Ctrl+Home are not used globally. Ctrl+Home/End with the playlist panel focused (move the selection) are `focus: "panel"`, which take priority over global, so there is no conflict; the user has to put focus back on the video area first.
+- Home / End / Ctrl+Home are not used by any other global command. While the playlist has focus (only after a single click on a row) the list itself uses Home / End (and ↑ ↓ PgUp PgDn) to move the selection, as list views do; Ctrl+Home (Move to Top) has no list key (coordinator ruling 2026-11-08), Ctrl+End stays Move to Bottom (panel-only). Esc, playing a row or a click on the video gives the keys back to the video.
 - Alt+F is not used. Alt+P (enter subtitles manually) is out of scope this round and is not taken.
 - **Subtitle sync keys changed**: on a US keyboard Shift+. = `>`, Shift+, = `<`, Shift+/ = `?`. Audio sync uses `>` `<` `?` (G09 in the audio chapter), so subtitle sync changes to `.` earlier, `,` later, `/` reset, and `>` `<` go to audio. `.` and `,` have no other bindings now. The core does not migrate old user overlay bindings (there is no rebinding interface yet).
 
@@ -3110,7 +3110,7 @@ New items in the "Playback" submenu. playback already uses 201–226, playlist 2
 
 Conflict check and trade-offs:
 - PgUp/PgDn without modifiers are playback's "previous / next"; this plugin only uses combinations with Shift or Ctrl, so there is no conflict: bookmarks/chapters use Shift+PgUp/PgDn, chapters use Ctrl+PgUp/PgDn.
-- With the playlist focused, `P` is playlist's panel-scope "play selected". Panel scope is looked up before global, so with the list focused P plays the selection, and only with the video or bottom bar focused does it add a bookmark. This difference is accepted.
+- P has no playlist binding (coordinator ruling 2026-11-08: Play from the list is Enter or a double-click), so P adds a bookmark whatever has focus, the list included.
 
 ### B21 Chapter / bookmark menu and jumping
 
@@ -3164,7 +3164,7 @@ Reason: chapters are media information that mpv already reads (`chapter-list`), 
 - After restarting Vestra Player and opening the same file again, the bookmarks are still there.
 - Rename "Bookmark 1" to "Climax" in the window: the menu updates within 1 second.
 - In a live stream P is unavailable, and the menu item shows the disabled reason.
-- With the playlist focused, P plays the selected item and does not add a bookmark; with the video focused, P adds a bookmark.
+- With the playlist focused, P still adds a bookmark (the list plays with Enter or a double-click).
 
 **Round 3a implementation notes**
 - Each menu path segment is at most 80 bytes (host limit): chapter and bookmark menu text is shortened by bytes with `…` appended, and duplicates get ` (2)`; menu overflow items are split into "More Chapters… (N in all)" and "More Bookmarks… (N in all)".

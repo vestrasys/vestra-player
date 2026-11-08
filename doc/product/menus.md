@@ -87,25 +87,42 @@ Global keys not in the menu: Shift+Tab brief info (info). Esc is Toggle Fullscre
 
 ### When the playlist has focus
 
-The following keys only work while the playlist (the list or its search box) has focus (`focus: "panel"`), and take precedence over global commands on the same key; once focus leaves, the global meaning returns. They are not in the main context menu or the palette; they appear in the list's context menu, in the list's bottom-bar buttons, and in the pop-up menus of the "Add" (＋) and "Sort" (⇅) buttons.
+Focus rules (user ruling 2026-11-08): only a single click on a row (on release, so a drag does not take it; or a right press on a row) and the search box's Esc/↓ give the list the focus; it then shows a 1px accent ring. A double-click or Enter on a row (play), Esc in the list, and a click on the video give the keys back to the video. The wheel, the bar's buttons, a drag, a click below the rows or on the bar's background leave the focus where it was.
+
+While the list has focus it handles the standard list keys itself (in `sidebar.slint`, unmodified; Shift extends the selection), as desktop players and file lists do; these are the only keys it takes from the player:
+
+| Key | In the list | Global meaning it covers while the list has focus |
+| --- | --- | --- |
+| ↑ · ↓ | Select the previous / next row | Volume + / Volume − |
+| PgUp · PgDn | Move the selection a page up / down | Previous / Next |
+| Home · End | Select the first / last row | Previous / Next Dialogue |
+| Enter | Play the selected row, then give the keys back to the video | (none) |
+| Esc | Give the keys back to the video | Toggle Fullscreen |
+
+With Shift the navigation keys extend the selection (so Shift+PgUp/PgDn, Previous/Next Bookmark or Chapter, are the list's too); with Ctrl, Alt or ⌘ the list takes none of them.
+
+Every other key goes on to the list's key bindings below and then to the player (Space, ←, →, the media keys and so on keep their global meaning).
+
+The list's key bindings work only while the playlist (the list or its search box) has focus (`focus: "panel"`). None of them is a global key (coordinator ruling 2026-11-08: the list shortcuts that shadowed a global key were removed in playlist 0.2.6). The list commands are not in the main context menu; they appear in the list's context menu, in the list's bottom-bar buttons and in the pop-up menus of the "Add" (＋) and "Sort" (⇅) buttons. Those with a key are panel-scoped and left out of the palette; those without one are in the palette ("Playlist: …").
 
 | Command | Shortcut | Appears in | Notes |
 | --- | --- | --- | --- |
-| Play | Enter, P | List context menu | Shadows global Enter (fullscreen), P (add bookmark) |
-| Add Files… | Ctrl+I | List context menu, Add | Shadows global Ctrl+I (cycle deinterlace) |
-| Add Folder… | Ctrl+O | List context menu, Add | Shadows global Ctrl+O (open file) |
-| Add Link… | Ctrl+U | List context menu, Add | Shadows global Ctrl+U (open URL) |
-| Remove Selected | Delete, Backspace | List context menu | Shadows global Backspace (jump to start) |
+| Play | Enter | List context menu | Enter is handled by the list itself (above); the binding names the key in the menu |
+| Add Files… | | List context menu, Add | No shortcut (Ctrl+I stays Deinterlace: Cycle) |
+| Add Folder… | | List context menu, Add | No shortcut (Ctrl+O stays Open File…) |
+| Add Link… | | List context menu, Add | No shortcut (Ctrl+U stays Open URL…) |
+| Remove Selected | Delete | List context menu | Backspace stays Jump to Start |
 | Remove Unselected | Ctrl+Delete | List context menu | |
-| Remove Invalid Items | Ctrl+T | List context menu | Shadows global Ctrl+T (cycle always-on-top mode) |
+| Remove Invalid Items | | List context menu | No shortcut (Ctrl+T stays Always on Top: Cycle Mode) |
 | Remove All | Alt+Delete | List context menu | |
 | Show in Finder | Ctrl+F | List context menu | The title is the same on every system (it also says "Finder" on Windows) |
 | Select All | Ctrl+A | List context menu | |
 | Search | Ctrl+S | List context menu | |
-| Open List File… | F3 | List context menu | Shadows global F3 (open file) |
-| Save List… | F2 | List context menu | Shadows global F2 (open folder) |
-| Close List | F6 | List context menu | Same effect as global F6 (hide the list) |
-| Move to Top · Move Up · Move Down · Move to Bottom | Ctrl+Home · Ctrl+↑ · Ctrl+↓ · Ctrl+End | List bottom-bar buttons | Ctrl+Home shadows the global binding (current subtitle start); on macOS ⌃↑/⌃↓ are taken by the system by default; use ⌘↑/⌘↓ |
+| Open List File… | | List context menu | No shortcut (F3 stays Open File…) |
+| Save List… | | List context menu | No shortcut (F2 stays Open Folder…) |
+| Close List | | List context menu | No shortcut; global F6 (Playlist) hides the list too |
+| Playlist Settings… | | Palette only | No shortcut (F5 stays Options…); opens Options ▸ Playback ▸ Playlist |
+| Move to Top · Move Up · Move Down · Move to Bottom | — · Ctrl+↑ · Ctrl+↓ · Ctrl+End | List bottom-bar buttons | Move to Top has no shortcut (Ctrl+Home stays Current Subtitle Start); on macOS ⌃↑/⌃↓ are taken by the system by default; use ⌘↑/⌘↓ |
 | Ascending · Descending | Ctrl+1 · Ctrl+2 | Sort | Radio |
 | By Title · File Name · Extension · Size · Duration · Date · Random Order · Folder | Ctrl+3 … Ctrl+9, Ctrl+0 | Sort | |
 | Sort by Path · Reverse Current Order | | Sort | No shortcut |
@@ -148,7 +165,7 @@ On 2026-10-21 every default binding (19 plugins, 14 core actions, the host's Ful
 - The host's only ⌘ binding is Cmd+Q (quit); no command declares Ctrl+Q; no other Ctrl binding duplicates it.
 - Standard window close keys (macOS ⌘W; Windows Ctrl+W, Ctrl+F4; Linux Ctrl+W; only in tool windows, floating panels and the options window, see [Keys the system takes first](https://vestrasys.github.io/vestra-player-sdk/documents/Commands,_menus_and_bindings.html#keys-the-system-takes-first)): no default binding uses Ctrl+W, Cmd+W or Ctrl+F4 (F4 is "Close", without a modifier, so no conflict).
 - Panel focus scope (playlist): no conflicts. The Picture panel's Geometry editor takes plain arrows, `+` `=` `-`, and Esc/Enter only in crop mode while it has focus; modified arrows (Ctrl, Alt, Shift) pass through to the global commands.
-- Cross-scope shadowing (by design, not a conflict): while the list has focus, Enter, P, Ctrl+I, Ctrl+O, Ctrl+U, Backspace, Ctrl+T, Ctrl+Home, F3, F2 and F6 have the list's own meaning; see the notes in the previous section.
+- Cross-scope shadowing (by design, not a conflict): while the list has focus (only after a single click on a row) it uses the standard list navigation keys ↑ ↓ PgUp PgDn Home End and Esc (which gives the keys back to the video); no other list shortcut shadows a global key (coordinator ruling 2026-11-08); see [When the playlist has focus](#when-the-playlist-has-focus).
 - `>` `<` `?` are typed characters and are different key names from `.` `,` `/` (on a US keyboard the former need Shift), so they do not conflict; the same goes for `{` `}` and `[` `]`.
 - Ctrl+I / Tab, Ctrl+H / Backspace, Ctrl+M / Enter and Ctrl+[ / Esc are the same control character in terminal terms; the host tells them apart by physical key (`bindings.rs`), so they do not conflict.
 
