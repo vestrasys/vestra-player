@@ -746,35 +746,6 @@ pub fn frame_notice(forward: bool, moved: bool, position: Option<f64>) -> String
     }
 }
 
-/// Old playback-plugin overlay keys and the core action that replaces each.
-pub const OVERLAY_MIGRATION: [(&str, &str); 12] = [
-    ("vestra.playback/toggle-pause", "host/play-pause"),
-    ("vestra.playback/close-source", "host/stop"),
-    ("vestra.playback/previous", "host/previous"),
-    ("vestra.playback/next", "host/next"),
-    ("vestra.playback/backward-5", "host/seek-backward"),
-    ("vestra.playback/forward-5", "host/seek-forward"),
-    ("vestra.playback/rate-down", "host/rate-down"),
-    ("vestra.playback/rate-up", "host/rate-up"),
-    ("vestra.playback/rate-10", "host/rate-normal"),
-    ("vestra.playback/volume-up", "host/volume-up"),
-    ("vestra.playback/volume-down", "host/volume-down"),
-    ("vestra.playback/mute", "host/mute"),
-];
-
-/// Rewrite old keys once; an existing new key wins and the old one is dropped.
-/// Returns whether anything changed.
-pub fn migrate_overlay(overlay: &mut std::collections::BTreeMap<String, Vec<String>>) -> bool {
-    let mut changed = false;
-    for (old, new) in OVERLAY_MIGRATION {
-        if let Some(bindings) = overlay.remove(old) {
-            changed = true;
-            overlay.entry(new.to_owned()).or_insert(bindings);
-        }
-    }
-    changed
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -1229,29 +1200,6 @@ mod tests {
         assert_eq!(rate_text(1.25), "1.25");
         assert_eq!(time(Some(3723.0)), "1:02:03");
         assert_eq!(time(None), "--:--");
-    }
-
-    #[test]
-    fn overlay_keys_move_once_and_new_keys_win() {
-        let mut overlay = std::collections::BTreeMap::from([
-            (
-                "vestra.playback/toggle-pause".to_owned(),
-                vec!["P".to_owned()],
-            ),
-            ("vestra.playback/mute".to_owned(), vec!["N".to_owned()]),
-            ("host/mute".to_owned(), vec!["Ctrl+M".to_owned()]),
-            ("vestra.playback/jump".to_owned(), vec!["J".to_owned()]),
-        ]);
-        assert!(migrate_overlay(&mut overlay));
-        assert_eq!(overlay["host/play-pause"], ["P"]);
-        assert_eq!(overlay["host/mute"], ["Ctrl+M"]);
-        assert!(!overlay.contains_key("vestra.playback/mute"));
-        assert_eq!(
-            overlay["vestra.playback/jump"],
-            ["J"],
-            "commands that stay in playback keep theirs"
-        );
-        assert!(!migrate_overlay(&mut overlay));
     }
 
     /// mpv's `relative+keyframes` on these keyframes: forward to the first
