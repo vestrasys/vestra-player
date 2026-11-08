@@ -75,8 +75,8 @@ function matches(file: string, pattern: string): boolean {
 
 const grepSchema = Type.Object({
   pattern: Type.String({ description: "Regular expression (or literal text with literal: true)" }),
-  path: Type.Optional(Type.String({ description: "File or folder to search, relative to the work folder (default: all), or in the reference, e.g. sdk/dist/plugin/types.d.ts" })),
-  glob: Type.Optional(Type.String({ description: "Only files matching this glob, e.g. *.ts" })),
+  path: Type.Optional(Type.String({ description: "File or folder to search, relative to the work folder (default: all), or in the reference, e.g. sdk/dist/plugin/testing/index.d.ts, or sdk/dist/plugin with glob types{,/*}.d.ts for the API types" })),
+  glob: Type.Optional(Type.String({ description: "Only files matching this glob, e.g. *.ts; with a \"/\" it matches the path below the searched folder, e.g. types{,/*}.d.ts" })),
   ignoreCase: Type.Optional(Type.Boolean()),
   literal: Type.Optional(Type.Boolean()),
   limit: Type.Optional(Type.Number({ description: "Most matches to return (default 100)" })),
