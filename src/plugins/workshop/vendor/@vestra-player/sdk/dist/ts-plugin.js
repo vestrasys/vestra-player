@@ -1,4 +1,4 @@
-import { addCapabilityEdit, CAPABILITY_DIAGNOSTIC, findUndeclaredCapabilities, isPluginSource, } from "./capability-check.js";
+import { addCapabilityEdit, CAPABILITY_DIAGNOSTIC, CAPABILITY_UNCHECKED, checkCapabilities, isPluginSource, } from "./capability-check.js";
 const FIX_NAME = "vestraAddCapability";
 /** The nearest manifest.json at or above a file, with its capabilities. */
 function manifestFor(ts, file) {
@@ -50,22 +50,24 @@ export default function init(modules) {
         create(info) {
             const service = info.languageService;
             const log = (message) => info.project?.projectService?.logger?.info(`[@vestra-player/sdk/ts-plugin] ${message}`);
-            const findings = (file) => {
+            const none = { findings: [], unchecked: [] };
+            const results = (file) => {
                 const manifest = manifestFor(ts, file);
                 const program = service.getProgram();
                 if (!manifest || !program || !isPluginSource(manifest.directory, file))
-                    return [];
+                    return none;
                 try {
-                    return findUndeclaredCapabilities(ts, program, {
+                    return checkCapabilities(ts, program, {
                         files: [file],
                         capabilities: manifest.capabilities,
                     });
                 }
                 catch (error) {
                     log(`check failed: ${error.stack ?? String(error)}`);
-                    return [];
+                    return none;
                 }
             };
+            const findings = (file) => results(file).findings;
             const proxy = Object.create(null);
             for (const key of Object.keys(service)) {
                 const member = service[key];
@@ -75,15 +77,25 @@ export default function init(modules) {
             proxy.getSemanticDiagnostics = (file) => {
                 const prior = service.getSemanticDiagnostics(file);
                 const source = service.getProgram()?.getSourceFile(file);
+                const { findings: missing, unchecked } = results(file);
                 return [
                     ...prior,
-                    ...findings(file).map((finding) => ({
+                    ...missing.map((finding) => ({
                         file: source,
                         start: finding.start,
                         length: finding.length,
                         messageText: finding.message,
                         category: ts.DiagnosticCategory.Error,
                         code: CAPABILITY_DIAGNOSTIC,
+                        source: "vestra",
+                    })),
+                    ...unchecked.map((call) => ({
+                        file: source,
+                        start: call.start,
+                        length: call.length,
+                        messageText: call.message,
+                        category: ts.DiagnosticCategory.Warning,
+                        code: CAPABILITY_UNCHECKED,
                         source: "vestra",
                     })),
                 ];

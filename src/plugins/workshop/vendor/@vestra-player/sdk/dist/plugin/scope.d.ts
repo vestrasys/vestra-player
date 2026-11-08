@@ -46,6 +46,7 @@ export declare class ScopeImpl implements Plugin {
     readonly appearance: import("./types.ts").Appearance;
     readonly settings: import("./types.ts").Settings;
     readonly i18n: import("./types.ts").I18n;
+    readonly wire: import("./types.ts").Wire;
     get app(): import("./types.ts").App;
     scope(): Scope;
     add<T extends Disposable>(item: T): T;
@@ -64,6 +65,14 @@ export declare class ScopeImpl implements Plugin {
      * anyway, and a full pass follows within `SAFETY_PASS_MS`.
      */
     runOn(change: Change, handler: (...args: never[]) => unknown, ...args: unknown[]): void;
+    /**
+     * Run a listener that pushes its own values (`player.on`, SDK 1.7.0)
+     * like `run`, except that no full pass follows it: what it writes to
+     * `plugin.state` runs the passes for its readers, and for anything else
+     * the plugin calls `update()`. Its reads are not counted as a binding's.
+     */
+    runQuiet(handler: (...args: never[]) => unknown, ...args: unknown[]): void;
     update(): void;
+    state<T extends object>(initial: T): T;
     dispose(): Promise<void>;
 }

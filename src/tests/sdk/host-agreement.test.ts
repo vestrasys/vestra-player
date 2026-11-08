@@ -785,6 +785,13 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "VideoUpscaling.state": ["video.upscaling.state"],
   "VideoUpscaling.set": ["video.upscaling.set"],
   "VideoUpscaling.onChange": ["event:video.upscaling.changed"],
+  // SDK 1.7.0: plugin.wire.commands.register (register, then update and
+  // unregister through the WireCommand it returns).
+  "WireCommands.register": [
+    "commands.register",
+    "commands.update",
+    "commands.unregister",
+  ],
 };
 
 /**
@@ -938,9 +945,7 @@ test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the playe
 
 test("SystemInfo.rendering has the values app.system reports (system.rs rendering_json)", () => {
   // SystemInfo's field (`Plugin.rendering` is the SDK 1.5.35 service).
-  const sdk = /readonly rendering\??: ("[^;]+);/.exec(
-    sdkTypes(),
-  )?.[1];
+  const sdk = /readonly rendering\??: ("[^;]+);/.exec(sdkTypes())?.[1];
   assert.ok(sdk, "SystemInfo.rendering in the SDK's plugin types");
   const system = host("src/system.rs");
   const body =
@@ -1241,9 +1246,7 @@ test("THEME_PALETTES are the player's palettes (theme.rs)", () => {
 });
 
 test("HostAction ids are the player's core actions (core_actions.rs ACTIONS)", () => {
-  const sdk = /export type HostAction = ([^;]+);/.exec(
-    sdkTypes(),
-  )?.[1];
+  const sdk = /export type HostAction = ([^;]+);/.exec(sdkTypes())?.[1];
   assert.ok(sdk, "HostAction in the SDK's plugin types");
   const actions = /pub const ACTIONS: \[&str; \d+\] = \[([^\]]*)\];/.exec(
     host("src/core_actions.rs"),

@@ -9,7 +9,7 @@ import { mkdir, open, rename, rm, stat } from "node:fs/promises";
 import { join, resolve } from "node:path";
 import { failure } from "./errors.js";
 import { systemServices } from "./local.js";
-import { playerOf, validStep } from "./player.js";
+import { validStep } from "./player/rules.js";
 const MAX_OUTPUT = 16 * 1024 * 1024;
 export const clipboard = (scope) => ({
     readText: () => scope.runtime.host.clipboard.readText(),
@@ -45,11 +45,10 @@ export const host = (scope) => ({
                 throw failure("invalid", "seconds must be 0.1–3600 in tenths");
         }
         await scope.runtime.host.host.run(action, seconds);
-        // Like the player's own controls: `player.state` shows the result.
+        // Like the player's own controls: `player.state` shows the result (the
+        // player's state copy registered how to read it again).
         if (scope.runtime.can("playback.read"))
-            await playerOf(scope.runtime)
-                .refresh()
-                .catch(() => { });
+            await scope.runtime.reread("source.state");
     },
 });
 export const power = (scope) => ({

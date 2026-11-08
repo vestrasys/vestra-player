@@ -9,7 +9,7 @@
 import { statSync } from "node:fs";
 import { HostError } from "../../wire.js";
 import { SESSION_STORAGE_LIMITS } from "../services.js";
-import { validStep } from "../player.js";
+import { validStep } from "../player/rules.js";
 import { runCore, windowFacts } from "./core-actions.js";
 import { shownText, declaredText, shownValues, hostText } from "./i18n.js";
 import { resetWrites, writeProperty, initialValues, seeImages, kebab, } from "./layout.js";

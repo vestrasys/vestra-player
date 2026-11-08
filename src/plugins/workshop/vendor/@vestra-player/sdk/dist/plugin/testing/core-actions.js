@@ -7,7 +7,7 @@
  * Internal to the SDK; not exported from `@vestra-player/sdk/testing`.
  */
 import { HostError } from "../../wire.js";
-import { validStep } from "../player.js";
+import { validStep } from "../player/rules.js";
 import { hostText } from "./i18n.js";
 import { sourceIntent, audioCondition } from "./media.js";
 export function coreFacts(host, _inner) {

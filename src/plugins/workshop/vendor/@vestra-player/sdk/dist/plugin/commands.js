@@ -7,6 +7,11 @@ import { ImageHandle } from "./view/image.js";
 import { isTextValue, textProblem } from "../i18n.js";
 import { conditionJson, isCondition } from "./when.js";
 const value = (item) => typeof item === "function" ? item() : item;
+/**
+ * A state field given as a function: the command is evaluated in the update
+ * passes. Constants and `plugin.when` conditions are not (SDK 1.7.0).
+ */
+const tracks = (spec) => Object.values(spec).some((field) => typeof field === "function");
 /** A field's value, or `fallback` (and its condition noted) for a condition. */
 function field(item, fallback, name, when) {
     if (!isCondition(item))
@@ -97,14 +102,6 @@ function button(id, value, inMenu) {
         throw fail(`unknown button icon ${JSON.stringify(icon)}: a name of @vestra/icons.slint (BAR_BUTTON_ICONS) or an image from plugin.ui.image`);
     return { icon, order };
 }
-/** Unregistrations in flight per plugin: re-adding an id waits for its removal. */
-const removals = new WeakMap();
-const removing = (runtime) => {
-    let map = removals.get(runtime);
-    if (!map)
-        removals.set(runtime, (map = new Map()));
-    return map;
-};
 class CommandHandle {
     id;
     ready;
@@ -122,7 +119,15 @@ class CommandHandle {
     #label;
     /** Where the plugin added it, for the player's log. */
     #where;
+    /**
+     * Its place in the update passes: only while a state field is a function
+     * (`tracks`); a command of constants is registered and left alone.
+     */
     #binding;
+    /** A `set()` of a command outside the passes is sent in a microtask. */
+    #queued = false;
+    /** Its place in the order of evaluation, should it bind later. */
+    #slot;
     constructor(scope, options) {
         const runtime = scope.runtime;
         this.#where = runtime.callSite();
@@ -140,7 +145,7 @@ class CommandHandle {
         const declaration = declare(options);
         // The host requires a strictly increasing revision per update; the
         // registration itself is revision 1, so every later state follows it.
-        const previous = removing(runtime).get(this.id);
+        const previous = runtime.removals.get(this.id);
         this.#pump = new Latest(async ({ state, when }) => {
             if (this.#refused)
                 return;
@@ -171,7 +176,9 @@ class CommandHandle {
                 scope.run(options.run);
         };
         runtime.commands.set(this.id, this.#run);
-        this.#binding = runtime.bind(() => this.#sync());
+        this.#slot = runtime.passes.slot();
+        if (tracks(this.#spec))
+            this.#binding = runtime.bind(() => this.#sync(), this.#slot);
         scope.add(this);
     }
     /**
@@ -215,9 +222,32 @@ class CommandHandle {
         this.#last = encoded;
         this.#pump.push(state).catch((error) => this.#scope.report(error));
     }
+    /**
+     * This command's state alone (SDK 1.7.0; before, a full update pass): a
+     * bound command is evaluated in the next pass, a command of constants
+     * sends its new state through its own `Latest` in a microtask (several
+     * `set()` calls in one turn send one update). A function field binds it.
+     */
     set(state) {
         Object.assign(this.#spec, state);
-        this.#scope.update();
+        if (this.#disposed)
+            return;
+        if (!this.#binding && tracks(this.#spec))
+            this.#binding = this.#scope.runtime.bind(() => this.#sync(), this.#slot);
+        if (this.#binding)
+            return this.#binding.invalidate();
+        if (this.#queued)
+            return;
+        this.#queued = true;
+        queueMicrotask(() => {
+            this.#queued = false;
+            try {
+                this.#sync();
+            }
+            catch (error) {
+                this.#scope.report(error);
+            }
+        });
     }
     async dispose() {
         if (this.#disposed)
@@ -230,9 +260,9 @@ class CommandHandle {
         this.#pump.stop();
         // Removed from the menu once registered. Recorded before any await, so an
         // immediate re-add of the same id registers after this removal.
-        const pending = removing(runtime);
+        const pending = runtime.removals;
         const removal = (async () => {
-            await this.#binding.dispose();
+            await this.#binding?.dispose();
             await this.ready.catch(() => { });
             if (this.#registered)
                 await runtime.host.commands.unregister(this.id).catch(() => { });

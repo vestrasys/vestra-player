@@ -19,10 +19,16 @@ export class Runtime extends Connection {
         super(transport, manifest, directory, dataDirectory, app, options);
         this.passes = new Passes(this);
         this.counts = this.passes.counts;
+        const passes = this.passes;
+        this.signals = {
+            read: (key, field) => passes.depends(key, field),
+            changed: (key, fields) => passes.changed(key, fields),
+            invalidate: () => passes.invalidate(),
+        };
     }
     /** {@link Passes.bind} */
-    bind(evaluate) {
-        return this.passes.bind(evaluate);
+    bind(evaluate, slot) {
+        return this.passes.bind(evaluate, slot);
     }
     /** {@link Passes.reading} */
     reading(event) {
