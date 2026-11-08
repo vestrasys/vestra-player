@@ -1,0 +1,881 @@
+// The Subtitles panel in the adjust column (menu redesign §3.2, mockup 02 right): Show, Tracks,
+// Sync, Style and Reset in one column, 317px by default and usable from 280px. It replaces the
+// Subtitle Tuning and Adjust Sync windows; "Font, Colour and Outline…" opens Subtitle Settings.
+// Every row is a layout and every text one line (elided, its whole wording in a tooltip); the
+// elements are always there and change only their values, never per hover. Key caps come from
+// `plugin.commands.keys` (an empty one takes no room) and move into the tooltips in a narrow
+// column. Every text is @tr (English source; locales/<lang>.po translate it); the plugin passes data.
+import { LineEdit, ScrollView } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Check, Choice, KeyHint, ToolTipArea, ToolTipKey } from "@vestra/widgets.slint";
+
+// The first key of each command (`plugin.commands.keys`), "" without one.
+export struct Keys {
+    show: string,
+    cycle: string,
+    load: string,
+    reload: string,
+    earlier: string,
+    later: string,
+    syncreset: string,
+    previous: string,
+    next: string,
+    sizedown: string,
+    sizeup: string,
+    movedown: string,
+    moveup: string,
+    movereset: string,
+    bold: string,
+    shadow: string,
+    boxed: string,
+}
+
+export global SubtitlesBridge {
+    in property <Keys> keys;
+    // An operation runs (loading, switching): the track controls wait, Load… cancels.
+    in property <bool> busy;
+    // Show subtitles: checked while a primary track is shown; enabled when there is a track.
+    in property <bool> shown;
+    in property <bool> can-show;
+    // The first entry (off) comes from the plugin with the track names (text values, translated by the player).
+    in property <[string]> track-labels: [];
+    in property <int> selected-track;
+    in property <[string]> secondary-labels: [];
+    in property <int> selected-secondary;
+    // There is a text track that can be the secondary subtitle.
+    in property <bool> can-secondary;
+    // 0 top, 1 above the main subtitle (model.ts SECONDARY_POSITIONS).
+    in property <int> secondary-position;
+    // The selected track is an external file this plugin loaded.
+    in property <bool> can-reload;
+    in property <bool> can-style;
+    // Why styling is off (a text value); "" when it is on.
+    in property <string> style-reason;
+    // The sync in seconds with its sign ("+1.25", "−0.5", "0.0") and as the field starts it ("-0.5").
+    in property <string> sync-text: "0.0";
+    in property <string> sync-value: "0";
+    // The sync step in seconds ("0.5").
+    in property <string> step-text: "0.5";
+    in property <int> subtitle-size: 36;
+    // Where the subtitle sits, mpv's sub-pos: 100 is the bottom edge (100 − the bottom margin).
+    in property <int> position-percent: 95;
+    in property <bool> bold;
+    in property <bool> shadow;
+    in property <bool> boxed;
+    in property <bool> ass-original: true;
+    // Previous / Next line can jump; else why not: "reading", "seek" (the media cannot seek) or "text" (no text subtitles).
+    in property <bool> can-lines;
+    in property <string> lines-reason;
+    // The status line (a text value, the player translates it); "" for none.
+    in property <string> status;
+    // Bumped by Adjust Sync… (the command): the sync value opens for typing.
+    in property <int> edit-sync;
+
+    callback toggle-shown();
+    callback select-track(int);
+    callback select-secondary(int);
+    callback set-secondary-position(int);
+    callback load-file();
+    callback cancel();
+    callback reload();
+    callback sync-step(int);
+    // The typed sync value, in seconds ("-1.25", "+0.5", "250 ms").
+    callback apply-sync(string);
+    callback previous-line();
+    callback next-line();
+    callback size-step(int);
+    callback position-step(int);
+    // "size", "position" or "sync"
+    callback reset-field(string);
+    callback toggle-bold();
+    callback toggle-shadow();
+    callback toggle-box();
+    callback set-ass-original(bool);
+    callback open-settings();
+    callback reset-all();
+    // A text field took or lost the focus (keeps the fullscreen column out).
+    callback focus-changed(bool);
+}
+
+// Glyphs of this panel only, in the V-Line style of @vestra/icons.slint (1.5px round-capped lines), 14×12 boxes.
+global Glyphs {
+    out property <string> reset: "M 3.5 3 A 4.5 4.5 0 1 1 2.5 7 M 3.5 0.8 V 3 H 5.7";
+    out property <string> previous: "M 9.5 2 L 4.5 6 L 9.5 10 Z";
+    out property <string> next: "M 4.5 2 L 9.5 6 L 4.5 10 Z";
+    out property <string> down: "M 7 1.5 V 10.5 M 3.5 7 L 7 10.5 L 10.5 7";
+    out property <string> up: "M 7 10.5 V 1.5 M 3.5 5 L 7 1.5 L 10.5 5";
+    out property <string> minus: "M 3 6 H 11";
+    out property <string> plus: "M 3 6 H 11 M 7 2 V 10";
+}
+
+component Glyph inherits Path {
+    in property <string> glyph;
+    in property <brush> color: Theme.text-list;
+    width: 14px;
+    height: 12px;
+    viewbox-width: 14;
+    viewbox-height: 12;
+    commands: self.glyph;
+    fill: transparent;
+    stroke: self.color;
+    stroke-width: 1.5px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+}
+
+// One line of text that never wraps: it takes the width its row leaves and elides there, with
+// its whole wording in a tooltip when it does not fit.
+component Line {
+    in property <string> text;
+    in property <brush> color: Theme.text-list;
+    in property <length> min: 0px;
+    min-height: 16px;
+    min-width: root.min;
+    preferred-width: root.min;
+    horizontal-stretch: 1;
+    ToolTipArea {
+        text: label.preferred-width > root.width ? root.text : "";
+        label := Text {
+            width: root.width;
+            text: root.text;
+            color: root.color;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+}
+
+// A row's label in the label column (elided, the whole label in a tooltip).
+component RowLabel inherits Line {
+    in property <length> column;
+    color: Theme.text;
+    min: root.column;
+    width: root.column;
+    horizontal-stretch: 0;
+}
+
+// A section heading: its name and a line to the right edge.
+component Heading {
+    in property <string> text;
+    min-height: 24px;
+    HorizontalLayout {
+        spacing: 8px;
+        padding-top: 6px;
+        Text {
+            text: root.text.to-uppercase();
+            color: Theme.text-dim;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+            overflow: elide;
+            horizontal-stretch: 0;
+        }
+        VerticalLayout {
+            alignment: center;
+            padding-top: 1px;
+            Rectangle { height: 1px; background: Theme.line; }
+        }
+    }
+}
+
+// A compact button (21px): a glyph and/or a label, and its key cap inside when `key` is given
+// (proposal §3.5); the tooltip names it with its keys. `on` draws a toggle that is on.
+component Btn {
+    in property <string> text;
+    in property <string> glyph;
+    // The glyph after the label instead of before it ("Next ▶").
+    in property <bool> glyph-after;
+    in property <string> key;
+    in property <bool> enabled: true;
+    in property <bool> on;
+    in property <bool> bold-text;
+    in property <string> tip;
+    in property <[ToolTipKey]> tip-keys;
+    in property <string> tip-detail;
+    callback clicked();
+    callback double-clicked();
+    min-height: Theme.button-height;
+    preferred-height: Theme.button-height;
+    min-width: max(22px, row.min-width);
+    preferred-width: max(22px, row.preferred-width);
+    horizontal-stretch: 0;
+    accessible-role: button;
+    accessible-label: root.text != "" ? root.text : root.tip;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    ToolTipArea {
+        text: root.tip;
+        keys: root.tip-keys;
+        detail: root.tip-detail;
+        Rectangle {
+            border-radius: Theme.radius-control;
+            border-width: root.on ? 1px : 0px;
+            border-color: root.enabled ? Theme.accent : Theme.accent-disabled;
+            background: !root.enabled ? Theme.button-disabled
+                : touch.pressed ? Theme.button-press
+                : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+            // No spacing of its own: a part that is not there (no glyph, no label, no key) takes no room.
+            row := HorizontalLayout {
+                padding-left: root.text == "" ? 4px : 7px;
+                padding-right: root.text == "" ? 4px : 7px;
+                alignment: center;
+                Rectangle {
+                    visible: root.glyph != "" && !root.glyph-after;
+                    width: !self.visible ? 0px : root.text != "" ? 18px : 14px;
+                    HorizontalLayout {
+                        alignment: start;
+                        VerticalLayout {
+                            alignment: center;
+                            Glyph { glyph: root.glyph; color: root.enabled ? Theme.text-list : Theme.icon-disabled; }
+                        }
+                    }
+                }
+                Text {
+                    text: root.text;
+                    color: !root.enabled ? Theme.text-dim : root.on ? Theme.text : Theme.text-list;
+                    font-size: Theme.font-body;
+                    font-weight: root.bold-text ? 700 : 400;
+                    vertical-alignment: center;
+                }
+                Rectangle {
+                    visible: root.glyph != "" && root.glyph-after;
+                    width: !self.visible ? 0px : root.text != "" ? 18px : 14px;
+                    HorizontalLayout {
+                        alignment: end;
+                        VerticalLayout {
+                            alignment: center;
+                            Glyph { glyph: root.glyph; color: root.enabled ? Theme.text-list : Theme.icon-disabled; }
+                        }
+                    }
+                }
+                VerticalLayout {
+                    alignment: center;
+                    padding-left: root.key != "" ? 5px : 0px;
+                    KeyHint { text: root.key; }
+                }
+            }
+            touch := TouchArea {
+                enabled: root.enabled;
+                clicked => { root.clicked(); }
+                double-clicked => { root.double-clicked(); }
+            }
+        }
+    }
+}
+
+// The key caps at a row's right end (up to three: `a`, `b`, `c`, each with what it does), in a
+// tooltip that names them. A key that is not bound takes no room.
+component Caps {
+    in property <string> tip;
+    in property <string> a;
+    in property <string> a-text;
+    in property <string> b;
+    in property <string> b-text;
+    in property <string> c;
+    in property <string> c-text;
+    // false in a narrow column: the caps are left out (the controls' tooltips name the keys).
+    in property <bool> shown: true;
+    visible: root.shown && (root.a != "" || root.b != "" || root.c != "");
+    horizontal-stretch: 0;
+    width: self.visible ? row.preferred-width : 0px;
+    ToolTipArea {
+        text: root.tip;
+        keys: [{ key: root.a, text: root.a-text }, { key: root.b, text: root.b-text }, { key: root.c, text: root.c-text }];
+        row := HorizontalLayout {
+            alignment: end;
+            VerticalLayout {
+                alignment: center;
+                KeyHint { text: root.a; }
+            }
+            VerticalLayout {
+                alignment: center;
+                padding-left: root.a != "" && root.b != "" ? 3px : 0px;
+                KeyHint { text: root.b; }
+            }
+            VerticalLayout {
+                alignment: center;
+                padding-left: (root.a != "" || root.b != "") && root.c != "" ? 3px : 0px;
+                KeyHint { text: root.c; }
+            }
+        }
+    }
+}
+
+// A value between the − and + buttons: read-only, centred; a double click restores its default.
+component Value inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <string> tip;
+    in property <string> tip-detail;
+    callback double-clicked();
+    min-width: 46px;
+    preferred-width: max(46px, label.preferred-width + 12px);
+    height: Theme.input-height;
+    horizontal-stretch: 0;
+    border-radius: Theme.radius-control;
+    border-width: 1px;
+    border-color: Theme.line;
+    background: Theme.bg-list;
+    value-area := ToolTipArea {
+        text: root.tip;
+        detail: root.tip-detail;
+        label := Text {
+            width: value-area.width;
+            height: value-area.height;
+            text: root.text;
+            color: root.enabled ? Theme.text : Theme.text-dim;
+            font-size: Theme.font-body;
+            horizontal-alignment: center;
+            vertical-alignment: center;
+        }
+        TouchArea {
+            enabled: root.enabled;
+            double-clicked => { root.double-clicked(); }
+        }
+    }
+}
+
+// A check box with a one-line label (elided, the whole label in a tooltip). The plugin owns the
+// state: a click asks with `toggled` and the plugin sets `checked`.
+component CheckRow {
+    in property <string> text;
+    in property <bool> checked;
+    in property <bool> enabled: true;
+    in property <string> tip;
+    callback toggled(bool);
+    min-height: Theme.checkbox-row-height;
+    HorizontalLayout {
+        spacing: 5px;
+        box := Check {
+            text: "";
+            self-toggle: false;
+            checked: root.checked;
+            enabled: root.enabled;
+            horizontal-stretch: 0;
+            toggled(on) => { root.toggled(on); }
+        }
+        label-area := ToolTipArea {
+            text: root.tip != "" ? root.tip : (label.preferred-width > self.width ? root.text : "");
+            horizontal-stretch: 1;
+            label := Text {
+                width: label-area.width;
+                height: label-area.height;
+                text: root.text;
+                color: root.enabled ? Theme.text : Theme.text-dim;
+                font-size: Theme.font-body;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            TouchArea {
+                enabled: root.enabled;
+                clicked => { box.toggle(); }
+            }
+        }
+    }
+}
+
+// One choice of a Segments pair; the current one is raised. Its label elides, whole in a tooltip.
+component Segment {
+    in property <string> text;
+    in property <bool> current;
+    in property <bool> enabled: true;
+    callback clicked();
+    // Equal halves whatever the labels: the same preferred width, the same stretch.
+    horizontal-stretch: 1;
+    min-width: 30px;
+    preferred-width: 30px;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.current;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    ToolTipArea {
+        text: label.preferred-width > label.width ? root.text : "";
+        Rectangle {
+            border-radius: Theme.radius-control;
+            background: root.current ? Theme.selected-bg : touch.has-hover && root.enabled ? Theme.hover-bg : transparent;
+            HorizontalLayout {
+                padding-left: 4px;
+                padding-right: 4px;
+                label := Text {
+                    text: root.text;
+                    color: !root.enabled ? Theme.text-dim : root.current ? Theme.text : Theme.text-list;
+                    font-size: Theme.font-body;
+                    horizontal-alignment: center;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+            touch := TouchArea {
+                enabled: root.enabled;
+                clicked => { root.clicked(); }
+            }
+        }
+    }
+}
+// Two choices side by side (0 and 1). A click asks with `selected`; the plugin sets `current`.
+component Segments inherits Rectangle {
+    in property <string> first;
+    in property <string> second;
+    in property <int> current;
+    in property <bool> enabled: true;
+    callback selected(int);
+    height: Theme.input-height;
+    border-radius: Theme.radius-control;
+    background: Theme.bg-list;
+    horizontal-stretch: 1;
+    HorizontalLayout {
+        padding: 1px;
+        spacing: 1px;
+        Segment {
+            text: root.first;
+            current: root.current == 0;
+            enabled: root.enabled;
+            clicked => { root.selected(0); }
+        }
+        Segment {
+            text: root.second;
+            current: root.current == 1;
+            enabled: root.enabled;
+            clicked => { root.selected(1); }
+        }
+    }
+}
+export component SubtitlesPanel inherits Rectangle {
+    background: Theme.bg-panel;
+    // Key caps beside the controls from the default width on; narrower, they are in the tooltips.
+    private property <bool> wide: root.width >= 310px;
+    // The label column: the widest label, 52–84px (a longer translation elides, whole in its tooltip).
+    private property <length> column: clamp(label-measure.preferred-width, 52px, 84px);
+    private property <bool> idle: !SubtitlesBridge.busy;
+    private property <bool> styling: SubtitlesBridge.can-style;
+    // The sync value is being typed (Adjust Sync, the value's click).
+    private property <bool> typing;
+    // Mirrors of the bridge, so that a pick that the player refuses (or confirms) resets the lists.
+    private property <int> track-index: SubtitlesBridge.selected-track;
+    private property <int> track-count: SubtitlesBridge.track-labels.length;
+    private property <int> secondary-index: SubtitlesBridge.selected-secondary;
+    private property <int> secondary-count: SubtitlesBridge.secondary-labels.length;
+    private property <int> edit-request: SubtitlesBridge.edit-sync;
+    private property <string> sync-value: SubtitlesBridge.sync-value;
+    changed track-index => { track-choice.current-index = self.track-index; }
+    changed track-count => { track-choice.current-index = self.track-index; }
+    changed secondary-index => { secondary-choice.current-index = self.secondary-index; }
+    changed secondary-count => { secondary-choice.current-index = self.secondary-index; }
+    changed edit-request => { root.start-typing(); }
+    // ↑/↓ while typing step the sync like −/+; the field follows the value.
+    changed sync-value => { if root.typing { sync-field.text = self.sync-value; } }
+
+    function start-typing() {
+        if !root.styling { return; }
+        root.typing = true;
+        sync-field.text = SubtitlesBridge.sync-value;
+        sync-field.focus();
+        sync-field.select-all();
+    }
+    function stop-typing() {
+        root.typing = false;
+        sync-field.clear-focus();
+    }
+    // Why Previous / Next cannot jump.
+    private property <string> lines-why: SubtitlesBridge.lines-reason == "reading" ? @tr("Reading subtitles…")
+        : SubtitlesBridge.lines-reason == "seek" ? @tr("The current media cannot seek") : @tr("No text subtitles available");
+    // The tooltip of a style control: its name, or why it is off.
+    pure function style-tip(name: string) -> string {
+        return root.styling ? name : SubtitlesBridge.style-reason;
+    }
+
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        label-measure := VerticalLayout {
+            for text in [@tr("Primary"), @tr("Secondary"), @tr("Position"), @tr("Delay"), @tr("Lines"), @tr("Size"), @tr("Look")]: Text {
+                text: text;
+                font-size: Theme.font-body;
+            }
+        }
+    }
+
+    VerticalLayout {
+        scroll := ScrollView {
+            vertical-stretch: 1;
+            viewport-width: content.width;
+            viewport-height: content.preferred-height;
+            content := VerticalLayout {
+                width: scroll.visible-width;
+                padding: 10px;
+                padding-top: 8px;
+                spacing: 6px;
+                alignment: start;
+
+                // ------------------------------------------------------------ Show
+                HorizontalLayout {
+                    spacing: 4px;
+                    CheckRow {
+                        horizontal-stretch: 1;
+                        text: @tr("Show subtitles");
+                        checked: SubtitlesBridge.shown;
+                        enabled: SubtitlesBridge.can-show && root.idle;
+                        toggled => { SubtitlesBridge.toggle-shown(); }
+                    }
+                    Caps {
+                        shown: root.wide;
+                        tip: @tr("Show Subtitles");
+                        a: SubtitlesBridge.keys.show;
+                    }
+                }
+
+                // ------------------------------------------------------------ Tracks
+                Heading { text: @tr("Tracks"); }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Primary"); }
+                    track-choice := Choice {
+                        horizontal-stretch: 1;
+                        model: SubtitlesBridge.track-labels;
+                        current-index: SubtitlesBridge.selected-track;
+                        enabled: root.idle;
+                        max-visible-rows: 8;
+                        selected(index) => {
+                            SubtitlesBridge.select-track(index);
+                            self.current-index = root.track-index;
+                        }
+                    }
+                    Caps {
+                        shown: root.wide;
+                        tip: @tr("Cycle Subtitle Tracks");
+                        a: SubtitlesBridge.keys.cycle;
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    Rectangle { width: root.column; }
+                    // While an operation runs the same button cancels it.
+                    Btn {
+                        text: root.idle ? @tr("Load…") : @tr("Cancel");
+                        key: root.wide && root.idle ? SubtitlesBridge.keys.load : "";
+                        tip: root.idle ? @tr("Open Subtitle") : @tr("Cancel");
+                        tip-keys: [{ key: root.idle ? SubtitlesBridge.keys.load : "", text: "" }];
+                        clicked => {
+                            if root.idle { SubtitlesBridge.load-file(); } else { SubtitlesBridge.cancel(); }
+                        }
+                    }
+                    Btn {
+                        text: @tr("Reload");
+                        key: root.wide ? SubtitlesBridge.keys.reload : "";
+                        enabled: SubtitlesBridge.can-reload && root.idle;
+                        tip: @tr("Reload Subtitles");
+                        tip-keys: [{ key: SubtitlesBridge.keys.reload, text: "" }];
+                        tip-detail: SubtitlesBridge.can-reload ? "" : @tr("for subtitle files you opened");
+                        clicked => { SubtitlesBridge.reload(); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Secondary"); }
+                    secondary-choice := Choice {
+                        horizontal-stretch: 1;
+                        model: SubtitlesBridge.secondary-labels;
+                        current-index: SubtitlesBridge.selected-secondary;
+                        enabled: SubtitlesBridge.can-secondary && root.idle;
+                        max-visible-rows: 8;
+                        // The pick shows once the player has it; a refused one (the primary, a bitmap track) snaps back.
+                        selected(index) => {
+                            SubtitlesBridge.select-secondary(index);
+                            self.current-index = root.secondary-index;
+                        }
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Position"); }
+                    // In the order of model.ts SECONDARY_POSITIONS.
+                    Segments {
+                        first: @tr("Top");
+                        second: @tr("Above Main Subtitle");
+                        current: SubtitlesBridge.secondary-position;
+                        selected(index) => { SubtitlesBridge.set-secondary-position(index); }
+                    }
+                }
+
+                // ------------------------------------------------------------ Sync
+                Heading { text: @tr("Sync"); }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Delay"); }
+                    Btn {
+                        // TRANSLATORS: {} is the sync step in seconds ("0.5"); the button moves the subtitles earlier.
+                        text: @tr("−{}", SubtitlesBridge.step-text);
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Earlier"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.earlier, text: "" }];
+                        clicked => { SubtitlesBridge.sync-step(-1); }
+                    }
+                    // The value; a click types a new one (Enter applies, Esc keeps the old one).
+                    Rectangle {
+                        min-width: 58px;
+                        preferred-width: max(58px, sync-label.preferred-width + 14px);
+                        height: Theme.input-height;
+                        horizontal-stretch: 0;
+                        Rectangle {
+                            visible: !root.typing;
+                            border-radius: Theme.radius-control;
+                            border-width: 1px;
+                            border-color: sync-touch.has-hover && root.styling ? Theme.accent : Theme.line;
+                            background: Theme.bg-list;
+                            sync-area := ToolTipArea {
+                                text: root.style-tip(@tr("Subtitle delay"));
+                                detail: root.styling ? @tr("click: type a value · later is positive") : "";
+                                sync-label := Text {
+                                    width: sync-area.width;
+                                    height: sync-area.height;
+                                    // TRANSLATORS: {} is the subtitle delay in seconds with its sign ("+1.25").
+                                    text: @tr("{} s", SubtitlesBridge.sync-text);
+                                    color: root.styling ? Theme.text : Theme.text-dim;
+                                    font-size: Theme.font-body;
+                                    horizontal-alignment: center;
+                                    vertical-alignment: center;
+                                }
+                                sync-touch := TouchArea {
+                                    enabled: root.styling;
+                                    mouse-cursor: text;
+                                    clicked => { root.start-typing(); }
+                                }
+                            }
+                        }
+                        FocusScope {
+                            visible: root.typing;
+                            focus-on-click: false;
+                            focus-on-tab-navigation: false;
+                            capture-key-pressed(event) => {
+                                if event.text == Key.UpArrow { SubtitlesBridge.sync-step(1); return accept; }
+                                if event.text == Key.DownArrow { SubtitlesBridge.sync-step(-1); return accept; }
+                                if event.text == Key.Escape { root.stop-typing(); return accept; }
+                                return reject;
+                            }
+                            sync-field := LineEdit {
+                                width: parent.width;
+                                height: parent.height;
+                                font-size: Theme.font-body;
+                                horizontal-alignment: center;
+                                enabled: root.typing;
+                                accepted(text) => {
+                                    SubtitlesBridge.apply-sync(text);
+                                    root.stop-typing();
+                                }
+                                changed has-focus => {
+                                    SubtitlesBridge.focus-changed(self.has-focus);
+                                    if !self.has-focus { root.typing = false; }
+                                }
+                            }
+                        }
+                    }
+                    Btn {
+                        // TRANSLATORS: {} is the sync step in seconds ("0.5"); the button moves the subtitles later.
+                        text: @tr("+{}", SubtitlesBridge.step-text);
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Later"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.later, text: "" }];
+                        clicked => { SubtitlesBridge.sync-step(1); }
+                    }
+                    Btn {
+                        glyph: Glyphs.reset;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Reset Sync"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.syncreset, text: "" }];
+                        clicked => { SubtitlesBridge.reset-field("sync"); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Caps {
+                        shown: root.wide;
+                        tip: @tr("Subtitle Sync");
+                        a: SubtitlesBridge.keys.earlier;
+                        a-text: "−";
+                        b: SubtitlesBridge.keys.later;
+                        b-text: "+";
+                        c: SubtitlesBridge.keys.syncreset;
+                        c-text: @tr("Reset");
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Lines"); }
+                    Btn {
+                        text: @tr("Previous");
+                        glyph: Glyphs.previous;
+                        key: root.wide ? SubtitlesBridge.keys.previous : "";
+                        enabled: SubtitlesBridge.can-lines;
+                        tip: SubtitlesBridge.can-lines ? @tr("Previous Dialogue") : root.lines-why;
+                        tip-keys: [{ key: SubtitlesBridge.keys.previous, text: "" }];
+                        clicked => { SubtitlesBridge.previous-line(); }
+                    }
+                    Btn {
+                        text: @tr("Next");
+                        glyph: Glyphs.next;
+                        glyph-after: true;
+                        key: root.wide ? SubtitlesBridge.keys.next : "";
+                        enabled: SubtitlesBridge.can-lines;
+                        tip: SubtitlesBridge.can-lines ? @tr("Next Dialogue") : root.lines-why;
+                        tip-keys: [{ key: SubtitlesBridge.keys.next, text: "" }];
+                        clicked => { SubtitlesBridge.next-line(); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+
+                // ------------------------------------------------------------ Style
+                Heading { text: @tr("Style"); }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Size"); }
+                    Btn {
+                        glyph: Glyphs.minus;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Size −"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.sizedown, text: "" }];
+                        clicked => { SubtitlesBridge.size-step(-1); }
+                    }
+                    Value {
+                        text: SubtitlesBridge.subtitle-size;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Subtitle size"));
+                        tip-detail: root.styling ? @tr("double-click: Default") : "";
+                        double-clicked => { SubtitlesBridge.reset-field("size"); }
+                    }
+                    Btn {
+                        glyph: Glyphs.plus;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Size +"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.sizeup, text: "" }];
+                        clicked => { SubtitlesBridge.size-step(1); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Caps {
+                        shown: root.wide;
+                        tip: @tr("Subtitle size");
+                        a: SubtitlesBridge.keys.sizedown;
+                        a-text: "−";
+                        b: SubtitlesBridge.keys.sizeup;
+                        b-text: "+";
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Position"); }
+                    Btn {
+                        glyph: Glyphs.down;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Move Down"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.movedown, text: "" }];
+                        clicked => { SubtitlesBridge.position-step(-1); }
+                    }
+                    Value {
+                        // TRANSLATORS: {} is where the subtitle sits, 100 at the bottom edge.
+                        text: @tr("{}%", SubtitlesBridge.position-percent);
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Subtitle position"));
+                        tip-detail: root.styling ? @tr("double-click: Default") : "";
+                        double-clicked => { SubtitlesBridge.reset-field("position"); }
+                    }
+                    Btn {
+                        glyph: Glyphs.up;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Move Up"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.moveup, text: "" }];
+                        clicked => { SubtitlesBridge.position-step(1); }
+                    }
+                    Btn {
+                        glyph: Glyphs.reset;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Reset Position"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.movereset, text: "" }];
+                        clicked => { SubtitlesBridge.reset-field("position"); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Caps {
+                        shown: root.wide;
+                        tip: @tr("Reset Position");
+                        a: SubtitlesBridge.keys.movereset;
+                    }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    RowLabel { column: root.column; text: @tr("Look"); }
+                    Btn {
+                        // i18n-ignore: the bold mark of text editors
+                        text: "B";
+                        bold-text: true;
+                        on: SubtitlesBridge.bold;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Bold"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.bold, text: "" }];
+                        clicked => { SubtitlesBridge.toggle-bold(); }
+                    }
+                    Btn {
+                        text: @tr("Shadow");
+                        on: SubtitlesBridge.shadow;
+                        enabled: root.styling && !SubtitlesBridge.boxed;
+                        tip: root.style-tip(@tr("Shadow"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.shadow, text: "" }];
+                        clicked => { SubtitlesBridge.toggle-shadow(); }
+                    }
+                    Btn {
+                        text: @tr("Box");
+                        on: SubtitlesBridge.boxed;
+                        enabled: root.styling;
+                        tip: root.style-tip(@tr("Opaque Box"));
+                        tip-keys: [{ key: SubtitlesBridge.keys.boxed, text: "" }];
+                        tip-detail: root.styling ? @tr("replaces outline and shadow") : "";
+                        clicked => { SubtitlesBridge.toggle-box(); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Caps {
+                        shown: root.wide;
+                        tip: @tr("Bold");
+                        a: SubtitlesBridge.keys.bold;
+                    }
+                }
+                CheckRow {
+                    text: @tr("Keep original ASS/SSA styles");
+                    tip: @tr("ASS/SSA subtitles keep the fonts, colours and positions of their file");
+                    checked: SubtitlesBridge.ass-original;
+                    toggled(on) => { SubtitlesBridge.set-ass-original(on); }
+                }
+                HorizontalLayout {
+                    spacing: 4px;
+                    Rectangle { width: root.column; }
+                    Btn {
+                        text: @tr("Font, Colour and Outline…");
+                        tip: @tr("Subtitle Settings");
+                        clicked => { SubtitlesBridge.open-settings(); }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+            }
+        }
+
+        // ------------------------------------------------------------ the status and Reset
+        VerticalLayout {
+            vertical-stretch: 0;
+            padding-left: 10px;
+            padding-right: 10px;
+            padding-bottom: 8px;
+            spacing: 6px;
+            Rectangle { height: 1px; background: Theme.line; }
+            HorizontalLayout {
+                spacing: 6px;
+                Line {
+                    text: SubtitlesBridge.status != "" ? SubtitlesBridge.status : SubtitlesBridge.style-reason;
+                    color: Theme.text-dim;
+                }
+                Btn {
+                    text: @tr("Reset");
+                    enabled: root.idle;
+                    tip: @tr("Reset the subtitle style and sync");
+                    clicked => { SubtitlesBridge.reset-all(); }
+                }
+            }
+        }
+    }
+}

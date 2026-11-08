@@ -26,9 +26,10 @@ test("English by default: menus, on-screen messages and window status", async ()
   const { stop } = await startPlugin(activate, { directory, host });
   assert.deepEqual(host.command("load").declaration.path, ["@open", "Open Subtitle…"]);
   assert.deepEqual(host.command("dialogue-next").declaration.path, ["@playback", "Seek", "Next Dialogue"]);
-  assert.deepEqual(host.command("track-off").declaration.path, ["@subtitles", "Subtitle Track", "Off"]);
-  assert.deepEqual(host.command("sync-earlier").declaration.path, ["@subtitles", "Sync", "Earlier 0.5 s"]);
-  assert.deepEqual(host.command("box").display.path.slice(1), ["Subtitle Style", "Opaque Box"]);
+  assert.deepEqual(host.command("track-off").declaration.path, ["Subtitle Track", "Off"]);
+  assert.deepEqual(host.command("tune").display, { title: "Subtitles…", path: ["Subtitles…"] });
+  assert.deepEqual(host.command("sync-earlier").display, { title: "Earlier 0.5 s", path: [] });
+  assert.deepEqual(host.command("box").display, { title: "Opaque Box", path: [] });
   assert.equal(host.command("track-1").declaration.path.at(-1), "English · en", "track names are data");
   await host.press("Alt+PageUp");
   await host.press(".");
@@ -36,9 +37,9 @@ test("English by default: menus, on-screen messages and window status", async ()
   assert.deepEqual(host.sent("osd.show").at(0), { text: "Subtitle size: larger ({})", args: [38] });
   await host.settle(170);
   await host.command("tune").run();
-  const window = host.window("subtitle-tune");
+  const window = host.mounted();
   assert.equal(shownStatus(window.props), "Subtitle style updated");
-  const sent = [...host.sent("ui.open"), ...host.sent("ui.set")].map((m) =>
+  const sent = [...host.sent("ui.mount"), ...host.sent("ui.setMount")].map((m) =>
     m.property === "status" ? m.value : (m.properties as { status?: unknown } | undefined)?.status);
   assert.deepEqual(sent.findLast(Boolean), { $vestraText: "Subtitle style updated", args: [] }, "a text value");
   assert.deepEqual(window.props["track-labels"], ["Subtitles Off", "English · en"]);
@@ -78,46 +79,47 @@ test("fixed lists stay in step with their Slint names; every text is translated"
   const pot = await read("locales/messages.pot");
   const po = await read("locales/zh-Hans.po");
   assert.doesNotMatch(po, /msgstr ""\n\n/);
-  assert.match(po, /msgid "Subtitle Tuning…"\nmsgstr "字幕微调…"/);
+  assert.match(po, /msgid "Subtitles…"\nmsgstr "字幕…"/);
   assert.equal([...pot.matchAll(/^msgid /gm)].length, [...po.matchAll(/^msgid /gm)].length, "the catalog has the template's texts");
-  for (const source of ["main.ts", "model.ts", "formats.ts", "messages.ts", "ui/tune.slint", "ui/settings.slint", "ui/sync.slint"]) {
+  for (const source of ["main.ts", "model.ts", "formats.ts", "messages.ts", "ui/panel.slint", "ui/settings.slint"]) {
     const code = (await read(source)).split("\n").filter((line) => !/^\s*(\/\/|\*|\/\*\*)/.test(line));
     assert.deepEqual(code.filter((line) => /\p{Script=Han}/u.test(line)), [], source);
   }
 });
 
-test("every command has a category for the command palette, translated, and controls in a window name it as home", async () => {
+test("every command has a category for the command palette, translated, and controls in the panel name it as home", async () => {
   const expected: Record<string, [string, string | null]> = {
     "load": ["Subtitles", "tune"],
     "load-secondary": ["Subtitles", null],
-    "show": ["Subtitles", null],
+    "show": ["Subtitles", "tune"],
     "track-off": ["Subtitle Tracks", "tune"],
     "track-1": ["Subtitle Tracks", "tune"],
-    "track-cycle": ["Subtitle Tracks", null],
+    "track-cycle": ["Subtitle Tracks", "tune"],
     "second-off": ["Secondary Subtitle", "tune"],
     "second-1": ["Secondary Subtitle", "tune"],
-    "second-position-top": ["Secondary Subtitle Position", null],
-    "second-position-aboveMain": ["Secondary Subtitle Position", null],
+    "second-position-top": ["Secondary Subtitle Position", "tune"],
+    "second-position-aboveMain": ["Secondary Subtitle Position", "tune"],
     "size-up": ["Subtitle Style", "tune"],
     "size-down": ["Subtitle Style", "tune"],
     "move-up": ["Subtitle Style", "tune"],
     "move-down": ["Subtitle Style", "tune"],
-    "bold": ["Subtitle Style", "settings"],
-    "shadow": ["Subtitle Style", "settings"],
-    "box": ["Subtitle Style", "settings"],
-    "ass-original": ["Subtitles", "settings"],
+    "bold": ["Subtitle Style", "tune"],
+    "shadow": ["Subtitle Style", "tune"],
+    "box": ["Subtitle Style", "tune"],
+    "ass-original": ["Subtitles", "tune"],
     "move-reset": ["Reset", "tune"],
     "sync-reset": ["Reset", "tune"],
-    "dialogue-previous": ["Seek", null],
-    "dialogue-next": ["Seek", null],
+    "dialogue-previous": ["Seek", "tune"],
+    "dialogue-next": ["Seek", "tune"],
     "dialogue-current": ["Seek", null],
     "sync-earlier": ["Subtitle Sync", "tune"],
     "sync-later": ["Subtitle Sync", "tune"],
-    "sync-input": ["Subtitle Sync", null],
-    "reload": ["Subtitles", null],
+    "sync-input": ["Subtitle Sync", "tune"],
+    "reload": ["Subtitles", "tune"],
     "refresh": ["Subtitles", null],
+    "remove": ["Subtitles", null],
     "tune": ["Subtitles", null],
-    "settings": ["Subtitles", null],
+    "settings": ["Subtitles", "tune"],
   };
   for (const locale of ["en", "zh-Hans"] as const) {
     const host = sourceHost();
@@ -135,7 +137,7 @@ test("every command has a category for the command palette, translated, and cont
       for (const id of ["track-off", "track-1", "track-cycle"]) assert.equal(shown[id]![0], "字幕轨", id);
       for (const [id, [category]] of Object.entries(expected)) assert.notEqual(shown[id]![0], category, `${id} is translated`);
     }
-    // Every home is a command of this plugin that opens a window.
+    // Every home is a command of this plugin that opens the panel.
     for (const [, home] of Object.values(expected)) if (home) assert.ok(host.commands.has(home));
     await stop();
   }

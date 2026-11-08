@@ -6,460 +6,460 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:118
+#: main.ts:122
 #, x-machine
 msgid "External subtitle"
 msgstr "外部字幕"
 
-#: main.ts:120 main.ts:957
+#: main.ts:124 main.ts:999
 #, x-machine
 msgid "Track {}"
 msgstr "トラック {}"
 
-#: main.ts:121
+#: main.ts:125
 #, x-machine
 msgid "Embedded {}"
 msgstr "埋め込み {}"
 
-#: main.ts:128 main.ts:964
+#: main.ts:132 main.ts:1006
 #, x-machine
 msgid "{} · {}"
 msgstr "{} · {}"
 
-#: main.ts:137 manifest.json
+#: main.ts:135 main.ts:142 manifest.json
 #, x-machine
 msgid "Subtitles"
 msgstr "字幕"
 
-#: main.ts:140
+#: main.ts:145
 #, x-machine
 msgid "Subtitle Tracks"
 msgstr "字幕トラック"
 
-#: main.ts:141 main.ts:928 main.ts:935 main.ts:994
+#: main.ts:146
 #, x-machine
 msgid "Secondary Subtitle"
 msgstr "副字幕"
 
-#: main.ts:142
+#: main.ts:147
 #, x-machine
 msgid "Secondary Subtitle Position"
 msgstr "副字幕の位置"
 
-#: main.ts:143 main.ts:1033 main.ts:1038 main.ts:1043 main.ts:1048 main.ts:1062 main.ts:1071 main.ts:1080
+#: main.ts:148
 #, x-machine
 msgid "Subtitle Style"
 msgstr "字幕のスタイル"
 
-#: main.ts:144 main.ts:1275
+#: main.ts:149 main.ts:1317 ui/panel.slint:657
 #, x-machine
 msgid "Subtitle Sync"
 msgstr "字幕の同期"
 
-#: main.ts:145 main.ts:1236 main.ts:1240 main.ts:1244
+#: main.ts:150 main.ts:1278 main.ts:1282 main.ts:1286
 #, x-machine
 msgid "Seek"
 msgstr "シーク"
 
-#: main.ts:146
+#: main.ts:151 ui/panel.slint:659 ui/panel.slint:830
 #, x-machine
 msgid "Reset"
 msgstr "リセット"
 
-#: main.ts:187
+#: main.ts:192
 #, x-machine
 msgid "Subtitle sync: 0 s"
 msgstr "字幕の同期：0 秒"
 
-#: main.ts:188
+#: main.ts:193
 #, x-machine
 msgid "Subtitle sync: {} s earlier"
 msgstr "字幕の同期：{} 秒早く"
 
-#: main.ts:188
+#: main.ts:193
 #, x-machine
 msgid "Subtitle sync: {} s later"
 msgstr "字幕の同期：{} 秒遅く"
 
-#: main.ts:313
+#: main.ts:318
 #, x-machine
 msgid "Add Secondary Subtitle"
 msgstr "副字幕を追加"
 
-#: main.ts:313
+#: main.ts:318 ui/panel.slint:523
 #, x-machine
 msgid "Open Subtitle"
 msgstr "字幕を開く"
 
-#: main.ts:727
+#: main.ts:747
 #, x-machine
 msgid "Subtitles Off"
 msgstr "字幕オフ"
 
-#: main.ts:730
+#: main.ts:749
 #, x-machine
 msgid "Secondary Off"
 msgstr "副字幕オフ"
 
-#: main.ts:904
+#: main.ts:940
 #, x-machine
 msgid "Open Subtitle…"
 msgstr "字幕を開く…"
 
-#: main.ts:904 main.ts:912 main.ts:916 main.ts:921 main.ts:928 main.ts:997 main.ts:1005 main.ts:1290
+#: main.ts:940 main.ts:948 main.ts:956 main.ts:962 main.ts:970 main.ts:1040 main.ts:1048 main.ts:1324 main.ts:1336
 #, x-machine
 msgid "Subtitle operation in progress"
 msgstr "字幕の操作を実行中です"
 
-#: main.ts:910
+#: main.ts:946
 #, x-machine
 msgid "Add Secondary Subtitle…"
 msgstr "副字幕を追加…"
 
-#: main.ts:912
+#: main.ts:948
 #, x-machine
 msgid "No media to play"
 msgstr "再生できるメディアがありません"
 
-#: main.ts:916
+#: main.ts:956 ui/panel.slint:489
 #, x-machine
 msgid "Show Subtitles"
 msgstr "字幕を表示"
 
-#: main.ts:921 main.ts:1004 main.ts:1013
+#: main.ts:962 main.ts:1047
 #, x-machine
 msgid "Subtitle Track"
 msgstr "字幕トラック"
 
-#: main.ts:921 main.ts:928
+#: main.ts:962 main.ts:970
 #, x-machine
 msgid "Off"
 msgstr "オフ"
 
-#: main.ts:935
-#, x-machine
-msgid "Position"
-msgstr "位置"
-
-#: main.ts:935
+#: main.ts:977 ui/panel.slint:561
 #, x-machine
 msgid "Top"
 msgstr "上部"
 
-#: main.ts:935
+#: main.ts:977 ui/panel.slint:561
 #, x-machine
 msgid "Above Main Subtitle"
 msgstr "主字幕の上"
 
-#: main.ts:971
+#: main.ts:1013
 #, x-machine
 msgid "{} ({})"
 msgstr "{}（{}）"
 
-#: main.ts:997
+#: main.ts:1040
 #, x-machine
 msgid "Only text subtitles can be secondary"
 msgstr "副字幕にできるのはテキスト字幕のみです"
 
-#: main.ts:997
+#: main.ts:1040
 #, x-machine
 msgid "Already the primary subtitle"
 msgstr "すでに主字幕です"
 
-#: main.ts:1013
+#: main.ts:1056
 #, x-machine
 msgid "Cycle"
 msgstr "順に切り替え"
 
-#: main.ts:1016
+#: main.ts:1059
 #, x-machine
 msgid "No subtitle tracks"
 msgstr "字幕トラックがありません"
 
-#: main.ts:1033
+#: main.ts:1075 ui/panel.slint:709
 #, x-machine
 msgid "Size +"
 msgstr "サイズ +"
 
-#: main.ts:1035
+#: main.ts:1077
 #, x-machine
 msgid "Subtitle size: larger ({})"
 msgstr "字幕のサイズ：大きく（{}）"
 
-#: main.ts:1038
+#: main.ts:1080 ui/panel.slint:695
 #, x-machine
 msgid "Size −"
 msgstr "サイズ −"
 
-#: main.ts:1040
+#: main.ts:1082
 #, x-machine
 msgid "Subtitle size: smaller ({})"
 msgstr "字幕のサイズ：小さく（{}）"
 
-#: main.ts:1043
+#: main.ts:1085 ui/panel.slint:741
 #, x-machine
 msgid "Move Up"
 msgstr "上へ移動"
 
-#: main.ts:1045
+#: main.ts:1087
 #, x-machine
 msgid "Subtitle position: up ({}%)"
 msgstr "字幕の位置：上へ（{}%）"
 
-#: main.ts:1048
+#: main.ts:1090 ui/panel.slint:726
 #, x-machine
 msgid "Move Down"
 msgstr "下へ移動"
 
-#: main.ts:1050
+#: main.ts:1092
 #, x-machine
 msgid "Subtitle position: down ({}%)"
 msgstr "字幕の位置：下へ（{}%）"
 
-#: main.ts:1053
+#: main.ts:1095
 #, x-machine
 msgid "Subtitle Position"
 msgstr "字幕の位置"
 
-#: main.ts:1057
+#: main.ts:1099
 #, x-machine
 msgid "Subtitle position: default ({}%)"
 msgstr "字幕の位置：デフォルト（{}%）"
 
-#: main.ts:1062 ui/settings.slint:119
+#: main.ts:1104 ui/panel.slint:768 ui/panel.slint:792 ui/settings.slint:119
 #, x-machine
 msgid "Bold"
 msgstr "太字"
 
-#: main.ts:1067
+#: main.ts:1109
 #, x-machine
 msgid "Bold subtitles"
 msgstr "字幕の太字：オン"
 
-#: main.ts:1067
+#: main.ts:1109
 #, x-machine
 msgid "Bold subtitles off"
 msgstr "字幕の太字：オフ"
 
-#: main.ts:1071
+#: main.ts:1113 ui/panel.slint:773 ui/panel.slint:776
 #, x-machine
 msgid "Shadow"
 msgstr "影"
 
-#: main.ts:1076
+#: main.ts:1118
 #, x-machine
 msgid "Subtitle shadow: on ({})"
 msgstr "字幕の影：オン（{}）"
 
-#: main.ts:1076
+#: main.ts:1118
 #, x-machine
 msgid "Subtitle shadow: off"
 msgstr "字幕の影：オフ"
 
-#: main.ts:1080
+#: main.ts:1122 ui/panel.slint:784
 #, x-machine
 msgid "Opaque Box"
 msgstr "不透明な背景"
 
-#: main.ts:1085
+#: main.ts:1127
 #, x-machine
 msgid "Opaque subtitle box: on"
 msgstr "字幕の不透明な背景：オン"
 
-#: main.ts:1085
+#: main.ts:1127
 #, x-machine
 msgid "Opaque subtitle box: off"
 msgstr "字幕の不透明な背景：オフ"
 
-#: main.ts:1095
+#: main.ts:1137
 #, x-machine
 msgid "ASS/SSA animated subtitles: on"
 msgstr "ASS/SSA のアニメーション字幕：オン"
 
-#: main.ts:1095
+#: main.ts:1137
 #, x-machine
 msgid "ASS/SSA animated subtitles: off"
 msgstr "ASS/SSA のアニメーション字幕：オフ"
 
-#: main.ts:1101
+#: main.ts:1143
 #, x-machine
 msgid "Original ASS/SSA Styles"
 msgstr "ASS/SSA の元のスタイル"
 
-#: main.ts:1136
+#: main.ts:1178
 #, x-machine
 msgid "Secondary subtitle position: top"
 msgstr "副字幕の位置：上部"
 
-#: main.ts:1136
+#: main.ts:1178
 #, x-machine
 msgid "Secondary subtitle position: above the main subtitle"
 msgstr "副字幕の位置：主字幕の上"
 
-#: main.ts:1172 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1214 main.ts:1279 main.ts:1283 main.ts:1287 ui/panel.slint:446
 #, x-machine
 msgid "Reading subtitles…"
 msgstr "字幕を読み取り中…"
 
-#: main.ts:1210 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1252 main.ts:1279 main.ts:1283 main.ts:1287 ui/panel.slint:447
 #, x-machine
 msgid "The current media cannot seek"
 msgstr "現在のメディアはシークできません"
 
-#: main.ts:1210 main.ts:1221 main.ts:1237 main.ts:1241 main.ts:1245
+#: main.ts:1252 main.ts:1263 main.ts:1279 main.ts:1283 main.ts:1287 ui/panel.slint:447
 #, x-machine
 msgid "No text subtitles available"
 msgstr "使用できるテキスト字幕がありません"
 
-#: main.ts:1217
+#: main.ts:1259
 #, x-machine
 msgid "ffmpeg is needed to read embedded subtitles"
 msgstr "埋め込み字幕を読み取るには ffmpeg が必要です"
 
-#: main.ts:1217
+#: main.ts:1259
 #, x-machine
 msgid "Reading embedded subtitles timed out"
 msgstr "埋め込み字幕の読み取りがタイムアウトしました"
 
-#: main.ts:1217
+#: main.ts:1259
 #, x-machine
 msgid "Cannot read embedded subtitles"
 msgstr "埋め込み字幕を読み取れません"
 
-#: main.ts:1227
+#: main.ts:1269
 #, x-machine
 msgid "No previous dialogue"
 msgstr "前のセリフはありません"
 
-#: main.ts:1227
+#: main.ts:1269
 #, x-machine
 msgid "No next dialogue"
 msgstr "次のセリフはありません"
 
-#: main.ts:1227
+#: main.ts:1269
 #, x-machine
 msgid "No dialogue to jump to"
 msgstr "移動できるセリフがありません"
 
-#: main.ts:1228
+#: main.ts:1270
 #, x-machine
 msgid "Seek: previous dialogue {}"
 msgstr "シーク：前のセリフ {}"
 
-#: main.ts:1228
+#: main.ts:1270
 #, x-machine
 msgid "Seek: next dialogue {}"
 msgstr "シーク：次のセリフ {}"
 
-#: main.ts:1228
+#: main.ts:1270
 #, x-machine
 msgid "Seek: start of current dialogue {}"
 msgstr "シーク：現在のセリフの先頭 {}"
 
-#: main.ts:1236
+#: main.ts:1278 ui/panel.slint:670
 #, x-machine
 msgid "Previous Dialogue"
 msgstr "前のセリフ"
 
-#: main.ts:1240
+#: main.ts:1282 ui/panel.slint:680
 #, x-machine
 msgid "Next Dialogue"
 msgstr "次のセリフ"
 
-#: main.ts:1244
+#: main.ts:1286
 #, x-machine
 msgid "Current Subtitle Start"
 msgstr "現在の字幕の先頭"
 
-#: main.ts:1264 main.ts:1268 main.ts:1279
-#, x-machine
-msgid "Sync"
-msgstr "同期"
-
-#: main.ts:1264
+#: main.ts:1306
 #, x-machine
 msgid "Earlier 0.05 s"
 msgstr "0.05 秒早く"
 
-#: main.ts:1264
+#: main.ts:1306
 #, x-machine
 msgid "Earlier 0.1 s"
 msgstr "0.1 秒早く"
 
-#: main.ts:1264
+#: main.ts:1306
 #, x-machine
 msgid "Earlier 0.25 s"
 msgstr "0.25 秒早く"
 
-#: main.ts:1264
+#: main.ts:1306
 #, x-machine
 msgid "Earlier 0.5 s"
 msgstr "0.5 秒早く"
 
-#: main.ts:1264
+#: main.ts:1306
 #, x-machine
 msgid "Earlier 1 s"
 msgstr "1 秒早く"
 
-#: main.ts:1264
+#: main.ts:1306
 #, x-machine
 msgid "Earlier 5 s"
 msgstr "5 秒早く"
 
-#: main.ts:1268
+#: main.ts:1310
 #, x-machine
 msgid "Later 0.05 s"
 msgstr "0.05 秒遅く"
 
-#: main.ts:1268
+#: main.ts:1310
 #, x-machine
 msgid "Later 0.1 s"
 msgstr "0.1 秒遅く"
 
-#: main.ts:1268
+#: main.ts:1310
 #, x-machine
 msgid "Later 0.25 s"
 msgstr "0.25 秒遅く"
 
-#: main.ts:1268
+#: main.ts:1310
 #, x-machine
 msgid "Later 0.5 s"
 msgstr "0.5 秒遅く"
 
-#: main.ts:1268
+#: main.ts:1310
 #, x-machine
 msgid "Later 1 s"
 msgstr "1 秒遅く"
 
-#: main.ts:1268
+#: main.ts:1310
 #, x-machine
 msgid "Later 5 s"
 msgstr "5 秒遅く"
 
-#: main.ts:1279
+#: main.ts:1321
 #, x-machine
 msgid "Adjust Sync…"
 msgstr "同期を調整…"
 
-#: main.ts:1290
+#: main.ts:1324 ui/panel.slint:533
 #, x-machine
 msgid "Reload Subtitles"
 msgstr "字幕を再読み込み"
 
-#: main.ts:1290
+#: main.ts:1328
 #, x-machine
 msgid "Refresh Subtitle Tracks"
 msgstr "字幕トラックを更新"
 
-#: main.ts:1290
+#: main.ts:1334
 #, x-machine
-msgid "Subtitle Tuning…"
-msgstr "字幕の微調整…"
+msgid "Remove External Subtitle"
+msgstr "外部字幕を削除"
 
-#: main.ts:1290
+#: main.ts:1336
+#, x-machine
+msgid "No external subtitle selected"
+msgstr "外部字幕が選択されていません"
+
+#: main.ts:1339
 #, x-machine
 msgid "Subtitle Settings…"
 msgstr "字幕の設定…"
+
+#: main.ts:1342
+#, x-machine
+msgid "Subtitles…"
+msgstr "字幕…"
 
 #: manifest.json
 #, x-machine
@@ -470,10 +470,10 @@ msgstr "外部字幕の読み込み、トラックの選択、スタイルと同
 #, x-machine
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Find it in the right-click menu under Subtitles."
+"Subtitles… (Alt+3) in the right-click menu opens its panel beside the video."
 msgstr ""
 "字幕トラックの選択と切り替え、SRT、ASS/SSA、WebVTT、SAMI、MicroDVD 字幕の読み込み（エンコーディングは自動検出）、ローカル動画を開いたときの同じ名前の字幕ファイルの読み込み、副字幕の表示ができます。サイズ、位置、フォント、色、縁取り、影、背景ボックス、同期を調整でき、セリフ単位で移動でき、外部字幕ファイルが変更されると自動で再読み込みします。\n"
-"右クリックメニューの「字幕」から使えます。"
+"右クリックメニューの「字幕…」（Alt+3）で動画の横にパネルが開きます。"
 
 #: manifest.json
 #, x-machine
@@ -842,13 +842,13 @@ msgstr "メディアが変わったため、実行中の操作をキャンセル
 
 #: messages.ts:152
 #, x-machine
-msgid "Enter whole milliseconds, for example 1250 or -500."
-msgstr "ミリ秒を整数で入力してください（例：1250、-500）。"
+msgid "Enter seconds, for example 1.25 or -0.5."
+msgstr "秒数を入力してください（例：1.25、-0.5）。"
 
 #: messages.ts:152
 #, x-machine
-msgid "The sync value must be between −{} and {} ms"
-msgstr "同期の値は −{}〜{} ms の範囲で指定してください"
+msgid "The sync value must be between −{} and {} s"
+msgstr "同期値は −{}～{} 秒の範囲で指定してください"
 
 #: messages.ts:152
 #, x-machine
@@ -960,10 +960,199 @@ msgstr "字幕に埋め込まれたフォントは無視しました"
 msgid "Unknown video frame rate; the MicroDVD subtitle was converted at 23.976"
 msgstr "ビデオのフレームレートが不明なため、MicroDVD 字幕を 23.976 で変換しました"
 
-#: ui/settings.slint:21
+#: ui/panel.slint:458 ui/panel.slint:498
+#, x-machine
+msgid "Primary"
+msgstr "メイン"
+
+#: ui/panel.slint:458 ui/panel.slint:542
+#, x-machine
+msgid "Secondary"
+msgstr "副字幕"
+
+#: ui/panel.slint:458 ui/panel.slint:558 ui/panel.slint:722
+#, x-machine
+msgid "Position"
+msgstr "位置"
+
+#: ui/panel.slint:458 ui/panel.slint:571
+#, x-machine
+msgid "Delay"
+msgstr "遅延"
+
+#: ui/panel.slint:458 ui/panel.slint:664
+#, x-machine
+msgid "Lines"
+msgstr "セリフ"
+
+#: ui/panel.slint:458 ui/panel.slint:691
+#, x-machine
+msgid "Size"
+msgstr "サイズ"
+
+#: ui/panel.slint:458 ui/panel.slint:761
+#, x-machine
+msgid "Look"
+msgstr "見た目"
+
+#: ui/panel.slint:482
+#, x-machine
+msgid "Show subtitles"
+msgstr "字幕を表示"
+
+#: ui/panel.slint:495
+#, x-machine
+msgid "Tracks"
+msgstr "トラック"
+
+#: ui/panel.slint:512
+#, x-machine
+msgid "Cycle Subtitle Tracks"
+msgstr "字幕トラックを切り替え"
+
+#: ui/panel.slint:521
+#, x-machine
+msgid "Load…"
+msgstr "読み込む…"
+
+#: ui/panel.slint:521 ui/panel.slint:523
+#, x-machine
+msgid "Cancel"
+msgstr "キャンセル"
+
+#: ui/panel.slint:530
+#, x-machine
+msgid "Reload"
+msgstr "再読み込み"
+
+#: ui/panel.slint:535
+#, x-machine
+msgid "for subtitle files you opened"
+msgstr "開いた字幕ファイルのみ"
+
+#: ui/panel.slint:568
+#, x-machine
+msgid "Sync"
+msgstr "同期"
+
+#. {} is the sync step in seconds ("0.5"); the button moves the subtitles earlier.
+#: ui/panel.slint:574
+#, x-machine
+msgid "−{}"
+msgstr "−{}"
+
+#: ui/panel.slint:576
+#, x-machine
+msgid "Earlier"
+msgstr "早く"
+
+#: ui/panel.slint:593
+#, x-machine
+msgid "Subtitle delay"
+msgstr "字幕の遅延"
+
+#: ui/panel.slint:594
+#, x-machine
+msgid "click: type a value · later is positive"
+msgstr "クリック：値を入力 · 正の値で遅く"
+
+#. {} is the subtitle delay in seconds with its sign ("+1.25").
+#: ui/panel.slint:599 ui/settings.slint:214
+#, x-machine
+msgid "{} s"
+msgstr "{} 秒"
+
+#. {} is the sync step in seconds ("0.5"); the button moves the subtitles later.
+#: ui/panel.slint:641
+#, x-machine
+msgid "+{}"
+msgstr "+{}"
+
+#: ui/panel.slint:643
+#, x-machine
+msgid "Later"
+msgstr "遅く"
+
+#: ui/panel.slint:650
+#, x-machine
+msgid "Reset Sync"
+msgstr "同期をリセット"
+
+#: ui/panel.slint:666
+#, x-machine
+msgid "Previous"
+msgstr "前へ"
+
+#: ui/panel.slint:675
+#, x-machine
+msgid "Next"
+msgstr "次へ"
+
+#: ui/panel.slint:688
+#, x-machine
+msgid "Style"
+msgstr "スタイル"
+
+#: ui/panel.slint:702 ui/panel.slint:716
+#, x-machine
+msgid "Subtitle size"
+msgstr "字幕のサイズ"
+
+#: ui/panel.slint:703 ui/panel.slint:735
+#, x-machine
+msgid "double-click: Default"
+msgstr "ダブルクリック：デフォルト"
+
+#. {} is where the subtitle sits, 100 at the bottom edge.
+#: ui/panel.slint:732
+#, x-machine
+msgid "{}%"
+msgstr "{}%"
+
+#: ui/panel.slint:734
+#, x-machine
+msgid "Subtitle position"
+msgstr "字幕の位置"
+
+#: ui/panel.slint:748 ui/panel.slint:755
+#, x-machine
+msgid "Reset Position"
+msgstr "位置をリセット"
+
+#: ui/panel.slint:781
+#, x-machine
+msgid "Box"
+msgstr "背景"
+
+#: ui/panel.slint:786
+#, x-machine
+msgid "replaces outline and shadow"
+msgstr "縁取りと影の代わりに表示"
+
+#: ui/panel.slint:797
+#, x-machine
+msgid "Keep original ASS/SSA styles"
+msgstr "ASS/SSA の元のスタイルを保持"
+
+#: ui/panel.slint:798
+#, x-machine
+msgid "ASS/SSA subtitles keep the fonts, colours and positions of their file"
+msgstr "ASS/SSA 字幕はファイルのフォント・色・位置をそのまま使います"
+
+#: ui/panel.slint:806
+#, x-machine
+msgid "Font, Colour and Outline…"
+msgstr "フォント・色・縁取り…"
+
+#: ui/panel.slint:807 ui/settings.slint:21
 #, x-machine
 msgid "Subtitle Settings"
 msgstr "字幕の設定"
+
+#: ui/panel.slint:832
+#, x-machine
+msgid "Reset the subtitle style and sync"
+msgstr "字幕のスタイルと同期をリセット"
 
 #: ui/settings.slint:80 ui/settings.slint:95
 #, x-machine
@@ -1010,7 +1199,7 @@ msgstr "同期の単位"
 msgid "Default encoding"
 msgstr "デフォルトのエンコーディング"
 
-#: ui/settings.slint:87 ui/settings.slint:103 ui/settings.slint:136 ui/settings.slint:148 ui/settings.slint:160 ui/settings.slint:182 ui/settings.slint:194 ui/settings.slint:205 ui/settings.slint:218 ui/settings.slint:238 ui/tune.slint:75 ui/tune.slint:119 ui/tune.slint:127 ui/tune.slint:147
+#: ui/settings.slint:87 ui/settings.slint:103 ui/settings.slint:136 ui/settings.slint:148 ui/settings.slint:160 ui/settings.slint:182 ui/settings.slint:194 ui/settings.slint:205 ui/settings.slint:218 ui/settings.slint:238
 #, x-machine
 msgid "Default"
 msgstr "デフォルト"
@@ -1049,11 +1238,6 @@ msgstr "元のスタイルを保持"
 #, x-machine
 msgid "Use subtitle settings"
 msgstr "字幕の設定を使用"
-
-#: ui/settings.slint:214
-#, x-machine
-msgid "{} s"
-msgstr "{} 秒"
 
 #: ui/settings.slint:227
 #, x-machine
@@ -1104,88 +1288,3 @@ msgstr "同じ名前の字幕ファイルを自動で読み込む"
 #, x-machine
 msgid "Reset All"
 msgstr "すべてリセット"
-
-#: ui/sync.slint:10
-#, x-machine
-msgid "Adjust Sync"
-msgstr "同期を調整"
-
-#: ui/sync.slint:29 ui/sync.slint:79
-#, x-machine
-msgid "Positive delays the subtitles, negative advances them."
-msgstr "正の値で字幕を遅らせ、負の値で早めます。"
-
-#: ui/sync.slint:41
-#, x-machine
-msgid "Sync value (ms):"
-msgstr "同期の値（ms）："
-
-#: ui/sync.slint:71
-#, x-machine
-msgid "Apply"
-msgstr "適用"
-
-#: ui/tune.slint:21
-#, x-machine
-msgid "Subtitle Tuning"
-msgstr "字幕の微調整"
-
-#: ui/tune.slint:64 ui/tune.slint:115
-#, x-machine
-msgid "Size {}"
-msgstr "サイズ {}"
-
-#: ui/tune.slint:64 ui/tune.slint:123
-#, x-machine
-msgid "Position {}%"
-msgstr "位置 {}%"
-
-#: ui/tune.slint:64 ui/tune.slint:137
-#, x-machine
-msgid "Sync {}"
-msgstr "同期 {}"
-
-#: ui/tune.slint:71 ui/tune.slint:93
-#, x-machine
-msgid "Cancel"
-msgstr "キャンセル"
-
-#: ui/tune.slint:71 ui/tune.slint:93
-#, x-machine
-msgid "Load…"
-msgstr "読み込む…"
-
-#: ui/tune.slint:73 ui/tune.slint:124
-#, x-machine
-msgid "Up"
-msgstr "上"
-
-#: ui/tune.slint:74 ui/tune.slint:125
-#, x-machine
-msgid "Down"
-msgstr "下"
-
-#: ui/tune.slint:133
-#, x-machine
-msgid "In seconds. Positive delays the subtitles, negative advances them. Click to enter a value."
-msgstr "単位は秒です。正の値で字幕を遅らせ、負の値で早めます。クリックすると値を入力できます。"
-
-#: ui/tune.slint:145
-#, x-machine
-msgid "Later"
-msgstr "遅く"
-
-#: ui/tune.slint:146
-#, x-machine
-msgid "Earlier"
-msgstr "早く"
-
-#: ui/tune.slint:159
-#, x-machine
-msgid "Remove"
-msgstr "削除"
-
-#: ui/tune.slint:160
-#, x-machine
-msgid "Settings…"
-msgstr "設定…"

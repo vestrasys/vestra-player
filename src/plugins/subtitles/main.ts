@@ -4,7 +4,6 @@ import type { FSWatcher } from "node:fs";
 import { stat } from "node:fs/promises";
 import { basename, dirname, isAbsolute, join } from "node:path";
 import type {
-  CommandOptions,
   Plugin,
   SubtitleStyle,
   SubtitleTrack,
@@ -30,6 +29,7 @@ import {
   parse,
   parseStyle,
   parseSync,
+  stepSeconds,
   saveable,
   serialize,
 } from "./model.ts";
@@ -38,13 +38,13 @@ import { SIDECAR_LIMIT, folders, sidecars } from "./sidecars.ts";
 
 /** Colour choices, in the order of ui/settings.slint's list. */
 const COLORS = ["white", "yellow", "cyan"] as const;
-/** Subtitles ▸ Subtitle Track lists at most this many tracks (orders 303–310); the rest are in Subtitle Tuning. */
+/** Subtitle Track ▸ lists at most this many tracks (orders 303–310); the rest are in the Subtitles panel. */
 const MENU_TRACKS = 8;
 const SIZE_STEP = 2;
 /**
- * Menu keys the track items must not take: the fixed items of Subtitle Track ▸ (Off, Cycle)
- * and Secondary Subtitle ▸ (Off, Position ▸). Menus merge by these words, and the player
- * refuses a leaf that is also a submenu's name. Both lists share the names, so one set.
+ * Menu keys the track items must not take: Subtitle Track ▸ Off, a leaf of the same menu. Menus
+ * merge by these words. "Cycle" and "Position" were fixed items until the panel (0.4.11); they
+ * stay reserved, so that a track keeps the name it had in the menu and the command palette.
  */
 const RESERVED = new Set(["Off", "Cycle", "Position"]);
 /** A style with every optional field filled in. */
@@ -84,7 +84,11 @@ function errorText(e: unknown): Status {
       return message("failed");
   }
 }
-const seconds = (ms: number) => `${ms > 0 ? "+" : ms < 0 ? "−" : ""}${Math.abs(ms) / 1000}`;
+/** A subtitle sync in seconds with its sign, at least one decimal: "+1.25", "−0.5", "0.0". */
+const syncShown = (ms: number) => {
+  const abs = Math.abs(ms) / 1000;
+  return `${ms > 0 ? "+" : ms < 0 ? "−" : ""}${Number.isInteger(abs) ? abs.toFixed(1) : abs}`;
+};
 /** "Cannot reload: …" for each error of reading a subtitle file. */
 const RELOAD: Record<FileError, StatusId> = {
   readFailed: "reload.readFailed",
@@ -105,7 +109,7 @@ type Action = (ticket: number) => Promise<void>;
 type Loaded = { path: string; part: number; hash: string; cues: Cue[] };
 const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest("hex");
 
-/** Subtitles: Subtitle Tuning and Subtitle Settings windows, Subtitles ▸ menu, serialized subtitle operations. */
+/** Subtitles: the Subtitles panel (adjust column), the Subtitle Settings window, the commands, serialized subtitle operations. */
 export default async function activate(plugin: Plugin) {
   const { subtitles, osd } = plugin;
   const { text } = plugin.i18n;
@@ -126,9 +130,10 @@ export default async function activate(plugin: Plugin) {
   const titled = (t: SubtitleTrack) => `${t.title}${t.language ? ` · ${t.language}` : ""}`;
   const label = (t: SubtitleTrack): TextArg =>
     t.title ? titled(t) : t.language ? text("{} · {}", [fallbackName(t), t.language]) : fallbackName(t);
-  const tune = plugin.windows.create("ui/tune.slint", { id: "subtitle-tune" });
+  // The Subtitles panel in the adjust column (menu redesign §3.2): tracks, sync and style. It
+  // replaces the Subtitle Tuning and Adjust Sync windows; Subtitle Settings stays a window.
+  const panel = plugin.panels.mount("adjust", "ui/panel.slint", { title: "Subtitles" });
   const settings = plugin.windows.create("ui/settings.slint", { id: "subtitle-settings" });
-  const syncWindow = plugin.windows.create("ui/sync.slint", { id: "subtitle-sync" });
   /**
    * Command categories (player 0.7.6): the command palette reads "Category: Title". Usually the submenu
    * name; text values, so that the catalog keeps them whatever the menu paths become.
@@ -713,31 +718,54 @@ export default async function activate(plugin: Plugin) {
     });
   };
 
-  /** What every window shows; ui/settings.slint has no busy state (it declares no `busy`). */
+  /** What the panel and the settings window show; ui/settings.slint has no busy state (it declares no `busy`). */
   const shared = () => {
     const s = subtitles.state;
     const blocked = styleBlocked(s);
     return { canStyle: !blocked, styleReason: statusText(plugin.i18n, blocked ?? NONE), status: statusText(plugin.i18n, status) };
   };
-  const common = () => ({ busy, ...shared() });
-  tune.bind(() => {
+  /** The first key of one of this plugin's commands ("" without one): the panel's key caps. */
+  const keyOf = (id: string) => plugin.commands.keys(id)[0] ?? "";
+  /** Bumped by Adjust Sync… (the command): the panel opens its sync value for typing. */
+  let editSync = 0;
+  panel.bind(() => {
     const s = subtitles.state, selected = s?.selected ?? null, style = current();
+    const lines = dialogueBlocked();
     return {
-      ...common(),
+      busy,
+      ...shared(),
+      keys: {
+        show: keyOf("show"), cycle: keyOf("track-cycle"), load: keyOf("load"), reload: keyOf("reload"),
+        earlier: keyOf("sync-earlier"), later: keyOf("sync-later"), syncreset: keyOf("sync-reset"),
+        previous: keyOf("dialogue-previous"), next: keyOf("dialogue-next"),
+        sizedown: keyOf("size-down"), sizeup: keyOf("size-up"),
+        movedown: keyOf("move-down"), moveup: keyOf("move-up"), movereset: keyOf("move-reset"),
+        bold: keyOf("bold"), shadow: keyOf("shadow"), boxed: keyOf("box"),
+      },
+      shown: !!selected,
+      canShow: !!s?.tracks.length,
       trackLabels: [text("Subtitles Off"), ...(s?.tracks.map(label) ?? [])],
       selectedTrack: selected && s ? s.tracks.findIndex((t) => t.id === selected.id) + 1 : 0,
-      canRemove: !!selected?.owned,
       secondaryLabels: [text("Secondary Off"), ...(s?.tracks.map(label) ?? [])],
       selectedSecondary: s?.secondary ? s.tracks.findIndex((t) => t.id === s.secondary!.id) + 1 : 0,
+      canSecondary: !!s?.tracks.some((t) => t.text),
+      secondaryPosition: secondaryPosition === "aboveMain" ? 1 : 0,
+      canReload: !!selected && loaded.has(selected.id),
+      syncText: syncShown(style.offsetMs),
+      syncValue: String(style.offsetMs / 1000),
+      stepText: stepSeconds(syncStep),
       subtitleSize: style.fontSize,
-      marginPercent: style.marginPercent,
-      syncSeconds: seconds(style.offsetMs),
+      positionPercent: 100 - style.marginPercent,
+      bold: style.bold === true,
+      shadow: (style.shadow ?? 0) > 0,
+      boxed: style.box !== null && style.box !== undefined,
+      assOriginal: assMode() !== "force",
+      canLines: !cueReading && !lines,
+      // Why Previous / Next cannot jump: the panel words it (ui/panel.slint `lines-reason`).
+      linesReason: cueReading ? "reading" : lines === NO_SEEK ? "seek" : lines ? "text" : "",
+      editSync,
     };
   });
-  syncWindow.bind(() => ({
-    ...common(),
-    valueText: String(current().offsetMs),
-  }));
   settings.bind(() => {
     const s = subtitles.state, style = current();
     const ass = /^(ass|ssa)$/.test(s?.selected?.codec ?? "") && style.assOverride !== "force";
@@ -787,22 +815,45 @@ export default async function activate(plugin: Plugin) {
   };
   const number = (handler: (value: number) => unknown) => (value: number) => Number.isFinite(value) && handler(value);
 
-  tune.on("selectTrack", selectIndex);
-  tune.on("selectSecondary", (index: number) => {
+  // The panel: the same operations as the commands, reported on its status line.
+  panel.on("toggleShown", () => busy || run(message("togglingShown"), toggleShown));
+  panel.on("selectTrack", selectIndex);
+  panel.on("selectSecondary", (index: number) => {
     const s = subtitles.state;
     if (busy || !Number.isInteger(index)) return;
     const track = index === 0 ? null : s?.tracks[index - 1];
     if (track !== undefined) return run(message("switchingSecondary"), selectSecondary(track, s?.sourceId));
   });
-  tune.on("loadFile", () => busy || run(message("chooseFile"), load));
-  tune.on("cancel", cancel);
-  tune.on("sizeStep", number(sizeBy));
-  tune.on("positionStep", number(moveBy));
-  tune.on("syncStep", number((v) => syncBy(Math.sign(v))));
-  tune.on("openSync", () => showSync());
-  tune.on("resetField", resetField);
-  tune.on("removeSelected", removeSelected);
-  tune.on("openSettings", () => showSettings());
+  panel.on("setSecondaryPosition", (index: number) => {
+    const position = Number.isInteger(index) ? SECONDARY_POSITIONS[index]?.id : undefined;
+    if (position) setSecondaryPosition(position);
+  });
+  panel.on("loadFile", () => busy || run(message("chooseFile"), load));
+  panel.on("cancel", cancel);
+  panel.on("reload", () => busy || run(message("reloading"), reload()));
+  panel.on("syncStep", number((v) => syncBy(Math.sign(v))));
+  panel.on("applySync", (typed: string) => {
+    const parsed = parseSync(String(typed));
+    if ("error" in parsed) {
+      status = parsed.error;
+      plugin.update();
+      return;
+    }
+    applySync(parsed.value);
+  });
+  panel.on("previousLine", () => jump("previous"));
+  panel.on("nextLine", () => jump("next"));
+  panel.on("sizeStep", number(sizeBy));
+  panel.on("positionStep", number(moveBy));
+  panel.on("resetField", resetField);
+  panel.on("toggleBold", () => styleChange((s) => ({ bold: !s.bold })));
+  panel.on("toggleShadow", () => styleChange((s) => ({ shadow: (s.shadow ?? 0) > 0 ? 0 : styleFile.shadowLast })));
+  panel.on("toggleBox", () => styleChange((s) => ({ box: s.box === null || s.box === undefined ? styleFile.boxOpacity : null })));
+  panel.on("setAssOriginal", (on: boolean) => setAssOverride(on === true ? "keep" : "force"));
+  panel.on("openSettings", () => showSettings());
+  panel.on("resetAll", resetStyle);
+  // A focused text field keeps the column out in fullscreen.
+  panel.on("focusChanged", (focused: boolean) => panel.setInteraction({ focused: focused === true }));
 
   // Ranges are the host's accepted style limits; anything wider fails as `invalid`.
   settings.on("changeOutline", number((v) => styleChange(() => ({ outline: clamp(v, 0, 4) }))));
@@ -856,46 +907,31 @@ export default async function activate(plugin: Plugin) {
   settings.on("changeAutoReload", (on: boolean) => setAutoReload(on === true));
   settings.on("changeAutoLoad", (on: boolean) => setAutoLoad(on === true));
 
-  // Adjust Sync (D05): Enter or Apply applies; ↑/↓ in the field step by the sync step and apply.
-  const applySync = (value: number) => {
+  // The typed sync value (D05, the panel's value; Enter applies, ↑/↓ step like −/+), shown on screen too.
+  function applySync(value: number) {
     const style = styleChange(() => ({ offsetMs: value }));
     if (style) sayOffset(style.offsetMs);
-  };
-  syncWindow.on("apply", (text: string) => {
-    const parsed = parseSync(String(text));
-    if ("error" in parsed) {
-      status = parsed.error;
-      syncWindow.set({ valueText: String(current().offsetMs) });
-      return;
-    }
-    applySync(parsed.value);
-  });
-  syncWindow.on("nudge", (text: string, direction: number) => {
-    if (!Number.isFinite(direction) || !direction) return;
-    const parsed = parseSync(String(text));
-    const base = "error" in parsed ? current().offsetMs : parsed.value;
-    const value = clamp(base + Math.sign(direction) * syncStep, -SYNC_LIMIT, SYNC_LIMIT);
-    applySync(value);
-    syncWindow.set({ valueText: String(value) });
-  });
+  }
   plugin.onError((e) => {
     console.error(`[subtitles] ${e.message}`);
     status = errorText(e);
   });
 
-  async function showTune() {
+  /** Subtitles… (Alt+3): open the adjust column at this panel, or close it when the panel is in front. */
+  async function togglePanel() {
     await subtitles.refresh();
-    await tune.show();
+    await panel.toggle();
   }
   async function showSettings() {
     await subtitles.refresh();
     await settings.show();
   }
-  async function showSync() {
+  /** Adjust Sync…: the panel in front, its sync value open for typing. */
+  async function typeSync() {
     await subtitles.refresh();
-    // Opening fills in the current value, replacing whatever was typed last time.
-    syncWindow.set({ valueText: String(current().offsetMs) });
-    await syncWindow.show();
+    await panel.show();
+    editSync++;
+    plugin.update();
   }
 
   // ---------------------------------------------------------------- menu
@@ -912,28 +948,34 @@ export default async function activate(plugin: Plugin) {
     reason: () => (busy ? BUSY : hasMedia() ? null : NO_MEDIA),
     run: () => busy || announce(message("chooseSecondaryFile"), loadAs("secondary")),
   });
+  // Menu redesign (step 6): the Subtitles panel replaces Subtitles ▸ and Reset ▸ Subtitle *. The menu
+  // keeps Open ▸ Open Subtitle… / Add Secondary Subtitle…, the top-level Subtitle Track ▸ and
+  // Subtitles…; every other command is in the command palette ("Category: Title") with its key,
+  // and names the panel (`home: "tune"`) when its control is there.
   plugin.commands.add({
-    id: "show", path: ["@subtitles", "Show Subtitles"], order: 301, bindings: ["Alt+H"], ...idle, category: CATEGORY.subtitles,
+    id: "show", title: "Show Subtitles", bindings: ["Alt+H"], ...idle, category: CATEGORY.subtitles, home: "tune",
     checked: () => !!subtitles.state?.selected,
     run: () => busy || announce(message("togglingShown"), toggleShown),
   });
+  // Subtitle Track ▸ (top level, proposal §4): Off (302), the tracks (303–310).
   plugin.commands.add({
-    id: "track-off", path: ["@subtitles", "Subtitle Track", "Off"], order: 302, group: "subtitle-track", radio: true, ...idle,
+    id: "track-off", path: ["Subtitle Track", "Off"], order: 302, group: "subtitle-track", radio: true, ...idle,
     category: CATEGORY.track, home: "tune",
     checked: () => !subtitles.state?.selected,
     run: () => busy || announce(message("hiding"), select(null)),
   });
-  // A08 Subtitles ▸ Secondary Subtitle ▸: Off (312), the tracks (313–320), Position ▸ (321).
+  // A08 secondary subtitle: Off, the tracks, the position (the panel's Secondary and Position rows).
+  const POSITION_TITLES = { top: "Top", aboveMain: "Above Main Subtitle" } as const satisfies Record<SecondaryPosition, string>;
   plugin.commands.add({
-    id: "second-off", path: ["@subtitles", "Secondary Subtitle", "Off"], order: 312, group: "subtitle-second", radio: true, ...idle,
+    id: "second-off", title: "Off", radio: true, ...idle,
     category: CATEGORY.secondary, home: "tune",
     checked: () => !subtitles.state?.secondary,
     run: () => busy || announce(message("closingSecondary"), selectSecondary(null)),
   });
-  for (const { id, label: title } of SECONDARY_POSITIONS)
+  for (const { id } of SECONDARY_POSITIONS)
     plugin.commands.add({
-      id: `second-position-${id}`, path: ["@subtitles", "Secondary Subtitle", "Position", title], order: 321, group: "subtitle-second-pos",
-      radio: true, checked: () => secondaryPosition === id, category: CATEGORY.secondaryPosition,
+      id: `second-position-${id}`, title: POSITION_TITLES[id], radio: true, checked: () => secondaryPosition === id,
+      category: CATEGORY.secondaryPosition, home: "tune",
       run: () => setSecondaryPosition(id),
     });
   // The track items are rebuilt in a child scope whenever the track list changes.
@@ -991,8 +1033,9 @@ export default async function activate(plugin: Plugin) {
       seconds.forEach((track, i) =>
         secondMenu.commands.add({
           // Track names are data; a fallback name is a text value (menuTitles).
-          id: `second-${i + 1}`, path: ["@subtitles", "Secondary Subtitle", /* i18n-ignore */ titles[i]!.title], order: 313 + i,
-          group: "subtitle-second", radio: true, busy: () => busy, category: CATEGORY.secondary, home: "tune",
+          id: `second-${i + 1}`,
+          /* i18n-ignore */ title: titles[i]!.title,
+          radio: true, busy: () => busy, category: CATEGORY.secondary, home: "tune",
           enabled: () => !busy && !secondBlocked(track),
           reason: () => (busy ? BUSY : secondBlocked(track)),
           checked: () => track.id === subtitles.state?.secondary?.id,
@@ -1001,7 +1044,7 @@ export default async function activate(plugin: Plugin) {
       );
       tracks.forEach((track, i) =>
         trackMenu.commands.add({
-          id: `track-${i + 1}`, path: ["@subtitles", "Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
+          id: `track-${i + 1}`, path: ["Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
           group: "subtitle-track", radio: true, ...idle, category: CATEGORY.track, home: "tune",
           checked: () => track.id === subtitles.state?.selected?.id,
           run: () => busy || announce(message("switching"), select(track, s.sourceId)),
@@ -1010,14 +1053,14 @@ export default async function activate(plugin: Plugin) {
     });
   }
   plugin.commands.add({
-    id: "track-cycle", path: ["@subtitles", "Subtitle Track", "Cycle"], order: 311, group: "subtitle-cycle", bindings: ["Alt+L"],
-    category: CATEGORY.track,
+    id: "track-cycle", title: "Cycle", bindings: ["Alt+L"],
+    category: CATEGORY.track, home: "tune",
     enabled: () => !!subtitles.state?.tracks.length,
     reason: () => (subtitles.state?.tracks.length ? null : "No subtitle tracks"),
     run: cycle,
   });
 
-  // Subtitle Style ▸ (D06, D07): same edits as the Subtitle Tuning buttons, reported on screen.
+  // Subtitle style (D06, D07): same edits as the panel's buttons, reported on screen.
   /**
    * Key-driven style edits: never blocked by a running operation, so held keys keep repeating.
    * `text` shows the result on screen (`osd.show` with the edited style's values).
@@ -1028,29 +1071,28 @@ export default async function activate(plugin: Plugin) {
     else say(status);
     plugin.update();
   };
-  const STYLE = ["@subtitles", "Subtitle Style"] as const;
   plugin.commands.add({
-    id: "size-up", path: [...STYLE, "Size +"], order: 325, group: "style-font", bindings: ["Alt+PageUp"], repeat: true,
+    id: "size-up", title: "Size +", bindings: ["Alt+PageUp"], repeat: true,
     category: CATEGORY.style, home: "tune",
     run: styleRun(() => sizeBy(1), (s) => osd.show("Subtitle size: larger ({})", [s.fontSize])),
   });
   plugin.commands.add({
-    id: "size-down", path: [...STYLE, "Size −"], order: 326, group: "style-font", bindings: ["Alt+PageDown"], repeat: true,
+    id: "size-down", title: "Size −", bindings: ["Alt+PageDown"], repeat: true,
     category: CATEGORY.style, home: "tune",
     run: styleRun(() => sizeBy(-1), (s) => osd.show("Subtitle size: smaller ({})", [s.fontSize])),
   });
   plugin.commands.add({
-    id: "move-up", path: [...STYLE, "Move Up"], order: 330, group: "style-move", bindings: [], repeat: true,
+    id: "move-up", title: "Move Up", bindings: [], repeat: true,
     category: CATEGORY.style, home: "tune",
     run: styleRun(() => moveBy(1), (s) => osd.show("Subtitle position: up ({}%)", [s.marginPercent])),
   });
   plugin.commands.add({
-    id: "move-down", path: [...STYLE, "Move Down"], order: 331, group: "style-move", bindings: [], repeat: true,
+    id: "move-down", title: "Move Down", bindings: [], repeat: true,
     category: CATEGORY.style, home: "tune",
     run: styleRun(() => moveBy(-1), (s) => osd.show("Subtitle position: down ({}%)", [s.marginPercent])),
   });
   plugin.commands.add({
-    id: "move-reset", path: ["@reset", "Subtitle Position"], order: 330, group: "reset-subtitles", bindings: ["Alt+Home"], repeat: false,
+    id: "move-reset", title: "Subtitle Position", bindings: ["Alt+Home"], repeat: false,
     category: CATEGORY.reset, home: "tune",
     run: styleRun(
       () => styleChange(() => ({ marginPercent: BASE.marginPercent })),
@@ -1059,8 +1101,8 @@ export default async function activate(plugin: Plugin) {
   });
   // D09 Bold, D11 Shadow / Opaque Box (toggles; the window has the sliders).
   plugin.commands.add({
-    id: "bold", path: [...STYLE, "Bold"], order: 324, group: "style-font", bindings: ["Alt+B"], repeat: false,
-    category: CATEGORY.style, home: "settings",
+    id: "bold", title: "Bold", bindings: ["Alt+B"], repeat: false,
+    category: CATEGORY.style, home: "tune",
     checked: () => current().bold,
     run: styleRun(
       () => styleChange((s) => ({ bold: !s.bold })),
@@ -1068,8 +1110,8 @@ export default async function activate(plugin: Plugin) {
     ),
   });
   plugin.commands.add({
-    id: "shadow", path: [...STYLE, "Shadow"], order: 335, group: "style-box", bindings: [], repeat: false,
-    category: CATEGORY.style, home: "settings",
+    id: "shadow", title: "Shadow", bindings: [], repeat: false,
+    category: CATEGORY.style, home: "tune",
     checked: () => current().shadow > 0,
     run: styleRun(
       () => styleChange((s) => ({ shadow: (s.shadow ?? 0) > 0 ? 0 : styleFile.shadowLast })),
@@ -1077,8 +1119,8 @@ export default async function activate(plugin: Plugin) {
     ),
   });
   plugin.commands.add({
-    id: "box", path: [...STYLE, "Opaque Box"], order: 336, group: "style-box", bindings: [], repeat: false,
-    category: CATEGORY.style, home: "settings",
+    id: "box", title: "Opaque Box", bindings: [], repeat: false,
+    category: CATEGORY.style, home: "tune",
     checked: () => current().box !== null,
     run: styleRun(
       () => styleChange((s) => ({ box: s.box === null || s.box === undefined ? styleFile.boxOpacity : null })),
@@ -1098,8 +1140,8 @@ export default async function activate(plugin: Plugin) {
   /** The ASS choice in effect, or the one waiting to be applied. */
   const assMode = () => (restorePending && styleFile.style ? styleFile.style.assOverride : current().assOverride);
   plugin.commands.add({
-    id: "ass-original", path: ["@subtitles", "Original ASS/SSA Styles"], order: 337, group: "subtitle-render",
-    category: CATEGORY.subtitles, home: "settings",
+    id: "ass-original", title: "Original ASS/SSA Styles",
+    category: CATEGORY.subtitles, home: "tune",
     checked: () => assMode() !== "force",
     run: () => setAssOverride(assMode() === "force" ? "keep" : "force"),
   });
@@ -1233,11 +1275,11 @@ export default async function activate(plugin: Plugin) {
   }
   const dialogue = { enabled: () => !cueReading && !dialogueBlocked(), busy: () => cueReading, reason: () => (cueReading ? "Reading subtitles…" : dialogueBlocked()) };
   plugin.commands.add({
-    id: "dialogue-previous", path: ["@playback", "Seek", "Previous Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek,
+    id: "dialogue-previous", path: ["@playback", "Seek", "Previous Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek, home: "tune",
     bindings: ["Home"], repeat: true, ...dialogue, run: () => jump("previous"),
   });
   plugin.commands.add({
-    id: "dialogue-next", path: ["@playback", "Seek", "Next Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek,
+    id: "dialogue-next", path: ["@playback", "Seek", "Next Dialogue"], order: 217, group: "jump-subtitle", category: CATEGORY.seek, home: "tune",
     bindings: ["End"], repeat: true, ...dialogue, run: () => jump("next"),
   });
   plugin.commands.add({
@@ -1261,37 +1303,46 @@ export default async function activate(plugin: Plugin) {
       await syncMenu.dispose();
       syncMenu = plugin.scope();
       syncMenu.commands.add({
-        id: "sync-earlier", path: ["@subtitles", "Sync", titles.earlier], order: 339, group: "subtitle-sync",
+        id: "sync-earlier", title: titles.earlier,
         category: CATEGORY.sync, home: "tune", bindings: ["."], repeat: true, run: styleRun(() => syncBy(-1), offsetText),
       });
       syncMenu.commands.add({
-        id: "sync-later", path: ["@subtitles", "Sync", titles.later], order: 340, group: "subtitle-sync",
+        id: "sync-later", title: titles.later,
         category: CATEGORY.sync, home: "tune", bindings: [","], repeat: true, run: styleRun(() => syncBy(1), offsetText),
       });
     });
   }
   syncSyncMenu();
   plugin.commands.add({
-    id: "sync-reset", path: ["@reset", "Subtitle Sync"], order: 331, group: "reset-subtitles", category: CATEGORY.reset, home: "tune",
+    id: "sync-reset", title: "Subtitle Sync", category: CATEGORY.reset, home: "tune",
     bindings: ["/"], repeat: true, run: styleRun(syncReset, offsetText),
   });
   plugin.commands.add({
-    id: "sync-input", path: ["@subtitles", "Sync", "Adjust Sync…"], order: 342, group: "subtitle-sync-input",
-    category: CATEGORY.sync, run: showSync,
+    id: "sync-input", title: "Adjust Sync…", category: CATEGORY.sync, home: "tune", run: typeSync,
   });
-  const TOOLS = {
-    reload: "Reload Subtitles",
-    refresh: "Refresh Subtitle Tracks",
-    tune: "Subtitle Tuning…",
-    settings: "Subtitle Settings…",
-  } as const;
-  type Extra = Partial<Pick<CommandOptions, "bindings"> & typeof idle>;
-  const tool = (id: keyof typeof TOOLS, order: number, run: () => unknown, extra: Extra = {}) =>
-    plugin.commands.add({ id, path: ["@subtitles", TOOLS[id]], order, group: "subtitle-tools", category: CATEGORY.subtitles, run, ...extra });
-  tool("reload", 370, () => busy || announce(message("reloading"), reload()), { bindings: ["Ctrl+Alt+Y"], ...idle });
-  tool("refresh", 371, () => busy || announce(message("refreshing"), refresh));
-  tool("tune", 372, showTune);
-  tool("settings", 373, showSettings);
+  plugin.commands.add({
+    id: "reload", title: "Reload Subtitles", bindings: ["Ctrl+Alt+Y"], ...idle, category: CATEGORY.subtitles, home: "tune",
+    run: () => busy || announce(message("reloading"), reload()),
+  });
+  plugin.commands.add({
+    id: "refresh", title: "Refresh Subtitle Tracks", category: CATEGORY.subtitles,
+    run: () => busy || announce(message("refreshing"), refresh),
+  });
+  // The Subtitle Tuning window's Remove button: the selected external subtitle, when this plugin owns it.
+  const canRemove = () => !busy && !!subtitles.state?.selected?.owned;
+  plugin.commands.add({
+    id: "remove", title: "Remove External Subtitle", category: CATEGORY.subtitles,
+    enabled: canRemove, busy: () => busy,
+    reason: () => (busy ? BUSY : canRemove() ? null : "No external subtitle selected"),
+    run: () => removeSelected()?.then(say),
+  });
+  plugin.commands.add({ id: "settings", title: "Subtitle Settings…", category: CATEGORY.subtitles, home: "tune", run: showSettings });
+  // Subtitles… (Alt+3, proposal §3.2): the Subtitles panel in the adjust column; again closes the column.
+  plugin.commands.add({
+    id: "tune", path: ["Subtitles…"], order: 603, group: "adjust", bindings: ["Alt+3"], category: CATEGORY.subtitles,
+    checked: () => (panel.state?.preferred ?? false) && (panel.state?.active ?? false),
+    run: togglePanel,
+  });
 
   // A new source cancels pending work; a new source or selection drops the unconfirmed style.
   subtitles.onChange((s) => {
@@ -1313,9 +1364,9 @@ export default async function activate(plugin: Plugin) {
   });
   // The subtitle state may be ready before the player's state says the local file is (or the other way round).
   plugin.player.onChange(() => scanOnOpen());
-  // The host has no subtitle event; an open window also re-reads every 1.5 s.
+  // The host has no subtitle event; the panel on screen or an open window also re-reads every 1.5 s.
   const poll = setInterval(() => {
-    if ((tune.opened || settings.opened || syncWindow.opened) && !busy)
+    if ((panel.state?.effective || settings.opened) && !busy)
       subtitles.refresh().catch((e) => {
         status = errorText(e);
         plugin.update();

@@ -1,4 +1,4 @@
-// Round 3a: A08 secondary subtitle (menu, 添加次字幕…, position, the 字幕微调 row, mutual exclusion).
+// Round 3a: A08 secondary subtitle (palette commands, 添加次字幕…, position, the panel's Secondary row, mutual exclusion).
 import assert from "node:assert/strict";
 import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -38,11 +38,13 @@ function dualHost() {
   host.subtitles.selection = { stamp: { generation: 1, revision: 1 }, target: ZH };
   return host;
 }
-const items = (host: TestHost, path: string) =>
+/** The commands whose id matches (palette only since the panel): id, title, radio, enabled, checked, reason. */
+const items = (host: TestHost, ids: RegExp) =>
   [...host.commands.entries()]
-    .filter(([, { display }]) => display.path.slice(0, -1).join(" > ") === path)
+    .filter(([id]) => ids.test(id))
     .map(([id, { declaration: d, display, state }]) =>
-      [id, display.path.at(-1), d.order, d.group, d.radio, state.enabled, state.checked, state.reason && host.translate(state.reason)] as const);
+      [id, display.title, d.radio, state.enabled, state.checked, state.reason && host.translate(state.reason)] as const);
+const SECOND = /^second-(off|\d+)$/;
 const secondary = (host: TestHost) => host.subtitles.selection.secondary ?? null;
 const styleSent = (host: TestHost) => host.sent("subtitles.style").map((p) => (p.style as Record<string, unknown> | null)?.secondaryPosition);
 async function srt(name: string, body: string) {
@@ -52,19 +54,19 @@ async function srt(name: string, body: string) {
   return { path, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("A08: 次字幕 ▸ lists the tracks; the primary and bitmap tracks are disabled with the reason", async () => {
+test("A08: the 次字幕 commands list the tracks; the primary and bitmap tracks are disabled with the reason", async () => {
   const host = dualHost();
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.settle();
-  assert.deepEqual(items(host, "字幕 > 次字幕"), [
-    ["second-off", "不显示", 312, "subtitle-second", true, true, true, null],
-    ["second-1", "中文 · zh", 313, "subtitle-second", true, false, false, "已作为主字幕"],
-    ["second-2", "English · en", 314, "subtitle-second", true, true, false, null],
-    ["second-3", "PGS", 315, "subtitle-second", true, false, false, "次字幕仅支持文本字幕"],
+  assert.deepEqual(items(host, SECOND), [
+    ["second-off", "不显示", true, true, true, null],
+    ["second-1", "中文 · zh", true, false, false, "已作为主字幕"],
+    ["second-2", "English · en", true, true, false, null],
+    ["second-3", "PGS", true, false, false, "次字幕仅支持文本字幕"],
   ]);
-  assert.deepEqual(items(host, "字幕 > 次字幕 > 位置").map((i) => i.slice(1, 7)), [
-    ["顶部", 321, "subtitle-second-pos", true, true, true],
-    ["主字幕上方", 321, "subtitle-second-pos", true, true, false],
+  assert.deepEqual(items(host, /^second-position-/).map((i) => i.slice(1, 5)), [
+    ["顶部", true, true, true],
+    ["主字幕上方", true, true, false],
   ]);
   await host.command("second-2").run();
   await host.settle();
@@ -108,7 +110,7 @@ test("A08: choosing the secondary as the primary turns the secondary off; 依次
   assert.deepEqual(host.subtitles.selection.target, EN);
   assert.equal(secondary(host), null);
   assert.equal(host.osd.at(-1), "字幕：English · en。次字幕已关闭（已改为主字幕）");
-  assert.deepEqual(items(host, "字幕 > 次字幕").map((i) => [i[1], i[5], i[7]]), [
+  assert.deepEqual(items(host, SECOND).map((i) => [i[1], i[3], i[5]]), [
     ["不显示", true, null],
     ["中文 · zh", true, null],
     ["English · en", false, "已作为主字幕"],
@@ -136,7 +138,7 @@ test("A08: 添加次字幕… loads a file as the secondary and leaves the prima
   let started = await startPlugin(activate, { directory, host: empty, locale: "zh-Hans" });
   assert.equal(empty.command("load-secondary").state.enabled, false);
   assert.equal(empty.translate(empty.command("load-secondary").state.reason!), "没有可播放的媒体");
-  assert.deepEqual(items(empty, "字幕 > 次字幕").map((i) => i[1]), ["不显示"], "no text track: only 不显示");
+  assert.deepEqual(items(empty, SECOND).map((i) => i[1]), ["不显示"], "no text track: only 不显示");
   await started.stop();
   const host = dualHost();
   started = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
@@ -195,11 +197,12 @@ test("A08: 位置 ▸ 主字幕上方 is applied as a style field, saved, and re
   }
 });
 
-test("A08: the 字幕微调 次字幕 row selects, refuses the primary with a reason, and turns off", async () => {
+test("A08: the panel's 次字幕 row selects, refuses the primary with a reason, and turns off", async () => {
   const host = dualHost();
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.command("tune").run();
-  const window = host.window("subtitle-tune");
+  const window = host.mounted();
+  assert.equal(window.props["can-secondary"], true);
   assert.deepEqual(window.props["secondary-labels"], ["关闭次字幕", "中文 · zh", "English · en", "PGS"]);
   assert.equal(window.props["selected-secondary"], 0);
   window.emit("select-secondary", 2);

@@ -24,12 +24,9 @@ export const SYNC_MENU = [
   { step: 5000, earlier: "Earlier 5 s", later: "Later 5 s" },
 ] as const;
 
-/** A08: where the secondary subtitle sits (`SubtitleStyle.secondaryPosition`), with its menu title. */
+/** A08: where the secondary subtitle sits (`SubtitleStyle.secondaryPosition`), in the order of the panel's Position choices. */
 export type SecondaryPosition = "top" | "aboveMain";
-export const SECONDARY_POSITIONS = [
-  { id: "top", label: "Top" },
-  { id: "aboveMain", label: "Above Main Subtitle" },
-] as const;
+export const SECONDARY_POSITIONS = [{ id: "top" }, { id: "aboveMain" }] as const;
 export type Stored = {
   syncStepMs: number;
   autoReload: boolean;
@@ -67,15 +64,19 @@ export const serialize = ({ syncStepMs, autoReload, autoLoad, fallbackEncoding, 
 export const stepSeconds = (ms: number) => `${ms / 1000}`;
 
 /**
- * Adjust Sync input: whole milliseconds with an optional sign (ASCII or U+2212).
- * Returns the value, or the status saying why it was refused.
+ * The typed sync value (the panel's Delay field), in milliseconds: seconds as the panel shows
+ * them, with an optional sign (ASCII or U+2212), a dot or comma and up to three decimals, and an
+ * optional unit: `-1.25`, `+0,5 s`, `2`, or milliseconds with `ms` (`250 ms`), as mpv's
+ * `sub-delay` takes seconds. Returns the value, or the status saying why it was refused.
  */
 export function parseSync(text: string): { value: number } | { error: Status } {
-  const trimmed = String(text).trim().replace(/^−/, "-");
-  if (!/^[+-]?\d{1,9}$/.test(trimmed)) return { error: status("syncInteger") };
-  const value = Number(trimmed);
-  if (Math.abs(value) > SYNC_LIMIT) return { error: status("syncRange", [SYNC_LIMIT, SYNC_LIMIT]) };
-  return { value };
+  const match = /^([+-]?)(\d{1,6})(?:[.,](\d{1,3}))?\s*(s|ms)?$/i.exec(String(text).trim().replace(/^−/, "-"));
+  if (!match) return { error: status("syncSeconds") };
+  const [, sign, whole, fraction = "", unit = "s"] = match;
+  const ms = unit.toLowerCase() === "ms" ? (fraction ? Number.NaN : Number(whole)) : Number(whole) * 1000 + Number(fraction.padEnd(3, "0"));
+  if (!Number.isFinite(ms)) return { error: status("syncSeconds") };
+  if (ms > SYNC_LIMIT) return { error: status("syncRange", [SYNC_LIMIT / 1000, SYNC_LIMIT / 1000]) };
+  return { value: sign === "-" && ms ? -ms : ms };
 }
 
 // ------------------------------------------------------------------ style.json (D09)
