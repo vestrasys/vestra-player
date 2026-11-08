@@ -177,12 +177,12 @@ test("style.json: the style (not the sync) is restored when a stylable track is 
   }
 });
 
-test("D05: sync values up to ±600 000 ms are accepted", async () => {
+test("D05: sync values up to ±600 s are accepted", async () => {
   const host = sourceHost();
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   await host.command("sync-input").run();
-  const sync = host.window("subtitle-sync");
-  sync.emit("apply", "-90000");
+  const sync = host.mounted();
+  sync.emit("apply-sync", "-90");
   await host.settle(170);
   assert.equal(style(host)?.offsetMs, -90000);
   assert.equal(host.osd.at(-1), "字幕同步: 超前 90 秒");

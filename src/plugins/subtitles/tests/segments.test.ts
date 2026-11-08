@@ -19,7 +19,8 @@ async function segments(tracks: Track[], locale: (typeof LOCALES)[number]) {
   const { stop } = await startPlugin(activate, { directory, host, locale });
   await host.settle();
   const shown = tracks.slice(0, 8).map((_, i) => host.command(`track-${i + 1}`).display.path.at(-1) as string);
-  const second = tracks.slice(0, 8).map((_, i) => host.command(`second-${i + 1}`).display.path.at(-1) as string);
+  // The secondary tracks are palette commands with the same names (titles, no path).
+  const second = tracks.slice(0, 8).map((_, i) => host.command(`second-${i + 1}`).display.title);
   await stop();
   return { shown, second };
 }
@@ -137,7 +138,7 @@ test("a track titled \"Position\" (or \"Off\", \"Cycle\") does not take a fixed 
   assert.deepEqual(shown.en, ["Position (1)", "Off (2)", "Cycle (3)"]);
 });
 
-test("the OSD and the window lists name an id-less embedded track \"Track N\" like the menu", async () => {
+test("the OSD and the panel lists name an id-less embedded track \"Track N\" like the menu", async () => {
   const host = new TestHost();
   host.openElsewhere("/movie.mkv");
   host.subtitles.tracks.push(
@@ -148,7 +149,7 @@ test("the OSD and the window lists name an id-less embedded track \"Track N\" li
   await host.settle();
   assert.equal(host.command("track-2").display.path.at(-1), "Track 2");
   await host.command("tune").run();
-  const props = host.window("subtitle-tune").props;
+  const props = host.mounted().props;
   assert.deepEqual(props["track-labels"], ["Subtitles Off", "English · en", "Track 2"]);
   assert.deepEqual(props["secondary-labels"], ["Secondary Off", "English · en", "Track 2"]);
   await host.command("track-2").run();
