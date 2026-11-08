@@ -15,11 +15,31 @@ pub const PREROLL: &str = "source-zero-to-start";
 /// Caller owns source/stream selection and execution. No paths, stream maps or
 /// arbitrary user filter expressions are accepted here. Effects precede the
 /// timestamp shift and resampling so their state sees the original source prefix.
+#[cfg(test)]
 pub fn audio(
     resources: &[Resource<AudioNode>],
     offset_ms: i32,
     start: f64,
     end: f64,
+) -> Result<String> {
+    audio_from(resources, offset_ms, start, end, 0.)
+}
+
+/// The audio chain for audio decoded from `base` seconds on, after an input
+/// seek (`base` 0: from source time 0, as the tests' `audio` builds it). The
+/// timeline is shifted so `base` is 0 before the resampler: its
+/// `first_pts=0` then pads nothing before the seek (from source time 0 it
+/// padded and held silence for everything before it: 1.5 GB at 30 min). The
+/// unit of `first_pts` is the input's sample period, so the shift is done in
+/// seconds instead. `base` is whole seconds (a sample boundary at every
+/// integer rate, so samples land where a decode from 0 s puts them) and not
+/// after the first sample after the offset shift.
+pub fn audio_from(
+    resources: &[Resource<AudioNode>],
+    offset_ms: i32,
+    start: f64,
+    end: f64,
+    base: f64,
 ) -> Result<String> {
     ensure!(
         (-10_000..=10_000).contains(&offset_ms),
@@ -29,10 +49,21 @@ pub fn audio(
         start.is_finite() && end.is_finite() && 0.0 <= start && start < end && end <= 86400.0,
         "audio interval must be finite with 0 <= start < end <= 86400 seconds"
     );
+    ensure!(
+        base.is_finite() && base >= 0. && base.fract() == 0. && base <= start,
+        "the audio timeline must start at a whole second at or before the interval"
+    );
     let effects = effects::render_lavfi(&Descriptors::Audio(resources.to_vec()))?;
     let offset = f64::from(offset_ms) / 1000.0;
+    let shift = if base == 0. {
+        format!("({offset})")
+    } else {
+        format!("({offset}-{base})")
+    };
     Ok(format!(
-        "{effects},asetpts=PTS+({offset})/TB,aresample=48000:async=1:first_pts=0,apad,atrim=start={start}:end={end},asetpts=PTS-STARTPTS"
+        "{effects},asetpts=PTS+{shift}/TB,aresample=48000:async=1:first_pts=0,apad,atrim=start={}:end={},asetpts=PTS-STARTPTS",
+        start - base,
+        end - base
     ))
 }
 

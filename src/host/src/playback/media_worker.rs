@@ -27,6 +27,12 @@ const CANCELLED_BEFORE_START: u8 = 7;
 const POLL: Duration = Duration::from_millis(20);
 const STDERR_TAIL: usize = 64 * 1024;
 const PNG_BYTES: usize = 128 * 1024 * 1024;
+/// `facts.preroll` of an export without effects or with stateless ones:
+/// decoding starts at the keyframe before the start (an input seek).
+const SEEK_PREROLL: &str = "keyframe-before-start";
+/// `facts.preroll` of an export with stateful effects: decoding starts at the
+/// keyframe before a bounded history window (`HISTORY_SECONDS`).
+const BOUNDED_PREROLL: &str = "bounded-history";
 
 /// The still-image format of a one-frame export. FFmpeg always writes a PNG;
 /// JPEG and BMP are converted from it (validated) before publication.
@@ -631,8 +637,9 @@ pub(super) fn capture_input_command(
 
 /// Run an FFmpeg child to its end on this worker, reaped on every path. Its
 /// stderr keeps a bounded tail. With `total`, the command writes `-progress
-/// pipe:1` (FFmpeg's `key=value` lines) to stdout and each `out_time_us` moves
-/// [`Control::progress`] toward `total` seconds. `Ok(None)`: cancelled.
+/// pipe:1` (FFmpeg's `key=value` lines) to stdout and each positive
+/// `out_time_us` moves [`Control::progress`] toward `total` seconds (it stays
+/// `None` until the first frame is written). `Ok(None)`: cancelled.
 pub(super) fn run_tool(
     command: &mut Command,
     stdin: Stdio,
@@ -677,7 +684,6 @@ pub(super) fn run_tool(
     let waited = thread::scope(|scope| {
         let reader = match (stdout, total) {
             (Some(stdout), Some(total)) => {
-                control.set_progress(0., total);
                 match thread::Builder::new()
                     .name("media-progress".into())
                     .spawn_scoped(scope, move || read_progress(stdout, control, total))
@@ -728,7 +734,12 @@ fn read_progress(stdout: impl Read, control: &Control, total: f64) {
             Ok(0) | Err(_) => return,
             Ok(_) => {}
         }
-        if let Some(done) = progress_seconds(&String::from_utf8_lossy(&line)) {
+        // Unknown (`null`) until the first frame is written: before it FFmpeg
+        // decodes up to the start (from a keyframe, or from 0 s for an effects
+        // chain) and reports 0, which would read as a stuck bar.
+        if let Some(done) =
+            progress_seconds(&String::from_utf8_lossy(&line)).filter(|done| *done > 0.)
+        {
             control.set_progress(done, total);
         }
     }
@@ -858,7 +869,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         .find(|s| s.trim_start().starts_with("libavfilter"))
         .context("libavfilter version missing")?;
     let copy = matches!(&request.output, Output::Copy { .. });
-    control.record_facts(serde_json::json!({"descriptorVersion":"vestra-finite/1","ffmpegVersion":ffmpeg_version,"libavfilterVersion":libavfilter.trim(),"videoStreamIndex":request.video_stream,"range":{"start":request.time,"end":request.output.end(),"interval":if copy {"stream copy; first video packet is the keyframe at or before start"} else {"half-open; first video PTS >= start"}},"preroll":if !copy && (request.processed.is_some() || matches!(&request.output,Output::Mp4{..})) {Some(crate::playback::offline_audio::PREROLL)}else{None},"hasAudio":request.output.has_audio(),"audioTiming":if copy && request.output.has_audio() {"stream copy: source packets from the video start, unchanged"} else if request.output.has_audio() {"DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded"}else{"not applicable: no audio output"},"processed":request.processed.is_some()}));
+    control.record_facts(serde_json::json!({"descriptorVersion":"vestra-finite/1","ffmpegVersion":ffmpeg_version,"libavfilterVersion":libavfilter.trim(),"videoStreamIndex":request.video_stream,"range":{"start":request.time,"end":request.output.end(),"interval":if copy {"stream copy; first video packet is the keyframe at or before start"} else {"half-open; first video PTS >= start"}},"preroll":null,"hasAudio":request.output.has_audio(),"audioTiming":if copy && request.output.has_audio() {"stream copy: source packets from the video start, unchanged"} else if request.output.has_audio() {"DSP source0 -> signed PTS shift -> 48kHz resample first_pts=0 -> zero pad -> range trim; device gain/mute excluded"}else{"not applicable: no audio output"},"processed":request.processed.is_some()}));
     reader
         .validate()
         .context("source-unavailable before encoding")?;
@@ -872,11 +883,11 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
         "error",
         "-show_entries",
         if matches!(&request.output, Output::Still(_)) {
-            "format=start_time"
+            "format=start_time,format_name"
         } else {
             // Clips also need the streams: the codecs and time bases of a
             // copy, the frame rate of a capped re-encode.
-            "format=start_time,bit_rate:stream=index,codec_type,codec_name,time_base,avg_frame_rate,r_frame_rate,bit_rate:stream_disposition=attached_pic"
+            "format=start_time,format_name,bit_rate:stream=index,codec_type,codec_name,time_base,avg_frame_rate,r_frame_rate,bit_rate:stream_disposition=attached_pic"
         },
         "-of",
         "json",
@@ -906,6 +917,21 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     reader
         .validate()
         .context("source-unavailable after origin verification")?;
+    let seek = seek_plan(
+        request,
+        probed["format"]["format_name"].as_str().unwrap_or(""),
+    );
+    let mut facts = control.facts();
+    facts["preroll"] = match seek {
+        Some(seek) => seek.preroll.into(),
+        None if !copy
+            && (request.processed.is_some() || matches!(&request.output, Output::Mp4 { .. })) =>
+        {
+            crate::playback::offline_audio::PREROLL.into()
+        }
+        None => serde_json::Value::Null,
+    };
+    control.record_facts(facts);
     let filename = request
         .destination
         .file_name()
@@ -1046,6 +1072,15 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
     if request.processed.is_none() && matches!(&request.output, Output::Still(_)) {
         command.args(["-ss", &request.time.to_string()]);
     }
+    if let Some(seek) = seek {
+        // No state to warm up beyond `seek.at`: seek the held file (FFmpeg
+        // decodes from the keyframe before it) instead of decoding from 0 s.
+        // `-copyts -start_at_zero` keep the normalized source timeline, so
+        // the trims, the subtitle times and the audio graph below are
+        // unchanged and the frames and samples are those of decoding from
+        // 0 s.
+        command.args(["-ss", &seek.at.to_string(), "-copyts", "-start_at_zero"]);
+    }
     command.args(["-i", crate::platform::HELD_FILE_INPUT]);
     let mut total = None;
     match &request.output {
@@ -1105,8 +1140,13 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
                     .as_ref()
                     .map(|p| (p.processing.audio.as_slice(), p.processing.audio_offset_ms))
                     .unwrap_or((&[], 0));
-                let af =
-                    crate::playback::offline_audio::audio(resources, offset, request.time, *end)?;
+                let af = crate::playback::offline_audio::audio_from(
+                    resources,
+                    offset,
+                    request.time,
+                    *end,
+                    audio_base(seek, offset),
+                )?;
                 let stream = audio
                     .stream_index
                     .context("frozen audio stream mapping unavailable")?;
@@ -1227,6 +1267,100 @@ fn source_bitrate(probed: &serde_json::Value, video_stream: u32) -> Option<u64> 
     })
 }
 
+/// History an export keeps before its start when the chain has stateful
+/// nodes (`effects::History::Bounded`): 10 s, from the keyframe before it.
+const HISTORY_SECONDS: f64 = 10.;
+
+/// Where an export starts decoding, when not at 0 s.
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct Seek {
+    /// Normalized source seconds; FFmpeg decodes from the keyframe before.
+    at: f64,
+    /// `facts.preroll`: `keyframe-before-start` or `bounded-history`.
+    preroll: &'static str,
+}
+
+/// Audio decoded before the seek point when the export has audio: an AAC or
+/// MP3 decoder started cold writes different first samples (priming).
+const AUDIO_WARMUP_SECONDS: f64 = 1.;
+
+/// Containers whose input seek lands on the keyframe at or before the target
+/// (an index: MP4/MOV, Matroska/WebM). Others (MPEG-TS, raw streams) seek by
+/// estimate and can land after it, losing frames: they decode from 0 s.
+fn seeks_exactly(format_name: &str) -> bool {
+    format_name
+        .split(',')
+        .any(|name| matches!(name, "mov" | "mp4" | "matroska" | "webm"))
+}
+
+/// The input seek of a frame or a re-encoded clip that needs no history from
+/// 0 s; `None` keeps decoding from 0 s (`offline_audio::PREROLL`). A raw
+/// still keeps its own plain `-ss`; a stream copy seeks in `media_copy`.
+/// With effects (user ruling 2026-11-07, by effect type): a stateless chain
+/// seeks to the start, a chain with stateful nodes keeps `HISTORY_SECONDS`
+/// before it, a frameBlend chain decodes from 0 s. Audio needs
+/// `AUDIO_WARMUP_SECONDS` more, and a positive audio offset (audio played
+/// later) the source that much earlier. Only in containers that seek
+/// exactly (`seeks_exactly`); a seek that would reach 0 s is no seek.
+fn seek_plan(request: &RenderRequest, format_name: &str) -> Option<Seek> {
+    if request.processed.is_none() && matches!(&request.output, Output::Still(_))
+        || matches!(&request.output, Output::Copy { .. })
+        || !seeks_exactly(format_name)
+    {
+        return None;
+    }
+    let (window, preroll, offset_ms) = match &request.processed {
+        None => (0., SEEK_PREROLL, 0),
+        Some(frozen) => {
+            let processing = &frozen.processing;
+            let history = processing
+                .video
+                .iter()
+                .flat_map(|r| {
+                    r.nodes
+                        .iter()
+                        .map(crate::playback::effects::VideoNode::history)
+                })
+                .chain(processing.audio.iter().flat_map(|r| {
+                    r.nodes
+                        .iter()
+                        .map(crate::playback::effects::AudioNode::history)
+                }))
+                .max()
+                .unwrap_or(crate::playback::effects::History::None);
+            match history {
+                crate::playback::effects::History::None => {
+                    (0., SEEK_PREROLL, processing.audio_offset_ms)
+                }
+                crate::playback::effects::History::Bounded => {
+                    (HISTORY_SECONDS, BOUNDED_PREROLL, processing.audio_offset_ms)
+                }
+                crate::playback::effects::History::FromZero => return None,
+            }
+        }
+    };
+    let audio = if request.output.has_audio() {
+        AUDIO_WARMUP_SECONDS + f64::from(offset_ms.max(0)) / 1000.
+    } else {
+        0.
+    };
+    // Whole seconds: a sample boundary at every integer rate (`audio_base`).
+    let at = (request.time - window - audio).floor();
+    (at > 0.).then_some(Seek { at, preroll })
+}
+
+/// Where the audio graph's timeline starts after an input seek
+/// (`offline_audio::audio_from`): the seek point shifted by a negative audio
+/// offset (audio played earlier), in whole seconds, rounded down so it is
+/// never after the first decoded sample; 0 without a seek.
+fn audio_base(seek: Option<Seek>, offset_ms: i32) -> f64 {
+    seek.map_or(0., |seek| {
+        (seek.at + f64::from(offset_ms.min(0)) / 1000.)
+            .floor()
+            .max(0.)
+    })
+}
+
 /// The R6 ceilings as filters after the range trim: a frame-rate cap only
 /// when the source is faster, and a height cap that leaves a shorter picture
 /// alone (the width follows the aspect, kept even).
@@ -1269,8 +1403,13 @@ fn publish(
         .context("temporary output could not be flushed")?;
     temp.persist_noclobber(&destination)
         .map_err(|error| anyhow::anyhow!("no-clobber publication failed: {}", error.error))?;
-    if let Some((_, total)) = control.progress() {
-        // FFmpeg's last report may stop short of the clip's nominal length.
+    // FFmpeg's last report may stop short of the clip's length, and a clip
+    // written before its first report has none at all.
+    if let Some(total) = control
+        .progress()
+        .map(|(_, total)| total)
+        .or(range.map(|(start, end)| end - start))
+    {
         control.set_progress(total, total);
     }
     Ok(Outcome::Completed { destination, range })
@@ -1383,6 +1522,8 @@ pub(super) mod real {
             thread::sleep(Duration::from_millis(5));
         }
         thread.join().unwrap();
+        // A short job can finish between two polls.
+        let seen = seen.or(control.progress());
         (control, seen)
     }
 }
@@ -1515,6 +1656,680 @@ mod tests {
             5.,
         );
         assert_eq!(dips.progress(), Some((2., 5.)));
+        // While FFmpeg decodes up to the start it reports 0: still unknown.
+        let preroll = Control::new();
+        read_progress(
+            io::Cursor::new(b"out_time_us=N/A\nout_time_us=0\nprogress=continue\n".to_vec()),
+            &preroll,
+            5.,
+        );
+        assert_eq!(preroll.progress(), None);
+    }
+
+    /// `ffmpeg … -f <format> -` of `file`'s first video or audio stream,
+    /// decoded: per-frame md5 lines (time and hash) or raw PCM bytes.
+    fn decoded(file: &std::path::Path, stream: &str, format: &str) -> Vec<u8> {
+        let out = Command::new(real::ffmpeg())
+            .args(["-v", "error", "-i"])
+            .arg(file)
+            .args(["-map", stream])
+            .args(if format == "framemd5" {
+                &["-f", "framemd5"][..]
+            } else {
+                &["-f", "s16le", "-ac", "2"][..]
+            })
+            .arg("-")
+            .output()
+            .unwrap();
+        assert!(
+            out.status.success(),
+            "{}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+        if format == "framemd5" {
+            // Keep presentation time and hash; drop the comment header.
+            String::from_utf8(out.stdout)
+                .unwrap()
+                .lines()
+                .filter(|l| !l.starts_with('#'))
+                .map(|l| {
+                    let f: Vec<_> = l.split(',').map(str::trim).collect();
+                    format!("{} {}\n", f[2], f[5])
+                })
+                .collect::<String>()
+                .into_bytes()
+        } else {
+            out.stdout
+        }
+    }
+
+    /// A raw clip input-seeks to its start (`-ss -copyts -start_at_zero`)
+    /// instead of decoding from 0 s and writes what decoding from 0 s
+    /// writes. The MP4 starts at about 10 s (`-output_ts_offset`), so the
+    /// normalized timeline is checked too. A TS of the same streams seeks by
+    /// estimate, so it still decodes from 0 s.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_raw_clip_seeks_and_writes_what_decoding_from_zero_writes() {
+        let dir = tempfile::tempdir().unwrap();
+        let noisy = noisy_source(dir.path());
+        for (name, format, preroll) in [
+            ("offset.mp4", "mp4", SEEK_PREROLL),
+            (
+                "offset.ts",
+                "mpegts",
+                crate::playback::offline_audio::PREROLL,
+            ),
+        ] {
+            let source = dir.path().join(name);
+            let made = Command::new(real::ffmpeg())
+                .args(["-loglevel", "error", "-y", "-i"])
+                .arg(&noisy)
+                .args(["-c", "copy", "-output_ts_offset", "10", "-f", format])
+                .arg(&source)
+                .status()
+                .unwrap();
+            assert!(made.success());
+            let origin: f64 =
+                real::probe(&source, &["-show_entries", "format=start_time"])["format"]
+                    ["start_time"]
+                    .as_str()
+                    .unwrap()
+                    .parse()
+                    .unwrap();
+            assert!(origin > 9., "{name} starts at {origin} s");
+            let out = dir.path().join(format);
+            std::fs::create_dir(&out).unwrap();
+            same_as_from_zero(&source, origin, (20.3, 21.9), None, preroll, &out, true);
+        }
+    }
+
+    /// A testmedia clip (H.264 + AAC in MKV), 20.4–21.4 s: the same frames.
+    /// Matroska times are whole milliseconds, so the resampler places the
+    /// first sample after a seek up to half a millisecond from where a
+    /// decode from 0 s puts it: the audio matches within that.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264 and the testmedia clips"]
+    fn a_raw_clip_of_a_real_file_seeks_to_the_same_frames() {
+        let Some(source) = real::clip("[ryona]kof xiii Athena.mkv") else {
+            return;
+        };
+        let dir = tempfile::tempdir().unwrap();
+        same_as_from_zero(
+            &source,
+            0.,
+            (20.4, 21.4),
+            None,
+            SEEK_PREROLL,
+            dir.path(),
+            false,
+        );
+    }
+
+    /// Effects for [`same_as_from_zero`]: video and audio chains and the
+    /// audio offset in ms.
+    struct Effects {
+        video: Vec<crate::playback::effects::VideoNode>,
+        audio: Vec<crate::playback::effects::AudioNode>,
+        offset_ms: i32,
+    }
+
+    /// Export `start..end` of `source` (video 0, audio 1) through the worker
+    /// and compare it with decoding from 0 s: the reference runs the graph
+    /// the worker builds without the input seek (one thread, so both
+    /// encoders are deterministic). Frames (time and md5) and audio PCM must
+    /// be the same; `preroll` is the expected `facts.preroll`.
+    fn same_as_from_zero(
+        source: &std::path::Path,
+        origin: f64,
+        (start, end): (f64, f64),
+        effects: Option<Effects>,
+        preroll: &str,
+        dir: &std::path::Path,
+        exact_audio: bool,
+    ) {
+        use crate::playback::effects::Resource;
+        fn resource<N>(nodes: Vec<N>) -> Resource<N> {
+            Resource {
+                manifest_id: "test.plugin".into(),
+                resource_id: "chain".into(),
+                nodes,
+            }
+        }
+        let (video_resources, audio_resources, offset_ms) = match &effects {
+            Some(e) => (
+                (!e.video.is_empty())
+                    .then(|| resource(e.video.clone()))
+                    .into_iter()
+                    .collect(),
+                (!e.audio.is_empty())
+                    .then(|| resource(e.audio.clone()))
+                    .into_iter()
+                    .collect(),
+                e.offset_ms,
+            ),
+            None => (Vec::new(), Vec::new(), 0),
+        };
+        let destination = dir.join("seek.mp4");
+        let mut request = real::request(
+            source,
+            start,
+            destination.clone(),
+            Output::Mp4 {
+                end,
+                audio: Some(real::audio(1)),
+                encoding: Encoding::default(),
+            },
+        );
+        request.source_origin = origin;
+        if effects.is_some() {
+            request.processed = Some(Arc::new(crate::playback::media_jobs::FrozenProcessed {
+                processing: crate::playback::processing::FrozenProcessing {
+                    revision: 1,
+                    video: video_resources.clone(),
+                    audio: audio_resources.clone(),
+                    audio_offset_ms: offset_ms,
+                },
+                subtitle: None,
+                width: 320,
+                height: 240,
+                audio_delay_ms: f64::from(offset_ms),
+            }));
+        }
+        let (control, progress) = real::run_job(request);
+        assert!(
+            matches!(control.snapshot().1, Some(Outcome::Completed { .. })),
+            "{:?}",
+            control.snapshot().1
+        );
+        assert_eq!(control.facts()["preroll"], preroll);
+        assert!(
+            control
+                .progress()
+                .is_some_and(|(done, total)| done == total)
+        );
+        assert!(progress.is_some_and(|(done, _)| done > 0.));
+        // The reference: the graph the worker builds, decoded from 0 s.
+        let filter = if effects.is_some() {
+            crate::playback::offline_descriptor::video_range(
+                &video_resources,
+                None,
+                start,
+                Some(end),
+            )
+            .unwrap()
+        } else {
+            format!(
+                "scale=w='max(1,round(iw*sar))':h=ih,setsar=1,settb=AVTB,trim=start={start}:end={end},setpts=PTS-STARTPTS"
+            )
+        };
+        let video = format!("[0:0]{filter},pad=ceil(iw/2)*2:ceil(ih/2)*2:color=black[v]");
+        let audio =
+            crate::playback::offline_audio::audio(&audio_resources, offset_ms, start, end).unwrap();
+        let reference = dir.join("reference.mp4");
+        let made = Command::new(real::ffmpeg())
+            .args([
+                "-nostdin",
+                "-v",
+                "error",
+                "-threads",
+                "1",
+                "-filter_threads",
+                "1",
+            ])
+            .args(["-filter_complex_threads", "1", "-i"])
+            .arg(source)
+            .arg("-filter_complex")
+            .arg(format!("{video};[0:1]{audio}[a]"))
+            .args(["-map", "[v]", "-map", "[a]", "-c:a", "aac", "-ar", "48000"])
+            .args(["-b:a", "192k", "-t", &(end - start).to_string()])
+            .args(["-c:v", "libx264", "-preset", "veryfast", "-crf", "18"])
+            .args([
+                "-pix_fmt",
+                "yuv420p",
+                "-threads",
+                "1",
+                "-movflags",
+                "+faststart",
+            ])
+            .args(["-f", "mp4", "-y"])
+            .arg(&reference)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let frames = decoded(&destination, "0:v:0", "framemd5");
+        assert!(!frames.is_empty());
+        assert_eq!(
+            frames,
+            decoded(&reference, "0:v:0", "framemd5"),
+            "video frames differ"
+        );
+        let pcm = decoded(&destination, "0:a:0", "pcm");
+        assert!(pcm.len() > 100_000);
+        let expected = decoded(&reference, "0:a:0", "pcm");
+        if exact_audio {
+            assert!(
+                pcm == expected,
+                "audio PCM differs: {:?}",
+                alignment(&pcm, &expected)
+            );
+        } else {
+            let (shift, correlation) = alignment(&pcm, &expected);
+            assert!(
+                shift.abs() <= 24 && correlation > 0.99,
+                "audio off by {shift} samples (correlation {correlation})"
+            );
+        }
+    }
+
+    /// The best shift (samples, ±48) of `a` against `b` (16-bit stereo, left
+    /// channel) and the normalized correlation there.
+    fn alignment(a: &[u8], b: &[u8]) -> (i64, f64) {
+        let left = |pcm: &[u8]| -> Vec<f64> {
+            pcm.as_chunks::<4>()
+                .0
+                .iter()
+                .map(|f| f64::from(i16::from_le_bytes([f[0], f[1]])))
+                .collect()
+        };
+        let (a, b) = (left(a), left(b));
+        assert_eq!(a.len(), b.len(), "audio lengths differ");
+        let n = a.len() as i64;
+        (-48..=48)
+            .map(|shift: i64| {
+                let (mut ab, mut aa, mut bb) = (0., 0., 0.);
+                for i in 100..n - 100 {
+                    let (x, y) = (a[i as usize], b[(i + shift) as usize]);
+                    ab += x * y;
+                    aa += x * x;
+                    bb += y * y;
+                }
+                (shift, ab / (aa * bb).sqrt())
+            })
+            .fold((0, f64::MIN), |best, c| if c.1 > best.1 { c } else { best })
+    }
+
+    /// 30 s of noisy 25 fps video (so temporal filters have work) and pink
+    /// noise, keyframes every 2 s, in MP4.
+    fn noisy_source(dir: &std::path::Path) -> PathBuf {
+        let source = dir.join("noisy.mp4");
+        let made = Command::new(real::ffmpeg())
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("testsrc2=size=320x240:rate=25,noise=alls=20:allf=t")
+            .args(["-f", "lavfi", "-i", "anoisesrc=d=30:c=pink:r=44100"])
+            .args([
+                "-t",
+                "30",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-g",
+                "50",
+            ])
+            .args(["-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest"])
+            .arg(&source)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        source
+    }
+
+    /// A chain of stateless nodes (eq, gblur, volume, channels) seeks to the
+    /// start like a raw snapshot: the same frames as decoding from 0 s. The
+    /// audio filters see the decoded audio in other chunks after a seek, so
+    /// a sample can round one step differently, and the AAC encoder turns
+    /// that into a different bitstream: the audio matches closely (aligned,
+    /// correlation above 0.99), not exactly. An audio offset moves the seek
+    /// earlier by itself.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_stateless_chain_seeks_to_the_start() {
+        use crate::playback::effects::{AudioNode, ChannelMode, VideoNode};
+        let dir = tempfile::tempdir().unwrap();
+        let source = noisy_source(dir.path());
+        same_as_from_zero(
+            &source,
+            0.,
+            (20.3, 21.9),
+            Some(Effects {
+                video: vec![
+                    VideoNode::Eq {
+                        brightness: 0.05,
+                        contrast: 1.2,
+                        saturation: 1.1,
+                        gamma: 1.,
+                    },
+                    VideoNode::Gblur {
+                        sigma: 1.5,
+                        steps: 3,
+                    },
+                ],
+                audio: vec![
+                    AudioNode::Volume { gain_db: -3. },
+                    AudioNode::Channels {
+                        mode: ChannelMode::Mono,
+                    },
+                ],
+                offset_ms: 400,
+            }),
+            SEEK_PREROLL,
+            dir.path(),
+            false,
+        );
+    }
+
+    /// A chain with stateful nodes (temporal denoise, deinterlace, an
+    /// equalizer, dynaudnorm) keeps 10 s of history before the start: the
+    /// frames of the clip are those of decoding from 0 s; the audio filters
+    /// keep a trace of older input (dynaudnorm's gain smoothing), so the
+    /// samples match closely (aligned, correlation above 0.99), not exactly.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_stateful_chain_keeps_a_bounded_history() {
+        use crate::playback::effects::{AudioNode, DeinterlaceOutput, DeinterlaceWhen, VideoNode};
+        let dir = tempfile::tempdir().unwrap();
+        let source = noisy_source(dir.path());
+        same_as_from_zero(
+            &source,
+            0.,
+            (20.3, 21.9),
+            Some(Effects {
+                video: vec![
+                    VideoNode::Denoise {
+                        luma_spatial: 4.,
+                        chroma_spatial: 3.,
+                        luma_temporal: 6.,
+                        chroma_temporal: 4.5,
+                    },
+                    VideoNode::Deinterlace {
+                        when: DeinterlaceWhen::All,
+                        output: DeinterlaceOutput::Frame,
+                    },
+                ],
+                audio: vec![
+                    AudioNode::Equalizer {
+                        frequency: 1000.,
+                        q: 1.,
+                        gain_db: 6.,
+                    },
+                    AudioNode::Dynaudnorm {
+                        enabled: true,
+                        max_gain: 4.,
+                        peak: 0.95,
+                    },
+                ],
+                offset_ms: 0,
+            }),
+            BOUNDED_PREROLL,
+            dir.path(),
+            false,
+        );
+    }
+
+    /// frameBlend's frame grid starts at the source's first frame, so its
+    /// chain still decodes from 0 s.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_frame_blend_chain_decodes_from_zero() {
+        use crate::playback::effects::VideoNode;
+        let dir = tempfile::tempdir().unwrap();
+        let source = noisy_source(dir.path());
+        same_as_from_zero(
+            &source,
+            0.,
+            (20.3, 21.9),
+            Some(Effects {
+                video: vec![VideoNode::FrameBlend { fps: 60. }],
+                audio: Vec::new(),
+                offset_ms: 0,
+            }),
+            crate::playback::offline_audio::PREROLL,
+            dir.path(),
+            true,
+        );
+    }
+
+    #[test]
+    fn a_far_seek_starts_the_audio_timeline_at_the_seek() {
+        let seek = |at| {
+            Some(Seek {
+                at,
+                preroll: SEEK_PREROLL,
+            })
+        };
+        assert_eq!(audio_base(None, 0), 0.);
+        // 30 min: the audio timeline starts there, not at 0 s.
+        assert_eq!(audio_base(seek(1799.), 0), 1799.);
+        // A positive offset plays audio later: the first sample is later
+        // still, so the seek point is early enough. A negative one starts it
+        // earlier, in whole seconds.
+        assert_eq!(audio_base(seek(1799.), 400), 1799.);
+        assert_eq!(audio_base(seek(1799.), -500), 1798.);
+        assert_eq!(audio_base(seek(0.), -500), 0.);
+        let graph =
+            crate::playback::offline_audio::audio_from(&[], 0, 1800., 1801.5, 1799.).unwrap();
+        assert!(
+            graph.contains(
+                "asetpts=PTS+(0-1799)/TB,aresample=48000:async=1:first_pts=0,apad,atrim=start=1:end=2.5,"
+            ),
+            "{graph}"
+        );
+        // From 0 s the graph is the one before seeking existed.
+        assert_eq!(
+            crate::playback::offline_audio::audio_from(&[], 400, 2., 3., 0.).unwrap(),
+            "anull,asetpts=PTS+(0.4)/TB,aresample=48000:async=1:first_pts=0,apad,atrim=start=2:end=3,asetpts=PTS-STARTPTS"
+        );
+        // A base after the interval or between seconds is refused.
+        assert!(crate::playback::offline_audio::audio_from(&[], 0, 1., 2., 2.).is_err());
+        assert!(crate::playback::offline_audio::audio_from(&[], 0, 1., 2., 0.5).is_err());
+        // Seek points are whole seconds.
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        std::fs::write(&source, b"bytes").unwrap();
+        let request = real::request(
+            &source,
+            137.933,
+            dir.path().join("o"),
+            Output::Mp4 {
+                end: 151.1,
+                audio: Some(real::audio(1)),
+                encoding: Encoding::default(),
+            },
+        );
+        assert_eq!(seek_plan(&request, "mov,mp4"), seek(136.));
+    }
+
+    /// A clip 30 min into a file: the export seeks there and completes with
+    /// its audio (the resampler starts at the seek, so it holds no 30 min of
+    /// padding), and a job finished before FFmpeg's first progress report
+    /// still ends at total/total.
+    #[test]
+    #[ignore = "needs ffmpeg with libx264"]
+    fn a_far_seek_exports_with_audio() {
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("long.mp4");
+        let made = Command::new(real::ffmpeg())
+            .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+            .arg("color=c=gray:size=64x64:rate=2")
+            .args(["-f", "lavfi", "-i", "sine=frequency=440:sample_rate=48000"])
+            .args([
+                "-t",
+                "1830",
+                "-c:v",
+                "libx264",
+                "-preset",
+                "ultrafast",
+                "-g",
+                "20",
+            ])
+            .args([
+                "-pix_fmt",
+                "yuv420p",
+                "-c:a",
+                "aac",
+                "-b:a",
+                "32k",
+                "-shortest",
+            ])
+            .arg(&source)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        let destination = dir.path().join("far.mp4");
+        let started = std::time::Instant::now();
+        let (control, _) = real::run_job(real::request(
+            &source,
+            1800.,
+            destination.clone(),
+            Output::Mp4 {
+                end: 1802.,
+                audio: Some(real::audio(1)),
+                encoding: Encoding::default(),
+            },
+        ));
+        assert!(
+            matches!(control.snapshot().1, Some(Outcome::Completed { .. })),
+            "{:?}",
+            control.snapshot().1
+        );
+        assert_eq!(control.facts()["preroll"], SEEK_PREROLL);
+        assert!(started.elapsed() < Duration::from_secs(60));
+        let (done, total) = control.progress().expect("progress after completion");
+        assert_eq!(done, total);
+        let pcm = decoded(&destination, "0:a:0", "pcm");
+        // 2 s of 48 kHz stereo 16-bit, and not silence.
+        assert!(pcm.len() >= 380_000, "{}", pcm.len());
+        assert!(pcm.iter().any(|b| *b != 0));
+    }
+
+    #[test]
+    fn the_seek_follows_the_chain_s_history() {
+        const MP4: &str = "mov,mp4,m4a,3gp,3g2,mj2";
+        use crate::playback::effects::{AudioNode, Resource, VideoNode};
+        let dir = tempfile::tempdir().unwrap();
+        let source = dir.path().join("source");
+        std::fs::write(&source, b"bytes").unwrap();
+        let mp4 = || Output::Mp4 {
+            end: 40.,
+            audio: Some(real::audio(1)),
+            encoding: Encoding::default(),
+        };
+        let with = |output, video: Vec<VideoNode>, audio: Vec<AudioNode>, offset_ms, time| {
+            let mut request = real::request(&source, time, dir.path().join("out"), output);
+            request.processed = Some(Arc::new(crate::playback::media_jobs::FrozenProcessed {
+                processing: crate::playback::processing::FrozenProcessing {
+                    revision: 1,
+                    video: vec![Resource {
+                        manifest_id: "p".into(),
+                        resource_id: "v".into(),
+                        nodes: video,
+                    }],
+                    audio: vec![Resource {
+                        manifest_id: "p".into(),
+                        resource_id: "a".into(),
+                        nodes: audio,
+                    }],
+                    audio_offset_ms: offset_ms,
+                },
+                subtitle: None,
+                width: 2,
+                height: 2,
+                audio_delay_ms: 0.,
+            }));
+            seek_plan(&request, MP4)
+        };
+        let eq = VideoNode::Eq {
+            brightness: 0.,
+            contrast: 1.,
+            saturation: 1.,
+            gamma: 1.,
+        };
+        let seek = |at, preroll| Some(Seek { at, preroll });
+        // Raw: the start; a raw still and a copy seek elsewhere.
+        assert_eq!(
+            seek_plan(
+                &real::request(&source, 30., dir.path().join("o"), mp4()),
+                MP4
+            ),
+            seek(29., SEEK_PREROLL)
+        );
+        assert_eq!(
+            seek_plan(
+                &real::request(
+                    &source,
+                    30.,
+                    dir.path().join("o"),
+                    Output::Still(Still::Png)
+                ),
+                MP4
+            ),
+            None
+        );
+        // Stateless, also as a still; a positive audio offset seeks earlier.
+        assert_eq!(
+            with(mp4(), vec![eq.clone()], vec![], 0, 30.),
+            seek(29., SEEK_PREROLL)
+        );
+        assert_eq!(
+            with(Output::Still(Still::Png), vec![eq.clone()], vec![], 0, 30.),
+            seek(30., SEEK_PREROLL)
+        );
+        assert_eq!(
+            with(
+                mp4(),
+                vec![eq.clone()],
+                vec![AudioNode::Volume { gain_db: 1. }],
+                500,
+                30.
+            ),
+            seek(28., SEEK_PREROLL)
+        );
+        assert_eq!(
+            with(mp4(), vec![], vec![], -500, 30.),
+            seek(29., SEEK_PREROLL)
+        );
+        // Spatial-only denoise is stateless, temporal denoise is not.
+        let denoise = |temporal| VideoNode::Denoise {
+            luma_spatial: 4.,
+            chroma_spatial: 3.,
+            luma_temporal: temporal,
+            chroma_temporal: 0.,
+        };
+        assert_eq!(
+            with(mp4(), vec![denoise(0.)], vec![], 0, 30.),
+            seek(29., SEEK_PREROLL)
+        );
+        assert_eq!(
+            with(mp4(), vec![eq.clone(), denoise(6.)], vec![], 0, 30.),
+            seek(19., BOUNDED_PREROLL)
+        );
+        let dynaudnorm = AudioNode::Dynaudnorm {
+            enabled: true,
+            max_gain: 4.,
+            peak: 0.95,
+        };
+        assert_eq!(
+            with(mp4(), vec![], vec![dynaudnorm.clone()], 1000, 30.),
+            seek(18., BOUNDED_PREROLL)
+        );
+        // History reaching 0 s, and frameBlend: from 0 s.
+        assert_eq!(with(mp4(), vec![], vec![dynaudnorm], 0, 8.), None);
+        assert_eq!(
+            with(
+                mp4(),
+                vec![eq, VideoNode::FrameBlend { fps: 60. }],
+                vec![],
+                0,
+                30.
+            ),
+            None
+        );
+        // MPEG-TS seeks by estimate: no seek. Matroska and WebM have cues.
+        let raw = || real::request(&source, 30., dir.path().join("o"), mp4());
+        assert_eq!(seek_plan(&raw(), "mpegts"), None);
+        assert_eq!(seek_plan(&raw(), ""), None);
+        assert_eq!(seek_plan(&raw(), "matroska,webm"), seek(29., SEEK_PREROLL));
     }
 
     #[test]
