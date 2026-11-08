@@ -1337,7 +1337,7 @@ export default async function activate(plugin: Plugin) {
     id: "video.picture",
     path: ["Picture…"],
     category: category.picture,
-    order: 796,
+    order: 791,
     group: "windows",
     bindings: ["Alt+1"],
     run: () => panel.toggle(),

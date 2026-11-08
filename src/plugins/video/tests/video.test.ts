@@ -278,7 +278,7 @@ test("only Picture… is in the menu (Alt+1); every other command is in the pale
     ["90°", 409, "video-effects", ""],
     ["180°", 409, "video-effects", ""],
     ["270°", 409, "video-effects", ""],
-    ["Picture…", 796, "windows", "Alt+1"],
+    ["Picture…", 791, "windows", "Alt+1"],
     ["Picture", 440, "reset-video", "Q"],
     ["Picture Panel", 443, "reset-video", ""],
     ["Brightness -1%", 442, "video-color", "W"],
