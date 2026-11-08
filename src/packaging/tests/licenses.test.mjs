@@ -1,10 +1,13 @@
 // node --test packaging/tests/ (npm run test:packaging)
 import assert from "node:assert/strict";
+import { existsSync } from "node:fs";
+import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { test } from "node:test";
 import {
   checkPluginPackages,
   loadThirdParty,
+  packedByBuild,
   pluginDirectory,
   pluginPackages,
   sourcePlugin,
@@ -182,4 +185,29 @@ test("the workshop's vendored SDK and TypeScript notices are covered", async () 
     "vendor/typescript/LICENSE.txt",
     "vendor/typescript/ThirdPartyNoticeText.txt",
   ]);
+});
+
+test("a license file reaches the package only when the build copies it", () => {
+  // Markdown and translation sources are skipped unless listed in assets.
+  assert.equal(packedByBuild("licenses/still/NOTICE.md"), false);
+  assert.equal(packedByBuild("licenses/still/NOTICE.md", ["licenses"]), true);
+  assert.equal(packedByBuild("licenses/jsnes/LICENSE"), true);
+  assert.equal(packedByBuild("assets/still.jpg"), true);
+  assert.equal(packedByBuild("tests/LICENSE"), false);
+  assert.equal(packedByBuild("vendor/x/LICENSE", ["vendor"]), true);
+  assert.equal(packedByBuild(".build/LICENSE"), false);
+  assert.equal(packedByBuild("licenses/x/LICENSE.md", ["licenses/y"]), false);
+});
+
+test("every vxp_license_files entry is copied by its plugin build", async () => {
+  for (const component of config.component.filter((c) => c.vxp)) {
+    const dir = await pluginDirectory(component.vxp);
+    assert.ok(dir, component.vxp);
+    const file = join(source, "plugins", dir, "package.json");
+    const assets = existsSync(file)
+      ? (JSON.parse(await readFile(file, "utf8")).vestra?.assets ?? [])
+      : [];
+    for (const rel of component.vxp_license_files ?? [])
+      assert.ok(packedByBuild(rel, assets), `${component.name}: ${rel}`);
+  }
 });

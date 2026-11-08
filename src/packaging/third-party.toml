@@ -4,7 +4,10 @@
 #   - every component's license_files exist under the package's licenses/
 #     directory (macOS Contents/Resources/licenses, Windows <install>\licenses);
 #   - every plugin package (.vxp) named by a component holds its vxp_license_files;
-#   - every license expression is satisfied by [policy].allowed.
+#   - every license expression is satisfied by [policy].allowed, or, for a
+#     component's own `license` only, by its `allowed_licenses` (a license
+#     fine for one bundled image but not for code; packages of inventory/vendor
+#     components are always held to [policy].allowed).
 # Paths in `macos`/`windows` are globs relative to Vestra Player.app/Contents
 # and to the install directory. `license_from` gives, in the same order as
 # `license_files`, the repository file the bundler copies (src/-relative);
@@ -41,8 +44,6 @@ allowed = [
   "LGPL-3.0-or-later", "GPL-2.0-or-later", "GPL-3.0-only", "GPL-3.0-or-later",
   "FTL", "IJG", "libpng-2.0", "WTFPL", "HPND-sell-variant", "MIT-Modern-Variant",
   "LicenseRef-Homebrew-public-domain", "curl", "X11", "bzip2-1.0.6",
-  # Media, not code: an image shipped beside the program, not linked into it.
-  "CC-BY-3.0",
 ]
 
 [own]
@@ -145,6 +146,8 @@ source = "https://github.com/earendil-works/pi"
 [[component]]
 name = "Big Buck Bunny still (in the video plugin)"
 license = "CC-BY-3.0"
+# Media, not code: an image shipped beside the program, not linked into it.
+allowed_licenses = ["CC-BY-3.0"]
 vxp = "vestra.video"
 vxp_license_files = ["licenses/still/NOTICE.md"]
 note = "assets/still.jpg, one frame of Big Buck Bunny (© 2008 Blender Foundation, www.bigbuckbunny.org), scaled down; the Picture panel's geometry editor shows it."

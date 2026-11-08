@@ -5,7 +5,10 @@
  *   node packaging/check-licenses.mjs --static
  *       Repository only (runs in _static): about.toml `accepted` equals
  *       deny.toml [licenses].allow; third-party.toml parses and every
- *       `license_from` file exists; every plugin with run-time npm
+ *       `license_from` file exists; every `vxp_license_files` entry exists in
+ *       the plugin source and is copied by `vestra-plugin build` (Markdown
+ *       under licenses/ needs the directory in the plugin's package.json
+ *       `"vestra".assets`); every plugin with run-time npm
  *       dependencies has a licenses/ directory; a plugin with a
  *       dependency-inventory.json or vendor/ has inventory / vendor components
  *       and every package they list has an allowed license and its license
@@ -100,6 +103,44 @@ export async function sourcePlugin(dir) {
     read: async (rel) =>
       exists(join(dir, rel)) ? readFile(join(dir, rel)) : undefined,
   };
+}
+
+// What `vestra-plugin build` leaves out of a package unless the path is listed
+// in the plugin's package.json `"vestra".assets` (the SDK's SKIP_DIRS /
+// SKIP_EXTENSIONS in bin/vestra-plugin.mjs; dot-names are skipped too).
+// A license text under licenses/ is usually Markdown, so a plugin that ships
+// one lists `licenses` in its assets (as the workshop and VestraNES do).
+const BUILD_SKIP_DIRS = new Set([
+  "dist",
+  "node_modules",
+  "tests",
+  "vendor",
+  "evidence",
+  ".build",
+  ".typecheck",
+]);
+const BUILD_SKIP_EXTENSIONS = new Set([
+  ".md",
+  ".log",
+  ".zip",
+  ".vxp",
+  ".po",
+  ".pot",
+]);
+
+/**
+ * Whether `vestra-plugin build` copies the plugin file `rel` (relative,
+ * `/`-separated) into the package, given the plugin's `"vestra".assets`.
+ */
+export function packedByBuild(rel, assets = []) {
+  const parts = rel.split("/");
+  if (assets.some((asset) => rel === asset || rel.startsWith(`${asset}/`)))
+    return true;
+  if (parts.some((part) => part.startsWith(".") || BUILD_SKIP_DIRS.has(part)))
+    return false;
+  const name = parts.at(-1);
+  const dot = name.lastIndexOf(".");
+  return dot < 0 || !BUILD_SKIP_EXTENSIONS.has(name.slice(dot));
 }
 
 /** A vendored package's license text, and the notices shipped beside it. */
@@ -300,8 +341,21 @@ async function checkStatic() {
       problem(`${component.name}: inventory/vendor need vxp`);
     if (!component.deps && !packages && !component.license)
       problem(`${component.name}: no license`);
-    if (component.license && !spdxAllowed(component.license, allowed))
-      problem(`${component.name}: ${component.license} is not allowed`);
+    // `allowed_licenses` widens the policy for this component's own license
+    // only (a bundled image under CC-BY-3.0); the packages of an
+    // inventory/vendor component are still held to [policy].allowed.
+    if (component.allowed_licenses && packages)
+      problem(
+        `${component.name}: allowed_licenses applies to the component's own license, not to inventory/vendor packages`,
+      );
+    const componentAllowed = new Set([
+      ...allowed,
+      ...(component.allowed_licenses ?? []),
+    ]);
+    if (component.license && !spdxAllowed(component.license, componentAllowed))
+      problem(
+        `${component.name}: ${component.license} is not allowed (by [policy].allowed or the component's allowed_licenses)`,
+      );
     if (
       !packages &&
       !component.license_files?.length &&
@@ -322,10 +376,18 @@ async function checkStatic() {
       const dir = await pluginDirectory(component.vxp);
       if (!dir)
         problem(`${component.name}: no plugin with id ${component.vxp}`);
-      else
+      else {
+        const assets =
+          (await readJsonIfExists(join(source, "plugins", dir, "package.json")))
+            ?.vestra?.assets ?? [];
         for (const file of component.vxp_license_files ?? [])
           if (!exists(join(source, "plugins", dir, file)))
             problem(`${component.name}: plugins/${dir}/${file} does not exist`);
+          else if (!packedByBuild(file, assets))
+            problem(
+              `${component.name}: plugins/${dir}/${file} is skipped by vestra-plugin build; list its directory in plugins/${dir}/package.json "vestra".assets`,
+            );
+      }
     }
   }
 
