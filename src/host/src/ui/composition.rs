@@ -126,17 +126,16 @@ pub fn global_alias(owner: u64) -> String {
 }
 
 /// Slint handler body that forwards a key event to the host binding table.
-/// The main window's panel key scopes (the docked sidebar, its fullscreen
-/// overlay, the bottom bar, the docked adjust column) never take the focus
-/// by a click (user ruling 2026-11-08): a click on an empty part of a panel
-/// leaves the keys with the video, and only a panel's own control that
-/// takes the focus (a list, a field) or an explicit `focus()` (a tab of the
-/// column's strip) moves them; `VestraFocus.release` gives them back. The
-/// adjust overlay of a narrow window keeps the default: it is transient,
-/// and Esc inside it closes it. The detached sidebar's window keeps it too:
-/// its key scope is the only one in that window.
-const UNFOCUSED: &str = "focus-on-click: false;";
-
+/// The panel key scopes it goes into (the docked sidebar, its fullscreen
+/// overlay, the bottom bar, the adjust column, the detached window's) keep
+/// Slint's default `focus-on-click: true`, so plugins' `focus: "panel"`
+/// bindings work as they did before 0.7.6: a press that no control of the
+/// panel takes (an empty part of it) gives the panel the keys. A press a
+/// control takes (a button, a row's `TouchArea`, a drag) never reaches the
+/// scope (Slint 1.18 offers a press to the children first), so it leaves
+/// the focus where it was; a panel that wants an empty press to leave it
+/// too puts a `TouchArea {}` under its content (the playlist does).
+/// `VestraFocus.release` gives the keys back to the video.
 fn key_forward(scope: &str) -> String {
     format!(
         "key-pressed(event) => {{ if root.key-input(\"{scope}\", event.text, event.modifiers.control, event.modifiers.alt, event.modifiers.shift, event.modifiers.meta, event.repeat) {{ return accept; }} reject }}"
@@ -463,7 +462,7 @@ fn shell_source_with(
              TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
              moved => {{ if self.pressed {{ root.sidebar-width = clamp(root.width / 1px - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 317, max(317, root.width / 1px - 321)); }} }} \
              pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.sidebar-resized(root.sidebar-actual); }} }} }} }}\n\
-             if root.sidebar-visible: sidebar-keys := FocusScope {{ width: root.sidebar-actual * 1px; horizontal-stretch: 0; {} {UNFOCUSED} {} }}",
+             if root.sidebar-visible: sidebar-keys := FocusScope {{ width: root.sidebar-actual * 1px; horizontal-stretch: 0; {} {} }}",
             key_forward("panel:sidebar"),
             sidebar_content(&tabs, tabbed, "sidebar-keys", "false")
         )
@@ -484,7 +483,7 @@ fn shell_source_with(
              TouchArea {{ changed has-hover => {{ root.sidebar-hover = self.has-hover; }} \
              changed mouse-x => {{ root.window-input(\"activity\"); }} \
              changed mouse-y => {{ root.window-input(\"activity\"); }} \
-             overlay-keys := FocusScope {{ {UNFOCUSED} {} {} }} }} }}",
+             overlay-keys := FocusScope {{ {} {} }} }} }}",
             key_forward("panel:sidebar"),
             sidebar_content(&tabs, tabbed, "overlay-keys", "false")
         )
@@ -499,7 +498,7 @@ fn shell_source_with(
         .map(|spec| {
             format!(
                 "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible ? 0px : bottom-keys.height; vertical-stretch: 0; \
-                 bottom-keys := FocusScope {{ visible: root.bottom-visible; {UNFOCUSED} x: 0px; \
+                 bottom-keys := FocusScope {{ visible: root.bottom-visible; x: 0px; \
                  width: parent.width - (root.host-fullscreen ? root.columns-popped-width * 1px : 0px); \
                  height: min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); \
                  y: root.host-fullscreen ? -self.height : 0px; {} \
@@ -573,7 +572,7 @@ fn adjust_column(tabs: &[&CompileSpec], tabbed: bool) -> AdjustColumn {
          TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
          moved => {{ if self.pressed {{ root.adjust-width = clamp(root.width / 1px - (root.sidebar-visible ? root.sidebar-actual + 3 : 0) - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 280, max(280, root.width / 1px * 0.5)); }} }} \
          pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.adjust-resized(root.adjust-actual); }} }} }} }}\n\
-         if root.adjust-visible: adjust-keys := FocusScope {{ width: root.adjust-actual * 1px; horizontal-stretch: 0; {keys} {UNFOCUSED} {} }}",
+         if root.adjust-visible: adjust-keys := FocusScope {{ width: root.adjust-actual * 1px; horizontal-stretch: 0; {keys} {} }}",
         column_content(
             Column::Adjust,
             tabs,
@@ -1360,18 +1359,11 @@ mod tests {
         assert!(single.contains(
             "sidebar-keys := FocusScope { width: root.sidebar-actual * 1px; horizontal-stretch: 0; key-pressed"
         ));
-        // A click on a panel leaves the keys with the video: the docked
-        // sidebar, its overlay and the bottom bar (user ruling 2026-11-08);
-        // the detached window's only key scope still takes them.
-        for scope in [
-            "reject } focus-on-click: false; Owner20View",
-            "overlay-keys := FocusScope { focus-on-click: false;",
-            "bottom-keys := FocusScope { visible: root.bottom-visible; focus-on-click: false;",
-        ] {
-            assert!(single.contains(scope), "{scope}");
-        }
-        // Those three and the window's outermost `keys` (host.slint).
-        assert_eq!(single.matches("focus-on-click").count(), 4);
+        // The panel key scopes (docked, overlay, bottom bar, detached) keep
+        // Slint's click-to-focus, so `focus: "panel"` bindings work as
+        // before 0.7.6; only the window's outermost `keys` (host.slint)
+        // opts out.
+        assert_eq!(single.matches("focus-on-click").count(), 1);
         assert!(
             !floating_source(&specs[1..2], "List")
                 .unwrap()
@@ -1484,16 +1476,10 @@ mod tests {
             .unwrap();
         assert!(adjust < sidebar);
         assert!(source.find("bottom-content := Owner10View").unwrap() < adjust);
-        // A click on the docked column leaves the keys with the video; the
-        // narrow window's transient overlay takes them (Esc closes it).
-        // (The docked adjust column and the docked sidebar, both tabbed.)
-        assert_eq!(
-            source
-                .matches("reject } focus-on-click: false; SidebarTabs")
-                .count(),
-            2
-        );
-        assert!(!source.contains("adjust-overlay-keys := FocusScope { focus-on-click"));
+        // The docked column, the narrow window's overlay and the sidebar
+        // all keep Slint's click-to-focus (`focus: "panel"` bindings);
+        // only the window's outermost `keys` (host.slint) opts out.
+        assert_eq!(source.matches("focus-on-click").count(), 1);
         // One branch docked, one in the overlay, keyed by its owner.
         assert_eq!(
             source

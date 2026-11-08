@@ -1958,12 +1958,17 @@ export component W inherits Window {
     /// The sidebar fixture whose list gives the keys back with
     /// `VestraFocus.release()` (Enter, Esc).
     fn focus_list() -> [crate::ui::composition::CompileSpec; 1] {
+        sidebar_fixture("focus-list.slint", "FocusList")
+    }
+
+    /// The fixture `file`'s `component` as owner 20's sidebar panel.
+    fn sidebar_fixture(file: &str, component: &str) -> [crate::ui::composition::CompileSpec; 1] {
         use crate::ui::composition::{CompileSpec, Slot};
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
         [CompileSpec {
             owner: 20,
-            file: base.join("focus-list.slint"),
-            component: "FocusList".into(),
+            file: base.join(file),
+            component: component.into(),
             global: Some("Bridge".into()),
             slot: Slot::Sidebar,
         }]
@@ -2027,11 +2032,10 @@ export component W inherits Window {
         window.get_property("t-focused").unwrap() == Value::Bool(true)
     }
 
-    /// User ruling 2026-11-08: a click on an empty part of a sidebar panel
-    /// leaves the keys with the video (the shell's panel scopes do not take
-    /// the focus by a click); the panel's own list takes them on a click,
-    /// and its `VestraFocus.release()` (Enter, Esc) gives them back to the
-    /// video at once.
+    /// A panel's own list takes the keys on a click, and its
+    /// `VestraFocus.release()` (Enter, Esc) gives them back to the video at
+    /// once; a click on an empty part of the panel gives them to the
+    /// panel's key scope (as before 0.7.6), a click on the video back.
     #[test]
     fn panels_give_the_keys_back_to_the_video() {
         use slint::platform::Key;
@@ -2042,7 +2046,9 @@ export component W inherits Window {
         // The docked sidebar: 317px at the right edge; its list the top
         // 100px, the rest of the panel empty.
         click_at(&shell, 1300., 600.);
-        assert!(focused(&shell), "an empty part of the panel");
+        assert!(!focused(&shell), "the panel's key scope took them");
+        click_at(&shell, 500., 400.);
+        assert!(focused(&shell), "a click on the video");
         click_at(&shell, 1300., 50.);
         assert!(!focused(&shell), "the list took the keys");
         press(&shell, Key::DownArrow);
@@ -2070,6 +2076,74 @@ export component W inherits Window {
         press(&window, Key::Return);
         assert!(focused(&window), "the window's key scope has them");
         window.hide().unwrap();
+    }
+
+    /// A docked panel whose rows are a `ListView` of `TouchArea`s (the SDK's
+    /// panel-menu example) gets its `focus: "panel"` keys after a click on
+    /// its empty part, as before 0.7.6: a press on a row is the row's and
+    /// leaves the focus where it was; a press below the rows gives the
+    /// panel's key scope the keys, and a row click then keeps them there.
+    #[test]
+    fn a_docked_row_list_gets_panel_keys_after_a_click() {
+        use slint::platform::Key;
+        use std::{cell::RefCell, rc::Rc};
+        headless();
+        let source =
+            crate::ui::composition::shell_source(&sidebar_fixture("row-list.slint", "RowList"))
+                .unwrap();
+        let shell = focus_window(source, "canvas", "HostWindow");
+        // The scopes `key-input` was asked for, in order; the panel scope
+        // binds Delete (as panel-menu's Remove with `focus: "panel"`).
+        let scopes = Rc::new(RefCell::new(Vec::<String>::new()));
+        let delete: slint::SharedString = Key::Delete.into();
+        shell
+            .set_callback("key-input", {
+                let scopes = scopes.clone();
+                move |args| {
+                    let text = |i: usize| match &args[i] {
+                        Value::String(s) => s.to_string(),
+                        _ => String::new(),
+                    };
+                    let scope = text(0);
+                    let bound = scope == "panel:sidebar" && text(1) == delete.as_str();
+                    scopes.borrow_mut().push(scope);
+                    Value::Bool(bound)
+                }
+            })
+            .unwrap();
+        let delete_scopes = || {
+            scopes.borrow_mut().clear();
+            press(&shell, Key::Delete);
+            std::mem::take(&mut *scopes.borrow_mut())
+        };
+        let selected = |shell: &ComponentInstance| {
+            shell
+                .get_global_property(&crate::ui::composition::global_alias(20), "selected")
+                .unwrap()
+        };
+        // The docked sidebar: 317px at the right edge; three 40px rows at
+        // its top, the rest of it empty.
+        click_at(&shell, 1300., 20.);
+        assert_eq!(
+            selected(&shell),
+            Value::Number(0.),
+            "the row took the press"
+        );
+        assert!(
+            focused(&shell),
+            "a row click leaves the keys with the video"
+        );
+        assert_eq!(delete_scopes(), [""], "only the player's own keys");
+        click_at(&shell, 1300., 600.);
+        assert!(!focused(&shell), "the panel's key scope took the keys");
+        assert_eq!(delete_scopes(), ["panel:sidebar"], "the panel's binding");
+        click_at(&shell, 1300., 60.);
+        assert_eq!(selected(&shell), Value::Number(1.));
+        assert_eq!(delete_scopes(), ["panel:sidebar"], "a row click keeps them");
+        click_at(&shell, 500., 400.);
+        assert!(focused(&shell), "a click on the video takes them back");
+        assert_eq!(delete_scopes(), [""]);
+        shell.hide().unwrap();
     }
 
     /// G-10: the OSD and information block sizes follow the video area.

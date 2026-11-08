@@ -187,9 +187,10 @@ export component HostWindow inherits Window {
     init => { canvas.focus(); }
     // VESTRA-MOUNT-PROPERTIES
     keys := FocusScope {
-        // A click that no control takes (an empty part of a panel, the
-        // bar) leaves the keys where they were, as the panels' own scopes
-        // do (composition.rs `UNFOCUSED`); the video takes them on a press.
+        // A press that nothing below takes leaves the keys where they
+        // were; the video takes them on a press, and a panel's own key
+        // scope on a press on an empty part of it (composition.rs
+        // `key_forward`), so its `focus: "panel"` bindings apply.
         focus-on-click: false;
         key-pressed(event) => {
             if root.key-input("", event.text, event.modifiers.control, event.modifiers.alt,
