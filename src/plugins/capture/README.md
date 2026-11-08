@@ -23,6 +23,7 @@ In the command palette (Ctrl+Shift+P): Save Rendered Frame (Ctrl+Alt+E), Copy Re
 ## Limits
 
 - Clips need a local video with a known duration; frames work wherever the player can capture one.
+- While subtitles are shown, Save and Copy Current Frame (Ctrl+E, Ctrl+C) also include the video effects of plugins that have any: the player draws subtitles only into the frame with effects (a host request to separate them is to follow). Subtitles it cannot draw into a frame (only plain text can be) are left out, and the message says so.
 - A Fast cut starts on a keyframe and copies the video and one audio track, no subtitles; files whose codecs cannot be copied need Precise. Precise clips are H.264 + AAC in MP4, encoded on the cores the player can spare (at most half, at below-normal priority).
 - Use A-B range needs the A-B loop switched on.
 

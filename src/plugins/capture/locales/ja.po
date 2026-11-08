@@ -176,7 +176,7 @@ msgstr "このファイルのビットレートが不明です。別の画質を
 msgid "The file or folder was moved or deleted."
 msgstr "ファイルまたはフォルダーは移動または削除されました。"
 
-#: main.ts:135 main.ts:140 main.ts:802 main.ts:1060 ui/parts.slint:69
+#: main.ts:135 main.ts:140 main.ts:809 main.ts:1067 ui/parts.slint:69
 #, x-machine
 msgid "The Capture tab could not open."
 msgstr "「キャプチャ」タブを開けませんでした。"
@@ -216,213 +216,218 @@ msgstr "コピー"
 msgid "Show in Tab"
 msgstr "タブに表示"
 
-#: main.ts:314
+#: main.ts:316
 #, x-machine
 msgid "Snapshot format: {}"
 msgstr "スナップショットの形式：{}"
 
-#: main.ts:329
+#: main.ts:331
 #, x-machine
 msgid "Choose Snapshot Folder"
 msgstr "スナップショットのフォルダを選択"
 
-#: main.ts:331
+#: main.ts:333
 #, x-machine
 msgid "Please choose an existing folder."
 msgstr "既存のフォルダを選択してください。"
 
-#: main.ts:334
+#: main.ts:336
 #, x-machine
 msgid "Snapshot folder: {}"
 msgstr "スナップショットのフォルダ：{}"
 
-#: main.ts:391
+#: main.ts:397
 #, x-machine
 msgid "The previous snapshot is still being processed"
 msgstr "前のスナップショットをまだ処理中です"
 
-#: main.ts:414
+#: main.ts:420
 #, x-machine
 msgid "Snapshot queued"
 msgstr "スナップショットをキューに追加しました"
 
-#: main.ts:422
+#: main.ts:428
 #, x-machine
 msgid "Save Rendered Frame As"
 msgstr "レンダリング後のフレームを別名で保存"
 
-#: main.ts:422
+#: main.ts:428
 #, x-machine
 msgid "Save Current Frame As"
 msgstr "現在のフレームを別名で保存"
 
-#: main.ts:433 main.ts:945 main.ts:1101
+#: main.ts:440
+#, x-machine
+msgid "Frame copied without subtitles: they cannot be drawn into a frame"
+msgstr "字幕なしでフレームをコピーしました：字幕はフレームに描画できません"
+
+#: main.ts:440 main.ts:952 main.ts:1108
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "フレームをクリップボードにコピーしました"
 
-#: main.ts:588
+#: main.ts:595
 #, x-machine
 msgid "Export Clip"
 msgstr "クリップを書き出す"
 
-#: main.ts:623
+#: main.ts:630
 #, x-machine
 msgid "Exporting the last {} seconds"
 msgstr "最後の {} 秒を書き出しています"
 
-#: main.ts:658
+#: main.ts:665
 #, x-machine
 msgid "Capture"
 msgstr "キャプチャ"
 
-#: main.ts:1009 main.ts:1124 ui/tab.slint:1094
+#: main.ts:1016 main.ts:1131 ui/tab.slint:1094
 #, x-machine
 msgid "Export"
 msgstr "エクスポート"
 
-#: main.ts:1016 main.ts:1017 manifest.json ui/tab.slint:750 ui/tab.slint:1275
+#: main.ts:1023 main.ts:1024 manifest.json ui/tab.slint:750 ui/tab.slint:1275
 #, x-machine
 msgid "Snapshot"
 msgstr "スナップショット"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:792
+#: main.ts:1023 main.ts:1024 ui/tab.slint:792
 #, x-machine
 msgid "Save Current Frame"
 msgstr "現在のフレームを保存"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:802
+#: main.ts:1023 main.ts:1024 ui/tab.slint:802
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "現在のフレームをコピー"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Burst…"
 msgstr "連写…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Clip…"
 msgstr "クリップを書き出す…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture…"
 msgstr "キャプチャ…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "現在のフレームを別名で保存…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "レンダリング後のフレームを保存"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "レンダリング後のフレームを別名で保存…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "レンダリング後のフレームをコピー"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Tasks…"
 msgstr "書き出しタスク…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as PNG"
 msgstr "PNG でキャプチャ"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "JPEG でキャプチャ"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as BMP"
 msgstr "BMP でキャプチャ"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "レンダリング後のフレームに字幕を含める"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "スナップショットの設定…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "スナップショットのフォルダ…"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:1148
+#: main.ts:1023 main.ts:1024 ui/tab.slint:1148
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "スナップショットのフォルダを開く"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:931
+#: main.ts:1023 main.ts:1024 ui/tab.slint:931
 #, x-machine
 msgid "Set Clip Start"
 msgstr "クリップの開始を設定"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:943
+#: main.ts:1023 main.ts:1024 ui/tab.slint:943
 #, x-machine
 msgid "Set Clip End"
 msgstr "クリップの終了を設定"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Clip Range"
 msgstr "クリップ範囲を書き出す"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Show Last Capture in Folder"
 msgstr "最新のキャプチャをフォルダーに表示"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Last Snapshot"
 msgstr "最新のスナップショットをコピー"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Video Frame Only"
 msgstr "映像のフレームだけを保存"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Video Frame Only"
 msgstr "映像のフレームだけをコピー"
 
-#: main.ts:1016 main.ts:1017 main.ts:1129 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
+#: main.ts:1023 main.ts:1024 main.ts:1136 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
 #, x-machine
 msgid "No frame to capture"
 msgstr "キャプチャできるフレームがありません"
 
-#: main.ts:1107
+#: main.ts:1114
 #, x-machine
 msgid "Clip start: {}"
 msgstr "クリップの開始：{}"
 
-#: main.ts:1112
+#: main.ts:1119
 #, x-machine
 msgid "Clip end: {}"
 msgstr "クリップの終了：{}"
 
 #. {} is 10, 30, 60 or 120.
-#: main.ts:1123 ui/tab.slint:967
+#: main.ts:1130 ui/tab.slint:967
 #, x-machine
 msgid "Export Last {} Seconds"
 msgstr "最後の {} 秒を書き出す"
@@ -456,22 +461,22 @@ msgstr "スナップショット"
 msgid "export"
 msgstr "書き出し"
 
-#: model.ts:248 ui/tab.slint:151
+#: model.ts:250 ui/tab.slint:151
 #, x-machine
 msgid "No Audio"
 msgstr "音声なし"
 
-#: model.ts:249 ui/tab.slint:151
+#: model.ts:251 ui/tab.slint:151
 #, x-machine
 msgid "Current Track"
 msgstr "現在のトラック"
 
-#: model.ts:250
+#: model.ts:252
 #, x-machine
 msgid "Track {} · {}"
 msgstr "トラック {} · {}"
 
-#: model.ts:250
+#: model.ts:252
 #, x-machine
 msgid "Track {}"
 msgstr "トラック {}"
@@ -480,6 +485,11 @@ msgstr "トラック {}"
 #, x-machine
 msgid "Frame saved as {}"
 msgstr "フレームを {} として保存しました"
+
+#: seams.ts:82
+#, x-machine
+msgid "Frame saved without subtitles as {}"
+msgstr "字幕なしでフレームを保存しました：{}"
 
 #: seams.ts:82
 #, x-machine

@@ -188,7 +188,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         { title: text("Show in Folder"), command: "capture.revealLast" },
         kind === "image" ? { title: text("Copy"), command: "capture.copyLast" } : { title: text("Show in Tab"), command: "capture.tasks" },
       ];
-      if (kind === "image") showDone(plugin, "Frame saved as {}", [fit(path)], actions);
+      // TRANSLATORS: {} is the file. The subtitles shown could not be drawn into the frame (only plain text can be).
+      if (kind === "image" && task.spec.withoutSubtitles) showDone(plugin, "Frame saved without subtitles as {}", [fit(path)], actions);
+      else if (kind === "image") showDone(plugin, "Frame saved as {}", [fit(path)], actions);
       // TRANSLATORS: {0} is the number of frames (2–20), {1} the folder.
       else if (kind === "burst") showDone(plugin, "Burst of {0} frames saved to {1}", [task.outputs.length, fit(task.destination)], actions);
       else showDone(plugin, "Clip exported as {}", [fit(path)], actions);
@@ -365,23 +367,27 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
    * PotPlayer), sent as the capture time; the host's current frame only when
    * no position is known.
    */
-  const frameSpec = (seen: { position: number | null }, content: { processed: boolean; subtitles: boolean }, format: Format): Spec => ({
+  const frameSpec = (seen: { position: number | null }, content: { processed: boolean; subtitles: boolean; withoutSubtitles?: boolean }, format: Format): Spec => ({
     kind: "image", start: seen.position ?? 0, count: 1, step: 1, processed: content.processed, subtitles: content.processed && content.subtitles,
-    track: "none", current: seen.position === null, format, quality: settings.quality,
+    track: "none", current: seen.position === null, format, quality: settings.quality, withoutSubtitles: content.withoutSubtitles,
   });
   /**
    * Run a capture with the mode's content. A frame that has the subtitles only
    * because they are shown, and whose subtitles the player cannot draw into a
    * frame (only plain text can be), is taken without them rather than failing.
    */
-  async function withContent(mode: FrameMode, run: (content: { processed: boolean; subtitles: boolean }) => Promise<void>) {
+  type Content = { processed: boolean; subtitles: boolean; withoutSubtitles?: boolean };
+  /** Returns whether the subtitles were left out (the message then says so). */
+  async function withContent(mode: FrameMode, run: (content: Content) => Promise<void>) {
     const content = await frameContent(mode);
     try {
       await run(content);
+      return false;
     } catch (error) {
       const onlySubtitles = mode === "frame" && content.subtitles && !settings.snapshotEffects;
       if (!onlySubtitles || !(error instanceof Failure && error.code === "unavailable")) throw error;
-      await run({ processed: false, subtitles: false });
+      await run({ processed: false, subtitles: false, withoutSubtitles: true });
+      return true;
     }
   }
   const imageName = (source: string | null, time: number, format: Format) =>
@@ -429,8 +435,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const copyFrame = (mode: FrameMode) =>
     single(async () => {
       const seen = await player.refresh();
-      await withContent(mode, (content) => copier.copy(seen, content.processed, content.subtitles));
-      shown(osd.show("Frame copied to the clipboard"));
+      const dropped = await withContent(mode, (content) => copier.copy(seen, content.processed, content.subtitles));
+      // The subtitles shown could not be drawn into the frame (only plain text can be): say so.
+      shown(dropped ? osd.show("Frame copied without subtitles: they cannot be drawn into a frame") : osd.show("Frame copied to the clipboard"));
     });
 
   // ---------------------------------------------------------------- burst

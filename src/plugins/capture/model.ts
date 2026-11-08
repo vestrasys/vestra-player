@@ -23,6 +23,8 @@ export interface Spec {
   quality?: number;
   /** Clips: stream copy (`fast`, needs R1) or re-encode (`precise`); `precise` when absent. */
   method?: Method;
+  /** Frames: the subtitles shown were left out (the player cannot draw them into a frame); the message says so. */
+  withoutSubtitles?: boolean;
   /** Clips: the encode options of a Precise cut (R6); the encoding clips always had when absent. */
   encode?: Encode;
 }

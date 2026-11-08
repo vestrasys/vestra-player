@@ -78,7 +78,7 @@ export interface OsdAction {
  * would show the text alone, so every action is also in the tab and the
  * command palette.
  */
-export function showDone(plugin: Plugin, text: "Frame saved as {}" | "Clip exported as {}" | "Burst of {0} frames saved to {1}", args: (string | number)[], actions: OsdAction[]) {
+export function showDone(plugin: Plugin, text: "Frame saved as {}" | "Frame saved without subtitles as {}" | "Clip exported as {}" | "Burst of {0} frames saved to {1}", args: (string | number)[], actions: OsdAction[]) {
   void plugin.osd.show(text, args, { actions: actions.slice(0, 2) }).catch(() => {});
 }
 

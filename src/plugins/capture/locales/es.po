@@ -176,7 +176,7 @@ msgstr "Se desconoce la tasa de bits de este archivo. Elija otra calidad."
 msgid "The file or folder was moved or deleted."
 msgstr "El archivo o la carpeta se movió o se eliminó."
 
-#: main.ts:135 main.ts:140 main.ts:802 main.ts:1060 ui/parts.slint:69
+#: main.ts:135 main.ts:140 main.ts:809 main.ts:1067 ui/parts.slint:69
 #, x-machine
 msgid "The Capture tab could not open."
 msgstr "No se pudo abrir la pestaña Captura."
@@ -216,213 +216,218 @@ msgstr "Copiar"
 msgid "Show in Tab"
 msgstr "Mostrar en la pestaña"
 
-#: main.ts:314
+#: main.ts:316
 #, x-machine
 msgid "Snapshot format: {}"
 msgstr "Formato de captura: {}"
 
-#: main.ts:329
+#: main.ts:331
 #, x-machine
 msgid "Choose Snapshot Folder"
 msgstr "Elegir carpeta de capturas"
 
-#: main.ts:331
+#: main.ts:333
 #, x-machine
 msgid "Please choose an existing folder."
 msgstr "Elige una carpeta existente."
 
-#: main.ts:334
+#: main.ts:336
 #, x-machine
 msgid "Snapshot folder: {}"
 msgstr "Carpeta de capturas: {}"
 
-#: main.ts:391
+#: main.ts:397
 #, x-machine
 msgid "The previous snapshot is still being processed"
 msgstr "La captura anterior aún se está procesando"
 
-#: main.ts:414
+#: main.ts:420
 #, x-machine
 msgid "Snapshot queued"
 msgstr "Captura en cola"
 
-#: main.ts:422
+#: main.ts:428
 #, x-machine
 msgid "Save Rendered Frame As"
 msgstr "Guardar fotograma renderizado como"
 
-#: main.ts:422
+#: main.ts:428
 #, x-machine
 msgid "Save Current Frame As"
 msgstr "Guardar fotograma actual como"
 
-#: main.ts:433 main.ts:945 main.ts:1101
+#: main.ts:440
+#, x-machine
+msgid "Frame copied without subtitles: they cannot be drawn into a frame"
+msgstr "Fotograma copiado sin subtítulos: no se pueden dibujar en el fotograma"
+
+#: main.ts:440 main.ts:952 main.ts:1108
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "Fotograma copiado al portapapeles"
 
-#: main.ts:588
+#: main.ts:595
 #, x-machine
 msgid "Export Clip"
 msgstr "Exportar clip"
 
-#: main.ts:623
+#: main.ts:630
 #, x-machine
 msgid "Exporting the last {} seconds"
 msgstr "Exportando los últimos {} segundos"
 
-#: main.ts:658
+#: main.ts:665
 #, x-machine
 msgid "Capture"
 msgstr "Captura"
 
-#: main.ts:1009 main.ts:1124 ui/tab.slint:1094
+#: main.ts:1016 main.ts:1131 ui/tab.slint:1094
 #, x-machine
 msgid "Export"
 msgstr "Exportación"
 
-#: main.ts:1016 main.ts:1017 manifest.json ui/tab.slint:750 ui/tab.slint:1275
+#: main.ts:1023 main.ts:1024 manifest.json ui/tab.slint:750 ui/tab.slint:1275
 #, x-machine
 msgid "Snapshot"
 msgstr "Captura"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:792
+#: main.ts:1023 main.ts:1024 ui/tab.slint:792
 #, x-machine
 msgid "Save Current Frame"
 msgstr "Guardar fotograma actual"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:802
+#: main.ts:1023 main.ts:1024 ui/tab.slint:802
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "Copiar fotograma actual"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Burst…"
 msgstr "Ráfaga…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Clip…"
 msgstr "Exportar clip…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture…"
 msgstr "Captura…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "Guardar fotograma actual como…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "Guardar fotograma renderizado"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "Guardar fotograma renderizado como…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "Copiar fotograma renderizado"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Tasks…"
 msgstr "Tareas de exportación…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as PNG"
 msgstr "Capturar como PNG"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "Capturar como JPEG"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as BMP"
 msgstr "Capturar como BMP"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "Incluir subtítulos en el fotograma renderizado"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "Configuración de captura…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "Carpeta de capturas…"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:1148
+#: main.ts:1023 main.ts:1024 ui/tab.slint:1148
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "Abrir carpeta de capturas"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:931
+#: main.ts:1023 main.ts:1024 ui/tab.slint:931
 #, x-machine
 msgid "Set Clip Start"
 msgstr "Fijar inicio del clip"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:943
+#: main.ts:1023 main.ts:1024 ui/tab.slint:943
 #, x-machine
 msgid "Set Clip End"
 msgstr "Fijar final del clip"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Clip Range"
 msgstr "Exportar el intervalo del clip"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Show Last Capture in Folder"
 msgstr "Mostrar la última captura en la carpeta"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Last Snapshot"
 msgstr "Copiar la última captura"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Video Frame Only"
 msgstr "Guardar solo el fotograma de vídeo"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Video Frame Only"
 msgstr "Copiar solo el fotograma de vídeo"
 
-#: main.ts:1016 main.ts:1017 main.ts:1129 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
+#: main.ts:1023 main.ts:1024 main.ts:1136 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
 #, x-machine
 msgid "No frame to capture"
 msgstr "No hay fotograma que capturar"
 
-#: main.ts:1107
+#: main.ts:1114
 #, x-machine
 msgid "Clip start: {}"
 msgstr "Inicio del clip: {}"
 
-#: main.ts:1112
+#: main.ts:1119
 #, x-machine
 msgid "Clip end: {}"
 msgstr "Final del clip: {}"
 
 #. {} is 10, 30, 60 or 120.
-#: main.ts:1123 ui/tab.slint:967
+#: main.ts:1130 ui/tab.slint:967
 #, x-machine
 msgid "Export Last {} Seconds"
 msgstr "Exportar los últimos {} segundos"
@@ -456,22 +461,22 @@ msgstr "captura"
 msgid "export"
 msgstr "exportar"
 
-#: model.ts:248 ui/tab.slint:151
+#: model.ts:250 ui/tab.slint:151
 #, x-machine
 msgid "No Audio"
 msgstr "Sin audio"
 
-#: model.ts:249 ui/tab.slint:151
+#: model.ts:251 ui/tab.slint:151
 #, x-machine
 msgid "Current Track"
 msgstr "Pista actual"
 
-#: model.ts:250
+#: model.ts:252
 #, x-machine
 msgid "Track {} · {}"
 msgstr "Pista {} · {}"
 
-#: model.ts:250
+#: model.ts:252
 #, x-machine
 msgid "Track {}"
 msgstr "Pista {}"
@@ -480,6 +485,11 @@ msgstr "Pista {}"
 #, x-machine
 msgid "Frame saved as {}"
 msgstr "Fotograma guardado como {}"
+
+#: seams.ts:82
+#, x-machine
+msgid "Frame saved without subtitles as {}"
+msgstr "Fotograma guardado sin subtítulos como {}"
 
 #: seams.ts:82
 #, x-machine

@@ -56,7 +56,11 @@ function manualJobs(host: TestHost) {
     if (job.status === "cancelling") Object.assign(job, { status: "cancelled", outcome: { cancelled: true } });
     return structuredClone(job);
   });
-  return (id: number, patch: Partial<MediaJob>) => Object.assign(host.jobs.get(id)!, patch);
+  // The host records a job after its start request: wait for it, so a test never patches a job that is not there yet.
+  return async (id: number, patch: Partial<MediaJob>) => {
+    await until(() => !!host.jobs.get(id));
+    Object.assign(host.jobs.get(id)!, patch);
+  };
 }
 /** A temporary capture folder chosen through Snapshot Folder…. */
 async function withFolder(host: TestHost) {
@@ -501,13 +505,11 @@ test("clip, Precise: Export saves into the folder with the template's name and t
     await until(() => (tab(host).card as { shown: boolean }).shown);
     assert.equal((tab(host).card as { name: string }).name, "source-one_00.01.000-00.04.500.mp4");
     assert.equal((tab(host).card as { percent: number }).percent, -1, "no percentage before the first progress");
-    setJob(1, { status: "running", progress: { done: 1.75, total: 3.5 } } as never);
-    await until(() => (tab(host).card as { percent: number }).percent === 50);
-    assert.equal(rows(host)[0]!.state, "running");
-    assert.equal((rows(host)[0] as unknown as { percent: number }).percent, 50);
+    await setJob(1, { status: "running", progress: { done: 1.75, total: 3.5 } } as never);
+    await until(() => (tab(host).card as { percent: number }).percent === 50 && rows(host)[0]?.state === "running" && (rows(host)[0] as unknown as { percent: number }).percent === 50);
     const destination = join(folder, "source-one_00.01.000-00.04.500.mp4");
     await writeFile(destination, "mp4 bytes");
-    setJob(1, { status: "completed", publicationStarted: true, progress: null, outcome: { destination, start: 1, end: 4.52 } } as never);
+    await setJob(1, { status: "completed", publicationStarted: true, progress: null, outcome: { destination, start: 1, end: 4.52 } } as never);
     await until(() => host.osd.at(-1) === `片段已导出为 ${destination}` && statusOf(host, "clip-status") === "已导出 source-one_00.01.000-00.04.500.mp4");
     await until(() => rows(host).length === 1 && rows(host)[0]!.state === "completed");
     assert.equal((tab(host).card as { shown: boolean }).shown, false);
@@ -552,7 +554,7 @@ test("Export Clip… only opens the Clip section; Export Clip Range (Ctrl+Shift+
     await host.press("Ctrl+Shift+E");
     await until(() => host.sent("jobs.start").length === 1);
     assert.equal(host.sent("jobs.start")[0]!.end, 12);
-    setJob(1, { status: "cancelled", outcome: { cancelled: true } });
+    await setJob(1, { status: "cancelled", outcome: { cancelled: true } });
     // A range the user typed: Export Clip… keeps it; a bad one is said on screen by the key.
     host.mounted().emit("clip-edited", "0:05", "0:03");
     const sets = host.sent("ui.setMount").length;
@@ -631,7 +633,7 @@ test("Last N s (Ctrl+Shift+R): the seconds before the position into the folder; 
     assert.equal(host.sent("jobs.start")[0]!.end, 20);
     assert.equal(host.osd.at(-1), "Exporting the last 30 seconds");
     assert.deepEqual([tab(host)["clip-start"], tab(host)["clip-end"]], ["00:00.000", "00:20.000"], "empty fields show what was exported");
-    setJob(1, { status: "cancelled", outcome: { cancelled: true } });
+    await setJob(1, { status: "cancelled", outcome: { cancelled: true } });
     // A range the user typed is kept; Last N s exports its own range all the same.
     host.mounted().emit("clip-edited", "0:03", "0:07");
     host.setSource({ position: 25 });
@@ -640,7 +642,7 @@ test("Last N s (Ctrl+Shift+R): the seconds before the position into the folder; 
     assert.deepEqual([host.sent("snapshot.capture")[1]!.time, host.sent("jobs.start")[1]!.end], [0, 25]);
     assert.equal(tab(host)["clip-end"], "00:20.000", "the typed fields were not written over (00:25.000 would be)");
     host.setSource({ position: 20 });
-    setJob(2, { status: "cancelled", outcome: { cancelled: true } });
+    await setJob(2, { status: "cancelled", outcome: { cancelled: true } });
     host.mounted().emit("clip-edited", "", "");
     host.mounted().emit("set-last-seconds", 0);
     await host.settle();
@@ -700,7 +702,7 @@ test("one running and four queued; the sixth is refused; queued input keeps its 
     await until(() => rows(host).some((row) => row.id === "t2" && row.state === "cancelled"));
     assert.equal(host.sent("jobs.cancel").length, 0, "queued cancellation leaves the running worker alone");
     host.openElsewhere("/contract/source-two.mp4");
-    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: join(folder, "source-one_00.02.000.png") } });
+    await setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: join(folder, "source-one_00.02.000.png") } });
     await until(() => host.sent("jobs.start").length === 2);
     assert.equal(host.sent("jobs.start")[1]!.snapshotId, 3, "skips the cancelled task and uses the third frozen input");
     assert.equal((host.snapshots.get(3) as { sourceStamp: { generation: number } }).sourceStamp.generation, 1, "queued input not refreshed");
@@ -757,7 +759,7 @@ test("a failed task keeps its input; retry from Results reuses it after the sour
   try {
     await host.press("Ctrl+E");
     await until(() => host.sent("jobs.start").length === 1);
-    setJob(1, { status: "failed", outcome: { error: { code: "space", message: "disk full" } } });
+    await setJob(1, { status: "failed", outcome: { error: { code: "space", message: "disk full" } } });
     await until(() => host.osd.at(-1) === "截图失败：磁盘空间不足");
     await until(() => rows(host)[0]?.state === "failed");
     assert.deepEqual([rows(host)[0]!.reason, rows(host)[0]!.retryable], ["space", true]);
@@ -825,8 +827,8 @@ test("the typed fields survive standby (session storage)", async () => {
   const again = new TestHost();
   ready(again);
   const second = await startPlugin(activate, { directory, host: again, locale: "zh-Hans", sessionStorage: new Map([["form", kept!]]) });
-  await until(() => tab(again)["clip-start"] === "0:07");
-  assert.deepEqual([tab(again)["clip-end"], tab(again)["audio-index"]], ["0:11", 0]);
+  // The fields come back with `set`, the audio choice with the binding: wait for all three.
+  await until(() => tab(again)["clip-start"] === "0:07" && tab(again)["clip-end"] === "0:11" && tab(again)["audio-index"] === 0);
   await second.stop();
 });
 
@@ -885,11 +887,11 @@ test("results persist across restarts (finished only); a moved file says so; Cle
     await until(() => host.sent("jobs.start").length === 1);
     const destination = String(host.sent("jobs.start")[0]!.destination);
     await writeFile(destination, "png");
-    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination } });
+    await setJob(1, { status: "completed", publicationStarted: true, outcome: { destination } });
     await until(() => rows(host).length === 1 && rows(host)[0]!.state === "completed");
     await host.press("Ctrl+E");
     await until(() => host.sent("jobs.start").length === 2);
-    setJob(2, { status: "failed", outcome: { error: { code: "space", message: "full" } } });
+    await setJob(2, { status: "failed", outcome: { error: { code: "space", message: "full" } } });
     await until(() => rows(host).length === 2);
     await jsonFile(join(data, "results.json"), (v) => (v.list as unknown[]).length === 1);
     await first.stop();
@@ -963,9 +965,9 @@ test("Fast (R1): the default; keyframes from ffprobe on the player's clock; a st
     assert.equal(tab(host)["method-index"], 0, "Fast is the default");
     assert.deepEqual(tab(host).support, { fast: true, encode: true, progress: true });
     panel.emit("clip-edited", "4:02.3", "4:19");
-    await until(() => (tab(host).note as { snapped: boolean }).snapped);
+    // The codec probe and the keyframe probe answer separately: wait for the note and the name they give.
+    await until(() => (tab(host).note as { snapped: boolean; container: string }).snapped && (tab(host).note as { container: string }).container === "mp4" && tab(host)["clip-name"] === "movie_04.00.000-04.19.000.mp4");
     assert.deepEqual(tab(host).note, { method: "fast", start: "04:00.000", end: "04:19.000", early: "2.3", snapped: true, container: "mp4" });
-    assert.equal(tab(host)["clip-name"], "movie_04.00.000-04.19.000.mp4", "named by where it really starts");
     const line = tab(host).timeline as { key: number; gota: number; wanta: number; ticks: string };
     assert.ok(line.key >= 0 && line.gota < line.wanta && line.ticks.includes("M"));
     const probe = host.tools.calls.find((call) => call.args.includes("-read_intervals"))!;
@@ -984,7 +986,7 @@ test("Fast (R1): the default; keyframes from ffprobe on the player's clock; a st
     // The player wrote MKV and reports where the file really starts.
     const written = join(folder, "movie_04.00.000-04.19.000.mkv");
     await writeFile(written, "mkv bytes");
-    setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: written, start: 239.96, end: 259.02 } } as never);
+    await setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: written, start: 239.96, end: 259.02 } } as never);
     await until(() => rows(host)[0]?.state === "completed");
     const [row] = rows(host) as unknown as { name: string; method: string; range: string; badge: string }[];
     assert.deepEqual([row!.name, row!.method, row!.range, row!.badge], ["movie_04.00.000-04.19.000.mkv", "fast", "03:59.960–04:19.020", "19.1"]);
@@ -1021,8 +1023,8 @@ test("a stream copy the player cannot make: Fast cut is not possible, Use Precis
     host.exportFailure = { code: "unsupported", message: "codec vc1 cannot be copied" };
     host.mounted().emit("export-clip", "0:01", "0:04");
     await until(() => host.osd.at(-1) === `Export failed: ${REASON.fastImpossible}`);
-    assert.deepEqual((tab(host)["clip-status"] as { reason: string }).reason, "fastImpossible", "the tab offers Use Precise");
-    assert.equal(rows(host)[0]!.reason, "fastImpossible");
+    // The tab's values follow the OSD in their own update: wait for them.
+    await until(() => (tab(host)["clip-status"] as { reason: string }).reason === "fastImpossible" && rows(host)[0]?.reason === "fastImpossible");
     // Same as source on a file whose bitrate the player cannot tell.
     host.mounted().emit("set-method", 1);
     host.mounted().emit("set-preset", 0);
@@ -1106,6 +1108,16 @@ test("Save and Copy take the frame as mpv does: the subtitles shown, the effects
       return await host.request("snapshot.capture", p);
     });
     assert.deepEqual(await saved(() => host.press("Ctrl+E")), ["raw", false]);
+    await until(() => host.osd.at(-1)?.startsWith("帧已保存为") === true && host.osd.at(-1)!.endsWith("（不含字幕：字幕无法画入帧中）"));
+    // Copy says so too.
+    host.handle("snapshot.capture", async (p) => {
+      if (p.mode === "processed") throw new HostError("unsupported", "styled subtitles cannot be flattened");
+      host.reset("snapshot.capture");
+      return await host.request("snapshot.capture", p);
+    });
+    host.handle("clipboard.writeImage", () => {}); // the test host's exports write no real PNG
+    await host.press("Ctrl+C");
+    await until(() => host.osd.at(-1) === "已复制画面（不含字幕：字幕无法画入帧中）");
     host.reset("snapshot.capture");
     // Settings: Include video effects, no subtitles shown.
     host.subtitles.selection.target = null;

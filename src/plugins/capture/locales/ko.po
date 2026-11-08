@@ -176,7 +176,7 @@ msgstr "이 파일의 비트레이트를 알 수 없습니다. 다른 화질을 
 msgid "The file or folder was moved or deleted."
 msgstr "파일 또는 폴더가 이동되었거나 삭제되었습니다."
 
-#: main.ts:135 main.ts:140 main.ts:802 main.ts:1060 ui/parts.slint:69
+#: main.ts:135 main.ts:140 main.ts:809 main.ts:1067 ui/parts.slint:69
 #, x-machine
 msgid "The Capture tab could not open."
 msgstr "‘캡처’ 탭을 열 수 없습니다."
@@ -216,213 +216,218 @@ msgstr "복사"
 msgid "Show in Tab"
 msgstr "탭에서 보기"
 
-#: main.ts:314
+#: main.ts:316
 #, x-machine
 msgid "Snapshot format: {}"
 msgstr "스냅샷 형식: {}"
 
-#: main.ts:329
+#: main.ts:331
 #, x-machine
 msgid "Choose Snapshot Folder"
 msgstr "스냅샷 폴더 선택"
 
-#: main.ts:331
+#: main.ts:333
 #, x-machine
 msgid "Please choose an existing folder."
 msgstr "기존 폴더를 선택하세요."
 
-#: main.ts:334
+#: main.ts:336
 #, x-machine
 msgid "Snapshot folder: {}"
 msgstr "스냅샷 폴더: {}"
 
-#: main.ts:391
+#: main.ts:397
 #, x-machine
 msgid "The previous snapshot is still being processed"
 msgstr "이전 스냅샷을 아직 처리하고 있습니다"
 
-#: main.ts:414
+#: main.ts:420
 #, x-machine
 msgid "Snapshot queued"
 msgstr "스냅샷 대기 중"
 
-#: main.ts:422
+#: main.ts:428
 #, x-machine
 msgid "Save Rendered Frame As"
 msgstr "렌더링된 프레임을 다른 이름으로 저장"
 
-#: main.ts:422
+#: main.ts:428
 #, x-machine
 msgid "Save Current Frame As"
 msgstr "현재 프레임을 다른 이름으로 저장"
 
-#: main.ts:433 main.ts:945 main.ts:1101
+#: main.ts:440
+#, x-machine
+msgid "Frame copied without subtitles: they cannot be drawn into a frame"
+msgstr "자막 없이 프레임을 복사했습니다: 자막을 프레임에 그릴 수 없습니다"
+
+#: main.ts:440 main.ts:952 main.ts:1108
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "프레임을 클립보드에 복사했습니다"
 
-#: main.ts:588
+#: main.ts:595
 #, x-machine
 msgid "Export Clip"
 msgstr "클립 내보내기"
 
-#: main.ts:623
+#: main.ts:630
 #, x-machine
 msgid "Exporting the last {} seconds"
 msgstr "마지막 {}초를 내보내는 중"
 
-#: main.ts:658
+#: main.ts:665
 #, x-machine
 msgid "Capture"
 msgstr "캡처"
 
-#: main.ts:1009 main.ts:1124 ui/tab.slint:1094
+#: main.ts:1016 main.ts:1131 ui/tab.slint:1094
 #, x-machine
 msgid "Export"
 msgstr "내보내기"
 
-#: main.ts:1016 main.ts:1017 manifest.json ui/tab.slint:750 ui/tab.slint:1275
+#: main.ts:1023 main.ts:1024 manifest.json ui/tab.slint:750 ui/tab.slint:1275
 #, x-machine
 msgid "Snapshot"
 msgstr "스냅샷"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:792
+#: main.ts:1023 main.ts:1024 ui/tab.slint:792
 #, x-machine
 msgid "Save Current Frame"
 msgstr "현재 프레임 저장"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:802
+#: main.ts:1023 main.ts:1024 ui/tab.slint:802
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "현재 프레임 복사"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Burst…"
 msgstr "연속 캡처…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Clip…"
 msgstr "클립 내보내기…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture…"
 msgstr "캡처…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "현재 프레임을 다른 이름으로 저장…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "렌더링된 프레임 저장"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "렌더링된 프레임을 다른 이름으로 저장…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "렌더링된 프레임 복사"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Tasks…"
 msgstr "내보내기 작업…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as PNG"
 msgstr "PNG로 캡처"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "JPEG로 캡처"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Capture as BMP"
 msgstr "BMP로 캡처"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "렌더링된 프레임에 자막 포함"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "스냅샷 설정…"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "스냅샷 폴더…"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:1148
+#: main.ts:1023 main.ts:1024 ui/tab.slint:1148
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "스냅샷 폴더 열기"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:931
+#: main.ts:1023 main.ts:1024 ui/tab.slint:931
 #, x-machine
 msgid "Set Clip Start"
 msgstr "클립 시작 설정"
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:943
+#: main.ts:1023 main.ts:1024 ui/tab.slint:943
 #, x-machine
 msgid "Set Clip End"
 msgstr "클립 끝 설정"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Export Clip Range"
 msgstr "클립 구간 내보내기"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Show Last Capture in Folder"
 msgstr "최근 캡처를 폴더에서 보기"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Last Snapshot"
 msgstr "최근 스냅샷 복사"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Save Video Frame Only"
 msgstr "비디오 프레임만 저장"
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 #, x-machine
 msgid "Copy Video Frame Only"
 msgstr "비디오 프레임만 복사"
 
-#: main.ts:1016 main.ts:1017 main.ts:1129 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
+#: main.ts:1023 main.ts:1024 main.ts:1136 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
 #, x-machine
 msgid "No frame to capture"
 msgstr "캡처할 프레임이 없습니다"
 
-#: main.ts:1107
+#: main.ts:1114
 #, x-machine
 msgid "Clip start: {}"
 msgstr "클립 시작: {}"
 
-#: main.ts:1112
+#: main.ts:1119
 #, x-machine
 msgid "Clip end: {}"
 msgstr "클립 끝: {}"
 
 #. {} is 10, 30, 60 or 120.
-#: main.ts:1123 ui/tab.slint:967
+#: main.ts:1130 ui/tab.slint:967
 #, x-machine
 msgid "Export Last {} Seconds"
 msgstr "마지막 {}초 내보내기"
@@ -456,22 +461,22 @@ msgstr "스냅샷"
 msgid "export"
 msgstr "내보내기"
 
-#: model.ts:248 ui/tab.slint:151
+#: model.ts:250 ui/tab.slint:151
 #, x-machine
 msgid "No Audio"
 msgstr "오디오 없음"
 
-#: model.ts:249 ui/tab.slint:151
+#: model.ts:251 ui/tab.slint:151
 #, x-machine
 msgid "Current Track"
 msgstr "현재 트랙"
 
-#: model.ts:250
+#: model.ts:252
 #, x-machine
 msgid "Track {} · {}"
 msgstr "트랙 {} · {}"
 
-#: model.ts:250
+#: model.ts:252
 #, x-machine
 msgid "Track {}"
 msgstr "트랙 {}"
@@ -480,6 +485,11 @@ msgstr "트랙 {}"
 #, x-machine
 msgid "Frame saved as {}"
 msgstr "프레임을 저장했습니다: {}"
+
+#: seams.ts:82
+#, x-machine
+msgid "Frame saved without subtitles as {}"
+msgstr "자막 없이 프레임을 저장했습니다: {}"
 
 #: seams.ts:82
 #, x-machine

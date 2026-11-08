@@ -140,7 +140,7 @@ msgstr ""
 msgid "The file or folder was moved or deleted."
 msgstr ""
 
-#: main.ts:135 main.ts:140 main.ts:802 main.ts:1060 ui/parts.slint:69
+#: main.ts:135 main.ts:140 main.ts:809 main.ts:1067 ui/parts.slint:69
 msgid "The Capture tab could not open."
 msgstr ""
 
@@ -172,172 +172,176 @@ msgstr ""
 msgid "Show in Tab"
 msgstr ""
 
-#: main.ts:314
+#: main.ts:316
 msgid "Snapshot format: {}"
 msgstr ""
 
-#: main.ts:329
+#: main.ts:331
 msgid "Choose Snapshot Folder"
 msgstr ""
 
-#: main.ts:331
+#: main.ts:333
 msgid "Please choose an existing folder."
 msgstr ""
 
-#: main.ts:334
+#: main.ts:336
 msgid "Snapshot folder: {}"
 msgstr ""
 
-#: main.ts:391
+#: main.ts:397
 msgid "The previous snapshot is still being processed"
 msgstr ""
 
-#: main.ts:414
+#: main.ts:420
 msgid "Snapshot queued"
 msgstr ""
 
-#: main.ts:422
+#: main.ts:428
 msgid "Save Rendered Frame As"
 msgstr ""
 
-#: main.ts:422
+#: main.ts:428
 msgid "Save Current Frame As"
 msgstr ""
 
-#: main.ts:433 main.ts:945 main.ts:1101
+#: main.ts:440
+msgid "Frame copied without subtitles: they cannot be drawn into a frame"
+msgstr ""
+
+#: main.ts:440 main.ts:952 main.ts:1108
 msgid "Frame copied to the clipboard"
 msgstr ""
 
-#: main.ts:588
+#: main.ts:595
 msgid "Export Clip"
 msgstr ""
 
-#: main.ts:623
+#: main.ts:630
 msgid "Exporting the last {} seconds"
 msgstr ""
 
-#: main.ts:658
+#: main.ts:665
 msgid "Capture"
 msgstr ""
 
-#: main.ts:1009 main.ts:1124 ui/tab.slint:1094
+#: main.ts:1016 main.ts:1131 ui/tab.slint:1094
 msgid "Export"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017 manifest.json ui/tab.slint:750 ui/tab.slint:1275
+#: main.ts:1023 main.ts:1024 manifest.json ui/tab.slint:750 ui/tab.slint:1275
 msgid "Snapshot"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:792
+#: main.ts:1023 main.ts:1024 ui/tab.slint:792
 msgid "Save Current Frame"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:802
+#: main.ts:1023 main.ts:1024 ui/tab.slint:802
 msgid "Copy Current Frame"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Burst…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Export Clip…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Capture…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Save Current Frame As…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Save Rendered Frame"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Save Rendered Frame As…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Copy Rendered Frame"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Export Tasks…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Capture as PNG"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Capture as JPEG"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Capture as BMP"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Include Subtitles in Rendered Frame"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Snapshot Settings…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Snapshot Folder…"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:1148
+#: main.ts:1023 main.ts:1024 ui/tab.slint:1148
 msgid "Open Snapshot Folder"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:931
+#: main.ts:1023 main.ts:1024 ui/tab.slint:931
 msgid "Set Clip Start"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017 ui/tab.slint:943
+#: main.ts:1023 main.ts:1024 ui/tab.slint:943
 msgid "Set Clip End"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Export Clip Range"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Show Last Capture in Folder"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Copy Last Snapshot"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Save Video Frame Only"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017
+#: main.ts:1023 main.ts:1024
 msgid "Copy Video Frame Only"
 msgstr ""
 
-#: main.ts:1016 main.ts:1017 main.ts:1129 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
+#: main.ts:1023 main.ts:1024 main.ts:1136 ui/tab.slint:792 ui/tab.slint:802 ui/tab.slint:810 ui/tab.slint:881
 msgid "No frame to capture"
 msgstr ""
 
-#: main.ts:1107
+#: main.ts:1114
 msgid "Clip start: {}"
 msgstr ""
 
-#: main.ts:1112
+#: main.ts:1119
 msgid "Clip end: {}"
 msgstr ""
 
 #. {} is 10, 30, 60 or 120.
-#: main.ts:1123 ui/tab.slint:967
+#: main.ts:1130 ui/tab.slint:967
 msgid "Export Last {} Seconds"
 msgstr ""
 
@@ -363,24 +367,28 @@ msgstr ""
 msgid "export"
 msgstr ""
 
-#: model.ts:248 ui/tab.slint:151
+#: model.ts:250 ui/tab.slint:151
 msgid "No Audio"
 msgstr ""
 
-#: model.ts:249 ui/tab.slint:151
+#: model.ts:251 ui/tab.slint:151
 msgid "Current Track"
 msgstr ""
 
-#: model.ts:250
+#: model.ts:252
 msgid "Track {} · {}"
 msgstr ""
 
-#: model.ts:250
+#: model.ts:252
 msgid "Track {}"
 msgstr ""
 
 #: seams.ts:82
 msgid "Frame saved as {}"
+msgstr ""
+
+#: seams.ts:82
+msgid "Frame saved without subtitles as {}"
 msgstr ""
 
 #: seams.ts:82
