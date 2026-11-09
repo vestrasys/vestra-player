@@ -440,6 +440,32 @@ test("a drag chains its own seeks: the release sample replaces intermediate poin
   await stop();
 });
 
+test("after the end the seek bar, a drag and the seek steps stay enabled (the host plays on); speed stays greyed", async () => {
+  // Exact mode: the plugin's own seek (keyframe mode is the core's step seek, which the SDK's test host still refuses at the end).
+  const { host, stop } = await startWith({ seekKeyframes: false });
+  const bar = host.mounted("bottom");
+  host.setSource({ phase: "ended", terminalReason: "natural", position: 100, paused: true });
+  await host.settle();
+  assert.equal(bar.props["can-seek"], true);
+  assert.equal(host.command("backward-2").state.enabled, true);
+  assert.equal(host.command("jump").state.enabled, true);
+  assert.equal(host.command("rate-05").state.enabled, false);
+  // A click on the seek bar: press and release on one spot.
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.4);
+  await host.settle(0);
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.deepEqual(seeks(host), [40]);
+  assert.equal(lastOsd(host), "跳转: 00:40 / 01:40");
+  host.setSource({ phase: "ended", terminalReason: "natural", position: 100, paused: true });
+  await host.settle();
+  await host.command("backward-2").run();
+  await host.settle(20);
+  assert.deepEqual(seeks(host), [40, 70]);
+  await stop();
+});
+
 test("cancel discards the unsent tail without undoing the accepted seek", async () => {
   const { host, stop } = await start(withMedia());
   const bar = host.mounted("bottom");

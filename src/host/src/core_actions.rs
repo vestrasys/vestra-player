@@ -107,8 +107,10 @@ impl Facts {
     fn can_toggle(&self) -> bool {
         (self.can_pause && self.phase_ready) || (self.phase_ended && self.can_restart)
     }
+    /// After the end too: the seek leaves the end and playback resumes
+    /// (`Sources`, 2026-11-09).
     fn can_step_seek(&self) -> bool {
-        self.can_seek && self.phase_ready && self.position.is_some()
+        self.can_seek && (self.phase_ready || self.phase_ended) && self.position.is_some()
     }
     fn can_rate(&self) -> bool {
         self.can_rate && self.phase_ready
@@ -505,9 +507,14 @@ pub fn run_step(action: &str, seconds: &Value) -> Result<Option<f64>, String> {
 
 /// Keyframe step seeks (`setStepSeek({ keyframes: true })`, seek-keyframes
 /// round): they apply to the two step-seek actions on a source with moving
-/// video that can seek; everything else keeps the exact `plan`.
+/// video that can seek; everything else keeps the exact `plan`. After the
+/// end the exact seek leaves the end (a source seek), so it is used there.
 pub fn keyframe_seek(action: &str, facts: &Facts, keyframes: bool) -> bool {
-    keyframes && matches!(action, "seek-backward" | "seek-forward") && facts.video && facts.can_seek
+    keyframes
+        && matches!(action, "seek-backward" | "seek-forward")
+        && facts.video
+        && facts.can_seek
+        && facts.phase_ready
 }
 
 /// The mpv command of one keyframe step seek: always relative, so mpv
@@ -976,6 +983,14 @@ mod tests {
             plan("play-pause", &ended, 5.0, None).unwrap(),
             (Plan::Restart, Some("Playing".into()))
         );
+        // After the end ← → seek (an exact source seek, which resumes), not
+        // "Not supported by the current source".
+        assert_eq!(
+            plan("seek-backward", &ended, 10.0, None).unwrap().0,
+            Plan::Seek(27.0)
+        );
+        assert!(keyframe_seek("seek-backward", &facts, true));
+        assert!(!keyframe_seek("seek-backward", &ended, true));
         assert_eq!(
             plan("seek-forward", &facts, 5.0, None).unwrap(),
             (Plan::Seek(42.0), Some("Forward 5 s: 00:42 / 01:40".into()))

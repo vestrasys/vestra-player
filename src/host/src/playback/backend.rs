@@ -1628,6 +1628,9 @@ impl CoreActions {
             }
             StepPlan::Command(command) => {
                 context.sources.seek_elsewhere();
+                if unit == "frame" {
+                    context.sources.frame_stepped();
+                }
                 context
                     .mpv
                     .command(&command)
@@ -1645,6 +1648,9 @@ impl CoreActions {
                     })
                     .unwrap_or(30.);
                 let target = (before.or(facts.position).unwrap_or(0.) - 1. / fps).max(0.);
+                // A frame step back from the end stays paused (other seeks
+                // from the end resume).
+                context.sources.hold_pause_on_seek();
                 self.submit(
                     context,
                     json!({"kind":"control","control":{"kind":"seek","seconds":target}}),

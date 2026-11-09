@@ -26,6 +26,7 @@ The decisions below replace earlier wording in the feature requirements and the 
 | Four always-on-top modes, default "While Playing in Fullscreen" | IA-WIN-03 |
 | `` ` `` is "Mini Size" on every system; mini size is not on top; picture-in-picture is a separate command with no default key | IA-WIN-01, IA-WIN-02 |
 | Seek bar hover time is off by default | IA-PB-01 |
+| Seeking after the end (seek bar, ← →, plugins) plays on; previous frame (D) stays paused | IA-PB-09 |
 | The volume limit in the UI and for keys is 100; `player.setOutput` still accepts 0–200 | G-13a, G-13b |
 | The background layer takes effect while loading and shows the loading screen | G-16a, G-16b |
 | OSD font size follows the video area height | G-10 |
@@ -765,6 +766,20 @@ In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) a
 
 **Status**: cancelled (together with IA-CORE-09).
 
+### IA-PB-09 Seeking after the end resumes playback (P2)
+
+**Status**: implemented (user ruling 2026-11-09).
+
+**Requirements**: after a video ends naturally (`phase: ended`; mpv stays on the last frame, paused by `keep-open`), the seek bar stays usable. A seek bar click or drag, ← / → (and the other seek steps), and any plugin's `player.seek` / `Scrub.seek` jump to the target **and play on**. Exceptions:
+- Previous frame (D) after the end goes to just before the last frame and **stays paused** (B07).
+- When the end was reached while paused (frame stepping forward into the end, or a seek to the end while paused), a seek from the end keeps the pause.
+- Space / Play and Jump to Start (Backspace) still restart from 0 and play (B09).
+- Repeat One / Repeat All never stop at the end; unchanged.
+
+The `keep-open-pause` default is not changed: the host unpauses only on a successful seek that leaves the end. Keyframe step seeks ("Jump to keyframes only") use an exact seek after the end.
+
+**Acceptance**: play a clip to its end, then click the middle of the seek bar: the picture jumps there and plays; at the end press ←: it jumps back 5 s and plays; at the end press D: one frame back, paused; then click the seek bar: it jumps and stays paused (an ordinary seek while paused).
+
 ### Core API requests in this chapter
 
 | Signature | Source |
@@ -1359,7 +1374,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | M-10 | Picture | Wheel while holding a side button | Bindable (not implemented) | IA-CORE-08 |
 | M-11 | Picture | Drag | No modifier: moves the window; with a modifier: goes to the registered plugin (not implemented) | G-05, IA-CORE-17 |
 | M-12 | Bottom bar | Wheel | No effect | |
-| M-13 | Seek bar | Click | Jumps to the click position on press | |
+| M-13 | Seek bar | Click | Jumps to the click position on press; after the end it also plays on | IA-PB-09 |
 | M-14 | Seek bar | Drag | Seeks in real time without pausing; on release OSD "Seek: …" | |
 | M-15 | Seek bar | Hover | Time tooltip off by default, can be turned on in the menu; thumbnail off by default | IA-PB-01 |
 | M-16 | Seek bar | Hover near a bookmark or chapter | Within 3 px shows "title  time" | |
