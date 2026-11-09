@@ -35,17 +35,19 @@ export struct PlaylistRow {
 }
 
 // Glyphs of this panel only, in the V-Line style of @vestra/icons.slint (round-capped
-// 1.5px lines, never filled), each in a 13×10 box (the bar's) or 14×14 (placeholders).
+// 1.5px lines, never filled), each in a 13×10 box (the bar's), 14×12 (the bar's Repeat button)
+// or 14×14 (placeholders).
 global PlaylistGlyphs {
     // The thumbnail toggle shows the current mode: rows with a picture, or compact lines.
     out property <string> thumb-rows: "M 1 1 H 4.5 V 4 H 1 Z M 6.5 2.5 H 12 M 1 6 H 4.5 V 9 H 1 Z M 6.5 7.5 H 12";
     out property <string> compact-rows: "M 1 1.5 H 12 M 1 5 H 12 M 1 8.5 H 12";
     // The Repeat button (14×12): the four modes differ by the glyph alone (same colour in every
-    // state). Off: down the list once to a bar; All: the loop; One: the loop with "1"; Stop After
-    // Current: an arrow into a stop block (unlike Next's »|).
-    out property <string> repeat-off: "M 1.5 2 H 6 M 1.5 6 H 6 M 1.5 10 H 6 M 10.5 1.5 V 8 M 8.5 6 L 10.5 8 L 12.5 6 M 8.5 10.5 H 12.5";
-    out property <string> repeat-all: "M 1.5 6.5 V 5 Q 1.5 2 4.5 2 H 12.5 M 11 0.5 L 12.5 2 L 11 3.5 M 12.5 5.5 V 7 Q 12.5 10 9.5 10 H 1.5 M 3 8.5 L 1.5 10 L 3 11.5";
-    out property <string> repeat-one: "M 1.5 6.5 V 5 Q 1.5 2 4.5 2 H 12.5 M 11 0.5 L 12.5 2 L 11 3.5 M 12.5 5.5 V 7 Q 12.5 10 9.5 10 H 1.5 M 3 8.5 L 1.5 10 L 3 11.5 M 6 5.25 L 7.25 4.5 V 7.5";
+    // state). Off: the loop with a slash (user decision 2026-11-09); All: the loop; One: the loop
+    // with "1"; Stop After Current: an arrow into a stop block (unlike Next's »|).
+    out property <string> repeat-off-slash: "M 1.5 6.5 V 4.75 Q 1.5 1.75 4.5 1.75 H 12.5 M 11.25 0.5 L 12.5 1.75 L 11.25 3 M 12.5 5.25 V 7.25 Q 12.5 10.25 9.5 10.25 H 1.5 M 2.75 9 L 1.5 10.25 L 2.75 11.5 M 3.5 1 L 10.5 11";
+    out property <string> repeat-off: PlaylistGlyphs.repeat-off-slash;
+    out property <string> repeat-all: "M 1.5 6.5 V 4.75 Q 1.5 1.75 4.5 1.75 H 12.5 M 11.25 0.5 L 12.5 1.75 L 11.25 3 M 12.5 5.25 V 7.25 Q 12.5 10.25 9.5 10.25 H 1.5 M 2.75 9 L 1.5 10.25 L 2.75 11.5";
+    out property <string> repeat-one: "M 1.5 6.5 V 4.75 Q 1.5 1.75 4.5 1.75 H 12.5 M 11.25 0.5 L 12.5 1.75 L 11.25 3 M 12.5 5.25 V 7.25 Q 12.5 10.25 9.5 10.25 H 1.5 M 2.75 9 L 1.5 10.25 L 2.75 11.5 M 5.75 5 L 7.25 3.75 V 8.25";
     out property <string> stop-after: "M 1.5 6 H 7.25 M 5 3.75 L 7.25 6 L 5 8.25 M 9.25 3 H 12.5 V 9 H 9.25 Z";
     out property <string> audio: "M 5 11.5 V 2.5 L 12 1 V 10 M 5 11.5 A 1.75 1.5 0 1 1 1.5 11.5 A 1.75 1.5 0 1 1 5 11.5 Z M 12 10 A 1.75 1.5 0 1 1 8.5 10 A 1.75 1.5 0 1 1 12 10 Z";
     out property <string> link: "M 12.5 7 A 5.5 5.5 0 1 1 1.5 7 A 5.5 5.5 0 1 1 12.5 7 Z M 1.5 7 H 12.5 M 7 1.5 Q 4.2 7 7 12.5 M 7 1.5 Q 9.8 7 7 12.5";
@@ -160,8 +162,9 @@ component IconButton {
 
 // A small button in the bottom bar: an 18px pill (41px, the width of the
 // text buttons it replaced; Add, Delete and the thumbnail toggle are 28px
-// since 0.1.11), centred vertically, with an icon label (`icon` from the
-// library, or a `glyph` of this panel); `text` is its tooltip and accessible name.
+// since 0.1.11, and so is Repeat), centred vertically, with an icon label (`icon` from the
+// library, or a `glyph` of this panel: 13×10, Repeat's 14×12); `text` is its tooltip and
+// accessible name. Its colour is the same for every glyph (Repeat's modes differ by glyph only).
 component BarButton {
     in property <string> text;
     in property <string> icon;

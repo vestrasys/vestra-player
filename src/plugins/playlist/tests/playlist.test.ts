@@ -8,6 +8,7 @@ import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { filesPending, settleFiles } from "./settle.ts";
 import activate from "../main.ts";
 import { Prober, type ProbeRunner } from "../probe.ts";
+import { playback } from "../playback.ts";
 import { Queue } from "../queue.ts";
 import { chineseTexts } from "./texts.ts";
 
@@ -940,6 +941,105 @@ for (const shuffle of [false, true]) {
   });
 }
 
+test("Stop After Current on the last item stops without the end-of-list notice", async () => {
+  const app = await start();
+  try {
+    await app.addFiles([app.a, app.b, app.c]);
+    await app.run("repeat-once");
+    await app.click(2);
+    await app.press("Enter");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    const notices = app.host.osd.length;
+    app.end();
+    await app.host.settle();
+    assert.equal(app.opens().length, 1);
+    assert.equal(app.host.osd.length, notices, "no notice");
+    assert.ok(!app.host.osd.includes("列表已播完"));
+    assert.equal(app.rows()[2].current, true);
+  } finally {
+    await app.close();
+  }
+});
+
+for (const [mode, from, to] of [
+  ["repeat-none", 0, 1],
+  ["repeat-all", 2, 0],
+] as const) {
+  test(`switching Stop After Current to ${mode} while an item plays advances at its end`, async () => {
+    const app = await start();
+    try {
+      await app.addFiles([app.a, app.b, app.c]);
+      await app.run("repeat-once");
+      await app.click(from);
+      await app.press("Enter");
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      await app.run(mode);
+      app.end();
+      await app.host.settle();
+      assert.equal(app.opens().length, 2);
+      assert.equal(app.opens().at(-1)?.source, [app.a, app.b, app.c][to]);
+    } finally {
+      await app.close();
+    }
+  });
+}
+
+test("Stop After Current: removing the playing item opens nothing at its end", async () => {
+  const app = await start();
+  try {
+    await app.addFiles([app.a, app.b, app.c]);
+    await app.run("repeat-once");
+    await app.click(1);
+    await app.press("Enter");
+    app.host.setSource({ phase: "ready" });
+    await app.host.settle();
+    await app.click(1);
+    await app.press("Delete");
+    assert.deepEqual(app.names(), ["a.mp4", "c.mp4"]);
+    app.end();
+    await app.host.settle();
+    assert.equal(app.opens().length, 1, "nothing else opens");
+    assert.deepEqual(app.names(), ["a.mp4", "c.mp4"]);
+  } finally {
+    await app.close();
+  }
+});
+
+test("B26: with Fast Advance to Next on, nothing is prepared in Stop After Current", async () => {
+  const host = new TestHost();
+  settleFiles(host);
+  const { plugin, stop } = await startPlugin(() => {}, { directory: new URL("..", import.meta.url), host, locale: "en" });
+  const directory = await mkdtemp(join(tmpdir(), "vestra-playlist-plan-"));
+  try {
+    const [a, b] = [join(directory, "a.mp4"), join(directory, "b.mp4")];
+    for (const file of [a, b]) await writeFile(file, "x");
+    const queue = new Queue(plugin.i18n);
+    const player = playback(plugin, queue);
+    await queue.addFiles([a, b]);
+    player.setFast(true);
+    await player.play(queue.rows[0]!.rowId);
+    host.setSource({ phase: "ready" });
+    await host.settle();
+    const prepared = async () => {
+      player.prepare();
+      for (const deadline = Date.now() + 15_000; player.planned === null; await pause(5))
+        if (Date.now() > deadline) throw new Error("the next row was not prepared");
+      return player.planned;
+    };
+    assert.equal(await prepared(), queue.rows[1]!.rowId, "Off: the next row is prepared");
+    queue.repeat = "once";
+    player.prepare();
+    assert.equal(player.planned, null, "Stop After Current: no plan");
+    queue.repeat = "all";
+    assert.equal(await prepared(), queue.rows[1]!.rowId, "All again: prepared");
+  } finally {
+    await stop();
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("the bottom bar has no move buttons and has the Repeat button; the list menu's Move items run each move", async () => {
   const slint = await readFile(new URL("../ui/sidebar.slint", import.meta.url), "utf8");
   const code = slint.replace(/\/\/.*$/gm, "");
@@ -951,11 +1051,18 @@ test("the bottom bar has no move buttons and has the Repeat button; the list men
   // The button keeps the bar's colour in every mode: the four modes differ by their glyph only.
   const repeat = bar.slice(bar.lastIndexOf("BarButton {", bar.indexOf("cycle-repeat")));
   assert.doesNotMatch(repeat, /Theme\.accent|color:|background:/);
-  const glyphs = ["repeat-off", "repeat-all", "repeat-one", "stop-after"].map((name) => {
+  const literal = (name: string) => {
     const found = code.match(new RegExp(`out property <string> ${name}: "([^"]+)";`));
     assert.ok(found, name);
-    assert.match(repeat, new RegExp(`PlaylistGlyphs\\.${name}\\b`), name);
     return found![1];
+  };
+  const glyphs = ["repeat-off", "repeat-all", "repeat-one", "stop-after"].map((name) => {
+    assert.match(repeat, new RegExp(`PlaylistGlyphs\\.${name}\\b`), name);
+    if (name !== "repeat-off") return literal(name);
+    // Off: the loop with a slash (user decision 2026-11-09).
+    assert.match(code, /out property <string> repeat-off: PlaylistGlyphs\.repeat-off-slash;/);
+    assert.doesNotMatch(code, /repeat-off-list/);
+    return literal("repeat-off-slash");
   });
   assert.equal(new Set(glyphs).size, 4, "four distinct glyphs");
   const app = await start();
