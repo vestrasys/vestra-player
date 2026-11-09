@@ -869,13 +869,13 @@ msgstr "끄기"
 
 #: settings.slint:251
 #, x-machine
-msgid "Low (recommended)"
-msgstr "낮음(권장)"
+msgid "Low"
+msgstr "낮음"
 
 #: settings.slint:251
 #, x-machine
-msgid "Medium"
-msgstr "중간"
+msgid "Medium (recommended)"
+msgstr "중간(권장)"
 
 #: settings.slint:260
 #, x-machine

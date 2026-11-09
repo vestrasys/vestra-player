@@ -869,13 +869,13 @@ msgstr "オフ"
 
 #: settings.slint:251
 #, x-machine
-msgid "Low (recommended)"
-msgstr "低（推奨）"
+msgid "Low"
+msgstr "低"
 
 #: settings.slint:251
 #, x-machine
-msgid "Medium"
-msgstr "中"
+msgid "Medium (recommended)"
+msgstr "中（推奨）"
 
 #: settings.slint:260
 #, x-machine

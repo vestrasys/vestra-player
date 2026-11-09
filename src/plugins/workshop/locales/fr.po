@@ -875,13 +875,13 @@ msgstr "Désactivée"
 
 #: settings.slint:251
 #, x-machine
-msgid "Low (recommended)"
-msgstr "Faible (recommandé)"
+msgid "Low"
+msgstr "Faible"
 
 #: settings.slint:251
 #, x-machine
-msgid "Medium"
-msgstr "Moyenne"
+msgid "Medium (recommended)"
+msgstr "Moyenne (recommandée)"
 
 #: settings.slint:260
 #, x-machine

@@ -696,11 +696,11 @@ msgid "Off"
 msgstr ""
 
 #: settings.slint:251
-msgid "Low (recommended)"
+msgid "Low"
 msgstr ""
 
 #: settings.slint:251
-msgid "Medium"
+msgid "Medium (recommended)"
 msgstr ""
 
 #: settings.slint:260

@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.38
+
+- Thinking is **Medium** by default (was Low; user ruling 2026-11-09): in validation, plugin tasks completed on Medium and failed on Low. The settings list reads Off, Low, Medium (recommended). A saved choice stays as saved; only settings without one (or with an unknown level) now think at Medium. pi maps the level per model as before: a model without a medium level takes the next level up that it has (high on, for example, DeepSeek, Xiaomi and Mistral reasoning models), and a model that does not reason runs without thinking. On an Anthropic-format endpoint with a thinking budget, Medium is 8192 tokens of the 16384 `max_tokens` (Low was 2048), so thinking costs more per turn.
+- Tests: Medium by default (index and 8192-token budget), Low on choice (2048), a saved Low or Off kept, an unset or unknown level read as Medium.
+
 ## 2.2.37
 
 - The vendored SDK is 1.7.5 (`npm run vendor:sdk`), the version the player now uses. 1.7.4 only changes the documentation: it restores one general guide, "How a plugin works" (`/Guides/Guides/How a plugin works`, the rules behind every plugin on one page), which the Tutorial's "Next" list points to. 1.7.5 makes the test host (`TestHost`) follow the player at the end of a file (the seek steps, Previous Frame and the keyframe steps work after the end; a step seek there is an exact seek that plays on), and the AI's command table lists the playlist's Stop After Current (`playlist.repeat-once`). Who must change: nobody.

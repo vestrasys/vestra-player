@@ -873,13 +873,13 @@ msgstr "Desactivado"
 
 #: settings.slint:251
 #, x-machine
-msgid "Low (recommended)"
-msgstr "Bajo (recomendado)"
+msgid "Low"
+msgstr "Bajo"
 
 #: settings.slint:251
 #, x-machine
-msgid "Medium"
-msgstr "Medio"
+msgid "Medium (recommended)"
+msgstr "Medio (recomendado)"
 
 #: settings.slint:260
 #, x-machine

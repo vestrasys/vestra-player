@@ -703,12 +703,12 @@ msgid "Off"
 msgstr "关闭"
 
 #: settings.slint:251
-msgid "Low (recommended)"
-msgstr "低（推荐）"
+msgid "Low"
+msgstr "低"
 
 #: settings.slint:251
-msgid "Medium"
-msgstr "中"
+msgid "Medium (recommended)"
+msgstr "中（推荐）"
 
 #: settings.slint:260
 msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
