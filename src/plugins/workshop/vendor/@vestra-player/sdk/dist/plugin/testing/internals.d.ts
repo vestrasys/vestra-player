@@ -72,6 +72,16 @@ export declare class Internals {
     /** The binding table revision of `commands.keys` (a counter here). */
     keysRevision: number;
     /**
+     * Like the player (2026-11-09): a seek from the end plays on unless the
+     * end was reached while paused or by a frame step (set when the phase
+     * becomes `ended`).
+     */
+    endKeepsPause: boolean;
+    /** A frame step since the last source intent (the player's `stepped`). */
+    stepped: boolean;
+    /** The next source intent is a frame step back from the end: it stays paused. */
+    holdPause: boolean;
+    /**
      * The resources this plugin loaded into the current source (resource id →
      * bytes), removed ones included: like the player, a removed track frees
      * its place among the live tracks but not among the loads.

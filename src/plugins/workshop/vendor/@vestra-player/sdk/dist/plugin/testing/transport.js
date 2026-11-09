@@ -85,8 +85,9 @@ export function close(host, inner) {
             retryDelay: 100,
         });
     }
-    catch {
-        // Left in the temporary directory.
+    catch (error) {
+        // Left in the temporary directory, and said so.
+        console.warn(`# TestHost: left ${inner.scratch} (${error.code ?? String(error)})`);
     }
 }
 /** Implements `TestHost.keepsRunning`. */
