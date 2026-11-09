@@ -71,9 +71,11 @@ export class Playback {
   get state() {
     return this.#player.state;
   }
+  /** Seeking also works after the end: the host jumps there and plays on (2026-11-09). */
   can(kind: "pause" | "seek" | "rate" | "close") {
     const { can, phase } = this.state;
-    return can[kind] && (kind === "close" ? phase !== "empty" : phase === "ready");
+    if (kind === "close") return can.close && phase !== "empty";
+    return can[kind] && (phase === "ready" || (kind === "seek" && phase === "ended"));
   }
   canSeek() {
     const { duration } = this.state;

@@ -129,7 +129,9 @@ export class PlaybackPanel implements PanelActions {
         tick: tickOf(rate),
         canJump: p.canSeek(),
         canStart: p.canRestart() && !p.ui.restartBusy,
+        // After the end only Previous Frame works (the player's D; F needs a playing source).
         canFrame: p.canStep(),
+        canFrameForward: p.canStep() && p.state.phase === "ready",
         canKeyframe: keyframe.enabled,
         keyframeReason: keyframe.reason === "No video" ? "video" : keyframe.reason ? "source" : "",
         steps: settings.value.seekSteps.map(stepText),

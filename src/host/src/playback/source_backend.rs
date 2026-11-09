@@ -139,6 +139,19 @@ pub struct Sources {
     active: Option<(i64, IntentTicket)>,
     loaded: Option<(i64, IntentTicket)>,
     eof_rearm: bool,
+    /// Seeking away from the end resumes playback (2026-11-09) unless the
+    /// end was reached while paused or by a frame step: that pause stays.
+    end_keeps_pause: bool,
+    /// A frame step was sent since the last submitted intent (mpv unpauses
+    /// for the step, so the pause read at the end cannot tell).
+    stepped: bool,
+    /// A pause or play request since the last state read: it is the pause
+    /// at an end reached before the next read (play pressed in the last
+    /// frames).
+    pause_request: Option<bool>,
+    /// The next submitted seek is a frame step back from the end
+    /// (`StepPlan::FromEnd`): it stays paused.
+    hold_pause: bool,
     local_media: BTreeMap<i64, Arc<LocalMedia>>,
     current_local: Option<(u64, Arc<LocalMedia>)>,
     lease_ready: Option<(i64, u64)>,
@@ -831,6 +844,8 @@ impl Sources {
                 && !self.eof_rearm
                 && eof
             {
+                let paused = self.pause_request.unwrap_or(self.session.state().paused);
+                self.end_keeps_pause = self.stepped || paused;
                 self.session.event(SourceEvent::EndFile {
                     entry,
                     reason: EndReason::Natural,
@@ -845,6 +860,7 @@ impl Sources {
                 mpv.get_property("duration").ok(),
             );
         }
+        self.pause_request = None;
         self.lease_ready = None;
         let container = mpv.get_property::<String>("file-format").ok();
         let seekable = mpv.get_property::<bool>("seekable").unwrap_or(false);
@@ -907,12 +923,44 @@ impl Sources {
     pub fn seek_elsewhere(&mut self) {
         self.seek_flight.clear();
     }
+    /// After the end, a seek to `seconds` at or past the end (the smaller
+    /// of the position and the duration, 0.5 ms slack) goes nowhere: it is
+    /// accepted and not sent, and the source stays ended and paused. (Sent,
+    /// mpv would land on the end again at once: Ready, unpaused, then
+    /// keep-open's pause, flickering.)
+    fn at_end_already(&self, seconds: f64) -> bool {
+        let state = self.session.state();
+        if state.phase != Phase::Ended {
+            return false;
+        }
+        let end = match (state.position, state.duration) {
+            (Some(position), Some(duration)) => position.min(duration),
+            (Some(end), None) | (None, Some(end)) => end,
+            (None, None) => return false,
+        };
+        seconds >= end - 0.0005
+    }
+    /// The host sent mpv a frame step: an end it reaches keeps the pause.
+    pub fn frame_stepped(&mut self) {
+        self.stepped = true;
+    }
+    /// The next `source.submit` is a frame step back from the end: the seek
+    /// leaves the end paused.
+    pub fn hold_pause_on_seek(&mut self) {
+        self.hold_pause = true;
+    }
     pub fn event(&mut self, event: &MpvEvent) -> bool {
         if matches!(
             event,
             MpvEvent::PlaybackRestart | MpvEvent::StartFile { .. } | MpvEvent::EndFile { .. }
         ) {
             self.seek_flight.clear();
+        }
+        // The seek that left the end has landed: from here `eof-reached` is
+        // about the new position, so an end reached at once (a seek to the
+        // last frames) is seen, even when no state read caught it false.
+        if matches!(event, MpvEvent::PlaybackRestart) {
+            self.eof_rearm = false;
         }
         match event {
             MpvEvent::StartFile { playlist_entry_id } => {
@@ -1414,8 +1462,21 @@ impl Sources {
             .as_u64()
             .filter(|id| *id > 0)
             .ok_or_else(|| RpcError::invalid("operationId requires positive integer"))?;
+        // Both flags cover this submit only, whatever becomes of it.
+        let hold_pause = std::mem::take(&mut self.hold_pause);
+        self.stepped = false;
         let mut intent = serde_json::from_value::<SourceIntent>(params["intent"].clone())
             .map_err(|e| RpcError::invalid(e.to_string()))?;
+        // A new load, a restart or Close: the end that was kept is gone.
+        if !matches!(intent, SourceIntent::Control { .. }) {
+            self.end_keeps_pause = false;
+        }
+        // After the end a seek to the end goes nowhere (`at_end_already`).
+        let stays_at_end = matches!(
+            &intent,
+            SourceIntent::Control { control: Control::Seek { seconds, .. }, .. }
+                if self.at_end_already(*seconds)
+        );
         #[cfg(feature = "producer-audio")]
         let preflight = if matches!(intent, SourceIntent::Control { .. })
             && (self.pending_error.is_some()
@@ -1730,10 +1791,12 @@ impl Sources {
                 }
                 match control {
                     Control::Pause { paused } => mpv.set_property("pause", *paused).inspect(|()| {
+                        self.pause_request = Some(*paused);
                         crate::input_trace::mark(&format!(
                             "playback worker: libmpv pause={paused} set"
                         ));
                     }),
+                    Control::Seek { .. } if stays_at_end => Ok(()),
                     Control::Seek { seconds, keyframes } => {
                         let entry = self.active.map(|(entry, _)| entry);
                         if self.seek_flight.repeats(entry, *seconds, *keyframes)
@@ -1779,6 +1842,7 @@ impl Sources {
             });
         }
         if result.is_ok()
+            && !stays_at_end
             && matches!(
                 intent,
                 SourceIntent::Control {
@@ -1792,6 +1856,12 @@ impl Sources {
             self.active = Some((entry, active));
             self.entries.insert(entry, active);
             self.eof_rearm = true;
+            // keep-open paused mpv at the end; a seek from there plays on
+            // (the seek bar, ← →, a plugin's seek), except a frame step back
+            // or an end reached while paused / by stepping.
+            if !hold_pause && !self.end_keeps_pause {
+                let _ = mpv.set_property("pause", false);
+            }
         }
         let status = self
             .books
