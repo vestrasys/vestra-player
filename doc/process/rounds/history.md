@@ -1,4 +1,4 @@
-| I | **Capture** | Split (11-09, user): built-in keeps snapshots (#235, settings in Options ▸ Video ▸ Snapshot); clip export is the store plugin Clip Export 0.1.0 (plugins #37, published) || B5 | **Slim right-click menu**, `menus.md` refreshed | Merged (#219: Adjustments and Effects / Sidebar entries) || B4 | **Panels**: Picture, Audio, Subtitles, Playback | Merged after the v3 redesign (player 0.7.6: one flat Picture panel, A-B Loop in Playback). Follow-ups: tab-switch compile stall (spike), startup recompile stall (fix running) |# Project history and current round
+# Project history and current round
 
 This file replaces the per-topic round records of October and November 2026. It keeps what still matters: how the project got here, the decisions in force, the lessons that changed how we work, and the open topics. Process rules live in [agentic-workflow](../../../agentic-workflow/README.md); architecture lives in [doc/architecture](../../architecture/README.md).
 
@@ -258,8 +258,8 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 | B2 | **Shortcut hints** in tabs, sliders and buttons | Merged (#198, SDK 1.6.7) |
 | B3a | **Host-owned button strip**, » overflow, 🔍 button; host and playback in one release | Merged (#200, SDK 1.6.8); overflow width sweep 1100→560 px GUI-checked |
 | B3b | **Adjust slot**: adjust column, narrow-window overlay, fullscreen slide-out, Adjust button; SDK patch (`adjust` slot value, docs) | Merged (#209, SDK 1.6.11–1.6.13). Host multi-panel (one panel per slot per plugin, SDK 1.6.15) merged (#214) |
-| B4 | **Panels**: Picture, Audio, Subtitles, Playback. One plugin author each | All four built, reviewed and integrated in branch b4-panels (SDK 1.6.16: tables + `commands.keys("host/<id>")`; ci:local 21/21; GUI-checked). **Held by the user (11-08): merge after the redesign** of Picture ▸ Geometry (direct manipulation: fixed screen frame + draggable/resizable video frame), a more compact Effects section, Denoise visibly grouped with its mode, and a Playback speed slider — mockups first (C:estradesignmenu-redesignmockups, PICTURE-PLAYBACK-v2.md). First-open cost with four real panels: 406 ms (one tab) / 713 ms (all compiled). Follow-ups: subtitle-online Online ▸ to Open ▸; lazy_activation covers only 9 built-ins (7 now mount panels headless-refused); host-command `home` for palette locations |
-| B5 | **Slim right-click menu**, `menus.md` refreshed | After B4 |
+| B4 | **Panels**: Picture, Audio, Subtitles, Playback | Merged after the v3 redesign (player 0.7.6: one flat Picture panel, A-B Loop in Playback). Follow-ups: tab-switch compile stall (spike), startup recompile stall (fix running) |
+| B5 | **Slim right-click menu**, `menus.md` refreshed | Merged (#219: Adjustments and Effects / Sidebar entries) |
 | B6 | Full GUI test, then a release | Release tag needs the user |
 | C | **SDK review → SDK refactor** (user, 11-08): inventory by a researcher (module map and consumers, duplicated rules SDK↔host, change history, specialised vs generic APIs, heavy runtime parts, ranked refactor batches as patch releases); plan goes to the user before any change | Plan written: `doc/specs/sdk-refactor.md` (three layers, three plugin styles, plugin.state, batches 4.0 → Step 1–3 → D/E/F, docs refactor); five open questions for the user; timing not decided |
 | D | **Download page**: re-record the clips that show menus, fix copy for the panels and the palette. Push only, no deploy | After B6 |
@@ -267,7 +267,7 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 | F | **Launch video v4**, re-made for the new UI; music decision | Last; needs the user |
 | G | GPU test clip default | Done: env.ps1 sets VESTRA_GPU_CLIP to the testmedia 4K60 clip |
 | H | **Fullscreen title strip (Windows), side lane** (user request 11-07) | Merged (#192), spec G-19. GUI: reveal/hide, top-right vs sidebar, 60 fps, minimize→restore→exit returns maximized |
-| I | **Capture tab** (side lane; renamed from Snapshots & Clips) | Host R3/R5 (#203), export modes R1/R2/R4/R6 (#205) and export input seek (#206) merged; SDK 1.6.10 released. Tab reworked after user feedback (real sub-pages, Save/Copy only, tooltips instead of explanation blocks, Advanced section, menu entry "Capture…"); review: product code OK, flaky tests being fixed (one helper for all 37 assert-after-wait spots, 20 green runs required). Then GUI check (layout, Fast/Precise, progress, OSD actions, frame rate with threads auto) and merge. Follow-ups: host request for subtitles without effects in `media.capture` (today shown subtitles force processed=true); OSD text too long pushes its action buttons off the video; Retry of a Fast failure should offer Precise |
+| I | **Capture** | Split (11-09, user): built-in keeps snapshots (#235, settings in Options ▸ Video ▸ Snapshot); clip export is the store plugin Clip Export 0.1.0 (plugins #37, published) |
 
 ### Log (newest first)
 
