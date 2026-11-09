@@ -14,6 +14,12 @@ export declare const readyCapabilities: {
 export declare function sourceIntent(host: TestHost, inner: Internals, intent: Record<string, Json>): {
     ticket: Json;
 };
+/**
+ * Like the player: after the end, a seek at or past the end (the smaller of
+ * the position and the duration, 0.5 ms slack) goes nowhere. It is accepted;
+ * the source stays ended and paused.
+ */
+export declare function atEndAlready(host: TestHost, seconds: number): boolean;
 /** The file resolver of this plugin that claims `source`, if any. */
 export declare function fileResolver(host: TestHost, _inner: Internals, source: string): string | null;
 /** Retire the producer that is the player's source, unless it is `keep`. */
@@ -50,6 +56,6 @@ export declare function loadedSubtitles(host: TestHost, inner: Internals): Map<s
 export declare function subtitleRoom(host: TestHost, inner: Internals, resourceId: string): void;
 export declare function subtitleChange(host: TestHost, inner: Internals, expected: Json): void;
 /** Implements `TestHost.setSource`. */
-export declare function setSource(host: TestHost, _inner: Internals, patch: Partial<SourceState>): void;
+export declare function setSource(host: TestHost, inner: Internals, patch: Partial<SourceState>): void;
 /** The default handlers of this area's wire methods, by method name. */
 export declare function mediaHandlers(host: TestHost, inner: Internals): Record<string, Handler>;

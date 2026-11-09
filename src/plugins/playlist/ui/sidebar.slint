@@ -35,11 +35,20 @@ export struct PlaylistRow {
 }
 
 // Glyphs of this panel only, in the V-Line style of @vestra/icons.slint (round-capped
-// 1.5px lines, never filled), each in a 13×10 box (the bar's) or 14×14 (placeholders).
+// 1.5px lines, never filled), each in a 13×10 box (the bar's), 14×12 (the bar's Repeat button)
+// or 14×14 (placeholders).
 global PlaylistGlyphs {
     // The thumbnail toggle shows the current mode: rows with a picture, or compact lines.
     out property <string> thumb-rows: "M 1 1 H 4.5 V 4 H 1 Z M 6.5 2.5 H 12 M 1 6 H 4.5 V 9 H 1 Z M 6.5 7.5 H 12";
     out property <string> compact-rows: "M 1 1.5 H 12 M 1 5 H 12 M 1 8.5 H 12";
+    // The Repeat button (14×12): the four modes differ by the glyph alone (same colour in every
+    // state). Off: the loop with a slash (user decision 2026-11-09); All: the loop; One: the loop
+    // with "1"; Stop After Current: an arrow into a stop block (unlike Next's »|).
+    out property <string> repeat-off-slash: "M 1.5 6.5 V 4.75 Q 1.5 1.75 4.5 1.75 H 12.5 M 11.25 0.5 L 12.5 1.75 L 11.25 3 M 12.5 5.25 V 7.25 Q 12.5 10.25 9.5 10.25 H 1.5 M 2.75 9 L 1.5 10.25 L 2.75 11.5 M 3.5 1 L 10.5 11";
+    out property <string> repeat-off: PlaylistGlyphs.repeat-off-slash;
+    out property <string> repeat-all: "M 1.5 6.5 V 4.75 Q 1.5 1.75 4.5 1.75 H 12.5 M 11.25 0.5 L 12.5 1.75 L 11.25 3 M 12.5 5.25 V 7.25 Q 12.5 10.25 9.5 10.25 H 1.5 M 2.75 9 L 1.5 10.25 L 2.75 11.5";
+    out property <string> repeat-one: "M 1.5 6.5 V 4.75 Q 1.5 1.75 4.5 1.75 H 12.5 M 11.25 0.5 L 12.5 1.75 L 11.25 3 M 12.5 5.25 V 7.25 Q 12.5 10.25 9.5 10.25 H 1.5 M 2.75 9 L 1.5 10.25 L 2.75 11.5 M 5.75 5 L 7.25 3.75 V 8.25";
+    out property <string> stop-after: "M 1.5 6 H 7.25 M 5 3.75 L 7.25 6 L 5 8.25 M 9.25 3 H 12.5 V 9 H 9.25 Z";
     out property <string> audio: "M 5 11.5 V 2.5 L 12 1 V 10 M 5 11.5 A 1.75 1.5 0 1 1 1.5 11.5 A 1.75 1.5 0 1 1 5 11.5 Z M 12 10 A 1.75 1.5 0 1 1 8.5 10 A 1.75 1.5 0 1 1 12 10 Z";
     out property <string> link: "M 12.5 7 A 5.5 5.5 0 1 1 1.5 7 A 5.5 5.5 0 1 1 12.5 7 Z M 1.5 7 H 12.5 M 7 1.5 Q 4.2 7 7 12.5 M 7 1.5 Q 9.8 7 7 12.5";
 }
@@ -75,10 +84,8 @@ export global PlaylistBridge {
     in property <bool> can-add: true;
     in property <bool> can-remove;
     in property <bool> can-sort;
-    in property <bool> can-top;
-    in property <bool> can-up;
-    in property <bool> can-down;
-    in property <bool> can-bottom;
+    // Repeat mode, shown by the bar's Repeat button: 0 Off, 1 All, 2 One, 3 Stop After Current.
+    in property <int> repeat;
     // Drag reorder is off while a search filters (C21).
     in property <bool> can-drag: true;
     // A search filters the rows (shows "No matches" when none match).
@@ -101,9 +108,9 @@ export global PlaylistBridge {
     callback select-step(int, bool);
     // Drag reorder: (dragged row, insertion index in the current order)
     callback drop-row(string, int);
-    // "top" | "up" | "down" | "bottom"
-    callback place(string);
     callback remove();
+    // The bar's Repeat button: Off → All → One → Stop After Current → Off.
+    callback cycle-repeat();
     // Window coordinates for the popups
     callback add-menu(float, float);
     callback sort-menu(float, float);
@@ -155,12 +162,16 @@ component IconButton {
 
 // A small button in the bottom bar: an 18px pill (41px, the width of the
 // text buttons it replaced; Add, Delete and the thumbnail toggle are 28px
-// since 0.1.11), centred vertically, with an icon label (`icon` from the
-// library, or a `glyph` of this panel); `text` is its tooltip and accessible name.
+// since 0.1.11, and so is Repeat), centred vertically, with an icon label (`icon` from the
+// library, or a `glyph` of this panel: 13×10, Repeat's 14×12); `text` is its tooltip and
+// accessible name. Its colour is the same for every glyph (Repeat's modes differ by glyph only).
 component BarButton {
     in property <string> text;
     in property <string> icon;
     in property <string> glyph;
+    // The glyph's box (13×10 by default; the Repeat glyphs are 14×12).
+    in property <length> glyph-width: 13px;
+    in property <length> glyph-height: 10px;
     in property <length> pill-width: Theme.button-small-min-width;
     in property <bool> enabled: true;
     callback clicked(float, float);
@@ -183,6 +194,8 @@ component BarButton {
             }
             if root.glyph != "": Glyph {
                 glyph: root.glyph;
+                box-width: root.glyph-width;
+                box-height: root.glyph-height;
                 color: root.enabled ? Theme.text-list : Theme.text-dim;
             }
             ToolTipArea {
@@ -647,7 +660,8 @@ export component PlaylistSidebar inherits Rectangle {
                 }
             }
 
-            // Bottom bar: move icons | ADD DEL SORT | search | total duration (hidden first when narrow).
+            // Bottom bar (design B2): ADD DEL SORT THUMBNAILS REPEAT | search | total duration (hidden first
+            // when narrow). No move buttons: drag, Ctrl+↑/↓/End and the list menu's Move items reorder.
             bar := Rectangle {
                 height: 35px;
                 background: Theme.bg-panel;
@@ -665,31 +679,6 @@ export component PlaylistSidebar inherits Rectangle {
                     width: self.preferred-width;
                     padding-left: 6px;
                     padding-top: 1px;
-                    IconButton {
-                        tip: @tr("Move to top");
-                        enabled: PlaylistBridge.can-top;
-                        icon: "move-top";
-                        clicked => { PlaylistBridge.place("top"); }
-                    }
-                    IconButton {
-                        tip: @tr("Move up (Ctrl+↑)");
-                        enabled: PlaylistBridge.can-up;
-                        icon: "move-up";
-                        clicked => { PlaylistBridge.place("up"); }
-                    }
-                    IconButton {
-                        tip: @tr("Move down (Ctrl+↓)");
-                        enabled: PlaylistBridge.can-down;
-                        icon: "move-down";
-                        clicked => { PlaylistBridge.place("down"); }
-                    }
-                    IconButton {
-                        tip: @tr("Move to bottom (Ctrl+End)");
-                        enabled: PlaylistBridge.can-bottom;
-                        icon: "move-bottom";
-                        clicked => { PlaylistBridge.place("bottom"); }
-                    }
-                    Rectangle { width: 6px; }
                     BarButton {
                         text: @tr("Add");
                         icon: "add";
@@ -720,6 +709,23 @@ export component PlaylistSidebar inherits Rectangle {
                         glyph: PlaylistBridge.thumbnails ? PlaylistGlyphs.thumb-rows : PlaylistGlyphs.compact-rows;
                         pill-width: 28px;
                         clicked => { PlaylistBridge.toggle-thumbnails(); }
+                    }
+                    Rectangle { width: 4px; }
+                    // Repeat: a click cycles Off → All → One → Stop After Current → Off. The colour is the
+                    // bar's in every mode (user ruling 2026-11-09); the glyph alone tells the modes apart.
+                    BarButton {
+                        text: PlaylistBridge.repeat == 1 ? @tr("Repeat: All (loop the list)")
+                            : PlaylistBridge.repeat == 2 ? @tr("Repeat: One (loop this video)")
+                            : PlaylistBridge.repeat == 3 ? @tr("Repeat: Stop After Current")
+                            : @tr("Repeat: Off (play the list once)");
+                        glyph: PlaylistBridge.repeat == 1 ? PlaylistGlyphs.repeat-all
+                            : PlaylistBridge.repeat == 2 ? PlaylistGlyphs.repeat-one
+                            : PlaylistBridge.repeat == 3 ? PlaylistGlyphs.stop-after
+                            : PlaylistGlyphs.repeat-off;
+                        glyph-width: 14px;
+                        glyph-height: 12px;
+                        pill-width: 28px;
+                        clicked => { PlaylistBridge.cycle-repeat(); }
                     }
                 }
                 // C21 search box: about 24px high on `Theme.hover-bg` (UI-PL-09); width from `search-width`.

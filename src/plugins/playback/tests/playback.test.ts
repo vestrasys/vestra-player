@@ -441,9 +441,9 @@ test("a drag chains its own seeks: the release sample replaces intermediate poin
 });
 
 test("after the end the seek bar (click and drag) and the seek steps stay enabled (the host plays on); speed stays greyed", async () => {
-  // Exact mode: the plugin's own seek. Keyframe mode is the core's step seek; the SDK's test host
-  // refuses it at the end up to SDK 1.7.4 (1.7.5 allows it, as the player does).
-  const { host, stop } = await startWith({ seekKeyframes: false });
+  // Keyframe mode (the default): the bar is the plugin's keyframe seek, the steps are the core's
+  // step seek, which after the end is an exact seek that plays on (as the player, SDK 1.7.5).
+  const { host, stop } = await startWith({});
   const bar = host.mounted("bottom");
   host.setSource({ phase: "ended", terminalReason: "natural", position: 100, paused: true });
   await host.settle();
@@ -463,7 +463,7 @@ test("after the end the seek bar (click and drag) and the seek steps stay enable
   await host.settle();
   await host.command("backward-2").run();
   await host.settle(20);
-  assert.deepEqual(seeks(host), [40, 70]);
+  assert.deepEqual(host.coreSeeks, [{ action: "seek-backward", seconds: 30, keyframes: false, landed: 70 }]);
   // A drag after the end: its seeks chain as while playing (the first, then the release sample).
   host.setSource({ phase: "ended", terminalReason: "natural", position: 100, paused: true });
   await host.settle();
@@ -474,7 +474,7 @@ test("after the end the seek bar (click and drag) and the seek steps stay enable
   await host.settle(0);
   bar.emit("dragging", false);
   await host.settle(80);
-  assert.deepEqual(seeks(host), [40, 70, 10, 25]);
+  assert.deepEqual(seeks(host), [40, 10, 25]);
   assert.equal(lastOsd(host), "跳转: 00:25 / 01:40");
   await stop();
 });

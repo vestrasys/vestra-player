@@ -10,6 +10,13 @@ export declare function coreFacts(host: TestHost, _inner: Internals): {
 };
 /** Why one frame that way is impossible (B07), or null; the player's rules. */
 export declare function frameCheck(host: TestHost, inner: Internals, forward: boolean): string | null;
+/**
+ * One frame step that `frameCheck` allowed, as the player runs it: recorded
+ * in `steps`; back from the end an exact seek one frame (`stats` fps, else
+ * 30) before the position that stays paused; on the first frame nothing
+ * moves; any other step marks an end it reaches as keeping the pause.
+ */
+export declare function frameStep(host: TestHost, inner: Internals, forward: boolean): void;
 /** The same enabled rules and reasons as the player's core actions. */
 export declare function coreState(host: TestHost, inner: Internals, action: string): {
     enabled: boolean;

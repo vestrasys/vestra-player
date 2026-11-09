@@ -6,8 +6,8 @@ The playlist in the right sidebar.
 
 - **Add**: add files, folders (including subfolders) and links; drag and drop files, folders or list files onto the video area or the list.
 - **When opening a file**: open only that file, add similar files from the same folder (the default), or add all files in the folder.
-- **Organize**: multiple selection, drag to reorder, move up and down, several ways to sort, search; remove the selected, the unselected, the invalid or all items.
-- **Play**: repeat (off, all, one), shuffle; plays the next item when one ends, and Fast Advance to Next can shorten the switch.
+- **Organize**: multiple selection, drag to reorder, move to the top, up, down or to the bottom (Move items in the list menu, Ctrl+↑ / Ctrl+↓ / Ctrl+End), several ways to sort, search; remove the selected, the unselected, the invalid or all items.
+- **Play**: repeat (Off: play the list once; All: loop the list; One: loop the current item; Stop After Current: stop when the current item ends, without going on), shuffle (no effect under One and Stop After Current; Next and Previous work in every mode); plays the next item when one ends, and Fast Advance to Next can shorten the switch.
 - **Opens on the playing item**: each time the list is shown (F6, its tab, detached or attached, after a restart) it is scrolled so that the playing item is in the middle (at the top or bottom near the list's ends); while the list is shown, an item that starts playing out of view is scrolled to the middle, unless you scrolled in the last 2 seconds.
 - **List files**: open and save M3U, M3U8, PLS; open DPL.
 - **Thumbnails** (on by default): each row shows a small picture with the duration on it, the title and the file's folder. Videos show a keyframe from a tenth of the way in, audio files their cover art, links a placeholder. The button at the right of the bottom bar switches between these rows and compact single-line rows; the choice is remembered. Pictures are made only for the rows on screen and a few around them (needs ffmpeg, at most 2 at a time, paused while a file opens) and kept in the plugin's data folder, so they come back at once.
@@ -17,8 +17,8 @@ The playlist in the right sidebar.
 
 - F6 (Playlist in the command palette) shows or hides the list; when the sidebar has tabs from other plugins, F6 first switches to the playlist tab, and pressing it again on the playlist tab hides the sidebar. The player's Sidebar item in the right-click menu and the Sidebar button at the right of the control bar show or hide the sidebar at its last tab.
 - Right-click menu Open ▸ Open Folder… (F2).
-- Command palette (Ctrl+Shift+P): Playlist: Add Files… / Add Link… / Add Folder…, Open List File…, Save List…, Shuffle, Fast Advance to Next, Remember List, Confirm Before Removing All; Repeat: Off / All / One; When Opening a File: the three modes (no longer in the right-click menu).
-- The right-click menu inside the list and the ADD, DEL and SORT buttons; when the list has focus, Enter plays, Delete removes, Ctrl+A selects all, Ctrl+S searches, and so on; playing an item (Enter, a double-click) or Esc gives the keys back to the video. While the list has focus (only after a single click on a row) it uses the navigation keys ↑ ↓ PgUp PgDn Home End and Esc; no other list shortcut shadows a player key.
+- Command palette (Ctrl+Shift+P): Playlist: Add Files… / Add Link… / Add Folder…, Open List File…, Save List…, Shuffle, Fast Advance to Next, Remember List, Confirm Before Removing All; Repeat: Off / All / One / Stop After Current; When Opening a File: the three modes (no longer in the right-click menu).
+- The right-click menu inside the list and the bottom bar: Add, Delete, Sort, the thumbnail toggle and Repeat (a click cycles Off → All → One → Stop After Current; the icon shows the mode: a slashed loop for Off, the loop for All, the loop with "1" for One, an arrow into a stop block for Stop After Current; the tooltip names it); when the list has focus, Enter plays, Delete removes, Ctrl+A selects all, Ctrl+S searches, and so on; playing an item (Enter, a double-click) or Esc gives the keys back to the video. While the list has focus (only after a single click on a row) it uses the navigation keys ↑ ↓ PgUp PgDn Home End and Esc; no other list shortcut shadows a player key.
 - Options window Playback ▸ Playlist.
 
 ## Limits

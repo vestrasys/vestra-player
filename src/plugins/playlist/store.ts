@@ -51,7 +51,7 @@ export const defaults = (): Settings => ({
   thumbnails: true,
 });
 
-const REPEATS = ["none", "all", "one"];
+const REPEATS = ["none", "all", "one", "once"];
 const MODES = ["only", "similar", "folder"];
 const SORT_KEYS = ["title", "filename", "extension", "size", "duration", "date", "folder", "path"];
 

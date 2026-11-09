@@ -35,7 +35,8 @@ export type RowError = null | { kind: "missing" | "unreadable" | "unplayable" } 
  * by `sourceId`).
  */
 export type Binding = { rowId: string; media: Media | null; sourceId?: number; end?: Disposable };
-export type Repeat = "none" | "all" | "one";
+/** `once`: Stop After Current (the current item plays once, then playback stops; the list does not advance). */
+export type Repeat = "none" | "all" | "one" | "once";
 export type Placement = "top" | "up" | "down" | "bottom";
 /** C11 keys; `shuffle` and `reverse` reorder without being a key the direction re-applies. */
 export type SortKey =

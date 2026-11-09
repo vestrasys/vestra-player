@@ -37,6 +37,7 @@ export const NOTICES = [
   "Repeat: Off",
   "Repeat: All",
   "Repeat: One",
+  "Repeat: Stop After Current",
   "Shuffle: On",
   "Shuffle: Off",
   "Fast advance to next: On",

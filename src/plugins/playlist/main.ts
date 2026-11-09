@@ -46,6 +46,7 @@ const repeats = [
   ["none", "Off"],
   ["all", "All"],
   ["one", "One"],
+  ["once", "Stop After Current"],
 ] as const satisfies readonly (readonly [Repeat, string])[];
 const openModes = [
   ["only", "Open Only That File"],
@@ -652,7 +653,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   // The options shared by the menu and the settings page (IA-PL-02).
   const setRepeat = (mode: Repeat) => {
     queue.repeat = mode;
-    queue.notice(mode === "none" ? "Repeat: Off" : mode === "all" ? "Repeat: All" : "Repeat: One");
+    queue.notice(
+      mode === "none"
+        ? "Repeat: Off"
+        : mode === "all"
+          ? "Repeat: All"
+          : mode === "one"
+            ? "Repeat: One"
+            : "Repeat: Stop After Current",
+    );
+  };
+  /** The bar's Repeat button: Off → All → One → Stop After Current → Off. */
+  const cycleRepeat = () => {
+    const index = repeats.findIndex(([mode]) => mode === queue.repeat);
+    setRepeat(repeats[(index + 1) % repeats.length]![0]);
   };
   const setShuffle = (on: boolean) => {
     queue.setShuffle(on);
@@ -672,8 +686,9 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     settings.confirmClear = on;
     queue.notice(settings.confirmClear ? "Confirm before removing all: On" : "Confirm before removing all: Off");
   };
+  // 233–235, then Stop After Current at 245 (236 and on were taken before it came).
   repeats.forEach(([mode, title], index) =>
-    playlistMenu(`repeat-${mode}`, title, 233 + index, {
+    playlistMenu(`repeat-${mode}`, title, index < 3 ? 233 + index : 245, {
       category: categories.repeat,
       ...SETTINGS,
       radio: true,
@@ -1042,10 +1057,8 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
       canRemove: queue.selection.size > 0,
       canSort: sortable(),
       canDrag: !queue.filtering,
-      canTop: queue.canPlace("top"),
-      canUp: queue.canPlace("up"),
-      canDown: queue.canPlace("down"),
-      canBottom: queue.canPlace("bottom"),
+      // The bar's Repeat button: 0 Off, 1 All, 2 One, 3 Stop After Current.
+      repeat: repeats.findIndex(([mode]) => mode === queue.repeat),
       scrollToY: scroller.to,
       scrollRequest: scroller.request,
       showY: listArea.scroll,
@@ -1068,7 +1081,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     revealCursor = true;
   });
   list.on("dropRow", (rowId: string, index: number) => queue.drop(rowId, index));
-  list.on("place", (where: string) => (where in moves ? place(where as Placement)() : undefined));
+  list.on("cycleRepeat", () => cycleRepeat());
   list.on("remove", () => removeSelected());
   list.on("addMenu", (x: number, y: number) => list.showMenu([add, addFolderCommand, addLink], { x, y }));
   list.on("sortMenu", (x: number, y: number) => list.showMenu(sorts, { x, y }));
@@ -1085,6 +1098,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
         removeOthers,
         removeInvalidCommand,
         removeAll,
+        null,
+        // Move: the bar has no move buttons (design B2); Panel.showMenu is one level, so the
+        // four moves are a group of their own here.
+        moves.top,
+        moves.up,
+        moves.down,
+        moves.bottom,
         null,
         revealCommand,
         null,

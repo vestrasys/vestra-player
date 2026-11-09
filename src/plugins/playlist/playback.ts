@@ -82,6 +82,9 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   const advance = (binding: Binding, ended: PlayerState): Promise<void> | undefined => {
     if (busy() || queue.binding !== binding) return;
     if (!queue.row(queue.binding.rowId)) return;
+    // Stop After Current: playback stops at this end; the row and the position stay as at the
+    // end of the list under Off (shuffle has nothing to pick: nothing advances).
+    if (queue.repeat === "once") return;
     if (timing) advancing = { at: performance.now(), title: "" };
     if (queue.repeat === "one") return replay(ended);
     const prepared = planned();
@@ -102,7 +105,7 @@ export function playback(scope: Scope, queue: Queue, settled: () => void = () =>
   const anchor = () => queue.failed ?? queue.binding?.rowId ?? queue.selected;
   /** The row a natural end would open now (shuffle: the planned pick while it is still allowed). */
   function upcoming(): Row | undefined {
-    if (!queue.binding || queue.repeat === "one") return undefined;
+    if (!queue.binding || queue.repeat === "one" || queue.repeat === "once") return undefined;
     if (!queue.shuffle) return queue.neighbor(1);
     const kept = plan && queue.candidates(anchor()).find((row) => row.rowId === plan!.rowId);
     return kept || queue.neighbor(1);

@@ -9,7 +9,7 @@
 import { HostError } from "../../wire.js";
 import { validStep } from "../player/rules.js";
 import { hostText } from "./i18n.js";
-import { sourceIntent, audioCondition } from "./media.js";
+import { atEndAlready, sourceIntent, audioCondition } from "./media.js";
 export function coreFacts(host, _inner) {
     const s = host.source;
     const ready = s.phase === "ready";
@@ -18,7 +18,9 @@ export function coreFacts(host, _inner) {
         ready,
         ended,
         toggle: (s.capabilities.pause && ready) || (ended && s.capabilities.restart),
-        step: s.capabilities.seek && ready && s.position !== null,
+        // After the end too: the seek leaves the end and plays on (player
+        // 2026-11-09).
+        step: s.capabilities.seek && (ready || ended) && s.position !== null,
         rate: s.capabilities.rate && ready,
         close: s.capabilities.close && s.phase !== "empty",
     };
@@ -39,6 +41,35 @@ export function frameCheck(host, inner, forward) {
     if (!forward && !s.capabilities.seek)
         return noBack;
     return null;
+}
+/**
+ * One frame step that `frameCheck` allowed, as the player runs it: recorded
+ * in `steps`; back from the end an exact seek one frame (`stats` fps, else
+ * 30) before the position that stays paused; on the first frame nothing
+ * moves; any other step marks an end it reaches as keeping the pause.
+ */
+export function frameStep(host, inner, forward) {
+    host.steps.push({
+        unit: "frame",
+        direction: forward ? "forward" : "backward",
+    });
+    const s = host.source;
+    if (!forward && s.position !== null && s.position <= 0.001)
+        return;
+    if (!forward && s.phase === "ended") {
+        const fps = host.stats.video?.fps;
+        const frame = 1 / (fps && Number.isFinite(fps) && fps > 0 ? fps : 30);
+        inner.holdPause = true;
+        sourceIntent(host, inner, {
+            kind: "control",
+            control: {
+                kind: "seek",
+                seconds: Math.max(0, (s.position ?? 0) - frame),
+            },
+        });
+        return;
+    }
+    inner.stepped = true;
 }
 /** The same enabled rules and reasons as the player's core actions. */
 export function coreState(host, inner, action) {
@@ -217,10 +248,7 @@ export function runCore(host, inner, action, seconds) {
             return;
         case "frame-back":
         case "frame-forward":
-            host.steps.push({
-                unit: "frame",
-                direction: action === "frame-back" ? "backward" : "forward",
-            });
+            frameStep(host, inner, action === "frame-forward");
             return;
         case "seek-backward":
         case "seek-forward": {
@@ -232,6 +260,7 @@ export function runCore(host, inner, action, seconds) {
             // after the target (none: the exact target), backward on the last at
             // or before it; only sources with moving video that can seek.
             const keyframes = host.stepSeekKeyframes &&
+                s.phase === "ready" && // after the end: an exact seek
                 host.keyframes !== null &&
                 s.hasVideo !== false &&
                 s.capabilities.seek;
@@ -318,13 +347,42 @@ export function coreActionsHandlers(host, inner) {
             audioCondition(host, inner, p.expected);
             const s = host.source;
             const reason = p.unit === "keyframe"
-                ? s.phase === "ready" && s.capabilities.seek && s.hasVideo !== false
+                ? (s.phase === "ready" || s.phase === "ended") &&
+                    s.capabilities.seek &&
+                    s.hasVideo !== false
                     ? null
                     : hostText(host, inner, "Not supported by the current source")
                 : frameCheck(host, inner, p.direction === "forward");
             if (reason)
                 throw new HostError("unsupported", reason);
-            host.steps.push({ unit: String(p.unit), direction: String(p.direction) });
+            if (p.unit === "frame")
+                frameStep(host, inner, p.direction === "forward");
+            else {
+                host.steps.push({
+                    unit: String(p.unit),
+                    direction: String(p.direction),
+                });
+                // Like the player after the end: Previous Keyframe is a source seek
+                // to the last keyframe before the position (1 ms back; the exact
+                // target when no keyframes are modelled) that stays paused; Next
+                // Keyframe goes nowhere (the plugin says so).
+                const target = Math.max(0, (s.position ?? 0) - 0.001);
+                // "Already at the end" is decided on the raw target, as the player.
+                if (s.phase === "ended" &&
+                    p.direction === "backward" &&
+                    !atEndAlready(host, target)) {
+                    const landed = host.keyframes === null
+                        ? target
+                        : host.keyframes
+                            .filter((k) => k <= target)
+                            .reduce((a, k) => Math.max(a, k), 0);
+                    inner.holdPause = true;
+                    sourceIntent(host, inner, {
+                        kind: "control",
+                        control: { kind: "seek", seconds: landed, keyframes: true },
+                    });
+                }
+            }
         },
         "sequence.set": (p) => {
             host.sequence = p.flags;

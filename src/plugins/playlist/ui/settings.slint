@@ -9,7 +9,7 @@ export global PlaylistSettings {
     in-out property <int> open-mode;
     in-out property <bool> append-on-open;
     in-out property <bool> drop-at-pointer;
-    // 0 Off, 1 All, 2 One
+    // 0 Off, 1 All, 2 One, 3 Stop After Current
     in-out property <int> repeat;
     in-out property <bool> shuffle;
     in-out property <bool> fast-advance;
@@ -147,7 +147,7 @@ export component PlaylistSettingsPage inherits Rectangle {
             Label { column: root.column; text: @tr("Repeat:"); }
             repeat-combo := ComboBox {
                 width: 200px;
-                model: [@tr("Off"), @tr("All"), @tr("One")];
+                model: [@tr("Off"), @tr("All"), @tr("One"), @tr("Stop After Current")];
                 current-index: PlaylistSettings.repeat;
                 selected => { PlaylistSettings.set-repeat(self.current-index); }
             }
