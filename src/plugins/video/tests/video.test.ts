@@ -5,7 +5,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 import { isDeepStrictEqual } from "node:util";
-import type { Locale } from "@vestra-player/sdk";
+import type { Locale, Text } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { activeDenoise, aspectIndex, aspectMessage, blendFps, defaultLook, defaults, droppedTooMany, eqNeutral, framed, framesIndex, isHdr, isShaderName, nextAspect, nodesFor, parse, parseAspect, peakOf, presets, rememberDenoise, serialize, shaderList, switchDenoise } from "../model.ts";
@@ -2313,7 +2313,7 @@ test("panel: the GPU Rendering switch shows the player's state and switches like
 
 // ---------------------------------------------------------------- AI Upscaling (RTX VSR) in the Rendering section
 
-type Upscaling = { checked: boolean; enabled: boolean; busy: boolean; kind: string; detail: string; from: number; to: number; gpu: string };
+type Upscaling = { checked: boolean; enabled: boolean; busy: boolean; kind: string; detail: string | Text; from: number; to: number; gpu: string };
 const upOf = (host: TestHost) => host.mounted().props.upscaling as Upscaling;
 const upItem = (host: TestHost) => host.command("video.upscaling");
 const RTX = "NVIDIA GeForce RTX 4070 Laptop GPU";
@@ -2402,10 +2402,64 @@ test("AI Upscaling: not needed for a video shown at its size; waits while this p
     host.upscalingChanged();
     await until(host, () => upOf(host).kind === "effects", "the picture effects keep the frames in memory");
     assert.equal(upOf(host).checked, true);
-    host.upscalingDecoding("copy-back", [{ id: "someone.else", name: "Other" }]);
+    // Another plugin's filter: the status names it.
+    host.upscalingDecoding("copy-back", [{ id: "someone.frame", name: "Auto Frame" }]);
     host.upscalingChanged();
-    await until(host, () => upOf(host).kind === "waiting", "another plugin's filter");
-    assert.match(upOf(host).detail, /Other/);
+    await until(host, () => upOf(host).kind === "plugins", "another plugin's filter");
+    assert.equal(host.translate(upOf(host).detail), "Waiting · Auto Frame keeps the frames in memory; turn its effects off to upscale");
+    assert.equal(upOf(host).checked, true);
+  } finally {
+    await stop();
+  }
+});
+
+test("AI Upscaling: while it waits for the decoder, the status says why and names the other plugins in the way", async () => {
+  const { host, window, stop } = await playing();
+  try {
+    window.emit("run", "video.upscaling");
+    await until(host, () => upOf(host).kind === "upscaling", "on");
+    const waits = async (cause: string, plugins: { id: string; name: string }[] | undefined, kind: string) => {
+      host.upscalingDecoding(cause, plugins);
+      host.upscalingChanged();
+      await until(host, () => upOf(host).kind === kind, `${cause} → ${kind}`);
+      assert.deepEqual([upOf(host).checked, upOf(host).enabled], [true, true], "waiting, the switch stays usable");
+    };
+    // Several plugins (this one's filters among them): all named, the plural sentence.
+    await waits("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }, { id: "someone.frame", name: "Auto Frame" }], "plugins");
+    assert.equal(
+      host.translate(upOf(host).detail),
+      "Waiting · Picture Adjustments, Auto Frame keep the frames in memory; turn their effects off to upscale",
+    );
+    // Only this plugin's own filters: the panel's effects.
+    await waits("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }], "effects");
+    // No plugin named: the hardware decoding setting copies back.
+    await waits("copy-back", [], "copy-back");
+    await waits("hwdec-off", undefined, "hwdec-off");
+    await waits("software", undefined, "software");
+    await waits("other-hwdec", undefined, "other-hwdec");
+    // A cause this plugin does not know: the player's message.
+    host.upscaling.reason = { code: "decoding", cause: "future", message: "the decoder is busy" };
+    host.upscalingChanged();
+    await until(host, () => upOf(host).kind === "waiting", "unknown cause");
+    assert.equal(upOf(host).detail, "the decoder is busy");
+  } finally {
+    await stop();
+  }
+});
+
+test("AI Upscaling: the plugins in the way are named in Simplified Chinese", async () => {
+  const { host, window, stop } = await playing(undefined, zh);
+  try {
+    window.emit("run", "video.upscaling");
+    await until(host, () => upOf(host).kind === "upscaling", "on");
+    host.upscalingDecoding("copy-back", [{ id: "someone.frame", name: "Auto Frame" }]);
+    host.upscalingChanged();
+    await until(host, () => upOf(host).kind === "plugins", "one plugin");
+    assert.equal(host.translate(upOf(host).detail), "等待中 · Auto Frame 让帧留在内存中；关闭它的效果即可超分");
+    host.upscalingDecoding("copy-back", [{ id: "a.one", name: "One" }, { id: "b.two", name: "Two" }]);
+    host.upscalingChanged();
+    await until(host, () => upOf(host).kind === "plugins" && host.translate(upOf(host).detail).includes("Two"), "two plugins");
+    assert.equal(host.translate(upOf(host).detail), "等待中 · One、Two 让帧留在内存中；关闭它们的效果即可超分");
   } finally {
     await stop();
   }

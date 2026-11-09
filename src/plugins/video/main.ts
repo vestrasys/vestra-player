@@ -10,6 +10,7 @@ import type {
   RenderingPreference,
   RenderingState,
   Scope,
+  Text,
   UpscalingState,
 } from "@vestra-player/sdk";
 import {
@@ -390,7 +391,7 @@ export default async function activate(plugin: Plugin) {
     name: "",
   });
   /** The AI Upscaling switch as the panel shows it (set below, with the rendering state). */
-  let upscalingView = () => ({ checked: false, enabled: false, busy: false, kind: "off", detail: "", from: 0, to: 0, gpu: "" });
+  let upscalingView = () => ({ checked: false, enabled: false, busy: false, kind: "off", detail: "" as string | Text, from: 0, to: 0, gpu: "" });
   panel.bind(() => {
     const { d3, gradual, temporal } = effects.denoise;
     return {
@@ -1670,7 +1671,7 @@ export default async function activate(plugin: Plugin) {
   let upscalingBusy = false;
   const softwareNow = () => rendering?.mode === "software";
   /** What the status line says (`Upscaling.kind` in picture.slint) and the player's message. */
-  const upscalingStatus = (): { kind: string; detail: string } => {
+  const upscalingStatus = (): { kind: string; detail: string | Text } => {
     const on = look.render.upscaling;
     if (rendering?.mode === "software")
       // No GPU renderer on this system at all (Linux): not on this system; else it needs GPU rendering.
@@ -1683,9 +1684,26 @@ export default async function activate(plugin: Plugin) {
       if (code === "no-gpu" || code === "driver" || code === "gpu-unsupported" || code === "adapter") return { kind: "gpu", detail: message };
       if (code === "rendering" && rendering?.mode !== "gpu") return { kind: "rendering", detail: message };
       if (!on) return { kind: "off", detail: "" };
-      // This plugin's own filters keep the frames in memory (copy-back decoding): say so.
-      if (code === "decoding" && reason.cause === "copy-back" && reason.plugins?.some((p) => p.id === plugin.id))
-        return { kind: "effects", detail: message };
+      if (code === "decoding") {
+        const { cause } = reason;
+        const plugins = reason.plugins ?? [];
+        // Other plugins' video filters keep the frames in memory (copy-back decoding): name them
+        // (their manifest names, as the player gives them; this plugin's too when its filters are
+        // also on), so the user knows whose effects to turn off. One and several are two texts.
+        if (cause === "copy-back" && plugins.some((p) => p.id !== plugin.id)) {
+          const names = plugin.i18n.list(plugins.map((p) => p.name));
+          const detail = plugins.length === 1
+            ? plugin.i18n.text("Waiting · {} keeps the frames in memory; turn its effects off to upscale", [names])
+            : plugin.i18n.text("Waiting · {} keep the frames in memory; turn their effects off to upscale", [names]);
+          return { kind: "plugins", detail };
+        }
+        // Only this plugin's own filters do: say so.
+        if (cause === "copy-back" && plugins.length > 0) return { kind: "effects", detail: message };
+        // No plugin named: the user's hwdec setting copies the frames back.
+        if (cause === "copy-back") return { kind: "copy-back", detail: message };
+        if (cause === "hwdec-off" || cause === "software" || cause === "other-hwdec") return { kind: cause, detail: message };
+        // A cause this plugin does not know: the player's message (below).
+      }
       // Can pass during the run (another file, GPU rendering still starting).
       if (code === "decoding" || code === "rendering") return { kind: "waiting", detail: message };
       return { kind: "other", detail: message };

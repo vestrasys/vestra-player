@@ -74,9 +74,13 @@ export struct Gpu {
 // AI Upscaling (`plugin.video.upscaling`, RTX Video Super Resolution). `checked`: the saved choice.
 // `kind` says what the status line words: "off"; "on" (on, not read yet); "upscaling" (`from`p to
 // `to`p on `gpu`; 0 / "" when not known); "idle" (on, the video is not shown larger than its size);
-// "effects" (waits: this panel's effects need the frames in memory); "waiting" (waits: `detail`);
+// "effects" (waits: this panel's effects need the frames in memory); "plugins" (waits: other
+// plugins' filters need the frames in memory; `detail` is the whole sentence naming them);
+// "copy-back" (waits: the hardware decoding setting copies the frames to memory); "hwdec-off"
+// (waits: hardware decoding is off); "software" (waits: this video is decoded in software);
+// "other-hwdec" (waits: another hardware decoder); "waiting" (waits: `detail`);
 // "rendering" (needs GPU rendering); "platform" (not on this system); "gpu" (not on this GPU:
-// `detail`); "other" (`detail`). `detail` is the player's own message.
+// `detail`); "other" (`detail`). `detail` is the player's own message, except for "plugins".
 export struct Upscaling {
     checked: bool,
     enabled: bool,
@@ -1351,6 +1355,11 @@ export component Picture inherits Rectangle {
         : root.up-kind == "on" ? @tr("On · upscales video shown larger than its size")
         : root.up-kind == "idle" ? @tr("On · this video is not shown larger than its size")
         : root.up-kind == "effects" ? @tr("Waiting · the picture effects need the frames in memory")
+        : root.up-kind == "plugins" ? PictureBridge.upscaling.detail
+        : root.up-kind == "copy-back" ? @tr("Waiting · the hardware decoding setting copies the frames to memory")
+        : root.up-kind == "hwdec-off" ? @tr("Waiting · hardware decoding is off")
+        : root.up-kind == "software" ? @tr("Waiting · this video is decoded in software")
+        : root.up-kind == "other-hwdec" ? @tr("Waiting · this video uses another hardware decoder")
         : root.up-kind == "waiting" ? @tr("Waiting · {}", PictureBridge.upscaling.detail)
         : root.up-kind == "rendering" ? @tr("Needs GPU rendering (software rendering now)")
         : root.up-kind == "platform" ? @tr("Not available on this system (Windows with an NVIDIA RTX GPU)")
@@ -1358,7 +1367,9 @@ export component Picture inherits Rectangle {
         : root.up-kind == "other" ? PictureBridge.upscaling.detail
         : @tr("Off · sharpens video shown larger than its size");
     private property <string> up-tone: root.up-kind == "upscaling" ? "on"
-        : root.up-kind == "effects" || root.up-kind == "waiting" ? "pending" : "off";
+        : root.up-kind == "effects" || root.up-kind == "plugins" || root.up-kind == "copy-back"
+            || root.up-kind == "hwdec-off" || root.up-kind == "software" || root.up-kind == "other-hwdec"
+            || root.up-kind == "waiting" ? "pending" : "off";
     private property <int> advanced-serial: PictureBridge.advanced-serial;
 
     // +3, 0, -2 (a figure of the readout).

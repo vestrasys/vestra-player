@@ -4,866 +4,874 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:180 main.ts:1056 main.ts:1455
+#: main.ts:181 main.ts:1057 main.ts:1454
 msgid "Picture"
 msgstr ""
 
-#: main.ts:231 picture.slint:1249
+#: main.ts:232 picture.slint:1307
 msgid "Shader failed to load"
 msgstr ""
 
-#: main.ts:232
+#: main.ts:233
 msgid "Render options unavailable: another plugin controls them"
 msgstr ""
 
-#: main.ts:235
+#: main.ts:236
 msgid "Render options unavailable: {}"
 msgstr ""
 
-#: main.ts:640
+#: main.ts:641
 msgid "Display unavailable: another plugin controls the display"
 msgstr ""
 
-#: main.ts:642
+#: main.ts:643
 msgid "Display unavailable: {}"
 msgstr ""
 
-#: main.ts:652
+#: main.ts:653
 msgid "Aspect ratio: Default"
 msgstr ""
 
-#: main.ts:652
+#: main.ts:653
 msgid "Aspect ratio: {}"
 msgstr ""
 
-#: main.ts:652
+#: main.ts:653
 msgid "Aspect ratio: Custom - {}"
 msgstr ""
 
-#: main.ts:657 main.ts:1161 picture.slint:1831
+#: main.ts:658 main.ts:1162 picture.slint:1900
 msgid "Keep Aspect Ratio"
 msgstr ""
 
-#: main.ts:657 main.ts:1161 picture.slint:1831
+#: main.ts:658 main.ts:1162 picture.slint:1900
 msgid "Ignore Aspect Ratio"
 msgstr ""
 
-#: main.ts:657 picture.slint:1831
+#: main.ts:658 picture.slint:1900
 msgid "Fill Window"
 msgstr ""
 
-#: main.ts:663
+#: main.ts:664
 msgid "Framing: larger ({}%)"
 msgstr ""
 
-#: main.ts:663
+#: main.ts:664
 msgid "Framing: smaller ({}%)"
 msgstr ""
 
-#: main.ts:670
+#: main.ts:671
 msgid "Framing: move right ({}%, {}%)"
 msgstr ""
 
-#: main.ts:670
+#: main.ts:671
 msgid "Framing: move left ({}%, {}%)"
 msgstr ""
 
-#: main.ts:670
+#: main.ts:671
 msgid "Framing: move up ({}%, {}%)"
 msgstr ""
 
-#: main.ts:670
+#: main.ts:671
 msgid "Framing: move down ({}%, {}%)"
 msgstr ""
 
-#: main.ts:675
+#: main.ts:676
 msgid "Framing: centered"
 msgstr ""
 
-#: main.ts:675
+#: main.ts:676
 msgid "Framing: reset"
 msgstr ""
 
-#: main.ts:747
+#: main.ts:748
 msgid "Picture reset; image processing off"
 msgstr ""
 
-#: main.ts:747
+#: main.ts:748
 msgid "Picture reset"
 msgstr ""
 
-#: main.ts:763
+#: main.ts:764
 msgid "Picture panel reset"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Brightness -1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Brightness +1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Contrast -1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Contrast +1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Saturation -1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Saturation +1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Hue -1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Hue +1% ({}%)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Brightness -1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Brightness +1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Contrast -1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Contrast +1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Saturation -1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Saturation +1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Hue -1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:768
+#: main.ts:769
 msgid "Hue +1% ({}%) (picture effects off)"
 msgstr ""
 
-#: main.ts:774
+#: main.ts:775
 msgid "Flip vertically: on"
 msgstr ""
 
-#: main.ts:774
+#: main.ts:775
 msgid "Flip vertically: off"
 msgstr ""
 
-#: main.ts:775
+#: main.ts:776
 msgid "Flip horizontally: on"
 msgstr ""
 
-#: main.ts:775
+#: main.ts:776
 msgid "Flip horizontally: off"
 msgstr ""
 
-#: main.ts:780
+#: main.ts:781
 msgid "Rotation: none"
 msgstr ""
 
-#: main.ts:780
+#: main.ts:781
 msgid "Rotation: {}°"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Sharpen: on"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Edge sharpen: on"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Deblock: on"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Deband: on"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "3D denoise: on"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Gradual denoise: on"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Temporal denoise: on"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Sharpen: off"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Edge sharpen: off"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Deblock: off"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Deband: off"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "3D denoise: off"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Gradual denoise: off"
 msgstr ""
 
-#: main.ts:785
+#: main.ts:786
 msgid "Temporal denoise: off"
 msgstr ""
 
-#: main.ts:790
+#: main.ts:791
 msgid "Deinterlace: auto"
 msgstr ""
 
-#: main.ts:790
+#: main.ts:791
 msgid "Deinterlace: always"
 msgstr ""
 
-#: main.ts:790
+#: main.ts:791
 msgid "Deinterlace: never"
 msgstr ""
 
-#: main.ts:795
+#: main.ts:796
 msgid "Deinterlace output: by frame"
 msgstr ""
 
-#: main.ts:795
+#: main.ts:796
 msgid "Deinterlace output: by field (double rate)"
 msgstr ""
 
-#: main.ts:802
+#: main.ts:803
 msgid "Crop/stretch: none"
 msgstr ""
 
-#: main.ts:802
+#: main.ts:803
 msgid "Crop/stretch: stretch to {}"
 msgstr ""
 
-#: main.ts:802
+#: main.ts:803
 msgid "Crop/stretch: crop to {}"
 msgstr ""
 
-#: main.ts:809
+#: main.ts:810
 msgid "Crop position ({}%, {}%)"
 msgstr ""
 
-#: main.ts:824
+#: main.ts:825
 msgid "Frame doubling: off"
 msgstr ""
 
-#: main.ts:824
+#: main.ts:825
 msgid "Frame doubling: on (motion interpolation turned off)"
 msgstr ""
 
-#: main.ts:824
+#: main.ts:825
 msgid "Frame doubling: on"
 msgstr ""
 
-#: main.ts:824
+#: main.ts:825
 msgid "Frame doubling: on (picture effects off)"
 msgstr ""
 
-#: main.ts:844
+#: main.ts:845
 msgid "Motion interpolation: off"
 msgstr ""
 
-#: main.ts:844
+#: main.ts:845
 msgid "Motion interpolation: on (frame doubling turned off)"
 msgstr ""
 
-#: main.ts:844
+#: main.ts:845
 msgid "Motion interpolation: on"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: auto (not an HDR source)"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: off (not an HDR source)"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: BT.2390 (not an HDR source)"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: Hable (not an HDR source)"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: Mobius (not an HDR source)"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: Reinhard (not an HDR source)"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: clip (not an HDR source)"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: auto"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: off"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: BT.2390"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: Hable"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: Mobius"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: Reinhard"
 msgstr ""
 
-#: main.ts:852
+#: main.ts:853
 msgid "HDR tone mapping: clip"
 msgstr ""
 
-#: main.ts:857
+#: main.ts:858
 msgid "Dynamic peak detection: on"
 msgstr ""
 
-#: main.ts:857
+#: main.ts:858
 msgid "Dynamic peak detection: off"
 msgstr ""
 
-#: main.ts:865
+#: main.ts:866
 msgid "Pixel shaders: off"
 msgstr ""
 
-#: main.ts:866
+#: main.ts:867
 msgid "Pixel shaders: no shaders"
 msgstr ""
 
-#: main.ts:867
+#: main.ts:868
 msgid "Pixel shaders: on ({})"
 msgstr ""
 
-#: main.ts:918
+#: main.ts:919
 msgid "Many frames dropped with field output, try frame output; many dropped with frame doubling, consider turning it off"
 msgstr ""
 
-#: main.ts:918
+#: main.ts:919
 msgid "Many frames dropped with field output, try frame output"
 msgstr ""
 
-#: main.ts:918
+#: main.ts:919
 msgid "Many frames dropped with frame doubling, consider turning it off"
 msgstr ""
 
-#: main.ts:952 main.ts:968
+#: main.ts:953 main.ts:969
 msgid "At most {} shaders"
 msgstr ""
 
-#: main.ts:963
+#: main.ts:964
 msgid "Add Shader (.glsl)"
 msgstr ""
 
-#: main.ts:966
+#: main.ts:967
 msgid "Only .glsl or .hook shader files can be added"
 msgstr ""
 
-#: main.ts:973
+#: main.ts:974
 msgid "Could not copy the shader: {}"
 msgstr ""
 
-#: main.ts:982
+#: main.ts:983
 msgid "Could not open the shader folder: {}"
 msgstr ""
 
 #. {} is a list of file names.
-#: main.ts:991
+#: main.ts:992
 msgid "Removed missing shaders: {}"
 msgstr ""
 
 #. {} is a list of file names.
-#: main.ts:992
+#: main.ts:993
 msgid "Shaders reloaded ({})"
 msgstr ""
 
-#: main.ts:1047
+#: main.ts:1048
 msgid "Pixel Shaders"
 msgstr ""
 
-#: main.ts:1048
+#: main.ts:1049
 msgid "HDR Tone Mapping"
 msgstr ""
 
-#: main.ts:1049 picture.slint:1893
+#: main.ts:1050 picture.slint:1963
 msgid "Deinterlace"
 msgstr ""
 
-#: main.ts:1050 picture.slint:1807
+#: main.ts:1051 picture.slint:1876
 msgid "Aspect"
 msgstr ""
 
-#: main.ts:1051
+#: main.ts:1052
 msgid "Crop/Stretch"
 msgstr ""
 
-#: main.ts:1052 main.ts:1325
+#: main.ts:1053 main.ts:1326
 msgid "Framing"
 msgstr ""
 
-#: main.ts:1053
+#: main.ts:1054
 msgid "Image Processing"
 msgstr ""
 
-#: main.ts:1054
+#: main.ts:1055
 msgid "Rotation"
 msgstr ""
 
-#: main.ts:1055
+#: main.ts:1056
 msgid "Reset"
 msgstr ""
 
-#: main.ts:1067
+#: main.ts:1068
 msgid "Use Shaders"
 msgstr ""
 
-#: main.ts:1074 main.ts:1080 main.ts:1091 main.ts:1102 main.ts:1113 main.ts:1415 main.ts:1768 ui/shaders.slint:131
+#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1793 ui/shaders.slint:131
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr ""
 
-#: main.ts:1078
+#: main.ts:1079
 msgid "Shader List…"
 msgstr ""
 
-#: main.ts:1079
+#: main.ts:1080
 msgid "Open Shader Folder"
 msgstr ""
 
-#: main.ts:1080
+#: main.ts:1081
 msgid "Reload Shaders"
 msgstr ""
 
-#: main.ts:1084 main.ts:1134 picture.slint:1272 picture.slint:1273
+#: main.ts:1085 main.ts:1135 picture.slint:1330 picture.slint:1331
 msgid "Auto"
 msgstr ""
 
-#: main.ts:1084 picture.slint:1273 picture.slint:1781
+#: main.ts:1085 picture.slint:1331 picture.slint:1847
 msgid "Off"
 msgstr ""
 
-#: main.ts:1084
+#: main.ts:1085
 msgid "BT.2390"
 msgstr ""
 
-#: main.ts:1084
+#: main.ts:1085
 msgid "Hable"
 msgstr ""
 
-#: main.ts:1084
+#: main.ts:1085
 msgid "Mobius"
 msgstr ""
 
-#: main.ts:1084
+#: main.ts:1085
 msgid "Reinhard"
 msgstr ""
 
-#: main.ts:1084 picture.slint:1273
+#: main.ts:1085 picture.slint:1331
 msgid "Clip"
 msgstr ""
 
-#: main.ts:1096 picture.slint:1975
+#: main.ts:1097 picture.slint:2045
 msgid "Dynamic Peak Detection"
 msgstr ""
 
-#: main.ts:1108
+#: main.ts:1109
 msgid "HDR Settings…"
 msgstr ""
 
-#: main.ts:1120 main.ts:1421
+#: main.ts:1121 main.ts:1422
 msgid "Cycle"
 msgstr ""
 
-#: main.ts:1134 picture.slint:1272
+#: main.ts:1135 picture.slint:1330
 msgid "Always"
 msgstr ""
 
-#: main.ts:1134 picture.slint:1272
+#: main.ts:1135 picture.slint:1330
 msgid "Never"
 msgstr ""
 
-#: main.ts:1146
+#: main.ts:1147
 msgid "By Frame"
 msgstr ""
 
-#: main.ts:1146 picture.slint:1911
+#: main.ts:1147 picture.slint:1981
 msgid "By Field (Double Rate)"
 msgstr ""
 
-#: main.ts:1153 picture.slint:1910
+#: main.ts:1154 picture.slint:1980
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr ""
 
-#: main.ts:1161
+#: main.ts:1162
 msgid "Fill Window (Crop Excess)"
 msgstr ""
 
-#: main.ts:1172
+#: main.ts:1173
 msgid "Cycle Aspect Ratio"
 msgstr ""
 
-#: main.ts:1182 picture.slint:1257 picture.slint:1258
+#: main.ts:1183 picture.slint:1315 picture.slint:1316
 msgid "Default (Source)"
 msgstr ""
 
-#: main.ts:1229 picture.slint:1258
+#: main.ts:1230 picture.slint:1316
 msgid "Custom ({})"
 msgstr ""
 
-#: main.ts:1230
+#: main.ts:1231
 msgid "Custom (x:y)"
 msgstr ""
 
-#: main.ts:1230
+#: main.ts:1231
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr ""
 
-#: main.ts:1233 picture.slint:1824
+#: main.ts:1234 picture.slint:1893
 msgid "Custom Aspect Ratio…"
 msgstr ""
 
-#: main.ts:1245
+#: main.ts:1246
 msgid "None"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Stretch to 4:3"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Stretch to 16:9"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Stretch to 16:10"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Stretch to 1.85:1"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Stretch to 2.35:1"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Crop to 4:3"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Crop to 16:9"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Crop to 16:10"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Crop to 1.85:1"
 msgstr ""
 
-#: main.ts:1258
+#: main.ts:1259
 msgid "Crop to 2.35:1"
 msgstr ""
 
-#: main.ts:1278
+#: main.ts:1279
 msgid "Move Left"
 msgstr ""
 
-#: main.ts:1278
+#: main.ts:1279
 msgid "Move Right"
 msgstr ""
 
-#: main.ts:1278 ui/shaders.slint:91 ui/shaders.slint:114
+#: main.ts:1279 ui/shaders.slint:91 ui/shaders.slint:114
 msgid "Move Up"
 msgstr ""
 
-#: main.ts:1278 ui/shaders.slint:91 ui/shaders.slint:115
+#: main.ts:1279 ui/shaders.slint:91 ui/shaders.slint:115
 msgid "Move Down"
 msgstr ""
 
-#: main.ts:1290
+#: main.ts:1291
 msgid "Crop Position"
 msgstr ""
 
-#: main.ts:1313
+#: main.ts:1314
 msgid "Zoom In"
 msgstr ""
 
-#: main.ts:1313
+#: main.ts:1314
 msgid "Zoom Out"
 msgstr ""
 
-#: main.ts:1313
+#: main.ts:1314
 msgid "Pan →"
 msgstr ""
 
-#: main.ts:1313
+#: main.ts:1314
 msgid "Pan ←"
 msgstr ""
 
-#: main.ts:1313
+#: main.ts:1314
 msgid "Pan ↑"
 msgstr ""
 
-#: main.ts:1313
+#: main.ts:1314
 msgid "Pan ↓"
 msgstr ""
 
-#: main.ts:1313 picture.slint:1743
+#: main.ts:1314 picture.slint:1809
 msgid "Center Frame"
 msgstr ""
 
-#: main.ts:1338 picture.slint:1719
+#: main.ts:1339 picture.slint:1785
 msgid "Flip Vertically"
 msgstr ""
 
-#: main.ts:1349 picture.slint:1726
+#: main.ts:1350 picture.slint:1792
 msgid "Flip Horizontally"
 msgstr ""
 
-#: main.ts:1360 picture.slint:1508 picture.slint:1589
+#: main.ts:1361 picture.slint:1574 picture.slint:1655
 msgid "Gaussian Blur"
 msgstr ""
 
-#: main.ts:1370
+#: main.ts:1371
 msgid "Gaussian blur: on"
 msgstr ""
 
-#: main.ts:1370
+#: main.ts:1371
 msgid "Gaussian blur: off"
 msgstr ""
 
-#: main.ts:1386 picture.slint:1489 picture.slint:1490 picture.slint:1568 picture.slint:1569
+#: main.ts:1387 picture.slint:1555 picture.slint:1556 picture.slint:1634 picture.slint:1635
 msgid "Sharpen"
 msgstr ""
 
-#: main.ts:1386
+#: main.ts:1387
 msgid "Edge Sharpen"
 msgstr ""
 
-#: main.ts:1386 picture.slint:1516 picture.slint:1517 picture.slint:1599
+#: main.ts:1387 picture.slint:1582 picture.slint:1583 picture.slint:1665
 msgid "Deblock"
 msgstr ""
 
-#: main.ts:1386 picture.slint:1525 picture.slint:1526 picture.slint:1609 picture.slint:1610
+#: main.ts:1387 picture.slint:1591 picture.slint:1592 picture.slint:1675 picture.slint:1676
 msgid "Deband"
 msgstr ""
 
-#: main.ts:1386 picture.slint:1655
+#: main.ts:1387 picture.slint:1721
 msgid "3D Denoise"
 msgstr ""
 
-#: main.ts:1386 picture.slint:1666
+#: main.ts:1387 picture.slint:1732
 msgid "Gradual Denoise"
 msgstr ""
 
-#: main.ts:1386 picture.slint:1677
+#: main.ts:1387 picture.slint:1743
 msgid "Temporal Denoise"
 msgstr ""
 
-#: main.ts:1399
+#: main.ts:1400
 msgid "Frame Doubling"
 msgstr ""
 
-#: main.ts:1409
+#: main.ts:1410
 msgid "Motion Interpolation"
 msgstr ""
 
-#: main.ts:1432
+#: main.ts:1433
 msgid "No Rotation"
 msgstr ""
 
-#: main.ts:1432
+#: main.ts:1433
 msgid "90°"
 msgstr ""
 
-#: main.ts:1432
+#: main.ts:1433
 msgid "180°"
 msgstr ""
 
-#: main.ts:1432
+#: main.ts:1433
 msgid "270°"
 msgstr ""
 
-#: main.ts:1446
+#: main.ts:1447
 msgid "Picture…"
 msgstr ""
 
-#: main.ts:1467
+#: main.ts:1466
 msgid "Picture Panel"
 msgstr ""
 
-#: main.ts:1479
+#: main.ts:1478
 msgid "Brightness -1%"
 msgstr ""
 
-#: main.ts:1479
+#: main.ts:1478
 msgid "Contrast -1%"
 msgstr ""
 
-#: main.ts:1479
+#: main.ts:1478
 msgid "Saturation -1%"
 msgstr ""
 
-#: main.ts:1479
+#: main.ts:1478
 msgid "Hue -1%"
 msgstr ""
 
-#: main.ts:1490
+#: main.ts:1489
 msgid "Brightness +1%"
 msgstr ""
 
-#: main.ts:1490
+#: main.ts:1489
 msgid "Contrast +1%"
 msgstr ""
 
-#: main.ts:1490
+#: main.ts:1489
 msgid "Saturation +1%"
 msgstr ""
 
-#: main.ts:1490
+#: main.ts:1489
 msgid "Hue +1%"
 msgstr ""
 
 #. {} is the player's own message, already in the interface language.
-#: main.ts:1516
+#: main.ts:1515
 msgid "{}"
 msgstr ""
 
-#: main.ts:1529
+#: main.ts:1528
 msgid "GPU Rendering (Restart to Apply)"
 msgstr ""
 
-#: main.ts:1529
+#: main.ts:1528
 msgid "GPU Rendering (Experimental)"
 msgstr ""
 
-#: main.ts:1539 main.ts:1768 picture.slint:1279 picture.slint:1289 picture.slint:1354
+#: main.ts:1538 main.ts:1793 picture.slint:1338 picture.slint:1348 picture.slint:1420
 msgid "Switching…"
 msgstr ""
 
-#: main.ts:1548
+#: main.ts:1547
 msgid "Restart Player to Apply"
 msgstr ""
 
-#: main.ts:1606
+#: main.ts:1605
 msgid "GPU rendering unavailable: {}"
 msgstr ""
 
-#: main.ts:1607
+#: main.ts:1606
 msgid "Could not save the rendering choice: {}"
 msgstr ""
 
-#: main.ts:1616
+#: main.ts:1615
 msgid "GPU rendering chosen; the next start still uses software rendering: {}"
 msgstr ""
 
-#: main.ts:1617
+#: main.ts:1616
 msgid "GPU rendering: on"
 msgstr ""
 
-#: main.ts:1617
+#: main.ts:1616
 msgid "GPU rendering: off"
 msgstr ""
 
-#: main.ts:1628
+#: main.ts:1627
 msgid "Restart Vestra Player now to apply?"
 msgstr ""
 
-#: main.ts:1629
+#: main.ts:1628
 msgid "Vestra Player will draw on the GPU from the restart on. A local file continues where it is. If you choose Later, GPU rendering starts the next time you open Vestra Player."
 msgstr ""
 
-#: main.ts:1629
+#: main.ts:1628
 msgid "Vestra Player will use software rendering from the restart on. A local file continues where it is. If you choose Later, software rendering starts the next time you open Vestra Player."
 msgstr ""
 
-#: main.ts:1632
+#: main.ts:1631
 msgid "Restart Now"
 msgstr ""
 
-#: main.ts:1633
+#: main.ts:1632
 msgid "Later"
 msgstr ""
 
-#: main.ts:1638
+#: main.ts:1637
 msgid "GPU rendering: on (applies at the next start)"
 msgstr ""
 
-#: main.ts:1638
+#: main.ts:1637
 msgid "GPU rendering: off (applies at the next start)"
 msgstr ""
 
-#: main.ts:1651
+#: main.ts:1650
 msgid "Could not restart the player: {}"
 msgstr ""
 
-#: main.ts:1702
+#: main.ts:1696
+msgid "Waiting · {} keeps the frames in memory; turn its effects off to upscale"
+msgstr ""
+
+#: main.ts:1697
+msgid "Waiting · {} keep the frames in memory; turn their effects off to upscale"
+msgstr ""
+
+#: main.ts:1722
 msgid "Not available on this GPU: {}"
 msgstr ""
 
-#: main.ts:1740
+#: main.ts:1762
 msgid "AI upscaling unavailable: {}"
 msgstr ""
 
-#: main.ts:1746
+#: main.ts:1768
 msgid "AI upscaling: on (Super Resolution must also be on in the NVIDIA app)"
 msgstr ""
 
-#: main.ts:1751
+#: main.ts:1773
 msgid "AI upscaling: off"
 msgstr ""
 
-#: main.ts:1761 picture.slint:1402
+#: main.ts:1786 picture.slint:1468
 msgid "AI Upscaling"
 msgstr ""
 
-#: main.ts:1768 picture.slint:1301
+#: main.ts:1793 picture.slint:1365
 msgid "Not available on this system (Windows with an NVIDIA RTX GPU)"
 msgstr ""
 
@@ -897,401 +905,417 @@ msgstr ""
 msgid "filters"
 msgstr ""
 
-#: picture.slint:545 picture.slint:695 picture.slint:732 picture.slint:1945
+#: picture.slint:600 picture.slint:750 picture.slint:787 picture.slint:2015
 msgid "· double-click: Default"
 msgstr ""
 
-#: picture.slint:610
+#: picture.slint:665
 msgid "· click: on or off"
 msgstr ""
 
-#: picture.slint:1144
+#: picture.slint:1199
 msgid "Pick a ratio below"
 msgstr ""
 
-#: picture.slint:1144
+#: picture.slint:1199
 msgid "Screen"
 msgstr ""
 
-#: picture.slint:1245
+#: picture.slint:1303
 msgid "Needs GPU rendering: turn it on under Rendering, then restart"
 msgstr ""
 
-#: picture.slint:1246
+#: picture.slint:1304
 msgid "No picture in the current source"
 msgstr ""
 
-#: picture.slint:1247
+#: picture.slint:1305
 msgid "Picture processing failed"
 msgstr ""
 
-#: picture.slint:1248
+#: picture.slint:1306
 msgid "Display unavailable"
 msgstr ""
 
-#: picture.slint:1250
+#: picture.slint:1308
 msgid "Render options unavailable"
 msgstr ""
 
-#: picture.slint:1251
+#: picture.slint:1309
 msgid "Render settings failed"
 msgstr ""
 
-#: picture.slint:1254
+#: picture.slint:1312
 msgid "Another plugin controls the display"
 msgstr ""
 
-#: picture.slint:1255
+#: picture.slint:1313
 msgid "Another plugin controls the render options"
 msgstr ""
 
-#: picture.slint:1262 picture.slint:1538 picture.slint:1654
+#: picture.slint:1320 picture.slint:1604 picture.slint:1720
 msgid "3D"
 msgstr ""
 
-#: picture.slint:1264 picture.slint:1665
+#: picture.slint:1322 picture.slint:1731
 msgid "Gradual"
 msgstr ""
 
-#: picture.slint:1266 picture.slint:1538 picture.slint:1676
+#: picture.slint:1324 picture.slint:1604 picture.slint:1742
 msgid "Temporal"
 msgstr ""
 
-#: picture.slint:1270
+#: picture.slint:1328
 msgid "{} with bars"
 msgstr ""
 
-#: picture.slint:1274
+#: picture.slint:1332
+msgid "Advanced"
+msgstr ""
+
+#: picture.slint:1333
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] ""
 msgstr[1] ""
 
 #. the closed Advanced row's summary: {0} the deinterlace mode, {1} the HDR tone mapping, {2} "3 shaders".
-#: picture.slint:1276
+#: picture.slint:1335
 msgid "Deinterlace {0} · HDR {1} · {2}"
 msgstr ""
 
-#: picture.slint:1280
+#: picture.slint:1339
 msgid "Restart to apply · GPU from the next start"
 msgstr ""
 
-#: picture.slint:1281
+#: picture.slint:1340
 msgid "Restart to apply · software rendering from the next start"
 msgstr ""
 
-#: picture.slint:1282
+#: picture.slint:1341
 msgid "On the GPU · {}"
 msgstr ""
 
-#: picture.slint:1282
+#: picture.slint:1341
 msgid "On the GPU"
 msgstr ""
 
-#: picture.slint:1283
+#: picture.slint:1342
 msgid "Software rendering · {}"
 msgstr ""
 
-#: picture.slint:1284
+#: picture.slint:1343
 msgid "Software rendering · turn on, then restart"
 msgstr ""
 
 #. {0} and {1} are the video's height and the shown height in pixels (1080, 2160), {2} the GPU's name.
-#: picture.slint:1293
+#: picture.slint:1352
 msgid "Upscaling {0}p → {1}p on {2}"
 msgstr ""
 
-#: picture.slint:1294
+#: picture.slint:1353
 msgid "Upscaling {0}p → {1}p"
 msgstr ""
 
-#: picture.slint:1295
+#: picture.slint:1354
 msgid "Upscaling on the GPU"
 msgstr ""
 
-#: picture.slint:1296
+#: picture.slint:1355
 msgid "On · upscales video shown larger than its size"
 msgstr ""
 
-#: picture.slint:1297
+#: picture.slint:1356
 msgid "On · this video is not shown larger than its size"
 msgstr ""
 
-#: picture.slint:1298
+#: picture.slint:1357
 msgid "Waiting · the picture effects need the frames in memory"
 msgstr ""
 
-#: picture.slint:1299
-msgid "Waiting · {}"
+#: picture.slint:1359
+msgid "Waiting · the hardware decoding setting copies the frames to memory"
 msgstr ""
 
-#: picture.slint:1300
-msgid "Needs GPU rendering (software rendering now)"
+#: picture.slint:1360
+msgid "Waiting · hardware decoding is off"
 msgstr ""
 
-#: picture.slint:1302
-msgid "Not available on this GPU · {}"
-msgstr ""
-
-#: picture.slint:1304
-msgid "Off · sharpens video shown larger than its size"
-msgstr ""
-
-#: picture.slint:1341
-msgid "Rendering"
-msgstr ""
-
-#: picture.slint:1356
-msgid "Restart Vestra Player to apply"
-msgstr ""
-
-#: picture.slint:1357
-msgid "Draw the video on the GPU from the next start"
+#: picture.slint:1361
+msgid "Waiting · this video is decoded in software"
 msgstr ""
 
 #: picture.slint:1362
-msgid "GPU Rendering"
+msgid "Waiting · this video uses another hardware decoder"
 msgstr ""
 
-#: picture.slint:1369
-msgid "Experimental"
+#: picture.slint:1363
+msgid "Waiting · {}"
 msgstr ""
 
-#: picture.slint:1370
-msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
+#: picture.slint:1364
+msgid "Needs GPU rendering (software rendering now)"
 msgstr ""
 
-#: picture.slint:1378
-msgid "Restart"
+#: picture.slint:1366
+msgid "Not available on this GPU · {}"
 msgstr ""
 
-#: picture.slint:1398
-msgid "NVIDIA RTX Video Super Resolution: sharpens video shown larger than its size. Needs GPU rendering on an NVIDIA RTX GPU, and Super Resolution turned on in the NVIDIA app (System ▸ Video ▸ RTX Video Enhancement)."
+#: picture.slint:1368
+msgid "Off · sharpens video shown larger than its size"
 msgstr ""
 
-#: picture.slint:1411
-msgid "NVIDIA RTX Video Super Resolution"
+#: picture.slint:1407
+msgid "Rendering"
 msgstr ""
 
 #: picture.slint:1422
-msgid "Colour"
+msgid "Restart Vestra Player to apply"
 msgstr ""
 
-#: picture.slint:1426
-msgid "Original"
-msgstr ""
-
-#: picture.slint:1427
-msgid "Vivid"
+#: picture.slint:1423
+msgid "Draw the video on the GPU from the next start"
 msgstr ""
 
 #: picture.slint:1428
-msgid "Cinema"
-msgstr ""
-
-#: picture.slint:1429
-msgid "Soft"
+msgid "GPU Rendering"
 msgstr ""
 
 #: picture.slint:1435
-msgid "Brightness"
+msgid "Experimental"
+msgstr ""
+
+#: picture.slint:1436
+msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
 msgstr ""
 
 #: picture.slint:1444
+msgid "Restart"
+msgstr ""
+
+#: picture.slint:1464
+msgid "NVIDIA RTX Video Super Resolution: sharpens video shown larger than its size. Needs GPU rendering on an NVIDIA RTX GPU, and Super Resolution turned on in the NVIDIA app (System ▸ Video ▸ RTX Video Enhancement)."
+msgstr ""
+
+#: picture.slint:1477
+msgid "NVIDIA RTX Video Super Resolution"
+msgstr ""
+
+#: picture.slint:1488
+msgid "Colour"
+msgstr ""
+
+#: picture.slint:1492
+msgid "Original"
+msgstr ""
+
+#: picture.slint:1493
+msgid "Vivid"
+msgstr ""
+
+#: picture.slint:1494
+msgid "Cinema"
+msgstr ""
+
+#: picture.slint:1495
+msgid "Soft"
+msgstr ""
+
+#: picture.slint:1501
+msgid "Brightness"
+msgstr ""
+
+#: picture.slint:1510
 msgid "Contrast"
 msgstr ""
 
-#: picture.slint:1453
+#: picture.slint:1519
 msgid "Saturation"
 msgstr ""
 
-#: picture.slint:1462
+#: picture.slint:1528
 msgid "Hue"
 msgstr ""
 
-#: picture.slint:1471
+#: picture.slint:1537
 msgid "Gamma"
 msgstr ""
 
-#: picture.slint:1483
+#: picture.slint:1549
 msgid "Effects"
 msgstr ""
 
-#: picture.slint:1498 picture.slint:1578
+#: picture.slint:1564 picture.slint:1644
 msgid "Edges"
 msgstr ""
 
-#: picture.slint:1499 picture.slint:1579
+#: picture.slint:1565 picture.slint:1645
 msgid "Wide-radius sharpening that mainly strengthens outlines"
 msgstr ""
 
-#: picture.slint:1507 picture.slint:1588
+#: picture.slint:1573 picture.slint:1654
 msgid "Blur"
 msgstr ""
 
-#: picture.slint:1536 picture.slint:1638
+#: picture.slint:1602 picture.slint:1704
 msgid "Denoise"
 msgstr ""
 
-#: picture.slint:1537
+#: picture.slint:1603
 msgid "Denoise: turns the denoisers on or off"
 msgstr ""
 
-#: picture.slint:1545
+#: picture.slint:1611
 msgid "Doubling"
 msgstr ""
 
-#: picture.slint:1546
+#: picture.slint:1612
 msgid "Rate already high enough"
 msgstr ""
 
-#: picture.slint:1547
+#: picture.slint:1613
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr ""
 
-#: picture.slint:1555
+#: picture.slint:1621
 msgid "Interpolate"
 msgstr ""
 
-#: picture.slint:1556
+#: picture.slint:1622
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr ""
 
-#: picture.slint:1600
+#: picture.slint:1666
 msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
 msgstr ""
 
-#: picture.slint:1693
+#: picture.slint:1759
 msgid "Geometry"
 msgstr ""
 
-#: picture.slint:1699
+#: picture.slint:1765
 msgid "Rotate Left"
 msgstr ""
 
-#: picture.slint:1704
+#: picture.slint:1770
 msgid "Rotate Right"
 msgstr ""
 
-#: picture.slint:1734
+#: picture.slint:1800
 msgid "Leave Crop Mode"
 msgstr ""
 
-#: picture.slint:1734
+#: picture.slint:1800
 msgid "Crop: pick a ratio, then drag the box"
 msgstr ""
 
-#: picture.slint:1744
+#: picture.slint:1810
 msgid "Reset Framing"
 msgstr ""
 
-#: picture.slint:1752
+#: picture.slint:1818
 msgid "Zoom {}%"
 msgstr ""
 
 #. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
-#: picture.slint:1757
+#: picture.slint:1823
 msgid "Offset {0}, {1}"
 msgstr ""
 
-#: picture.slint:1759
+#: picture.slint:1825
 msgid "Crop {}"
 msgstr ""
 
 #. the crop box's position in percent, across and down (50 = centred).
-#: picture.slint:1764
+#: picture.slint:1830
 msgid "at {0}%, {1}%"
 msgstr ""
 
-#: picture.slint:1775
+#: picture.slint:1841
 msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
 msgstr ""
 
-#: picture.slint:1793
+#: picture.slint:1859
 msgid "Stretch to the ratio: add bars instead of cutting the picture"
 msgstr ""
 
-#: picture.slint:1797
+#: picture.slint:1863
 msgid "Add bars instead of cutting"
 msgstr ""
 
-#: picture.slint:1808
+#: picture.slint:1877
 msgid "Aspect ratio"
 msgstr ""
 
-#: picture.slint:1830
+#: picture.slint:1899
 msgid "Fit"
 msgstr ""
 
-#: picture.slint:1835
+#: picture.slint:1904
 msgid "Keep"
 msgstr ""
 
-#: picture.slint:1836
+#: picture.slint:1905
 msgid "Stretch"
 msgstr ""
 
-#: picture.slint:1837
+#: picture.slint:1906
 msgid "Fill"
 msgstr ""
 
-#: picture.slint:1860
-msgid "Advanced"
-msgstr ""
-
-#: picture.slint:1915
+#: picture.slint:1985
 msgid "Double rate"
 msgstr ""
 
-#: picture.slint:1923
+#: picture.slint:1993
 msgid "HDR"
 msgstr ""
 
-#: picture.slint:1925
+#: picture.slint:1995
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr ""
 
-#: picture.slint:1926
+#: picture.slint:1996
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr ""
 
-#: picture.slint:1944
+#: picture.slint:2014
 msgid "Target brightness"
 msgstr ""
 
-#: picture.slint:1961
+#: picture.slint:2031
 msgid "{} nits"
 msgstr ""
 
-#: picture.slint:1979
+#: picture.slint:2049
 msgid "Peak detection"
 msgstr ""
 
-#: picture.slint:1988
+#: picture.slint:2058
 msgid "Shaders"
 msgstr ""
 
-#: picture.slint:1989
+#: picture.slint:2059
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr ""
 
-#: picture.slint:2000
+#: picture.slint:2070
 msgid "List…"
 msgstr ""
 
-#: picture.slint:2030
+#: picture.slint:2100
 msgid "Retry"
 msgstr ""
 
-#: picture.slint:2046 picture.slint:2050
+#: picture.slint:2116 picture.slint:2120
 msgid "Enable picture effects"
 msgstr ""
 
-#: picture.slint:2059
+#: picture.slint:2129
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr ""
 
-#: picture.slint:2064
+#: picture.slint:2134
 msgid "Reset All"
 msgstr ""
 
