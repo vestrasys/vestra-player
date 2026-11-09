@@ -16,7 +16,7 @@ This document specifies the Vestra Player interface: sizes, colors, geometry and
 | --- | --- | --- |
 | D1 | Visual identity | Direction A "V-Line × Aurora" (chosen by the user on 2026-10-24, [proposal](identity/proposal.md)): the palette takes the full spectrum of the logo (`src/assets/brand/logo.png`), magenta accent `#f72aa6`, cyan for "now playing", progress as an amber→magenta→purple→cyan gradient; dark `vestra` by default, light `vestra-light` optional (the video area stays dark); icons are V-Line round-capped strokes (§2.5); corner radii 4/8px (§2) |
 | D2 | Tools for adjusting picture, audio and subtitles | Three separate small plugin windows, all following the panel page specification in §7.1; no container that gathers them into one window (C12) |
-| D3 | Screenshots | "Save Current Frame" Ctrl+E saves directly to the snapshot folder and shows an on-screen message, with no confirmation; only "Save As…" opens a save dialog. Burst capture and Export Clip are separate dialogs |
+| D3 | Screenshots | "Save Current Frame" Ctrl+E saves directly to the snapshot folder and shows an on-screen message, with no confirmation; only "Save As…" opens a save dialog. Burst (Ctrl+G) captures at once with the count and interval of its settings; the settings are the Options page Video ▸ Snapshot. Clip export is not built in: it comes from a store plugin |
 | D4 | Menu entry point | No menu button inside the main window; the menu is opened only by right-click; no macOS top menu bar |
 | D5 | Debug information | Not shown permanently. The "Playback Info" plugin toggles an information layer over the video with Tab, off by default (§9.2) |
 | D6 | Playlist docking | Attached to the right side of the main window by default; can be detached into a floating window and attached back (C14) |
@@ -345,9 +345,6 @@ Picture Adjustments, Audio Workbench and Subtitle Tuning use the same small-wind
 | audio | Audio Workbench (tabbed) | 301×260 |
 | subtitles | Subtitle Tuning, Subtitle Settings | width 301 |
 | subtitles | Adjust Sync | 350×121 |
-| capture | Burst, export tasks | width 438 |
-| capture | Export Clip | width 400 |
-| capture | Snapshot Settings | width 360 |
 | playback | Input boxes such as Jump to Time and Seek Steps | width 357 |
 | playback, playlist, store | Link input | preferred width 397, minimum 260 |
 | marks | Chapters and Bookmarks | 380×420, minimum 320×300 |
@@ -397,9 +394,9 @@ The rules for plugin authors are on the SDK documentation site, [Design rules �
 | --- | --- | --- | --- |
 | UI-DLG-01 | Jump to Time (G) | Separate small window (width 357) with a set of time inputs | playback |
 | UI-DLG-02 | Open URL (Ctrl+U) | All link input windows use `UrlInputRow` from the widget library: input box + [Open] [Cancel], Return confirms, Esc cancels; no history list. Shared by Open URL, the list's "Add Link…", the Plugin Store and link-type plugins (YouTube, Bilibili) | playback, playlist, store, link-type plugins |
-| UI-DLG-03 | Screenshot | No window: Ctrl+E saves directly to the snapshot folder (PNG by default), Ctrl+C copies to the clipboard, "Save As…" opens a save dialog; an on-screen message on success; the save folder is chosen in Snapshot Settings | capture |
-| UI-DLG-04 | Burst | Separate dialog (width 438): storage, format/size, count and range groups, bottom buttons 24px high | capture |
-| UI-DLG-05 | Export Clip | Separate dialog (width 400), grouped by the §2.3 specification | capture |
+| UI-DLG-03 | Screenshot | No window: Ctrl+E saves directly to the snapshot folder (PNG by default), Ctrl+C copies to the clipboard, "Save As…" opens a save dialog; an on-screen message on success; the save folder is chosen in Options ▸ Video ▸ Snapshot (Snapshot Settings…) | capture |
+| UI-DLG-04 | Burst | No window: Ctrl+G captures from the frame shown; count, interval, effects and subtitles are on the Options page Video ▸ Snapshot | capture |
+| UI-DLG-05 | Export Clip | Not built in (2026-11-09): a store plugin | — |
 | UI-DLG-06 | Plugin Workshop | Only the §7.3 common requirements | workshop |
 
 ## 8. Keyboard and mouse

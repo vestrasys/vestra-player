@@ -47,7 +47,7 @@ Handled through the bottom-up flow of the [community workflow](../agentic-workfl
 | Build tool reports an error for imports of npm dependencies that are not bundled (NES once failed to start after install because of this) | GUI test | Medium |
 | Automated integration tests against a real host with plugins as fixtures (currently only unit tests and manual GUI tests) | Maintainer assessment | Medium |
 | `commands.unregister` (remove a single command at run time) | Migration | Low, wait until a plugin needs it |
-| Numeric progress for export tasks, encoder precheck | Capture plugin | When needed |
+| Numeric progress for export tasks, encoder precheck | Clip export store plugin (no longer built in since 2026-11-09) | When needed |
 | Open media shortcut Cmd/Ctrl+O | Basic Playback | When needed |
 | Plugin disable/management API (plugin manager); there is currently no public way to disable a plugin, so the GUI test cannot test "disabling only undoes its own effects" | GUI test | When needed |
 

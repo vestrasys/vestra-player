@@ -6,7 +6,7 @@ import test from "node:test";
 import { isDeepStrictEqual } from "node:util";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { eventually, newFakes, stills, watchHost, words } from "./fakes.ts";
+import { eventually, newFakes, stills, watchHost } from "./fakes.ts";
 
 const fakes = newFakes();
 const directory = new URL("..", import.meta.url);
@@ -24,13 +24,11 @@ async function until(predicate: () => boolean | Promise<boolean>) {
 }
 const exists = (path: string) => stat(path).then(() => true, () => false);
 const lastOsd = (host: TestHost) => host.osd.at(-1) ?? "";
-/** The burst dialog's progress line as shown. */
-/** The tab's bridge values. */
-const tab = (host: TestHost) => host.mounted().props;
-type Row = { id: string; kind: string; state: string; reason: string; retryable: boolean };
-const rows = (host: TestHost) => tab(host).results as Row[];
-/** The newest burst finished: its result row. */
-const burstDone = (host: TestHost) => rows(host).some((row) => row.kind === "burst" && row.state === "completed");
+/** Options ▸ Video ▸ Snapshot: the page and its bridge values. */
+const page = (host: TestHost) => host.settingsPage("snapshot");
+const props = (host: TestHost) => page(host).props;
+/** The newest burst finished: its message. */
+const burstDone = (host: TestHost) => lastOsd(host).startsWith("连拍已保存");
 
 /** Jobs publish a real file at the requested destination (like the worker), so copies and the task list see it. */
 function publishingJobs(host: TestHost) {
@@ -177,11 +175,11 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     assert.equal(lastOsd(host), "截图格式：JPEG");
     assert.equal(jpeg.state.checked, true);
     assert.equal(host.command("capture.format.png").state.checked, false);
-    const settings = host.mounted();
-    await eventually(() => tab(host)["format-index"], 1);
+    const settings = page(host);
+    await eventually(() => props(host)["format-index"], 1);
     settings.emit("set-quality", 80);
     await host.settle();
-    await eventually(() => tab(host).quality, 80);
+    await eventually(() => props(host).quality, 80);
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
     const target = join(folder, "source-one_00.02.000.jpg");
@@ -205,7 +203,7 @@ test("F07: JPEG is exported by the player with the chosen quality; quality and f
     const again = await startPlugin(activate, { directory, host: restart, dataDirectory: data, locale: "zh-Hans" });
     assert.equal(restart.command("capture.format.bmp").state.checked, true);
     await restart.settle();
-    await eventually(() => tab(restart).quality, 80);
+    await eventually(() => restart.settingsPage("snapshot").props.quality, 80);
     await again.stop();
   } finally {
     await stop();
@@ -228,10 +226,6 @@ test("F07: a failed JPEG export fails the task like a PNG one; nothing is left b
     await until(() => lastOsd(host) === "截图失败：导出失败");
     assert.equal(stills(host)[0]!.kind, "rawJpeg");
     assert.deepEqual(await readdir(folder), []);
-    await until(() => rows(host)[0]?.state === "failed");
-    const [row] = rows(host);
-    assert.equal(words(host).reason(row!.reason, ""), "导出失败");
-    assert.equal(row!.retryable, true);
   } finally {
     await stop();
   }
@@ -262,20 +256,19 @@ test("F07: 另存为 uses the typed extension once; otherwise the current format
   }
 });
 
-test("F07: bursts use the shared format; the dialog's combo box changes it", async () => {
+test("F07: bursts use the shared format; the settings page's format list changes it", async () => {
   const { host, folder, stop } = await setup();
   try {
-    await host.press("Ctrl+G");
-    const burst = host.mounted();
-    await eventually(() => tab(host)["format-index"], 0);
-    burst.emit("choose-format", 1);
+    const settings = page(host);
+    await eventually(() => props(host)["format-index"], 0);
+    settings.emit("choose-format", 1);
+    settings.emit("burst-edited", "3", "0.5");
     await host.settle();
-    assert.equal(lastOsd(host), "截图格式：JPEG");
     assert.equal(host.command("capture.format.jpeg").state.checked, true);
-    burst.emit("start-burst", "1", "3", "0.5", false, false, false);
+    await host.press("Ctrl+G");
     await until(() => burstDone(host));
     const [child] = await readdir(folder);
-    assert.deepEqual((await readdir(join(folder, child!))).sort(), ["001-1.000s.jpg", "002-1.500s.jpg", "003-2.000s.jpg"]);
+    assert.deepEqual((await readdir(join(folder, child!))).sort(), ["001-2.000s.jpg", "002-2.500s.jpg", "003-3.000s.jpg"]);
     assert.equal(host.exports.length, 3);
     assert.ok(host.exports.every((job) => job.kind === "rawJpeg" && job.quality === 90));
   } finally {
@@ -296,7 +289,8 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
     await until(() => fakes.opened.length === 2);
     assert.equal(await exists(folder), true, "recreated");
     await host.command("capture.settings").run();
-    host.mounted().emit("set-beside-media", true);
+    assert.deepEqual(host.settings.shows, ["snapshot"], "Snapshot Settings… opens the Options window at the page");
+    page(host).emit("set-beside-media", true);
     await host.settle();
     await host.command("capture.openFolder").run();
     await until(() => fakes.opened.length === 3);
@@ -318,31 +312,33 @@ test("F09: 打开截图文件夹 reveals the folder, recreating it; the media fo
   }
 });
 
-test("F09: Results Open opens the output with system.openPath; a burst opens its folder; a moved file says so", async () => {
+test("F09: the saved message's buttons act on the newest capture: Show in Folder, Copy; a moved file says so", async () => {
   const { host, folder, stop } = await setup();
   try {
+    await host.command("capture.revealLast").run();
+    await until(() => lastOsd(host) === host.translate("This task has no output file yet."));
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
-    await until(() => rows(host)[0]?.state === "completed");
-    const frame = rows(host)[0]!.id;
-    host.mounted().emit("open-result", frame);
-    await until(() => fakes.opened.length === 1);
-    assert.deepEqual(fakes.opened, [join(folder, "source-one_00.02.000.png")]);
+    const frame = join(folder, "source-one_00.02.000.png");
+    assert.deepEqual(host.osdActions.at(-1)?.map((action) => action.command), ["capture.revealLast", "capture.copyLast"]);
+    await host.pressOsdAction(0);
+    await until(() => host.system.revealed.length === 1);
+    assert.equal(host.system.revealed[0], frame);
+    await host.pressOsdAction(1);
+    await until(() => lastOsd(host) === "画面截图：复制到剪贴板");
+    assert.equal(fakes.copied.at(-1)!.path, frame);
+    page(host).emit("burst-edited", "2", "0.5");
     await host.press("Ctrl+G");
-    host.mounted().emit("start-burst", "1", "2", "0.5", false, false, false);
     await until(() => burstDone(host));
-    host.mounted().emit("open-result", rows(host)[0]!.id);
-    await until(() => fakes.opened.length === 2);
+    assert.deepEqual(host.osdActions.at(-1)?.map((action) => action.command), ["capture.revealLast"], "a burst's message: Show in Folder only");
     const [burstFolder] = (await readdir(folder)).filter((name) => name.startsWith("Capture-"));
-    assert.equal(fakes.opened[1], join(folder, burstFolder!));
-    fakes.failOpen = true;
-    host.mounted().emit("open-result", frame);
-    await until(() => words(host).status(tab(host)["results-status"] as never) === "无法打开文件夹。");
-    fakes.failOpen = false;
-    await rm(join(folder, "source-one_00.02.000.png"));
-    host.mounted().emit("open-result", frame);
-    await until(() => rows(host).find((row) => row.id === frame)?.state === "gone");
-    assert.equal(fakes.opened.length, 2, "nothing opened for a moved file");
+    await host.command("capture.revealLast").run();
+    await until(() => host.system.revealed.length === 2);
+    assert.equal(host.system.revealed[1], join(folder, burstFolder!, "001-2.000s.png"), "a burst shows its first frame");
+    await rm(join(folder, burstFolder!), { recursive: true });
+    await host.command("capture.revealLast").run();
+    await until(() => lastOsd(host) === host.translate("The file or folder was moved or deleted."));
+    assert.equal(host.system.revealed.length, 2, "nothing shown for a moved file");
   } finally {
     await stop();
   }
@@ -363,8 +359,8 @@ test("settings: a damaged settings.json is set aside as .bad-<time>; a partly in
     assert.equal(host.command("capture.format.png").state.checked, true, "unknown format → PNG");
     assert.equal(host.command("capture.screenSubtitles").state.checked, true, "not a boolean → default");
     await host.settle();
-    const props = tab(host);
-    assert.deepEqual([props.folder, props.quality, props["beside-media"]], [folder, 100, true]);
+    const values = props(host);
+    assert.deepEqual([values.folder, values.quality, values["beside-media"]], [folder, 100, true]);
     await started.stop();
   } finally {
     await rm(data, { recursive: true, force: true });

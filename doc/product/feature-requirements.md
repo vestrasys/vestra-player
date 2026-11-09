@@ -2323,7 +2323,7 @@ No core changes needed for: the G09 shortcuts, the G11 shortcuts, A11's automati
 
 ### Scope
 
-The capture plugin saves playback content as image or video files: single screenshots, bursts, clip export. This round adds: copying the frame to the clipboard, a single "rendered frame" screenshot (with effects and subtitles), JPEG/BMP and quality, and opening the screenshot folder.
+The capture plugin saves playback content as image or video files: single screenshots, bursts, clip export. (2026-11-09: clip export left the built-in plugin for a store plugin; the built-in keeps frames and bursts. The clip rows below are the record of this round.) This round adds: copying the frame to the clipboard, a single "rendered frame" screenshot (with effects and subtitles), JPEG/BMP and quality, and opening the screenshot folder.
 
 Boundaries and trade-offs:
 - Frames are always taken with core snapshots (`media.capture` + `Snapshot.export`), so the freeze and conditional-submit semantics are the same as the existing screenshots.

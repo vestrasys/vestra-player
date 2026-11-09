@@ -2,19 +2,15 @@ import { existsSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { Scope } from "@vestra-player/sdk";
-import { encodeOf, lastSeconds, METHODS } from "./clip.ts";
-import type { Encode, Method } from "./clip.ts";
 import { FORMATS, quality } from "./model.ts";
 import type { Format } from "./model.ts";
 import { normalTemplate } from "./names.ts";
 import type { TemplateKind } from "./names.ts";
 
-/** The burst row's values (proposal §3.2 ②), kept between runs. */
+/** A burst's values (Options ▸ Video ▸ Snapshot); Burst (Ctrl+G) starts at the current position with them. */
 export interface BurstSettings {
   count: number;
   step: number;
-  /** Start at the current position (else at `start`, typed in the row). */
-  fromNow: boolean;
   processed: boolean;
   subtitles: boolean;
 }
@@ -30,24 +26,11 @@ export interface Settings {
   screenSubtitles: boolean;
   /** F07/F09: save into the media's folder when possible. */
   besideMedia: boolean;
-  /** The clip method the user picked; Fast by default (it applies once the player can copy streams, R1). */
-  method: Method;
-  /** A Precise cut's options (R6), High quality by default. */
-  encode: Encode;
   burst: BurstSettings;
   /** File-name templates (proposal §3.7). */
   templates: Record<TemplateKind, string>;
-  /** "Last N s" length. */
-  lastSeconds: number;
-  /** Rows of the tab the user opened: the burst row (Settings page), Advanced (Clip page). */
-  burstOpen: boolean;
-  advancedOpen: boolean;
-  /** The sub-tab shown last: 0 Snapshot, 1 Clip, 2 Results, 3 Settings. */
-  page: number;
-  /** Save / Copy Current Frame (the Snapshot page) include the video effects. */
+  /** Save / Copy Current Frame include the video effects. */
   snapshotEffects: boolean;
-  /** Seconds of work per second of media of the last Precise export on this machine (the time estimate); null before one. */
-  preciseSpeed: number | null;
 }
 
 export const defaultFolder = () => {
@@ -69,7 +52,18 @@ const inRange = (value: unknown, low: number, high: number, fallback: number) =>
   return typeof value === "number" && Number.isFinite(n) && n >= low && n <= high ? n : fallback;
 };
 
-export const DEFAULT_BURST: BurstSettings = { count: 10, step: 1, fromNow: true, processed: false, subtitles: false };
+export const DEFAULT_BURST: BurstSettings = { count: 10, step: 1, processed: false, subtitles: false };
+
+/** A burst's frame count as typed: an integer 2–20, or null. */
+export function burstCount(text: unknown): number | null {
+  const n = Number(String(text ?? "").trim());
+  return String(text ?? "").trim() !== "" && Number.isInteger(n) && n >= 2 && n <= 20 ? n : null;
+}
+/** A burst's interval in seconds as typed: 0.1–10, or null. */
+export function burstStep(text: unknown): number | null {
+  const n = Number(String(text ?? "").trim());
+  return String(text ?? "").trim() !== "" && Number.isFinite(n) && n >= 0.1 && n <= 10 ? n : null;
+}
 
 /** Settings from stored data, field by field: an invalid field falls back alone. */
 export function settingsOf(stored: unknown, folder = defaultFolder()): Settings {
@@ -82,26 +76,17 @@ export function settingsOf(stored: unknown, folder = defaultFolder()): Settings 
     quality: s.quality === undefined ? 90 : quality(s.quality),
     screenSubtitles: flag(s.screenSubtitles, true),
     besideMedia: flag(s.besideMedia, false),
-    method: METHODS.includes(s.method as Method) ? (s.method as Method) : "fast",
-    encode: encodeOf(s.encode),
     burst: {
       count: Number.isInteger(burst.count) ? inRange(burst.count, 2, 20, DEFAULT_BURST.count) : DEFAULT_BURST.count,
       step: inRange(burst.step, 0.1, 10, DEFAULT_BURST.step),
-      fromNow: flag(burst.fromNow, DEFAULT_BURST.fromNow),
       processed: flag(burst.processed, DEFAULT_BURST.processed),
       subtitles: flag(burst.subtitles, DEFAULT_BURST.subtitles),
     },
     templates: {
       image: normalTemplate("image", templates.image),
-      clip: normalTemplate("clip", templates.clip),
       burst: normalTemplate("burst", templates.burst),
     },
-    lastSeconds: lastSeconds(s.lastSeconds),
-    burstOpen: flag(s.burstOpen, false),
-    advancedOpen: flag(s.advancedOpen, false),
-    page: Number.isInteger(s.page) ? inRange(s.page, 0, 3, 0) : 0,
     snapshotEffects: flag(s.snapshotEffects, false),
-    preciseSpeed: s.preciseSpeed === null || s.preciseSpeed === undefined ? null : inRange(s.preciseSpeed, 0.01, 1000, 0) || null,
   };
 }
 
