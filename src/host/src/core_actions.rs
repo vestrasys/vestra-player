@@ -674,10 +674,15 @@ pub fn frame_check(facts: &Facts, forward: bool) -> Result<(), String> {
 pub enum StepPlan {
     /// An mpv command, then wait for the new position.
     Command(Vec<&'static str>),
-    /// After the end: an exact source seek one frame before the position.
-    FromEnd,
+    /// After the end: a source seek that leaves the end and stays paused
+    /// (`Sources::hold_pause_on_seek`): one frame before the position
+    /// (exact), or to the last keyframe before it (`keyframes`).
+    FromEnd { keyframes: bool },
     /// Already on the first frame: nothing moves.
     AtStart,
+    /// After the end, forward by a keyframe: nothing moves (the caller says
+    /// "Already at the last keyframe").
+    AtEnd,
 }
 
 /// The plan for `player.step`, or `(code, reason)`.
@@ -700,13 +705,17 @@ pub fn step_plan(
             Ok(if forward {
                 StepPlan::Command(vec!["frame-step"])
             } else if facts.phase_ended {
-                StepPlan::FromEnd
+                StepPlan::FromEnd { keyframes: false }
             } else {
                 StepPlan::Command(vec!["frame-back-step"])
             })
         }
         "keyframe" => {
-            if !(facts.phase_ready && facts.media && facts.video && facts.can_seek) {
+            if !((facts.phase_ready || facts.phase_ended)
+                && facts.media
+                && facts.video
+                && facts.can_seek)
+            {
                 return Err((
                     "unsupported",
                     if facts.video {
@@ -715,6 +724,15 @@ pub fn step_plan(
                         no_video()
                     },
                 ));
+            }
+            // After the end a plain mpv seek would not leave the end: back
+            // is a source seek, forward has nowhere to go.
+            if facts.phase_ended {
+                return Ok(if forward {
+                    StepPlan::AtEnd
+                } else {
+                    StepPlan::FromEnd { keyframes: true }
+                });
             }
             // Measured with mpv 0.41: `seek ±0 relative+keyframes` lands on
             // the current or an earlier keyframe; ±1 ms with keyframes
@@ -1146,7 +1164,16 @@ mod tests {
         assert_eq!(frame_check(&ended, true), Err(UNSUPPORTED.to_owned()));
         assert_eq!(
             plan(&ended, "frame", "backward").unwrap(),
-            StepPlan::FromEnd
+            StepPlan::FromEnd { keyframes: false }
+        );
+        // Keyframes after the end: back by a source seek, forward stays.
+        assert_eq!(
+            plan(&ended, "keyframe", "backward").unwrap(),
+            StepPlan::FromEnd { keyframes: true }
+        );
+        assert_eq!(
+            plan(&ended, "keyframe", "forward").unwrap(),
+            StepPlan::AtEnd
         );
         // Audio only, a generated stream, nothing open.
         let audio = Facts {

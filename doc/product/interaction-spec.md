@@ -771,14 +771,15 @@ In fullscreen, `reason === "fullscreen"` means the overlay is retracted (G-01) a
 **Status**: implemented (user ruling 2026-11-09).
 
 **Requirements**: after a video ends naturally (`phase: ended`; mpv stays on the last frame, paused by `keep-open`), the seek bar stays usable. A seek bar click or drag, ← / → (and the other seek steps), and any plugin's `player.seek` / `Scrub.seek` jump to the target **and play on**. Exceptions:
-- Previous frame (D) after the end goes to just before the last frame and **stays paused** (B07).
-- When the end was reached while paused (frame stepping forward into the end, or a seek to the end while paused), a seek from the end keeps the pause.
+- Previous frame (D) after the end goes to just before the last frame and **stays paused** (B07). Previous keyframe after the end goes to the last keyframe before the position and stays paused; next keyframe after the end does not move ("Already at the last keyframe"); next frame (F) stays disabled.
+- When the end was reached while paused (frame stepping forward into the end, or a paused preview step of the picture effects; a seek to the end while paused does not end playback, mpv ends only while playing), a seek from the end keeps the pause.
+- **A seek to the end goes nowhere**: after the end, a seek whose target is at or past the end — target ≥ min(position, duration) − 0.5 ms, with the position and duration of the source state — is accepted and not sent to mpv; the source stays `ended` and paused, so → at the end or a click at the seek bar's right end changes nothing and Space still replays. (Sent, mpv would land on the end again at once.) A seek into the last frames is sent, plays them, and ends again.
 - Space / Play and Jump to Start (Backspace) still restart from 0 and play (B09).
 - Repeat One / Repeat All never stop at the end; unchanged.
 
-The `keep-open-pause` default is not changed: the host unpauses only on a successful seek that leaves the end. Keyframe step seeks ("Jump to keyframes only") use an exact seek after the end.
+The `keep-open-pause` default is not changed: the host unpauses only on a successful seek that leaves the end. Keyframe step seeks ("Jump to keyframes only") use an exact seek after the end. The pause that matters is how the end was reached, not the pause state while ended: a plugin that sets pause while the source is ended (`player.pause(true)`; Space replays there) does not keep a later seek paused. This is intended: at the end mpv is always paused by `keep-open`, so a pause request there says nothing new.
 
-**Acceptance**: play a clip to its end, then click the middle of the seek bar: the picture jumps there and plays; at the end press ←: it jumps back 5 s and plays; at the end press D: one frame back, paused; then click the seek bar: it jumps and stays paused (an ordinary seek while paused).
+**Acceptance**: play a clip to its end, then click the middle of the seek bar: the picture jumps there and plays; at the end press ←: it jumps back 5 s and plays; at the end press → or click the right end of the seek bar: nothing changes and Space replays from 0; at the end press D: one frame back, paused; then click the seek bar: it jumps and stays paused (an ordinary seek while paused).
 
 ### Core API requests in this chapter
 

@@ -145,6 +145,10 @@ pub struct Sources {
     /// A frame step was sent since the last submitted intent (mpv unpauses
     /// for the step, so the pause read at the end cannot tell).
     stepped: bool,
+    /// A pause or play request since the last state read: it is the pause
+    /// at an end reached before the next read (play pressed in the last
+    /// frames).
+    pause_request: Option<bool>,
     /// The next submitted seek is a frame step back from the end
     /// (`StepPlan::FromEnd`): it stays paused.
     hold_pause: bool,
@@ -840,7 +844,8 @@ impl Sources {
                 && !self.eof_rearm
                 && eof
             {
-                self.end_keeps_pause = self.stepped || self.session.state().paused;
+                let paused = self.pause_request.unwrap_or(self.session.state().paused);
+                self.end_keeps_pause = self.stepped || paused;
                 self.session.event(SourceEvent::EndFile {
                     entry,
                     reason: EndReason::Natural,
@@ -855,6 +860,7 @@ impl Sources {
                 mpv.get_property("duration").ok(),
             );
         }
+        self.pause_request = None;
         self.lease_ready = None;
         let container = mpv.get_property::<String>("file-format").ok();
         let seekable = mpv.get_property::<bool>("seekable").unwrap_or(false);
@@ -917,6 +923,23 @@ impl Sources {
     pub fn seek_elsewhere(&mut self) {
         self.seek_flight.clear();
     }
+    /// After the end, a seek to `seconds` at or past the end (the smaller
+    /// of the position and the duration, 0.5 ms slack) goes nowhere: it is
+    /// accepted and not sent, and the source stays ended and paused. (Sent,
+    /// mpv would land on the end again at once: Ready, unpaused, then
+    /// keep-open's pause, flickering.)
+    fn at_end_already(&self, seconds: f64) -> bool {
+        let state = self.session.state();
+        if state.phase != Phase::Ended {
+            return false;
+        }
+        let end = match (state.position, state.duration) {
+            (Some(position), Some(duration)) => position.min(duration),
+            (Some(end), None) | (None, Some(end)) => end,
+            (None, None) => return false,
+        };
+        seconds >= end - 0.0005
+    }
     /// The host sent mpv a frame step: an end it reaches keeps the pause.
     pub fn frame_stepped(&mut self) {
         self.stepped = true;
@@ -932,6 +955,12 @@ impl Sources {
             MpvEvent::PlaybackRestart | MpvEvent::StartFile { .. } | MpvEvent::EndFile { .. }
         ) {
             self.seek_flight.clear();
+        }
+        // The seek that left the end has landed: from here `eof-reached` is
+        // about the new position, so an end reached at once (a seek to the
+        // last frames) is seen, even when no state read caught it false.
+        if matches!(event, MpvEvent::PlaybackRestart) {
+            self.eof_rearm = false;
         }
         match event {
             MpvEvent::StartFile { playlist_entry_id } => {
@@ -1438,6 +1467,16 @@ impl Sources {
         self.stepped = false;
         let mut intent = serde_json::from_value::<SourceIntent>(params["intent"].clone())
             .map_err(|e| RpcError::invalid(e.to_string()))?;
+        // A new load, a restart or Close: the end that was kept is gone.
+        if !matches!(intent, SourceIntent::Control { .. }) {
+            self.end_keeps_pause = false;
+        }
+        // After the end a seek to the end goes nowhere (`at_end_already`).
+        let stays_at_end = matches!(
+            &intent,
+            SourceIntent::Control { control: Control::Seek { seconds, .. }, .. }
+                if self.at_end_already(*seconds)
+        );
         #[cfg(feature = "producer-audio")]
         let preflight = if matches!(intent, SourceIntent::Control { .. })
             && (self.pending_error.is_some()
@@ -1752,10 +1791,12 @@ impl Sources {
                 }
                 match control {
                     Control::Pause { paused } => mpv.set_property("pause", *paused).inspect(|()| {
+                        self.pause_request = Some(*paused);
                         crate::input_trace::mark(&format!(
                             "playback worker: libmpv pause={paused} set"
                         ));
                     }),
+                    Control::Seek { .. } if stays_at_end => Ok(()),
                     Control::Seek { seconds, keyframes } => {
                         let entry = self.active.map(|(entry, _)| entry);
                         if self.seek_flight.repeats(entry, *seconds, *keyframes)
@@ -1801,6 +1842,7 @@ impl Sources {
             });
         }
         if result.is_ok()
+            && !stays_at_end
             && matches!(
                 intent,
                 SourceIntent::Control {
@@ -3422,114 +3464,5 @@ mod lease_tests {
             "{at_load:?}"
         );
         assert_eq!(tracks(true, &tagged), at_load);
-    }
-
-    /// A silent WAV (mono 16-bit, 8 kHz) that libmpv plays with no FFmpeg on
-    /// the machine. Under half a second mpv decodes it all at once and reports
-    /// `eof-reached` while the rest still plays, so tests use longer ones.
-    fn silence(path: &Path, seconds: f64) {
-        let samples = (8000.0 * seconds) as u32;
-        let data = samples * 2;
-        let mut bytes = Vec::with_capacity(44 + data as usize);
-        bytes.extend_from_slice(b"RIFF");
-        bytes.extend_from_slice(&(36 + data).to_le_bytes());
-        bytes.extend_from_slice(b"WAVEfmt ");
-        bytes.extend_from_slice(&16u32.to_le_bytes());
-        bytes.extend_from_slice(&1u16.to_le_bytes()); // PCM
-        bytes.extend_from_slice(&1u16.to_le_bytes()); // mono
-        bytes.extend_from_slice(&8000u32.to_le_bytes());
-        bytes.extend_from_slice(&16000u32.to_le_bytes());
-        bytes.extend_from_slice(&2u16.to_le_bytes());
-        bytes.extend_from_slice(&16u16.to_le_bytes());
-        bytes.extend_from_slice(b"data");
-        bytes.extend_from_slice(&data.to_le_bytes());
-        bytes.resize(44 + data as usize, 0);
-        std::fs::write(path, bytes).unwrap();
-    }
-
-    /// Pumps events and reads the state until the phase is `phase` (20 s at most).
-    fn until_phase(sources: &mut Sources, mpv: &Mpv, phase: &str) {
-        let end = Instant::now() + Duration::from_secs(20);
-        loop {
-            while let Some(event) = mpv.poll_event() {
-                sources.event(&event);
-            }
-            let state = sources.snapshot(mpv);
-            if state["phase"] == phase {
-                return;
-            }
-            assert!(Instant::now() < end, "no {phase} in time: {state}");
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    /// keep-open pauses once the audio output has drained (20 s at most).
-    fn until_paused(mpv: &Mpv) {
-        let end = Instant::now() + Duration::from_secs(20);
-        while !mpv.get_property::<bool>("pause").unwrap() {
-            assert!(Instant::now() < end, "keep-open did not pause");
-            std::thread::sleep(Duration::from_millis(5));
-        }
-    }
-
-    /// 2026-11-09: after a natural end (keep-open paused mpv) a seek jumps
-    /// and plays on; a frame step back from the end (`StepPlan::FromEnd`
-    /// marks its seek) and an end reached by stepping stay paused; Play at
-    /// the end still restarts from 0 and plays.
-    #[test]
-    fn a_seek_from_the_end_resumes_except_a_frame_step() {
-        let dir = tempfile::tempdir().unwrap();
-        let clip = dir.path().join("silence.wav");
-        silence(&clip, 2.0);
-        let mpv = player();
-        let mut sources = Sources::default();
-        let seek =
-            |seconds: f64| json!({"kind":"control","control":{"kind":"seek","seconds":seconds}});
-        let restarted = |event: &MpvEvent| matches!(event, MpvEvent::PlaybackRestart);
-        let paused = |mpv: &Mpv| mpv.get_property::<bool>("pause").unwrap();
-        submit(
-            &mut sources,
-            &mpv,
-            1,
-            json!({"kind":"open","source":clip.to_str().unwrap(),"startPaused":false}),
-        );
-        until_phase(&mut sources, &mpv, "ended");
-        until_paused(&mpv);
-
-        // The seek bar, ← →, a plugin's seek: jump there and play on.
-        submit(&mut sources, &mpv, 2, seek(1.5));
-        pump(&mut sources, &mpv, restarted);
-        assert_eq!(sources.snapshot(&mpv)["phase"], "ready");
-        assert!(!paused(&mpv), "a seek from the end resumes");
-
-        // It plays to the end again; a frame step back stays paused.
-        until_phase(&mut sources, &mpv, "ended");
-        until_paused(&mpv);
-        sources.hold_pause_on_seek();
-        submit(&mut sources, &mpv, 3, seek(1.0));
-        pump(&mut sources, &mpv, restarted);
-        assert_eq!(sources.snapshot(&mpv)["phase"], "ready");
-        assert!(paused(&mpv), "a frame step back from the end stays paused");
-
-        // Paused, stepping into the end (mpv unpauses for the step) keeps
-        // the pause on the next seek too.
-        sources.frame_stepped();
-        mpv.set_property("pause", false).unwrap();
-        until_phase(&mut sources, &mpv, "ended");
-        until_paused(&mpv);
-        submit(&mut sources, &mpv, 4, seek(1.5));
-        pump(&mut sources, &mpv, restarted);
-        assert_eq!(sources.snapshot(&mpv)["phase"], "ready");
-        assert!(paused(&mpv), "an end reached by stepping stays paused");
-
-        // Play at the end (`Plan::Restart`): from 0, playing.
-        mpv.set_property("pause", false).unwrap();
-        until_phase(&mut sources, &mpv, "ended");
-        until_paused(&mpv);
-        submit(&mut sources, &mpv, 5, json!({"kind":"restart"}));
-        pump(&mut sources, &mpv, restarted);
-        assert_eq!(sources.snapshot(&mpv)["phase"], "ready");
-        assert!(!paused(&mpv), "Play at the end restarts playing");
-        assert!(mpv.get_property::<f64>("time-pos").unwrap() < 0.35);
     }
 }

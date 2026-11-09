@@ -955,6 +955,11 @@ impl Backend {
                             aspect: settings.aspect,
                         };
                         processing.tick(&mpv, Instant::now(), Some(facts));
+                        // A paused preview step unpauses mpv for two frames:
+                        // an end it reaches was reached while paused.
+                        if processing.stepping() {
+                            sources.frame_stepped();
+                        }
                     }
                     let now_types = sources.file_types();
                     if now_types != file_types {
@@ -1636,24 +1641,32 @@ impl CoreActions {
                     .command(&command)
                     .map_err(|e| RpcError::new("backend", e.to_string()))?
             }
-            StepPlan::FromEnd => {
-                let fps = ["estimated-vf-fps", "container-fps"]
-                    .iter()
-                    .find_map(|name| {
-                        context
-                            .mpv
-                            .get_property::<f64>(name)
-                            .ok()
-                            .filter(|fps| fps.is_finite() && *fps > 0.)
-                    })
-                    .unwrap_or(30.);
-                let target = (before.or(facts.position).unwrap_or(0.) - 1. / fps).max(0.);
-                // A frame step back from the end stays paused (other seeks
-                // from the end resume).
+            StepPlan::AtEnd => return Ok(Some(json!({ "osd": null }))),
+            StepPlan::FromEnd { keyframes } => {
+                let at = before.or(facts.position).unwrap_or(0.);
+                // One frame back exactly, or the last keyframe before the
+                // position (`absolute+keyframes` rounds back).
+                let target = if keyframes {
+                    (at - 0.001).max(0.)
+                } else {
+                    let fps = ["estimated-vf-fps", "container-fps"]
+                        .iter()
+                        .find_map(|name| {
+                            context
+                                .mpv
+                                .get_property::<f64>(name)
+                                .ok()
+                                .filter(|fps| fps.is_finite() && *fps > 0.)
+                        })
+                        .unwrap_or(30.);
+                    (at - 1. / fps).max(0.)
+                };
+                // A step back from the end stays paused (other seeks from
+                // the end resume).
                 context.sources.hold_pause_on_seek();
                 self.submit(
                     context,
-                    json!({"kind":"control","control":{"kind":"seek","seconds":target}}),
+                    json!({"kind":"control","control":{"kind":"seek","seconds":target,"keyframes":keyframes}}),
                 )?;
             }
         }
@@ -2067,5 +2080,310 @@ mod tests {
         );
         assert!(wake.wait(Duration::ZERO));
         assert_eq!(receiver.try_iter().count(), 1);
+    }
+}
+
+/// Seeking after the end (user ruling 2026-11-09, interaction spec
+/// IA-PB-09) through the real paths: the core actions (`run`), `player.step`
+/// (`step`) and the source requests on a real libmpv with keep-open, its
+/// state read every 100 ms as the worker publishes it. The clip is a
+/// generated Y4M (raw video, every frame a keyframe): no FFmpeg needed.
+#[cfg(test)]
+mod end_tests {
+    use super::*;
+    use crate::host::Reply;
+    use crate::playback::source_backend::Sources;
+    use crate::playback::source_geometry::Geometry;
+    use std::path::Path;
+
+    /// 32×32 at 25 fps, `frames` frames.
+    fn clip(path: &Path, frames: usize) {
+        let (w, h) = (32usize, 32usize);
+        let mut bytes = format!("YUV4MPEG2 W{w} H{h} F25:1 Ip A1:1 C420jpeg\n").into_bytes();
+        for n in 0..frames {
+            bytes.extend_from_slice(b"FRAME\n");
+            bytes.extend(std::iter::repeat_n((n * 4) as u8, w * h));
+            bytes.extend(std::iter::repeat_n(128u8, w * h / 2));
+        }
+        std::fs::write(path, bytes).unwrap();
+    }
+
+    struct Rig {
+        mpv: Mpv,
+        sources: Sources,
+        geometry: Geometry,
+        geometry_error: bool,
+        gate: Arc<AtomicBool>,
+        actions: CoreActions,
+        operation: u64,
+        reply: u64,
+        /// The last state read (the worker reads it every 100 ms).
+        state: Value,
+        read: Option<Instant>,
+        _dir: tempfile::TempDir,
+    }
+
+    impl Rig {
+        /// A 2 s clip, opened playing.
+        fn new() -> Self {
+            let dir = tempfile::tempdir().unwrap();
+            let path = dir.path().join("clip.y4m");
+            clip(&path, 50);
+            let mpv = Mpv::builder()
+                .unwrap()
+                .set_property("vo", "null")
+                .unwrap()
+                .set_property("ao", "null")
+                .unwrap()
+                .set_property("keep-open", true)
+                .unwrap()
+                .build()
+                .unwrap();
+            let gate = Arc::new(AtomicBool::new(true));
+            let mut rig = Rig {
+                mpv,
+                sources: Sources::default(),
+                geometry: Geometry::new(gate.clone()),
+                geometry_error: false,
+                gate,
+                actions: CoreActions::default(),
+                operation: 0,
+                reply: 0,
+                state: Value::Null,
+                read: None,
+                _dir: dir,
+            };
+            let source = path.to_str().unwrap().to_owned();
+            rig.submit(json!({"kind":"open","source":source,"startPaused":false}));
+            rig.until(|state| state["phase"] == "ready");
+            rig
+        }
+        fn submit(&mut self, intent: Value) {
+            self.operation += 1;
+            self.sources
+                .dispatch(
+                    &self.mpv,
+                    1,
+                    "source.submit",
+                    &json!({"operationId":self.operation,"intent":intent}),
+                )
+                .unwrap();
+        }
+        fn seek(&mut self, seconds: f64) {
+            self.submit(json!({"kind":"control","control":{"kind":"seek","seconds":seconds}}));
+        }
+        fn pause(&mut self, paused: bool) {
+            self.submit(json!({"kind":"control","control":{"kind":"pause","paused":paused}}));
+        }
+        fn context(&mut self) -> (&mut CoreActions, SourceContext<'_>) {
+            (
+                &mut self.actions,
+                SourceContext {
+                    mpv: &self.mpv,
+                    sources: &mut self.sources,
+                    geometry: &mut self.geometry,
+                    geometry_error: &mut self.geometry_error,
+                    publish_gate: &self.gate,
+                },
+            )
+        }
+        fn reply(&mut self) -> Reply {
+            self.reply += 1;
+            Reply {
+                owner: 0,
+                id: self.reply,
+            }
+        }
+        /// A core action (`host.action`), answered.
+        fn action(&mut self, action: &str, step: f64) -> Result<Value, RpcError> {
+            let done = Completion::Action(self.reply(), action.into());
+            let params = json!({"action":action,"step":step});
+            let (actions, mut context) = self.context();
+            match actions.run(&mut context, &params, done) {
+                Some((_, result)) => result,
+                None => self.answer(),
+            }
+        }
+        /// `player.step { unit, direction }`, answered.
+        fn step(&mut self, unit: &str, direction: &str) -> Result<Value, RpcError> {
+            let done = Completion::Step(self.reply());
+            let params = json!({"unit":unit,"direction":direction});
+            let (actions, mut context) = self.context();
+            match actions.step(&mut context, &params, done) {
+                Some((_, result)) => result,
+                None => self.answer(),
+            }
+        }
+        fn answer(&mut self) -> Result<Value, RpcError> {
+            let end = Instant::now() + Duration::from_secs(10);
+            loop {
+                assert!(Instant::now() < end, "no answer in time");
+                self.turn();
+                let generation = self.sources.generation();
+                if let Some((_, result)) = self.actions.poll(&self.mpv, generation).pop() {
+                    return result;
+                }
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        }
+        /// One worker turn: mpv's events, and the state every 100 ms.
+        fn turn(&mut self) {
+            while let Some(event) = self.mpv.poll_event() {
+                self.sources.event(&event);
+            }
+            if self
+                .read
+                .is_none_or(|at| at.elapsed() >= Duration::from_millis(100))
+            {
+                self.read = Some(Instant::now());
+                self.state = self.sources.snapshot(&self.mpv);
+            }
+        }
+        /// Turns until the state read satisfies `done` (10 s at most).
+        fn until(&mut self, done: impl Fn(&Value) -> bool) {
+            let end = Instant::now() + Duration::from_secs(10);
+            loop {
+                self.turn();
+                if done(&self.state) {
+                    return;
+                }
+                assert!(Instant::now() < end, "not in time: {}", self.state);
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        }
+        /// Turns for `time`, then reads the state now.
+        fn settle(&mut self, time: Duration) -> Value {
+            let end = Instant::now() + time;
+            while Instant::now() < end {
+                self.turn();
+                std::thread::sleep(Duration::from_millis(2));
+            }
+            self.read = None;
+            self.turn();
+            self.state.clone()
+        }
+        /// Ended, and paused by keep-open.
+        fn until_ended(&mut self) {
+            self.until(|state| state["phase"] == "ended");
+            let end = Instant::now() + Duration::from_secs(10);
+            while !self.paused() {
+                assert!(Instant::now() < end, "keep-open did not pause");
+                self.turn();
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        }
+        fn paused(&self) -> bool {
+            self.mpv.get_property::<bool>("pause").unwrap()
+        }
+        fn position(&self) -> f64 {
+            self.mpv.get_property::<f64>("time-pos").unwrap()
+        }
+    }
+
+    /// Review of the first cut: → at the end (a seek to the duration) went
+    /// Ready, unpaused, hit the end again at once, and stayed Ready and
+    /// paused when no state read saw `eof-reached` false: Space then sent
+    /// "play" instead of replaying. A seek to the end now stays ended; a
+    /// seek into the last frames plays them and ends again.
+    #[test]
+    fn a_seek_to_the_end_after_the_end_stays_ended_and_play_replays() {
+        let mut rig = Rig::new();
+        rig.until_ended();
+        // → (clamped to the duration).
+        rig.action("seek-forward", 5.0).unwrap();
+        let state = rig.settle(Duration::from_millis(600));
+        assert_eq!(state["phase"], "ended", "{state}");
+        assert!(rig.paused());
+        // A plugin's seek to the duration (the seek bar's right end).
+        let duration = state["duration"].as_f64().unwrap_or(2.0);
+        rig.seek(duration);
+        let state = rig.settle(Duration::from_millis(600));
+        assert_eq!(state["phase"], "ended", "{state}");
+        assert!(rig.paused());
+        // Two frames before the end: they play, and the end comes again.
+        let at = rig.position();
+        rig.seek(at - 0.08);
+        rig.until_ended();
+        // Space at the end replays from 0, playing.
+        rig.action("play-pause", 5.0).unwrap();
+        rig.until(|state| state["phase"] == "ready");
+        // The new load reads paused until it starts (no position yet).
+        let end = Instant::now() + Duration::from_secs(10);
+        while rig.paused() || rig.mpv.get_property::<f64>("time-pos").is_err() {
+            assert!(Instant::now() < end, "Play at the end plays");
+            rig.turn();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(rig.position() < 1.0, "from the start: {}", rig.position());
+    }
+
+    /// ← and a plugin's seek after the end play on; Previous Frame (D) and
+    /// Previous Keyframe after the end stay paused; Next Keyframe after the
+    /// end stays at the end.
+    #[test]
+    fn a_seek_from_the_end_plays_on_and_a_step_back_stays_paused() {
+        let mut rig = Rig::new();
+        rig.until_ended();
+        rig.action("seek-backward", 0.5).unwrap();
+        let state = rig.settle(Duration::from_millis(150));
+        assert_eq!(state["phase"], "ready", "{state}");
+        assert!(!rig.paused(), "← after the end plays on");
+        rig.until_ended();
+        let end = rig.position();
+        rig.step("frame", "backward").unwrap();
+        let state = rig.settle(Duration::from_millis(300));
+        assert_eq!(state["phase"], "ready", "{state}");
+        assert!(rig.paused(), "D after the end stays paused");
+        assert!(rig.position() < end, "{} < {end}", rig.position());
+        rig.pause(false);
+        rig.until_ended();
+        rig.step("keyframe", "forward").unwrap();
+        let state = rig.settle(Duration::from_millis(300));
+        assert_eq!(state["phase"], "ended", "{state}");
+        rig.step("keyframe", "backward").unwrap();
+        let state = rig.settle(Duration::from_millis(300));
+        assert_eq!(state["phase"], "ready", "{state}");
+        assert!(rig.paused(), "Previous Keyframe after the end stays paused");
+        assert!(rig.position() < end, "{} < {end}", rig.position());
+        // A plugin's seek after the end plays on too.
+        rig.pause(false);
+        rig.until_ended();
+        rig.seek(0.5);
+        let state = rig.settle(Duration::from_millis(150));
+        assert_eq!(state["phase"], "ready", "{state}");
+        assert!(!rig.paused(), "a plugin's seek after the end plays on");
+    }
+
+    /// An end reached while paused keeps the pause on the next seek: here
+    /// by stepping frames forward (mpv unpauses for each step). A seek to
+    /// the end while paused does not end playback: mpv reaches the end only
+    /// when it plays.
+    #[test]
+    fn an_end_reached_while_paused_keeps_the_pause() {
+        let mut rig = Rig::new();
+        rig.pause(true);
+        rig.seek(1.8);
+        rig.settle(Duration::from_millis(200));
+        for _ in 0..20 {
+            rig.step("frame", "forward").unwrap();
+            if rig.settle(Duration::from_millis(50))["phase"] == "ended" {
+                break;
+            }
+        }
+        assert_eq!(rig.state["phase"], "ended", "{}", rig.state);
+        rig.action("seek-backward", 0.5).unwrap();
+        let state = rig.settle(Duration::from_millis(300));
+        assert_eq!(state["phase"], "ready", "{state}");
+        assert!(rig.paused(), "stepped into the end: the seek stays paused");
+        // Play pressed in the last frames (before any state read sees it):
+        // an end reached playing, so a seek from it plays on.
+        rig.seek(1.9);
+        rig.settle(Duration::from_millis(150));
+        rig.pause(false);
+        rig.until_ended();
+        rig.action("seek-backward", 0.5).unwrap();
+        let state = rig.settle(Duration::from_millis(150));
+        assert_eq!(state["phase"], "ready", "{state}");
+        assert!(!rig.paused(), "played into the end: the seek plays on");
     }
 }

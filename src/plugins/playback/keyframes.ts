@@ -56,7 +56,9 @@ export class Keyframes {
   state(): State {
     const s = this.#scope.player.state;
     let reason: Reason | null = null;
-    if (s.kind !== "media" || s.phase !== "ready" || !s.can.seek || s.position === null) reason = UNSUPPORTED;
+    // After the end too (2026-11-09): Previous Keyframe leaves the end paused, Next Keyframe stays there.
+    const playable = s.phase === "ready" || s.phase === "ended";
+    if (s.kind !== "media" || !playable || !s.can.seek || s.position === null) reason = UNSUPPORTED;
     else if (this.#st.video?.sourceId !== s.sourceId || !this.#st.video.video) reason = NO_VIDEO;
     const busy = this.#st.busy;
     return { enabled: reason === null && !busy, checked: null, busy, reason };

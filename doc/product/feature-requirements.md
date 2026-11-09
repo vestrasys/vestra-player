@@ -370,6 +370,7 @@ player.setStepSeek(options: { seconds: number }): Promise<void>
    - Audio only (downgraded): the command is disabled with the reason "No video". `player.step` returns `unsupported` for sources without an active video; whether there is video is found by playback calling `stats()` once when each source first becomes ready, and cached (ruling R-P1). Plugin simulator streams are disabled the same way.
    - "Previous" while already at the first keyframe: jump to 0; message "Jumped to the start".
    - "Next" after the last keyframe: nothing moves; message "Already at the last keyframe".
+   - Playback finished (`phase: ended`): "Previous" goes to the last keyframe before the position and stays paused; "Next" does not move ("Already at the last keyframe"); interaction spec IA-PB-09.
 
 **Core dependencies**: `player.step("keyframe", direction, { ifCurrent })` (ruling R-P2 merged into R-P1; the core uses mpv `seek ±0.001 relative+keyframes`, which strictly passes the current keyframe in both directions).
 

@@ -440,8 +440,9 @@ test("a drag chains its own seeks: the release sample replaces intermediate poin
   await stop();
 });
 
-test("after the end the seek bar, a drag and the seek steps stay enabled (the host plays on); speed stays greyed", async () => {
-  // Exact mode: the plugin's own seek (keyframe mode is the core's step seek, which the SDK's test host still refuses at the end).
+test("after the end the seek bar (click and drag) and the seek steps stay enabled (the host plays on); speed stays greyed", async () => {
+  // Exact mode: the plugin's own seek. Keyframe mode is the core's step seek; the SDK's test host
+  // refuses it at the end up to SDK 1.7.4 (1.7.5 allows it, as the player does).
   const { host, stop } = await startWith({ seekKeyframes: false });
   const bar = host.mounted("bottom");
   host.setSource({ phase: "ended", terminalReason: "natural", position: 100, paused: true });
@@ -463,6 +464,18 @@ test("after the end the seek bar, a drag and the seek steps stay enabled (the ho
   await host.command("backward-2").run();
   await host.settle(20);
   assert.deepEqual(seeks(host), [40, 70]);
+  // A drag after the end: its seeks chain as while playing (the first, then the release sample).
+  host.setSource({ phase: "ended", terminalReason: "natural", position: 100, paused: true });
+  await host.settle();
+  bar.emit("dragging", true);
+  bar.emit("seek-changed", 0.1);
+  bar.emit("seek-changed", 0.2);
+  bar.emit("seek-changed", 0.25);
+  await host.settle(0);
+  bar.emit("dragging", false);
+  await host.settle(80);
+  assert.deepEqual(seeks(host), [40, 70, 10, 25]);
+  assert.equal(lastOsd(host), "跳转: 00:25 / 01:40");
   await stop();
 });
 
@@ -1108,6 +1121,14 @@ test("the Playback panel's steps: frames are the player's, keyframes and Jump to
   await eventually(() => host.sent("player.step").map((p) => [p.unit, p.direction]), [["keyframe", "forward"]]);
   // The test host does not move for a keyframe step: the plugin says so.
   await eventually(() => lastOsd(host), "已是最后一个关键帧");
+  // After the end: Previous Frame and the keyframe steps work, Next Frame does not (as the player).
+  host.setSource({ phase: "ended", terminalReason: "natural", position: 100, paused: true });
+  await eventually(
+    () => [panel.props["can-frame"], panel.props["can-frame-forward"], panel.props["can-keyframe"], panel.props["keyframe-reason"]],
+    [true, false, true, ""],
+  );
+  host.setSource({ phase: "ready", position: 12, paused: false });
+  await eventually(() => panel.props["can-frame-forward"], true);
   panel.emit("jumpStart");
   await eventually(() => host.source.position, 0);
   await eventually(() => lastOsd(host), "定位: 开始处");
