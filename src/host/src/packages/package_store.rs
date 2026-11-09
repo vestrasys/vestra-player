@@ -1389,6 +1389,11 @@ impl Store {
         self.catalog.pending.values().cloned().collect()
     }
 
+    /// `id`'s install that is journaled and not yet committed or aborted.
+    pub fn pending_of(&self, id: &str) -> Option<&Recovery> {
+        self.catalog.pending.get(id)
+    }
+
     pub fn save_operation(&mut self, id: &str, value: &Value) -> Result<()> {
         identifier(id)?;
         check_receipt(value)?;
