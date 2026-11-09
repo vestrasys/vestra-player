@@ -20,6 +20,13 @@ export class Internals {
     writes = new Map();
     /** The parts of a whole value held until its last part, by view and property. */
     parts = new Map();
+    /** The exported global each mounted panel's properties belong to, by slot. */
+    globals = new Map();
+    /**
+     * A panel's properties (view and name) whose stored initial value the
+     * panel could not take: it shows the property's default.
+     */
+    unshown = new Set();
     nextOwner = 2;
     /** Owners of other plugins' panels, by plugin id ({@link TestHost.mountOther}). */
     others = new Map();

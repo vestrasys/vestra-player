@@ -90,6 +90,7 @@ import { registerCoreActions, windowFacts, coreActionsHandlers, } from "./core-a
 import { translate, i18nHandlers } from "./i18n.js";
 import { mountOther, unmountOther, mounted, setTimelineRanges, setTimelineLayer, layoutHandlers, } from "./layout.js";
 import { osdHandlers } from "./osd.js";
+import { packageDirectories } from "./slint-types.js";
 import { failStream, jobsHandlers } from "./jobs.js";
 import { upscalingState, failVideoRender, failVideoShaders, upscalingDecoding, processingHandlers, } from "./processing.js";
 import { sourceIntent, startResolution, setSource, mediaHandlers, initialSource, } from "./media.js";
@@ -2706,6 +2707,9 @@ export async function startPlugin(activate, options = {}) {
     }
     host.manifestId = manifest.id;
     host.loadCatalog(directory);
+    // Its Slint files: the values its views are given are checked against
+    // their declared types.
+    packageDirectories.set(host, directory);
     const data = options.dataDirectory ?? host.dataDirectory;
     for (const [key, value] of options.sessionStorage ?? [])
         host.sessionStorage.set(key, sortedJson(value));

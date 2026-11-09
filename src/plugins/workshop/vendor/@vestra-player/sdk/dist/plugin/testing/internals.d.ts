@@ -20,6 +20,13 @@ export declare class Internals {
         seq: number;
         rows: Json[];
     }>;
+    /** The exported global each mounted panel's properties belong to, by slot. */
+    readonly globals: Map<string, string | undefined>;
+    /**
+     * A panel's properties (view and name) whose stored initial value the
+     * panel could not take: it shows the property's default.
+     */
+    readonly unshown: Set<string>;
     nextOwner: number;
     /** Owners of other plugins' panels, by plugin id ({@link TestHost.mountOther}). */
     readonly others: Map<string, {
