@@ -1,4 +1,4 @@
-# Project history and current round
+| I | **Capture** | Split (11-09, user): built-in keeps snapshots (#235, settings in Options ▸ Video ▸ Snapshot); clip export is the store plugin Clip Export 0.1.0 (plugins #37, published) || B5 | **Slim right-click menu**, `menus.md` refreshed | Merged (#219: Adjustments and Effects / Sidebar entries) || B4 | **Panels**: Picture, Audio, Subtitles, Playback | Merged after the v3 redesign (player 0.7.6: one flat Picture panel, A-B Loop in Playback). Follow-ups: tab-switch compile stall (spike), startup recompile stall (fix running) |# Project history and current round
 
 This file replaces the per-topic round records of October and November 2026. It keeps what still matters: how the project got here, the decisions in force, the lessons that changed how we work, and the open topics. Process rules live in [agentic-workflow](../../../agentic-workflow/README.md); architecture lives in [doc/architecture](../../architecture/README.md).
 
@@ -235,6 +235,14 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 
 - **Capture split (11-09 evening, user):** the built-in capture plugin keeps snapshots only (save / save as / copy, burst, keys, right-click Video ▸ Snapshot, palette); clip export moves to an official store plugin (Clip Export, zysilm.clipexport) in the plugins repo. No tab or bottom-strip button for the built-in. The player is unreleased: no migration notice. Real stream recording (mpv stream-record style, or encoding the rendered output) is postponed — not started until the user asks.
 - **Page (11-09 evening, user):** variant B (sticky scroll showcase) chosen. Slide 01 may be longer: colour sliders then the command palette, the Audio part dropped; 02 out point 5.3 s; 04 uses the promo's clearer colour-wheel footage for its payoff; captions unchanged. Shader Upscale 0.3.0 published without the coordinator's GPU measurements (the user tests it).
+
+- **Task list (11-09 night, user) — the order of work after the current items:**
+  - *Doing now:* startup recompile stall fix (adjust column remembered open + file argument; headless reproduction and regression test); Workshop default thinking low → medium (user: yes); SDK 1.7.6 deletes `resolvers.fileTypes`, `resolvers.onFileTypesChange`, `commands.onKeysChange`, `timeline.onChange`, `appearance.onChange` directly, no deprecation (user); ComponentContainer spike — an experiment only, results to the user before any change (user).
+  - *Coordinator follow-ups (no user decision):* new installer after the stall fix; es/fr AI Upscaling lines too long; Reset All does not reset Deinterlace; Clip Export store icon and a test for Precise effects/subtitles arguments; playback tests' 2 s `until` timeouts; uninstall dev-load flash; release.mjs releases/ path hardening; snapshot "no output file yet" wording; page: delete unused clips (ai-3, playlist) after the user looks.
+  - *Recorded for later (user):* A1 owed GUI check (minimized start, multi-monitor); host `media.capture` subtitles without effects (shown subtitles force processed=true today).
+  - *Needs the user (kept in view):* B6 full GUI test + release tag, 0.7.5 release (macOS job cancelled 11-04), remote CI once before release; signing (Apple enrolment, Windows), page deploy and SEO; rotate the OpenRouter and MiniMax keys pasted in chat.
+  - *Backlog, same priority, start only when there is time:* cross-process picture-in-picture (Windows DWM thumbnail prototype first), real stream recording (stream-record style first), Mini OBS.
+  - *Declined:* colorbalance node for the colour wheels (user, 11-09).
 
 ### State
 
