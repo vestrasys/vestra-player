@@ -26,7 +26,7 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
 
 <table>
   <tr>
-    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="Picture Adjustments window over a playing video, saturation turned down"></a><br><b>Picture adjustments</b>: right-click ▸ Video, changes apply while the video plays.</td>
+    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="The Adjustments and Effects column beside a playing video, its Picture panel with saturation turned down"></a><br><b>Picture adjustments</b>: the Adjustments and Effects column (bottom bar, or Alt+1 for its Picture panel); changes apply while the video plays.</td>
     <td width="50%"><a href=".github/readme/plugin-store.webp"><img src=".github/readme/plugin-store.webp" alt="Plugin Store window listing the available plugins"></a><br><b>Plugin Store</b>: install plugins from the bottom bar; they appear right away.</td>
   </tr>
   <tr>
@@ -35,7 +35,7 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
   </tr>
   <tr>
     <td><a href=".github/readme/seek-preview.webp"><img src=".github/readme/seek-preview.webp" alt="A thumbnail preview above the seek bar"></a><br><b>Seek-bar preview</b>: a thumbnail of the frame under the pointer.</td>
-    <td><a href=".github/readme/ai-workshop.webp"><img src=".github/readme/ai-workshop.webp" alt="Vestra Player AI window, a new chat, over a playing video"></a><br><b>Vestra Player AI</b> (experimental): describe a plugin and it writes, checks and tests it, with your own AI provider.</td>
+    <td><a href=".github/readme/ai-workshop.webp"><img src=".github/readme/ai-workshop.webp" alt="Vestra Player AI window over a playing video: its answer for a Colour Wheels plugin and Installed Colour Wheels 0.1.0"></a><br><b>Vestra Player AI</b> (experimental): describe a plugin and it writes, checks and tests it, with your own AI provider.</td>
   </tr>
 </table>
 
