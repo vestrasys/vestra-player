@@ -210,8 +210,8 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 .pl-item.current  { color: var(--playing); }                     /* now playing; 2px playing bar on the left (3px margin top and bottom, round caps) */
 .pl-item.played   { color: var(--text-played); }                 /* played */
 .pl-bottom { height: 35px; background: var(--bg-panel); border-top: 1px solid var(--line); padding-left: 6px; }
-/* left→right: move to top, move up, move down, move to bottom (25px slot each, icon 14×12) | 6 | add | 4 | remove | 4 | sort | search box (24 high, hover-bg; collapses to a magnifier icon when narrow) | total duration 11px text-list */
-.pl-btn    { height: 18px; width: 41px; border-radius: 4px; background: var(--button-bg); color: var(--text-list); }
+/* left→right (design B2): add | 4 | remove | 4 | sort | 4 | thumbnail toggle | 4 | repeat (glyph 14×12, same colour in every mode) | 4 | search box (24 high, hover-bg; collapses to a magnifier icon when narrow) | total duration 11px text-list */
+.pl-btn    { height: 18px; width: 28px; /* sort: 41px */ border-radius: 4px; background: var(--button-bg); color: var(--text-list); }
            /* icon labels add / remove / sort (10×10) centered; tooltips "Add", "Delete", "Sort" */
 ```
 
@@ -221,7 +221,7 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 | UI-PL-06 | List items are single lines: `index. title` left-aligned, duration right-aligned, background `bg-list`, no cards and no rounded corners, row height 20px | playlist |
 | UI-PL-07 | State is shown by color: now playing `playing` (plus a 2px bar on the left), played `text-played`, selected `selected-bg` background; no status text line. Failures use an on-screen message + a small icon at the end of the row | playlist |
 | UI-PL-08 | No button row above the list. Previous/next item belong to right-click on the bottom bar and PgUp/PgDn, playing is done by double-click/Enter, adding belongs to the popup menu of the bottom-bar "Add" button | playlist |
-| UI-PL-09 | 35px button bar at the bottom: four icon buttons move to top/move up/move down/move to bottom (25px slots) + three 41×18 icon buttons add / remove / sort (+ − ⇅, with tooltips) + search box (about 24px high) + list total duration on the right | playlist |
+| UI-PL-09 | 35px button bar at the bottom (design B2, 2026-11-09): icon buttons add / remove / sort / thumbnail toggle / repeat (+ − ⇅, 28×18 except sort 41×18, with tooltips) + search box (about 24px high) + list total duration on the right. No move buttons: drag (UI-PL-17), Ctrl+↑/↓/End (UI-PL-15) and the list context menu's Move to Top / Move Up / Move Down / Move to Bottom group reorder. Repeat: a click cycles Off → All → One → Stop After Current → Off; the button has the bar's colour in every mode and its 14×12 V-Line glyph alone tells the mode (Off: down the list to a bar; All: loop; One: loop with "1"; Stop After Current: arrow into a stop block, unlike Next's »|); tooltip "Repeat: Off (play the list once)" / "Repeat: All (loop the list)" / "Repeat: One (loop this video)" / "Repeat: Stop After Current" | playlist |
 | UI-PL-10 | No path or message text at the bottom; the full path is a mouse tooltip, messages use on-screen messages | playlist (tooltips use `ToolTipArea` from C2) |
 | UI-PL-11 | Scroll bars follow the palette (std-widgets dark or light, §2.1) | playlist (C2) |
 
@@ -232,11 +232,11 @@ Two rows, 62px high in total, all icon buttons, no text buttons.
 | UI-PL-12 | Double-click an item | Play | playlist |
 | UI-PL-13 | Enter, double-click | Play the selection and give the keys back to the video | playlist + host (keys while the list has focus, C3) |
 | UI-PL-14 | Delete | Remove the selection | Same as above |
-| UI-PL-15 | Ctrl+↑/↓, Ctrl+Home/End | Move up/move down/move to top/move to bottom | Same as above |
+| UI-PL-15 | Ctrl+↑/↓, Ctrl+End; list context menu | Move up/move down/move to bottom; Move to Top (no key) and all four are in the list context menu | Same as above |
 | UI-PL-16 | Ctrl+A, Shift/Ctrl+click | Multi-select; DEL and moves act on the selection | playlist |
 | UI-PL-17 | Drag | Drag to reorder (off while a search filter is active) | playlist |
 | UI-PL-18 | List context menu | This plugin's commands, in the same style as the main menu (list in the list context menu table of [menus.md](menus.md)) | playlist (C11) |
-| UI-PL-19 | End of the list | By default playback stops at the end; under "Playback ▸ Playlist" there are loop (Off/All/One, radio) and shuffle (check), off by default | playlist |
+| UI-PL-19 | End of the list | By default playback stops at the end of the list. Repeat (radio, Off by default): Off, All, One, Stop After Current (the current item plays once, then playback stops at its end; the list does not advance; shuffle has no effect; manual Next/Previous still work), set by the bar's Repeat button, the palette and Options ▸ Playback ▸ Playlist; shuffle (check), off by default | playlist |
 | UI-PL-20 | When a new file is opened | The list is handled according to the "Playback ▸ Playlist ▸ When Opening a File" setting; defaults in interaction specification IA-PL-01 | playlist |
 
 ## 6. Context menu

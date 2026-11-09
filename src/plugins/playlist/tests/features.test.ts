@@ -352,6 +352,24 @@ test("C11: sorting is disabled below two rows", async () => {
   }
 });
 
+test("Stop After Current is saved like the other repeat modes and comes back after a restart", async () => {
+  const data = await mkdtemp(join(tmpdir(), "vestra-playlist-data-"));
+  let app = await start({ data });
+  try {
+    await app.run("repeat-once");
+    await app.host.settle(1100); // the debounced save
+    const saved = JSON.parse(await readFile(join(data, "playlists.json"), "utf8"));
+    assert.equal(saved.settings.repeat, "once");
+    await app.stop();
+    app = await start({ data });
+    assert.equal(app.command("repeat-once").state.checked, true);
+    assert.equal(app.prop("repeat"), 3);
+  } finally {
+    await app.close();
+    await rm(data, { recursive: true, force: true });
+  }
+});
+
 test("C17: the list, titles, selection and settings come back after a restart; nothing is opened", async () => {
   const data = await mkdtemp(join(tmpdir(), "vestra-playlist-data-"));
   let app = await start({ data, durations: { "a.mp4": 61 } });

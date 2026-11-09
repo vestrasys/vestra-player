@@ -207,6 +207,7 @@ test("menu positions follow the round allocation table; list keys only work with
       ["(不循环)", 233, "domain", "", ""],
       ["(全部)", 234, "domain", "", ""],
       ["(单个)", 235, "domain", "", ""],
+      ["(播完当前停止)", 245, "domain", "", ""],
       ["(随机)", 236, "domain", "", ""],
       ["(打开列表文件…)", 237, "list", "", ""],
       ["(保存列表…)", 238, "list", "", ""],
@@ -286,7 +287,7 @@ test("every command has a palette category (its submenu or popup label) and a ho
   const app = await start();
   try {
     const commands = [...app.host.commands.entries()];
-    assert.equal(commands.length, 48);
+    assert.equal(commands.length, 49);
     const ids = new Set(commands.map(([id]) => id));
     const byCategory = new Map<string, string[]>();
     const homes = new Map<string, string[]>();
@@ -305,7 +306,7 @@ test("every command has a palette category (its submenu or popup label) and a ho
       [...byCategory].map(([category, list]) => [category, list.length]),
       [
         ["播放列表", 30],
-        ["循环", 3],
+        ["循环", 4],
         ["打开文件时", 3],
         ["排序", 12],
       ],
@@ -329,6 +330,7 @@ test("every command has a palette category (its submenu or popup label) and a ho
       "repeat-none",
       "repeat-all",
       "repeat-one",
+      "repeat-once",
       "shuffle",
       "open-mode-only",
       "open-mode-similar",
@@ -537,8 +539,8 @@ test("Ctrl+arrows, the bottom-bar icons and dragging reorder the selection", asy
   try {
     await app.addFiles([app.a, app.b, app.c]);
     await app.click(2);
-    assert.equal(app.prop("can-up"), true);
-    assert.equal(app.prop("can-down"), false);
+    assert.equal(app.command("move-up").state.enabled, true);
+    assert.equal(app.command("move-down").state.enabled, false);
     await app.press("Ctrl+ArrowUp");
     assert.deepEqual(app.names(), ["a.mp4", "c.mp4", "b.mp4"]);
     await app.run("move-top");
@@ -547,7 +549,7 @@ test("Ctrl+arrows, the bottom-bar icons and dragging reorder the selection", asy
     await app.press("Ctrl+End");
     assert.deepEqual(app.names(), ["a.mp4", "b.mp4", "c.mp4"]);
     await app.click(0);
-    await app.emit("place", "down");
+    await app.run("move-down");
     assert.deepEqual(app.names(), ["b.mp4", "a.mp4", "c.mp4"]);
     await app.press("Ctrl+ArrowDown");
     assert.deepEqual(app.names(), ["b.mp4", "c.mp4", "a.mp4"]);
@@ -570,7 +572,7 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
   const app = await start();
   try {
     await app.emit("context-menu", 40, 60);
-    // 13 commands and 6 separators, single level (Panel.showMenu: at most 32).
+    // 17 commands and 7 separators, single level (Panel.showMenu: at most 32).
     assert.deepEqual(app.host.menus.at(-1), {
       items: [
         "playlist.play",
@@ -583,6 +585,11 @@ test("the list menu, ADD and SORT popups list this plugin's commands; sorting re
         "playlist.remove-unselected",
         "playlist.remove-invalid",
         "playlist.clear",
+        null,
+        "playlist.move-top",
+        "playlist.move-up",
+        "playlist.move-down",
+        "playlist.move-bottom",
         null,
         "playlist.reveal",
         null,
@@ -852,6 +859,131 @@ test("shuffle plays every row once, then the list is finished", async () => {
     assert.equal(opened.length, 3);
     assert.deepEqual([...opened].sort(), [app.a, app.b, app.c].sort());
     assert.equal(app.osd(), "列表已播完");
+  } finally {
+    await app.close();
+  }
+});
+
+test("the bar's Repeat button cycles Off → All → One → Stop After Current → Off, in step with the commands", async () => {
+  const app = await start();
+  try {
+    assert.equal(app.prop("repeat"), 0);
+    const steps = [
+      [1, "repeat-all", "循环：全部"],
+      [2, "repeat-one", "循环：单个"],
+      [3, "repeat-once", "循环：播完当前停止"],
+      [0, "repeat-none", "循环：不循环"],
+    ] as const;
+    for (const [index, id, notice] of steps) {
+      await app.emit("cycle-repeat");
+      assert.equal(app.prop("repeat"), index, id);
+      assert.equal(app.command(id).state.checked, true, id);
+      assert.equal(app.osd(), notice);
+    }
+    // The palette's radio item and the settings page set the same mode the button shows.
+    assert.equal(app.command("repeat-once").declaration.radio, true);
+    await app.run("repeat-once");
+    assert.equal(app.prop("repeat"), 3);
+    assert.equal(app.host.settingsPage("playlist").props.repeat, 3);
+    app.host.settingsPage("playlist").emit("set-repeat", 1);
+    await app.host.settle();
+    assert.equal(app.prop("repeat"), 1);
+    assert.equal(app.command("repeat-all").state.checked, true);
+  } finally {
+    await app.close();
+  }
+});
+
+for (const shuffle of [false, true]) {
+  test(`Stop After Current stops at the end of the current item without advancing${shuffle ? " (shuffle on)" : ""}; Next and Previous still work`, async () => {
+    const app = await start();
+    try {
+      await app.addFiles([app.a, app.b, app.c]);
+      if (shuffle) await app.run("shuffle");
+      await app.run("repeat-once");
+      await app.click(1);
+      await app.press("Enter");
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      const notices = app.host.osd.length;
+      app.end();
+      await app.host.settle();
+      assert.equal(app.opens().length, 1, "nothing else opens");
+      assert.equal(app.rows()[1].current, true, "the current row stays");
+      assert.deepEqual(app.names(), ["a.mp4", "b.mp4", "c.mp4"]);
+      assert.equal(app.host.osd.length, notices, "no notice: playback simply stops");
+      // A repeated end event of the same playthrough does not advance either.
+      app.end();
+      await app.host.settle();
+      assert.equal(app.opens().length, 1);
+      // Manual Next and Previous work in every mode.
+      await app.host.step("next");
+      await app.host.settle();
+      assert.equal(app.opens().length, 2);
+      const next = app.opens().at(-1)!.source;
+      assert.notEqual(next, app.b);
+      if (!shuffle) assert.equal(next, app.c);
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      // Shuffle may have picked the first row, which has no previous one.
+      await app.host.step(shuffle && !app.host.sequence?.canPrevious ? "next" : "previous");
+      await app.host.settle();
+      assert.equal(app.opens().length, 3);
+      app.host.setSource({ phase: "ready" });
+      await app.host.settle();
+      app.end();
+      await app.host.settle();
+      assert.equal(app.opens().length, 3, "and stops again at the end");
+    } finally {
+      await app.close();
+    }
+  });
+}
+
+test("the bottom bar has no move buttons and has the Repeat button; the list menu's Move items run each move", async () => {
+  const slint = await readFile(new URL("../ui/sidebar.slint", import.meta.url), "utf8");
+  const code = slint.replace(/\/\/.*$/gm, "");
+  const bar = code.slice(code.indexOf("bar := Rectangle {"), code.indexOf("search-keys := FocusScope {"));
+  assert.ok(bar.length > 0);
+  assert.doesNotMatch(bar, /move-(top|up|down|bottom)|PlaylistBridge\.place\(/, "no move buttons");
+  assert.doesNotMatch(code, /can-(top|up|down|bottom)|callback place\(/);
+  assert.match(bar, /clicked => \{ PlaylistBridge\.cycle-repeat\(\); \}/);
+  // The button keeps the bar's colour in every mode: the four modes differ by their glyph only.
+  const repeat = bar.slice(bar.lastIndexOf("BarButton {", bar.indexOf("cycle-repeat")));
+  assert.doesNotMatch(repeat, /Theme\.accent|color:|background:/);
+  const glyphs = ["repeat-off", "repeat-all", "repeat-one", "stop-after"].map((name) => {
+    const found = code.match(new RegExp(`out property <string> ${name}: "([^"]+)";`));
+    assert.ok(found, name);
+    assert.match(repeat, new RegExp(`PlaylistGlyphs\\.${name}\\b`), name);
+    return found![1];
+  });
+  assert.equal(new Set(glyphs).size, 4, "four distinct glyphs");
+  const app = await start();
+  try {
+    await app.addFiles([app.a, app.b, app.c]);
+    await app.emit("context-menu", 5, 5);
+    const items = app.host.menus.at(-1)!.items;
+    const at = items.indexOf("playlist.move-top");
+    assert.deepEqual(items.slice(at - 1, at + 5), [
+      null,
+      "playlist.move-top",
+      "playlist.move-up",
+      "playlist.move-down",
+      "playlist.move-bottom",
+      null,
+    ]);
+    assert.equal(app.host.translate("Move to Top"), "置顶");
+    await app.click(2);
+    for (const [id, order] of [
+      ["move-top", ["c.mp4", "a.mp4", "b.mp4"]],
+      ["move-down", ["a.mp4", "c.mp4", "b.mp4"]],
+      ["move-bottom", ["a.mp4", "b.mp4", "c.mp4"]],
+      ["move-up", ["a.mp4", "c.mp4", "b.mp4"]],
+    ] as const) {
+      await app.host.command(`playlist.${id}`).run();
+      await app.host.settle();
+      assert.deepEqual(app.names(), order, id);
+    }
   } finally {
     await app.close();
   }
