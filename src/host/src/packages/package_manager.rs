@@ -103,6 +103,27 @@ fn images_of(op: &Operation) -> Vec<Image> {
     }
     images
 }
+/// How `packages.list` lists a plugin running from `directory`: installed
+/// (with its instance) or a development load (`false`). It is installed
+/// when it runs its record's package (`from_record`), or the target of the
+/// install that is activating (`pending`): the record names that target
+/// only once the install commits, and a store install is not a development
+/// load meanwhile.
+fn listed_instance(
+    directory: &Path,
+    from_record: bool,
+    record: package_store::Installed,
+    pending: Option<&package_store::Recovery>,
+) -> (bool, Option<Instance>) {
+    if let Some(pending) = pending.filter(|p| p.target.directory == directory) {
+        let instance = pending
+            .instance
+            .clone()
+            .or_else(|| pending.before.instance.clone());
+        return (true, instance);
+    }
+    (from_record, record.instance.filter(|_| from_record))
+}
 /// A finished digest check: id, serial, outcome.
 type VerifyResult = (String, u64, std::result::Result<(), String>);
 /// A built-in's digest check (`Manager::verify`).
@@ -1325,10 +1346,16 @@ impl Host {
             let plugin = &self.plugins[&owner];
             let id = plugin.manifest.id.clone();
             let stored = self.packages.store.get(&id);
-            let installed = self
+            let from_record = self
                 .packages
                 .runs_from(&id, &stored)
                 .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
+            let (installed, instance) = listed_instance(
+                &plugin.directory,
+                from_record,
+                stored,
+                self.packages.store.pending_of(&id),
+            );
             let warnings = self.warnings_of(owner);
             // The supervisor's state of its unit, its activation read (supervisor.md §10).
             let listed = self
@@ -1351,7 +1378,6 @@ impl Host {
             } else {
                 "development"
             };
-            let instance = installed.then_some(stored.instance).flatten();
             // `process` (SDK 1.5.38): it has a process (`idle` below).
             let process = (state == "running").then_some("running");
             list.insert(
@@ -2826,6 +2852,54 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!(directory, moved_path.join("packages").join(&other.digest));
+    }
+
+    /// A store install's target runs (activates) before its record names
+    /// it: `packages.list` lists it installed, with the repository it came
+    /// from, never as a development load (the store showed "Development
+    /// load" for ~1 s after installing VestraTube). A plugin from any other
+    /// directory still lists as one.
+    #[test]
+    fn an_activating_install_is_listed_installed_not_a_development_load() {
+        let root = tempfile::tempdir().unwrap();
+        let mut store = Store::open(root.path().into()).unwrap();
+        let id = "a.tube";
+        let dir = tempfile::tempdir().unwrap();
+        let target = store.stage(&candidate(dir.path(), id, "1.0.0")).unwrap();
+        let before = store.get(id);
+        let source = repo("https://example.org/index.json");
+        let (instance, _) = install_instance(&store, id, &before, source.clone(), false).unwrap();
+        store
+            .prepare_with_receipt(id, before.revision, &target, "op-1", json!({}), instance)
+            .unwrap();
+        let manager = manager(store, BTreeMap::new());
+        let list = |directory: &Path| {
+            let record = manager.store.get(id);
+            let from_record = manager
+                .runs_from(id, &record)
+                .is_some_and(|p| p.is_ok_and(|(dir, _)| dir == directory));
+            listed_instance(directory, from_record, record, manager.store.pending_of(id))
+        };
+        // Activating: the record does not run it yet (a first install has
+        // none), the pending install does.
+        assert!(manager.runs_from(id, &manager.store.get(id)).is_none());
+        let (installed, instance) = list(&target.directory);
+        assert!(
+            installed,
+            "an activating store install is not a development load"
+        );
+        assert_eq!(instance.map(|i| i.source), Some(source.clone()));
+        // A development load of the same id runs from elsewhere.
+        let elsewhere = tempfile::tempdir().unwrap();
+        assert_eq!(list(elsewhere.path()), (false, None));
+        // Committed: the record runs it.
+        let mut manager = manager;
+        manager.store.commit(id, "op-1").unwrap();
+        assert!(manager.store.pending_of(id).is_none());
+        let record = manager.store.get(id);
+        let (installed, instance) = listed_instance(&target.directory, true, record, None);
+        assert!(installed);
+        assert_eq!(instance.map(|i| i.source), Some(source));
     }
 
     #[test]
