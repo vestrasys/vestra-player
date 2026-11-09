@@ -373,10 +373,26 @@ test("panel: idle, set A and B, nudge, clear, the switch, the count, the chapter
     status: panel.props["ab-status"],
   });
   // Nothing open: greyed with the reason; the keys are the commands' own (modifiers as the host labels them).
-  await eventually(ab, { usable: false, reason: "media", a: "", b: "", on: false, canLoop: false, count: 0, status: "" });
-  const keys = panel.props.keys as Record<string, string>;
-  assert.deepEqual([keys.seta, keys.cleara, keys.setb, keys.clearb, keys.abtoggle], ["[", "{", "]", "}", "\\"]);
-  for (const key of [keys.aback, keys.aforward, keys.bback, keys.bforward, keys.absegment]) assert.ok(key!.length > 1, key);
+  const keyed = () => {
+    const keys = (panel.props.keys ?? {}) as Record<string, string>;
+    return {
+      ...ab(),
+      plain: [keys.seta, keys.cleara, keys.setb, keys.clearb, keys.abtoggle],
+      modified: [keys.aback, keys.aforward, keys.bback, keys.bforward, keys.absegment].map((key) => (key ?? "").length > 1),
+    };
+  };
+  await eventually(keyed, {
+    usable: false,
+    reason: "media",
+    a: "",
+    b: "",
+    on: false,
+    canLoop: false,
+    count: 0,
+    status: "",
+    plain: ["[", "{", "]", "}", "\\"],
+    modified: [true, true, true, true, true],
+  });
   host.rebind("ab.set-a", []);
   await eventually(() => (panel.props.keys as Record<string, string>).seta, "");
   host.rebind("ab.set-a", ["["]);
@@ -384,77 +400,95 @@ test("panel: idle, set A and B, nudge, clear, the switch, the count, the chapter
   // Open: the mini timeline has the chapter ticks and the position; A is not set yet.
   await play(host, file(), 600, 243);
   await eventually(ab, { usable: true, reason: "", a: "", b: "", on: false, canLoop: false, count: 0, status: "4:03.0" });
-  await eventually(() => panel.props["ab-ticks"], "M250 0V1M750 0V1");
-  assert.equal(panel.props["ab-at"], 243 / 600);
-  assert.equal(panel.props["ab-span"], false);
+  // The panel's properties arrive one request each (`ui.setMount`), the loop, seek, OSD and
+  // marker requests separately: each step waits on every value it checks.
+  await eventually(
+    () => [panel.props["ab-ticks"], panel.props["ab-at"], panel.props["ab-span"]],
+    ["M250 0V1M750 0V1", 243 / 600, false],
+  );
 
   // "Set A here" (= [), then the time with its nudges.
   panel.emit("abSet", "a");
-  await eventually(() => panel.props["ab-a"], "4:03.0");
-  assert.equal(host.osd.at(-1), "A-B start: 4:03.0");
-  assert.equal(panel.props["ab-a-at"], 243 / 600);
-  assert.equal(panel.props["ab-status"], "");
+  await eventually(
+    () => [panel.props["ab-a"], host.osd.at(-1), panel.props["ab-a-at"], panel.props["ab-status"]],
+    ["4:03.0", "A-B start: 4:03.0", 243 / 600, ""],
+  );
   panel.emit("abNudge", "a", -1);
   panel.emit("abNudge", "a", -1);
-  await eventually(() => panel.props["ab-a"], "4:02.8");
-  assert.deepEqual(published(host), [[242.8, "marker", "A"]]);
+  await eventually(() => [panel.props["ab-a"], published(host)], ["4:02.8", [[242.8, "marker", "A"]]]);
 
   // "Set B here" (= ]): the loop starts at once and jumps to A; the span is coloured.
   await at(host, 289);
   panel.emit("abSet", "b");
-  await eventually(() => [panel.props["ab-b"], panel.props["ab-on"], panel.props["ab-can-loop"]], ["4:49.0", true, true]);
-  assert.deepEqual(loops(host).at(-1), { a: 242.8, b: 289 });
-  assert.equal(seeks(host).at(-1), 242.8);
-  assert.deepEqual([panel.props["ab-span"], panel.props["ab-span-a"], panel.props["ab-span-b"]], [true, 242.8 / 600, 289 / 600]);
-  assert.equal(panel.props["ab-status"], "∞");
+  await eventually(
+    () => [
+      panel.props["ab-b"],
+      panel.props["ab-on"],
+      panel.props["ab-can-loop"],
+      loops(host).at(-1),
+      seeks(host).at(-1),
+      panel.props["ab-span"],
+      panel.props["ab-span-a"],
+      panel.props["ab-span-b"],
+      panel.props["ab-status"],
+    ],
+    ["4:49.0", true, true, { a: 242.8, b: 289 }, 242.8, true, 242.8 / 600, 289 / 600, "∞"],
+  );
 
   // The count: 5 times re-sends the loop; the pass follows the jumps back (5 jumps back = 6 passes).
   panel.emit("abCountChosen", 4);
-  await eventually(() => panel.props["ab-count"], 4);
-  assert.deepEqual(loops(host).at(-1), { a: 242.8, b: 289, count: 5 });
-  assert.equal(panel.props["ab-status"], "1 / 6");
+  await eventually(
+    () => [panel.props["ab-count"], loops(host).at(-1), panel.props["ab-status"]],
+    [4, { a: 242.8, b: 289, count: 5 }, "1 / 6"],
+  );
   await at(host, 260);
   await at(host, 288.8);
   await at(host, 242.9); // the player jumped back to A
-  await eventually(() => panel.props["ab-status"], "2 / 6");
-  assert.equal(host.command("ab.count.5").state.checked, true);
+  await eventually(() => [panel.props["ab-status"], host.command("ab.count.5").state.checked], ["2 / 6", true]);
 
   // The switch: off keeps A and B (the span grey), on again.
   panel.emit("abToggle");
-  await eventually(() => panel.props["ab-on"], false);
-  assert.deepEqual(loops(host).at(-1), null);
-  assert.deepEqual([panel.props["ab-span"], panel.props["ab-status"]], [true, ""]);
+  await eventually(
+    () => [panel.props["ab-on"], loops(host).at(-1), panel.props["ab-span"], panel.props["ab-status"]],
+    [false, null, true, ""],
+  );
   panel.emit("abToggle");
   await eventually(() => panel.props["ab-on"], true);
 
   // A typed time: applied (the field closes), or refused (marked; the reason on the video).
   const done = panel.props.done as number;
   panel.emit("abType", "b", "5:00");
-  await eventually(() => panel.props["ab-b"], "5:00.0");
-  assert.equal(panel.props.done, done + 1);
-  assert.deepEqual(loops(host).at(-1), { a: 242.8, b: 300, count: 5 });
+  await eventually(
+    () => [panel.props["ab-b"], panel.props.done, loops(host).at(-1)],
+    ["5:00.0", done + 1, { a: 242.8, b: 300, count: 5 }],
+  );
   panel.emit("abType", "b", "4:00");
-  await eventually(() => panel.props["ab-invalid"], "b");
-  assert.equal(host.osd.at(-1), "End point must be after the start point");
+  await eventually(() => [panel.props["ab-invalid"], host.osd.at(-1)], ["b", "End point must be after the start point"]);
   assert.equal(panel.props["ab-b"], "5:00.0");
   panel.emit("focusChanged", "b", false);
   await eventually(() => panel.props["ab-invalid"], "");
   panel.emit("abType", "a", "20:00");
-  await eventually(() => panel.props["ab-invalid"], "a");
-  assert.equal(host.osd.at(-1), "Enter a time within the source's duration as HH:MM:SS.mmm");
+  await eventually(
+    () => [panel.props["ab-invalid"], host.osd.at(-1)],
+    ["a", "Enter a time within the source's duration as HH:MM:SS.mmm"],
+  );
   panel.emit("abType", "a", "nonsense");
   assert.equal(panel.props["ab-a"], "4:02.8");
 
   // × clears a point: the loop goes off.
   panel.emit("abClear", "b");
-  await eventually(() => [panel.props["ab-b"], panel.props["ab-on"], panel.props["ab-can-loop"]], ["", false, false]);
-  assert.equal(host.osd.at(-1), "A-B loop off");
+  await eventually(
+    () => [panel.props["ab-b"], panel.props["ab-on"], panel.props["ab-can-loop"], host.osd.at(-1)],
+    ["", false, false, "A-B loop off"],
+  );
 
   // ↺ Chapter (= Alt+\): the chapter around the position, started at once.
   await at(host, 200);
   panel.emit("abSegment");
-  await eventually(() => [panel.props["ab-a"], panel.props["ab-b"], panel.props["ab-on"]], ["2:30.0", "7:30.0", true]);
-  assert.deepEqual(loops(host).at(-1), { a: 150, b: 450, count: 5 });
+  await eventually(
+    () => [panel.props["ab-a"], panel.props["ab-b"], panel.props["ab-on"], loops(host).at(-1)],
+    ["2:30.0", "7:30.0", true, { a: 150, b: 450, count: 5 }],
+  );
   assert.deepEqual(host.conflicts, []);
 });
 
@@ -478,8 +512,7 @@ test("panel: a counted loop shows count + 1 passes; the last one plays after the
   await at(host, 19.9);
   host.setSource({ position: 10.1, loop: null });
   await host.settle(WAIT);
-  await eventually(() => panel.props["ab-status"], "3 / 3");
-  assert.equal(panel.props["ab-on"], false);
+  await eventually(() => [panel.props["ab-status"], panel.props["ab-on"]], ["3 / 3", false]);
   assert.notEqual(host.osd.at(-1), "A-B loop ended");
   await at(host, 15);
   assert.equal(panel.props["ab-status"], "3 / 3");
@@ -487,8 +520,8 @@ test("panel: a counted loop shows count + 1 passes; the last one plays after the
   // The last pass ends when the position passes B.
   await at(host, 20.2);
   assert.equal(host.osd.at(-1), "A-B loop ended");
-  await eventually(() => panel.props["ab-status"], "");
-  assert.equal(host.command("ab.toggle").state.enabled, true); // A and B are kept
+  // A and B are kept: the switch stays usable.
+  await eventually(() => [panel.props["ab-status"], host.command("ab.toggle").state.enabled], ["", true]);
 });
 
 test("panel: the last pass also ends on a seek out of the range or a new source", async () => {
