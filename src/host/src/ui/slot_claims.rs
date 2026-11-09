@@ -90,6 +90,15 @@ impl<T> Gate<T> {
         self.held.drain(..).map(|(_, request)| request).collect()
     }
 
+    /// The requests `pick` chooses, oldest first, at once; the others stay.
+    pub fn release_where(&mut self, mut pick: impl FnMut(&T) -> bool) -> Vec<T> {
+        let (picked, kept) = std::mem::take(&mut self.held)
+            .into_iter()
+            .partition(|(_, request)| pick(request));
+        self.held = kept;
+        picked.into_iter().map(|(_, request)| request).collect()
+    }
+
     /// A request of `owner`'s waits here.
     pub fn waiting(&self, owner: u64) -> bool {
         self.held.iter().any(|(o, _)| *o == owner)
@@ -184,6 +193,23 @@ mod tests {
         assert!(gate.is_empty());
         assert!(!gate.holds(2, false, false));
         assert!(gate.release(false).is_empty());
+    }
+
+    /// The start-up compile takes the held mounts (`release_held_panel_requests`):
+    /// they leave in order, the other requests keep waiting in theirs.
+    #[test]
+    fn held_mounts_can_leave_before_the_other_requests() {
+        let mut gate = Gate::default();
+        gate.hold(2, "sequence 2");
+        gate.hold(2, "mount 2");
+        gate.hold(3, "mount 3");
+        gate.hold(3, "resolver 3");
+        assert_eq!(
+            gate.release_where(|r| r.starts_with("mount")),
+            ["mount 2", "mount 3"]
+        );
+        assert!(gate.holds(2, false, false));
+        assert_eq!(gate.release(false), ["sequence 2", "resolver 3"]);
     }
 
     #[test]

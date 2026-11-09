@@ -689,6 +689,18 @@ impl Host {
             self.sync_work(owner, false);
         }
     }
+    /// Start-up settled (now, or at an earlier check): the panels the
+    /// plugins mount at their activation have all been asked for, so the
+    /// shell can compile once with them (`prepare_mount_tick`).
+    pub(crate) fn startup_has_settled(&mut self) -> bool {
+        self.on_demand.settled || self.startup_settled()
+    }
+    /// A plugin's start is under way (its start job queued for a place or
+    /// spawning, before its activation is pending): a third-party plugin
+    /// waiting for the built-ins, which `startup_settled` does not see yet.
+    pub(crate) fn start_under_way(&self) -> bool {
+        self.supervisor.start_installed()
+    }
     /// Start-up is over: every installed plugin started, replayed or
     /// queued has run its first activation (as files opened at launch wait,
     /// `open_files_tick`).

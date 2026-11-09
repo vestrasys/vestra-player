@@ -936,6 +936,13 @@ impl<P: Clone> Supervisor<P> {
     pub fn job(&self, u: UnitId) -> Option<&Job> {
         self.units.get(&u).and_then(|unit| unit.job.as_ref())
     }
+    /// A unit has a start or restart installed (queued for a place, or
+    /// spawning).
+    pub fn start_installed(&self) -> bool {
+        self.units
+            .values()
+            .any(|unit| unit.job.as_ref().is_some_and(Job::will_start))
+    }
     /// The result of a job of `u` that ended (the last 8 are kept).
     pub fn job_result(&self, u: UnitId, job: JobId) -> Option<&JobResult> {
         self.units.get(&u).and_then(|unit| {

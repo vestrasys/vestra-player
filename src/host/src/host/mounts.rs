@@ -65,6 +65,15 @@ pub(crate) fn refuse_initial(properties: &mut BTreeMap<String, Value>) -> Vec<Rp
 impl Host {
     pub(crate) fn prepare_mount_tick(&mut self) {
         self.release_held_mounts();
+        // Start-up with nothing to mount: done once it settled.
+        if !self.startup_mounted
+            && self.preparing.is_none()
+            && self.mount_queue.is_empty()
+            && self.held_mounts.is_empty()
+            && self.startup_has_settled()
+        {
+            self.startup_mounted = true;
+        }
         if self.preparing.is_none() {
             if let Some(change) = self.mount_queue.pop_front() {
                 if !change.announced {
@@ -102,10 +111,26 @@ impl Host {
         if waited < Duration::from_millis(32) {
             return;
         }
-        // At start-up, a built-in that will mount its panel and has not
-        // asked yet is waited for (briefly), to compile the shell once.
-        if waited < STARTUP_MOUNT_GATHER && self.builtin_mount_expected() {
-            return;
+        // At start-up the mounts wait until every plugin that may mount a
+        // panel has asked (built-ins, replayed tabs and third-party plugins,
+        // whose mounts are held while the built-ins start; a plugin that
+        // asked waits for this compile to finish its activation): the shell
+        // compiles once, with whatever layout was remembered (the adjust
+        // column's shown tab included), before a file given at launch opens
+        // (`open_files_tick`). A plugin that never asks holds it up for
+        // `STARTUP_MOUNT_LIMIT` at most.
+        if !self.startup_mounted {
+            if let Some(waiting) = self.startup_mount_expected() {
+                if waited < STARTUP_MOUNT_LIMIT {
+                    return;
+                }
+                diag!(
+                    "shell: start-up mounts still expected after {} ms (waiting for {waiting}); compiling with those in",
+                    STARTUP_MOUNT_LIMIT.as_millis()
+                );
+            }
+            self.startup_mounted = true;
+            self.release_held_panel_requests();
         }
         let (_, change) = self.preparing.take().unwrap();
         let started = Instant::now();
@@ -358,7 +383,27 @@ impl Host {
                     shown: sidebar_tabs::shown(plan.active, &compiled),
                 }
             });
-            match self.compile_shell(&shown, tabbed, strips) {
+            let compiling = Instant::now();
+            let compiled_shell = self.compile_shell(&shown, tabbed, strips);
+            // One line per compile of the shell (tests/startup_compiles.rs
+            // counts them): a compile blocks the UI thread.
+            diag!(
+                "shell: compile with {} panel(s) [{}] in {:.1} ms at +{} ms ({})",
+                shown.len(),
+                shown
+                    .iter()
+                    .map(|m| format!("{}:{}", m.manifest, m.spec.slot.name()))
+                    .collect::<Vec<_>>()
+                    .join(", "),
+                compiling.elapsed().as_secs_f64() * 1000.,
+                self.now_ms(),
+                if compiled_shell.is_ok() {
+                    "ready"
+                } else {
+                    "failed"
+                }
+            );
+            match compiled_shell {
                 Ok(failures) => {
                     self.report_value_failures(failures);
                     self.shell_specs = specs;

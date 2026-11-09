@@ -325,9 +325,10 @@ pub(crate) struct OsdActions {
     pub(crate) owner: u64,
     pub(crate) commands: Vec<String>,
 }
-/// At start-up, how long a queued mount waits for the other built-ins'
-/// mounts, so that the shell compiles once for all of them.
-pub(crate) const STARTUP_MOUNT_GATHER: Duration = Duration::from_millis(400);
+/// At start-up, how long a queued mount waits at most for the other
+/// plugins to settle (`prepare_mount_tick`), so that the shell compiles once
+/// for all of them.
+pub(crate) const STARTUP_MOUNT_LIMIT: Duration = Duration::from_secs(5);
 pub(crate) struct MountChange {
     pub(crate) reply: Reply,
     /// The panel it changes (`panel_key`); `reply.owner` is the plugin.
@@ -409,6 +410,14 @@ pub(crate) struct Host {
     pub(crate) shell_compiled: BTreeMap<u64, u64>,
     /// A current tab needs its panel compiled (`prepare_mount_tick`).
     pub(crate) shell_refresh: bool,
+    /// The start-up mounts were compiled into the shell (or there were
+    /// none): until then mounts wait for start-up to settle and files
+    /// given at launch wait for them (`prepare_mount_tick`).
+    pub(crate) startup_mounted: bool,
+    /// Every start-up panel is in the shell: start-up settled with no
+    /// mount left to prepare (`open_files_tick`; a file given at launch
+    /// opens only then, so no compile lands on early playback).
+    pub(crate) startup_panels: bool,
     /// Column panels whose compile failed when their tab joined the compiled
     /// set (reported to their plugin): left out until they mount again.
     pub(crate) tabs_failed: std::collections::BTreeSet<u64>,

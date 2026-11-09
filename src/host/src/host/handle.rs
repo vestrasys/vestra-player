@@ -232,6 +232,7 @@ impl Host {
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner) = data.clone();
                     if previous["phase"] != data["phase"] {
+                        diag!("source: phase {} at +{} ms", data["phase"], self.now_ms());
                         input_trace::mark(&format!(
                             "host loop: source.state phase={}",
                             data["phase"]

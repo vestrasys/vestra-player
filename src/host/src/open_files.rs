@@ -6,8 +6,10 @@
 //! does not open anything itself (it knows no plugin).
 //!
 //! At start-up the providers register while their plugins activate, so the
-//! files wait until the installed packages have started and no activation is
-//! pending, or `SETTLE_LIMIT` at most. Paths no plugin takes are reported.
+//! files wait until the installed packages have started, no activation is
+//! pending and the shell compiled with every start-up panel (no compile
+//! lands on early playback), or `SETTLE_LIMIT` at most. Paths no plugin
+//! takes are reported.
 //!
 //! Files arriving within `QUIET` of each other are one open: Explorer starts
 //! one process per selected file for "Open" on a multiple selection, and
@@ -61,20 +63,42 @@ impl Host {
         }
         self.open_files_tick();
     }
+    /// Files wait until the plugins started and the shell compiled with
+    /// their start-up panels (`startup_panels`): a compile blocks the UI
+    /// thread, and one landing just after playback began stalled it.
     pub(super) fn open_files_tick(&mut self) {
-        let settled = self.packages_started() && !self.builtin_first_run_queued() && {
-            let now = self.now_ms();
-            let owners = self.plugins.keys().copied().collect::<Vec<_>>();
-            !owners.into_iter().any(|owner| {
-                matches!(
-                    self.activation_status(owner, now),
-                    Ok(activation::Status::Pending { .. })
-                )
-            })
-        };
+        if !self.startup_panels && self.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
+            // A start that never settles (a plugin retried after a crash)
+            // keeps no later file waiting.
+            self.startup_panels = true;
+        }
+        if !self.startup_panels {
+            self.startup_panels = self.startup_mounted
+                && self.mount_queue.is_empty()
+                && self.preparing.is_none()
+                && self.held_mounts.is_empty()
+                && !self.start_under_way()
+                && self.startup_has_settled();
+        }
+        let settled =
+            self.startup_panels && self.packages_started() && !self.builtin_first_run_queued() && {
+                let now = self.now_ms();
+                let owners = self.plugins.keys().copied().collect::<Vec<_>>();
+                !owners.into_iter().any(|owner| {
+                    matches!(
+                        self.activation_status(owner, now),
+                        Ok(activation::Status::Pending { .. })
+                    )
+                })
+            };
         let Some(files) = self.opens.due(settled) else {
             return;
         };
+        diag!(
+            "open: {} file(s) handed over at +{} ms",
+            files.len(),
+            self.now_ms()
+        );
         let taken = self.drops.groups(&files);
         for path in &files {
             let text = path.to_string_lossy();
