@@ -924,6 +924,10 @@ impl Processing {
             effects::chain_display_size(resources, source.display).unwrap_or(source.display);
         live::factor(output, &view, self.live.budget.steps, source.anamorphic)
     }
+    /// When the paused preview step in flight started (`None`: none).
+    pub fn step_started(&self) -> Option<Instant> {
+        self.live.stepping
+    }
     /// A paused preview step is in flight: mpv's `pause` reads `no` until
     /// it is over, which is not the user's (`StatePush` waits).
     pub fn stepping(&self) -> bool {
