@@ -233,6 +233,9 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 - **One player ci:local per batch (11-08 evening, user):** a ci:local takes about half an hour, so the player does not run it per step: the rename, the A-B fix and the test fix stay on branch rename-adjust-sidebar; the user previews a build made straight from that branch with the SDK 1.7.0 code installed locally; when 1.7.0 is published the player upgrades once (1.6.20 → 1.7.0) and runs one ci:local before merging everything.
 - **Authority while the user is away:** the coordinator assigns, reviews, commits, merges on local checks and releases SDK patches (agentic-workflow.md §8). It stops for the user on: workflow-file changes, player release tags (CI is left alone for now), paid services, deploys, using the screen without consent, and new trade-offs (agentic-workflow.md §7).
 
+- **Capture split (11-09 evening, user):** the built-in capture plugin keeps snapshots only (save / save as / copy, burst, keys, right-click Video ▸ Snapshot, palette); clip export moves to an official store plugin (Clip Export, zysilm.clipexport) in the plugins repo. No tab or bottom-strip button for the built-in. The player is unreleased: no migration notice. Real stream recording (mpv stream-record style, or encoding the rendered output) is postponed — not started until the user asks.
+- **Page (11-09 evening, user):** variant B (sticky scroll showcase) chosen. Slide 01 may be longer: colour sliders then the command palette, the Audio part dropped; 02 out point 5.3 s; 04 uses the promo's clearer colour-wheel footage for its payoff; captions unchanged. Shader Upscale 0.3.0 published without the coordinator's GPU measurements (the user tests it).
+
 ### State
 
 | # | Item | State |
