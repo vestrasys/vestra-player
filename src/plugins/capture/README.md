@@ -1,6 +1,6 @@
 # Snapshot
 
-Saves and copies the current frame and captures bursts. It has no panel: the right-click menu's Snapshot ▸, the command palette and the keys run it, and its settings are a page of the Options window, **Options ▸ Video ▸ Snapshot** (Snapshot ▸ Snapshot Settings…). Exporting video clips is a store plugin's job.
+Saves and copies the current frame and captures bursts. It has no panel: the right-click menu's Snapshot ▸, the command palette and the keys run it, and its settings are a page of the Options window, **Options ▸ Video ▸ Snapshot** (palette: Snapshot Settings…). Exporting video clips is a store plugin's job.
 
 ## Features
 
@@ -18,7 +18,7 @@ The snapshot folder (or beside the video when possible), the image format (PNG, 
 Right-click menu: Snapshot ▸ (a top-level submenu after Audio Track and Subtitle Track).
 
 - Save Current Frame (Ctrl+E), Copy Current Frame (Ctrl+C), Burst (Ctrl+G)
-- Snapshot Settings… opens the Options window at the Snapshot page
+- Its settings: Snapshot Settings… in the command palette, or Options ▸ Video ▸ Snapshot
 
 In the command palette (Ctrl+Shift+P): Save Rendered Frame (Ctrl+Alt+E), Copy Rendered Frame (Ctrl+Alt+C), Save / Copy Video Frame Only, the Save As… commands, Snapshot Folder…, Open Snapshot Folder, Show Last Capture in Folder, Copy Last Snapshot, Capture as PNG / JPEG / BMP, Include Subtitles in Rendered Frame.
 

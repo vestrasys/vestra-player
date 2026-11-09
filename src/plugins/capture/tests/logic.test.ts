@@ -99,3 +99,19 @@ test("settings fall back field by field; the defaults", () => {
   assert.deepEqual([s.besideMedia, s.screenSubtitles, s.snapshotEffects], [false, true, false]);
   assert.deepEqual(Object.keys(settingsOf({})).sort(), ["besideMedia", "burst", "folder", "format", "quality", "screenSubtitles", "snapshotEffects", "templates"]);
 });
+
+test("settings stored by the plugin with the Capture tab load; the clip and tab fields are ignored", () => {
+  const old = {
+    format: "jpeg", quality: 80, besideMedia: true, snapshotEffects: true,
+    method: "precise", encode: { crf: 20, speed: "fast" }, lastSeconds: 60, page: 2, burstOpen: true, advancedOpen: true, preciseSpeed: 1.5,
+    burst: { count: 5, step: 0.5, fromNow: false, processed: true, subtitles: true },
+    templates: { image: "{n}", clip: "{name}_{start}-{end}", burst: "B {date}" },
+  };
+  const s = settingsOf(old, "/pictures");
+  assert.deepEqual(s, {
+    folder: "/pictures", format: "jpeg", quality: 80, screenSubtitles: true, besideMedia: true,
+    burst: { count: 5, step: 0.5, processed: true, subtitles: true },
+    templates: { image: "{n}", burst: "B {date}" },
+    snapshotEffects: true,
+  });
+});

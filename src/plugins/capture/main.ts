@@ -20,7 +20,7 @@ const ROOM = 160;
 const fit = (path: string) => (path.length <= ROOM ? path : basename(path).slice(0, ROOM));
 const cut = (text: string) => text.slice(0, ROOM);
 
-/** The titles of the commands, by id. The first four are the right-click menu's Snapshot ▸. */
+/** The titles of the commands, by id. The first three are the right-click menu's Snapshot ▸. */
 const TITLE = {
   "capture.save": "Save Current Frame",
   "capture.copy": "Copy Current Frame",
@@ -43,7 +43,7 @@ const TITLE = {
 } as const;
 type CommandId = keyof typeof TITLE;
 /** The commands shown in the right-click menu's Snapshot ▸; the rest are in the command palette only. */
-const IN_MENU: readonly CommandId[] = ["capture.save", "capture.copy", "capture.burst", "capture.settings"];
+const IN_MENU: readonly CommandId[] = ["capture.save", "capture.copy", "capture.burst"];
 /** The OSD prefix of a failed capture; the reason (or the player's or system's own message) goes after it. */
 const FAILED = { image: "Snapshot failed: {}", burst: "Burst failed: {}" } as const;
 /** The Options page (Options ▸ Video ▸ Snapshot). */
@@ -392,9 +392,9 @@ export default async function activate(plugin: Plugin) {
   entry("capture.save", 420, () => saveFrame("frame"), { bindings: ["Ctrl+E"], ...quick, ...canCapture });
   entry("capture.copy", 422, () => copyFrame("frame"), { bindings: ["Ctrl+C"], ...quick, ...canCapture });
   entry("capture.burst", 426, startBurst, { bindings: ["Ctrl+G"], ...quick, ...canCapture });
-  // Snapshot Settings…: the Options window at this plugin's page (as Playlist Settings… does).
+  // Snapshot Settings… (palette only): the Options window at this plugin's page (as Playlist Settings… does).
   entry("capture.settings", 436, () =>
-    plugin.settings.show(PAGE_ID).catch((error) => console.error(`[capture] the settings page could not open: ${message(error)}`)), { group: "capture-settings" });
+    plugin.settings.show(PAGE_ID).catch((error) => console.error(`[capture] the settings page could not open: ${message(error)}`)));
   // Palette only (keys unchanged).
   entry("capture.saveAs", 421, () => saveFrameAs("frame"), canCapture);
   entry("capture.saveScreen", 423, () => saveFrame("screen"), { bindings: ["Ctrl+Alt+E"], ...canCapture });

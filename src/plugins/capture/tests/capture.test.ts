@@ -62,7 +62,7 @@ async function withFolder(host: TestHost) {
   return { folder, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("Snapshot ▸ has four items; every other command is in the command palette with its keys; no panel", async () => {
+test("Snapshot ▸ has three items; every other command is in the command palette with its keys; no panel", async () => {
   const host = new TestHost();
   ready(host);
   const { stop } = await start(host);
@@ -73,10 +73,10 @@ test("Snapshot ▸ has four items; every other command is in the command palette
       ["截图 > 保存当前画面", 420, "domain", "Ctrl+E"],
       ["截图 > 复制当前画面", 422, "domain", "Ctrl+C"],
       ["截图 > 连拍", 426, "domain", "Ctrl+G"],
-      ["截图 > 截图设置…", 436, "capture-settings", ""],
     ]);
     const palette = [...host.commands.entries()].filter(([, c]) => !c.declaration.path?.length).map(([id, { declaration: d }]) => [id, d.bindings.join(","), d.home ?? ""]);
     assert.deepEqual(palette, [
+      ["capture.settings", "", ""],
       ["capture.saveAs", "", ""],
       ["capture.saveScreen", "Ctrl+Alt+E", ""],
       ["capture.saveScreenAs", "", ""],
@@ -132,7 +132,7 @@ test("English by default: menus, the settings page's title, OSD and the save pan
   try {
     assert.deepEqual([host.command("capture.save").declaration.path, host.command("capture.save").declaration.group], [["Snapshot", "Save Current Frame"], "domain"]);
     assert.deepEqual(host.command("capture.burst").display.path, ["Snapshot", "Burst"]);
-    assert.deepEqual(host.command("capture.settings").display.path, ["Snapshot", "Snapshot Settings…"]);
+    assert.deepEqual([host.command("capture.settings").display.path, host.command("capture.settings").display.title], [[], "Snapshot Settings…"], "palette only");
     assert.equal(page(host).title, "Snapshot");
     await host.command("capture.format.jpeg").run();
     await host.settle();
