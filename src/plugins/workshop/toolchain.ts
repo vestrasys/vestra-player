@@ -478,6 +478,7 @@ export class Toolchain {
     if (owner && prefix !== owner) warnings.push(`The id prefix "${prefix}" differs from the GitHub name "${owner}" in the settings; change it to ${owner}.<name> before publishing`);
     if (!owner && prefix === LOCAL_OWNER) warnings.push("The id starts with local.: for this computer only. To publish, enter a GitHub name in the settings, then change the id to <name>.<plugin>");
     errors.push(...(await packageProblems(directory)));
+    errors.push(...(await slintProblems(directory)));
     if (!(await testFiles(directory)).length) warnings.push("No *.test.ts tests in tests/");
     return { errors, warnings };
   }
@@ -733,6 +734,117 @@ async function testFiles(directory: string): Promise<string[]> {
   } catch {
     return [];
   }
+}
+
+/**
+ * Slint types a plugin cannot write from TypeScript: a property value is
+ * JSON (booleans, numbers, strings, arrays, structs) plus images and
+ * Markdown, and the player refuses a string for a `brush` or `color`
+ * declaration at run time ("high-tint: wrong type: high-tint is a string
+ * where the declaration has a brush"), after every check has passed: the
+ * TestHost has no Slint and the player's compile sees no values. So the
+ * check reads the declarations itself.
+ */
+const UNWRITABLE_SLINT_TYPES = new Set(["brush", "color"]);
+
+/**
+ * `in` and `in-out` properties of an exported component or global whose
+ * Slint type the plugin cannot write (UNWRITABLE_SLINT_TYPES), one problem
+ * per declaration with its file and line. Only the exported component and
+ * global are the plugin's side of a window, panel or settings page; a helper
+ * component may well take a brush from the Slint code that uses it.
+ * `library`: the file is imported by another of the project's .slint files,
+ * so its exported components are helpers (Slint needs `export` to import a
+ * component from another file, as in a `ui/parts.slint`) and are skipped;
+ * its globals are still checked.
+ * Not caught here: a colour inside an array or a struct property (a model of
+ * rows with a `brush` field). The TestHost (SDK 1.7.3) refuses such a value
+ * against the .slint declaration when the plugin's tests write it.
+ */
+export function slintDeclarationProblems(file: string, source: string, { library = false }: { library?: boolean } = {}): string[] {
+  // Comments and string literals become spaces of the same length, so
+  // offsets and line numbers stay those of the source.
+  const blank = (text: string) => text.replace(/[^\n]/g, " ");
+  const stripped = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*|"(?:[^"\\\n]|\\.)*"/g, blank);
+  const line = (offset: number) => stripped.slice(0, offset).split("\n").length;
+  const problems: string[] = [];
+  const exported = /\bexport\s+(component|global)\s+([\w-]+)[^{]*\{/g;
+  for (let block = exported.exec(stripped); block; block = exported.exec(stripped)) {
+    const skip = library && block[1] === "component";
+    // The block's body: from its opening brace to the matching closing one.
+    let depth = 0;
+    let start = block.index + block[0].length;
+    let end = start;
+    let at = start - 1; // the opening brace
+    for (; at < stripped.length; at++) {
+      const char = stripped[at];
+      if (char === "{") depth++;
+      else if (char === "}" && --depth === 0) break;
+    }
+    end = at;
+    // Declarations at the body's own level (depth 1): a nested element's
+    // properties are the Slint code's business.
+    depth = 0;
+    let declaration = "";
+    for (let i = start; i < end; i++) {
+      const char = stripped[i];
+      if (char === "{") {
+        depth++;
+        declaration = "";
+      } else if (char === "}") {
+        depth--;
+        declaration = "";
+      } else if (depth === 0) {
+        if (char === ";") {
+          const found = /\b(in|in-out)\s+property\s*<\s*([\w-]+)\s*>\s*([\w-]+)/.exec(declaration);
+          if (found && !skip && UNWRITABLE_SLINT_TYPES.has(found[2])) {
+            const offset = i - declaration.length + (found.index ?? 0);
+            problems.push(
+              `${file}:${line(offset)}: ${found[1]} property <${found[2]}> ${found[3]} in ${block[1]} ${block[2]}: the player cannot write a ${found[2]} from a plugin (a property value is a boolean, a number, a string, an array, a struct, an image or Markdown; the window would fail with "wrong type" when shown). Declare a number or string instead and compute the ${found[2]} in Slint.`,
+            );
+          }
+          declaration = "";
+        } else declaration += char;
+      }
+    }
+    exported.lastIndex = Math.max(exported.lastIndex, end);
+  }
+  return problems;
+}
+
+/**
+ * The project's .slint files that another of its .slint files imports
+ * (`import { … } from "./parts.slint"`, a path relative to the importing
+ * file): libraries, not entry files. `@vestra/…` and `std-widgets.slint`
+ * imports are the player's, not the project's.
+ */
+export function slintLibraries(sources: Map<string, string>): Set<string> {
+  const libraries = new Set<string>();
+  const imported = /\bimport\b[^;]*?\bfrom\s*"([^"]+)"|\bimport\s*"([^"]+)"/g;
+  for (const [file, source] of sources) {
+    const code = source.replace(/\/\*[\s\S]*?\*\/|\/\/[^\n]*/g, "");
+    for (let found = imported.exec(code); found; found = imported.exec(code)) {
+      const target = path.posix.normalize(path.posix.join(path.posix.dirname(file), found[1] ?? found[2]));
+      if (target !== file && sources.has(target)) libraries.add(target);
+    }
+    imported.lastIndex = 0;
+  }
+  return libraries;
+}
+
+/**
+ * Every .slint file of the project checked with slintDeclarationProblems,
+ * the imported ones as libraries. projectFiles leaves out node_modules and
+ * dist; vendor/ is a copy of someone else's Slint (the SDK's own
+ * `icons.slint` exports `Icon` with an `in property <brush> color`).
+ */
+async function slintProblems(directory: string): Promise<string[]> {
+  const sources = new Map<string, string>();
+  for (const rel of (await projectFiles(directory)).filter((file) => file.endsWith(".slint") && !/(^|\/)vendor\//.test(file))) sources.set(rel, await fs.readFile(path.join(directory, rel), "utf8"));
+  const libraries = slintLibraries(sources);
+  const problems: string[] = [];
+  for (const [rel, source] of sources) problems.push(...slintDeclarationProblems(rel, source, { library: libraries.has(rel) }));
+  return problems;
 }
 
 /** package.json: no npm dependencies (the CLI would install them) and no bundling (no esbuild here). */

@@ -290,6 +290,58 @@ test("an endpoint that refuses the reasoning parameters: an error that points to
   );
 });
 
+test("row order: the user's message, then the turn's activity, then the reply, live and from the record, for a fresh conversation and a follow-up", async () => {
+  // Live: the model writes a note before its first tool call (shown as the
+  // answer while it streams, then taken out), later the answer.
+  const chat = new Chat();
+  const turn = (prompt, note, answer) => {
+    chat.user(prompt);
+    chat.begin();
+    chat.apply({ kind: "assistant_start" });
+    chat.apply({ kind: "text", delta: note });
+    assert.deepEqual(chat.rows.slice(-3).map((r) => r.kind), ["user", "activity", "assistant"], "the note streams below the message");
+    chat.apply({ kind: "tool_start", id: `${prompt}-1`, name: "docs", target: "/" });
+    chat.apply({ kind: "assistant_end", text: note, stopReason: "toolUse", error: null });
+    chat.apply({ kind: "tool_end", id: `${prompt}-1`, name: "docs", ok: true, summary: "" });
+    assert.deepEqual(chat.rows.slice(-2).map((r) => r.kind), ["user", "activity"], "the note is gone once its tool call starts");
+    chat.apply({ kind: "assistant_start" });
+    chat.apply({ kind: "text", delta: answer });
+    chat.apply({ kind: "assistant_end", text: answer, stopReason: "stop", error: null });
+    chat.apply({ kind: "settled", aborted: false });
+  };
+  turn("做个插件", "我先读文档。", "做好了。");
+  turn("窗口打不开", "我看看。", "修好了。");
+  assert.deepEqual(
+    chat.rows.map((r) => [r.kind, r.text]),
+    [["user", "做个插件"], ["activity", ""], ["assistant", "做好了。"], ["user", "窗口打不开"], ["activity", ""], ["assistant", "修好了。"]],
+  );
+  // What the window gets keeps that order (an unmade document shows as text).
+  const docs = new MessageDocs(async (text) => [{ text }]);
+  await docs.sync(chat.rows);
+  assert.deepEqual(docs.props(chat.rows).map((r) => r.kind), ["user", "activity", "assistant", "user", "activity", "assistant"]);
+
+  // The record, as pi writes it: the same two turns.
+  const record = (role, content, extra = {}) => JSON.stringify({ type: "message", message: { role, content, ...extra } });
+  const call = (id) => ({ type: "toolCall", id, name: "docs", arguments: { path: "/" } });
+  const result = (id) => record("toolResult", [{ type: "text", text: "/ · docs" }], { toolCallId: id, isError: false });
+  const jsonl = [
+    JSON.stringify({ type: "session", id: "s" }),
+    record("user", "做个插件"),
+    record("assistant", [{ type: "thinking", thinking: "…" }, { type: "text", text: "我先读文档。" }, call("a")], { stopReason: "toolUse" }),
+    result("a"),
+    record("assistant", [{ type: "text", text: "做好了。" }], { stopReason: "stop" }),
+    record("user", "窗口打不开"),
+    record("assistant", [{ type: "text", text: "我看看。" }, call("b")], { stopReason: "toolUse" }),
+    result("b"),
+    record("assistant", [{ type: "text", text: "修好了。" }], { stopReason: "stop" }),
+  ].join("\n");
+  const replayed = Chat.fromJsonl(jsonl);
+  assert.deepEqual(
+    replayed.rows.map((r) => [r.kind, r.text]),
+    [["user", "做个插件"], ["activity", ""], ["assistant", "做好了。"], ["user", "窗口打不开"], ["activity", ""], ["assistant", "修好了。"]],
+  );
+});
+
 test("the last note becomes the answer also when thinking came after it; the thinking shows nowhere", () => {
   const chat = new Chat();
   chat.user("做个插件");
