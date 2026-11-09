@@ -56,6 +56,7 @@ export global PlaybackPanelBridge {
     in property <bool> can-jump;
     in property <bool> can-start;
     in property <bool> can-frame;
+    in property <bool> can-frame-forward;
     // Keyframe steps; else why not: "video" (no video) or "source" (the source cannot).
     in property <bool> can-keyframe;
     in property <string> keyframe-reason;
@@ -1274,8 +1275,8 @@ export component PlaybackPanel inherits Rectangle {
                 }
                 Btn {
                     glyph: Glyphs.next;
-                    enabled: PlaybackPanelBridge.can-frame;
-                    tip: PlaybackPanelBridge.can-frame ? @tr("Next Frame") : root.unsupported;
+                    enabled: PlaybackPanelBridge.can-frame-forward;
+                    tip: PlaybackPanelBridge.can-frame-forward ? @tr("Next Frame") : root.unsupported;
                     tip-keys: [{ key: PlaybackPanelBridge.keys.frameforward, text: "" }];
                     clicked => { PlaybackPanelBridge.frame-step(1); }
                 }

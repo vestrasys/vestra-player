@@ -343,7 +343,7 @@ player.setStepSeek(options: { seconds: number }): Promise<void>
    - Previous frame on the first frame: nothing moves; message "Already at the first frame".
    - No video track (audio only): the command is disabled with the reason "No video".
    - Plugin simulator streams and live streams that cannot seek: previous frame is disabled with the reason "The current source cannot step back a frame". Live streams can still step to the next frame (mpv can decode the next frame); this is decided by `can.frameStep`.
-   - Playback finished (`phase: ended`): previous frame is available and goes to just before the last frame; next frame is disabled.
+   - Playback finished (`phase: ended`): previous frame is available, goes to just before the last frame and stays paused; next frame is disabled. Other seeks after the end (seek bar, ← →, `player.seek`) play on (interaction spec IA-PB-09).
 6. A frame step triggered while a seek bar drag gesture is in progress: end the gesture first (consistent with the existing rule "any external change ends the gesture").
 
 **Core dependencies**: core actions `frame-back` / `frame-forward` (reference §5.5), which call `player.step("frame", …)` internally (ruling R-P1, accepted after rewrite: no `can.*` added). After the hand-over these two commands are registered and run entirely by the core; playback does not register them, and the bottom bar has no buttons for them.
@@ -370,6 +370,7 @@ player.setStepSeek(options: { seconds: number }): Promise<void>
    - Audio only (downgraded): the command is disabled with the reason "No video". `player.step` returns `unsupported` for sources without an active video; whether there is video is found by playback calling `stats()` once when each source first becomes ready, and cached (ruling R-P1). Plugin simulator streams are disabled the same way.
    - "Previous" while already at the first keyframe: jump to 0; message "Jumped to the start".
    - "Next" after the last keyframe: nothing moves; message "Already at the last keyframe".
+   - Playback finished (`phase: ended`): "Previous" goes to the last keyframe before the position and stays paused; "Next" does not move ("Already at the last keyframe"); interaction spec IA-PB-09.
 
 **Core dependencies**: `player.step("keyframe", direction, { ifCurrent })` (ruling R-P2 merged into R-P1; the core uses mpv `seek ±0.001 relative+keyframes`, which strictly passes the current keyframe in both directions).
 
@@ -540,6 +541,7 @@ We suggest also handing over `rate-10` (Speed ▸ Normal, Z): it belongs to the 
 **Existing behavior the core must take over** (moved over from `controller.ts`, behavior unchanged)
 - Play / pause: with `phase: ended` it replays instead; message "Paused" / "Play".
 - Relative seek: keeps adding from the latest unfinished target (repeated → presses do not lose steps); clamped between 0 and the duration; message "Forward 5 s: 00:37 / 01:40"; uses the step set with `setStepSeek`.
+- Seeking after the end (2026-11-09, IA-PB-09): ← → and the seek bar work at `phase: ended`; a seek that leaves the end plays on, unless it is previous frame or the end was reached while paused.
 - Speed: ±0.1, rounded to 0.01, clamped to 0.25–4; message "Speed: 1.1x".
 - Volume: ±5, clamped to 0–200, based on the latest draft value; set the volume first, then unmute; messages "Volume: 85%" and "Mute: on / off".
 - Previous / next: handed to the playback sequence provider; when there is none, disabled with the reason "No previous item / No next item".
