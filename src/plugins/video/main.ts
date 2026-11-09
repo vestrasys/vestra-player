@@ -1672,7 +1672,7 @@ export default async function activate(plugin: Plugin) {
   const softwareNow = () => rendering?.mode === "software";
   /**
    * What the status line says (`Upscaling.kind` in picture.slint) and the player's message; with
-   * kind `plugins`, `detail` is the line (short and actionable: the narrowest adjust column shows
+   * kind `plugins`, `detail` is the line (short, what to do: the narrowest adjust column shows
    * about 36 characters) and `tip` its tooltip (why).
    */
   const upscalingStatus = (): { kind: string; detail: string | Text; tip?: Text } => {
@@ -1711,7 +1711,7 @@ export default async function activate(plugin: Plugin) {
         }
         // Only this plugin's own filters do: say so.
         if (cause === "copy-back" && plugins.length > 0) return { kind: "effects", detail: message };
-        // No plugin named: the user's hwdec setting copies the frames back.
+        // No plugin named: copy-back for another reason (the player has no hardware decoding setting).
         if (cause === "copy-back") return { kind: "copy-back", detail: message };
         if (cause === "hwdec-off" || cause === "software" || cause === "other-hwdec") return { kind: cause, detail: message };
         // A cause this plugin does not know: the player's message (below).

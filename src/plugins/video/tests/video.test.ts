@@ -2440,7 +2440,7 @@ test("AI Upscaling: while it waits for the decoder, the status says why and name
     );
     // Only this plugin's own filters: the panel's effects.
     await waits("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }], "effects");
-    // No plugin named: the hardware decoding setting copies back.
+    // No plugin named: copy-back for another reason.
     await waits("copy-back", [], "copy-back");
     await waits("hwdec-off", undefined, "hwdec-off");
     await waits("software", undefined, "software");
