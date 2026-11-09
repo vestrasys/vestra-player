@@ -373,10 +373,26 @@ test("panel: idle, set A and B, nudge, clear, the switch, the count, the chapter
     status: panel.props["ab-status"],
   });
   // Nothing open: greyed with the reason; the keys are the commands' own (modifiers as the host labels them).
-  await eventually(ab, { usable: false, reason: "media", a: "", b: "", on: false, canLoop: false, count: 0, status: "" });
-  const keys = panel.props.keys as Record<string, string>;
-  assert.deepEqual([keys.seta, keys.cleara, keys.setb, keys.clearb, keys.abtoggle], ["[", "{", "]", "}", "\\"]);
-  for (const key of [keys.aback, keys.aforward, keys.bback, keys.bforward, keys.absegment]) assert.ok(key!.length > 1, key);
+  const keyed = () => {
+    const keys = (panel.props.keys ?? {}) as Record<string, string>;
+    return {
+      ...ab(),
+      plain: [keys.seta, keys.cleara, keys.setb, keys.clearb, keys.abtoggle],
+      modified: [keys.aback, keys.aforward, keys.bback, keys.bforward, keys.absegment].map((key) => (key ?? "").length > 1),
+    };
+  };
+  await eventually(keyed, {
+    usable: false,
+    reason: "media",
+    a: "",
+    b: "",
+    on: false,
+    canLoop: false,
+    count: 0,
+    status: "",
+    plain: ["[", "{", "]", "}", "\\"],
+    modified: [true, true, true, true, true],
+  });
   host.rebind("ab.set-a", []);
   await eventually(() => (panel.props.keys as Record<string, string>).seta, "");
   host.rebind("ab.set-a", ["["]);
@@ -496,8 +512,7 @@ test("panel: a counted loop shows count + 1 passes; the last one plays after the
   await at(host, 19.9);
   host.setSource({ position: 10.1, loop: null });
   await host.settle(WAIT);
-  await eventually(() => panel.props["ab-status"], "3 / 3");
-  assert.equal(panel.props["ab-on"], false);
+  await eventually(() => [panel.props["ab-status"], panel.props["ab-on"]], ["3 / 3", false]);
   assert.notEqual(host.osd.at(-1), "A-B loop ended");
   await at(host, 15);
   assert.equal(panel.props["ab-status"], "3 / 3");
@@ -505,8 +520,8 @@ test("panel: a counted loop shows count + 1 passes; the last one plays after the
   // The last pass ends when the position passes B.
   await at(host, 20.2);
   assert.equal(host.osd.at(-1), "A-B loop ended");
-  await eventually(() => panel.props["ab-status"], "");
-  assert.equal(host.command("ab.toggle").state.enabled, true); // A and B are kept
+  // A and B are kept: the switch stays usable.
+  await eventually(() => [panel.props["ab-status"], host.command("ab.toggle").state.enabled], ["", true]);
 });
 
 test("panel: the last pass also ends on a seek out of the range or a new source", async () => {

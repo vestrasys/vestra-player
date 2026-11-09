@@ -920,9 +920,17 @@ test("the Playback panel's speed: the wheel is the player's X / C, a tick and a 
   await eventually(() => host.osd.filter((text) => text === "速度范围为0.25–4倍").length, 2);
   panel.emit("applyRate", "1.3×");
   await eventually(() => host.source.rate, 1.3);
-  await eventually(() => [panel.props["rate-text"], panel.props.tick, panel.props["rate-invalid"], panel.props.done], ["1.3", -1, false, 1]);
+  await eventually(
+    () => [
+      panel.props["rate-text"],
+      panel.props.tick,
+      panel.props["rate-invalid"],
+      panel.props.done,
+      ...["rate-05", "rate-15", "rate-20"].map((id) => host.command(id).state.checked),
+    ],
+    ["1.3", -1, false, 1, false, false, false],
+  );
   assert.ok((host.sent("source.submit").at(-1)!.intent as Record<string, unknown>).expected);
-  for (const id of ["rate-05", "rate-15", "rate-20"]) assert.equal(host.command(id).state.checked, false, id);
   await stop();
 });
 
