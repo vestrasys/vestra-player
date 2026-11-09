@@ -1,4 +1,4 @@
-// Reasoning models: thinking is on ("low") where the model reasons, comes
+// Reasoning models: thinking is on ("medium" by default) where the model reasons, comes
 // back as thinking (not shown: it only counts as the turn's work), not as the answer, and the settings
 // choose the level and, for a custom endpoint, whether its model reasons.
 import assert from "node:assert/strict";
@@ -16,17 +16,17 @@ const thinkThenAnswer = (req) => {
     : { thinking: ["The user wants ", "the folder listed."], text: ["我先看看文件夹。"], toolCalls: [{ name: "ls", args: { path: "." } }] };
 };
 
-test("a custom Anthropic-format reasoning model (MiniMax-M3): thinking low with room for the answer, not shown", async () => {
+test("a custom Anthropic-format reasoning model (MiniMax-M3): thinking medium by default with room for the answer, not shown", async () => {
   const mock = await server(thinkThenAnswer, { models: ["MiniMax-M3"] });
   const ai = await startAi({ locale: "zh-Hans" });
   await ai.configure(mock.url, { format: "Anthropic" });
-  assert.equal(ai.page.props["thinking-index"], 1, "low by default");
+  assert.equal(ai.page.props["thinking-index"], 2, "medium by default");
   assert.equal(ai.page.props.reasons, true, "MiniMax-M3 reasons (guessed from its id)");
   await ai.ask("看看文件夹");
 
   const body = mock.chats[0].body;
   assert.equal(body.thinking?.type, "enabled");
-  assert.equal(body.thinking.budget_tokens, 2048);
+  assert.equal(body.thinking.budget_tokens, 8192);
   assert.ok(body.max_tokens > body.thinking.budget_tokens + 8000, `max_tokens ${body.max_tokens} leaves room after the thinking budget`);
 
   assert.equal(ai.kinds(), "user,activity,assistant");
@@ -41,7 +41,7 @@ test("a custom Anthropic-format reasoning model (MiniMax-M3): thinking low with 
   await ai.stop();
 });
 
-test("thinking off in the settings, or a model marked as not reasoning, sends no thinking", async () => {
+test("thinking off or low in the settings, or a model marked as not reasoning: no thinking or the smaller budget", async () => {
   const mock = await server(() => ({ text: ["好"] }), { models: ["MiniMax-M3"] });
   const ai = await startAi({ locale: "zh-Hans" });
   await ai.configure(mock.url, { format: "Anthropic" });
@@ -51,10 +51,10 @@ test("thinking off in the settings, or a model marked as not reasoning, sends no
   assert.deepEqual(mock.chats.at(-1).body.thinking, { type: "disabled" });
   assert.equal(mock.chats.at(-1).body.max_tokens, 16384);
 
-  ai.page.emit("choose-thinking", 2);
+  ai.page.emit("choose-thinking", 1);
   await ai.send("new-chat");
   await ai.ask("二");
-  assert.equal(mock.chats.at(-1).body.thinking.budget_tokens, 8192, "medium");
+  assert.equal(mock.chats.at(-1).body.thinking.budget_tokens, 2048, "low");
 
   ai.page.emit("set-reasons", false);
   await ai.host.settle();
@@ -89,7 +89,10 @@ test("which custom models reason, by id: only clear reasoning models; when unsur
 test("an unknown thinking level or a damaged reasoning map keeps the other settings", () => {
   const saved = { ...DEFAULT_SETTINGS, provider: "custom-openai", models: { "custom-openai": "m" }, thinking: "high", reasoning: { "custom-openai m": "yes" } };
   assert.equal(validSettings(saved), true);
-  assert.equal(thinkingOf(saved), "low");
+  assert.equal(thinkingOf(saved), "medium", "the default");
+  assert.equal(thinkingOf({ ...saved, thinking: "low" }), "low", "a saved choice stays as saved");
+  assert.equal(thinkingOf({ ...saved, thinking: "off" }), "off");
+  assert.equal(thinkingOf(DEFAULT_SETTINGS), "medium", "unset: medium");
   assert.equal(reasoningOf(saved, "custom-openai m"), undefined);
   assert.equal(reasoningOf({ ...saved, reasoning: { "custom-openai m": false } }, "custom-openai m"), false);
 });

@@ -190,7 +190,7 @@ async function start(message: StartMessage) {
     agentDir: message.sessionDir,
     model,
     // pi clamps the level to what the model supports ("off" for one that does not reason).
-    thinkingLevel: message.thinking ?? "low",
+    thinkingLevel: message.thinking ?? "medium",
     modelRuntime,
     resourceLoader,
     sessionManager,

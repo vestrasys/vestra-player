@@ -873,13 +873,13 @@ msgstr "Aus"
 
 #: settings.slint:251
 #, x-machine
-msgid "Low (recommended)"
-msgstr "Niedrig (empfohlen)"
+msgid "Low"
+msgstr "Niedrig"
 
 #: settings.slint:251
 #, x-machine
-msgid "Medium"
-msgstr "Mittel"
+msgid "Medium (recommended)"
+msgstr "Mittel (empfohlen)"
 
 #: settings.slint:260
 #, x-machine

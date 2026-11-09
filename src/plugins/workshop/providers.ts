@@ -130,7 +130,7 @@ export interface AiSettings {
   savedKeys?: Record<string, boolean>;
   /** The user's GitHub name: the id prefix of new plugins (unset: local.). */
   owner?: string;
-  /** How much reasoning models think before they answer (unset: "low"). */
+  /** How much reasoning models think before they answer (unset: "medium"). */
   thinking?: Thinking;
   /**
    * Custom endpoints: whether the model reasons, by "<provider> <model>"; unset:
@@ -139,10 +139,10 @@ export interface AiSettings {
   reasoning?: Record<string, boolean>;
 }
 
-/** The thinking levels the settings offer, cheapest first; "low" is the default (cost-aware). */
+/** The thinking levels the settings offer, cheapest first; "medium" is the default (low did not complete plugin tasks in validation). */
 export const THINKING = ["off", "low", "medium"] as const;
 export type Thinking = (typeof THINKING)[number];
-export const DEFAULT_THINKING: Thinking = "low";
+export const DEFAULT_THINKING: Thinking = "medium";
 
 /**
  * Custom endpoint models that clearly reason (think before they answer) and

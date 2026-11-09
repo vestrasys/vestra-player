@@ -39,7 +39,7 @@ export global AiSettings {
     // The user's GitHub name, the id prefix of new plugins; the hint says what it gives.
     in-out property <string> owner-text;
     in property <PageSay> owner-hint;
-    // Thinking of reasoning models: 0 off, 1 low (default), 2 medium (providers.ts THINKING).
+    // Thinking of reasoning models: 0 off, 1 low, 2 medium (default) (providers.ts THINKING).
     in-out property <int> thinking-index;
     // Custom endpoints: the model reasons (the user's choice, or guessed from its id).
     in property <bool> reasons;
@@ -248,7 +248,7 @@ export component AiSettingsPage inherits Rectangle {
             ComboBox {
                 height: Theme.input-height;
                 horizontal-stretch: 1;
-                model: [@tr("Off"), @tr("Low (recommended)"), @tr("Medium")];
+                model: [@tr("Off"), @tr("Low"), @tr("Medium (recommended)")];
                 current-index <=> AiSettings.thinking-index;
                 selected => { AiSettings.choose-thinking(self.current-index); }
             }
