@@ -954,10 +954,13 @@ impl Backend {
                             fit: settings.fit,
                             aspect: settings.aspect,
                         };
+                        let before = processing.step_started();
                         processing.tick(&mpv, Instant::now(), Some(facts));
                         // A paused preview step unpauses mpv for two frames:
-                        // an end it reaches was reached while paused.
-                        if processing.stepping() {
+                        // an end it reaches was reached while paused. Marked
+                        // once, when it starts: Play pressed during the step
+                        // clears the mark (any `source.submit`) for good.
+                        if preview_step_started(before, processing.step_started()) {
                             sources.frame_stepped();
                         }
                     }
@@ -1643,7 +1646,9 @@ impl CoreActions {
             }
             StepPlan::AtEnd => return Ok(Some(json!({ "osd": null }))),
             StepPlan::FromEnd { keyframes } => {
-                let at = before.or(facts.position).unwrap_or(0.);
+                // The position of the state just read: the same value the
+                // source compares a seek from the end with (`at_end_already`).
+                let at = facts.position.or(before).unwrap_or(0.);
                 // One frame back exactly, or the last keyframe before the
                 // position (`absolute+keyframes` rounds back).
                 let target = if keyframes {
@@ -1733,6 +1738,12 @@ fn finished(
         Ok(Some(value)) => done.map(|done| (done, Ok(value))),
         Err(error) => done.map(|done| (done, Err(error))),
     }
+}
+
+/// A paused preview step started in this tick (`Processing::step_started`
+/// changed to a new start), not one still running from an earlier tick.
+fn preview_step_started(before: Option<Instant>, after: Option<Instant>) -> bool {
+    after.is_some() && after != before
 }
 
 /// Who waits for a deferred step.
@@ -2380,6 +2391,54 @@ mod end_tests {
         rig.seek(1.9);
         rig.settle(Duration::from_millis(150));
         rig.pause(false);
+        rig.until_ended();
+        rig.action("seek-backward", 0.5).unwrap();
+        let state = rig.settle(Duration::from_millis(150));
+        assert_eq!(state["phase"], "ready", "{state}");
+        assert!(!rig.paused(), "played into the end: the seek plays on");
+    }
+
+    /// A paused preview step (picture effects) is marked as a frame step
+    /// once, when it starts; ticks while it runs do not mark it again.
+    #[test]
+    fn a_preview_step_is_marked_when_it_starts_only() {
+        let t = Instant::now();
+        let later = t + Duration::from_millis(30);
+        assert!(preview_step_started(None, Some(t)));
+        assert!(!preview_step_started(Some(t), Some(t)), "still running");
+        assert!(
+            preview_step_started(Some(t), Some(later)),
+            "ended, next began"
+        );
+        assert!(!preview_step_started(Some(t), None));
+        assert!(!preview_step_started(None, None));
+    }
+
+    /// Re-review: Play pressed during a paused preview step used to be
+    /// undone by the next tick (still stepping: marked again), so an end
+    /// reached later kept the pause and the seek from it stayed paused.
+    #[test]
+    fn play_during_a_preview_step_leaves_a_later_end_playing() {
+        let mut rig = Rig::new();
+        rig.pause(true);
+        rig.seek(1.0);
+        rig.settle(Duration::from_millis(150));
+        // The worker's tick starts a preview step; Play is pressed during it.
+        let step = Some(Instant::now());
+        if preview_step_started(None, step) {
+            rig.sources.frame_stepped();
+        }
+        rig.pause(false);
+        // Ticks while that step still runs, until the end.
+        let end = Instant::now() + Duration::from_secs(10);
+        while rig.state["phase"] != "ended" {
+            assert!(Instant::now() < end, "not ended: {}", rig.state);
+            if preview_step_started(step, step) {
+                rig.sources.frame_stepped();
+            }
+            rig.turn();
+            std::thread::sleep(Duration::from_millis(2));
+        }
         rig.until_ended();
         rig.action("seek-backward", 0.5).unwrap();
         let state = rig.settle(Duration::from_millis(150));
