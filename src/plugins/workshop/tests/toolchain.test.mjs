@@ -192,6 +192,67 @@ test("the check refuses vestra. ids, npm dependencies and a manifest id that is 
   assert.equal((await runTool(toolchain, session, "", "install_plugin", { id: "local.demo" }, new AbortController().signal)).text, "No tool named install_plugin");
 });
 
+test("the check refuses an exported brush or color property the plugin would write (the player refuses the value only at run time)", async () => {
+  const { session, toolchain } = await setup();
+  await toolchain.scaffold(session, { name: "demo" }, "");
+  const project = path.join(session.work, "local.demo");
+  const slint = await fs.readFile(path.join(project, "ui/main.slint"), "utf8");
+  // A helper component may take a brush from Slint code; the exported window may not take one from the plugin.
+  await fs.writeFile(
+    path.join(project, "ui/main.slint"),
+    `import { VerticalBox } from "std-widgets.slint";
+// in property <brush> commented-out;
+component Dot inherits Rectangle { in property <brush> tint; background: self.tint; }
+${slint.replace("export component MainWindow inherits Window {", 'export component MainWindow inherits Window {\n    in property <string> label: "a { brace } in a string";\n    in property <brush> high-tint;\n    in-out property <color> low-tint;\n    Dot { tint: root.high-tint; in property <brush> nested; }')}
+export global Bridge { in property <color> accent; in property <float> strength; }
+`,
+  );
+  const checked = await toolchain.check(session, "local.demo", "");
+  assert.equal(checked.ok, false);
+  assert.match(checked.text, /^Check failed: 3 problem\(s\)/);
+  const { problems } = JSON.parse(checked.text.split("\n").slice(1).join("\n"));
+  const written = (await fs.readFile(path.join(project, "ui/main.slint"), "utf8")).split("\n");
+  const lineOf = (text) => written.findIndex((l) => l.includes(text)) + 1;
+  assert.deepEqual(
+    problems.map((p) => p.split(":").slice(0, 3).join(":")),
+    [
+      `ui/main.slint:${lineOf("<brush> high-tint")}: in property <brush> high-tint in component MainWindow`,
+      `ui/main.slint:${lineOf("<color> low-tint")}: in-out property <color> low-tint in component MainWindow`,
+      `ui/main.slint:${lineOf("<color> accent")}: in property <color> accent in global Bridge`,
+    ],
+  );
+  assert.match(problems[0], /cannot write a brush from a plugin[\s\S]*compute the brush in Slint/);
+  // Pure Slint text passes: the same file without the plugin-side colour properties.
+  await fs.writeFile(path.join(project, "ui/main.slint"), slint.replace("export component MainWindow inherits Window {", "export component MainWindow inherits Window {\n    in property <float> hue;\n    Rectangle { in property <brush> tint; }"));
+  const passed = await toolchain.check(session, "local.demo", "");
+  assert.equal(passed.ok, true, passed.text);
+});
+
+test("the brush check skips the exported components of a .slint file another one imports (a parts library) and vendor/, not the entry window", async () => {
+  const { session, toolchain } = await setup();
+  await toolchain.scaffold(session, { name: "demo" }, "");
+  const project = path.join(session.work, "local.demo");
+  const slint = await fs.readFile(path.join(project, "ui/main.slint"), "utf8");
+  // Slint needs `export` to import a component from another file: Swatch is a helper.
+  await fs.writeFile(path.join(project, "ui/parts.slint"), "export component Swatch inherits Rectangle { in property <brush> fill; background: self.fill; }\n");
+  // A copy of someone else's Slint, like the SDK's icons.slint (`export component Icon { in property <brush> color; }`).
+  await fs.mkdir(path.join(project, "ui/vendor"), { recursive: true });
+  await fs.writeFile(path.join(project, "ui/vendor/icons.slint"), "export component Icon inherits Rectangle { in property <brush> color; }\n");
+  const entry = `import { Swatch } from "./parts.slint";\n${slint.replace("export component MainWindow inherits Window {", "export component MainWindow inherits Window {\n    in property <float> hue;\n    Swatch { fill: #336699; }")}`;
+  await fs.writeFile(path.join(project, "ui/main.slint"), entry);
+  const passed = await toolchain.check(session, "local.demo", "");
+  assert.equal(passed.ok, true, passed.text);
+  // The entry window's own brush property is still refused.
+  await fs.writeFile(path.join(project, "ui/main.slint"), entry.replace("in property <float> hue;", "in property <brush> hue;"));
+  const checked = await toolchain.check(session, "local.demo", "");
+  assert.equal(checked.ok, false);
+  const { problems } = JSON.parse(checked.text.split("\n").slice(1).join("\n"));
+  assert.deepEqual(
+    problems.map((p) => p.split(":").slice(0, 1).join(":") + ":" + p.split(": ")[1]),
+    ["ui/main.slint:in property <brush> hue in component MainWindow"],
+  );
+});
+
 test("the type check runs under the permission model: it reads the project and the SDK, nothing else", async () => {
   const { session, toolchain } = await setup();
   await toolchain.scaffold(session, { name: "demo" }, "");
