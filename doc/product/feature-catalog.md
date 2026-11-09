@@ -169,7 +169,7 @@ Date: 2026-10-20. Implementation status checked against the current Vestra `main
 | F08 | File name with system time / playback time | ⊘ | Fixed as "title_playbacktime". capture. Dropped in the cut review (2026-10-20). |
 | F09 | Screenshot folder setting and open | ◐ | Can be set and is remembered; no "Open Folder". capture |
 | F10 | Delete the last screenshot | ⊘ | capture. Dropped in the cut review (2026-10-20). |
-| F11 | Export a clip (start and end time) | ✅ | capture (offline export, not live recording) |
+| F11 | Export a clip (start and end time) | ✅ | a store plugin since 2026-11-09 (was the built-in capture plugin); offline export, not live recording |
 | F12 | Live video / audio recording | ⊘ | core. Dropped in the cut review (2026-10-20). |
 
 ## G. Audio

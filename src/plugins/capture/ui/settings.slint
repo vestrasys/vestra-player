@@ -1,0 +1,258 @@
+// Options ▸ Video ▸ Snapshot (Snapshot Settings…): where captures go, the frame's format and
+// content, the burst that Burst (Ctrl+G) takes, and the file-name templates. 440 wide (the
+// options window's page area); the window scrolls a taller page. Library widgets (@vestra/widgets.slint).
+import { LineEdit } from "std-widgets.slint";
+import { Theme } from "@vestra/theme.slint";
+import { Button, Check, Choice, Slider } from "@vestra/widgets.slint";
+
+// The names the two templates give now.
+export struct Previews {
+    image: string,
+    burst: string,
+}
+
+export global SnapshotPage {
+    in property <string> folder;
+    in-out property <bool> beside-media;
+    in-out property <int> format-index;
+    in-out property <float> quality: 90;
+    // Save / Copy Current Frame include the video effects.
+    in-out property <bool> snapshot-effects;
+    // The burst's fields hold what the user typed; the plugin keeps the last valid values.
+    in-out property <string> burst-count: "10";
+    in-out property <string> burst-step: "1";
+    in-out property <bool> burst-processed;
+    in-out property <bool> burst-subtitles;
+    in-out property <string> template-image;
+    in-out property <string> template-burst;
+    in property <Previews> previews;
+    callback pick-folder();
+    callback set-beside-media(bool);
+    callback choose-format(int);
+    callback set-quality(int);
+    callback set-snapshot-effects(bool);
+    // (count, interval) as typed
+    callback burst-edited(string, string);
+    callback set-burst-processed(bool);
+    callback set-burst-subtitles(bool);
+    // ("image" | "burst", text)
+    callback template-edited(string, string);
+    callback insert-variable(string, string);
+    callback reset-template(string);
+}
+
+component Section inherits Text {
+    height: Theme.label-height;
+    font-size: Theme.font-body;
+    color: Theme.text-dim;
+}
+
+// A row label; `column` is the page's label column (the widest label, at least 64px).
+component Label inherits Text {
+    in property <length> column: 64px;
+    width: root.column;
+    color: Theme.text;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+}
+
+component Note inherits Text {
+    color: Theme.text-dim;
+    font-size: Theme.font-body;
+    vertical-alignment: center;
+    overflow: elide;
+}
+
+// A number field of the burst row.
+component Field inherits LineEdit {
+    width: 56px;
+    height: Theme.input-height;
+    font-size: Theme.font-body;
+}
+
+// One template row: label, field, Default name, and the name it gives below.
+component TemplateRow {
+    in property <string> label;
+    in property <string> kind;
+    in property <string> preview;
+    in property <length> column;
+    in-out property <string> value;
+    callback focused(string);
+    VerticalLayout {
+        spacing: 2px;
+        HorizontalLayout {
+            spacing: 4px;
+            Label { column: root.column; text: root.label; }
+            LineEdit {
+                height: Theme.input-height;
+                font-size: Theme.font-body;
+                font-family: Theme.font-mono;
+                text <=> root.value;
+                edited(text) => { SnapshotPage.template-edited(root.kind, text); }
+                changed has-focus => { if self.has-focus { root.focused(root.kind); } }
+            }
+            Button {
+                small: true;
+                height: Theme.input-height;
+                text: @tr("Default name");
+                clicked => { SnapshotPage.reset-template(root.kind); }
+            }
+        }
+        HorizontalLayout {
+            padding-left: root.column + 4px;
+            Text {
+                text: "→ " + root.preview;
+                color: Theme.text-list;
+                font-family: Theme.font-mono;
+                font-size: Theme.font-xs;
+                overflow: elide;
+            }
+        }
+    }
+}
+
+// One variable chip of the file-name templates: a click adds the variable to the template last focused.
+component Chip inherits Button {
+    in property <string> variable;
+    in property <string> target;
+    small: true;
+    text: root.variable;
+    clicked => { SnapshotPage.insert-variable(root.target, root.variable); }
+}
+
+export component SnapshotSettingsPage inherits Rectangle {
+    background: Theme.bg-panel;
+    private property <string> chip-target: "image";
+    private property <length> column: max(64px, measure.preferred-width);
+    Rectangle {
+        visible: false;
+        width: 0;
+        height: 0;
+        measure := VerticalLayout {
+            for text in [@tr("Format"), @tr("Count"), @tr("Interval"), @tr("Snapshot"), @tr("Burst")]: Label { width: self.preferred-width; text: text; }
+        }
+    }
+    VerticalLayout {
+        padding: Theme.dialog-padding;
+        spacing: 6px;
+        alignment: start;
+        Text {
+            height: 24px;
+            text: @tr("Snapshot");
+            font-size: Theme.font-title;
+            font-weight: 700;
+            vertical-alignment: center;
+            color: Theme.text;
+        }
+
+        Section { text: @tr("Save to"); }
+        HorizontalLayout {
+            spacing: 4px;
+            LineEdit { height: Theme.input-height; font-size: Theme.font-body; text: SnapshotPage.folder; read-only: true; }
+            Button { width: 30px; height: Theme.input-height; text: "…"; clicked => { SnapshotPage.pick-folder(); } }
+        }
+        Check {
+            text: @tr("Save to the media folder when possible");
+            checked <=> SnapshotPage.beside-media;
+            toggled(on) => { SnapshotPage.set-beside-media(on); }
+        }
+
+        Rectangle { height: 8px; }
+        Section { text: @tr("Snapshots"); }
+        HorizontalLayout {
+            spacing: 4px;
+            Label { column: root.column; text: @tr("Format"); }
+            Choice {
+                width: 74px;
+                model: ["PNG", "JPEG", "BMP"];
+                current-index <=> SnapshotPage.format-index;
+                selected(index) => { SnapshotPage.choose-format(index); }
+            }
+            if SnapshotPage.format-index == 1: Slider {
+                minimum: 1;
+                maximum: 100;
+                step: 1;
+                value <=> SnapshotPage.quality;
+                released(v) => { SnapshotPage.set-quality(round(v)); }
+            }
+            if SnapshotPage.format-index == 1: Note { width: 26px; text: round(SnapshotPage.quality); horizontal-alignment: right; }
+            if SnapshotPage.format-index != 1: Note { horizontal-stretch: 1; text: @tr("Quality: JPEG only"); }
+        }
+        Check {
+            text: @tr("Include video effects");
+            checked <=> SnapshotPage.snapshot-effects;
+            toggled(on) => { SnapshotPage.set-snapshot-effects(on); }
+        }
+
+        Rectangle { height: 8px; }
+        Section { text: @tr("Burst"); }
+        HorizontalLayout {
+            spacing: 4px;
+            Label { column: root.column; text: @tr("Count"); }
+            Field {
+                text <=> SnapshotPage.burst-count;
+                edited => { SnapshotPage.burst-edited(SnapshotPage.burst-count, SnapshotPage.burst-step); }
+            }
+            Note { horizontal-stretch: 1; text: @tr("frames (2–20)"); }
+        }
+        HorizontalLayout {
+            spacing: 4px;
+            Label { column: root.column; text: @tr("Interval"); }
+            Field {
+                text <=> SnapshotPage.burst-step;
+                edited => { SnapshotPage.burst-edited(SnapshotPage.burst-count, SnapshotPage.burst-step); }
+            }
+            Note { horizontal-stretch: 1; text: @tr("s (0.1–10)"); }
+        }
+        Check {
+            text: @tr("Include video effects");
+            checked <=> SnapshotPage.burst-processed;
+            toggled(on) => { SnapshotPage.set-burst-processed(on); }
+        }
+        Check {
+            text: @tr("Capture subtitles too");
+            enabled: SnapshotPage.burst-processed;
+            checked <=> SnapshotPage.burst-subtitles;
+            toggled(on) => { SnapshotPage.set-burst-subtitles(on); }
+        }
+
+        Rectangle { height: 8px; }
+        Section { text: @tr("File names"); }
+        TemplateRow {
+            column: root.column;
+            label: @tr("Snapshot");
+            kind: "image";
+            preview: SnapshotPage.previews.image;
+            value <=> SnapshotPage.template-image;
+            focused(kind) => { root.chip-target = kind; }
+        }
+        TemplateRow {
+            column: root.column;
+            label: @tr("Burst");
+            kind: "burst";
+            preview: SnapshotPage.previews.burst;
+            value <=> SnapshotPage.template-burst;
+            focused(kind) => { root.chip-target = kind; }
+        }
+        // Written out one by one (no `for`): a fixed set of seven, not a list.
+        HorizontalLayout {
+            spacing: 3px;
+            alignment: start;
+            Chip { variable: "{name}"; target: root.chip-target; }
+            Chip { variable: "{pos}"; target: root.chip-target; }
+            Chip { variable: "{start}"; target: root.chip-target; }
+            Chip { variable: "{end}"; target: root.chip-target; }
+            Chip { variable: "{date}"; target: root.chip-target; }
+            Chip { variable: "{time}"; target: root.chip-target; }
+            Chip { variable: "{n}"; target: root.chip-target; }
+        }
+        // No fixed height: the layout gives the wrapped text all its lines.
+        Text {
+            text: @tr("Click a variable to add it to the template you edited last. Existing files are never overwritten: a number is added.");
+            font-size: Theme.font-body;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+            line-height-factor: 1.25;
+        }
+    }
+}

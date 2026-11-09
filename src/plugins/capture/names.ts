@@ -2,16 +2,14 @@ import { clock, stemOf } from "./model.ts";
 
 /**
  * File-name templates (proposal §3.7, mpv's `screenshot-template`): one for
- * frames, one for clips and one for a burst's folder. The defaults name files
- * as the plugin always did, except that a clip also states its end.
+ * frames and one for a burst's folder.
  */
-export type TemplateKind = "image" | "clip" | "burst";
+export type TemplateKind = "image" | "burst";
 export const DEFAULT_TEMPLATES: Readonly<Record<TemplateKind, string>> = {
   image: "{name}_{pos}",
-  clip: "{name}_{start}-{end}",
   burst: "Capture-{date} {time}",
 };
-/** The variables, in the order the tab's chips show them. */
+/** The variables, in the order the settings page's chips show them. */
 export const VARIABLES = ["{name}", "{pos}", "{start}", "{end}", "{date}", "{time}", "{n}"] as const;
 /** At most this many characters per template (a name stays well inside the 255 of the file systems). */
 export const TEMPLATE_LIMIT = 120;
@@ -19,7 +17,7 @@ export const TEMPLATE_LIMIT = 120;
 export interface NameValues {
   /** The playing source (its file name without the extension is `{name}`). */
   source: string | null;
-  /** The frame time (`{pos}`), and the clip's or burst's first and last times. */
+  /** The frame time (`{pos}`), and a burst's first and last frame times. */
   start: number;
   end?: number;
   /** When the capture was made (`{date}`, `{time}`, local time). */
@@ -95,6 +93,6 @@ export function renderName(kind: TemplateKind, template: string, values: NameVal
   return fill(normalTemplate(kind, template)) || fill(DEFAULT_TEMPLATES[kind]);
 }
 
-/** Insert a variable chip at the end of a template (the tab's chips; a click puts it where the text ends). */
+/** Insert a variable chip at the end of a template (the settings page's chips; a click puts it where the text ends). */
 export const insertVariable = (template: string, variable: string) =>
   (VARIABLES as readonly string[]).includes(variable) ? `${template}${variable}`.slice(0, TEMPLATE_LIMIT) : template;

@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.13
+
+- **Snapshot only** (user ruling 2026-11-09): clip export leaves the built-in plugin and becomes a store plugin; this plugin keeps saving, saving as and copying the current frame, the rendered frame and the video frame, bursts, their settings, keys and the right-click Snapshot ▸. Who must change: users who export clips install the store plugin. What users see: no Capture sidebar tab and no Export commands.
+- Gone with the clips: Export Clip…, Export Clip Range (Ctrl+Shift+E), Export Last N Seconds (Ctrl+Shift+R), Set Clip Start / End, Export Tasks…, Capture… (Alt+S) and the Capture tab (`ui/tab.slint`, `ui/parts.slint`, `clip.ts`, `results.ts`, `seams.ts`): the clip page (Fast / Precise, encoder settings, estimates, the keyframe probe), the clip range on the seek bar, the Results list (running and finished captures with Cancel, Retry, Open, Copy, Remove, thumbnails, `results.json`), the progress card and the Last N s length.
+- **Options ▸ Video ▸ Snapshot** (`ui/settings.slint`), opened by **Snapshot Settings…** (command palette only, as before; Snapshot ▸ now has three items: Save Current Frame, Copy Current Frame, Burst): the folder, save beside the media, format and JPEG quality, Include video effects, the burst's count, interval, effects and subtitles, and the frame and burst file-name templates with their variable chips.
+- **Burst** (Ctrl+G, was Burst…) now takes the burst at once from the frame shown at the press, with the settings' count and interval, as PotPlayer's consecutive capture does; the typed start time is gone. Its message has Show in Folder (no Show in Tab).
+- Show Last Capture in Folder and Copy Last Snapshot act on the newest capture of this session (no list is kept across restarts). A failed capture is said on screen and not kept for a retry.
+- Palette `home`: the format and folder commands point at Snapshot Settings…; the frame commands have none (they lived in the tab).
+- Manifest: `ui.settings` added; `ui.mount`, `timeline.marks` and `events` removed; punchline and description say what is left; tag `export` removed. Translations: three new texts (machine in de, es, fr, ja and ko, marked `x-machine`), every text of the tab and the clips removed from the catalogs.
+
 ## 1.0.12
 
 - Menu sweep (menu redesign §4): the Snapshot ▸ submenu moves from Video ▸ to the top level of the right-click menu, after Audio Track ▸ and Subtitle Track ▸ in the same separator group (its first item's group is `domain`, was `capture-quick`); the five items, their order and the separator before Capture… are unchanged. Who must change: nobody.

@@ -5,358 +5,257 @@ msgstr ""
 "Content-Transfer-Encoding: 8bit\n"
 "Plural-Forms: nplurals=1; plural=0;\n"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:35
-msgid "Enter a time such as 1:02:03.450, or seconds."
-msgstr "请输入时间，例如 1:02:03.450，或秒数。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:36
-msgid "The end must be after the start."
-msgstr "结束时间必须晚于开始时间。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:37
+#: main.ts:85 main.ts:90
 msgid "A burst needs 2–20 frames, an interval of 0.1–10 s and a known media duration."
 msgstr "连拍需要 2–20 张、间隔 0.1–10 秒，且媒体时长已知。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:38
+#: main.ts:85 main.ts:90
 msgid "The burst runs past the end of the media. Use fewer frames or a shorter interval."
 msgstr "连拍超出媒体时长，请减少张数或间隔。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:39
+#: main.ts:85 main.ts:90
 msgid "No free file name found."
 msgstr "找不到可用的文件名。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:40
+#: main.ts:85 main.ts:90
 msgid "The current frame cannot be captured. Open a local video file first."
 msgstr "当前画面无法截取，请先打开本地视频文件。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:41
-msgid "The current frame cannot be exported. Open a local video file first."
-msgstr "当前画面无法导出，请先打开本地视频文件。"
+#: main.ts:85 main.ts:90
+msgid "Bursts need a known media duration."
+msgstr "连拍需要已知的媒体时长。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:42
-msgid "Bursts and clips need a known media duration."
-msgstr "连拍和导出片段需要已知的媒体时长。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:43
+#: main.ts:85 main.ts:90
 msgid "The selected range is past the end of the media."
 msgstr "所选范围超出媒体时长。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:44
-msgid "The selected audio track cannot be exported. Choose another track or No Audio."
-msgstr "所选音轨无法导出，请换一条音轨或选择无声音。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:45
+#: main.ts:85 main.ts:90
 msgid "The media changed; nothing was started."
 msgstr "播放内容已变化，未开始。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:46
+#: main.ts:85 main.ts:90
 msgid "The player is busy. Try again later."
 msgstr "播放器忙，请稍后再试。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:47
+#: main.ts:85 main.ts:90
 msgid "The current frame cannot be captured."
 msgstr "当前画面无法截取。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:48
+#: main.ts:85 main.ts:90
 msgid "Could not capture the frame."
 msgstr "截取画面失败。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:49
+#: main.ts:85 main.ts:90
 msgid "One export is running and four are queued. Please wait."
 msgstr "已有一个导出在进行、四个在排队，请稍候。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:50
-msgid "The kept frame has expired. Retry with the current frame."
-msgstr "保留的画面已过期，请用当前画面重试。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:51
+#: main.ts:85 main.ts:90
 msgid "The kept frame was released."
 msgstr "保留的画面已释放。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:52
+#: main.ts:85 main.ts:90
 msgid "Cancelled."
 msgstr "已取消。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:53
+#: main.ts:85 main.ts:90
 msgid "Could not write to the clipboard"
 msgstr "无法写入剪贴板"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:54
+#: main.ts:85 main.ts:90
 msgid "Not enough disk space"
 msgstr "磁盘空间不足"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:55
+#: main.ts:85 main.ts:90
 msgid "The target file already exists"
 msgstr "目标文件已存在"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:56
+#: main.ts:85 main.ts:90
 msgid "No write permission"
 msgstr "没有写入权限"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:57
+#: main.ts:85 main.ts:90
 msgid "This media cannot be encoded"
 msgstr "无法编码此媒体"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:58
+#: main.ts:85 main.ts:90
 msgid "Export failed"
 msgstr "导出失败"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:59
+#: main.ts:85 main.ts:90
 msgid "This task has no output file yet."
 msgstr "这个任务还没有输出文件。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:60
-msgid "The output file no longer exists."
-msgstr "输出文件已不存在。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:61
+#: main.ts:85 main.ts:90
 msgid "Could not open the folder."
 msgstr "无法打开文件夹。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:62
+#: main.ts:85 main.ts:90
 msgid "The snapshot folder is unavailable. Please choose it again."
 msgstr "截图文件夹不可用，请重新选择。"
 
-#: main.ts:135 main.ts:140 ui/parts.slint:63
-msgid "Clips need a local file."
-msgstr "片段需要本地文件。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:64
-msgid "Set A and B with A-B Loop (Chapters tab)."
-msgstr "请先用 A-B 循环设置 A 点和 B 点（章节页签）。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:65
-msgid "Nothing has played before the current position yet."
-msgstr "当前位置之前还没有可导出的内容。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:66
-msgid "Fast cut is not possible for this file. Use Precise."
-msgstr "此文件无法快速剪切，请使用“精确”。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:67
-msgid "The bitrate of this file is unknown. Choose another quality."
-msgstr "无法得知此文件的码率，请选择其他画质。"
-
-#: main.ts:135 main.ts:140 ui/parts.slint:68
+#: main.ts:85 main.ts:90
 msgid "The file or folder was moved or deleted."
 msgstr "文件或文件夹已被移动或删除。"
 
-#: main.ts:135 main.ts:140 main.ts:810 main.ts:1068 ui/parts.slint:69
-msgid "The Capture tab could not open."
-msgstr "无法打开“截取”页签。"
-
-#: main.ts:140
+#: main.ts:90
 msgid "Snapshot failed: {}"
 msgstr "截图失败：{}"
 
-#: main.ts:140 ui/parts.slint:101
+#: main.ts:90
 msgid "Burst failed: {}"
 msgstr "连拍失败：{}"
 
-#: main.ts:140 ui/parts.slint:103
-msgid "Export failed: {}"
-msgstr "导出失败：{}"
+#: main.ts:102
+msgid "Frame saved as {}"
+msgstr "帧已保存为 {}"
 
-#: main.ts:145 ui/tab.slint:757 ui/tab.slint:1290
-msgid "Clip"
-msgstr "片段"
+#: main.ts:102
+msgid "Frame saved without subtitles as {}"
+msgstr "帧已保存为 {}（不含字幕：字幕无法画入帧中）"
 
-#: main.ts:189 ui/tab.slint:661
+#: main.ts:102
+msgid "Burst of {0} frames saved to {1}"
+msgstr "连拍已保存 {0} 张到 {1}"
+
+#: main.ts:111
 msgid "Show in Folder"
 msgstr "在文件夹中显示"
 
-#: main.ts:190 ui/tab.slint:651 ui/tab.slint:804
+#: main.ts:112
 msgid "Copy"
 msgstr "复制"
 
-#: main.ts:190
-msgid "Show in Tab"
-msgstr "在页签中显示"
-
-#: main.ts:317
+#: main.ts:138
 msgid "Snapshot format: {}"
 msgstr "截图格式：{}"
 
-#: main.ts:332
+#: main.ts:153
 msgid "Choose Snapshot Folder"
 msgstr "选择截图文件夹"
 
-#: main.ts:334
+#: main.ts:155
 msgid "Please choose an existing folder."
 msgstr "请选择一个已有的文件夹。"
 
-#: main.ts:337
+#: main.ts:158
 msgid "Snapshot folder: {}"
 msgstr "截图文件夹：{}"
 
-#: main.ts:398
+#: main.ts:218
 msgid "The previous snapshot is still being processed"
 msgstr "上一张截图仍在处理"
 
-#: main.ts:421
+#: main.ts:241 main.ts:282
 msgid "Snapshot queued"
 msgstr "截图已排队"
 
-#: main.ts:429
+#: main.ts:249
 msgid "Save Rendered Frame As"
 msgstr "实际画面另存为"
 
-#: main.ts:429
+#: main.ts:249
 msgid "Save Current Frame As"
 msgstr "当前画面另存为"
 
-#: main.ts:441
+#: main.ts:261
 msgid "Frame copied without subtitles: they cannot be drawn into a frame"
 msgstr "已复制画面（不含字幕：字幕无法画入帧中）"
 
-#: main.ts:441 main.ts:953 main.ts:1109
+#: main.ts:261 main.ts:426
 msgid "Frame copied to the clipboard"
 msgstr "画面截图：复制到剪贴板"
 
-#: main.ts:596
-msgid "Export Clip"
-msgstr "导出片段"
-
-#: main.ts:631
-msgid "Exporting the last {} seconds"
-msgstr "正在导出最后 {} 秒"
-
-#: main.ts:666
-msgid "Capture"
-msgstr "截取"
-
-#: main.ts:1017 main.ts:1132 ui/tab.slint:1102
-msgid "Export"
-msgstr "导出"
-
-#: main.ts:1024 main.ts:1025 manifest.json ui/tab.slint:757 ui/tab.slint:1283
+#: main.ts:302 main.ts:384 main.ts:385 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
 msgid "Snapshot"
 msgstr "截图"
 
-#: main.ts:1024 main.ts:1025 ui/tab.slint:799
+#: main.ts:384 main.ts:385
 msgid "Save Current Frame"
 msgstr "保存当前画面"
 
-#: main.ts:1024 main.ts:1025 ui/tab.slint:809
+#: main.ts:384 main.ts:385
 msgid "Copy Current Frame"
 msgstr "复制当前画面"
 
-#: main.ts:1024 main.ts:1025
-msgid "Burst…"
-msgstr "连拍…"
+#: main.ts:384 main.ts:385 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
+msgid "Burst"
+msgstr "连拍"
 
-#: main.ts:1024 main.ts:1025
-msgid "Export Clip…"
-msgstr "导出片段…"
-
-#: main.ts:1024 main.ts:1025
-msgid "Capture…"
-msgstr "截取…"
-
-#: main.ts:1024 main.ts:1025
-msgid "Save Current Frame As…"
-msgstr "当前画面另存为…"
-
-#: main.ts:1024 main.ts:1025
-msgid "Save Rendered Frame"
-msgstr "保存实际画面"
-
-#: main.ts:1024 main.ts:1025
-msgid "Save Rendered Frame As…"
-msgstr "实际画面另存为…"
-
-#: main.ts:1024 main.ts:1025
-msgid "Copy Rendered Frame"
-msgstr "复制实际画面"
-
-#: main.ts:1024 main.ts:1025
-msgid "Export Tasks…"
-msgstr "导出任务…"
-
-#: main.ts:1024 main.ts:1025
-msgid "Capture as PNG"
-msgstr "截取为 PNG"
-
-#: main.ts:1024 main.ts:1025
-msgid "Capture as JPEG"
-msgstr "截取为 JPEG"
-
-#: main.ts:1024 main.ts:1025
-msgid "Capture as BMP"
-msgstr "截取为 BMP"
-
-#: main.ts:1024 main.ts:1025
-msgid "Include Subtitles in Rendered Frame"
-msgstr "实际画面包含字幕"
-
-#: main.ts:1024 main.ts:1025
+#: main.ts:384 main.ts:385
 msgid "Snapshot Settings…"
 msgstr "截图设置…"
 
-#: main.ts:1024 main.ts:1025
+#: main.ts:384 main.ts:385
+msgid "Save Current Frame As…"
+msgstr "当前画面另存为…"
+
+#: main.ts:384 main.ts:385
+msgid "Save Rendered Frame"
+msgstr "保存实际画面"
+
+#: main.ts:384 main.ts:385
+msgid "Save Rendered Frame As…"
+msgstr "实际画面另存为…"
+
+#: main.ts:384 main.ts:385
+msgid "Copy Rendered Frame"
+msgstr "复制实际画面"
+
+#: main.ts:384 main.ts:385
+msgid "Capture as PNG"
+msgstr "截取为 PNG"
+
+#: main.ts:384 main.ts:385
+msgid "Capture as JPEG"
+msgstr "截取为 JPEG"
+
+#: main.ts:384 main.ts:385
+msgid "Capture as BMP"
+msgstr "截取为 BMP"
+
+#: main.ts:384 main.ts:385
+msgid "Include Subtitles in Rendered Frame"
+msgstr "实际画面包含字幕"
+
+#: main.ts:384 main.ts:385
 msgid "Snapshot Folder…"
 msgstr "截图文件夹…"
 
-#: main.ts:1024 main.ts:1025 ui/tab.slint:1156
+#: main.ts:384 main.ts:385
 msgid "Open Snapshot Folder"
 msgstr "打开截图文件夹"
 
-#: main.ts:1024 main.ts:1025 ui/tab.slint:939
-msgid "Set Clip Start"
-msgstr "设为片段起点"
-
-#: main.ts:1024 main.ts:1025 ui/tab.slint:951
-msgid "Set Clip End"
-msgstr "设为片段终点"
-
-#: main.ts:1024 main.ts:1025
-msgid "Export Clip Range"
-msgstr "导出片段范围"
-
-#: main.ts:1024 main.ts:1025
+#: main.ts:384 main.ts:385
 msgid "Show Last Capture in Folder"
 msgstr "在文件夹中显示最近的截取"
 
-#: main.ts:1024 main.ts:1025
+#: main.ts:384 main.ts:385
 msgid "Copy Last Snapshot"
 msgstr "复制最近的截图"
 
-#: main.ts:1024 main.ts:1025
+#: main.ts:384 main.ts:385
 msgid "Save Video Frame Only"
 msgstr "仅保存视频画面"
 
-#: main.ts:1024 main.ts:1025
+#: main.ts:384 main.ts:385
 msgid "Copy Video Frame Only"
 msgstr "仅复制视频画面"
 
-#: main.ts:1024 main.ts:1025 main.ts:1137 ui/tab.slint:799 ui/tab.slint:809 ui/tab.slint:817 ui/tab.slint:889
+#: main.ts:384 main.ts:385
 msgid "No frame to capture"
 msgstr "没有可截取的画面"
 
-#: main.ts:1115
-msgid "Clip start: {}"
-msgstr "片段起点：{}"
-
-#: main.ts:1120
-msgid "Clip end: {}"
-msgstr "片段终点：{}"
-
-#. {} is 10, 30, 60 or 120.
-#: main.ts:1131 ui/tab.slint:975
-msgid "Export Last {} Seconds"
-msgstr "导出最后 {} 秒"
-
 #: manifest.json
-msgid "Save or copy the current frame, capture bursts, export clips"
-msgstr "保存或复制当前画面、连拍、导出片段"
+msgid "Save or copy the current frame and capture bursts"
+msgstr "保存或复制当前画面、连拍"
 
 #: manifest.json
 msgid ""
-"Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP; captures a burst of frames; exports part of a video as a lossless stream copy or a re-encoded MP4. One sidebar tab, Capture, holds the controls, the running exports and the finished results.\n"
-"Right-click menu: Video ▸ Snapshot; Alt+S opens the tab."
+"Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n"
+"Right-click menu: Snapshot ▸."
 msgstr ""
-"将当前画面（含显示中的字幕，或含视频效果的实际画面）保存、另存为或复制为 PNG、JPEG 或 BMP；连拍多张画面；将视频的一段导出为无损的流复制或重新编码的 MP4。侧栏中的“截取”页签集中了这些操作、正在进行的导出和已完成的结果。\n"
-"右键菜单：视频 ▸ 截图；Alt+S 打开该页签。"
+"将当前画面（含显示中的字幕，或含视频效果的实际画面）保存、另存为或复制为 PNG、JPEG 或 BMP，并可连拍多张画面。设置位于 选项 ▸ 视频 ▸ 截图。\n"
+"右键菜单：截图 ▸。"
 
 #: manifest.json
 msgid "video"
@@ -366,584 +265,58 @@ msgstr "视频"
 msgid "snapshot"
 msgstr "截图"
 
-#: manifest.json
-msgid "export"
-msgstr "导出"
-
-#: model.ts:250 ui/tab.slint:151
-msgid "No Audio"
-msgstr "无声音"
-
-#: model.ts:251 ui/tab.slint:151
-msgid "Current Track"
-msgstr "当前音轨"
-
-#: model.ts:252
-msgid "Track {} · {}"
-msgstr "音轨 {} · {}"
-
-#: model.ts:252
-msgid "Track {}"
-msgstr "音轨 {}"
-
-#: seams.ts:83
-msgid "Frame saved as {}"
-msgstr "帧已保存为 {}"
-
-#: seams.ts:83
-msgid "Frame saved without subtitles as {}"
-msgstr "帧已保存为 {}（不含字幕：字幕无法画入帧中）"
-
-#: seams.ts:83
-msgid "Clip exported as {}"
-msgstr "片段已导出为 {}"
-
-#: seams.ts:83
-msgid "Burst of {0} frames saved to {1}"
-msgstr "连拍已保存 {0} 张到 {1}"
-
-#: ui/parts.slint:75
-msgid "Queued"
-msgstr "排队中"
-
-#: ui/parts.slint:76
-msgid "Preparing"
-msgstr "准备中"
-
-#: ui/parts.slint:77
-msgid "Exporting"
-msgstr "导出中"
-
-#: ui/parts.slint:78
-msgid "Cancelling"
-msgstr "正在取消"
-
-#: ui/parts.slint:79
-msgid "Completed"
-msgstr "已完成"
-
-#: ui/parts.slint:80
-msgid "Failed"
-msgstr "失败"
-
-#: ui/parts.slint:81
-msgid "Cancelled"
-msgstr "已取消"
-
-#: ui/parts.slint:89 ui/tab.slint:598
-msgid "Failed: {}"
-msgstr "失败：{}"
-
-#. {0} is a task state (Exporting), {1} the frames done, {2} the frames in all.
-#: ui/parts.slint:91 ui/tab.slint:604
-msgid "{0} · {1}/{2}"
-msgstr "{0} · {1}/{2}"
-
-#. {} is the number of frames (2–20).
-#: ui/parts.slint:98
-msgid "{} frames saved"
-msgstr "已保存 {} 张"
-
-#. {} is the number of frames (2–20).
-#: ui/parts.slint:100
-msgid "Burst of {} frames started"
-msgstr "已开始连拍 {} 张"
-
-#: ui/parts.slint:102
-msgid "Exported {}"
-msgstr "已导出 {}"
-
-#: ui/parts.slint:104
-msgid "No save location chosen."
-msgstr "未选择保存位置。"
-
-#: ui/parts.slint:105
-msgid "Export started. Follow it in Results."
-msgstr "已开始导出，可在结果中查看。"
-
-#: ui/parts.slint:106
-msgid "Restarted."
-msgstr "已重新开始。"
-
-#: ui/parts.slint:112 ui/tab.slint:906
-msgid "Fast"
-msgstr "快速"
-
-#: ui/parts.slint:113 ui/tab.slint:914
-msgid "Precise"
-msgstr "精确"
-
-#: ui/parts.slint:119 ui/tab.slint:1016 ui/tab.slint:1017
-msgid "Same as source"
-msgstr "与源相同"
-
-#: ui/parts.slint:120 ui/tab.slint:992 ui/tab.slint:1016 ui/tab.slint:1017
-msgid "High quality"
-msgstr "高画质"
-
-#: ui/parts.slint:121 ui/tab.slint:1016 ui/tab.slint:1017
-msgid "Small file"
-msgstr "小文件"
-
-#: ui/parts.slint:122 ui/tab.slint:1016
-msgid "Custom"
-msgstr "自定义"
-
-#: ui/parts.slint:128
-msgid "just now"
-msgstr "刚刚"
-
-#. {} is a number of minutes (1–59).
-#: ui/parts.slint:130
-msgid "{} min ago"
-msgstr "{} 分钟前"
-
-#. {} is a number of hours (1–23).
-#: ui/parts.slint:132
-msgid "{} h ago"
-msgstr "{} 小时前"
-
-#. {} is a number of days.
-#: ui/parts.slint:134
-msgid "{} d ago"
-msgstr "{} 天前"
-
-#. {} is a number of seconds.
-#. {} is a clip's length in seconds ("3.5") or a burst's number of frames.
-#: ui/parts.slint:141 ui/tab.slint:575 ui/tab.slint:1336
-msgid "{} s"
-msgstr "{} 秒"
-
-#. {0} and {1} are numbers of seconds.
-#: ui/parts.slint:143
-msgid "{0}–{1} s"
-msgstr "{0}–{1} 秒"
-
-#. {} is a number of minutes.
-#: ui/parts.slint:146
-msgid "{} min"
-msgstr "{} 分钟"
-
-#. {0} and {1} are numbers of minutes.
-#: ui/parts.slint:148
-msgid "about {0}–{1} min"
-msgstr "约 {0}–{1} 分钟"
-
-#. {0} is the time a Fast cut starts at (the keyframe), {1} how many seconds before the typed start.
-#: ui/tab.slint:481
-msgid "{0} (−{1} s)"
-msgstr "{0}（提前 {1} 秒）"
-
-#: ui/tab.slint:521
+#: ui/settings.slint:97
 msgid "Default name"
 msgstr "恢复默认名称"
 
-#. {} is a clip's length in seconds ("3.5") or a burst's number of frames.
-#: ui/tab.slint:575
-msgid "×{}"
-msgstr "×{}"
-
-#: ui/tab.slint:597
-msgid "File moved or deleted"
-msgstr "文件已移动或删除"
-
-#. {0} is the number of frames (2–20), {1} the time of the first.
-#: ui/tab.slint:601
-msgid "Queued · {0} frames from {1}"
-msgstr "排队中 · 从 {1} 起 {0} 张"
-
-#. {} is a time or a time range.
-#: ui/tab.slint:603
-msgid "Queued · {}"
-msgstr "排队中 · {}"
-
-#. {} is a percentage.
-#: ui/tab.slint:606 ui/tab.slint:872
-msgid "Finishing…"
-msgstr "正在完成…"
-
-#. {0} is a percentage, {1} seconds.
-#: ui/tab.slint:609
-msgid "Exporting · {0} % · about {1} s left"
-msgstr "导出中 · {0}% · 约剩 {1} 秒"
-
-#. {} is a percentage.
-#: ui/tab.slint:611
-msgid "Exporting · {} %"
-msgstr "导出中 · {}%"
-
-#. {0} is a task state (Exporting), {1} the time spent (0:12).
-#. what the closed Advanced rows hold now: an audio choice and a quality.
-#: ui/tab.slint:613 ui/tab.slint:991
-msgid "{0} · {1}"
-msgstr "{0} · {1}"
-
-#. {} is the number of frames (2–20).
-#: ui/tab.slint:615 ui/tab.slint:617 ui/tab.slint:618
-msgid "{} MB"
-msgstr "{} MB"
-
-#. {} is the number of frames (2–20).
-#: ui/tab.slint:617
-msgid "Burst · {} frames"
-msgstr "连拍 · {} 张"
-
-#: ui/tab.slint:636 ui/tab.slint:853
-msgid "Cancel"
-msgstr "取消"
-
-#: ui/tab.slint:641
-msgid "Retry"
-msgstr "重试"
-
-#: ui/tab.slint:646 ui/tab.slint:656
-msgid "Open"
-msgstr "打开"
-
-#: ui/tab.slint:656
-msgid "Open Folder"
-msgstr "打开文件夹"
-
-#: ui/tab.slint:666
-msgid "Remove from List"
-msgstr "从列表中移除"
-
-#: ui/tab.slint:720
-msgid "Fast cut copies the streams: lossless and done in seconds, but a clip can only start on a keyframe."
-msgstr "快速剪切直接复制数据流：无损，几秒即可完成，但片段只能从关键帧开始。"
-
-#. {0} and {2} are times, {1} seconds.
-#: ui/tab.slint:724
-msgid "It will start at {0}, {1} s before your start, and end at {2}."
-msgstr "它将从 {0} 开始（比你设的起点早 {1} 秒），在 {2} 结束。"
-
-#. {0} and {1} are times.
-#: ui/tab.slint:726
-msgid "It will start at {0} and end at {1}."
-msgstr "它将从 {0} 开始，在 {1} 结束。"
-
-#: ui/tab.slint:727
-msgid "It starts on the keyframe at or before your start."
-msgstr "它将从你设的起点处或之前最近的关键帧开始。"
-
-#: ui/tab.slint:728
-msgid "Its streams do not fit in MP4, so it is saved as MKV."
-msgstr "其数据流无法放入 MP4，因此保存为 MKV。"
-
-#: ui/tab.slint:729
-msgid "Pick Precise to start on the exact frame."
-msgstr "要从精确的帧开始，请选择“精确”。"
-
-#: ui/tab.slint:730
-msgid "Precise re-encodes from the exact frame, and can include video effects and subtitles."
-msgstr "“精确”从精确的那一帧起重新编码，并可包含视频效果和字幕。"
-
-#. {0} and {1} are times.
-#: ui/tab.slint:732
-msgid "Precise re-encodes from the exact frame {0} to {1}, and can include video effects and subtitles."
-msgstr "“精确”从 {0} 这一帧起重新编码到 {1}，并可包含视频效果和字幕。"
-
-#. {0} seconds of media, {1} megabytes ("46" or "55–80"), {2} a time span ("2 s", "about 1–3 min").
-#: ui/tab.slint:737
-msgid "Length {0} s · ≈ {1} MB · ≈ {2}"
-msgstr "时长 {0} 秒 · 约 {1} MB · 约 {2}"
-
-#. {0} seconds of media, {1} a time span ("2 s", "about 1–3 min").
-#: ui/tab.slint:739
-msgid "Length {0} s · ≈ {1}"
-msgstr "时长 {0} 秒 · 约 {1}"
-
-#: ui/tab.slint:758
-msgid "Results ({})"
-msgstr "结果（{}）"
-
-#: ui/tab.slint:758
-msgid "Results"
-msgstr "结果"
-
-#: ui/tab.slint:758
-msgid "Settings"
-msgstr "设置"
-
-#: ui/tab.slint:768
-msgid "Show or hide this tab"
-msgstr "显示或隐藏此页签"
-
-#: ui/tab.slint:794
-msgid "Save"
-msgstr "保存"
-
-#: ui/tab.slint:816 ui/tab.slint:888
-msgid "This picture is made by a plugin"
-msgstr "此画面由插件生成"
-
-#: ui/tab.slint:818
-msgid "Source size, with the subtitles shown and the video effects"
-msgstr "原始尺寸，包含显示中的字幕和视频效果"
-
-#: ui/tab.slint:819
-msgid "Source size, with the subtitles shown"
-msgstr "原始尺寸，包含显示中的字幕"
-
-#. {} is the file or folder name.
-#: ui/tab.slint:850
-msgid "Exporting {}"
-msgstr "正在导出 {}"
-
-#: ui/tab.slint:873
-msgid "{} %"
-msgstr "{}%"
-
-#. {} is a number of seconds.
-#: ui/tab.slint:875
-msgid "about {} s left"
-msgstr "约剩 {} 秒"
-
-#. {} is the number of exports waiting (1–4).
-#: ui/tab.slint:878
-msgid "+{} queued"
-msgstr "另有 {} 个排队"
-
-#: ui/tab.slint:893
-msgid "There is no file to cut."
-msgstr "没有可剪切的文件。"
-
-#: ui/tab.slint:894
-msgid "Frames can still be saved; open a local file to cut clips."
-msgstr "仍可保存画面；要剪切片段，请打开本地文件。"
-
-#: ui/tab.slint:895
-msgid "Open a local video file to save frames, bursts and clips."
-msgstr "打开本地视频文件后，即可保存画面、连拍和片段。"
-
-#: ui/tab.slint:907
-msgid "lossless"
-msgstr "无损"
-
-#: ui/tab.slint:907
-msgid "no re-encode · lossless"
-msgstr "不重新编码 · 无损"
-
-#: ui/tab.slint:915
-msgid "re-encode"
-msgstr "重新编码"
-
-#: ui/tab.slint:915
-msgid "re-encode · any frame"
-msgstr "重新编码 · 任意帧"
-
-#: ui/tab.slint:931 ui/tab.slint:1231 ui/tab.slint:1269
-msgid "Start"
-msgstr "开始"
-
-#: ui/tab.slint:939 ui/tab.slint:951 ui/tab.slint:1274
-msgid "Now"
-msgstr "当前"
-
-#: ui/tab.slint:943
-msgid "End"
-msgstr "结束"
-
-#: ui/tab.slint:958
-msgid "Use A-B range"
-msgstr "使用 A-B 范围"
-
-#: ui/tab.slint:961
-msgid "Copy the A-B loop into Start and End"
-msgstr "将 A-B 循环填入开始和结束"
-
-#. {0} and {1} are the A and B times of the loop.
-#: ui/tab.slint:963
-msgid "A {0} · B {1}"
-msgstr "A {0} · B {1}"
-
-#. {} is 10, 30, 60 or 120.
-#: ui/tab.slint:969
-msgid "Last {} s"
-msgstr "最后 {} 秒"
-
-#: ui/tab.slint:988
-msgid "Advanced"
-msgstr "高级"
-
-#: ui/tab.slint:992 ui/tab.slint:1013
-msgid "Same as source (stream copy)"
-msgstr "与源相同（复制数据流）"
-
-#: ui/tab.slint:1003 ui/tab.slint:1066
-msgid "Audio"
-msgstr "音频"
-
-#: ui/tab.slint:1012
-msgid "Quality"
-msgstr "画质"
-
-#: ui/tab.slint:1021
-msgid "High quality (H.264 + AAC in MP4)"
-msgstr "高画质（MP4，H.264 + AAC）"
-
-#: ui/tab.slint:1027
-msgid "Resolution"
-msgstr "分辨率"
-
-#: ui/tab.slint:1029 ui/tab.slint:1039
-msgid "Source"
-msgstr "源"
-
-#: ui/tab.slint:1036
-msgid "Frame rate"
-msgstr "帧率"
-
-#: ui/tab.slint:1039
-msgid "{} fps"
-msgstr "{} fps"
-
-#: ui/tab.slint:1046
-msgid "Source bitrate"
-msgstr "源码率"
-
-#: ui/tab.slint:1046
-msgid "Quality number {}"
-msgstr "质量值 {}"
-
-#: ui/tab.slint:1057
-msgid "Speed"
-msgstr "速度"
-
-#: ui/tab.slint:1059
-msgid "Faster"
-msgstr "较快"
-
-#: ui/tab.slint:1059
-msgid "Balanced"
-msgstr "均衡"
-
-#: ui/tab.slint:1059
-msgid "Smaller"
-msgstr "较小"
-
-#: ui/tab.slint:1069
-msgid "AAC {} kb/s"
-msgstr "AAC {} kb/s"
-
-#: ui/tab.slint:1078
-msgid "Reset"
-msgstr "重置"
-
-#: ui/tab.slint:1084 ui/tab.slint:1208 ui/tab.slint:1276
-msgid "Include video effects"
-msgstr "包含画面效果"
-
-#: ui/tab.slint:1090
-msgid "Burn in subtitles"
-msgstr "烧录字幕"
-
-#: ui/tab.slint:1095
-msgid "Effects and subtitles: Precise only"
-msgstr "效果和字幕：仅“精确”"
-
-#: ui/tab.slint:1109
-msgid "Export as {} into the snapshot folder"
-msgstr "导出为 {}，存到截图文件夹"
-
-#: ui/tab.slint:1110
-msgid "Export the range into the snapshot folder"
-msgstr "将此范围导出到截图文件夹"
-
-#: ui/tab.slint:1116
-msgid "Export As…"
-msgstr "导出为…"
-
-#: ui/tab.slint:1118
-msgid "Export the range into a file you choose"
-msgstr "将此范围导出到你选择的文件"
-
-#: ui/tab.slint:1131
-msgid "Use Precise"
-msgstr "使用“精确”"
-
-#: ui/tab.slint:1148
-msgid "No snapshots or clips yet."
-msgstr "还没有截图或片段。"
-
-#: ui/tab.slint:1158
-msgid "Clear Finished"
-msgstr "清除已完成"
-
-#: ui/tab.slint:1175
-msgid "Save to"
-msgstr "保存设置"
-
-#: ui/tab.slint:1182
-msgid "Save to the media folder when possible"
-msgstr "条件允许时储存到播放文件夹"
-
-#: ui/tab.slint:1187
-msgid "Snapshots"
-msgstr "截图"
-
-#: ui/tab.slint:1190
+#: ui/settings.slint:132 ui/settings.slint:164
 msgid "Format"
 msgstr "格式"
 
-#: ui/tab.slint:1205
-msgid "Quality: JPEG only"
-msgstr "质量：仅 JPEG"
-
-#: ui/tab.slint:1218 ui/tab.slint:1297
-msgid "Burst"
-msgstr "连拍"
-
-#. {0} is the number of frames, {1} the interval in seconds.
-#: ui/tab.slint:1222
-msgid "{0} frames · every {1} s · from now"
-msgstr "{0} 张 · 每 {1} 秒 · 从当前位置"
-
-#. {0} is the number of frames, {1} the interval in seconds, {2} the start time.
-#: ui/tab.slint:1224
-msgid "{0} frames · every {1} s · from {2}"
-msgstr "{0} 张 · 每 {1} 秒 · 从 {2}"
-
-#: ui/tab.slint:1236
-msgid "Start the burst"
-msgstr "开始连拍"
-
-#: ui/tab.slint:1248
+#: ui/settings.slint:132 ui/settings.slint:191
 msgid "Count"
 msgstr "张数"
 
-#: ui/tab.slint:1254
-msgid "frames (2–20)"
-msgstr "张（2–20）"
-
-#: ui/tab.slint:1258
+#: ui/settings.slint:132 ui/settings.slint:200
 msgid "Interval"
 msgstr "间隔"
 
-#: ui/tab.slint:1264
+#: ui/settings.slint:148
+msgid "Save to"
+msgstr "保存设置"
+
+#: ui/settings.slint:155
+msgid "Save to the media folder when possible"
+msgstr "条件允许时储存到播放文件夹"
+
+#: ui/settings.slint:161
+msgid "Snapshots"
+msgstr "截图"
+
+#: ui/settings.slint:179
+msgid "Quality: JPEG only"
+msgstr "质量：仅 JPEG"
+
+#: ui/settings.slint:182 ui/settings.slint:208
+msgid "Include video effects"
+msgstr "包含画面效果"
+
+#: ui/settings.slint:196
+msgid "frames (2–20)"
+msgstr "张（2–20）"
+
+#: ui/settings.slint:205
 msgid "s (0.1–10)"
 msgstr "秒（0.1–10）"
 
-#: ui/tab.slint:1266
-msgid "Start at the current position"
-msgstr "从当前位置开始"
-
-#: ui/tab.slint:1277
+#: ui/settings.slint:213
 msgid "Capture subtitles too"
 msgstr "同时截取字幕"
 
-#: ui/tab.slint:1281
+#: ui/settings.slint:220
 msgid "File names"
 msgstr "文件名"
 
-#: ui/tab.slint:1306
+#: ui/settings.slint:251
 msgid "Click a variable to add it to the template you edited last. Existing files are never overwritten: a number is added."
 msgstr "点击变量，将其添加到最后编辑的模板中。已有文件不会被覆盖，会自动加上编号。"
-
-#: ui/tab.slint:1330
-msgid "Clips"
-msgstr "片段"
-
-#: ui/tab.slint:1333
-msgid "Last clip length"
-msgstr "“最后 N 秒”的长度"
