@@ -12,7 +12,7 @@ import { SESSION_STORAGE_LIMITS } from "../services.js";
 import { validStep } from "../player/rules.js";
 import { runCore, windowFacts } from "./core-actions.js";
 import { shownText, declaredText, shownValues, hostText } from "./i18n.js";
-import { resetWrites, writeProperty, initialValues, seeImages, kebab, } from "./layout.js";
+import { resetWrites, writeProperty, initialValues, seeImages, kebab, typedView, checkType, inSetOrder, } from "./layout.js";
 /** A `plugin.storage.session` key, checked as the player does. */
 export function sessionKey(key) {
     if (typeof key !== "string" ||
@@ -219,6 +219,14 @@ export function servicesHandlers(host, inner) {
             if (host.settings.pages.size >= 8)
                 throw new HostError("invalid", "a plugin has at most 8 settings pages");
             const properties = initialValues(host, inner, shownValues(host, inner, p.properties));
+            // Stricter than the player, which sets a page's values when the
+            // Options window shows it (and fails to show it, code `ui`): the
+            // test host checks their types when they are written, so a test
+            // need not open the window.
+            const typed = typedView(host, String(p.file), String(p.global), "ui", true);
+            if (typed)
+                for (const name of inSetOrder(properties))
+                    checkType(typed, name, properties[name], undefined);
             seeImages(host, inner, properties);
             resetWrites(host, inner, `$settings:${id}`);
             host.settings.pages.set(id, {
@@ -243,7 +251,7 @@ export function servicesHandlers(host, inner) {
             if (!page)
                 throw new HostError("missing", "page not registered");
             const property = String(p.property);
-            const next = writeProperty(host, inner, `$settings:${String(p.id)}`, property, p, page.props[property]);
+            const next = writeProperty(host, inner, `$settings:${String(p.id)}`, property, p, page.props[property], typedView(host, page.file, page.global, "ui", true));
             // A part of a value sent in parts is held until the last (player 0.6.0).
             if (next !== undefined)
                 page.props[property] = next;

@@ -1,6 +1,7 @@
 import type { Json, LayoutPanel } from "../../wire.ts";
 import type { FakePanel, TestHost } from "./index.ts";
 import type { Handler, Internals } from "./internals.ts";
+import type { Refusal, ViewTypes } from "./slint-types.ts";
 export declare const kebab: (name: string) => string;
 export declare const SLOT_LABELS: Record<string, string>;
 /** The view a panel's writes are kept under (the player's, per slot). */
@@ -43,16 +44,58 @@ export declare function resetWrites(_host: TestHost, inner: Internals, view: str
  * otherwise). The result is checked against the value limits whole: the
  * player counts the rows a patch keeps too.
  */
-export declare function writeProperty(host: TestHost, inner: Internals, view: string, property: string, p: Record<string, Json>, current: Json | undefined): Json | undefined;
+export declare function writeProperty(host: TestHost, inner: Internals, view: string, property: string, p: Record<string, Json>, current: Json | undefined, typed?: TypedView | null): Json | undefined;
 /**
  * Refuse property values over the player's limits ({@link UI_VALUE_LIMITS})
  * with `limit`, naming the property, as the player does.
  */
 export declare function checkValues(_host: TestHost, _inner: Internals, values: Record<string, Json>): void;
 /**
+ * A view's declared property types, with how the player words a refusal
+ * there: the error `code`, and `bare` when it reads the property before it
+ * writes it (`ui.set`, `ui.setMount`, `settings.set`, a panel's or settings
+ * page's initial values), so that an unknown one is refused as "no such
+ * property" without its name. Those writes compare first
+ * (`ui_values::reconcile_in`): a value equal to what the property holds
+ * does nothing, on an `out` property too. `fresh`: the property shows its
+ * default although a value is stored (a panel's initial value it could
+ * not take).
+ */
+export interface TypedView {
+    types: ViewTypes;
+    code: string;
+    bare: boolean;
+    fresh?: boolean;
+}
+/**
+ * The declared types of the view in `file` of the plugin's package: its
+ * exported component, or `global` (a panel's or settings page's). `null`
+ * (nothing checked) when the host runs no package or the file cannot be
+ * read.
+ */
+export declare function typedView(host: TestHost, file: string, global: string | undefined, code: string, bare: boolean): TypedView | null;
+/** A refusal in the player's words, for a write that reads the property first (`bare`) or not. */
+export declare const refusalText: (found: Refusal, bare: boolean) => string;
+/**
+ * Refuse a value the player's Slint refuses for `property` (a value of
+ * another type than declared, an undeclared or `out` property), with the
+ * player's code and words. `current`: what the property shows now (none:
+ * its default), which the words describe the declared type by.
+ */
+export declare function checkType(typed: TypedView, property: string, value: Json, current: Json | undefined): void;
+/**
+ * Refuse a struct field name the player's conversion refuses (not in
+ * Slint's canonical spelling), whatever the view declares: code `host`,
+ * the property named.
+ */
+export declare function checkSpelling(property: string, value: Json): void;
+/** Property names in the order the player sets them (a `BTreeMap`). */
+export declare const inSetOrder: (values: Record<string, Json>) => string[];
+/**
  * A panel's or settings page's initial properties, as the player keeps
- * them: one over the limits is left out (the property keeps its default)
- * and reported with `ui.error`, the request itself succeeds.
+ * them: one over the limits (`limit`) or with a struct field name not in
+ * Slint's canonical spelling (`host`) is left out (the property keeps its
+ * default) and reported with `ui.error`, the request itself succeeds.
  */
 export declare function initialValues(host: TestHost, _inner: Internals, values: Record<string, Json>): Record<string, Json>;
 export declare function seeImages(host: TestHost, _inner: Internals, values: Record<string, Json> | Json[]): void;
