@@ -391,7 +391,7 @@ export default async function activate(plugin: Plugin) {
     name: "",
   });
   /** The AI Upscaling switch as the panel shows it (set below, with the rendering state). */
-  let upscalingView = () => ({ checked: false, enabled: false, busy: false, kind: "off", detail: "" as string | Text, from: 0, to: 0, gpu: "" });
+  let upscalingView = () => ({ checked: false, enabled: false, busy: false, kind: "off", detail: "" as string | Text, tip: "" as string | Text, from: 0, to: 0, gpu: "" });
   panel.bind(() => {
     const { d3, gradual, temporal } = effects.denoise;
     return {
@@ -1670,8 +1670,12 @@ export default async function activate(plugin: Plugin) {
   // then). Under software rendering nothing is asked: it needs GPU rendering.
   let upscalingBusy = false;
   const softwareNow = () => rendering?.mode === "software";
-  /** What the status line says (`Upscaling.kind` in picture.slint) and the player's message. */
-  const upscalingStatus = (): { kind: string; detail: string | Text } => {
+  /**
+   * What the status line says (`Upscaling.kind` in picture.slint) and the player's message; with
+   * kind `plugins`, `detail` is the line (short, what to do: the narrowest adjust column shows
+   * about 36 characters) and `tip` its tooltip (why).
+   */
+  const upscalingStatus = (): { kind: string; detail: string | Text; tip?: Text } => {
     const on = look.render.upscaling;
     if (rendering?.mode === "software")
       // No GPU renderer on this system at all (Linux): not on this system; else it needs GPU rendering.
@@ -1689,17 +1693,25 @@ export default async function activate(plugin: Plugin) {
         const plugins = reason.plugins ?? [];
         // Other plugins' video filters keep the frames in memory (copy-back decoding): name them
         // (their manifest names, as the player gives them; this plugin's too when its filters are
-        // also on), so the user knows whose effects to turn off. One and several are two texts.
+        // also on), so the user knows whose effects to turn off. One and several are two texts:
+        // the line says what to do, its tooltip why.
         if (cause === "copy-back" && plugins.some((p) => p.id !== plugin.id)) {
           const names = plugin.i18n.list(plugins.map((p) => p.name));
-          const detail = plugins.length === 1
-            ? plugin.i18n.text("Waiting · {} keeps the frames in memory; turn its effects off to upscale", [names])
-            : plugin.i18n.text("Waiting · {} keep the frames in memory; turn their effects off to upscale", [names]);
-          return { kind: "plugins", detail };
+          return plugins.length === 1
+            ? {
+                kind: "plugins",
+                detail: plugin.i18n.text("Waiting · turn off {}'s effects", [names]),
+                tip: plugin.i18n.text("{} keeps the frames in memory for its effects, but upscaling needs them on the GPU. Turn its effects off to upscale.", [names]),
+              }
+            : {
+                kind: "plugins",
+                detail: plugin.i18n.text("Waiting · turn off the effects of {}", [names]),
+                tip: plugin.i18n.text("{} keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale.", [names]),
+              };
         }
         // Only this plugin's own filters do: say so.
         if (cause === "copy-back" && plugins.length > 0) return { kind: "effects", detail: message };
-        // No plugin named: the user's hwdec setting copies the frames back.
+        // No plugin named: copy-back for another reason (the player has no hardware decoding setting).
         if (cause === "copy-back") return { kind: "copy-back", detail: message };
         if (cause === "hwdec-off" || cause === "software" || cause === "other-hwdec") return { kind: cause, detail: message };
         // A cause this plugin does not know: the player's message (below).
@@ -1722,7 +1734,7 @@ export default async function activate(plugin: Plugin) {
     return plugin.i18n.text("Not available on this GPU: {}", [detail]);
   };
   upscalingView = () => {
-    const { kind, detail } = upscalingStatus();
+    const { kind, detail, tip } = upscalingStatus();
     const upscaled = kind === "upscaling" && upscaling !== null;
     return {
       checked: look.render.upscaling,
@@ -1730,6 +1742,7 @@ export default async function activate(plugin: Plugin) {
       busy: upscalingBusy,
       kind,
       detail,
+      tip: tip ?? "",
       from: upscaled ? (upscaling?.video?.displayHeight ?? 0) : 0,
       to: upscaled ? (upscaling?.area?.height ?? 0) : 0,
       gpu: upscaling?.gpu ?? "",

@@ -13,7 +13,7 @@ msgstr ""
 msgid "Picture"
 msgstr "Image"
 
-#: main.ts:232 picture.slint:1307
+#: main.ts:232 picture.slint:1312
 #, x-machine
 msgid "Shader failed to load"
 msgstr "Échec du chargement du shader"
@@ -53,17 +53,17 @@ msgstr "Format d'image : {}"
 msgid "Aspect ratio: Custom - {}"
 msgstr "Format d'image : personnalisé - {}"
 
-#: main.ts:658 main.ts:1162 picture.slint:1900
+#: main.ts:658 main.ts:1162 picture.slint:1917
 #, x-machine
 msgid "Keep Aspect Ratio"
 msgstr "Conserver le format d'image"
 
-#: main.ts:658 main.ts:1162 picture.slint:1900
+#: main.ts:658 main.ts:1162 picture.slint:1917
 #, x-machine
 msgid "Ignore Aspect Ratio"
 msgstr "Ignorer le format d'image"
 
-#: main.ts:658 picture.slint:1900
+#: main.ts:658 picture.slint:1917
 #, x-machine
 msgid "Fill Window"
 msgstr "Remplir la fenêtre"
@@ -540,12 +540,12 @@ msgstr "Pixel shaders"
 msgid "HDR Tone Mapping"
 msgstr "Mappage des tons HDR"
 
-#: main.ts:1050 picture.slint:1963
+#: main.ts:1050 picture.slint:1980
 #, x-machine
 msgid "Deinterlace"
 msgstr "Désentrelacement"
 
-#: main.ts:1051 picture.slint:1876
+#: main.ts:1051 picture.slint:1893
 #, x-machine
 msgid "Aspect"
 msgstr "Format"
@@ -580,7 +580,7 @@ msgstr "Réinitialiser"
 msgid "Use Shaders"
 msgstr "Utiliser les shaders"
 
-#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1793 ui/shaders.slint:131
+#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1806 ui/shaders.slint:131
 #, x-machine
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "Nécessite le rendu GPU (rendu logiciel actuellement)"
@@ -600,12 +600,12 @@ msgstr "Ouvrir le dossier des shaders"
 msgid "Reload Shaders"
 msgstr "Recharger les shaders"
 
-#: main.ts:1085 main.ts:1135 picture.slint:1330 picture.slint:1331
+#: main.ts:1085 main.ts:1135 picture.slint:1335 picture.slint:1336
 #, x-machine
 msgid "Auto"
 msgstr "Auto"
 
-#: main.ts:1085 picture.slint:1331 picture.slint:1847
+#: main.ts:1085 picture.slint:1336 picture.slint:1864
 #, x-machine
 msgid "Off"
 msgstr "Désactivé"
@@ -630,12 +630,12 @@ msgstr "Mobius"
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:1085 picture.slint:1331
+#: main.ts:1085 picture.slint:1336
 #, x-machine
 msgid "Clip"
 msgstr "Écrêtage"
 
-#: main.ts:1097 picture.slint:2045
+#: main.ts:1097 picture.slint:2062
 #, x-machine
 msgid "Dynamic Peak Detection"
 msgstr "Détection dynamique des pics"
@@ -650,12 +650,12 @@ msgstr "Paramètres HDR…"
 msgid "Cycle"
 msgstr "Faire défiler"
 
-#: main.ts:1135 picture.slint:1330
+#: main.ts:1135 picture.slint:1335
 #, x-machine
 msgid "Always"
 msgstr "Toujours"
 
-#: main.ts:1135 picture.slint:1330
+#: main.ts:1135 picture.slint:1335
 #, x-machine
 msgid "Never"
 msgstr "Jamais"
@@ -665,12 +665,12 @@ msgstr "Jamais"
 msgid "By Frame"
 msgstr "Par image"
 
-#: main.ts:1147 picture.slint:1981
+#: main.ts:1147 picture.slint:1998
 #, x-machine
 msgid "By Field (Double Rate)"
 msgstr "Par trame (fréquence doublée)"
 
-#: main.ts:1154 picture.slint:1980
+#: main.ts:1154 picture.slint:1997
 #, x-machine
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr "Auto produit par trame (fréquence doublée) ; ce réglage s’applique à « Toujours »"
@@ -685,12 +685,12 @@ msgstr "Remplir la fenêtre (rogner l'excédent)"
 msgid "Cycle Aspect Ratio"
 msgstr "Faire défiler les formats d'image"
 
-#: main.ts:1183 picture.slint:1315 picture.slint:1316
+#: main.ts:1183 picture.slint:1320 picture.slint:1321
 #, x-machine
 msgid "Default (Source)"
 msgstr "Par défaut (source)"
 
-#: main.ts:1230 picture.slint:1316
+#: main.ts:1230 picture.slint:1321
 #, x-machine
 msgid "Custom ({})"
 msgstr "Personnalisé ({})"
@@ -705,7 +705,7 @@ msgstr "Personnalisé (x:y)"
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "Définissez-en d'abord un via « Format d'image personnalisé… »"
 
-#: main.ts:1234 picture.slint:1893
+#: main.ts:1234 picture.slint:1910
 #, x-machine
 msgid "Custom Aspect Ratio…"
 msgstr "Format d'image personnalisé…"
@@ -820,22 +820,22 @@ msgstr "Panoramique ↑"
 msgid "Pan ↓"
 msgstr "Panoramique ↓"
 
-#: main.ts:1314 picture.slint:1809
+#: main.ts:1314 picture.slint:1826
 #, x-machine
 msgid "Center Frame"
 msgstr "Centrer l'image"
 
-#: main.ts:1339 picture.slint:1785
+#: main.ts:1339 picture.slint:1802
 #, x-machine
 msgid "Flip Vertically"
 msgstr "Retourner verticalement"
 
-#: main.ts:1350 picture.slint:1792
+#: main.ts:1350 picture.slint:1809
 #, x-machine
 msgid "Flip Horizontally"
 msgstr "Retourner horizontalement"
 
-#: main.ts:1361 picture.slint:1574 picture.slint:1655
+#: main.ts:1361 picture.slint:1591 picture.slint:1672
 #, x-machine
 msgid "Gaussian Blur"
 msgstr "Flou gaussien"
@@ -850,7 +850,7 @@ msgstr "Flou gaussien : activé"
 msgid "Gaussian blur: off"
 msgstr "Flou gaussien : désactivé"
 
-#: main.ts:1387 picture.slint:1555 picture.slint:1556 picture.slint:1634 picture.slint:1635
+#: main.ts:1387 picture.slint:1572 picture.slint:1573 picture.slint:1651 picture.slint:1652
 #, x-machine
 msgid "Sharpen"
 msgstr "Netteté"
@@ -860,27 +860,27 @@ msgstr "Netteté"
 msgid "Edge Sharpen"
 msgstr "Netteté des contours"
 
-#: main.ts:1387 picture.slint:1582 picture.slint:1583 picture.slint:1665
+#: main.ts:1387 picture.slint:1599 picture.slint:1600 picture.slint:1682
 #, x-machine
 msgid "Deblock"
 msgstr "Dégroupage"
 
-#: main.ts:1387 picture.slint:1591 picture.slint:1592 picture.slint:1675 picture.slint:1676
+#: main.ts:1387 picture.slint:1608 picture.slint:1609 picture.slint:1692 picture.slint:1693
 #, x-machine
 msgid "Deband"
 msgstr "Suppression des bandes"
 
-#: main.ts:1387 picture.slint:1721
+#: main.ts:1387 picture.slint:1738
 #, x-machine
 msgid "3D Denoise"
 msgstr "Débruitage 3D"
 
-#: main.ts:1387 picture.slint:1732
+#: main.ts:1387 picture.slint:1749
 #, x-machine
 msgid "Gradual Denoise"
 msgstr "Débruitage progressif"
 
-#: main.ts:1387 picture.slint:1743
+#: main.ts:1387 picture.slint:1760
 #, x-machine
 msgid "Temporal Denoise"
 msgstr "Débruitage temporel"
@@ -981,7 +981,7 @@ msgstr "Rendu GPU (redémarrer pour appliquer)"
 msgid "GPU Rendering (Experimental)"
 msgstr "Rendu GPU (expérimental)"
 
-#: main.ts:1538 main.ts:1793 picture.slint:1338 picture.slint:1348 picture.slint:1420
+#: main.ts:1538 main.ts:1806 picture.slint:1343 picture.slint:1353 picture.slint:1437
 #, x-machine
 msgid "Switching…"
 msgstr "Changement en cours…"
@@ -1056,42 +1056,52 @@ msgstr "Rendu GPU : désactivé (au prochain démarrage)"
 msgid "Could not restart the player: {}"
 msgstr "Impossible de redémarrer le lecteur : {}"
 
-#: main.ts:1696
+#: main.ts:1703
 #, x-machine
-msgid "Waiting · {} keeps the frames in memory; turn its effects off to upscale"
-msgstr "En attente · {} garde les images en mémoire ; désactivez ses effets pour la mise à l'échelle"
+msgid "Waiting · turn off {}'s effects"
+msgstr "En attente · désactivez les effets de {}"
 
-#: main.ts:1697
+#: main.ts:1704
 #, x-machine
-msgid "Waiting · {} keep the frames in memory; turn their effects off to upscale"
-msgstr "En attente · {} gardent les images en mémoire ; désactivez leurs effets pour la mise à l'échelle"
+msgid "{} keeps the frames in memory for its effects, but upscaling needs them on the GPU. Turn its effects off to upscale."
+msgstr "{} garde les images en mémoire pour ses effets, mais la mise à l'échelle les veut sur le GPU. Désactivez ses effets pour la mise à l'échelle."
 
-#: main.ts:1722
+#: main.ts:1708
+#, x-machine
+msgid "Waiting · turn off the effects of {}"
+msgstr "En attente · désactivez les effets de {}"
+
+#: main.ts:1709
+#, x-machine
+msgid "{} keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale."
+msgstr "{} gardent les images en mémoire pour leurs effets, mais la mise à l'échelle les veut sur le GPU. Désactivez leurs effets pour la mise à l'échelle."
+
+#: main.ts:1734
 #, x-machine
 msgid "Not available on this GPU: {}"
 msgstr "Indisponible sur ce GPU : {}"
 
-#: main.ts:1762
+#: main.ts:1775
 #, x-machine
 msgid "AI upscaling unavailable: {}"
 msgstr "Mise à l'échelle IA indisponible : {}"
 
-#: main.ts:1768
+#: main.ts:1781
 #, x-machine
 msgid "AI upscaling: on (Super Resolution must also be on in the NVIDIA app)"
 msgstr "Mise à l'échelle IA : activée (Super Resolution doit aussi être activé dans l'application NVIDIA)"
 
-#: main.ts:1773
+#: main.ts:1786
 #, x-machine
 msgid "AI upscaling: off"
 msgstr "Mise à l'échelle IA : désactivée"
 
-#: main.ts:1786 picture.slint:1468
+#: main.ts:1799 picture.slint:1485
 #, x-machine
 msgid "AI Upscaling"
 msgstr "Mise à l'échelle IA"
 
-#: main.ts:1793 picture.slint:1365
+#: main.ts:1806 picture.slint:1373
 #, x-machine
 msgid "Not available on this system (Windows with an NVIDIA RTX GPU)"
 msgstr "Indisponible sur ce système (Windows avec un GPU NVIDIA RTX)"
@@ -1135,92 +1145,92 @@ msgstr "couleur"
 msgid "filters"
 msgstr "filtres"
 
-#: picture.slint:600 picture.slint:750 picture.slint:787 picture.slint:2015
+#: picture.slint:605 picture.slint:755 picture.slint:792 picture.slint:2032
 #, x-machine
 msgid "· double-click: Default"
 msgstr "· double-clic : défaut"
 
-#: picture.slint:665
+#: picture.slint:670
 #, x-machine
 msgid "· click: on or off"
 msgstr "· clic : activer / désactiver"
 
-#: picture.slint:1199
+#: picture.slint:1204
 #, x-machine
 msgid "Pick a ratio below"
 msgstr "Choisissez un rapport ci-dessous"
 
-#: picture.slint:1199
+#: picture.slint:1204
 #, x-machine
 msgid "Screen"
 msgstr "Écran"
 
-#: picture.slint:1303
+#: picture.slint:1308
 #, x-machine
 msgid "Needs GPU rendering: turn it on under Rendering, then restart"
 msgstr "Nécessite le rendu GPU : activez-le sous Rendu, puis redémarrez"
 
-#: picture.slint:1304
+#: picture.slint:1309
 #, x-machine
 msgid "No picture in the current source"
 msgstr "Aucune image dans la source actuelle"
 
-#: picture.slint:1305
+#: picture.slint:1310
 #, x-machine
 msgid "Picture processing failed"
 msgstr "Échec du traitement de l'image"
 
-#: picture.slint:1306
+#: picture.slint:1311
 #, x-machine
 msgid "Display unavailable"
 msgstr "Affichage indisponible"
 
-#: picture.slint:1308
+#: picture.slint:1313
 #, x-machine
 msgid "Render options unavailable"
 msgstr "Options de rendu indisponibles"
 
-#: picture.slint:1309
+#: picture.slint:1314
 #, x-machine
 msgid "Render settings failed"
 msgstr "Échec de l'application des paramètres de rendu"
 
-#: picture.slint:1312
+#: picture.slint:1317
 #, x-machine
 msgid "Another plugin controls the display"
 msgstr "Un autre plugin contrôle l'affichage"
 
-#: picture.slint:1313
+#: picture.slint:1318
 #, x-machine
 msgid "Another plugin controls the render options"
 msgstr "Un autre plugin contrôle les options de rendu"
 
-#: picture.slint:1320 picture.slint:1604 picture.slint:1720
+#: picture.slint:1325 picture.slint:1621 picture.slint:1737
 #, x-machine
 msgid "3D"
 msgstr "3D"
 
-#: picture.slint:1322 picture.slint:1731
+#: picture.slint:1327 picture.slint:1748
 #, x-machine
 msgid "Gradual"
 msgstr "Progressif"
 
-#: picture.slint:1324 picture.slint:1604 picture.slint:1742
+#: picture.slint:1329 picture.slint:1621 picture.slint:1759
 #, x-machine
 msgid "Temporal"
 msgstr "Temporel"
 
-#: picture.slint:1328
+#: picture.slint:1333
 #, x-machine
 msgid "{} with bars"
 msgstr "{} avec bandes"
 
-#: picture.slint:1332
+#: picture.slint:1337
 #, x-machine
 msgid "Advanced"
 msgstr "Avancé"
 
-#: picture.slint:1333
+#: picture.slint:1338
 #, x-machine
 msgid "{n} shader"
 msgid_plural "{n} shaders"
@@ -1228,425 +1238,450 @@ msgstr[0] "{n} shader"
 msgstr[1] "{n} shaders"
 
 #. the closed Advanced row's summary: {0} the deinterlace mode, {1} the HDR tone mapping, {2} "3 shaders".
-#: picture.slint:1335
+#: picture.slint:1340
 #, x-machine
 msgid "Deinterlace {0} · HDR {1} · {2}"
 msgstr "Désentrelacement {0} · HDR {1} · {2}"
 
-#: picture.slint:1339
+#: picture.slint:1344
 #, x-machine
 msgid "Restart to apply · GPU from the next start"
 msgstr "Redémarrez pour appliquer · GPU dès le prochain démarrage"
 
-#: picture.slint:1340
+#: picture.slint:1345
 #, x-machine
 msgid "Restart to apply · software rendering from the next start"
 msgstr "Redémarrez pour appliquer · rendu logiciel dès le prochain démarrage"
 
-#: picture.slint:1341
+#: picture.slint:1346
 #, x-machine
 msgid "On the GPU · {}"
 msgstr "Sur le GPU · {}"
 
-#: picture.slint:1341
+#: picture.slint:1346
 #, x-machine
 msgid "On the GPU"
 msgstr "Sur le GPU"
 
-#: picture.slint:1342
+#: picture.slint:1347
 #, x-machine
 msgid "Software rendering · {}"
 msgstr "Rendu logiciel · {}"
 
-#: picture.slint:1343
+#: picture.slint:1348
 #, x-machine
 msgid "Software rendering · turn on, then restart"
 msgstr "Rendu logiciel · activez, puis redémarrez"
 
 #. {0} and {1} are the video's height and the shown height in pixels (1080, 2160), {2} the GPU's name.
-#: picture.slint:1352
+#: picture.slint:1357
 #, x-machine
 msgid "Upscaling {0}p → {1}p on {2}"
 msgstr "Mise à l'échelle {0}p → {1}p sur {2}"
 
-#: picture.slint:1353
+#: picture.slint:1358
 #, x-machine
 msgid "Upscaling {0}p → {1}p"
 msgstr "Mise à l'échelle {0}p → {1}p"
 
-#: picture.slint:1354
+#: picture.slint:1359
 #, x-machine
 msgid "Upscaling on the GPU"
 msgstr "Mise à l'échelle sur le GPU"
 
-#: picture.slint:1355
+#: picture.slint:1360
 #, x-machine
 msgid "On · upscales video shown larger than its size"
 msgstr "Activé · met à l'échelle les vidéos affichées plus grandes que leur taille"
 
-#: picture.slint:1356
+#: picture.slint:1361
 #, x-machine
 msgid "On · this video is not shown larger than its size"
 msgstr "Activé · cette vidéo n'est pas affichée plus grande que sa taille"
 
-#: picture.slint:1357
+#: picture.slint:1365
 #, x-machine
-msgid "Waiting · the picture effects need the frames in memory"
-msgstr "En attente · les effets d'image ont besoin des images en mémoire"
+msgid "Waiting · reset picture adjustments"
+msgstr "En attente · réinitialisez les réglages de l'image"
 
-#: picture.slint:1359
+#: picture.slint:1367
 #, x-machine
-msgid "Waiting · the hardware decoding setting copies the frames to memory"
-msgstr "En attente · le réglage du décodage matériel copie les images en mémoire"
+msgid "Waiting · frames copied to memory"
+msgstr "En attente · images copiées en mémoire"
 
-#: picture.slint:1360
+#: picture.slint:1368
 #, x-machine
 msgid "Waiting · hardware decoding is off"
 msgstr "En attente · le décodage matériel est désactivé"
 
-#: picture.slint:1361
+#: picture.slint:1369
 #, x-machine
-msgid "Waiting · this video is decoded in software"
-msgstr "En attente · cette vidéo est décodée par logiciel"
+msgid "Waiting · video decoded in software"
+msgstr "En attente · vidéo décodée par logiciel"
 
-#: picture.slint:1362
+#: picture.slint:1370
 #, x-machine
-msgid "Waiting · this video uses another hardware decoder"
-msgstr "En attente · cette vidéo utilise un autre décodeur matériel"
+msgid "Waiting · another hardware decoder"
+msgstr "En attente · autre décodeur matériel"
 
-#: picture.slint:1363
+#: picture.slint:1371
 #, x-machine
 msgid "Waiting · {}"
 msgstr "En attente · {}"
 
-#: picture.slint:1364
+#: picture.slint:1372
 #, x-machine
 msgid "Needs GPU rendering (software rendering now)"
 msgstr "Nécessite le rendu GPU (rendu logiciel actuellement)"
 
-#: picture.slint:1366
+#: picture.slint:1374
 #, x-machine
 msgid "Not available on this GPU · {}"
 msgstr "Indisponible sur ce GPU · {}"
 
-#: picture.slint:1368
+#: picture.slint:1376
 #, x-machine
 msgid "Off · sharpens video shown larger than its size"
 msgstr "Désactivé · rend plus nettes les vidéos affichées plus grandes que leur taille"
 
-#: picture.slint:1407
+#: picture.slint:1379
+#, x-machine
+msgid "Colour, Effects or Geometry (flip, rotation, crop/stretch) away from their defaults, or Deinterlace Always, need the frames in memory, but upscaling needs them on the GPU. Reset them to upscale."
+msgstr "Couleur, Effets ou Géométrie (retournement, rotation, recadrage/étirement) hors de leurs valeurs par défaut, ou Désentrelacement Toujours, ont besoin des images en mémoire, mais la mise à l'échelle les veut sur le GPU. Réinitialisez-les pour la mise à l'échelle."
+
+#: picture.slint:1381
+#, x-machine
+msgid "The video is decoded on the GPU, but its frames are copied to memory, and upscaling needs them on the GPU."
+msgstr "La vidéo est décodée sur le GPU, mais ses images sont copiées en mémoire, et la mise à l'échelle les veut sur le GPU."
+
+#: picture.slint:1382
+#, x-machine
+msgid "Hardware decoding is off, and upscaling needs the video decoded on the GPU."
+msgstr "Le décodage matériel est désactivé, et la mise à l'échelle demande une vidéo décodée sur le GPU."
+
+#: picture.slint:1383
+#, x-machine
+msgid "This video is decoded in software (for example a format the GPU does not decode), but upscaling needs it decoded on the GPU. Videos the GPU decodes are upscaled."
+msgstr "Cette vidéo est décodée par logiciel (par exemple un format que le GPU ne décode pas), mais la mise à l'échelle demande une vidéo décodée sur le GPU. Les vidéos que le GPU décode sont mises à l'échelle."
+
+#: picture.slint:1384
+#, x-machine
+msgid "This video is decoded with another hardware decoder, and upscaling needs it decoded on the GPU that renders it."
+msgstr "Cette vidéo est décodée par un autre décodeur matériel, et la mise à l'échelle demande qu'elle soit décodée sur le GPU qui l'affiche."
+
+#: picture.slint:1424
 #, x-machine
 msgid "Rendering"
 msgstr "Rendu"
 
-#: picture.slint:1422
+#: picture.slint:1439
 #, x-machine
 msgid "Restart Vestra Player to apply"
 msgstr "Redémarrez Vestra Player pour l'appliquer"
 
-#: picture.slint:1423
+#: picture.slint:1440
 #, x-machine
 msgid "Draw the video on the GPU from the next start"
 msgstr "Dessiner la vidéo sur le GPU dès le prochain démarrage"
 
-#: picture.slint:1428
+#: picture.slint:1445
 #, x-machine
 msgid "GPU Rendering"
 msgstr "Rendu GPU"
 
-#: picture.slint:1435
+#: picture.slint:1452
 #, x-machine
 msgid "Experimental"
 msgstr "Expérimental"
 
-#: picture.slint:1436
+#: picture.slint:1453
 #, x-machine
 msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
 msgstr "Expérimental — le rendu GPU est nouveau. Si l'image se dégrade, désactivez-le ici et redémarrez ; après un plantage du GPU, le lecteur revient de lui-même au rendu logiciel."
 
-#: picture.slint:1444
+#: picture.slint:1461
 #, x-machine
 msgid "Restart"
 msgstr "Redémarrer"
 
-#: picture.slint:1464
+#: picture.slint:1481
 #, x-machine
 msgid "NVIDIA RTX Video Super Resolution: sharpens video shown larger than its size. Needs GPU rendering on an NVIDIA RTX GPU, and Super Resolution turned on in the NVIDIA app (System ▸ Video ▸ RTX Video Enhancement)."
 msgstr "NVIDIA RTX Video Super Resolution : rend plus nettes les vidéos affichées plus grandes que leur taille. Nécessite le rendu GPU sur un GPU NVIDIA RTX et Super Resolution activé dans l'application NVIDIA (Système ▸ Vidéo ▸ RTX Video Enhancement)."
 
-#: picture.slint:1477
+#: picture.slint:1494
 #, x-machine
 msgid "NVIDIA RTX Video Super Resolution"
 msgstr "NVIDIA RTX Video Super Resolution"
 
-#: picture.slint:1488
+#: picture.slint:1505
 #, x-machine
 msgid "Colour"
 msgstr "Couleur"
 
-#: picture.slint:1492
+#: picture.slint:1509
 #, x-machine
 msgid "Original"
 msgstr "Original"
 
-#: picture.slint:1493
+#: picture.slint:1510
 #, x-machine
 msgid "Vivid"
 msgstr "Vif"
 
-#: picture.slint:1494
+#: picture.slint:1511
 #, x-machine
 msgid "Cinema"
 msgstr "Cinéma"
 
-#: picture.slint:1495
+#: picture.slint:1512
 #, x-machine
 msgid "Soft"
 msgstr "Doux"
 
-#: picture.slint:1501
+#: picture.slint:1518
 #, x-machine
 msgid "Brightness"
 msgstr "Luminosité"
 
-#: picture.slint:1510
+#: picture.slint:1527
 #, x-machine
 msgid "Contrast"
 msgstr "Contraste"
 
-#: picture.slint:1519
+#: picture.slint:1536
 #, x-machine
 msgid "Saturation"
 msgstr "Saturation"
 
-#: picture.slint:1528
+#: picture.slint:1545
 #, x-machine
 msgid "Hue"
 msgstr "Teinte"
 
-#: picture.slint:1537
+#: picture.slint:1554
 #, x-machine
 msgid "Gamma"
 msgstr "Gamma"
 
-#: picture.slint:1549
+#: picture.slint:1566
 #, x-machine
 msgid "Effects"
 msgstr "Effets"
 
-#: picture.slint:1564 picture.slint:1644
+#: picture.slint:1581 picture.slint:1661
 #, x-machine
 msgid "Edges"
 msgstr "Contours"
 
-#: picture.slint:1565 picture.slint:1645
+#: picture.slint:1582 picture.slint:1662
 #, x-machine
 msgid "Wide-radius sharpening that mainly strengthens outlines"
 msgstr "Renforcement de netteté à grand rayon qui accentue surtout les contours"
 
-#: picture.slint:1573 picture.slint:1654
+#: picture.slint:1590 picture.slint:1671
 #, x-machine
 msgid "Blur"
 msgstr "Flou"
 
-#: picture.slint:1602 picture.slint:1704
+#: picture.slint:1619 picture.slint:1721
 #, x-machine
 msgid "Denoise"
 msgstr "Débruitage"
 
-#: picture.slint:1603
+#: picture.slint:1620
 #, x-machine
 msgid "Denoise: turns the denoisers on or off"
 msgstr "Débruitage : active ou désactive les débruiteurs"
 
-#: picture.slint:1611
+#: picture.slint:1628
 #, x-machine
 msgid "Doubling"
 msgstr "Doubler"
 
-#: picture.slint:1612
+#: picture.slint:1629
 #, x-machine
 msgid "Rate already high enough"
 msgstr "Fréquence déjà suffisante"
 
-#: picture.slint:1613
+#: picture.slint:1630
 #, x-machine
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr "Double la fréquence d'images (jusqu'à 60), en créant chaque image intermédiaire par fusion de ses voisines"
 
-#: picture.slint:1621
+#: picture.slint:1638
 #, x-machine
 msgid "Interpolate"
 msgstr "Interpoler"
 
-#: picture.slint:1622
+#: picture.slint:1639
 #, x-machine
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr "Interpolation GPU à la fréquence de rafraîchissement de l'écran ; exclut le doublement d'images"
 
-#: picture.slint:1666
+#: picture.slint:1683
 #, x-machine
 msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
 msgstr "Faible en dessous de 50, fort à partir de 50 ; surtout visible sur les MPEG-2/MPEG-4 à faible débit"
 
-#: picture.slint:1759
+#: picture.slint:1776
 #, x-machine
 msgid "Geometry"
 msgstr "Géométrie"
 
-#: picture.slint:1765
+#: picture.slint:1782
 #, x-machine
 msgid "Rotate Left"
 msgstr "Pivoter à gauche"
 
-#: picture.slint:1770
+#: picture.slint:1787
 #, x-machine
 msgid "Rotate Right"
 msgstr "Pivoter à droite"
 
-#: picture.slint:1800
+#: picture.slint:1817
 #, x-machine
 msgid "Leave Crop Mode"
 msgstr "Quitter le mode recadrage"
 
-#: picture.slint:1800
+#: picture.slint:1817
 #, x-machine
 msgid "Crop: pick a ratio, then drag the box"
 msgstr "Recadrer : choisissez un rapport, puis faites glisser le cadre"
 
-#: picture.slint:1810
+#: picture.slint:1827
 #, x-machine
 msgid "Reset Framing"
 msgstr "Réinitialiser le cadrage"
 
-#: picture.slint:1818
+#: picture.slint:1835
 #, x-machine
 msgid "Zoom {}%"
 msgstr "Zoom {} %"
 
 #. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
-#: picture.slint:1823
+#: picture.slint:1840
 #, x-machine
 msgid "Offset {0}, {1}"
 msgstr "Décalage {0}, {1}"
 
-#: picture.slint:1825
+#: picture.slint:1842
 #, x-machine
 msgid "Crop {}"
 msgstr "Recadrage {}"
 
 #. the crop box's position in percent, across and down (50 = centred).
-#: picture.slint:1830
+#: picture.slint:1847
 #, x-machine
 msgid "at {0}%, {1}%"
 msgstr "à {0} %, {1} %"
 
-#: picture.slint:1841
+#: picture.slint:1858
 #, x-machine
 msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
 msgstr "Recadrer à un rapport ; faites glisser le cadre dans l’éditeur pour choisir la partie gardée"
 
-#: picture.slint:1859
+#: picture.slint:1876
 #, x-machine
 msgid "Stretch to the ratio: add bars instead of cutting the picture"
 msgstr "Étirer au rapport : ajouter des bandes au lieu de couper l’image"
 
-#: picture.slint:1863
+#: picture.slint:1880
 #, x-machine
 msgid "Add bars instead of cutting"
 msgstr "Bandes au lieu de couper"
 
-#: picture.slint:1877
+#: picture.slint:1894
 #, x-machine
 msgid "Aspect ratio"
 msgstr "Format d'image"
 
-#: picture.slint:1899
+#: picture.slint:1916
 #, x-machine
 msgid "Fit"
 msgstr "Ajustement"
 
-#: picture.slint:1904
+#: picture.slint:1921
 #, x-machine
 msgid "Keep"
 msgstr "Conserver"
 
-#: picture.slint:1905
+#: picture.slint:1922
 #, x-machine
 msgid "Stretch"
 msgstr "Étirer"
 
-#: picture.slint:1906
+#: picture.slint:1923
 #, x-machine
 msgid "Fill"
 msgstr "Remplir"
 
-#: picture.slint:1985
+#: picture.slint:2002
 #, x-machine
 msgid "Double rate"
 msgstr "Fréquence doublée"
 
-#: picture.slint:1993
+#: picture.slint:2010
 #, x-machine
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:1995
+#: picture.slint:2012
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr "Mappage des tons des sources HDR (PQ / HLG) sur les écrans SDR · Source non HDR"
 
-#: picture.slint:1996
+#: picture.slint:2013
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr "Mappage des tons des sources HDR (PQ / HLG) sur les écrans SDR"
 
-#: picture.slint:2014
+#: picture.slint:2031
 #, x-machine
 msgid "Target brightness"
 msgstr "Luminosité cible"
 
-#: picture.slint:2031
+#: picture.slint:2048
 #, x-machine
 msgid "{} nits"
 msgstr "{} nits"
 
-#: picture.slint:2049
+#: picture.slint:2066
 #, x-machine
 msgid "Peak detection"
 msgstr "Détection des pics"
 
-#: picture.slint:2058
+#: picture.slint:2075
 #, x-machine
 msgid "Shaders"
 msgstr "Shaders"
 
-#: picture.slint:2059
+#: picture.slint:2076
 #, x-machine
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr "Shaders utilisateur mpv (.glsl), exécutés dans l'ordre de la liste"
 
-#: picture.slint:2070
+#: picture.slint:2087
 #, x-machine
 msgid "List…"
 msgstr "Liste…"
 
-#: picture.slint:2100
+#: picture.slint:2117
 #, x-machine
 msgid "Retry"
 msgstr "Réessayer"
 
-#: picture.slint:2116 picture.slint:2120
+#: picture.slint:2133 picture.slint:2137
 #, x-machine
 msgid "Enable picture effects"
 msgstr "Activer les effets d'image"
 
-#: picture.slint:2129
+#: picture.slint:2146
 #, x-machine
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr "Couleur, effets et géométrie par défaut ; les réglages avancés restent"
 
-#: picture.slint:2134
+#: picture.slint:2151
 #, x-machine
 msgid "Reset All"
 msgstr "Tout réinitialiser"
@@ -1730,3 +1765,19 @@ msgstr "« Utiliser les shaders » est désactivé"
 #, x-machine
 msgid "Open Folder"
 msgstr "Ouvrir le dossier"
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
