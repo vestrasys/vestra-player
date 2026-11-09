@@ -87,6 +87,8 @@ export struct Upscaling {
     busy: bool,
     kind: string,
     detail: string,
+    // With kind "plugins": the status line's tooltip (`detail` is the line).
+    tip: string,
     from: int,
     to: int,
     gpu: string,
@@ -326,16 +328,18 @@ component Badge {
 }
 
 // The status line under a Rendering switch: a dot (filled green: on; filled amber: waiting for a
-// restart; hollow: off or not available) and one line of text, elided, the whole text in the tip.
+// restart; hollow: off or not available) and one line of text, elided, the whole text in the tip
+// (or `tip`, where the line is short and the tooltip says why).
 component StatusLine {
     in property <string> text;
+    in property <string> tip: root.text;
     // "on", "pending" or "off".
     in property <string> tone;
     height: Layout.status;
     ToolTipArea {
         width: 100%;
         height: 100%;
-        text: root.text;
+        text: root.tip;
         HorizontalLayout {
             width: 100%;
             height: 100%;
@@ -1354,18 +1358,29 @@ export component Picture inherits Rectangle {
             : @tr("Upscaling on the GPU"))
         : root.up-kind == "on" ? @tr("On · upscales video shown larger than its size")
         : root.up-kind == "idle" ? @tr("On · this video is not shown larger than its size")
-        : root.up-kind == "effects" ? @tr("Waiting · the picture effects need the frames in memory")
+        // Waiting: the line says what to do (the narrowest adjust column shows about 36
+        // characters), its tooltip why (`up-tip`).
+        : root.up-kind == "effects" ? @tr("Waiting · turn off picture effects")
         : root.up-kind == "plugins" ? PictureBridge.upscaling.detail
-        : root.up-kind == "copy-back" ? @tr("Waiting · the hardware decoding setting copies the frames to memory")
-        : root.up-kind == "hwdec-off" ? @tr("Waiting · hardware decoding is off")
-        : root.up-kind == "software" ? @tr("Waiting · this video is decoded in software")
-        : root.up-kind == "other-hwdec" ? @tr("Waiting · this video uses another hardware decoder")
+        : root.up-kind == "copy-back" ? @tr("Waiting · turn off copy-back decoding")
+        : root.up-kind == "hwdec-off" ? @tr("Waiting · turn on hardware decoding")
+        : root.up-kind == "software" ? @tr("Waiting · video decoded in software")
+        : root.up-kind == "other-hwdec" ? @tr("Waiting · change the hardware decoder")
         : root.up-kind == "waiting" ? @tr("Waiting · {}", PictureBridge.upscaling.detail)
         : root.up-kind == "rendering" ? @tr("Needs GPU rendering (software rendering now)")
         : root.up-kind == "platform" ? @tr("Not available on this system (Windows with an NVIDIA RTX GPU)")
         : root.up-kind == "gpu" ? @tr("Not available on this GPU · {}", PictureBridge.upscaling.detail)
         : root.up-kind == "other" ? PictureBridge.upscaling.detail
         : @tr("Off · sharpens video shown larger than its size");
+    // Its tooltip: why it waits, where the line only says what to do; else the line itself.
+    private property <string> up-tip: PictureBridge.upscaling.busy ? root.up-status
+        : root.up-kind == "effects" ? @tr("The picture effects need the frames in memory, but upscaling needs them on the GPU. Turn the effects off to upscale.")
+        : root.up-kind == "plugins" ? PictureBridge.upscaling.tip
+        : root.up-kind == "copy-back" ? @tr("The hardware decoding setting copies the frames to memory, but upscaling needs them on the GPU. Choose a hardware decoding mode without copy-back to upscale.")
+        : root.up-kind == "hwdec-off" ? @tr("Hardware decoding is off, but upscaling needs the video decoded on the GPU. Turn hardware decoding on to upscale.")
+        : root.up-kind == "software" ? @tr("This video is decoded in software (for example a format the GPU does not decode), but upscaling needs it decoded on the GPU. Videos the GPU decodes are upscaled.")
+        : root.up-kind == "other-hwdec" ? @tr("This video is decoded with another hardware decoder, but upscaling needs it decoded on the GPU that renders it. Choose that GPU's decoder to upscale.")
+        : root.up-status;
     private property <string> up-tone: root.up-kind == "upscaling" ? "on"
         : root.up-kind == "effects" || root.up-kind == "plugins" || root.up-kind == "copy-back"
             || root.up-kind == "hwdec-off" || root.up-kind == "software" || root.up-kind == "other-hwdec"
@@ -1479,7 +1494,7 @@ export component Picture inherits Rectangle {
                         }
                         Rectangle { horizontal-stretch: 1; }
                     }
-                    StatusLine { text: root.up-status; tone: root.up-tone; }
+                    StatusLine { text: root.up-status; tip: root.up-tip; tone: root.up-tone; }
                 }
 
                 // ---------------------------------------------------------------- Colour

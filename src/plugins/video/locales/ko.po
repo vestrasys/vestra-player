@@ -11,7 +11,7 @@ msgstr ""
 msgid "Picture"
 msgstr "화면"
 
-#: main.ts:232 picture.slint:1307
+#: main.ts:232 picture.slint:1311
 #, x-machine
 msgid "Shader failed to load"
 msgstr "셰이더를 불러오지 못했습니다"
@@ -51,17 +51,17 @@ msgstr "화면비: {}"
 msgid "Aspect ratio: Custom - {}"
 msgstr "화면비: 사용자 지정 - {}"
 
-#: main.ts:658 main.ts:1162 picture.slint:1900
+#: main.ts:658 main.ts:1162 picture.slint:1915
 #, x-machine
 msgid "Keep Aspect Ratio"
 msgstr "화면비 유지"
 
-#: main.ts:658 main.ts:1162 picture.slint:1900
+#: main.ts:658 main.ts:1162 picture.slint:1915
 #, x-machine
 msgid "Ignore Aspect Ratio"
 msgstr "화면비 무시"
 
-#: main.ts:658 picture.slint:1900
+#: main.ts:658 picture.slint:1915
 #, x-machine
 msgid "Fill Window"
 msgstr "창 채우기"
@@ -538,12 +538,12 @@ msgstr "픽셀 셰이더"
 msgid "HDR Tone Mapping"
 msgstr "HDR 톤 매핑"
 
-#: main.ts:1050 picture.slint:1963
+#: main.ts:1050 picture.slint:1978
 #, x-machine
 msgid "Deinterlace"
 msgstr "디인터레이스"
 
-#: main.ts:1051 picture.slint:1876
+#: main.ts:1051 picture.slint:1891
 #, x-machine
 msgid "Aspect"
 msgstr "화면비"
@@ -578,7 +578,7 @@ msgstr "재설정"
 msgid "Use Shaders"
 msgstr "셰이더 사용"
 
-#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1793 ui/shaders.slint:131
+#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1806 ui/shaders.slint:131
 #, x-machine
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "GPU 렌더링이 필요합니다 (현재 소프트웨어 렌더링)"
@@ -598,12 +598,12 @@ msgstr "셰이더 폴더 열기"
 msgid "Reload Shaders"
 msgstr "셰이더 다시 불러오기"
 
-#: main.ts:1085 main.ts:1135 picture.slint:1330 picture.slint:1331
+#: main.ts:1085 main.ts:1135 picture.slint:1334 picture.slint:1335
 #, x-machine
 msgid "Auto"
 msgstr "자동"
 
-#: main.ts:1085 picture.slint:1331 picture.slint:1847
+#: main.ts:1085 picture.slint:1335 picture.slint:1862
 #, x-machine
 msgid "Off"
 msgstr "끔"
@@ -628,12 +628,12 @@ msgstr "Mobius"
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:1085 picture.slint:1331
+#: main.ts:1085 picture.slint:1335
 #, x-machine
 msgid "Clip"
 msgstr "클립"
 
-#: main.ts:1097 picture.slint:2045
+#: main.ts:1097 picture.slint:2060
 #, x-machine
 msgid "Dynamic Peak Detection"
 msgstr "동적 피크 감지"
@@ -648,12 +648,12 @@ msgstr "HDR 설정…"
 msgid "Cycle"
 msgstr "순환"
 
-#: main.ts:1135 picture.slint:1330
+#: main.ts:1135 picture.slint:1334
 #, x-machine
 msgid "Always"
 msgstr "항상"
 
-#: main.ts:1135 picture.slint:1330
+#: main.ts:1135 picture.slint:1334
 #, x-machine
 msgid "Never"
 msgstr "사용 안 함"
@@ -663,12 +663,12 @@ msgstr "사용 안 함"
 msgid "By Frame"
 msgstr "프레임 단위"
 
-#: main.ts:1147 picture.slint:1981
+#: main.ts:1147 picture.slint:1996
 #, x-machine
 msgid "By Field (Double Rate)"
 msgstr "필드 단위 (2배 프레임 속도)"
 
-#: main.ts:1154 picture.slint:1980
+#: main.ts:1154 picture.slint:1995
 #, x-machine
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr "자동은 필드 단위(2배 프레임 속도)로 출력합니다. 이 설정은 '항상'에 적용됩니다"
@@ -683,12 +683,12 @@ msgstr "창 채우기 (넘치는 부분 자르기)"
 msgid "Cycle Aspect Ratio"
 msgstr "화면비 순환"
 
-#: main.ts:1183 picture.slint:1315 picture.slint:1316
+#: main.ts:1183 picture.slint:1319 picture.slint:1320
 #, x-machine
 msgid "Default (Source)"
 msgstr "기본값 (소스)"
 
-#: main.ts:1230 picture.slint:1316
+#: main.ts:1230 picture.slint:1320
 #, x-machine
 msgid "Custom ({})"
 msgstr "사용자 지정 ({})"
@@ -703,7 +703,7 @@ msgstr "사용자 지정 (x:y)"
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "먼저 ‘사용자 지정 화면비…’에서 입력하세요"
 
-#: main.ts:1234 picture.slint:1893
+#: main.ts:1234 picture.slint:1908
 #, x-machine
 msgid "Custom Aspect Ratio…"
 msgstr "사용자 지정 화면비…"
@@ -818,22 +818,22 @@ msgstr "이동 ↑"
 msgid "Pan ↓"
 msgstr "이동 ↓"
 
-#: main.ts:1314 picture.slint:1809
+#: main.ts:1314 picture.slint:1824
 #, x-machine
 msgid "Center Frame"
 msgstr "화면 가운데로"
 
-#: main.ts:1339 picture.slint:1785
+#: main.ts:1339 picture.slint:1800
 #, x-machine
 msgid "Flip Vertically"
 msgstr "상하 반전"
 
-#: main.ts:1350 picture.slint:1792
+#: main.ts:1350 picture.slint:1807
 #, x-machine
 msgid "Flip Horizontally"
 msgstr "좌우 반전"
 
-#: main.ts:1361 picture.slint:1574 picture.slint:1655
+#: main.ts:1361 picture.slint:1589 picture.slint:1670
 #, x-machine
 msgid "Gaussian Blur"
 msgstr "가우시안 블러"
@@ -848,7 +848,7 @@ msgstr "가우시안 블러: 켬"
 msgid "Gaussian blur: off"
 msgstr "가우시안 블러: 끔"
 
-#: main.ts:1387 picture.slint:1555 picture.slint:1556 picture.slint:1634 picture.slint:1635
+#: main.ts:1387 picture.slint:1570 picture.slint:1571 picture.slint:1649 picture.slint:1650
 #, x-machine
 msgid "Sharpen"
 msgstr "선명하게"
@@ -858,27 +858,27 @@ msgstr "선명하게"
 msgid "Edge Sharpen"
 msgstr "가장자리 선명하게"
 
-#: main.ts:1387 picture.slint:1582 picture.slint:1583 picture.slint:1665
+#: main.ts:1387 picture.slint:1597 picture.slint:1598 picture.slint:1680
 #, x-machine
 msgid "Deblock"
 msgstr "디블록"
 
-#: main.ts:1387 picture.slint:1591 picture.slint:1592 picture.slint:1675 picture.slint:1676
+#: main.ts:1387 picture.slint:1606 picture.slint:1607 picture.slint:1690 picture.slint:1691
 #, x-machine
 msgid "Deband"
 msgstr "디밴드"
 
-#: main.ts:1387 picture.slint:1721
+#: main.ts:1387 picture.slint:1736
 #, x-machine
 msgid "3D Denoise"
 msgstr "3D 노이즈 제거"
 
-#: main.ts:1387 picture.slint:1732
+#: main.ts:1387 picture.slint:1747
 #, x-machine
 msgid "Gradual Denoise"
 msgstr "점진적 노이즈 제거"
 
-#: main.ts:1387 picture.slint:1743
+#: main.ts:1387 picture.slint:1758
 #, x-machine
 msgid "Temporal Denoise"
 msgstr "시간적 노이즈 제거"
@@ -979,7 +979,7 @@ msgstr "GPU 렌더링(다시 시작하면 적용)"
 msgid "GPU Rendering (Experimental)"
 msgstr "GPU 렌더링(실험적)"
 
-#: main.ts:1538 main.ts:1793 picture.slint:1338 picture.slint:1348 picture.slint:1420
+#: main.ts:1538 main.ts:1806 picture.slint:1342 picture.slint:1352 picture.slint:1435
 #, x-machine
 msgid "Switching…"
 msgstr "전환 중…"
@@ -1054,42 +1054,52 @@ msgstr "GPU 렌더링: 끔(다음 시작 시 적용)"
 msgid "Could not restart the player: {}"
 msgstr "플레이어를 다시 시작할 수 없습니다: {}"
 
-#: main.ts:1696
+#: main.ts:1703
 #, x-machine
-msgid "Waiting · {} keeps the frames in memory; turn its effects off to upscale"
-msgstr "대기 중 · {}이(가) 프레임을 메모리에 두고 있음; 해당 효과를 끄면 업스케일됨"
+msgid "Waiting · turn off {}'s effects"
+msgstr "대기 중 · {}의 효과 끄기"
 
-#: main.ts:1697
+#: main.ts:1704
 #, x-machine
-msgid "Waiting · {} keep the frames in memory; turn their effects off to upscale"
-msgstr "대기 중 · {}이(가) 프레임을 메모리에 두고 있음; 해당 효과들을 끄면 업스케일됨"
+msgid "{} keeps the frames in memory for its effects, but upscaling needs them on the GPU. Turn its effects off to upscale."
+msgstr "{}이(가) 효과를 위해 프레임을 메모리에 두고 있지만, 업스케일링에는 프레임이 GPU에 있어야 합니다. 해당 효과를 끄면 업스케일됩니다."
 
-#: main.ts:1722
+#: main.ts:1708
+#, x-machine
+msgid "Waiting · turn off the effects of {}"
+msgstr "대기 중 · {}의 효과 끄기"
+
+#: main.ts:1709
+#, x-machine
+msgid "{} keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale."
+msgstr "{}이(가) 효과를 위해 프레임을 메모리에 두고 있지만, 업스케일링에는 프레임이 GPU에 있어야 합니다. 해당 효과들을 끄면 업스케일됩니다."
+
+#: main.ts:1734
 #, x-machine
 msgid "Not available on this GPU: {}"
 msgstr "이 GPU에서는 사용할 수 없음: {}"
 
-#: main.ts:1762
+#: main.ts:1775
 #, x-machine
 msgid "AI upscaling unavailable: {}"
 msgstr "AI 업스케일링을 사용할 수 없음: {}"
 
-#: main.ts:1768
+#: main.ts:1781
 #, x-machine
 msgid "AI upscaling: on (Super Resolution must also be on in the NVIDIA app)"
 msgstr "AI 업스케일링: 켬 (NVIDIA 앱에서 Super Resolution도 켜야 합니다)"
 
-#: main.ts:1773
+#: main.ts:1786
 #, x-machine
 msgid "AI upscaling: off"
 msgstr "AI 업스케일링: 끔"
 
-#: main.ts:1786 picture.slint:1468
+#: main.ts:1799 picture.slint:1483
 #, x-machine
 msgid "AI Upscaling"
 msgstr "AI 업스케일링"
 
-#: main.ts:1793 picture.slint:1365
+#: main.ts:1806 picture.slint:1371
 #, x-machine
 msgid "Not available on this system (Windows with an NVIDIA RTX GPU)"
 msgstr "이 시스템에서는 사용할 수 없음 (Windows와 NVIDIA RTX GPU 필요)"
@@ -1133,517 +1143,542 @@ msgstr "색상"
 msgid "filters"
 msgstr "필터"
 
-#: picture.slint:600 picture.slint:750 picture.slint:787 picture.slint:2015
+#: picture.slint:604 picture.slint:754 picture.slint:791 picture.slint:2030
 #, x-machine
 msgid "· double-click: Default"
 msgstr "· 두 번 클릭: 기본값"
 
-#: picture.slint:665
+#: picture.slint:669
 #, x-machine
 msgid "· click: on or off"
 msgstr "· 클릭: 켜기 / 끄기"
 
-#: picture.slint:1199
+#: picture.slint:1203
 #, x-machine
 msgid "Pick a ratio below"
 msgstr "아래에서 비율 선택"
 
-#: picture.slint:1199
+#: picture.slint:1203
 #, x-machine
 msgid "Screen"
 msgstr "화면"
 
-#: picture.slint:1303
+#: picture.slint:1307
 #, x-machine
 msgid "Needs GPU rendering: turn it on under Rendering, then restart"
 msgstr "GPU 렌더링 필요: 렌더링에서 켠 뒤 다시 시작하세요"
 
-#: picture.slint:1304
+#: picture.slint:1308
 #, x-machine
 msgid "No picture in the current source"
 msgstr "현재 소스에 화면이 없습니다"
 
-#: picture.slint:1305
+#: picture.slint:1309
 #, x-machine
 msgid "Picture processing failed"
 msgstr "화면 처리에 실패했습니다"
 
-#: picture.slint:1306
+#: picture.slint:1310
 #, x-machine
 msgid "Display unavailable"
 msgstr "화면 표시를 사용할 수 없음"
 
-#: picture.slint:1308
+#: picture.slint:1312
 #, x-machine
 msgid "Render options unavailable"
 msgstr "렌더링 옵션을 사용할 수 없음"
 
-#: picture.slint:1309
+#: picture.slint:1313
 #, x-machine
 msgid "Render settings failed"
 msgstr "렌더링 설정에 실패했습니다"
 
-#: picture.slint:1312
+#: picture.slint:1316
 #, x-machine
 msgid "Another plugin controls the display"
 msgstr "다른 플러그인이 화면 표시를 제어하고 있습니다"
 
-#: picture.slint:1313
+#: picture.slint:1317
 #, x-machine
 msgid "Another plugin controls the render options"
 msgstr "다른 플러그인이 렌더링 옵션을 제어하고 있습니다"
 
-#: picture.slint:1320 picture.slint:1604 picture.slint:1720
+#: picture.slint:1324 picture.slint:1619 picture.slint:1735
 #, x-machine
 msgid "3D"
 msgstr "3D"
 
-#: picture.slint:1322 picture.slint:1731
+#: picture.slint:1326 picture.slint:1746
 #, x-machine
 msgid "Gradual"
 msgstr "점진적"
 
-#: picture.slint:1324 picture.slint:1604 picture.slint:1742
+#: picture.slint:1328 picture.slint:1619 picture.slint:1757
 #, x-machine
 msgid "Temporal"
 msgstr "시간적"
 
-#: picture.slint:1328
+#: picture.slint:1332
 #, x-machine
 msgid "{} with bars"
 msgstr "{} (검은 띠)"
 
-#: picture.slint:1332
+#: picture.slint:1336
 #, x-machine
 msgid "Advanced"
 msgstr "고급"
 
-#: picture.slint:1333
+#: picture.slint:1337
 #, x-machine
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] "셰이더 {n}개"
 
 #. the closed Advanced row's summary: {0} the deinterlace mode, {1} the HDR tone mapping, {2} "3 shaders".
-#: picture.slint:1335
+#: picture.slint:1339
 #, x-machine
 msgid "Deinterlace {0} · HDR {1} · {2}"
 msgstr "디인터레이스 {0} · HDR {1} · {2}"
 
-#: picture.slint:1339
+#: picture.slint:1343
 #, x-machine
 msgid "Restart to apply · GPU from the next start"
 msgstr "다시 시작하면 적용 · 다음 시작부터 GPU"
 
-#: picture.slint:1340
+#: picture.slint:1344
 #, x-machine
 msgid "Restart to apply · software rendering from the next start"
 msgstr "다시 시작하면 적용 · 다음 시작부터 소프트웨어 렌더링"
 
-#: picture.slint:1341
+#: picture.slint:1345
 #, x-machine
 msgid "On the GPU · {}"
 msgstr "GPU 사용 중 · {}"
 
-#: picture.slint:1341
+#: picture.slint:1345
 #, x-machine
 msgid "On the GPU"
 msgstr "GPU 사용 중"
 
-#: picture.slint:1342
+#: picture.slint:1346
 #, x-machine
 msgid "Software rendering · {}"
 msgstr "소프트웨어 렌더링 · {}"
 
-#: picture.slint:1343
+#: picture.slint:1347
 #, x-machine
 msgid "Software rendering · turn on, then restart"
 msgstr "소프트웨어 렌더링 · 켠 뒤 다시 시작"
 
 #. {0} and {1} are the video's height and the shown height in pixels (1080, 2160), {2} the GPU's name.
-#: picture.slint:1352
+#: picture.slint:1356
 #, x-machine
 msgid "Upscaling {0}p → {1}p on {2}"
 msgstr "업스케일링 중 {0}p → {1}p ({2})"
 
-#: picture.slint:1353
+#: picture.slint:1357
 #, x-machine
 msgid "Upscaling {0}p → {1}p"
 msgstr "업스케일링 중 {0}p → {1}p"
 
-#: picture.slint:1354
+#: picture.slint:1358
 #, x-machine
 msgid "Upscaling on the GPU"
 msgstr "GPU에서 업스케일링 중"
 
-#: picture.slint:1355
+#: picture.slint:1359
 #, x-machine
 msgid "On · upscales video shown larger than its size"
 msgstr "켬 · 원래 크기보다 크게 표시되는 동영상을 업스케일"
 
-#: picture.slint:1356
+#: picture.slint:1360
 #, x-machine
 msgid "On · this video is not shown larger than its size"
 msgstr "켬 · 이 동영상은 원래 크기보다 크게 표시되지 않음"
 
-#: picture.slint:1357
-#, x-machine
-msgid "Waiting · the picture effects need the frames in memory"
-msgstr "대기 중 · 화면 효과가 프레임을 메모리에서 처리해야 함"
-
-#: picture.slint:1359
-#, x-machine
-msgid "Waiting · the hardware decoding setting copies the frames to memory"
-msgstr "대기 중 · 하드웨어 디코딩 설정이 프레임을 메모리로 복사함"
-
-#: picture.slint:1360
-#, x-machine
-msgid "Waiting · hardware decoding is off"
-msgstr "대기 중 · 하드웨어 디코딩이 꺼져 있음"
-
-#: picture.slint:1361
-#, x-machine
-msgid "Waiting · this video is decoded in software"
-msgstr "대기 중 · 이 동영상은 소프트웨어로 디코딩됨"
-
-#: picture.slint:1362
-#, x-machine
-msgid "Waiting · this video uses another hardware decoder"
-msgstr "대기 중 · 이 동영상은 다른 하드웨어 디코더를 사용함"
-
 #: picture.slint:1363
+#, x-machine
+msgid "Waiting · turn off picture effects"
+msgstr "대기 중 · 화면 효과 끄기"
+
+#: picture.slint:1365
+#, x-machine
+msgid "Waiting · turn off copy-back decoding"
+msgstr "대기 중 · 카피백 디코딩 끄기"
+
+#: picture.slint:1366
+#, x-machine
+msgid "Waiting · turn on hardware decoding"
+msgstr "대기 중 · 하드웨어 디코딩 켜기"
+
+#: picture.slint:1367
+#, x-machine
+msgid "Waiting · video decoded in software"
+msgstr "대기 중 · 소프트웨어로 디코딩됨"
+
+#: picture.slint:1368
+#, x-machine
+msgid "Waiting · change the hardware decoder"
+msgstr "대기 중 · 하드웨어 디코더 변경"
+
+#: picture.slint:1369
 #, x-machine
 msgid "Waiting · {}"
 msgstr "대기 중 · {}"
 
-#: picture.slint:1364
+#: picture.slint:1370
 #, x-machine
 msgid "Needs GPU rendering (software rendering now)"
 msgstr "GPU 렌더링 필요 (현재 소프트웨어 렌더링)"
 
-#: picture.slint:1366
+#: picture.slint:1372
 #, x-machine
 msgid "Not available on this GPU · {}"
 msgstr "이 GPU에서는 사용 불가 · {}"
 
-#: picture.slint:1368
+#: picture.slint:1374
 #, x-machine
 msgid "Off · sharpens video shown larger than its size"
 msgstr "끔 · 크게 표시되는 동영상을 선명하게"
 
-#: picture.slint:1407
+#: picture.slint:1377
+#, x-machine
+msgid "The picture effects need the frames in memory, but upscaling needs them on the GPU. Turn the effects off to upscale."
+msgstr "화면 효과가 프레임을 메모리에서 처리해야 하지만, 업스케일링에는 프레임이 GPU에 있어야 합니다. 효과를 끄면 업스케일됩니다."
+
+#: picture.slint:1379
+#, x-machine
+msgid "The hardware decoding setting copies the frames to memory, but upscaling needs them on the GPU. Choose a hardware decoding mode without copy-back to upscale."
+msgstr "하드웨어 디코딩 설정이 프레임을 메모리로 복사하지만, 업스케일링에는 프레임이 GPU에 있어야 합니다. 카피백이 없는 하드웨어 디코딩 모드를 선택하면 업스케일됩니다."
+
+#: picture.slint:1380
+#, x-machine
+msgid "Hardware decoding is off, but upscaling needs the video decoded on the GPU. Turn hardware decoding on to upscale."
+msgstr "하드웨어 디코딩이 꺼져 있지만, 업스케일링에는 GPU에서 디코딩된 동영상이 필요합니다. 하드웨어 디코딩을 켜면 업스케일됩니다."
+
+#: picture.slint:1381
+#, x-machine
+msgid "This video is decoded in software (for example a format the GPU does not decode), but upscaling needs it decoded on the GPU. Videos the GPU decodes are upscaled."
+msgstr "이 동영상은 소프트웨어로 디코딩되지만(예: GPU가 디코딩하지 않는 형식), 업스케일링에는 GPU에서 디코딩되어야 합니다. GPU가 디코딩하는 동영상은 업스케일됩니다."
+
+#: picture.slint:1382
+#, x-machine
+msgid "This video is decoded with another hardware decoder, but upscaling needs it decoded on the GPU that renders it. Choose that GPU's decoder to upscale."
+msgstr "이 동영상은 다른 하드웨어 디코더로 디코딩되지만, 업스케일링에는 렌더링하는 GPU에서 디코딩되어야 합니다. 해당 GPU의 디코더를 선택하면 업스케일됩니다."
+
+#: picture.slint:1422
 #, x-machine
 msgid "Rendering"
 msgstr "렌더링"
 
-#: picture.slint:1422
+#: picture.slint:1437
 #, x-machine
 msgid "Restart Vestra Player to apply"
 msgstr "적용하려면 Vestra Player를 다시 시작하세요"
 
-#: picture.slint:1423
+#: picture.slint:1438
 #, x-machine
 msgid "Draw the video on the GPU from the next start"
 msgstr "다음 시작부터 GPU로 동영상을 그립니다"
 
-#: picture.slint:1428
+#: picture.slint:1443
 #, x-machine
 msgid "GPU Rendering"
 msgstr "GPU 렌더링"
 
-#: picture.slint:1435
+#: picture.slint:1450
 #, x-machine
 msgid "Experimental"
 msgstr "실험적"
 
-#: picture.slint:1436
+#: picture.slint:1451
 #, x-machine
 msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
 msgstr "실험적 — GPU 경로는 새 기능입니다. 화면이 깨지면 여기서 끄고 다시 시작하세요. GPU가 충돌하면 플레이어가 스스로 소프트웨어 렌더링으로 돌아갑니다."
 
-#: picture.slint:1444
+#: picture.slint:1459
 #, x-machine
 msgid "Restart"
 msgstr "다시 시작"
 
-#: picture.slint:1464
+#: picture.slint:1479
 #, x-machine
 msgid "NVIDIA RTX Video Super Resolution: sharpens video shown larger than its size. Needs GPU rendering on an NVIDIA RTX GPU, and Super Resolution turned on in the NVIDIA app (System ▸ Video ▸ RTX Video Enhancement)."
 msgstr "NVIDIA RTX Video Super Resolution: 크게 표시되는 동영상을 선명하게 합니다. NVIDIA RTX GPU에서 GPU 렌더링과, NVIDIA 앱에서 Super Resolution을 켜야 합니다 (시스템 ▸ 비디오 ▸ RTX 비디오 향상)."
 
-#: picture.slint:1477
+#: picture.slint:1492
 #, x-machine
 msgid "NVIDIA RTX Video Super Resolution"
 msgstr "NVIDIA RTX Video Super Resolution"
 
-#: picture.slint:1488
+#: picture.slint:1503
 #, x-machine
 msgid "Colour"
 msgstr "색상"
 
-#: picture.slint:1492
+#: picture.slint:1507
 #, x-machine
 msgid "Original"
 msgstr "원본"
 
-#: picture.slint:1493
+#: picture.slint:1508
 #, x-machine
 msgid "Vivid"
 msgstr "선명"
 
-#: picture.slint:1494
+#: picture.slint:1509
 #, x-machine
 msgid "Cinema"
 msgstr "영화"
 
-#: picture.slint:1495
+#: picture.slint:1510
 #, x-machine
 msgid "Soft"
 msgstr "부드러움"
 
-#: picture.slint:1501
+#: picture.slint:1516
 #, x-machine
 msgid "Brightness"
 msgstr "밝기"
 
-#: picture.slint:1510
+#: picture.slint:1525
 #, x-machine
 msgid "Contrast"
 msgstr "대비"
 
-#: picture.slint:1519
+#: picture.slint:1534
 #, x-machine
 msgid "Saturation"
 msgstr "채도"
 
-#: picture.slint:1528
+#: picture.slint:1543
 #, x-machine
 msgid "Hue"
 msgstr "색조"
 
-#: picture.slint:1537
+#: picture.slint:1552
 #, x-machine
 msgid "Gamma"
 msgstr "감마"
 
-#: picture.slint:1549
+#: picture.slint:1564
 #, x-machine
 msgid "Effects"
 msgstr "효과"
 
-#: picture.slint:1564 picture.slint:1644
+#: picture.slint:1579 picture.slint:1659
 #, x-machine
 msgid "Edges"
 msgstr "가장자리"
 
-#: picture.slint:1565 picture.slint:1645
+#: picture.slint:1580 picture.slint:1660
 #, x-machine
 msgid "Wide-radius sharpening that mainly strengthens outlines"
 msgstr "넓은 반경으로 선명하게 하여 주로 윤곽을 강조합니다"
 
-#: picture.slint:1573 picture.slint:1654
+#: picture.slint:1588 picture.slint:1669
 #, x-machine
 msgid "Blur"
 msgstr "블러"
 
-#: picture.slint:1602 picture.slint:1704
+#: picture.slint:1617 picture.slint:1719
 #, x-machine
 msgid "Denoise"
 msgstr "노이즈 제거"
 
-#: picture.slint:1603
+#: picture.slint:1618
 #, x-machine
 msgid "Denoise: turns the denoisers on or off"
 msgstr "노이즈 제거: 노이즈 제거 필터 켜기 / 끄기"
 
-#: picture.slint:1611
+#: picture.slint:1626
 #, x-machine
 msgid "Doubling"
 msgstr "2배"
 
-#: picture.slint:1612
+#: picture.slint:1627
 #, x-machine
 msgid "Rate already high enough"
 msgstr "프레임 속도가 이미 충분히 높습니다"
 
-#: picture.slint:1613
+#: picture.slint:1628
 #, x-machine
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr "프레임 속도를 2배(최대 60)로 높이며, 중간 프레임은 앞뒤 프레임을 섞어 만듭니다"
 
-#: picture.slint:1621
+#: picture.slint:1636
 #, x-machine
 msgid "Interpolate"
 msgstr "보간"
 
-#: picture.slint:1622
+#: picture.slint:1637
 #, x-machine
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr "디스플레이 주사율에 맞춰 GPU로 보간합니다. 프레임 2배와 함께 쓸 수 없습니다"
 
-#: picture.slint:1666
+#: picture.slint:1681
 #, x-machine
 msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
 msgstr "50 미만은 약하게, 50 이상은 강하게 적용됩니다. 저비트레이트 MPEG-2/MPEG-4에서 가장 효과가 큽니다"
 
-#: picture.slint:1759
+#: picture.slint:1774
 #, x-machine
 msgid "Geometry"
 msgstr "형태"
 
-#: picture.slint:1765
+#: picture.slint:1780
 #, x-machine
 msgid "Rotate Left"
 msgstr "왼쪽으로 회전"
 
-#: picture.slint:1770
+#: picture.slint:1785
 #, x-machine
 msgid "Rotate Right"
 msgstr "오른쪽으로 회전"
 
-#: picture.slint:1800
+#: picture.slint:1815
 #, x-machine
 msgid "Leave Crop Mode"
 msgstr "자르기 모드 종료"
 
-#: picture.slint:1800
+#: picture.slint:1815
 #, x-machine
 msgid "Crop: pick a ratio, then drag the box"
 msgstr "자르기: 비율을 고른 뒤 상자를 끌기"
 
-#: picture.slint:1810
+#: picture.slint:1825
 #, x-machine
 msgid "Reset Framing"
 msgstr "화면 크기/위치 재설정"
 
-#: picture.slint:1818
+#: picture.slint:1833
 #, x-machine
 msgid "Zoom {}%"
 msgstr "확대 {}%"
 
 #. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
-#: picture.slint:1823
+#: picture.slint:1838
 #, x-machine
 msgid "Offset {0}, {1}"
 msgstr "이동 {0}, {1}"
 
-#: picture.slint:1825
+#: picture.slint:1840
 #, x-machine
 msgid "Crop {}"
 msgstr "자르기 {}"
 
 #. the crop box's position in percent, across and down (50 = centred).
-#: picture.slint:1830
+#: picture.slint:1845
 #, x-machine
 msgid "at {0}%, {1}%"
 msgstr "위치 {0}%, {1}%"
 
-#: picture.slint:1841
+#: picture.slint:1856
 #, x-machine
 msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
 msgstr "비율로 자르기. 편집기에서 상자를 끌어 남길 부분을 선택"
 
-#: picture.slint:1859
+#: picture.slint:1874
 #, x-machine
 msgid "Stretch to the ratio: add bars instead of cutting the picture"
 msgstr "비율에 맞추기: 화면을 자르지 않고 검은 띠 추가"
 
-#: picture.slint:1863
+#: picture.slint:1878
 #, x-machine
 msgid "Add bars instead of cutting"
 msgstr "자르지 않고 검은 띠 추가"
 
-#: picture.slint:1877
+#: picture.slint:1892
 #, x-machine
 msgid "Aspect ratio"
 msgstr "화면비"
 
-#: picture.slint:1899
+#: picture.slint:1914
 #, x-machine
 msgid "Fit"
 msgstr "맞춤"
 
-#: picture.slint:1904
+#: picture.slint:1919
 #, x-machine
 msgid "Keep"
 msgstr "유지"
 
-#: picture.slint:1905
+#: picture.slint:1920
 #, x-machine
 msgid "Stretch"
 msgstr "늘이기"
 
-#: picture.slint:1906
+#: picture.slint:1921
 #, x-machine
 msgid "Fill"
 msgstr "채우기"
 
-#: picture.slint:1985
+#: picture.slint:2000
 #, x-machine
 msgid "Double rate"
 msgstr "2배 프레임 속도"
 
-#: picture.slint:1993
+#: picture.slint:2008
 #, x-machine
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:1995
+#: picture.slint:2010
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr "SDR 디스플레이에서 HDR 소스(PQ / HLG)의 톤 매핑 · HDR 소스 아님"
 
-#: picture.slint:1996
+#: picture.slint:2011
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr "SDR 디스플레이에서 HDR 소스(PQ / HLG)의 톤 매핑"
 
-#: picture.slint:2014
+#: picture.slint:2029
 #, x-machine
 msgid "Target brightness"
 msgstr "목표 밝기"
 
-#: picture.slint:2031
+#: picture.slint:2046
 #, x-machine
 msgid "{} nits"
 msgstr "{}니트"
 
-#: picture.slint:2049
+#: picture.slint:2064
 #, x-machine
 msgid "Peak detection"
 msgstr "피크 감지"
 
-#: picture.slint:2058
+#: picture.slint:2073
 #, x-machine
 msgid "Shaders"
 msgstr "셰이더"
 
-#: picture.slint:2059
+#: picture.slint:2074
 #, x-machine
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr "mpv 사용자 셰이더(.glsl), 목록 순서대로 실행"
 
-#: picture.slint:2070
+#: picture.slint:2085
 #, x-machine
 msgid "List…"
 msgstr "목록…"
 
-#: picture.slint:2100
+#: picture.slint:2115
 #, x-machine
 msgid "Retry"
 msgstr "다시 시도"
 
-#: picture.slint:2116 picture.slint:2120
+#: picture.slint:2131 picture.slint:2135
 #, x-machine
 msgid "Enable picture effects"
 msgstr "화면 효과 사용"
 
-#: picture.slint:2129
+#: picture.slint:2144
 #, x-machine
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr "색상, 효과, 형태를 기본값으로 되돌립니다. 고급 설정은 유지됩니다"
 
-#: picture.slint:2134
+#: picture.slint:2149
 #, x-machine
 msgid "Reset All"
 msgstr "모두 재설정"
@@ -1727,3 +1762,17 @@ msgstr "“셰이더 사용”이 꺼져 있습니다"
 #, x-machine
 msgid "Open Folder"
 msgstr "폴더 열기"
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine
+
+#, x-machine

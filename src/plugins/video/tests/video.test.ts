@@ -2313,7 +2313,7 @@ test("panel: the GPU Rendering switch shows the player's state and switches like
 
 // ---------------------------------------------------------------- AI Upscaling (RTX VSR) in the Rendering section
 
-type Upscaling = { checked: boolean; enabled: boolean; busy: boolean; kind: string; detail: string | Text; from: number; to: number; gpu: string };
+type Upscaling = { checked: boolean; enabled: boolean; busy: boolean; kind: string; detail: string | Text; tip: string | Text; from: number; to: number; gpu: string };
 const upOf = (host: TestHost) => host.mounted().props.upscaling as Upscaling;
 const upItem = (host: TestHost) => host.command("video.upscaling");
 const RTX = "NVIDIA GeForce RTX 4070 Laptop GPU";
@@ -2326,7 +2326,7 @@ test("AI Upscaling: starting and showing the panel check no GPU; the switch upsc
     try {
       await host.settle();
       assert.equal(host.upscaling.checked, false, "starting woke no GPU");
-      assert.deepEqual(upOf(host), { checked: false, enabled: true, busy: false, kind: "off", detail: "", from: 0, to: 0, gpu: "" });
+      assert.deepEqual(upOf(host), { checked: false, enabled: true, busy: false, kind: "off", detail: "", tip: "", from: 0, to: 0, gpu: "" });
       assert.deepEqual(
         [upItem(host).display.title, upItem(host).display.category, upItem(host).declaration.order, upItem(host).state.checked],
         ["AI Upscaling", "Picture", 461, false],
@@ -2337,7 +2337,7 @@ test("AI Upscaling: starting and showing the panel check no GPU; the switch upsc
       await host.settle();
       assert.equal(host.upscaling.checked, false, "showing the panel woke no GPU");
       assert.equal(host.listening.has("video.upscaling.changed"), false, "not followed before the state was read");
-      assert.deepEqual(upOf(host), { checked: false, enabled: true, busy: false, kind: "off", detail: "", from: 0, to: 0, gpu: "" });
+      assert.deepEqual(upOf(host), { checked: false, enabled: true, busy: false, kind: "off", detail: "", tip: "", from: 0, to: 0, gpu: "" });
       assert.equal(gpuOf(host).name, "");
       assert.equal(upItem(host).state.enabled, true);
       // The panel's switch runs the command: now the GPU is checked, and the panel follows the player.
@@ -2346,7 +2346,7 @@ test("AI Upscaling: starting and showing the panel check no GPU; the switch upsc
       assert.equal(host.upscaling.checked, true);
       await until(host, () => host.listening.has("video.upscaling.changed"), "followed once read while the panel shows");
       await eventually(() => gpuOf(host).name, RTX);
-      assert.deepEqual(upOf(host), { checked: true, enabled: true, busy: false, kind: "upscaling", detail: "", from: 1080, to: 2160, gpu: RTX });
+      assert.deepEqual(upOf(host), { checked: true, enabled: true, busy: false, kind: "upscaling", detail: "", tip: "", from: 1080, to: 2160, gpu: RTX });
       assert.equal(host.upscaling.enabled, true);
       assert.equal(upItem(host).state.checked, true);
       assert.equal(host.osd.at(-1), "AI upscaling: on (Super Resolution must also be on in the NVIDIA app)");
@@ -2406,7 +2406,12 @@ test("AI Upscaling: not needed for a video shown at its size; waits while this p
     host.upscalingDecoding("copy-back", [{ id: "someone.frame", name: "Auto Frame" }]);
     host.upscalingChanged();
     await until(host, () => upOf(host).kind === "plugins", "another plugin's filter");
-    assert.equal(host.translate(upOf(host).detail), "Waiting · Auto Frame keeps the frames in memory; turn its effects off to upscale");
+    // The line says what to do (short: the narrowest adjust column shows about 36 characters), its tooltip why.
+    assert.equal(host.translate(upOf(host).detail), "Waiting · turn off Auto Frame's effects");
+    assert.equal(
+      host.translate(upOf(host).tip),
+      "Auto Frame keeps the frames in memory for its effects, but upscaling needs them on the GPU. Turn its effects off to upscale.",
+    );
     assert.equal(upOf(host).checked, true);
   } finally {
     await stop();
@@ -2423,12 +2428,15 @@ test("AI Upscaling: while it waits for the decoder, the status says why and name
       host.upscalingChanged();
       await until(host, () => upOf(host).kind === kind, `${cause} → ${kind}`);
       assert.deepEqual([upOf(host).checked, upOf(host).enabled], [true, true], "waiting, the switch stays usable");
+      // Only the plugins line has a tooltip of its own (picture.slint words the others).
+      if (kind !== "plugins") assert.equal(upOf(host).tip, "", `${kind}: no tip from the plugin`);
     };
     // Several plugins (this one's filters among them): all named, the plural sentence.
     await waits("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }, { id: "someone.frame", name: "Auto Frame" }], "plugins");
+    assert.equal(host.translate(upOf(host).detail), "Waiting · turn off the effects of Picture Adjustments, Auto Frame");
     assert.equal(
-      host.translate(upOf(host).detail),
-      "Waiting · Picture Adjustments, Auto Frame keep the frames in memory; turn their effects off to upscale",
+      host.translate(upOf(host).tip),
+      "Picture Adjustments, Auto Frame keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale.",
     );
     // Only this plugin's own filters: the panel's effects.
     await waits("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }], "effects");
@@ -2455,11 +2463,13 @@ test("AI Upscaling: the plugins in the way are named in Simplified Chinese", asy
     host.upscalingDecoding("copy-back", [{ id: "someone.frame", name: "Auto Frame" }]);
     host.upscalingChanged();
     await until(host, () => upOf(host).kind === "plugins", "one plugin");
-    assert.equal(host.translate(upOf(host).detail), "等待中 · Auto Frame 让帧留在内存中；关闭它的效果即可超分");
+    assert.equal(host.translate(upOf(host).detail), "等待中 · 关闭 Auto Frame 的效果");
+    assert.equal(host.translate(upOf(host).tip), "Auto Frame 的效果需要在内存中处理帧，而超分需要帧留在 GPU 上。关闭它的效果即可超分。");
     host.upscalingDecoding("copy-back", [{ id: "a.one", name: "One" }, { id: "b.two", name: "Two" }]);
     host.upscalingChanged();
     await until(host, () => upOf(host).kind === "plugins" && host.translate(upOf(host).detail).includes("Two"), "two plugins");
-    assert.equal(host.translate(upOf(host).detail), "等待中 · One、Two 让帧留在内存中；关闭它们的效果即可超分");
+    assert.equal(host.translate(upOf(host).detail), "等待中 · 关闭 One、Two 的效果");
+    assert.equal(host.translate(upOf(host).tip), "One、Two 的效果需要在内存中处理帧，而超分需要帧留在 GPU 上。关闭它们的效果即可超分。");
   } finally {
     await stop();
   }
@@ -2475,7 +2485,7 @@ test("AI Upscaling: greyed with the reason where it cannot work, never asking th
   const first = await start(soft);
   try {
     await soft.command("video.picture").run();
-    await eventually(() => upOf(soft), { checked: false, enabled: false, busy: false, kind: "rendering", detail: "", from: 0, to: 0, gpu: "" });
+    await eventually(() => upOf(soft), { checked: false, enabled: false, busy: false, kind: "rendering", detail: "", tip: "", from: 0, to: 0, gpu: "" });
     assert.deepEqual([upItem(soft).state.enabled, upItem(soft).display.reason], [false, "Needs GPU rendering (currently software rendering)"]);
     await eventually(() => gpuOf(soft).ongpu, false);
     assert.equal(soft.upscaling.checked, false, "no GPU check under software rendering");
