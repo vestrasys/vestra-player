@@ -31,13 +31,19 @@ impl Capability for MediaControl {
         // its check (`jobs.check { parts }`) read the plugin's source
         // references: they need `media.sources` too, and carry the plugin's
         // store key. A snapshot's check (`jobs.check { snapshotId }`) does not.
-        if matches!(method, "jobs.check" | "jobs.start") && !params["parts"].is_null() {
-            if !super::plugin(host, reply)?.allows("media.sources") {
-                return Err(RpcError::new(
-                    "capability",
-                    "capability must be declared in manifest: media.sources (an export of parts)",
-                ));
-            }
+        let parts = !params["parts"].is_null();
+        if matches!(method, "jobs.check" | "jobs.start")
+            && parts
+            && !super::plugin(host, reply)?.allows("media.sources")
+        {
+            return Err(RpcError::new(
+                "capability",
+                "capability must be declared in manifest: media.sources (an export of parts)",
+            ));
+        }
+        // Every check carries the store key: a snapshot's check counts in the
+        // plugin's share of the request threads as its parts checks do.
+        if method == "jobs.check" || (method == "jobs.start" && parts) {
             return super::media_sources::forward_with_store(host, reply, method, params);
         }
         forward_media(host, reply, method, params)

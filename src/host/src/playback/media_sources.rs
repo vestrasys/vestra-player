@@ -864,7 +864,7 @@ pub struct SnapshotInput {
 pub fn check_snapshot(
     events: &mpsc::Sender<Event>,
     reply: Reply,
-    owner: u64,
+    store: String,
     input: SnapshotInput,
     encoding: Encoding,
 ) {
@@ -875,7 +875,8 @@ pub fn check_snapshot(
             return;
         }
     };
-    spawn(events, reply, format!("owner:{owner}"), move || {
+    // The plugin's share of the request threads, as its parts checks.
+    spawn(events, reply, store, move || {
         let probed = probe(&ffmpeg, &input.lease, &Control::new())
             .map_err(|e| RpcError::new("unsupported", format!("the file cannot be probed: {e:#}")))?
             .ok_or_else(|| RpcError::new("internal", "probe cancelled"))?;

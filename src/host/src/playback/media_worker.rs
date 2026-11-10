@@ -2026,7 +2026,7 @@ mod tests {
         let made = Command::new(real::ffmpeg())
             .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
             .arg("testsrc2=size=320x240:rate=25,noise=alls=20:allf=t")
-            .args(["-f", "lavfi", "-i", "anoisesrc=d=30:c=pink:r=44100"])
+            .args(["-f", "lavfi", "-i", "anoisesrc=d=30:c=pink:r=44100:seed=7"])
             .args([
                 "-t",
                 "30",

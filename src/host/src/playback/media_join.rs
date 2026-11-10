@@ -71,14 +71,34 @@ pub fn scratch_root() -> Option<PathBuf> {
     crate::platform::app_cache_dir().map(|dir| dir.join("export-parts"))
 }
 
-/// Removes what an earlier run left in `root` (no export runs yet).
+/// The prefix of an export's folder of intermediate parts.
+const WORK_PREFIX: &str = ".vestra-join-";
+
+/// Removes what an earlier run left in `root` (no export runs yet): only
+/// the export folders (`.vestra-join-*`), and only when `root` itself is a
+/// real directory, not a link or junction to somewhere else. A link among
+/// the entries is removed itself, never followed.
 pub fn clean_scratch(root: &Path) {
+    let real_directory = std::fs::symlink_metadata(root)
+        .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink());
+    if !real_directory {
+        return;
+    }
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
     };
     for entry in entries.flatten() {
+        if !entry.file_name().to_string_lossy().starts_with(WORK_PREFIX) {
+            continue;
+        }
         let path = entry.path();
-        let removed = if path.is_dir() {
+        let Ok(meta) = std::fs::symlink_metadata(&path) else {
+            continue;
+        };
+        let removed = if meta.file_type().is_symlink() {
+            // A link (or a junction) goes as a link.
+            std::fs::remove_file(&path).or_else(|_| std::fs::remove_dir(&path))
+        } else if meta.is_dir() {
             std::fs::remove_dir_all(&path)
         } else {
             std::fs::remove_file(&path)
@@ -361,7 +381,7 @@ fn join(request: &JoinRequest, control: &Control) -> Result<Outcome> {
         .sum();
     check_space(bytes, &scratch, &parent)?;
     let work = tempfile::Builder::new()
-        .prefix(".vestra-join-")
+        .prefix(WORK_PREFIX)
         .tempdir_in(&scratch)
         .context("the temporary folder could not be created")?;
     // A copied part is Matroska whatever the output: it has no edit list,
@@ -1128,11 +1148,17 @@ mod tests {
         };
         assert_eq!(names(&videos).len(), 2, "{:?}", names(&videos));
         assert!(names(&scratch).is_empty(), "{:?}", names(&scratch));
-        // A crash's leftovers go at the next start.
+        // A crash's leftovers go at the next start; nothing else does.
         std::fs::create_dir_all(scratch.join(".vestra-join-old")).unwrap();
         std::fs::write(scratch.join(".vestra-join-old").join("part-000.mkv"), b"x").unwrap();
+        std::fs::write(scratch.join("someone-else.txt"), b"keep").unwrap();
         clean_scratch(&scratch);
-        assert!(names(&scratch).is_empty());
+        assert_eq!(names(&scratch), ["someone-else.txt"]);
+        // A root that is not a real directory is left alone.
+        let file = dir.path().join("not-a-dir");
+        std::fs::write(&file, b"x").unwrap();
+        clean_scratch(&file);
+        assert!(file.is_file());
     }
 
     /// The check takes a snapshot's clip too: one part from its held file;
@@ -1147,7 +1173,7 @@ mod tests {
             media_sources::check_snapshot(
                 &events,
                 crate::host::Reply { owner: 9, id: 1 },
-                9,
+                "test:snapshot".into(),
                 media_sources::SnapshotInput {
                     lease: Arc::new(Lease::open(&path).unwrap()),
                     start: 1.,

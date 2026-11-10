@@ -63,22 +63,77 @@ pub fn disk_space(path: &std::path::Path) -> Option<(u64, String)> {
 }
 #[cfg(not(target_os = "windows"))]
 pub fn disk_space(path: &std::path::Path) -> Option<(u64, String)> {
-    // POSIX output: one header line, then device, blocks, used, available
-    // (1024-byte blocks with -k) and capacity, the mount point last.
-    let out = std::process::Command::new("df")
+    use std::io::Read;
+    // `/bin/df`, not whatever `df` is first on PATH; `--` so a path that
+    // starts with `-` is a path. 5 s at most (a hung network mount): then
+    // the space is unknown, as when the system does not answer.
+    let mut child = std::process::Command::new("/bin/df")
         .arg("-Pk")
+        .arg("--")
         .arg(path)
-        .output()
+        .stdin(std::process::Stdio::null())
+        .stdout(std::process::Stdio::piped())
+        .stderr(std::process::Stdio::null())
+        .spawn()
         .ok()?;
-    if !out.status.success() {
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(5);
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if std::time::Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(20));
+            }
+            _ => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return None;
+            }
+        }
+    };
+    let mut text = String::new();
+    child.stdout.take()?.read_to_string(&mut text).ok()?;
+    if !status.success() {
         return None;
     }
-    let text = String::from_utf8_lossy(&out.stdout);
-    let line = text.lines().nth(1)?;
-    let fields: Vec<&str> = line.split_whitespace().collect();
-    let available = fields.get(3)?.parse::<u64>().ok()?;
-    let mount = fields.get(5..)?.join(" ");
-    Some((available.saturating_mul(1024), mount))
+    parse_df(&text)
+}
+
+/// POSIX `df -Pk`: a header line, then device, blocks, used, available
+/// (1024-byte blocks) and capacity (`NN%`), the mount point last. Read from
+/// the capacity column (the `NN%` after three numbers), so a device or
+/// mount name with spaces, even one with `NN%` in it, does not shift them.
+#[cfg_attr(target_os = "windows", allow(dead_code))]
+fn parse_df(text: &str) -> Option<(u64, String)> {
+    let fields: Vec<&str> = text.lines().nth(1)?.split_whitespace().collect();
+    let number = |field: &str| !field.is_empty() && field.bytes().all(|b| b.is_ascii_digit());
+    // The capacity is the first `NN%` that follows three numbers (blocks,
+    // used, available) after at least one device field.
+    let capacity = (4..fields.len()).find(|&i| {
+        fields[i].strip_suffix('%').is_some_and(number)
+            && fields[i - 3..i].iter().all(|field| number(field))
+    })?;
+    let available = fields.get(capacity.checked_sub(1)?)?.parse::<u64>().ok()?;
+    let mount = fields.get(capacity + 1..)?.join(" ");
+    (!mount.is_empty()).then(|| (available.saturating_mul(1024), mount))
+}
+
+#[cfg(test)]
+mod disk_space_tests {
+    use super::parse_df;
+
+    #[test]
+    fn df_is_read_from_its_capacity_column() {
+        let plain = "Filesystem 1024-blocks Used Available Capacity Mounted on\n/dev/disk3s1 971350180 500000000 400000000 56% /\n";
+        assert_eq!(parse_df(plain), Some((400_000_000 * 1024, "/".into())));
+        // Spaces in the device and the mount point.
+        let spaced = "Filesystem 1024-blocks Used Available Capacity Mounted on\nmap auto home 0 0 1234 0% /Volumes/My Disk 50%\n";
+        assert_eq!(
+            parse_df(spaced),
+            Some((1234 * 1024, "/Volumes/My Disk 50%".into()))
+        );
+        assert_eq!(parse_df("Filesystem\n"), None);
+        assert_eq!(parse_df("h\n/dev/x 1 2 3 4 /\n"), None);
+    }
 }
 
 /// The systems the platform layer has per-system tables for (standard

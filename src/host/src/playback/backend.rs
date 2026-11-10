@@ -580,9 +580,25 @@ impl Backend {
                         // The check of a snapshot's clip (`jobs.check`
                         // without parts): its held file, probed on a short
                         // thread.
+                        if command.method == "jobs.check"
+                            && command.params["snapshotId"].is_null()
+                                == command.params["parts"].is_null()
+                        {
+                            let _ = events.send(Event::Reply(
+                                command.reply,
+                                Err(RpcError::invalid(
+                                    "jobs.check takes parts or a snapshotId, one of them",
+                                )),
+                            ));
+                            continue;
+                        }
                         if command.method == "jobs.check" && !command.params["snapshotId"].is_null()
                         {
                             let input = jobs.snapshot_check(command.reply.owner, &command.params);
+                            let store = command.params["store"].as_str().map_or_else(
+                                || format!("owner:{}", command.reply.owner),
+                                str::to_owned,
+                            );
                             match input.and_then(|input| {
                                 crate::playback::media_sources::check_encoding(&command.params)
                                     .map(|encoding| (input, encoding))
@@ -591,7 +607,7 @@ impl Backend {
                                     crate::playback::media_sources::check_snapshot(
                                         &events,
                                         command.reply.clone(),
-                                        command.reply.owner,
+                                        store,
                                         input,
                                         encoding,
                                     )
