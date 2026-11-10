@@ -57,19 +57,30 @@ fn filter_value(text: &str) -> String {
 /// The caller's own carrier/font path as an escaped filter value: absolute
 /// (no protocol prefix or working-directory lookup), no parent traversal or
 /// control characters, and on Windows only a drive or UNC root (not the
-/// `\\?\` / `\\.\` device namespaces). Ownership/existence remain caller checks.
+/// `\\?\` / `\\.\` device namespaces, in any mix of `/` and `\`: Rust parses
+/// `//?/C:/x` or `//./pipe/x` as a UNC share on server `?` / `.`, yet Windows
+/// opens them in the device namespace). Ownership/existence remain caller checks.
 fn owned_path(path: &Path) -> Result<String> {
     let text = path
         .to_str()
         .ok_or_else(|| anyhow::anyhow!("non-UTF8 carrier/font path"))?;
+    let separator = |c: Option<&u8>| matches!(c, Some(b'/' | b'\\'));
+    let bytes = text.as_bytes();
+    let device_namespace = separator(bytes.first())
+        && separator(bytes.get(1))
+        && matches!(bytes.get(2), Some(b'?' | b'.'))
+        && (bytes.len() == 3 || separator(bytes.get(3)));
     ensure!(
         path.is_absolute()
+            && !device_namespace
             && text.len() <= 4096
             && !text.chars().any(char::is_control)
             && path.components().all(|c| match c {
-                Component::Prefix(prefix) => {
-                    matches!(prefix.kind(), Prefix::Disk(_) | Prefix::UNC(..))
-                }
+                Component::Prefix(prefix) => match prefix.kind() {
+                    Prefix::Disk(_) => true,
+                    Prefix::UNC(server, _) => server != "?" && server != ".",
+                    _ => false,
+                },
                 Component::RootDir | Component::Normal(_) => true,
                 Component::CurDir | Component::ParentDir => false,
             }),
@@ -332,10 +343,27 @@ mod tests {
                 r"C:\owned\..\a.vtt",
                 r"\\?\C:\owned\cue.vtt",
                 r"\\.\pipe\cue",
+                // Device namespaces spelled with forward slashes, which Rust
+                // parses as UNC shares on server `?` / `.`.
+                "//?/C:/x",
+                r"\\?/C:/x",
+                r"/\?\C:\x",
+                r"//?\C:\x",
+                "//?/pipe/x",
+                "//./pipe/x",
+                r"\\.\C:\x",
+                r"/\./pipe/x",
+                r"\\?\UNC\server\share\x",
                 "C:\\owned\\a\nb.vtt",
             ]
         } else {
-            &["relative.vtt", "/owned/../a.vtt", "/owned/a\nb.vtt"]
+            &[
+                "relative.vtt",
+                "/owned/../a.vtt",
+                "/owned/a\nb.vtt",
+                "//?/C:/x",
+                "//./pipe/x",
+            ]
         };
         for path in rejected {
             let mut subtitle = descriptor(&style);
