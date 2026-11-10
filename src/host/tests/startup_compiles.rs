@@ -434,8 +434,9 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
             // before). Its panel compiles at each restart, as any
             // plugin's that starts during playback. Its first run is still
             // waited for (it may mount): 1.5 to 2.6 s here, against 12 to 17 s
-            // before; 4 s leaves room for a loaded machine.
-            if opens[0] >= 4000 {
+            // before; 8 s leaves room for a loaded machine (a plain case once
+            // opened at +3.9 s) and still separates the two.
+            if opens[0] >= 8000 {
                 failures.push(format!("{name}: the file opened at +{} ms", opens[0]));
             }
             continue;
