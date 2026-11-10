@@ -40,7 +40,8 @@ export declare const TIMELINE_LIMITS: Readonly<{
 }>;
 /**
  * One per plugin: read before activation (with `playback.read`), then kept
- * current from `timeline.changed` (with `events`) once the plugin uses it.
+ * current from `timeline.changed` (with `events`) once the plugin uses it
+ * (or listens to that event with `player.on`).
  */
 export declare class TimelineService {
     #private;
@@ -52,9 +53,6 @@ export declare class TimelineService {
     start(): void;
     accept(lists: WireTimeline): void;
     read(): Promise<void>;
-    watch(listener: (marks: readonly TimelineMark[]) => void): {
-        dispose: () => Promise<void>;
-    };
 }
 export declare const timelineOf: (runtime: Runtime) => TimelineService;
 export declare function timeline(scope: ScopeImpl): Timeline;

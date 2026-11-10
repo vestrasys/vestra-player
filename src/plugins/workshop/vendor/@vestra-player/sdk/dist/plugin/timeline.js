@@ -52,13 +52,13 @@ const viewRanges = (ranges) => Object.freeze(ranges.map((range) => Object.freeze
 })));
 /**
  * One per plugin: read before activation (with `playback.read`), then kept
- * current from `timeline.changed` (with `events`) once the plugin uses it.
+ * current from `timeline.changed` (with `events`) once the plugin uses it
+ * (or listens to that event with `player.on`).
  */
 export class TimelineService {
     #runtime;
     marks = Object.freeze([]);
     ranges = Object.freeze([]);
-    #listeners = new Set();
     #started = false;
     layer = false;
     constructor(runtime) {
@@ -72,7 +72,8 @@ export class TimelineService {
         if (this.#started)
             return;
         this.#started = true;
-        // A mirror: a plugin listens through `watch` and bindings.
+        // A mirror: bindings read it; it hears each event before the plugin's
+        // own listeners (`player.on`).
         this.#runtime.on("timeline.changed", (data) => {
             const lists = data;
             if (lists && Array.isArray(lists.marks))
@@ -93,26 +94,12 @@ export class TimelineService {
             this.marks = marks;
         if (rangesChanged)
             this.ranges = ranges;
-        // `onChange` follows the marks only, as before ranges existed.
-        if (marksChanged)
-            for (const listener of [...this.#listeners])
-                listener(marks);
         this.#runtime.invalidate();
     }
     async read() {
         const result = await this.#runtime.host.timeline.marks().catch(() => null);
         if (result)
             this.accept(result);
-    }
-    watch(listener) {
-        this.#listeners.add(listener);
-        const held = this.#runtime.hold("timeline.changed");
-        return {
-            dispose: async () => {
-                this.#listeners.delete(listener);
-                await held.dispose();
-            },
-        };
     }
 }
 export const timelineOf = (runtime) => runtime.service("timeline", () => new TimelineService(runtime));
@@ -128,16 +115,6 @@ export function timeline(scope) {
             service().start();
             scope.runtime.reading("timeline.changed");
             return service().ranges;
-        },
-        onChange(listener) {
-            service().start();
-            const watch = service().watch((marks) => scope.run(listener, marks));
-            return scope.add({
-                dispose: async () => {
-                    scope.forget(watch);
-                    await watch.dispose();
-                },
-            });
         },
         layer() {
             if (service().layer)

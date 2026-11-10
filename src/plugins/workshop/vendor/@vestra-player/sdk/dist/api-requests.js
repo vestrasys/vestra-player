@@ -72,7 +72,6 @@ export const API_REQUESTS = Object.freeze({
     "Subtitles.setStyle": [{ method: "subtitles.style" }, readsSubtitles],
     "Timeline.marks": [{ method: "timeline.marks" }],
     "Timeline.ranges": [{ method: "timeline.marks" }],
-    "Timeline.onChange": [listen("timeline.changed")],
     "Timeline.layer": [
         { method: "timeline.set" },
         { method: "timeline.setRanges" },
@@ -84,7 +83,6 @@ export const API_REQUESTS = Object.freeze({
     "MainWindow.setPictureInPicture": [
         { method: "window.setPictureInPicture" },
     ],
-    "Appearance.onChange": [listen("appearance.changed")],
     "Appearance.set": [{ method: "appearance.set" }],
     "Appearance.setLanguage": [{ method: "appearance.setLanguage" }],
     "Drops.provide": [{ method: "drops.provide" }],
@@ -100,10 +98,8 @@ export const API_REQUESTS = Object.freeze({
         listen("window.state"),
     ],
     "Resolvers.add": [{ method: "sourceResolvers.register" }],
-    "Resolvers.onFileTypesChange": [listen("resolvers.fileTypes")],
     "Commands.add": [{ method: "commands.register" }],
     "Commands.keys": [{ method: "commands.keys" }, listen("commands.keys")],
-    "Commands.onKeysChange": [listen("commands.keys")],
     "Host.run": [{ method: "host.run" }],
     "Windows.create": [{ method: "ui.open" }],
     "Dialogs.confirm": [{ method: "dialogs.confirm" }],

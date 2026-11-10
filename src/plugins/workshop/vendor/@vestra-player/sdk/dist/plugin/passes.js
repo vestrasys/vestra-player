@@ -10,10 +10,6 @@ const STATE = {
     "timeline.changed": { name: "plugin.timeline.marks", when: false },
     "commands.keys": { name: "plugin.commands.keys", when: false },
     "playback.backend": { name: "plugin.subtitles.state", when: false },
-    "resolvers.fileTypes": {
-        name: "plugin.resolvers.fileTypes",
-        when: false,
-    },
 };
 /** Whether something that read `deps` may see a different result after `change`. */
 function affected(deps, change) {

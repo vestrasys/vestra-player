@@ -9,6 +9,12 @@ export declare class ScopeImpl implements Plugin {
     get dataDirectory(): string;
     get stopReason(): StopReason | undefined;
     get disposed(): boolean;
+    /**
+     * Start the SDK's copy that `event` keeps current (`plugin.commands.keys`,
+     * `plugin.timeline`, `plugin.appearance`), for `player.on`; nothing for
+     * an event without one.
+     */
+    followCopy(event: string): void;
     readonly commands: import("./types.ts").Commands;
     readonly when: import("./types.ts").When;
     readonly windows: import("./types.ts").Windows;
