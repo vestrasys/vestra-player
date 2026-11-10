@@ -377,9 +377,19 @@ impl Plugin {
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
         match &self.runner {
-            Runner::Own { outbound, .. } => outbound.try_send(message).map_err(|error| {
-                anyhow::anyhow!("plugin output backpressure/disconnected: {error}")
-            }),
+            Runner::Own { outbound, .. } => match outbound.try_send(message) {
+                Ok(()) => Ok(()),
+                // Its writer stopped: the pipe broke (the process is gone or
+                // going), and the writer reported that (`RuntimeFault`), as
+                // its reader reports the exit. Those drive the stop and the
+                // class's restart rule (supervisor.md §7); an error here
+                // would stop it for good before they arrive (as
+                // `shared_runner::Member::send` does for a member).
+                Err(mpsc::TrySendError::Disconnected(_)) => Ok(()),
+                Err(mpsc::TrySendError::Full(_)) => {
+                    bail!("plugin output backpressure: {OUTBOUND_CAPACITY} messages queued")
+                }
+            },
             Runner::Shared(member) => member.send(message),
             Runner::Stopped => bail!("plugin stopped"),
         }
@@ -783,6 +793,85 @@ mod stop_tests {
         drop(plugin);
         let reason = std::fs::read_to_string(directory.join("reason.txt")).unwrap();
         assert_eq!(reason, "quit");
+    }
+
+    /// Review of the crash-restart change: a plugin that crashes while the
+    /// host writes to it. Once its writer found the pipe closed (and
+    /// reported it, `RuntimeFault`), `send` drops what follows instead of
+    /// failing: a failed send stopped it for good (`transport_failed`)
+    /// before its exit could restart it by its class's rule.
+    #[test]
+    #[ignore = "needs Node 26: run with --include-ignored (ci:local)"]
+    fn a_send_to_a_plugin_that_crashed_is_dropped_not_a_failure() {
+        let root = tempfile::tempdir().unwrap();
+        let directory = root.path().join("crashing");
+        std::fs::create_dir_all(&directory).unwrap();
+        std::fs::write(
+            directory.join("manifest.json"),
+            json!({"id":"test.crashing","version":"1.0.0","apiVersion":API,
+                "entry":"main.js","capabilities":[]})
+            .to_string(),
+        )
+        .unwrap();
+        std::fs::write(directory.join("package.json"), r#"{"type":"module"}"#).unwrap();
+        std::fs::write(
+            directory.join("main.js"),
+            // At its import: its activation would wait for answers from
+            // the host, which this test does not give.
+            "setTimeout(() => process.exit(7), 50);\nexport default function activate() {}\n",
+        )
+        .unwrap();
+        let directory = dunce::canonicalize(directory).unwrap();
+        let manifest = crate::packages::manifest::read_development(&directory).unwrap();
+        let (events, receiver) = mpsc::channel();
+        let runner = own_process(
+            crate::process::runtime_paths::get(),
+            &manifest.id,
+            &directory,
+            None,
+            None,
+            1,
+            events,
+        )
+        .unwrap();
+        let mut plugin = Plugin {
+            manifest,
+            directory,
+            catalog: None,
+            data_key: DataKey::Development("test.crashing".into()),
+            data_directory: None,
+            subscriptions: BTreeMap::new(),
+            listeners: BTreeMap::new(),
+            runner,
+            stop_wait: Duration::from_millis(300),
+            stop_reason: StopReason::Quit,
+            exited: false,
+        };
+        // The host goes on writing (events for it) through the crash.
+        let deadline = Instant::now() + Duration::from_secs(15);
+        let mut writer_failed = false;
+        let mut exited = false;
+        while !(exited && writer_failed) && Instant::now() < deadline {
+            plugin
+                .send(json!({"event":"host.tick","data":{"pad":"x".repeat(4096)}}))
+                .expect("a send to a crashed plugin is dropped, not an error");
+            while let Ok(event) = receiver.try_recv() {
+                match event {
+                    Event::Exited(1) => exited = true,
+                    Event::RuntimeFault(1, message) if message.contains("stdin") => {
+                        writer_failed = true;
+                    }
+                    _ => {}
+                }
+            }
+            thread::sleep(Duration::from_millis(2));
+        }
+        assert!(exited, "the plugin never exited");
+        assert!(writer_failed, "the host never wrote to the closed pipe");
+        // Its writer is gone now: what follows is dropped too.
+        for _ in 0..100 {
+            plugin.send(json!({"event":"host.tick"})).unwrap();
+        }
     }
 
     #[test]

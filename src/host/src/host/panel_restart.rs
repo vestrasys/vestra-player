@@ -42,6 +42,9 @@ pub(crate) struct Restarting {
     pub(crate) text: String,
     /// When the restarted run was found activated (ms, `now_ms`).
     pub(crate) ready_at: Option<u64>,
+    /// The run that crashed last (no process): what removes a panel the
+    /// restarted run did not mount again is sent as its.
+    pub(crate) crashed: u64,
 }
 
 /// The bookkeeping of kept panels (no Slint, unit-tested).
@@ -66,8 +69,10 @@ impl Restarts {
                 keys: BTreeSet::new(),
                 text: String::new(),
                 ready_at: None,
+                crashed: owner,
             });
         entry.owner = owner;
+        entry.crashed = owner;
         entry.keys.extend(keys);
         entry.text = text;
         entry.ready_at = None;
@@ -300,6 +305,17 @@ impl Host {
     pub(crate) fn panel_back(&mut self, key: u64) {
         if self.restarts.done(key) {
             self.set_restarting_line(key, "");
+            // The line may have held the keys (`take-keys`); they go back to
+            // the video, as when a column's tab goes (`sync_column`). The
+            // detached window's own key scope takes them there.
+            if let Some(shell) = &self.shell
+                && !matches!(shell.get_property("canvas-focused"), Ok(SValue::Bool(true)))
+            {
+                let _ = shell.invoke("focus-video", &[]);
+            }
+            if let Some(floating) = self.floating.as_ref().filter(|f| f.owners.contains(&key)) {
+                let _ = floating.instance.invoke("focus-video", &[]);
+            }
         }
     }
     /// The line over kept panel `key`, in the shell and the floating window.
@@ -358,7 +374,7 @@ impl Host {
                         continue;
                     }
                     // Not mounted again (nor on its way): it goes.
-                    let keys = entry.keys.clone();
+                    let (keys, entry_crashed) = (entry.keys.clone(), entry.crashed);
                     let stale = keys
                         .into_iter()
                         .filter(|&key| !self.mount_pending(key))
@@ -377,7 +393,10 @@ impl Host {
                                 .release_view(mount.plugin, mount_view(mount.spec.slot));
                         }
                     }
-                    self.drop_panels(pid, stale);
+                    // Under the crashed run: the restarted one never mounted them
+                    // and is told nothing of them (no `ui.preparing`).
+                    let crashed = entry_crashed;
+                    self.drop_panels(crashed, stale);
                 }
                 Coming::No => self.give_up_panels(&id),
             }
@@ -460,7 +479,8 @@ impl Host {
                 reply: Reply { owner, id: 0 },
                 key,
                 contribution: None,
-                announced: false,
+                // Told nothing: its run may be a restart that never mounted it.
+                announced: true,
             });
         }
     }
@@ -496,6 +516,8 @@ mod tests {
         let moves = restarts.move_to("a.b", 9, |key| rekey_panel(key, 9));
         assert_eq!(moves, [(20, 36), (21, 37)]);
         assert_eq!(restarts.owner_of("a.b"), Some(9));
+        // A panel it never mounts again goes as the crashed run's.
+        assert_eq!(restarts.plugins["a.b"].crashed, 5);
         assert!(restarts.waiting(36) && !restarts.waiting(20));
         assert_eq!(restarts.compiled_key(36), 20);
         assert_eq!(restarts.key_of_branch(21), 37);
@@ -506,6 +528,7 @@ mod tests {
         // is still the first run's.
         restarts.keep("a.b", 9, keys(&[36, 37]), "A is restarting…".into());
         restarts.move_to("a.b", 12, |key| rekey_panel(key, 12));
+        assert_eq!(restarts.plugins["a.b"].crashed, 9);
         assert_eq!(restarts.compiled_key(48), 20);
         assert_eq!(restarts.compiled_key(49), 21);
         // Its bottom bar is mounted again; the tab still waits.

@@ -174,13 +174,25 @@ fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()
 
 /// A panel's restart line (`panel_restart.rs`): while its plugin restarts
 /// after a crash, the host dims the panel's last content and draws one
-/// line over it, taking the pointer (`ui/panel-restarting.slint`); `when`:
+/// line over it, taking the pointer and the keys (`ui/panel-restarting.slint`); `when`:
 /// a further condition (its tab is the shown one).
-fn restarting_overlay(owner: u64, when: &str) -> String {
+fn restarting_overlay(owner: u64, when: &str, take_keys: &str) -> String {
     format!(
         "if {when}root.owner{owner}-restarting != \"\": PanelRestarting {{ x: 0px; y: 0px; \
-         width: parent.width; height: parent.height; text: root.owner{owner}-restarting; }}"
+         width: parent.width; height: parent.height; text: root.owner{owner}-restarting; \
+         take-keys: {take_keys}; }}"
     )
+}
+
+/// Whether a panel's restart line takes the keys when it comes: in the
+/// shell when the video does not have them (they may be on the panel's
+/// controls), always in the detached sidebar's window (`detached`).
+fn restarting_keys(detached: &str) -> &'static str {
+    if detached == "true" {
+        "true"
+    } else {
+        "!root.canvas-focused"
+    }
 }
 
 /// The restart line's property of each panel in `specs` (`""`: live).
@@ -242,7 +254,7 @@ fn column_content(
             return format!(
                 "Owner{}View {{ width: parent.width; height: parent.height; }} {}",
                 spec.owner,
-                restarting_overlay(spec.owner, "")
+                restarting_overlay(spec.owner, "", restarting_keys(detached))
             );
         }
         _ => {}
@@ -254,7 +266,11 @@ fn column_content(
             format!(
                 "if root.{p}-shown == {0}: Owner{0}View {{ width: parent.width; height: parent.height; }} {1}",
                 spec.owner,
-                restarting_overlay(spec.owner, &format!("root.{p}-shown == {} && ", spec.owner))
+                restarting_overlay(
+                    spec.owner,
+                    &format!("root.{p}-shown == {} && ", spec.owner),
+                    restarting_keys(detached),
+                )
             )
         })
         .collect::<Vec<_>>()
@@ -535,7 +551,7 @@ fn shell_source_with(
                  bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} {} {} }} }} }}",
                 key_forward("panel:bottom"),
                 spec.owner,
-                restarting_overlay(spec.owner, ""),
+                restarting_overlay(spec.owner, "", "!root.canvas-focused"),
                 bar_strip(
                     &bar_room.map_or_else(|| "0px".to_owned(), |p| format!("bottom-content.{p}"))
                 )
@@ -563,7 +579,7 @@ fn shell_source_with(
                 "Rectangle {{ visible: root.no-video; \
                  Owner{}View {{ width: parent.width; height: parent.height; }} {} }}",
                 spec.owner,
-                restarting_overlay(spec.owner, "")
+                restarting_overlay(spec.owner, "", "false")
             )
         })
         .unwrap_or_default();

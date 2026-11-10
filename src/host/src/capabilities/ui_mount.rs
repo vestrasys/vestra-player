@@ -302,12 +302,13 @@ fn mount(
     if method == "ui.unmount" {
         let keys = match params.get("slot").filter(|v| !v.is_null()) {
             Some(_) => panel_of(host, reply.owner, params)?.into_iter().collect(),
+            // A panel kept over this plugin's restart is its too: removed
+            // now, not left for `REMOUNT_LIMIT` (with `slot` it is the
+            // slot's panel either way).
             None => host
                 .mounts
                 .values()
-                .filter(|m| {
-                    m.plugin == reply.owner && !m.recorded && !host.restarts.waiting(m.spec.owner)
-                })
+                .filter(|m| m.plugin == reply.owner && !m.recorded)
                 .map(|m| m.spec.owner)
                 .collect::<Vec<_>>(),
         };

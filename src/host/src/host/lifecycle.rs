@@ -440,7 +440,8 @@ impl Host {
         }
     }
     /// A message for `owner` could not be queued. An own process: its queue
-    /// is full or its pipe closed, and it stops, as before. A member of the
+    /// is full (a closed pipe is not an error: its exit drives the restart,
+    /// `Plugin::send`), and it stops, as before. A member of the
     /// shared runner: its queue fills only while the runner reads none of
     /// its input (one reader for every member), so the runner is stuck;
     /// every member restarts with it (`restart_shared`), this one included,
@@ -457,7 +458,7 @@ impl Host {
                 plugin.manifest.id
             ));
         } else {
-            // Its queue is full or its pipe closed: the stop line cannot be
+            // Its queue is full: the stop line cannot be
             // queued either, and the process is killed after the wait.
             self.stop_failed(owner);
         }

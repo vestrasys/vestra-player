@@ -386,6 +386,14 @@ fn crash_loop_failures(name: &str, compiles: &[Compile], log: &str) -> Vec<Strin
             "{name}: {with} compile(s) with its panel after the first (a restart compiled)"
         ));
     }
+    // It listens to the player (`player.onChange`): the host writes to it
+    // during playback, also as it crashes. A write to its closed pipe is
+    // dropped; it never stops it for good before its restart (it did).
+    if log.contains(&format!("({THIRD_PARTY}) transport:")) {
+        failures.push(format!(
+            "{name}: a send to it failed and stopped it (transport)"
+        ));
+    }
     let gave_up = log.contains(&format!("supervisor: {THIRD_PARTY} start limit hit"));
     if !gave_up {
         failures.push(format!("{name}: it never hit its start limit"));
