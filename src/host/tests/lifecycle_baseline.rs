@@ -218,7 +218,7 @@ fn held_commands_reach_a_woken_plugin_in_order_at_its_ready() {
         ),
     );
     let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
-    // A first run: lazy at its ready, parked at once, recorded.
+    // A first run: lazy at its ready, parked once quiet, recorded.
     let first = root.run(4, &lazy);
     at(&first, &format!("lazy: {TWO} parked (2 recorded calls)"));
 

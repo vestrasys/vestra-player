@@ -253,8 +253,8 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
         });
         let lazy = [("VESTRA_SHARED", shared), ("VESTRA_IDLE_MS", "500")];
         let first = run(root.path(), 5, &lazy);
-        // First runs: the mirror plugin is parked at once, without waiting
-        // for an idle time; the listener stays.
+        // First runs: the mirror plugin is parked after its quiet period;
+        // the listener stays.
         for expected in [
             format!("lazy: {MIRROR} starts for its first run"),
             format!("lazy: {MIRROR} classified lazy"),
@@ -337,7 +337,7 @@ fn a_plugin_that_takes_up_a_live_resource_after_its_first_run_starts_at_the_next
     });
     let lazy = [("VESTRA_IDLE_MS", "500")];
 
-    // First run: nothing live, parked at once with its command recorded.
+    // First run: nothing live, parked once quiet with its command recorded.
     let first = run(root.path(), 5, &lazy);
     assert!(
         first.contains(&format!("lazy: {TAKES_UP} classified lazy")),
@@ -449,6 +449,84 @@ fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked()
         second.contains(&format!("{SETS_AFTER_READY} applied")),
         "{second}"
     );
+}
+
+const RESTORES_AFTER_ROUND_TRIP: &str = "vestra.fixture-restores-after-round-trip";
+const RESTORES_AFTER_TIMER: &str = "vestra.fixture-restores-after-timer";
+
+/// A first run (an install, or any upgrade) whose activation starts the
+/// restore of its saved effect and returns (`void apply()`): one applies
+/// it after a round trip to the host and a `setTimeout(0)`, one after a
+/// 300 ms timer (a slower read), each in a player of its own (the video
+/// view has one owner). Neither waits for a test hook: the 300 ms request
+/// always comes after the class was answered lazy. A first run parked at
+/// its classification stopped before such a request came and dropped it,
+/// and its lazy recording did not restore the effect at the next start.
+/// Now a first run goes to standby only after a quiet period: the request
+/// reaches the worker while it runs, makes it resident, and the next start
+/// launches it.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_first_run_that_restores_its_effect_after_its_ready_starts_at_the_next_launch() {
+    for (id, wait) in [
+        (
+            RESTORES_AFTER_ROUND_TRIP,
+            "await plugin.storage.session.get(\"saved\");\n\
+             await new Promise((done) => setTimeout(done, 0));",
+        ),
+        (
+            RESTORES_AFTER_TIMER,
+            "await new Promise((done) => setTimeout(done, 300));",
+        ),
+    ] {
+        let root = root_with(|plugins| {
+            vec![package(
+                plugins,
+                id,
+                &["commands", "processing.video"],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     plugin.commands.add({{ id: \"noop\", path: [\"Tools\", \"Noop\"], run: () => {{}} }});\n\
+                     const apply = async () => {{\n\
+                     {wait}\n\
+                     await plugin.video.view().set({{ zoom: 1.5 }});\n\
+                     console.error(`{id} applied`);\n\
+                     }};\n\
+                     void apply();\n}}\n"
+                ),
+            )]
+        });
+        let first = run(root.path(), 4, &[]);
+        assert!(first.contains(&format!("{id} applied")), "{id}: {first}");
+        assert!(
+            !first.contains(&format!("lazy: {id} parked")),
+            "{id}: {first}"
+        );
+        // Classified resident (the request came while its class was asked)
+        // or resident from the request on: either way not lazy.
+        assert!(
+            first.contains(&format!("lazy: {id} classified resident"))
+                || first.contains(&format!("lazy: {id} resident from now on")),
+            "{id}: {first}"
+        );
+        assert!(
+            recordings(root.path())
+                .iter()
+                .any(|r| r["residentAtReady"] == true),
+            "{id}: a resident recording: {:?}\n{first}",
+            recordings(root.path())
+        );
+        let second = run(root.path(), 3, &[]);
+        assert!(
+            second.contains(&format!("lazy: {id} starts: resident at its last ready")),
+            "{id}: {second}"
+        );
+        assert!(
+            !second.contains(&format!("lazy: {id} replayed")),
+            "{id}: {second}"
+        );
+        assert!(second.contains(&format!("{id} applied")), "{id}: {second}");
+    }
 }
 
 /// The old lazy activation pinned at most eight first runs in flight

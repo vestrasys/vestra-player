@@ -1429,8 +1429,25 @@ fn only_a_first_run_goes_to_standby_when_classified() {
         w.tick(10 + idle);
         assert!(matches!(w.state(u), UnitState::Standby { .. }));
     }
-    // A first run classified lazy goes at once.
-    let mut w = World::new(preset());
+    // A first run classified lazy goes after its quiet period.
+    let tunables = preset();
+    let quiet = tunables.first_run_quiet;
+    let mut w = World::new(tunables);
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.classified(pid, None);
+    let actions = w.tick(10 + quiet);
+    assert!(actions.contains(&Action::Checkpoint {
+        unit: u,
+        pid,
+        resident: false
+    }));
+    assert!(matches!(w.state(u), UnitState::Standby { .. }));
+    // Without a quiet period: at its classification.
+    let mut tunables = preset();
+    tunables.first_run_quiet = 0;
+    let mut w = World::new(tunables);
     let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
     w.tick(0);
     let pid = w.pid(u);
@@ -1441,6 +1458,140 @@ fn only_a_first_run_goes_to_standby_when_classified() {
         pid,
         resident: false
     }));
+    assert!(matches!(w.state(u), UnitState::Standby { .. }));
+}
+
+/// A first run classified lazy is not stopped at its classification: a
+/// saved effect it restores just after its ready (a timer, a round trip)
+/// would reach the host while it stops, be dropped, and its lazy
+/// checkpoint would not restore it at the next start. It goes to standby
+/// after `first_run_quiet` of idle time, through the idle timer's Standby
+/// job (the adapter asks the playback worker again then); a use meanwhile
+/// starts the period again, and a held resource taken up meanwhile
+/// (`holds_live`) makes it resident: no standby, a resident checkpoint.
+#[test]
+fn a_lazy_first_run_goes_to_standby_after_its_quiet_period() {
+    let tunables = preset();
+    let quiet = tunables.first_run_quiet;
+    assert!(quiet > 0 && quiet < tunables.idle_timeout);
+    {
+        let mut w = World::new(tunables.clone());
+        let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.s.classified(pid, None);
+        let mut actions = w.tick(quiet - 1);
+        assert!(active(&w, u), "{actions:?}");
+        // Used just before the period ends: it starts again.
+        w.s.touch(pid, quiet - 1);
+        actions.extend(w.tick(quiet));
+        actions.extend(w.tick(2 * quiet - 2));
+        assert!(active(&w, u), "{actions:?}");
+        assert_eq!(count(&actions, is_terminate), 0, "{actions:?}");
+        assert_eq!(count(&actions, is_checkpoint), 0, "{actions:?}");
+        // Quiet: the Standby job asks for its resources, then it goes.
+        let actions = w.tick(2 * quiet);
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::QueryResources { pid: p, .. } if *p == pid)),
+            "{actions:?}"
+        );
+        assert!(actions.contains(&Action::Checkpoint {
+            unit: u,
+            pid,
+            resident: false
+        }));
+        assert!(matches!(w.state(u), UnitState::Standby { .. }));
+    }
+    // Takes up something held within the period: resident, never parked.
+    let mut w = World::new(tunables);
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.classified(pid, None);
+    w.tick(quiet / 2);
+    assert!(w.s.holds_live(pid));
+    let mut actions = w.tick(quiet / 2 + 1);
+    actions.extend(w.tick(10 * quiet));
+    assert!(actions.contains(&Action::Checkpoint {
+        unit: u,
+        pid,
+        resident: true
+    }));
+    assert_eq!(count(&actions, is_terminate), 0, "{actions:?}");
+    assert!(active(&w, u));
+}
+
+/// A lazy first run busy at its classification (the Host's busy checks,
+/// synced as declared work before it: a command, a dialog, a settings
+/// page) gets no quiet period: it waits the idle timeout after the work
+/// ends, as before.
+#[test]
+fn a_first_run_busy_at_its_classification_waits_the_idle_timeout() {
+    let tunables = preset();
+    let (quiet, idle) = (tunables.first_run_quiet, tunables.idle_timeout);
+    let mut w = World::new(tunables);
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.begin_work(pid, WorkKind::Declared(1), 0);
+    w.s.classified(pid, None);
+    let mut actions = w.tick(quiet);
+    w.s.set_now(2 * quiet);
+    w.s.end_work(pid, WorkKind::Declared(1));
+    actions.extend(w.tick(4 * quiet));
+    actions.extend(w.tick(2 * quiet + idle - 1));
+    assert!(active(&w, u), "{actions:?}");
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, Action::QueryResources { .. })),
+        "no quiet period: {actions:?}"
+    );
+    let actions = w.tick(2 * quiet + idle);
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, Action::QueryResources { pid: p, .. } if *p == pid)),
+        "{actions:?}"
+    );
+    assert!(matches!(w.state(u), UnitState::Standby { .. }));
+}
+
+/// A lazy first run whose quiet period ended while it was busy (the
+/// adapter answered its Standby job's question busy: a command, a dialog
+/// opened after its classification) falls back to the idle timeout: it is
+/// not asked again every quiet period while it stays busy.
+#[test]
+fn a_first_run_found_busy_after_its_quiet_period_waits_the_idle_timeout() {
+    let tunables = preset();
+    let (quiet, idle) = (tunables.first_run_quiet, tunables.idle_timeout);
+    let mut w = World::new(tunables);
+    w.auto_resources = false;
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.classified(pid, None);
+    let asks = |actions: &[Action<u32>]| {
+        actions
+            .iter()
+            .filter(|a| matches!(a, Action::QueryResources { pid: p, .. } if *p == pid))
+            .count()
+    };
+    assert_eq!(asks(&w.tick(quiet)), 1);
+    w.s.resources_answered(pid, true);
+    let mut actions = w.tick(quiet);
+    for t in (2..30).map(|n| n * quiet) {
+        actions.extend(w.tick(t.min(quiet + idle - 1)));
+    }
+    assert_eq!(asks(&actions), 0, "not every quiet period: {actions:?}");
+    assert!(active(&w, u));
+    let actions = w.tick(quiet + idle);
+    assert_eq!(asks(&actions), 1, "after the idle timeout: {actions:?}");
+    w.s.resources_answered(pid, false);
+    w.tick(quiet + idle);
+    w.tick(quiet + idle + 1);
     assert!(matches!(w.state(u), UnitState::Standby { .. }));
 }
 

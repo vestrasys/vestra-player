@@ -345,8 +345,11 @@ pub struct Unit<P> {
     pub(super) classifying: bool,
 
     /// The current run was started as a first run (`Start{FirstRun}`): only
-    /// such a run goes to standby at once when classified lazy.
+    /// such a run goes to standby soon when classified lazy.
     pub(super) run_is_first: bool,
+    /// This first run was classified lazy while idle: it goes to standby
+    /// after `first_run_quiet` of idle time, not the idle timeout.
+    pub(super) quiet_park: bool,
     /// The current run was classified (or its class is known from the
     /// checkpoint): it is checkpointed at shutdown (today's `lazy.classes`).
     pub(super) classified_run: bool,
@@ -423,6 +426,7 @@ impl<P> Unit<P> {
             classifying: false,
 
             run_is_first: false,
+            quiet_park: false,
             classified_run: false,
             may_reclassify: false,
             recorded_resident: recordable && spec.checkpoint.is_some_and(|c| c.resident),
