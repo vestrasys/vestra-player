@@ -77,9 +77,12 @@ export const WRITE_GRACE_MS = 60_000;
  * a file that another handle has open (a reader of the index or a sheet, a
  * virus scanner, the indexer) fails with EPERM, EACCES or EBUSY until that
  * handle closes. 0.2.18: the waits grow by `RENAME_STEP_MS` up to
- * `RENAME_MAX_WAIT_MS` (graceful-fs's win32 rename, which write-file-atomic
- * uses, waits the same way), so all tries span about 1 s; before, 5 tries over
- * 0.2 s still lost to a busy reader now and then.
+ * `RENAME_MAX_WAIT_MS` (the steps of graceful-fs's win32 rename), so all
+ * tries span about 1 s. The ~1 s total and retrying over an existing, open
+ * target are this plugin's choice (graceful-fs retries for up to 60 s and only
+ * while the target does not exist; Windows refuses to replace a file another
+ * handle has open). Before, 5 tries over 0.2 s still lost to a busy reader now
+ * and then.
  */
 export const RENAME_TRIES = 15;
 export const RENAME_STEP_MS = 10;

@@ -703,7 +703,7 @@ test("0.2.12 cache: a refused rename is tried again (EPERM, EACCES, EBUSY) up to
     };
     await assert.rejects(writeIndex(dir, index(2)), { code: "EACCES" });
     assert.equal(calls, RENAME_TRIES);
-    // 0.2.18: the waits between the tries grow and span about 1 s in all (graceful-fs's win32 rename).
+    // 0.2.18: the waits grow in graceful-fs's win32 rename steps; the ~1 s total is this plugin's choice.
     const waits = Array.from({ length: RENAME_TRIES - 1 }, (_, i) => renameWait(i + 1));
     assert.ok(waits.every((w, i) => i === 0 || w >= waits[i - 1]!));
     const total = waits.reduce((a, b) => a + b, 0);
