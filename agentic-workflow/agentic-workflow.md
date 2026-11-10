@@ -177,7 +177,7 @@ This rule does not change the version rules above: additions stay patch releases
 
 **The host changes the Slint widget library (`src/host/ui/palette.slint`, `src/host/ui/vestra/`)**
 
-The SDK package carries a read-only copy for authors' editors; the player's version is authoritative. When you change the widget library:
+The SDK package carries a read-only copy for authors' editors and for TestHost, which checks the values a plugin sets against the library's structs and properties; the player's version is authoritative. When you change the widget library:
 
 1. `cd src && node scripts/sync-sdk-slint.mjs --write <SDK repository directory>` copies the files from `host/ui` into `slint/` in the SDK repository; when adding a new library file, first add it to the script's `SLINT_FILES`.
 2. The copy reaches the SDK with its next release under the release cadence above; the player's change merges without waiting for it. Before the next player release, the SDK is released and the dependency upgraded as described above.
