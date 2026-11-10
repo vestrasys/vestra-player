@@ -119,7 +119,8 @@ impl RenderContext {
         if result < 0 { Err(error_text(result)) } else { Ok(()) }
     }
 
-    /// The frame drawn last was shown (display-synced timing).
+    /// The frame drawn last was shown: after every frame, or never (one
+    /// report makes mpv wait for one in each later flip, render.h).
     pub fn report_swap(&self) {
         // SAFETY: a live context, render thread only.
         unsafe { sys::mpv_render_context_report_swap(self.0) };
