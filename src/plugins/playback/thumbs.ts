@@ -1,8 +1,8 @@
-import { mkdir, realpath, rename, rm, stat, unlink, writeFile } from "node:fs/promises";
+import { mkdir, realpath, rm, stat, unlink, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { ImageRef, PlayerState, Plugin } from "@vestra-player/sdk";
 import { isLocalPath } from "./local-path.ts";
-import { cacheKey, type CacheIndex, CACHE_VERSION, evict, readIndex, writeIndex } from "./preview-cache.ts";
+import { cacheKey, type CacheIndex, CACHE_VERSION, evict, readIndex, replaceFile, writeIndex } from "./preview-cache.ts";
 import type { SettingsStore } from "./settings.ts";
 import {
   CELL_BYTES,
@@ -825,7 +825,11 @@ export class Thumbnails {
               maxOutput: 64 * 1024,
               signal: job.abort.signal,
             });
-            await rename(fresh, join(job.dir!, `sheet-${s}.jpg`));
+            // Refused while the bar or a virus scanner has the old sheet open: tried again for about 1 s.
+            await replaceFile(fresh, join(job.dir!, `sheet-${s}.jpg`));
+          } catch (error) {
+            await unlink(fresh).catch(() => {}); // made again from the cells at the next write
+            throw error;
           } finally {
             await unlink(raw).catch(() => {});
           }

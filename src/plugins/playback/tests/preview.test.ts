@@ -26,6 +26,7 @@ import {
   indexFs,
   readIndex,
   RENAME_TRIES,
+  renameWait,
   WRITE_GRACE_MS,
   writeIndex,
 } from "../preview-cache.ts";
@@ -656,6 +657,18 @@ test("0.2.12 cache: index.json is replaced atomically (temporary file, rename, r
     await closing;
     assert.equal((await readIndex(dir))?.usedAt, 3);
     assert.deepEqual(readdirSync(dir), ["index.json"]);
+    // 0.2.18: a reader that keeps it open for half a second (0.2.17 gave up after 0.2 s).
+    const slow = openSync(join(dir, "index.json"), "r");
+    const slowClosing = new Promise<void>((resolve) =>
+      setTimeout(() => {
+        closeSync(slow);
+        resolve();
+      }, 500),
+    );
+    await writeIndex(dir, index(4));
+    await slowClosing;
+    assert.equal((await readIndex(dir))?.usedAt, 4);
+    assert.deepEqual(readdirSync(dir), ["index.json"]);
     // Readers read index.json only: a temporary file alone is no index.
     rmSync(join(dir, "index.json"));
     writeFileSync(join(dir, "index.json.1.1.tmp"), JSON.stringify(index(4)));
@@ -690,6 +703,11 @@ test("0.2.12 cache: a refused rename is tried again (EPERM, EACCES, EBUSY) up to
     };
     await assert.rejects(writeIndex(dir, index(2)), { code: "EACCES" });
     assert.equal(calls, RENAME_TRIES);
+    // 0.2.18: the waits grow in graceful-fs's win32 rename steps; the ~1 s total is this plugin's choice.
+    const waits = Array.from({ length: RENAME_TRIES - 1 }, (_, i) => renameWait(i + 1));
+    assert.ok(waits.every((w, i) => i === 0 || w >= waits[i - 1]!));
+    const total = waits.reduce((a, b) => a + b, 0);
+    assert.ok(total >= 800 && total <= 1000, `waits ${total} ms`);
     assert.deepEqual(readdirSync(dir), ["index.json"]);
     assert.equal((await readIndex(dir))?.usedAt, 1);
     // Any other error is not tried again.
