@@ -72,12 +72,42 @@ const isIndex = (value: unknown): value is CacheIndex => {
 export const INDEX_TEMP = /^index\.json\.\d+\.\d+\.tmp$/;
 /** A temporary index younger than this is a write in progress; an older one is left over from a crash. */
 export const WRITE_GRACE_MS = 60_000;
-/** Renames refused for a moment on Windows (a virus scanner or the indexer has the file open) are tried this often. */
-export const RENAME_TRIES = 5;
+/**
+ * Renames refused for a moment on Windows are tried this often. A rename over
+ * a file that another handle has open (a reader of the index or a sheet, a
+ * virus scanner, the indexer) fails with EPERM, EACCES or EBUSY until that
+ * handle closes. 0.2.18: the waits grow by `RENAME_STEP_MS` up to
+ * `RENAME_MAX_WAIT_MS` (graceful-fs's win32 rename, which write-file-atomic
+ * uses, waits the same way), so all tries span about 1 s; before, 5 tries over
+ * 0.2 s still lost to a busy reader now and then.
+ */
+export const RENAME_TRIES = 15;
+export const RENAME_STEP_MS = 10;
+export const RENAME_MAX_WAIT_MS = 100;
 const TRANSIENT = new Set(["EPERM", "EACCES", "EBUSY"]);
 let temps = 0;
-/** The file calls of `writeIndex`; tests replace them to play a failing disk or a refused rename. */
+/** The file calls of `writeIndex` and `replaceFile`; tests replace them to play a failing disk or a refused rename. */
 export const indexFs = { writeFile, rename };
+
+/** The wait after the `attempt`th refused rename (1-based). */
+export const renameWait = (attempt: number): number => Math.min(RENAME_STEP_MS * attempt, RENAME_MAX_WAIT_MS);
+
+/**
+ * Rename `from` over `to`, trying again while Windows refuses it for a moment
+ * (see `RENAME_TRIES`). Node's rename replaces an existing file on Windows too
+ * (libuv: MoveFileExW with MOVEFILE_REPLACE_EXISTING). The last error is
+ * thrown; `from` is left for the caller to remove.
+ */
+export async function replaceFile(from: string, to: string): Promise<void> {
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await indexFs.rename(from, to);
+    } catch (error) {
+      if (attempt >= RENAME_TRIES || !TRANSIENT.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
+      await new Promise((resolve) => setTimeout(resolve, renameWait(attempt)));
+    }
+  }
+}
 
 type Look = { index: CacheIndex } | { invalid: true } | { unreadable: true };
 
@@ -111,17 +141,9 @@ export async function writeIndex(dir: string, index: CacheIndex): Promise<void> 
   try {
     // Inside the try: a write that fails half way leaves no temporary file behind.
     await indexFs.writeFile(temp, JSON.stringify(index));
-    // Node's rename replaces an existing file on Windows too (libuv: MoveFileExW
-    // with MOVEFILE_REPLACE_EXISTING); it is refused while another program holds
-    // the target open without delete sharing: wait a little and try again.
-    for (let attempt = 1; ; attempt++) {
-      try {
-        return await indexFs.rename(temp, join(dir, INDEX_FILE));
-      } catch (error) {
-        if (attempt >= RENAME_TRIES || !TRANSIENT.has((error as NodeJS.ErrnoException).code ?? "")) throw error;
-        await new Promise((resolve) => setTimeout(resolve, 20 * attempt));
-      }
-    }
+    // Refused while a reader (a clean-up looking at this folder, a virus
+    // scanner) has index.json open: tried again for about 1 s.
+    await replaceFile(temp, join(dir, INDEX_FILE));
   } catch (error) {
     await unlink(temp).catch(() => {});
     throw error;
