@@ -4,7 +4,7 @@
 //! something to the plugin that got it; `media.sources.locate` comes back
 //! here for the file dialog (`Event::SourceLocate`). Exports of their parts
 //! are `jobs.start` / `jobs.check` with `parts` (`media_control.rs`).
-use super::{Capability, Handled, Info, Method, Recorded, Residency, forward_media, plugin};
+use super::{Capability, Handled, Info, Method, Needs, Recorded, Residency, forward_media, plugin};
 use crate::{
     host::{Event, Host, Reply, RpcError},
     i18n,
@@ -21,11 +21,24 @@ static INFO: Info = Info {
     requires: &[],
     residency: Residency::None,
 };
-static METHODS: &[Method] = &[Method::this("media.sources.*")];
+static METHODS: &[Method] = &[
+    // Opening replaces what is playing, as `player.open` does, so it needs
+    // `playback.control` as well: declared, `media.sources` is checked; not
+    // declared, the check asks for `playback.control`, which fails.
+    Method {
+        name: "media.sources.open",
+        needs: Needs::IfDeclared {
+            declared: "playback.control",
+            then: "media.sources",
+            otherwise: "playback.control",
+        },
+    },
+    Method::this("media.sources.*"),
+];
 /// The methods the prefix covers.
 const SOURCES: &[&str] = &[
-    "media.sources.reference",
-    "media.sources.resolve",
+    "media.sources.remember",
+    "media.sources.get",
     "media.sources.locate",
     "media.sources.forget",
     "media.sources.list",

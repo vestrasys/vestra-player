@@ -732,19 +732,23 @@ impl Jobs {
     }
 }
 impl Jobs {
-    /// `jobs.check { snapshotId, end }`: the snapshot's clip as one part.
+    /// `jobs.check { snapshotId, end }`: the snapshot's clip as one part
+    /// (`media_sources::CheckParams`).
     pub fn snapshot_check(
         &self,
         owner: u64,
-        params: &Value,
+        snapshot_id: u64,
+        end: Option<f64>,
     ) -> Result<crate::playback::media_sources::SnapshotInput, RpcError> {
+        if !safe(snapshot_id) {
+            return Err(RpcError::invalid("positive safe integer identity required"));
+        }
         let snapshot = self
             .snapshots
-            .get(&id(params, "snapshotId")?)
+            .get(&snapshot_id)
             .filter(|s| s.owner == owner)
             .ok_or_else(|| RpcError::new("unknown-expired", "snapshot unavailable"))?;
-        let end = params["end"]
-            .as_f64()
+        let end = end
             .filter(|end| end.is_finite() && *end > snapshot.time && *end <= snapshot.duration)
             .ok_or_else(|| {
                 RpcError::invalid("end must be after the snapshot time and within its duration")

@@ -600,45 +600,11 @@ impl Backend {
                             }
                             continue;
                         }
-                        // The check of a snapshot's clip (`jobs.check`
-                        // without parts): its held file, probed on a short
-                        // thread.
+                        // A snapshot's check (`jobs.check { snapshotId }`)
+                        // is served here; a parts check goes on below.
                         if command.method == "jobs.check"
-                            && command.params["snapshotId"].is_null()
-                                == command.params["parts"].is_null()
+                            && snapshot_check(&jobs, &events, &command.reply, &command.params)
                         {
-                            let _ = events.send(Event::Reply(
-                                command.reply,
-                                Err(RpcError::invalid(
-                                    "jobs.check takes parts or a snapshotId, one of them",
-                                )),
-                            ));
-                            continue;
-                        }
-                        if command.method == "jobs.check" && !command.params["snapshotId"].is_null()
-                        {
-                            let input = jobs.snapshot_check(command.reply.owner, &command.params);
-                            let store = command.params["store"].as_str().map_or_else(
-                                || format!("owner:{}", command.reply.owner),
-                                str::to_owned,
-                            );
-                            match input.and_then(|input| {
-                                crate::playback::media_sources::check_encoding(&command.params)
-                                    .map(|encoding| (input, encoding))
-                            }) {
-                                Ok((input, encoding)) => {
-                                    crate::playback::media_sources::check_snapshot(
-                                        &events,
-                                        command.reply.clone(),
-                                        store,
-                                        input,
-                                        encoding,
-                                    )
-                                }
-                                Err(error) => {
-                                    let _ = events.send(Event::Reply(command.reply, Err(error)));
-                                }
-                            }
                             continue;
                         }
                         // Source references and the parts check: answered
@@ -1410,6 +1376,48 @@ fn stats(
         "cacheSeconds":signed("demuxer-cache-duration")})
 }
 
+/// `jobs.check`: its params read (`media_sources::CheckParams`), parts or a
+/// `snapshotId`, one of them. A snapshot's check is answered here (its held
+/// file, probed on a short thread), as is a refused request; `false`: a
+/// parts check, for `media_sources::request`.
+fn snapshot_check(
+    jobs: &crate::playback::media_jobs::Jobs,
+    events: &mpsc::Sender<Event>,
+    reply: &Reply,
+    params: &Value,
+) -> bool {
+    use crate::playback::media_sources::{CheckParams, check_snapshot, read_params};
+    let refuse = |error: RpcError| {
+        let _ = events.send(Event::Reply(reply.clone(), Err(error)));
+        true
+    };
+    let check = match read_params::<CheckParams>(params) {
+        Ok(check) if check.snapshot_id.is_none() != check.parts.is_none() => check,
+        Ok(_) => {
+            return refuse(RpcError::invalid(
+                "jobs.check takes parts or a snapshotId, one of them",
+            ));
+        }
+        Err(error) => return refuse(error),
+    };
+    let Some(snapshot_id) = check.snapshot_id else {
+        return false;
+    };
+    let input = match jobs
+        .snapshot_check(reply.owner, snapshot_id, check.end)
+        .and_then(|input| check.encoding().map(|encoding| (input, encoding)))
+    {
+        Ok(input) => input,
+        Err(error) => return refuse(error),
+    };
+    // The plugin's share of the request threads, as its parts checks.
+    let store = params["store"]
+        .as_str()
+        .map_or_else(|| format!("owner:{}", reply.owner), str::to_owned);
+    check_snapshot(events, reply.clone(), store, input.0, input.1);
+    true
+}
+
 /// `media.sources.open`: the remembered file opened as any open
 /// (`source.submit` under the plugin's own operation id, so its
 /// `source.operation` follows it), at `start` through the resume point of
@@ -2056,6 +2064,46 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
 mod tests {
     use super::*;
     use crate::playback::session::Phase;
+
+    /// `jobs.check` takes parts or a snapshotId (missing and null alike
+    /// absent); typed fields; parts go on to `media_sources::request`.
+    #[test]
+    fn a_check_takes_parts_or_a_snapshot_id_one_of_them() {
+        let jobs = crate::playback::media_jobs::Jobs::default();
+        let (events, replies) = mpsc::channel();
+        let reply = Reply { owner: 1, id: 1 };
+        let refused = |params: Value| {
+            assert!(snapshot_check(&jobs, &events, &reply, &params), "{params}");
+            match replies.try_recv().unwrap() {
+                Event::Reply(_, Err(error)) => error.code,
+                _ => panic!("not a refusal"),
+            }
+        };
+        let part = json!({"source":"t","start":0,"end":1});
+        for params in [
+            json!({"store":"k","parts":[part],"snapshotId":1,"end":1}),
+            json!({"store":"k"}),
+            json!({"store":"k","parts":null,"snapshotId":null}),
+            json!({"store":"k","snapshotId":1,"end":1,"snapshotID":1}),
+            json!({"store":"k","snapshotId":"1","end":1}),
+            json!({"store":"k","snapshotId":0,"end":1}),
+        ] {
+            assert_eq!(refused(params.clone()), "invalid", "{params}");
+        }
+        // A snapshot this plugin does not hold; `end` is read after it.
+        assert_eq!(
+            refused(json!({"store":"k","snapshotId":1,"end":null})),
+            "unknown-expired"
+        );
+        // Parts (and a null snapshotId) are the parts check's.
+        for params in [
+            json!({"store":"k","parts":[part]}),
+            json!({"store":"k","parts":[part],"snapshotId":null,"end":null}),
+        ] {
+            assert!(!snapshot_check(&jobs, &events, &reply, &params), "{params}");
+        }
+        assert!(replies.try_recv().is_err());
+    }
     /// Review 1B: a shader request counts as processed whether or not its
     /// list was written (the same merged list, `limit`, `unsupported`), so
     /// the shader guard never waits for it all run.

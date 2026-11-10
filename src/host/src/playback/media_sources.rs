@@ -2,7 +2,7 @@
 //! (host-internal store; runs on the playback worker and short threads).
 //!
 //! The host mints an opaque token for the current source when a plugin asks
-//! (`media.sources.reference`); only a local regular file qualifies, never a
+//! (`media.sources.remember`); only a local regular file qualifies, never a
 //! stream or a plugin's own picture. The token is the plugin's key into a
 //! table the host keeps in the profile (`media-sources.json`, keyed by the
 //! plugin's data key): the path, its size and modification time when it was
@@ -49,6 +49,8 @@ const MAX_IN_FLIGHT_PER_PLUGIN: usize = 4;
 static IN_FLIGHT_BY_STORE: Mutex<BTreeMap<String, usize>> = Mutex::new(BTreeMap::new());
 /// The parts' total length, as one clip's (24 hours).
 pub const MAX_TOTAL_SECONDS: f64 = 86400.;
+/// A part's latest end in its file (24 hours, as one clip's length).
+pub const MAX_PART_END: f64 = 86400.;
 
 /// A video stream's facts, as probed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -568,8 +570,15 @@ pub fn parts_valid(parts: &[Part]) -> bool {
                 && p.start.is_finite()
                 && p.end.is_finite()
                 && p.start >= 0.
-                && p.end <= 86400.
+                && p.end <= MAX_PART_END
         })
+}
+/// What [`parts_valid`] asks for, as an error message.
+fn parts_required() -> String {
+    format!(
+        "1–{MAX_PARTS} parts with a token and finite times from 0 to {MAX_PART_END} s \
+         (24 hours in all) required"
+    )
 }
 
 /// What a re-encoded join writes: the first part's square-pixel size (even)
@@ -769,11 +778,82 @@ fn key_of(params: &Value) -> Result<String, RpcError> {
         .ok_or_else(|| RpcError::new("internal", "source store unavailable"))
 }
 fn token_of(params: &Value) -> Result<String, RpcError> {
-    params["token"]
-        .as_str()
-        .filter(|t| !t.is_empty() && t.len() <= 64)
-        .map(str::to_owned)
-        .ok_or_else(|| RpcError::invalid("token required"))
+    checked_token(params["token"].as_str().unwrap_or_default().to_owned())
+}
+fn checked_token(token: String) -> Result<String, RpcError> {
+    if token.is_empty() || token.len() > 64 {
+        return Err(RpcError::invalid("token required"));
+    }
+    Ok(token)
+}
+
+/// A `media.sources.*` or `jobs.check` request's params, read into `T`
+/// (`deny_unknown_fields`): a misspelt or extra field, a missing required
+/// one or a wrong type is `invalid`; an optional field may be missing or
+/// null. The host's `store` is read first (`key_of`), so a request without
+/// one stays `internal`.
+pub fn read_params<T: serde::de::DeserializeOwned>(params: &Value) -> Result<T, RpcError> {
+    serde_json::from_value(params.clone()).map_err(|error| RpcError::invalid(error.to_string()))
+}
+
+/// `media.sources.get` / `locate` / `forget { token }`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct TokenParams {
+    /// The host's store key (read by `key_of`).
+    #[serde(rename = "store")]
+    _store: serde::de::IgnoredAny,
+    token: String,
+}
+/// `media.sources.remember { expected? }`: `expected` is the current
+/// source's stamp (`source.state`'s `stamp`), as `snapshot.capture`'s.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct RememberParams {
+    #[serde(rename = "store")]
+    _store: serde::de::IgnoredAny,
+    expected: Option<crate::playback::session::SourceStamp>,
+}
+/// `media.sources.list {}`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct ListParams {
+    #[serde(rename = "store")]
+    _store: serde::de::IgnoredAny,
+}
+/// `media.sources.open { token, operationId, start? }`.
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OpenParams {
+    #[serde(rename = "store")]
+    _store: serde::de::IgnoredAny,
+    token: String,
+    operation_id: u64,
+    start: Option<f64>,
+}
+/// `jobs.check { parts | snapshotId, end?, encoding? }`: the parts of
+/// remembered files, or a snapshot's clip up to `end` (one of the two;
+/// `playback/backend.rs` checks that).
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct CheckParams {
+    /// The host's store key (`media_control.rs` adds it to every check).
+    #[serde(rename = "store")]
+    _store: Option<serde::de::IgnoredAny>,
+    pub parts: Option<Vec<Part>>,
+    pub snapshot_id: Option<u64>,
+    pub end: Option<f64>,
+    pub encoding: Option<Encoding>,
+}
+impl CheckParams {
+    /// The check's encoding (the default when there is none).
+    pub fn encoding(&self) -> Result<Encoding, RpcError> {
+        let encoding = self.encoding.unwrap_or_default();
+        if !encoding.valid() {
+            return Err(RpcError::invalid("invalid encoding"));
+        }
+        Ok(encoding)
+    }
 }
 
 /// `media.sources.open { token, start?, operationId }`: the file a plugin's
@@ -788,28 +868,27 @@ pub fn open_request(
     params: &Value,
 ) -> Result<(String, Option<f64>, Value), RpcError> {
     let key = key_of(params)?;
-    let token = token_of(params)?;
-    let operation = params["operationId"]
-        .as_u64()
-        .filter(|id| *id > 0)
-        .ok_or_else(|| RpcError::invalid("operationId requires positive integer"))?;
+    let OpenParams {
+        token,
+        operation_id: operation,
+        start,
+        ..
+    } = read_params(params)?;
+    let token = checked_token(token)?;
+    if operation == 0 {
+        return Err(RpcError::invalid("operationId requires positive integer"));
+    }
     let entry = store
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner)
         .get(&key, &token)
         .cloned()
         .ok_or_else(unknown)?;
-    let start = match &params["start"] {
-        Value::Null => None,
-        value => Some(
-            value
-                .as_f64()
-                .filter(|s| s.is_finite() && *s >= 0. && *s < entry.facts.duration)
-                .ok_or_else(|| {
-                    RpcError::invalid("start must be seconds from 0 to before the file's end")
-                })?,
-        ),
-    };
+    if start.is_some_and(|s| !(s.is_finite() && s >= 0. && s < entry.facts.duration)) {
+        return Err(RpcError::invalid(
+            "start must be seconds from 0 to before the file's end",
+        ));
+    }
     match entry.status() {
         Status::Ok => (),
         Status::Missing => {
@@ -835,17 +914,6 @@ pub fn open_request(
         "intent": {"kind": "open", "source": path, "startPaused": false},
     });
     Ok((path, start.filter(|s| *s > 0.), submit))
-}
-
-/// The encoding of a check (`jobs.check`'s optional `encoding`).
-pub fn check_encoding(params: &Value) -> Result<Encoding, RpcError> {
-    match &params["encoding"] {
-        Value::Null => Ok(Encoding::default()),
-        value => match serde_json::from_value::<Encoding>(value.clone()) {
-            Ok(encoding) if encoding.valid() => Ok(encoding),
-            _ => Err(RpcError::invalid("invalid encoding")),
-        },
-    }
 }
 
 /// A snapshot's clip, as one part for [`check`].
@@ -975,7 +1043,7 @@ pub(super) fn spawn(
     }
 }
 
-/// The current source, when it is a local regular file (`reference`).
+/// The current source, when it is a local regular file (`remember`).
 pub struct Current {
     pub path: Option<PathBuf>,
     /// The source's stamp (`source.state`'s `stamp`).
@@ -1011,9 +1079,16 @@ pub fn request(
     };
     let store = store.clone();
     match method {
-        "media.sources.reference" => {
+        "media.sources.remember" => {
+            let RememberParams { expected, .. } = match read_params(params) {
+                Ok(params) => params,
+                Err(error) => return answer(Err(error)),
+            };
             let current = current();
-            if !params["expected"].is_null() && params["expected"] != current.stamp {
+            if expected.is_some_and(|expected| {
+                serde_json::from_value::<crate::playback::session::SourceStamp>(current.stamp).ok()
+                    != Some(expected)
+            }) {
                 return answer(Err(RpcError::new("stale", "source intent changed")));
             }
             let Some(path) = current.path else {
@@ -1035,8 +1110,9 @@ pub fn request(
                 Ok(entry.public(&token, Status::Ok))
             });
         }
-        "media.sources.resolve" => {
-            let token = match token_of(params) {
+        "media.sources.get" => {
+            let token = match read_params(params).and_then(|p: TokenParams| checked_token(p.token))
+            {
                 Ok(token) => token,
                 Err(error) => return answer(Err(error)),
             };
@@ -1050,20 +1126,26 @@ pub fn request(
                 Ok(entry.public(&token, entry.status()))
             });
         }
-        "media.sources.list" => spawn(events, reply, key.clone(), move || {
-            let entries = store
-                .lock()
-                .unwrap_or_else(std::sync::PoisonError::into_inner)
-                .list(&key);
-            Ok(Value::Array(
-                entries
-                    .iter()
-                    .map(|(token, entry)| entry.public(token, entry.status()))
-                    .collect(),
-            ))
-        }),
+        "media.sources.list" => {
+            if let Err(error) = read_params::<ListParams>(params) {
+                return answer(Err(error));
+            }
+            spawn(events, reply, key.clone(), move || {
+                let entries = store
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
+                    .list(&key);
+                Ok(Value::Array(
+                    entries
+                        .iter()
+                        .map(|(token, entry)| entry.public(token, entry.status()))
+                        .collect(),
+                ))
+            });
+        }
         "media.sources.forget" => {
-            let token = match token_of(params) {
+            let token = match read_params(params).and_then(|p: TokenParams| checked_token(p.token))
+            {
                 Ok(token) => token,
                 Err(error) => return answer(Err(error)),
             };
@@ -1074,7 +1156,8 @@ pub fn request(
             answer(Ok(Value::Null));
         }
         "media.sources.locate" => {
-            let token = match token_of(params) {
+            let token = match read_params(params).and_then(|p: TokenParams| checked_token(p.token))
+            {
                 Ok(token) => token,
                 Err(error) => return answer(Err(error)),
             };
@@ -1123,18 +1206,19 @@ pub fn request(
             });
         }
         "jobs.check" => {
-            let parts: Vec<Part> = match serde_json::from_value(params["parts"].clone()) {
-                Ok(parts) => parts,
-                Err(error) => return answer(Err(RpcError::invalid(error.to_string()))),
-            };
-            let encoding = match check_encoding(params) {
-                Ok(encoding) => encoding,
+            let checked = read_params::<CheckParams>(params).and_then(|check| {
+                let encoding = check.encoding()?;
+                let parts = check
+                    .parts
+                    .ok_or_else(|| RpcError::invalid("parts required"))?;
+                Ok((parts, encoding))
+            });
+            let (parts, encoding) = match checked {
+                Ok(checked) => checked,
                 Err(error) => return answer(Err(error)),
             };
             if !parts_valid(&parts) {
-                return answer(Err(RpcError::invalid(format!(
-                    "1–{MAX_PARTS} parts with a token and finite times from 0 to 86400 s (24 hours in all) required"
-                ))));
+                return answer(Err(RpcError::invalid(parts_required())));
             }
             spawn(events, reply, key.clone(), move || {
                 let resolved = resolve_parts(&store, &key, &parts);
@@ -1567,5 +1651,185 @@ mod tests {
             start: 0.,
             end: 1.
         }]));
+    }
+
+    /// One request's reply: `request` answers at once or from a short thread.
+    fn ask(
+        store: &Shared,
+        method: &str,
+        params: Value,
+        current: Current,
+    ) -> Result<Value, RpcError> {
+        let (events, replies) = mpsc::channel();
+        request(
+            store,
+            &events,
+            Reply { owner: 1, id: 1 },
+            method,
+            &params,
+            || current,
+        );
+        match replies
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap()
+        {
+            Event::Reply(_, result) => result,
+            _ => panic!("not a reply"),
+        }
+    }
+    fn nothing_open() -> Current {
+        Current {
+            path: None,
+            stamp: json!({"generation": 2, "intentVersion": 5}),
+        }
+    }
+
+    #[test]
+    fn new_methods_refuse_misspelt_and_extra_fields_and_read_null_as_missing() {
+        let shared: Shared = Arc::new(Mutex::new(Store::default()));
+        let token = shared
+            .lock()
+            .unwrap()
+            .insert("k", entry("/x", None, None))
+            .unwrap();
+        let code = |method: &str, params: Value| {
+            ask(&shared, method, params, nothing_open()).map_err(|e| e.code)
+        };
+        // Typed: a misspelt or extra field, a wrong type, a missing token.
+        for method in [
+            "media.sources.get",
+            "media.sources.forget",
+            "media.sources.locate",
+        ] {
+            assert_eq!(
+                code(method, json!({"store":"k","tokn":token})),
+                Err("invalid".into()),
+                "{method}"
+            );
+            assert_eq!(
+                code(method, json!({"store":"k","token":token,"extra":1})),
+                Err("invalid".into()),
+                "{method}"
+            );
+            assert_eq!(
+                code(method, json!({"store":"k","token":7})),
+                Err("invalid".into()),
+                "{method}"
+            );
+            assert_eq!(
+                code(method, json!({"store":"k","token":""})),
+                Err("invalid".into()),
+                "{method}"
+            );
+        }
+        assert_eq!(
+            code("media.sources.list", json!({"store":"k","all":true})),
+            Err("invalid".into())
+        );
+        assert_eq!(
+            code("media.sources.list", json!({"store":"k"})).unwrap()[0]["token"],
+            json!(token)
+        );
+        assert_eq!(
+            code("media.sources.get", json!({"store":"k","token":token})).unwrap()["token"],
+            json!(token)
+        );
+        // `store` is the host's: without it the request is the host's fault.
+        assert_eq!(
+            code("media.sources.get", json!({"token":token})),
+            Err("internal".into())
+        );
+        assert_eq!(code("jobs.check", json!({})), Err("internal".into()));
+        // `remember { expected? }`: missing and null alike skip the stamp
+        // check (nothing local is open, so `unsupported` either way); a
+        // stamp of another source is `stale`; a stamp that is no stamp or a
+        // misspelt field is `invalid`.
+        for params in [
+            json!({"store":"k"}),
+            json!({"store":"k","expected":null}),
+            json!({"store":"k","expected":{"generation":2,"intentVersion":5}}),
+        ] {
+            assert_eq!(
+                code("media.sources.remember", params.clone()),
+                Err("unsupported".into()),
+                "{params}"
+            );
+        }
+        assert_eq!(
+            code(
+                "media.sources.remember",
+                json!({"store":"k","expected":{"generation":2,"intentVersion":4}})
+            ),
+            Err("stale".into())
+        );
+        for params in [
+            json!({"store":"k","expected":"2"}),
+            json!({"store":"k","expect":{"generation":2,"intentVersion":5}}),
+        ] {
+            assert_eq!(
+                code("media.sources.remember", params.clone()),
+                Err("invalid".into()),
+                "{params}"
+            );
+        }
+        // `jobs.check { parts }`: typed parts and encoding; `end` and
+        // `encoding` may be null.
+        let part = json!({"source":token,"start":0,"end":1});
+        let checked = code(
+            "jobs.check",
+            json!({"store":"k","parts":[part],"encoding":null,"snapshotId":null}),
+        )
+        .unwrap();
+        assert!(checked["copy"].is_object(), "{checked}");
+        for params in [
+            json!({"store":"k","parts":[part],"encodng":{}}),
+            json!({"store":"k","parts":[{"source":token,"start":0,"end":1,"x":1}]}),
+            json!({"store":"k","parts":[part],"encoding":{"crf":99}}),
+            json!({"store":"k","parts":[{"source":token,"start":0,"end":86401}]}),
+            json!({"store":"k"}),
+        ] {
+            assert_eq!(
+                code("jobs.check", params.clone()),
+                Err("invalid".into()),
+                "{params}"
+            );
+        }
+    }
+
+    #[test]
+    fn open_refuses_misspelt_fields_and_reads_a_null_start_as_none() {
+        let shared: Shared = Arc::new(Mutex::new(Store::default()));
+        let base = json!({"store":"k","token":"t","operationId":3});
+        let with = |field: &str, value: Value| {
+            let mut params = base.clone();
+            params[field] = value;
+            params
+        };
+        for params in [
+            with("operationID", json!(3)),
+            with("begin", json!(1)),
+            with("operationId", json!(-1)),
+            with("operationId", json!(1.5)),
+            json!({"store":"k","token":"t"}),
+        ] {
+            assert_eq!(
+                open_request(&shared, &params).unwrap_err().code,
+                "invalid",
+                "{params}"
+            );
+        }
+        // Read as typed: a null start passes to the token's lookup.
+        assert_eq!(
+            open_request(&shared, &with("start", Value::Null))
+                .unwrap_err()
+                .code,
+            "missing"
+        );
+        assert_eq!(
+            open_request(&shared, &json!({"token":"t","operationId":3}))
+                .unwrap_err()
+                .code,
+            "internal"
+        );
     }
 }

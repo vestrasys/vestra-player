@@ -594,6 +594,33 @@ mod tests {
     }
 
     #[test]
+    fn opening_a_remembered_file_needs_media_sources_and_playback_control() {
+        // What `Host::dispatch` lets through: the needed capability declared.
+        let allowed = |method: &str, declared: &[&str]| {
+            let allows = |name: &str| declared.contains(&name);
+            required(method, &json!({}), allows)
+                .unwrap()
+                .is_none_or(allows)
+        };
+        let both = ["media.sources", "playback.control"];
+        assert!(allowed("media.sources.open", &both));
+        assert!(!allowed("media.sources.open", &["media.sources"]));
+        assert!(!allowed("media.sources.open", &["playback.control"]));
+        assert!(!allowed("media.sources.open", &[]));
+        // The other members need `media.sources` alone.
+        for method in [
+            "media.sources.remember",
+            "media.sources.get",
+            "media.sources.locate",
+            "media.sources.forget",
+            "media.sources.list",
+        ] {
+            assert!(allowed(method, &["media.sources"]), "{method}");
+            assert!(!allowed(method, &["playback.control"]), "{method}");
+        }
+    }
+
+    #[test]
     fn a_plugin_follows_up_its_own_source_operation_with_playback_control() {
         let query = |declared: &[&str]| {
             required("source.operation", &json!({"operationId": 1}), |name| {
@@ -647,7 +674,7 @@ mod tests {
         );
         assert_eq!(needs("jobs.check", json!({})), Some("media.control"));
         assert_eq!(
-            needs("media.sources.reference", json!({})),
+            needs("media.sources.remember", json!({})),
             Some("media.sources")
         );
         // The host's own source messages are no plugin method.

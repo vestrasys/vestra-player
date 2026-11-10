@@ -446,6 +446,14 @@
       "label": "Remember videos you add and export from them later",
       "methods": [
         {
+          "name": "media.sources.open",
+          "needs": {
+            "ifDeclared": "playback.control",
+            "otherwise": "playback.control",
+            "then": "media.sources"
+          }
+        },
+        {
           "name": "media.sources.*",
           "needs": "media.sources"
         }

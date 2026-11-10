@@ -433,7 +433,7 @@ impl Sources {
         self.session.state().phase
     }
     /// The current source when it is a local regular file the player
-    /// opened (`media.sources.reference`): not a URL or stream, not a
+    /// opened (`media.sources.remember`): not a URL or stream, not a
     /// plugin's own picture, and loaded (ready or ended).
     pub fn local_file(&self) -> Option<std::path::PathBuf> {
         #[cfg(feature = "producer-audio")]
