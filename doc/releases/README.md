@@ -13,18 +13,23 @@ Installers are published on this repository's own GitHub Releases (coordinator d
    - built-in plugins that changed bump their own versions too, otherwise they are not updated on users' machines (see the notes in `src/scripts/stage-plugins.mjs`).
 
    A commit that changes only `src/release.json` and `doc/` runs no CI checks (it counts as documentation; the release job checks it).
-3. **Write the release notes** `doc/releases/v<version>.md`: user-facing, in English (the release page is for all users); new features, fixes, known issues; for unsigned test builds include the installation steps (see below).
-4. **Dry run**: after merging to main,
+3. **Strict SDK agreement**: the SDK's product data (built-in command and submenu tables, the Slint library copy, the test host's Chinese texts, palette colours) only warns on main between SDK releases; a release ships an SDK that matches it ([agentic-workflow.md §1.6](../../agentic-workflow/agentic-workflow.md) "Release cadence"). On the commit to be tagged, in `src/`:
+   ```
+   VESTRA_SDK_STRICT=1 npm run test:sdk && npm run sdk:sync-slint -- --strict
+   ```
+   (or `npm run ci:local -- --strict-sdk`). If it fails, cut the SDK sync release first (`node scripts/sync-sdk-slint.mjs --write <sdk-repo>` for the Slint copy, the tables in the SDK repository), upgrade `@vestra-player/sdk` here and merge that before tagging. `release.yml`'s `sdk-agreement` job runs the same check and packaging waits for it.
+4. **Write the release notes** `doc/releases/v<version>.md`: user-facing, in English (the release page is for all users); new features, fixes, known issues; for unsigned test builds include the installation steps (see below).
+5. **Dry run**: after merging to main,
    ```
    gh workflow run release.yml --repo vestrasys/vestra-player --ref main -f dry_run=true
    ```
    Runs the full checks and builds the installers for both systems, `host.json` and `SHA256SUMS`, without signing and without creating a release. The package jobs say in their "Reuse a released host" step whether they took the host of a published release or build it; `-f fresh_host=true` forces a build. To check only one system, add `-f platforms=windows` (or `macos`); this skips build-test and packaging for the other system (macOS runners are billed at 10x). Tag builds always do both. The outputs are in the run's artifacts (`vestra-unsigned-macos`, `vestra-unsigned-windows`, `vestra-unsigned-SHA256SUMS`); download them with `gh run download <run id>` (kept for 1 day only). Try them on real machines using the checklist at the end of [packaging-proposal.md](../architecture/packaging-proposal.md).
-5. **Tag**:
+6. **Tag**:
    ```
    git tag -a v<version> -m "Vestra Player <version>" && git push origin v<version>
    ```
    `release.yml` checks that the tag matches the release version in `src/release.json`, that the release notes exist and that the release version is not lower than the host version, runs the full checks (skipped when main already passed the commit) and packaging (with the host reused when its inputs did not change); the two TODO jobs `sign-*` must be approved in the `release` environment; finally it creates a **draft** release. The assets are `VestraPlayer-<version>-macos-arm64.dmg`, `…-macos-arm64.app.zip`, `…-windows-x64-setup.exe`, `…-windows-x64-portable.zip`, the fixed-name copies of the installers (see "Stable download links" below), `host.json` (the host binary inside, see below), `SHA256SUMS` and `latest.json` (see "latest.json" below).
-6. **Check the draft**, and when it is correct publish it on GitHub (or `gh release edit v<version> --draft=false`).
+7. **Check the draft**, and when it is correct publish it on GitHub (or `gh release edit v<version> --draft=false`).
 
 If something fails, fix it and push a tag for a new patch version; do not move a tag that has already been pushed.
 

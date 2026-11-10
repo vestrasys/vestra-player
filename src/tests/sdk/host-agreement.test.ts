@@ -2,11 +2,29 @@
 // few of the player's constants and its Slint library; they must agree with
 // this host. A mismatch means: change the SDK repository, release it and
 // upgrade the dependency here (agentic-workflow/agentic-workflow.md §1.6).
+//
+// Contract data (what decides whether the player accepts a request, or how a
+// plugin or TestHost behaves: capabilities, apiVersion, limits, error codes,
+// wire shapes, menu ids, wake events, the player's own menu paths, the Slint
+// library's types) fails a `test`. Product data (a snapshot of how the
+// player looks now: the rest of the built-in command and submenu tables, the
+// Slint library copy byte for byte, the player's Chinese texts, palette
+// colours) is an `advisory` test: between SDK releases a failed comparison
+// is reported as a TODO and does not fail the run (any other error does). VESTRA_SDK_STRICT=1 (`npm run
+// ci:local -- --strict-sdk`, the release workflow) makes it a plain test;
+// that is the check when the SDK dependency is upgraded and before a release.
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   API_VERSION,
@@ -51,6 +69,71 @@ import { runNode } from "./children.ts";
 
 const host = (file: string) =>
   readFileSync(new URL(`../../host/${file}`, import.meta.url), "utf8");
+
+const STRICT = process.env.VESTRA_SDK_STRICT === "1";
+const ADVISORY =
+  "product data: warns until the next SDK sync; VESTRA_SDK_STRICT=1 enforces it";
+
+/**
+ * Whether an advisory test's failure is a product-data difference: only a
+ * failed comparison (node:assert's AssertionError). Anything else (a
+ * TypeError, a plugin that throws on start, a reader that no longer finds
+ * its Rust or Slint, see `found`) is a broken check and fails in both modes.
+ */
+const productDifference = (error: unknown) =>
+  error instanceof assert.AssertionError;
+
+/**
+ * `value`, or a plain Error (not an AssertionError, so an advisory test
+ * fails too) when a reader did not find what it reads.
+ */
+function found<T>(value: T | null | undefined | false, what: string): T {
+  if (value === null || value === undefined || value === false)
+    throw new Error(`not found: ${what} (adjust the reader)`);
+  return value;
+}
+
+/**
+ * A product-data test: with VESTRA_SDK_STRICT=1 a plain test; otherwise a
+ * failed comparison is shown as a TODO (the run passes) and, when
+ * VESTRA_SDK_ADVISORY_FILE names a file, appended to it as one line
+ * (ci:local prints them at the end). Other errors fail (productDifference).
+ */
+function advisory(name: string, fn: (t: TestContext) => void | Promise<void>) {
+  if (STRICT) return test(name, fn);
+  return test(name, async (t) => {
+    try {
+      await fn(t);
+    } catch (error) {
+      if (!productDifference(error)) throw error;
+      t.todo(ADVISORY);
+      const file = process.env.VESTRA_SDK_ADVISORY_FILE;
+      if (file) {
+        const message = error instanceof Error ? error.message : String(error);
+        appendFileSync(file, `test:sdk: ${name}: ${message.split("\n")[0]}\n`);
+      }
+      throw error;
+    }
+  });
+}
+
+test("advisory tests downgrade only failed comparisons", () => {
+  const thrown = (fn: () => unknown) => {
+    try {
+      fn();
+    } catch (error) {
+      return error;
+    }
+    throw new Error("nothing thrown");
+  };
+  assert.equal(productDifference(thrown(() => assert.equal(1, 2))), true);
+  assert.equal(
+    productDifference(thrown(() => Object.entries(null as never))),
+    false,
+  );
+  assert.equal(productDifference(thrown(() => found(null, "x"))), false);
+  assert.equal(productDifference(new Error("crash")), false);
+});
 
 test("COMMAND_LIMITS matches the player's registry", () => {
   const rust = host("src/commands.rs");
@@ -228,8 +311,7 @@ test("the installed SDK's copy of host/capabilities.json is current (SDK npm run
   assert.deepEqual(HOST_CAPABILITIES, capabilityJson());
 });
 
-test("the installed SDK's Slint library copy matches the player's", () => {
-  // Every file of the library is in the copy (the script lists them).
+test("every file of the Slint library is in sync-sdk-slint.mjs's SLINT_FILES", () => {
   const library = readdirSync(
     new URL("../../host/ui/vestra/", import.meta.url),
   );
@@ -237,14 +319,268 @@ test("the installed SDK's Slint library copy matches the player's", () => {
     new URL("../../scripts/sync-sdk-slint.mjs", import.meta.url),
     "utf8",
   );
+  assert.ok(script.includes(`"palette.slint"`), "palette.slint is synced");
   for (const file of library)
     assert.ok(script.includes(`"vestra/${file}"`), `${file} is synced`);
+});
+
+advisory("the installed SDK's Slint library copy matches the player's", () => {
   const result = runNode([
     fileURLToPath(new URL("../../scripts/sync-sdk-slint.mjs", import.meta.url)),
-    "--check",
+    "--strict",
   ]);
+  // Exit 1 with the script's own message: files differ (product data). Any
+  // other outcome (a crash also exits 1, without that message) is a failure.
+  const differs =
+    result.status === 1 &&
+    /The installed SDK's Slint copy .* differs from host\/ui: /.test(
+      result.stderr,
+    );
+  if (result.status !== 0 && !differs)
+    throw new Error(
+      `sync-sdk-slint.mjs --strict: exit ${result.status}\n${result.stderr}`,
+    );
   assert.equal(result.status, 0, result.stderr);
 });
+
+// TestHost resolves `@vestra/…` imports from the SDK's copy and checks the
+// values a plugin sets against the library's structs and properties
+// (SDK dist/plugin/testing/slint-types.js), so that surface is contract in
+// one direction: what the SDK copy declares that the player lacks or
+// declares differently would let TestHost accept a value the player
+// refuses. What only the player declares (a new property or struct field)
+// makes TestHost stricter, and plugins need a new SDK to use it anyway: that
+// waits for the next SDK release (advisory). The rest of the copy (bodies,
+// defaults, colours) is the byte comparison above.
+
+/** Per SLINT_FILES file, the type surface of host/ui's file and the SDK copy's. */
+function slintSurfaces() {
+  const script = readFileSync(
+    new URL("../../scripts/sync-sdk-slint.mjs", import.meta.url),
+    "utf8",
+  );
+  const list = found(
+    /const SLINT_FILES = \[([^\]]*)\]/.exec(script)?.[1],
+    "SLINT_FILES in sync-sdk-slint.mjs",
+  );
+  const files = [...list.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  found(files.length > 0 && files, "files in SLINT_FILES");
+  const sdkSlint = (file: string) =>
+    readFileSync(
+      new URL(
+        `../../node_modules/@vestra-player/sdk/slint/${file}`,
+        import.meta.url,
+      ),
+      "utf8",
+    );
+  let total = 0;
+  const surfaces = files.map((file) => {
+    const player = slintSurface(host(`ui/${file}`));
+    total += player.length;
+    found(player.length > 0 && player, `exported declarations in ${file}`);
+    // TestHost takes what it cannot resolve as any value: an empty or
+    // unreadable copy would accept everything.
+    const sdk = slintSurface(sdkSlint(file));
+    found(
+      sdk.length > 0 && sdk,
+      `exported declarations in the SDK copy of ${file}`,
+    );
+    return { file, player, sdk };
+  });
+  // The reader still reads the library (a struct field, a property).
+  const markdown = slintSurface(host("ui/vestra/markdown.slint"));
+  found(
+    markdown.includes("struct MarkdownRow.header: bool"),
+    "struct MarkdownRow's fields in markdown.slint",
+  );
+  found(
+    markdown.includes("MarkdownView.blocks: in [MarkdownBlock]"),
+    "MarkdownView's blocks property in markdown.slint",
+  );
+  found(total > 20 && total, "the library's exported declarations");
+  return surfaces;
+}
+
+/** The declaration an entry of slintSurface is (`struct X`, `component X`, …), or null for a member. */
+function slintDeclaration(entry: string): string | null {
+  const m =
+    /^(struct|enum) ([\w-]+)$/.exec(entry) ??
+    /^(component|global) ([\w-]+)(?: inherits \S+)?$/.exec(entry) ??
+    /^(export) (\S+)$/.exec(entry);
+  return m ? `${m[1]} ${m[2]}` : null;
+}
+
+// A struct, enum, component or global the copy lacks is a type TestHost
+// cannot resolve, and it takes that as any value: every exported
+// declaration of the player's must be in the copy (a new one needs the SDK
+// sync before it merges). Members only the player has stay advisory.
+test("the SDK's Slint library copy has every exported declaration of the player's (structs, enums, components, globals)", () => {
+  for (const { file, player, sdk } of slintSurfaces()) {
+    const have = new Set(sdk.map(slintDeclaration));
+    assert.deepEqual(
+      player
+        .map(slintDeclaration)
+        .filter(
+          (declaration) => declaration !== null && !have.has(declaration),
+        ),
+      [],
+      `${file}: exported in host/ui/${file} but missing from the SDK copy`,
+    );
+  }
+});
+
+test("the SDK's Slint library copy declares nothing the player lacks or declares differently (structs, components, properties)", () => {
+  for (const { file, player, sdk } of slintSurfaces()) {
+    const have = new Set(player);
+    assert.deepEqual(
+      sdk.filter((entry) => !have.has(entry)),
+      [],
+      `${file}: declared so in the SDK copy only (host/ui/${file} lacks it or declares it otherwise)`,
+    );
+  }
+});
+
+advisory(
+  "the SDK's Slint library copy declares the player's additions (structs, components, properties)",
+  () => {
+    // An entry's key: what stands before its declaration.
+    const key = (entry: string) => entry.split(": ")[0]!;
+    for (const { file, player, sdk } of slintSurfaces()) {
+      const keys = new Set(sdk.map(key));
+      assert.deepEqual(
+        player.filter((entry) => !keys.has(key(entry))),
+        [],
+        `${file}: declared in host/ui/${file} only`,
+      );
+    }
+  },
+);
+
+/** Slint source without comments, with every string literal emptied (`""`). */
+function slintCode(text: string): string {
+  const n = text.length;
+  let i = 0;
+  let out = "";
+  // From an opening quote to past its closing one; `\{ … }` interpolations
+  // may hold braces and strings of their own.
+  const skipString = () => {
+    i++;
+    while (i < n && text[i] !== '"') {
+      if (text[i] === "\\" && text[i + 1] === "{") {
+        i += 2;
+        let depth = 1;
+        while (i < n && depth > 0) {
+          if (text[i] === '"') {
+            skipString();
+            continue;
+          }
+          if (text[i] === "{") depth++;
+          else if (text[i] === "}") depth--;
+          i++;
+        }
+        continue;
+      }
+      if (text[i] === "\\") i++;
+      i++;
+    }
+    i++;
+  };
+  while (i < n) {
+    if (text.startsWith("//", i)) {
+      const end = text.indexOf("\n", i);
+      i = end < 0 ? n : end;
+    } else if (text.startsWith("/*", i)) {
+      const end = text.indexOf("*/", i + 2);
+      i = end < 0 ? n : end + 2;
+      out += " ";
+    } else if (text[i] === '"') {
+      skipString();
+      out += '""';
+    } else out += text[i++];
+  }
+  return out;
+}
+
+/** The index of the `}` that closes the `{` at `open` in slintCode output. */
+function slintClose(code: string, open: number): number {
+  let depth = 0;
+  for (let i = open; i < code.length; i++)
+    if (code[i] === "{") depth++;
+    else if (code[i] === "}" && --depth === 0) return i;
+  throw new Error("unbalanced braces in a Slint file");
+}
+
+/**
+ * The type surface of one Slint library file, one sorted entry each
+ * (`<key>` or `<key>: <declaration>`): every exported struct and each of
+ * its fields with its type, exported enum and each value, exported
+ * component or global (and its base), and each of their non-private
+ * property declarations directly in the body (name, direction, type).
+ * Names as Slint normalises them (`_` is `-`).
+ */
+function slintSurface(text: string): string[] {
+  const code = slintCode(text);
+  const name = (id: string) => id.replace(/^-/, "_").replace(/(?<!^)_/g, "-");
+  const type = (text: string) => name(text.replace(/\s+/g, ""));
+  const body = (open: number) => code.slice(open + 1, slintClose(code, open));
+  // Split at the commas outside brackets (a field may be `{ a: int, … }`).
+  const items = (text: string) => {
+    const parts = [""];
+    let depth = 0;
+    for (const c of text) {
+      if ("{[(".includes(c)) depth++;
+      else if ("}])".includes(c)) depth--;
+      if (c === "," && depth === 0) parts.push("");
+      else parts[parts.length - 1] += c;
+    }
+    return parts.map((part) => part.trim()).filter(Boolean);
+  };
+  const lines: string[] = [];
+  for (const m of code.matchAll(/\bexport\s+struct\s+([\w-]+)\s*\{/g)) {
+    const struct = name(m[1]!);
+    lines.push(`struct ${struct}`);
+    for (const field of items(body(m.index + m[0].length - 1))) {
+      const colon = found(
+        field.indexOf(":") > 0 && field.indexOf(":"),
+        `a field of struct ${struct}: ${field}`,
+      );
+      lines.push(
+        `struct ${struct}.${name(field.slice(0, colon).trim())}: ${type(field.slice(colon + 1))}`,
+      );
+    }
+  }
+  for (const m of code.matchAll(/\bexport\s+enum\s+([\w-]+)\s*\{/g)) {
+    lines.push(`enum ${name(m[1]!)}`);
+    for (const value of items(body(m.index + m[0].length - 1)))
+      lines.push(`enum ${name(m[1]!)}::${name(value)}`);
+  }
+  for (const m of code.matchAll(/\bexport\s*\{([^}]*)\}/g))
+    for (const item of items(m[1]!)) lines.push(`export ${type(item)}`);
+  for (const m of code.matchAll(
+    /\bexport\s+(component|global)\s+([\w-]+)(?:\s+inherits\s+([\w-]+))?\s*\{/g,
+  )) {
+    const element = name(m[2]!);
+    lines.push(`${m[1]} ${element}${m[3] ? ` inherits ${name(m[3])}` : ""}`);
+    // Only what stands directly in the body: nested `{ … }` blanked.
+    let top = "";
+    let depth = 0;
+    for (const c of body(m.index + m[0].length - 1)) {
+      if (c === "{") depth++;
+      if (depth === 0) top += c;
+      if (c === "}") depth--;
+    }
+    for (const p of top.matchAll(
+      /(?:^|[;\s])(?:(in-out|in_out|in|out|private)\s+)?property\s*(?:<([^>]*)>)?\s*([\w-]+)/g,
+    )) {
+      const direction = (p[1] ?? "private").replace("in_out", "in-out");
+      if (direction === "private") continue;
+      lines.push(
+        `${element}.${name(p[3]!)}: ${direction} ${p[2] === undefined ? "(two-way)" : type(p[2])}`,
+      );
+    }
+  }
+  return lines.sort();
+}
 
 test("manifest rules match the player's (host/src/packages/manifest.rs)", () => {
   const rust = host("src/packages/manifest.rs");
@@ -437,12 +773,15 @@ test("the SDK's Slint @tr scanner agrees with the player's", () => {
   }
 });
 
-test("the test host's copy of the player's Chinese texts matches locales/zh-Hans.po", () => {
-  const { entries } = parsePo(host("locales/zh-Hans.po"));
-  const player = new Map(entries.map((e) => [e.id, e.strings[0]]));
-  for (const [english, chinese] of Object.entries(HOST_ZH_HANS))
-    assert.equal(player.get(english), chinese, english);
-});
+advisory(
+  "the test host's copy of the player's Chinese texts matches locales/zh-Hans.po",
+  () => {
+    const { entries } = parsePo(host("locales/zh-Hans.po"));
+    const player = new Map(entries.map((e) => [e.id, e.strings[0]]));
+    for (const [english, chinese] of Object.entries(HOST_ZH_HANS))
+      assert.equal(player.get(english), chinese, english);
+  },
+);
 
 // ------------------------------------------- tables of the SDK's Reference
 //
@@ -484,7 +823,7 @@ const sdkTypes = () => {
 /** The text inside the `{ ... }` that follows `marker` (strings and comments skipped). */
 function braces(text: string, marker: string): string {
   const at = text.indexOf(marker);
-  assert.ok(at >= 0, `${marker} not found`);
+  found(at >= 0, marker);
   const open = text.indexOf("{", at + marker.length - 1);
   const close = matching(text, open);
   return text.slice(open + 1, close);
@@ -598,24 +937,27 @@ test("capabilities.json's wording and requirements are CAPABILITY_INFO's", () =>
   }
 });
 
-test("CAPABILITY_INFO's store wording is the store's (plugins/store/labels.ts)", () => {
+// Both are this repository's files, so the store is checked against the
+// player directly (CAPABILITY_INFO is compared with capabilities.json above).
+test("the store's capability wording is capabilities.json's (plugins/store/labels.ts)", () => {
   const store: Record<string, { text: string; risky?: boolean }> =
     STORE_CAPABILITIES;
+  const json = capabilityJson();
   assert.deepEqual(
     Object.keys(store).sort(),
-    Object.keys(CAPABILITY_INFO).sort(),
-    "the store labels another set of capabilities than CAPABILITY_INFO",
+    json.capabilities.map((c) => c.name).sort(),
+    "the store labels another set of capabilities than capabilities.json",
   );
-  for (const [name, info] of Object.entries(CAPABILITY_INFO)) {
+  for (const c of json.capabilities) {
     assert.equal(
-      store[name]!.text,
-      info.label,
-      `${name}: store text vs CAPABILITY_INFO.label`,
+      store[c.name]!.text,
+      c.label,
+      `${c.name}: store text vs capabilities.json label`,
     );
     assert.equal(
-      store[name]!.risky === true,
-      info.risky,
-      `${name}: store risky vs CAPABILITY_INFO.risky`,
+      store[c.name]!.risky === true,
+      c.risky,
+      `${c.name}: store risky vs capabilities.json risky`,
     );
   }
 });
@@ -1261,29 +1603,54 @@ test("BINDING_INPUTS are the names the player's binding parser accepts (bindings
   );
 });
 
-test("THEME_PALETTES are the player's palettes (theme.rs)", () => {
-  const rust = host("src/ui/theme.rs");
+/** A palette of theme.rs (`VESTRA`, `VESTRA_LIGHT`): token → `#rrggbb`. */
+function themePalette(name: string): Record<string, string> {
+  const body = found(
+    new RegExp(
+      `const ${name}: \\[\\(&str, u32\\); \\d+\\] = \\[([\\s\\S]*?)\\];`,
+    ).exec(host("src/ui/theme.rs"))?.[1],
+    `${name} in theme.rs`,
+  );
+  const palette = Object.fromEntries(
+    [...body.matchAll(/\("([^"]+)", 0x([0-9a-f]{6})\)/gi)].map((m) => [
+      m[1]!,
+      `#${m[2]!.toLowerCase()}`,
+    ]),
+  );
+  found(Object.keys(palette).length > 0, `the colours of ${name}`);
+  return palette;
+}
+
+test("THEME_PALETTES names the player's themes and no token the player lacks (theme.rs THEMES)", () => {
   const themes = /pub const THEMES: \[&str; \d+\] = \[([^\]]*)\];/.exec(
-    rust,
+    host("src/ui/theme.rs"),
   )?.[1];
   assert.ok(themes, "THEMES in theme.rs");
-  const palette = (name: string) => {
-    const body = new RegExp(
-      `const ${name}: \\[\\(&str, u32\\); \\d+\\] = \\[([\\s\\S]*?)\\];`,
-    ).exec(rust)?.[1];
-    assert.ok(body, `${name} in theme.rs`);
-    return Object.fromEntries(
-      [...body.matchAll(/\("([^"]+)", 0x([0-9a-f]{6})\)/gi)].map((m) => [
-        m[1]!,
-        `#${m[2]!.toLowerCase()}`,
-      ]),
-    );
-  };
   assert.deepEqual(
     Object.keys(THEME_PALETTES),
     [...themes.matchAll(/"([^"]+)"/g)].map((m) => m[1]),
     "THEME_PALETTES has other palettes than theme.rs THEMES",
   );
+  // A token only the SDK names is contract (a plugin's test could rely on
+  // a colour the player does not set); a new token of the player's waits
+  // for the next SDK release (the colours test below).
+  for (const [theme, rust] of [
+    ["vestra", "VESTRA"],
+    ["vestra-light", "VESTRA_LIGHT"],
+  ] as const) {
+    const player = themePalette(rust);
+    assert.deepEqual(
+      Object.keys(THEME_PALETTES[theme]!)
+        .filter((token) => !Object.hasOwn(player, token))
+        .sort(),
+      [],
+      `THEME_PALETTES['${theme}'] tokens that theme.rs ${rust} lacks`,
+    );
+  }
+});
+
+advisory("THEME_PALETTES' colours are the player's palettes (theme.rs)", () => {
+  const palette = themePalette;
   assert.deepEqual(
     { ...THEME_PALETTES.vestra },
     palette("VESTRA"),
@@ -1428,10 +1795,12 @@ function hostCommands(): Row[] {
   for (const [, id, variable] of own.matchAll(
     /\("([a-z-]+)", (\w+), state\(/g,
   )) {
-    const made = new RegExp(
-      `let mut ${variable} =\\s*commands::Declaration::new\\("([^"]+)", &\\[([^\\]]*)\\]\\)`,
-    ).exec(own);
-    assert.ok(made, `host_declarations: the declaration of ${id}`);
+    const made = found(
+      new RegExp(
+        `let mut ${variable} =\\s*commands::Declaration::new\\("([^"]+)", &\\[([^\\]]*)\\]\\)`,
+      ).exec(own),
+      `host_declarations: the declaration of ${id}`,
+    );
     const bindings =
       new RegExp(`${variable}\\.bindings = vec!\\[([^\\]]*)\\]`).exec(
         own,
@@ -1516,92 +1885,125 @@ function hostCommands(): Row[] {
   return rows;
 }
 
-test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in plugins register", async () => {
-  assertRows(
-    hostCommands(),
-    BUILTIN_COMMANDS.filter((row) => row.owner === "host"),
-    "the player's own commands (host/actions.rs host_declarations, core_actions.rs) differ from BUILTIN_COMMANDS",
-  );
-  const root = new URL("../../plugins/", import.meta.url);
-  const rows: Row[] = [];
-  for (const name of readdirSync(root).sort()) {
-    const directory = new URL(`${name}/`, root);
-    const manifest = JSON.parse(
-      readFileSync(new URL("manifest.json", directory), "utf8"),
-    ) as { id: string };
-    const { default: activate } = (await import(
-      new URL("main.ts", directory).href
-    )) as {
-      default: Parameters<typeof startPlugin>[0];
-    };
-    const data = mkdtempSync(join(tmpdir(), "vestra-agreement-"));
-    const { host: fake, stop } = await startPlugin(activate, {
-      directory,
-      dataDirectory: data,
-      locale: "en",
-    });
-    for (const [id, command] of fake.commands)
-      rows.push({
-        owner: manifest.id,
-        id,
-        path: [...command.display.path],
-        title: command.display.title,
-        bindings: [...(command.declaration.bindings ?? [])],
-        focus: command.declaration.focus === "panel" ? "panel" : null,
-      });
-    await stop();
-    rmSync(data, { recursive: true, force: true });
-  }
-  assertRows(
-    rows,
-    BUILTIN_COMMANDS.filter((row) => row.owner !== "host"),
-    "the built-in plugins' commands (started in the test host) differ from BUILTIN_COMMANDS",
-  );
-  // Submenus: every inner path of a plugin command below the top level of a
-  // built-in menu, or a top-level menu of its own; not the player's own
-  // groups (`host_group_label` in commands.rs: Playback ▸ Seek, Playback ▸
-  // Speed), whoever fills them (the player's seek and speed actions left them
-  // for the command palette, menu redesign step 4).
-  const builtIn = new Set(Object.values(MENU_KEYS));
-  const hosts = new Set(
-    [
-      ...braces(host("src/commands.rs"), "pub fn host_group_label(").matchAll(
-        /\[((?:"[^"]+",?\s*)+)\] =>/g,
-      ),
-    ]
-      .map((m) => [...m[1]!.matchAll(/"([^"]*)"/g)].map((s) => s[1]!))
-      .filter((path) => path.length > 1)
-      .map((path) => path.join(" ▸ ")),
-  );
-  assert.ok(hosts.has("Playback ▸ Seek"), "host_group_label in commands.rs");
-  const submenus = new Map<string, Set<string>>();
-  for (const row of rows)
-    for (let i = 1; i < row.path.length; i++) {
-      const path = row.path.slice(0, i);
-      const key = path.join(" ▸ ");
-      if ((i === 1 && builtIn.has(path[0]!)) || hosts.has(key)) continue;
-      submenus.set(key, (submenus.get(key) ?? new Set()).add(row.owner));
-    }
-  const shown = (
-    menus: Iterable<{ path: readonly string[]; plugins: Iterable<string> }>,
-  ) =>
-    [...menus]
-      .map(
-        (menu) =>
-          `${menu.path.join(" ▸ ")} | ${[...menu.plugins].sort().join(", ")}`,
-      )
-      .sort();
+// TestHost refuses a plugin command on or under one of the player's own
+// menu paths (`conflict`) and counts the player's own commands in
+// COMMAND_LIMITS.total (`limit`), taking both from BUILTIN_COMMANDS' rows
+// owned by "host" (SDK dist/plugin/testing/commands.js). Contract in the
+// direction where TestHost would accept what the player refuses: a menu path
+// of the player's that BUILTIN_COMMANDS lacks (TestHost lets a plugin take
+// it), and fewer host rows than the player has commands (TestHost reaches
+// the total later). The other direction (an SDK-only path or row) only makes
+// TestHost stricter; with titles, keys, the built-in plugins' rows and
+// BUILTIN_SUBMENUS it is product data (below).
+test("BUILTIN_COMMANDS has every menu path of the player's own and as many of its commands (TestHost conflicts and limits)", () => {
+  const player = hostCommands();
+  found(player.length > 0 && player, "the player's own commands");
+  const sdk = BUILTIN_COMMANDS.filter((row) => row.owner === "host");
+  const paths = new Set(sdk.map((row) => row.path.join(" ▸ ")));
   assert.deepEqual(
-    shown(
-      [...submenus].map(([key, plugins]) => ({
-        path: key.split(" ▸ "),
-        plugins,
-      })),
-    ),
-    shown(BUILTIN_SUBMENUS),
-    "the built-in plugins' submenus differ from BUILTIN_SUBMENUS",
+    player
+      .filter((row) => row.path.length > 0)
+      .map((row) => row.path.join(" ▸ "))
+      .filter((path) => !paths.has(path))
+      .sort(),
+    [],
+    "menu paths of the player's own commands (host/actions.rs host_declarations, core_actions.rs) that BUILTIN_COMMANDS lacks",
+  );
+  assert.ok(
+    sdk.length >= player.length,
+    `BUILTIN_COMMANDS has ${sdk.length} host rows, the player ${player.length} own commands`,
   );
 });
+
+advisory(
+  "BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in plugins register",
+  async () => {
+    assertRows(
+      hostCommands(),
+      BUILTIN_COMMANDS.filter((row) => row.owner === "host"),
+      "the player's own commands (host/actions.rs host_declarations, core_actions.rs) differ from BUILTIN_COMMANDS",
+    );
+    const root = new URL("../../plugins/", import.meta.url);
+    const rows: Row[] = [];
+    for (const name of readdirSync(root).sort()) {
+      const directory = new URL(`${name}/`, root);
+      const manifest = JSON.parse(
+        readFileSync(new URL("manifest.json", directory), "utf8"),
+      ) as { id: string };
+      const { default: activate } = (await import(
+        new URL("main.ts", directory).href
+      )) as {
+        default: Parameters<typeof startPlugin>[0];
+      };
+      const data = mkdtempSync(join(tmpdir(), "vestra-agreement-"));
+      const { host: fake, stop } = await startPlugin(activate, {
+        directory,
+        dataDirectory: data,
+        locale: "en",
+      });
+      for (const [id, command] of fake.commands)
+        rows.push({
+          owner: manifest.id,
+          id,
+          path: [...command.display.path],
+          title: command.display.title,
+          bindings: [...(command.declaration.bindings ?? [])],
+          focus: command.declaration.focus === "panel" ? "panel" : null,
+        });
+      await stop();
+      rmSync(data, { recursive: true, force: true });
+    }
+    assertRows(
+      rows,
+      BUILTIN_COMMANDS.filter((row) => row.owner !== "host"),
+      "the built-in plugins' commands (started in the test host) differ from BUILTIN_COMMANDS",
+    );
+    // Submenus: every inner path of a plugin command below the top level of a
+    // built-in menu, or a top-level menu of its own; not the player's own
+    // groups (`host_group_label` in commands.rs: Playback ▸ Seek, Playback ▸
+    // Speed), whoever fills them (the player's seek and speed actions left them
+    // for the command palette, menu redesign step 4).
+    const builtIn = new Set(Object.values(MENU_KEYS));
+    const hosts = new Set(
+      [
+        ...braces(host("src/commands.rs"), "pub fn host_group_label(").matchAll(
+          /\[((?:"[^"]+",?\s*)+)\] =>/g,
+        ),
+      ]
+        .map((m) => [...m[1]!.matchAll(/"([^"]*)"/g)].map((s) => s[1]!))
+        .filter((path) => path.length > 1)
+        .map((path) => path.join(" ▸ ")),
+    );
+    found(hosts.has("Playback ▸ Seek"), "host_group_label in commands.rs");
+    const submenus = new Map<string, Set<string>>();
+    for (const row of rows)
+      for (let i = 1; i < row.path.length; i++) {
+        const path = row.path.slice(0, i);
+        const key = path.join(" ▸ ");
+        if ((i === 1 && builtIn.has(path[0]!)) || hosts.has(key)) continue;
+        submenus.set(key, (submenus.get(key) ?? new Set()).add(row.owner));
+      }
+    const shown = (
+      menus: Iterable<{ path: readonly string[]; plugins: Iterable<string> }>,
+    ) =>
+      [...menus]
+        .map(
+          (menu) =>
+            `${menu.path.join(" ▸ ")} | ${[...menu.plugins].sort().join(", ")}`,
+        )
+        .sort();
+    assert.deepEqual(
+      shown(
+        [...submenus].map(([key, plugins]) => ({
+          path: key.split(" ▸ "),
+          plugins,
+        })),
+      ),
+      shown(BUILTIN_SUBMENUS),
+      "the built-in plugins' submenus differ from BUILTIN_SUBMENUS",
+    );
+  },
+);
 
 test("COMMAND_LIMITS' declaration limits are the player's (commands.rs Registry::register; SDK 1.5.48)", () => {
   const rust = host("src/commands.rs");

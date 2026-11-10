@@ -4,10 +4,18 @@
  * .github/workflows/_static.yml and _build-test.yml, in that order. Every
  * step runs; the summary lists the ones that failed.
  *
- *   npm run ci:local [-- --static] [-- --advisories]
+ *   npm run ci:local [-- --static] [-- --advisories] [-- --strict-sdk]
  *
  *   --static      only the static checks (no clippy, test, doc)
  *   --advisories  also `cargo deny check advisories` (nightly's audit)
+ *   --strict-sdk  VESTRA_SDK_STRICT=1: the SDK's product data (built-in
+ *                 commands, Slint copy, Chinese texts, palette colours) must
+ *                 match the player too, as when the SDK dependency is
+ *                 upgraded and before a release (agentic-workflow.md §1.6)
+ *
+ * Without --strict-sdk, product-data mismatches only warn (test:sdk TODOs,
+ * sdk:sync-slint warnings); the steps write them to VESTRA_SDK_ADVISORY_FILE
+ * and the summary lists them under `advisories:`.
  *
  * Differences from CI: `portability` runs in full here (CI leaves its host
  * half to the Windows job), and clippy/test run for this machine's OS only.
@@ -38,11 +46,15 @@ const source = resolve(import.meta.dirname, "..");
 const repo = resolve(source, "..");
 const host = join(source, "host");
 const record = mkdtempSync(join(tmpdir(), "vestra-ui-record-"));
+const advisoryDir = mkdtempSync(join(tmpdir(), "vestra-sdk-advisories-"));
+const advisories = join(advisoryDir, "advisories.txt");
 const env = {
   ...process.env,
   CARGO_TARGET_DIR:
     process.env.CARGO_TARGET_DIR || join(tmpdir(), "vestra-target", "ci"),
   VESTRA_UI_RECORD: record,
+  VESTRA_SDK_ADVISORY_FILE: advisories,
+  ...(args.has("--strict-sdk") ? { VESTRA_SDK_STRICT: "1" } : {}),
 };
 
 const steps = [
@@ -89,6 +101,7 @@ const steps = [
 // CI runs `npm ci` in src/ and in every plugin with its own lockfile
 // (.github/actions/setup-node). A worktree's node_modules can lag behind its
 // lockfile, which shows up later as unrelated type errors; reinstall first.
+let installFailed = false;
 for (const dir of [
   source,
   ...readdirSync(join(source, "plugins"))
@@ -106,8 +119,8 @@ for (const dir of [
   });
   if (result.status !== 0) {
     console.log(`ci:local: npm ci failed in ${name}; run it there by hand`);
-    rmSync(record, { recursive: true, force: true });
-    process.exit(1);
+    installFailed = true;
+    break;
   }
 }
 
@@ -144,7 +157,9 @@ function staleDeps(dir) {
 }
 
 const failed = [];
-for (const [cwd, command, extra = {}] of steps) {
+// Never process.exit() (packaging/lib.mjs reportErrors: it can deadlock on
+// Node 26); an install failure skips the steps and sets the exit code.
+for (const [cwd, command, extra = {}] of installFailed ? [] : steps) {
   console.log(`\n== ${command}`);
   const [program, ...rest] = command.split(" ");
   const started = Date.now();
@@ -164,9 +179,22 @@ for (const [cwd, command, extra = {}] of steps) {
   } else console.log(`ok (${seconds}s)`);
 }
 
+const warned = existsSync(advisories)
+  ? readFileSync(advisories, "utf8").split("\n").filter(Boolean)
+  : [];
 rmSync(record, { recursive: true, force: true });
-console.log(
-  `\nci:local: ${steps.length - failed.length}/${steps.length} passed`,
-);
-for (const command of failed) console.log(`  failed: ${command}`);
-process.exitCode = failed.length ? 1 : 0;
+rmSync(advisoryDir, { recursive: true, force: true });
+if (installFailed) process.exitCode = 1;
+else {
+  console.log(
+    `\nci:local: ${steps.length - failed.length}/${steps.length} passed`,
+  );
+  for (const command of failed) console.log(`  failed: ${command}`);
+  if (warned.length) {
+    console.log(
+      `advisories: ${warned.length} (SDK product data; --strict-sdk fails on them)`,
+    );
+    for (const line of warned) console.log(`  ${line}`);
+  }
+  process.exitCode = failed.length ? 1 : 0;
+}

@@ -122,6 +122,31 @@ jobs:
           WAIT: "1800"
         run: bash .github/scripts/main-green.sh
 
+  # Strict SDK agreement (doc/releases/README.md): the SDK's product data
+  # (built-in commands, Slint copy, Chinese texts, palette colours) only warns
+  # on main; a release ships an SDK that matches it. Runs even when main.yml
+  # already passed the commit.
+  sdk-agreement:
+    name: SDK agreement (strict)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        working-directory: src
+    env:
+      VESTRA_SDK_STRICT: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-node
+      - run: npm run test:sdk
+        timeout-minutes: 5
+      - run: npm run sdk:sync-slint -- --strict
+        timeout-minutes: 5
+
   static:
     needs: verify
     if: needs.verify.outputs.tested != 'true'
@@ -153,11 +178,13 @@ jobs:
       # Windows checks the recorded plugin props, unless only macOS runs.
       ui-record: ${{ needs.static.outputs.ui_record == 'true' && inputs.platforms == 'macos' }}
 
-  # After build-test, or straight away when main.yml already passed it.
+  # After build-test, or straight away when main.yml already passed it;
+  # always after the strict SDK agreement.
   package-windows:
-    needs: [verify, windows]
+    needs: [verify, sdk-agreement, windows]
     if: >-
-      !cancelled() && needs.verify.result == 'success' && inputs.platforms != 'macos'
+      !cancelled() && needs.verify.result == 'success' && needs.sdk-agreement.result == 'success'
+      && inputs.platforms != 'macos'
       && (needs.verify.outputs.tested == 'true' || needs.windows.result == 'success')
     permissions:
       contents: read
@@ -167,9 +194,10 @@ jobs:
       reuse-host: ${{ !inputs.fresh_host }}
 
   package-macos:
-    needs: [verify, macos]
+    needs: [verify, sdk-agreement, macos]
     if: >-
-      !cancelled() && needs.verify.result == 'success' && inputs.platforms != 'windows'
+      !cancelled() && needs.verify.result == 'success' && needs.sdk-agreement.result == 'success'
+      && inputs.platforms != 'windows'
       && (needs.verify.outputs.tested == 'true' || needs.macos.result == 'success')
     permissions:
       contents: read
