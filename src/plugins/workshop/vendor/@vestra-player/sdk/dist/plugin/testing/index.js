@@ -1238,8 +1238,53 @@ export class TestHost {
     uploads = new Map();
     /** Snapshots taken with `media.capture`, by snapshot id. Wire-level. */
     snapshots = new Map();
-    /** Every `jobs.start` request (`kind`, `destination`, `quality`, …), newest last. */
+    /**
+     * Every `jobs.start` request (`kind`, `destination`, `quality`, …),
+     * newest last: a snapshot's (`snapshotId`) or, since 1.7.8, an export of
+     * remembered files' parts (`parts`), whose job runs half way through its
+     * middle part (`progress.part`), then completes (a copy's destination gets
+     * the extension of its container).
+     */
     exports = [];
+    /**
+     * Local files as the fake player knows them, by path, for
+     * `plugin.media.sources` and exports of their parts. A file not listed is a 1080p 30 fps
+     * H.264 file with AAC stereo 48 kHz sound, as long as the current
+     * source. Set `status` to `missing` or `changed` to stand for a moved or
+     * rewritten file; `video: null` or `audio: null` for a file without one.
+     *
+     * @example A second file that a copy cannot join to the first
+     * The plugin's list gets a part of a 4K file, then one of a 1080p file:
+     * the check then says `size` and the job has to re-encode.
+     * ```ts
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.mediaFiles.set("/media/b.mp4", {
+     *   duration: 30,
+     *   video: { codec: "h264", width: 1920, height: 818, fps: 30, pixelFormat: "yuv420p" },
+     * });
+     * host.setSource({ phase: "ready", source: "/media/b.mp4", duration: 30 });
+     * ```
+     *
+     * @since 1.7.8
+     */
+    mediaFiles = new Map();
+    /**
+     * Every `plugin.media.sources.open` the plugin made (its token and
+     * start, 0 for the beginning), newest last. Each opens the token's path
+     * as an ordinary open: `source` becomes that path, `position` the start.
+     *
+     * @since 1.7.8
+     */
+    sourceOpens = [];
+    /**
+     * The plugin's source references (`plugin.media.sources`) by token: the
+     * path each stands for. `locate` takes its answer from
+     * {@link TestHost.dialogAnswers}. Wire-level.
+     *
+     * @since 1.7.8
+     */
+    sourceReferences = new Map();
     /**
      * Export jobs by job id. Each state query advances a job one step
      * (`queued` → `running` → `completed`; `cancelling` → `cancelled`).
@@ -2640,8 +2685,14 @@ export class TestHost {
  *
  * The manifest id and capabilities come from `directory/manifest.json`
  * unless `capabilities` is given; then `id` (default `"test.plugin"`) and
- * `capabilities` are used and no manifest is read. Calls that need an
- * undeclared capability fail with `capability`, as in the player.
+ * `capabilities` are used and no manifest is read. The test host does not
+ * apply the player's capability table to every request: the members that
+ * check a capability on the plugin's side (`plugin.media.sources` and its
+ * `open`, which also needs `playback.control`, `plugin.secrets`, timeline
+ * marks, video shaders and views, among others) fail with `capability` as in
+ * the player, but a call the player refuses for an undeclared capability can
+ * succeed here. `vestra-plugin check` (and the TypeScript plugin) reports
+ * those calls from the sources.
  *
  * Rejects when `manifest.json` cannot be read or parsed, when `activate`
  * throws, or when a registration made during activation fails (for example

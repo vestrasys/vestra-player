@@ -1036,6 +1036,34 @@ export declare function createWire(transport: Transport): {
             cancel: "requested" | "tooLate" | "terminal";
         }>;
         operation: (operationId: number) => Promise<import("./media.ts").MediaOperation>;
+        startParts: (options: {
+            operationId: number;
+            parts: import("./media.ts").WireExportPart[];
+            destination: string;
+        } & ({
+            kind: "rawCopy";
+            container?: "auto" | "mp4" | "mkv";
+        } | {
+            kind: "rawMp4";
+            encoding?: import("./media.ts").WireEncoding;
+        })) => Promise<{
+            jobId: number;
+            status: "queued";
+        }>;
+        check: (parts: import("./media.ts").WireExportPart[], encoding?: import("./media.ts").WireEncoding) => Promise<import("./media.ts").WireExportCheck>;
+        checkSnapshot: (snapshotId: number, end: number, encoding?: import("./media.ts").WireEncoding) => Promise<import("./media.ts").WireExportCheck>;
+    };
+    mediaSources: {
+        remember: (expected?: SourceStamp) => Promise<import("./media.ts").WireSourceReference>;
+        get: (token: string) => Promise<import("./media.ts").WireSourceReference>;
+        locate: (token: string) => Promise<import("./media.ts").WireSourceReference | null>;
+        forget: (token: string) => Promise<void>;
+        list: () => Promise<import("./media.ts").WireSourceReference[]>;
+        open: (options: {
+            token: string;
+            operationId: number;
+            start?: number;
+        }) => Promise<import("./source.ts").SourceOperation>;
     };
     source: {
         state: () => Promise<import("./source.ts").SourceState>;

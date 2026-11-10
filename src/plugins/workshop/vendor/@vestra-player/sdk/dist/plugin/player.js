@@ -270,7 +270,9 @@ export class PlayerService {
         const id = ++this.#operation;
         let result;
         try {
-            result = await this.runtime.host.source.submit(intent, id);
+            result = await (options.send
+                ? options.send(id)
+                : this.runtime.host.source.submit(intent, id));
         }
         catch (error) {
             if (!uncertain(error))

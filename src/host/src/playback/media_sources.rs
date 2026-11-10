@@ -1782,7 +1782,7 @@ mod tests {
         .unwrap();
         assert!(checked["copy"].is_object(), "{checked}");
         for params in [
-            json!({"store":"k","parts":[part],"encodng":{}}),
+            json!({"store":"k","parts":[part],"encodingOptions":{}}),
             json!({"store":"k","parts":[{"source":token,"start":0,"end":1,"x":1}]}),
             json!({"store":"k","parts":[part],"encoding":{"crf":99}}),
             json!({"store":"k","parts":[{"source":token,"start":0,"end":86401}]}),
