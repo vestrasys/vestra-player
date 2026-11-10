@@ -55,6 +55,12 @@ pub fn refusal(slot: Slot, holder: &str) -> String {
 
 /// Mount and sequence requests of non-built-in plugins, held while built-in plugins start.
 /// One owner's requests stay in order: once one is held, its later ones are too.
+/// The one exception is [`Gate::release_where`] (the start-up compile of the
+/// shell takes the held mounts and unmounts): those leave ahead of the same
+/// owner's earlier held requests of other kinds (`sequence.set`, source
+/// resolvers), which keep waiting for the built-ins so that a built-in still
+/// claims those first. A panel request and a sequence or resolver request
+/// never depend on each other's order.
 pub struct Gate<T> {
     held: VecDeque<(u64, T)>,
 }
@@ -90,7 +96,8 @@ impl<T> Gate<T> {
         self.held.drain(..).map(|(_, request)| request).collect()
     }
 
-    /// The requests `pick` chooses, oldest first, at once; the others stay.
+    /// The requests `pick` chooses, oldest first, at once; the others stay,
+    /// in their order, even an owner's earlier ones (see [`Gate`]).
     pub fn release_where(&mut self, mut pick: impl FnMut(&T) -> bool) -> Vec<T> {
         let (picked, kept) = std::mem::take(&mut self.held)
             .into_iter()

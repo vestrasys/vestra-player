@@ -695,11 +695,16 @@ impl Host {
     pub(crate) fn startup_has_settled(&mut self) -> bool {
         self.on_demand.settled || self.startup_settled()
     }
-    /// A plugin's start is under way (its start job queued for a place or
-    /// spawning, before its activation is pending): a third-party plugin
-    /// waiting for the built-ins, which `startup_settled` does not see yet.
+    /// A plugin that declares `ui.mount` is on its way to its activation
+    /// (its start queued for a place or creating its process, before its
+    /// activation is pending): a third-party plugin waiting for the
+    /// built-ins, which `startup_settled` does not see yet. A restart after
+    /// a crash is not (`Supervisor::starts_under_way`): a plugin that fails
+    /// at every activation never holds up a file given at launch.
     pub(crate) fn start_under_way(&self) -> bool {
-        self.supervisor.start_installed()
+        self.supervisor
+            .starts_under_way()
+            .any(|id| self.declares_ui_mount(id))
     }
     /// Start-up is over: every installed plugin started, replayed or
     /// queued has run its first activation (as files opened at launch wait,

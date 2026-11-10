@@ -1326,6 +1326,16 @@ impl Host {
         }
         (!waiting.is_empty()).then(|| waiting.join(", "))
     }
+    /// Installed (or built-in) plugin `id` declares `ui.mount` (an unreadable
+    /// one counts as not).
+    pub(crate) fn declares_ui_mount(&self, id: &str) -> bool {
+        self.packages
+            .store
+            .record(id)
+            .and_then(|record| self.packages.runs_from(id, record))
+            .and_then(Result::ok)
+            .is_some_and(|(_, manifest)| manifest.capabilities.iter().any(|c| c == "ui.mount"))
+    }
     /// Plugin `owner` (its process) asked for a panel: mounted (panels are
     /// keyed by `panel_key`, not by plugin), queued, being prepared or held
     /// while the built-ins start.

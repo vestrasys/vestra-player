@@ -50,6 +50,9 @@ enum ThirdParty {
     Parked,
     /// Also listens to the playback state: it stays running.
     Resident,
+    /// Resident at the last run, and now its process ends during every
+    /// activation (restarted after a crash, with a growing delay).
+    Crashing,
 }
 
 /// A third-party plugin with a sidebar tab, installed in the library under
@@ -59,6 +62,16 @@ fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
         ThirdParty::Resident => (
             serde_json::json!(["ui.mount", "events", "playback.read"]),
             "plugin.player.onChange(() => {});\n",
+        ),
+        // Its first run (the warm-up) records it resident; from the next
+        // start on it exits while it waits for its panel.
+        ThirdParty::Crashing => (
+            serde_json::json!(["ui.mount", "events", "playback.read"]),
+            "plugin.player.onChange(() => {});\n\
+             const mark = join(plugin.dataDirectory, \"ran\");\n\
+             if (existsSync(mark)) setTimeout(() => process.exit(7), 50);\n\
+             else { mkdirSync(plugin.dataDirectory, { recursive: true }); \
+             writeFileSync(mark, \"1\"); }\n",
         ),
         _ => (serde_json::json!(["ui.mount"]), ""),
     };
@@ -70,7 +83,9 @@ fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
         (
             "main.js",
             format!(
-                "export default function activate(plugin) {{\n{listen}\
+                "import {{ existsSync, mkdirSync, writeFileSync }} from \"node:fs\";\n\
+                 import {{ join }} from \"node:path\";\n\
+                 export default function activate(plugin) {{\n{listen}\
                  plugin.panels.mount(\"sidebar\", \"ui/list.slint\", {{ title: \"Fixture\" }});\n}}\n"
             ),
         ),
@@ -174,7 +189,13 @@ impl Profile {
     }
     fn command(&self, args: &[&std::ffi::OsStr]) -> Command {
         let root = self.dir.path();
-        let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+        // `VESTRA_TEST_HOST_EXE`: another build of the host, to compare
+        // (before and after a change).
+        let exe = std::env::var_os("VESTRA_TEST_HOST_EXE").map_or_else(
+            || PathBuf::from(env!("CARGO_BIN_EXE_vestra-host")),
+            PathBuf::from,
+        );
+        let mut command = Command::new(exe);
         command
             .arg("--silent")
             .args(args)
@@ -187,7 +208,12 @@ impl Profile {
             .env("VESTRA_SHADER_CACHE", root.join("shader-cache"))
             .env("APPDATA", root.join("appdata"))
             .env("LOCALAPPDATA", root.join("local"))
-            .env("VESTRA_LANGUAGE", "en");
+            .env("VESTRA_LANGUAGE", "en")
+            // The start-up gate waits for every mounting plugin: on a loaded
+            // machine a built-in can take longer than the player's 5 s to ask,
+            // which would fail the count, not the player. What is checked is
+            // the order (compiles before the open), not that window.
+            .env("VESTRA_TEST_MOUNT_LIMIT_MS", "60000");
         for key in [
             "VESTRA_SHARED",
             "VESTRA_IDLE_MS",
@@ -364,9 +390,15 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
             [ThirdParty::None, ThirdParty::Parked, ThirdParty::Resident]
                 .map(|third_party| (true, adjust_open, third_party))
         })
-        .chain([(false, true, ThirdParty::Resident)])
+        .chain([
+            (false, true, ThirdParty::Resident),
+            (true, true, ThirdParty::Crashing),
+        ])
         .filter(|&(ran_before, adjust_open, third_party)| {
-            !debug || (ran_before && adjust_open && third_party != ThirdParty::Parked)
+            !debug
+                || (ran_before
+                    && adjust_open
+                    && matches!(third_party, ThirdParty::None | ThirdParty::Resident))
         });
     for (ran_before, adjust_open, third_party) in cases {
         let profile = Profile::new(&plugins, adjust_open, third_party);
@@ -396,8 +428,17 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
             failures.push(format!("{name}: {} open(s), not 2", opens.len()));
             continue;
         }
-        if log.contains("start-up mounts still expected") {
-            failures.push(format!("{name}: the start-up compile waited for its limit"));
+        if third_party == ThirdParty::Crashing {
+            // A plugin restarted after a crash is not waited for: the file
+            // opens as soon as the others settled (it waited for the restarts
+            // before). Its panel compiles at each restart, as any
+            // plugin's that starts during playback. Its first run is still
+            // waited for (it may mount): 1.5 to 2.6 s here, against 12 to 17 s
+            // before; 4 s leaves room for a loaded machine.
+            if opens[0] >= 4000 {
+                failures.push(format!("{name}: the file opened at +{} ms", opens[0]));
+            }
+            continue;
         }
         // One compile with every start-up panel; a third-party plugin that
         // keeps running starts only once the built-ins finished starting

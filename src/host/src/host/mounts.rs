@@ -118,15 +118,16 @@ impl Host {
         // compiles once, with whatever layout was remembered (the adjust
         // column's shown tab included), before a file given at launch opens
         // (`open_files_tick`). A plugin that never asks holds it up for
-        // `STARTUP_MOUNT_LIMIT` at most.
+        // `STARTUP_MOUNT_LIMIT` (5 s) at most: the built-ins' panels (the bar,
+        // the playlist) then wait that long too, the price of one compile.
         if !self.startup_mounted {
             if let Some(waiting) = self.startup_mount_expected() {
-                if waited < STARTUP_MOUNT_LIMIT {
+                if waited < startup_mount_limit() {
                     return;
                 }
                 diag!(
                     "shell: start-up mounts still expected after {} ms (waiting for {waiting}); compiling with those in",
-                    STARTUP_MOUNT_LIMIT.as_millis()
+                    startup_mount_limit().as_millis()
                 );
             }
             self.startup_mounted = true;
