@@ -1059,7 +1059,7 @@ msgstr "Impossible de redémarrer le lecteur : {}"
 #: main.ts:1703
 #, x-machine
 msgid "Waiting · turn off {}'s effects"
-msgstr "En attente · désactivez les effets de {}"
+msgstr "En attente · coupez les effets de {}"
 
 #: main.ts:1704
 #, x-machine
@@ -1069,7 +1069,7 @@ msgstr "{} garde les images en mémoire pour ses effets, mais la mise à l'éche
 #: main.ts:1708
 #, x-machine
 msgid "Waiting · turn off the effects of {}"
-msgstr "En attente · désactivez les effets de {}"
+msgstr "En attente · coupez les effets de {}"
 
 #: main.ts:1709
 #, x-machine
@@ -1302,22 +1302,22 @@ msgstr "Activé · cette vidéo n'est pas affichée plus grande que sa taille"
 #: picture.slint:1365
 #, x-machine
 msgid "Waiting · reset picture adjustments"
-msgstr "En attente · réinitialisez les réglages de l'image"
+msgstr "En attente · réinitialisez les réglages"
 
 #: picture.slint:1367
 #, x-machine
 msgid "Waiting · frames copied to memory"
-msgstr "En attente · images copiées en mémoire"
+msgstr "En attente · images en mémoire"
 
 #: picture.slint:1368
 #, x-machine
 msgid "Waiting · hardware decoding is off"
-msgstr "En attente · le décodage matériel est désactivé"
+msgstr "En attente · sans décodage matériel"
 
 #: picture.slint:1369
 #, x-machine
 msgid "Waiting · video decoded in software"
-msgstr "En attente · vidéo décodée par logiciel"
+msgstr "En attente · décodage logiciel"
 
 #: picture.slint:1370
 #, x-machine

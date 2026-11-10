@@ -1300,22 +1300,22 @@ msgstr "Ein · dieses Video wird nicht größer als seine Größe gezeigt"
 #: picture.slint:1365
 #, x-machine
 msgid "Waiting · reset picture adjustments"
-msgstr "Wartet · Bildeinstellungen zurücksetzen"
+msgstr "Wartet · Bild zurücksetzen"
 
 #: picture.slint:1367
 #, x-machine
 msgid "Waiting · frames copied to memory"
-msgstr "Wartet · Bilder in den Speicher kopiert"
+msgstr "Wartet · Bilder im Arbeitsspeicher"
 
 #: picture.slint:1368
 #, x-machine
 msgid "Waiting · hardware decoding is off"
-msgstr "Wartet · Hardware-Decodierung ist aus"
+msgstr "Wartet · Hardware-Decodierung aus"
 
 #: picture.slint:1369
 #, x-machine
 msgid "Waiting · video decoded in software"
-msgstr "Wartet · Video per Software decodiert"
+msgstr "Wartet · Software-Decodierung"
 
 #: picture.slint:1370
 #, x-machine

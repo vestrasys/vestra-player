@@ -1304,12 +1304,12 @@ msgstr "待機中 · 映像の調整をリセット"
 #: picture.slint:1367
 #, x-machine
 msgid "Waiting · frames copied to memory"
-msgstr "待機中 · フレームをメモリにコピー中"
+msgstr "待機中 · フレームをメモリにコピー"
 
 #: picture.slint:1368
 #, x-machine
 msgid "Waiting · hardware decoding is off"
-msgstr "待機中 · ハードウェアデコードがオフです"
+msgstr "待機中 · ハードウェアデコード無効"
 
 #: picture.slint:1369
 #, x-machine
@@ -1319,7 +1319,7 @@ msgstr "待機中 · ソフトウェアでデコード中"
 #: picture.slint:1370
 #, x-machine
 msgid "Waiting · another hardware decoder"
-msgstr "待機中 · 別のハードウェアデコーダー"
+msgstr "待機中 · 別のデコーダーを使用中"
 
 #: picture.slint:1371
 #, x-machine
