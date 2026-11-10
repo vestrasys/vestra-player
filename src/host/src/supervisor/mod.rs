@@ -1372,6 +1372,59 @@ impl<P: Clone> Supervisor<P> {
         self.sync(u);
     }
 
+    /// Run `pid` may still go to standby: active, recordable and not
+    /// resident. What it holds in the playback worker is worth asking again
+    /// after its requests there (`holds_live`).
+    pub fn may_stand_by(&self, pid: Pid) -> bool {
+        self.current(pid)
+            .and_then(|u| self.units.get(&u))
+            .is_some_and(|unit| {
+                matches!(unit.state, UnitState::Active { .. }) && unit.recordable && !unit.resident
+            })
+    }
+
+    /// Run `pid`, classified lazy, holds a live resource it acquired after
+    /// its classification (a shader list, a filter chain, a stream: the
+    /// playback worker's answer to a later ask). It is resident from now on,
+    /// as if classified so at its ready: no idle standby, and its checkpoint
+    /// says resident, so the next start launches it (and it takes up what it
+    /// holds again) instead of replaying its entry points. As a resident
+    /// classification at ready, the next ready classifies it again: one that
+    /// let go by then goes back to standby (supervisor.md §4). `false`:
+    /// nothing changed (not active, its class still asked, resident already).
+    pub fn holds_live(&mut self, pid: Pid) -> bool {
+        let Some(u) = self.current(pid) else {
+            return false;
+        };
+        let Some(unit) = self.units.get_mut(&u) else {
+            return false;
+        };
+        if !matches!(unit.state, UnitState::Active { .. })
+            || !unit.recordable
+            || unit.resident
+            || unit.classifying
+            || unit.may_reclassify
+        {
+            return false;
+        }
+        unit.resident = true;
+        if unit.class == Class::Normal {
+            unit.class = Class::Resident;
+        }
+        Timers::cancel(&mut unit.gens, TimerKind::Idle);
+        if !(unit.recorded && unit.recorded_resident) {
+            unit.recorded = true;
+            unit.recorded_resident = true;
+            self.pending.push(Action::Checkpoint {
+                unit: u,
+                pid,
+                resident: true,
+            });
+        }
+        self.sync(u);
+        true
+    }
+
     /// `touch`: the unit was used (formerly `Lazy::touch`).
     pub fn touch(&mut self, pid: Pid, now: Ms) {
         self.set_now(now);

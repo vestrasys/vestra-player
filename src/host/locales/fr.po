@@ -575,6 +575,12 @@ msgstr "{} n'a plus de mémoire"
 msgid "{} stopped after repeated faults"
 msgstr "{} s'est arrêté après des erreurs répétées"
 
+#. The line over a crashed plugin's panel while the player restarts the plugin; the panel stays, dimmed (user ruling 2026-11-10).
+#: src/host/host/panel_restart.rs
+#, x-machine
+msgid "{} is restarting…"
+msgstr "{} redémarre…"
+
 #. The reason on a crashed plugin's menu items, and the OSD on a click, while it waits a moment before it may start again; B4.
 #: src/host/host/supervisor/mod.rs src/host/host/supervisor/actions.rs
 #, x-machine

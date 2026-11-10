@@ -12,6 +12,7 @@
 //! macOS only. All `unsafe` stays in this crate; the public API is safe.
 #![cfg(target_os = "macos")]
 
+use crate::cadence::Cadence;
 use glow::{HasContext, NativeFramebuffer, NativeTexture};
 use objc2_core_foundation::{CFDictionary, CFNumber, CFRetained, CFString};
 pub use objc2_io_surface::IOSurfaceRef;
@@ -273,14 +274,14 @@ fn produce(
     let notify = shared.clone();
     render.set_update_callback(move || notify.wake()); // Only signals (rsmpv's rule).
     let _ = ready.send(Ok(()));
-    let (mut ring, mut next, mut sequence, mut drawn) = (Vec::new(), 0, 0, None::<Instant>);
+    let (mut ring, mut next, mut sequence) = (Vec::new(), 0, 0);
+    let mut cadence = Cadence::default();
     while !shared.stop.load(Ordering::Acquire) {
         let pace = *lock(&shared.pace);
-        // Paced: wait for the rest of the period, so frames come at most at
-        // the display rate however often mpv asks.
-        let left = pace.zip(drawn).map(|(period, at)| period.saturating_sub(at.elapsed()));
-        match left {
-            Some(left) if !left.is_zero() => thread::sleep(left),
+        // Paced: wait for the next start on the display's grid, so frames
+        // come at the display rate however often mpv asks (`Cadence`).
+        match cadence.wait(pace, Instant::now()) {
+            left if !left.is_zero() => thread::sleep(left),
             _ => shared.wait(Duration::from_millis(20)),
         }
         let size = *lock(&shared.size);
@@ -292,26 +293,29 @@ fn produce(
             ring.extend((0..RING).map_while(|_| unsafe { target(&gl, size) }));
         }
         if ring.len() == RING && (render.update() || (resized && sequence > 0)) {
+            cadence.started(pace, Instant::now());
             // Skip a surface the window server still shows.
             let free = (0..RING).map(|i| (next + i) % RING).find(|&i| !ring[i].0.0.is_in_use());
             let Target(surface, _, fbo) = &ring[free.unwrap_or(next)];
             next = (free.unwrap_or(next) + 1) % RING;
             let (width, height) = (size.0 as i32, size.1 as i32);
             let fbo = OpenGlFbo { fbo: fbo.0.get() as i32, width, height, internal_format: 0 };
-            if render.render_opengl(fbo, false, pace.is_none()).is_ok() {
+            let drawn = render.render_opengl(fbo, false, pace.is_none()).is_ok();
+            if drawn {
                 // SAFETY: the offscreen context is current. glFinish makes the
                 // pixels complete before any window binds the surface.
                 unsafe { gl.finish() };
-                if pace.is_some() {
-                    render.report_swap();
-                }
-                drawn = Some(Instant::now());
-                if publish.load(Ordering::Acquire) {
-                    sequence += 1;
-                    *lock(&shared.latest) = Some(Published { surface: surface.clone(), sequence });
-                    lock(&shared.redraw).iter().for_each(|redraw| redraw());
-                    lock(&shared.notify).iter().for_each(|notify| notify());
-                }
+            }
+            // After every render call, paced or not, failed or not: mpv takes
+            // one report as the promise of all (render.h) and then waits up
+            // to 200 ms in each flip for the next (5 frames a second after
+            // interpolation was turned off, until the player quit).
+            render.report_swap();
+            if drawn && publish.load(Ordering::Acquire) {
+                sequence += 1;
+                *lock(&shared.latest) = Some(Published { surface: surface.clone(), sequence });
+                lock(&shared.redraw).iter().for_each(|redraw| redraw());
+                lock(&shared.notify).iter().for_each(|notify| notify());
             }
         }
     }
@@ -358,8 +362,9 @@ impl Handle {
             self.0.wake();
         }
     }
-    /// `Some(fps)`: draw at most `fps` frames a second and report each as
-    /// presented (mpv `video-sync=display-*`); `None`: mpv's own timing.
+    /// `Some(fps)`: start a frame every `1 / fps` seconds at most (mpv
+    /// `video-sync=display-*`); `None`: mpv's own timing. Every frame is
+    /// reported as presented either way (`report_swap`).
     pub fn set_display_fps(&self, fps: Option<f64>) {
         let period =
             fps.filter(|f| f.is_finite() && *f >= 1.).map(|f| Duration::from_secs_f64(1. / f));
@@ -676,5 +681,37 @@ mod tests {
         handle.reshow();
         let (epoch, hold) = *lock(&handle.0.reshow);
         assert!(epoch == 1 && hold > 0 && hold <= handle.frames(), "{epoch} {hold}");
+    }
+    /// Interpolation on, then off: the rate after it is the rate before it
+    /// (mpv waits for a swap report in every flip once it had one).
+    #[test]
+    #[ignore = "needs a GPU OpenGL 4.1 context, which CI's macOS VMs lack; `npm run ci:local` runs it"]
+    fn interpolation_off_restores_the_frame_rate() {
+        let mpv = player();
+        let renderer = Renderer::start(mpv.clone(), (64, 64), Arc::new(true.into())).expect("gl");
+        let handle = renderer.handle();
+        mpv.command(&["loadfile", "av://lavfi:testsrc2=s=64x64:r=60:d=60"]).expect("loadfile");
+        assert!(until(|| handle.frames() > 10), "no frames");
+        let rate = || {
+            thread::sleep(Duration::from_millis(500));
+            let start = (Instant::now(), handle.frames());
+            thread::sleep(Duration::from_secs(2));
+            (handle.frames() - start.1) as f64 / start.0.elapsed().as_secs_f64()
+        };
+        let interpolate = |on: bool| {
+            let set = |name: &str, value: &str| mpv.set_property(name, value).expect("set");
+            set("interpolation", if on { "yes" } else { "no" });
+            set("video-sync", if on { "display-resample" } else { "audio" });
+            set("display-fps-override", if on { "60" } else { "0" });
+            handle.set_display_fps(on.then_some(60.));
+        };
+        let before = rate();
+        assert!(before >= 50., "{before:.1} frames/s before");
+        interpolate(true);
+        let on = rate();
+        assert!(on >= 50., "{on:.1} frames/s with interpolation");
+        interpolate(false);
+        let after = rate();
+        assert!(after >= before * 0.9, "{after:.1} frames/s after, {before:.1} before");
     }
 }

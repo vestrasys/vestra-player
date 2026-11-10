@@ -94,12 +94,12 @@ impl Host {
                 let result = self.apply_mounts(self.mounts.clone(), &[]);
                 if let Err(error) = &result {
                     diag!("current tabs {active:?}: {}", error.message);
-                    for (state, active) in self.columns.iter_mut().zip(active) {
-                        // Only the tab that needed the compile is held back.
-                        if active
-                            .is_some_and(|owner| self.shell_compiled.get(&owner) != Some(&owner))
-                        {
-                            state.refresh_failed = active;
+                    // Only the tab that needed the compile is held back.
+                    let held =
+                        active.map(|a| a.filter(|&owner| self.shell_branch(owner, true).is_none()));
+                    for (state, held) in self.columns.iter_mut().zip(held) {
+                        if held.is_some() {
+                            state.refresh_failed = held;
                         }
                     }
                 }
@@ -202,6 +202,24 @@ impl Host {
         let elapsed = started.elapsed().as_secs_f64() * 1000.;
         for change in changes {
             let owner = change.reply.owner;
+            // A panel kept over its plugin's restart, mounted again (in
+            // its kept branch when the spec is the same) or removed: its
+            // restart line goes (`panel_restart.rs`).
+            if result.is_ok() && self.restarts.waiting(change.key) {
+                if let Some(mount) = &change.contribution {
+                    diag!(
+                        "shell: {} mounted its {} panel again after its restart ({})",
+                        mount.manifest,
+                        mount.spec.slot.name(),
+                        if self.restarts.compiled_key(change.key) != change.key {
+                            "kept branch, no compile"
+                        } else {
+                            "compiled"
+                        }
+                    );
+                }
+                self.panel_back(change.key);
+            }
             if !change.contribution.as_ref().is_some_and(|m| m.recorded) {
                 self.send(owner,json!({"event":"ui.preparing","data":{"phase":if result.is_ok(){"ready"}else{"failed"},"elapsedMs":elapsed,"slot":slot_of(change.key)}}));
             }
@@ -363,8 +381,16 @@ impl Host {
                 .cloned()
                 .collect::<Vec<_>>();
             let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
+            // A panel kept over its plugin's restart and mounted again with
+            // the same file, component, global and slot is the branch the
+            // shell has under its old key (`panel_restart.rs`): no compile.
+            let compiled_as = shown
+                .iter()
+                .map(|m| self.compiled_spec(m))
+                .collect::<Vec<_>>();
             if self.shell.is_some()
-                && specs == self.shell_specs
+                && panel_restart::canonical(compiled_as)
+                    == panel_restart::canonical(self.shell_specs.clone())
                 && tabbed == [self.columns[0].tabbed, self.columns[1].tabbed]
             {
                 break;
@@ -412,6 +438,8 @@ impl Host {
                         state.tabbed = tabbed;
                     }
                     self.shell_compiled = compiled;
+                    // Every panel is under its own key in the new shell.
+                    self.restarts.recompiled();
                     recompiled = true;
                     break;
                 }
@@ -455,7 +483,8 @@ impl Host {
             }
             for mount in &shown {
                 if let Some(column) = Column::of(mount.spec.slot) {
-                    composition::set_tabbed(&shell, &mount.spec, tabbed[column.index()])
+                    let spec = self.compiled_spec(mount);
+                    composition::set_tabbed(&shell, &spec, tabbed[column.index()])
                         .map_err(error)?;
                 }
             }
@@ -466,10 +495,9 @@ impl Host {
                 .collect::<Vec<_>>();
             let mut failures = Vec::new();
             for mount in &rewritten {
+                let spec = self.compiled_spec(mount);
                 for (name, value) in self.mount_values(mount) {
-                    if let Err(error) =
-                        composition::set_global_value(&shell, &mount.spec, &name, value)
-                    {
+                    if let Err(error) = composition::set_global_value(&shell, &spec, &name, value) {
                         failures.push((mount.spec.owner, format!("{name}: {error:#}")));
                     }
                 }
@@ -648,6 +676,13 @@ impl Host {
                     if let Some(property) = mount.spec.slot.visible_property() {
                         shell.set_property(property, visible.into())?;
                     }
+                    // Still waiting for its plugin's restart.
+                    if let Some(line) = self.restarts.text_of(mount.spec.owner) {
+                        shell.set_property(
+                            &panel_restart::restarting_property(mount.spec.owner),
+                            SValue::String(line.into()),
+                        )?;
+                    }
                 }
                 // A column of placeholders only (none compiled) has no spec
                 // here: it takes the last tick's place too.
@@ -752,10 +787,22 @@ impl Host {
         values
     }
     pub(crate) fn mount_callbacks(&mut self) {
-        for event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
+        for mut event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
+            // A callback names the branch it came from: a panel kept over
+            // its plugin's restart has it under its old key.
+            event.owner = self.restarts.key_of_branch(event.owner);
             if !self.window_generation_live(event.shell_generation)
                 || !self.mounts.contains_key(&event.owner)
             {
+                continue;
+            }
+            // Its process is gone: dropped, never held for the next run
+            // (a stale click). The panel takes no pointer meanwhile.
+            if self.restarts.waiting(event.owner) {
+                diag!(
+                    "mount callback {} of a panel waiting for its plugin's restart: dropped",
+                    event.callback
+                );
                 continue;
             }
             // To the panel's plugin: `view` stays `"$mount"` for SDKs before

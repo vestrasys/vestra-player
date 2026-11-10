@@ -39,7 +39,7 @@ mod subtitles_read;
 mod timeline_marks;
 mod ui_dialog;
 mod ui_drop;
-mod ui_mount;
+pub(crate) mod ui_mount;
 mod ui_osd;
 mod ui_settings;
 mod ui_theme;
@@ -409,7 +409,9 @@ pub fn required(
 }
 
 /// Hands a request to the playback worker; a stopped worker is `backend`.
-fn forward(host: &Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+/// What the plugin holds there may change with it: a run that may still go
+/// to standby has the worker asked again (`Host::worker_requested`).
+fn forward(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
     host.backend
         .commands
         .send(Command {
@@ -418,12 +420,14 @@ fn forward(host: &Host, reply: &Reply, method: &str, params: &Value) -> Handled 
             params: params.clone(),
         })
         .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
+    host.worker_requested(reply.owner);
     Ok(None)
 }
 
 /// Hands a request to the playback worker; a stopped worker is `host`
-/// (subtitles, snapshots, jobs, video view and render).
-fn forward_media(host: &Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+/// (subtitles, snapshots, jobs, video view and render). As `forward`, what
+/// the plugin holds there is asked again.
+fn forward_media(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
     host.backend
         .commands
         .send(Command {
@@ -432,6 +436,7 @@ fn forward_media(host: &Host, reply: &Reply, method: &str, params: &Value) -> Ha
             params: params.clone(),
         })
         .map_err(anyhow::Error::from)?;
+    host.worker_requested(reply.owner);
     Ok(None)
 }
 

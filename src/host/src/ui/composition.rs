@@ -172,6 +172,37 @@ fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()
     Ok(())
 }
 
+/// A panel's restart line (`panel_restart.rs`): while its plugin restarts
+/// after a crash, the host dims the panel's last content and draws one
+/// line over it, taking the pointer (`ui/panel-restarting.slint`); a click
+/// on it gives it the keys, which `owner<key>-restarting-focused` reports.
+/// `when`: a further condition (its tab is the shown one).
+fn restarting_overlay(owner: u64, when: &str) -> String {
+    format!(
+        "if {when}root.owner{owner}-restarting != \"\": PanelRestarting {{ x: 0px; y: 0px; \
+         width: parent.width; height: parent.height; text: root.owner{owner}-restarting; \
+         changed holds-keys => {{ root.owner{owner}-restarting-focused = self.holds-keys; }} }}"
+    )
+}
+
+/// The restart line's properties of each panel in `specs`: its text (`""`:
+/// live) and whether it has the keys.
+fn restarting_properties(specs: &[CompileSpec]) -> String {
+    specs
+        .iter()
+        .map(|spec| {
+            format!(
+                "\n    in property <string> owner{0}-restarting;\
+                 \n    in-out property <bool> owner{0}-restarting-focused;",
+                spec.owner
+            )
+        })
+        .collect()
+}
+
+/// The import of the restart line's component, when there are panels.
+const RESTARTING_IMPORT: &str = "import { PanelRestarting } from \"panel-restarting.slint\";\n";
+
 /// The shell's slot properties and the tab properties of its columns (also
 /// in a shell without tabs, so the host binds them alike).
 const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
@@ -219,8 +250,9 @@ fn column_content(
         [] if !tabbed => return String::new(),
         [spec] if !tabbed => {
             return format!(
-                "Owner{}View {{ width: parent.width; height: parent.height; }}",
-                spec.owner
+                "Owner{}View {{ width: parent.width; height: parent.height; }} {}",
+                spec.owner,
+                restarting_overlay(spec.owner, "")
             );
         }
         _ => {}
@@ -230,8 +262,12 @@ fn column_content(
         .iter()
         .map(|spec| {
             format!(
-                "if root.{p}-shown == {0}: Owner{0}View {{ width: parent.width; height: parent.height; }}",
-                spec.owner
+                "if root.{p}-shown == {0}: Owner{0}View {{ width: parent.width; height: parent.height; }} {1}",
+                spec.owner,
+                restarting_overlay(
+                    spec.owner,
+                    &format!("root.{p}-shown == {} && ", spec.owner),
+                )
             )
         })
         .collect::<Vec<_>>()
@@ -423,12 +459,16 @@ fn shell_source_with(
         let path = import_path(&spec.file)?;
         import_spec(&mut source, spec, &path)?;
     }
+    if !specs.is_empty() {
+        source.push_str(RESTARTING_IMPORT);
+    }
     let mut shell = include_str!("../../ui/host.slint").to_owned();
     // FS-BAR-1: the bottom bar's laid-out height, also while it is hidden
     // (the host's fullscreen band); 0 without a bottom bar.
     let has_bottom = specs.iter().any(|spec| spec.slot == Slot::Bottom);
     let properties = format!(
-        "{SHELL_PROPERTIES}\n    out property <float> bottom-band-height: {};",
+        "{SHELL_PROPERTIES}{}\n    out property <float> bottom-band-height: {};",
+        restarting_properties(specs),
         if has_bottom {
             "bottom-keys.height / 1px"
         } else {
@@ -505,9 +545,10 @@ fn shell_source_with(
                  TouchArea {{ changed has-hover => {{ root.bottom-hover = self.has-hover; }} \
                  changed mouse-x => {{ root.window-input(\"activity\"); }} \
                  changed mouse-y => {{ root.window-input(\"activity\"); }} \
-                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} {} }} }} }}",
+                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} {} {} }} }} }}",
                 key_forward("panel:bottom"),
                 spec.owner,
+                restarting_overlay(spec.owner, ""),
                 bar_strip(
                     &bar_room.map_or_else(|| "0px".to_owned(), |p| format!("bottom-content.{p}"))
                 )
@@ -533,8 +574,9 @@ fn shell_source_with(
         .map(|spec| {
             format!(
                 "Rectangle {{ visible: root.no-video; \
-                 Owner{}View {{ width: parent.width; height: parent.height; }} }}",
-                spec.owner
+                 Owner{}View {{ width: parent.width; height: parent.height; }} {} }}",
+                spec.owner,
+                restarting_overlay(spec.owner, "")
             )
         })
         .unwrap_or_default();
@@ -629,6 +671,9 @@ pub fn floating_source_tabbed(specs: &[CompileSpec], title: &str, tabbed: bool) 
         let path = import_path(&spec.file)?;
         import_spec(&mut source, spec, &path)?;
     }
+    if !specs.is_empty() {
+        source.push_str(RESTARTING_IMPORT);
+    }
     let tabbed = tabbed || specs.len() > 1;
     if tabbed {
         source.push_str("import { SidebarTabs } from \"sidebar-tabs.slint\";\n");
@@ -663,6 +708,7 @@ export component FloatingPanel inherits Window {{
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
     in-out property <int> sidebar-active: 0;
     in property <int> sidebar-shown: -1;
+    {restarting}
     in property <[string]> sidebar-titles;
     callback sidebar-tab(int);
     callback sidebar-overflow(float, float);
@@ -691,6 +737,7 @@ export component FloatingPanel inherits Window {{
 }}
 "#,
         keys = key_forward("panel:sidebar"),
+        restarting = restarting_properties(specs),
     ));
     Ok(source)
 }

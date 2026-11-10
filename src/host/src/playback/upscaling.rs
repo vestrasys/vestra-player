@@ -676,6 +676,11 @@ impl Upscaling {
                 Pending::State(reply, _) | Pending::Set(reply, ..) => reply.owner == owner,
             })
     }
+    /// `owner` has upscaling on (not only a request waiting): what its next
+    /// activation turns on again (lazy activation's `held`).
+    pub fn owns(&self, owner: u64) -> bool {
+        self.owners.contains(&owner)
+    }
     /// The plugin stopped: its request goes, and with the last one the
     /// filter (plugin independence: a stopped plugin's resources are
     /// revoked); its unanswered requests are dropped.

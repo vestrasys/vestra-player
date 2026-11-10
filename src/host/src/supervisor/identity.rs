@@ -766,6 +766,46 @@ mod tests {
         assert_eq!(s.quit_checkpoints(), [(a, Pid(1), false)]);
     }
 
+    /// A run classified lazy that later takes up something live (Shader
+    /// Upscale's shaders, turned on after a first run without them):
+    /// `holds_live` makes it resident as a classification at ready would,
+    /// its checkpoint is written resident at once (the next start launches
+    /// it, quit writes nothing more), and it never stands by while idle.
+    /// Before its class is known, and once resident, nothing changes.
+    #[test]
+    fn a_lazy_run_that_takes_up_a_live_resource_is_resident_from_then_on() {
+        let mut s = new();
+        let u = ready(&mut s, "a.one", 1, 0, false);
+        // Its class still asked: the classification decides.
+        assert!(s.may_stand_by(Pid(1)));
+        assert!(!s.holds_live(Pid(1)));
+        s.classified(Pid(1), None);
+        s.run_jobs(0);
+        assert_eq!(s.quit_checkpoints(), [(u, Pid(1), false)]);
+
+        assert!(s.holds_live(Pid(1)));
+        let actions = s.run_jobs(0);
+        assert!(
+            actions.contains(&Action::Checkpoint {
+                unit: u,
+                pid: Pid(1),
+                resident: true
+            }),
+            "{actions:?}"
+        );
+        let unit = s.unit(u).unwrap();
+        assert!(unit.resident && unit.recorded_resident);
+        assert!(!s.may_stand_by(Pid(1)));
+        assert!(!s.holds_live(Pid(1)), "resident already");
+        assert!(s.quit_checkpoints().is_empty());
+        // Idle long past the idle timeout: no standby is asked.
+        let later = s.tunables().idle_timeout * 3;
+        s.set_now(later);
+        let actions = s.run_jobs(later);
+        assert!(!kinds(&actions).contains(&"QueryResources"), "{actions:?}");
+        assert!(!s.unit(u).unwrap().state.is_deactivating());
+    }
+
     /// Today's wake (`lazy_deliver` → `wake` → `wake_now` → `lazy_ready`): a
     /// trigger on a unit in standby starts it in the same `run_jobs`: the
     /// entries move to the new pid, the trigger is held for its ready and

@@ -11,6 +11,9 @@
 //!
 //! All `unsafe` stays in this crate; the public API is safe.
 
+#[cfg(any(windows, target_os = "macos"))]
+mod cadence;
+
 #[cfg(target_os = "macos")]
 mod macos;
 #[cfg(target_os = "macos")]

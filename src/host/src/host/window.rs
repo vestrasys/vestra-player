@@ -565,7 +565,8 @@ impl Host {
         };
         let pending = self.mount_queue.iter().any(|c| c.key == owner)
             || self.preparing.as_ref().is_some_and(|(_, c)| c.key == owner);
-        let compiled = self.shell_compiled.get(&owner) == Some(&owner);
+        // Under its own key, or its kept branch after its plugin restarted.
+        let compiled = self.shell_branch(owner, true).is_some();
         match sidebar_tabs::need(mount.recorded, compiled, pending) {
             sidebar_tabs::Need::Wake => {
                 if self.columns[index].woken != Some(owner) {
@@ -868,6 +869,16 @@ impl Host {
             composition::set_tabbed(&instance, &mount.spec, tabbed)?;
         }
         self.report_value_failures(failures);
+        // A tab still waiting for its plugin's restart (`panel_restart.rs`).
+        for tab in &tabs {
+            if let (Some(line), Some(&alias)) = (
+                self.restarts.text_of(tab.spec.owner),
+                self.shell_compiled.get(&tab.spec.owner),
+            ) {
+                let property = super::panel_restart::restarting_property(alias);
+                instance.set_property(&property, SValue::String(line.into()))?;
+            }
+        }
         instance.set_property("sidebar-titles", self.tab_titles(owners)?)?;
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);
