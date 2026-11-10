@@ -9,8 +9,8 @@
 //! over without a compile. Each removal and re-mount used to compile the
 //! whole shell (0.3 to 0.6 s on the UI thread), for up to five restarts.
 //!
-//! Meanwhile the panel is dimmed under one host line ("<name> is
-//! restarting…", `PanelRestarting` in ui/panel-restarting.slint) that takes
+//! Meanwhile the panel is dimmed under one host line (`"<name> is
+//! restarting…"`, `PanelRestarting` in ui/panel-restarting.slint) that takes
 //! the pointer, and its callbacks are dropped (the process is gone; a held
 //! callback would reach the next run as a stale click). A restart that
 //! does not come (the start limit hit, the plugin disabled or uninstalled,
