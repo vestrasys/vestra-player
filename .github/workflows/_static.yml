@@ -11,6 +11,13 @@ on:
           names under src/plugins (plan.sh picks them from the changed paths).
         type: string
         default: all
+      sdk_strict:
+        description: >
+          VESTRA_SDK_STRICT for test:sdk and sdk:sync-slint: true fails on
+          the SDK's product data too (built-in commands, Slint copy); false
+          only warns on it (doc/process/ci.md).
+        type: boolean
+        default: false
     outputs:
       ui_record:
         description: >
@@ -79,6 +86,8 @@ jobs:
       contents: read
     outputs:
       ui_record: ${{ steps.ui-record.outputs.recorded }}
+    env:
+      VESTRA_SDK_STRICT: ${{ inputs.sdk_strict && '1' || '0' }}
     defaults:
       run:
         working-directory: src

@@ -2,11 +2,28 @@
 // few of the player's constants and its Slint library; they must agree with
 // this host. A mismatch means: change the SDK repository, release it and
 // upgrade the dependency here (agentic-workflow/agentic-workflow.md §1.6).
+//
+// Contract data (what decides whether the player accepts a request, or how a
+// plugin or TestHost behaves: capabilities, apiVersion, limits, error codes,
+// wire shapes, menu ids, wake events) fails a `test`. Product data (a
+// snapshot of how the player looks now: the built-in command and submenu
+// tables, the Slint library copy, the player's Chinese texts, palette
+// colours) is an `advisory` test: between SDK releases its failure is
+// reported as a TODO and does not fail the run. VESTRA_SDK_STRICT=1 (`npm run
+// ci:local -- --strict-sdk`, the release workflow) makes it a plain test;
+// that is the check when the SDK dependency is upgraded and before a release.
 import assert from "node:assert/strict";
-import { mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import {
+  appendFileSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
+import type { TestContext } from "node:test";
 import { fileURLToPath } from "node:url";
 import {
   API_VERSION,
@@ -50,6 +67,33 @@ import { runNode } from "./children.ts";
 
 const host = (file: string) =>
   readFileSync(new URL(`../../host/${file}`, import.meta.url), "utf8");
+
+const STRICT = process.env.VESTRA_SDK_STRICT === "1";
+const ADVISORY =
+  "product data: warns until the next SDK sync; VESTRA_SDK_STRICT=1 enforces it";
+
+/**
+ * A product-data test: with VESTRA_SDK_STRICT=1 a plain test; otherwise a
+ * failure is shown as a TODO (the run passes) and, when
+ * VESTRA_SDK_ADVISORY_FILE names a file, appended to it as one line
+ * (ci:local prints them at the end).
+ */
+function advisory(name: string, fn: (t: TestContext) => void | Promise<void>) {
+  if (STRICT) return test(name, fn);
+  return test(name, async (t) => {
+    try {
+      await fn(t);
+    } catch (error) {
+      t.todo(ADVISORY);
+      const file = process.env.VESTRA_SDK_ADVISORY_FILE;
+      if (file) {
+        const message = error instanceof Error ? error.message : String(error);
+        appendFileSync(file, `test:sdk: ${name}: ${message.split("\n")[0]}\n`);
+      }
+      throw error;
+    }
+  });
+}
 
 test("COMMAND_LIMITS matches the player's registry", () => {
   const rust = host("src/commands.rs");
@@ -227,8 +271,7 @@ test("the installed SDK's copy of host/capabilities.json is current (SDK npm run
   assert.deepEqual(HOST_CAPABILITIES, capabilityJson());
 });
 
-test("the installed SDK's Slint library copy matches the player's", () => {
-  // Every file of the library is in the copy (the script lists them).
+test("every file of the Slint library is in sync-sdk-slint.mjs's SLINT_FILES", () => {
   const library = readdirSync(
     new URL("../../host/ui/vestra/", import.meta.url),
   );
@@ -236,11 +279,15 @@ test("the installed SDK's Slint library copy matches the player's", () => {
     new URL("../../scripts/sync-sdk-slint.mjs", import.meta.url),
     "utf8",
   );
+  assert.ok(script.includes(`"palette.slint"`), "palette.slint is synced");
   for (const file of library)
     assert.ok(script.includes(`"vestra/${file}"`), `${file} is synced`);
+});
+
+advisory("the installed SDK's Slint library copy matches the player's", () => {
   const result = runNode([
     fileURLToPath(new URL("../../scripts/sync-sdk-slint.mjs", import.meta.url)),
-    "--check",
+    "--strict",
   ]);
   assert.equal(result.status, 0, result.stderr);
 });
@@ -436,12 +483,15 @@ test("the SDK's Slint @tr scanner agrees with the player's", () => {
   }
 });
 
-test("the test host's copy of the player's Chinese texts matches locales/zh-Hans.po", () => {
-  const { entries } = parsePo(host("locales/zh-Hans.po"));
-  const player = new Map(entries.map((e) => [e.id, e.strings[0]]));
-  for (const [english, chinese] of Object.entries(HOST_ZH_HANS))
-    assert.equal(player.get(english), chinese, english);
-});
+advisory(
+  "the test host's copy of the player's Chinese texts matches locales/zh-Hans.po",
+  () => {
+    const { entries } = parsePo(host("locales/zh-Hans.po"));
+    const player = new Map(entries.map((e) => [e.id, e.strings[0]]));
+    for (const [english, chinese] of Object.entries(HOST_ZH_HANS))
+      assert.equal(player.get(english), chinese, english);
+  },
+);
 
 // ------------------------------------------- tables of the SDK's Reference
 //
@@ -597,24 +647,27 @@ test("capabilities.json's wording and requirements are CAPABILITY_INFO's", () =>
   }
 });
 
-test("CAPABILITY_INFO's store wording is the store's (plugins/store/labels.ts)", () => {
+// Both are this repository's files, so the store is checked against the
+// player directly (CAPABILITY_INFO is compared with capabilities.json above).
+test("the store's capability wording is capabilities.json's (plugins/store/labels.ts)", () => {
   const store: Record<string, { text: string; risky?: boolean }> =
     STORE_CAPABILITIES;
+  const json = capabilityJson();
   assert.deepEqual(
     Object.keys(store).sort(),
-    Object.keys(CAPABILITY_INFO).sort(),
-    "the store labels another set of capabilities than CAPABILITY_INFO",
+    json.capabilities.map((c) => c.name).sort(),
+    "the store labels another set of capabilities than capabilities.json",
   );
-  for (const [name, info] of Object.entries(CAPABILITY_INFO)) {
+  for (const c of json.capabilities) {
     assert.equal(
-      store[name]!.text,
-      info.label,
-      `${name}: store text vs CAPABILITY_INFO.label`,
+      store[c.name]!.text,
+      c.label,
+      `${c.name}: store text vs capabilities.json label`,
     );
     assert.equal(
-      store[name]!.risky === true,
-      info.risky,
-      `${name}: store risky vs CAPABILITY_INFO.risky`,
+      store[c.name]!.risky === true,
+      c.risky,
+      `${c.name}: store risky vs capabilities.json risky`,
     );
   }
 });
@@ -1206,12 +1259,20 @@ test("BINDING_INPUTS are the names the player's binding parser accepts (bindings
   );
 });
 
-test("THEME_PALETTES are the player's palettes (theme.rs)", () => {
-  const rust = host("src/ui/theme.rs");
+test("THEME_PALETTES names the player's themes (theme.rs THEMES)", () => {
   const themes = /pub const THEMES: \[&str; \d+\] = \[([^\]]*)\];/.exec(
-    rust,
+    host("src/ui/theme.rs"),
   )?.[1];
   assert.ok(themes, "THEMES in theme.rs");
+  assert.deepEqual(
+    Object.keys(THEME_PALETTES),
+    [...themes.matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+    "THEME_PALETTES has other palettes than theme.rs THEMES",
+  );
+});
+
+advisory("THEME_PALETTES' colours are the player's palettes (theme.rs)", () => {
+  const rust = host("src/ui/theme.rs");
   const palette = (name: string) => {
     const body = new RegExp(
       `const ${name}: \\[\\(&str, u32\\); \\d+\\] = \\[([\\s\\S]*?)\\];`,
@@ -1224,11 +1285,6 @@ test("THEME_PALETTES are the player's palettes (theme.rs)", () => {
       ]),
     );
   };
-  assert.deepEqual(
-    Object.keys(THEME_PALETTES),
-    [...themes.matchAll(/"([^"]+)"/g)].map((m) => m[1]),
-    "THEME_PALETTES has other palettes than theme.rs THEMES",
-  );
   assert.deepEqual(
     { ...THEME_PALETTES.vestra },
     palette("VESTRA"),
@@ -1461,92 +1517,95 @@ function hostCommands(): Row[] {
   return rows;
 }
 
-test("BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in plugins register", async () => {
-  assertRows(
-    hostCommands(),
-    BUILTIN_COMMANDS.filter((row) => row.owner === "host"),
-    "the player's own commands (host/actions.rs host_declarations, core_actions.rs) differ from BUILTIN_COMMANDS",
-  );
-  const root = new URL("../../plugins/", import.meta.url);
-  const rows: Row[] = [];
-  for (const name of readdirSync(root).sort()) {
-    const directory = new URL(`${name}/`, root);
-    const manifest = JSON.parse(
-      readFileSync(new URL("manifest.json", directory), "utf8"),
-    ) as { id: string };
-    const { default: activate } = (await import(
-      new URL("main.ts", directory).href
-    )) as {
-      default: Parameters<typeof startPlugin>[0];
-    };
-    const data = mkdtempSync(join(tmpdir(), "vestra-agreement-"));
-    const { host: fake, stop } = await startPlugin(activate, {
-      directory,
-      dataDirectory: data,
-      locale: "en",
-    });
-    for (const [id, command] of fake.commands)
-      rows.push({
-        owner: manifest.id,
-        id,
-        path: [...command.display.path],
-        title: command.display.title,
-        bindings: [...(command.declaration.bindings ?? [])],
-        focus: command.declaration.focus === "panel" ? "panel" : null,
+advisory(
+  "BUILTIN_COMMANDS and BUILTIN_SUBMENUS are what the player and its built-in plugins register",
+  async () => {
+    assertRows(
+      hostCommands(),
+      BUILTIN_COMMANDS.filter((row) => row.owner === "host"),
+      "the player's own commands (host/actions.rs host_declarations, core_actions.rs) differ from BUILTIN_COMMANDS",
+    );
+    const root = new URL("../../plugins/", import.meta.url);
+    const rows: Row[] = [];
+    for (const name of readdirSync(root).sort()) {
+      const directory = new URL(`${name}/`, root);
+      const manifest = JSON.parse(
+        readFileSync(new URL("manifest.json", directory), "utf8"),
+      ) as { id: string };
+      const { default: activate } = (await import(
+        new URL("main.ts", directory).href
+      )) as {
+        default: Parameters<typeof startPlugin>[0];
+      };
+      const data = mkdtempSync(join(tmpdir(), "vestra-agreement-"));
+      const { host: fake, stop } = await startPlugin(activate, {
+        directory,
+        dataDirectory: data,
+        locale: "en",
       });
-    await stop();
-    rmSync(data, { recursive: true, force: true });
-  }
-  assertRows(
-    rows,
-    BUILTIN_COMMANDS.filter((row) => row.owner !== "host"),
-    "the built-in plugins' commands (started in the test host) differ from BUILTIN_COMMANDS",
-  );
-  // Submenus: every inner path of a plugin command below the top level of a
-  // built-in menu, or a top-level menu of its own; not the player's own
-  // groups (`host_group_label` in commands.rs: Playback ▸ Seek, Playback ▸
-  // Speed), whoever fills them (the player's seek and speed actions left them
-  // for the command palette, menu redesign step 4).
-  const builtIn = new Set(Object.values(MENU_KEYS));
-  const hosts = new Set(
-    [
-      ...braces(host("src/commands.rs"), "pub fn host_group_label(").matchAll(
-        /\[((?:"[^"]+",?\s*)+)\] =>/g,
-      ),
-    ]
-      .map((m) => [...m[1]!.matchAll(/"([^"]*)"/g)].map((s) => s[1]!))
-      .filter((path) => path.length > 1)
-      .map((path) => path.join(" ▸ ")),
-  );
-  assert.ok(hosts.has("Playback ▸ Seek"), "host_group_label in commands.rs");
-  const submenus = new Map<string, Set<string>>();
-  for (const row of rows)
-    for (let i = 1; i < row.path.length; i++) {
-      const path = row.path.slice(0, i);
-      const key = path.join(" ▸ ");
-      if ((i === 1 && builtIn.has(path[0]!)) || hosts.has(key)) continue;
-      submenus.set(key, (submenus.get(key) ?? new Set()).add(row.owner));
+      for (const [id, command] of fake.commands)
+        rows.push({
+          owner: manifest.id,
+          id,
+          path: [...command.display.path],
+          title: command.display.title,
+          bindings: [...(command.declaration.bindings ?? [])],
+          focus: command.declaration.focus === "panel" ? "panel" : null,
+        });
+      await stop();
+      rmSync(data, { recursive: true, force: true });
     }
-  const shown = (
-    menus: Iterable<{ path: readonly string[]; plugins: Iterable<string> }>,
-  ) =>
-    [...menus]
-      .map(
-        (menu) =>
-          `${menu.path.join(" ▸ ")} | ${[...menu.plugins].sort().join(", ")}`,
-      )
-      .sort();
-  assert.deepEqual(
-    shown(
-      [...submenus].map(([key, plugins]) => ({
-        path: key.split(" ▸ "),
-        plugins,
-      })),
-    ),
-    shown(BUILTIN_SUBMENUS),
-    "the built-in plugins' submenus differ from BUILTIN_SUBMENUS",
-  );
-});
+    assertRows(
+      rows,
+      BUILTIN_COMMANDS.filter((row) => row.owner !== "host"),
+      "the built-in plugins' commands (started in the test host) differ from BUILTIN_COMMANDS",
+    );
+    // Submenus: every inner path of a plugin command below the top level of a
+    // built-in menu, or a top-level menu of its own; not the player's own
+    // groups (`host_group_label` in commands.rs: Playback ▸ Seek, Playback ▸
+    // Speed), whoever fills them (the player's seek and speed actions left them
+    // for the command palette, menu redesign step 4).
+    const builtIn = new Set(Object.values(MENU_KEYS));
+    const hosts = new Set(
+      [
+        ...braces(host("src/commands.rs"), "pub fn host_group_label(").matchAll(
+          /\[((?:"[^"]+",?\s*)+)\] =>/g,
+        ),
+      ]
+        .map((m) => [...m[1]!.matchAll(/"([^"]*)"/g)].map((s) => s[1]!))
+        .filter((path) => path.length > 1)
+        .map((path) => path.join(" ▸ ")),
+    );
+    assert.ok(hosts.has("Playback ▸ Seek"), "host_group_label in commands.rs");
+    const submenus = new Map<string, Set<string>>();
+    for (const row of rows)
+      for (let i = 1; i < row.path.length; i++) {
+        const path = row.path.slice(0, i);
+        const key = path.join(" ▸ ");
+        if ((i === 1 && builtIn.has(path[0]!)) || hosts.has(key)) continue;
+        submenus.set(key, (submenus.get(key) ?? new Set()).add(row.owner));
+      }
+    const shown = (
+      menus: Iterable<{ path: readonly string[]; plugins: Iterable<string> }>,
+    ) =>
+      [...menus]
+        .map(
+          (menu) =>
+            `${menu.path.join(" ▸ ")} | ${[...menu.plugins].sort().join(", ")}`,
+        )
+        .sort();
+    assert.deepEqual(
+      shown(
+        [...submenus].map(([key, plugins]) => ({
+          path: key.split(" ▸ "),
+          plugins,
+        })),
+      ),
+      shown(BUILTIN_SUBMENUS),
+      "the built-in plugins' submenus differ from BUILTIN_SUBMENUS",
+    );
+  },
+);
 
 test("COMMAND_LIMITS' declaration limits are the player's (commands.rs Registry::register; SDK 1.5.48)", () => {
   const rust = host("src/commands.rs");
@@ -1602,24 +1661,29 @@ test("TestHost refuses a menu text with the player's message (commands.rs text; 
   );
 });
 
-test("TestHost refuses a plugin item on or under each of the player's own menu items (SDK 1.5.48)", async () => {
-  const paths = hostCommands()
-    .map((row) => row.path)
-    .filter((path) => path.length > 0);
-  // Toggle Fullscreen and Quit (host_declarations) and the core actions.
-  assert.ok(paths.some((path) => path.join() === "Quit"));
-  for (const taken of [...paths, ...paths.map((path) => [...path, "Item"])])
-    await assert.rejects(
-      startPlugin(
-        (plugin) => {
-          plugin.commands.add({ id: "a", path: [...taken], run() {} });
-        },
-        { capabilities: ["commands"] },
-      ),
-      { code: "conflict" },
-      `a plugin item at ${taken.join(" ▸ ")}`,
-    );
-});
+// TestHost takes the player's own menu items from BUILTIN_COMMANDS (product
+// data), so this check follows that table.
+advisory(
+  "TestHost refuses a plugin item on or under each of the player's own menu items (SDK 1.5.48)",
+  async () => {
+    const paths = hostCommands()
+      .map((row) => row.path)
+      .filter((path) => path.length > 0);
+    // Toggle Fullscreen and Quit (host_declarations) and the core actions.
+    assert.ok(paths.some((path) => path.join() === "Quit"));
+    for (const taken of [...paths, ...paths.map((path) => [...path, "Item"])])
+      await assert.rejects(
+        startPlugin(
+          (plugin) => {
+            plugin.commands.add({ id: "a", path: [...taken], run() {} });
+          },
+          { capabilities: ["commands"] },
+        ),
+        { code: "conflict" },
+        `a plugin item at ${taken.join(" ▸ ")}`,
+      );
+  },
+);
 
 test("SESSION_STORAGE_LIMITS are the player's (session_storage.rs; SDK 1.5.25, player 0.5.5)", async (t) => {
   const runtime: { SESSION_STORAGE_LIMITS?: object } =
