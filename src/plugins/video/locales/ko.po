@@ -1309,7 +1309,7 @@ msgstr "대기 중 · 프레임이 메모리로 복사됨"
 #: picture.slint:1368
 #, x-machine
 msgid "Waiting · hardware decoding is off"
-msgstr "대기 중 · 하드웨어 디코딩이 꺼져 있음"
+msgstr "대기 중 · 하드웨어 디코딩 꺼짐"
 
 #: picture.slint:1369
 #, x-machine

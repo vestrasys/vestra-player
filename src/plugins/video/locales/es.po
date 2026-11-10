@@ -1057,7 +1057,7 @@ msgstr "No se pudo reiniciar el reproductor: {}"
 #: main.ts:1703
 #, x-machine
 msgid "Waiting · turn off {}'s effects"
-msgstr "En espera · desactiva los efectos de {}"
+msgstr "En espera · desactiva efectos de {}"
 
 #: main.ts:1704
 #, x-machine
@@ -1067,7 +1067,7 @@ msgstr "{} mantiene los fotogramas en memoria para sus efectos, pero el escalado
 #: main.ts:1708
 #, x-machine
 msgid "Waiting · turn off the effects of {}"
-msgstr "En espera · desactiva los efectos de {}"
+msgstr "En espera · desactiva efectos de {}"
 
 #: main.ts:1709
 #, x-machine
@@ -1300,27 +1300,27 @@ msgstr "Activado · este vídeo no se muestra más grande que su tamaño"
 #: picture.slint:1365
 #, x-machine
 msgid "Waiting · reset picture adjustments"
-msgstr "En espera · restablece los ajustes de imagen"
+msgstr "En espera · restablece los ajustes"
 
 #: picture.slint:1367
 #, x-machine
 msgid "Waiting · frames copied to memory"
-msgstr "En espera · fotogramas copiados a memoria"
+msgstr "En espera · fotogramas en memoria"
 
 #: picture.slint:1368
 #, x-machine
 msgid "Waiting · hardware decoding is off"
-msgstr "En espera · la decodificación por hardware está desactivada"
+msgstr "En espera · sin decodificación HW"
 
 #: picture.slint:1369
 #, x-machine
 msgid "Waiting · video decoded in software"
-msgstr "En espera · vídeo decodificado por software"
+msgstr "En espera · decodificación software"
 
 #: picture.slint:1370
 #, x-machine
 msgid "Waiting · another hardware decoder"
-msgstr "En espera · otro decodificador por hardware"
+msgstr "En espera · otro decodificador HW"
 
 #: picture.slint:1371
 #, x-machine
