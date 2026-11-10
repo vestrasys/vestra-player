@@ -304,18 +304,30 @@ impl Host {
     /// line goes.
     pub(crate) fn panel_back(&mut self, key: u64) {
         if self.restarts.done(key) {
-            self.set_restarting_line(key, "");
-            // The line may have held the keys (`take-keys`); they go back to
-            // the video, as when a column's tab goes (`sync_column`). The
-            // detached window's own key scope takes them there.
-            if let Some(shell) = &self.shell
-                && !matches!(shell.get_property("canvas-focused"), Ok(SValue::Bool(true)))
-            {
+            // The line had the keys (a click on it): they go back to the
+            // video, as when a column's tab goes (`sync_column`; the detached
+            // window's own key scope there). Anywhere else (the video, the
+            // command palette, another panel) they stay.
+            let property = restarting_focus_property(self.restarts.compiled_key(key));
+            let had = |window: &slint_interpreter::ComponentInstance| {
+                matches!(window.get_property(&property), Ok(SValue::Bool(true)))
+            };
+            if let Some(shell) = self.shell.as_ref().filter(|shell| had(shell)) {
+                let _ = shell.set_property(&property, false.into());
                 let _ = shell.invoke("focus-video", &[]);
             }
-            if let Some(floating) = self.floating.as_ref().filter(|f| f.owners.contains(&key)) {
-                let _ = floating.instance.invoke("focus-video", &[]);
+            if let Some(floating) = &self.floating {
+                let branch = self.shell_compiled.get(&key).copied().unwrap_or(key);
+                let property = restarting_focus_property(branch);
+                if matches!(
+                    floating.instance.get_property(&property),
+                    Ok(SValue::Bool(true))
+                ) {
+                    let _ = floating.instance.set_property(&property, false.into());
+                    let _ = floating.instance.invoke("focus-video", &[]);
+                }
             }
+            self.set_restarting_line(key, "");
         }
     }
     /// The line over kept panel `key`, in the shell and the floating window.
@@ -490,6 +502,12 @@ impl Host {
 /// panel compiled under `key` ("" while it is live).
 pub(crate) fn restarting_property(key: u64) -> String {
     format!("owner{key}-restarting")
+}
+
+/// Whether the line over the panel compiled under `key` has the keys (a
+/// click on it gave them).
+pub(crate) fn restarting_focus_property(key: u64) -> String {
+    format!("owner{key}-restarting-focused")
 }
 
 #[cfg(test)]

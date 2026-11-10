@@ -2062,6 +2062,64 @@ export component W inherits Window {
         shell.hide().unwrap();
     }
 
+    /// Review of the crash-restart change: a panel's restart line
+    /// (`panel-restarting.slint`) never takes the keys by itself. The keys
+    /// on another panel's control stay there while the line comes and goes;
+    /// only a click on the line gives them to it, which the shell reports
+    /// (`owner<key>-restarting-focused`, for `panel_back`).
+    #[test]
+    fn a_restart_line_takes_the_keys_only_when_clicked() {
+        use crate::ui::composition::{CompileSpec, Slot};
+        use slint::platform::Key;
+        headless();
+        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
+        let [list] = focus_list();
+        let bar = CompileSpec {
+            owner: 24,
+            file: base.join("min-bar.slint"),
+            component: "MinBar".into(),
+            global: Some("MinBridge".into()),
+            slot: Slot::Bottom,
+        };
+        let source = crate::ui::composition::shell_source(&[list, bar]).unwrap();
+        let shell = focus_window(source, "canvas", "HostWindow");
+        let line = |text: &str| {
+            shell
+                .set_property("owner24-restarting", Value::String(text.into()))
+                .unwrap();
+            settle_layout(shell.window());
+            slint::platform::update_timers_and_animations();
+        };
+        let line_focused =
+            || shell.get_property("owner24-restarting-focused").unwrap() == Value::Bool(true);
+        let played = || {
+            shell
+                .get_global_property(&crate::ui::composition::global_alias(20), "played")
+                .unwrap()
+        };
+        // The sidebar's list has the keys; the bottom bar's plugin restarts.
+        click_at(&shell, 1300., 50.);
+        assert!(!focused(&shell), "the list has the keys");
+        line("Bar is restarting…");
+        assert!(!line_focused(), "the line took no keys");
+        press(&shell, Key::Return);
+        assert_eq!(played(), Value::Number(1.), "the list still had them");
+        assert!(focused(&shell), "and gave them back to the video");
+        // On the video, they stay there too, and when the line goes.
+        line("");
+        line("Bar is restarting…");
+        assert!(focused(&shell) && !line_focused());
+        // A click on the line (the bar, 62px at the bottom) gives it the keys;
+        // a key goes past it to the player, never to the bar's controls.
+        click_at(&shell, 200., 956. - 30.);
+        assert!(line_focused(), "the click gave the line the keys");
+        assert!(!focused(&shell));
+        press(&shell, Key::Return);
+        assert_eq!(played(), Value::Number(1.));
+        line("");
+        shell.hide().unwrap();
+    }
+
     /// The detached sidebar has no video: `VestraFocus.release()` gives the
     /// keys to the window's own key scope (unaccepted keys then reach the
     /// player's shortcuts through `key-input`).

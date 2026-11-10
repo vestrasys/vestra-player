@@ -174,37 +174,35 @@ fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()
 
 /// A panel's restart line (`panel_restart.rs`): while its plugin restarts
 /// after a crash, the host dims the panel's last content and draws one
-/// line over it, taking the pointer and the keys (`ui/panel-restarting.slint`); `when`:
-/// a further condition (its tab is the shown one).
-fn restarting_overlay(owner: u64, when: &str, take_keys: &str) -> String {
+/// line over it, taking the pointer (`ui/panel-restarting.slint`); a click
+/// on it gives it the keys, which `owner<key>-restarting-focused` reports.
+/// `when`: a further condition (its tab is the shown one).
+fn restarting_overlay(owner: u64, when: &str) -> String {
     format!(
         "if {when}root.owner{owner}-restarting != \"\": PanelRestarting {{ x: 0px; y: 0px; \
          width: parent.width; height: parent.height; text: root.owner{owner}-restarting; \
-         take-keys: {take_keys}; }}"
+         changed holds-keys => {{ root.owner{owner}-restarting-focused = self.holds-keys; }} }}"
     )
 }
 
-/// Whether a panel's restart line takes the keys when it comes: in the
-/// shell when the video does not have them (they may be on the panel's
-/// controls), always in the detached sidebar's window (`detached`).
-fn restarting_keys(detached: &str) -> &'static str {
-    if detached == "true" {
-        "true"
-    } else {
-        "!root.canvas-focused"
-    }
-}
-
-/// The restart line's property of each panel in `specs` (`""`: live).
+/// The restart line's properties of each panel in `specs`: its text (`""`:
+/// live) and whether it has the keys.
 fn restarting_properties(specs: &[CompileSpec]) -> String {
     specs
         .iter()
-        .map(|spec| format!("\n    in property <string> owner{}-restarting;", spec.owner))
+        .map(|spec| {
+            format!(
+                "\n    in property <string> owner{0}-restarting;\
+                 \n    in-out property <bool> owner{0}-restarting-focused;",
+                spec.owner
+            )
+        })
         .collect()
 }
 
 /// The import of the restart line's component, when there are panels.
 const RESTARTING_IMPORT: &str = "import { PanelRestarting } from \"panel-restarting.slint\";\n";
+
 /// The shell's slot properties and the tab properties of its columns (also
 /// in a shell without tabs, so the host binds them alike).
 const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
@@ -254,7 +252,7 @@ fn column_content(
             return format!(
                 "Owner{}View {{ width: parent.width; height: parent.height; }} {}",
                 spec.owner,
-                restarting_overlay(spec.owner, "", restarting_keys(detached))
+                restarting_overlay(spec.owner, "")
             );
         }
         _ => {}
@@ -269,7 +267,6 @@ fn column_content(
                 restarting_overlay(
                     spec.owner,
                     &format!("root.{p}-shown == {} && ", spec.owner),
-                    restarting_keys(detached),
                 )
             )
         })
@@ -551,7 +548,7 @@ fn shell_source_with(
                  bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} {} {} }} }} }}",
                 key_forward("panel:bottom"),
                 spec.owner,
-                restarting_overlay(spec.owner, "", "!root.canvas-focused"),
+                restarting_overlay(spec.owner, ""),
                 bar_strip(
                     &bar_room.map_or_else(|| "0px".to_owned(), |p| format!("bottom-content.{p}"))
                 )
@@ -579,7 +576,7 @@ fn shell_source_with(
                 "Rectangle {{ visible: root.no-video; \
                  Owner{}View {{ width: parent.width; height: parent.height; }} {} }}",
                 spec.owner,
-                restarting_overlay(spec.owner, "", "false")
+                restarting_overlay(spec.owner, "")
             )
         })
         .unwrap_or_default();

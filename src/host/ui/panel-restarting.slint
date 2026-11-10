@@ -3,25 +3,21 @@
 // `text` ("<name> is restarting…", translated by the host) is not empty.
 // The panel's last content shows dimmed under it, so it is not taken for
 // live data, and the line sits on the OSD's plate (white on a translucent
-// dark plate, ui-spec §6.6). It takes the pointer, the wheel and the keys:
-// nothing reaches the plugin's controls while its process is gone.
+// dark plate, ui-spec §6.6). It takes the pointer and the wheel: nothing
+// reaches the plugin's controls while its process is gone.
 import { Theme } from "@vestra/theme.slint";
 
 export component PanelRestarting inherits Rectangle {
     in property <string> text;
-    // The keys were not on the video when it came (`!canvas-focused`;
-    // always in the detached sidebar's window): they may have been on a
-    // control of the panel, so its invisible key scope takes them. A key
-    // is not handled there: it goes on to the column's scope (the player's
-    // panel shortcuts), never to the panel's controls. The host gives the
-    // keys back to the video when the line goes (`panel_back`).
-    in property <bool> take-keys;
+    // A click on it gives the keys to its invisible key scope (not to the
+    // panel's controls under it). It never takes them by itself: the keys
+    // stay wherever they are (the video, the command palette, another
+    // panel) when it comes. A key is not handled there: it goes on to the
+    // column's scope (the player's panel shortcuts). The host reads this
+    // (`owner<key>-restarting-focused`) to give the keys back to the video
+    // when the line goes, only when it had them (`panel_back`).
+    out property <bool> holds-keys: keys.has-focus;
     background: Theme.bg-panel.with-alpha(0.72);
-    init => {
-        if root.take-keys {
-            keys.focus();
-        }
-    }
     keys := FocusScope {
         TouchArea {
             clicked => { keys.focus(); }
