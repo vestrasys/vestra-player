@@ -1377,7 +1377,7 @@ fn stats(
 }
 
 /// `jobs.check`: its params read (`media_sources::CheckParams`), parts or a
-/// `snapshotId`, one of them. A snapshot's check is answered here (its held
+/// `snapshotId`, one of them (`end` only with a `snapshotId`). A snapshot's check is answered here (its held
 /// file, probed on a short thread), as is a refused request; `false`: a
 /// parts check, for `media_sources::request`.
 fn snapshot_check(
@@ -1401,6 +1401,12 @@ fn snapshot_check(
         Err(error) => return refuse(error),
     };
     let Some(snapshot_id) = check.snapshot_id else {
+        // Parts carry their own ends; `end` is the snapshot form's.
+        if check.end.is_some() {
+            return refuse(RpcError::invalid(
+                "end belongs to a snapshotId check; parts carry their own end",
+            ));
+        }
         return false;
     };
     let input = match jobs
@@ -2087,6 +2093,9 @@ mod tests {
             json!({"store":"k","snapshotId":1,"end":1,"snapshotID":1}),
             json!({"store":"k","snapshotId":"1","end":1}),
             json!({"store":"k","snapshotId":0,"end":1}),
+            // `end` is the snapshot form's only.
+            json!({"store":"k","parts":[part],"end":1}),
+            json!({"store":"k","parts":[part],"end":0}),
         ] {
             assert_eq!(refused(params.clone()), "invalid", "{params}");
         }
