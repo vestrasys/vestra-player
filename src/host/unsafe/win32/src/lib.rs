@@ -15,7 +15,8 @@
 //! waiting for a display's vertical blank
 //! (`VBlank`, the redraw clock) and keeping a full-screen window from
 //! matching its display exactly (`unmatch_display`), whether an open
-//! file is on a network file system (`file_is_remote`), waiting for a
+//! file is on a network file system (`file_is_remote`), the free space of
+//! the volume holding a path (`disk_space`), waiting for a
 //! process to end (`wait_for_process_exit`), the thread's CPU cycles
 //! (`thread_cycles`), the process's private memory and the system commit
 //! charge (`memory_status`, the host log's memory line), the physical
@@ -107,6 +108,40 @@ pub fn file_is_remote(file: &std::fs::File) -> bool {
     result >= 0
         && (info.DeviceType == FILE_DEVICE_NETWORK_FILE_SYSTEM
             || info.Characteristics & FILE_REMOTE_DEVICE != 0)
+}
+
+/// The bytes free for this user on the volume that holds `path` (an
+/// existing file or directory) and that volume's root (`C:\\`,
+/// `\\\\server\\share\\`, a mount folder), to tell two paths on one volume
+/// apart. `None` when the system does not answer.
+pub fn disk_space(path: &std::path::Path) -> Option<(u64, String)> {
+    use std::os::windows::ffi::{OsStrExt, OsStringExt};
+    use windows_sys::Win32::Storage::FileSystem::{GetDiskFreeSpaceExW, GetVolumePathNameW};
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut root = [0u16; 1024];
+    // SAFETY: `wide` is a NUL-terminated UTF-16 string alive for the call;
+    // `root` is a writable local buffer whose length in characters is passed
+    // with it, so the call writes only inside it.
+    if unsafe { GetVolumePathNameW(wide.as_ptr(), root.as_mut_ptr(), root.len() as u32) } == 0 {
+        return None;
+    }
+    let mut free = 0u64;
+    // SAFETY: `root` now holds a NUL-terminated volume path; `free` is a
+    // writable local; the two other out-parameters may be null.
+    let ok = unsafe {
+        GetDiskFreeSpaceExW(
+            root.as_ptr(),
+            &mut free,
+            std::ptr::null_mut(),
+            std::ptr::null_mut(),
+        )
+    };
+    if ok == 0 {
+        return None;
+    }
+    let length = root.iter().position(|c| *c == 0).unwrap_or(root.len());
+    let root = std::ffi::OsString::from_wide(&root[..length]);
+    Some((free, root.to_string_lossy().into_owned()))
 }
 
 /// The system double-click time in milliseconds.

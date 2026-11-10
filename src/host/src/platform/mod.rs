@@ -25,7 +25,7 @@
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
-//! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file) |
+//! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file), `disk_space` (free bytes and volume of a path: Windows through `vestra-win32`; elsewhere `df -Pk`) |
 //! | opening windows | `cloak_until_drawn`, `window_drawing` (Windows: each window is cloaked from its show to its first draw, so it never opens white, through `vestra-win32`; elsewhere nothing) |
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
 //! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame), `same_video_image` (Windows: also compares wgpu textures; elsewhere `Image` equality) |
@@ -52,6 +52,34 @@ mod imp;
 mod imp;
 
 pub use imp::*;
+
+/// The bytes free for this user on the volume holding `path` (an existing
+/// file or directory) and that volume's identity (its root or mount
+/// point), so two paths on one volume are counted together. `None` when
+/// the system does not answer (an export then skips its space check).
+#[cfg(target_os = "windows")]
+pub fn disk_space(path: &std::path::Path) -> Option<(u64, String)> {
+    vestra_win32::disk_space(path)
+}
+#[cfg(not(target_os = "windows"))]
+pub fn disk_space(path: &std::path::Path) -> Option<(u64, String)> {
+    // POSIX output: one header line, then device, blocks, used, available
+    // (1024-byte blocks with -k) and capacity, the mount point last.
+    let out = std::process::Command::new("df")
+        .arg("-Pk")
+        .arg(path)
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        return None;
+    }
+    let text = String::from_utf8_lossy(&out.stdout);
+    let line = text.lines().nth(1)?;
+    let fields: Vec<&str> = line.split_whitespace().collect();
+    let available = fields.get(3)?.parse::<u64>().ok()?;
+    let mount = fields.get(5..)?.join(" ");
+    Some((available.saturating_mul(1024), mount))
+}
 
 /// The systems the platform layer has per-system tables for (standard
 /// window shortcuts, the monospace font); each platform module names its own

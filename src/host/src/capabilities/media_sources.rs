@@ -68,6 +68,11 @@ pub(super) fn forward_with_store(
     forward_media(host, reply, method, &params)
 }
 
+/// The shortest time between two Locate dialogs of one plugin.
+const LOCATE_INTERVAL: std::time::Duration = std::time::Duration::from_secs(2);
+static LAST_LOCATE: std::sync::Mutex<std::collections::BTreeMap<u64, std::time::Instant>> =
+    std::sync::Mutex::new(std::collections::BTreeMap::new());
+
 /// `media.sources.locate`: the native file dialog for a referenced file
 /// (`fields`: `store`, `token`, `name`, `directory`); its choice goes back to
 /// the playback worker (`Event::SourceLocated`).
@@ -84,6 +89,26 @@ pub(crate) fn locate_dialog(
     }
     if host.dialog_busy {
         return Err(RpcError::new("busy", "a native dialog is already open"));
+    }
+    // One dialog per plugin every few seconds: a plugin cannot put up one
+    // file dialog after another (each dialog still needs the previous one
+    // closed, as `dialogs.open`).
+    {
+        let mut last = LAST_LOCATE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let now = std::time::Instant::now();
+        if last
+            .get(&reply.owner)
+            .is_some_and(|at| now.duration_since(*at) < LOCATE_INTERVAL)
+        {
+            return Err(RpcError::new(
+                "busy",
+                "a Locate dialog was shown a moment ago; try again",
+            ));
+        }
+        last.retain(|_, at| now.duration_since(*at) < LOCATE_INTERVAL);
+        last.insert(reply.owner, now);
     }
     let name = fields["name"].as_str().unwrap_or_default();
     let mut dialog =

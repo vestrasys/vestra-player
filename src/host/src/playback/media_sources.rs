@@ -44,6 +44,11 @@ pub const MAX_PARTS: usize = 100;
 /// Requests served at once on short threads (probes, checks).
 const MAX_IN_FLIGHT: usize = 16;
 static IN_FLIGHT: AtomicUsize = AtomicUsize::new(0);
+/// One plugin's share of them, so it cannot starve the others.
+const MAX_IN_FLIGHT_PER_PLUGIN: usize = 4;
+static IN_FLIGHT_BY_STORE: Mutex<BTreeMap<String, usize>> = Mutex::new(BTreeMap::new());
+/// The parts' total length, as one clip's (24 hours).
+pub const MAX_TOTAL_SECONDS: f64 = 86400.;
 
 /// A video stream's facts, as probed.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -120,9 +125,82 @@ struct Saved {
 
 /// The references of every plugin, saved in the profile.
 pub struct Store {
-    /// `None`: kept in memory only (tests, no application data directory).
-    file: Option<PathBuf>,
     saved: Saved,
+    /// Writes the file on a thread of its own (`None`: kept in memory only:
+    /// tests, no application data directory). A change only serializes the
+    /// table under the lock; the write and its fsync happen elsewhere, the
+    /// newest table winning when several wait.
+    writer: Option<Writer>,
+}
+
+enum Persist {
+    Write(Vec<u8>),
+    /// Tests: answered once everything sent before is on disk.
+    #[cfg_attr(not(test), allow(dead_code))]
+    Flush(mpsc::Sender<()>),
+}
+struct Writer {
+    tx: Option<mpsc::Sender<Persist>>,
+    thread: Option<std::thread::JoinHandle<()>>,
+}
+impl Writer {
+    fn start(file: PathBuf) -> Option<Self> {
+        let (tx, rx) = mpsc::channel::<Persist>();
+        let thread = std::thread::Builder::new()
+            .name("media-sources-save".into())
+            .spawn(move || {
+                while let Ok(first) = rx.recv() {
+                    let mut latest = None;
+                    let mut acks = Vec::new();
+                    let mut next = Some(first);
+                    // Everything waiting now: only the newest table is written.
+                    while let Some(message) = next {
+                        match message {
+                            Persist::Write(bytes) => latest = Some(bytes),
+                            Persist::Flush(ack) => acks.push(ack),
+                        }
+                        next = rx.try_recv().ok();
+                    }
+                    if let Some(bytes) = latest {
+                        write_file(&file, &bytes);
+                    }
+                    for ack in acks {
+                        let _ = ack.send(());
+                    }
+                }
+            })
+            .map_err(|error| diag!("media sources: no writer thread: {error}"))
+            .ok()?;
+        Some(Self {
+            tx: Some(tx),
+            thread: Some(thread),
+        })
+    }
+}
+impl Drop for Writer {
+    /// The pending table is written before the store goes (player exit).
+    fn drop(&mut self) {
+        drop(self.tx.take());
+        if let Some(thread) = self.thread.take() {
+            let _ = thread.join();
+        }
+    }
+}
+/// The whole table, to a temporary file then renamed over the old one.
+fn write_file(file: &Path, bytes: &[u8]) {
+    let write = || -> Result<()> {
+        use std::io::Write;
+        let directory = file.parent().context("no directory")?;
+        std::fs::create_dir_all(directory)?;
+        let mut temp = tempfile::NamedTempFile::new_in(directory)?;
+        temp.write_all(bytes)?;
+        temp.as_file().sync_all()?;
+        temp.persist(file)?;
+        Ok(())
+    };
+    if let Err(error) = write() {
+        diag!("media sources: the references could not be saved: {error:#}");
+    }
 }
 impl Default for Store {
     fn default() -> Self {
@@ -196,8 +274,34 @@ impl Store {
     /// The profile's store (`<app data>/media-sources.json`), or an empty
     /// one in memory without an application data directory. A file that
     /// cannot be read starts empty (and is replaced at the next change).
+    /// A development load's references end with the run that loaded it
+    /// (`--plugin`): the next launch starts without them.
     pub fn open_default() -> Self {
-        Self::open(crate::platform::app_data_dir().map(|dir| dir.join("media-sources.json")))
+        let mut store =
+            Self::open(crate::platform::app_data_dir().map(|dir| dir.join("media-sources.json")));
+        store.end_development_loads();
+        store
+    }
+    /// Drops every `development:<id>` store.
+    pub fn end_development_loads(&mut self) {
+        let before = self.saved.stores.len();
+        self.saved
+            .stores
+            .retain(|key, _| !key.starts_with("development:"));
+        if self.saved.stores.len() != before {
+            self.save();
+        }
+    }
+    /// Waits until every change so far is on disk (tests; at shutdown the
+    /// writer is joined instead).
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn flush(&self) {
+        if let Some(tx) = self.writer.as_ref().and_then(|w| w.tx.as_ref()) {
+            let (ack, done) = mpsc::channel();
+            if tx.send(Persist::Flush(ack)).is_ok() {
+                let _ = done.recv();
+            }
+        }
     }
     pub fn open(file: Option<PathBuf>) -> Self {
         let saved = file
@@ -211,23 +315,21 @@ impl Store {
                 }
             })
             .unwrap_or_default();
-        Self { file, saved }
+        Self {
+            saved,
+            writer: file.and_then(Writer::start),
+        }
     }
+    /// Hands the table to the writer: no file system call under the lock.
     fn save(&self) {
-        let Some(file) = &self.file else {
+        let Some(tx) = self.writer.as_ref().and_then(|w| w.tx.as_ref()) else {
             return;
         };
-        let write = || -> Result<()> {
-            let directory = file.parent().context("no directory")?;
-            std::fs::create_dir_all(directory)?;
-            let mut temp = tempfile::NamedTempFile::new_in(directory)?;
-            serde_json::to_writer(&mut temp, &self.saved)?;
-            temp.as_file().sync_all()?;
-            temp.persist(file)?;
-            Ok(())
-        };
-        if let Err(error) = write() {
-            diag!("media sources: the references could not be saved: {error:#}");
+        match serde_json::to_vec(&self.saved) {
+            Ok(bytes) => {
+                let _ = tx.send(Persist::Write(bytes));
+            }
+            Err(error) => diag!("media sources: the references could not be written: {error}"),
         }
     }
     pub fn get(&self, key: &str, token: &str) -> Option<&Entry> {
@@ -455,9 +557,11 @@ pub struct Part {
     pub end: f64,
 }
 
-/// The parts' size and kind (1..=100, finite times): the shape only.
+/// The parts' size and kind (1..=100, finite times, 24 hours in all): the
+/// shape only.
 pub fn parts_valid(parts: &[Part]) -> bool {
     (1..=MAX_PARTS).contains(&parts.len())
+        && parts.iter().map(|p| (p.end - p.start).max(0.)).sum::<f64>() <= MAX_TOTAL_SECONDS
         && parts.iter().all(|p| {
             !p.source.is_empty()
                 && p.source.len() <= 64
@@ -733,20 +837,123 @@ pub fn open_request(
     Ok((path, start.filter(|s| *s > 0.), submit))
 }
 
-/// Serve a request on a short thread and reply from it.
-fn spawn(
+/// The encoding of a check (`jobs.check`'s optional `encoding`).
+pub fn check_encoding(params: &Value) -> Result<Encoding, RpcError> {
+    match &params["encoding"] {
+        Value::Null => Ok(Encoding::default()),
+        value => match serde_json::from_value::<Encoding>(value.clone()) {
+            Ok(encoding) if encoding.valid() => Ok(encoding),
+            _ => Err(RpcError::invalid("invalid encoding")),
+        },
+    }
+}
+
+/// A snapshot's clip, as one part for [`check`].
+pub struct SnapshotInput {
+    pub lease: Arc<Lease>,
+    pub start: f64,
+    pub end: f64,
+    /// A processed snapshot: its picture size (effects need a re-encode).
+    pub presentation: Option<(u32, u32)>,
+}
+
+/// `jobs.check { snapshotId, end, encoding? }`: the check of a snapshot's
+/// clip, as of one part: the held file is probed (on a short thread). A
+/// processed snapshot cannot be copied (`effects`) and re-encodes at its
+/// picture size.
+pub fn check_snapshot(
     events: &mpsc::Sender<Event>,
     reply: Reply,
+    owner: u64,
+    input: SnapshotInput,
+    encoding: Encoding,
+) {
+    let ffmpeg = match ffmpeg() {
+        Ok(ffmpeg) => ffmpeg,
+        Err(error) => {
+            let _ = events.send(Event::Reply(reply, Err(error)));
+            return;
+        }
+    };
+    spawn(events, reply, format!("owner:{owner}"), move || {
+        let probed = probe(&ffmpeg, &input.lease, &Control::new())
+            .map_err(|e| RpcError::new("unsupported", format!("the file cannot be probed: {e:#}")))?
+            .ok_or_else(|| RpcError::new("internal", "probe cancelled"))?;
+        let facts = facts_from(&probed)?;
+        let accepted = input.lease.facts();
+        let entry = Entry {
+            path: PathBuf::new(),
+            len: accepted.len,
+            modified: nanos(accepted.modified),
+            name: String::new(),
+            facts,
+        };
+        let part = Part {
+            source: "snapshot".into(),
+            start: input.start,
+            end: input.end,
+        };
+        let mut checked = check(
+            std::slice::from_ref(&part),
+            &[Resolved {
+                entry: Some(entry),
+                status: Status::Ok,
+            }],
+            &encoding,
+        );
+        if let Some((width, height)) = input.presentation {
+            checked["copy"] = json!({"ok":false,"reasons":[{"part":0,"field":"effects","value":null,"expected":null}]});
+            if checked["encode"].is_object() {
+                checked["encode"]["width"] = json!(width.div_ceil(2) * 2);
+                checked["encode"]["height"] = json!(height.div_ceil(2) * 2);
+            }
+        }
+        Ok(checked)
+    });
+}
+
+/// Serve a request on a short thread and reply from it.
+pub(super) fn spawn(
+    events: &mpsc::Sender<Event>,
+    reply: Reply,
+    store: String,
     work: impl FnOnce() -> Result<Value, RpcError> + Send + 'static,
 ) {
-    if IN_FLIGHT.fetch_add(1, Ordering::AcqRel) >= MAX_IN_FLIGHT {
-        IN_FLIGHT.fetch_sub(1, Ordering::AcqRel);
+    let busy = |events: &mpsc::Sender<Event>, reply: Reply| {
         let _ = events.send(Event::Reply(
             reply,
             Err(RpcError::new("busy", "too many source requests at once")),
         ));
-        return;
+    };
+    {
+        let mut by_store = IN_FLIGHT_BY_STORE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let mine = by_store.entry(store.clone()).or_default();
+        if *mine >= MAX_IN_FLIGHT_PER_PLUGIN {
+            drop(by_store);
+            return busy(events, reply);
+        }
+        if IN_FLIGHT.fetch_add(1, Ordering::AcqRel) >= MAX_IN_FLIGHT {
+            IN_FLIGHT.fetch_sub(1, Ordering::AcqRel);
+            drop(by_store);
+            return busy(events, reply);
+        }
+        *mine += 1;
     }
+    let release = move || {
+        IN_FLIGHT.fetch_sub(1, Ordering::AcqRel);
+        let mut by_store = IN_FLIGHT_BY_STORE
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        if let Some(mine) = by_store.get_mut(&store) {
+            *mine = mine.saturating_sub(1);
+            if *mine == 0 {
+                by_store.remove(&store);
+            }
+        }
+    };
+    let release_failed = release.clone();
     let events = events.clone();
     let failed = events.clone();
     let failed_reply = reply.clone();
@@ -755,11 +962,11 @@ fn spawn(
         .spawn(move || {
             let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(work))
                 .unwrap_or_else(|_| Err(RpcError::new("internal", "source request panicked")));
-            IN_FLIGHT.fetch_sub(1, Ordering::AcqRel);
+            release();
             let _ = events.send(Event::Reply(reply, result));
         });
     if let Err(error) = spawned {
-        IN_FLIGHT.fetch_sub(1, Ordering::AcqRel);
+        release_failed();
         let _ = failed.send(Event::Reply(
             failed_reply,
             Err(RpcError::new("unavailable", error.to_string())),
@@ -818,7 +1025,7 @@ pub fn request(
                 Ok(ffmpeg) => ffmpeg,
                 Err(error) => return answer(Err(error)),
             };
-            spawn(events, reply, move || {
+            spawn(events, reply, key.clone(), move || {
                 let entry = entry_of(&ffmpeg, &path)?;
                 let mut store = store
                     .lock()
@@ -832,7 +1039,7 @@ pub fn request(
                 Ok(token) => token,
                 Err(error) => return answer(Err(error)),
             };
-            spawn(events, reply, move || {
+            spawn(events, reply, key.clone(), move || {
                 let entry = store
                     .lock()
                     .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -842,7 +1049,7 @@ pub fn request(
                 Ok(entry.public(&token, entry.status()))
             });
         }
-        "media.sources.list" => spawn(events, reply, move || {
+        "media.sources.list" => spawn(events, reply, key.clone(), move || {
             let entries = store
                 .lock()
                 .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -905,7 +1112,7 @@ pub fn request(
                 Ok(ffmpeg) => ffmpeg,
                 Err(error) => return answer(Err(error)),
             };
-            spawn(events, reply, move || {
+            spawn(events, reply, key.clone(), move || {
                 let entry = entry_of(&ffmpeg, &path)?;
                 store
                     .lock()
@@ -919,19 +1126,16 @@ pub fn request(
                 Ok(parts) => parts,
                 Err(error) => return answer(Err(RpcError::invalid(error.to_string()))),
             };
-            let encoding: Encoding = match &params["encoding"] {
-                Value::Null => Encoding::default(),
-                value => match serde_json::from_value::<Encoding>(value.clone()) {
-                    Ok(encoding) if encoding.valid() => encoding,
-                    _ => return answer(Err(RpcError::invalid("invalid encoding"))),
-                },
+            let encoding = match check_encoding(params) {
+                Ok(encoding) => encoding,
+                Err(error) => return answer(Err(error)),
             };
             if !parts_valid(&parts) {
                 return answer(Err(RpcError::invalid(format!(
-                    "1–{MAX_PARTS} parts with a token and finite times from 0 to 86400 s required"
+                    "1–{MAX_PARTS} parts with a token and finite times from 0 to 86400 s (24 hours in all) required"
                 ))));
             }
-            spawn(events, reply, move || {
+            spawn(events, reply, key.clone(), move || {
                 let resolved = resolve_parts(&store, &key, &parts);
                 Ok(check(&parts, &resolved, &encoding))
             });
@@ -1192,6 +1396,7 @@ mod tests {
         let other = store.insert("instance:2", a.clone()).unwrap();
         assert_ne!(other, token);
         // A restart reads the same references.
+        store.flush();
         let reopened = Store::open(Some(file.clone()));
         assert_eq!(reopened.get("instance:1", &token), Some(&a));
         assert_eq!(reopened.list("instance:2").len(), 1);
@@ -1212,7 +1417,20 @@ mod tests {
         store.forget("instance:1", &token);
         assert!(store.get("instance:1", &token).is_none());
         store.revoke("instance:2");
-        assert!(Store::open(Some(file)).list("instance:2").is_empty());
+        store.flush();
+        assert!(
+            Store::open(Some(file.clone()))
+                .list("instance:2")
+                .is_empty()
+        );
+        // A development load's references end with its run.
+        store.insert("development:a.b", a.clone()).unwrap();
+        store.end_development_loads();
+        assert!(store.list("development:a.b").is_empty());
+        assert_eq!(store.list("instance:1").len(), 0);
+        drop(store);
+        // Dropping the store writes what was pending.
+        assert!(Store::open(Some(file)).list("development:a.b").is_empty());
         // The bound.
         let mut store = Store::open(None);
         for n in 0..MAX_PER_PLUGIN {
@@ -1296,7 +1514,48 @@ mod tests {
     }
 
     #[test]
+    fn one_plugin_cannot_take_every_request_slot() {
+        let (events, replies) = mpsc::channel();
+        let (go, wait) = std::sync::mpsc::channel::<()>();
+        let wait = Arc::new(Mutex::new(wait));
+        for _ in 0..MAX_IN_FLIGHT_PER_PLUGIN + 1 {
+            let wait = wait.clone();
+            spawn(
+                &events,
+                Reply { owner: 1, id: 1 },
+                "test:greedy".into(),
+                move || {
+                    let _ = wait.lock().unwrap().recv();
+                    Ok(Value::Null)
+                },
+            );
+        }
+        // The fifth of one plugin is refused at once; another plugin's runs.
+        let refused = replies.recv().unwrap();
+        assert!(
+            matches!(&refused, Event::Reply(_, Err(e)) if e.code == "busy"),
+            "refused"
+        );
+        spawn(
+            &events,
+            Reply { owner: 2, id: 1 },
+            "test:other".into(),
+            || Ok(json!(2)),
+        );
+        assert!(matches!(replies.recv().unwrap(), Event::Reply(r, Ok(_)) if r.owner == 2));
+        for _ in 0..MAX_IN_FLIGHT_PER_PLUGIN {
+            go.send(()).unwrap();
+        }
+        for _ in 0..MAX_IN_FLIGHT_PER_PLUGIN {
+            assert!(matches!(replies.recv().unwrap(), Event::Reply(_, Ok(_))));
+        }
+    }
+
+    #[test]
     fn parts_are_bounded() {
+        // 24 hours in all, as one clip.
+        assert!(parts_valid(&[part(0., 43200.), part(0., 43200.)]));
+        assert!(!parts_valid(&[part(0., 43200.), part(0., 43201.)]));
         assert!(parts_valid(&[part(0., 1.)]));
         assert!(!parts_valid(&[]));
         assert!(!parts_valid(&vec![part(0., 1.); MAX_PARTS + 1]));

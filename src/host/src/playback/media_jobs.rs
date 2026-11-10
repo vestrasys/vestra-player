@@ -623,6 +623,7 @@ impl Jobs {
                     parts: parts.into_iter().zip(entries).collect(),
                     destination: PathBuf::from(destination),
                     ffmpeg: binary,
+                    scratch: crate::playback::media_join::scratch_root(),
                     mode: if kind == "rawCopy" {
                         crate::playback::media_join::Mode::Copy {
                             container: container.unwrap_or_default(),
@@ -731,6 +732,30 @@ impl Jobs {
     }
 }
 impl Jobs {
+    /// `jobs.check { snapshotId, end }`: the snapshot's clip as one part.
+    pub fn snapshot_check(
+        &self,
+        owner: u64,
+        params: &Value,
+    ) -> Result<crate::playback::media_sources::SnapshotInput, RpcError> {
+        let snapshot = self
+            .snapshots
+            .get(&id(params, "snapshotId")?)
+            .filter(|s| s.owner == owner)
+            .ok_or_else(|| RpcError::new("unknown-expired", "snapshot unavailable"))?;
+        let end = params["end"]
+            .as_f64()
+            .filter(|end| end.is_finite() && *end > snapshot.time && *end <= snapshot.duration)
+            .ok_or_else(|| {
+                RpcError::invalid("end must be after the snapshot time and within its duration")
+            })?;
+        Ok(crate::playback::media_sources::SnapshotInput {
+            lease: snapshot.lease.clone(),
+            start: snapshot.time,
+            end,
+            presentation: snapshot.processed.as_ref().map(|p| (p.width, p.height)),
+        })
+    }
     /// The references a join's parts name, in `store` (the caller's own):
     /// `missing` for a token it does not hold.
     fn join_entries(

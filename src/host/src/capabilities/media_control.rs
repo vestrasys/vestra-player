@@ -28,9 +28,10 @@ impl Capability for MediaControl {
     fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         // An export of remembered files' parts (`jobs.start { parts }`) and
-        // its check (`jobs.check`) read the plugin's source references: they
-        // need `media.sources` too, and carry the plugin's store key.
-        if method == "jobs.check" || (method == "jobs.start" && !params["parts"].is_null()) {
+        // its check (`jobs.check { parts }`) read the plugin's source
+        // references: they need `media.sources` too, and carry the plugin's
+        // store key. A snapshot's check (`jobs.check { snapshotId }`) does not.
+        if matches!(method, "jobs.check" | "jobs.start") && !params["parts"].is_null() {
             if !super::plugin(host, reply)?.allows("media.sources") {
                 return Err(RpcError::new(
                     "capability",

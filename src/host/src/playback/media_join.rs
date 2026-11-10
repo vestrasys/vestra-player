@@ -58,6 +58,124 @@ pub struct JoinRequest {
     pub destination: PathBuf,
     pub ffmpeg: PathBuf,
     pub mode: Mode,
+    /// Where the intermediate parts go ([`scratch_root`]); `None`: a
+    /// hidden folder beside the destination.
+    pub scratch: Option<PathBuf>,
+}
+
+/// The player's own folder for intermediate parts:
+/// `<app cache>/export-parts`, out of the user's folders and emptied at
+/// start-up ([`clean_scratch`]), so a crash or a power cut mid-export
+/// leaves nothing beside the user's videos.
+pub fn scratch_root() -> Option<PathBuf> {
+    crate::platform::app_cache_dir().map(|dir| dir.join("export-parts"))
+}
+
+/// Removes what an earlier run left in `root` (no export runs yet).
+pub fn clean_scratch(root: &Path) {
+    let Ok(entries) = std::fs::read_dir(root) else {
+        return;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        let removed = if path.is_dir() {
+            std::fs::remove_dir_all(&path)
+        } else {
+            std::fs::remove_file(&path)
+        };
+        if let Err(error) = removed {
+            diag!("export parts: {} not removed: {error}", path.display());
+        }
+    }
+}
+
+/// Bytes a part of `length` seconds of `entry` takes once written: a copy
+/// its share of the file, a re-encode the target's picture at about 0.12
+/// bit per pixel (x264 CRF 18 at its fastest presets writes less on most
+/// sources) or the source's rate (`videoBitrate: "source"`, at its 1.5×
+/// peak), plus AAC at 256 kb/s. An estimate for the space check, on the
+/// high side.
+fn part_bytes(entry: &Entry, length: f64, mode: &Mode, target: media_sources::Target) -> f64 {
+    let share = entry.len as f64 * length / entry.facts.duration.max(0.001);
+    match mode {
+        Mode::Copy { .. } => share,
+        Mode::Encode { encoding } => {
+            let video = match encoding.video_bitrate {
+                Some(VideoBitrate::Source) => share * 1.5,
+                None => {
+                    f64::from(target.width) * f64::from(target.height) * f64::from(target.rate.0)
+                        / f64::from(target.rate.1)
+                        * 0.12
+                        / 8.
+                        * length
+                }
+            };
+            video + 32_000. * length
+        }
+    }
+}
+
+/// Free space for the export: the intermediate parts in `scratch` and the
+/// output beside `destination`, each about `bytes`, twice that when both
+/// are on one volume, with 10 % and 64 MiB to spare. A volume the system
+/// cannot tell about is not checked.
+fn check_space(bytes: f64, scratch: &Path, destination: &Path) -> Result<()> {
+    let need = bytes * 1.1 + 64. * 1024. * 1024.;
+    let gib = |b: f64| b / (1024. * 1024. * 1024.);
+    let short = |need: f64, free: u64, volume: &str| -> Result<()> {
+        if (free as f64) < need {
+            return Err(Coded(
+                "no-space",
+                format!(
+                    "the export needs about {:.1} GB on {volume}, {:.1} GB is free",
+                    gib(need),
+                    gib(free as f64)
+                ),
+            )
+            .into());
+        }
+        Ok(())
+    };
+    match (
+        crate::platform::disk_space(scratch),
+        crate::platform::disk_space(destination),
+    ) {
+        (Some((free, a)), Some((_, b))) if a == b => short(need * 2., free, &a),
+        (scratch, destination) => {
+            if let Some((free, volume)) = scratch {
+                short(need, free, &volume)?;
+            }
+            if let Some((free, volume)) = destination {
+                short(need, free, &volume)?;
+            }
+            Ok(())
+        }
+    }
+}
+
+/// Decodes `seconds` of `path` from `at` (the joins of a copy: each part's
+/// start must decode); `Ok(None)`: cancelled.
+fn decode_at(
+    ffmpeg: &Path,
+    path: &Path,
+    at: f64,
+    seconds: f64,
+    control: &Control,
+) -> Result<Option<()>> {
+    let mut command = crate::platform::background_tool_command(ffmpeg);
+    command
+        .args(["-nostdin", "-v", "error", "-xerror", "-threads", "2"])
+        .args(["-ss", &secs(at), "-t", &secs(seconds), "-i"])
+        .arg(path)
+        .args(["-map", "0:v:0", "-map", "0:a?", "-f", "null", "-"]);
+    match run_tool(&mut command, Stdio::null(), control, None)? {
+        None => Ok(None),
+        Some((status, _)) if status.success() => Ok(Some(())),
+        Some((status, stderr)) => bail!(
+            "the join at {at:.3}s does not decode ({status}): {}",
+            String::from_utf8_lossy(&stderr).trim()
+        ),
+    }
 }
 
 pub fn run(request: JoinRequest, control: &Control) {
@@ -228,11 +346,24 @@ fn join(request: &JoinRequest, control: &Control) -> Result<Outcome> {
     if destination.exists() {
         bail!("no-clobber: {} already exists", destination.display());
     }
+    let total: f64 = parts.iter().map(|(p, _)| p.end - p.start).sum();
+    let target = media_sources::target(first_video, &encoding);
+    let scratch = match &request.scratch {
+        Some(root) => {
+            std::fs::create_dir_all(root).context("the export-parts folder could not be made")?;
+            root.clone()
+        }
+        None => parent.clone(),
+    };
+    let bytes: f64 = parts
+        .iter()
+        .map(|(part, entry)| part_bytes(entry, part.end - part.start, &request.mode, target))
+        .sum();
+    check_space(bytes, &scratch, &parent)?;
     let work = tempfile::Builder::new()
         .prefix(".vestra-join-")
-        .tempdir_in(&parent)
+        .tempdir_in(&scratch)
         .context("the temporary folder could not be created")?;
-    let total: f64 = parts.iter().map(|(p, _)| p.end - p.start).sum();
     // A copied part is Matroska whatever the output: it has no edit list,
     // so the frames FFmpeg copies past a part's end (it cuts in decode
     // order) are presented and counted in its duration, and the next part
@@ -246,7 +377,6 @@ fn join(request: &JoinRequest, control: &Control) -> Result<Outcome> {
     let mut files = Vec::with_capacity(parts.len());
     let mut written = Vec::with_capacity(parts.len());
     let mut before = 0.;
-    let target = media_sources::target(first_video, &encoding);
     for (index, ((part, entry), lease)) in parts.iter().zip(&leases).enumerate() {
         let length = part.end - part.start;
         control.set_segment(Some(Segment {
@@ -328,6 +458,13 @@ fn join(request: &JoinRequest, control: &Control) -> Result<Outcome> {
     if control.status() == JobStatus::Cancelling {
         return Ok(Outcome::Cancelled);
     }
+    // The last part's copy facts (`media_copy::write`) are not the export's:
+    // `facts.join` below has every part.
+    let mut stale = control.facts();
+    if let Some(facts) = stale.as_object_mut() {
+        facts.remove("copy");
+    }
+    control.record_facts(stale);
     // All parts are written: what remains is quick (copying them into one).
     control.set_segment(Some(Segment {
         part: parts.len(),
@@ -342,7 +479,12 @@ fn join(request: &JoinRequest, control: &Control) -> Result<Outcome> {
         text.push_str(&concat_line(file)?);
     }
     std::fs::write(&list, text).context("the part list could not be written")?;
-    let temp = tempfile::NamedTempFile::new_in(&parent)
+    // Beside the destination, for a no-clobber rename into place (as every
+    // export); named so a leftover is recognisable.
+    let temp = tempfile::Builder::new()
+        .prefix(".vestra-export-")
+        .suffix(".tmp")
+        .tempfile_in(&parent)
         .context("owned temporary output could not be created")?;
     let mut command = crate::platform::background_tool_command(&request.ffmpeg);
     command
@@ -383,6 +525,27 @@ fn join(request: &JoinRequest, control: &Control) -> Result<Outcome> {
     };
     if decode_check(&request.ffmpeg, temp.path(), threads, limit, control)?.is_none() {
         return Ok(Outcome::Cancelled);
+    }
+    // A copy: every join must decode too, not only the start (a re-encode
+    // was decoded whole above). Each part starts where the ones before it
+    // end in the output.
+    if matches!(request.mode, Mode::Copy { .. }) {
+        let mut at = 0.;
+        for w in written.iter().take(written.len().saturating_sub(1)) {
+            at += w["end"].as_f64().unwrap_or(0.) - w["start"].as_f64().unwrap_or(0.);
+            let from = (at - 0.25).max(0.);
+            if decode_at(
+                &request.ffmpeg,
+                temp.path(),
+                from,
+                DECODE_CHECK_SECONDS + 0.25,
+                control,
+            )?
+            .is_none()
+            {
+                return Ok(Outcome::Cancelled);
+            }
+        }
     }
     let mut probe = crate::platform::tool_command(sibling(&request.ffmpeg, "ffprobe")?);
     probe
@@ -737,6 +900,7 @@ mod tests {
             parts: vec![part(&a, 2.5, 4.), part(&b, 1., 2.), part(&a, 6., 7.5)],
             destination: out.clone(),
             ffmpeg: real::ffmpeg(),
+            scratch: None,
             mode: Mode::Copy {
                 container: Container::Auto,
             },
@@ -784,6 +948,8 @@ mod tests {
         assert_eq!(seen.first(), Some(&(1, 3)));
         assert!(seen.contains(&(2, 3)) && seen.contains(&(3, 3)), "{seen:?}");
         assert_eq!(control.progress().map(|(d, t)| d == t), Some(true));
+        // Only the export's own facts: no part's copy facts left over.
+        assert!(facts.get("copy").is_none(), "{facts}");
         // The temporary folder is gone.
         let left: Vec<_> = std::fs::read_dir(dir.path())
             .unwrap()
@@ -825,6 +991,7 @@ mod tests {
             parts: parts.iter().map(|(p, e)| (p.clone(), e.clone())).collect(),
             destination: dir.path().join("copy.mp4"),
             ffmpeg: real::ffmpeg(),
+            scratch: None,
             mode: Mode::Copy {
                 container: Container::Auto,
             },
@@ -841,6 +1008,7 @@ mod tests {
             parts,
             destination: dir.path().join("joined.mp4"),
             ffmpeg: real::ffmpeg(),
+            scratch: None,
             mode: Mode::Encode {
                 encoding: Encoding::default(),
             },
@@ -906,6 +1074,7 @@ mod tests {
             parts: vec![part(&long, 0., 20.), part(&long, 20., 40.)],
             destination: dir.path().join("joined.mp4"),
             ffmpeg: real::ffmpeg(),
+            scratch: None,
             mode: Mode::Encode {
                 encoding: Encoding::default(),
             },
@@ -924,6 +1093,129 @@ mod tests {
         assert_eq!(left, [std::ffi::OsString::from("long.mp4")]);
     }
 
+    /// The intermediate parts go to the player's own folder, which is
+    /// empty again after the export and is emptied at start-up.
+    #[test]
+    #[ignore = "needs ffmpeg"]
+    fn intermediates_live_in_the_scratch_folder_and_leave_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let videos = dir.path().join("Videos");
+        let scratch = dir.path().join("cache").join("export-parts");
+        std::fs::create_dir_all(&videos).unwrap();
+        let a = entry(&source(
+            &videos,
+            "a.mp4",
+            "320x240",
+            "30",
+            Some((48000, 2)),
+            4,
+        ));
+        let (control, _) = run_join(JoinRequest {
+            parts: vec![part(&a, 0., 1.5), part(&a, 2., 3.5)],
+            destination: videos.join("out.mp4"),
+            ffmpeg: real::ffmpeg(),
+            scratch: Some(scratch.clone()),
+            mode: Mode::Copy {
+                container: Container::Auto,
+            },
+        });
+        completed(&control);
+        let names = |dir: &Path| -> Vec<String> {
+            std::fs::read_dir(dir)
+                .unwrap()
+                .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .collect()
+        };
+        assert_eq!(names(&videos).len(), 2, "{:?}", names(&videos));
+        assert!(names(&scratch).is_empty(), "{:?}", names(&scratch));
+        // A crash's leftovers go at the next start.
+        std::fs::create_dir_all(scratch.join(".vestra-join-old")).unwrap();
+        std::fs::write(scratch.join(".vestra-join-old").join("part-000.mkv"), b"x").unwrap();
+        clean_scratch(&scratch);
+        assert!(names(&scratch).is_empty());
+    }
+
+    /// The check takes a snapshot's clip too: one part from its held file;
+    /// a processed snapshot cannot be copied.
+    #[test]
+    #[ignore = "needs ffmpeg"]
+    fn a_snapshot_clip_is_checked_as_one_part() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = source(dir.path(), "a.mp4", "320x240", "30", Some((48000, 2)), 4);
+        let ask = |presentation: Option<(u32, u32)>| {
+            let (events, replies) = std::sync::mpsc::channel();
+            media_sources::check_snapshot(
+                &events,
+                crate::host::Reply { owner: 9, id: 1 },
+                9,
+                media_sources::SnapshotInput {
+                    lease: Arc::new(Lease::open(&path).unwrap()),
+                    start: 1.,
+                    end: 3.,
+                    presentation,
+                },
+                Encoding::default(),
+            );
+            match replies.recv_timeout(Duration::from_secs(60)).unwrap() {
+                crate::host::Event::Reply(_, Ok(value)) => value,
+                _ => panic!("no answer"),
+            }
+        };
+        let raw = ask(None);
+        assert_eq!(raw["blocking"], json!([]), "{raw}");
+        assert_eq!(raw["copy"], json!({"ok":true,"container":"mp4"}));
+        assert_eq!(raw["encode"]["width"], 320);
+        assert_eq!(raw["duration"], 2.0);
+        let processed = ask(Some((641, 360)));
+        assert_eq!(processed["copy"]["reasons"][0]["field"], "effects");
+        assert_eq!(processed["encode"]["width"], 642);
+    }
+
+    #[test]
+    fn a_join_without_room_fails_no_space_before_writing() {
+        let dir = tempfile::tempdir().unwrap();
+        // More than any disk has: refused, naming the volume.
+        let error = check_space(1e18, dir.path(), dir.path()).unwrap_err();
+        let coded = error.downcast_ref::<Coded>().unwrap();
+        assert_eq!(coded.0, "no-space");
+        assert!(coded.1.contains("GB is free"), "{}", coded.1);
+        assert!(check_space(1024., dir.path(), dir.path()).is_ok());
+        // The estimate: a copy its share of the file, a re-encode its picture.
+        let mut e = entry_facts(1_000_000, 100.);
+        let copy = Mode::Copy {
+            container: Container::Auto,
+        };
+        let t = media_sources::Target {
+            width: 1920,
+            height: 1080,
+            rate: (30, 1),
+        };
+        assert_eq!(part_bytes(&e, 10., &copy, t), 100_000.);
+        let encode = Mode::Encode {
+            encoding: Encoding::default(),
+        };
+        let bytes = part_bytes(&e, 10., &encode, t);
+        assert!((bytes - (1920. * 1080. * 30. * 0.12 / 8. * 10. + 320_000.)).abs() < 1.);
+        e.facts.duration = 0.;
+        assert!(part_bytes(&e, 1., &copy, t).is_finite());
+    }
+
+    fn entry_facts(len: u64, duration: f64) -> Entry {
+        Entry {
+            path: PathBuf::from("/x.mp4"),
+            len,
+            modified: 0,
+            name: "x.mp4".into(),
+            facts: media_sources::Facts {
+                duration,
+                origin: 0.,
+                format: "mp4".into(),
+                video: None,
+                audio: None,
+            },
+        }
+    }
+
     /// A part whose file was moved fails `source-missing`; one rewritten
     /// since it was added fails `source-changed`. Nothing is written.
     #[test]
@@ -938,6 +1230,7 @@ mod tests {
                 parts,
                 destination: dir.path().join("joined.mp4"),
                 ffmpeg: real::ffmpeg(),
+                scratch: None,
                 mode: Mode::Copy {
                     container: Container::Auto,
                 },

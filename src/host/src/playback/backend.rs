@@ -376,6 +376,11 @@ impl Backend {
                 jobs.sources = Arc::new(std::sync::Mutex::new(
                     crate::playback::media_sources::Store::open_default(),
                 ));
+                // What a crashed export of parts left behind (no export
+                // runs before this worker serves requests).
+                if let Some(root) = crate::playback::media_join::scratch_root() {
+                    crate::playback::media_join::clean_scratch(&root);
+                }
                 let mut push = StatePush::new();
                 let mut actions = CoreActions::default();
                 let mut upscaling = crate::playback::upscaling::Upscaling::default();
@@ -572,7 +577,32 @@ impl Backend {
                             }
                             continue;
                         }
-                        // Source references and the join check: answered
+                        // The check of a snapshot's clip (`jobs.check`
+                        // without parts): its held file, probed on a short
+                        // thread.
+                        if command.method == "jobs.check" && !command.params["snapshotId"].is_null()
+                        {
+                            let input = jobs.snapshot_check(command.reply.owner, &command.params);
+                            match input.and_then(|input| {
+                                crate::playback::media_sources::check_encoding(&command.params)
+                                    .map(|encoding| (input, encoding))
+                            }) {
+                                Ok((input, encoding)) => {
+                                    crate::playback::media_sources::check_snapshot(
+                                        &events,
+                                        command.reply.clone(),
+                                        command.reply.owner,
+                                        input,
+                                        encoding,
+                                    )
+                                }
+                                Err(error) => {
+                                    let _ = events.send(Event::Reply(command.reply, Err(error)));
+                                }
+                            }
+                            continue;
+                        }
+                        // Source references and the parts check: answered
                         // from short threads (`media_sources.rs`).
                         if (command.method.starts_with("media.sources.")
                             && command.method != "media.sources.open")
