@@ -266,6 +266,14 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
   - *Permissions:* the coordinator's routine commands need no approval (global allow rules added 11-10).
   - *Priority (11-11):* the stutter for a few frames after resuming from a pause of a few seconds is the top item; a fix starts only after it is reproduced.
 
+- **Task list (11-11, user):**
+  - *Not done:* a Shader Upscale hint about first-use shader compile; a host.log line for long render calls.
+  - *Dropped:* rotating the pasted OpenRouter/MiniMax keys (no longer a task).
+  - *Kept:* the page's unused clips (ai-3, playlist) stay.
+  - *No change for now:* a throttle for a crash-looping plugin's recompiles and the elided AI Upscaling "On" line at the narrowest column — the Slint compile results come first.
+  - *Order:* (1) the resume-after-pause stutter (top, fix only after a reproduction); (2) the owed GUI checks (#250, #254, A1), after the stutter is solved; (3) the coordinator's small follow-ups; (4) the **Slint compile** topic (upstream request or a Vestra fork), moved ahead of the backlog; (5) backlog (cross-process PiP, real stream recording, Mini OBS); (6) SDK decision (3), last, for a detailed read by the user.
+  - *B6 / release:* the full GUI test waits — remote CI cannot run now.
+
 ### State
 
 | # | Item | State |
