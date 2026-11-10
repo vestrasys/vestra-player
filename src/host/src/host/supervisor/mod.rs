@@ -83,6 +83,21 @@ pub(crate) const TRIGGERS: &[&str] = &[
     "ui.callback",
 ];
 
+/// What of a run's resources in the playback worker (its answer to
+/// `owner.resources`) its next activation takes up again from its own
+/// settings (shaders, a processing chain, render options, a subtitle style,
+/// the video view, upscaling it turned on): the worker's `held`, or `None`
+/// when there is none. The rest of `live` is work in flight (a source
+/// resolution, a snapshot or job, a producer stream or the audio device, an
+/// upscaling request waiting, a subtitle track of the current media): it
+/// keeps a run up while it lasts, never makes it resident.
+fn held_in_worker(answer: &Value) -> Option<Value> {
+    answer["held"]
+        .as_array()
+        .filter(|held| !held.is_empty())
+        .map(|held| Value::Array(held.clone()))
+}
+
 /// What the playback worker was asked for a run (`owner.resources`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Ask {
@@ -122,6 +137,11 @@ enum Busy {
     /// panel is never live, so its plugin stays Normal, and this keeps it
     /// running only while the tab is shown.
     ShownTab,
+    /// What it holds in the playback worker is asked again after a request
+    /// of its there (`worker_requested`), not answered yet: a first run
+    /// whose class came back lazy is not parked before the answer says
+    /// whether it took up something its next start must restore.
+    WorkerAsk,
 }
 
 /// The Host's side of on-demand start (formerly `lazy.rs`'s `Lazy`): what the
@@ -135,6 +155,13 @@ pub(crate) struct OnDemand {
     /// Each run's answer at its classification (`{ live, resolvers }`): its
     /// resolvers, for a checkpoint at quit (today's `Class.backend`).
     answers: BTreeMap<u64, Value>,
+    /// Runs whose `owner.resources` was asked again after a request of theirs
+    /// to the playback worker (`worker_requested`), not answered yet. Only
+    /// asked when nothing else is, so its answer comes before any later ask's.
+    refreshing: BTreeSet<u64>,
+    /// Runs with a request to the playback worker since their last ask that
+    /// could not be asked yet (another ask out): asked once that is answered.
+    stale: BTreeSet<u64>,
     /// Plugins already logged as staying up, with the reason.
     told: BTreeMap<u64, &'static str>,
     /// The Host's busy checks of each run as the core has them (declared work,
@@ -268,6 +295,8 @@ pub(crate) fn new() -> Supervisor<Value> {
     let mut supervisor = Supervisor::new(
         Tunables {
             idle_timeout,
+            // Never longer than the idle time itself.
+            first_run_quiet: tunables.first_run_quiet.min(idle_timeout),
             ..tunables
         },
         1,
@@ -1021,8 +1050,9 @@ impl Host {
     /// `owner`'s class at its ready (today's `lazy_classified`), for the
     /// core: a resident one is checkpointed as such (the next start
     /// launches it, even after a crash) and frees its first-run place; a
-    /// lazy first run goes to standby at once if the Host's own idle check
-    /// passes and its recording is written, else as soon as it is idle.
+    /// lazy first run goes to standby once it has been idle for
+    /// `first_run_quiet` (with that 0: at once if the Host's own idle check
+    /// passes and its recording is written, else as soon as it is idle).
     fn class_known(&mut self, owner: u64, resident: Option<String>, backend: Value) {
         let first_run = self.supervisor.run_is_first(Pid(owner));
         // The core closed this run's classification already (answered, or
@@ -1041,11 +1071,20 @@ impl Host {
         }
         let now = self.now_ms();
         self.supervisor.set_now(now);
-        // A lazy first run goes to standby at once unless busy: the Host's
-        // checks are declared work (`sync_work`), and its recording is
-        // written ahead (today's `park` does not park when that fails), on
-        // the recorder thread: the classification waits for it.
-        if resident.is_none() && first_run && !self.sync_work(owner, false) {
+        // A lazy first run goes to standby after a short quiet period
+        // (`first_run_quiet`) unless busy, through the idle timer's Standby
+        // job, which writes its recording then (`standby_answer`); busy, it
+        // waits its idle timeout. The Host's checks are declared work
+        // (`sync_work`), synced now so that the core's classification knows
+        // them. Only without a quiet period does an idle one go at once: its
+        // recording is written ahead (today's `park` does not park when that
+        // fails), on the recorder thread, and the classification waits for it.
+        let busy = resident.is_none() && first_run && self.sync_work(owner, false);
+        if resident.is_none()
+            && first_run
+            && !busy
+            && self.supervisor.tunables().first_run_quiet == 0
+        {
             match self.standby_record(owner, &backend) {
                 Ok(calls) => {
                     self.on_demand.answers.insert(owner, backend.clone());
@@ -1074,6 +1113,9 @@ impl Host {
         let id = plugin.manifest.id.clone();
         if matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_))) {
             busy.insert(Busy::Classify);
+        }
+        if self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner) {
+            busy.insert(Busy::WorkerAsk);
         }
         if !matches!(
             self.activation_status(owner, now),
@@ -1319,9 +1361,51 @@ impl Host {
     /// of a standby the core asked for (`QueryResources`): it goes to
     /// standby if it is still idle and nothing it holds is live.
     pub(crate) fn resources_answer(&mut self, owner: u64, answer: &Value) {
+        if !self.on_demand.refreshing.contains(&owner)
+            && matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_)))
+        {
+            let now = self.now_ms();
+            if self.probe_hold_answer(owner, answer, now) {
+                return;
+            }
+        }
+        self.resources_answer_now(owner, answer);
+    }
+    fn resources_answer_now(&mut self, owner: u64, answer: &Value) {
+        // Asked only when nothing else was: this answer is the refresh's.
+        if self.on_demand.refreshing.remove(&owner) {
+            self.refresh_answer(owner, answer);
+        } else {
+            self.asked_answer(owner, answer);
+        }
+        // A request to the worker came while this ask was out.
+        if self.on_demand.stale.remove(&owner) {
+            self.worker_requested(owner);
+        }
+    }
+    fn asked_answer(&mut self, owner: u64, answer: &Value) {
         match self.on_demand.asked.remove(&owner) {
-            Some(Ask::Classify(_)) => {
+            Some(Ask::Classify(ready)) => {
                 if !self.plugins.contains_key(&owner) {
+                    return;
+                }
+                // A request to the worker came after this ask (a first run
+                // that sets its saved shaders just after its ready): the
+                // answer may not count it. Asked again before a lazy class
+                // parks it, within the same deadline (`classify_timeouts`).
+                if held_in_worker(answer).is_none()
+                    && self.on_demand.stale.remove(&owner)
+                    && self
+                        .backend
+                        .commands
+                        .send(Command {
+                            reply: Reply { owner, id: 0 },
+                            method: "owner.resources".into(),
+                            params: Value::Null,
+                        })
+                        .is_ok()
+                {
+                    self.on_demand.asked.insert(owner, Ask::Classify(ready));
                     return;
                 }
                 let resident = answer["live"]
@@ -1382,6 +1466,10 @@ impl Host {
                 );
             }
             Err(reason) => {
+                // Classified lazy, it holds something in the worker its next
+                // activation takes up again: resident from now on
+                // (`holds_live`). Work in flight there only keeps it up.
+                self.acquired_live(owner, answer);
                 // Asked again after another idle period.
                 if self.on_demand.told.insert(owner, reason) != Some(reason) {
                     diag!(
@@ -1398,6 +1486,68 @@ impl Host {
                 self.supervisor.resources_answered(Pid(owner), true);
                 self.supervisor_run();
             }
+        }
+    }
+    /// A request of `owner` was handed to the playback worker (`forward`).
+    /// Its class came from what it held at its ready; a run that may still
+    /// go to standby can take up something live there after it (a plugin
+    /// whose first run held no shader sets some later), so the worker is
+    /// asked again. The ask follows the request on the worker's queue: its
+    /// answer counts the request. One ask at a time per run; a request
+    /// while another ask is out is asked after its answer.
+    pub(crate) fn worker_requested(&mut self, owner: u64) {
+        if self.checkpoint_key_of(owner).is_none()
+            || self.on_demand.probe.park_all
+            || !self.supervisor.may_stand_by(Pid(owner))
+        {
+            return;
+        }
+        if self.on_demand.refreshing.contains(&owner) || self.on_demand.asked.contains_key(&owner) {
+            self.on_demand.stale.insert(owner);
+            return;
+        }
+        let asked = self.backend.commands.send(Command {
+            reply: Reply { owner, id: 0 },
+            method: "owner.resources".into(),
+            params: Value::Null,
+        });
+        if asked.is_ok() {
+            self.on_demand.refreshing.insert(owner);
+        }
+    }
+    /// The worker's answer to `worker_requested`'s ask: the run's resolvers
+    /// as they are now (for a checkpoint at quit), and a held resource
+    /// makes it resident (`acquired_live`).
+    fn refresh_answer(&mut self, owner: u64, answer: &Value) {
+        if !self.plugins.contains_key(&owner) {
+            return;
+        }
+        if let Some(known) = self.on_demand.answers.get_mut(&owner) {
+            *known = answer.clone();
+        }
+        self.acquired_live(owner, answer);
+    }
+    /// `answer` (the worker's `{ live, held, resolvers }` for `owner`) names a
+    /// held resource (`held_in_worker`): a run that may still go to standby
+    /// is resident from now on, and its checkpoint says so
+    /// (`Supervisor::holds_live`). Work in flight (a resolution, a job, a
+    /// stream, a request waiting) never does: it keeps the run up only, as
+    /// before, and it is asked again after another idle period.
+    fn acquired_live(&mut self, owner: u64, answer: &Value) {
+        let Some(live) = held_in_worker(answer) else {
+            return;
+        };
+        if self.on_demand.probe.park_all {
+            return;
+        }
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        if self.supervisor.holds_live(Pid(owner)) {
+            diag!(
+                "lazy: {} resident from now on: a resource in the playback worker {live}",
+                self.plugin_id(owner)
+            );
+            self.supervisor_run();
         }
     }
     /// The core's Standby job asks whether `owner` may go to standby
@@ -1456,6 +1606,8 @@ impl Host {
         self.on_demand.ui_pending.remove(&owner);
         self.on_demand.told.remove(&owner);
         self.on_demand.answers.remove(&owner);
+        self.on_demand.refreshing.remove(&owner);
+        self.on_demand.stale.remove(&owner);
         // The core's work of the run went with it.
         self.on_demand.work.remove(&owner);
     }
@@ -1469,6 +1621,7 @@ impl Host {
             self.holds_tick(now);
         }
         self.probe_tick(now);
+        self.probe_late_tick(now);
         self.memory_tick(now);
         if now < self.on_demand.next_check {
             return;
@@ -1510,6 +1663,7 @@ mod tests {
         assert_eq!(CHECK_MS, 250);
         assert_eq!(t.starting_notice, 400);
         assert_eq!(t.quiet_after_start, 1_000);
+        assert_eq!(t.first_run_quiet, 1_000);
         assert_eq!(t.stop_wait, 20_000);
         // `PARK_WAIT`, the grace the core gives a stop for standby.
         assert_eq!(PARK_WAIT, Duration::from_secs(5));
@@ -1530,6 +1684,40 @@ mod tests {
                 "ui.callback"
             ]
         );
+    }
+
+    /// Only what a plugin's next activation takes up again makes a lazy run
+    /// resident (`acquired_live`, the standby path, the quit checkpoint):
+    /// work in flight in the worker (a source resolution, a snapshot or a job
+    /// such as Clip Export's, a producer stream or the audio device such as
+    /// VestraNES's, an upscaling state read waiting) keeps it up only; held
+    /// shaders (Shader Upscale), a filter chain or the view do.
+    #[test]
+    fn only_held_worker_resources_make_a_lazy_run_resident() {
+        for live in [
+            json!(["a source resolution in flight"]),
+            json!(["a snapshot or a job"]),
+            json!(["a producer stream", "the audio device"]),
+            json!(["video upscaling"]),
+            json!(["a subtitle track or style"]),
+        ] {
+            let answer = json!({"live": live, "held": [], "resolvers": []});
+            assert_eq!(held_in_worker(&answer), None, "{answer}");
+        }
+        // An answer without `held` (none counts) never promotes.
+        assert_eq!(held_in_worker(&json!({"live": ["video shaders"]})), None);
+        assert_eq!(held_in_worker(&Value::Null), None);
+        for held in [
+            "video shaders",
+            "a processing chain",
+            "the video view",
+            "the video render options",
+            "a subtitle style",
+            "video upscaling",
+        ] {
+            let answer = json!({"live": [held, "a snapshot or a job"], "held": [held]});
+            assert_eq!(held_in_worker(&answer), Some(json!([held])), "{answer}");
+        }
     }
 
     /// The shared runner waits at least 30 s without a member (was 1 s), and at

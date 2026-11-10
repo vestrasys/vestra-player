@@ -27,6 +27,7 @@ mod ring;
 mod tests;
 mod watchdog;
 
+use crate::cadence::Cadence;
 pub use d3d::Choice;
 use d3d::{D3d11, Gpu, SharedFence, Waiter};
 use ring::{RING, Ring, Slot};
@@ -456,6 +457,10 @@ struct Shared {
     /// never signalled (a fence deadlock, for the watchdog).
     #[cfg(test)]
     stall_now: AtomicBool,
+    /// Tests: every render call returns an error after mpv rendered (a
+    /// failed call that took the frame, without a removed device).
+    #[cfg(test)]
+    render_errors: AtomicBool,
     /// Last: the textures and fences above drop before the device.
     gpu: Arc<Gpu>,
 }
@@ -492,6 +497,8 @@ impl Shared {
             fail_now: AtomicBool::new(false),
             #[cfg(test)]
             stall_now: AtomicBool::new(false),
+            #[cfg(test)]
+            render_errors: AtomicBool::new(false),
             gpu,
         }
     }
@@ -932,7 +939,7 @@ fn produce(
     // A new size first seen when; the ring changes once it has held for
     // `SETTLE` (a border drag asks for a new size every frame).
     let mut asked_size = None::<(Size, Instant)>;
-    let (mut drawn, mut ready_value, mut timeouts) = (None::<Instant>, 0u64, 0u64);
+    let (mut cadence, mut ready_value, mut timeouts) = (Cadence::default(), 0u64, 0u64);
     // GPU rendering cannot go on: release every GPU wait on the shared
     // fences (neither queue may wait forever) and tell the host, which
     // switches to software rendering (`Handle::failed`).
@@ -969,11 +976,10 @@ fn produce(
             break;
         }
         let pace = *lock(&shared.pace);
-        // Paced: wait for the rest of the period, so frames come at most at
-        // the display rate however often mpv asks.
-        let left = pace.zip(drawn).map(|(period, at)| period.saturating_sub(at.elapsed()));
-        match left {
-            Some(left) if !left.is_zero() => thread::sleep(left),
+        // Paced: wait for the next start on the display's grid, so frames
+        // come at the display rate however often mpv asks (`Cadence`).
+        match cadence.wait(pace, Instant::now()) {
+            left if !left.is_zero() => thread::sleep(left),
             _ => shared.wait(Duration::from_millis(20)),
         }
         let size = *lock(&shared.size);
@@ -1031,6 +1037,7 @@ fn produce(
         if !(render.update() || (resized && published > 0)) {
             continue;
         }
+        cadence.started(pace, Instant::now());
         // A free texture. Windows hold a claim only during a draw; one left
         // by a draw that never finished is released at the window's next
         // draw, so after 100 ms the windows are asked to draw.
@@ -1096,12 +1103,21 @@ fn produce(
         // The call's start, odd (`Handle::progress`).
         let started = shared.calls.fetch_add(1, Ordering::AcqRel) + 1;
         let rendered = render.render(&slots[index].d3d11, block && pace.is_none());
+        #[cfg(test)]
+        let rendered = if shared.render_errors.load(Ordering::Acquire) {
+            rendered.and(Err("a test asked for render errors".to_string()))
+        } else {
+            rendered
+        };
         shared.calls.fetch_add(1, Ordering::AcqRel);
         if let Err(error) = rendered {
             if d3d11.removed().is_some() {
                 fail(format!("mpv's render failed ({error})"));
                 break;
             }
+            // mpv took the frame all the same: its flip waits for a report
+            // (every render call is followed by one, see below).
+            render.report_swap();
             continue;
         }
         let rendered = began.elapsed();
@@ -1163,10 +1179,11 @@ fn produce(
             stats.stuck += u64::from(asked > 0);
             stats.throttled += u64::from(throttled);
         }
-        if pace.is_some() {
-            render.report_swap();
-        }
-        drawn = Some(Instant::now());
+        // Every frame, paced or not: mpv takes one report as the promise of
+        // all (render.h), and then waits up to 200 ms in each flip for the
+        // next one: reported only while interpolating, playback fell to 5
+        // frames a second once it was off, until the player quit.
+        render.report_swap();
         if publish.load(Ordering::Acquire) && !shared.halted() {
             let texture = slots[index].texture.clone();
             let payload = Payload { texture, ready: ready_value, size: slots_size.unwrap_or(size) };
@@ -1228,8 +1245,9 @@ impl Handle {
             mpv::Wake::wake(&*self.0);
         }
     }
-    /// `Some(fps)`: render at most `fps` frames a second and report each as
-    /// presented (mpv `video-sync=display-*`); `None`: mpv's own timing.
+    /// `Some(fps)`: start a frame every `1 / fps` seconds at most (mpv
+    /// `video-sync=display-*`); `None`: mpv's own timing. Every frame is
+    /// reported as presented either way (`report_swap`).
     pub fn set_display_fps(&self, fps: Option<f64>) {
         let period =
             fps.filter(|f| f.is_finite() && *f >= 1.).map(|f| Duration::from_secs_f64(1. / f));

@@ -421,3 +421,135 @@ fn real_gpu_hands_4k60_frames_over_at_the_clip_rate() {
     assert!(pixels.iter().any(|&byte| byte > 16), "the frame is black");
     drop(renderer);
 }
+
+/// Interpolation on, then off (Picture ▸ Effects ▸ Frames, 2026-11-10): the
+/// frame rate after it is the rate before it. mpv takes a single
+/// `mpv_render_context_report_swap` as the promise that every frame is
+/// reported; a renderer that reported only while paced left mpv waiting
+/// 200 ms for each later frame (5 frames a second) until the player quit.
+#[test]
+fn warp_interpolation_off_restores_the_frame_rate() {
+    let mpv = player("no");
+    let renderer = Renderer::start_on(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()))
+        .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", &SOURCE.replace("d=30", "r=60:d=30")]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 10), "no frames");
+    let rate = |what: &str| {
+        thread::sleep(Duration::from_millis(500));
+        let dropped = || mpv.get_property::<i64>("frame-drop-count").unwrap_or(0);
+        let (start, frames, drops) = (Instant::now(), handle.frames(), dropped());
+        thread::sleep(Duration::from_secs(2));
+        let rate = (handle.frames() - frames) as f64 / start.elapsed().as_secs_f64();
+        let drops = dropped() - drops;
+        let _ = writeln!(std::io::stderr(), "{what}: {rate:.1} frames/s, {drops} dropped");
+        (rate, drops)
+    };
+    let interpolate = |on: bool| {
+        let set = |name: &str, value: &str| mpv.set_property(name, value).expect(name);
+        set("interpolation", if on { "yes" } else { "no" });
+        set("video-sync", if on { "display-resample" } else { "audio" });
+        set("display-fps-override", if on { "60" } else { "0" });
+        handle.set_display_fps(on.then_some(60.));
+    };
+    let (before, _) = rate("before");
+    assert!(before >= 50., "{before:.1} frames/s before interpolation");
+    interpolate(true);
+    let (on, _) = rate("on");
+    assert!(on >= 50., "{on:.1} frames/s with interpolation");
+    interpolate(false);
+    let (after, dropped) = rate("off");
+    assert!(after >= before * 0.9, "{after:.1} frames/s after interpolation, {before:.1} before");
+    assert!(dropped <= 2, "{dropped} frames dropped after interpolation");
+    drop(renderer);
+}
+
+/// The same on the high-performance GPU (the one GPU rendering picks) with
+/// a 4K60 clip (`VESTRA_GPU_CLIP`, default the Big Buck Bunny 2160p60 test
+/// clip), a simulated window taking frames 60 times a second: the rates
+/// and mpv's drop counters off, on and off again.
+#[test]
+#[ignore = "needs a GPU and a 4K60 clip; the coordinator runs it (one at a time, about 15 s)"]
+fn real_gpu_interpolation_on_and_off_at_4k60() {
+    let clip = std::env::var("VESTRA_GPU_CLIP")
+        .unwrap_or_else(|_| r"C:\vestra\testmedia\bbb_sunflower_2160p_60fps_normal.mp4".into());
+    let gpu = Arc::new(Gpu::open(Choice::HighPerformance).expect("Direct3D 12"));
+    assert!(!gpu.facts.software, "{} is not a GPU", gpu.facts.name);
+    let mpv = player("auto-safe");
+    mpv.set_property("loop-file", "inf").unwrap();
+    let renderer =
+        Renderer::start_on(gpu.clone(), mpv.clone(), (3840, 2160), Arc::new(true.into()))
+            .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", &clip]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 0), "no frame");
+    let (shared, mut view) = (handle.0.clone(), View::default());
+    let counter = |name: &str| mpv.get_property::<i64>(name).unwrap_or(0);
+    let mut rate = |what: &str| {
+        let (start, frames) = (Instant::now(), handle.frames());
+        let drops = (counter("frame-drop-count"), counter("decoder-frame-drop-count"));
+        let mistimed = counter("mistimed-frame-count");
+        while start.elapsed() < Duration::from_secs(4) {
+            let tick = Instant::now();
+            let _ = view.before(&shared);
+            gpu.queue.submit([]);
+            view.after(&shared);
+            thread::sleep(Duration::from_micros(16_667).saturating_sub(tick.elapsed()));
+        }
+        let rate = (handle.frames() - frames) as f64 / start.elapsed().as_secs_f64();
+        let dropped = counter("frame-drop-count") - drops.0;
+        let decoder = counter("decoder-frame-drop-count") - drops.1;
+        let mistimed = counter("mistimed-frame-count") - mistimed;
+        let _ = writeln!(
+            std::io::stderr(),
+            "{what}: {rate:.1} frames/s, dropped {dropped} (decoder {decoder}), mistimed {mistimed}"
+        );
+        (rate, dropped + decoder)
+    };
+    let interpolate = |on: bool| {
+        let set = |name: &str, value: &str| mpv.set_property(name, value).expect(name);
+        set("interpolation", if on { "yes" } else { "no" });
+        set("video-sync", if on { "display-resample" } else { "audio" });
+        set("display-fps-override", if on { "60" } else { "0" });
+        handle.set_display_fps(on.then_some(60.));
+    };
+    thread::sleep(Duration::from_secs(2));
+    let (before, _) = rate("before");
+    interpolate(true);
+    thread::sleep(Duration::from_secs(1));
+    let (on, on_dropped) = rate("on");
+    interpolate(false);
+    thread::sleep(Duration::from_secs(1));
+    let (after, dropped) = rate("off");
+    let _ = writeln!(std::io::stderr(), "{}{}", gpu.facts.name, handle.log_text());
+    assert!(before >= 58., "before {before:.1}/s");
+    assert!(on >= 58. && on_dropped <= 4, "on {on:.1}/s, {on_dropped} dropped");
+    assert!(after >= 58. && dropped <= 4, "off {after:.1}/s, {dropped} dropped");
+    drop(renderer);
+}
+
+/// A render call that fails (no removed device) took mpv's frame all the
+/// same: it is reported too, or mpv's flip waits 200 ms for each such frame.
+#[test]
+fn warp_a_failed_render_call_is_reported_too() {
+    let mpv = player("no");
+    let renderer = Renderer::start_on(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()))
+        .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", &SOURCE.replace("d=30", "r=60:d=30")]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 10), "no frames (and so reports)");
+    let shared = &handle.0;
+    shared.render_errors.store(true, Ordering::Release);
+    thread::sleep(Duration::from_millis(500));
+    let (start, calls) = (Instant::now(), shared.calls.load(Ordering::Acquire));
+    thread::sleep(Duration::from_secs(2));
+    let rate =
+        (shared.calls.load(Ordering::Acquire) - calls) as f64 / 2. / start.elapsed().as_secs_f64();
+    let _ = writeln!(std::io::stderr(), "failing render calls: {rate:.1}/s");
+    assert!(rate >= 50., "{rate:.1} render calls a second while they fail");
+    shared.render_errors.store(false, Ordering::Release);
+    let frames = handle.frames();
+    assert!(until(5, || handle.frames() > frames + 10), "no frames after the errors");
+    assert!(handle.failed().is_none());
+    drop(renderer);
+}

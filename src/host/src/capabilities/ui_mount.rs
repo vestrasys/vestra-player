@@ -82,50 +82,7 @@ impl Capability for UiMount {
     /// placeholders until its new mounts take them over). A branch compiled
     /// under the old key stays drawn for the tab meanwhile (`shell_compiled`).
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        let keys = host
-            .mounts
-            .values()
-            .filter(|m| m.plugin == from)
-            .map(|m| (m.spec.owner, m.spec.slot))
-            .collect::<Vec<_>>();
-        for (old, slot) in keys {
-            let new = panel_key(to, slot);
-            let Some(mut mount) = host.mounts.remove(&old) else {
-                continue;
-            };
-            mount.spec.owner = new;
-            mount.plugin = to;
-            host.mounts.insert(new, mount);
-            host.policy.rekey(old, new);
-            if let Some(alias) = host.shell_compiled.remove(&old) {
-                host.shell_compiled.insert(new, alias);
-            }
-            let swap = |key: &mut u64| {
-                if *key == old {
-                    *key = new;
-                }
-            };
-            if let Some(floating) = &mut host.floating {
-                floating.owners.iter_mut().for_each(swap);
-            }
-            for state in &mut host.columns {
-                state.tabs.iter_mut().for_each(swap);
-                for key in [&mut state.active, &mut state.woken].into_iter().flatten() {
-                    swap(key);
-                }
-            }
-        }
-        // The panel keys' owners (plugins).
-        let mut shared = host.input.borrow_mut();
-        let input = &mut *shared;
-        for owner in [&mut input.sidebar, &mut input.adjust]
-            .into_iter()
-            .flatten()
-        {
-            if *owner == from {
-                *owner = to;
-            }
-        }
+        rekey_panels(host, from, to);
     }
     /// Parked (`keep_recorded`): its tabs stay, as placeholders. Gone for
     /// good (disabled, uninstalled, a placeholder its plugin did not mount
@@ -217,6 +174,58 @@ impl Capability for UiMount {
     }
 }
 
+/// The panels of run `from` move to run `to` (a parked plugin woke as
+/// `to`; a crashed plugin's kept panels go to its restart,
+/// `panel_restart.rs`): its tabs stay placeholders until its new mounts
+/// take them over, and a branch compiled under the old key stays drawn
+/// meanwhile (`shell_compiled`).
+pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
+    let keys = host
+        .mounts
+        .values()
+        .filter(|m| m.plugin == from)
+        .map(|m| (m.spec.owner, m.spec.slot))
+        .collect::<Vec<_>>();
+    for (old, slot) in keys {
+        let new = panel_key(to, slot);
+        let Some(mut mount) = host.mounts.remove(&old) else {
+            continue;
+        };
+        mount.spec.owner = new;
+        mount.plugin = to;
+        host.mounts.insert(new, mount);
+        host.policy.rekey(old, new);
+        if let Some(alias) = host.shell_compiled.remove(&old) {
+            host.shell_compiled.insert(new, alias);
+        }
+        let swap = |key: &mut u64| {
+            if *key == old {
+                *key = new;
+            }
+        };
+        if let Some(floating) = &mut host.floating {
+            floating.owners.iter_mut().for_each(swap);
+        }
+        for state in &mut host.columns {
+            state.tabs.iter_mut().for_each(swap);
+            for key in [&mut state.active, &mut state.woken].into_iter().flatten() {
+                swap(key);
+            }
+        }
+    }
+    // The panel keys' owners (plugins).
+    let mut shared = host.input.borrow_mut();
+    let input = &mut *shared;
+    for owner in [&mut input.sidebar, &mut input.adjust]
+        .into_iter()
+        .flatten()
+    {
+        if *owner == from {
+            *owner = to;
+        }
+    }
+}
+
 /// Drop the mounts of plugin `owner` that wait in `queue` (its unmounts
 /// stay: they remove what is applied).
 fn forget_queued(queue: &mut std::collections::VecDeque<MountChange>, owner: u64) {
@@ -261,7 +270,7 @@ fn panel_of(host: &Host, owner: u64, params: &Value) -> std::result::Result<Opti
     let mut keys = host
         .mounts
         .values()
-        .filter(|m| m.plugin == owner && !m.recorded)
+        .filter(|m| m.plugin == owner && !m.recorded && !host.restarts.waiting(m.spec.owner))
         .map(|m| m.spec.owner);
     match (keys.next(), keys.next()) {
         (key, None) => Ok(key),
@@ -286,9 +295,16 @@ fn mount(
             "mounts require a native shell",
         ));
     }
+    // Panels kept over this plugin's restart belong to this run from now
+    // on (normally done at its spawn already, `panel_restart.rs`).
+    let id = host.plugin_id(reply.owner);
+    host.adopt_panels(&id, reply.owner);
     if method == "ui.unmount" {
         let keys = match params.get("slot").filter(|v| !v.is_null()) {
             Some(_) => panel_of(host, reply.owner, params)?.into_iter().collect(),
+            // A panel kept over this plugin's restart is its too: removed
+            // now, not left for `REMOUNT_LIMIT` (with `slot` it is the
+            // slot's panel either way).
             None => host
                 .mounts
                 .values()
@@ -360,8 +376,9 @@ fn mount(
         return Err(RpcError::new("busy", "UI preparation queue full"));
     }
     // One panel per slot and plugin; a placeholder tab of this plugin
-    // (sidebar-tabs.md) is taken over by its woken run's mount.
-    if host.mounts.get(&key).is_some_and(|m| !m.recorded) {
+    // (sidebar-tabs.md) is taken over by its woken run's mount, a panel
+    // kept over its restart by its restarted run's (`panel_restart.rs`).
+    if host.mounts.get(&key).is_some_and(|m| !m.recorded) && !host.restarts.waiting(key) {
         return Err(RpcError::new(
             "conflict",
             "this plugin already has a panel in this slot",
@@ -534,10 +551,10 @@ fn set_mount(
     let mut prepared = host.take_prepared(reply);
     let key = panel_of(host, reply.owner, params)?
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
-    let spec = host
+    let mut spec = host
         .mounts
         .get(&key)
-        .filter(|mount| !mount.recorded)
+        .filter(|mount| !mount.recorded && !host.restarts.waiting(key))
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?
         .spec
         .clone();
@@ -548,17 +565,17 @@ fn set_mount(
         .map(ComponentHandle::clone_strong)
         .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
     // A tab beyond the front tabs is not in the shell (sidebar-tabs.md):
-    // its values are only stored, and written when it is compiled.
-    let shell =
-        (!spec.slot.tabbed() || host.shell_compiled.get(&key) == Some(&key)).then_some(shell);
+    // its values are only stored, and written when it is compiled. A panel
+    // kept over its plugin's restart is written under the key its branch
+    // was compiled under (`panel_restart.rs`).
+    let branch = host.shell_branch(key, spec.slot.tabbed());
+    spec.owner = branch.unwrap_or(key);
+    let shell = branch.is_some().then_some(shell);
     let property = string(params, "property")?;
     let floating = host
         .floating
         .as_ref()
-        .filter(|f| {
-            f.compiled.contains(&key)
-                && (!spec.slot.tabbed() || host.shell_compiled.get(&key) == Some(&key))
-        })
+        .filter(|f| branch.is_some_and(|branch| f.compiled.contains(&branch)))
         .map(|f| f.instance.clone_strong());
     // A part of a whole value sent in parts: held until the last (P3).
     let parted = host.parts(reply.owner, view, property, params, prepared.as_deref())?;
@@ -660,7 +677,7 @@ fn patch_mount(
         return Err(ui_patch::stale());
     };
     let ops = ui_patch::parse(ops, stored.len())?;
-    let alias = composition::global_alias(key);
+    let alias = composition::global_alias(host.restarts.compiled_key(key));
     let mut instances = shell.into_iter().collect::<Vec<_>>();
     instances.extend(floating);
     // Converted once (on the reader thread when large), written into each
@@ -720,6 +737,7 @@ fn interaction(
     let mount = host
         .mounts
         .get(&key)
+        .filter(|_| !host.restarts.waiting(key))
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
     let boolean = |key: &str| {
         params[key]
@@ -758,6 +776,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
     let mount = host
         .mounts
         .get(&key)
+        .filter(|_| !host.restarts.waiting(key))
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
     let items = params["items"]
         .as_array()

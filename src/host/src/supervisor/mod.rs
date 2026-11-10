@@ -277,6 +277,16 @@ fn standby_running<P>(unit: &Unit<P>) -> bool {
     )
 }
 
+/// The idle time after which the unit's run goes to standby: the idle
+/// timeout, or a lazy first run's quiet period (`Unit::quiet_park`).
+fn idle_time<P>(tunables: &Tunables, unit: &Unit<P>) -> Ms {
+    if unit.quiet_park {
+        tunables.first_run_quiet
+    } else {
+        tunables.idle_timeout
+    }
+}
+
 /// A first run waiting for a place (today's `FirstQueue` entry).
 fn first_queued<P>(unit: &Unit<P>) -> bool {
     matches!(unit.state, UnitState::Inactive)
@@ -1271,6 +1281,12 @@ impl<P: Clone> Supervisor<P> {
         };
 
         unit.asked_at = None;
+        if busy || unit.work.busy() {
+            // A first run found busy waits the idle timeout from now on, as
+            // one busy at its classification does: not asked again every
+            // quiet period while it stays busy.
+            unit.quiet_park = false;
+        }
         if busy || unit.work.busy() || last_active >= asked {
             // Asked again after another idle period.
             if let UnitState::Active { last_active, .. } = &mut unit.state {
@@ -1295,10 +1311,11 @@ impl<P: Clone> Supervisor<P> {
     /// resource. A run without a checkpoint is classified (the 5 s timer runs);
     /// any other ready run of a recordable unit may be, once per run, as
     /// today's `lazy_ready` classifies on every ready (supervisor.md). A lazy
-    /// first run goes to standby at once unless it is busy: a job, or work in
-    /// flight (the Host's own idle check is declared work, `work.rs`;
-    /// today's `lazy_classified` parks only when `lazy_idle` says idle and its
-    /// recording was written).
+    /// first run goes to standby after `first_run_quiet` of idle time (at
+    /// once with that 0) unless it is busy: a job, or work in flight (the
+    /// Host's own idle check is declared work, `work.rs`; today's
+    /// `lazy_classified` parks only when `lazy_idle` says idle and its
+    /// recording was written); busy, it waits its idle timeout.
     pub fn classified(&mut self, pid: Pid, resident: Option<String>) {
         let Some(u) = self.current(pid) else {
             return;
@@ -1344,12 +1361,28 @@ impl<P: Clone> Supervisor<P> {
             let Some(unit) = self.units.get_mut(&u) else {
                 return;
             };
-            // Only a first run goes to standby at once (today's
+            // Only a first run goes to standby soon (today's
             // `lazy_classified`); any other run waits for its idle timeout.
             if !at_once {
                 self.arm_idle(u);
             } else if busy {
                 // It waits its idle timeout.
+                self.arm_idle(u);
+            } else if self.tunables.first_run_quiet > 0 {
+                // After a short quiet period, counted from the end of its
+                // classification (work: supervisor.md §4), through the idle
+                // timer's Standby job: what the run takes up meanwhile (a
+                // saved effect restored after a timer or a round trip)
+                // reaches the playback worker while it runs, is asked about
+                // again and makes it resident (`holds_live`); any use or work
+                // starts the period again. Not parked at once: a request that
+                // came while it stopped would be dropped, and its lazy
+                // recording would not restore that effect at the next start.
+                unit.quiet_park = true;
+                let now = self.now;
+                if let UnitState::Active { last_active, .. } = &mut unit.state {
+                    *last_active = (*last_active).max(now);
+                }
                 self.arm_idle(u);
             } else {
                 unit.recorded = true;
@@ -1370,6 +1403,60 @@ impl<P: Clone> Supervisor<P> {
             }
         }
         self.sync(u);
+    }
+
+    /// Run `pid` may still go to standby: active, recordable and not
+    /// resident. What it holds in the playback worker is worth asking again
+    /// after its requests there (`holds_live`).
+    pub fn may_stand_by(&self, pid: Pid) -> bool {
+        self.current(pid)
+            .and_then(|u| self.units.get(&u))
+            .is_some_and(|unit| {
+                matches!(unit.state, UnitState::Active { .. }) && unit.recordable && !unit.resident
+            })
+    }
+
+    /// Run `pid`, classified lazy, holds a live resource it acquired after
+    /// its classification (a shader list, a filter chain, a stream: the
+    /// playback worker's answer to a later ask). It is resident from now on,
+    /// as if classified so at its ready: no idle standby, and its checkpoint
+    /// says resident, so the next start launches it (and it takes up what it
+    /// holds again) instead of replaying its entry points. As a resident
+    /// classification at ready, the next ready classifies it again: one that
+    /// let go by then goes back to standby (supervisor.md §4). `false`:
+    /// nothing changed (not active, its class still asked, resident already).
+    pub fn holds_live(&mut self, pid: Pid) -> bool {
+        let Some(u) = self.current(pid) else {
+            return false;
+        };
+        let Some(unit) = self.units.get_mut(&u) else {
+            return false;
+        };
+        if !matches!(unit.state, UnitState::Active { .. })
+            || !unit.recordable
+            || unit.resident
+            || unit.classifying
+            || unit.may_reclassify
+        {
+            return false;
+        }
+        unit.resident = true;
+        unit.quiet_park = false;
+        if unit.class == Class::Normal {
+            unit.class = Class::Resident;
+        }
+        Timers::cancel(&mut unit.gens, TimerKind::Idle);
+        if !(unit.recorded && unit.recorded_resident) {
+            unit.recorded = true;
+            unit.recorded_resident = true;
+            self.pending.push(Action::Checkpoint {
+                unit: u,
+                pid,
+                resident: true,
+            });
+        }
+        self.sync(u);
+        true
     }
 
     /// `touch`: the unit was used (formerly `Lazy::touch`).
@@ -1758,6 +1845,7 @@ impl<P: Clone> Supervisor<P> {
         unit.classifying = false;
         unit.classified_run = false;
         unit.may_reclassify = false;
+        unit.quiet_park = false;
         unit.asked_at = None;
         unit.runtime_ready = false;
         unit.pending_ui = 0;
@@ -1791,7 +1879,7 @@ impl<P: Clone> Supervisor<P> {
         if !idles || !unit.recordable || unit.classifying {
             return;
         }
-        let due = last_active + self.tunables.idle_timeout;
+        let due = last_active + idle_time(&self.tunables, unit);
         self.timers.arm(&mut unit.gens, u, TimerKind::Idle, due);
     }
 
@@ -2059,6 +2147,7 @@ impl<P: Clone> Supervisor<P> {
         unit.pending_ui = 0;
         unit.classified_run = false;
         unit.may_reclassify = false;
+        unit.quiet_park = false;
         unit.run_is_first = unit
             .job
             .as_ref()
@@ -2711,11 +2800,14 @@ impl<P: Clone> Supervisor<P> {
                 if unit.job.is_some() {
                     return;
                 }
-                let due = last_active + self.tunables.idle_timeout;
-                let again = now + self.tunables.idle_timeout;
+                let due = last_active + idle_time(&self.tunables, unit);
                 if now < due {
                     self.timers.arm(&mut unit.gens, u, TimerKind::Idle, due);
                 } else if unit.work.busy() {
+                    // Busy: a first run's quiet period is over (as in
+                    // `resources_answered`).
+                    unit.quiet_park = false;
+                    let again = now + self.tunables.idle_timeout;
                     self.timers.arm(&mut unit.gens, u, TimerKind::Idle, again);
                 } else {
                     let _ = self.enqueue_job(

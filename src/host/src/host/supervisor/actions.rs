@@ -404,6 +404,10 @@ impl Host {
                 first.unwrap_or("its settings page")
             );
             capabilities::rekey(self, from, to);
+        } else {
+            // A restart after a crash: the panels kept meanwhile are its
+            // (`panel_restart.rs`), before its first `ui.mount` comes.
+            self.adopt_panels(id, to);
         }
         if matches!(
             kind,
