@@ -1,0 +1,47 @@
+// A plugin panel whose plugin restarts after a crash (panel_restart.rs,
+// user ruling 2026-11-10): composition.rs puts this over the panel while
+// `text` ("<name> is restarting…", translated by the host) is not empty.
+// The panel's last content shows dimmed under it, so it is not taken for
+// live data, and the line sits on the OSD's plate (white on a translucent
+// dark plate, ui-spec §6.6). It takes the pointer and the wheel: nothing
+// reaches the plugin's controls while its process is gone.
+import { Theme } from "@vestra/theme.slint";
+
+export component PanelRestarting inherits Rectangle {
+    in property <string> text;
+    // A click on it gives the keys to its invisible key scope (not to the
+    // panel's controls under it). It never takes them by itself: the keys
+    // stay wherever they are (the video, the command palette, another
+    // panel) when it comes. A key is not handled there: it goes on to the
+    // column's scope (the player's panel shortcuts). The host reads this
+    // (`owner<key>-restarting-focused`) to give the keys back to the video
+    // when the line goes, only when it had them (`panel_back`).
+    out property <bool> holds-keys: keys.has-focus;
+    background: Theme.bg-panel.with-alpha(0.72);
+    keys := FocusScope {
+        TouchArea {
+            clicked => { keys.focus(); }
+            scroll-event(event) => { accept }
+        }
+    }
+    Rectangle {
+        x: (parent.width - self.width) / 2;
+        y: (parent.height - self.height) / 2;
+        width: min(label.preferred-width + 24px, parent.width - 8px);
+        height: label.preferred-height + 10px;
+        border-radius: Theme.radius-panel;
+        background: #0b0a10c4;
+        label := Text {
+            x: 12px;
+            y: 0px;
+            width: parent.width - 24px;
+            height: parent.height;
+            text: root.text;
+            font-size: Theme.font-body;
+            font-weight: 600;
+            color: #ffffff;
+            overflow: elide;
+            vertical-alignment: center;
+        }
+    }
+}

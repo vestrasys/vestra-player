@@ -488,6 +488,7 @@ fn player() -> Result<()> {
         columns: Default::default(),
         shell_specs: Vec::new(),
         shell_compiled: BTreeMap::new(),
+        restarts: Default::default(),
         shell_refresh: false,
         // Headless runs mount nothing.
         startup_mounted: headless,
@@ -855,6 +856,7 @@ fn player() -> Result<()> {
                 host.placements.tick();
                 host.mount_callbacks();
                 host.prepare_mount_tick();
+                host.panel_restart_tick();
                 host.window_tick();
                 platform::tool_windows_tick();
                 host.activation_tick();
