@@ -26,6 +26,7 @@ import {
   MANIFEST_FIELDS,
   MANIFEST_LIMITS,
   MARKDOWN_LIMITS,
+  MEDIA_SOURCE_LIMITS,
   MENU_IDS,
   MENU_KEYS,
   MESSAGE_LIMIT,
@@ -753,6 +754,29 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "jobs.cancel",
     "jobs.operation",
   ],
+  // An export of remembered files' parts: jobs.start with parts (the
+  // player also checks media.sources for it, capabilities/media_control.rs).
+  "MediaCapture.export": [
+    "jobs.start",
+    "jobs.state",
+    "jobs.cancel",
+    "jobs.operation",
+  ],
+  "MediaCapture.exportCheck": ["jobs.check"],
+  "MediaSources.remember": ["media.sources.remember"],
+  "MediaSources.get": ["media.sources.get"],
+  "MediaSources.locate": ["media.sources.locate"],
+  "MediaSources.forget": ["media.sources.forget"],
+  "MediaSources.list": ["media.sources.list"],
+  // Replaces what is playing, so it needs playback.control as well as
+  // media.sources (capabilities/media_sources.rs); followed as player.open
+  // is (source.operation then needs playback.control; the refresh after it
+  // is best-effort).
+  "MediaSources.open": [
+    "media.sources.open",
+    "source.operation?",
+    "source.state?",
+  ],
   "Osd.show": ["osd.show"],
   "Osd.panel": ["osd.panel"],
   "Clipboard.readText": ["clipboard.readText"],
@@ -1162,6 +1186,37 @@ test("VIDEO_PROCESSING_LIMITS are the player's (playback/effects.rs, plugin_file
     },
     { ...VIDEO_PROCESSING_LIMITS },
     "VIDEO_PROCESSING_LIMITS differ from the player's",
+  );
+});
+
+test("MEDIA_SOURCE_LIMITS are the player's (playback/media_sources.rs, capabilities/media_sources.rs; SDK 1.7.8)", () => {
+  // `[pub ]const NAME: <type> = …;` (the request share and the Locate
+  // interval are private), products of numbers; `86400.` reads as 86400.
+  const constant = (file: string, name: string) => {
+    const value = new RegExp(`(?:pub )?const ${name}: [\\w:]+ = ([^;]+);`).exec(
+      host(file),
+    )?.[1];
+    assert.ok(value, `${name} in ${file}`);
+    const seconds = /Duration::from_secs\((\d+)\)$/.exec(value)?.[1];
+    if (seconds !== undefined) return Number(seconds);
+    return value
+      .split("*")
+      .map((part) => Number(part.trim()))
+      .reduce((a, b) => a * b, 1);
+  };
+  const store = "src/playback/media_sources.rs";
+  const capability = "src/capabilities/media_sources.rs";
+  assert.deepEqual(
+    {
+      references: constant(store, "MAX_PER_PLUGIN"),
+      parts: constant(store, "MAX_PARTS"),
+      partEnd: constant(store, "MAX_PART_END"),
+      totalSeconds: constant(store, "MAX_TOTAL_SECONDS"),
+      requests: constant(store, "MAX_IN_FLIGHT_PER_PLUGIN"),
+      locateInterval: constant(capability, "LOCATE_INTERVAL"),
+    },
+    { ...MEDIA_SOURCE_LIMITS },
+    "MEDIA_SOURCE_LIMITS differ from the player's",
   );
 });
 

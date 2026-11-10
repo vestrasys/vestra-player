@@ -432,6 +432,24 @@ impl Sources {
     pub fn phase(&self) -> Phase {
         self.session.state().phase
     }
+    /// The current source when it is a local regular file the player
+    /// opened (`media.sources.remember`): not a URL or stream, not a
+    /// plugin's own picture, and loaded (ready or ended).
+    pub fn local_file(&self) -> Option<std::path::PathBuf> {
+        #[cfg(feature = "producer-audio")]
+        if self.provider_ticket.is_some() {
+            return None;
+        }
+        if !matches!(self.phase(), Phase::Ready | Phase::Ended) {
+            return None;
+        }
+        let source = self.session.state().source.clone()?;
+        if source.contains("://") {
+            return None;
+        }
+        let path = std::path::PathBuf::from(source);
+        (path.is_absolute() && path.is_file()).then_some(path)
+    }
     /// `audio.addTrack { path, select, expected? }` → the new track;
     /// `audio.selectTrack { id, expected? }` → null. Both act on the current
     /// media load only, conditional on the source stamp like other controls.
@@ -2045,6 +2063,10 @@ impl Sources {
     /// `host.resume`: the next open of `point.source` continues there.
     pub fn resume_next_open(&mut self, point: ResumePoint) {
         self.resume = Some(point);
+    }
+    /// The pending resume point goes (an open meant to use it was refused).
+    pub fn clear_resume(&mut self) {
+        self.resume = None;
     }
 }
 

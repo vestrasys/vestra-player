@@ -7,6 +7,8 @@ pub(crate) mod cover_listing;
 pub(crate) mod effects;
 pub(crate) mod media_copy;
 pub(crate) mod media_jobs;
+pub(crate) mod media_join;
+pub(crate) mod media_sources;
 pub(crate) mod media_tracks;
 pub(crate) mod media_worker;
 pub(crate) mod native_subtitle;

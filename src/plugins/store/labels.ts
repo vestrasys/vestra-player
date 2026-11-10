@@ -23,6 +23,7 @@ export const CAPABILITIES = {
   "subtitles.control": { text: "Load and change subtitles" },
   "media.read": { text: "Take snapshots and export clips" },
   "media.control": { text: "Take snapshots and export clips" },
+  "media.sources": { text: "Remember videos you add and export from them later" },
   "source.resolve": { text: "Resolve online video addresses" },
   "timeline.marks": { text: "Show marks on the progress bar" },
   "window.control": { text: "Adjust the main window (size, on top, picture-in-picture)" },

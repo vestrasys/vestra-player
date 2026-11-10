@@ -432,6 +432,42 @@ impl Host {
                 self.dialog_busy = false;
                 self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
             }
+            Event::SourceLocate(reply, fields) => {
+                if let Err(error) = crate::capabilities::locate_dialog(self, &reply, fields) {
+                    self.respond(reply, Err(error));
+                }
+            }
+            Event::SourceLocated(reply, mut fields, path) => {
+                self.policy.activity(self.now_ms());
+                self.dialog_busy = false;
+                match path.as_deref().map(|path| path.to_str()) {
+                    None => self.respond(reply, Ok(Value::Null)),
+                    Some(None) => self.respond(
+                        reply,
+                        Err(RpcError::new(
+                            "unsupported",
+                            "the file's path is not Unicode",
+                        )),
+                    ),
+                    Some(Some(path)) => {
+                        fields["path"] = json!(path);
+                        let sent = self
+                            .backend
+                            .commands
+                            .send(crate::playback::backend::Command {
+                                reply: reply.clone(),
+                                method: "owner.sourceLocated".into(),
+                                params: fields,
+                            });
+                        if sent.is_err() {
+                            self.respond(
+                                reply,
+                                Err(RpcError::new("backend", "playback worker stopped")),
+                            );
+                        }
+                    }
+                }
+            }
             Event::DialogDone(reply, paths) => {
                 self.policy.activity(self.now_ms());
                 self.dialog_busy = false;
