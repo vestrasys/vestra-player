@@ -1,5 +1,4 @@
-<p align="center"><img src=".github/assets/logo.png" width="96" height="96" alt="Vestra Player logo"></p>
-<h1 align="center">Vestra Player</h1>
+<p align="center"><img src=".github/readme/banner.webp" width="800" alt="Vestra Player: the logo above the player, a meadow from Big Buck Bunny playing, the Adjustments and Effects column open on its Picture panel"></p>
 <p align="center"><b>A fast, keyboard-friendly desktop video player where every feature is a plugin.</b></p>
 <p align="center">
   <a href="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml"><img src="https://github.com/vestrasys/vestra-player/actions/workflows/main.yml/badge.svg?branch=main" alt="CI"></a>
@@ -16,17 +15,11 @@
   <a href="agentic-workflow/">Agentic Workflow</a>
 </p>
 
-<p align="center">
-  <picture>
-    <img src=".github/readme/banner.webp" width="800" alt="Vestra Player windows: the Plugin Store, picture adjustments on a playing video, and Vestra Player AI">
-  </picture>
-</p>
-
 Vestra Player is an open-source video player for macOS and Windows. It aims for rich, discoverable controls (menus, shortcuts, a docked playlist, deep video and audio settings) on a modern, extensible architecture. Playback is handled by [libmpv](https://mpv.io); the interface is native [Slint](https://slint.dev); and everything you use (playback bar, playlist, video and audio adjustments, subtitles, screenshots and export, history, hotkeys, the plugin store) is a TypeScript plugin, and the store adds more, such as the NES emulator VestraNES.
 
 <table>
   <tr>
-    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="The Adjustments and Effects column beside a playing video, its Picture panel with saturation turned down"></a><br><b>Picture adjustments</b>: the Adjustments and Effects column (bottom bar, or Alt+1 for its Picture panel); changes apply while the video plays.</td>
+    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="The Adjustments and Effects column beside a playing video, its Picture panel open"></a><br><b>Picture adjustments</b>: the Adjustments and Effects column (bottom bar, or Alt+1 for its Picture panel); changes apply while the video plays.</td>
     <td width="50%"><a href=".github/readme/plugin-store.webp"><img src=".github/readme/plugin-store.webp" alt="Plugin Store window listing the available plugins"></a><br><b>Plugin Store</b>: install plugins from the bottom bar; they appear right away.</td>
   </tr>
   <tr>
