@@ -277,8 +277,8 @@ const NONE = Object.freeze([]);
 const KEYS = "commands.keys";
 /**
  * One per plugin: the SDK's copy of the key labels of the plugin's own
- * commands. Started by the first `keys` read or `onKeysChange`: it subscribes
- * to `commands.keys` (a mirror, unless a listener or a binding holds it), then
+ * commands. Started by the first `keys` read or a `player.on("commands.keys")`: it
+ * subscribes to `commands.keys` (a mirror, unless a listener or a binding holds it), then
  * asks once; the player pushes every later change. Answers and events carry the
  * binding table's revision, and an older one than what the copy has is dropped.
  */
@@ -287,7 +287,6 @@ class KeysService {
     #keys = new Map();
     #revision = -1;
     #started = false;
-    #listeners = new Set();
     constructor(runtime) {
         this.#runtime = runtime;
     }
@@ -333,24 +332,12 @@ class KeysService {
         if (!changed.length)
             return;
         this.#runtime.changed(KEYS, changed);
-        for (const listener of [...this.#listeners])
-            listener();
     }
     get(id) {
         return this.#keys.get(id) ?? NONE;
     }
-    watch(listener) {
-        this.#listeners.add(listener);
-        const held = this.#runtime.hold(KEYS);
-        return {
-            dispose: async () => {
-                this.#listeners.delete(listener);
-                await held.dispose();
-            },
-        };
-    }
 }
-const keysOf = (runtime) => runtime.service("commands.keys", () => new KeysService(runtime));
+export const keysOf = (runtime) => runtime.service("commands.keys", () => new KeysService(runtime));
 export const commands = (scope) => ({
     add: (options) => new CommandHandle(scope, options),
     keys(id) {
@@ -361,16 +348,5 @@ export const commands = (scope) => ({
         scope.runtime.reading(KEYS);
         scope.runtime.depends(KEYS, id);
         return service.get(id);
-    },
-    onKeysChange(listener) {
-        const service = keysOf(scope.runtime);
-        service.start();
-        const watch = service.watch(() => scope.run(listener));
-        return scope.add({
-            dispose: async () => {
-                scope.forget(watch);
-                await watch.dispose();
-            },
-        });
     },
 });

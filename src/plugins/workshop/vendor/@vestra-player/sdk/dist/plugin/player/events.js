@@ -22,12 +22,16 @@ export const EVENT_NEEDS = {
     "resolvers.fileTypes": "events",
     "video.upscaling.changed": "video.upscaling",
 };
-/** `Player.on`: `listener` hears each `event`, with a copy of its data. */
-export function playerOn(scope, event, listener) {
+/** `Player.on`'s arguments: a {@link HostEvent} name and a function. */
+export function checkOn(event, listener) {
     if (typeof event !== "string" || !Object.hasOwn(EVENT_NEEDS, event))
         throw failure("invalid", `unknown event ${JSON.stringify(event)}; the events are ${Object.keys(EVENT_NEEDS).join(", ")}`);
     if (typeof listener !== "function")
         throw failure("invalid", "on takes an event name and a listener");
+}
+/** `Player.on`: `listener` hears each `event`, with a copy of its data. */
+export function playerOn(scope, event, listener) {
+    checkOn(event, listener);
     const watch = scope.runtime.on(event, 
     // A copy: the same data also feeds the SDK's own state copies.
     // No full pass after it (`runQuiet`): the listener pushes its own

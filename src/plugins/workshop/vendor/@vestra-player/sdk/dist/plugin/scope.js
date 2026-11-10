@@ -1,14 +1,14 @@
 /** Scopes own handles. Disposal runs newest first and never throws. */
 import { failure, toError } from "./errors.js";
-import { commands } from "./commands.js";
+import { commands, keysOf } from "./commands.js";
 import { WHEN } from "./when.js";
 import { dialogs } from "./services/dialogs.js";
 import { ui } from "./view/image.js";
 import { panels } from "./view/panel.js";
 import { windows } from "./view/window.js";
-import { timeline } from "./timeline.js";
+import { timeline, timelineOf } from "./timeline.js";
 import { drops } from "./drops.js";
-import { appearance } from "./appearance.js";
+import { appearance, appearanceOf } from "./appearance.js";
 import { settings } from "./settings.js";
 import { i18n } from "./language.js";
 import { player } from "./player.js";
@@ -25,6 +25,16 @@ import { bindingsApi } from "./bindings.js";
 import { trackedState } from "./state.js";
 import { wire } from "./wire-facade.js";
 import { clipboard, host, power, rendering, secrets, storage, system, tools, videoUpscaling, } from "./services.js";
+/**
+ * The SDK's state copies that a player event keeps current, by event: a
+ * `player.on` listener of the event starts its copy first, so the copy
+ * already holds the event's data when the listener runs.
+ */
+const COPIES = {
+    "commands.keys": (runtime) => keysOf(runtime).start(),
+    "timeline.changed": (runtime) => timelineOf(runtime).start(),
+    "appearance.changed": (runtime) => appearanceOf(runtime).start(),
+};
 export class ScopeImpl {
     runtime;
     #parent;
@@ -49,6 +59,15 @@ export class ScopeImpl {
     }
     get disposed() {
         return this.#disposed || (this.#parent?.disposed ?? false);
+    }
+    /**
+     * Start the SDK's copy that `event` keeps current (`plugin.commands.keys`,
+     * `plugin.timeline`, `plugin.appearance`), for `player.on`; nothing for
+     * an event without one.
+     */
+    followCopy(event) {
+        if (Object.hasOwn(COPIES, event))
+            COPIES[event](this.runtime);
     }
     commands = commands(this);
     when = WHEN;

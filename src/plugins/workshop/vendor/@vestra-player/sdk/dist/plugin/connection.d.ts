@@ -72,6 +72,12 @@ export declare class Connection {
      * changed that state elsewhere asks for it (`reread`).
      */
     readonly rereads: Map<string, () => Promise<unknown>>;
+    /**
+     * Where a state copy (mirror) that threw on an event is reported: the
+     * plugin's error handlers once the root scope exists (`onError`, as for
+     * a listener), the log before.
+     */
+    reportMirror: (error: unknown) => void;
     /** The framework's ears ({@link StateSignals}); silent until `Runtime` sets them. */
     signals: StateSignals;
     /**

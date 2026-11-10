@@ -99,6 +99,12 @@ export class Connection {
      * changed that state elsewhere asks for it (`reread`).
      */
     rereads = new Map();
+    /**
+     * Where a state copy (mirror) that threw on an event is reported: the
+     * plugin's error handlers once the root scope exists (`onError`, as for
+     * a listener), the log before.
+     */
+    reportMirror = (error) => console.error(`[${this.manifest.id}]`, error);
     /** The framework's ears ({@link StateSignals}); silent until `Runtime` sets them. */
     signals = SILENT;
     /**
@@ -266,11 +272,18 @@ export class Connection {
         let entry = this.#events.get(event);
         const created = !entry;
         if (!entry) {
-            entry = { listeners: new Set(), active: 0, whys: new Map() };
+            entry = {
+                listeners: new Set(),
+                mirrors: new Set(),
+                active: 0,
+                whys: new Map(),
+            };
             this.#events.set(event, entry);
         }
         const group = entry;
         group.listeners.add(listener);
+        if (mirror)
+            group.mirrors.add(listener);
         const token = {};
         if (!mirror) {
             group.active++;
@@ -285,7 +298,21 @@ export class Connection {
             const whys = group.told ? allWhys(group) : undefined;
             group.toldWhy = whys?.join("\n");
             group.off = this.host.events.subscribe(event, (data) => {
-                for (const each of [...group.listeners])
+                // Split once: the state copies first, each on its own (one that
+                // throws stops neither the others nor the plugin's listeners),
+                // then the plugin's listeners in order.
+                const mirrors = [];
+                const others = [];
+                for (const each of group.listeners)
+                    (group.mirrors.has(each) ? mirrors : others).push(each);
+                for (const each of mirrors)
+                    try {
+                        each(data);
+                    }
+                    catch (error) {
+                        this.reportMirror(error);
+                    }
+                for (const each of others)
                     each(data);
             }, !group.told, whys);
             this.starting(group.off, (error) => console.error(`[${this.manifest.id}] subscribe ${event}:`, error));
@@ -299,6 +326,7 @@ export class Connection {
                     return;
                 listening = false;
                 group.listeners.delete(listener);
+                group.mirrors.delete(listener);
                 if (!mirror)
                     group.active--;
                 group.whys.delete(token);

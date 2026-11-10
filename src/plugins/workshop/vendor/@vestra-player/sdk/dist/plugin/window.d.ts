@@ -19,8 +19,6 @@ export declare class WindowService {
     start(): void;
     /** The palette, as the `window.state` reply carried it (`plugin.appearance`). */
     appearance: string | undefined;
-    /** The file resolvers' extensions, as the reply carried them (`plugin.resolvers.fileTypes`). */
-    fileTypes: string[] | undefined;
     /** The saved interface language, as the reply carried it (`plugin.appearance.language`). */
     language: string | undefined;
     accept(facts: WindowFacts): void;

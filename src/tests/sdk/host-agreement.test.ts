@@ -673,13 +673,10 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "event:playback.backend",
     "subtitles.state",
   ],
-  "Timeline.onChange": ["event:timeline.changed"],
   "MainWindow.onChange": ["event:window.state"],
-  "Appearance.onChange": ["event:appearance.changed"],
   "PanelSlot.onChange": LAYOUT,
   "Panel.onChange": LAYOUT,
   "BackdropSlot.onChange": LAYOUT,
-  "Resolvers.onFileTypesChange": ["event:resolvers.fileTypes"],
   "Commands.add": [
     "commands.register",
     "commands.update",
@@ -687,7 +684,6 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   ],
   // SDK 1.6.7, player 0.7.6: the labels of the plugin's own commands.
   "Commands.keys": ["commands.keys", "event:commands.keys"],
-  "Commands.onKeysChange": ["event:commands.keys"],
   "Host.run": ["host.run", "source.state?"],
   "Windows.create": ["ui.open", "ui.set", "ui.show", "ui.close"],
   "Panels.mount": [
