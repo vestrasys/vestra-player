@@ -29,8 +29,9 @@ impl Capability for MediaControl {
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         // An export of remembered files' parts (`jobs.start { parts }`) and
         // its check (`jobs.check { parts }`) read the plugin's source
-        // references: they need `media.sources` too, and carry the plugin's
-        // store key. A snapshot's check (`jobs.check { snapshotId }`) does not.
+        // references: they need `media.sources` too. A snapshot's check
+        // (`jobs.check { snapshotId }`) needs only `media.control`, but it
+        // carries the store key as well (below).
         let parts = !params["parts"].is_null();
         if matches!(method, "jobs.check" | "jobs.start")
             && parts

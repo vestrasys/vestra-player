@@ -64,8 +64,9 @@ pub struct JoinRequest {
 }
 
 /// The player's own folder for intermediate parts:
-/// `<app cache>/export-parts`, out of the user's folders and emptied at
-/// start-up ([`clean_scratch`]), so a crash or a power cut mid-export
+/// `<app cache>/export-parts`, out of the user's folders; its leftover
+/// `.vestra-join-*` folders are removed at start-up ([`clean_scratch`]), so a
+/// crash or a power cut mid-export
 /// leaves nothing beside the user's videos.
 pub fn scratch_root() -> Option<PathBuf> {
     crate::platform::app_cache_dir().map(|dir| dir.join("export-parts"))

@@ -1377,9 +1377,9 @@ fn stats(
 }
 
 /// `jobs.check`: its params read (`media_sources::CheckParams`), parts or a
-/// `snapshotId`, one of them (`end` only with a `snapshotId`). A snapshot's check is answered here (its held
-/// file, probed on a short thread), as is a refused request; `false`: a
-/// parts check, for `media_sources::request`.
+/// `snapshotId`, one of them (`end` only with a `snapshotId`). A snapshot's
+/// check is answered here (its held file, probed on a short thread), as is
+/// a refused request; `false`: a parts check, for `media_sources::request`.
 fn snapshot_check(
     jobs: &crate::playback::media_jobs::Jobs,
     events: &mpsc::Sender<Event>,

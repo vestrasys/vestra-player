@@ -196,6 +196,28 @@ impl Mutation {
         }
     }
 }
+/// A mutation's params, read as [`Mutation`], and the host's `store` key.
+/// `store` (`capabilities/media_control.rs`) comes only with a parts
+/// export (`jobs.start { parts }`, whose source references it reads) and is
+/// read only there; the published forms keep their shape, so a `store` in
+/// them is an unknown field (`invalid`), as is `parts: null`.
+fn mutation_of(method: &str, params: &Value) -> Result<(Mutation, Option<String>), RpcError> {
+    let mut params = params
+        .as_object()
+        .cloned()
+        .ok_or_else(|| RpcError::invalid("object required"))?;
+    let store = match params.get("parts") {
+        Some(Value::Null) => return Err(RpcError::invalid("parts must be a list of parts")),
+        Some(_) if method == "jobs.start" => params
+            .remove("store")
+            .and_then(|store| store.as_str().map(str::to_owned)),
+        _ => None,
+    };
+    params.insert("method".into(), json!(method));
+    let mutation = serde_json::from_value(Value::Object(params))
+        .map_err(|e| RpcError::invalid(e.to_string()))?;
+    Ok((mutation, store))
+}
 fn safe(value: u64) -> bool {
     value > 0 && value <= Book::MAX_REVISION
 }
@@ -339,18 +361,7 @@ impl Jobs {
                 }
             });
         }
-        let mut params = params
-            .as_object()
-            .cloned()
-            .ok_or_else(|| RpcError::invalid("object required"))?;
-        // The host's own field (`capabilities/media_control.rs`): whose
-        // source references a parts export reads.
-        let store = params
-            .remove("store")
-            .and_then(|store| store.as_str().map(str::to_owned));
-        params.insert("method".into(), json!(method));
-        let mutation: Mutation = serde_json::from_value(Value::Object(params))
-            .map_err(|e| RpcError::invalid(e.to_string()))?;
+        let (mutation, store) = mutation_of(method, params)?;
         let operation = mutation.id();
         if !safe(operation) {
             return Err(RpcError::invalid("positive safe operationId required"));
@@ -1043,6 +1054,59 @@ mod tests {
         assert_eq!(error.code, "missing");
         assert!(error.message.contains("part 0"));
         assert!(jobs.join_entries(&parts, "instance:other").is_ok());
+    }
+
+    #[test]
+    fn only_a_parts_export_carries_the_hosts_store() {
+        let code = |method: &str, params: Value| mutation_of(method, &params).err().map(|e| e.code);
+        let stamp = json!({"generation":1,"intentVersion":1});
+        let destination = if cfg!(windows) {
+            r"C:\clips\clip.mp4"
+        } else {
+            "/clips/clip.mp4"
+        };
+        // The published forms are as before the parts export: `store` is an
+        // unknown field, and so is a null `parts`.
+        for (method, params) in [
+            (
+                "snapshot.capture",
+                json!({"operationId":1,"expected":stamp,"store":"k"}),
+            ),
+            (
+                "snapshot.release",
+                json!({"operationId":1,"snapshotId":1,"store":"k"}),
+            ),
+            (
+                "jobs.start",
+                json!({"operationId":1,"snapshotId":1,"kind":"rawMp4","destination":destination,"end":2,"store":"k"}),
+            ),
+            (
+                "jobs.cancel",
+                json!({"operationId":1,"jobId":1,"store":"k"}),
+            ),
+            (
+                "jobs.start",
+                json!({"operationId":1,"snapshotId":1,"kind":"rawMp4","destination":destination,"end":2,"parts":null}),
+            ),
+        ] {
+            assert_eq!(
+                code(method, params.clone()),
+                Some("invalid".into()),
+                "{params}"
+            );
+        }
+        // Without `store` they read as before.
+        assert_eq!(
+            code(
+                "jobs.start",
+                json!({"operationId":1,"snapshotId":1,"kind":"rawMp4","destination":destination,"end":2}),
+            ),
+            None
+        );
+        // A parts export: the store is the host's, taken out before reading.
+        let parts = json!({"operationId":1,"parts":[{"source":"t","start":0,"end":1}],"kind":"rawCopy","destination":destination,"store":"k"});
+        let (_, store) = mutation_of("jobs.start", &parts).unwrap();
+        assert_eq!(store.as_deref(), Some("k"));
     }
 
     #[test]
