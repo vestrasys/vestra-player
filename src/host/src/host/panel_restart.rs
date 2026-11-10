@@ -335,18 +335,26 @@ impl Host {
         let text = self.restarts.text_of(key).unwrap_or("").to_owned();
         self.set_restarting_line(key, &text);
     }
+    /// The line over panel `key` (`""`: none), in the shell and the floating
+    /// window. A line that goes also forgets whether it had the keys
+    /// (`owner<key>-restarting-focused`): the overlay is gone, and a later
+    /// `panel_back` must not read a stale `true` (whatever cleared it:
+    /// `panel_back`, which read it first, or `restart_over`).
     fn set_restarting_line(&self, key: u64, text: &str) {
-        let property = restarting_property(self.restarts.compiled_key(key));
+        let shell_key = self.restarts.compiled_key(key);
+        let branch = self.shell_compiled.get(&key).copied().unwrap_or(key);
         let value = SValue::String(text.into());
+        let windows = self
+            .shell
+            .iter()
+            .map(|shell| (shell, shell_key))
+            .chain(self.floating.iter().map(|f| (&f.instance, branch)));
         // A panel not compiled into a window has no property there.
-        if let Some(shell) = &self.shell {
-            let _ = shell.set_property(&property, value.clone());
-        }
-        if let Some(floating) = &self.floating {
-            let branch = self.shell_compiled.get(&key).copied().unwrap_or(key);
-            let _ = floating
-                .instance
-                .set_property(&restarting_property(branch), value);
+        for (window, compiled) in windows {
+            let _ = window.set_property(&restarting_property(compiled), value.clone());
+            if text.is_empty() {
+                let _ = window.set_property(&restarting_focus_property(compiled), false.into());
+            }
         }
     }
     /// The kept panels follow their plugins' restarts (every tick): moved
