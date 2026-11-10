@@ -803,8 +803,8 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
     assert.equal(host.sent("audio.addTrack").length, 0, "off by default");
     await host.command("audio.workbench").run();
     host.mounted().emit("auto-load-changed", true);
-    await host.settle(20);
-    assert.deepEqual(host.sent("audio.addTrack").map((p) => [p.path, p.select]), [
+    // The plugin lists the folder itself, which `settle` does not wait for.
+    await until(host, () => host.sent("audio.addTrack").map((p) => [p.path, p.select]), [
       [join(folder, "film.ac3"), false],
       [join(folder, "film.jpn.mka"), false],
     ]);
@@ -820,13 +820,11 @@ test("A11: auto-loading same-named audio adds same-named audio next to a local f
     assert.equal(next.sent("audio.addTrack").length, 0);
     next.openElsewhere(join(folder, "film.mkv"));
     next.setSource({ audioTracks: [track(1)] });
-    await next.settle(20);
-    assert.equal(next.sent("audio.addTrack").length, 2);
+    await until(next, () => next.sent("audio.addTrack").length, 2);
     // The closer video gets the file the first one left.
     next.openElsewhere(join(folder, "film.Extended.mkv"));
     next.setSource({ audioTracks: [track(1)] });
-    await next.settle(20);
-    assert.deepEqual(next.sent("audio.addTrack").slice(2).map((p) => p.path), [join(folder, "film.Extended.ac3")]);
+    await until(next, () => next.sent("audio.addTrack").slice(2).map((p) => p.path), [join(folder, "film.Extended.ac3")]);
     await started.stop();
   } finally {
     await rm(folder, { recursive: true, force: true });
@@ -885,9 +883,12 @@ test("G16: the palette lists System Default and the devices (no menu); choosing 
     assert.equal(host.osd.at(-1), "Audio output: System Default");
     assert.equal(window.props["device-index"], 0);
     window.emit("device-selected", 1);
-    await host.settle(350);
-    assert.equal((await savedJson(join(data, "settings.json"))).device, SPEAKERS.id);
-    assert.equal((await savedJson(join(data, "settings.json"))).deviceName, SPEAKERS.name);
+    // The store writes 300 ms after the last change: wait for the file, not for a fixed time.
+    const savedDevice = async () => {
+      const saved = await savedJson(join(data, "settings.json")).catch(() => null);
+      return saved && { device: saved.device, deviceName: saved.deviceName };
+    };
+    await until(host, savedDevice, { device: SPEAKERS.id, deviceName: SPEAKERS.name });
     // A refused switch keeps the previous device.
     host.handle("player.setAudioDevice", () => {
       throw new HostError("busy", "设备被占用");
@@ -1276,10 +1277,13 @@ test("Audio… (Alt+2) opens the adjust column at the Audio tab, and closes it f
   await stop();
 });
 
-/** Wait (up to 2 s of host time) until `read()` deep-equals `expected`, then assert that same value. */
+/**
+ * Wait (up to 2 s of host time) until `read()` deep-equals `expected`, then assert that same value.
+ * Also for what `host.settle()` does not wait for: the plugin's own file work and debounced saves.
+ */
 async function until(host: TestHost, read: () => unknown, expected: unknown) {
-  for (let i = 0; i < 40 && !isDeepStrictEqual(read(), expected); i++) await host.settle(50);
-  assert.deepEqual(read(), expected);
+  for (let i = 0; i < 40 && !isDeepStrictEqual(await read(), expected); i++) await host.settle(50);
+  assert.deepEqual(await read(), expected);
 }
 
 test("the panel shows each command's current key: the default, a user's own, none once cleared", async () => {
