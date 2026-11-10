@@ -593,6 +593,11 @@ impl Subtitles {
             }
         }
     }
+    /// `owner` set a subtitle style: what its next activation sets again
+    /// (lazy activation's `held`; a track or a file is the current media's).
+    pub fn holds_style(&self, owner: u64) -> bool {
+        self.styles.contains_key(&owner)
+    }
     /// `owner` contributed a track, a style or a file (lazy activation: it
     /// stays running).
     pub fn holds(&self, owner: u64) -> bool {

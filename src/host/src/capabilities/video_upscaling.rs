@@ -52,6 +52,7 @@ impl Capability for VideoUpscaling {
                 params: forwarded,
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
+        host.worker_requested(reply.owner);
         Ok(None)
     }
 }

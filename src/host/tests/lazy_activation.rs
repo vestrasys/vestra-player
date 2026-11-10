@@ -303,6 +303,154 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
     }
 }
 
+const TAKES_UP: &str = "vestra.fixture-takes-up";
+
+/// A plugin whose first run holds nothing live is parked; woken later by its
+/// command, it takes up something only its process can serve in the playback
+/// worker (as Shader Upscale's shaders once turned on; here the video view,
+/// which a headless player takes too) and saves that choice. It is resident
+/// from then on: the next start launches it, and its activation takes up
+/// the resource again, instead of replaying its command without a process
+/// (the shaders were not applied until its window opened).
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_plugin_that_takes_up_a_live_resource_after_its_first_run_starts_at_the_next_launch() {
+    let root = root_with(|plugins| {
+        vec![package(
+            plugins,
+            TAKES_UP,
+            &["commands", "processing.video", "playback.read", "events"],
+            format!(
+                "export default async function activate(plugin) {{\n\
+                 const store = plugin.storage.json(\"choice\", {{ defaults: {{ on: false }}, debounceMs: 0 }});\n\
+                 let view = null;\n\
+                 const apply = () => {{\n\
+                 if (!store.value.on) return;\n\
+                 (view ??= plugin.video.view()).set({{ zoom: 1.5 }});\n\
+                 console.error(`{TAKES_UP} applied`);\n\
+                 }};\n\
+                 plugin.commands.add({{ id: \"on\", path: [\"Tools\", \"Zoom\"],\n\
+                 run: () => {{ store.save({{ on: true }}); apply(); }} }});\n\
+                 apply();\n}}\n"
+            ),
+        )]
+    });
+    let lazy = [("VESTRA_IDLE_MS", "500")];
+
+    // First run: nothing live, parked at once with its command recorded.
+    let first = run(root.path(), 5, &lazy);
+    assert!(
+        first.contains(&format!("lazy: {TAKES_UP} classified lazy")),
+        "{first}"
+    );
+    assert!(!first.contains(&format!("{TAKES_UP} applied")), "{first}");
+    assert!(
+        first.contains(&format!("lazy: {TAKES_UP} parked")),
+        "{first}"
+    );
+
+    // Replayed, woken by its command, which takes up the video view. The
+    // default idle time (30 s): the player quits before any idle standby
+    // asks the worker again, as the user who turns shaders on and quits.
+    let woken = [("VESTRA_TEST_EXECUTE", "vestra.fixture-takes-up/on@2500")];
+    let second = run(root.path(), 6, &woken);
+    assert!(
+        second.contains(&format!("lazy: {TAKES_UP} replayed (1 calls)")),
+        "{second}"
+    );
+    assert!(second.contains(&format!("{TAKES_UP} applied")), "{second}");
+    assert!(
+        second.contains(&format!("lazy: {TAKES_UP} resident from now on")),
+        "{second}"
+    );
+    assert!(
+        recordings(root.path())
+            .iter()
+            .any(|r| r["residentAtReady"] == true),
+        "a resident recording: {:?}",
+        recordings(root.path())
+    );
+
+    // Launched at start, not replayed: its activation applies its choice.
+    let third = run(root.path(), 4, &lazy);
+    assert!(
+        third.contains(&format!(
+            "lazy: {TAKES_UP} starts: resident at its last ready"
+        )),
+        "{third}"
+    );
+    assert!(
+        !third.contains(&format!("lazy: {TAKES_UP} replayed")),
+        "{third}"
+    );
+    assert!(third.contains(&format!("{TAKES_UP} applied")), "{third}");
+}
+
+const SETS_AFTER_READY: &str = "vestra.fixture-sets-after-ready";
+
+/// A first run (an install, or any upgrade) whose activation returns before
+/// it takes up what its saved settings ask for: the request reaches the
+/// worker after the ready, while the classification's question is out (held
+/// out 300 ms by `VESTRA_TEST_CLASSIFY_LATE`, so the request always lands in
+/// that window), and the answer, asked before the request, says nothing is
+/// held. The question is asked again; the run is classified resident, not
+/// parked with a lazy recording, and the next start launches it.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked() {
+    let root = root_with(|plugins| {
+        vec![package(
+            plugins,
+            SETS_AFTER_READY,
+            &["commands", "processing.video"],
+            format!(
+                "export default async function activate(plugin) {{\n\
+                 plugin.commands.add({{ id: \"noop\", path: [\"Tools\", \"Noop\"], run: () => {{}} }});\n\
+                 setTimeout(() => {{\n\
+                 plugin.video.view().set({{ zoom: 1.5 }});\n\
+                 console.error(`{SETS_AFTER_READY} applied`);\n\
+                 }}, 0);\n}}\n"
+            ),
+        )]
+    });
+    let first = run(root.path(), 4, &[("VESTRA_TEST_CLASSIFY_LATE", "300")]);
+    assert!(
+        first.contains(&format!("{SETS_AFTER_READY} applied")),
+        "{first}"
+    );
+    let applied = first.find(&format!("{SETS_AFTER_READY} applied")).unwrap();
+    let handled = first
+        .find("VESTRA_TEST_CLASSIFY_LATE")
+        .unwrap_or_else(|| panic!("{first}"));
+    assert!(applied < handled, "the request came while asked: {first}");
+    assert!(
+        first.contains(&format!("lazy: {SETS_AFTER_READY} classified resident")),
+        "{first}"
+    );
+    assert!(
+        !first.contains(&format!("lazy: {SETS_AFTER_READY} parked")),
+        "{first}"
+    );
+    assert!(
+        recordings(root.path())
+            .iter()
+            .any(|r| r["residentAtReady"] == true),
+        "a resident recording: {:?}\n{first}",
+        recordings(root.path())
+    );
+    let second = run(root.path(), 3, &[]);
+    assert!(
+        second.contains(&format!(
+            "lazy: {SETS_AFTER_READY} starts: resident at its last ready"
+        )),
+        "{second}"
+    );
+    assert!(
+        second.contains(&format!("{SETS_AFTER_READY} applied")),
+        "{second}"
+    );
+}
+
 /// The old lazy activation pinned at most eight first runs in flight
 /// (`FIRST_RUNS`), built-ins
 /// included. Now built-ins start outside every limit (supervisor.md §5
