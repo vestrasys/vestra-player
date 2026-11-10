@@ -18,7 +18,7 @@
 
 <p align="center">
   <picture>
-    <img src=".github/readme/banner.webp" width="800" alt="Vestra Player windows: the Plugin Store, picture adjustments on a playing video, and Vestra Player AI">
+    <img src=".github/readme/banner.webp" width="800" alt="The Vestra Player logo above the player: a meadow from Big Buck Bunny playing, the Adjustments and Effects column open on its Picture panel">
   </picture>
 </p>
 
@@ -26,7 +26,7 @@ Vestra Player is an open-source video player for macOS and Windows. It aims for 
 
 <table>
   <tr>
-    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="The Adjustments and Effects column beside a playing video, its Picture panel with saturation turned down"></a><br><b>Picture adjustments</b>: the Adjustments and Effects column (bottom bar, or Alt+1 for its Picture panel); changes apply while the video plays.</td>
+    <td width="50%"><a href=".github/readme/picture-adjustments.webp"><img src=".github/readme/picture-adjustments.webp" alt="The Adjustments and Effects column beside a playing video, its Picture panel open"></a><br><b>Picture adjustments</b>: the Adjustments and Effects column (bottom bar, or Alt+1 for its Picture panel); changes apply while the video plays.</td>
     <td width="50%"><a href=".github/readme/plugin-store.webp"><img src=".github/readme/plugin-store.webp" alt="Plugin Store window listing the available plugins"></a><br><b>Plugin Store</b>: install plugins from the bottom bar; they appear right away.</td>
   </tr>
   <tr>
