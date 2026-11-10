@@ -83,6 +83,21 @@ pub(crate) const TRIGGERS: &[&str] = &[
     "ui.callback",
 ];
 
+/// What of a run's resources in the playback worker (its answer to
+/// `owner.resources`) its next activation takes up again from its own
+/// settings (shaders, a processing chain, render options, a subtitle style,
+/// the video view, upscaling it turned on): the worker's `held`, or `None`
+/// when there is none. The rest of `live` is work in flight (a source
+/// resolution, a snapshot or job, a producer stream or the audio device, an
+/// upscaling request waiting, a subtitle track of the current media): it
+/// keeps a run up while it lasts, never makes it resident.
+fn held_in_worker(answer: &Value) -> Option<Value> {
+    answer["held"]
+        .as_array()
+        .filter(|held| !held.is_empty())
+        .map(|held| Value::Array(held.clone()))
+}
+
 /// What the playback worker was asked for a run (`owner.resources`).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Ask {
@@ -122,6 +137,11 @@ enum Busy {
     /// panel is never live, so its plugin stays Normal, and this keeps it
     /// running only while the tab is shown.
     ShownTab,
+    /// What it holds in the playback worker is asked again after a request
+    /// of its there (`worker_requested`), not answered yet: a first run
+    /// whose class came back lazy is not parked before the answer says
+    /// whether it took up something its next start must restore.
+    WorkerAsk,
 }
 
 /// The Host's side of on-demand start (formerly `lazy.rs`'s `Lazy`): what the
@@ -1082,6 +1102,9 @@ impl Host {
         if matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_))) {
             busy.insert(Busy::Classify);
         }
+        if self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner) {
+            busy.insert(Busy::WorkerAsk);
+        }
         if !matches!(
             self.activation_status(owner, now),
             Ok(activation::Status::Ready)
@@ -1326,6 +1349,17 @@ impl Host {
     /// of a standby the core asked for (`QueryResources`): it goes to
     /// standby if it is still idle and nothing it holds is live.
     pub(crate) fn resources_answer(&mut self, owner: u64, answer: &Value) {
+        if !self.on_demand.refreshing.contains(&owner)
+            && matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_)))
+        {
+            let now = self.now_ms();
+            if self.probe_hold_answer(owner, answer, now) {
+                return;
+            }
+        }
+        self.resources_answer_now(owner, answer);
+    }
+    fn resources_answer_now(&mut self, owner: u64, answer: &Value) {
         // Asked only when nothing else was: this answer is the refresh's.
         if self.on_demand.refreshing.remove(&owner) {
             self.refresh_answer(owner, answer);
@@ -1339,8 +1373,27 @@ impl Host {
     }
     fn asked_answer(&mut self, owner: u64, answer: &Value) {
         match self.on_demand.asked.remove(&owner) {
-            Some(Ask::Classify(_)) => {
+            Some(Ask::Classify(ready)) => {
                 if !self.plugins.contains_key(&owner) {
+                    return;
+                }
+                // A request to the worker came after this ask (a first run
+                // that sets its saved shaders just after its ready): the
+                // answer may not count it. Asked again before a lazy class
+                // parks it, within the same deadline (`classify_timeouts`).
+                if held_in_worker(answer).is_none()
+                    && self.on_demand.stale.remove(&owner)
+                    && self
+                        .backend
+                        .commands
+                        .send(Command {
+                            reply: Reply { owner, id: 0 },
+                            method: "owner.resources".into(),
+                            params: Value::Null,
+                        })
+                        .is_ok()
+                {
+                    self.on_demand.asked.insert(owner, Ask::Classify(ready));
                     return;
                 }
                 let resident = answer["live"]
@@ -1401,8 +1454,9 @@ impl Host {
                 );
             }
             Err(reason) => {
-                // Classified lazy, it holds something live in the worker
-                // now: resident from now on (`holds_live`).
+                // Classified lazy, it holds something in the worker its next
+                // activation takes up again: resident from now on
+                // (`holds_live`). Work in flight there only keeps it up.
                 self.acquired_live(owner, answer);
                 // Asked again after another idle period.
                 if self.on_demand.told.insert(owner, reason) != Some(reason) {
@@ -1450,7 +1504,7 @@ impl Host {
         }
     }
     /// The worker's answer to `worker_requested`'s ask: the run's resolvers
-    /// as they are now (for a checkpoint at quit), and a live resource
+    /// as they are now (for a checkpoint at quit), and a held resource
     /// makes it resident (`acquired_live`).
     fn refresh_answer(&mut self, owner: u64, answer: &Value) {
         if !self.plugins.contains_key(&owner) {
@@ -1461,17 +1515,19 @@ impl Host {
         }
         self.acquired_live(owner, answer);
     }
-    /// `answer` (the worker's `{ live, resolvers }` for `owner`) names a live
-    /// resource: a run that may still go to standby is resident from now on,
-    /// and its checkpoint says so (`Supervisor::holds_live`).
+    /// `answer` (the worker's `{ live, held, resolvers }` for `owner`) names a
+    /// held resource (`held_in_worker`): a run that may still go to standby
+    /// is resident from now on, and its checkpoint says so
+    /// (`Supervisor::holds_live`). Work in flight (a resolution, a job, a
+    /// stream, a request waiting) never does: it keeps the run up only, as
+    /// before, and it is asked again after another idle period.
     fn acquired_live(&mut self, owner: u64, answer: &Value) {
-        let Some(live) = answer["live"].as_array().filter(|live| !live.is_empty()) else {
+        let Some(live) = held_in_worker(answer) else {
             return;
         };
         if self.on_demand.probe.park_all {
             return;
         }
-        let live = Value::Array(live.clone());
         let now = self.now_ms();
         self.supervisor.set_now(now);
         if self.supervisor.holds_live(Pid(owner)) {
@@ -1553,6 +1609,7 @@ impl Host {
             self.holds_tick(now);
         }
         self.probe_tick(now);
+        self.probe_late_tick(now);
         self.memory_tick(now);
         if now < self.on_demand.next_check {
             return;
@@ -1614,6 +1671,40 @@ mod tests {
                 "ui.callback"
             ]
         );
+    }
+
+    /// Only what a plugin's next activation takes up again makes a lazy run
+    /// resident (`acquired_live`, the standby path, the quit checkpoint):
+    /// work in flight in the worker (a source resolution, a snapshot or a job
+    /// such as Clip Export's, a producer stream or the audio device such as
+    /// VestraNES's, an upscaling state read waiting) keeps it up only; held
+    /// shaders (Shader Upscale), a filter chain or the view do.
+    #[test]
+    fn only_held_worker_resources_make_a_lazy_run_resident() {
+        for live in [
+            json!(["a source resolution in flight"]),
+            json!(["a snapshot or a job"]),
+            json!(["a producer stream", "the audio device"]),
+            json!(["video upscaling"]),
+            json!(["a subtitle track or style"]),
+        ] {
+            let answer = json!({"live": live, "held": [], "resolvers": []});
+            assert_eq!(held_in_worker(&answer), None, "{answer}");
+        }
+        // An answer without `held` (none counts) never promotes.
+        assert_eq!(held_in_worker(&json!({"live": ["video shaders"]})), None);
+        assert_eq!(held_in_worker(&Value::Null), None);
+        for held in [
+            "video shaders",
+            "a processing chain",
+            "the video view",
+            "the video render options",
+            "a subtitle style",
+            "video upscaling",
+        ] {
+            let answer = json!({"live": [held, "a snapshot or a job"], "held": [held]});
+            assert_eq!(held_in_worker(&answer), Some(json!([held])), "{answer}");
+        }
     }
 
     /// The shared runner waits at least 30 s without a member (was 1 s), and at

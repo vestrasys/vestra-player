@@ -386,6 +386,71 @@ fn a_plugin_that_takes_up_a_live_resource_after_its_first_run_starts_at_the_next
     assert!(third.contains(&format!("{TAKES_UP} applied")), "{third}");
 }
 
+const SETS_AFTER_READY: &str = "vestra.fixture-sets-after-ready";
+
+/// A first run (an install, or any upgrade) whose activation returns before
+/// it takes up what its saved settings ask for: the request reaches the
+/// worker after the ready, while the classification's question is out (held
+/// out 300 ms by `VESTRA_TEST_CLASSIFY_LATE`, so the request always lands in
+/// that window), and the answer, asked before the request, says nothing is
+/// held. The question is asked again; the run is classified resident, not
+/// parked with a lazy recording, and the next start launches it.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked() {
+    let root = root_with(|plugins| {
+        vec![package(
+            plugins,
+            SETS_AFTER_READY,
+            &["commands", "processing.video"],
+            format!(
+                "export default async function activate(plugin) {{\n\
+                 plugin.commands.add({{ id: \"noop\", path: [\"Tools\", \"Noop\"], run: () => {{}} }});\n\
+                 setTimeout(() => {{\n\
+                 plugin.video.view().set({{ zoom: 1.5 }});\n\
+                 console.error(`{SETS_AFTER_READY} applied`);\n\
+                 }}, 0);\n}}\n"
+            ),
+        )]
+    });
+    let first = run(root.path(), 4, &[("VESTRA_TEST_CLASSIFY_LATE", "300")]);
+    assert!(
+        first.contains(&format!("{SETS_AFTER_READY} applied")),
+        "{first}"
+    );
+    let applied = first.find(&format!("{SETS_AFTER_READY} applied")).unwrap();
+    let handled = first
+        .find("VESTRA_TEST_CLASSIFY_LATE")
+        .unwrap_or_else(|| panic!("{first}"));
+    assert!(applied < handled, "the request came while asked: {first}");
+    assert!(
+        first.contains(&format!("lazy: {SETS_AFTER_READY} classified resident")),
+        "{first}"
+    );
+    assert!(
+        !first.contains(&format!("lazy: {SETS_AFTER_READY} parked")),
+        "{first}"
+    );
+    assert!(
+        recordings(root.path())
+            .iter()
+            .any(|r| r["residentAtReady"] == true),
+        "a resident recording: {:?}\n{first}",
+        recordings(root.path())
+    );
+    let second = run(root.path(), 3, &[]);
+    assert!(
+        second.contains(&format!(
+            "lazy: {SETS_AFTER_READY} starts: resident at its last ready"
+        )),
+        "{second}"
+    );
+    assert!(
+        second.contains(&format!("{SETS_AFTER_READY} applied")),
+        "{second}"
+    );
+}
+
 /// The old lazy activation pinned at most eight first runs in flight
 /// (`FIRST_RUNS`), built-ins
 /// included. Now built-ins start outside every limit (supervisor.md §5

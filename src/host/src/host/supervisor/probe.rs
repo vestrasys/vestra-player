@@ -26,6 +26,11 @@
 //!   plugin command that long after start, as a menu click would, or
 //!   `@park+<ms>` that long after the plugin's next park. Headless tests
 //!   have no other way in without input.
+//! - `VESTRA_TEST_CLASSIFY_LATE=<ms>`: the playback worker's answer to a
+//!   run's first classification question is handled that long after it
+//!   came (under the 5 s classification deadline), so a request the
+//!   plugin sends to the worker just after its ready lands while the
+//!   question is out, deterministically.
 //!
 //! Source resolvers live in the playback worker and are not listed (no
 //! built-in registers one; `owner.resources` reports a lazy plugin's).
@@ -38,6 +43,12 @@ pub(crate) struct Probe {
     file: Option<PathBuf>,
     pub park_all: bool,
     wake_at: Option<u64>,
+    classify_late: Option<u64>,
+    /// Classification answers held back (`VESTRA_TEST_CLASSIFY_LATE`):
+    /// owner, answer, when it is handled.
+    late: Vec<(u64, Value, u64)>,
+    /// Runs whose first classification answer was held back already.
+    delayed: BTreeSet<u64>,
 }
 impl Probe {
     pub fn from_env() -> Self {
@@ -49,6 +60,39 @@ impl Probe {
             wake_at: std::env::var("VESTRA_TEST_WAKE")
                 .ok()
                 .and_then(|ms| ms.parse().ok()),
+            classify_late: std::env::var("VESTRA_TEST_CLASSIFY_LATE")
+                .ok()
+                .and_then(|ms| ms.parse().ok()),
+            late: Vec::new(),
+            delayed: BTreeSet::new(),
+        }
+    }
+}
+
+impl Host {
+    /// `VESTRA_TEST_CLASSIFY_LATE`: `answer` is `owner`'s first answer to a
+    /// classification question; held back (`true`), it is handled by
+    /// `probe_late_tick` once due.
+    pub(super) fn probe_hold_answer(&mut self, owner: u64, answer: &Value, now: u64) -> bool {
+        let probe = &mut self.on_demand.probe;
+        let Some(late) = probe.classify_late else {
+            return false;
+        };
+        if !probe.delayed.insert(owner) {
+            return false;
+        }
+        probe.late.push((owner, answer.clone(), now + late));
+        true
+    }
+    /// The held-back classification answers that are due are handled now.
+    pub(super) fn probe_late_tick(&mut self, now: u64) {
+        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.on_demand.probe.late)
+            .into_iter()
+            .partition(|(_, _, at)| *at <= now);
+        self.on_demand.probe.late = waiting;
+        for (owner, answer, _) in due {
+            diag!("lazy: VESTRA_TEST_CLASSIFY_LATE: owner {owner}'s answer handled");
+            self.resources_answer_now(owner, &answer);
         }
     }
 }

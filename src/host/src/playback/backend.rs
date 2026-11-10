@@ -452,7 +452,30 @@ impl Backend {
                                 if upscaling.holds(owner) {
                                     live.push("video upscaling");
                                 }
-                                let answer = json!({"live":live,
+                                // Of `live`, what the plugin's next activation
+                                // takes up again from its settings (the rest
+                                // is work in flight: a resolution, a job, a
+                                // stream, a request waiting).
+                                let mut held = Vec::new();
+                                if processing.holds(owner) {
+                                    held.push("a processing chain");
+                                }
+                                if subtitles.holds_style(owner) {
+                                    held.push("a subtitle style");
+                                }
+                                if view.owner() == Some(owner) {
+                                    held.push("the video view");
+                                }
+                                if render_options.owner() == Some(owner) {
+                                    held.push("the video render options");
+                                }
+                                if shaders.holds(owner) {
+                                    held.push("video shaders");
+                                }
+                                if upscaling.owns(owner) {
+                                    held.push("video upscaling");
+                                }
+                                let answer = json!({"live":live,"held":held,
                                     "resolvers":sources.resolvers_of(owner)});
                                 let _ = events.send(Event::OwnerResources(owner, answer));
                                 continue;

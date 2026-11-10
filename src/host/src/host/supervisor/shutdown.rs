@@ -117,11 +117,12 @@ impl Host {
                 .get(&owner)
                 .cloned()
                 .unwrap_or(Value::Null);
-            // Something live in the playback worker, or a request there
-            // whose answer has not come (`worker_requested`): the safe side,
-            // as a classification without an answer. The next start
-            // launches it, and its ready classifies it again.
-            let live = backend["live"].as_array().is_some_and(|l| !l.is_empty());
+            // Something held in the playback worker (`held_in_worker`: work
+            // in flight there is not), or a request there whose answer has
+            // not come (`worker_requested`): the safe side, as a
+            // classification without an answer. The next start launches it,
+            // and its ready classifies it again.
+            let live = held_in_worker(&backend).is_some();
             let unanswered =
                 self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner);
             if (live || unanswered) && !self.on_demand.probe.park_all {
