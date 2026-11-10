@@ -16,6 +16,7 @@ mod lifecycle;
 mod menus;
 mod mounts;
 pub(crate) mod palette;
+pub(crate) mod panel_restart;
 mod rendering;
 mod restart;
 pub(crate) mod revised;
@@ -98,6 +99,11 @@ pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
 pub(crate) fn panel_key(owner: u64, slot: composition::Slot) -> u64 {
     debug_assert!(owner <= u64::MAX / PANEL_SLOTS, "owner {owner} too large");
     owner.wrapping_mul(PANEL_SLOTS) + slot as u64
+}
+/// Panel `key` under run `to` (its slot kept): a plugin's panels moving to
+/// its next run (a woken plugin's tabs, a restarted plugin's kept panels).
+pub(crate) fn rekey_panel(key: u64, to: u64) -> u64 {
+    to.wrapping_mul(PANEL_SLOTS) + key % PANEL_SLOTS
 }
 /// The plugin a panel key belongs to.
 pub(crate) fn panel_plugin(key: u64) -> u64 {
@@ -424,6 +430,9 @@ pub(crate) struct Host {
     /// its branch was compiled under (different after a parked plugin woke
     /// under a new owner, until its new mount compiles it).
     pub(crate) shell_compiled: BTreeMap<u64, u64>,
+    /// Panels kept while their plugin restarts after a crash, and the keys
+    /// their branches were compiled under (`panel_restart.rs`).
+    pub(crate) restarts: panel_restart::Restarts,
     /// A current tab needs its panel compiled (`prepare_mount_tick`).
     pub(crate) shell_refresh: bool,
     /// The start-up mounts were compiled into the shell (or there were

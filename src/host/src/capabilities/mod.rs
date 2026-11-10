@@ -39,7 +39,7 @@ mod subtitles_read;
 mod timeline_marks;
 mod ui_dialog;
 mod ui_drop;
-mod ui_mount;
+pub(crate) mod ui_mount;
 mod ui_osd;
 mod ui_settings;
 mod ui_theme;

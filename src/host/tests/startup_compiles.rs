@@ -64,13 +64,14 @@ fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
             "plugin.player.onChange(() => {});\n",
         ),
         // Its first run (the warm-up) records it resident; from the next
-        // start on it exits while it waits for its panel.
+        // start on it exits as soon as its panel is in the shell (each run
+        // mounts it, then crashes: the crash loop).
         ThirdParty::Crashing => (
             serde_json::json!(["ui.mount", "events", "playback.read"]),
             "plugin.player.onChange(() => {});\n\
              const mark = join(plugin.dataDirectory, \"ran\");\n\
-             if (existsSync(mark)) setTimeout(() => process.exit(7), 50);\n\
-             else { mkdirSync(plugin.dataDirectory, { recursive: true }); \
+             crash = existsSync(mark);\n\
+             if (!crash) { mkdirSync(plugin.dataDirectory, { recursive: true }); \
              writeFileSync(mark, \"1\"); }\n",
         ),
         _ => (serde_json::json!(["ui.mount"]), ""),
@@ -85,8 +86,9 @@ fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
             format!(
                 "import {{ existsSync, mkdirSync, writeFileSync }} from \"node:fs\";\n\
                  import {{ join }} from \"node:path\";\n\
-                 export default function activate(plugin) {{\n{listen}\
-                 plugin.panels.mount(\"sidebar\", \"ui/list.slint\", {{ title: \"Fixture\" }});\n}}\n"
+                 export default function activate(plugin) {{\nlet crash = false;\n{listen}\
+                 const panel = plugin.panels.mount(\"sidebar\", \"ui/list.slint\", {{ title: \"Fixture\" }});\n\
+                 if (crash) panel.ready.then(() => setTimeout(() => process.exit(7), 20));\n}}\n"
             ),
         ),
         (
@@ -365,6 +367,57 @@ fn report(name: &str, log: &str) -> (Vec<Compile>, Vec<u64>) {
     (compiles, opens)
 }
 
+/// The crash loop (user ruling 2026-11-10, `host/panel_restart.rs`): the
+/// plugin's tab compiles once, when it first mounts; while it crashes and
+/// is restarted (four times) its panel stays and each restart mounts the
+/// same panel again into the kept branch: no compile. Once it hits its
+/// start limit its panel goes: exactly one compile, without it.
+fn crash_loop_failures(name: &str, compiles: &[Compile], log: &str) -> Vec<String> {
+    let mut failures = Vec::new();
+    let fixture = format!("{THIRD_PARTY}:sidebar");
+    let Some(first) = compiles.iter().position(|c| c.panels.contains(&fixture)) else {
+        return vec![format!("{name}: its panel never compiled")];
+    };
+    let later = &compiles[first + 1..];
+    let with = later.iter().filter(|c| c.panels.contains(&fixture)).count();
+    let without = later.len() - with;
+    if with > 0 {
+        failures.push(format!(
+            "{name}: {with} compile(s) with its panel after the first (a restart compiled)"
+        ));
+    }
+    let gave_up = log.contains(&format!("supervisor: {THIRD_PARTY} start limit hit"));
+    if !gave_up {
+        failures.push(format!("{name}: it never hit its start limit"));
+    } else if without != 1 {
+        failures.push(format!(
+            "{name}: {without} compile(s) after it gave up, not 1 (the removal)"
+        ));
+    }
+    let restarts = log
+        .matches("restarts after a fault; its 1 panel(s) stay")
+        .count();
+    let reused = log
+        .matches(&format!(
+            "shell: {THIRD_PARTY} mounted its sidebar panel again after its restart (kept branch, no compile)"
+        ))
+        .count();
+    let _ = writeln_stderr(&format!(
+        "   crash loop: {restarts} restart(s) kept the panel, {reused} re-mount(s) into the kept branch"
+    ));
+    if restarts < 4 || reused == 0 {
+        failures.push(format!(
+            "{name}: {restarts} restart(s) kept its panel, {reused} re-mount(s) reused it"
+        ));
+    }
+    failures
+}
+
+fn writeln_stderr(line: &str) -> std::io::Result<()> {
+    use std::io::Write;
+    writeln!(std::io::stderr(), "{line}")
+}
+
 /// Every remembered layout: one compile with the start-up panels (besides
 /// the window's first, empty shell, before any plugin runs; one more for a
 /// third-party plugin that starts after the built-ins), none once the file
@@ -384,6 +437,9 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
     // --include-ignored`).
     let debug = cfg!(debug_assertions);
     let (warm_up, seconds) = if debug { (20, 45) } else { (10, 24) };
+    // The crash loop runs until its start limit (five crashes, restarted
+    // after 1, 2, 4 and 8 s): about 20 s after the plugin first starts.
+    let crash_seconds = 45;
     let cases = [true, false]
         .into_iter()
         .flat_map(|adjust_open| {
@@ -415,7 +471,11 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
             profile.run(warm_up, None, None);
         }
         let log = profile.run(
-            seconds,
+            if third_party == ThirdParty::Crashing {
+                crash_seconds
+            } else {
+                seconds
+            },
             Some(&first),
             Some((&second, Duration::from_secs(5))),
         );
@@ -431,14 +491,14 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
         if third_party == ThirdParty::Crashing {
             // A plugin restarted after a crash is not waited for: the file
             // opens as soon as the others settled (it waited for the restarts
-            // before). Its panel compiles at each restart, as any
-            // plugin's that starts during playback. Its first run is still
-            // waited for (it may mount): 1.5 to 2.6 s here, against 12 to 17 s
-            // before; 8 s leaves room for a loaded machine (a plain case once
-            // opened at +3.9 s) and still separates the two.
+            // before). Its first run is still waited for (it may mount): 1.5
+            // to 2.6 s here, against 12 to 17 s before; 8 s leaves room for
+            // a loaded machine (a plain case once opened at +3.9 s) and still
+            // separates the two.
             if opens[0] >= 8000 {
                 failures.push(format!("{name}: the file opened at +{} ms", opens[0]));
             }
+            failures.extend(crash_loop_failures(&name, &compiles, &log));
             continue;
         }
         // One compile with every start-up panel; a third-party plugin that

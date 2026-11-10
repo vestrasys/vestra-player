@@ -277,7 +277,22 @@ impl Host {
         self.on_demand_forget(owner);
         self.held_mounts.forget(owner);
         self.warnings.edit().remove(&owner);
+        // Panels kept over an earlier crash of this plugin are this run's
+        // (moved at its spawn; `panel_restart.rs`).
+        let id = self.plugin_id(owner);
+        self.adopt_panels(&id, owner);
         capabilities::revoke(self, owner, park);
+        // A run the supervisor restarts by itself after a fault keeps its
+        // panels in the shell meanwhile (user ruling 2026-11-10): no
+        // compile now, none when its restart mounts them again. Any other
+        // stop ends such a wait: its panels go below as before (a parked
+        // run's tabs stay placeholders).
+        let kept = if !park && !self.headless && self.auto_restarting(owner) {
+            self.keep_panels(owner)
+        } else {
+            self.restart_over(&id);
+            Default::default()
+        };
         // Its panels (one per slot): parked, a tab stays, a placeholder
         // (sidebar-tabs.md), its panel in the shell if it is compiled; the
         // others go.
@@ -285,6 +300,7 @@ impl Host {
             .mounts
             .values()
             .filter(|m| m.plugin == owner && !(park && m.recorded))
+            .filter(|m| !kept.contains(&m.spec.owner))
             .map(|m| m.spec.owner)
             .collect::<Vec<_>>();
         {
