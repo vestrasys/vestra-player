@@ -660,15 +660,21 @@ mod tests {
         assert!(matches!(s.job(u).map(|j| &j.kind), Some(JobKind::Standby)));
     }
 
-    /// A lazy first run: classified lazy and idle, it parks at once; busy
-    /// (or its recording failed), it parks after its idle time; resident,
-    /// it stays and is checkpointed resident once.
+    /// A lazy first run: classified lazy and idle, it parks after its quiet
+    /// period (`first_run_quiet`); busy (or its recording failed), it parks
+    /// after its idle time; resident, it stays and is checkpointed resident
+    /// once.
     #[test]
     fn b2c_first_runs_park_at_their_classification() {
-        let mut s = new();
-        let u = ready(&mut s, "a.one", 1, 0, true);
-        s.classified(Pid(1), None);
-        let actions = s.run_jobs(0);
+        let mut first = new();
+        let quiet = first.tunables().first_run_quiet;
+        let u = ready(&mut first, "a.one", 1, 0, true);
+        first.classified(Pid(1), None);
+        assert!(kinds(&first.run_jobs(0)).is_empty());
+        assert!(kinds(&first.run_jobs(quiet - 1)).is_empty());
+        assert_eq!(kinds(&first.run_jobs(quiet)), ["QueryResources"]);
+        first.resources_answered(Pid(1), false);
+        let actions = first.run_jobs(quiet);
         assert_eq!(kinds(&actions), ["Checkpoint", "Terminate"], "{actions:?}");
         assert!(actions.contains(&Action::Checkpoint {
             unit: u,
@@ -677,20 +683,21 @@ mod tests {
         }));
         // Busy at its classification (the Host's busy is declared work): it
         // waits its idle time after the work ends.
-        let v = ready(&mut s, "b.two", 2, 0, true);
-        s.begin_work(Pid(2), super::super::WorkKind::Declared(1), 0);
-        s.classified(Pid(2), None);
+        let mut s = new();
+        let v = ready(&mut s, "b.two", 1, 0, true);
+        s.begin_work(Pid(1), super::super::WorkKind::Declared(1), 0);
+        s.classified(Pid(1), None);
         assert!(kinds(&s.run_jobs(0)).is_empty());
         assert!(kinds(&s.run_jobs(250)).is_empty(), "still busy");
         s.set_now(400);
-        s.end_work(Pid(2), super::super::WorkKind::Declared(1));
+        s.end_work(Pid(1), super::super::WorkKind::Declared(1));
         assert!(!kinds(&s.run_jobs(500)).contains(&"QueryResources"));
         assert!(kinds(&s.run_jobs(60_400)).contains(&"QueryResources"));
-        s.resources_answered(Pid(2), false);
+        s.resources_answered(Pid(1), false);
         assert_eq!(kinds(&s.run_jobs(60_400)), ["Checkpoint", "Terminate"]);
         assert!(s.unit(v).unwrap().state.is_deactivating());
-        let w = ready(&mut s, "c.three", 3, 500, true);
-        s.classified(Pid(3), Some("a listener".into()));
+        let w = ready(&mut s, "c.three", 2, 500, true);
+        s.classified(Pid(2), Some("a listener".into()));
         assert_eq!(
             s.run_jobs(500)
                 .into_iter()
@@ -698,12 +705,12 @@ mod tests {
                 .collect::<Vec<_>>(),
             [Action::Checkpoint {
                 unit: w,
-                pid: Pid(3),
+                pid: Pid(2),
                 resident: true
             }]
         );
         // Classified once per run: a second answer changes nothing.
-        s.classified(Pid(3), None);
+        s.classified(Pid(2), None);
         assert!(kinds(&s.run_jobs(500)).is_empty());
     }
 

@@ -295,6 +295,8 @@ pub(crate) fn new() -> Supervisor<Value> {
     let mut supervisor = Supervisor::new(
         Tunables {
             idle_timeout,
+            // Never longer than the idle time itself.
+            first_run_quiet: tunables.first_run_quiet.min(idle_timeout),
             ..tunables
         },
         1,
@@ -1048,8 +1050,9 @@ impl Host {
     /// `owner`'s class at its ready (today's `lazy_classified`), for the
     /// core: a resident one is checkpointed as such (the next start
     /// launches it, even after a crash) and frees its first-run place; a
-    /// lazy first run goes to standby at once if the Host's own idle check
-    /// passes and its recording is written, else as soon as it is idle.
+    /// lazy first run goes to standby once it has been idle for
+    /// `first_run_quiet` (with that 0: at once if the Host's own idle check
+    /// passes and its recording is written, else as soon as it is idle).
     fn class_known(&mut self, owner: u64, resident: Option<String>, backend: Value) {
         let first_run = self.supervisor.run_is_first(Pid(owner));
         // The core closed this run's classification already (answered, or
@@ -1068,11 +1071,18 @@ impl Host {
         }
         let now = self.now_ms();
         self.supervisor.set_now(now);
-        // A lazy first run goes to standby at once unless busy: the Host's
-        // checks are declared work (`sync_work`), and its recording is
-        // written ahead (today's `park` does not park when that fails), on
-        // the recorder thread: the classification waits for it.
-        if resident.is_none() && first_run && !self.sync_work(owner, false) {
+        // A lazy first run goes to standby after a short quiet period
+        // (`first_run_quiet`), through the idle timer's Standby job, which
+        // writes its recording then (`standby_answer`). Only without one does
+        // it go at once unless busy: the Host's checks are declared work
+        // (`sync_work`), and its recording is written ahead (today's `park`
+        // does not park when that fails), on the recorder thread: the
+        // classification waits for it.
+        if resident.is_none()
+            && first_run
+            && self.supervisor.tunables().first_run_quiet == 0
+            && !self.sync_work(owner, false)
+        {
             match self.standby_record(owner, &backend) {
                 Ok(calls) => {
                     self.on_demand.answers.insert(owner, backend.clone());
@@ -1651,6 +1661,7 @@ mod tests {
         assert_eq!(CHECK_MS, 250);
         assert_eq!(t.starting_notice, 400);
         assert_eq!(t.quiet_after_start, 1_000);
+        assert_eq!(t.first_run_quiet, 1_000);
         assert_eq!(t.stop_wait, 20_000);
         // `PARK_WAIT`, the grace the core gives a stop for standby.
         assert_eq!(PARK_WAIT, Duration::from_secs(5));

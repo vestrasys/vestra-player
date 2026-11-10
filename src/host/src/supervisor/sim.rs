@@ -1429,8 +1429,25 @@ fn only_a_first_run_goes_to_standby_when_classified() {
         w.tick(10 + idle);
         assert!(matches!(w.state(u), UnitState::Standby { .. }));
     }
-    // A first run classified lazy goes at once.
-    let mut w = World::new(preset());
+    // A first run classified lazy goes after its quiet period.
+    let tunables = preset();
+    let quiet = tunables.first_run_quiet;
+    let mut w = World::new(tunables);
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.classified(pid, None);
+    let actions = w.tick(10 + quiet);
+    assert!(actions.contains(&Action::Checkpoint {
+        unit: u,
+        pid,
+        resident: false
+    }));
+    assert!(matches!(w.state(u), UnitState::Standby { .. }));
+    // Without a quiet period: at its classification.
+    let mut tunables = preset();
+    tunables.first_run_quiet = 0;
+    let mut w = World::new(tunables);
     let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
     w.tick(0);
     let pid = w.pid(u);
@@ -1442,6 +1459,68 @@ fn only_a_first_run_goes_to_standby_when_classified() {
         resident: false
     }));
     assert!(matches!(w.state(u), UnitState::Standby { .. }));
+}
+
+/// A first run classified lazy is not stopped at its classification: a
+/// saved effect it restores just after its ready (a timer, a round trip)
+/// would reach the host while it stops, be dropped, and its lazy
+/// checkpoint would not restore it at the next start. It goes to standby
+/// after `first_run_quiet` of idle time, through the idle timer's Standby
+/// job (the adapter asks the playback worker again then); a use meanwhile
+/// starts the period again, and a held resource taken up meanwhile
+/// (`holds_live`) makes it resident: no standby, a resident checkpoint.
+#[test]
+fn a_lazy_first_run_goes_to_standby_after_its_quiet_period() {
+    let tunables = preset();
+    let quiet = tunables.first_run_quiet;
+    assert!(quiet > 0 && quiet < tunables.idle_timeout);
+    {
+        let mut w = World::new(tunables.clone());
+        let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+        w.tick(0);
+        let pid = w.pid(u);
+        w.s.classified(pid, None);
+        let mut actions = w.tick(quiet - 1);
+        assert!(active(&w, u), "{actions:?}");
+        // Used just before the period ends: it starts again.
+        w.s.touch(pid, quiet - 1);
+        actions.extend(w.tick(quiet));
+        actions.extend(w.tick(2 * quiet - 2));
+        assert!(active(&w, u), "{actions:?}");
+        assert_eq!(count(&actions, is_terminate), 0, "{actions:?}");
+        assert_eq!(count(&actions, is_checkpoint), 0, "{actions:?}");
+        // Quiet: the Standby job asks for its resources, then it goes.
+        let actions = w.tick(2 * quiet);
+        assert!(
+            actions
+                .iter()
+                .any(|a| matches!(a, Action::QueryResources { pid: p, .. } if *p == pid)),
+            "{actions:?}"
+        );
+        assert!(actions.contains(&Action::Checkpoint {
+            unit: u,
+            pid,
+            resident: false
+        }));
+        assert!(matches!(w.state(u), UnitState::Standby { .. }));
+    }
+    // Takes up something held within the period: resident, never parked.
+    let mut w = World::new(tunables);
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.classified(pid, None);
+    w.tick(quiet / 2);
+    assert!(w.s.holds_live(pid));
+    let mut actions = w.tick(quiet / 2 + 1);
+    actions.extend(w.tick(10 * quiet));
+    assert!(actions.contains(&Action::Checkpoint {
+        unit: u,
+        pid,
+        resident: true
+    }));
+    assert_eq!(count(&actions, is_terminate), 0, "{actions:?}");
+    assert!(active(&w, u));
 }
 
 /// Item 2 (probe `development_gets_a_checkpoint_after_classify_wait`): a

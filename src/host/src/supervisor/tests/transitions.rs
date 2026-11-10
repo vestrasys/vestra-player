@@ -380,12 +380,17 @@ fn t11_start_timeout_target_restarts_by_its_class() {
     assert!(matches!(sim.st(u), S::AutoRestart(_)), "{:?}", sim.st(u));
 }
 
-// Active --classified "can go to standby"--> Deactivating{Idle, then: Standby}; Checkpoint; Terminate{Idle, keep}
+// Active --classified "can go to standby", then idle for FIRST_RUN_QUIET--> QueryResources;
+// answered idle --> Deactivating{Idle, then: Standby}; Checkpoint; Terminate{Idle, keep}
 spec! {
     fn t12_first_run_classified_standby_checkpoints_and_stops(p) {
         let mut sim = Sim::new(p);
         let (u, pid) = sim.in_active(first_run("a"));
         let acts = sim.classified(pid, false);
+        assert_eq!(sim.st(u), S::Active(pid), "not at its classification: {:?}", names(&acts));
+        assert!(sim.after(FIRST_RUN_QUIET - 1).is_empty());
+        assert!(has(&sim.after(1), "QueryResources"));
+        let acts = sim.resources(pid, false);
         assert_eq!(sim.st(u).then(), Some(Then::Standby));
         let (c, t) = (pos(&acts, "Checkpoint").expect("Checkpoint"), pos(&acts, "Terminate").expect("Terminate"));
         assert!(c < t, "checkpoint before terminate: {:?}", names(&acts));
@@ -432,6 +437,12 @@ fn twenty_sidebar_tab_plugins_are_not_resident() {
             assert_eq!(sim.st(u), S::Active(pid), "the current tab's plugin runs");
             assert!(terminates(&acts).is_empty());
         } else {
+            assert!(
+                terminates(&acts).is_empty(),
+                "tab{n}: after its quiet period"
+            );
+            assert!(has(&sim.after(FIRST_RUN_QUIET), "QueryResources"), "tab{n}");
+            let acts = sim.resources(pid, false);
             assert_eq!(sim.st(u).then(), Some(Then::Standby), "tab{n}");
             assert_eq!(terminates(&acts)[0].2, "idle");
             sim.gone(pid);

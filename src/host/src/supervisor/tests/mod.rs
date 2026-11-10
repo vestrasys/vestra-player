@@ -40,6 +40,8 @@ pub(super) const VERIFY_WAIT: Ms = 3_000;
 pub(super) const STARTING_OSD: Ms = 400;
 /// `QUIET_AFTER_START_MS` ("Event wakes").
 pub(super) const QUIET_AFTER_START: Ms = 1_000;
+/// A lazy first run's idle time before standby (supervisor.md §4 "First run").
+pub(super) const FIRST_RUN_QUIET: Ms = 1_000;
 /// Text of a Start that waited on a stop job (reload).
 pub(super) const TEXT_RELOAD_STUCK: &str = "the previous process did not stop within 20 s";
 /// Text of a wake that waited on a standby stop.
@@ -894,6 +896,7 @@ fn t00_presets_match_design_values() {
     assert_eq!(t.verify_wait, VERIFY_WAIT);
     assert_eq!(t.starting_notice, STARTING_OSD);
     assert_eq!(t.quiet_after_start, QUIET_AFTER_START);
+    assert_eq!(t.first_run_quiet, FIRST_RUN_QUIET);
     assert_eq!(t.backlog_max, p.backlog_max);
     assert_eq!(t.lane_max, p.lane_max);
     assert_eq!(t.interactive_reserve, p.reserve);

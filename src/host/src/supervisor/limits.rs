@@ -82,6 +82,13 @@ pub struct Tunables {
     pub development: Policy,
     /// Idle timeout (`IDLE_MS`).
     pub idle_timeout: Ms,
+    /// A first run classified lazy while idle goes to standby once it has
+    /// been idle this long (counted from its last use or work, as the idle
+    /// timeout) instead of at its classification: what it takes up just
+    /// after its ready (a saved effect restored after a timer or a round
+    /// trip) reaches the playback worker while it still runs. `0`: at its
+    /// classification.
+    pub first_run_quiet: Ms,
     /// Reap + backend cleanup (`STOP_WAIT` 20 s, one constant).
     pub stop_wait: Ms,
     pub verify_wait: Ms,
@@ -187,6 +194,7 @@ impl Tunables {
             normal: Policy::for_class(Class::Normal),
             development: Policy::for_class(Class::Development),
             idle_timeout: 30_000,
+            first_run_quiet: 1_000,
             stop_wait: 20_000,
             verify_wait: 3_000,
             classify_wait: 5_000,
