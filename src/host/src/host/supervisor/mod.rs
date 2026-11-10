@@ -1072,16 +1072,18 @@ impl Host {
         let now = self.now_ms();
         self.supervisor.set_now(now);
         // A lazy first run goes to standby after a short quiet period
-        // (`first_run_quiet`), through the idle timer's Standby job, which
-        // writes its recording then (`standby_answer`). Only without one does
-        // it go at once unless busy: the Host's checks are declared work
-        // (`sync_work`), and its recording is written ahead (today's `park`
-        // does not park when that fails), on the recorder thread: the
-        // classification waits for it.
+        // (`first_run_quiet`) unless busy, through the idle timer's Standby
+        // job, which writes its recording then (`standby_answer`); busy, it
+        // waits its idle timeout. The Host's checks are declared work
+        // (`sync_work`), synced now so that the core's classification knows
+        // them. Only without a quiet period does an idle one go at once: its
+        // recording is written ahead (today's `park` does not park when that
+        // fails), on the recorder thread, and the classification waits for it.
+        let busy = resident.is_none() && first_run && self.sync_work(owner, false);
         if resident.is_none()
             && first_run
+            && !busy
             && self.supervisor.tunables().first_run_quiet == 0
-            && !self.sync_work(owner, false)
         {
             match self.standby_record(owner, &backend) {
                 Ok(calls) => {

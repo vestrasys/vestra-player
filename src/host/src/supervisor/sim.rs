@@ -1523,6 +1523,78 @@ fn a_lazy_first_run_goes_to_standby_after_its_quiet_period() {
     assert!(active(&w, u));
 }
 
+/// A lazy first run busy at its classification (the Host's busy checks,
+/// synced as declared work before it: a command, a dialog, a settings
+/// page) gets no quiet period: it waits the idle timeout after the work
+/// ends, as before.
+#[test]
+fn a_first_run_busy_at_its_classification_waits_the_idle_timeout() {
+    let tunables = preset();
+    let (quiet, idle) = (tunables.first_run_quiet, tunables.idle_timeout);
+    let mut w = World::new(tunables);
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.begin_work(pid, WorkKind::Declared(1), 0);
+    w.s.classified(pid, None);
+    let mut actions = w.tick(quiet);
+    w.s.set_now(2 * quiet);
+    w.s.end_work(pid, WorkKind::Declared(1));
+    actions.extend(w.tick(4 * quiet));
+    actions.extend(w.tick(2 * quiet + idle - 1));
+    assert!(active(&w, u), "{actions:?}");
+    assert!(
+        !actions
+            .iter()
+            .any(|a| matches!(a, Action::QueryResources { .. })),
+        "no quiet period: {actions:?}"
+    );
+    let actions = w.tick(2 * quiet + idle);
+    assert!(
+        actions
+            .iter()
+            .any(|a| matches!(a, Action::QueryResources { pid: p, .. } if *p == pid)),
+        "{actions:?}"
+    );
+    assert!(matches!(w.state(u), UnitState::Standby { .. }));
+}
+
+/// A lazy first run whose quiet period ended while it was busy (the
+/// adapter answered its Standby job's question busy: a command, a dialog
+/// opened after its classification) falls back to the idle timeout: it is
+/// not asked again every quiet period while it stays busy.
+#[test]
+fn a_first_run_found_busy_after_its_quiet_period_waits_the_idle_timeout() {
+    let tunables = preset();
+    let (quiet, idle) = (tunables.first_run_quiet, tunables.idle_timeout);
+    let mut w = World::new(tunables);
+    w.auto_resources = false;
+    let u = w.s.add_unit(UnitSpec::new("f", Class::Normal));
+    w.tick(0);
+    let pid = w.pid(u);
+    w.s.classified(pid, None);
+    let asks = |actions: &[Action<u32>]| {
+        actions
+            .iter()
+            .filter(|a| matches!(a, Action::QueryResources { pid: p, .. } if *p == pid))
+            .count()
+    };
+    assert_eq!(asks(&w.tick(quiet)), 1);
+    w.s.resources_answered(pid, true);
+    let mut actions = w.tick(quiet);
+    for t in (2..30).map(|n| n * quiet) {
+        actions.extend(w.tick(t.min(quiet + idle - 1)));
+    }
+    assert_eq!(asks(&actions), 0, "not every quiet period: {actions:?}");
+    assert!(active(&w, u));
+    let actions = w.tick(quiet + idle);
+    assert_eq!(asks(&actions), 1, "after the idle timeout: {actions:?}");
+    w.s.resources_answered(pid, false);
+    w.tick(quiet + idle);
+    w.tick(quiet + idle + 1);
+    assert!(matches!(w.state(u), UnitState::Standby { .. }));
+}
+
 /// Item 2 (probe `development_gets_a_checkpoint_after_classify_wait`): a
 /// development load is never classified, checkpointed or put in standby
 /// (today's `lazy_development` only logs).

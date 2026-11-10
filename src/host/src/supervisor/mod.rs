@@ -1281,6 +1281,12 @@ impl<P: Clone> Supervisor<P> {
         };
 
         unit.asked_at = None;
+        if busy || unit.work.busy() {
+            // A first run found busy waits the idle timeout from now on, as
+            // one busy at its classification does: not asked again every
+            // quiet period while it stays busy.
+            unit.quiet_park = false;
+        }
         if busy || unit.work.busy() || last_active >= asked {
             // Asked again after another idle period.
             if let UnitState::Active { last_active, .. } = &mut unit.state {
@@ -2794,12 +2800,14 @@ impl<P: Clone> Supervisor<P> {
                 if unit.job.is_some() {
                     return;
                 }
-                let idle = idle_time(&self.tunables, unit);
-                let due = last_active + idle;
-                let again = now + idle;
+                let due = last_active + idle_time(&self.tunables, unit);
                 if now < due {
                     self.timers.arm(&mut unit.gens, u, TimerKind::Idle, due);
                 } else if unit.work.busy() {
+                    // Busy: a first run's quiet period is over (as in
+                    // `resources_answered`).
+                    unit.quiet_park = false;
+                    let again = now + self.tunables.idle_timeout;
                     self.timers.arm(&mut unit.gens, u, TimerKind::Idle, again);
                 } else {
                     let _ = self.enqueue_job(
