@@ -8,6 +8,7 @@ pub mod composition;
 pub(crate) mod confirm;
 pub(crate) mod drops;
 pub(crate) mod menu;
+pub(crate) mod offscreen;
 pub(crate) mod pip;
 pub(crate) mod settings_window;
 pub(crate) mod sidebar_tabs;

@@ -142,6 +142,22 @@ fn select_cpu_windows(
 }
 
 fn main() -> Result<()> {
+    // Tests that run the windowed host offscreen (`ui::offscreen`, no
+    // winit, so no main-thread requirement): on a thread with room for the
+    // debug build's Slint compiler, which overflows Windows' 1 MB main
+    // thread when the shell compiles with an adjust panel.
+    if ui::offscreen::requested() {
+        return std::thread::Builder::new()
+            .name("main".into())
+            .stack_size(64 << 20)
+            .spawn(player)?
+            .join()
+            .unwrap_or_else(|_| bail!("the player thread panicked"));
+    }
+    player()
+}
+
+fn player() -> Result<()> {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let launch::Launch {
         directories,
@@ -250,7 +266,10 @@ fn main() -> Result<()> {
     // wgpu/Direct3D 12, and only when the user turned it on); headless,
     // `VESTRA_RENDER`, the saved preference, the crash guard, the driver
     // denylist and systems without a GPU renderer can make it software.
-    let startup = host::rendering_startup(headless);
+    // Tests that run the windowed host with no window on screen
+    // (`ui::offscreen`): software rendering, as headless runs.
+    let offscreen = !headless && ui::offscreen::requested();
+    let startup = host::rendering_startup(headless || offscreen);
     let mut render = render_mode::decide(&startup.facts, startup.preference);
     logged!("{}", render.line());
     for note in &render.notes {
@@ -303,7 +322,9 @@ fn main() -> Result<()> {
             }
         );
     }
-    if !headless {
+    if offscreen {
+        ui::offscreen::install().map_err(|error| anyhow::anyhow!("offscreen platform: {error}"))?;
+    } else if !headless {
         // Windows: the main window draws at the display's vertical blanks
         // (`frame_pacing.rs`), not on Slint's timer.
         // Every window: the tool windows are owned by the main window
@@ -468,6 +489,9 @@ fn main() -> Result<()> {
         shell_specs: Vec::new(),
         shell_compiled: BTreeMap::new(),
         shell_refresh: false,
+        // Headless runs mount nothing.
+        startup_mounted: headless,
+        startup_panels: headless,
         tabs_failed: Default::default(),
         bottom_shown: true,
         native_window: None,

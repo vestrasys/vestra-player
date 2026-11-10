@@ -1290,36 +1290,68 @@ impl Host {
     pub(crate) fn builtin_first_run_queued(&self) -> bool {
         self.supervisor.first_runs_queued().1
     }
-    /// A built-in still activating that may mount a panel (it declares
-    /// `ui.mount`) and has not asked yet: at start-up the shell waits a
-    /// little for it, so that the built-ins' panels come in one compile
-    /// (`prepare_mount_tick`).
-    pub(crate) fn builtin_mount_expected(&mut self) -> bool {
-        if !self.packages_started() {
-            return true;
+    /// At start-up, a plugin may still ask to mount a panel before the
+    /// built-ins can finish starting: a built-in is not loaded yet or waits
+    /// for its first run, or a running plugin that declares `ui.mount` is
+    /// still activating and has asked for none yet (built-in or not; one
+    /// that asked waits for the compile before its activation ends, so it
+    /// is not waited for). Until then the shell waits, so that it compiles
+    /// once for all of them (`prepare_mount_tick`). Plugins that start only
+    /// after the built-ins (third-party ones waiting for a place) cannot be
+    /// waited for: their panels compile once more, before a file given at
+    /// launch opens (`startup_panels`). What it waits for, for the log;
+    /// `None`: nothing.
+    pub(crate) fn startup_mount_expected(&mut self) -> Option<String> {
+        if !self.packages.booted || self.builtins_to_load() > 0 {
+            return Some("the built-ins to load".into());
+        }
+        if self.builtin_first_run_queued() {
+            return Some("a built-in's first run".into());
         }
         let now = self.now_ms();
         let owners = self
             .plugins
             .iter()
-            .filter(|(owner, plugin)| {
-                plugin.allows("ui.mount")
-                    && !self.mounts.contains_key(owner)
-                    && !self.mount_queue.iter().any(|c| c.reply.owner == **owner)
-                    && !self
-                        .preparing
-                        .as_ref()
-                        .is_some_and(|(_, c)| c.reply.owner == **owner)
-            })
+            .filter(|(owner, plugin)| plugin.allows("ui.mount") && !self.mount_asked(**owner))
             .map(|(owner, _)| *owner)
             .collect::<Vec<_>>();
-        owners.into_iter().any(|owner| {
-            self.is_builtin(owner)
-                && matches!(
-                    self.activation_status(owner, now),
-                    Ok(activation::Status::Pending { .. })
-                )
-        })
+        let mut waiting = Vec::new();
+        for owner in owners {
+            if matches!(
+                self.activation_status(owner, now),
+                Ok(activation::Status::Pending { .. })
+            ) {
+                waiting.push(self.plugin_id(owner));
+            }
+        }
+        (!waiting.is_empty()).then(|| waiting.join(", "))
+    }
+    /// Installed (or built-in) plugin `id` declares `ui.mount` (an unreadable
+    /// one counts as not).
+    pub(crate) fn declares_ui_mount(&self, id: &str) -> bool {
+        self.packages
+            .store
+            .record(id)
+            .and_then(|record| self.packages.runs_from(id, record))
+            .and_then(Result::ok)
+            .is_some_and(|(_, manifest)| manifest.capabilities.iter().any(|c| c == "ui.mount"))
+    }
+    /// Plugin `owner` (its process) asked for a panel: mounted (panels are
+    /// keyed by `panel_key`, not by plugin), queued, being prepared or held
+    /// while the built-ins start.
+    fn mount_asked(&self, owner: u64) -> bool {
+        self.mounts
+            .values()
+            .any(|m| m.plugin == owner && !m.recorded)
+            || self.mount_queue.iter().any(|c| c.reply.owner == owner)
+            || self
+                .preparing
+                .as_ref()
+                .is_some_and(|(_, c)| c.reply.owner == owner)
+            || self
+                .held_mounts
+                .held_of(owner)
+                .any(|(_, method, _)| method == "ui.mount")
     }
     fn operation_pending(&self, id: &str) -> bool {
         self.packages.operations.values().any(|op| {

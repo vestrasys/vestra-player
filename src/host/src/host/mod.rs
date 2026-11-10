@@ -325,9 +325,26 @@ pub(crate) struct OsdActions {
     pub(crate) owner: u64,
     pub(crate) commands: Vec<String>,
 }
-/// At start-up, how long a queued mount waits for the other built-ins'
-/// mounts, so that the shell compiles once for all of them.
-pub(crate) const STARTUP_MOUNT_GATHER: Duration = Duration::from_millis(400);
+/// At start-up, how long the first compile of the shell waits at most for
+/// the plugins that may still mount a panel (`prepare_mount_tick`), so that
+/// it compiles once for all of them. The trade-off: until then the window
+/// shows the shell without any panel, so one slow plugin (a built-in or a
+/// third-party one still activating that has not asked yet) can keep the
+/// built-ins' panels (the bar, the playlist) away for up to this long; a
+/// panel that asks later compiles the shell once more. Usually the gate
+/// opens within a few hundred milliseconds of the built-ins' mounts.
+pub(crate) const STARTUP_MOUNT_LIMIT: Duration = Duration::from_secs(5);
+/// [`STARTUP_MOUNT_LIMIT`], or `VESTRA_TEST_MOUNT_LIMIT_MS` (tests on a
+/// loaded machine: tests/startup_compiles.rs).
+pub(crate) fn startup_mount_limit() -> Duration {
+    static LIMIT: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
+    *LIMIT.get_or_init(|| {
+        std::env::var("VESTRA_TEST_MOUNT_LIMIT_MS")
+            .ok()
+            .and_then(|ms| ms.parse().ok())
+            .map_or(STARTUP_MOUNT_LIMIT, Duration::from_millis)
+    })
+}
 pub(crate) struct MountChange {
     pub(crate) reply: Reply,
     /// The panel it changes (`panel_key`); `reply.owner` is the plugin.
@@ -409,6 +426,14 @@ pub(crate) struct Host {
     pub(crate) shell_compiled: BTreeMap<u64, u64>,
     /// A current tab needs its panel compiled (`prepare_mount_tick`).
     pub(crate) shell_refresh: bool,
+    /// The start-up mounts were compiled into the shell (or there were
+    /// none): until then mounts wait for start-up to settle and files
+    /// given at launch wait for them (`prepare_mount_tick`).
+    pub(crate) startup_mounted: bool,
+    /// Every start-up panel is in the shell: start-up settled with no
+    /// mount left to prepare (`open_files_tick`; a file given at launch
+    /// opens only then, so no compile lands on early playback).
+    pub(crate) startup_panels: bool,
     /// Column panels whose compile failed when their tab joined the compiled
     /// set (reported to their plugin): left out until they mount again.
     pub(crate) tabs_failed: std::collections::BTreeSet<u64>,
