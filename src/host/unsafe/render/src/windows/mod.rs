@@ -457,6 +457,10 @@ struct Shared {
     /// never signalled (a fence deadlock, for the watchdog).
     #[cfg(test)]
     stall_now: AtomicBool,
+    /// Tests: every render call returns an error after mpv rendered (a
+    /// failed call that took the frame, without a removed device).
+    #[cfg(test)]
+    render_errors: AtomicBool,
     /// Last: the textures and fences above drop before the device.
     gpu: Arc<Gpu>,
 }
@@ -493,6 +497,8 @@ impl Shared {
             fail_now: AtomicBool::new(false),
             #[cfg(test)]
             stall_now: AtomicBool::new(false),
+            #[cfg(test)]
+            render_errors: AtomicBool::new(false),
             gpu,
         }
     }
@@ -1097,12 +1103,21 @@ fn produce(
         // The call's start, odd (`Handle::progress`).
         let started = shared.calls.fetch_add(1, Ordering::AcqRel) + 1;
         let rendered = render.render(&slots[index].d3d11, block && pace.is_none());
+        #[cfg(test)]
+        let rendered = if shared.render_errors.load(Ordering::Acquire) {
+            rendered.and(Err("a test asked for render errors".to_string()))
+        } else {
+            rendered
+        };
         shared.calls.fetch_add(1, Ordering::AcqRel);
         if let Err(error) = rendered {
             if d3d11.removed().is_some() {
                 fail(format!("mpv's render failed ({error})"));
                 break;
             }
+            // mpv took the frame all the same: its flip waits for a report
+            // (every render call is followed by one, see below).
+            render.report_swap();
             continue;
         }
         let rendered = began.elapsed();

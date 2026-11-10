@@ -300,21 +300,22 @@ fn produce(
             next = (free.unwrap_or(next) + 1) % RING;
             let (width, height) = (size.0 as i32, size.1 as i32);
             let fbo = OpenGlFbo { fbo: fbo.0.get() as i32, width, height, internal_format: 0 };
-            if render.render_opengl(fbo, false, pace.is_none()).is_ok() {
+            let drawn = render.render_opengl(fbo, false, pace.is_none()).is_ok();
+            if drawn {
                 // SAFETY: the offscreen context is current. glFinish makes the
                 // pixels complete before any window binds the surface.
                 unsafe { gl.finish() };
-                // Every frame, paced or not: mpv takes one report as the
-                // promise of all (render.h) and then waits up to 200 ms in
-                // each flip for the next (5 frames a second after
-                // interpolation was turned off, until the player quit).
-                render.report_swap();
-                if publish.load(Ordering::Acquire) {
-                    sequence += 1;
-                    *lock(&shared.latest) = Some(Published { surface: surface.clone(), sequence });
-                    lock(&shared.redraw).iter().for_each(|redraw| redraw());
-                    lock(&shared.notify).iter().for_each(|notify| notify());
-                }
+            }
+            // After every render call, paced or not, failed or not: mpv takes
+            // one report as the promise of all (render.h) and then waits up
+            // to 200 ms in each flip for the next (5 frames a second after
+            // interpolation was turned off, until the player quit).
+            render.report_swap();
+            if drawn && publish.load(Ordering::Acquire) {
+                sequence += 1;
+                *lock(&shared.latest) = Some(Published { surface: surface.clone(), sequence });
+                lock(&shared.redraw).iter().for_each(|redraw| redraw());
+                lock(&shared.notify).iter().for_each(|notify| notify());
             }
         }
     }

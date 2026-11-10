@@ -527,3 +527,29 @@ fn real_gpu_interpolation_on_and_off_at_4k60() {
     assert!(after >= 58. && dropped <= 4, "off {after:.1}/s, {dropped} dropped");
     drop(renderer);
 }
+
+/// A render call that fails (no removed device) took mpv's frame all the
+/// same: it is reported too, or mpv's flip waits 200 ms for each such frame.
+#[test]
+fn warp_a_failed_render_call_is_reported_too() {
+    let mpv = player("no");
+    let renderer = Renderer::start_on(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()))
+        .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", &SOURCE.replace("d=30", "r=60:d=30")]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 10), "no frames (and so reports)");
+    let shared = &handle.0;
+    shared.render_errors.store(true, Ordering::Release);
+    thread::sleep(Duration::from_millis(500));
+    let (start, calls) = (Instant::now(), shared.calls.load(Ordering::Acquire));
+    thread::sleep(Duration::from_secs(2));
+    let rate =
+        (shared.calls.load(Ordering::Acquire) - calls) as f64 / 2. / start.elapsed().as_secs_f64();
+    let _ = writeln!(std::io::stderr(), "failing render calls: {rate:.1}/s");
+    assert!(rate >= 50., "{rate:.1} render calls a second while they fail");
+    shared.render_errors.store(false, Ordering::Release);
+    let frames = handle.frames();
+    assert!(until(5, || handle.frames() > frames + 10), "no frames after the errors");
+    assert!(handle.failed().is_none());
+    drop(renderer);
+}
