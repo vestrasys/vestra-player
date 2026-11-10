@@ -85,6 +85,11 @@ pub(crate) enum Event {
     Recorded(u64, u64, std::result::Result<(), String>),
     BackendCleaned(u64),
     DialogDone(Reply, Option<Vec<PathBuf>>),
+    /// `media.sources.locate`: the playback worker found the reference;
+    /// show the file dialog (requester, `{ store, token, name }`).
+    SourceLocate(Reply, Value),
+    /// That dialog closed: (requester, the same fields, the chosen file).
+    SourceLocated(Reply, Value, Option<PathBuf>),
     /// An Option + named key handed to Slint again: (window generation, Slint
     /// key code, pressed, the press's physical key).
     InjectKey(u64, char, Injected, Option<bindings::Physical>),

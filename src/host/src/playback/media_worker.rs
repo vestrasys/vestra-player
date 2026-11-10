@@ -149,17 +149,17 @@ impl Encoding {
                 .audio_bitrate
                 .is_none_or(|rate| matches!(rate, 128 | 192 | 256))
     }
-    fn crf(&self) -> u8 {
+    pub(super) fn crf(&self) -> u8 {
         self.crf.unwrap_or(18)
     }
-    fn preset(&self) -> &'static str {
+    pub(super) fn preset(&self) -> &'static str {
         match self.speed {
             None | Some(Speed::Faster) => "veryfast",
             Some(Speed::Balanced) => "medium",
             Some(Speed::Smaller) => "slow",
         }
     }
-    fn audio_bitrate(&self) -> u32 {
+    pub(super) fn audio_bitrate(&self) -> u32 {
         self.audio_bitrate.unwrap_or(192)
     }
     pub fn threads(&self) -> usize {
@@ -235,6 +235,23 @@ pub struct Control {
     facts: Mutex<serde_json::Value>,
     /// Seconds written and to write, from FFmpeg's `-progress` (clips only).
     progress: Mutex<Option<(f64, f64)>>,
+    /// A join's current part (`media_join.rs`): `progress` is then that
+    /// part's, mapped onto the whole output.
+    segment: Mutex<Option<Segment>>,
+}
+/// The part of a join being written: `progress` reports
+/// `before + min(done, length)` of `total`.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Segment {
+    /// 1-based.
+    pub part: usize,
+    pub parts: usize,
+    /// Output seconds of the parts before it.
+    pub before: f64,
+    /// Its own output seconds.
+    pub length: f64,
+    /// Output seconds of the whole join.
+    pub total: f64,
 }
 impl Default for Control {
     fn default() -> Self {
@@ -249,15 +266,49 @@ impl Control {
             result: Mutex::new(None),
             facts: Mutex::new(serde_json::Value::Null),
             progress: Mutex::new(None),
+            segment: Mutex::new(None),
         }
     }
     /// `(done, total)` seconds of a clip being written; `None` while unknown
-    /// (a frame, or before the encoder starts).
+    /// (a frame, or before the encoder starts). A join reports its whole
+    /// output from its first part on.
     pub fn progress(&self) -> Option<(f64, f64)> {
+        let raw = *self
+            .progress
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match *self
+            .segment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+        {
+            None => raw,
+            Some(segment) => Some((
+                (segment.before + raw.map_or(0., |(done, _)| done.min(segment.length)))
+                    .min(segment.total),
+                segment.total,
+            )),
+        }
+    }
+    /// A join's current part and part count (1-based).
+    pub fn part(&self) -> Option<(usize, usize)> {
+        self.segment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .map(|segment| (segment.part, segment.parts))
+    }
+    /// A join moves to `segment` (its own progress starts unknown); `None`
+    /// ends the mapping.
+    pub(super) fn set_segment(&self, segment: Option<Segment>) {
+        let mut slot = self
+            .segment
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
         *self
             .progress
             .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner)
+            .unwrap_or_else(std::sync::PoisonError::into_inner) = None;
+        *slot = segment;
     }
     /// Never moves back for the same `total` (FFmpeg's `out_time` can dip,
     /// for example around B-frame reordering at the start).
@@ -357,7 +408,7 @@ impl Control {
             )
             .is_ok()
     }
-    fn publish(&self) -> bool {
+    pub(super) fn publish(&self) -> bool {
         let won = self
             .state
             .compare_exchange(
@@ -394,17 +445,36 @@ impl Control {
 /// Accepted cancellation prevents publication; cancellation during Publishing is
 /// TooLate. A Failed result can still report a cleanup/OS error after cancel.
 pub fn run(request: RenderRequest, control: Arc<Control>) {
+    run_with(&control, |control| encode(&request, control));
+}
+
+/// A failure with its own outcome code (`source-missing`, `source-changed`).
+#[derive(Debug)]
+pub struct Coded(pub &'static str, pub String);
+impl std::fmt::Display for Coded {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.1)
+    }
+}
+impl std::error::Error for Coded {}
+
+/// Runs one job's `work` under its Control (see [`run`]): a [`Refused`]
+/// error fails `unsupported`, a [`Coded`] one with its code, others
+/// `export-failed`.
+pub(super) fn run_with(control: &Control, work: impl FnOnce(&Control) -> Result<Outcome>) {
     if !control.start() {
         if control.state.load(Ordering::Acquire) == CANCELLED_BEFORE_START {
             control.finish(Outcome::Cancelled);
         }
         return;
     }
-    match std::panic::catch_unwind(|| encode(&request, &control)) {
+    match std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| work(control))) {
         Ok(Ok(outcome)) => control.finish(outcome),
         Ok(Err(error)) => control.finish(Outcome::Failed {
             code: if error.downcast_ref::<Refused>().is_some() {
                 "unsupported"
+            } else if let Some(coded) = error.downcast_ref::<Coded>() {
+                coded.0
             } else {
                 "export-failed"
             },
@@ -1246,7 +1316,7 @@ fn encode(request: &RenderRequest, control: &Control) -> Result<Outcome> {
 
 /// The source video's average bitrate in bit/s: the stream's own, else the
 /// container's minus the other streams' known rates (at least 100 kb/s).
-fn source_bitrate(probed: &serde_json::Value, video_stream: u32) -> Option<u64> {
+pub(super) fn source_bitrate(probed: &serde_json::Value, video_stream: u32) -> Option<u64> {
     let bits = |v: &serde_json::Value| {
         v["bit_rate"]
             .as_str()
@@ -1282,12 +1352,12 @@ struct Seek {
 
 /// Audio decoded before the seek point when the export has audio: an AAC or
 /// MP3 decoder started cold writes different first samples (priming).
-const AUDIO_WARMUP_SECONDS: f64 = 1.;
+pub(super) const AUDIO_WARMUP_SECONDS: f64 = 1.;
 
 /// Containers whose input seek lands on the keyframe at or before the target
 /// (an index: MP4/MOV, Matroska/WebM). Others (MPEG-TS, raw streams) seek by
 /// estimate and can land after it, losing frames: they decode from 0 s.
-fn seeks_exactly(format_name: &str) -> bool {
+pub(super) fn seeks_exactly(format_name: &str) -> bool {
     format_name
         .split(',')
         .any(|name| matches!(name, "mov" | "mp4" | "matroska" | "webm"))
@@ -1956,7 +2026,7 @@ mod tests {
         let made = Command::new(real::ffmpeg())
             .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
             .arg("testsrc2=size=320x240:rate=25,noise=alls=20:allf=t")
-            .args(["-f", "lavfi", "-i", "anoisesrc=d=30:c=pink:r=44100"])
+            .args(["-f", "lavfi", "-i", "anoisesrc=d=30:c=pink:r=44100:seed=7"])
             .args([
                 "-t",
                 "30",

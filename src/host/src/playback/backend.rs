@@ -373,6 +373,14 @@ impl Backend {
                 let mut cover_art = CoverArt::default();
                 let mut subtitles = crate::playback::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::playback::media_jobs::Jobs::default();
+                jobs.sources = Arc::new(std::sync::Mutex::new(
+                    crate::playback::media_sources::Store::open_default(),
+                ));
+                // What a crashed export of parts left behind (no export
+                // runs before this worker serves requests).
+                if let Some(root) = crate::playback::media_join::scratch_root() {
+                    crate::playback::media_join::clean_scratch(&root);
+                }
                 let mut push = StatePush::new();
                 let mut actions = CoreActions::default();
                 let mut upscaling = crate::playback::upscaling::Upscaling::default();
@@ -592,6 +600,35 @@ impl Backend {
                             }
                             continue;
                         }
+                        // A snapshot's check (`jobs.check { snapshotId }`)
+                        // is served here; a parts check goes on below.
+                        if command.method == "jobs.check"
+                            && snapshot_check(&jobs, &events, &command.reply, &command.params)
+                        {
+                            continue;
+                        }
+                        // Source references and the parts check: answered
+                        // from short threads (`media_sources.rs`).
+                        if (command.method.starts_with("media.sources.")
+                            && command.method != "media.sources.open")
+                            || matches!(
+                                command.method.as_str(),
+                                "jobs.check" | "owner.sourceLocated" | "owner.sourcesRevoked"
+                            )
+                        {
+                            crate::playback::media_sources::request(
+                                &jobs.sources,
+                                &events,
+                                command.reply,
+                                &command.method,
+                                &command.params,
+                                || crate::playback::media_sources::Current {
+                                    stamp: sources.snapshot(&mpv)["stamp"].clone(),
+                                    path: sources.local_file(),
+                                },
+                            );
+                            continue;
+                        }
                         if command.method.starts_with("snapshot.")
                             || command.method.starts_with("jobs.")
                         {
@@ -776,6 +813,22 @@ impl Backend {
                             if let Some((done, result)) = result {
                                 done.send(&events, result);
                             }
+                            continue;
+                        }
+                        // A remembered file opened as any open, under the
+                        // plugin's own operation id; `start` through the
+                        // resume point of that exact path (`resume_claim`).
+                        if command.method == "media.sources.open" {
+                            let result = open_reference(
+                                &mut context,
+                                &mut actions,
+                                &jobs.sources,
+                                command.reply.owner,
+                                &command.params,
+                            );
+                            processing.note_source(sources.generation(), sources.phase());
+                            subtitles.note_source(sources.generation(), sources.phase());
+                            let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
                         actions.source_request(&command.method, &command.params);
@@ -1321,6 +1374,84 @@ fn stats(
         "framesDropped":int("frame-drop-count"),"video":video,"audio":audio,
         "avSyncMs":signed("avsync").map(|seconds| seconds * 1000.),
         "cacheSeconds":signed("demuxer-cache-duration")})
+}
+
+/// `jobs.check`: its params read (`media_sources::CheckParams`), parts or a
+/// `snapshotId`, one of them (`end` only with a `snapshotId`). A snapshot's
+/// check is answered here (its held file, probed on a short thread), as is
+/// a refused request; `false`: a parts check, for `media_sources::request`.
+fn snapshot_check(
+    jobs: &crate::playback::media_jobs::Jobs,
+    events: &mpsc::Sender<Event>,
+    reply: &Reply,
+    params: &Value,
+) -> bool {
+    use crate::playback::media_sources::{CheckParams, check_snapshot, read_params};
+    let refuse = |error: RpcError| {
+        let _ = events.send(Event::Reply(reply.clone(), Err(error)));
+        true
+    };
+    let check = match read_params::<CheckParams>(params) {
+        Ok(check) if check.snapshot_id.is_none() != check.parts.is_none() => check,
+        Ok(_) => {
+            return refuse(RpcError::invalid(
+                "jobs.check takes parts or a snapshotId, one of them",
+            ));
+        }
+        Err(error) => return refuse(error),
+    };
+    let Some(snapshot_id) = check.snapshot_id else {
+        // Parts carry their own ends; `end` is the snapshot form's.
+        if check.end.is_some() {
+            return refuse(RpcError::invalid(
+                "end belongs to a snapshotId check; parts carry their own end",
+            ));
+        }
+        return false;
+    };
+    let input = match jobs
+        .snapshot_check(reply.owner, snapshot_id, check.end)
+        .and_then(|input| check.encoding().map(|encoding| (input, encoding)))
+    {
+        Ok(input) => input,
+        Err(error) => return refuse(error),
+    };
+    // The plugin's share of the request threads, as its parts checks.
+    let store = params["store"]
+        .as_str()
+        .map_or_else(|| format!("owner:{}", reply.owner), str::to_owned);
+    check_snapshot(events, reply.clone(), store, input.0, input.1);
+    true
+}
+
+/// `media.sources.open`: the remembered file opened as any open
+/// (`source.submit` under the plugin's own operation id, so its
+/// `source.operation` follows it), at `start` through the resume point of
+/// that exact path (`source_backend::resume_claim`); a refused open drops
+/// the point again.
+fn open_reference(
+    context: &mut SourceContext<'_>,
+    actions: &mut CoreActions,
+    store: &crate::playback::media_sources::Shared,
+    owner: u64,
+    params: &Value,
+) -> Result<Value, RpcError> {
+    let (path, start, submit) = crate::playback::media_sources::open_request(store, params)?;
+    if let Some(seconds) = start {
+        context
+            .sources
+            .resume_next_open(crate::playback::source_backend::ResumePoint {
+                source: path,
+                seconds,
+                paused: false,
+            });
+    }
+    actions.source_request("source.submit", &submit);
+    let result = context.call(owner, "source.submit", &submit);
+    if result.is_err() && start.is_some() {
+        context.sources.clear_resume();
+    }
+    result
 }
 
 /// What a source request touches on the control worker.
@@ -1939,6 +2070,49 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
 mod tests {
     use super::*;
     use crate::playback::session::Phase;
+
+    /// `jobs.check` takes parts or a snapshotId (missing and null alike
+    /// absent); typed fields; parts go on to `media_sources::request`.
+    #[test]
+    fn a_check_takes_parts_or_a_snapshot_id_one_of_them() {
+        let jobs = crate::playback::media_jobs::Jobs::default();
+        let (events, replies) = mpsc::channel();
+        let reply = Reply { owner: 1, id: 1 };
+        let refused = |params: Value| {
+            assert!(snapshot_check(&jobs, &events, &reply, &params), "{params}");
+            match replies.try_recv().unwrap() {
+                Event::Reply(_, Err(error)) => error.code,
+                _ => panic!("not a refusal"),
+            }
+        };
+        let part = json!({"source":"t","start":0,"end":1});
+        for params in [
+            json!({"store":"k","parts":[part],"snapshotId":1,"end":1}),
+            json!({"store":"k"}),
+            json!({"store":"k","parts":null,"snapshotId":null}),
+            json!({"store":"k","snapshotId":1,"end":1,"snapshotID":1}),
+            json!({"store":"k","snapshotId":"1","end":1}),
+            json!({"store":"k","snapshotId":0,"end":1}),
+            // `end` is the snapshot form's only.
+            json!({"store":"k","parts":[part],"end":1}),
+            json!({"store":"k","parts":[part],"end":0}),
+        ] {
+            assert_eq!(refused(params.clone()), "invalid", "{params}");
+        }
+        // A snapshot this plugin does not hold; `end` is read after it.
+        assert_eq!(
+            refused(json!({"store":"k","snapshotId":1,"end":null})),
+            "unknown-expired"
+        );
+        // Parts (and a null snapshotId) are the parts check's.
+        for params in [
+            json!({"store":"k","parts":[part]}),
+            json!({"store":"k","parts":[part],"snapshotId":null,"end":null}),
+        ] {
+            assert!(!snapshot_check(&jobs, &events, &reply, &params), "{params}");
+        }
+        assert!(replies.try_recv().is_err());
+    }
     /// Review 1B: a shader request counts as processed whether or not its
     /// list was written (the same merged list, `limit`, `unsupported`), so
     /// the shader guard never waits for it all run.
@@ -2349,6 +2523,60 @@ mod end_tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         assert!(rig.position() < 1.0, "from the start: {}", rig.position());
+    }
+
+    /// `media.sources.open` opens the remembered file in place of the
+    /// current one, playing from `start`; a missing file is refused and
+    /// the current source stays.
+    #[test]
+    fn a_remembered_file_opens_at_its_start_and_a_missing_one_is_refused() {
+        let mut rig = Rig::new();
+        let other = rig._dir.path().join("other it's.y4m");
+        clip(&other, 50);
+        let meta = std::fs::metadata(&other).unwrap();
+        let store: crate::playback::media_sources::Shared = Default::default();
+        let token = store
+            .lock()
+            .unwrap()
+            .insert(
+                "k",
+                crate::playback::media_sources::Entry {
+                    path: other.clone(),
+                    len: meta.len(),
+                    modified: crate::playback::media_sources::nanos(meta.modified().unwrap()),
+                    name: "other it's.y4m".into(),
+                    facts: crate::playback::media_sources::Facts {
+                        duration: 2.0,
+                        origin: 0.,
+                        format: "yuv4mpegpipe".into(),
+                        video: None,
+                        audio: None,
+                    },
+                },
+            )
+            .unwrap();
+        let first = rig.state["source"].clone();
+        let params = json!({"store":"k","token":token,"operationId":100,"start":1.0});
+        let (actions, mut context) = rig.context();
+        open_reference(&mut context, actions, &store, 1, &params).unwrap();
+        rig.until(|state| {
+            state["phase"] == "ready" && state["source"] == json!(other.to_str().unwrap())
+        });
+        let end = Instant::now() + Duration::from_secs(10);
+        while rig.mpv.get_property::<f64>("time-pos").is_err() {
+            assert!(Instant::now() < end, "no position");
+            rig.turn();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(rig.position() >= 0.95, "from 1 s: {}", rig.position());
+        assert!(!rig.paused());
+        assert_ne!(first, rig.state["source"]);
+        // Gone: refused before anything opens.
+        std::fs::remove_file(&other).unwrap();
+        let params = json!({"store":"k","token":token,"operationId":101});
+        let (actions, mut context) = rig.context();
+        let error = open_reference(&mut context, actions, &store, 1, &params).unwrap_err();
+        assert_eq!(error.code, "source-missing");
     }
 
     /// ← and a plugin's seek after the end play on; Previous Frame (D) and

@@ -669,3 +669,9 @@ msgstr "조정 및 효과"
 #, x-machine
 msgid "No panel is in the adjust column"
 msgstr "조정 열에 패널이 없습니다"
+
+#. Title of the dialog that finds a moved video again ({}: its file name).
+#: src/capabilities/media_sources.rs
+#, x-machine
+msgid "Locate {}"
+msgstr "{} 찾기"

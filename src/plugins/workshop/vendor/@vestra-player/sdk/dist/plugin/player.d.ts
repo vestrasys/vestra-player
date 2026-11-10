@@ -1,4 +1,4 @@
-import type { SourceIntent, SourceStamp, SourceState, SourceTicket } from "../source.ts";
+import type { SourceIntent, SourceOperation, SourceStamp, SourceState, SourceTicket } from "../source.ts";
 import { Latest } from "./latest.ts";
 import type { Runtime } from "./runtime.ts";
 import type { ScopeImpl } from "./scope.ts";
@@ -69,6 +69,12 @@ export declare class PlayerService implements StreamSource {
     submit(intent: SourceIntent, options?: {
         signal?: AbortSignal;
         accepted?: (ticket: SourceTicket) => void;
+        /**
+         * Send the submit another way under this service's operation id
+         * (`media.sources.open`, which the player turns into this intent's
+         * `source.submit`); followed with `source.operation` as any submit.
+         */
+        send?: (operationId: number) => Promise<SourceOperation>;
     }): Promise<SourceTicket>;
     expected(state: PlayerState | undefined): {
         expected?: SourceStamp;

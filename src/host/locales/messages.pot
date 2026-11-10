@@ -546,3 +546,8 @@ msgstr ""
 #: src/ui/bar_buttons.rs
 msgid "No panel is in the adjust column"
 msgstr ""
+
+#. Title of the dialog that finds a moved video again ({}: its file name).
+#: src/capabilities/media_sources.rs
+msgid "Locate {}"
+msgstr ""

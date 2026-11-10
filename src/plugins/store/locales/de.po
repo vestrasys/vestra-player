@@ -1631,6 +1631,11 @@ msgstr "Schnappschüsse aufnehmen und Clips exportieren"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 #, x-machine
+msgid "Remember videos you add and export from them later"
+msgstr "Hinzugefügte Videos merken und später daraus exportieren"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
 msgid "Resolve online video addresses"
 msgstr "Adressen von Online-Videos auflösen"
 

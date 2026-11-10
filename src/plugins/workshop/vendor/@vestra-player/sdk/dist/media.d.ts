@@ -1,6 +1,6 @@
 /** Finite media jobs. Native-subtitle freezing remains pending. */
 import type { Transport } from "./wire.ts";
-import type { SourceStamp, SourceAudioTrack } from "./source.ts";
+import type { SourceStamp, SourceAudioTrack, SourceOperation } from "./source.ts";
 import type { VideoNode, AudioNode } from "./processing.ts";
 import type { SubtitleStamp, SubtitleStyle, SubtitleTrack } from "./subtitles.ts";
 export type RawSnapshot = {
@@ -174,6 +174,22 @@ export type MediaJob = {
                 end: number;
             };
         };
+        /** An export of parts (`jobs.start { parts }`): how it was written. */
+        join?: {
+            mode: "copy" | "mp4";
+            container: "mp4" | "mkv";
+            /** Each part as written, in seconds of its own file. */
+            parts: {
+                start: number;
+                end: number;
+            }[];
+            /** A re-encode: the output size and frame rate. */
+            target: {
+                width: number;
+                height: number;
+                fps: number;
+            } | null;
+        };
     };
     outcome: null | {
         destination: string;
@@ -196,6 +212,10 @@ export type MediaJob = {
     progress?: {
         done: number;
         total: number;
+        /** An export of parts: the part being written, from 1. */
+        part?: number;
+        /** An export of parts: how many parts. */
+        parts?: number;
     } | null;
 };
 /** The wire form of `ExportEncoding` (`jobs.start`). */
@@ -207,6 +227,62 @@ export type WireEncoding = {
     audioBitrate?: 128 | 192 | 256;
     threads?: "single" | "auto";
     videoBitrate?: "source";
+};
+/** A source reference as the player describes it (`media.sources.*`). */
+export type WireSourceReference = {
+    token: string;
+    name: string;
+    duration: number;
+    status: "ok" | "missing" | "changed";
+    video: {
+        codec: string;
+        width: number;
+        height: number;
+        fps: number;
+        pixelFormat: string | null;
+    } | null;
+    audio: {
+        codec: string;
+        sampleRate: number;
+        channels: number;
+    } | null;
+};
+/** One part of an export (`jobs.start { parts }`, `jobs.check`). */
+export type WireExportPart = {
+    source: string;
+    start: number;
+    end: number;
+};
+/** The answer of `jobs.check`. */
+export type WireExportCheck = {
+    blocking: {
+        part: number;
+        problem: "unknown" | "missing" | "changed" | "noVideo" | "range";
+        /** `range`: the file's duration. */
+        duration?: number;
+    }[];
+    copy: {
+        ok: true;
+        container: "mp4" | "mkv";
+    } | {
+        ok: false;
+        reasons: {
+            part: number;
+            field: "videoCodec" | "videoParams" | "size" | "fps" | "pixelFormat" | "audio" | "effects";
+            value: string | number | null;
+            expected: string | number | null;
+        }[];
+    };
+    encode: {
+        width: number;
+        height: number;
+        fps: number;
+        audio: {
+            sampleRate: 48000;
+            channels: 2;
+        } | null;
+    } | null;
+    duration: number;
 };
 export type MediaOperation = {
     status: "pending" | "unknown" | "unknownExpired";
@@ -264,5 +340,36 @@ export declare function mediaClients(transport: Transport): {
             cancel: "requested" | "tooLate" | "terminal";
         }>;
         operation: (operationId: number) => Promise<MediaOperation>;
+        /** `jobs.start` with parts of remembered files instead of a snapshot. */
+        startParts: (options: {
+            operationId: number;
+            parts: WireExportPart[];
+            destination: string;
+        } & ({
+            kind: "rawCopy";
+            container?: "auto" | "mp4" | "mkv";
+        } | {
+            kind: "rawMp4";
+            encoding?: WireEncoding;
+        })) => Promise<{
+            jobId: number;
+            status: "queued";
+        }>;
+        check: (parts: WireExportPart[], encoding?: WireEncoding) => Promise<WireExportCheck>;
+        /** `jobs.check` of a snapshot's clip (to `end`) instead of parts. */
+        checkSnapshot: (snapshotId: number, end: number, encoding?: WireEncoding) => Promise<WireExportCheck>;
+    };
+    mediaSources: {
+        remember: (expected?: SourceStamp) => Promise<WireSourceReference>;
+        get: (token: string) => Promise<WireSourceReference>;
+        locate: (token: string) => Promise<WireSourceReference | null>;
+        forget: (token: string) => Promise<void>;
+        list: () => Promise<WireSourceReference[]>;
+        /** An `open` submit of the file, under the player service's operation id. */
+        open: (options: {
+            token: string;
+            operationId: number;
+            start?: number;
+        }) => Promise<SourceOperation>;
     };
 };

@@ -15,6 +15,7 @@ export { API_VERSION, CAPABILITIES, CAPABILITY_INFO, MESSAGE_LIMIT, } from "./ca
 export { HOST_CAPABILITIES } from "./host-capabilities.ts";
 export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "./commands.ts";
 export { BINDING_INPUTS } from "./plugin/bindings.ts";
+export { MEDIA_SOURCE_LIMITS } from "./plugin/media.ts";
 export { OSD_LIMITS } from "./plugin/osd.ts";
 export { TIMELINE_LIMITS } from "./plugin/timeline.ts";
 export { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./plugin/services.ts";
