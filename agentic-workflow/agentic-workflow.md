@@ -154,6 +154,25 @@ Plugins never bundle the SDK: they import it as types only, and the player build
 3. **Plugins are not forced to update.** Every SDK release's CHANGELOG entry opens with who must change and what happens to a plugin that doesn't.
 4. **Later, when third-party plugins exist** (registered as an open item, not done yet): the packing tool records the SDK version a plugin was built with, and the player warns in the store and the plugin details when a plugin was built before a breaking change ("built on an older interface, parts may not work; the author has not updated it"), together with its last update date. Only when a removed API is essential to a plugin is it disabled, with the reason shown to the user.
 
+**New APIs must be general (user ruling, 2026-11-10)**
+
+The SDK is the whole surface plugins can reach, and every member added to it is kept, documented and modelled in TestHost for as long as plugins may use it. An API shaped around one feature makes the SDK larger without making it more capable, and every later feature then asks for its own member. So, before any new member, capability or message is added (bottom-up request §4 or the maintainer's own design):
+
+1. **Name at least two or three different plugins that would use it.** They may be existing plugins or plausible ones (a bookmarks plugin, a history plugin, a comparison tool), but each must be a different kind of plugin with a concrete use, written in the request or the design: "plugin X calls it to …". Two variants of the same feature (two exporters, two upscalers) count as one.
+2. **If only one plugin needs it, extend an existing API instead.** In order of preference:
+   - add an optional field or a new mode to an existing call (old callers unchanged);
+   - generalise an existing call so the old behaviour is its simplest case (one input → N inputs, one source → a list);
+   - add a small, general primitive that the feature can be built from in the plugin;
+   - only when none of these fits, add the specific API — and the request says why the general forms were rejected.
+3. **Shape the name and the arguments by what it does, not by who asked.** No feature names in API names (`media.sources`, not `clipCollection.refs`); arguments describe the operation (`parts`, `start`, `end`), not one plugin's UI.
+4. **Security and resource limits are part of the generality check.** A general primitive must not widen what a plugin can read, write or run beyond what the user did (for example, a source reference is minted only for a file the user opened and never reveals its path). If the general form needs a wider boundary than the specific one, say so and let the user rule (§7).
+5. **The review checks this rule.** The independent reviewer of an API batch lists the named users and the extended alternatives, and returns the batch when a member serves one feature only without the written reason from item 2.
+6. **Record it.** The SDK CHANGELOG entry of a new member names its intended users in one line ("used by Clip Export's collection; also for bookmarks, history and resume"), and the reference docs show at least one use that is not the requesting plugin's.
+
+Example (2026-11-10, SDK 1.7.8 before release): the clip-collection feature first got `media.sources` and a separate `media.join`/`joinCheck`. `media.sources` (persistent references to files the user opened) passes item 1 — bookmarks, history and resume, comparison and chapter tools all need it. `media.join` served only the merged export, so it was folded into the existing export API as an export with several input parts (one part is today's single clip), with a pre-check every export can use.
+
+This rule does not change the version rules above: additions stay patch releases, removals and behaviour changes still need the user's approval.
+
 **The host changes the Slint widget library (`src/host/ui/palette.slint`, `src/host/ui/vestra/`)**
 
 The SDK package carries a read-only copy for authors' editors; the player's version is authoritative. When you change the widget library:
