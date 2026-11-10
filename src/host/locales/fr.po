@@ -665,3 +665,9 @@ msgstr "Réglages et effets"
 #, x-machine
 msgid "No panel is in the adjust column"
 msgstr "Aucun panneau dans la colonne de réglages"
+
+#. Title of the dialog that finds a moved video again ({}: its file name).
+#: src/capabilities/media_sources.rs
+#, x-machine
+msgid "Locate {}"
+msgstr "Rechercher {}"

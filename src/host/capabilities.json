@@ -443,6 +443,19 @@
       "risky": false
     },
     {
+      "label": "Remember videos you add and export from them later",
+      "methods": [
+        {
+          "name": "media.sources.*",
+          "needs": "media.sources"
+        }
+      ],
+      "name": "media.sources",
+      "requires": [],
+      "residency": "none",
+      "risky": false
+    },
+    {
       "label": "Show messages on the video",
       "methods": [
         {

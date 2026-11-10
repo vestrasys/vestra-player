@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.store 0.2.14\n"
+"Project-Id-Version: vestra.store 0.2.16\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -1294,6 +1294,10 @@ msgstr ""
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Take snapshots and export clips"
+msgstr ""
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+msgid "Remember videos you add and export from them later"
 msgstr ""
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409

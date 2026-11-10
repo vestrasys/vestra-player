@@ -1371,6 +1371,11 @@ msgid "Take snapshots and export clips"
 msgstr "截图与导出视频片段"
 
 #: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Remember videos you add and export from them later"
+msgstr "记住你添加的视频，稍后从中导出"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
 msgid "Resolve online video addresses"
 msgstr "解析网络视频地址"
 

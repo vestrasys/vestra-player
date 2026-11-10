@@ -753,6 +753,27 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "jobs.cancel",
     "jobs.operation",
   ],
+  // An export of remembered files' parts: jobs.start with parts (the
+  // player also checks media.sources for it, capabilities/media_control.rs).
+  "MediaCapture.export": [
+    "jobs.start",
+    "jobs.state",
+    "jobs.cancel",
+    "jobs.operation",
+  ],
+  "MediaCapture.exportCheck": ["jobs.check"],
+  "MediaSources.reference": ["media.sources.reference"],
+  "MediaSources.resolve": ["media.sources.resolve"],
+  "MediaSources.locate": ["media.sources.locate"],
+  "MediaSources.forget": ["media.sources.forget"],
+  "MediaSources.list": ["media.sources.list"],
+  // Followed as player.open is (source.operation needs playback.read,
+  // documented at the member; the refresh after it is best-effort).
+  "MediaSources.open": [
+    "media.sources.open",
+    "source.operation?",
+    "source.state?",
+  ],
   "Osd.show": ["osd.show"],
   "Osd.panel": ["osd.panel"],
   "Clipboard.readText": ["clipboard.readText"],

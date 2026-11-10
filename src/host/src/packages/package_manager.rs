@@ -1814,6 +1814,18 @@ impl Host {
         if let Some(instance) = &installed.instance {
             self.session_storage
                 .clear(&DataKey::Instance(instance.guid.clone()));
+            // Its source references go too, whether or not its files do
+            // (`media.sources`): another install starts without them.
+            let _ = self
+                .backend
+                .commands
+                .send(crate::playback::backend::Command {
+                    reply: Reply { owner: 0, id: 0 },
+                    method: "owner.sourcesRevoked".into(),
+                    params: json!({"store": crate::playback::media_sources::store_key(
+                        &DataKey::Instance(instance.guid.clone())
+                    )}),
+                });
         }
         if remove_data && let Some(instance) = &installed.instance {
             self.purge_secrets(&DataKey::Instance(instance.guid.clone()));

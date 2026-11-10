@@ -666,3 +666,9 @@ msgstr "Anpassungen und Effekte"
 #, x-machine
 msgid "No panel is in the adjust column"
 msgstr "In der Anpassungsspalte ist kein Bereich"
+
+#. Title of the dialog that finds a moved video again ({}: its file name).
+#: src/capabilities/media_sources.rs
+#, x-machine
+msgid "Locate {}"
+msgstr "{} suchen"

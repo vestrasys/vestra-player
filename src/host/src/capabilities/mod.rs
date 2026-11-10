@@ -25,6 +25,7 @@ mod commands;
 mod events;
 mod media_control;
 mod media_read;
+mod media_sources;
 mod playback_control;
 mod playback_read;
 mod plugins_manage;
@@ -50,6 +51,7 @@ mod window_control;
 
 pub(crate) use commands::refresh_conditions;
 pub(crate) use events::WAKE_EVENTS;
+pub(crate) use media_sources::locate_dialog;
 
 /// What a capability is, as the manifest, the store and the SDK name it.
 // Read by the JSON generator (`json`, a test) and the lazy activation to come.
@@ -296,6 +298,7 @@ pub static ALL: &[&dyn Capability] = &[
     &subtitles_control::SubtitlesControl,
     &media_read::MediaRead,
     &media_control::MediaControl,
+    &media_sources::MediaSources,
     &ui_osd::UiOsd,
     &clipboard::Clipboard,
     &window_control::WindowControl,
@@ -631,6 +634,24 @@ mod tests {
         );
         assert_eq!(needs("snapshot.state", json!({})), Some("media.read"));
         assert_eq!(needs("snapshot.capture", json!({})), Some("media.control"));
+        // An export of parts is an export (media.sources checked as well,
+        // capabilities/media_control.rs); the check too.
+        assert_eq!(
+            needs("jobs.start", json!({"parts": []})),
+            Some("media.control")
+        );
+        assert_eq!(needs("jobs.check", json!({})), Some("media.control"));
+        assert_eq!(
+            needs("media.sources.reference", json!({})),
+            Some("media.sources")
+        );
+        // The host's own source messages are no plugin method.
+        for internal in ["owner.sourceLocated", "owner.sourcesRevoked"] {
+            assert_eq!(
+                required(internal, &json!({}), |_| true).unwrap_err().code,
+                "unsupported"
+            );
+        }
         assert_eq!(needs("subtitles.state", json!({})), Some("subtitles.read"));
         assert_eq!(
             needs("subtitles.select", json!({})),

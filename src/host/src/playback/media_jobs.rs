@@ -43,6 +43,8 @@ struct Job {
 }
 #[derive(Default)]
 pub struct Jobs {
+    /// `media.sources`: the plugins' source references (a parts export reads them).
+    pub sources: crate::playback::media_sources::Shared,
     books: BTreeMap<u64, Book>,
     snapshots: BTreeMap<u64, Arc<Snapshot>>,
     jobs: BTreeMap<u64, Job>,
@@ -85,7 +87,14 @@ enum Mutation {
     #[serde(rename = "jobs.start")]
     Start {
         operation_id: u64,
-        snapshot_id: u64,
+        /// The input: a frozen snapshot, or `parts`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        snapshot_id: Option<u64>,
+        /// The input: ranges of remembered files in order (`media.sources`),
+        /// a clip kind only (`rawCopy`, `rawMp4`); one file is written from
+        /// them all (`media_join.rs`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        parts: Option<Vec<crate::playback::media_sources::Part>>,
         kind: String,
         destination: String,
         end: Option<f64>,
@@ -101,6 +110,13 @@ enum Mutation {
     },
     #[serde(rename = "jobs.cancel")]
     Cancel { operation_id: u64, job_id: u64 },
+}
+/// An absolute, bounded destination path.
+fn destination_valid(destination: &str) -> bool {
+    !destination.is_empty()
+        && destination.len() <= 4096
+        && !destination.contains('\0')
+        && PathBuf::from(destination).is_absolute()
 }
 /// The still format of a one-frame job kind (`rawPng`, `processedJpeg`, …).
 fn still(kind: &str) -> Option<media_worker::Still> {
@@ -127,6 +143,7 @@ impl Mutation {
     fn start_valid(&self) -> bool {
         let Self::Start {
             snapshot_id,
+            parts,
             kind,
             destination,
             end,
@@ -140,7 +157,24 @@ impl Mutation {
             return true;
         };
         let clip = clip(kind);
-        safe(*snapshot_id)
+        let snapshot_id = match (snapshot_id, parts) {
+            (Some(id), None) => *id,
+            // Parts: a clip of remembered files, its ranges in the parts.
+            (None, Some(parts)) => {
+                return crate::playback::media_sources::parts_valid(parts)
+                    && parts.iter().all(|p| p.end > p.start)
+                    && matches!(kind.as_str(), "rawCopy" | "rawMp4")
+                    && end.is_none()
+                    && sample_time.is_none()
+                    && quality.is_none()
+                    && (encoding.is_none() || kind == "rawMp4")
+                    && encoding.is_none_or(|encoding| encoding.valid())
+                    && (container.is_none() || kind == "rawCopy")
+                    && destination_valid(destination);
+            }
+            _ => return false,
+        };
+        safe(snapshot_id)
             && (still(kind).is_some() || clip)
             && (quality.is_none() || kind.ends_with("Jpeg"))
             && quality.is_none_or(|quality| (1..=100).contains(&quality))
@@ -151,10 +185,7 @@ impl Mutation {
             && (clip || end.is_none())
             && (!clip || sample_time.is_none())
             && sample_time.is_none_or(|time| (0. ..=86400.).contains(&time))
-            && !destination.is_empty()
-            && destination.len() <= 4096
-            && !destination.contains('\0')
-            && PathBuf::from(destination).is_absolute()
+            && destination_valid(destination)
     }
     fn id(&self) -> u64 {
         match self {
@@ -258,10 +289,15 @@ impl Jobs {
             }
             Some(media_worker::Outcome::Cancelled) => json!({"cancelled":true}),
         };
-        let progress = job
-            .control
-            .progress()
-            .map(|(done, total)| json!({"done":done,"total":total}));
+        let progress = job.control.progress().map(|(done, total)| {
+            let mut progress = json!({"done":done,"total":total});
+            // A join: the part being written (1-based) and how many.
+            if let Some((part, parts)) = job.control.part() {
+                progress["part"] = json!(part);
+                progress["parts"] = json!(parts);
+            }
+            progress
+        });
         Ok(
             json!({"jobId":id,"status":status(phase),"publicationStarted":publication_started,"outcome":outcome,"facts":job.control.facts(),"progress":progress}),
         )
@@ -307,6 +343,11 @@ impl Jobs {
             .as_object()
             .cloned()
             .ok_or_else(|| RpcError::invalid("object required"))?;
+        // The host's own field (`capabilities/media_control.rs`): whose
+        // source references a parts export reads.
+        let store = params
+            .remove("store")
+            .and_then(|store| store.as_str().map(str::to_owned));
         params.insert("method".into(), json!(method));
         let mutation: Mutation = serde_json::from_value(Value::Object(params))
             .map_err(|e| RpcError::invalid(e.to_string()))?;
@@ -350,9 +391,13 @@ impl Jobs {
                 return Err(RpcError::invalid("snapshotId required"));
             }
             Mutation::Start { .. } if !mutation.start_valid() => {
-                return Err(RpcError::invalid(
-                    "frame, MP4 or rawCopy kind, snapshotId, bounded absolute destination, JPEG quality 1–100 and clip options of the kind required",
-                ));
+                return Err(RpcError::invalid(format!(
+                    "frame, MP4 or rawCopy kind, a snapshotId or 1–{} parts (rawCopy or rawMp4, end after start, no end, sampleTime or quality), bounded absolute destination, JPEG quality 1–100 and clip options of the kind required",
+                    crate::playback::media_sources::MAX_PARTS
+                )));
+            }
+            Mutation::Start { parts: Some(_), .. } if store.is_none() => {
+                return Err(RpcError::new("internal", "source store unavailable"));
             }
             Mutation::Cancel { job_id, .. } if !safe(*job_id) => {
                 return Err(RpcError::invalid("jobId required"));
@@ -382,7 +427,7 @@ impl Jobs {
                 return Err(RpcError::new("busy", "media operation capacity reached"));
             }
         }
-        let result = self.mutate(context, owner, mutation);
+        let result = self.mutate(context, owner, mutation, store.as_deref());
         let outcome = result.as_ref().cloned().map_err(|e| operations::Failure {
             code: e.code.clone(),
             message: e.message.clone(),
@@ -399,6 +444,7 @@ impl Jobs {
         context: CaptureContext<'_>,
         owner: u64,
         mutation: Mutation,
+        store: Option<&str>,
     ) -> Result<Value, RpcError> {
         let CaptureContext {
             sources,
@@ -563,6 +609,36 @@ impl Jobs {
                 Ok(Value::Null)
             }
             Mutation::Start {
+                parts: Some(parts),
+                destination,
+                kind,
+                encoding,
+                container,
+                ..
+            } => {
+                let store = store.ok_or_else(|| RpcError::new("internal", "no source store"))?;
+                let entries = self.join_entries(&parts, store)?;
+                let binary = self.room(owner)?;
+                let request = crate::playback::media_join::JoinRequest {
+                    parts: parts.into_iter().zip(entries).collect(),
+                    destination: PathBuf::from(destination),
+                    ffmpeg: binary,
+                    mode: if kind == "rawCopy" {
+                        crate::playback::media_join::Mode::Copy {
+                            container: container.unwrap_or_default(),
+                        }
+                    } else {
+                        crate::playback::media_join::Mode::Encode {
+                            encoding: encoding.unwrap_or_default(),
+                        }
+                    },
+                };
+                let id = self.launch(owner, move |control| {
+                    crate::playback::media_join::run(request, &control);
+                })?;
+                Ok(json!({"jobId":id,"status":"queued"}))
+            }
+            Mutation::Start {
                 snapshot_id,
                 destination,
                 kind,
@@ -573,6 +649,8 @@ impl Jobs {
                 container,
                 ..
             } => {
+                let snapshot_id =
+                    snapshot_id.ok_or_else(|| RpcError::invalid("snapshotId required"))?;
                 let snapshot = self
                     .snapshots
                     .get(&snapshot_id)
@@ -618,78 +696,22 @@ impl Jobs {
                         other => other,
                     })
                 };
-                if self.workers.len() >= 8
-                    || self
-                        .jobs
-                        .values()
-                        .filter(|j| j.owner == owner && !terminal(j.control.status()))
-                        .count()
-                        >= 2
-                {
-                    return Err(RpcError::new("busy", "worker capacity reached"));
-                }
-                while self.jobs.len() >= 128 {
-                    let old = self
-                        .jobs
-                        .iter()
-                        .find(|(_, j)| terminal(j.control.status()))
-                        .map(|(id, _)| *id);
-                    if let Some(id) = old {
-                        self.jobs.remove(&id);
-                    } else {
-                        return Err(RpcError::new("busy", "job records full"));
-                    }
-                }
-                if self.next_job >= Book::MAX_REVISION {
-                    return Err(RpcError::new("busy", "job identity capacity exhausted"));
-                }
-                // `$VESTRA_FFMPEG`, the bundled one, else `PATH` in a
-                // development build (`runtime_paths.rs`).
-                let Some(binary) = crate::process::runtime_paths::get()
-                    .ffmpeg
-                    .clone()
-                    .filter(|binary| binary.is_file())
-                else {
-                    return Err(RpcError::new(
-                        "unavailable",
-                        "validated FFmpeg binary unavailable",
-                    ));
-                };
-                self.next_job += 1;
-                let id = self.next_job;
-                let control = Arc::new(Control::new());
-                let worker_control = control.clone();
-                let worker = std::thread::Builder::new()
-                    .name(format!("media-job-{id}"))
-                    .spawn(move || {
-                        media_worker::run(
-                            media_worker::RenderRequest {
-                                lease: snapshot.lease.clone(),
-                                time: sample_time,
-                                destination: PathBuf::from(destination),
-                                ffmpeg: binary,
-                                processed: snapshot.processed.clone(),
-                                output,
-                                video_stream: snapshot.video_stream,
-                                source_origin: snapshot.source_origin,
-                            },
-                            worker_control,
-                        )
-                    })
-                    .map_err(|error| {
-                        RpcError::new(
-                            "unavailable",
-                            format!("media worker could not start: {error}"),
-                        )
-                    })?;
-                self.jobs.insert(
-                    id,
-                    Job {
-                        owner,
-                        control: control.clone(),
-                    },
-                );
-                self.workers.push(worker);
+                let binary = self.room(owner)?;
+                let id = self.launch(owner, move |worker_control| {
+                    media_worker::run(
+                        media_worker::RenderRequest {
+                            lease: snapshot.lease.clone(),
+                            time: sample_time,
+                            destination: PathBuf::from(destination),
+                            ffmpeg: binary,
+                            processed: snapshot.processed.clone(),
+                            output,
+                            video_stream: snapshot.video_stream,
+                            source_origin: snapshot.source_origin,
+                        },
+                        worker_control,
+                    )
+                })?;
                 Ok(json!({"jobId":id,"status":"queued","snapshotId":snapshot_id}))
             }
             Mutation::Cancel { job_id, .. } => {
@@ -706,6 +728,87 @@ impl Jobs {
                 Ok(json!({"jobId":job_id,"cancel":result}))
             }
         }
+    }
+}
+impl Jobs {
+    /// The references a join's parts name, in `store` (the caller's own):
+    /// `missing` for a token it does not hold.
+    fn join_entries(
+        &self,
+        parts: &[crate::playback::media_sources::Part],
+        store: &str,
+    ) -> Result<Vec<crate::playback::media_sources::Entry>, RpcError> {
+        let sources = self
+            .sources
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        parts
+            .iter()
+            .enumerate()
+            .map(|(index, part)| {
+                sources.get(store, &part.source).cloned().ok_or_else(|| {
+                    RpcError::new(
+                        "missing",
+                        format!("part {index} names no source reference of this plugin"),
+                    )
+                })
+            })
+            .collect()
+    }
+    /// Room for one more job of `owner` (2 running per plugin, 8 in the
+    /// player, 128 records), and the FFmpeg to run it with.
+    fn room(&mut self, owner: u64) -> Result<PathBuf, RpcError> {
+        if self.workers.len() >= 8
+            || self
+                .jobs
+                .values()
+                .filter(|j| j.owner == owner && !terminal(j.control.status()))
+                .count()
+                >= 2
+        {
+            return Err(RpcError::new("busy", "worker capacity reached"));
+        }
+        while self.jobs.len() >= 128 {
+            let old = self
+                .jobs
+                .iter()
+                .find(|(_, j)| terminal(j.control.status()))
+                .map(|(id, _)| *id);
+            if let Some(id) = old {
+                self.jobs.remove(&id);
+            } else {
+                return Err(RpcError::new("busy", "job records full"));
+            }
+        }
+        if self.next_job >= Book::MAX_REVISION {
+            return Err(RpcError::new("busy", "job identity capacity exhausted"));
+        }
+        // `$VESTRA_FFMPEG`, the bundled one, else `PATH` in a
+        // development build (`runtime_paths.rs`).
+        crate::playback::media_sources::ffmpeg()
+    }
+    /// Start `work` on a worker thread of its own as a new job of `owner`.
+    fn launch(
+        &mut self,
+        owner: u64,
+        work: impl FnOnce(Arc<Control>) + Send + 'static,
+    ) -> Result<u64, RpcError> {
+        self.next_job += 1;
+        let id = self.next_job;
+        let control = Arc::new(Control::new());
+        let worker_control = control.clone();
+        let worker = std::thread::Builder::new()
+            .name(format!("media-job-{id}"))
+            .spawn(move || work(worker_control))
+            .map_err(|error| {
+                RpcError::new(
+                    "unavailable",
+                    format!("media worker could not start: {error}"),
+                )
+            })?;
+        self.jobs.insert(id, Job { owner, control });
+        self.workers.push(worker);
+        Ok(id)
     }
 }
 impl Drop for Jobs {
@@ -816,6 +919,101 @@ mod tests {
         let auto: media_worker::Encoding =
             serde_json::from_value(json!({"threads":"auto"})).unwrap();
         assert!((1..=8).contains(&auto.threads()));
+    }
+
+    fn join(fields: Value) -> bool {
+        let destination = if cfg!(windows) {
+            r"C:\clips\joined.mp4"
+        } else {
+            "/clips/joined.mp4"
+        };
+        let mut params = json!({"method":"jobs.start","operationId":1,"destination":destination,
+            "parts":[{"source":"src-a","start":0,"end":5},{"source":"src-b","start":10,"end":12.5}]});
+        params
+            .as_object_mut()
+            .unwrap()
+            .extend(fields.as_object().unwrap().clone());
+        serde_json::from_value::<Mutation>(params).is_ok_and(|m| m.start_valid())
+    }
+
+    #[test]
+    fn a_parts_export_takes_bounded_parts_and_only_its_kinds_options() {
+        assert!(join(json!({"kind":"rawCopy"})));
+        assert!(join(json!({"kind":"rawCopy","container":"mkv"})));
+        assert!(join(
+            json!({"kind":"rawMp4","encoding":{"crf":20,"maxHeight":720}})
+        ));
+        // A snapshot export is unchanged; parts and a snapshot are one input.
+        assert!(valid(json!({"kind":"rawCopy","end":5})));
+        assert!(!join(json!({"kind":"rawCopy","snapshotId":1})));
+        // Only clips, with their ranges in the parts.
+        for kind in ["processedMp4", "rawPng", "rawJpeg", "processedCopy"] {
+            assert!(!join(json!({"kind":kind})), "{kind}");
+        }
+        assert!(!join(json!({"kind":"rawCopy","end":5})));
+        assert!(!join(json!({"kind":"rawMp4","sampleTime":1})));
+        assert!(!join(json!({"kind":"rawCopy","encoding":{}})));
+        assert!(!join(json!({"kind":"rawMp4","container":"mp4"})));
+        assert!(!join(json!({"kind":"rawMp4","encoding":{"crf":40}})));
+        assert!(!join(json!({"kind":"rawCopy","parts":[]})));
+        assert!(!join(
+            json!({"kind":"rawCopy","parts":[{"source":"src-a","start":5,"end":5}]})
+        ));
+        assert!(!join(
+            json!({"kind":"rawCopy","parts":[{"source":"src-a","start":-1,"end":5}]})
+        ));
+        assert!(!join(
+            json!({"kind":"rawCopy","destination":"relative.mp4"})
+        ));
+        let many: Vec<Value> = (0..=crate::playback::media_sources::MAX_PARTS)
+            .map(|_| json!({"source":"src-a","start":0,"end":1}))
+            .collect();
+        assert!(!join(json!({"kind":"rawCopy","parts":many})));
+        // Unknown fields (an FFmpeg string, a path) do not even parse.
+        assert!(!join(json!({"kind":"rawCopy","filter":"concat"})));
+        assert!(!join(
+            json!({"kind":"rawCopy","parts":[{"source":"src-a","start":0,"end":1,"path":"/etc"}]})
+        ));
+        // Without parts the payload is a snapshot export's as before.
+        let payload =
+            serde_json::to_value(start(json!({"kind":"rawMp4","end":5})).unwrap()).unwrap();
+        assert!(payload.get("parts").is_none());
+        assert_eq!(payload["snapshotId"], 1);
+    }
+
+    #[test]
+    fn a_join_names_only_the_callers_references() {
+        let mut jobs = Jobs::default();
+        jobs.register(7);
+        let entry = crate::playback::media_sources::Entry {
+            path: PathBuf::from("/a.mp4"),
+            len: 1,
+            modified: 1,
+            name: "a.mp4".into(),
+            facts: crate::playback::media_sources::Facts {
+                duration: 10.,
+                origin: 0.,
+                format: "mp4".into(),
+                video: None,
+                audio: None,
+            },
+        };
+        let token = jobs
+            .sources
+            .lock()
+            .unwrap()
+            .insert("instance:other", entry)
+            .unwrap();
+        let parts = [crate::playback::media_sources::Part {
+            source: token,
+            start: 0.,
+            end: 1.,
+        }];
+        // Another plugin's token is unknown here, before any worker starts.
+        let error = jobs.join_entries(&parts, "instance:mine").unwrap_err();
+        assert_eq!(error.code, "missing");
+        assert!(error.message.contains("part 0"));
+        assert!(jobs.join_entries(&parts, "instance:other").is_ok());
     }
 
     #[test]

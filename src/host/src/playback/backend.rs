@@ -373,6 +373,9 @@ impl Backend {
                 let mut cover_art = CoverArt::default();
                 let mut subtitles = crate::playback::subtitle_backend::Subtitles::new(fonts);
                 let mut jobs = crate::playback::media_jobs::Jobs::default();
+                jobs.sources = Arc::new(std::sync::Mutex::new(
+                    crate::playback::media_sources::Store::open_default(),
+                ));
                 let mut push = StatePush::new();
                 let mut actions = CoreActions::default();
                 let mut upscaling = crate::playback::upscaling::Upscaling::default();
@@ -569,6 +572,28 @@ impl Backend {
                             }
                             continue;
                         }
+                        // Source references and the join check: answered
+                        // from short threads (`media_sources.rs`).
+                        if (command.method.starts_with("media.sources.")
+                            && command.method != "media.sources.open")
+                            || matches!(
+                                command.method.as_str(),
+                                "jobs.check" | "owner.sourceLocated" | "owner.sourcesRevoked"
+                            )
+                        {
+                            crate::playback::media_sources::request(
+                                &jobs.sources,
+                                &events,
+                                command.reply,
+                                &command.method,
+                                &command.params,
+                                || crate::playback::media_sources::Current {
+                                    stamp: sources.snapshot(&mpv)["stamp"].clone(),
+                                    path: sources.local_file(),
+                                },
+                            );
+                            continue;
+                        }
                         if command.method.starts_with("snapshot.")
                             || command.method.starts_with("jobs.")
                         {
@@ -753,6 +778,22 @@ impl Backend {
                             if let Some((done, result)) = result {
                                 done.send(&events, result);
                             }
+                            continue;
+                        }
+                        // A remembered file opened as any open, under the
+                        // plugin's own operation id; `start` through the
+                        // resume point of that exact path (`resume_claim`).
+                        if command.method == "media.sources.open" {
+                            let result = open_reference(
+                                &mut context,
+                                &mut actions,
+                                &jobs.sources,
+                                command.reply.owner,
+                                &command.params,
+                            );
+                            processing.note_source(sources.generation(), sources.phase());
+                            subtitles.note_source(sources.generation(), sources.phase());
+                            let _ = events.send(Event::Reply(command.reply, result));
                             continue;
                         }
                         actions.source_request(&command.method, &command.params);
@@ -1298,6 +1339,36 @@ fn stats(
         "framesDropped":int("frame-drop-count"),"video":video,"audio":audio,
         "avSyncMs":signed("avsync").map(|seconds| seconds * 1000.),
         "cacheSeconds":signed("demuxer-cache-duration")})
+}
+
+/// `media.sources.open`: the remembered file opened as any open
+/// (`source.submit` under the plugin's own operation id, so its
+/// `source.operation` follows it), at `start` through the resume point of
+/// that exact path (`source_backend::resume_claim`); a refused open drops
+/// the point again.
+fn open_reference(
+    context: &mut SourceContext<'_>,
+    actions: &mut CoreActions,
+    store: &crate::playback::media_sources::Shared,
+    owner: u64,
+    params: &Value,
+) -> Result<Value, RpcError> {
+    let (path, start, submit) = crate::playback::media_sources::open_request(store, params)?;
+    if let Some(seconds) = start {
+        context
+            .sources
+            .resume_next_open(crate::playback::source_backend::ResumePoint {
+                source: path,
+                seconds,
+                paused: false,
+            });
+    }
+    actions.source_request("source.submit", &submit);
+    let result = context.call(owner, "source.submit", &submit);
+    if result.is_err() && start.is_some() {
+        context.sources.clear_resume();
+    }
+    result
 }
 
 /// What a source request touches on the control worker.
@@ -2326,6 +2397,60 @@ mod end_tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         assert!(rig.position() < 1.0, "from the start: {}", rig.position());
+    }
+
+    /// `media.sources.open` opens the remembered file in place of the
+    /// current one, playing from `start`; a missing file is refused and
+    /// the current source stays.
+    #[test]
+    fn a_remembered_file_opens_at_its_start_and_a_missing_one_is_refused() {
+        let mut rig = Rig::new();
+        let other = rig._dir.path().join("other it's.y4m");
+        clip(&other, 50);
+        let meta = std::fs::metadata(&other).unwrap();
+        let store: crate::playback::media_sources::Shared = Default::default();
+        let token = store
+            .lock()
+            .unwrap()
+            .insert(
+                "k",
+                crate::playback::media_sources::Entry {
+                    path: other.clone(),
+                    len: meta.len(),
+                    modified: crate::playback::media_sources::nanos(meta.modified().unwrap()),
+                    name: "other it's.y4m".into(),
+                    facts: crate::playback::media_sources::Facts {
+                        duration: 2.0,
+                        origin: 0.,
+                        format: "yuv4mpegpipe".into(),
+                        video: None,
+                        audio: None,
+                    },
+                },
+            )
+            .unwrap();
+        let first = rig.state["source"].clone();
+        let params = json!({"store":"k","token":token,"operationId":100,"start":1.0});
+        let (actions, mut context) = rig.context();
+        open_reference(&mut context, actions, &store, 1, &params).unwrap();
+        rig.until(|state| {
+            state["phase"] == "ready" && state["source"] == json!(other.to_str().unwrap())
+        });
+        let end = Instant::now() + Duration::from_secs(10);
+        while rig.mpv.get_property::<f64>("time-pos").is_err() {
+            assert!(Instant::now() < end, "no position");
+            rig.turn();
+            std::thread::sleep(Duration::from_millis(2));
+        }
+        assert!(rig.position() >= 0.95, "from 1 s: {}", rig.position());
+        assert!(!rig.paused());
+        assert_ne!(first, rig.state["source"]);
+        // Gone: refused before anything opens.
+        std::fs::remove_file(&other).unwrap();
+        let params = json!({"store":"k","token":token,"operationId":101});
+        let (actions, mut context) = rig.context();
+        let error = open_reference(&mut context, actions, &store, 1, &params).unwrap_err();
+        assert_eq!(error.code, "source-missing");
     }
 
     /// ← and a plugin's seek after the end play on; Previous Frame (D) and

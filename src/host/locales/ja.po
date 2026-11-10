@@ -663,3 +663,9 @@ msgstr "調整とエフェクト"
 #, x-machine
 msgid "No panel is in the adjust column"
 msgstr "調整列にパネルがありません"
+
+#. Title of the dialog that finds a moved video again ({}: its file name).
+#: src/capabilities/media_sources.rs
+#, x-machine
+msgid "Locate {}"
+msgstr "{} を探す"

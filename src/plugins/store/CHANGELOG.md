@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.16
+
+- The permission list names the new capability `media.sources` (SDK 1.7.8): **Remember videos you add and export from them later**, translated by machine (marked `x-machine`). Who must change: nobody.
+
 ## 0.2.15
 
 - The install and update confirmations end with the permission list (or the "Current: …" line); the closing sentence "A plugin is a complete program: the permissions above only limit what it can do with the player, not reading and writing files or using the network." is gone (user ruling 2026-11-08). The same grey line under Permissions in the store window is gone too. The warnings for unofficial repositories and sideloaded packages are unchanged. Who must change: nobody.
