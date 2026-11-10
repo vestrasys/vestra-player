@@ -377,7 +377,14 @@ function slintSurfaces() {
     const player = slintSurface(host(`ui/${file}`));
     total += player.length;
     found(player.length > 0 && player, `exported declarations in ${file}`);
-    return { file, player, sdk: slintSurface(sdkSlint(file)) };
+    // TestHost takes what it cannot resolve as any value: an empty or
+    // unreadable copy would accept everything.
+    const sdk = slintSurface(sdkSlint(file));
+    found(
+      sdk.length > 0 && sdk,
+      `exported declarations in the SDK copy of ${file}`,
+    );
+    return { file, player, sdk };
   });
   // The reader still reads the library (a struct field, a property).
   const markdown = slintSurface(host("ui/vestra/markdown.slint"));
@@ -392,6 +399,34 @@ function slintSurfaces() {
   found(total > 20 && total, "the library's exported declarations");
   return surfaces;
 }
+
+/** The declaration an entry of slintSurface is (`struct X`, `component X`, …), or null for a member. */
+function slintDeclaration(entry: string): string | null {
+  const m =
+    /^(struct|enum) ([\w-]+)$/.exec(entry) ??
+    /^(component|global) ([\w-]+)(?: inherits \S+)?$/.exec(entry) ??
+    /^(export) (\S+)$/.exec(entry);
+  return m ? `${m[1]} ${m[2]}` : null;
+}
+
+// A struct, enum, component or global the copy lacks is a type TestHost
+// cannot resolve, and it takes that as any value: every exported
+// declaration of the player's must be in the copy (a new one needs the SDK
+// sync before it merges). Members only the player has stay advisory.
+test("the SDK's Slint library copy has every exported declaration of the player's (structs, enums, components, globals)", () => {
+  for (const { file, player, sdk } of slintSurfaces()) {
+    const have = new Set(sdk.map(slintDeclaration));
+    assert.deepEqual(
+      player
+        .map(slintDeclaration)
+        .filter(
+          (declaration) => declaration !== null && !have.has(declaration),
+        ),
+      [],
+      `${file}: exported in host/ui/${file} but missing from the SDK copy`,
+    );
+  }
+});
 
 test("the SDK's Slint library copy declares nothing the player lacks or declares differently (structs, components, properties)", () => {
   for (const { file, player, sdk } of slintSurfaces()) {
