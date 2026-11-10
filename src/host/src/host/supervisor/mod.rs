@@ -135,6 +135,13 @@ pub(crate) struct OnDemand {
     /// Each run's answer at its classification (`{ live, resolvers }`): its
     /// resolvers, for a checkpoint at quit (today's `Class.backend`).
     answers: BTreeMap<u64, Value>,
+    /// Runs whose `owner.resources` was asked again after a request of theirs
+    /// to the playback worker (`worker_requested`), not answered yet. Only
+    /// asked when nothing else is, so its answer comes before any later ask's.
+    refreshing: BTreeSet<u64>,
+    /// Runs with a request to the playback worker since their last ask that
+    /// could not be asked yet (another ask out): asked once that is answered.
+    stale: BTreeSet<u64>,
     /// Plugins already logged as staying up, with the reason.
     told: BTreeMap<u64, &'static str>,
     /// The Host's busy checks of each run as the core has them (declared work,
@@ -1319,6 +1326,18 @@ impl Host {
     /// of a standby the core asked for (`QueryResources`): it goes to
     /// standby if it is still idle and nothing it holds is live.
     pub(crate) fn resources_answer(&mut self, owner: u64, answer: &Value) {
+        // Asked only when nothing else was: this answer is the refresh's.
+        if self.on_demand.refreshing.remove(&owner) {
+            self.refresh_answer(owner, answer);
+        } else {
+            self.asked_answer(owner, answer);
+        }
+        // A request to the worker came while this ask was out.
+        if self.on_demand.stale.remove(&owner) {
+            self.worker_requested(owner);
+        }
+    }
+    fn asked_answer(&mut self, owner: u64, answer: &Value) {
         match self.on_demand.asked.remove(&owner) {
             Some(Ask::Classify(_)) => {
                 if !self.plugins.contains_key(&owner) {
@@ -1382,6 +1401,9 @@ impl Host {
                 );
             }
             Err(reason) => {
+                // Classified lazy, it holds something live in the worker
+                // now: resident from now on (`holds_live`).
+                self.acquired_live(owner, answer);
                 // Asked again after another idle period.
                 if self.on_demand.told.insert(owner, reason) != Some(reason) {
                     diag!(
@@ -1398,6 +1420,66 @@ impl Host {
                 self.supervisor.resources_answered(Pid(owner), true);
                 self.supervisor_run();
             }
+        }
+    }
+    /// A request of `owner` was handed to the playback worker (`forward`).
+    /// Its class came from what it held at its ready; a run that may still
+    /// go to standby can take up something live there after it (a plugin
+    /// whose first run held no shader sets some later), so the worker is
+    /// asked again. The ask follows the request on the worker's queue: its
+    /// answer counts the request. One ask at a time per run; a request
+    /// while another ask is out is asked after its answer.
+    pub(crate) fn worker_requested(&mut self, owner: u64) {
+        if self.checkpoint_key_of(owner).is_none()
+            || self.on_demand.probe.park_all
+            || !self.supervisor.may_stand_by(Pid(owner))
+        {
+            return;
+        }
+        if self.on_demand.refreshing.contains(&owner) || self.on_demand.asked.contains_key(&owner) {
+            self.on_demand.stale.insert(owner);
+            return;
+        }
+        let asked = self.backend.commands.send(Command {
+            reply: Reply { owner, id: 0 },
+            method: "owner.resources".into(),
+            params: Value::Null,
+        });
+        if asked.is_ok() {
+            self.on_demand.refreshing.insert(owner);
+        }
+    }
+    /// The worker's answer to `worker_requested`'s ask: the run's resolvers
+    /// as they are now (for a checkpoint at quit), and a live resource
+    /// makes it resident (`acquired_live`).
+    fn refresh_answer(&mut self, owner: u64, answer: &Value) {
+        if !self.plugins.contains_key(&owner) {
+            return;
+        }
+        if let Some(known) = self.on_demand.answers.get_mut(&owner) {
+            *known = answer.clone();
+        }
+        self.acquired_live(owner, answer);
+    }
+    /// `answer` (the worker's `{ live, resolvers }` for `owner`) names a live
+    /// resource: a run that may still go to standby is resident from now on,
+    /// and its checkpoint says so (`Supervisor::holds_live`).
+    fn acquired_live(&mut self, owner: u64, answer: &Value) {
+        let Some(live) = answer["live"].as_array().filter(|live| !live.is_empty()) else {
+            return;
+        };
+        if self.on_demand.probe.park_all {
+            return;
+        }
+        let live = Value::Array(live.clone());
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        if self.supervisor.holds_live(Pid(owner)) {
+            diag!(
+                "lazy: {} resident from now on: a resource in the playback worker {live}",
+                self.plugin_id(owner)
+            );
+            self.supervisor_run();
         }
     }
     /// The core's Standby job asks whether `owner` may go to standby
@@ -1456,6 +1538,8 @@ impl Host {
         self.on_demand.ui_pending.remove(&owner);
         self.on_demand.told.remove(&owner);
         self.on_demand.answers.remove(&owner);
+        self.on_demand.refreshing.remove(&owner);
+        self.on_demand.stale.remove(&owner);
         // The core's work of the run went with it.
         self.on_demand.work.remove(&owner);
     }

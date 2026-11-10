@@ -60,6 +60,8 @@ A unit leaves `Deactivating` only when its process is reaped **and** the playbac
 
 **First run.** A plugin without a recording is started once. At its ready the host checks, within 5 s, whether it holds something live. If it does, it is Resident and keeps running. If not, the host writes a **recording** of everything it registered (commands in registration order, bindings, settings pages, drop targets, resolvers, wake-event subscriptions, a background sidebar tab) and stops it with reason `idle`. From then on, start-up replays the recording: the entry points appear without a process.
 
+**Taking up something live later.** A run's class comes from what it holds at its ready, but a plugin may take up something live afterwards (shaders, a filter chain, the video view, once the user turns them on). After each request a run that may still go to standby sends to the playback worker, the host asks the worker again what the run holds there (one ask at a time, queued behind the request, so the answer counts it). If it now holds something live, the run is Resident from then on, exactly as if it had been classified so at its ready: no idle standby, and its recording says resident, so the next start launches it and its activation takes the resource up again instead of only replaying its entry points. The next ready classifies it again as usual. At quit, a lazy run whose last answer names something live, or whose ask is still unanswered, is recorded resident too (the safe side, as a classification without an answer).
+
 **Wake.** A trigger on an entry point of a plugin in standby starts its process. The trigger waits in the unit's queue (its **backlog**) until the new process is ready, then is delivered in order.
 
 | Trigger | Kind | If it cannot be delivered |

@@ -117,11 +117,23 @@ impl Host {
                 .get(&owner)
                 .cloned()
                 .unwrap_or(Value::Null);
-            match self.standby_record(owner, &backend) {
-                Ok(calls) => (calls, false),
-                Err(reason) => {
-                    diag!("lazy: {id} not recorded at quit: {reason}");
-                    return;
+            // Something live in the playback worker, or a request there
+            // whose answer has not come (`worker_requested`): the safe side,
+            // as a classification without an answer. The next start
+            // launches it, and its ready classifies it again.
+            let live = backend["live"].as_array().is_some_and(|l| !l.is_empty());
+            let unanswered =
+                self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner);
+            if (live || unanswered) && !self.on_demand.probe.park_all {
+                diag!("lazy: {id} holds something live in the playback worker at quit");
+                (Vec::new(), true)
+            } else {
+                match self.standby_record(owner, &backend) {
+                    Ok(calls) => (calls, false),
+                    Err(reason) => {
+                        diag!("lazy: {id} not recorded at quit: {reason}");
+                        return;
+                    }
                 }
             }
         };
