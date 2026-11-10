@@ -14,6 +14,8 @@
  * Tools: typos, actionlint, zizmor, cargo-deny, cargo-shear
  * (`brew install typos-cli actionlint zizmor cargo-deny cargo-shear`).
  * Cargo output goes to $CARGO_TARGET_DIR, or <system temp>/vestra-target/ci.
+ * First, `npm ci` runs in src/ and in each plugin with a package-lock.json
+ * whose node_modules does not match its lockfile (CI always installs fresh).
  *
  * The plugin tests record the property values the plugins send to their
  * Slint views (VESTRA_UI_RECORD, scripts/ui-record.mjs); the host's ignored
@@ -21,9 +23,15 @@
  * -- --include-ignored`) sets each one on the compiled Slint component.
  */
 import { spawnSync } from "node:child_process";
-import { mkdtempSync, rmSync } from "node:fs";
+import {
+  existsSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 
 const args = new Set(process.argv.slice(2));
 const source = resolve(import.meta.dirname, "..");
@@ -77,6 +85,63 @@ const steps = [
         ],
       ]),
 ];
+
+// CI runs `npm ci` in src/ and in every plugin with its own lockfile
+// (.github/actions/setup-node). A worktree's node_modules can lag behind its
+// lockfile, which shows up later as unrelated type errors; reinstall first.
+for (const dir of [
+  source,
+  ...readdirSync(join(source, "plugins"))
+    .map((name) => join(source, "plugins", name))
+    .filter((dir) => existsSync(join(dir, "package-lock.json"))),
+]) {
+  const stale = staleDeps(dir);
+  if (!stale) continue;
+  const name = relative(repo, dir).replaceAll("\\", "/");
+  console.log(`deps: ${name}: ${stale}; running npm ci`);
+  const result = spawnSync("npm", ["ci", "--no-audit", "--no-fund"], {
+    cwd: dir,
+    stdio: "inherit",
+    shell: process.platform === "win32",
+  });
+  if (result.status !== 0) {
+    console.log(`ci:local: npm ci failed in ${name}; run it there by hand`);
+    rmSync(record, { recursive: true, force: true });
+    process.exit(1);
+  }
+}
+
+/**
+ * Why `dir/node_modules` does not match `dir/package-lock.json`, or null.
+ * Compares the lockfile with npm's record of the installed tree
+ * (node_modules/.package-lock.json) and checks each installed folder exists.
+ */
+function staleDeps(dir) {
+  const read = (path) => JSON.parse(readFileSync(path, "utf8")).packages ?? {};
+  const hidden = join(dir, "node_modules", ".package-lock.json");
+  if (!existsSync(hidden)) return "node_modules is missing or incomplete";
+  const want = read(join(dir, "package-lock.json"));
+  let have;
+  try {
+    have = read(hidden);
+  } catch {
+    return "node_modules/.package-lock.json is unreadable";
+  }
+  for (const [path, entry] of Object.entries(want)) {
+    if (path === "") continue;
+    const got = have[path];
+    if (!got) {
+      if (entry.optional) continue; // another platform's optional package
+      return `${path} is not installed`;
+    }
+    for (const key of ["version", "resolved", "integrity", "link"])
+      if (got[key] !== entry[key]) return `${path} differs from the lockfile`;
+    if (!existsSync(join(dir, path))) return `${path} is missing`;
+  }
+  for (const path of Object.keys(have))
+    if (!(path in want)) return `${path} is not in the lockfile`;
+  return null;
+}
 
 const failed = [];
 for (const [cwd, command, extra = {}] of steps) {
