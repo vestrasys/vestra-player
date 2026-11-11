@@ -8,8 +8,8 @@ import { timing } from "./store.ts";
 /**
  * Command palette categories (player 0.7.6): the names of the former Playback ▸
  * submenus, so their translations are kept. Every command of a former submenu
- * shares one. Menu sweep (B5): only Chapter and Bookmark List… is in the menu
- * (top level, after Playlist); everything else is in the command palette only.
+ * shares one. Only Chapter and Bookmark List… is in the menu (Tools ▸, user
+ * ruling 2026-11-11); everything else is in the command palette only.
  */
 export const MARKS_CATEGORY = "Chapters and Bookmarks";
 /** The command that opens the Chapters and Bookmarks window: the `home` of what the window lists or adds. */
@@ -67,8 +67,8 @@ const STEPS = [
 ] as const;
 
 /**
- * Chapters and Bookmarks (B21: Chapter and Bookmark List… at the top level,
- * 801 in the windows group after Playlist; the rest palette only, orders
+ * Chapters and Bookmarks (B21: Chapter and Bookmark List… in Tools ▸, order
+ * 801 in its own marks group; the rest palette only, orders
  * 261–265; the chapters and bookmarks 10000 + i / 20000 + i in a child scope
  * rebuilt when they change). A-B Loop (B23, orders 270–287) moved to the playback plugin.
  */
@@ -104,10 +104,10 @@ export class MarksMenu {
     const actions = this.#actions;
     commands.add({
       id: LIST_COMMAND,
-      path: ["Chapter and Bookmark List…"],
+      path: ["@tools", "Chapter and Bookmark List…"],
       category: MARKS_CATEGORY,
       order: 801,
-      group: "windows",
+      group: "marks",
       bindings: ["H"],
       run: () => this.#openList(),
     });

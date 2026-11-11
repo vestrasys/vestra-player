@@ -30,11 +30,11 @@ async function start(locale?: "zh-Hans") {
   return { host, i18n: plugin.plugin.i18n, stop: () => plugin.stop() };
 }
 
-test("I09: top-level About Vestra Player… (880, windows, F1) opens the about window with plugin.app versions", async () => {
+test("I09: Tools ▸ About Vestra Player… (880, settings-main, F1) opens the about window with plugin.app versions", async () => {
   const { host, stop } = await start();
   try {
     assert.deepEqual(host.command("info.about").declaration, {
-      title: "About Vestra Player…", path: ["About Vestra Player…"], order: 880, group: "settings-main", radio: false, bindings: ["F1"], focus: null, repeat: false, category: { $vestraText: "Help" },
+      title: "About Vestra Player…", path: ["@tools", "About Vestra Player…"], order: 880, group: "settings-main", radio: false, bindings: ["F1"], focus: null, repeat: false, category: { $vestraText: "Help" },
     });
     assert.deepEqual(host.conflicts, []);
     await host.press("F1");
@@ -179,7 +179,7 @@ test("I09 pure rules: unknown versions show Unknown; plugin rows sorted by id wi
 test("I09 in Simplified Chinese: the window's words and the message of before", async () => {
   const { host, stop } = await start("zh-Hans");
   try {
-    assert.deepEqual(host.command("info.about").display.path, ["关于 Vestra Player…"]);
+    assert.deepEqual(host.command("info.about").display.path, ["工具", "关于 Vestra Player…"]);
     // What about.slint shows through @tr (the player rewrites the literals with the catalog).
     const words = ["About Vestra Player", "Loaded plugins", "Version", "Source", "State", "Copy Info", "Close", "Copy failed", "Unknown", "Plugin API", "Rendering", "GPU", "Software"];
     assert.deepEqual(words.map((w) => host.translate(w)), ["关于 Vestra Player", "已加载插件", "版本", "来源", "状态", "复制信息", "关闭", "复制失败", "未知", "插件 API", "渲染", "GPU", "软件"]);

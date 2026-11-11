@@ -4,8 +4,8 @@ import { officialKeys } from "./signing.ts";
 import { Store } from "./store.ts";
 
 /**
- * Plugin Store (vestra.store, design doc/architecture/store-design.md): top-level
- * "Plugin Store…" (order 822, group windows), the store window, the settings
+ * Plugin Store (vestra.store, design doc/architecture/store-design.md): Tools ▸
+ * Plugin Store… (order 822, group windows), the store window, the settings
  * page Options ▸ Plugins ▸ Plugin Store and `.vxp` files dropped on the video area.
  * Network, signature checks and downloads run in this plugin's process
  * (Node fetch and crypto); installing goes through `plugin.packages`.

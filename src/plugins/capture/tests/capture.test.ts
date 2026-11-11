@@ -69,10 +69,10 @@ test("Snapshot ▸ has three items; every other command is in the command palett
   try {
     const menu = [...host.commands.values()].filter((c) => c.declaration.path?.length).map(({ declaration: d, display }) => [display.path.join(" > "), d.order, d.group, d.bindings.join(",")]);
     assert.deepEqual(menu, [
-      // Menu sweep (B5): Snapshot ▸ is a top-level submenu in the domain group.
-      ["截图 > 保存当前画面", 420, "domain", "Ctrl+E"],
-      ["截图 > 复制当前画面", 422, "domain", "Ctrl+C"],
-      ["截图 > 连拍", 426, "domain", "Ctrl+G"],
+      // User ruling 2026-11-11: Snapshot ▸ is in Tools ▸, in the domain group.
+      ["工具 > 截图 > 保存当前画面", 420, "domain", "Ctrl+E"],
+      ["工具 > 截图 > 复制当前画面", 422, "domain", "Ctrl+C"],
+      ["工具 > 截图 > 连拍", 426, "domain", "Ctrl+G"],
     ]);
     const palette = [...host.commands.entries()].filter(([, c]) => !c.declaration.path?.length).map(([id, { declaration: d }]) => [id, d.bindings.join(","), d.home ?? ""]);
     assert.deepEqual(palette, [
@@ -130,8 +130,8 @@ test("English by default: menus, the settings page's title, OSD and the save pan
   ready(host);
   const { stop } = await start(host, "en");
   try {
-    assert.deepEqual([host.command("capture.save").declaration.path, host.command("capture.save").declaration.group], [["Snapshot", "Save Current Frame"], "domain"]);
-    assert.deepEqual(host.command("capture.burst").display.path, ["Snapshot", "Burst"]);
+    assert.deepEqual([host.command("capture.save").declaration.path, host.command("capture.save").declaration.group], [["@tools", "Snapshot", "Save Current Frame"], "domain"]);
+    assert.deepEqual(host.command("capture.burst").display.path, ["Tools", "Snapshot", "Burst"]);
     assert.deepEqual([host.command("capture.settings").display.path, host.command("capture.settings").display.title], [[], "Snapshot Settings…"], "palette only");
     assert.equal(page(host).title, "Snapshot");
     await host.command("capture.format.jpeg").run();

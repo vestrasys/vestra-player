@@ -19,7 +19,7 @@ The main window's control bar, and playback commands such as open, seek and spee
 
 ## Where to find it
 
-- Right-click menu: Open File… (Ctrl+O, F3), Open ▸ Open URL… (Ctrl+U).
+- Right-click menu: Open ▸ Open File… (Ctrl+O, F3), Open URL… (Ctrl+U).
 - Right-click menu: Playback… (Alt+4), the Playback panel (speed, A-B Loop, jump, steps).
 - Command palette (Ctrl+Shift+P), with their keys: File: Reopen Current/Last File (Ctrl+Y); Copy to Clipboard: File Name, Folder Path, Full Path; Seek: Previous/Next Keyframe (Ctrl+Shift+←/→), Back/Forward 30 s (Ctrl+←/→), 60 s (Shift+←/→), 300 s (Ctrl+Alt+←/→), Jump to Time… (G), Jump to Start (Backspace), Seek Steps…; Speed: 0.5×, 1.5×, 2×, Custom…; Playback: Disable Screen Saver While Playing, Show Time / Thumbnail on Seek Bar Hover; A-B Loop: Set Start Point `[`, Set End Point `]`, Clear Start/End Point `{` `}`, Start/End Point Back/Forward 0.1 s (Ctrl/Alt+`[` `]`), Move Range Back/Forward 0.1 s (Ctrl+Alt+`[` `]`), Loop Current Chapter or Bookmark Range (Alt+`\`), A-B Loop On/Off (`\`); Loop Count: Endless, Once, 2, 3, 5, 10 Times.
 

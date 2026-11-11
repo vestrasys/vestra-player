@@ -959,7 +959,7 @@ export default async function activate(plugin: Plugin) {
     run: () => busy || announce(message("chooseSecondaryFile"), loadAs("secondary")),
   });
   // Menu redesign (step 6): the Subtitles panel replaces Subtitles ▸ and Reset ▸ Subtitle *. The menu
-  // keeps Open ▸ Open Subtitle… / Add Secondary Subtitle…, the top-level Subtitle Track ▸ and
+  // keeps Open ▸ Open Subtitle… / Add Secondary Subtitle…, Tools ▸ Subtitle Track ▸ and
   // Subtitles…; every other command is in the command palette ("Category: Title") with its key,
   // and names the panel (`home: "tune"`) when its control is there.
   plugin.commands.add({
@@ -967,9 +967,9 @@ export default async function activate(plugin: Plugin) {
     checked: () => !!subtitles.state?.selected,
     run: () => busy || announce(message("togglingShown"), toggleShown),
   });
-  // Subtitle Track ▸ (top level, proposal §4): Off (302), the tracks (303–310).
+  // Tools ▸ Subtitle Track ▸ (the short menu, user ruling 2026-11-11): Off (302), the tracks (303–310).
   plugin.commands.add({
-    id: "track-off", path: ["Subtitle Track", "Off"], order: 302, group: "domain", radio: true, ...idle,
+    id: "track-off", path: ["@tools", "Subtitle Track", "Off"], order: 302, group: "domain", radio: true, ...idle,
     category: CATEGORY.track, home: "tune",
     checked: () => !subtitles.state?.selected,
     run: () => busy || announce(message("hiding"), select(null)),
@@ -1054,7 +1054,7 @@ export default async function activate(plugin: Plugin) {
       );
       tracks.forEach((track, i) =>
         trackMenu.commands.add({
-          id: `track-${i + 1}`, path: ["Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
+          id: `track-${i + 1}`, path: ["@tools", "Subtitle Track", /* i18n-ignore */ titles[i]!.title], order: 303 + i,
           group: "domain", radio: true, ...idle, category: CATEGORY.track, home: "tune",
           checked: () => track.id === subtitles.state?.selected?.id,
           run: () => busy || announce(message("switching"), select(track, s.sourceId)),

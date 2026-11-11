@@ -291,9 +291,10 @@ export default async function activate(plugin: Plugin) {
   plugin.commands.add({
     id: "info.about",
     category: category.help,
-    path: ["About Vestra Player…"],
+    // The short menu (user ruling 2026-11-11): the last item of the player's Tools ▸.
+    path: ["@tools", "About Vestra Player…"],
     order: 880,
-    // Menu sweep (B5): the settings group, with Options… (830) and the host's Command Palette.
+    // Menu sweep (B5): the settings group, with Options… (830).
     group: "settings-main",
     bindings: ["F1"],
     run: showAbout,

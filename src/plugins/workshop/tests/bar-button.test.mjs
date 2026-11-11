@@ -20,7 +20,7 @@ test("the bottom bar's AI button: icon, order, tooltip, and a click opens the wi
   assert.equal(button.checked, false);
   assert.equal(button.tooltip, "Vestra Player AI");
   // The button sits beside a menu entry: one with no path would be refused.
-  assert.deepEqual(host.command("workshop.open").declaration.path, ["Vestra Player AI…"]);
+  assert.deepEqual(host.command("workshop.open").declaration.path, ["@tools", "Vestra Player AI…"]);
   assert.deepEqual(host.command("workshop.open").declaration.button, { icon: "ai", order: 100 });
 
   assert.ok(!host.windows.has("ai") || !host.window("ai").visible, "the window starts closed");

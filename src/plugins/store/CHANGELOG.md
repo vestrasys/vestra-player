@@ -3,6 +3,7 @@
 ## 0.2.16
 
 - The permission list names the new capability `media.sources` (SDK 1.7.8): **Remember videos you add and export from them later**, translated by machine (marked `x-machine`). Who must change: nobody.
+- Plugin Store… moves into the right-click menu's Tools ▸ (path `["@tools", title]`, the anchor added with the short menu; user ruling 2026-11-11): Tools ▸ ends with Vestra Player AI…, Plugin Store…, Command Palette…, then About. The title with the update count ("Plugin Store (2 updates)…") keeps the new path, as do the id, order 822, group `windows`, the palette category and the bottom-bar button. Who must change: nobody.
 
 ## 0.2.15
 

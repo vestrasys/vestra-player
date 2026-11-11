@@ -2,6 +2,8 @@
 
 ## 0.1.13
 
+- Menu (the short menu, user ruling 2026-11-11, SDK 1.7.12): About Vestra Player… (F1) moves from the top level of the right-click menu to the end of the player's Tools ▸ (`["@tools", "About Vestra Player…"]`); id, order 880, group `settings-main`, key and category are unchanged. No other info command is in the menu (Playback Info, Brief Info, Playback Properties… and Check for Updates… stay palette-only). Who must change: nobody.
+
 - Code only (SDK refactor ruling 11, built-in sweep pilot): what the About and Playback Properties windows and the Updates settings page show lives in `plugin.state` (SDK 1.7) instead of variables followed by a manual `plugin.update()`: the plugin list, renderer and status line (About), the tab, status, stats, File and System pages (Playback Properties), and the update state, error, progress, installer and saved settings (`Updater`). A write re-runs only the bindings that read the field; the one-second stats poll recomputes only the bindings that read the statistics (the SDK still adds a safety pass about once a second while the window is open, so full passes are fewer, not gone). All 9 manual update calls are gone; the download progress is still written at most ten times a second. Who must change: nobody. No behaviour change.
 
 - Menu sweep (menu redesign §4): Playback Info (Tab), Playback Properties… (Ctrl+F1) and Check for Updates… leave the right-click menu and are in the command palette only ("Info: …", "Help: Check for Updates…"), with ids, keys and the checked state unchanged; About Vestra Player… (F1) stays at the top level and joins the settings group (`settings-main`) with Options…, so one separator group holds Command Palette…, Options… and About. Who must change: nobody.

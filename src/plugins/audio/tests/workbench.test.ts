@@ -89,7 +89,7 @@ test("the right-click menu keeps Load External Audio… and Audio Track ▸; Aud
       ["Normalize", 0, "domain", "Shift+N", false, false],
       ["Crystalizer", 0, "domain", "Shift+C", false, false],
       ["Reset", 0, "domain", "", false, false],
-      ["Audio Track ▸ No Audio Tracks", 301, "domain", "", false, false],
+      ["@tools ▸ Audio Track ▸ No Audio Tracks", 301, "domain", "", false, false],
     ],
   );
   assert.equal(host.mounted().slot, "adjust");
@@ -670,8 +670,8 @@ test("G03: the Audio Track menu lists the tracks, follows the list and switches 
   await host.settle();
   const items = () =>
     [...host.commands.values()]
-      .filter(({ declaration: d }) => d.path[0] === "Audio Track" && d.order === 301)
-      .map(({ display }) => display.path[1]);
+      .filter(({ declaration: d }) => d.path[0] === "@tools" && d.path[1] === "Audio Track" && d.order === 301)
+      .map(({ display }) => display.path.at(-1));
   assert.deepEqual(items(), ["1. 日语 [jpn] (aac)", "2. English [eng] (aac)"]);
   assert.equal(host.command("audio.track.1").state.checked, true);
   assert.equal(host.command("audio.track.1").declaration.radio, true);
@@ -1041,7 +1041,7 @@ test("zh-Hans: the menu, the palette names, the reasons and the on-screen messag
       "声音处理: 规格化",
       "声音处理: 晶化",
       "声音处理: 复位",
-      "音轨 ▸ 没有音轨",
+      "工具 ▸ 音轨 ▸ 没有音轨",
       "输出设备: 系统默认",
       "输出设备: MacBook Air 扬声器",
       "输出设备: USB 耳机",
@@ -1122,7 +1122,7 @@ test("zh-Hans: the menu, the palette names, the reasons and the on-screen messag
   ]);
   assert.deepEqual(
     ["audio.track.1", "audio.track.2", "audio.track.3"].map((id) => host.command(id).display.path.join(" ▸ ")),
-    ["音轨 ▸ 1. 日语 [jpn] (aac)", "音轨 ▸ 音轨 2 (aac)", "音轨 ▸ 3. movie.jpn.mka（外部）"],
+    ["工具 ▸ 音轨 ▸ 1. 日语 [jpn] (aac)", "工具 ▸ 音轨 ▸ 音轨 2 (aac)", "工具 ▸ 音轨 ▸ 3. movie.jpn.mka（外部）"],
   );
   host.setSource({ audioTracks: [track(1)] });
   await host.settle();
@@ -1194,7 +1194,7 @@ test("G03: every Audio Track menu item fits the player's menu path segment in ev
           assert.doesNotMatch(segment, /^\s|\s$/u, `${locale}: ${JSON.stringify(segment)}`);
         }
       }
-      const labels = items.map((item) => item.display.path[1]!);
+      const labels = items.map((item) => item.display.path.at(-1)!);
       assert.equal(new Set(labels).size, labels.length, `${locale}: distinct items`);
       shown.set(locale, labels);
     } finally {

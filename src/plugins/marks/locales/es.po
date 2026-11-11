@@ -50,10 +50,10 @@ msgstr "Salta por capítulos y marcadores"
 #, x-machine
 msgid ""
 "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
-"Find it in the context menu under \"Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
+"Find it in the context menu under \"Tools ▸ Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
 msgstr ""
 "Muestra los capítulos del medio; agrega, nombra y administra marcadores para cada archivo; salta entre capítulos y marcadores y los muestra como marcas en la barra de progreso.\n"
-"Está en el menú contextual, en «Lista de capítulos y marcadores…» (H); los demás comandos están en la paleta de comandos, en «Capítulos y marcadores». El bucle A-B está en el panel «Reproducción» (Reproducción básica)."
+"Está en el menú contextual, en «Herramientas ▸ Lista de capítulos y marcadores…» (H); los demás comandos están en la paleta de comandos, en «Capítulos y marcadores». El bucle A-B está en el panel «Reproducción» (Reproducción básica)."
 
 #: manifest.json
 #, x-machine

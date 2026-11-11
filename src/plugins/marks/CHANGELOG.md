@@ -6,6 +6,7 @@
 - The plugin is now called **Chapters and Bookmarks** (was "Chapters, Bookmarks and A-B Loop"); the punchline, description and tags follow, in all six languages (the name reuses the existing "Chapters and Bookmarks" translations; the new punchline is machine-translated, `x-machine`, in de, es, fr, ja and ko). The A-B Loop texts are removed from the catalogs.
 - Code: `loop.ts`, `addLoopCommands`, `segmentAt`, `Actions.times` and the loop count in `store.ts` are gone; `seekbarMarks` no longer takes A and B.
 - Tests: the B23 tests moved to the playback plugin; this plugin's tests check that it declares no `ab.*` command and publishes no `A` marker.
+- Menu (user ruling 2026-11-11): Chapter and Bookmark List… (H) moves from the top level of the right-click menu into Tools ▸ (`["@tools", "Chapter and Bookmark List…"]`, SDK 1.7.12), after Snapshot ▸; order 801 stays, its group is now `marks` (was `windows`) so it sits between separators of its own. The description says "Tools ▸ Chapter and Bookmark List…" in all six languages (the player's word for Tools). Who must change: nobody.
 
 ## 0.1.7
 
