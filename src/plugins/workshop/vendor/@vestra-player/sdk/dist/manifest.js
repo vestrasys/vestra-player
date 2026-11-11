@@ -5,7 +5,7 @@
  */
 import { existsSync, lstatSync, readFileSync, realpathSync } from "node:fs";
 import { join, sep } from "node:path";
-import { API_VERSION, CAPABILITIES } from "./capabilities.js";
+import { API_VERSION, CAPABILITIES, CAPABILITY_INFO } from "./capabilities.js";
 export const MANIFEST_LIMITS = Object.freeze({
     idBytes: 128,
     name: 64,
@@ -75,6 +75,17 @@ export function manifestProblems(manifest, directory) {
             problem(`unknown capabilities ${unknown.join(", ")}`);
         if (new Set(capabilities).size !== capabilities.length)
             problem("capabilities must be unique");
+        // Only a built-in plugin may declare these. Built-in plugins have a
+        // `vestra.` id, which the player refuses for any other package: any
+        // other id is an error, a `vestra.` id a reminder.
+        const builtinOnly = capabilities.filter((c) => CAPABILITY_INFO[c]?.builtinOnly);
+        if (builtinOnly.length) {
+            const text = `${builtinOnly.join(", ")}: built-in plugins only (the player refuses any other plugin that declares ${builtinOnly.length === 1 ? "it" : "them"}, and its calls fail with code capability)`;
+            if (typeof id === "string" && /^vestra\./i.test(id))
+                hints.push(text);
+            else
+                problem(text);
+        }
     }
     if (typeof manifest.entry !== "string" || !relative(manifest.entry))
         problem("entry must be a relative path inside the package");

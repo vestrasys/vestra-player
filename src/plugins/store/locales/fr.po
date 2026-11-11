@@ -1681,6 +1681,16 @@ msgstr "Choisir le rendu GPU ou logiciel et redémarrer le lecteur"
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "Agrandir la vidéo avec le suréchantillonneur vidéo du GPU"
 
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Run any player or plugin command"
+msgstr "Exécuter n'importe quelle commande du lecteur ou d'un plugin"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Add the first row of the command palette"
+msgstr "Ajouter la première ligne de la palette de commandes"
+
 #: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Replace"

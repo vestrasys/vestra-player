@@ -413,6 +413,10 @@ pub(crate) struct Host {
     pub(crate) menu_shown: RefCell<menus::ShownMenu>,
     /// The open command palette (`MenuMode::Palette`).
     pub(crate) palette: palette::PaletteState,
+    /// The palette's first row and its holder (`palette.lead`).
+    pub(crate) lead: Option<crate::capabilities::Lead>,
+    /// `commands.run` tickets and rates.
+    pub(crate) command_runs: crate::capabilities::CommandRuns,
     pub(crate) policy: window_state::Policy,
     pub(crate) clock: Instant,
     pub(crate) window_facts: Value,

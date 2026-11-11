@@ -675,3 +675,63 @@ msgstr "조정 열에 패널이 없습니다"
 #, x-machine
 msgid "Locate {}"
 msgstr "{} 찾기"
+
+#. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label, {step}/{of}: the step of its request).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{plugin} · {step}/{of} · {command}"
+msgstr "{plugin} · {step}/{of} · {command}"
+
+#. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{plugin} · {command}"
+msgstr "{plugin} · {command}"
+
+#. commands.run: the alert before a plugin runs a command that asks first.
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{plugin} wants to run “{command}”"
+msgstr "{plugin}이(가) “{command}”을(를) 실행하려고 합니다"
+
+#. commands.run: why the alert asks, for a built-in plugin's destructive command.
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "This command cannot be undone."
+msgstr "이 명령은 되돌릴 수 없습니다."
+
+#. commands.run: why the alert asks, for a command of a plugin that is not built in ({owner}: that plugin's name).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does."
+msgstr "이 명령은 기본 제공 플러그인이 아닌 {owner}의 것입니다. 플레이어는 이 명령이 무엇을 하는지 알 수 없습니다."
+
+#. commands.run: the user's request quoted in the alert ({}: the text typed in the command palette).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "Request: “{}”"
+msgstr "요청: “{}”"
+
+#. commands.run: the alert's button that runs the command.
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "Run"
+msgstr "실행"
+
+#. commands.run: the alert's button that does not run the command (and stops the request).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "Don't Run"
+msgstr "실행 안 함"
+
+#. palette.lead: refused because another plugin holds the command palette's first row ({}: its id).
+#: src/capabilities/palette_lead.rs
+#, x-machine
+msgid "The command palette's first row is {}'s"
+msgstr "명령 팔레트의 첫 행은 {}이(가) 사용 중입니다"
+
+#. The bottom bar's command palette button while a plugin holds the palette's first row ({palette}: Command Palette…, {lead}: that row's title, such as Ask Vestra).
+#: src/ui/bar_buttons.rs
+#, x-machine
+msgid "{palette} and {lead}"
+msgstr "{palette} 및 {lead}"

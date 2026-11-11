@@ -2,6 +2,7 @@
 import type { Json, Transport } from "./wire.ts";
 import type { ListJson, TextJson } from "./i18n.ts";
 import type { ConditionJson } from "./plugin/when.ts";
+import type { CommandList, CommandRunResult } from "./plugin/types.ts";
 /**
  * The player's command registry caps, the same values as the player's own
  * table (the player's tests check that they agree). They are runaway guards,
@@ -134,7 +135,8 @@ export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video
  * icon of the player's V-Line set, `@vestra/icons.slint` (draw one in your own
  * Slint with `Icon { name: "store"; }`). The player's tests check that this
  * list is its icon set. `"sliders"` (three sliders, the player's Adjustments
- * and Effects button).
+ * and Effects button); `"search-ai"` (the magnifier with the AI icon's
+ * cross, the palette's button while a plugin holds its lead row).
  *
  * @example Check in a test that the button's icon exists
  * The test fails before release if the plugin's bar button names an icon
@@ -152,7 +154,7 @@ export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video
  *
  * @category Testing
  */
-export declare const BAR_BUTTON_ICONS: readonly ["play", "pause", "stop", "back", "forward", "open", "volume", "mute", "playlist", "detach", "attach", "close", "failed", "move-top", "move-up", "move-down", "move-bottom", "search", "chapter", "bookmark", "check-task", "check-box", "menu-check", "submenu", "scroll-up", "scroll-down", "caret-down", "sort-asc", "sort-desc", "tag-remove", "preview-play", "add", "remove", "sort", "fullscreen", "exit-fullscreen", "store", "ai", "sliders"];
+export declare const BAR_BUTTON_ICONS: readonly ["play", "pause", "stop", "back", "forward", "open", "volume", "mute", "playlist", "detach", "attach", "close", "failed", "move-top", "move-up", "move-down", "move-bottom", "search", "chapter", "bookmark", "check-task", "check-box", "menu-check", "submenu", "scroll-up", "scroll-down", "caret-down", "sort-asc", "sort-desc", "tag-remove", "preview-play", "add", "remove", "sort", "fullscreen", "exit-fullscreen", "store", "ai", "sliders", "search-ai"];
 /**
  * The player's limits on bottom-bar buttons (`CommandOptions.button`), the same
  * values as the player's (its tests check that they agree). A button past
@@ -344,6 +346,8 @@ export type CommandDeclaration = {
      * set, like `category`.
      */
     home?: string;
+    /** The command cannot be undone; sent only when `true`. */
+    destructive?: boolean;
 };
 /**
  * `commands.keys`: each of the plugin's own commands, by local id, and each of
@@ -378,4 +382,13 @@ export declare function commandClient(transport: Transport): {
     update: (id: string, revision: number, state: CommandState, when?: CommandWhen) => Promise<{
         revision: number;
     }>;
+    /** The palette's table (`commands.run`). */
+    list: () => Promise<CommandList>;
+    /** Run any listed command for a user action's ticket (`commands.run`). */
+    run: (params: {
+        id: string;
+        ticket: string;
+        step?: number;
+        of?: number;
+    }) => Promise<CommandRunResult>;
 };

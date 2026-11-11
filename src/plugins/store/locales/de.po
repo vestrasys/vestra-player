@@ -1679,6 +1679,16 @@ msgstr "GPU- oder Software-Rendering wählen und den Player neu starten"
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "Das Video mit dem Video-Upscaler der GPU hochskalieren"
 
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Run any player or plugin command"
+msgstr "Beliebige Befehle des Players oder von Plugins ausführen"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Add the first row of the command palette"
+msgstr "Die erste Zeile der Befehlspalette hinzufügen"
+
 #: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Replace"

@@ -11,6 +11,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &[],
     residency: Residency::Live,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     Method::this("timeline.set"),

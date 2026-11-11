@@ -22,10 +22,12 @@ use std::{collections::HashMap, sync::OnceLock};
 mod bindings_manage;
 mod clipboard;
 mod commands;
+mod commands_run;
 mod events;
 mod media_control;
 mod media_read;
 mod media_sources;
+pub(crate) mod palette_lead;
 mod playback_control;
 mod playback_read;
 mod plugins_manage;
@@ -50,8 +52,10 @@ mod video_upscaling;
 mod window_control;
 
 pub(crate) use commands::refresh_conditions;
+pub(crate) use commands_run::{CommandRuns, answered as command_run_answered};
 pub(crate) use events::WAKE_EVENTS;
 pub(crate) use media_sources::locate_dialog;
+pub(crate) use palette_lead::{EVENT as LEAD_EVENT, Lead};
 
 /// What a capability is, as the manifest, the store and the SDK name it.
 // Read by the JSON generator (`json`, a test) and the lazy activation to come.
@@ -69,6 +73,12 @@ pub struct Info {
     /// (doc/architecture/supervisor.md §2, "something live").
     /// A hint for the JSON; what decides is the capability's `record`.
     pub residency: Residency,
+    /// Only built-in plugins may use it (`CAPABILITY_INFO.builtinOnly`):
+    /// `Host::dispatch` and `replay` refuse it to any other plugin with
+    /// `capability`, built-in by provenance (`Host::is_builtin`), never by
+    /// a manifest field or a load mode; `packages.validate` refuses a
+    /// package that declares it.
+    pub builtin_only: bool,
 }
 
 /// The residency hint of a capability.
@@ -276,7 +286,39 @@ pub fn replay(
             "capability must be declared in manifest",
         ));
     }
+    // A recording of a package that is not built-in (the same id loaded for
+    // development or from another directory) replays nothing built-in-only.
+    let builtin = host.is_builtin_package(origin);
+    builtin_only_check(needs, builtin)?;
     capability.replay(host, owner, origin, call)
+}
+
+/// The refusal of a built-in-only capability (`Info::builtin_only`) to a
+/// plugin that is not built-in: `needs` is the capability a request needs,
+/// `builtin` whether its plugin is built-in by provenance.
+pub fn builtin_only_check(needs: Option<&str>, builtin: bool) -> std::result::Result<(), RpcError> {
+    if !builtin && needs.is_some_and(builtin_only) {
+        return Err(RpcError::new(
+            "capability",
+            "this capability is for built-in plugins only",
+        ));
+    }
+    Ok(())
+}
+
+/// Whether the capability `name` is for built-in plugins only.
+pub fn builtin_only(name: &str) -> bool {
+    ALL.iter()
+        .any(|c| c.info().name == name && c.info().builtin_only)
+}
+
+/// The first built-in-only capability a manifest declares: what a package
+/// that is not built-in may not declare (`packages.validate`).
+pub fn first_builtin_only(declared: &[String]) -> Option<&str> {
+    declared
+        .iter()
+        .map(String::as_str)
+        .find(|name| builtin_only(name))
 }
 
 /// Every manifest capability, in the manifest order the SDK's
@@ -310,6 +352,9 @@ pub static ALL: &[&dyn Capability] = &[
     &secrets::Secrets,
     &rendering_manage::RenderingManage,
     &video_upscaling::VideoUpscaling,
+    // Built-in only (Ask Vestra, doc/architecture/palette-lead.md).
+    &commands_run::CommandsRun,
+    &palette_lead::PaletteLead,
 ];
 
 /// Whether `name` is a manifest capability.
@@ -498,6 +543,7 @@ pub fn json() -> Value {
                 "risky": info.risky,
                 "requires": info.requires,
                 "residency": info.residency.name(),
+                "builtinOnly": info.builtin_only,
                 "methods": methods_json(c.methods(), Some(info)),
             })
         }).collect::<Vec<_>>(),
@@ -591,6 +637,63 @@ mod tests {
         for method in uncapable::METHODS {
             assert!(matches!(method.needs, Needs::Nothing), "{}", method.name);
         }
+    }
+
+    /// `commands.run` and `palette.lead` are refused to a plugin that is not
+    /// built-in, live (`Host::dispatch`) and replayed (`replay`), whatever it
+    /// declared; every other capability is unaffected.
+    #[test]
+    fn built_in_only_capabilities_are_refused_to_other_plugins() {
+        let only: Vec<_> = ALL
+            .iter()
+            .map(|c| c.info())
+            .filter(|info| info.builtin_only)
+            .map(|info| info.name)
+            .collect();
+        assert_eq!(only, ["commands.run", "palette.lead"]);
+        for method in [
+            "commands.list",
+            "commands.run",
+            "palette.lead.set",
+            "palette.lead.clear",
+            "palette.lead.done",
+        ] {
+            let needs = required(method, &json!({}), |_| true).unwrap();
+            assert!(needs.is_some_and(builtin_only), "{method}");
+            let refused = builtin_only_check(needs, false).unwrap_err();
+            assert_eq!(refused.code, "capability", "{method}");
+            assert_eq!(
+                refused.message,
+                "this capability is for built-in plugins only"
+            );
+            assert!(builtin_only_check(needs, true).is_ok(), "{method}");
+        }
+        // The `commands` capability's own methods stay open to everyone.
+        for method in ["commands.register", "commands.keys", "host.run"] {
+            let needs = required(method, &json!({}), |_| true).unwrap();
+            assert!(builtin_only_check(needs, false).is_ok(), "{method}");
+        }
+        assert!(builtin_only_check(None, false).is_ok());
+        let declared = |names: &[&str]| names.iter().map(|n| (*n).to_owned()).collect::<Vec<_>>();
+        assert_eq!(
+            first_builtin_only(&declared(&["commands", "palette.lead"])),
+            Some("palette.lead")
+        );
+        assert_eq!(first_builtin_only(&declared(&["commands", "events"])), None);
+        // Exported for the SDK.
+        let exported = json();
+        let flag = |name: &str| {
+            exported["capabilities"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .find(|c| c["name"] == name)
+                .unwrap()["builtinOnly"]
+                .clone()
+        };
+        assert_eq!(flag("commands.run"), true);
+        assert_eq!(flag("palette.lead"), true);
+        assert_eq!(flag("commands"), false);
     }
 
     #[test]

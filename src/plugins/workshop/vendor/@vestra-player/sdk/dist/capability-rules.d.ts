@@ -25,6 +25,8 @@ export interface HostCapability {
     readonly name: string;
     readonly label: string;
     readonly risky: boolean;
+    /** Only built-in plugins may declare it (absent: `false`). */
+    readonly builtinOnly?: boolean;
     readonly requires: readonly string[];
     readonly residency: string;
     readonly methods: readonly HostMethod[];
@@ -119,4 +121,5 @@ export declare function capabilityInfo(rules?: CapabilityRules): Record<string, 
     requires: string[];
     label: string;
     risky: boolean;
+    builtinOnly: boolean;
 }>;

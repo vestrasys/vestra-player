@@ -175,6 +175,11 @@ impl Host {
                 "capability must be declared in manifest",
             ));
         }
+        // Built-in-only capabilities (`commands.run`, `palette.lead`): by
+        // provenance, whatever the manifest declares.
+        if capability.is_some_and(capabilities::builtin_only) {
+            capabilities::builtin_only_check(capability, self.is_builtin(reply.owner))?;
+        }
         // Text values (i18n.md §7) in property values, timeline titles,
         // subtitle track titles and resolver failures become the strings
         // they show, in this plugin's catalog, before anything reads them (so

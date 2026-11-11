@@ -551,3 +551,53 @@ msgstr ""
 #: src/capabilities/media_sources.rs
 msgid "Locate {}"
 msgstr ""
+
+#. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label, {step}/{of}: the step of its request).
+#: src/capabilities/commands_run.rs
+msgid "{plugin} · {step}/{of} · {command}"
+msgstr ""
+
+#. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label).
+#: src/capabilities/commands_run.rs
+msgid "{plugin} · {command}"
+msgstr ""
+
+#. commands.run: the alert before a plugin runs a command that asks first.
+#: src/capabilities/commands_run.rs
+msgid "{plugin} wants to run “{command}”"
+msgstr ""
+
+#. commands.run: why the alert asks, for a built-in plugin's destructive command.
+#: src/capabilities/commands_run.rs
+msgid "This command cannot be undone."
+msgstr ""
+
+#. commands.run: why the alert asks, for a command of a plugin that is not built in ({owner}: that plugin's name).
+#: src/capabilities/commands_run.rs
+msgid "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does."
+msgstr ""
+
+#. commands.run: the user's request quoted in the alert ({}: the text typed in the command palette).
+#: src/capabilities/commands_run.rs
+msgid "Request: “{}”"
+msgstr ""
+
+#. commands.run: the alert's button that runs the command.
+#: src/capabilities/commands_run.rs
+msgid "Run"
+msgstr ""
+
+#. commands.run: the alert's button that does not run the command (and stops the request).
+#: src/capabilities/commands_run.rs
+msgid "Don't Run"
+msgstr ""
+
+#. palette.lead: refused because another plugin holds the command palette's first row ({}: its id).
+#: src/capabilities/palette_lead.rs
+msgid "The command palette's first row is {}'s"
+msgstr ""
+
+#. The bottom bar's command palette button while a plugin holds the palette's first row ({palette}: Command Palette…, {lead}: that row's title, such as Ask Vestra).
+#: src/ui/bar_buttons.rs
+msgid "{palette} and {lead}"
+msgstr ""

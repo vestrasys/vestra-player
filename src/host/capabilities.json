@@ -3,6 +3,7 @@
   "apiVersion": "vestra/1",
   "capabilities": [
     {
+      "builtinOnly": false,
       "label": "Provide audio and video it generates itself",
       "methods": [
         {
@@ -38,6 +39,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Read what is playing and the position",
       "methods": [
         {
@@ -71,6 +73,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Open media, control playback, keep the computer awake",
       "methods": [
         {
@@ -132,6 +135,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Resolve online video addresses",
       "methods": [
         {
@@ -157,6 +161,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Receive playback changes as they happen",
       "methods": [
         {
@@ -192,6 +197,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Add menu commands and shortcuts",
       "methods": [
         {
@@ -221,6 +227,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Open tool windows",
       "methods": [
         {
@@ -246,6 +253,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Show panels in the bottom bar, the sidebar or behind the video",
       "methods": [
         {
@@ -283,6 +291,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Show file pickers and confirmations",
       "methods": [
         {
@@ -300,6 +309,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Install, uninstall and disable other plugins",
       "methods": [
         {
@@ -313,6 +323,7 @@
       "risky": true
     },
     {
+      "builtinOnly": false,
       "label": "Process the picture (filters, shaders)",
       "methods": [
         {
@@ -364,6 +375,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Process the sound",
       "methods": [],
       "name": "processing.audio",
@@ -375,6 +387,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Read subtitles",
       "methods": [
         {
@@ -388,6 +401,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Load and change subtitles",
       "methods": [
         {
@@ -401,6 +415,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Take snapshots and export clips",
       "methods": [
         {
@@ -424,6 +439,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Take snapshots and export clips",
       "methods": [
         {
@@ -443,6 +459,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Remember videos you add and export from them later",
       "methods": [
         {
@@ -464,6 +481,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Show messages on the video",
       "methods": [
         {
@@ -481,6 +499,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Read and write the clipboard",
       "methods": [
         {
@@ -502,6 +521,7 @@
       "risky": true
     },
     {
+      "builtinOnly": false,
       "label": "Adjust the main window (size, on top, picture-in-picture)",
       "methods": [
         {
@@ -527,6 +547,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Change all shortcuts",
       "methods": [
         {
@@ -548,6 +569,7 @@
       "risky": true
     },
     {
+      "builtinOnly": false,
       "label": "Show marks on the progress bar",
       "methods": [
         {
@@ -565,6 +587,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Receive files dropped on the player",
       "methods": [
         {
@@ -586,6 +609,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Add pages to the Options window",
       "methods": [
         {
@@ -599,6 +623,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Change the player's palette",
       "methods": [
         {
@@ -616,6 +641,7 @@
       "risky": false
     },
     {
+      "builtinOnly": false,
       "label": "Store sign-in details in the system keychain",
       "methods": [
         {
@@ -637,6 +663,7 @@
       "risky": true
     },
     {
+      "builtinOnly": false,
       "label": "Choose GPU or software rendering and restart the player",
       "methods": [
         {
@@ -654,6 +681,7 @@
       "risky": true
     },
     {
+      "builtinOnly": false,
       "label": "Upscale the video with the GPU's video upscaler",
       "methods": [
         {
@@ -668,6 +696,46 @@
       "name": "video.upscaling",
       "requires": [],
       "residency": "live",
+      "risky": false
+    },
+    {
+      "builtinOnly": true,
+      "label": "Run any player or plugin command",
+      "methods": [
+        {
+          "name": "commands.list",
+          "needs": "commands.run"
+        },
+        {
+          "name": "commands.run",
+          "needs": "commands.run"
+        }
+      ],
+      "name": "commands.run",
+      "requires": [],
+      "residency": "none",
+      "risky": true
+    },
+    {
+      "builtinOnly": true,
+      "label": "Add the first row of the command palette",
+      "methods": [
+        {
+          "name": "palette.lead.set",
+          "needs": "palette.lead"
+        },
+        {
+          "name": "palette.lead.clear",
+          "needs": "palette.lead"
+        },
+        {
+          "name": "palette.lead.done",
+          "needs": "palette.lead"
+        }
+      ],
+      "name": "palette.lead",
+      "requires": [],
+      "residency": "recordable",
       "risky": false
     }
   ],

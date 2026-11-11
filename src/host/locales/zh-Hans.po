@@ -576,3 +576,63 @@ msgstr "调节栏中没有面板"
 #, x-machine
 msgid "Locate {}"
 msgstr "查找 {}"
+
+#. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label, {step}/{of}: the step of its request).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{plugin} · {step}/{of} · {command}"
+msgstr "{plugin} · {step}/{of} · {command}"
+
+#. commands.run: the OSD line naming what a built-in plugin ran ({plugin}: its name, {command}: the command's palette label).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{plugin} · {command}"
+msgstr "{plugin} · {command}"
+
+#. commands.run: the alert before a plugin runs a command that asks first.
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{plugin} wants to run “{command}”"
+msgstr "{plugin} 想要运行“{command}”"
+
+#. commands.run: why the alert asks, for a built-in plugin's destructive command.
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "This command cannot be undone."
+msgstr "此命令无法撤销。"
+
+#. commands.run: why the alert asks, for a command of a plugin that is not built in ({owner}: that plugin's name).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does."
+msgstr "此命令属于非内置插件 {owner}：播放器无法判断它会做什么。"
+
+#. commands.run: the user's request quoted in the alert ({}: the text typed in the command palette).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "Request: “{}”"
+msgstr "请求：“{}”"
+
+#. commands.run: the alert's button that runs the command.
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "Run"
+msgstr "运行"
+
+#. commands.run: the alert's button that does not run the command (and stops the request).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "Don't Run"
+msgstr "不运行"
+
+#. palette.lead: refused because another plugin holds the command palette's first row ({}: its id).
+#: src/capabilities/palette_lead.rs
+#, x-machine
+msgid "The command palette's first row is {}'s"
+msgstr "命令面板的第一行已由 {} 使用"
+
+#. The bottom bar's command palette button while a plugin holds the palette's first row ({palette}: Command Palette…, {lead}: that row's title, such as Ask Vestra).
+#: src/ui/bar_buttons.rs
+#, x-machine
+msgid "{palette} and {lead}"
+msgstr "{palette}与{lead}"

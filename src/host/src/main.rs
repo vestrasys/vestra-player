@@ -479,6 +479,8 @@ fn player() -> Result<()> {
         menu_panels: Vec::new(),
         menu_shown: Default::default(),
         palette: Default::default(),
+        lead: None,
+        command_runs: Default::default(),
         policy: window_state::Policy::new(0),
         clock: Instant::now(),
         window_facts: Value::Null,

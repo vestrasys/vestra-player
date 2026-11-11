@@ -427,6 +427,10 @@ impl Host {
             Event::OpenFiles(files, front) => self.open_files(files, front),
             Event::Settings(generation, index) => self.settings_event(generation, index),
             Event::SettingsChecked(serial, result) => self.settings_checked(serial, result),
+            Event::CommandRunAnswered(reply, yes) => {
+                self.policy.activity(self.now_ms());
+                crate::capabilities::command_run_answered(self, reply, yes);
+            }
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
                 self.dialog_busy = false;

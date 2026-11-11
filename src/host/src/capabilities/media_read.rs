@@ -10,6 +10,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &["media.control"],
     residency: Residency::None,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     Method::this("snapshot.state"),

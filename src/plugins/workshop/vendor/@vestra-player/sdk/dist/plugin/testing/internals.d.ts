@@ -70,7 +70,21 @@ export declare class Internals {
         producer: number;
         source: number;
         resolution: number;
+        ticket: number;
     };
+    /** `commands.run` tickets: runs, run times in the last second, last use (ms). */
+    readonly tickets: Map<string, {
+        count: number;
+        runs: number[];
+        last: number;
+    }>;
+    /** The last `commands.list` table (JSON) and its revision. */
+    listed: {
+        text: string;
+        revision: number;
+    };
+    /** The times of the plugin's `commands.run` calls in the last minute. */
+    runs: number[];
     sourceBook: Map<number, Json>;
     /** The pending resolutions' stamps and operations (beside `resolutions`). */
     resolving: Map<number, {

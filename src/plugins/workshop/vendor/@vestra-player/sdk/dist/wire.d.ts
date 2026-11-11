@@ -685,6 +685,21 @@ export declare function createWire(transport: Transport): {
         update: (id: string, revision: number, state: import("./commands.ts").CommandState, when?: import("./commands.ts").CommandWhen) => Promise<{
             revision: number;
         }>;
+        list: () => Promise<import("./index.ts").CommandList>;
+        run: (params: {
+            id: string;
+            ticket: string;
+            step?: number;
+            of?: number;
+        }) => Promise<import("./index.ts").CommandRunResult>;
+    };
+    /** The command palette's lead row (`palette.lead`). */
+    palette: {
+        set: (options: {
+            [key: string]: Json;
+        }) => Promise<void>;
+        clear: () => Promise<void>;
+        done: (ticket: string) => Promise<void>;
     };
     dialogs: {
         open: (options: {

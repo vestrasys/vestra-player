@@ -20,6 +20,7 @@ static INFO: Info = Info {
     // parts is `jobs.start`, which needs `media.control` as any export.
     requires: &[],
     residency: Residency::None,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     // Opening replaces what is playing, as `player.open` does, so it needs

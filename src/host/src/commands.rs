@@ -64,6 +64,11 @@ pub struct Declaration {
     /// (`CommandOptions.home`, SDK 1.6.4): the palette shows that place.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub home: Option<String>,
+    /// Running it cannot be taken back (`CommandOptions.destructive`):
+    /// a run through `commands.run` asks the user first
+    /// (capabilities/commands_run.rs). Optional; absent is `false`.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub destructive: bool,
     /// What the menu shows (doc/architecture/i18n.md §5), in the interface
     /// language; `title` and `path` stay as declared (English source text),
     /// the keys menus merge by. Filled by the player (`localize`), never by
@@ -98,7 +103,7 @@ pub enum ButtonIcon {
 /// button may name. Mirrored by `BAR_BUTTON_ICONS` in the SDK package;
 /// tests/sdk/host-agreement.test.ts checks the installed SDK agrees, and a
 /// test here that the list is the icon set's.
-pub const BUTTON_ICONS: [&str; 39] = [
+pub const BUTTON_ICONS: [&str; 40] = [
     "play",
     "pause",
     "stop",
@@ -138,6 +143,7 @@ pub const BUTTON_ICONS: [&str; 39] = [
     "store",
     "ai",
     "sliders",
+    "search-ai",
 ];
 
 /// The shown text of a [`Declaration`].
@@ -163,6 +169,7 @@ impl Declaration {
             repeat: false,
             category: None,
             home: None,
+            destructive: false,
             display: Display::default(),
             button: None,
         }

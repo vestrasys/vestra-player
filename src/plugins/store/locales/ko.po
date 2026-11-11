@@ -1679,6 +1679,16 @@ msgstr "GPU 렌더링과 소프트웨어 렌더링 선택, 플레이어 다시 �
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "GPU 비디오 업스케일러로 영상 업스케일링"
 
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Run any player or plugin command"
+msgstr "플레이어 또는 플러그인의 모든 명령 실행"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Add the first row of the command palette"
+msgstr "명령 팔레트 첫 줄 추가"
+
 #: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Replace"

@@ -1336,6 +1336,14 @@ msgstr ""
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr ""
 
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+msgid "Run any player or plugin command"
+msgstr ""
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+msgid "Add the first row of the command palette"
+msgstr ""
+
 #: store.ts:598 store.ts:599 store.ts:601
 msgid "Replace"
 msgstr ""
