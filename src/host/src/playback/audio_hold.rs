@@ -19,8 +19,9 @@
 //! - a pause longer than `HOLD`, the end of the file (keep-open's pause) and
 //!   no source release it: silence off, then `ao-reload` (mpv reads the
 //!   option only when it opens the audio output), and the device stops;
-//! - playback after a release arms it again, with the same reload: the
-//!   device has to start again then anyway.
+//! - the next file's load (before it sounds) or playback after a long pause
+//!   arms it again, with the same reload when an output is open: the device
+//!   has to start again then anyway. Normal playback never reloads.
 //!
 //! Windows only; elsewhere mpv's default (no silence) stays untouched.
 #![forbid(unsafe_code)]
@@ -39,7 +40,7 @@ pub enum Source {
     Paused,
     /// At the end (keep-open's pause), closed, failed or never opened.
     Stopped,
-    /// Loading: no change.
+    /// Loading: no sound yet, so a release is undone here (`Rearm`).
     Loading,
 }
 
@@ -81,8 +82,9 @@ impl AudioHold {
             return None;
         }
         match state {
-            Source::Loading => None,
-            Source::Playing => {
+            // Before the next file sounds: no reload while audio plays. Playing
+            // rearms too, for a load shorter than one state push.
+            Source::Loading | Source::Playing => {
                 self.paused_since = None;
                 (!std::mem::replace(&mut self.held, true)).then_some(Change::Rearm)
             }
@@ -101,10 +103,14 @@ impl AudioHold {
     }
 }
 
-/// Apply `change` to the player's mpv.
+/// Apply `change` to the player's mpv: the option, then a reload of the
+/// audio output if one is open (mpv reads the option when it opens one).
 pub fn apply(mpv: &rsmpv::Mpv, change: Change) -> Result<(), rsmpv::Error> {
     mpv.set_property("audio-stream-silence", change == Change::Rearm)?;
-    mpv.command(&["ao-reload"])
+    if mpv.get_property::<String>("current-ao").is_ok() {
+        mpv.command(&["ao-reload"])?;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
@@ -151,18 +157,72 @@ mod tests {
     }
 
     #[test]
-    fn the_end_of_the_file_releases_at_once_and_a_new_file_rearms() {
+    fn the_end_of_the_file_releases_at_once_and_the_next_load_rearms() {
         let t = Instant::now();
         let mut hold = AudioHold::new(true);
         assert_eq!(hold.observe(Source::Playing, t), None);
         assert_eq!(hold.observe(Source::Stopped, t + S), Some(Change::Release));
         assert_eq!(hold.observe(Source::Stopped, t + S * 2), None);
-        // The next file: loading changes nothing, playing rearms.
-        assert_eq!(hold.observe(Source::Loading, t + S * 3), None);
+        // The next file rearms while it loads, before it sounds; playing
+        // then changes nothing (no reload while audio plays).
         assert_eq!(
-            hold.observe(Source::Playing, t + S * 4),
+            hold.observe(Source::Loading, t + S * 3),
             Some(Change::Rearm)
         );
+        assert_eq!(hold.observe(Source::Playing, t + S * 4), None);
+    }
+
+    #[test]
+    fn the_start_up_release_is_undone_by_the_first_load() {
+        let t = Instant::now();
+        let mut hold = AudioHold::new(true);
+        // Nothing open yet.
+        assert_eq!(hold.observe(Source::Stopped, t), Some(Change::Release));
+        assert_eq!(hold.observe(Source::Loading, t + S), Some(Change::Rearm));
+        assert_eq!(hold.observe(Source::Loading, t + S * 2), None);
+        assert_eq!(hold.observe(Source::Playing, t + S * 3), None);
+    }
+
+    #[test]
+    fn a_load_shorter_than_a_state_push_rearms_when_it_plays() {
+        let t = Instant::now();
+        let mut hold = AudioHold::new(true);
+        assert_eq!(hold.observe(Source::Stopped, t), Some(Change::Release));
+        assert_eq!(hold.observe(Source::Playing, t + S), Some(Change::Rearm));
+    }
+
+    /// On a real mpv (`ao=null`): each change sets the option, without an
+    /// audio output and with one open (a generated tone, paused); the reload
+    /// of the open output succeeds.
+    #[test]
+    fn apply_sets_the_option_and_reloads_the_output() {
+        let mpv = rsmpv::Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap()
+            .set_property("audio-stream-silence", true)
+            .unwrap()
+            .build()
+            .unwrap();
+        let silence = || mpv.get_property::<bool>("audio-stream-silence").unwrap();
+        apply(&mpv, Change::Release).unwrap();
+        assert!(!silence());
+        apply(&mpv, Change::Rearm).unwrap();
+        assert!(silence());
+        mpv.set_property("pause", true).unwrap();
+        mpv.command(&["loadfile", "av://lavfi:sine=frequency=440"])
+            .unwrap();
+        let until = Instant::now() + Duration::from_secs(10);
+        while mpv.get_property::<String>("current-ao").is_err() {
+            assert!(Instant::now() < until, "no audio output opened");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        apply(&mpv, Change::Release).unwrap();
+        assert!(!silence());
+        apply(&mpv, Change::Rearm).unwrap();
+        assert!(silence());
     }
 
     #[test]
