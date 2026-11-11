@@ -337,8 +337,8 @@ impl Host {
         (shown, overflow, dropped)
     }
 
-    /// The command palette's cell (`host/palette`): the magnifier, always
-    /// shown, right of `»`.
+    /// The command palette's cell (`host/palette`): the magnifier (the ask
+    /// bubble while a lead is set), always shown, right of `»`.
     fn palette_item(&self) -> Option<Item> {
         let entry = self.commands.get(bindings::HOST, palette::PALETTE)?;
         let mut label = label(entry.declaration.shown_title());
@@ -348,7 +348,7 @@ impl Host {
             .table
             .label(bindings::HOST, palette::PALETTE);
         // While a plugin holds the palette's first row (`palette.lead`):
-        // the magnifier with the AI cross, and the row named in the tip.
+        // the speech bubble with the AI sparkle, and the row named in the tip.
         let icon = match &self.lead {
             Some(lead) => {
                 label = i18n::tr_args(
