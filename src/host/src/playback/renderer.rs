@@ -36,6 +36,11 @@ pub trait GpuBackend {
     type Frame: std::ops::Deref<Target = platform::GpuFrame>;
     /// Render at `size` pixels from the next frame on.
     fn set_size(&self, size: (u32, u32));
+    /// `set_size` for a single step of the area (fullscreen, maximize, a
+    /// toggled column): no wait for the size to hold (a drag's sizes wait).
+    fn set_size_now(&self, size: (u32, u32)) {
+        self.set_size(size);
+    }
     /// Pace to the display (`Some(fps)`, interpolation) or to the video.
     fn set_display_fps(&self, fps: Option<f64>);
     /// `Some(period)`: render and present the current (paused) frame once

@@ -113,6 +113,27 @@ export component HostWindow inherits Window {
     // The video column (without the bottom bar, sidebar and splitter).
     out property <float> video-width: canvas.width / 1px;
     out property <float> video-height: canvas.height / 1px;
+    // The picture's shape (width / height) while mpv letterboxes it into its
+    // frames (keep aspect, no zoom or pan); 0 otherwise. The host sets it.
+    in property <float> video-picture-aspect: 0;
+    // While the video area has another shape than the shown frame (a resize,
+    // until a frame at the new size comes), only the picture inside the frame
+    // is shown, scaled into the area, not mpv's bars for the old shape
+    // (the host's reference in render_target.rs computes the same).
+    private property <int> frame-w: root.video-frame.width;
+    private property <int> frame-h: root.video-frame.height;
+    private property <bool> clip-picture: root.video-picture-aspect > 0 && root.frame-w > 0 && root.frame-h > 0
+        && canvas.width > 0 && canvas.height > 0
+        && abs((root.frame-w / root.frame-h) / (canvas.width / canvas.height) - 1) > 0.01;
+    private property <bool> clip-wide: root.video-picture-aspect >= root.frame-w / max(1, root.frame-h);
+    private property <int> clip-w: !root.clip-picture ? root.frame-w
+        : root.clip-wide ? root.frame-w : max(1, round(root.frame-h * root.video-picture-aspect));
+    private property <int> clip-h: !root.clip-picture ? root.frame-h
+        : root.clip-wide ? max(1, round(root.frame-w / root.video-picture-aspect)) : root.frame-h;
+    out property <int> video-clip-x: round((root.frame-w - root.clip-w) / 2);
+    out property <int> video-clip-y: round((root.frame-h - root.clip-h) / 2);
+    out property <int> video-clip-width: root.clip-w;
+    out property <int> video-clip-height: root.clip-h;
     // Its top-left corner in the window (the PiP source layer sits there).
     out property <float> video-x: canvas.absolute-position.x / 1px;
     out property <float> video-y: canvas.absolute-position.y / 1px;
@@ -218,7 +239,9 @@ export component HostWindow inherits Window {
                         // them into the parent's, so the picture's size fed the window's layout
                         // and every new picture redid the layout and everything that depends
                         // on it.
-                        Image { x: 0px; y: 0px; visible: !root.no-video && !root.picture-in-picture; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain; }
+                        Image { x: 0px; y: 0px; visible: !root.no-video && !root.picture-in-picture; width: parent.width; height: parent.height; source: root.video-frame; image-fit: contain;
+                            source-clip-x: root.video-clip-x; source-clip-y: root.video-clip-y;
+                            source-clip-width: root.video-clip-width; source-clip-height: root.video-clip-height; }
                         if root.picture-in-picture: Text {
                             width: parent.width;
                             height: parent.height;

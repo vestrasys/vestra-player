@@ -1292,7 +1292,13 @@ mod tests {
             !wrapper.contains("clip"),
             "bottom bar wrapper clips: {wrapper}"
         );
-        assert!(!include_str!("../../ui/host.slint").contains("clip"));
+        // No `clip` property (the video's `source-clip-*` crops its picture
+        // only).
+        assert!(
+            !include_str!("../../ui/host.slint")
+                .split(|c: char| !(c.is_alphanumeric() || c == '-'))
+                .any(|word| word == "clip")
+        );
     }
 
     #[test]

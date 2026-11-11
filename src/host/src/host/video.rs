@@ -9,6 +9,29 @@ thread_local! {
     pub(crate) static FRAME_SINK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
     /// The UI thread's delivery of GPU frames to picture-in-picture.
     pub(crate) static PIP_GPU_SINK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+    /// The UI thread's `Host::resized`, run after the main window's resize.
+    pub(crate) static RESIZE_SINK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// The main window was resized (its winit hook): `Host::resized` once Slint
+/// has handled the event, coalesced (one queued at a time).
+pub(crate) fn queue_resized() {
+    static QUEUED: AtomicBool = AtomicBool::new(false);
+    if QUEUED.swap(true, Ordering::AcqRel) {
+        return;
+    }
+    let queued = slint::invoke_from_event_loop(|| {
+        QUEUED.store(false, Ordering::Release);
+        RESIZE_SINK.with(|sink| {
+            if let Some(resized) = &*sink.borrow() {
+                resized();
+            }
+        });
+    });
+    // No event loop (any more): the next resize may try again.
+    if queued.is_err() {
+        QUEUED.store(false, Ordering::Release);
+    }
 }
 
 /// `VESTRA_TEST_NO_VIDEO_IMAGE=1` (diagnostics): frames are rendered,
@@ -501,8 +524,61 @@ impl Host {
             self.backend.target.set_area(size);
             if let Some(gpu) = self.backend.render.gpu() {
                 // `VESTRA_RENDER_TARGET` (diagnostics) applies to GPU frames too.
-                gpu.set_size(render_target::forced().unwrap_or(size));
+                let size = render_target::forced().unwrap_or(size);
+                // A single step (fullscreen, maximize, a toggled column, PiP's
+                // shape) gets new textures at once; a drag's sizes only once
+                // one held.
+                if self.render_continuous {
+                    gpu.set_size(size);
+                } else {
+                    gpu.set_size_now(size);
+                }
             }
+        }
+    }
+    /// The video area as the layout has it now → the render size (C-SIZE)
+    /// and the picture's shape for the video area's `video-clip-*` (shown
+    /// alone while a frame of another shape is up, `picture_clip`). Each
+    /// tick, and right after the window was resized (`RESIZE_SINK`), so the
+    /// renderer starts on the new size before the next tick. Returns the
+    /// area in logical pixels.
+    pub(crate) fn follow_video_area(
+        &mut self,
+        shell: &slint_interpreter::ComponentInstance,
+        fullscreen: bool,
+    ) -> (f64, f64) {
+        view::settle_layout(shell.window());
+        let number = |name: &str| match shell.get_property(name) {
+            Ok(SValue::Number(n)) => n,
+            _ => 0.,
+        };
+        let video = (number("video-width"), number("video-height"));
+        let scale = f64::from(shell.window().scale_factor());
+        if let Some(applied) = self
+            .sizing
+            .observe(video, scale, fullscreen, Instant::now())
+        {
+            self.render_area = Some(applied.size);
+            self.render_continuous = applied.continuous;
+        }
+        self.apply_render_size();
+        // A generated stream's pictures are not mpv's frames.
+        let aspect = (!self.backend.render.producer())
+            .then(|| self.backend.target.layout())
+            .flatten()
+            .and_then(|layout| layout.letterbox_aspect())
+            .unwrap_or(0.);
+        if number("video-picture-aspect") != aspect {
+            let _ = shell.set_property("video-picture-aspect", SValue::Number(aspect));
+        }
+        video
+    }
+    /// The main window was resized (its winit hook, after Slint's own
+    /// handling): follow the new video area now instead of at the next tick.
+    pub(crate) fn resized(&mut self) {
+        if let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) {
+            let fullscreen = shell.window().is_fullscreen();
+            self.follow_video_area(&shell, fullscreen);
         }
     }
     /// A frame of `size` pixels may go to PiP: it has the shape the renderer

@@ -98,39 +98,83 @@ fn parse_size(text: &str) -> Option<Size> {
         .then_some((width, height))
 }
 
-/// Applies a changing area at most every `THROTTLE`, always the final value
-/// within `THROTTLE` after the changes stop, and at once when asked to
-/// (fullscreen, scale-factor change).
+/// Changes of the area within `THROTTLE` of each other that still apply at
+/// once: a single step (a toggled column, maximize) often lands in two
+/// layouts a tick apart; only a longer run of changes (a border drag) is
+/// throttled.
+pub const STEPS: u32 = 2;
+
+/// A size to apply, and whether it belongs to a run of changes (a border
+/// drag) rather than a single step: the GPU renderer remakes its textures at
+/// once for a step, and only once a run's size held (`SETTLE` there).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Applied {
+    pub size: Size,
+    pub continuous: bool,
+}
+
+/// Applies a single step of the area at once (up to `STEPS` changes within
+/// `THROTTLE` of each other); a longer run of changes at most every
+/// `THROTTLE`, always the final value within `THROTTLE` after the changes
+/// stop; and at once when asked to (fullscreen, scale-factor change).
 #[derive(Debug, Default)]
 pub struct Throttle {
     applied: Option<Size>,
     pending: Option<Size>,
     at: Option<Instant>,
+    /// The newest size offered, when it was first offered, and the changes
+    /// in the current run (each within `THROTTLE` of the one before).
+    offered: Option<Size>,
+    changed: Option<Instant>,
+    run: u32,
 }
 impl Throttle {
     /// Offer the newest area; returns the size to apply now, if any.
-    pub fn offer(&mut self, size: Size, immediate: bool, now: Instant) -> Option<Size> {
+    pub fn offer(&mut self, size: Size, immediate: bool, now: Instant) -> Option<Applied> {
+        if self
+            .changed
+            .is_none_or(|at| now.duration_since(at) >= THROTTLE)
+        {
+            self.run = 0;
+        }
+        if self.offered != Some(size) {
+            self.offered = Some(size);
+            self.changed = Some(now);
+            self.run += 1;
+        }
         if self.applied == Some(size) {
             self.pending = None;
             return None;
         }
-        let due = immediate || self.at.is_none_or(|at| now.duration_since(at) >= THROTTLE);
+        let continuous = self.run > STEPS;
+        let due =
+            immediate || !continuous || self.at.is_none_or(|at| now.duration_since(at) >= THROTTLE);
         if due {
             self.pending = None;
             self.applied = Some(size);
             self.at = Some(now);
-            Some(size)
+            Some(Applied {
+                size,
+                continuous: continuous && !immediate,
+            })
         } else {
             self.pending = Some(size);
             None
         }
     }
     /// Called every tick: the held value once its turn comes.
-    pub fn poll(&mut self, now: Instant) -> Option<Size> {
+    pub fn poll(&mut self, now: Instant) -> Option<Applied> {
         let size = self.pending?;
         self.offer(size, false, now)
     }
 }
+
+/// After fullscreen or the scale factor changed, the window's layouts within
+/// this long all belong to that one step and apply at once: entering
+/// fullscreen lays out the old window without its bar (the tick that sets
+/// it), then the screen (the resize, possibly in more than one system
+/// resize), and none of them may count as a drag.
+pub const TRANSITION: Duration = Duration::from_millis(250);
 
 /// The UI side: the video area each tick → the area to send to the renderer.
 #[derive(Debug, Default)]
@@ -138,6 +182,8 @@ pub struct Sizing {
     throttle: Throttle,
     /// (fullscreen, scale factor) last seen; a change applies at once.
     seen: Option<(bool, u64)>,
+    /// When they last changed (`TRANSITION`).
+    changed: Option<Instant>,
 }
 impl Sizing {
     pub fn observe(
@@ -146,10 +192,15 @@ impl Sizing {
         scale: f64,
         fullscreen: bool,
         now: Instant,
-    ) -> Option<Size> {
+    ) -> Option<Applied> {
         let facts = (fullscreen, scale.to_bits());
-        let immediate = self.seen.is_some_and(|seen| seen != facts);
+        if self.seen.is_some_and(|seen| seen != facts) {
+            self.changed = Some(now);
+        }
         self.seen = Some(facts);
+        let immediate = self
+            .changed
+            .is_some_and(|at| now.saturating_duration_since(at) < TRANSITION);
         match physical(logical, scale) {
             Some(area) => self.throttle.offer(area, immediate, now),
             None => self.throttle.poll(now),
@@ -168,9 +219,9 @@ pub struct Request {
 pub struct Shared {
     request: Mutex<Request>,
     revision: AtomicU64,
-    /// The picture's size inside the last rendered frame (the frame less
+    /// The last rendered frame and the picture inside it (the frame less
     /// mpv's margins, `osd-dimensions`), from the control worker.
-    picture: Mutex<Option<(f64, f64)>>,
+    picture: Mutex<Option<Layout>>,
     /// Wakes the software renderer when the request changes (`set_waker`).
     waker: Mutex<Option<Waker>>,
 }
@@ -213,13 +264,27 @@ impl Shared {
             waker();
         }
     }
-    /// The control worker: the picture's size in the last rendered frame.
+    /// A frame that is all picture, of this size (tests).
+    #[cfg(test)]
     pub fn set_picture(&self, picture: Option<(f64, f64)>) {
-        let picture =
-            picture.filter(|(w, h)| w.is_finite() && h.is_finite() && *w >= 1. && *h >= 1.);
-        *self.picture.lock().unwrap_or_else(PoisonError::into_inner) = picture;
+        self.set_layout(picture.map(|(width, height)| Layout {
+            frame: (width, height),
+            margins: [0.; 4],
+        }));
+    }
+    /// The control worker: the last rendered frame's size and mpv's margins
+    /// around the picture in it (`osd-dimensions`).
+    pub fn set_layout(&self, layout: Option<Layout>) {
+        let layout = layout.filter(|layout| {
+            let (w, h) = layout.picture();
+            w.is_finite() && h.is_finite() && w >= 1. && h >= 1.
+        });
+        *self.picture.lock().unwrap_or_else(PoisonError::into_inner) = layout;
     }
     pub fn picture(&self) -> Option<(f64, f64)> {
+        self.layout().map(|layout| layout.picture())
+    }
+    pub fn layout(&self) -> Option<Layout> {
         *self.picture.lock().unwrap_or_else(PoisonError::into_inner)
     }
     /// The current request and its revision (bumped by every change).
@@ -227,6 +292,72 @@ impl Shared {
         let request = *self.request.lock().unwrap_or_else(PoisonError::into_inner);
         (self.revision.load(Ordering::Acquire), request)
     }
+}
+
+/// A rendered frame's size and mpv's margins around the picture in it
+/// (`osd-dimensions`: `w`, `h`, then `ml`, `mt`, `mr`, `mb`; negative when
+/// the picture is larger than the frame, zoomed in or cropped).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Layout {
+    pub frame: (f64, f64),
+    pub margins: [f64; 4],
+}
+impl Layout {
+    /// The picture's size: the frame less the margins.
+    pub fn picture(&self) -> (f64, f64) {
+        let [left, top, right, bottom] = self.margins;
+        (self.frame.0 - left - right, self.frame.1 - top - bottom)
+    }
+    /// The picture's shape (width / height) while mpv letterboxes it into
+    /// its frames: the picture lies whole inside the frame, centred, and
+    /// touches two opposite edges (keep aspect, no zoom or pan). `None`
+    /// otherwise (zoomed, panned, filled, or nothing measured): then no
+    /// frame's picture can be told from its bars. Stretched (no keep aspect)
+    /// the picture fills the frame, so this is the frame's own shape and a
+    /// frame is shown whole, as before.
+    pub fn letterbox_aspect(&self) -> Option<f64> {
+        let (width, height) = self.picture();
+        let [left, top, right, bottom] = self.margins;
+        // Within a pixel or two: mpv rounds the margins to whole pixels.
+        const SLACK: f64 = 1.5;
+        let inside = self.margins.iter().all(|m| m.is_finite() && *m > -SLACK);
+        let centred = (left - right).abs() <= SLACK && (top - bottom).abs() <= SLACK;
+        let touches = left.max(right) <= SLACK || top.max(bottom) <= SLACK;
+        (inside && centred && touches && width >= 1. && height >= 1.).then(|| width / height)
+    }
+}
+
+/// The picture's rectangle inside a frame of `frame` pixels (x, y, width,
+/// height), to show alone while the video area has another shape than the
+/// frame: the frame was rendered for the area before a resize, with mpv's
+/// bars for that shape, and scaling the whole frame into the new area would
+/// show the picture at the wrong size until a frame at the new size comes
+/// (browsers, MPC and VLC scale the last picture, not its bars). `None`
+/// when the frame has the area's shape (within 1%), or without a
+/// letterboxed `aspect`: show the whole frame. `host.slint` computes the
+/// same in its `video-clip-*` bindings (a resize draws before any host
+/// code runs); this is their reference, and `ui::view` tests keep the two
+/// in step.
+#[cfg(test)]
+pub fn picture_clip(frame: Size, area: (f64, f64), aspect: Option<f64>) -> Option<[u32; 4]> {
+    let aspect = aspect.filter(|a| a.is_finite() && *a > 0.)?;
+    let (fw, fh) = (f64::from(frame.0), f64::from(frame.1));
+    let (aw, ah) = area;
+    if !(fw >= 1. && fh >= 1. && aw > 0. && ah > 0.) {
+        return None;
+    }
+    let frame_shape = fw / fh;
+    if ((frame_shape / (aw / ah)) - 1.).abs() <= 0.01 {
+        return None;
+    }
+    let (width, height) = if aspect >= frame_shape {
+        (fw, (fw / aspect).round().max(1.))
+    } else {
+        ((fh * aspect).round().max(1.), fh)
+    };
+    let x = ((fw - width) / 2.).round();
+    let y = ((fh - height) / 2.).round();
+    Some([x as u32, y as u32, width as u32, height as u32])
 }
 
 /// Picture-in-picture (R-H8): the largest area of the picture's shape inside
@@ -892,54 +1023,159 @@ mod tests {
     fn drags_are_throttled_and_the_final_size_always_lands() {
         let start = Instant::now();
         let ms = |n| start + Duration::from_millis(n);
+        let step = |size| {
+            Some(Applied {
+                size,
+                continuous: false,
+            })
+        };
+        let run = |size| {
+            Some(Applied {
+                size,
+                continuous: true,
+            })
+        };
         let mut throttle = Throttle::default();
-        assert_eq!(throttle.offer((100, 100), false, ms(0)), Some((100, 100)));
+        assert_eq!(throttle.offer((100, 100), false, ms(0)), step((100, 100)));
         assert_eq!(throttle.offer((100, 100), false, ms(5)), None, "unchanged");
-        // Continuous changes within 50 ms are held.
-        assert_eq!(throttle.offer((110, 100), false, ms(16)), None);
+        // A step's second layout a tick later applies at once too.
+        assert_eq!(throttle.offer((110, 100), false, ms(16)), step((110, 100)));
+        // More changes within 50 ms of each other: a drag, held.
         assert_eq!(throttle.offer((120, 100), false, ms(32)), None);
+        assert_eq!(throttle.offer((130, 100), false, ms(40)), None);
         assert_eq!(throttle.poll(ms(48)), None);
-        assert_eq!(throttle.poll(ms(50)), Some((120, 100)), "the newest one");
-        assert_eq!(throttle.offer((130, 100), false, ms(60)), None);
-        // Changes stop: the held final value lands within 50 ms.
-        assert_eq!(throttle.poll(ms(100)), Some((130, 100)));
+        assert_eq!(throttle.poll(ms(66)), run((130, 100)), "the newest one");
+        assert_eq!(throttle.offer((140, 100), false, ms(80)), None);
+        assert_eq!(throttle.poll(ms(100)), None);
+        // Changes stop: the held final value lands 50 ms after the last
+        // change, as a step (the GPU renderer remakes its textures at once).
+        assert_eq!(throttle.poll(ms(130)), step((140, 100)));
         assert_eq!(throttle.poll(ms(200)), None);
-        // Fullscreen or a scale-factor change applies at once.
-        assert_eq!(throttle.offer((140, 100), false, ms(110)), None);
+        // After a pause, a single step (two layouts) applies at once.
+        assert_eq!(throttle.offer((150, 100), false, ms(400)), step((150, 100)));
+        assert_eq!(throttle.offer((160, 100), false, ms(416)), step((160, 100)));
+        // Fullscreen or a scale-factor change applies at once, also in a run.
+        assert_eq!(throttle.offer((170, 100), false, ms(420)), None);
         assert_eq!(
-            throttle.offer((2560, 1600), true, ms(111)),
-            Some((2560, 1600))
+            throttle.offer((2560, 1600), true, ms(421)),
+            step((2560, 1600))
         );
-        assert_eq!(throttle.poll(ms(400)), None, "the held value was replaced");
+        assert_eq!(throttle.poll(ms(600)), None, "the held value was replaced");
         // Back to the applied size before the turn: nothing to do.
-        assert_eq!(throttle.offer((150, 100), false, ms(420)), Some((150, 100)));
-        assert_eq!(throttle.offer((160, 100), false, ms(430)), None);
-        assert_eq!(throttle.offer((150, 100), false, ms(440)), None);
-        assert_eq!(throttle.poll(ms(500)), None);
+        assert_eq!(
+            throttle.offer((180, 100), false, ms(1000)),
+            step((180, 100))
+        );
+        assert_eq!(
+            throttle.offer((190, 100), false, ms(1010)),
+            step((190, 100))
+        );
+        assert_eq!(throttle.offer((200, 100), false, ms(1020)), None);
+        assert_eq!(throttle.offer((190, 100), false, ms(1030)), None);
+        assert_eq!(throttle.poll(ms(1100)), None);
+    }
+
+    #[test]
+    fn a_letterboxed_frame_tells_its_picture_shape() {
+        let layout = |frame, margins| Layout { frame, margins };
+        let shape = |l: Layout| l.letterbox_aspect().map(|a| (a * 1000.).round() / 1000.);
+        // Pillarbox (16:9 in a wider area), letterbox, and no bars.
+        assert_eq!(
+            shape(layout((2000., 900.), [200., 0., 200., 0.])),
+            Some(1.778)
+        );
+        assert_eq!(
+            shape(layout((1280., 860.), [0., 70., 0., 70.])),
+            Some(1.778)
+        );
+        assert_eq!(shape(layout((1920., 1080.), [0.; 4])), Some(1.778));
+        // mpv's whole-pixel rounding: a pixel off centre still counts.
+        assert_eq!(
+            shape(layout((1281., 860.), [0., 70., 0., 69.])),
+            Some(1.777)
+        );
+        // Zoomed in or filled (negative margins), zoomed out (bars on all
+        // sides), panned (off centre): no shape to crop to.
+        assert_eq!(
+            shape(layout((1600., 900.), [-200., -112., -200., -112.])),
+            None
+        );
+        assert_eq!(shape(layout((1600., 900.), [0., -100., 0., -100.])), None);
+        assert_eq!(shape(layout((1600., 900.), [200., 112., 200., 112.])), None);
+        assert_eq!(shape(layout((2000., 900.), [300., 0., 100., 0.])), None);
+        assert_eq!(shape(layout((f64::NAN, 900.), [0.; 4])), None);
+    }
+
+    #[test]
+    fn a_frame_of_another_shape_shows_only_its_picture() {
+        let wide = Some(16. / 9.);
+        // The frame has the area's shape: the whole frame (today's picture).
+        assert_eq!(picture_clip((1600, 860), (1600., 860.), wide), None);
+        assert_eq!(
+            picture_clip((1600, 860), (800., 430.), wide),
+            None,
+            "scale only"
+        );
+        assert_eq!(
+            picture_clip((1604, 860), (1600., 860.), wide),
+            None,
+            "within 1%"
+        );
+        // Closing the sidebar: a 1280x860 frame (bars above and below) in a
+        // 1600x860 area shows its 1280x720 picture.
+        assert_eq!(
+            picture_clip((1280, 860), (1600., 860.), wide),
+            Some([0, 70, 1280, 720])
+        );
+        // Opening it: a pillarboxed 1600x860 frame in a 1280x860 area.
+        assert_eq!(
+            picture_clip((1600, 860), (1280., 860.), wide),
+            Some([36, 0, 1529, 860])
+        );
+        // Fullscreen: the window's frame into the screen.
+        assert_eq!(
+            picture_clip((1600, 860), (2560., 1440.), wide),
+            Some([36, 0, 1529, 860])
+        );
+        // A portrait picture, and a frame without bars (PiP's shape).
+        assert_eq!(
+            picture_clip((1000, 1000), (1600., 900.), Some(9. / 16.)),
+            Some([219, 0, 563, 1000])
+        );
+        assert_eq!(
+            picture_clip((1600, 900), (1000., 1000.), wide),
+            Some([0, 0, 1600, 900])
+        );
+        // No letterboxed shape, or nothing to show: the whole frame.
+        assert_eq!(picture_clip((1280, 860), (1600., 860.), None), None);
+        assert_eq!(picture_clip((1280, 860), (1600., 860.), Some(0.)), None);
+        assert_eq!(picture_clip((0, 0), (1600., 860.), wide), None);
+        assert_eq!(picture_clip((1280, 860), (0., 0.), wide), None);
     }
 
     #[test]
     fn fullscreen_and_scale_changes_skip_the_throttle() {
         let start = Instant::now();
         let ms = |n| start + Duration::from_millis(n);
+        let size = |applied: Option<Applied>| applied.map(|a| (a.size, a.continuous));
         let mut sizing = Sizing::default();
         assert_eq!(
-            sizing.observe((780., 500.), 2., false, ms(0)),
-            Some((1560, 1000))
+            size(sizing.observe((780., 500.), 2., false, ms(0))),
+            Some(((1560, 1000), false))
         );
         assert_eq!(
-            sizing.observe((790., 500.), 2., false, ms(16)),
-            None,
-            "dragging"
+            size(sizing.observe((790., 500.), 2., false, ms(16))),
+            Some(((1580, 1000), false)),
+            "a step's second layout"
         );
         assert_eq!(
-            sizing.observe((1280., 800.), 2., true, ms(20)),
-            Some((2560, 1600)),
+            size(sizing.observe((1280., 800.), 2., true, ms(20))),
+            Some(((2560, 1600), false)),
             "fullscreen"
         );
         assert_eq!(
-            sizing.observe((1280., 800.), 1., true, ms(30)),
-            Some((1280, 800)),
+            size(sizing.observe((1280., 800.), 1., true, ms(30))),
+            Some(((1280, 800), false)),
             "moved to a 1x screen"
         );
         assert_eq!(
@@ -947,11 +1183,66 @@ mod tests {
             None,
             "minimised"
         );
-        assert_eq!(sizing.observe((1000., 800.), 1., true, ms(45)), None);
+        // Still the screen change's step.
         assert_eq!(
-            sizing.observe((0., 0.), 1., true, ms(90)),
-            Some((1000, 800))
+            size(sizing.observe((1000., 800.), 1., true, ms(45))),
+            Some(((1000, 800), false))
         );
+        // Later, a drag: two layouts at once, then held, then the newest.
+        assert_eq!(
+            size(sizing.observe((1010., 800.), 1., true, ms(400))),
+            Some(((1010, 800), false))
+        );
+        assert_eq!(
+            size(sizing.observe((1020., 800.), 1., true, ms(416))),
+            Some(((1020, 800), false))
+        );
+        assert_eq!(sizing.observe((1030., 800.), 1., true, ms(432)), None);
+        assert_eq!(sizing.observe((1040., 800.), 1., true, ms(448)), None);
+        assert_eq!(
+            size(sizing.observe((0., 0.), 1., true, ms(470))),
+            Some(((1040, 800), true))
+        );
+    }
+
+    /// Entering fullscreen on Windows can take more layouts than a step's
+    /// two: the tick that sets the fullscreen bar and columns (the old
+    /// window without its bar), one or two system resizes, the tick after.
+    /// All apply at once and none as a drag (the GPU renderer would wait
+    /// `SETTLE` for it).
+    #[test]
+    fn every_layout_of_a_fullscreen_change_is_one_step() {
+        let start = Instant::now();
+        let ms = |n| start + Duration::from_millis(n);
+        let mut sizing = Sizing::default();
+        let step = |applied: Option<Applied>| applied.is_some_and(|a| !a.continuous);
+        assert!(step(sizing.observe((1600., 860.), 1., false, ms(0))));
+        // A drag just before does not make the change a run either.
+        assert!(step(sizing.observe((1610., 860.), 1., false, ms(10))));
+        let _ = sizing.observe((1620., 860.), 1., false, ms(20));
+        for (n, area) in [
+            (30, (1600., 900.)),
+            (31, (1600., 930.)),
+            (32, (2560., 1440.)),
+            (46, (2560., 1400.)),
+            (62, (2560., 1440.)),
+        ] {
+            assert!(
+                step(sizing.observe(area, 1., true, ms(n))),
+                "{area:?} at {n} ms"
+            );
+        }
+        // Leaving it again: the same.
+        for (n, area) in [
+            (1000, (2560., 1400.)),
+            (1001, (1600., 900.)),
+            (1016, (1280., 860.)),
+        ] {
+            assert!(
+                step(sizing.observe(area, 1., false, ms(n))),
+                "{area:?} at {n} ms"
+            );
+        }
     }
 
     #[test]

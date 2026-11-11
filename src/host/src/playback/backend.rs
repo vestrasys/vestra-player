@@ -1067,7 +1067,7 @@ impl Backend {
                     if !processing.stepping()
                         && push.due(sources.generation(), sources.phase(), Instant::now())
                     {
-                        view_target.set_picture(picture_size(&mpv));
+                        view_target.set_layout(picture_layout(&mpv));
                         if frame_log {
                             out_frame.stages.mpv_counts(
                                 mpv.get_property::<i64>("frame-drop-count").ok(),
@@ -1311,20 +1311,23 @@ impl CoverArt {
         Ok(())
     }
 }
-/// The picture's size in the last rendered frame: the frame less the
+/// The last rendered frame and the picture in it: the frame less the
 /// margins mpv left around the video (`osd-dimensions`; both renderers use
 /// `vo=libmpv`, so it describes their last frame). Every display setting
 /// (aspect override, rotation, zoom, panscan) is already in it.
-fn picture_size(mpv: &Mpv) -> Option<(f64, f64)> {
+fn picture_layout(mpv: &Mpv) -> Option<crate::playback::render_target::Layout> {
     let read = |name: &str| {
         mpv.get_property::<f64>(&format!("osd-dimensions/{name}"))
             .ok()
             .filter(|v| v.is_finite())
     };
-    let (width, height) = (read("w")?, read("h")?);
-    let width = width - read("ml").unwrap_or(0.) - read("mr").unwrap_or(0.);
-    let height = height - read("mt").unwrap_or(0.) - read("mb").unwrap_or(0.);
-    (width >= 1. && height >= 1.).then_some((width, height))
+    let margin = |name: &str| read(name).unwrap_or(0.);
+    let layout = crate::playback::render_target::Layout {
+        frame: (read("w")?, read("h")?),
+        margins: [margin("ml"), margin("mt"), margin("mr"), margin("mb")],
+    };
+    let (width, height) = layout.picture();
+    (width >= 1. && height >= 1.).then_some(layout)
 }
 /// The source's display size after the filter chain (`video-out-params/dw`, `dh`).
 fn source_size(mpv: &Mpv) -> Option<(u32, u32)> {

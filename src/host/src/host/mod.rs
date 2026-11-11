@@ -85,7 +85,7 @@ pub(crate) use rpc::{Reply, Request, RpcError, string, ui_error};
 pub(crate) use state::{LayoutChange, layout_change, policy_slot};
 pub(crate) use supervisor::Origin;
 pub(crate) use supervisor::shutdown::{DEVICE_LOSS_BUDGET, QUIT_BUDGET};
-pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK};
+pub(crate) use video::{FRAME_SINK, PIP_GPU_SINK, RESIZE_SINK};
 
 /// The key of a plugin's panel in one slot (SDK 1.6.15: a plugin mounts
 /// one panel per slot): what the shell, the policy and the compile sets
@@ -578,6 +578,9 @@ pub(crate) struct Host {
     /// renderers (the area, or the picture's shape while PiP wants frames).
     pub(crate) render_area: Option<render_target::Size>,
     pub(crate) render_sent: Option<render_target::Size>,
+    /// The area last applied belongs to a run of changes (a border drag),
+    /// not a single step (`render_target::Applied`).
+    pub(crate) render_continuous: bool,
     /// GPU rendering: PiP wants the renderer's frames (read by its frame
     /// callback on the render thread), and that callback is registered.
     pub(crate) pip_gpu: (Arc<AtomicBool>, bool),
