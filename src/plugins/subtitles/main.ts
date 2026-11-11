@@ -1342,6 +1342,7 @@ export default async function activate(plugin: Plugin) {
   const canRemove = () => !busy && !!subtitles.state?.selected?.owned;
   plugin.commands.add({
     id: "remove", title: "Remove External Subtitle", category: CATEGORY.subtitles,
+    destructive: true, // closes the loaded subtitle; a caller of commands.run asks the user first
     enabled: canRemove, busy: () => busy,
     reason: () => (busy ? BUSY : canRemove() ? null : "No external subtitle selected"),
     run: () => removeSelected()?.then(say),

@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.9
+
+- Clear Entries (`recent.clear`), Remove Invalid Entries (`recent.prune`) and Clear All Saved Positions (`resume.clear`) are declared `destructive` (SDK 1.7.9): they remove records or saved positions for good, so a built-in caller of `commands.run` (Ask Vestra) asks the user first. The menu and the palette run them as before. Who must change: nobody.
+- Tests: those three commands carry `destructive: true`, empty and with records, and no other command does.
+
 ## 0.1.8
 
 - Menu sweep (menu redesign §4): Playback ▸ Resume Playback ▸ (all five items) leaves the right-click menu and is in the command palette only ("Resume Playback: …"), with ids, radio and checked states unchanged; Open ▸ Recently Played ▸ stays and is now the last line of Open ▸ (order 119, after a separator; it sat between Load External Audio… and Add Secondary Subtitle… at 114). Who must change: nobody.
