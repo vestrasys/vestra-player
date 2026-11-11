@@ -1,20 +1,22 @@
-// Ask Vestra (PROPOSAL §1–§4; this file is §9 step 4, the vertical slice):
-// the command palette's lead row hands the typed sentence to this plugin, a
-// model of the user's choice turns it into steps (worker profile "ask"),
-// the steps run with the plugin's own playback control, and the OSD names
-// what ran with Undo. Commands (`commands.run`), the picture builder,
-// presets and the chat record come in later steps.
+// Ask Vestra (PROPOSAL §1–§4; §9 steps 4 and 5): the command palette's lead
+// row hands the typed sentence to this plugin, a model of the user's choice
+// turns it into steps (worker profile "ask") over the palette's command
+// table (commands.ts), the steps run (the player's commands through
+// `commands.run` with the request's ticket, speeds with the plugin's own
+// playback control), and the OSD names what ran with Undo. The picture
+// builder, presets and the chat record come in later steps.
 //
 // One request at a time: a new one stops the one running (PROPOSAL Q6 A).
 // The undo journal lives in session storage, so it survives the plugin's
 // idle standby but not a player restart (§7).
-import type { Plugin, PaletteLeadOptions, PlayerState, Text, TextArg } from "@vestra-player/sdk";
+import type { CommandInfo, Plugin, PaletteLeadOptions, PlayerState, Text, TextArg } from "@vestra-player/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { AgentWorker } from "../agent.ts";
 import type { StartMessage } from "../worker/protocol.ts";
 import { MAX_STEPS, PlanError, RATE, parsePlan, type Step } from "./plan.ts";
-import { ASK_SYSTEM_PROMPT, askMessage } from "./prompt.ts";
+import { askMessage, askSystemPrompt } from "./prompt.ts";
+import { commandTable, offered } from "./commands.ts";
 
 /** Wall time of one request (PROPOSAL §4). */
 export const REQUEST_TIMEOUT_MS = 90_000;
@@ -23,10 +25,13 @@ export const MAX_MODEL_CALLS = 4;
 /** Requests kept for Undo (§7). */
 export const JOURNAL_SIZE = 10;
 /**
- * What the consent covers: bump it when a request sends more (the command
- * list comes with `commands.run`), so the user is asked again.
+ * What the consent covers: bump it when a request sends more, so the user is
+ * asked again. v1: the request and the playback state; v2: also the command
+ * table.
  */
-const CONSENT_SCOPE = "v1";
+const CONSENT_SCOPE = "v2";
+/** A speed within this of the one a request set still counts as that speed (Undo). */
+const RATE_TOLERANCE = 0.005;
 /** Model text quoted on the OSD (an error, a refusal), at most. */
 const QUOTE_CHARS = 120;
 
@@ -50,11 +55,13 @@ export interface AskModel {
 }
 
 /**
- * One undoable change: what to restore (`before`) and what the request set
- * (`after`; Undo leaves a value the user changed since alone). Only the
- * plugin's own controls in v1 (coordinator ruling).
+ * One step of a request, for Undo. `rate`: what to restore (`before`) and
+ * what the request set (`after`; Undo leaves a value the user changed since
+ * alone). `none`: a command; Undo names it as one that cannot be undone
+ * (coordinator ruling for v1: restoring a toggle or radio would need
+ * `commands.run` with a ticket the Undo action does not have).
  */
-type JournalStep = { kind: "rate"; before: number; after: number };
+type JournalStep = { kind: "rate"; before: number; after: number } | { kind: "none"; label: string };
 type JournalEntry = { steps: JournalStep[] };
 
 interface Request {
@@ -62,7 +69,7 @@ interface Request {
   controller: AbortController;
   worker?: AgentWorker;
   /** Shown in the lead's status row: planning (null) or the step running. */
-  step: { index: number; of: number; label: Text } | null;
+  step: { index: number; of: number; label: TextArg } | null;
   /** Stopped by the user (Stop), not replaced by a newer request. */
   stopped: boolean;
 }
@@ -73,6 +80,15 @@ class Failure extends Error {
   constructor(text: Text) {
     super("Ask Vestra failure");
     this.text = text;
+  }
+}
+
+/** The user chose Don't Run in the player's confirmation: the request stops there. */
+class Declined extends Error {
+  readonly label: string;
+  constructor(label: string) {
+    super("Ask Vestra step declined");
+    this.label = label;
   }
 }
 
@@ -151,7 +167,9 @@ export function askVestra(plugin: Plugin, model: AskModel) {
   };
 
   // ---- one request
-  const stepLabel = (step: Step): Text => i18n.text("Speed {}×", [step.rate]);
+  /** A step as the OSD names it: a speed in words, a command by its label as the palette shows it (data). */
+  const stepLabel = (step: Step, rows: ReadonlyMap<string, CommandInfo>): TextArg =>
+    step.kind === "speed" ? i18n.text("Speed {}×", [step.rate]) : (rows.get(step.id)?.label ?? step.id);
 
   /** The player state for the model: no source name (§8). */
   const playerFacts = (state: PlayerState) => ({
@@ -162,14 +180,29 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     rate: state.rate,
   });
 
-  /** Asks the model; resolves with its steps (validated), rejects with a Failure or an abort. */
-  const plan = async (request: Request, query: string): Promise<Step[]> => {
+  /** The palette's table now, without personal rows; empty where the player refuses the list. */
+  const table = async (): Promise<CommandInfo[]> => {
+    try {
+      return offered(await plugin.commands.list(), plugin.id);
+    } catch (error) {
+      console.error(`Ask Vestra: commands.list: ${(error as Error).message}`);
+      return [];
+    }
+  };
+
+  /**
+   * Asks the model; resolves with its steps (validated against the table it
+   * was given) and that table by id, rejects with a Failure or an abort.
+   */
+  const plan = async (request: Request, query: string): Promise<{ steps: Step[]; rows: Map<string, CommandInfo> }> => {
     const connection = await model.connection();
     const state = await plugin.player.refresh();
+    const listed = await table();
+    const rows = new Map(listed.map((row) => [row.id, row]));
     const directory = path.join(plugin.dataDirectory, "askvestra");
     await fs.mkdir(directory, { recursive: true });
     request.controller.signal.throwIfAborted();
-    return new Promise<Step[]>((resolve, reject) => {
+    return new Promise((resolve, reject) => {
       let calls = 0;
       let lastText = "";
       let lastError: string | null = null;
@@ -195,7 +228,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
           sessionFile: null,
           // A one-line request: a short think at most (a model without reasoning runs without).
           thinking: "low",
-          systemPrompt: ASK_SYSTEM_PROMPT,
+          systemPrompt: askSystemPrompt(commandTable(listed)),
           docsRoots: [],
           pluginTools: ["run_steps"],
         },
@@ -204,8 +237,8 @@ export function askVestra(plugin: Plugin, model: AskModel) {
             worker.reply(call, { ok: true, text: "Running the steps." });
             if (name !== "run_steps") return fail(noSteps());
             try {
-              const steps = parsePlan(args);
-              end(() => resolve(steps));
+              const steps = parsePlan(args, new Set(rows.keys()));
+              end(() => resolve({ steps, rows }));
             } catch (error) {
               fail(error as Error);
             }
@@ -233,8 +266,33 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     });
   };
 
-  /** Runs one step with the plugin's own control; returns what undoes it. */
-  const runStep = async (step: Step, signal: AbortSignal): Promise<JournalStep> => {
+  /**
+   * Runs a command step as the palette would, with the request's ticket:
+   * the player checks it (enabled, not busy) and asks the user first for a
+   * dangerous one (Don't Run: Declined). `index`/`of` go to the player's
+   * own OSD line for a request of several steps.
+   */
+  const runCommand = async (id: string, label: string, ticket: string, index: number, of: number, signal: AbortSignal): Promise<JournalStep> => {
+    signal.throwIfAborted();
+    let result;
+    try {
+      result = await plugin.commands.run(id, of > 1 ? { ticket, step: index, of } : { ticket });
+    } catch (error) {
+      const code = codeOf(error);
+      if (code === "disabled") throw new Refusal(cut((error as Error).message)); // the command's reason, as shown
+      if (code === "busy") throw new Refusal(i18n.text("{} is busy", [label]));
+      if (code === "missing") throw new Refusal(i18n.text("{} is no longer there", [label]));
+      if (code === "limit") throw new Refusal(i18n.text("Too many commands at once"));
+      if (code === "ticket") throw new Refusal(i18n.text("The request has ended"));
+      if (code === "capability") throw new Refusal(i18n.text("This player does not let Vestra run commands"));
+      throw new Refusal(cut((error as Error).message));
+    }
+    if (!result.ran) throw new Declined(label);
+    return { kind: "none", label };
+  };
+
+  /** Runs a speed step with the plugin's own control; returns what undoes it. */
+  const runSpeed = async (step: { rate: number }, signal: AbortSignal): Promise<JournalStep> => {
     const state = await plugin.player.refresh();
     if (state.phase === "empty" || state.phase === "error") throw new Refusal(i18n.text("Nothing is playing"));
     if (!state.can.rate) throw new Refusal(i18n.text("This source cannot change speed"));
@@ -284,7 +342,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         const { confirmed } = await plugin.dialogs.confirm({
           message: i18n.text("Ask Vestra sends your request to {}", [model.providerName()]),
           detail: i18n.text(
-            "What you type in the command palette and the playback state (playing or paused, position, duration, speed) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account.",
+            "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and the playback state (playing or paused, position, duration, speed) go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account.",
           ),
           confirm: i18n.text("Continue"),
         });
@@ -321,34 +379,58 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     current = mine;
     refresh();
     const done: JournalStep[] = [];
-    const labels: Text[] = [];
+    const labels: TextArg[] = [];
+    /** Something to undo: a speed (commands cannot be undone in v1). */
+    const undoable = () => done.some((step) => step.kind === "rate");
+    const keep = async () => {
+      if (undoable()) await record({ steps: done });
+    };
+    /** The commands that ran, for "Cannot be undone: …". */
+    const fixed = () => i18n.list(done.flatMap((step) => (step.kind === "none" ? [step.label] : [])));
     try {
       await osd(i18n.text("Vestra · Planning…"), [stopAction()]);
-      const steps = await plan(mine, query);
+      const { steps, rows } = await plan(mine, query);
       stopWorker(mine);
+      let opened: string | null = null;
       for (const [index, step] of steps.entries()) {
         mine.controller.signal.throwIfAborted();
-        const label = stepLabel(step);
+        const label = stepLabel(step, rows);
         mine.step = { index: index + 1, of: steps.length, label };
         refresh();
-        if (steps.length > 1) await osd(i18n.text("Vestra · {0}/{1} · {2}", [index + 1, steps.length, label]), [stopAction()]);
         try {
-          done.push(await runStep(step, mine.controller.signal));
+          if (step.kind === "command") {
+            // The player shows its own line for each command it runs (with i/n).
+            done.push(await runCommand(step.id, String(label), ticket, index + 1, steps.length, mine.controller.signal));
+          } else {
+            if (steps.length > 1) await osd(i18n.text("Vestra · {0}/{1} · {2}", [index + 1, steps.length, label]), [stopAction()]);
+            done.push(await runSpeed(step, mine.controller.signal));
+          }
         } catch (error) {
           if (error instanceof Refusal) throw new Failure(i18n.text("Vestra · Step {0} failed: {1}", [index + 1, error.reason]));
           throw error;
         }
         labels.push(label);
+        // A command that opens a window ends the request: the user is in it now (PROPOSAL §4).
+        if (step.kind === "command" && rows.get(step.id)?.title.endsWith("…")) {
+          opened = String(label);
+          break;
+        }
       }
       mine.controller.signal.throwIfAborted(); // stopped during the last step: "Stopped", not the result
-      if (done.length) await record({ steps: done });
-      await osd(i18n.text("Vestra · {}", [i18n.list(labels)]), [undoAction()]);
+      await keep();
+      const actions = undoable() ? [undoAction()] : [];
+      const commands = done.some((step) => step.kind === "none");
+      if (opened !== null) await osd(i18n.text("Vestra · Opened {}", [opened]), actions);
+      else if (!commands) await osd(i18n.text("Vestra · {}", [i18n.list(labels)]), actions);
+      else if (undoable()) await osd(i18n.text("Vestra · {0} · Cannot be undone: {1}", [i18n.list(labels), fixed()]), actions);
+      else await osd(i18n.text("Vestra · {} · Cannot be undone", [i18n.list(labels)]));
     } catch (error) {
-      if (done.length) await record({ steps: done });
-      const actions = done.length ? [undoAction()] : [];
+      await keep();
+      const actions = undoable() ? [undoAction()] : [];
       if (mine.controller.signal.aborted) {
         if (mine.stopped) await osd(i18n.text("Vestra · Stopped"), actions);
-      } else if (error instanceof Failure) await osd(error.text, actions);
+      } else if (error instanceof Declined) await osd(i18n.text("Vestra · Stopped: {} was not run", [error.label]), actions);
+      else if (error instanceof Failure) await osd(error.text, actions);
       else if (error instanceof PlanError) await osd(planFailure(error), actions);
       else {
         console.error(`Ask Vestra: ${(error as Error).stack ?? error}`);
@@ -370,6 +452,8 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         return i18n.text("Vestra · The plan has more than {} steps", [MAX_STEPS]);
       case "unknown-kind":
         return i18n.text("Vestra · Step {0} failed: {1}", [error.step, i18n.text("Vestra cannot do “{}” yet", [error.value])]);
+      case "unknown-command":
+        return i18n.text("Vestra · Step {0} failed: {1}", [error.step, i18n.text("There is no command “{}”", [error.value])]);
       case "rate-range":
         return i18n.text("Vestra · Step {0} failed: {1}", [error.step, i18n.text("The speed must be between {0}× and {1}×", [RATE.min, RATE.max])]);
       default:
@@ -398,20 +482,29 @@ export function askVestra(plugin: Plugin, model: AskModel) {
    * journal only once restored, so a failed undo can be tried again; a
    * value changed since the request is left alone and the entry goes.
    */
-  const undoLast = async () => {
-    const journal = await loadJournal();
-    const entry = journal.at(-1);
-    if (!entry) return osd(i18n.text("Vestra · Nothing to undo"));
+  const undoLast = async (): Promise<void> => {
+    // A second press while one undo runs: that one is still restoring this entry.
+    if (undoing) return;
     const controller = (undoing = new AbortController());
-    const earlier = journal.slice(0, -1);
-    const save = (steps: JournalStep[]) => plugin.storage.session.set(JOURNAL, steps.length ? [...earlier, { steps }] : earlier);
-    const steps = [...entry.steps];
+    plugin.update();
     try {
+      const journal = await loadJournal();
+      const entry = journal.at(-1);
+      if (!entry) return await osd(i18n.text("Vestra · Nothing to undo"));
+      const earlier = journal.slice(0, -1);
+      const save = (steps: JournalStep[]) => plugin.storage.session.set(JOURNAL, steps.length ? [...earlier, { steps }] : earlier);
+      const steps = [...entry.steps];
+      const fixed: string[] = [];
       while (steps.length) {
         const step = steps.at(-1)!;
+        if (step.kind === "none") {
+          fixed.unshift(step.label);
+          steps.pop();
+          continue;
+        }
         const state = await plugin.player.refresh();
         if (state.phase === "empty" || state.phase === "error") throw new Refusal(i18n.text("Nothing is playing"));
-        if (state.rate !== step.after) {
+        if (Math.abs(state.rate - step.after) > RATE_TOLERANCE) {
           await save([]);
           await osd(i18n.text("Vestra · Not undone: the speed was changed since"));
           return;
@@ -419,14 +512,16 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         controller.signal.throwIfAborted();
         await plugin.player.setRate(step.before, { ifCurrent: state });
         steps.pop();
-        await save(steps);
+        await save(steps.some((each) => each.kind === "rate") ? steps : []);
       }
-      await osd(i18n.text("Vestra · Undone"));
+      if (fixed.length) await osd(i18n.text("Vestra · Undone · Cannot be undone: {}", [i18n.list(fixed)]));
+      else await osd(i18n.text("Vestra · Undone"));
     } catch (error) {
       if (controller.signal.aborted) return;
       await osd(i18n.text("Vestra · Undo failed: {}", [error instanceof Refusal ? error.reason : cut((error as Error).message)]));
     } finally {
       if (undoing === controller) undoing = null;
+      plugin.update();
     }
   };
   plugin.commands.add({
@@ -434,8 +529,8 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     title: "Undo Last Request",
     // i18n-ignore: the assistant's name, the same in every language
     category: "Vestra",
-    // Busy while a request runs: the player does not put the plugin in standby meanwhile.
-    busy: () => !!current,
+    // Busy while a request or an undo runs: the player does not put the plugin in standby meanwhile.
+    busy: () => !!current || !!undoing,
     reason: "Vestra is working",
     run: undoLast,
   });
