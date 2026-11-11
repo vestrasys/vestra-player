@@ -135,7 +135,7 @@ const SOFTWARE = "Needs GPU rendering (currently software rendering)";
 /** Deinterlace Auto is the player's deinterlacer, always at field rate: Output is greyed (the command's reason; the panel has the same tip). */
 const AUTO_OUTPUT = "Auto outputs by field (double rate); this setting applies to Always";
 /** The renderer switch (render modes §8.4): its title, and the title while a restart would change the renderer. */
-const GPU_TITLE = "GPU Rendering (Experimental)";
+const GPU_TITLE = "GPU Rendering";
 const GPU_PENDING_TITLE = "GPU Rendering (Restart to Apply)";
 /** Busy reason of the switch while a choice is being saved or the restart question is open. */
 const SWITCHING = "Switching…";
@@ -1457,6 +1457,9 @@ export default async function activate(plugin: Plugin) {
     order: 440,
     group: "reset-video",
     bindings: ["Q"],
+    // Several settings at once (colours, blur, every image-processing switch), no undo:
+    // a caller of commands.run (Ask Vestra) asks the user first (SDK 1.7.9).
+    destructive: true,
     run: reset,
   });
   runs.set("video.reset", reset);
@@ -1468,6 +1471,7 @@ export default async function activate(plugin: Plugin) {
     ...inPicture,
     order: 443,
     group: "reset-video",
+    destructive: true, // what Q resets plus the whole Geometry section; a commands.run caller asks first
     run: resetPanel,
   });
   runs.set("video.resetPanel", resetPanel);
@@ -1499,7 +1503,7 @@ export default async function activate(plugin: Plugin) {
   apply();
   applyRender();
 
-  // 460 GPU Rendering (Experimental): the player's renderer choice (`plugin.rendering`), a switch in
+  // 460 GPU Rendering: the player's renderer choice (`plugin.rendering`), a switch in
   // the panel's Rendering section and a command. The player keeps the choice and applies it at the
   // next start; the switch only shows and changes it. A title cannot change in place, so the
   // command lives in a child scope rebuilt when it changes.
@@ -1525,7 +1529,7 @@ export default async function activate(plugin: Plugin) {
     renderingMenu.commands.add({
       id: "video.gpu-rendering",
       // GPU_PENDING_TITLE or GPU_TITLE, written out so that the catalog finds them.
-      title: title === GPU_PENDING_TITLE ? "GPU Rendering (Restart to Apply)" : "GPU Rendering (Experimental)",
+      title: title === GPU_PENDING_TITLE ? "GPU Rendering (Restart to Apply)" : "GPU Rendering",
       category: category.picture,
       ...inPicture,
       order: 460,
@@ -1709,8 +1713,17 @@ export default async function activate(plugin: Plugin) {
                 tip: plugin.i18n.text("{} keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale.", [names]),
               };
         }
-        // Only this plugin's own filters do: say so.
-        if (cause === "copy-back" && plugins.length > 0) return { kind: "effects", detail: message };
+        // Only this plugin's own filters do: say which, so the line names what works. Deinterlace
+        // Auto is the player's own deinterlacer and neutral values make no node, so with the
+        // panel at its defaults nothing here waits. Deinterlace Always (bwdif) is an Advanced
+        // preference that neither reset touches: "deinterlace" asks for Auto; with Colour,
+        // Effects or Geometry away from their defaults too, "effects-off" asks for the master
+        // switch (the one action that clears both); those alone, "effects" (Reset All).
+        if (cause === "copy-back" && plugins.length > 0) {
+          const always = enabled && look.deinterlace.mode === "on";
+          const adjusted = enabled && nodesFor(look, blendRate()).some((n) => n.kind !== "deinterlace");
+          return { kind: always ? (adjusted ? "effects-off" : "deinterlace") : "effects", detail: message };
+        }
         // No plugin named: copy-back for another reason (the player has no hardware decoding setting).
         if (cause === "copy-back") return { kind: "copy-back", detail: message };
         if (cause === "hwdec-off" || cause === "software" || cause === "other-hwdec") return { kind: cause, detail: message };

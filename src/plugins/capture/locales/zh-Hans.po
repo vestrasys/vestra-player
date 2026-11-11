@@ -26,8 +26,8 @@ msgid "Bursts need a known media duration."
 msgstr "连拍需要已知的媒体时长。"
 
 #: main.ts:85 main.ts:90
-msgid "The selected range is past the end of the media."
-msgstr "所选范围超出媒体时长。"
+msgid "The frame is past the end of the media."
+msgstr "这一帧已超出媒体末尾。"
 
 #: main.ts:85 main.ts:90
 msgid "The media changed; nothing was started."
@@ -46,8 +46,8 @@ msgid "Could not capture the frame."
 msgstr "截取画面失败。"
 
 #: main.ts:85 main.ts:90
-msgid "One export is running and four are queued. Please wait."
-msgstr "已有一个导出在进行、四个在排队，请稍候。"
+msgid "Five captures are still being saved. Please wait."
+msgstr "还有五项截图正在保存，请稍候。"
 
 #: main.ts:85 main.ts:90
 msgid "The kept frame was released."
@@ -74,16 +74,16 @@ msgid "No write permission"
 msgstr "没有写入权限"
 
 #: main.ts:85 main.ts:90
-msgid "This media cannot be encoded"
-msgstr "无法编码此媒体"
+msgid "This frame cannot be encoded"
+msgstr "无法编码这一帧"
 
 #: main.ts:85 main.ts:90
-msgid "Export failed"
-msgstr "导出失败"
+msgid "Could not create the image file"
+msgstr "无法生成图片文件"
 
 #: main.ts:85 main.ts:90
-msgid "This task has no output file yet."
-msgstr "这个任务还没有输出文件。"
+msgid "No snapshot saved yet."
+msgstr "还没有保存过截图。"
 
 #: main.ts:85 main.ts:90
 msgid "Could not open the folder."
@@ -161,87 +161,87 @@ msgstr "当前画面另存为"
 msgid "Frame copied without subtitles: they cannot be drawn into a frame"
 msgstr "已复制画面（不含字幕：字幕无法画入帧中）"
 
-#: main.ts:261 main.ts:426
+#: main.ts:261 main.ts:431
 msgid "Frame copied to the clipboard"
 msgstr "画面截图：复制到剪贴板"
 
-#: main.ts:302 main.ts:384 main.ts:385 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
+#: main.ts:302 main.ts:389 main.ts:390 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
 msgid "Snapshot"
 msgstr "截图"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Current Frame"
 msgstr "保存当前画面"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Current Frame"
 msgstr "复制当前画面"
 
-#: main.ts:384 main.ts:385 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
+#: main.ts:389 main.ts:390 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
 msgid "Burst"
 msgstr "连拍"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Snapshot Settings…"
 msgstr "截图设置…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Current Frame As…"
 msgstr "当前画面另存为…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Rendered Frame"
 msgstr "保存实际画面"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Rendered Frame As…"
 msgstr "实际画面另存为…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Rendered Frame"
 msgstr "复制实际画面"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Capture as PNG"
 msgstr "截取为 PNG"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Capture as JPEG"
 msgstr "截取为 JPEG"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Capture as BMP"
 msgstr "截取为 BMP"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Include Subtitles in Rendered Frame"
 msgstr "实际画面包含字幕"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Snapshot Folder…"
 msgstr "截图文件夹…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Open Snapshot Folder"
 msgstr "打开截图文件夹"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Show Last Capture in Folder"
 msgstr "在文件夹中显示最近的截取"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Last Snapshot"
 msgstr "复制最近的截图"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Video Frame Only"
 msgstr "仅保存视频画面"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Video Frame Only"
 msgstr "仅复制视频画面"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "No frame to capture"
 msgstr "没有可截取的画面"
 

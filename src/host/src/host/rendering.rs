@@ -529,7 +529,8 @@ mod tests {
         assert_eq!(reason["code"], "default");
         let message = reason["message"].as_str().unwrap();
         assert!(
-            message.contains("experimental") && message.ends_with("Direct3D 12 (wgpu)"),
+            message.contains("off until it is turned on")
+                && message.ends_with("Direct3D 12 (wgpu)"),
             "{message}"
         );
         assert_eq!(

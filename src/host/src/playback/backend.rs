@@ -384,6 +384,7 @@ impl Backend {
                 }
                 let mut push = StatePush::new();
                 let mut audio_hold = crate::playback::audio_hold::AudioHold::for_player();
+                let mut gpu_warm = crate::playback::gpu_warm::GpuWarm::for_player();
                 let mut actions = CoreActions::default();
                 let mut upscaling = crate::playback::upscaling::Upscaling::default();
                 let upscaling_wake = worker_wake.clone();
@@ -904,6 +905,13 @@ impl Backend {
                                 // At once on resume: the device starts now anyway.
                                 let state = audio_state(sources.phase(), *paused);
                                 hold_audio(&mpv, &mut audio_hold, state);
+                                // Stop only: keep-open's pause at the end comes while
+                                // the phase still reads Ready, so a pause starts the
+                                // GPU warm from the state push (`push.paused` makes it
+                                // due at once), which sees the end.
+                                if state != crate::playback::audio_hold::Source::Paused {
+                                    warm_gpu(&mpv, &out_render, &mut gpu_warm, state);
+                                }
                             }
                             continue;
                         }
@@ -1076,9 +1084,11 @@ impl Backend {
                         // Natural EOF is found by the snapshot itself and is in it.
                         push.seen(sources.generation(), sources.phase());
                         push.published_paused(source_snapshot["paused"].as_bool());
-                        // The pause timer and the end (`audio_hold`).
+                        // The pause timer and the end (`audio_hold`, `gpu_warm`).
                         let paused = source_snapshot["paused"].as_bool() == Some(true);
-                        hold_audio(&mpv, &mut audio_hold, audio_state(sources.phase(), paused));
+                        let state = audio_state(sources.phase(), paused);
+                        hold_audio(&mpv, &mut audio_hold, state);
+                        warm_gpu(&mpv, &out_render, &mut gpu_warm, state);
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
                     }
@@ -2085,7 +2095,8 @@ fn keep_audio_device_running(builder: &rsmpv::Builder) -> Result<()> {
         .map_err(|error| anyhow::anyhow!("mpv option audio-stream-silence: {error}"))
 }
 
-/// What the audio hold sees of the source (`audio_hold::Source`).
+/// What the audio hold and the GPU warm see of the source
+/// (`audio_hold::Source`).
 fn audio_state(
     phase: crate::playback::session::Phase,
     paused: bool,
@@ -2111,6 +2122,46 @@ fn hold_audio(
     {
         diag!("playback: audio device {change:?}: {error}");
     }
+}
+
+/// Apply what the GPU warm decided (`gpu_warm`): GPU rendering only, and
+/// not for a generated stream's pictures (mpv's frame is not shown then).
+fn warm_gpu(
+    mpv: &Mpv,
+    render: &crate::playback::renderer::Render,
+    warm: &mut crate::playback::gpu_warm::GpuWarm,
+    state: crate::playback::audio_hold::Source,
+) {
+    use crate::playback::renderer::GpuBackend;
+    let Some(change) = warm.observe(state, Instant::now()) else {
+        return;
+    };
+    let Some(gpu) = render.gpu() else {
+        return;
+    };
+    let period = match change {
+        crate::playback::gpu_warm::Change::Start if !render.producer() => frame_period(mpv),
+        _ => None,
+    };
+    gpu.keep_warm(period);
+}
+
+/// The video's frame period (as `estimated-vf-fps` or `container-fps` say);
+/// `None` without one (no video), and for a still picture or cover art, which
+/// report 1 fps but draw nothing new while playing either.
+fn frame_period(mpv: &Mpv) -> Option<Duration> {
+    let still = |name: &str| mpv.get_property::<bool>(name).unwrap_or(false);
+    if still("current-tracks/video/image") || still("current-tracks/video/albumart") {
+        return None;
+    }
+    ["estimated-vf-fps", "container-fps"]
+        .iter()
+        .find_map(|name| {
+            mpv.get_property::<f64>(name)
+                .ok()
+                .filter(|fps| fps.is_finite() && *fps >= 1.)
+        })
+        .map(|fps| Duration::from_secs_f64(1. / fps.min(240.)))
 }
 
 #[cfg(test)]
