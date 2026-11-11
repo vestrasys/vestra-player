@@ -158,6 +158,7 @@ impl Backend {
                     builder = builder.set_property("ao", "null")?;
                 }
                 no_builtin_scripts(&builder)?;
+                keep_audio_device_running(&builder)?;
                 let mpv = Arc::new(builder.build()?);
                 // Before any render context exists (mpv reads it when its
                 // renderer starts); a failure costs only the cache.
@@ -2066,10 +2067,37 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
     Ok(())
 }
 
+/// The audio device keeps running while paused: mpv plays silence instead
+/// of stopping the output (`audio-stream-silence`, made for consumer audio
+/// hardware that is slow to start), as PotPlayer keeps its audio session
+/// active while paused. Without it, a Realtek or Bluetooth output that went
+/// idle during a pause of more than a few seconds took 270–290 ms to start
+/// again on resume, and mpv held the video frame for that long (Windows,
+/// 2026-11-11; mpv alone the same, `ao=null` and this option smooth).
+fn keep_audio_device_running(builder: &rsmpv::Builder) -> Result<()> {
+    rsmpv::Handle::set_property(builder, "audio-stream-silence", true)
+        .map_err(|error| anyhow::anyhow!("mpv option audio-stream-silence: {error}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::playback::session::Phase;
+
+    /// Resume after a pause must not wait for the audio device to start
+    /// again (`keep_audio_device_running`).
+    #[test]
+    fn the_audio_device_keeps_running_while_paused() {
+        let builder = rsmpv::Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap();
+        keep_audio_device_running(&builder).unwrap();
+        let mpv = builder.build().unwrap();
+        assert!(mpv.get_property::<bool>("audio-stream-silence").unwrap());
+    }
 
     /// `jobs.check` takes parts or a snapshotId (missing and null alike
     /// absent); typed fields; parts go on to `media_sources::request`.
