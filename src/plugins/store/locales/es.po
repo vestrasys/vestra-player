@@ -1679,6 +1679,16 @@ msgstr "Elegir el renderizado por GPU o por software y reiniciar el reproductor"
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "Escalar el vídeo con el escalador de vídeo de la GPU"
 
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Run any player or plugin command"
+msgstr "Ejecutar cualquier comando del reproductor o de un plugin"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Add the first row of the command palette"
+msgstr "Añadir la primera fila de la paleta de comandos"
+
 #: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Replace"
