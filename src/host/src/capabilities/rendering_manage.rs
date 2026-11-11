@@ -13,6 +13,7 @@ static INFO: Info = Info {
     risky: true,
     requires: &[],
     residency: Residency::None,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     Method::this("rendering.setPreference"),

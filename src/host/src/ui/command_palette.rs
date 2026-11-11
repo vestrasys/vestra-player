@@ -34,7 +34,7 @@ pub const CHROME: f64 = 92.;
 const PLAYER: &str = "Vestra Player";
 
 /// One listed command, as the palette shows and matches it.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 pub struct Item {
     pub owner: u64,
     pub id: String,
@@ -44,13 +44,25 @@ pub struct Item {
     /// `Category: Title` as shown.
     pub label: String,
     /// The same in English source text (the declared keys).
-    label_key: String,
+    pub label_key: String,
+    /// The title and the category as shown, and the title's English key
+    /// (`commands.list`, the lead's cursor rule).
+    pub title: String,
+    pub title_key: String,
+    pub category: String,
+    /// The menu path as shown and by its keys (`commands.list`, which
+    /// commands ask first).
+    pub path_shown: Vec<String>,
+    pub path_keys: Vec<String>,
+    /// Its separator group and `CommandOptions.destructive`.
+    pub group: String,
+    pub destructive: bool,
     /// The plugin's name as shown.
     pub plugin: String,
-    manifest: String,
+    pub manifest: String,
     /// The menu path as shown and by its keys, segments joined by spaces.
-    path: String,
-    path_key: String,
+    pub path: String,
+    pub path_key: String,
     /// Where the command lives: the window its `home` command opens, its
     /// menu path, or the menu; empty for a command outside the menu.
     pub place: String,
@@ -169,6 +181,13 @@ pub fn items(
                 global: format!("{}/{}", entry.manifest, entry.key.local_id),
                 label,
                 label_key,
+                title: title.to_owned(),
+                title_key: declaration.title.clone(),
+                category,
+                path_shown: shown_path.to_vec(),
+                path_keys: declaration.path.clone(),
+                group: declaration.group.clone(),
+                destructive: declaration.destructive,
                 plugin,
                 manifest: entry.manifest.clone(),
                 path: shown_path.join(" "),
@@ -463,6 +482,57 @@ pub fn position(items: &[Item], hits: &[Hit], global: &str) -> Option<usize> {
             .get(hit.index)
             .is_some_and(|item| item.global == global)
     })
+}
+
+/// Whether `query` names `item`: its title or full label (shown or English,
+/// a trailing ellipsis ignored) equals the query, or its title (shown or
+/// English) continues it from a word start, for a query of 3 or more
+/// characters. Case is ignored; the category is not the title. "pause"
+/// names "Playback: Play/Pause"; "warmer and 1.25× speed" names nothing.
+pub fn named_by(item: &Item, query: &str) -> bool {
+    let query: Vec<char> = query.trim().chars().map(fold).collect();
+    if query.is_empty() {
+        return false;
+    }
+    let folded = |text: &str| -> Vec<char> { place_name(text).chars().map(fold).collect() };
+    let titles = [item.title.as_str(), item.title_key.as_str()];
+    let whole = titles
+        .iter()
+        .chain([&item.label.as_str(), &item.label_key.as_str()])
+        .any(|text| folded(text) == query);
+    if whole {
+        return true;
+    }
+    if query.len() < 3 {
+        return false;
+    }
+    titles.iter().any(|title| {
+        let original: Vec<char> = title.chars().collect();
+        let text: Vec<char> = original.iter().copied().map(fold).collect();
+        (0..text.len())
+            .any(|at| (at == 0 || separator(original[at - 1])) && text[at..].starts_with(&query))
+    })
+}
+
+/// Where the cursor starts in a palette whose first row is a lead
+/// (`palette.lead`): on the first command the query names (1 + its place
+/// among `hits`), else on the lead (0). With an empty query: on the lead
+/// while it shows a status, else on the first command (the most recent, so
+/// Enter repeats the last command as without a lead). Without a lead: 0.
+pub fn aim(items: &[Item], hits: &[Hit], query: &str, lead: bool, status: bool) -> usize {
+    if !lead {
+        return 0;
+    }
+    if query.trim().is_empty() {
+        return if status || hits.is_empty() { 0 } else { 1 };
+    }
+    hits.iter()
+        .position(|hit| {
+            items
+                .get(hit.index)
+                .is_some_and(|item| named_by(item, query))
+        })
+        .map_or(0, |at| at + 1)
 }
 
 /// The recent list after running `global`: it first, at most
@@ -778,6 +848,66 @@ mod tests {
         // The old index now holds another command.
         assert_eq!(items[after[2].index].id, "mono");
         assert_eq!(position(&items, &after, "nobody/gone"), None);
+    }
+
+    /// The lead's cursor rule (Ask Vestra Q1 A, Q2 A): a query that names a
+    /// command keeps Enter on it; anything else goes to the lead; an empty
+    /// query keeps the last command first unless the lead shows a status;
+    /// and without a lead the cursor starts at 0 as it always did.
+    #[test]
+    fn the_cursor_starts_on_a_named_command_else_on_the_lead() {
+        let own = crate::host::Host::host_declarations()
+            .into_iter()
+            .map(|(id, declaration, _)| (id, declaration));
+        let mut entries: Vec<CommandSnapshot> = own
+            .chain(crate::core_actions::declarations(5.))
+            .map(|(id, declaration)| entry(0, "host", id, declaration))
+            .collect();
+        let mut chapter = Declaration::new("Next Chapter", &["Playback", "Next Chapter"]);
+        chapter.localize(|text| match text {
+            "Next Chapter" => "下一章节".into(),
+            other => other.into(),
+        });
+        entries.push(entry(3, "vestra.chapters", "next-chapter", chapter));
+        let items = items(&entries, &names, &none);
+        let at = |query: &str, recent: &[String]| {
+            let hits = search(&items, query, recent);
+            let cursor = aim(&items, &hits, query, true, false);
+            let named = cursor
+                .checked_sub(1)
+                .map(|i| items[hits[i].index].global.clone());
+            // Without a lead nothing moves.
+            assert_eq!(aim(&items, &hits, query, false, false), 0);
+            named
+        };
+        // A word start of the title, 3 or more characters.
+        assert_eq!(at("pause", &[]).as_deref(), Some("host/play-pause"));
+        assert_eq!(at("Play/Pause", &[]).as_deref(), Some("host/play-pause"));
+        // The full label, and the English title under a translation.
+        assert_eq!(at("playback: close", &[]).as_deref(), Some("host/stop"));
+        assert_eq!(
+            at("next chap", &[]).as_deref(),
+            Some("vestra.chapters/next-chapter")
+        );
+        assert_eq!(
+            at("下一章节", &[]).as_deref(),
+            Some("vestra.chapters/next-chapter")
+        );
+        // Not a word start, too short, the category, or a sentence: the lead.
+        assert_eq!(at("ause", &[]), None);
+        assert_eq!(at("pa", &[]), None);
+        assert_eq!(at("playback", &[]), None);
+        assert_eq!(at("warmer and 1.25× speed", &[]), None);
+        // An empty query: the first command (the most recent), as without a lead.
+        let recent = vec!["host/fullscreen".to_owned()];
+        let hits = search(&items, "", &recent);
+        assert_eq!(aim(&items, &hits, "", true, false), 1);
+        assert_eq!(items[hits[0].index].global, "host/fullscreen");
+        // ... unless the lead shows its status (a request running).
+        assert_eq!(aim(&items, &hits, "", true, true), 0);
+        assert_eq!(aim(&items, &[], "", true, false), 0);
+        assert!(named_by(&items[hits[0].index], "Toggle Fullscreen"));
+        assert!(!named_by(&items[hits[0].index], ""));
     }
 
     #[test]

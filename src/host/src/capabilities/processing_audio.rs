@@ -12,6 +12,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &["playback.read", "events"],
     residency: Residency::Live,
+    builtin_only: false,
 };
 impl Capability for ProcessingAudio {
     fn info(&self) -> &'static Info {

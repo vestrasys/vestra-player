@@ -14,6 +14,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &[],
     residency: Residency::None,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     Method::this("dialogs.open"),

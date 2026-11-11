@@ -17,6 +17,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &[],
     residency: Residency::Recordable,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     Method::this("commands.register"),

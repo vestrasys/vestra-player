@@ -97,6 +97,8 @@ pub(crate) enum Event {
     ModifiersReleased(u64, Vec<char>),
     /// `dialogs.confirm` answered: (requester, confirmed, checked).
     ConfirmDone(Reply, bool, bool),
+    /// The host's alert before a `commands.run` answered: (caller, run).
+    CommandRunAnswered(Reply, bool),
     /// A file dropped on a window: (window generation, path).
     Dropped(u64, PathBuf),
     /// Files to open (`open_files.rs`); `true`: from another launch, which

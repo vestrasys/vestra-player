@@ -1,7 +1,7 @@
 // Main window shell (core-ui-design.md §1). composition.rs replaces the
 // insertion markers with the mounted panels; without mounts it is the bare shell.
 import { MenuView, MenuLevel } from "menu-view.slint";
-import { PaletteView, PaletteRow } from "command-palette.slint";
+import { PaletteView, PaletteRow, PaletteLead } from "command-palette.slint";
 import { Theme } from "@vestra/theme.slint";
 import { TitleStrip } from "title-strip.slint";
 // The bottom-bar button strip (bar_buttons.rs; composition.rs places it).
@@ -81,6 +81,10 @@ export component HostWindow inherits Window {
     in property <int> palette-current: -1;
     in property <int> palette-shown: 0;
     in property <string> palette-count;
+    // The first row a built-in plugin holds (`palette.lead`), and the
+    // field's placeholder while it does (empty: the palette's own).
+    in property <PaletteLead> palette-lead;
+    in property <string> palette-placeholder;
     in property <[string]> palette-keys: ["Enter", "Shift+Enter", "Esc"];
     in-out property <string> palette-query;
     callback palette-edited(string);
@@ -477,6 +481,8 @@ export component HostWindow inherits Window {
             current: root.palette-current;
             shown: root.palette-shown;
             count: root.palette-count;
+            lead: root.palette-lead;
+            placeholder: root.palette-placeholder;
             run-key: root.palette-keys[0];
             keep-key: root.palette-keys[1];
             close-key: root.palette-keys[2];

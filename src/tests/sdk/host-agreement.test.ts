@@ -861,6 +861,8 @@ interface CapabilityJson {
   risky: boolean;
   requires: string[];
   residency: string;
+  /** Player 0.7.x: only built-in plugins may use it (by provenance). */
+  builtinOnly: boolean;
   methods: { name: string; needs: Needs }[];
 }
 
@@ -930,8 +932,19 @@ test("capabilities.json's wording and requirements are CAPABILITY_INFO's", () =>
   for (const c of json.capabilities) {
     const info = CAPABILITY_INFO[c.name]!;
     assert.deepEqual(
-      { label: c.label, risky: c.risky, requires: c.requires },
-      { label: info.label, risky: info.risky, requires: [...info.requires] },
+      {
+        label: c.label,
+        risky: c.risky,
+        requires: c.requires,
+        builtinOnly: c.builtinOnly,
+      },
+      {
+        label: info.label,
+        risky: info.risky,
+        requires: [...info.requires],
+        // SDK 1.7.9: `builtinOnly` (absent before: false).
+        builtinOnly: (info as { builtinOnly?: boolean }).builtinOnly ?? false,
+      },
       `${c.name}: capabilities.json vs CAPABILITY_INFO`,
     );
   }
