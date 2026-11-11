@@ -388,6 +388,17 @@ test("every command has a category for the command palette, and names Picture…
   await stop();
 });
 
+test("destructive (SDK 1.7.9): only Q and Reset All, which clear several settings at once; no other command", async () => {
+  const host = new TestHost();
+  host.openElsewhere("/movie.mp4");
+  const { stop } = await start(host);
+  const destructive = [...host.commands.entries()].filter(([, { declaration: d }]) => d.destructive === true).map(([id]) => id);
+  assert.deepEqual(destructive, ["video.reset", "video.resetPanel"]);
+  for (const id of ["video.frame.reset", "video.reframe.reset", "video.frame.centre", "video.aspect.default", "video.gpu-rendering", "video.shader.reload"])
+    assert.equal(host.command(id).declaration.destructive ?? false, false, id);
+  await stop();
+});
+
 test("Simplified Chinese: the palette names commands with the menu's translations", async () => {
   const host = new TestHost();
   const { stop } = await start(host, undefined, zh);
