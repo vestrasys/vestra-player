@@ -315,10 +315,10 @@ msgstr "현재 프레임 저장·복사, 연속 캡처"
 #, x-machine
 msgid ""
 "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n"
-"Right-click menu: Snapshot ▸."
+"Right-click menu: Tools ▸ Snapshot ▸."
 msgstr ""
 "현재 프레임(표시 중인 자막 포함, 또는 비디오 효과가 포함된 렌더링 프레임)을 PNG, JPEG, BMP로 저장, 다른 이름으로 저장 또는 복사하고, 연속 캡처합니다. 설정은 옵션 ▸ 비디오 ▸ 스냅샷에 있습니다.\n"
-"오른쪽 클릭 메뉴: 스냅샷 ▸."
+"오른쪽 클릭 메뉴: 도구 ▸ 스냅샷 ▸."
 
 #: manifest.json
 #, x-machine

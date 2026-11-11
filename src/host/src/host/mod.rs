@@ -23,6 +23,7 @@ pub(crate) mod revised;
 pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
 mod rpc;
 mod shell;
+pub(crate) mod stall;
 mod state;
 pub(crate) mod supervisor;
 mod video;

@@ -12,7 +12,7 @@ A-B Loop moved to the Playback panel (Basic Playback, 0.1.8): its keys (`[`, `]`
 
 ## Where to find it
 
-Context menu: Chapter and Bookmark List… (H), at the top level after Playlist.
+Context menu: Tools ▸ Chapter and Bookmark List… (H), after Snapshot ▸ in a group of its own.
 
 Command palette (Ctrl+Shift+P), with their keys, "Chapters and Bookmarks: …":
 

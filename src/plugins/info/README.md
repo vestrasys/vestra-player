@@ -14,7 +14,7 @@ Information about the media playing, the player and the system.
 
 - Command palette (Ctrl+Shift+P): Info: **Playback Info** (Tab); Brief Info with Shift+Tab.
 - Command palette: Info: **Playback Properties…** (Ctrl+F1).
-- Context menu **About Vestra Player…** (F1), at the top level next to Options….
+- Context menu **Tools ▸ About Vestra Player…** (F1), the last item of Tools ▸.
 - Command palette: Help: **Check for Updates…** (also the Updates row of the About window); Options ▸ General ▸ **Updates**.
 
 ## Languages

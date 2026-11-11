@@ -4,199 +4,199 @@ msgstr ""
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
-#: main.ts:56 main.ts:64 main.ts:346 main.ts:531 main.ts:610
+#: main.ts:54 main.ts:62 main.ts:344 main.ts:529 main.ts:608
 msgid "{}"
 msgstr ""
 
-#: main.ts:56 main.ts:65
+#: main.ts:54 main.ts:63
 msgid "Track {} ({})"
 msgstr ""
 
-#: main.ts:56 main.ts:66
+#: main.ts:54 main.ts:64
 msgid "Track {}"
 msgstr ""
 
-#: main.ts:57 main.ts:64
+#: main.ts:55 main.ts:62
 msgid "{} (external)"
 msgstr ""
 
-#: main.ts:65
+#: main.ts:63
 msgid "Track {} ({}) (external)"
 msgstr ""
 
-#: main.ts:66
+#: main.ts:64
 msgid "Track {} (external)"
 msgstr ""
 
-#: main.ts:74 main.ts:86 manifest.json
+#: main.ts:72 main.ts:84 manifest.json
 msgid "Audio"
 msgstr ""
 
-#: main.ts:75 main.ts:290 main.ts:301
+#: main.ts:73 main.ts:288 main.ts:299
 msgid "Audio Track"
 msgstr ""
 
-#: main.ts:76 ui/workbench.slint:236 ui/workbench.slint:389
+#: main.ts:74 ui/workbench.slint:236 ui/workbench.slint:393
 msgid "Channels"
 msgstr ""
 
-#: main.ts:77
+#: main.ts:75
 msgid "Output Device"
 msgstr ""
 
-#: main.ts:78
+#: main.ts:76
 msgid "Equalizer Preset"
 msgstr ""
 
-#: main.ts:79
+#: main.ts:77
 msgid "Audio Sync"
 msgstr ""
 
-#: main.ts:80
+#: main.ts:78
 msgid "Audio Processing"
 msgstr ""
 
-#: main.ts:128 main.ts:718
+#: main.ts:126 main.ts:716
 msgid "Audio sync: {} s"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Stereo"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Left Channel (mixed to stereo)"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Right Channel (mixed to stereo)"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Mono Mix (mixed to stereo)"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Swap Left and Right (mixed to stereo)"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Left Channel"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Right Channel"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Mono Mix"
 msgstr ""
 
-#: main.ts:137
+#: main.ts:135
 msgid "Channels: Swap Left and Right"
 msgstr ""
 
-#: main.ts:200
+#: main.ts:198
 msgid "Load External Audio"
 msgstr ""
 
-#: main.ts:203
+#: main.ts:201
 msgid "This audio is already loaded"
 msgstr ""
 
-#: main.ts:207
+#: main.ts:205
 msgid "Audio loaded: {}"
 msgstr ""
 
-#: main.ts:209
+#: main.ts:207
 msgid "The source changed; the audio was not loaded"
 msgstr ""
 
-#: main.ts:210
+#: main.ts:208
 msgid "Cannot load audio: {}"
 msgstr ""
 
-#: main.ts:261
+#: main.ts:259
 msgid "Audio track: {}"
 msgstr ""
 
-#: main.ts:264
+#: main.ts:262
 msgid "Cannot switch the audio track: {}"
 msgstr ""
 
-#: main.ts:269
+#: main.ts:267
 msgid "Only one audio track"
 msgstr ""
 
-#: main.ts:290
+#: main.ts:288
 msgid "Loading…"
 msgstr ""
 
-#: main.ts:290
+#: main.ts:288
 msgid "No Audio Tracks"
 msgstr ""
 
-#: main.ts:345 main.ts:610
+#: main.ts:343 main.ts:608
 msgid "Unnamed device"
 msgstr ""
 
-#: main.ts:345 main.ts:608
+#: main.ts:343 main.ts:606
 msgid "Selected device"
 msgstr ""
 
-#: main.ts:346
+#: main.ts:344
 msgid "{} ({})"
 msgstr ""
 
-#: main.ts:349 main.ts:607 ui/workbench.slint:46
+#: main.ts:347 main.ts:605 ui/workbench.slint:46
 msgid "System Default"
 msgstr ""
 
-#: main.ts:387
+#: main.ts:385
 msgid "Cannot switch to System Default: {}"
 msgstr ""
 
-#: main.ts:388
+#: main.ts:386
 msgid "Cannot switch to {}: {}"
 msgstr ""
 
-#: main.ts:399
+#: main.ts:397
 msgid "Audio output: System Default"
 msgstr ""
 
-#: main.ts:400
+#: main.ts:398
 msgid "Audio output: Selected device"
 msgstr ""
 
-#: main.ts:401
+#: main.ts:399
 msgid "Audio output: {}"
 msgstr ""
 
-#: main.ts:411
+#: main.ts:409
 msgid "Output device disconnected, using System Default"
 msgstr ""
 
-#: main.ts:443
+#: main.ts:441
 msgid "Device not connected"
 msgstr ""
 
-#: main.ts:540 main.ts:636 main.ts:661
+#: main.ts:538 main.ts:636 main.ts:659
 msgid "Loading"
 msgstr ""
 
-#: main.ts:540 main.ts:661 ui/workbench.slint:41
+#: main.ts:538 main.ts:659 ui/workbench.slint:41
 msgid "No audio tracks"
 msgstr ""
 
-#: main.ts:600
+#: main.ts:598
 msgid "No output devices available"
 msgstr ""
 
-#: main.ts:613
+#: main.ts:611
 msgid "{} (not connected)"
 msgstr ""
 
-#: main.ts:619
+#: main.ts:617
 msgid "{}: device not connected, using System Default"
 msgstr ""
 
@@ -216,131 +216,131 @@ msgstr ""
 msgid "Audio…"
 msgstr ""
 
-#: main.ts:656
+#: main.ts:654
 msgid "Cycle Tracks"
 msgstr ""
 
-#: main.ts:667 ui/workbench.slint:221 ui/workbench.slint:224
+#: main.ts:665 ui/workbench.slint:221 ui/workbench.slint:224
 msgid "Stereo"
 msgstr ""
 
-#: main.ts:667 ui/workbench.slint:224
+#: main.ts:665 ui/workbench.slint:224
 msgid "Left Channel"
 msgstr ""
 
-#: main.ts:667 ui/workbench.slint:224
+#: main.ts:665 ui/workbench.slint:224
 msgid "Right Channel"
 msgstr ""
 
-#: main.ts:667 ui/workbench.slint:224
+#: main.ts:665 ui/workbench.slint:224
 msgid "Mono Mix"
 msgstr ""
 
-#: main.ts:667 ui/workbench.slint:224
+#: main.ts:665 ui/workbench.slint:224
 msgid "Swap Left and Right"
 msgstr ""
 
-#: main.ts:673 main.ts:683 main.ts:696 main.ts:709 main.ts:716 main.ts:738 main.ts:750 main.ts:762 ui/workbench.slint:639
+#: main.ts:671 main.ts:681 main.ts:694 main.ts:707 main.ts:714 main.ts:736 main.ts:748 main.ts:760 ui/workbench.slint:643
 msgid "No audio track selected"
 msgstr ""
 
-#: main.ts:673 ui/workbench.slint:393
+#: main.ts:671 ui/workbench.slint:397
 msgid "The current track is mono"
 msgstr ""
 
-#: main.ts:679 ui/workbench.slint:239 ui/workbench.slint:538
+#: main.ts:677 ui/workbench.slint:239 ui/workbench.slint:542
 msgid "Equalizer"
 msgstr ""
 
-#: main.ts:686
+#: main.ts:684
 msgid "Equalizer: On"
 msgstr ""
 
-#: main.ts:686
+#: main.ts:684
 msgid "Equalizer: Off"
 msgstr ""
 
-#: main.ts:692 ui/workbench.slint:219
+#: main.ts:690 ui/workbench.slint:219
 msgid "Flat"
 msgstr ""
 
-#: main.ts:692 ui/workbench.slint:219
+#: main.ts:690 ui/workbench.slint:219
 msgid "Voice"
 msgstr ""
 
-#: main.ts:692 ui/workbench.slint:219
+#: main.ts:690 ui/workbench.slint:219
 msgid "Music"
 msgstr ""
 
-#: main.ts:692 ui/workbench.slint:219
+#: main.ts:690 ui/workbench.slint:219
 msgid "Cinema"
 msgstr ""
 
-#: main.ts:699
+#: main.ts:697
 msgid "Equalizer preset: Flat"
 msgstr ""
 
-#: main.ts:699
+#: main.ts:697
 msgid "Equalizer preset: Voice"
 msgstr ""
 
-#: main.ts:699
+#: main.ts:697
 msgid "Equalizer preset: Music"
 msgstr ""
 
-#: main.ts:699
+#: main.ts:697
 msgid "Equalizer preset: Cinema"
 msgstr ""
 
-#: main.ts:709
+#: main.ts:707
 msgid "50 ms Earlier"
 msgstr ""
 
-#: main.ts:709
+#: main.ts:707
 msgid "50 ms Later"
 msgstr ""
 
-#: main.ts:712 main.ts:759 ui/workbench.slint:660
+#: main.ts:710 main.ts:757 ui/workbench.slint:664
 msgid "Reset"
 msgstr ""
 
-#: main.ts:724 ui/workbench.slint:526
+#: main.ts:722 ui/workbench.slint:530
 msgid "Don't Keep"
 msgstr ""
 
-#: main.ts:724 ui/workbench.slint:526
+#: main.ts:722 ui/workbench.slint:530
 msgid "Keep for This Run"
 msgstr ""
 
-#: main.ts:724 ui/workbench.slint:526
+#: main.ts:722 ui/workbench.slint:530
 msgid "Always Keep"
 msgstr ""
 
-#: main.ts:734 ui/workbench.slint:587
+#: main.ts:732 ui/workbench.slint:591
 msgid "Normalize"
 msgstr ""
 
-#: main.ts:741
+#: main.ts:739
 msgid "Normalize: On"
 msgstr ""
 
-#: main.ts:741
+#: main.ts:739
 msgid "Normalize: Off"
 msgstr ""
 
-#: main.ts:746 ui/workbench.slint:601
+#: main.ts:744 ui/workbench.slint:605
 msgid "Crystalizer"
 msgstr ""
 
-#: main.ts:754
+#: main.ts:752
 msgid "Crystalizer: On"
 msgstr ""
 
-#: main.ts:754
+#: main.ts:752
 msgid "Crystalizer: Off"
 msgstr ""
 
-#: main.ts:765
+#: main.ts:766
 msgid "Audio processing reset"
 msgstr ""
 
@@ -351,7 +351,7 @@ msgstr ""
 #: manifest.json
 msgid ""
 "A ten-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\n"
-"Settings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Audio Track in the right-click menu."
+"Settings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Tools ▸ Audio Track in the right-click menu."
 msgstr ""
 
 #: manifest.json
@@ -398,98 +398,98 @@ msgstr ""
 msgid "Volume"
 msgstr ""
 
-#: ui/workbench.slint:234 ui/workbench.slint:333
+#: ui/workbench.slint:234 ui/workbench.slint:337
 msgid "Track"
 msgstr ""
 
-#: ui/workbench.slint:235 ui/workbench.slint:371
+#: ui/workbench.slint:235 ui/workbench.slint:375
 msgid "Output"
 msgstr ""
 
-#: ui/workbench.slint:237 ui/workbench.slint:452
+#: ui/workbench.slint:237 ui/workbench.slint:456
 msgid "Delay"
 msgstr ""
 
-#: ui/workbench.slint:238 ui/workbench.slint:521
+#: ui/workbench.slint:238 ui/workbench.slint:525
 msgid "Keep"
 msgstr ""
 
-#: ui/workbench.slint:313
+#: ui/workbench.slint:317
 msgid "{}%"
 msgstr ""
 
-#: ui/workbench.slint:329
+#: ui/workbench.slint:333
 msgid "TRACK"
 msgstr ""
 
-#: ui/workbench.slint:336
+#: ui/workbench.slint:340
 msgid "next"
 msgstr ""
 
-#: ui/workbench.slint:356
+#: ui/workbench.slint:360
 msgid "Load…"
 msgstr ""
 
-#: ui/workbench.slint:359
+#: ui/workbench.slint:363
 msgid "Load audio files with the same name as the video automatically"
 msgstr ""
 
-#: ui/workbench.slint:362
+#: ui/workbench.slint:366
 msgid "Same name"
 msgstr ""
 
-#: ui/workbench.slint:440
+#: ui/workbench.slint:444
 msgid "SYNC"
 msgstr ""
 
-#: ui/workbench.slint:444
+#: ui/workbench.slint:448
 msgid "Audio sync"
 msgstr ""
 
-#: ui/workbench.slint:446
+#: ui/workbench.slint:450
 msgid "earlier"
 msgstr ""
 
-#: ui/workbench.slint:447
+#: ui/workbench.slint:451
 msgid "later"
 msgstr ""
 
-#: ui/workbench.slint:534
+#: ui/workbench.slint:538
 msgid "EQUALIZER"
 msgstr ""
 
-#: ui/workbench.slint:580
+#: ui/workbench.slint:584
 msgid "PROCESSING"
 msgstr ""
 
-#: ui/workbench.slint:618
+#: ui/workbench.slint:622
 msgid "{} dB"
 msgstr ""
 
-#: ui/workbench.slint:638
+#: ui/workbench.slint:642
 msgid "Loading audio…"
 msgstr ""
 
-#: ui/workbench.slint:640
+#: ui/workbench.slint:644
 msgid "Applying…"
 msgstr ""
 
-#: ui/workbench.slint:641
+#: ui/workbench.slint:645
 msgid "Audio processing failed"
 msgstr ""
 
-#: ui/workbench.slint:642
+#: ui/workbench.slint:646
 msgid "Applied"
 msgstr ""
 
-#: ui/workbench.slint:643
+#: ui/workbench.slint:647
 msgid "Ready"
 msgstr ""
 
-#: ui/workbench.slint:653
+#: ui/workbench.slint:657
 msgid "Retry"
 msgstr ""
 
-#: ui/workbench.slint:656
+#: ui/workbench.slint:660
 msgid "Equalizer, Normalize and Crystalizer back to neutral; sync and channels are kept"
 msgstr ""

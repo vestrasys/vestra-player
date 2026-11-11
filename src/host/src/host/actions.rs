@@ -68,14 +68,10 @@ impl Host {
             busy: false,
             reason: None,
         };
-        let mut fullscreen =
-            commands::Declaration::new("Toggle Fullscreen", &["Toggle Fullscreen"]);
-        // The slim menu (B5): alone between two separators, after the column
-        // toggles (Adjustments and Effects 791, Sidebar 800, the chapter
-        // list) and before Vestra Player AI… (820); its group is shared with
-        // nothing shown.
-        fullscreen.group = "screen".into();
-        fullscreen.order = 810;
+        // The short menu (user ruling 2026-11-11): out of the right-click
+        // menu; Esc, the bottom bar's fullscreen button and the palette keep
+        // it.
+        let mut fullscreen = commands::Declaration::new("Toggle Fullscreen", &[]);
         // IA-CORE-04 (user ruling 2026-11-01): Escape toggles full screen,
         // its only default key (up to 0.5.x Enter, Alt+Enter and F11 did,
         // and Escape was Leave Fullscreen's). An Escape a menu, dialog or
@@ -98,48 +94,45 @@ impl Host {
         quit.localize(|_| i18n::tr("Quit"));
         // With Open File and Reopen, as File > Exit in most desktop programs.
         core_actions::categorize(&mut quit, "File");
-        quit.group = "exit".into();
+        // The short menu (user ruling 2026-11-11): last, in the settings
+        // group with Tools ▸ and Options… (830), no separator above it.
+        quit.group = "settings-main".into();
         quit.order = 990;
         // Windows and Linux menus show no `Cmd` binding (`label_shown`).
         quit.bindings = vec!["Cmd+Q".into()];
         // Player 0.5.10: the bottom bar's sidebar toggle (the rightmost cell
         // of the player's strip, bar_buttons.rs); no default key (F6 is the
-        // playlist's), bindable in Keyboard Shortcuts. User ruling
-        // 2026-11-08: a top-level menu item named like its strip button, in
-        // the windows group where Playlist (800) was; it reopens the sidebar
-        // at its last tab. One title for the menu, the strip and the palette,
-        // as Command Palette….
-        let mut sidebar = commands::Declaration::new("Sidebar", &["Sidebar"]);
+        // playlist's), bindable in Keyboard Shortcuts. It reopens the sidebar
+        // at its last tab. One title for the strip and the palette, as
+        // Command Palette…. Out of the right-click menu since the short menu
+        // (user ruling 2026-11-11; a top-level item from 2026-11-08).
+        let mut sidebar = commands::Declaration::new("Sidebar", &[]);
         sidebar.localize(|_| i18n::tr("Sidebar"));
         core_actions::categorize(&mut sidebar, "Window");
-        sidebar.group = "windows".into();
-        sidebar.order = 800;
         // Host 0.7.4 (menu redesign §6): the command palette; Ctrl+Shift+P
         // (⌘⇧P on macOS too, CTRL_ACCEPTS_CMD), and the magnifier of the
-        // bottom-bar strip (step 3a, bar_buttons.rs). The slim menu (B5): a
-        // top-level item, first of the settings group, directly above the
-        // preferences plugin's Options… (830, `settings-main`) and About
-        // Vestra Player…; the ellipsis because it opens a view.
-        let mut palette = commands::Declaration::new("Command Palette…", &["Command Palette…"]);
+        // bottom-bar strip (step 3a, bar_buttons.rs). The short menu (user
+        // ruling 2026-11-11): Tools ▸ (`commands::MENU_ANCHORS`), last of the
+        // windows group after Vestra Player AI… (820) and Plugin Store…
+        // (822), above About Vestra Player… (880); the ellipsis because it
+        // opens a view.
+        let mut palette =
+            commands::Declaration::new("Command Palette…", &["Tools", "Command Palette…"]);
         palette.localize(|_| i18n::tr("Command Palette…"));
         // The way to find every other command, next to About and Check for Updates.
         core_actions::categorize(&mut palette, "Help");
-        palette.group = "settings-main".into();
+        palette.group = "windows".into();
         palette.order = 829;
         palette.bindings = vec!["Ctrl+Shift+P".into()];
         // Host 0.7.6 (menu redesign step 3b): the adjust column's toggle, the
         // sliders cell of the bottom-bar strip between the palette and the
         // sidebar toggle; no default key (the panels' own commands have
-        // Alt+1…4), bindable in Keyboard Shortcuts. User ruling 2026-11-08:
-        // a top-level menu item named like its strip button, in the windows
-        // group where the four panel items (791–794) were; it reopens the
-        // column at its last tab.
-        let mut adjust =
-            commands::Declaration::new("Adjustments and Effects", &["Adjustments and Effects"]);
+        // Alt+1…4), bindable in Keyboard Shortcuts; it reopens the column at
+        // its last tab. Out of the right-click menu since the short menu
+        // (user ruling 2026-11-11; a top-level item from 2026-11-08).
+        let mut adjust = commands::Declaration::new("Adjustments and Effects", &[]);
         adjust.localize(|_| i18n::tr("Adjustments and Effects"));
         core_actions::categorize(&mut adjust, "Window");
-        adjust.group = "windows".into();
-        adjust.order = 791;
         vec![
             ("fullscreen", fullscreen, state(true, Some(false))),
             ("enter-fullscreen", enter, state(true, None)),
@@ -305,7 +298,9 @@ impl Host {
             .send(Command {
                 reply,
                 method: "host.action".into(),
-                params: json!({"action":action,"step":step.unwrap_or_else(|| self.step_seconds()),
+                // `queuedUs`: a slow way to the worker is logged (`stall.rs`).
+                params: json!({"action":action,"queuedUs":super::stall::clock_us(),
+                    "step":step.unwrap_or_else(|| self.step_seconds()),
                     "keyframes":self.step_keyframes(),
                     "sequence":{"next":facts.next,"previous":facts.previous}}),
             })
@@ -810,27 +805,26 @@ mod tests {
             .into_iter()
             .find(|(id, ..)| *id == palette::PALETTE)
             .unwrap();
-        // The slim menu (B5): a top-level item directly above Options… (830,
-        // group settings-main), with an ellipsis like every item that opens
-        // a view.
-        assert_eq!(declaration.path, ["Command Palette…"]);
+        // The short menu (user ruling 2026-11-11): Tools ▸, last of the
+        // windows group, with an ellipsis like every item that opens a view.
+        assert_eq!(declaration.path, ["Tools", "Command Palette…"]);
         assert_eq!(declaration.shown_title(), "Command Palette…");
         assert_eq!(
             (declaration.order, declaration.group.as_str()),
-            (829, "settings-main")
+            (829, "windows")
         );
         assert!(state.enabled);
     }
 
-    /// The slim menu (B5): the player's top-level items sit where
-    /// doc/product/menus.md puts them. The two column toggles open the
-    /// windows group (user ruling 2026-11-08: Adjustments and Effects 791,
-    /// Sidebar 800, where the four panel items and Playlist were); Toggle
-    /// Fullscreen is alone between two separators after them and before
-    /// Vestra Player AI… (820); Quit closes the menu; Play/Pause
-    /// (core_actions.rs) opens the domain group after Close.
+    /// The short menu (user ruling 2026-11-11): the player's items sit where
+    /// doc/product/menus.md puts them. Toggle Fullscreen and the two column
+    /// toggles left the menu (Esc, the bottom bar and the palette keep
+    /// them); Command Palette… is in Tools ▸ (820); Quit closes the menu in
+    /// the settings group with Tools ▸ and Options… (830), no separator
+    /// above it; Play/Pause (core_actions.rs) opens the domain group after
+    /// Close.
     #[test]
-    fn host_menu_items_have_their_slim_menu_places() {
+    fn host_menu_items_have_their_short_menu_places() {
         let declarations = Host::host_declarations();
         let place = |id: &str| {
             declarations
@@ -846,45 +840,36 @@ mod tests {
                 .unwrap()
         };
         assert_eq!(
-            place("fullscreen"),
-            (
-                vec!["Toggle Fullscreen".to_owned()],
-                810,
-                "screen".to_owned()
-            )
-        );
-        assert_eq!(
             place("quit"),
-            (vec!["Quit".to_owned()], 990, "exit".to_owned())
+            (vec!["Quit".to_owned()], 990, "settings-main".to_owned())
         );
         assert_eq!(
-            place("adjust"),
+            place("palette"),
             (
-                vec!["Adjustments and Effects".to_owned()],
-                791,
+                vec!["Tools".to_owned(), "Command Palette…".to_owned()],
+                829,
                 "windows".to_owned()
             )
-        );
-        assert_eq!(
-            place("sidebar"),
-            (vec!["Sidebar".to_owned()], 800, "windows".to_owned())
         );
         let in_menu: Vec<&str> = declarations
             .iter()
             .filter(|(_, declaration, _)| !declaration.path.is_empty())
             .map(|(id, ..)| *id)
             .collect();
-        assert_eq!(
-            in_menu,
-            ["fullscreen", "quit", "sidebar", "palette", "adjust"]
-        );
+        assert_eq!(in_menu, ["quit", "palette"]);
+        let tools = commands::MENU_ANCHORS
+            .iter()
+            .find(|(id, ..)| *id == "tools")
+            .unwrap();
+        assert_eq!(*tools, ("tools", "Tools", 820));
     }
 
     /// Menu redesign step 3b: Adjustments and Effects (`host/adjust`) and
     /// Sidebar (`host/sidebar`) toggle their columns; no default key,
     /// checkable (the dot), and disabled until a panel is in the column.
-    /// User ruling 2026-11-08: the menu item, the strip button and the
-    /// palette row share one title.
+    /// User ruling 2026-11-08: the strip button and the palette row share
+    /// one title; out of the right-click menu since the short menu (user
+    /// ruling 2026-11-11).
     #[test]
     fn column_toggles_are_checkable_host_commands_without_a_key() {
         for (id, title) in [
@@ -899,7 +884,7 @@ mod tests {
             assert_eq!(state.checked, Some(false), "{id}");
             assert!(!state.enabled, "{id}");
             assert_eq!(declaration.shown_title(), title);
-            assert_eq!(declaration.shown_path(), [title]);
+            assert!(declaration.path.is_empty(), "{id}");
         }
     }
 

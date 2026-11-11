@@ -718,21 +718,22 @@ mod tests {
         assert_eq!(named("quit"), "File: Quit");
         // Titles and keys stay; seek, frame and speed left the menu (menu
         // redesign step 4), Previous, Next, the volume steps and Mute too
-        // (the slim menu, B5), so they have no menu path; Play/Pause and the
-        // command palette are top-level items.
+        // (the slim menu, B5), so they have no menu path; Play/Pause is a
+        // top-level item, the command palette is in Tools ▸ (the short
+        // menu, user ruling 2026-11-11).
         assert_eq!(rows["seek-backward"]["key"], Value::Null);
         assert_eq!(rows["mute"]["key"], Value::Null);
         assert_eq!(rows["previous"]["key"], Value::Null);
         assert_eq!(rows["stop"]["key"], json!(["Close"]));
         assert_eq!(rows["play-pause"]["key"], json!(["Play/Pause"]));
-        assert_eq!(rows["palette"]["key"], json!(["Command Palette…"]));
+        assert_eq!(rows["palette"]["key"], json!(["Tools", "Command Palette…"]));
         assert_eq!(rows["palette"]["defaults"], json!(["Ctrl+Shift+P"]));
-        // The column toggles are top-level items (user ruling 2026-11-08),
-        // still without a default key.
+        // The column toggles left the menu (the short menu, user ruling
+        // 2026-11-11), still without a default key.
         assert_eq!(named("sidebar"), "Window: Sidebar");
-        assert_eq!(rows["sidebar"]["key"], json!(["Sidebar"]));
+        assert_eq!(rows["sidebar"]["key"], Value::Null);
         assert_eq!(named("adjust"), "Window: Adjustments and Effects");
-        assert_eq!(rows["adjust"]["key"], json!(["Adjustments and Effects"]));
+        assert_eq!(rows["adjust"]["key"], Value::Null);
         assert_eq!(rows["adjust"]["defaults"], json!([]));
     }
 }

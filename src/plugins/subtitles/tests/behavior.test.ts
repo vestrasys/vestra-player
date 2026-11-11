@@ -56,7 +56,7 @@ async function srtFile(text: string | Buffer) {
   return { path, cleanup: () => rm(folder, { recursive: true, force: true }) };
 }
 
-test("menu per the redesign: Open ▸, Subtitle Track ▸; Subtitles… and the rest in the palette; views bind exactly their Slint callbacks", async () => {
+test("menu per the redesign: Open ▸, Tools ▸ Subtitle Track ▸; Subtitles… and the rest in the palette; views bind exactly their Slint callbacks", async () => {
   const { host, window, stop } = await open();
   const declared = [...host.commands.values()]
     .filter(({ display }) => display.path.length)
@@ -65,9 +65,9 @@ test("menu per the redesign: Open ▸, Subtitle Track ▸; Subtitles… and the 
   assert.deepEqual(declared, [
     ["打开 > 打开字幕…", 113, "open", "Alt+O"],
     ["打开 > 添加次字幕…", 114, "open", ""],
-    // Group "domain" (menu sweep B5): no separator between Audio Track ▸, Subtitle Track ▸ and Snapshot ▸.
-    ["选择字幕轨 > 不显示", 302, "domain", ""],
-    ["选择字幕轨 > English · en", 303, "domain", ""],
+    // In Tools ▸ (the short menu, 2026-11-11); group "domain" (menu sweep B5): no separator between Audio Track ▸, Subtitle Track ▸ and Snapshot ▸.
+    ["工具 > 选择字幕轨 > 不显示", 302, "domain", ""],
+    ["工具 > 选择字幕轨 > English · en", 303, "domain", ""],
   ]);
   // Out of the menu, in the command palette with their keys (ids unchanged).
   const palette = [...host.commands.entries()]
@@ -409,7 +409,7 @@ test("the track menu follows the real track list: names, loads and source change
   host.subtitles.tracks.push({ target: { kind: "embedded", id: 2 }, title: "English", language: "en", styleSupported: true, styleReason: null });
   const { stop } = await startPlugin(activate, { directory, host, locale: "zh-Hans" });
   const titles = () =>
-    [...host.commands.values()].filter((c) => c.declaration.path[0] === "Subtitle Track").sort((a, b) => a.declaration.order - b.declaration.order).map((c) => c.display.path.at(-1));
+    [...host.commands.values()].filter((c) => c.declaration.path[1] === "Subtitle Track").sort((a, b) => a.declaration.order - b.declaration.order).map((c) => c.display.path.at(-1));
   try {
     assert.deepEqual(titles(), ["不显示", "English · en", "English · en (2)"], "equal names stay distinct paths");
     host.dialogAnswers.push([file.path]);

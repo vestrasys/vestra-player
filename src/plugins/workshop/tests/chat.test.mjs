@@ -14,8 +14,9 @@ const writeThenDone = (req, index) =>
 
 test("one menu entrance; without a key the window says so and links to the settings page", async () => {
   const ai = await startAi();
-  assert.deepEqual(ai.host.command("workshop.open").declaration.path, ["Vestra Player AI…"]);
-  assert.deepEqual(ai.host.command("workshop.open").display.path, ["Vestra Player AI…"]);
+  assert.deepEqual(ai.host.command("workshop.open").declaration.path, ["@tools", "Vestra Player AI…"]);
+  // The player names its own menus (Tools ▸); the test host shows them in Simplified Chinese.
+  assert.deepEqual(ai.host.command("workshop.open").display.path, ["工具", "Vestra Player AI…"]);
   await ai.until(() => ai.props.banner.code === "not-configured", "banner");
   assert.equal(ai.banner(), "No provider set up: choose a provider in the settings and save its API key first.");
   assert.equal(ai.host.command("workshop.open").declaration.order, 820);
@@ -33,7 +34,7 @@ test("one menu entrance; without a key the window says so and links to the setti
 test("Simplified Chinese: the menu, the banner and the settings page read as before", async () => {
   const ai = await startAi({ locale: "zh-Hans" });
   assert.equal(ai.plugin.i18n.locale, "zh-Hans");
-  assert.deepEqual(ai.host.command("workshop.open").display.path, ["Vestra Player AI…"]);
+  assert.deepEqual(ai.host.command("workshop.open").display.path, ["工具", "Vestra Player AI…"]);
   await ai.until(() => ai.props.banner.code === "not-configured", "banner");
   assert.equal(ai.banner(), "尚未配置服务商：请先在设置中选择服务商并保存 API key。");
   assert.equal(ai.keyState(), "未保存");

@@ -4,7 +4,7 @@ An AI assistant inside the player, based on [pi](https://github.com/earendil-wor
 
 ## How to use it
 
-1. Choose "Vestra Player AI…" in the right-click menu, or click the AI button at the right end of the bottom bar (left of the Plugin Store button).
+1. Choose "Tools ▸ Vestra Player AI…" in the right-click menu, or click the AI button at the right end of the bottom bar (left of the Plugin Store button).
 2. The first time, click "Go to Settings" (or "⚙ Settings" in the sidebar), and in "Options ▸ Plugins ▸ Vestra Player AI":
    - choose a provider: all the providers pi supports that use an API key (Anthropic, OpenAI, Google, OpenRouter, DeepSeek, Mistral, Groq, xAI, MiniMax, Moonshot and others, pay-as-you-go), or "Custom · OpenAI format" / "Custom · Anthropic format" (enter a Base URL; works with Ollama, LM Studio or other compatible services);
    - paste the API key and click "Save"; each provider's key is saved separately;

@@ -251,7 +251,7 @@ msgstr ""
 #: manifest.json
 msgid ""
 "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n"
-"Right-click menu: Snapshot ▸."
+"Right-click menu: Tools ▸ Snapshot ▸."
 msgstr ""
 
 #: manifest.json

@@ -855,8 +855,17 @@ fn player() -> Result<()> {
             Duration::from_millis(16),
             move || {
                 let began = Instant::now();
+                // A slow turn, or a gap before it, goes to the host log
+                // (`host/stall.rs`).
+                host::stall::tick_began(began);
+                let mut turn = host::stall::Turn::new(began);
                 let mut host = tick_host.borrow_mut();
-                host::drain_events(&receiver, began, 0, |event| host.handle(event));
+                host::drain_events(&receiver, began, 0, |event| {
+                    let (label, at) = (event.label(), Instant::now());
+                    host.handle(event);
+                    turn.event(label, at.elapsed());
+                });
+                turn.step("events");
                 if first_draws.is_some() {
                     let (draws, pictures) = host.backend.render.presentation.counts();
                     let opening = opened_at_start || host.last_source["phase"] == "loading";
@@ -865,25 +874,36 @@ fn player() -> Result<()> {
                     {
                         guard.settle();
                     }
+                    turn.step("crash guard first draws");
                 }
                 host.placements.tick();
                 host.mount_callbacks();
                 host.prepare_mount_tick();
+                turn.step("mounts");
                 host.panel_restart_tick();
+                turn.step("panel restarts");
                 host.window_tick();
+                turn.step("window tick");
                 platform::tool_windows_tick();
+                turn.step("tool windows");
                 host.activation_tick();
                 host.on_demand_tick();
+                turn.step("plugin activation");
                 host.power_tick();
                 host.diagnostics_tick();
+                turn.step("power and diagnostics");
                 host.package_tick();
+                turn.step("packages");
                 host.notify_tick();
                 host.timeline_tick();
                 host.drops_tick();
                 host.open_files_tick();
+                turn.step("notifications, timeline, drops, open files");
                 host.settings_tick();
+                turn.step("settings");
                 if host.theme_pending {
                     host.theme_all();
+                    turn.step("theme");
                 }
                 if host.commands.revision() != binding_revision {
                     binding_revision = host.commands.revision();
@@ -907,15 +927,18 @@ fn player() -> Result<()> {
                         }
                     }
                 }
+                turn.step("bindings and menu");
                 // The renderer's wake-up delivers frames; this only catches
                 // one whose wake-up found the host busy.
                 if host.backend.frame.missed() {
                     host.show_frame();
                 }
                 frame_pacing::tick();
+                turn.step("frame");
                 if let Some(log) = host.frame_log.as_mut() {
                     log.tick_took(began.elapsed());
                 }
+                host::stall::tick_ended(&turn, |owner| host.plugin_id(owner));
                 if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                     if let Some(path) = snapshot.as_ref()
                         && let Some(window) = host.shell.as_ref()

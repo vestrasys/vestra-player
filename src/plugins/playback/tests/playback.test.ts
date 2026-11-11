@@ -81,7 +81,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
       d.home ?? null,
     ]),
     [
-      ["open", "打开文件…", 100, "open", false, ["Ctrl+O", "F3"], false, null],
+      ["open", "打开/打开文件…", 100, "open", false, ["Ctrl+O", "F3"], false, null],
       ["open-url", "打开/打开链接…", 110, "open", false, ["Ctrl+U"], false, null],
       ["reopen", "(重开当前/最后文件)", null, null, false, ["Ctrl+Y"], false, null],
       ["copy-name", "(文件名)", null, null, false, [], false, null],
@@ -114,7 +114,7 @@ test("menu follows the allocation table: positions, groups, radio items, binding
   assert.deepEqual(
     own(host).map(([id, { declaration: d }]) => [id, d.path.length ? d.path.map(english).join("/") : `(${english(d.title!)})`]),
     [
-      ["open", "Open File…"],
+      ["open", "@open/Open File…"],
       ["open-url", "@open/Open URL…"],
       ["reopen", "(Reopen Current/Last File)"],
       ["copy-name", "(File Name)"],
@@ -264,7 +264,7 @@ test("every command has a non-empty category (the command palette's Category: Ti
 
 test("in English the menus, reasons and messages are the source texts", async () => {
   const { host, stop } = await start(withMedia(), "en");
-  assert.deepEqual(host.command("open").display.path, ["Open File…"]);
+  assert.deepEqual(host.command("open").display.path, ["Open", "Open File…"]);
   assert.deepEqual(host.command("open-url").display.path, ["Open", "Open URL…"]);
   assert.deepEqual([host.command("backward-2").display.title, host.command("backward-2").display.category], ["Back 30 s", "Seek"]);
   assert.deepEqual([host.command("rate-05").display.title, host.command("rate-05").display.category], ["0.5×", "Speed"]);
