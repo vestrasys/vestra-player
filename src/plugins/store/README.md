@@ -4,7 +4,7 @@ Browse the plugins in the official Vestra Player repository; install, update, un
 
 ## Entries
 
-- Right-click menu: Plugin Store…. When updates are available it reads Plugin Store (2 updates)….
+- Right-click menu: Tools ▸ Plugin Store…, between Vestra Player AI… and Command Palette…. When updates are available it reads Plugin Store (2 updates)….
 - Bottom bar: the shopping-bag button, between the AI button and the sidebar toggle (Vestra Player 0.5.10). Its tooltip is the menu title.
 - Drop a `.vxp` plugin package on the video area to install it.
 - Options ▸ Plugins ▸ Plugin Store: third-party repositories and the automatic update check.

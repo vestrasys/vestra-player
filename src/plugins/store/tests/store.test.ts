@@ -26,8 +26,8 @@ test("menu Plugin Store… counts updates from the same source only, announces t
   });
   try {
     const command = host.command("open");
-    assert.deepEqual(command.declaration.path, ["Plugin Store…"]);
-    assert.deepEqual(command.display.path, ["插件商城…"]);
+    assert.deepEqual(command.declaration.path, ["@tools", "Plugin Store…"]);
+    assert.deepEqual(command.display.path, ["工具", "插件商城…"]);
     assert.equal(command.display.category, "插件"); // the palette (player 0.7.6): "插件：插件商城…"
     assert.equal(command.declaration.home, undefined);
     assert.equal(command.declaration.order, 822);
@@ -35,8 +35,8 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
     await store.refreshAll(true);
-    await until(host, () => path(host)?.[0] !== "Plugin Store…", "menu title");
-    assert.deepEqual(host.command("open").display.path, ["插件商城（1 个可更新）…"]);
+    await until(host, () => path(host)?.[1] !== "Plugin Store…", "menu title");
+    assert.deepEqual(host.command("open").display.path, ["工具", "插件商城（1 个可更新）…"]);
     assert.equal(host.command("open").display.category, "插件", "the category stays when the title counts updates");
     assert.deepEqual(host.osd, ["插件商城：1 个插件可以更新"]);
     await store.refreshAll(true);
@@ -49,7 +49,7 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     await choose(host, "YouTube");
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "update");
-    await until(host, () => path(host)?.[0] === "Plugin Store…", "count gone after the update");
+    await until(host, () => path(host)?.[1] === "Plugin Store…", "count gone after the update");
     await until(host, () => !store.busy);
     // The updated plugin left Updates; the tab stays, empty, without details.
     assert.equal(props(host)["category"], UPDATES);
@@ -84,7 +84,7 @@ test("bottom-bar button: store icon at 200, the menu title as tooltip, a click o
 
     // The update count re-registers the command; the button follows its title.
     await store.refreshAll(true);
-    await until(host, () => path(host)?.[0] !== "Plugin Store…", "menu title");
+    await until(host, () => path(host)?.[1] !== "Plugin Store…", "menu title");
     assert.equal(host.barButtons.length, 1);
     assert.equal(host.barButtons[0]?.tooltip, "插件商城（1 个可更新）");
     assert.equal(host.barButtons[0]?.order, 200);

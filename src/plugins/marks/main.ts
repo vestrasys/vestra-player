@@ -9,7 +9,7 @@ import { addSeekbarCommand, SeekbarMarks } from "./seekbar.ts";
 import { Settings } from "./store.ts";
 
 /**
- * Chapters and Bookmarks: Chapter and Bookmark List… in the menu and the other
+ * Chapters and Bookmarks: Chapter and Bookmark List… in Tools ▸ and the other
  * Chapters and Bookmarks commands in the command palette (B21: chapters from
  * `player.chapters()`, bookmarks per file in bookmarks.json, the Chapters and
  * Bookmarks window) and the seek-bar marks (B22: this plugin's `timeline`

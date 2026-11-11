@@ -14,14 +14,14 @@ Picks subtitle tracks, loads external subtitles, adjusts style and sync.
 
 ## Entries
 
-- **Subtitles panel** (adjust column beside the video): **Subtitles…** (Alt+3, command palette; again closes the column), or Adjustments and Effects (right-click menu or the bottom bar's button) at its last tab. One column: Show subtitles; Tracks (Primary, Load…, Reload, Secondary and its position); Sync (−/+ by the sync step, the value — click it to type one —, reset; Previous / Next line); Style (size, position, bold, shadow, box, Keep original ASS/SSA styles, "Font, Colour and Outline…" for Subtitle Settings); Reset. Each control's key is shown beside it and in its tooltip, as the user has bound it.
-- Right-click menu: Open ▸ Open Subtitle… (Alt+O), Open ▸ Add Secondary Subtitle…, Subtitle Track ▸ (Off and the tracks), Subtitles… (Alt+3).
+- **Subtitles panel** (adjust column beside the video): **Subtitles…** (Alt+3, command palette; again closes the column), or Adjustments and Effects (the bottom bar's button) at its last tab. One column: Show subtitles; Tracks (Primary, Load…, Reload, Secondary and its position); Sync (−/+ by the sync step, the value — click it to type one —, reset; Previous / Next line); Style (size, position, bold, shadow, box, Keep original ASS/SSA styles, "Font, Colour and Outline…" for Subtitle Settings); Reset. Each control's key is shown beside it and in its tooltip, as the user has bound it.
+- Right-click menu: Open ▸ Open Subtitle… (Alt+O), Open ▸ Add Secondary Subtitle…, Tools ▸ Subtitle Track ▸ (Off and the tracks).
 - Command palette (Ctrl+Shift+P) and keys: everything else, as "Category: Title" — Show Subtitles (Alt+H), Cycle (Alt+L), Previous Dialogue (Home), Next Dialogue (End), Current Subtitle Start (Ctrl+Home), the secondary subtitle and its position, Size +/− (Alt+PgUp/PgDn), Move Up/Down (no default key; Alt+↑/↓ pan the video), Bold (Alt+B), Shadow, Opaque Box, Original ASS/SSA Styles, Earlier / Later (`.` `,`), Adjust Sync… (opens the panel's sync value for typing), Reset: Subtitle Position (Alt+Home), Reset: Subtitle Sync (`/`), Reload Subtitles (Ctrl+Alt+Y), Refresh Subtitle Tracks, Remove External Subtitle, Subtitle Settings….
 
 ## Limits
 
 - No image subtitle files (.sup, VobSub).
-- Subtitle Track ▸ lists at most 8 tracks; the rest are in the panel's Primary list.
+- Tools ▸ Subtitle Track ▸ lists at most 8 tracks; the rest are in the panel's Primary list.
 - Jumping by dialogue works for text subtitles of local files only.
 
 ## Translations

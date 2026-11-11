@@ -3,6 +3,7 @@
 ## 1.0.14
 
 - Wording left over from the clip tasks, now about snapshots: Show Last Capture in Folder and Copy Last Snapshot before any snapshot was saved say "No snapshot saved yet." (was "This task has no output file yet."); a sixth capture while five (frames or bursts) are saving says "Five captures are still being saved. Please wait." (was "One export is running and four are queued."); any other failure to make the file (writing, encoding, the worker) says "Could not create the image file" (was "Export failed"); "This frame cannot be encoded" (was "This media"); "The frame is past the end of the media." (was "The selected range"). Translations: zh-Hans by hand, de, es, fr, ja and ko machine (`x-machine`); the old texts removed from the catalogs.
+- Menu (user ruling 2026-11-11): Snapshot ▸ moves from the top level of the right-click menu into Tools ▸ (`["@tools", "Snapshot", …]`, SDK 1.7.12), after Audio Track ▸ and Subtitle Track ▸; its three items, their orders (420, 422, 426), keys and group `domain` are unchanged; the manifest description says "Right-click menu: Tools ▸ Snapshot ▸." (zh-Hans by hand, de, es, fr, ja and ko machine, `x-machine`). Who must change: nobody.
 
 ## 1.0.13
 

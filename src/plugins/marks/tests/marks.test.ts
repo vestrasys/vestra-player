@@ -613,13 +613,14 @@ const fixedMenu = (host: TestHost, title: (c: ReturnType<TestHost["command"]>) =
     .sort((a, b) => a.declaration.order - b.declaration.order)
     .map((c) => [title(c), c.declaration.order, c.declaration.group, c.declaration.bindings.join(",")]);
 
-test("menu: Chapter and Bookmark List… at the top level, the rest palette only; orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
+test("menu: Chapter and Bookmark List… in Tools ▸, the rest palette only; orders, groups and shortcuts as in the requirements; no binding conflicts", async () => {
   const host = new TestHost();
   await start(host);
-  // Menu sweep (B5): only the list command has a menu path (top level, after Playlist 800, windows group).
+  // Only the list command has a menu path (Tools ▸, user ruling 2026-11-11; its own marks group).
   const list = host.command("marks.list");
-  assert.deepEqual(list.declaration.path, ["Chapter and Bookmark List…"]);
-  assert.deepEqual(list.display.path, ["Chapter and Bookmark List…"]);
+  assert.deepEqual(list.declaration.path, ["@tools", "Chapter and Bookmark List…"]);
+  // With no locale the TestHost shows the player's own words (Tools) in Simplified Chinese.
+  assert.deepEqual(list.display.path, ["工具", "Chapter and Bookmark List…"]);
   for (const [id, c] of host.commands) if (id !== "marks.list") assert.deepEqual(c.declaration.path, [], `${id} is palette only`);
   assert.deepEqual(fixedMenu(host, (c) => c.declaration.title), [
     ["Add Bookmark", 261, "marks-edit", "P"],
@@ -627,7 +628,7 @@ test("menu: Chapter and Bookmark List… at the top level, the rest palette only
     ["Next Bookmark or Chapter", 263, "marks-edit", "Shift+PageDown"],
     ["Previous Chapter", 264, "marks-edit", "Ctrl+PageUp"],
     ["Next Chapter", 265, "marks-edit", "Ctrl+PageDown"],
-    ["Chapter and Bookmark List…", 801, "windows", "H"],
+    ["Chapter and Bookmark List…", 801, "marks", "H"],
   ]);
   assert.deepEqual(
     fixedMenu(host, (c) => c.display.title),
@@ -695,7 +696,7 @@ test("zh-Hans: the menus read as before the migration", async () => {
   const host = new TestHost();
   await start(host, undefined, "zh-Hans");
   // Menu sweep (B5): the list command is the only menu item; the rest show as "分类: 标题" in the palette.
-  assert.deepEqual(host.command("marks.list").display.path, ["章节/书签列表…"]);
+  assert.deepEqual(host.command("marks.list").display.path, ["工具", "章节/书签列表…"]);
   assert.deepEqual(
     [...new Set([...host.commands.values()].map((c) => c.display.category))].sort(),
     ["章节/书签"],
@@ -706,7 +707,7 @@ test("zh-Hans: the menus read as before the migration", async () => {
     ["下一书签/章节", 263, "marks-edit", "Shift+PageDown"],
     ["上一章节", 264, "marks-edit", "Ctrl+PageUp"],
     ["下一章节", 265, "marks-edit", "Ctrl+PageDown"],
-    ["章节/书签列表…", 801, "windows", "H"],
+    ["章节/书签列表…", 801, "marks", "H"],
   ]);
   assert.deepEqual([host.command("marks.seekbar").display.category, host.command("marks.seekbar").display.title], ["章节/书签", "在进度条上显示标记"]);
   assert.equal(host.translate(host.command("marks.add").state.reason!), "未打开媒体");

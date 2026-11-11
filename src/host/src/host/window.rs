@@ -537,8 +537,9 @@ impl Host {
     /// plugin is woken once (its activation mounts the panel again); a
     /// running plugin's panel that is not in the shell is compiled into it
     /// (`prepare_mount_tick`), unless that just failed for this tab. The
-    /// adjust column's first opening compiles its panel this way (menu
-    /// redesign, open question 1: on demand).
+    /// adjust column's first opening compiles its front tabs this way (menu
+    /// redesign, open question 1: on demand; all of them at once, so a
+    /// first switch among them compiles nothing).
     fn tab_demand(&mut self, column: Column, active: Option<u64>) {
         let index = column.index();
         let Some(owner) = active else {

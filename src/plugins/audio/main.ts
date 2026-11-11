@@ -26,10 +26,9 @@ import {
 import type { ChannelMode, Settings, SyncKeep, TrackRow } from "./model.ts";
 
 /**
- * The right-click menu's Audio Track ▸ (menu redesign §4): a top-level submenu in the domain range,
- * right after Play/Pause (201) and before Subtitle Track ▸ (302) and Snapshot ▸ (420), as mockup 04
- * orders them (menu sweep B5; it was 505, after both); everything else of the old Audio ▸ lives in
- * the Audio panel and the command palette.
+ * The right-click menu's Tools ▸ Audio Track ▸ (`@tools`, SDK 1.7.12; user ruling 2026-11-11): first
+ * in Tools ▸, before Subtitle Track ▸ (302) and Snapshot ▸ (420) in the same group (order 301, group
+ * `domain`); everything else of the old Audio ▸ lives in the Audio panel and the command palette.
  */
 const TRACKS = "Audio Track";
 const TRACKS_ORDER = 301;
@@ -286,7 +285,7 @@ export default async function activate(plugin: Plugin) {
       if (!list || list.length === 0) {
         trackScope.commands.add({
           id: "audio.track.none",
-          path: [TRACKS, loadingTracks() ? "Loading…" : "No Audio Tracks"],
+          path: ["@tools", TRACKS, loadingTracks() ? "Loading…" : "No Audio Tracks"],
           category: category.track,
           order: TRACKS_ORDER,
           enabled: false,
@@ -297,7 +296,7 @@ export default async function activate(plugin: Plugin) {
       list.forEach((t: AudioTrack, index) =>
         trackScope.commands.add({
           id: `audio.track.${t.id}`,
-          path: [TRACKS, labels![index]!],
+          path: ["@tools", TRACKS, labels![index]!],
           category: category.track,
           home: HOME,
           order: TRACKS_ORDER,
@@ -620,7 +619,7 @@ export default async function activate(plugin: Plugin) {
   }
 
   // ---------------------------------------------------------------- commands
-  // In the right-click menu: Open ▸ Load External Audio… (114) and Audio Track ▸ (`TRACKS`). Audio…
+  // In the right-click menu: Open ▸ Load External Audio… (114) and Tools ▸ Audio Track ▸ (`TRACKS`). Audio…
   // (Alt+2) is palette only (user ruling 2026-11-08: the menu's Adjustments and Effects, the
   // player's, opens the column at its last tab). Everything else is in the Audio panel and, by name,
   // in the command palette ("Category: Title", with the panel as its home); ids and keys are those

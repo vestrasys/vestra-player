@@ -673,21 +673,23 @@ mod tests {
         assert_eq!(row("volume-up").label, "Audio: Volume +");
         assert_eq!(row("fullscreen").label, "Window: Toggle Fullscreen");
         assert_eq!(row("quit").label, "File: Quit");
-        // In the menu since the slim menu (B5), with its ellipsis.
+        // In Tools ▸ since the short menu (user ruling 2026-11-11), with
+        // its ellipsis.
         assert_eq!(row("palette").label, "Help: Command Palette…");
-        assert_eq!(row("palette").place, "Menu");
+        assert_eq!(row("palette").place, "Tools ▸");
         // Palette only (B5): Previous, Next, the volume steps and Mute.
         assert_eq!(row("previous").label, "Playback: Previous");
         assert_eq!(row("previous").place, "");
         assert_eq!(row("mute").label, "Audio: Mute");
         assert_eq!(row("mute").place, "");
         assert_eq!(row("sidebar").global, "host/sidebar");
-        // The column toggles (user ruling 2026-11-08): top-level items named
-        // like their strip buttons.
+        // The column toggles, named like their strip buttons, and Toggle
+        // Fullscreen left the menu (the short menu, user ruling 2026-11-11).
         assert_eq!(row("sidebar").label, "Window: Sidebar");
-        assert_eq!(row("sidebar").place, "Menu");
+        assert_eq!(row("sidebar").place, "");
         assert_eq!(row("adjust").label, "Window: Adjustments and Effects");
-        assert_eq!(row("adjust").place, "Menu");
+        assert_eq!(row("adjust").place, "");
+        assert_eq!(row("fullscreen").place, "");
     }
 
     #[test]

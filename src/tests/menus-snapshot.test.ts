@@ -3,7 +3,7 @@
 //   OUT=<file> [PLUGINS=playback,playlist] node --test tests/menus-snapshot.test.ts
 // Default: every built-in plugin in src/plugins (a directory with `main.ts`).
 // `shortcut` is the first binding, or null, for a direct diff with old snapshots.
-// `bindings` and `order` are the declaration fields.
+// `bindings`, `order` and `group` are the declaration fields.
 // `host` lists the player's core actions (`host.coreCommands`).
 // The test host is the SDK package installed in src/node_modules (`npm ci` in src/).
 import { existsSync, readdirSync, writeFileSync } from "node:fs";
@@ -35,6 +35,7 @@ const row = ([id, c]: Entry) => {
     shortcut?: string | null;
     bindings?: string[];
     order?: number;
+    group?: string;
   };
   const bindings = d.bindings ?? (d.shortcut ? [d.shortcut] : []);
   return {
@@ -44,6 +45,8 @@ const row = ([id, c]: Entry) => {
     shortcut: bindings[0] ?? null,
     bindings,
     order: d.order ?? null,
+    // The separator group; the player's default is "domain".
+    group: d.group ?? "domain",
   };
 };
 

@@ -315,10 +315,10 @@ msgstr "Guarda o copia el fotograma actual y captura ráfagas"
 #, x-machine
 msgid ""
 "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n"
-"Right-click menu: Snapshot ▸."
+"Right-click menu: Tools ▸ Snapshot ▸."
 msgstr ""
 "Guarda, guarda como o copia el fotograma actual (con los subtítulos visibles, o el fotograma renderizado con efectos de vídeo) en PNG, JPEG o BMP, y captura ráfagas de fotogramas. La configuración está en Opciones ▸ Video ▸ Captura.\n"
-"Menú contextual: Captura ▸."
+"Menú contextual: Herramientas ▸ Captura ▸."
 
 #: manifest.json
 #, x-machine
