@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.capture 1.0.13\n"
+"Project-Id-Version: vestra.capture 1.0.14\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -25,7 +25,7 @@ msgid "Bursts need a known media duration."
 msgstr ""
 
 #: main.ts:85 main.ts:90
-msgid "The selected range is past the end of the media."
+msgid "The frame is past the end of the media."
 msgstr ""
 
 #: main.ts:85 main.ts:90
@@ -45,7 +45,7 @@ msgid "Could not capture the frame."
 msgstr ""
 
 #: main.ts:85 main.ts:90
-msgid "One export is running and four are queued. Please wait."
+msgid "Five captures are still being saved. Please wait."
 msgstr ""
 
 #: main.ts:85 main.ts:90
@@ -73,15 +73,15 @@ msgid "No write permission"
 msgstr ""
 
 #: main.ts:85 main.ts:90
-msgid "This media cannot be encoded"
+msgid "This frame cannot be encoded"
 msgstr ""
 
 #: main.ts:85 main.ts:90
-msgid "Export failed"
+msgid "Could not create the image file"
 msgstr ""
 
 #: main.ts:85 main.ts:90
-msgid "This task has no output file yet."
+msgid "No snapshot saved yet."
 msgstr ""
 
 #: main.ts:85 main.ts:90
@@ -160,87 +160,87 @@ msgstr ""
 msgid "Frame copied without subtitles: they cannot be drawn into a frame"
 msgstr ""
 
-#: main.ts:261 main.ts:426
+#: main.ts:261 main.ts:431
 msgid "Frame copied to the clipboard"
 msgstr ""
 
-#: main.ts:302 main.ts:384 main.ts:385 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
+#: main.ts:302 main.ts:389 main.ts:390 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
 msgid "Snapshot"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Current Frame"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Current Frame"
 msgstr ""
 
-#: main.ts:384 main.ts:385 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
+#: main.ts:389 main.ts:390 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
 msgid "Burst"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Snapshot Settings…"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Current Frame As…"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Rendered Frame"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Rendered Frame As…"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Rendered Frame"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Capture as PNG"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Capture as JPEG"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Capture as BMP"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Include Subtitles in Rendered Frame"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Snapshot Folder…"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Open Snapshot Folder"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Show Last Capture in Folder"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Last Snapshot"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Save Video Frame Only"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "Copy Video Frame Only"
 msgstr ""
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 msgid "No frame to capture"
 msgstr ""
 
