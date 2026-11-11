@@ -48,6 +48,13 @@ msgstr "설정"
 msgid "Reset"
 msgstr "재설정"
 
+#. The top-level menu that gathers the player's tools (tracks, snapshot,
+#. Vestra Player AI, the store, the command palette, About).
+#: src/commands.rs
+#, x-machine
+msgid "Tools"
+msgstr "도구"
+
 #: src/commands.rs:334
 #, x-machine
 msgid "Speed"
