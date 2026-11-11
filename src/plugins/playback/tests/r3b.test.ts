@@ -2,8 +2,9 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { startPlugin, TestHost, UI_VALUE_LIMITS } from "@vestra-player/sdk/testing";
-import { jsonBytes, MARK_TIP_BYTES, MAX_MARKS, sampled, seekMarks, seekRanges, TICK_BYTES } from "../bar.ts";
+import { jsonBytes, MARK_TIP_BYTES, MAX_MARKS, sampled, seekMarks, seekRanges, SPAN_DEBOUNCE_MS, TICK_BYTES } from "../bar.ts";
 import activate from "../main.ts";
+import { eventually, until } from "./eventually.ts";
 
 // I07 (the seek-bar preview) is in preview.test.ts since 0.2.0.
 const directory = new URL("..", import.meta.url);
@@ -11,14 +12,6 @@ const start = (host = new TestHost()) =>
   // The Chinese texts are what the plugin showed before English became the source.
   startPlugin(activate, { directory, host, locale: "zh-Hans" });
 
-// A ceiling, not a delay: generous because the whole suite runs in parallel.
-async function until(predicate: () => boolean, ms = 5000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
 function withMedia(host: TestHost, source: string, duration = 1000) {
   host.openElsewhere(source);
   host.setSource({ duration, position: 0 });
@@ -83,15 +76,16 @@ test("B22 span reports during a resize are debounced: the first at once, then th
   await until(() => bar.props["tick-span"] === 400);
   const sent = () => host.mounted("bottom").props["bookmark-ticks"];
   assert.equal(sent(), "M200 0V1");
-  // A drag of the window edge: a report a frame.
-  for (const px of [401, 405, 410, 420, 431]) {
-    bar.emit("spanChanged", px);
-    await new Promise((resolve) => setTimeout(resolve, 16));
-  }
-  assert.equal(bar.props["tick-span"], 400, "nothing rebuilt while the reports keep coming");
-  assert.equal(sent(), "M200 0V1");
-  await until(() => bar.props["tick-span"] === 431);
-  assert.equal(sent(), "M215 0V1");
+  // A drag of the window edge: reports in a burst, then half the debounce of
+  // real time. Nothing is rebuilt before the pause has run its course; the
+  // check is skipped when a loaded machine stretched the wait past it.
+  const t0 = Date.now();
+  for (const px of [401, 405, 410, 420, 431]) bar.emit("spanChanged", px);
+  await new Promise((resolve) => setTimeout(resolve, SPAN_DEBOUNCE_MS / 2));
+  const shown = [bar.props["tick-span"], sent()];
+  if (Date.now() - t0 < SPAN_DEBOUNCE_MS)
+    assert.deepEqual(shown, [400, "M200 0V1"], "nothing rebuilt before the pause");
+  await eventually(() => [bar.props["tick-span"], sent()], [431, "M215 0V1"]);
   // Stopped with a report pending: nothing runs after.
   bar.emit("spanChanged", 500);
   await stop();

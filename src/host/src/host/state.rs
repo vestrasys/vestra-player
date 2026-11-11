@@ -208,8 +208,8 @@ impl Host {
     }
     /// `{ fullscreen, maximized, videoArea, pictureInPicture }` of the main
     /// window (zero without one; `maximized` is false while fullscreen),
-    /// with the palette and the file resolvers' extensions
-    /// (`plugin.resolvers.fileTypes`).
+    /// with `appearance`, the file resolvers' extensions (`fileTypes`, from
+    /// the `resolvers.fileTypes` event), `language` and `locale`.
     pub(crate) fn window_state(&self) -> Value {
         let facts = &self.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,

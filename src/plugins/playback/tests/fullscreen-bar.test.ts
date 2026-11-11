@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
+import { until } from "./eventually.ts";
 
 /**
  * Fullscreen bar on hover only (request FS-BAR-1): the host
@@ -19,13 +20,6 @@ function fullscreenWithMedia() {
   host.setSource({ duration: 600, position: 120 });
   host.setMainWindow({ fullscreen: true });
   return host;
-}
-async function until(predicate: () => boolean) {
-  const deadline = Date.now() + 2000;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
 }
 const dragging = (locks: unknown) =>
   (locks as { dragging?: boolean } | null)?.dragging === true;
