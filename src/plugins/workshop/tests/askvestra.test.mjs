@@ -4,6 +4,7 @@
 // Undo → Undo; Stop, a newer request replacing the running one, a model
 // error, no model set up, and a plan the plugin refuses.
 import assert from "node:assert/strict";
+import os from "node:os";
 import test from "node:test";
 import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
@@ -122,6 +123,13 @@ test("one sentence → consent once → plan → setRate → OSD with Undo → U
   assert.match(sent, /\\"rate\\":1/);
   assert.doesNotMatch(sent, /Secret Holiday Film|\/media\//);
   assert.doesNotMatch(sent, new RegExp(KEY));
+  // No path of this machine either: pi's <cwd> section is a neutral name, not the data directory under the user's home.
+  // JSON doubles a backslash: both spellings of a Windows path become forward slashes.
+  const decoded = JSON.stringify(mock.chats[0].body.messages).replace(/\\\\/g, "/").replace(/\\/g, "/").toLowerCase();
+  for (const dir of [ai.plugin.dataDirectory, os.homedir(), os.tmpdir()]) {
+    const plain = dir.replace(/\\/g, "/").toLowerCase();
+    assert.ok(!decoded.includes(plain), `the request names ${dir}`);
+  }
   assert.deepEqual(
     mock.chats[0].body.tools.map((tool) => tool.function.name),
     ["run_steps"],
@@ -242,4 +250,85 @@ test("nothing playing: the step fails with the reason", async (t) => {
   ai.host.dialogAnswers.push(CONTINUE);
   await ai.host.runPaletteLead("1.25x speed");
   await ai.until(() => ai.host.osd.at(-1) === "Vestra · Step 1 failed: Nothing is playing", "failure");
+});
+
+test("Stop lands while the step reads the player state: the speed stays, no result, nothing to undo", async (t) => {
+  const ai = await ready(() => ({ ...plan(speed(1.25)), delayMs: 300 }));
+  t.after(() => ai.stop());
+  const { host, mock } = ai;
+  host.dialogAnswers.push(CONTINUE);
+  await host.runPaletteLead("1.25x speed");
+  await ai.until(() => mock.chats.length === 1, "planning");
+  // The step's state read: the user presses Stop before the answer comes.
+  host.handle("source.state", async () => {
+    host.reset("source.state");
+    void host.command("askvestra.stop").run();
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    return structuredClone(host.source);
+  });
+  await ai.until(() => ai.osd() === "Vestra · Stopped", "stopped");
+  assert.equal(host.source.rate, 1);
+  assert.deepEqual(host.osdActions.at(-1), [], "nothing ran: no Undo");
+  await host.command("askvestra.undo").run();
+  await ai.until(() => ai.osd() === "Vestra · Nothing to undo", "nothing to undo");
+});
+
+test("Undo leaves a speed the user changed since alone; a failed undo can be tried again", async (t) => {
+  const ai = await ready(() => plan(speed(1.25)));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  host.dialogAnswers.push(CONTINUE);
+  await host.runPaletteLead("1.25x speed");
+  await ai.until(() => ai.osd() === "Vestra · Speed 1.25×", "result");
+  host.setSource({ rate: 1.5 }); // the user changed the speed
+  await host.settle();
+  await host.command("askvestra.undo").run();
+  await ai.until(() => ai.osd() === "Vestra · Not undone: the speed was changed since", "skipped");
+  assert.equal(host.source.rate, 1.5);
+  await host.command("askvestra.undo").run();
+  await ai.until(() => ai.osd() === "Vestra · Nothing to undo", "entry gone");
+
+  // A failure keeps the entry: nothing playing, then playing again at the speed the request set.
+  host.setSource({ rate: 1 });
+  await host.runPaletteLead("1.25x speed");
+  await ai.until(() => host.osd.filter((line) => line === "Vestra · Speed 1.25×").length === 2, "second result");
+  host.handle("source.state", () => ({ ...structuredClone(host.source), phase: "empty" }));
+  await host.command("askvestra.undo").run();
+  await ai.until(() => ai.osd() === "Vestra · Undo failed: Nothing is playing", "undo failed");
+  host.reset("source.state");
+  await host.command("askvestra.undo").run();
+  await ai.until(() => ai.osd() === "Vestra · Undone", "undone on the second try");
+  assert.equal(host.source.rate, 1);
+});
+
+test("consent: two requests while the dialog is open ask once and the latest one runs; a new Base URL asks again", async (t) => {
+  const ai = await ready(() => plan(speed(1.25)));
+  t.after(() => ai.stop());
+  const { host, mock } = ai;
+  let answer;
+  const answered = new Promise((resolve) => (answer = resolve));
+  let asked = 0;
+  host.handle("dialogs.confirm", async () => {
+    asked++;
+    await answered;
+    return CONTINUE;
+  });
+  void host.runPaletteLead("first");
+  await ai.until(() => asked === 1, "dialog open");
+  void host.runPaletteLead("second");
+  await new Promise((resolve) => setTimeout(resolve, 200));
+  answer();
+  await ai.until(() => ai.osd() === "Vestra · Speed 1.25×", "result");
+  assert.equal(asked, 1);
+  assert.equal(mock.chats.length, 1);
+  assert.match(JSON.stringify(mock.chats[0].body.messages), /Request: second/);
+
+  // Another Base URL is another recipient.
+  const other = await server(() => plan(speed(1.5)));
+  ai.page.emit("set-base-url", other.url);
+  await host.settle();
+  await host.runPaletteLead("1.5x");
+  await ai.until(() => asked === 2, "asked again");
+  await ai.until(() => ai.osd() === "Vestra · Speed 1.5×", "second result");
+  assert.equal(other.chats.length, 1);
 });

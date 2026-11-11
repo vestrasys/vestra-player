@@ -903,7 +903,11 @@ export default async function activate(plugin: Plugin) {
       const p = provider();
       return { provider: p.id, modelId: model(), baseUrl: p.api ? settings.value.baseUrls[p.id] : null, api: p.api, key: await keyFor(p.id), reasoning: reasoning() };
     },
-    providerId: () => provider().id,
+    // A custom endpoint is a different recipient at each Base URL.
+    consentKey: () => {
+      const p = provider();
+      return p.api ? `${p.id} ${settings.value.baseUrls[p.id] ?? ""}` : p.id;
+    },
     providerName: () => entry(provider()),
     openSettings: () => plugin.settings.show("byok"),
     openWindow,

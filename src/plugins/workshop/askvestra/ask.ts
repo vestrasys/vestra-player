@@ -22,6 +22,11 @@ export const REQUEST_TIMEOUT_MS = 90_000;
 export const MAX_MODEL_CALLS = 4;
 /** Requests kept for Undo (§7). */
 export const JOURNAL_SIZE = 10;
+/**
+ * What the consent covers: bump it when a request sends more (the command
+ * list comes with `commands.run`), so the user is asked again.
+ */
+const CONSENT_SCOPE = "v1";
 /** Model text quoted on the OSD (an error, a refusal), at most. */
 const QUOTE_CHARS = 120;
 
@@ -36,16 +41,20 @@ export interface AskModel {
   ready(): Promise<boolean>;
   /** The connection for one request: provider, model, endpoint and key. */
   connection(): Promise<Pick<StartMessage, "provider" | "modelId" | "baseUrl" | "api" | "key" | "reasoning">>;
-  /** The provider's id (consent is given per provider). */
-  providerId(): string;
+  /** Who receives the requests: the provider's id, and a custom endpoint's Base URL (consent is given per recipient). */
+  consentKey(): string;
   /** The provider as the user knows it, for messages. */
   providerName(): TextArg;
   openSettings(): unknown;
   openWindow(): unknown;
 }
 
-/** One undoable change: what to restore. Only the plugin's own controls in v1 (coordinator ruling). */
-type JournalStep = { kind: "rate"; before: number };
+/**
+ * One undoable change: what to restore (`before`) and what the request set
+ * (`after`; Undo leaves a value the user changed since alone). Only the
+ * plugin's own controls in v1 (coordinator ruling).
+ */
+type JournalStep = { kind: "rate"; before: number; after: number };
 type JournalEntry = { steps: JournalStep[] };
 
 interface Request {
@@ -225,11 +234,13 @@ export function askVestra(plugin: Plugin, model: AskModel) {
   };
 
   /** Runs one step with the plugin's own control; returns what undoes it. */
-  const runStep = async (step: Step): Promise<JournalStep> => {
+  const runStep = async (step: Step, signal: AbortSignal): Promise<JournalStep> => {
     const state = await plugin.player.refresh();
     if (state.phase === "empty" || state.phase === "error") throw new Refusal(i18n.text("Nothing is playing"));
     if (!state.can.rate) throw new Refusal(i18n.text("This source cannot change speed"));
     const before = state.rate;
+    // Stopped or replaced while the state was read: change nothing.
+    signal.throwIfAborted();
     try {
       await plugin.player.setRate(step.rate, { ifCurrent: state });
     } catch (error) {
@@ -239,7 +250,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       if (code === "invalid") throw new Refusal(i18n.text("Nothing is playing"));
       throw new Refusal(cut((error as Error).message));
     }
-    return { kind: "rate", before };
+    return { kind: "rate", before, after: step.rate };
   };
 
   const stopWorker = (request: Request) => {
@@ -259,25 +270,42 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     refresh();
   };
 
-  /** Asks once per provider before the first request goes to it (PROPOSAL §8, Q12 A). */
-  const consented = async () => {
-    const id = model.providerId();
-    if (consent.value.providers.includes(id)) return true;
-    const answer = await plugin.dialogs.confirm({
-      message: i18n.text("Ask Vestra sends your request to {}", [model.providerName()]),
-      detail: i18n.text(
-        "What you type in the command palette, the player's command list and the playback state (speed, position, volume, tracks) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account.",
-      ),
-      confirm: i18n.text("Continue"),
-    });
-    if (!answer.confirmed) return false;
-    consent.save({ providers: [...consent.value.providers, id] });
-    return true;
+  /**
+   * Asks once per recipient before the first request goes to it (PROPOSAL
+   * §8, Q12 A). Requests made while the dialog is open share its answer.
+   */
+  let asking: { key: string; answer: Promise<boolean> } | null = null;
+  const consented = (): Promise<boolean> => {
+    const key = `${CONSENT_SCOPE} ${model.consentKey()}`;
+    if (consent.value.providers.includes(key)) return Promise.resolve(true);
+    if (asking?.key === key) return asking.answer;
+    const answer = (async () => {
+      try {
+        const { confirmed } = await plugin.dialogs.confirm({
+          message: i18n.text("Ask Vestra sends your request to {}", [model.providerName()]),
+          detail: i18n.text(
+            "What you type in the command palette and the playback state (playing or paused, position, duration, speed) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account.",
+          ),
+          confirm: i18n.text("Continue"),
+        });
+        if (confirmed && !consent.value.providers.includes(key)) consent.save({ providers: [...consent.value.providers, key] });
+        return confirmed;
+      } finally {
+        if (asking?.key === key) asking = null;
+      }
+    })();
+    asking = { key, answer };
+    return answer;
   };
 
+  /** Requests in the order the user made them: only the latest goes on after a wait (keychain, consent). */
+  let latest = 0;
   const request = async (query: string, ticket: string) => {
+    const order = ++latest;
     // A user action: reading the key may wait on the keychain's dialog.
-    if (!(await model.ready().catch(() => false))) {
+    const ready = await model.ready().catch(() => false);
+    if (order !== latest) return;
+    if (!ready) {
       refresh();
       // Flow 7: the settings page (the palette keeps the typed text, Q8);
       // set up but the key cannot be read: say so.
@@ -285,9 +313,10 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       else await osd(i18n.text("Vestra · Cannot read the API key; save it again in the settings"));
       return;
     }
-    if (!(await consented())) return;
-    // A request that came in while the dialog was open replaced this one.
+    if (!(await consented()) || order !== latest) return;
+    // This request replaces the one running, if any (PROPOSAL Q6 A), and an undo in progress.
     stop(false);
+    undoing?.abort(new DOMException("Replaced", "AbortError"));
     const mine: Request = { ticket, controller: new AbortController(), step: null, stopped: false };
     current = mine;
     refresh();
@@ -304,13 +333,14 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         refresh();
         if (steps.length > 1) await osd(i18n.text("Vestra · {0}/{1} · {2}", [index + 1, steps.length, label]), [stopAction()]);
         try {
-          done.push(await runStep(step));
+          done.push(await runStep(step, mine.controller.signal));
         } catch (error) {
           if (error instanceof Refusal) throw new Failure(i18n.text("Vestra · Step {0} failed: {1}", [index + 1, error.reason]));
           throw error;
         }
         labels.push(label);
       }
+      mine.controller.signal.throwIfAborted(); // stopped during the last step: "Stopped", not the result
       if (done.length) await record({ steps: done });
       await osd(i18n.text("Vestra · {}", [i18n.list(labels)]), [undoAction()]);
     } catch (error) {
@@ -361,20 +391,42 @@ export function askVestra(plugin: Plugin, model: AskModel) {
   });
 
   // ---- Undo and Stop: palette commands, and the OSD's buttons
+  /** The undo running; a new request stops it. */
+  let undoing: AbortController | null = null;
+  /**
+   * Restores the last request's changes, newest first. A step leaves the
+   * journal only once restored, so a failed undo can be tried again; a
+   * value changed since the request is left alone and the entry goes.
+   */
   const undoLast = async () => {
     const journal = await loadJournal();
-    const entry = journal.pop();
+    const entry = journal.at(-1);
     if (!entry) return osd(i18n.text("Vestra · Nothing to undo"));
-    await plugin.storage.session.set(JOURNAL, journal);
+    const controller = (undoing = new AbortController());
+    const earlier = journal.slice(0, -1);
+    const save = (steps: JournalStep[]) => plugin.storage.session.set(JOURNAL, steps.length ? [...earlier, { steps }] : earlier);
+    const steps = [...entry.steps];
     try {
-      for (const step of [...entry.steps].reverse()) {
+      while (steps.length) {
+        const step = steps.at(-1)!;
         const state = await plugin.player.refresh();
         if (state.phase === "empty" || state.phase === "error") throw new Refusal(i18n.text("Nothing is playing"));
+        if (state.rate !== step.after) {
+          await save([]);
+          await osd(i18n.text("Vestra · Not undone: the speed was changed since"));
+          return;
+        }
+        controller.signal.throwIfAborted();
         await plugin.player.setRate(step.before, { ifCurrent: state });
+        steps.pop();
+        await save(steps);
       }
       await osd(i18n.text("Vestra · Undone"));
     } catch (error) {
+      if (controller.signal.aborted) return;
       await osd(i18n.text("Vestra · Undo failed: {}", [error instanceof Refusal ? error.reason : cut((error as Error).message)]));
+    } finally {
+      if (undoing === controller) undoing = null;
     }
   };
   plugin.commands.add({

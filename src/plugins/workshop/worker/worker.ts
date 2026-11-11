@@ -26,6 +26,8 @@ import { Folders, TOOL_NAMES, createTools } from "./tools.ts";
 type Session = Awaited<ReturnType<typeof createAgentSession>>["session"];
 
 let session: Session | undefined;
+/** The working directory an Ask Vestra session tells the model: no real path (see start). */
+const ASK_CWD = "/vestra";
 let secret = "";
 /** Plugin tool calls waiting for the plugin's answer. */
 const waiting = new Map<string, (reply: ToolReply) => void>();
@@ -135,7 +137,10 @@ async function start(message: StartMessage) {
   // Ask Vestra: no files at all, only its own tools, nothing written.
   const ask = message.profile === "ask";
   const folders = ask ? null : await Folders.open(message.workDir, docsRoots);
-  const cwd = folders ? folders.work.root : message.sessionDir;
+  // pi writes the working directory into the system prompt (<cwd>); Ask
+  // Vestra has no files, and its folder is under the user's home (the
+  // account name): the model gets a neutral name instead.
+  const cwd = folders ? folders.work.root : ASK_CWD;
   const modelRuntime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,

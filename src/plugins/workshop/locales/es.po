@@ -511,172 +511,177 @@ msgstr "Enviar"
 msgid "■ Stop"
 msgstr "■ Detener"
 
-#: askvestra/ask.ts:95
+#: askvestra/ask.ts:104
 #, x-machine
 msgid "Ask Vestra"
 msgstr "Preguntar a Vestra"
 
-#: askvestra/ask.ts:97
+#: askvestra/ask.ts:106
 #, x-machine
 msgid "Type a command or ask Vestra"
 msgstr "Escribe un comando o pregunta a Vestra"
 
-#: askvestra/ask.ts:98
+#: askvestra/ask.ts:107
 #, x-machine
 msgid "Type a request or a question"
 msgstr "Escribe una petición o una pregunta"
 
-#: askvestra/ask.ts:99
+#: askvestra/ask.ts:108
 #, x-machine
 msgid "Set up a model first"
 msgstr "Configura primero un modelo"
 
-#: askvestra/ask.ts:103
+#: askvestra/ask.ts:112
 #, x-machine
 msgid "Vestra is working · Step {0} of {1} · {2}"
 msgstr "Vestra está trabajando · Paso {0} de {1} · {2}"
 
-#: askvestra/ask.ts:104
+#: askvestra/ask.ts:113
 #, x-machine
 msgid "Vestra is working · Planning…"
 msgstr "Vestra está trabajando · Planificando…"
 
-#: askvestra/ask.ts:105
+#: askvestra/ask.ts:114
 #, x-machine
 msgid "Enter stops"
 msgstr "Intro detiene"
 
-#: askvestra/ask.ts:132
+#: askvestra/ask.ts:141
 #, x-machine
 msgid "Undo"
 msgstr "Deshacer"
 
-#: askvestra/ask.ts:133 askvestra/ask.ts:392
+#: askvestra/ask.ts:142 askvestra/ask.ts:444
 #, x-machine
 msgid "Stop"
 msgstr "Detener"
 
-#: askvestra/ask.ts:145
+#: askvestra/ask.ts:154
 #, x-machine
 msgid "Speed {}×"
 msgstr "Velocidad {}×"
 
-#: askvestra/ask.ts:177
+#: askvestra/ask.ts:186
 #, x-machine
 msgid "Vestra · Took too long"
 msgstr "Vestra · Tardó demasiado"
 
-#: askvestra/ask.ts:179
+#: askvestra/ask.ts:188
 #, x-machine
 msgid "Vestra · Could not reach {0}: {1}"
 msgstr "Vestra · No se pudo contactar con {0}: {1}"
 
-#: askvestra/ask.ts:213 askvestra/ask.ts:315 askvestra/ask.ts:325
+#: askvestra/ask.ts:222 askvestra/ask.ts:345 askvestra/ask.ts:355
 #, x-machine
 msgid "Vestra · {}"
 msgstr "Vestra · {}"
 
-#: askvestra/ask.ts:230 askvestra/ask.ts:239 askvestra/ask.ts:372
+#: askvestra/ask.ts:239 askvestra/ask.ts:250 askvestra/ask.ts:413
 #, x-machine
 msgid "Nothing is playing"
 msgstr "No se está reproduciendo nada"
 
-#: askvestra/ask.ts:231 askvestra/ask.ts:238
+#: askvestra/ask.ts:240 askvestra/ask.ts:249
 #, x-machine
 msgid "This source cannot change speed"
 msgstr "Esta fuente no puede cambiar de velocidad"
 
-#: askvestra/ask.ts:237
+#: askvestra/ask.ts:248
 #, x-machine
 msgid "Playback changed meanwhile"
 msgstr "La reproducción cambió mientras tanto"
 
-#: askvestra/ask.ts:267
+#: askvestra/ask.ts:285
 #, x-machine
 msgid "Ask Vestra sends your request to {}"
 msgstr "«Preguntar a Vestra» envía tu petición a {}"
 
-#: askvestra/ask.ts:269
+#: askvestra/ask.ts:287
 #, x-machine
-msgid "What you type in the command palette, the player's command list and the playback state (speed, position, volume, tracks) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account."
-msgstr "Lo que escribes en la paleta de comandos, la lista de comandos del reproductor y el estado de la reproducción (velocidad, posición, volumen, pistas) se envían a este proveedor con tu clave de API, como en el chat. No se envían nombres de archivo, listas de reproducción, historial ni subtítulos. El proveedor cobra a tu cuenta."
+msgid "What you type in the command palette and the playback state (playing or paused, position, duration, speed) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account."
+msgstr "Lo que escribes en la paleta de comandos y el estado de la reproducción (en reproducción o en pausa, posición, duración, velocidad) se envían a este proveedor con tu clave de API, como en el chat. No se envían nombres de archivo, listas de reproducción, historial ni subtítulos. El proveedor cobra a tu cuenta."
 
-#: askvestra/ask.ts:271
+#: askvestra/ask.ts:289
 #, x-machine
 msgid "Continue"
 msgstr "Continuar"
 
-#: askvestra/ask.ts:285
+#: askvestra/ask.ts:313
 #, x-machine
 msgid "Vestra · Cannot read the API key; save it again in the settings"
 msgstr "Vestra · No se puede leer la clave de API; guárdala de nuevo en los ajustes"
 
-#: askvestra/ask.ts:297
+#: askvestra/ask.ts:326
 #, x-machine
 msgid "Vestra · Planning…"
 msgstr "Vestra · Planificando…"
 
-#: askvestra/ask.ts:305
+#: askvestra/ask.ts:334
 #, x-machine
 msgid "Vestra · {0}/{1} · {2}"
 msgstr "Vestra · {0}/{1} · {2}"
 
-#: askvestra/ask.ts:309 askvestra/ask.ts:342 askvestra/ask.ts:344
+#: askvestra/ask.ts:338 askvestra/ask.ts:372 askvestra/ask.ts:374
 #, x-machine
 msgid "Vestra · Step {0} failed: {1}"
 msgstr "Vestra · Falló el paso {0}: {1}"
 
-#: askvestra/ask.ts:320
+#: askvestra/ask.ts:350
 #, x-machine
 msgid "Vestra · Stopped"
 msgstr "Vestra · Detenido"
 
-#: askvestra/ask.ts:336
+#: askvestra/ask.ts:366
 #, x-machine
 msgid "Vestra · The model gave no steps"
 msgstr "Vestra · El modelo no dio ningún paso"
 
-#: askvestra/ask.ts:340
+#: askvestra/ask.ts:370
 #, x-machine
 msgid "Vestra · The plan has more than {} steps"
 msgstr "Vestra · El plan tiene más de {} pasos"
 
-#: askvestra/ask.ts:342
+#: askvestra/ask.ts:372
 #, x-machine
 msgid "Vestra cannot do “{}” yet"
 msgstr "Vestra aún no puede hacer «{}»"
 
-#: askvestra/ask.ts:344
+#: askvestra/ask.ts:374
 #, x-machine
 msgid "The speed must be between {0}× and {1}×"
 msgstr "La velocidad debe estar entre {0}× y {1}×"
 
-#: askvestra/ask.ts:367
+#: askvestra/ask.ts:404
 #, x-machine
 msgid "Vestra · Nothing to undo"
 msgstr "Vestra · Nada que deshacer"
 
-#: askvestra/ask.ts:375
+#: askvestra/ask.ts:416
+#, x-machine
+msgid "Vestra · Not undone: the speed was changed since"
+msgstr "Vestra · No se deshizo: la velocidad cambió desde entonces"
+
+#: askvestra/ask.ts:424
 #, x-machine
 msgid "Vestra · Undone"
 msgstr "Vestra · Deshecho"
 
-#: askvestra/ask.ts:377
+#: askvestra/ask.ts:427
 #, x-machine
 msgid "Vestra · Undo failed: {}"
 msgstr "Vestra · No se pudo deshacer: {}"
 
-#: askvestra/ask.ts:382
+#: askvestra/ask.ts:434
 #, x-machine
 msgid "Undo Last Request"
 msgstr "Deshacer la última petición"
 
-#: askvestra/ask.ts:387
+#: askvestra/ask.ts:439
 #, x-machine
 msgid "Vestra is working"
 msgstr "Vestra está trabajando"
 
-#: askvestra/ask.ts:396
+#: askvestra/ask.ts:448
 #, x-machine
 msgid "Vestra is not working on a request"
 msgstr "Vestra no está trabajando en ninguna petición"
