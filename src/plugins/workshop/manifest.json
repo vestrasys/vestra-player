@@ -15,7 +15,6 @@
     "commands.run",
     "ui.osd",
     "playback.read",
-    "playback.control",
     "palette.lead"
   ],
   "name": "Vestra Player AI",

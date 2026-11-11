@@ -52,8 +52,8 @@ export const ASK_TOOLS: Record<string, { description: string; parameters: Return
       steps: Type.Array(
         Type.Object(
           {
-            kind: Type.String({ description: "The step kind, e.g. speed" }),
-            rate: Type.Optional(Type.Number({ description: "speed: the playback speed, 0.25–4 (1 is normal)" })),
+            kind: Type.String({ description: "The step kind: command" }),
+            id: Type.Optional(Type.String({ description: "command: the id of a command of the table in the system prompt" })),
           },
           { additionalProperties: true },
         ),
