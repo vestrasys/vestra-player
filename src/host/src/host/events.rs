@@ -120,6 +120,62 @@ pub(crate) enum Event {
     OwnerResources(u64, Value),
 }
 
+impl Event {
+    /// Its kind, and the plugin it came from where it names one (the slow
+    /// turn line, `stall.rs`).
+    pub(crate) fn label(&self) -> super::stall::Label {
+        match self {
+            #[cfg(feature = "producer-audio")]
+            Self::PhysicalInput(..) => ("PhysicalInput", None),
+            Self::WindowInput(..) => ("WindowInput", None),
+            Self::Binding(..) => ("Binding", None),
+            Self::SidebarResized(..) => ("SidebarResized", None),
+            Self::AdjustResized(..) => ("AdjustResized", None),
+            Self::Tab(..) => ("Tab", None),
+            Self::TabOverflow(..) => ("TabOverflow", None),
+            Self::SidebarDetach(..) => ("SidebarDetach", None),
+            Self::AdjustDismiss(..) => ("AdjustDismiss", None),
+            Self::PipReturn(..) => ("PipReturn", None),
+            Self::FloatingClosed(..) => ("FloatingClosed", None),
+            Self::MenuAction(..) => ("MenuAction", None),
+            Self::Request(owner, _) => ("Request", Some(*owner)),
+            Self::Prepared(owner, ..) => ("Request", Some(*owner)),
+            Self::Reply(..) => ("Reply", None),
+            Self::ActionDone(..) => ("ActionDone", None),
+            Self::Broadcast(..) => ("Broadcast", None),
+            Self::UiCallback(owner, _) => ("UiCallback", Some(*owner)),
+            Self::ViewClosed(owner, _) => ("ViewClosed", Some(*owner)),
+            Self::MainClosed => ("MainClosed", None),
+            Self::TitleStrip(..) => ("TitleStrip", None),
+            Self::OsdAction(..) => ("OsdAction", None),
+            Self::PluginMessage(owner, ..) => ("PluginMessage", Some(*owner)),
+            Self::Exited(owner) => ("Exited", Some(*owner)),
+            Self::Runner(..) => ("Runner", None),
+            Self::RunnerExited(..) => ("RunnerExited", None),
+            Self::Reaped(owner, _) => ("Reaped", Some(*owner)),
+            Self::OutOfMemory(owner) => ("OutOfMemory", Some(*owner)),
+            Self::Spawned(owner, _) => ("Spawned", Some(*owner)),
+            Self::Recorded(owner, ..) => ("Recorded", Some(*owner)),
+            Self::BackendCleaned(owner) => ("BackendCleaned", Some(*owner)),
+            Self::DialogDone(..) => ("DialogDone", None),
+            Self::SourceLocate(..) => ("SourceLocate", None),
+            Self::SourceLocated(..) => ("SourceLocated", None),
+            Self::InjectKey(..) => ("InjectKey", None),
+            Self::ModifiersReleased(..) => ("ModifiersReleased", None),
+            Self::ConfirmDone(..) => ("ConfirmDone", None),
+            Self::CommandRunAnswered(..) => ("CommandRunAnswered", None),
+            Self::Dropped(..) => ("Dropped", None),
+            Self::OpenFiles(..) => ("OpenFiles", None),
+            Self::Settings(..) => ("Settings", None),
+            Self::SettingsChecked(..) => ("SettingsChecked", None),
+            Self::RuntimeFault(owner, _) => ("RuntimeFault", Some(*owner)),
+            Self::BarButton(..) => ("BarButton", None),
+            Self::BarMore(..) => ("BarMore", None),
+            Self::OwnerResources(owner, _) => ("OwnerResources", Some(*owner)),
+        }
+    }
+}
+
 /// Events one tick of the UI thread's loop handles at least, when that many
 /// are queued.
 pub(crate) const EVENTS_PER_TICK: usize = 128;
