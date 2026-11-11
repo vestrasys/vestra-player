@@ -38,7 +38,51 @@ export const PLUGIN_TOOLS: Record<string, { description: string; parameters: Ret
   },
 };
 
+/**
+ * Ask Vestra's tools (StartMessage.profile "ask"). The parameters are kept
+ * loose on purpose: the plugin validates every step before it runs any, so
+ * a step it refuses ends the request with a reason instead of pi sending
+ * the model a schema error and calling it again.
+ */
+export const ASK_TOOLS: Record<string, { description: string; parameters: ReturnType<typeof Type.Object> }> = {
+  run_steps: {
+    description:
+      "Run the steps that do what the user asked, in order. Call it once, with every step. Each step is an object with `kind` and its values; the kinds are listed in the system prompt.",
+    parameters: Type.Object({
+      steps: Type.Array(
+        Type.Object(
+          {
+            kind: Type.String({ description: "The step kind, e.g. speed" }),
+            rate: Type.Optional(Type.Number({ description: "speed: the playback speed, 0.25–4 (1 is normal)" })),
+          },
+          { additionalProperties: true },
+        ),
+        { description: "1 to 8 steps, in the order they run" },
+      ),
+    }),
+  },
+};
+
 export type Ask = (name: string, args: Record<string, unknown>, signal: AbortSignal | undefined) => Promise<ToolReply>;
+
+/** Ask Vestra's tools: the plugin process runs them; the result always ends the turn. */
+export function askTools(names: string[], ask: Ask): ToolDefinition[] {
+  return names
+    .filter((name) => ASK_TOOLS[name])
+    .map(
+      (name) =>
+        ({
+          name,
+          label: name,
+          description: ASK_TOOLS[name].description,
+          parameters: ASK_TOOLS[name].parameters,
+          async execute(_id: string, params: Record<string, unknown>, signal?: AbortSignal) {
+            const reply = await ask(name, params ?? {}, signal);
+            return { content: [{ type: "text", text: reply.text }], details: undefined, terminate: true };
+          },
+        }) as unknown as ToolDefinition,
+    );
+}
 
 export function pluginTools(names: string[], ask: Ask): ToolDefinition[] {
   return names

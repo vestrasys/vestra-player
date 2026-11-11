@@ -124,6 +124,7 @@ export type SourceOperation = {
 };
 export declare function sourceClient(transport: Transport): {
     state: () => Promise<SourceState>;
-    submit: (intent: SourceIntent, operationId?: number) => Promise<SourceOperation>;
+    /** `signal`: aborted while the submit still waits to be sent, it is not sent. */
+    submit: (intent: SourceIntent, operationId?: number, signal?: AbortSignal) => Promise<SourceOperation>;
     operation: (operationId: number) => Promise<SourceOperation>;
 };

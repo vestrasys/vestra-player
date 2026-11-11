@@ -104,7 +104,7 @@ fn the_reasons_come_in_order_and_say_what_to_do() {
     assert!(
         error
             .message()
-            .contains("turn on Video ▸ GPU Rendering and restart the player"),
+            .contains("turn on GPU Rendering in Picture ▸ Rendering and restart the player"),
         "{}",
         error.message()
     );
@@ -549,7 +549,9 @@ fn requests_wait_for_the_check_and_set_is_refused_where_it_cannot_work() {
         .unwrap_err();
     assert_eq!(error.code, "unsupported");
     assert!(
-        error.message.contains("Video ▸ GPU Rendering and restart"),
+        error
+            .message
+            .contains("GPU Rendering in Picture ▸ Rendering and restart"),
         "{}",
         error.message
     );

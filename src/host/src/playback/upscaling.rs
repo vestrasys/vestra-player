@@ -310,7 +310,7 @@ fn rendering_reason(reason: &RenderReason, rendering: &Value) -> Reason {
     } else if rendering["nextMode"] == "gpu" {
         "GPU rendering is turned on for the next start: restart the player".into()
     } else {
-        "turn on Video ▸ GPU Rendering and restart the player".into()
+        "turn on GPU Rendering in Picture ▸ Rendering and restart the player".into()
     };
     Reason::Rendering(format!(
         "upscaling needs GPU rendering, and the player renders in software ({}); {advice}",

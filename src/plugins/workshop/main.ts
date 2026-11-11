@@ -2,6 +2,7 @@ import type { Plugin } from "@vestra-player/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { AgentWorker } from "./agent.ts";
+import { askVestra } from "./askvestra/ask.ts";
 import { Delivering } from "./delivery.ts";
 import { systemPrompt } from "./prompt.ts";
 import { OwnerError, Toolchain, checkOwner, type Project, type SessionPaths } from "./toolchain.ts";
@@ -162,7 +163,10 @@ export default async function activate(plugin: Plugin) {
     if (saved) savedKeys[id] = true;
     else delete savedKeys[id];
     settings.save({ ...settings.value, savedKeys });
+    ask?.refresh();
   };
+  /** Ask Vestra, the palette's lead row (askvestra/ask.ts); made at the end of activate. */
+  let ask: ReturnType<typeof askVestra> | undefined;
   /** The key of `id`, read once; concurrent callers share the read. */
   const keyFor = (id: string): Promise<string> => {
     if (keys.has(id)) return Promise.resolve(keys.get(id)!);
@@ -697,6 +701,7 @@ export default async function activate(plugin: Plugin) {
   const changed = () => {
     generation++;
     releaseIdle();
+    ask?.refresh(); // "Set up a model first" follows the settings
   };
   /** Pulls the lists back to the model values (a one-way index stops following after a pick). */
   const syncIndexes = () => {
@@ -863,6 +868,10 @@ export default async function activate(plugin: Plugin) {
 
   refreshProjects();
 
+  const openWindow = () => {
+    loadKey(); // not awaited: a keychain dialog must not hold the window
+    return aiWindow.show();
+  };
   plugin.commands.add({
     id: "workshop.open",
     // Command palette category (player 0.7.6): "Plugins: Vestra Player AI…", next to the
@@ -873,9 +882,34 @@ export default async function activate(plugin: Plugin) {
     group: "windows",
     // The bottom bar's button (player 0.5.10), left of the Plugin Store's (200).
     button: { icon: "ai", order: 100 },
-    run: () => {
-      loadKey(); // not awaited: a keychain dialog must not hold the window
-      return aiWindow.show();
+    run: () => openWindow(),
+  });
+
+  // ---- Ask Vestra: the command palette's first row (askvestra/ask.ts)
+  ask = askVestra(plugin, {
+    // By the settings alone: the row's note must not wait on the keychain.
+    setUp: () => {
+      const p = provider();
+      if (gone() || !model()) return false;
+      if (p.api) return !!settings.value.baseUrls[p.id];
+      return !!settings.value.savedKeys?.[p.id] || !!keys.get(p.id);
     },
+    ready: async () => {
+      if (gone()) return false;
+      await keyFor(provider().id);
+      return configured();
+    },
+    connection: async () => {
+      const p = provider();
+      return { provider: p.id, modelId: model(), baseUrl: p.api ? settings.value.baseUrls[p.id] : null, api: p.api, key: await keyFor(p.id), reasoning: reasoning() };
+    },
+    // A custom endpoint is a different recipient at each Base URL.
+    consentKey: () => {
+      const p = provider();
+      return p.api ? `${p.id} ${settings.value.baseUrls[p.id] ?? ""}` : p.id;
+    },
+    providerName: () => entry(provider()),
+    openSettings: () => plugin.settings.show("byok"),
+    openWindow,
   });
 }

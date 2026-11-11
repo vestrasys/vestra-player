@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.36\n"
+"Project-Id-Version: vestra.workshop 2.2.38\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -36,7 +36,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: ai.slint:175 main.ts:542 settings.slint:197
+#: ai.slint:175 main.ts:546 settings.slint:206
 msgid "Delete"
 msgstr ""
 
@@ -412,6 +412,146 @@ msgstr ""
 msgid "■ Stop"
 msgstr ""
 
+#: askvestra/ask.ts:104
+msgid "Ask Vestra"
+msgstr ""
+
+#: askvestra/ask.ts:106
+msgid "Type a command or ask Vestra"
+msgstr ""
+
+#: askvestra/ask.ts:107
+msgid "Type a request or a question"
+msgstr ""
+
+#: askvestra/ask.ts:108
+msgid "Set up a model first"
+msgstr ""
+
+#: askvestra/ask.ts:112
+msgid "Vestra is working · Step {0} of {1} · {2}"
+msgstr ""
+
+#: askvestra/ask.ts:113
+msgid "Vestra is working · Planning…"
+msgstr ""
+
+#: askvestra/ask.ts:114
+msgid "Enter stops"
+msgstr ""
+
+#: askvestra/ask.ts:141
+msgid "Undo"
+msgstr ""
+
+#: askvestra/ask.ts:142 askvestra/ask.ts:444
+msgid "Stop"
+msgstr ""
+
+#: askvestra/ask.ts:154
+msgid "Speed {}×"
+msgstr ""
+
+#: askvestra/ask.ts:186
+msgid "Vestra · Took too long"
+msgstr ""
+
+#: askvestra/ask.ts:188
+msgid "Vestra · Could not reach {0}: {1}"
+msgstr ""
+
+#: askvestra/ask.ts:222 askvestra/ask.ts:345 askvestra/ask.ts:355
+msgid "Vestra · {}"
+msgstr ""
+
+#: askvestra/ask.ts:239 askvestra/ask.ts:250 askvestra/ask.ts:413
+msgid "Nothing is playing"
+msgstr ""
+
+#: askvestra/ask.ts:240 askvestra/ask.ts:249
+msgid "This source cannot change speed"
+msgstr ""
+
+#: askvestra/ask.ts:248
+msgid "Playback changed meanwhile"
+msgstr ""
+
+#: askvestra/ask.ts:285
+msgid "Ask Vestra sends your request to {}"
+msgstr ""
+
+#: askvestra/ask.ts:287
+msgid "What you type in the command palette and the playback state (playing or paused, position, duration, speed) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account."
+msgstr ""
+
+#: askvestra/ask.ts:289
+msgid "Continue"
+msgstr ""
+
+#: askvestra/ask.ts:313
+msgid "Vestra · Cannot read the API key; save it again in the settings"
+msgstr ""
+
+#: askvestra/ask.ts:326
+msgid "Vestra · Planning…"
+msgstr ""
+
+#: askvestra/ask.ts:334
+msgid "Vestra · {0}/{1} · {2}"
+msgstr ""
+
+#: askvestra/ask.ts:338 askvestra/ask.ts:372 askvestra/ask.ts:374
+msgid "Vestra · Step {0} failed: {1}"
+msgstr ""
+
+#: askvestra/ask.ts:350
+msgid "Vestra · Stopped"
+msgstr ""
+
+#: askvestra/ask.ts:366
+msgid "Vestra · The model gave no steps"
+msgstr ""
+
+#: askvestra/ask.ts:370
+msgid "Vestra · The plan has more than {} steps"
+msgstr ""
+
+#: askvestra/ask.ts:372
+msgid "Vestra cannot do “{}” yet"
+msgstr ""
+
+#: askvestra/ask.ts:374
+msgid "The speed must be between {0}× and {1}×"
+msgstr ""
+
+#: askvestra/ask.ts:404
+msgid "Vestra · Nothing to undo"
+msgstr ""
+
+#: askvestra/ask.ts:416
+msgid "Vestra · Not undone: the speed was changed since"
+msgstr ""
+
+#: askvestra/ask.ts:424
+msgid "Vestra · Undone"
+msgstr ""
+
+#: askvestra/ask.ts:427
+msgid "Vestra · Undo failed: {}"
+msgstr ""
+
+#: askvestra/ask.ts:434
+msgid "Undo Last Request"
+msgstr ""
+
+#: askvestra/ask.ts:439
+msgid "Vestra is working"
+msgstr ""
+
+#: askvestra/ask.ts:448
+msgid "Vestra is not working on a request"
+msgstr ""
+
 #: delivery.ts:203
 msgid "Install the AI-generated plugin “{}”?"
 msgstr ""
@@ -440,11 +580,11 @@ msgstr ""
 msgid "Replace"
 msgstr ""
 
-#: labels.slint:6 main.ts:633
+#: labels.slint:6 main.ts:637
 msgid "Custom · OpenAI format"
 msgstr ""
 
-#: labels.slint:7 main.ts:635
+#: labels.slint:7 main.ts:639
 msgid "Custom · Anthropic format"
 msgstr ""
 
@@ -452,43 +592,43 @@ msgstr ""
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr ""
 
-#: main.ts:538
+#: main.ts:542
 msgid "Delete the conversation “{}”?"
 msgstr ""
 
-#: main.ts:538
+#: main.ts:542
 msgid "Delete this conversation?"
 msgstr ""
 
-#: main.ts:539
+#: main.ts:543
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr ""
 
-#: main.ts:539
+#: main.ts:543
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr ""
 
-#: main.ts:601
+#: main.ts:605
 msgid "Export Plugin Package"
 msgstr ""
 
-#: main.ts:616
+#: main.ts:620
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr ""
 
-#: main.ts:637 manifest.json
+#: main.ts:641 manifest.json
 msgid "Vestra Player AI"
 msgstr ""
 
-#: main.ts:645
+#: main.ts:649
 msgid "{} (no longer offered)"
 msgstr ""
 
-#: main.ts:870
+#: main.ts:879
 msgid "Plugins"
 msgstr ""
 
-#: main.ts:871
+#: main.ts:880
 msgid "Vestra Player AI…"
 msgstr ""
 
@@ -635,86 +775,86 @@ msgstr ""
 msgid "A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)"
 msgstr ""
 
-#: settings.slint:118 settings.slint:143
-msgid "Provider"
-msgstr ""
-
-#: settings.slint:118 settings.slint:154
-msgid "Base URL"
-msgstr ""
-
-#: settings.slint:118 settings.slint:168
-msgid "API key"
-msgstr ""
-
-#: settings.slint:118 settings.slint:202 settings.slint:225
-msgid "Model"
-msgstr ""
-
-#: settings.slint:118 settings.slint:225
-msgid "Model ID"
-msgstr ""
-
-#: settings.slint:118 settings.slint:247
-msgid "Thinking"
-msgstr ""
-
-#: settings.slint:118 settings.slint:281
-msgid "Plugin author"
-msgstr ""
-
-#: settings.slint:138
-msgid "Delete Old Key"
-msgstr ""
-
-#: settings.slint:174
-msgid "A local service may leave this empty"
-msgstr ""
-
-#: settings.slint:174
-msgid "Paste the API key"
-msgstr ""
-
-#: settings.slint:181
-msgid "Save"
-msgstr ""
-
-#: settings.slint:216 settings.slint:239
-msgid "Fetching…"
-msgstr ""
-
-#: settings.slint:216 settings.slint:239
-msgid "Fetch Models"
-msgstr ""
-
-#: settings.slint:230
-msgid "Model ID, e.g. qwen3:8b"
-msgstr ""
-
-#: settings.slint:251
+#: settings.slint:116
 msgid "Off"
 msgstr ""
 
-#: settings.slint:251
+#: settings.slint:116
 msgid "Low"
 msgstr ""
 
-#: settings.slint:251
+#: settings.slint:116
 msgid "Medium (recommended)"
 msgstr ""
 
-#: settings.slint:260
+#: settings.slint:127 settings.slint:152
+msgid "Provider"
+msgstr ""
+
+#: settings.slint:127 settings.slint:163
+msgid "Base URL"
+msgstr ""
+
+#: settings.slint:127 settings.slint:177
+msgid "API key"
+msgstr ""
+
+#: settings.slint:127 settings.slint:211 settings.slint:234
+msgid "Model"
+msgstr ""
+
+#: settings.slint:127 settings.slint:234
+msgid "Model ID"
+msgstr ""
+
+#: settings.slint:127 settings.slint:256
+msgid "Thinking"
+msgstr ""
+
+#: settings.slint:127 settings.slint:290
+msgid "Plugin author"
+msgstr ""
+
+#: settings.slint:147
+msgid "Delete Old Key"
+msgstr ""
+
+#: settings.slint:183
+msgid "A local service may leave this empty"
+msgstr ""
+
+#: settings.slint:183
+msgid "Paste the API key"
+msgstr ""
+
+#: settings.slint:190
+msgid "Save"
+msgstr ""
+
+#: settings.slint:224 settings.slint:248
+msgid "Fetching…"
+msgstr ""
+
+#: settings.slint:224 settings.slint:248
+msgid "Fetch Models"
+msgstr ""
+
+#: settings.slint:239
+msgid "Model ID, e.g. qwen3:8b"
+msgstr ""
+
+#: settings.slint:269
 msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
 msgstr ""
 
-#: settings.slint:273
+#: settings.slint:282
 msgid "This model can think before it answers (a reasoning model)"
 msgstr ""
 
-#: settings.slint:286
+#: settings.slint:295
 msgid "Your GitHub name (the prefix of plugin ids)"
 msgstr ""
 
-#: settings.slint:304
+#: settings.slint:313
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr ""

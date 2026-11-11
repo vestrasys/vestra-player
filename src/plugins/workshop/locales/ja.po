@@ -46,7 +46,7 @@ msgstr "ファイル検索"
 msgid "Search"
 msgstr "テキスト検索"
 
-#: ai.slint:175 main.ts:542 settings.slint:197
+#: ai.slint:175 main.ts:546 settings.slint:206
 #, x-machine
 msgid "Delete"
 msgstr "削除"
@@ -508,6 +508,181 @@ msgstr "送信"
 msgid "■ Stop"
 msgstr "■ 停止"
 
+#: askvestra/ask.ts:104
+#, x-machine
+msgid "Ask Vestra"
+msgstr "Vestra に頼む"
+
+#: askvestra/ask.ts:106
+#, x-machine
+msgid "Type a command or ask Vestra"
+msgstr "コマンドを入力するか Vestra に頼む"
+
+#: askvestra/ask.ts:107
+#, x-machine
+msgid "Type a request or a question"
+msgstr "依頼や質問を入力"
+
+#: askvestra/ask.ts:108
+#, x-machine
+msgid "Set up a model first"
+msgstr "先にモデルを設定してください"
+
+#: askvestra/ask.ts:112
+#, x-machine
+msgid "Vestra is working · Step {0} of {1} · {2}"
+msgstr "Vestra が処理中 · ステップ {0}/{1} · {2}"
+
+#: askvestra/ask.ts:113
+#, x-machine
+msgid "Vestra is working · Planning…"
+msgstr "Vestra が処理中 · 計画中…"
+
+#: askvestra/ask.ts:114
+#, x-machine
+msgid "Enter stops"
+msgstr "Enter で停止"
+
+#: askvestra/ask.ts:141
+#, x-machine
+msgid "Undo"
+msgstr "元に戻す"
+
+#: askvestra/ask.ts:142 askvestra/ask.ts:444
+#, x-machine
+msgid "Stop"
+msgstr "停止"
+
+#: askvestra/ask.ts:154
+#, x-machine
+msgid "Speed {}×"
+msgstr "速度 {}×"
+
+#: askvestra/ask.ts:186
+#, x-machine
+msgid "Vestra · Took too long"
+msgstr "Vestra · 時間がかかりすぎました"
+
+#: askvestra/ask.ts:188
+#, x-machine
+msgid "Vestra · Could not reach {0}: {1}"
+msgstr "Vestra · {0} に接続できません: {1}"
+
+#: askvestra/ask.ts:222 askvestra/ask.ts:345 askvestra/ask.ts:355
+#, x-machine
+msgid "Vestra · {}"
+msgstr "Vestra · {}"
+
+#: askvestra/ask.ts:239 askvestra/ask.ts:250 askvestra/ask.ts:413
+#, x-machine
+msgid "Nothing is playing"
+msgstr "何も再生されていません"
+
+#: askvestra/ask.ts:240 askvestra/ask.ts:249
+#, x-machine
+msgid "This source cannot change speed"
+msgstr "このソースは速度を変更できません"
+
+#: askvestra/ask.ts:248
+#, x-machine
+msgid "Playback changed meanwhile"
+msgstr "その間に再生が変わりました"
+
+#: askvestra/ask.ts:285
+#, x-machine
+msgid "Ask Vestra sends your request to {}"
+msgstr "「Vestra に頼む」は依頼を {} に送信します"
+
+#: askvestra/ask.ts:287
+#, x-machine
+msgid "What you type in the command palette and the playback state (playing or paused, position, duration, speed) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account."
+msgstr "コマンドパレットに入力した内容と再生状態（再生中か一時停止中か、位置、長さ、速度）は、チャットと同じくあなたの API キーでこのプロバイダーに送信されます。ファイル名、プレイリスト、履歴、字幕は送信されません。料金はプロバイダーからあなたのアカウントに請求されます。"
+
+#: askvestra/ask.ts:289
+#, x-machine
+msgid "Continue"
+msgstr "続行"
+
+#: askvestra/ask.ts:313
+#, x-machine
+msgid "Vestra · Cannot read the API key; save it again in the settings"
+msgstr "Vestra · API キーを読み取れません。設定で保存し直してください"
+
+#: askvestra/ask.ts:326
+#, x-machine
+msgid "Vestra · Planning…"
+msgstr "Vestra · 計画中…"
+
+#: askvestra/ask.ts:334
+#, x-machine
+msgid "Vestra · {0}/{1} · {2}"
+msgstr "Vestra · {0}/{1} · {2}"
+
+#: askvestra/ask.ts:338 askvestra/ask.ts:372 askvestra/ask.ts:374
+#, x-machine
+msgid "Vestra · Step {0} failed: {1}"
+msgstr "Vestra · ステップ {0} が失敗しました: {1}"
+
+#: askvestra/ask.ts:350
+#, x-machine
+msgid "Vestra · Stopped"
+msgstr "Vestra · 停止しました"
+
+#: askvestra/ask.ts:366
+#, x-machine
+msgid "Vestra · The model gave no steps"
+msgstr "Vestra · モデルがステップを返しませんでした"
+
+#: askvestra/ask.ts:370
+#, x-machine
+msgid "Vestra · The plan has more than {} steps"
+msgstr "Vestra · 計画のステップが {} を超えています"
+
+#: askvestra/ask.ts:372
+#, x-machine
+msgid "Vestra cannot do “{}” yet"
+msgstr "Vestra はまだ「{}」を実行できません"
+
+#: askvestra/ask.ts:374
+#, x-machine
+msgid "The speed must be between {0}× and {1}×"
+msgstr "速度は {0}× から {1}× の間にしてください"
+
+#: askvestra/ask.ts:404
+#, x-machine
+msgid "Vestra · Nothing to undo"
+msgstr "Vestra · 元に戻す操作はありません"
+
+#: askvestra/ask.ts:416
+#, x-machine
+msgid "Vestra · Not undone: the speed was changed since"
+msgstr "Vestra · 元に戻しませんでした: その後速度が変更されています"
+
+#: askvestra/ask.ts:424
+#, x-machine
+msgid "Vestra · Undone"
+msgstr "Vestra · 元に戻しました"
+
+#: askvestra/ask.ts:427
+#, x-machine
+msgid "Vestra · Undo failed: {}"
+msgstr "Vestra · 元に戻せませんでした: {}"
+
+#: askvestra/ask.ts:434
+#, x-machine
+msgid "Undo Last Request"
+msgstr "最後の依頼を元に戻す"
+
+#: askvestra/ask.ts:439
+#, x-machine
+msgid "Vestra is working"
+msgstr "Vestra が処理中です"
+
+#: askvestra/ask.ts:448
+#, x-machine
+msgid "Vestra is not working on a request"
+msgstr "Vestra は依頼を処理していません"
+
 #: delivery.ts:203
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
@@ -546,12 +721,12 @@ msgstr "このプラグインは別の場所からインストールされてい
 msgid "Replace"
 msgstr "置き換える"
 
-#: labels.slint:6 main.ts:633
+#: labels.slint:6 main.ts:637
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "カスタム · OpenAI 形式"
 
-#: labels.slint:7 main.ts:635
+#: labels.slint:7 main.ts:639
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "カスタム · Anthropic 形式"
@@ -561,52 +736,52 @@ msgstr "カスタム · Anthropic 形式"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "以前に選択したプロバイダ「{}」は提供が終了しました。別のプロバイダか「カスタム · OpenAI/Anthropic 形式」を使用してください。"
 
-#: main.ts:538
+#: main.ts:542
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "会話「{}」を削除しますか？"
 
-#: main.ts:538
+#: main.ts:542
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "この会話を削除しますか？"
 
-#: main.ts:539
+#: main.ts:543
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "メッセージと、この会話で作ったプラグインプロジェクト（ソースフォルダーとパッケージ済みの .vxp ファイル）が削除されます。書き出したファイルは残ります。この会話からインストールしたプラグインはプレーヤーに残ります（{1}）。不要ならプラグインマネージャーで削除してください。"
 
-#: main.ts:539
+#: main.ts:543
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "メッセージと、この会話で作ったプラグインプロジェクト（ソースフォルダーとパッケージ済みの .vxp ファイル）が削除されます。書き出したファイルは残ります。"
 
-#: main.ts:601
+#: main.ts:605
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "プラグインパッケージを書き出す"
 
-#: main.ts:616
+#: main.ts:620
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "ソースを書き出す（そのまま GitHub リポジトリとして使用可能）"
 
-#: main.ts:637 manifest.json
+#: main.ts:641 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:645
+#: main.ts:649
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{}（提供終了）"
 
-#: main.ts:870
+#: main.ts:879
 #, x-machine
 msgid "Plugins"
 msgstr "プラグイン"
 
-#: main.ts:871
+#: main.ts:880
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
@@ -792,107 +967,107 @@ msgstr "「local」は名前が未入力であることを意味します。ご�
 msgid "A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)"
 msgstr "GitHub のユーザー名に使えるのは英字、数字、「-」のみで、最大 39 文字です（新しいプラグインは当面 local.<名前> を使用します）"
 
-#: settings.slint:118 settings.slint:143
-#, x-machine
-msgid "Provider"
-msgstr "プロバイダ"
-
-#: settings.slint:118 settings.slint:154
-#, x-machine
-msgid "Base URL"
-msgstr "Base URL"
-
-#: settings.slint:118 settings.slint:168
-#, x-machine
-msgid "API key"
-msgstr "API キー"
-
-#: settings.slint:118 settings.slint:202 settings.slint:225
-#, x-machine
-msgid "Model"
-msgstr "モデル"
-
-#: settings.slint:118 settings.slint:225
-#, x-machine
-msgid "Model ID"
-msgstr "モデル ID"
-
-#: settings.slint:118 settings.slint:247
-#, x-machine
-msgid "Thinking"
-msgstr "思考"
-
-#: settings.slint:118 settings.slint:281
-#, x-machine
-msgid "Plugin author"
-msgstr "プラグインの作成者"
-
-#: settings.slint:138
-#, x-machine
-msgid "Delete Old Key"
-msgstr "以前のキーを削除"
-
-#: settings.slint:174
-#, x-machine
-msgid "A local service may leave this empty"
-msgstr "ローカルサービスでは空欄でもかまいません"
-
-#: settings.slint:174
-#, x-machine
-msgid "Paste the API key"
-msgstr "API キーを貼り付け"
-
-#: settings.slint:181
-#, x-machine
-msgid "Save"
-msgstr "保存"
-
-#: settings.slint:216 settings.slint:239
-#, x-machine
-msgid "Fetching…"
-msgstr "取得中…"
-
-#: settings.slint:216 settings.slint:239
-#, x-machine
-msgid "Fetch Models"
-msgstr "モデルを取得"
-
-#: settings.slint:230
-#, x-machine
-msgid "Model ID, e.g. qwen3:8b"
-msgstr "モデル ID（例：qwen3:8b）"
-
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Off"
 msgstr "オフ"
 
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Low"
 msgstr "低"
 
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Medium (recommended)"
 msgstr "中（推奨）"
 
-#: settings.slint:260
+#: settings.slint:127 settings.slint:152
+#, x-machine
+msgid "Provider"
+msgstr "プロバイダ"
+
+#: settings.slint:127 settings.slint:163
+#, x-machine
+msgid "Base URL"
+msgstr "Base URL"
+
+#: settings.slint:127 settings.slint:177
+#, x-machine
+msgid "API key"
+msgstr "API キー"
+
+#: settings.slint:127 settings.slint:211 settings.slint:234
+#, x-machine
+msgid "Model"
+msgstr "モデル"
+
+#: settings.slint:127 settings.slint:234
+#, x-machine
+msgid "Model ID"
+msgstr "モデル ID"
+
+#: settings.slint:127 settings.slint:256
+#, x-machine
+msgid "Thinking"
+msgstr "思考"
+
+#: settings.slint:127 settings.slint:290
+#, x-machine
+msgid "Plugin author"
+msgstr "プラグインの作成者"
+
+#: settings.slint:147
+#, x-machine
+msgid "Delete Old Key"
+msgstr "以前のキーを削除"
+
+#: settings.slint:183
+#, x-machine
+msgid "A local service may leave this empty"
+msgstr "ローカルサービスでは空欄でもかまいません"
+
+#: settings.slint:183
+#, x-machine
+msgid "Paste the API key"
+msgstr "API キーを貼り付け"
+
+#: settings.slint:190
+#, x-machine
+msgid "Save"
+msgstr "保存"
+
+#: settings.slint:224 settings.slint:248
+#, x-machine
+msgid "Fetching…"
+msgstr "取得中…"
+
+#: settings.slint:224 settings.slint:248
+#, x-machine
+msgid "Fetch Models"
+msgstr "モデルを取得"
+
+#: settings.slint:239
+#, x-machine
+msgid "Model ID, e.g. qwen3:8b"
+msgstr "モデル ID（例：qwen3:8b）"
+
+#: settings.slint:269
 #, x-machine
 msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
 msgstr "推論モデル用です。思考のトークンも回答と同じくプロバイダーから課金されます。"
 
-#: settings.slint:273
+#: settings.slint:282
 #, x-machine
 msgid "This model can think before it answers (a reasoning model)"
 msgstr "このモデルは回答の前に思考します（推論モデル）"
 
-#: settings.slint:286
+#: settings.slint:295
 #, x-machine
 msgid "Your GitHub name (the prefix of plugin ids)"
 msgstr "GitHub のユーザー名（プラグイン ID の接頭辞）"
 
-#: settings.slint:304
+#: settings.slint:313
 #, x-machine
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "キーはシステムのキーチェーン（macOS）または資格情報マネージャー（Windows）にのみ保存され、ファイル、ログ、会話の記録には書き込まれません。"

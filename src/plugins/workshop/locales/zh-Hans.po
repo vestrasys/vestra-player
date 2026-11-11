@@ -37,7 +37,7 @@ msgstr "查找"
 msgid "Search"
 msgstr "搜索"
 
-#: ai.slint:175 main.ts:542 settings.slint:197
+#: ai.slint:175 main.ts:546 settings.slint:206
 msgid "Delete"
 msgstr "删除"
 
@@ -410,6 +410,181 @@ msgstr "发送"
 msgid "■ Stop"
 msgstr "■ 停止"
 
+#: askvestra/ask.ts:104
+#, x-machine
+msgid "Ask Vestra"
+msgstr "问 Vestra"
+
+#: askvestra/ask.ts:106
+#, x-machine
+msgid "Type a command or ask Vestra"
+msgstr "输入命令，或问 Vestra"
+
+#: askvestra/ask.ts:107
+#, x-machine
+msgid "Type a request or a question"
+msgstr "输入请求或问题"
+
+#: askvestra/ask.ts:108
+#, x-machine
+msgid "Set up a model first"
+msgstr "请先设置模型"
+
+#: askvestra/ask.ts:112
+#, x-machine
+msgid "Vestra is working · Step {0} of {1} · {2}"
+msgstr "Vestra 正在处理 · 第 {0}/{1} 步 · {2}"
+
+#: askvestra/ask.ts:113
+#, x-machine
+msgid "Vestra is working · Planning…"
+msgstr "Vestra 正在处理 · 规划中…"
+
+#: askvestra/ask.ts:114
+#, x-machine
+msgid "Enter stops"
+msgstr "Enter 停止"
+
+#: askvestra/ask.ts:141
+#, x-machine
+msgid "Undo"
+msgstr "撤销"
+
+#: askvestra/ask.ts:142 askvestra/ask.ts:444
+#, x-machine
+msgid "Stop"
+msgstr "停止"
+
+#: askvestra/ask.ts:154
+#, x-machine
+msgid "Speed {}×"
+msgstr "速度 {}×"
+
+#: askvestra/ask.ts:186
+#, x-machine
+msgid "Vestra · Took too long"
+msgstr "Vestra · 用时过长"
+
+#: askvestra/ask.ts:188
+#, x-machine
+msgid "Vestra · Could not reach {0}: {1}"
+msgstr "Vestra · 无法连接 {0}：{1}"
+
+#: askvestra/ask.ts:222 askvestra/ask.ts:345 askvestra/ask.ts:355
+#, x-machine
+msgid "Vestra · {}"
+msgstr "Vestra · {}"
+
+#: askvestra/ask.ts:239 askvestra/ask.ts:250 askvestra/ask.ts:413
+#, x-machine
+msgid "Nothing is playing"
+msgstr "没有正在播放的内容"
+
+#: askvestra/ask.ts:240 askvestra/ask.ts:249
+#, x-machine
+msgid "This source cannot change speed"
+msgstr "此来源无法改变速度"
+
+#: askvestra/ask.ts:248
+#, x-machine
+msgid "Playback changed meanwhile"
+msgstr "播放已在此期间改变"
+
+#: askvestra/ask.ts:285
+#, x-machine
+msgid "Ask Vestra sends your request to {}"
+msgstr "“问 Vestra”会把你的请求发送给 {}"
+
+#: askvestra/ask.ts:287
+#, x-machine
+msgid "What you type in the command palette and the playback state (playing or paused, position, duration, speed) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account."
+msgstr "你在命令面板中输入的内容和播放状态（播放或暂停、位置、时长、速度）会和对话一样，用你的 API 密钥发送给该服务商。文件名、播放列表、历史记录和字幕不会发送。费用由服务商向你的账户收取。"
+
+#: askvestra/ask.ts:289
+#, x-machine
+msgid "Continue"
+msgstr "继续"
+
+#: askvestra/ask.ts:313
+#, x-machine
+msgid "Vestra · Cannot read the API key; save it again in the settings"
+msgstr "Vestra · 无法读取 API 密钥；请在设置中重新保存"
+
+#: askvestra/ask.ts:326
+#, x-machine
+msgid "Vestra · Planning…"
+msgstr "Vestra · 规划中…"
+
+#: askvestra/ask.ts:334
+#, x-machine
+msgid "Vestra · {0}/{1} · {2}"
+msgstr "Vestra · {0}/{1} · {2}"
+
+#: askvestra/ask.ts:338 askvestra/ask.ts:372 askvestra/ask.ts:374
+#, x-machine
+msgid "Vestra · Step {0} failed: {1}"
+msgstr "Vestra · 第 {0} 步失败：{1}"
+
+#: askvestra/ask.ts:350
+#, x-machine
+msgid "Vestra · Stopped"
+msgstr "Vestra · 已停止"
+
+#: askvestra/ask.ts:366
+#, x-machine
+msgid "Vestra · The model gave no steps"
+msgstr "Vestra · 模型没有给出步骤"
+
+#: askvestra/ask.ts:370
+#, x-machine
+msgid "Vestra · The plan has more than {} steps"
+msgstr "Vestra · 计划超过 {} 步"
+
+#: askvestra/ask.ts:372
+#, x-machine
+msgid "Vestra cannot do “{}” yet"
+msgstr "Vestra 暂时还不能执行“{}”"
+
+#: askvestra/ask.ts:374
+#, x-machine
+msgid "The speed must be between {0}× and {1}×"
+msgstr "速度必须在 {0}× 到 {1}× 之间"
+
+#: askvestra/ask.ts:404
+#, x-machine
+msgid "Vestra · Nothing to undo"
+msgstr "Vestra · 没有可撤销的操作"
+
+#: askvestra/ask.ts:416
+#, x-machine
+msgid "Vestra · Not undone: the speed was changed since"
+msgstr "Vestra · 未撤销：速度已在此后被改变"
+
+#: askvestra/ask.ts:424
+#, x-machine
+msgid "Vestra · Undone"
+msgstr "Vestra · 已撤销"
+
+#: askvestra/ask.ts:427
+#, x-machine
+msgid "Vestra · Undo failed: {}"
+msgstr "Vestra · 撤销失败：{}"
+
+#: askvestra/ask.ts:434
+#, x-machine
+msgid "Undo Last Request"
+msgstr "撤销上一个请求"
+
+#: askvestra/ask.ts:439
+#, x-machine
+msgid "Vestra is working"
+msgstr "Vestra 正在处理"
+
+#: askvestra/ask.ts:448
+#, x-machine
+msgid "Vestra is not working on a request"
+msgstr "Vestra 没有正在处理的请求"
+
 #: delivery.ts:203
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "安装 AI 生成的插件「{}」？"
@@ -442,11 +617,11 @@ msgstr "它是从别处安装的（不是 Vestra Player AI 生成的）。替换
 msgid "Replace"
 msgstr "替换"
 
-#: labels.slint:6 main.ts:633
+#: labels.slint:6 main.ts:637
 msgid "Custom · OpenAI format"
 msgstr "自定义 · OpenAI 格式"
 
-#: labels.slint:7 main.ts:635
+#: labels.slint:7 main.ts:639
 msgid "Custom · Anthropic format"
 msgstr "自定义 · Anthropic 格式"
 
@@ -454,44 +629,44 @@ msgstr "自定义 · Anthropic 格式"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "之前选择的服务商「{}」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。"
 
-#: main.ts:538
+#: main.ts:542
 msgid "Delete the conversation “{}”?"
 msgstr "删除对话「{}」？"
 
-#: main.ts:538
+#: main.ts:542
 msgid "Delete this conversation?"
 msgstr "删除这个对话？"
 
-#: main.ts:539
+#: main.ts:543
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "对话记录和其中做的插件项目（源码文件夹和打包好的 .vxp 文件）都会删除；你导出的文件不受影响。从这个对话安装的插件仍留在播放器中（{1}）；不再需要的话，请在插件管理中移除。"
 
-#: main.ts:539
+#: main.ts:543
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "对话记录和其中做的插件项目（源码文件夹和打包好的 .vxp 文件）都会删除；你导出的文件不受影响。"
 
-#: main.ts:601
+#: main.ts:605
 msgid "Export Plugin Package"
 msgstr "导出插件包"
 
-#: main.ts:616
+#: main.ts:620
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "导出源码（可以直接作为 GitHub 仓库）"
 
-#: main.ts:637 manifest.json
+#: main.ts:641 manifest.json
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:645
+#: main.ts:649
 msgid "{} (no longer offered)"
 msgstr "{}（已不再提供）"
 
-#: main.ts:870
+#: main.ts:879
 #, x-machine
 msgid "Plugins"
 msgstr "插件"
 
-#: main.ts:871
+#: main.ts:880
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
 
@@ -642,86 +817,86 @@ msgstr "「local」表示没有填用户名，请填你自己的 GitHub 用户�
 msgid "A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)"
 msgstr "GitHub 用户名只能有字母、数字和「-」，最多 39 个字符（新插件暂时用 local.<名字>）"
 
-#: settings.slint:118 settings.slint:143
-msgid "Provider"
-msgstr "服务商"
-
-#: settings.slint:118 settings.slint:154
-msgid "Base URL"
-msgstr "Base URL"
-
-#: settings.slint:118 settings.slint:168
-msgid "API key"
-msgstr "API Key"
-
-#: settings.slint:118 settings.slint:202 settings.slint:225
-msgid "Model"
-msgstr "模型"
-
-#: settings.slint:118 settings.slint:225
-msgid "Model ID"
-msgstr "模型 ID"
-
-#: settings.slint:118 settings.slint:247
-msgid "Thinking"
-msgstr "思考"
-
-#: settings.slint:118 settings.slint:281
-msgid "Plugin author"
-msgstr "插件作者"
-
-#: settings.slint:138
-msgid "Delete Old Key"
-msgstr "删除旧 key"
-
-#: settings.slint:174
-msgid "A local service may leave this empty"
-msgstr "本地服务可以留空"
-
-#: settings.slint:174
-msgid "Paste the API key"
-msgstr "粘贴 API key"
-
-#: settings.slint:181
-msgid "Save"
-msgstr "保存"
-
-#: settings.slint:216 settings.slint:239
-msgid "Fetching…"
-msgstr "获取中…"
-
-#: settings.slint:216 settings.slint:239
-msgid "Fetch Models"
-msgstr "获取模型"
-
-#: settings.slint:230
-msgid "Model ID, e.g. qwen3:8b"
-msgstr "模型 ID，如 qwen3:8b"
-
-#: settings.slint:251
+#: settings.slint:116
 msgid "Off"
 msgstr "关闭"
 
-#: settings.slint:251
+#: settings.slint:116
 msgid "Low"
 msgstr "低"
 
-#: settings.slint:251
+#: settings.slint:116
 msgid "Medium (recommended)"
 msgstr "中（推荐）"
 
-#: settings.slint:260
+#: settings.slint:127 settings.slint:152
+msgid "Provider"
+msgstr "服务商"
+
+#: settings.slint:127 settings.slint:163
+msgid "Base URL"
+msgstr "Base URL"
+
+#: settings.slint:127 settings.slint:177
+msgid "API key"
+msgstr "API Key"
+
+#: settings.slint:127 settings.slint:211 settings.slint:234
+msgid "Model"
+msgstr "模型"
+
+#: settings.slint:127 settings.slint:234
+msgid "Model ID"
+msgstr "模型 ID"
+
+#: settings.slint:127 settings.slint:256
+msgid "Thinking"
+msgstr "思考"
+
+#: settings.slint:127 settings.slint:290
+msgid "Plugin author"
+msgstr "插件作者"
+
+#: settings.slint:147
+msgid "Delete Old Key"
+msgstr "删除旧 key"
+
+#: settings.slint:183
+msgid "A local service may leave this empty"
+msgstr "本地服务可以留空"
+
+#: settings.slint:183
+msgid "Paste the API key"
+msgstr "粘贴 API key"
+
+#: settings.slint:190
+msgid "Save"
+msgstr "保存"
+
+#: settings.slint:224 settings.slint:248
+msgid "Fetching…"
+msgstr "获取中…"
+
+#: settings.slint:224 settings.slint:248
+msgid "Fetch Models"
+msgstr "获取模型"
+
+#: settings.slint:239
+msgid "Model ID, e.g. qwen3:8b"
+msgstr "模型 ID，如 qwen3:8b"
+
+#: settings.slint:269
 msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
 msgstr "用于推理模型。思考产生的 token 和回答一样由服务商计费。"
 
-#: settings.slint:273
+#: settings.slint:282
 msgid "This model can think before it answers (a reasoning model)"
 msgstr "这个模型会先思考再回答（推理模型）"
 
-#: settings.slint:286
+#: settings.slint:295
 msgid "Your GitHub name (the prefix of plugin ids)"
 msgstr "你的 GitHub 用户名（插件 id 的前缀）"
 
-#: settings.slint:304
+#: settings.slint:313
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "key 只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或会话记录。"
