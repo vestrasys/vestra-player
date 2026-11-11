@@ -586,6 +586,13 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   /** Where a command's control lives: the playlist panel, or its settings page. */
   const PANEL = { home: "playlist.visibility" };
   const SETTINGS = { home: "playlist.settings" };
+  /**
+   * The commands that take rows out of the list (`destructive`, SDK 1.7.9): a run through
+   * another plugin's `commands.run` (Ask Vestra) is confirmed by the player first. A menu pick,
+   * a key or the palette runs them as before. Open List File… is not marked: it asks
+   * "Replace…?" itself, and a second question would ask the user twice.
+   */
+  const DESTRUCTIVE = { destructive: true };
   const reason = (enabled: () => boolean) => (): Reason | null =>
     enabled() ? null : player.busy() ? "Opening, or the result is not known yet" : "Nothing to act on";
   /** A list command: not in the main menu; its keys work while the list has focus. */
@@ -754,18 +761,20 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const add = listCommand("list-add", "Add Files…", () => !adding, addFiles, undefined, { busy: () => adding });
   const addFolderCommand = listCommand("list-add-folder", "Add Folder…", () => true, addFolderOnly, undefined, scanningFolder);
   const addLink = listCommand("list-link", "Add Link…", () => true, guard(() => link.show()));
-  const remove = listCommand("remove", "Remove Selected", () => queue.selection.size > 0, removeSelected, ["Delete"]);
+  const remove = listCommand("remove", "Remove Selected", () => queue.selection.size > 0, removeSelected, ["Delete"], DESTRUCTIVE);
   const removeOthers = listCommand(
     "remove-unselected",
     "Remove Unselected",
     () => queue.canRemoveUnselected(),
     removeUnselected,
     ["Ctrl+Delete"],
+    DESTRUCTIVE,
   );
   const removeInvalidCommand = listCommand("remove-invalid", "Remove Invalid Items", hasRows, removeInvalid, undefined, {
+    ...DESTRUCTIVE,
     busy: () => checking,
   });
-  const removeAll = listCommand("clear", "Remove All", hasRows, clearAll, ["Alt+Delete"]);
+  const removeAll = listCommand("clear", "Remove All", hasRows, clearAll, ["Alt+Delete"], DESTRUCTIVE);
   const hasLocal = () => queue.marked().some((row) => row.kind === "file");
   const revealCommand = listCommand("reveal", "Show in Finder", hasLocal, revealSelected, ["Ctrl+F"], {
     reason: () => (hasLocal() ? null : queue.selection.size ? "Links have no local location" : "Nothing to act on"),

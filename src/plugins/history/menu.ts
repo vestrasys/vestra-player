@@ -170,6 +170,8 @@ export class RecentMenu {
       group: "recent-manage",
       enabled: some,
       reason: noEntries,
+      // Removes records for good (no undo): a caller of `commands.run` asks first.
+      destructive: true,
       run: async () => quiet(this.#osd.show("Removed {} invalid entries", [await this.#recent.prune()])),
     });
     scope.commands.add({
@@ -180,6 +182,7 @@ export class RecentMenu {
       group: "recent-manage",
       enabled: some,
       reason: noEntries,
+      destructive: true,
       run: () => {
         this.#recent.clear();
         quiet(this.#osd.show("Playback history cleared"));
@@ -252,6 +255,7 @@ export function addResumeCommands(plugin: Plugin, resume: Resume, osd: Osd) {
     category,
     order: 254,
     group: "resume-options",
+    destructive: true,
     run: () => {
       resume.clear();
       quiet(osd.show("All saved positions cleared"));

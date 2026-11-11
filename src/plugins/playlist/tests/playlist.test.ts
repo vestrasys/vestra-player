@@ -349,6 +349,22 @@ test("every command has a palette category (its submenu or popup label) and a ho
   }
 });
 
+test("the commands that take rows out of the list declare destructive (SDK 1.7.9); no other command does", async () => {
+  const app = await start();
+  try {
+    const destructive = [...app.host.commands.entries()]
+      .filter(([, { declaration }]) => declaration.destructive === true)
+      .map(([id]) => id.replace("playlist.", ""));
+    assert.deepEqual(destructive, ["remove", "remove-unselected", "remove-invalid", "clear"]);
+    // Every other command declares none (absent is false), so a run of it through `commands.run` is not asked.
+    for (const [id, { declaration }] of app.host.commands) {
+      if (!destructive.includes(id.replace("playlist.", ""))) assert.equal(declaration.destructive ?? false, false, id);
+    }
+  } finally {
+    await app.close();
+  }
+});
+
 test("F6, Close List and the menu check share the sidebar preference; detach toggles", async () => {
   const app = await start();
   try {

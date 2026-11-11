@@ -289,6 +289,18 @@ test("real file bytes are uploaded; a lost commit reply is resolved by the SDK a
   }
 });
 
+test("only Remove External Subtitle is declared destructive (a commands.run caller asks first)", async () => {
+  const { host, stop } = await open();
+  try {
+    const destructive = [...host.commands.entries()]
+      .filter(([, { declaration }]) => declaration.destructive === true)
+      .map(([id]) => id);
+    assert.deepEqual(destructive, ["remove"]);
+  } finally {
+    await stop();
+  }
+});
+
 test("unreadable, unknown, graphic and oversized files are refused before any upload", async () => {
   const unknown = await srtFile(Buffer.from([0x31, 0x0a, 0xff, 0xfe]));
   const sup = await srtFile(Buffer.from("PG\u0000\u0000\u0000\u0000"));

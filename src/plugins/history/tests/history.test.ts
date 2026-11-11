@@ -551,6 +551,21 @@ test("palette: every command has a category (the submenu's label), empty and wit
   }
 });
 
+test("destructive: the three commands that remove records or saved positions say so; no other command does", async () => {
+  const destructive = ["recent.clear", "recent.prune", "resume.clear"];
+  const { host, stop } = await start();
+  const check = () => {
+    for (const [id, { declaration }] of host.commands)
+      assert.equal(declaration.destructive, destructive.includes(id) ? true : undefined, id);
+  };
+  check(); // empty
+  await play(host, file("a.mkv"));
+  assert.ok(host.commands.has("recent.item.0"));
+  check(); // with records: the rebuilt submenu keeps the marks
+  for (const id of destructive) assert.ok(host.commands.has(id), id);
+  await stop();
+});
+
 test("B25 left at 05:00 and opened again: continues from 04:58 with 「从 05:00 继续播放」; A12 shows the point", async () => {
   const [a, b] = [file("a.mkv"), file("b.mkv")];
   const { host, stop } = await start();

@@ -1457,6 +1457,9 @@ export default async function activate(plugin: Plugin) {
     order: 440,
     group: "reset-video",
     bindings: ["Q"],
+    // Several settings at once (colours, blur, every image-processing switch), no undo:
+    // a caller of commands.run (Ask Vestra) asks the user first (SDK 1.7.9).
+    destructive: true,
     run: reset,
   });
   runs.set("video.reset", reset);
@@ -1468,6 +1471,7 @@ export default async function activate(plugin: Plugin) {
     ...inPicture,
     order: 443,
     group: "reset-video",
+    destructive: true, // what Q resets plus the whole Geometry section; a commands.run caller asks first
     run: resetPanel,
   });
   runs.set("video.resetPanel", resetPanel);

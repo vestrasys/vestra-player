@@ -265,6 +265,8 @@ export default async function activate(plugin: Plugin) {
     group: "reset-appearance",
     enabled: () => logo.custom,
     reason: () => (logo.custom ? null : "Using the default logo"),
+    // Deletes the copied logo file for good (no undo): a caller of `commands.run` asks the user first.
+    destructive: true,
     run: () => logo.reset(),
   });
 

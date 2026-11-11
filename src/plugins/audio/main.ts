@@ -759,6 +759,9 @@ export default async function activate(plugin: Plugin) {
     category: category.processing,
     home: HOME,
     ...editing,
+    // Several settings back to neutral at once, with no undo: a built-in caller of `commands.run`
+    // (Ask Vestra) asks the user first (SDK 1.7.9). The menu, palette and panel run it as before.
+    destructive: true,
     // The processing only (the panel's Reset): the sync has its own reset, channels are a choice.
     run: () => {
       if (edit(neutralProcessing(settings))) quiet(plugin.osd.show("Audio processing reset"));

@@ -626,3 +626,18 @@ test("palette: every command has a category in every language (player 0.7.6)", a
     await stop();
   }
 });
+
+test("destructive: only Reset: Idle Logo (it deletes the copied logo file), with the default and a custom logo", async () => {
+  const data = mkdtempSync(join(scratch, "data-"));
+  const host = new TestHost();
+  const { stop } = await start(host, data);
+  const check = () => {
+    assert.equal(host.commands.size, 4);
+    for (const [id, { declaration }] of host.commands) assert.equal(declaration.destructive, id === "reset-logo" ? true : undefined, id);
+  };
+  check(); // default logo
+  await chooseLogo(host, [join(folder({ "mine.png": png(800, 400) }), "mine.png")]);
+  assert.equal(host.command("reset-logo").state.enabled, true);
+  check(); // custom logo
+  await stop();
+});

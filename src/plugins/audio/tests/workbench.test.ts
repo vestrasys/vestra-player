@@ -256,6 +256,32 @@ test("Reset ▸ Audio Processing clears the equalizer, Normalize and Crystalizer
   await stop();
 });
 
+test("destructive: only Audio Processing: Reset says so (several settings, no undo); every other command does not", async () => {
+  const destructive = ["audio.reset"];
+  const check = (host: TestHost) => {
+    for (const [id, { declaration }] of host.commands)
+      assert.equal(declaration.destructive, destructive.includes(id) ? true : undefined, id);
+    for (const id of destructive) assert.ok(host.commands.has(id), id);
+  };
+  // No source: the greyed "No Audio Tracks" item.
+  const bare = await startPlugin(activate, { directory });
+  await bare.host.settle();
+  assert.ok(bare.host.commands.has("audio.track.none"));
+  check(bare.host);
+  await bare.stop();
+  // A source with two tracks and output devices: the rebuilt track and device commands too.
+  const host = new TestHost();
+  host.audioDevices = [{ id: "wasapi/1", name: "Speakers" }];
+  host.openElsewhere("/movie.mp4");
+  host.setSource({ audioTracks: [track(1), track(2, false)] });
+  const { stop } = await startPlugin(activate, { directory, host });
+  await host.settle();
+  assert.ok(host.commands.has("audio.track.2"));
+  assert.ok(host.commands.has("audio.device.1"));
+  check(host);
+  await stop();
+});
+
 test("under Don't Keep another load of a source resets only the delay; an old success does not report", async () => {
   const { host, window, stop } = await open();
   window.emit("gain-changed", 0, 3);
