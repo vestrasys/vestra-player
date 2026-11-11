@@ -60,7 +60,7 @@ msgstr "Impossible de capturer l'image."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Five snapshots are still being saved. Please wait."
+msgid "Five captures are still being saved. Please wait."
 msgstr "Cinq captures sont encore en cours d’enregistrement. Veuillez patienter."
 
 #: main.ts:85 main.ts:90
@@ -100,8 +100,8 @@ msgstr "Impossible d’encoder cette image"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Could not write the image file"
-msgstr "Impossible d’écrire le fichier image"
+msgid "Could not create the image file"
+msgstr "Impossible de créer le fichier image"
 
 #: main.ts:85 main.ts:90
 #, x-machine

@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.capture 1.0.13\n"
+"Project-Id-Version: vestra.capture 1.0.14\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -45,7 +45,7 @@ msgid "Could not capture the frame."
 msgstr ""
 
 #: main.ts:85 main.ts:90
-msgid "Five snapshots are still being saved. Please wait."
+msgid "Five captures are still being saved. Please wait."
 msgstr ""
 
 #: main.ts:85 main.ts:90
@@ -77,7 +77,7 @@ msgid "This frame cannot be encoded"
 msgstr ""
 
 #: main.ts:85 main.ts:90
-msgid "Could not write the image file"
+msgid "Could not create the image file"
 msgstr ""
 
 #: main.ts:85 main.ts:90

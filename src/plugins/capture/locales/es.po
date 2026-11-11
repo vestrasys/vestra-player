@@ -58,7 +58,7 @@ msgstr "No se pudo capturar el fotograma."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Five snapshots are still being saved. Please wait."
+msgid "Five captures are still being saved. Please wait."
 msgstr "Aún se están guardando cinco capturas. Espere, por favor."
 
 #: main.ts:85 main.ts:90
@@ -98,8 +98,8 @@ msgstr "No se puede codificar este fotograma"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Could not write the image file"
-msgstr "No se pudo escribir el archivo de imagen"
+msgid "Could not create the image file"
+msgstr "No se pudo crear el archivo de imagen"
 
 #: main.ts:85 main.ts:90
 #, x-machine

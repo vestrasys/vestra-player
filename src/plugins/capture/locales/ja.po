@@ -58,8 +58,8 @@ msgstr "フレームをキャプチャできませんでした。"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Five snapshots are still being saved. Please wait."
-msgstr "5 枚のスナップショットを保存中です。しばらくお待ちください。"
+msgid "Five captures are still being saved. Please wait."
+msgstr "5 件のキャプチャを保存中です。しばらくお待ちください。"
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -98,8 +98,8 @@ msgstr "このフレームはエンコードできません"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Could not write the image file"
-msgstr "画像ファイルを書き込めませんでした"
+msgid "Could not create the image file"
+msgstr "画像ファイルを作成できませんでした"
 
 #: main.ts:85 main.ts:90
 #, x-machine

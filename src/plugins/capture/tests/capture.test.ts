@@ -405,7 +405,7 @@ test("one running and four queued; the sixth is refused; queued input keeps its 
     }
     assert.equal(host.sent("jobs.start").length, 1, "only one accepted task starts its worker");
     await host.press("Ctrl+E");
-    await until(() => host.osd.at(-1) === "截图失败：还有五张截图正在保存，请稍候。");
+    await until(() => host.osd.at(-1) === "截图失败：还有五项截图正在保存，请稍候。");
     assert.equal(host.sent("snapshot.capture").length, 5, "the sixth entry freezes nothing");
     host.openElsewhere("/contract/source-two.mp4");
     await setJob(1, { status: "completed", publicationStarted: true, outcome: { destination: join(folder, "source-one_00.02.000.png") } });

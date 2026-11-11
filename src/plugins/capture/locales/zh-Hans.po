@@ -46,8 +46,8 @@ msgid "Could not capture the frame."
 msgstr "截取画面失败。"
 
 #: main.ts:85 main.ts:90
-msgid "Five snapshots are still being saved. Please wait."
-msgstr "还有五张截图正在保存，请稍候。"
+msgid "Five captures are still being saved. Please wait."
+msgstr "还有五项截图正在保存，请稍候。"
 
 #: main.ts:85 main.ts:90
 msgid "The kept frame was released."
@@ -78,8 +78,8 @@ msgid "This frame cannot be encoded"
 msgstr "无法编码这一帧"
 
 #: main.ts:85 main.ts:90
-msgid "Could not write the image file"
-msgstr "无法写入图片文件"
+msgid "Could not create the image file"
+msgstr "无法生成图片文件"
 
 #: main.ts:85 main.ts:90
 msgid "No snapshot saved yet."

@@ -58,8 +58,8 @@ msgstr "Das Bild konnte nicht aufgenommen werden."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Five snapshots are still being saved. Please wait."
-msgstr "Fünf Schnappschüsse werden noch gespeichert. Bitte warten Sie."
+msgid "Five captures are still being saved. Please wait."
+msgstr "Fünf Aufnahmen werden noch gespeichert. Bitte warten Sie."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -98,8 +98,8 @@ msgstr "Dieses Bild kann nicht kodiert werden"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Could not write the image file"
-msgstr "Die Bilddatei konnte nicht geschrieben werden"
+msgid "Could not create the image file"
+msgstr "Die Bilddatei konnte nicht erstellt werden"
 
 #: main.ts:85 main.ts:90
 #, x-machine

@@ -223,7 +223,7 @@ test("F07: a failed JPEG export fails the task like a PNG one; nothing is left b
       return current;
     });
     await host.press("Ctrl+E");
-    await until(() => lastOsd(host) === "截图失败：无法写入图片文件");
+    await until(() => lastOsd(host) === "截图失败：无法生成图片文件");
     assert.equal(stills(host)[0]!.kind, "rawJpeg");
     assert.deepEqual(await readdir(folder), []);
   } finally {
