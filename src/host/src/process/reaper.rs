@@ -175,7 +175,7 @@ fn begin(item: Item) -> Waiting {
             owner: None,
             stop: Stop::Own {
                 child,
-                _outbound: mpsc::sync_channel(0).0,
+                _outbound: std::sync::Arc::new(mpsc::sync_channel(0).0),
                 deadline: Instant::now() + wait,
                 killed: false,
                 code: None,

@@ -16,6 +16,7 @@
 #![forbid(unsafe_code)]
 
 use crate::host::Event;
+use crate::process::unanswered::{Admission, Unanswered};
 use crate::process::{MAX_MESSAGE_BYTES, StopReason, stop_message};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
@@ -139,8 +140,10 @@ struct LinkState {
     /// False once the runner's stdout closed or the host let it go: a
     /// member's stop then returns at once.
     alive: bool,
-    /// Generations whose lines are accepted (started, not yet stopped).
-    members: BTreeSet<u64>,
+    /// Generations whose lines are accepted (started, not yet stopped),
+    /// and each one's unanswered requests (`unanswered.rs`: counted per
+    /// member, not for the runner).
+    members: BTreeMap<u64, Arc<Unanswered>>,
     /// Members waiting for their `runner.stopped`: `timedOut`.
     waiters: BTreeMap<u64, mpsc::Sender<bool>>,
     /// Members whose cleanup outlived the stop window.
@@ -160,8 +163,12 @@ impl Link {
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
+    /// Member `g`'s unanswered requests, when `g` is a member.
+    fn member(&self, g: u64) -> Option<Arc<Unanswered>> {
+        self.state().members.get(&g).cloned()
+    }
     fn is_member(&self, g: u64) -> bool {
-        self.state().members.contains(&g)
+        self.state().members.contains_key(&g)
     }
     fn stopped(&self, g: u64, timed_out: bool) {
         let mut state = self.state();
@@ -455,8 +462,9 @@ impl SharedRunner {
         directory: &Path,
         data_directory: Option<&Path>,
         app: &Value,
+        unanswered: Arc<Unanswered>,
     ) -> Result<Member> {
-        self.link.state().members.insert(g);
+        self.link.state().members.insert(g, unanswered);
         let start = json!({"event":"plugin.start","data":{
             "g": g,
             "id": id,
@@ -675,6 +683,27 @@ fn write_lines(mut stdin: impl Write, output: mpsc::Receiver<Line>) {
     }
 }
 
+/// Whether member `g`'s line goes on to the UI thread: a request past the
+/// limits is answered on the runner's queue instead (`unanswered.rs`),
+/// so the member's flood waits neither behind nor in front of the others.
+fn admit(link: &Link, g: u64, unanswered: &Unanswered, message: &Value, bytes: usize) -> bool {
+    match unanswered.admit(message, bytes) {
+        Admission::Forward => true,
+        Admission::Refuse(answer) => {
+            let sent = link.outbound.try_send(Line {
+                g,
+                message: answer,
+                queued: Some(unanswered.refusals().clone()),
+            });
+            if sent.is_err() {
+                unanswered.refusals().fetch_sub(1, Ordering::AcqRel);
+            }
+            false
+        }
+        Admission::Drop => false,
+    }
+}
+
 /// The runner's stdout, line by line, until it closes or writes a line no
 /// member can own (then the runner is restarted: nothing else writes
 /// there, `runner.fault` with `g` 0).
@@ -738,7 +767,10 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                 Ok((g, message)) => {
                     // A plugin already stopped (its last lines), or none of
                     // this runner's: never another owner's.
-                    if listening && link.is_member(g) {
+                    if listening
+                        && let Some(unanswered) = link.member(g)
+                        && admit(link, g, &unanswered, &message, bytes.len())
+                    {
                         listening = events.send(crate::process::request(g, message)).is_ok();
                     }
                 }
@@ -869,7 +901,10 @@ mod tests {
             outbound,
             state: Mutex::new(LinkState {
                 alive: true,
-                members: members.iter().copied().collect(),
+                members: members
+                    .iter()
+                    .map(|&g| (g, Unanswered::new(&format!("test.{g}"))))
+                    .collect(),
                 ..Default::default()
             }),
         };
@@ -993,7 +1028,7 @@ mod tests {
         let _output = runner.join().unwrap();
         // A slow cleanup: a leak after the stop window, and the stop returns
         // only once the runner reports the member gone (so a reload waits).
-        link.state().members.insert(4);
+        link.state().members.insert(4, Unanswered::new("test.4"));
         let answer = link.clone();
         let late = thread::spawn(move || {
             thread::sleep(STOP_WAIT + Duration::from_millis(400));
@@ -1007,7 +1042,7 @@ mod tests {
         assert_eq!(link.leaked(), 1);
         late.join().unwrap();
         // Never reported: the stop gives up at the runner's own deadline.
-        link.state().members.insert(4);
+        link.state().members.insert(4, Unanswered::new("test.4"));
         let began = Instant::now();
         member.stop(StopReason::Idle);
         assert!(began.elapsed() >= MEMBER_GONE - Duration::from_millis(50));
@@ -1043,18 +1078,108 @@ mod tests {
         assert!(stop.poll(began + STOP_WAIT * 2));
         assert_eq!(link.members(), 0);
         // Never reported: over at the runner's own deadline.
-        link.state().members.insert(4);
+        link.state().members.insert(4, Unanswered::new("test.4"));
         let mut stop = member.begin_stop(StopReason::Idle);
         let began = Instant::now();
         assert!(!stop.poll(began + MEMBER_GONE - Duration::from_millis(200)));
         assert!(stop.poll(began + MEMBER_GONE));
         assert_eq!((link.leaked(), link.members()), (2, 0));
         // Gone: over at once.
-        link.state().members.insert(4);
+        link.state().members.insert(4, Unanswered::new("test.4"));
         link.close();
         let mut stop = member.begin_stop(StopReason::Idle);
         assert!(stop.poll(Instant::now()));
         assert_eq!(link.members(), 0);
+    }
+
+    /// The request-flood backstop (user ruling 2026-11-11): one member's
+    /// 10 000 requests, none answered, are forwarded up to
+    /// `MAX_UNANSWERED_REQUESTS` and the rest refused on the runner's queue
+    /// (up to `REFUSALS_QUEUED` waiting; the writer frees them), while
+    /// another member's requests, read between them, all go on. Counted
+    /// per member: a restarted member (a new generation) starts at zero.
+    #[test]
+    fn a_member_flood_is_refused_past_the_limit_and_the_others_go_on() {
+        use crate::process::unanswered::{MAX_UNANSWERED_REQUESTS, REFUSALS_QUEUED};
+        let (link, output) = link(&[5, 8]);
+        let link = Arc::new(link);
+        // The runner's writer: written lines free their refusal slots.
+        let (written_tx, written) = mpsc::channel::<Value>();
+        let writer = thread::spawn(move || {
+            for line in output {
+                if let Some(queued) = &line.queued {
+                    queued.fetch_sub(1, Ordering::AcqRel);
+                }
+                let _ = written_tx.send(line.message);
+            }
+        });
+        let mut input = Vec::new();
+        for id in 0..10_000 {
+            input.extend_from_slice(
+                format!("{{\"g\":5,\"id\":{id},\"method\":\"osd.show\",\"params\":{{}}}}\n")
+                    .as_bytes(),
+            );
+            if id % 100 == 0 {
+                input.extend_from_slice(
+                    format!("{{\"g\":8,\"id\":{id},\"method\":\"osd.show\",\"params\":{{}}}}\n")
+                        .as_bytes(),
+                );
+            }
+        }
+        // Read in chunks, as the runner writes, so the writer keeps up.
+        let mut events = Vec::new();
+        for chunk in input
+            .split_inclusive(|&b| b == b'\n')
+            .collect::<Vec<_>>()
+            .chunks(64)
+        {
+            events.extend(read(&link, chunk.concat()));
+            while link.member(5).unwrap().refusals().load(Ordering::Acquire) > REFUSALS_QUEUED / 2 {
+                thread::yield_now();
+            }
+        }
+        let flooding = events
+            .iter()
+            .filter(|e| matches!(e, Event::Request(5, _)))
+            .count();
+        let other = events
+            .iter()
+            .filter(|e| matches!(e, Event::Request(8, _)))
+            .count();
+        assert_eq!(flooding, MAX_UNANSWERED_REQUESTS);
+        assert_eq!(other, 100);
+        let member = link.member(5).unwrap();
+        assert_eq!(member.counts().0, MAX_UNANSWERED_REQUESTS);
+        assert_eq!(link.member(8).unwrap().counts().0, 100);
+        // Each refused one was answered with `limit`, to its own id.
+        let deadline = Instant::now() + Duration::from_secs(10);
+        let mut refused = Vec::new();
+        while refused.len() < 10_000 - MAX_UNANSWERED_REQUESTS && Instant::now() < deadline {
+            if let Ok(answer) = written.recv_timeout(Duration::from_millis(100)) {
+                assert_eq!(answer["error"]["code"], "limit");
+                refused.push(answer["id"].as_u64().unwrap());
+            }
+        }
+        assert_eq!(refused.len(), 10_000 - MAX_UNANSWERED_REQUESTS);
+        assert_eq!(refused[0], MAX_UNANSWERED_REQUESTS as u64);
+        // Answered: room again for as many.
+        for id in 0..10 {
+            member.answered(id);
+        }
+        let more: String = (20_000..20_011)
+            .map(|id| format!("{{\"g\":5,\"id\":{id},\"method\":\"osd.show\",\"params\":{{}}}}\n"))
+            .collect();
+        assert_eq!(read(&link, more.into_bytes()).len(), 10);
+        // The member restarts: a new generation, a counter of its own.
+        link.state().members.remove(&5);
+        link.state().members.insert(6, Unanswered::new("test.6"));
+        let restarted = "{\"g\":6,\"id\":1,\"method\":\"osd.show\",\"params\":{}}\n";
+        assert!(matches!(
+            &read(&link, restarted.as_bytes().to_vec())[..],
+            [Event::Request(6, _)]
+        ));
+        drop(link);
+        writer.join().unwrap();
     }
 
     #[test]
