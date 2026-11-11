@@ -1,8 +1,9 @@
 // Options ▸ Playback ▸ Playlist (IA-PL-02; Playlist Settings…): the open
 // and drop options and the same switches as the Playback ▸ Playlist menu items. 440 wide
-// (the options window's page area). Combo boxes hold indexes into the plugin's lists.
-import { CheckBox, ComboBox, Palette } from "std-widgets.slint";
+// (the options window's page area). The drop-downs hold indexes into the plugin's lists.
+import { CheckBox, Palette } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
+import { Choice } from "@vestra/widgets.slint";
 
 export global PlaylistSettings {
     // 0 Open Only That File, 1 Add Similar Files, 2 Add All Files in the Folder
@@ -97,12 +98,20 @@ export component PlaylistSettingsPage inherits Rectangle {
     changed repeat => { repeat-combo.current-index = self.repeat; }
     // The label column: 96px, or the wider label.
     private property <length> column: max(96px, label-measure.preferred-width);
+    // The drop-downs: one width, their longest entry (and the label and V, 21px).
+    private property <length> choice-width: max(120px, choice-measure.preferred-width + 21px);
+    private property <[string]> open-modes: [@tr("Open only that file"), @tr("Add similar files"), @tr("Add all files in the folder")];
+    private property <[string]> repeat-modes: [@tr("Off"), @tr("All"), @tr("One"), @tr("Stop After Current")];
     Rectangle {
         visible: false;
         width: 0;
         height: 0;
         label-measure := VerticalLayout {
             for text in [@tr("When opening a file:"), @tr("Repeat:")]: Text { text: text; font-size: Theme.font-body; }
+        }
+        choice-measure := VerticalLayout {
+            for text in root.open-modes: Text { text: text; font-size: Theme.font-body; }
+            for text in root.repeat-modes: Text { text: text; font-size: Theme.font-body; }
         }
     }
     VerticalLayout {
@@ -122,12 +131,13 @@ export component PlaylistSettingsPage inherits Rectangle {
             height: Theme.input-height;
             spacing: 4px;
             Label { column: root.column; text: @tr("When opening a file:"); }
-            open-combo := ComboBox {
-                width: 200px;
-                model: [@tr("Open only that file"), @tr("Add similar files"), @tr("Add all files in the folder")];
+            open-combo := Choice {
+                width: root.choice-width;
+                model: root.open-modes;
                 current-index: PlaylistSettings.open-mode;
-                selected => { PlaylistSettings.set-open-mode(self.current-index); }
+                selected(index) => { PlaylistSettings.set-open-mode(index); }
             }
+            Rectangle { horizontal-stretch: 1; }
         }
         Check {
             text: @tr("Append when opening or dropping; don't clear the list");
@@ -145,12 +155,13 @@ export component PlaylistSettingsPage inherits Rectangle {
             height: Theme.input-height;
             spacing: 4px;
             Label { column: root.column; text: @tr("Repeat:"); }
-            repeat-combo := ComboBox {
-                width: 200px;
-                model: [@tr("Off"), @tr("All"), @tr("One"), @tr("Stop After Current")];
+            repeat-combo := Choice {
+                width: root.choice-width;
+                model: root.repeat-modes;
                 current-index: PlaylistSettings.repeat;
-                selected => { PlaylistSettings.set-repeat(self.current-index); }
+                selected(index) => { PlaylistSettings.set-repeat(index); }
             }
+            Rectangle { horizontal-stretch: 1; }
         }
         Check {
             text: @tr("Shuffle");
