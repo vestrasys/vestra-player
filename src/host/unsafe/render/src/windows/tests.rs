@@ -327,6 +327,47 @@ fn warp_frames_are_published_without_the_cpu_wait_and_timed_off_thread() {
     drop(renderer);
 }
 
+/// Paused, nothing new renders; kept warm, mpv's paused frame is rendered
+/// and published once per period (the same picture), until it is turned off.
+#[test]
+fn warp_a_renderer_kept_warm_republishes_the_paused_frame() {
+    let mpv = player("no");
+    let renderer = Renderer::start_on(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()))
+        .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", SOURCE]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 2), "no frames");
+    mpv.set_property("pause", true).expect("pause");
+    thread::sleep(Duration::from_millis(300));
+    let paused = handle.frames();
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(handle.frames(), paused, "paused: nothing new");
+    handle.keep_warm(Some(Duration::from_millis(25)));
+    assert!(until(5, || handle.frames() >= paused + 10), "not kept warm");
+    let (_, frame) = handle.latest().expect("latest");
+    let pixels = d3d::readback::wgpu(&warp_gpu(), &frame.0.texture);
+    assert!(red(&pixels, 64, 2) > 200 && red(&pixels, 64, 61) < 50, "the paused picture");
+    handle.keep_warm(None);
+    thread::sleep(Duration::from_millis(200));
+    let stopped = handle.frames();
+    thread::sleep(Duration::from_millis(300));
+    assert_eq!(handle.frames(), stopped, "no longer kept warm");
+    drop(renderer);
+}
+
+#[test]
+fn warm_frames_are_due_a_period_after_the_last_render() {
+    let (t, ms) = (Instant::now(), Duration::from_millis);
+    assert_eq!(warm_left(None, Some(t), t), None);
+    assert_eq!(warm_left(Some(ms(40)), None, t), Some(Duration::ZERO));
+    assert_eq!(warm_left(Some(ms(40)), Some(t), t + ms(10)), Some(ms(30)));
+    assert_eq!(warm_left(Some(ms(40)), Some(t), t + ms(50)), Some(Duration::ZERO));
+    // Interpolation paces to the display: the shorter period.
+    assert_eq!(warm_period(Some(ms(40)), Some(ms(16))), Some(ms(16)));
+    assert_eq!(warm_period(Some(ms(40)), None), Some(ms(40)));
+    assert_eq!(warm_period(None, Some(ms(16))), None);
+}
+
 /// Without a rendering notifier a window keeps its texture claimed until a
 /// newer frame replaces it; then the old one gets its `done` signal.
 #[test]

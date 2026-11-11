@@ -397,6 +397,9 @@ struct Shared {
     /// `Some(period)`: render at most once per period and report each frame
     /// as presented (mpv's display-synced timing, for interpolation).
     pace: Mutex<Option<Duration>>,
+    /// `Some(period)`: with nothing new from mpv (a pause), render and
+    /// publish its current frame once per period anyway ([`Handle::keep_warm`]).
+    warm: Mutex<Option<Duration>>,
     exchange: Mutex<Exchange>,
     /// Set by the render thread before `Renderer::start` returns.
     fences: OnceLock<Fences>,
@@ -471,6 +474,7 @@ impl Shared {
             stop: AtomicBool::new(false),
             size: Mutex::new(size),
             pace: Mutex::new(None),
+            warm: Mutex::new(None),
             exchange: Mutex::default(),
             fences: OnceLock::new(),
             pending: Default::default(),
@@ -940,6 +944,8 @@ fn produce(
     // `SETTLE` (a border drag asks for a new size every frame).
     let mut asked_size = None::<(Size, Instant)>;
     let (mut cadence, mut ready_value, mut timeouts) = (Cadence::default(), 0u64, 0u64);
+    // When the last render call started (`Handle::keep_warm`).
+    let mut last_render = None::<Instant>;
     // GPU rendering cannot go on: release every GPU wait on the shared
     // fences (neither queue may wait forever) and tell the host, which
     // switches to software rendering (`Handle::failed`).
@@ -976,11 +982,16 @@ fn produce(
             break;
         }
         let pace = *lock(&shared.pace);
+        let warm = warm_period(*lock(&shared.warm), pace);
         // Paced: wait for the next start on the display's grid, so frames
         // come at the display rate however often mpv asks (`Cadence`).
+        // Kept warm: no longer than until the next warm frame is due.
         match cadence.wait(pace, Instant::now()) {
             left if !left.is_zero() => thread::sleep(left),
-            _ => shared.wait(Duration::from_millis(20)),
+            _ => match warm_left(warm, last_render, Instant::now()) {
+                Some(left) if left < IDLE_WAIT => thread::sleep(left),
+                _ => shared.wait(IDLE_WAIT),
+            },
         }
         let size = *lock(&shared.size);
         let mut resized = false;
@@ -1034,10 +1045,14 @@ fn produce(
             continue;
         }
         let published = lock(&shared.exchange).ring.sequence();
-        if !(render.update() || (resized && published > 0)) {
+        // Kept warm (a pause): mpv's current frame again, through the same
+        // render, report and publish as a new one (mpv redraws it).
+        let warm_due = warm_left(warm, last_render, Instant::now()) == Some(Duration::ZERO);
+        if !(render.update() || ((resized || warm_due) && published > 0)) {
             continue;
         }
         cadence.started(pace, Instant::now());
+        last_render = Some(Instant::now());
         // A free texture. Windows hold a claim only during a draw; one left
         // by a draw that never finished is released at the window's next
         // draw, so after 100 ms the windows are asked to draw.
@@ -1210,6 +1225,23 @@ fn produce(
 /// How long a new video-area size must hold before the ring is remade at it.
 const SETTLE: Duration = Duration::from_millis(150);
 
+/// The longest wait for mpv's update callback between two looks.
+const IDLE_WAIT: Duration = Duration::from_millis(20);
+
+/// The period of warm frames: the host's (the video's frame rate), or the
+/// display's while paced (interpolation renders at the display rate).
+fn warm_period(warm: Option<Duration>, pace: Option<Duration>) -> Option<Duration> {
+    warm.map(|warm| pace.map_or(warm, |pace| pace.min(warm)))
+}
+
+/// How long until the next warm frame is due (zero: now); `None` when not
+/// kept warm.
+fn warm_left(warm: Option<Duration>, last: Option<Instant>, now: Instant) -> Option<Duration> {
+    warm.map(|period| {
+        last.map_or(Duration::ZERO, |last| (last + period).saturating_duration_since(now))
+    })
+}
+
 /// How far rendering got ([`Handle::progress`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Progress {
@@ -1253,6 +1285,17 @@ impl Handle {
             fps.filter(|f| f.is_finite() && *f >= 1.).map(|f| Duration::from_secs_f64(1. / f));
         *lock(&self.0.pace) = period;
         mpv::Wake::wake(&*self.0);
+    }
+    /// `Some(period)`: with nothing new from mpv (a pause), render its
+    /// current frame and publish it once per `period` anyway, so the windows
+    /// draw and present as during playback and the GPU keeps its clocks
+    /// (resume after a pause stuttered while it clocked up again);
+    /// `None`: only what mpv asks for. The host's `gpu_warm` decides.
+    pub fn keep_warm(&self, period: Option<Duration>) {
+        let period = period.filter(|period| !period.is_zero());
+        if std::mem::replace(&mut *lock(&self.0.warm), period) != period {
+            mpv::Wake::wake(&*self.0);
+        }
     }
     /// Why the render thread stopped (the device was removed, a fence could
     /// not be signalled), if it did: the host renders in software then.

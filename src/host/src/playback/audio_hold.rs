@@ -28,8 +28,10 @@
 
 use std::time::{Duration, Instant};
 
-/// How long a pause keeps the audio device running.
-pub const HOLD: Duration = Duration::from_secs(60);
+/// How long a pause keeps the audio device running, and GPU rendering's
+/// GPU busy (`gpu_warm`): one window for both (user ruling 2026-11-11;
+/// 60 s before).
+pub const HOLD: Duration = Duration::from_secs(180);
 
 /// What the source is doing, as the state push sees it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
