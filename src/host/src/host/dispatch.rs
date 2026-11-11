@@ -144,6 +144,11 @@ impl Host {
                 diag!("activation UI completion: {error}");
             }
         }
+        // Answered: it no longer counts against the plugin's limits of
+        // unanswered requests (`process/unanswered.rs`).
+        if let Some(plugin) = self.plugins.get(&reply.owner) {
+            plugin.answered(reply.id);
+        }
         let message = match result {
             Ok(value) => json!({"id":reply.id,"result":value}),
             Err(error) => json!({"id":reply.id,"error":error}),

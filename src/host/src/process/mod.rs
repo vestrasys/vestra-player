@@ -5,9 +5,11 @@
 pub(crate) mod reaper;
 pub(crate) mod runtime_paths;
 pub(crate) mod shared_runner;
+pub(crate) mod unanswered;
 
 use crate::host::Event;
 use crate::process::shared_runner::{Member, MemberStop, SharedRunner};
+use crate::process::unanswered::{Admission, Unanswered};
 use anyhow::{Context, Result, bail};
 use serde_json::{Value, json};
 use std::{
@@ -17,7 +19,7 @@ use std::{
     process::{Child, Stdio},
     sync::{
         Arc,
-        atomic::{AtomicBool, Ordering},
+        atomic::{AtomicBool, AtomicUsize, Ordering},
         mpsc,
     },
     thread,
@@ -126,6 +128,9 @@ pub fn heap_flag(mib: u32) -> String {
 /// Bounded per-plugin output queue. Source state alone emits ~10 events/s while playing,
 /// so a small queue disables healthy plugins after a brief event-loop stall.
 const OUTBOUND_CAPACITY: usize = 1024;
+/// A line for an own process's writer, and the counter it decrements once
+/// written (a refusal's, `Unanswered::refusals`).
+type Outbound = (Value, Option<Arc<AtomicUsize>>);
 /// `plugin.app`, set once at start-up and given to every plugin.
 static APP_INFO: std::sync::OnceLock<Value> = std::sync::OnceLock::new();
 pub fn set_app_info(info: &Value) {
@@ -143,7 +148,10 @@ pub enum Placement<'a> {
 enum Runner {
     Own {
         child: Child,
-        outbound: mpsc::SyncSender<Value>,
+        /// Its writer's queue; the reader holds it weakly (refusals), so
+        /// the writer ends with the plugin's stop even while a child of
+        /// the plugin keeps its stdout open.
+        outbound: Arc<mpsc::SyncSender<Outbound>>,
         /// Its stderr was read to the end (`forward_stderr`).
         stderr_done: Arc<AtomicBool>,
     },
@@ -162,7 +170,7 @@ pub enum Stop {
         child: Child,
         /// Kept until the process is gone: its stdin closes after the stop
         /// line, not before (a closed pipe ends it as `host-lost`).
-        _outbound: mpsc::SyncSender<Value>,
+        _outbound: Arc<mpsc::SyncSender<Outbound>>,
         deadline: Instant,
         /// Killed at its deadline; waited for without blocking after that.
         killed: bool,
@@ -287,6 +295,9 @@ pub struct Plugin {
     /// What dropping it tells the plugin (`set_stop_reason`); `quit` for a
     /// plugin dropped with the host.
     stop_reason: StopReason,
+    /// Its unanswered requests, which its reader counts and refuses past
+    /// the limits (`unanswered.rs`); `answered` when the host answers.
+    unanswered: Arc<Unanswered>,
     /// Its process ended by itself (`set_exited`): no `runtime.stop` is
     /// queued for it.
     exited: bool,
@@ -339,15 +350,16 @@ impl Plugin {
                     .map_err(|error| diag!("plugin data {}: {error}", dir.display()))
                     .is_ok()
             });
+        let unanswered = Unanswered::new(&manifest.id);
         let runner = match placement {
             Placement::Own { heap_mib } => own_process(
                 paths,
-                &manifest.id,
                 &directory,
                 data_directory.as_deref(),
                 heap_mib,
                 generation,
                 events,
+                unanswered.clone(),
             )?,
             Placement::Shared(shared) => Runner::Shared(shared.start(
                 generation,
@@ -355,6 +367,7 @@ impl Plugin {
                 &directory,
                 data_directory.as_deref(),
                 APP_INFO.get().unwrap_or(&Value::Null),
+                unanswered.clone(),
             )?),
         };
         let catalog = crate::i18n::load(&directory);
@@ -373,11 +386,17 @@ impl Plugin {
             stop_wait: Duration::from_millis(300),
             stop_reason: StopReason::Quit,
             exited: false,
+            unanswered,
         })
+    }
+    /// The host answered its request `id` (`Host::respond`): it no longer
+    /// counts against the limits.
+    pub fn answered(&self, id: u64) {
+        self.unanswered.answered(id);
     }
     pub fn send(&mut self, message: Value) -> Result<()> {
         match &self.runner {
-            Runner::Own { outbound, .. } => match outbound.try_send(message) {
+            Runner::Own { outbound, .. } => match outbound.try_send((message, None)) {
                 Ok(()) => Ok(()),
                 // Its writer stopped: the pipe broke (the process is gone or
                 // going), and the writer reported that (`RuntimeFault`), as
@@ -422,7 +441,7 @@ impl Plugin {
                 // Not delivered when its queue is full or its pipe closed
                 // (a `failed` stop, often): it is killed after the wait.
                 if !self.exited {
-                    let _ = outbound.try_send(stop_message(self.stop_reason));
+                    let _ = outbound.try_send((stop_message(self.stop_reason), None));
                 }
                 Stop::Own {
                     child,
@@ -492,12 +511,12 @@ impl Plugin {
 /// abort, which the supervisor reports as "ran out of memory" (supervisor.md §7).
 fn own_process(
     paths: &crate::process::runtime_paths::RuntimePaths,
-    id: &str,
     directory: &Path,
     data_directory: Option<&Path>,
     heap_mib: Option<u32>,
     generation: u64,
     events: mpsc::Sender<Event>,
+    unanswered: Arc<Unanswered>,
 ) -> Result<Runner> {
     let mut command = paths.node_command();
     if let Some(mib) = heap_mib {
@@ -526,7 +545,7 @@ fn own_process(
     if let Some(stderr) = child.stderr.take() {
         let done = stderr_done.clone();
         let events = events.clone();
-        let prefix = format!("[{id}]");
+        let prefix = format!("[{}]", unanswered.plugin());
         thread::spawn(move || {
             forward_stderr(
                 BufReader::new(stderr),
@@ -539,10 +558,13 @@ fn own_process(
         stderr_done.store(true, Ordering::Release);
     }
     let mut stdin = child.stdin.take().context("plugin stdin")?;
-    let (outbound, output) = mpsc::sync_channel::<Value>(OUTBOUND_CAPACITY);
+    let (outbound, output) = mpsc::sync_channel::<Outbound>(OUTBOUND_CAPACITY);
     let write_events = events.clone();
     thread::spawn(move || {
-        for message in output {
+        for (message, written) in output {
+            if let Some(written) = written {
+                written.fetch_sub(1, Ordering::AcqRel);
+            }
             // One write per line: `to_writer` on the unbuffered pipe made a
             // system call per JSON token (stress measurement 2026-11-11).
             let mut write = || -> Result<()> {
@@ -562,7 +584,20 @@ fn own_process(
         }
     });
     let stdout = child.stdout.take().context("plugin stdout")?;
-    thread::spawn(move || read_plugin(BufReader::new(stdout), generation, &events));
+    let outbound = Arc::new(outbound);
+    let refuse = Arc::downgrade(&outbound);
+    thread::spawn(move || {
+        read_plugin(
+            BufReader::new(stdout),
+            generation,
+            &events,
+            |message, bytes| match refuse.upgrade() {
+                Some(outbound) => admit(&unanswered, &outbound, message, bytes),
+                // Stopped: its lines are no longer the host's.
+                None => true,
+            },
+        );
+    });
     Ok(Runner::Own {
         child,
         outbound,
@@ -622,14 +657,40 @@ fn exit_code(status: std::process::ExitStatus) -> Option<i32> {
         status.code()
     }
 }
+/// Whether an own process's line goes on to the UI thread: a request past
+/// the limits is answered on its writer's queue instead (`unanswered.rs`).
+fn admit(
+    unanswered: &Unanswered,
+    outbound: &mpsc::SyncSender<Outbound>,
+    message: &Value,
+    bytes: usize,
+) -> bool {
+    match unanswered.admit(message, bytes) {
+        Admission::Forward => true,
+        Admission::Refuse(answer) => {
+            let written = unanswered.refusals().clone();
+            if outbound.try_send((answer, Some(written))).is_err() {
+                unanswered.refusals().fetch_sub(1, Ordering::AcqRel);
+            }
+            false
+        }
+        Admission::Drop => false,
+    }
+}
 /// An own process's stdout, line by line, as events for `generation`,
 /// until it closes. After an oversized or unparsable line (the plugin is
 /// stopped for it) or once the host no longer listens (quitting: its
 /// receiver goes first), the rest is read and dropped rather than the pipe
 /// closed: a closed pipe fails the plugin's next write, and its runner
 /// would stop it as `host-lost` before the `runtime.stop` that follows
-/// (`failed`, `quit`) arrives.
-fn read_plugin(mut reader: impl BufRead, generation: u64, events: &mpsc::Sender<Event>) {
+/// (`failed`, `quit`) arrives. `admit` (the line, its bytes) says whether a
+/// line goes on: a request past the limits is answered at once instead.
+fn read_plugin(
+    mut reader: impl BufRead,
+    generation: u64,
+    events: &mpsc::Sender<Event>,
+    mut admit: impl FnMut(&Value, usize) -> bool,
+) {
     let mut forwarding = true;
     loop {
         // Protocol lines are capped at MAX_MESSAGE_BYTES.
@@ -648,7 +709,11 @@ fn read_plugin(mut reader: impl BufRead, generation: u64, events: &mpsc::Sender<
                 forwarding = false;
             }
             Ok(_) => match serde_json::from_slice(&bytes) {
-                Ok(message) => forwarding = events.send(request(generation, message)).is_ok(),
+                Ok(message) => {
+                    if admit(&message, bytes.len()) {
+                        forwarding = events.send(request(generation, message)).is_ok();
+                    }
+                }
                 Err(e) => {
                     let _ = events.send(Event::RuntimeFault(
                         generation,
@@ -753,12 +818,12 @@ mod stop_tests {
         let (events, receiver) = mpsc::channel();
         let runner = own_process(
             crate::process::runtime_paths::get(),
-            &manifest.id,
             &directory,
             None,
             None,
             1,
             events,
+            Unanswered::new(&manifest.id),
         )
         .unwrap();
         let mut plugin = Plugin {
@@ -773,6 +838,7 @@ mod stop_tests {
             stop_wait: Duration::from_millis(1000),
             stop_reason: StopReason::Quit,
             exited: false,
+            unanswered: Unanswered::new("test"),
         };
         // Answer like the host until it writes on its own.
         let mut shows = 0;
@@ -829,12 +895,12 @@ mod stop_tests {
         let (events, receiver) = mpsc::channel();
         let runner = own_process(
             crate::process::runtime_paths::get(),
-            &manifest.id,
             &directory,
             None,
             None,
             1,
             events,
+            Unanswered::new(&manifest.id),
         )
         .unwrap();
         let mut plugin = Plugin {
@@ -849,6 +915,7 @@ mod stop_tests {
             stop_wait: Duration::from_millis(300),
             stop_reason: StopReason::Quit,
             exited: false,
+            unanswered: Unanswered::new("test"),
         };
         // The host goes on writing (events for it) through the crash.
         let deadline = Instant::now() + Duration::from_secs(15);
@@ -890,7 +957,7 @@ mod stop_tests {
         ] {
             let mut cursor = Cursor::new(input.into_bytes());
             let (events, received) = mpsc::channel();
-            read_plugin(&mut cursor, 3, &events);
+            read_plugin(&mut cursor, 3, &events, |_, _| true);
             drop(events);
             assert_eq!(cursor.position() as usize, cursor.get_ref().len());
             let received: Vec<_> = received.into_iter().collect();
@@ -908,12 +975,41 @@ mod stop_tests {
             }
             assert!(matches!(received.last(), Some(Event::Exited(3))));
         }
+        // The backstop (`unanswered.rs`): past the limit a request is
+        // answered on the writer's queue, not forwarded; notifications pass.
+        let lines: String = (0..400)
+            .map(|id| format!("{{\"id\":{id},\"method\":\"osd.show\"}}\n"))
+            .chain(["{\"event\":\"runtime.ready\"}\n".to_owned()])
+            .collect();
+        let unanswered = Unanswered::new("test.flood");
+        let (outbound, output) = mpsc::sync_channel::<Outbound>(OUTBOUND_CAPACITY);
+        let (events, received) = mpsc::channel();
+        read_plugin(
+            Cursor::new(lines.into_bytes()),
+            3,
+            &events,
+            |message, bytes| admit(&unanswered, &outbound, message, bytes),
+        );
+        drop(events);
+        let received: Vec<_> = received.into_iter().collect();
+        let limit = unanswered::MAX_UNANSWERED_REQUESTS;
+        assert_eq!(received.len(), limit + 2, "requests, ready, exit");
+        assert!(matches!(&received[limit], Event::Request(3, m) if m["event"] == "runtime.ready"));
+        let refusals: Vec<_> = output.try_iter().collect();
+        assert_eq!(refusals.len(), 400 - limit);
+        assert_eq!(refusals[0].0["id"], limit);
+        assert_eq!(refusals[0].0["error"]["code"], "limit");
+        assert_eq!(unanswered.refusals().load(Ordering::Acquire), 400 - limit);
+        for (_, written) in refusals {
+            written.unwrap().fetch_sub(1, Ordering::AcqRel);
+        }
+        assert_eq!(unanswered.refusals().load(Ordering::Acquire), 0);
         // Nobody listens: it still reads everything (the plugin's writes
         // never fail).
         let mut cursor = Cursor::new(b"{\"id\":1}\n{\"id\":2}\n".to_vec());
         let (events, received) = mpsc::channel();
         drop(received);
-        read_plugin(&mut cursor, 3, &events);
+        read_plugin(&mut cursor, 3, &events, |_, _| true);
         assert_eq!(cursor.position(), 18);
     }
 }
