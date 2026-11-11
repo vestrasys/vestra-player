@@ -4,16 +4,10 @@ export function subtitleClient(transport) {
         state: () => transport.request("subtitles.state"),
         /** Property application is not a visible-frame or exact-font identity fence. */
         style: (options) => transport.request("subtitles.style", options),
-        begin: (uploadId, generation, expectedBytes) => transport.request("subtitles.upload.begin", {
-            uploadId,
-            generation,
-            expectedBytes,
-        }),
-        append: (uploadId, offset, base64) => transport.request("subtitles.upload.append", {
-            uploadId,
-            offset,
-            base64,
-        }),
+        /** `signal`: aborted while the request still waits to be sent, it is not sent. */
+        begin: (uploadId, generation, expectedBytes, signal) => transport.request("subtitles.upload.begin", { uploadId, generation, expectedBytes }, { signal }),
+        /** `signal`: as for `begin`. */
+        append: (uploadId, offset, base64, signal) => transport.request("subtitles.upload.append", { uploadId, offset, base64 }, { signal }),
         discard: (uploadId) => transport.request("subtitles.upload.discard", { uploadId }),
         /** Atomic registration plus selection. inputOrigin guards a translation's original content revision. */
         commit: (options) => transport.request("subtitles.commit", options),

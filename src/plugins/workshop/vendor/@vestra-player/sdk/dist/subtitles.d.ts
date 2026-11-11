@@ -174,8 +174,10 @@ export declare function subtitleClient(transport: Transport): {
         expected: SubtitleStamp;
         style: SubtitleStyle | null;
     }) => Promise<SubtitleState>;
-    begin: (uploadId: number, generation: number, expectedBytes: number) => Promise<SubtitleUpload>;
-    append: (uploadId: number, offset: number, base64: string) => Promise<SubtitleUpload>;
+    /** `signal`: aborted while the request still waits to be sent, it is not sent. */
+    begin: (uploadId: number, generation: number, expectedBytes: number, signal?: AbortSignal) => Promise<SubtitleUpload>;
+    /** `signal`: as for `begin`. */
+    append: (uploadId: number, offset: number, base64: string, signal?: AbortSignal) => Promise<SubtitleUpload>;
     discard: (uploadId: number) => Promise<void>;
     /** Atomic registration plus selection. inputOrigin guards a translation's original content revision. */
     commit: (options: {

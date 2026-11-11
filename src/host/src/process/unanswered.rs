@@ -29,6 +29,17 @@ use std::{
 /// after measuring the built-ins): the SDK keeps at most 256 in flight and
 /// queues the rest itself, so a plugin on the SDK never reaches this; it
 /// stops clients that bypass the SDK.
+///
+/// The 64 lines over the SDK's 256 are for the requests the SDK never
+/// queues (its `UNQUEUED_METHODS`: answers to the player's own calls, which
+/// a held request may be waiting for), and their number is the player's:
+/// `sourceResolvers.respond` answers one of at most 32 waiting resolutions
+/// (`playback/source_backend.rs`), `producer.ackInput` the front of at most
+/// `CAPACITY` (32) queued input notices (`playback/producer_input_delivery.rs`;
+/// the SDK acknowledges one at a time) and `producer.ack` the one pending
+/// control. Raising one of those bounds, or a new unqueued method in the
+/// SDK, needs this margin checked again; the SDK agreement test
+/// (`tests/sdk/host-agreement.test.ts`) reads these figures and fails first.
 pub const MAX_UNANSWERED_REQUESTS: usize = 320;
 /// Request bytes (whole lines as read, newline included) one plugin may
 /// have unanswered (same ruling): four of the largest lines
@@ -60,7 +71,10 @@ struct State {
     /// bytes. A plugin on the SDK never repeats an id; a client that does
     /// has each answer take one line and an even share of the bytes.
     ids: HashMap<u64, (u32, usize)>,
-    /// Refusing since the log line; over once nothing is unanswered.
+    /// Refusing since the log line; over once the plugin is back under half
+    /// of both limits ([`Unanswered::answered`]), so the next burst logs
+    /// again even while a request stays pending (an open dialog's), and a
+    /// flood held at the limit logs once rather than at every answer.
     refusing: bool,
 }
 
@@ -161,7 +175,7 @@ impl Unanswered {
         }
         state.lines -= 1;
         state.bytes -= share;
-        if state.lines == 0 {
+        if state.lines <= MAX_UNANSWERED_REQUESTS / 2 && state.bytes <= MAX_UNANSWERED_BYTES / 2 {
             state.refusing = false;
         }
     }
@@ -216,6 +230,41 @@ mod tests {
         }
         assert_eq!(plugin.counts(), (0, 0));
         assert!(!plugin.state().refusing);
+    }
+
+    #[test]
+    fn a_burst_ends_under_half_the_limits_though_a_request_stays_pending() {
+        let plugin = Unanswered::new("a.b");
+        // Request 0 stays pending throughout (an open dialog's).
+        for id in 0..MAX_UNANSWERED_REQUESTS as u64 {
+            plugin.admit(&request(id), 10);
+        }
+        let refuse = |id| {
+            assert!(matches!(
+                plugin.admit(&request(id), 10),
+                Admission::Refuse(_)
+            ));
+            plugin.refusals().fetch_sub(1, Ordering::AcqRel);
+        };
+        refuse(1000);
+        assert!(plugin.state().refusing);
+        // Answers down to just over half: still the same burst, so a flood
+        // held at the limit logs once.
+        let half = MAX_UNANSWERED_REQUESTS as u64 / 2;
+        for id in half + 1..MAX_UNANSWERED_REQUESTS as u64 {
+            plugin.answered(id);
+        }
+        assert_eq!(plugin.counts().0, half as usize + 1);
+        assert!(plugin.state().refusing);
+        plugin.answered(half);
+        assert!(!plugin.state().refusing);
+        // The next burst logs again, though request 0 was never answered.
+        for id in 2000..2000 + (MAX_UNANSWERED_REQUESTS as u64 - half) {
+            plugin.admit(&request(id), 10);
+        }
+        refuse(3000);
+        assert!(plugin.state().refusing);
+        assert_eq!(plugin.counts().0, MAX_UNANSWERED_REQUESTS);
     }
 
     #[test]

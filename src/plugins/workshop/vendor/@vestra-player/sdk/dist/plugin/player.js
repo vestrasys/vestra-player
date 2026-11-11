@@ -272,7 +272,7 @@ export class PlayerService {
         try {
             result = await (options.send
                 ? options.send(id)
-                : this.runtime.host.source.submit(intent, id));
+                : this.runtime.host.source.submit(intent, id, options.signal));
         }
         catch (error) {
             if (!uncertain(error))
