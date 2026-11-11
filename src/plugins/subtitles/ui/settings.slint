@@ -2,9 +2,9 @@
 // fallback encoding (ui-spec §7.4, UI-TOOL-08).
 // Changes apply at once; every row has its own Default (UI-TOOL-04). Every
 // text is @tr (English source; locales/<lang>.po translate it).
-import { CheckBox, ComboBox } from "std-widgets.slint";
+import { CheckBox } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, Slider } from "@vestra/widgets.slint";
+import { Button, Choice, Slider } from "@vestra/widgets.slint";
 
 // The row label; `column` is the window's label column (65px, wider for longer translations).
 component RowLabel inherits Text {
@@ -93,12 +93,12 @@ export component SubtitleSettings inherits Window {
         HorizontalLayout {
             spacing: 3px;
             RowLabel { column: root.column; text: @tr("Font"); }
-            font-combo := ComboBox {
-                height: 22px;
+            font-combo := Choice {
+                window-height: root.height;
                 model: root.font-labels;
                 current-index: root.selected-font;
                 enabled: root.can-style;
-                selected(value) => { root.change-font(self.current-index); }
+                selected(index) => { root.change-font(index); }
             }
             Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("font"); } }
         }
@@ -126,12 +126,11 @@ export component SubtitleSettings inherits Window {
             spacing: 3px;
             RowLabel { column: root.column; text: @tr("Colour"); }
             // In the order of main.ts COLORS.
-            color-combo := ComboBox {
-                height: 22px;
+            color-combo := Choice {
                 model: [@tr("White"), @tr("Yellow"), @tr("Cyan")];
                 current-index: root.selected-color;
                 enabled: root.can-style;
-                selected(value) => { root.change-color(self.current-index); }
+                selected(index) => { root.change-color(index); }
             }
             Button { width: root.default-width; height: 22px; text: @tr("Default"); enabled: root.can-style; clicked => { root.reset-field("color"); } }
         }
@@ -196,11 +195,10 @@ export component SubtitleSettings inherits Window {
         HorizontalLayout {
             spacing: 3px;
             RowLabel { column: root.column; text: @tr("ASS style"); }
-            ass-combo := ComboBox {
-                height: 22px;
+            ass-combo := Choice {
                 model: [@tr("Keep original styles"), @tr("Use subtitle settings")];
                 current-index: root.ass-index;
-                selected(value) => { root.change-ass-override(self.current-index); }
+                selected(index) => { root.change-ass-override(index); }
             }
             Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-ass-override(0); } }
         }
@@ -209,11 +207,10 @@ export component SubtitleSettings inherits Window {
             spacing: 3px;
             RowLabel { column: root.column; text: @tr("Sync step"); }
             // In the order of model.ts SYNC_STEPS.
-            step-combo := ComboBox {
-                height: 22px;
+            step-combo := Choice {
                 model: [@tr("{} s", "0.05"), @tr("{} s", "0.1"), @tr("{} s", "0.25"), @tr("{} s", "0.5"), @tr("{} s", "1"), @tr("{} s", "5")];
                 current-index: root.sync-step-index;
-                selected(value) => { root.change-sync-step(self.current-index); }
+                selected(index) => { root.change-sync-step(index); }
             }
             Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-sync-step(3); } }
         }
@@ -221,8 +218,7 @@ export component SubtitleSettings inherits Window {
             spacing: 3px;
             RowLabel { column: root.column; text: @tr("Default encoding"); }
             // In the order of formats.ts ENCODINGS.
-            encoding-combo := ComboBox {
-                height: 22px;
+            encoding-combo := Choice {
                 model: [
                     @tr("Simplified Chinese (GB18030)"),
                     @tr("Traditional Chinese (Big5)"),
@@ -233,7 +229,7 @@ export component SubtitleSettings inherits Window {
                     @tr("Western (ISO-8859-1)"),
                 ];
                 current-index: root.encoding-index;
-                selected(value) => { root.change-encoding(self.current-index); }
+                selected(index) => { root.change-encoding(index); }
             }
             Button { width: root.default-width; height: 22px; text: @tr("Default"); clicked => { root.change-encoding(0); } }
         }
