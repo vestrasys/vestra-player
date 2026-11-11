@@ -587,9 +587,10 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   const PANEL = { home: "playlist.visibility" };
   const SETTINGS = { home: "playlist.settings" };
   /**
-   * The commands that take rows out of the list (`destructive`, SDK 1.7.9; Open List File…
-   * replaces it): a run through another plugin's `commands.run` (Ask Vestra) is confirmed by
-   * the player first. A menu pick, a key or the palette runs them as before.
+   * The commands that take rows out of the list (`destructive`, SDK 1.7.9): a run through
+   * another plugin's `commands.run` (Ask Vestra) is confirmed by the player first. A menu pick,
+   * a key or the palette runs them as before. Open List File… is not marked: it asks
+   * "Replace…?" itself, and a second question would ask the user twice.
    */
   const DESTRUCTIVE = { destructive: true };
   const reason = (enabled: () => boolean) => (): Reason | null =>
@@ -707,7 +708,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
     checked: () => queue.shuffle,
     run: () => setShuffle(!queue.shuffle),
   });
-  playlistMenu("open-list", "Open List File…", 237, { ...listFile, ...DESTRUCTIVE, run: openList });
+  playlistMenu("open-list", "Open List File…", 237, { ...listFile, run: openList });
   playlistMenu("save-list", "Save List…", 238, {
     ...listFile,
     enabled: hasRows,
@@ -812,7 +813,6 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   ]);
   const search = listCommand("search", "Search", () => true, () => void focusSearch++, ["Ctrl+S"]);
   const openListCommand = listCommand("list-open-list", "Open List File…", () => true, openList, undefined, {
-    ...DESTRUCTIVE,
     busy: () => listBusy,
   });
   const saveListCommand = listCommand("list-save-list", "Save List…", hasRows, saveList, undefined, {

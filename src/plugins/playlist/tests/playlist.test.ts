@@ -355,7 +355,7 @@ test("the commands that take rows out of the list declare destructive (SDK 1.7.9
     const destructive = [...app.host.commands.entries()]
       .filter(([, { declaration }]) => declaration.destructive === true)
       .map(([id]) => id.replace("playlist.", ""));
-    assert.deepEqual(destructive, ["open-list", "remove", "remove-unselected", "remove-invalid", "clear", "list-open-list"]);
+    assert.deepEqual(destructive, ["remove", "remove-unselected", "remove-invalid", "clear"]);
     // Every other command declares none (absent is false), so a run of it through `commands.run` is not asked.
     for (const [id, { declaration }] of app.host.commands) {
       if (!destructive.includes(id.replace("playlist.", ""))) assert.equal(declaration.destructive ?? false, false, id);
