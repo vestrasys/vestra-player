@@ -48,7 +48,7 @@ msgstr "Trouver"
 msgid "Search"
 msgstr "Rechercher"
 
-#: ai.slint:175 main.ts:542 settings.slint:197
+#: ai.slint:175 main.ts:546 settings.slint:206
 #, x-machine
 msgid "Delete"
 msgstr "Supprimer"
@@ -513,6 +513,176 @@ msgstr "Envoyer"
 msgid "■ Stop"
 msgstr "■ Arrêter"
 
+#: askvestra/ask.ts:95
+#, x-machine
+msgid "Ask Vestra"
+msgstr "Demander à Vestra"
+
+#: askvestra/ask.ts:97
+#, x-machine
+msgid "Type a command or ask Vestra"
+msgstr "Tapez une commande ou demandez à Vestra"
+
+#: askvestra/ask.ts:98
+#, x-machine
+msgid "Type a request or a question"
+msgstr "Tapez une demande ou une question"
+
+#: askvestra/ask.ts:99
+#, x-machine
+msgid "Set up a model first"
+msgstr "Configurez d’abord un modèle"
+
+#: askvestra/ask.ts:103
+#, x-machine
+msgid "Vestra is working · Step {0} of {1} · {2}"
+msgstr "Vestra travaille · Étape {0} sur {1} · {2}"
+
+#: askvestra/ask.ts:104
+#, x-machine
+msgid "Vestra is working · Planning…"
+msgstr "Vestra travaille · Planification…"
+
+#: askvestra/ask.ts:105
+#, x-machine
+msgid "Enter stops"
+msgstr "Entrée arrête"
+
+#: askvestra/ask.ts:132
+#, x-machine
+msgid "Undo"
+msgstr "Annuler"
+
+#: askvestra/ask.ts:133 askvestra/ask.ts:392
+#, x-machine
+msgid "Stop"
+msgstr "Arrêter"
+
+#: askvestra/ask.ts:145
+#, x-machine
+msgid "Speed {}×"
+msgstr "Vitesse {}×"
+
+#: askvestra/ask.ts:177
+#, x-machine
+msgid "Vestra · Took too long"
+msgstr "Vestra · Trop long"
+
+#: askvestra/ask.ts:179
+#, x-machine
+msgid "Vestra · Could not reach {0}: {1}"
+msgstr "Vestra · Impossible de joindre {0} : {1}"
+
+#: askvestra/ask.ts:213 askvestra/ask.ts:315 askvestra/ask.ts:325
+#, x-machine
+msgid "Vestra · {}"
+msgstr "Vestra · {}"
+
+#: askvestra/ask.ts:230 askvestra/ask.ts:239 askvestra/ask.ts:372
+#, x-machine
+msgid "Nothing is playing"
+msgstr "Aucune lecture en cours"
+
+#: askvestra/ask.ts:231 askvestra/ask.ts:238
+#, x-machine
+msgid "This source cannot change speed"
+msgstr "La vitesse de cette source ne peut pas être modifiée"
+
+#: askvestra/ask.ts:237
+#, x-machine
+msgid "Playback changed meanwhile"
+msgstr "La lecture a changé entre-temps"
+
+#: askvestra/ask.ts:267
+#, x-machine
+msgid "Ask Vestra sends your request to {}"
+msgstr "« Demander à Vestra » envoie votre demande à {}"
+
+#: askvestra/ask.ts:269
+#, x-machine
+msgid "What you type in the command palette, the player's command list and the playback state (speed, position, volume, tracks) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account."
+msgstr "Ce que vous tapez dans la palette de commandes, la liste des commandes du lecteur et l’état de la lecture (vitesse, position, volume, pistes) sont envoyés à ce fournisseur avec votre clé d’API, comme dans le chat. Les noms de fichiers, les listes de lecture, l’historique et les sous-titres ne sont pas envoyés. Le fournisseur facture votre compte."
+
+#: askvestra/ask.ts:271
+#, x-machine
+msgid "Continue"
+msgstr "Continuer"
+
+#: askvestra/ask.ts:285
+#, x-machine
+msgid "Vestra · Cannot read the API key; save it again in the settings"
+msgstr "Vestra · Impossible de lire la clé d’API ; enregistrez-la à nouveau dans les réglages"
+
+#: askvestra/ask.ts:297
+#, x-machine
+msgid "Vestra · Planning…"
+msgstr "Vestra · Planification…"
+
+#: askvestra/ask.ts:305
+#, x-machine
+msgid "Vestra · {0}/{1} · {2}"
+msgstr "Vestra · {0}/{1} · {2}"
+
+#: askvestra/ask.ts:309 askvestra/ask.ts:342 askvestra/ask.ts:344
+#, x-machine
+msgid "Vestra · Step {0} failed: {1}"
+msgstr "Vestra · Échec de l’étape {0} : {1}"
+
+#: askvestra/ask.ts:320
+#, x-machine
+msgid "Vestra · Stopped"
+msgstr "Vestra · Arrêté"
+
+#: askvestra/ask.ts:336
+#, x-machine
+msgid "Vestra · The model gave no steps"
+msgstr "Vestra · Le modèle n’a donné aucune étape"
+
+#: askvestra/ask.ts:340
+#, x-machine
+msgid "Vestra · The plan has more than {} steps"
+msgstr "Vestra · Le plan compte plus de {} étapes"
+
+#: askvestra/ask.ts:342
+#, x-machine
+msgid "Vestra cannot do “{}” yet"
+msgstr "Vestra ne sait pas encore faire « {} »"
+
+#: askvestra/ask.ts:344
+#, x-machine
+msgid "The speed must be between {0}× and {1}×"
+msgstr "La vitesse doit être comprise entre {0}× et {1}×"
+
+#: askvestra/ask.ts:367
+#, x-machine
+msgid "Vestra · Nothing to undo"
+msgstr "Vestra · Rien à annuler"
+
+#: askvestra/ask.ts:375
+#, x-machine
+msgid "Vestra · Undone"
+msgstr "Vestra · Annulé"
+
+#: askvestra/ask.ts:377
+#, x-machine
+msgid "Vestra · Undo failed: {}"
+msgstr "Vestra · Échec de l’annulation : {}"
+
+#: askvestra/ask.ts:382
+#, x-machine
+msgid "Undo Last Request"
+msgstr "Annuler la dernière demande"
+
+#: askvestra/ask.ts:387
+#, x-machine
+msgid "Vestra is working"
+msgstr "Vestra travaille"
+
+#: askvestra/ask.ts:396
+#, x-machine
+msgid "Vestra is not working on a request"
+msgstr "Vestra ne traite aucune demande"
+
 #: delivery.ts:203
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
@@ -551,12 +721,12 @@ msgstr "Il a été installé depuis une autre source (non créé par Vestra Play
 msgid "Replace"
 msgstr "Remplacer"
 
-#: labels.slint:6 main.ts:633
+#: labels.slint:6 main.ts:637
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "Personnalisé · format OpenAI"
 
-#: labels.slint:7 main.ts:635
+#: labels.slint:7 main.ts:639
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "Personnalisé · format Anthropic"
@@ -566,52 +736,52 @@ msgstr "Personnalisé · format Anthropic"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "Le fournisseur choisi précédemment, « {} », n'est plus proposé ; utilisez un autre fournisseur ou « Personnalisé · format OpenAI/Anthropic »."
 
-#: main.ts:538
+#: main.ts:542
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "Supprimer la conversation « {} » ?"
 
-#: main.ts:538
+#: main.ts:542
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "Supprimer cette conversation ?"
 
-#: main.ts:539
+#: main.ts:543
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "Ses messages et les projets de plugin créés dedans (dossiers source et fichiers .vxp empaquetés) sont supprimés ; les fichiers que vous avez exportés sont conservés. Les plugins installés depuis cette conversation restent installés dans le lecteur ({1}) ; supprimez-les dans le gestionnaire de plugins si vous n’en voulez plus."
 
-#: main.ts:539
+#: main.ts:543
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "Ses messages et les projets de plugin créés dedans (dossiers source et fichiers .vxp empaquetés) sont supprimés ; les fichiers que vous avez exportés sont conservés."
 
-#: main.ts:601
+#: main.ts:605
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "Exporter le paquet du plugin"
 
-#: main.ts:616
+#: main.ts:620
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "Exporter les sources (prêtes à servir de dépôt GitHub)"
 
-#: main.ts:637 manifest.json
+#: main.ts:641 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:645
+#: main.ts:649
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{} (n'est plus proposé)"
 
-#: main.ts:870
+#: main.ts:879
 #, x-machine
 msgid "Plugins"
 msgstr "Plugins"
 
-#: main.ts:871
+#: main.ts:880
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
@@ -798,107 +968,107 @@ msgstr "« local » signifie qu'aucun nom n'a été saisi ; saisissez votre p
 msgid "A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)"
 msgstr "Un nom GitHub ne contient que des lettres, des chiffres et « - », 39 caractères au plus (les nouveaux plugins utilisent local.<nom> pour l'instant)"
 
-#: settings.slint:118 settings.slint:143
-#, x-machine
-msgid "Provider"
-msgstr "Fournisseur"
-
-#: settings.slint:118 settings.slint:154
-#, x-machine
-msgid "Base URL"
-msgstr "URL de base"
-
-#: settings.slint:118 settings.slint:168
-#, x-machine
-msgid "API key"
-msgstr "Clé API"
-
-#: settings.slint:118 settings.slint:202 settings.slint:225
-#, x-machine
-msgid "Model"
-msgstr "Modèle"
-
-#: settings.slint:118 settings.slint:225
-#, x-machine
-msgid "Model ID"
-msgstr "ID du modèle"
-
-#: settings.slint:118 settings.slint:247
-#, x-machine
-msgid "Thinking"
-msgstr "Réflexion"
-
-#: settings.slint:118 settings.slint:281
-#, x-machine
-msgid "Plugin author"
-msgstr "Auteur du plugin"
-
-#: settings.slint:138
-#, x-machine
-msgid "Delete Old Key"
-msgstr "Supprimer l'ancienne clé"
-
-#: settings.slint:174
-#, x-machine
-msgid "A local service may leave this empty"
-msgstr "Un service local peut laisser ce champ vide"
-
-#: settings.slint:174
-#, x-machine
-msgid "Paste the API key"
-msgstr "Collez la clé API"
-
-#: settings.slint:181
-#, x-machine
-msgid "Save"
-msgstr "Enregistrer"
-
-#: settings.slint:216 settings.slint:239
-#, x-machine
-msgid "Fetching…"
-msgstr "Récupération…"
-
-#: settings.slint:216 settings.slint:239
-#, x-machine
-msgid "Fetch Models"
-msgstr "Récupérer les modèles"
-
-#: settings.slint:230
-#, x-machine
-msgid "Model ID, e.g. qwen3:8b"
-msgstr "ID du modèle, p. ex. qwen3:8b"
-
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Off"
 msgstr "Désactivée"
 
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Low"
 msgstr "Faible"
 
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Medium (recommended)"
 msgstr "Moyenne (recommandée)"
 
-#: settings.slint:260
+#: settings.slint:127 settings.slint:152
+#, x-machine
+msgid "Provider"
+msgstr "Fournisseur"
+
+#: settings.slint:127 settings.slint:163
+#, x-machine
+msgid "Base URL"
+msgstr "URL de base"
+
+#: settings.slint:127 settings.slint:177
+#, x-machine
+msgid "API key"
+msgstr "Clé API"
+
+#: settings.slint:127 settings.slint:211 settings.slint:234
+#, x-machine
+msgid "Model"
+msgstr "Modèle"
+
+#: settings.slint:127 settings.slint:234
+#, x-machine
+msgid "Model ID"
+msgstr "ID du modèle"
+
+#: settings.slint:127 settings.slint:256
+#, x-machine
+msgid "Thinking"
+msgstr "Réflexion"
+
+#: settings.slint:127 settings.slint:290
+#, x-machine
+msgid "Plugin author"
+msgstr "Auteur du plugin"
+
+#: settings.slint:147
+#, x-machine
+msgid "Delete Old Key"
+msgstr "Supprimer l'ancienne clé"
+
+#: settings.slint:183
+#, x-machine
+msgid "A local service may leave this empty"
+msgstr "Un service local peut laisser ce champ vide"
+
+#: settings.slint:183
+#, x-machine
+msgid "Paste the API key"
+msgstr "Collez la clé API"
+
+#: settings.slint:190
+#, x-machine
+msgid "Save"
+msgstr "Enregistrer"
+
+#: settings.slint:224 settings.slint:248
+#, x-machine
+msgid "Fetching…"
+msgstr "Récupération…"
+
+#: settings.slint:224 settings.slint:248
+#, x-machine
+msgid "Fetch Models"
+msgstr "Récupérer les modèles"
+
+#: settings.slint:239
+#, x-machine
+msgid "Model ID, e.g. qwen3:8b"
+msgstr "ID du modèle, p. ex. qwen3:8b"
+
+#: settings.slint:269
 #, x-machine
 msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
 msgstr "Pour les modèles de raisonnement. Les jetons de réflexion sont facturés par le fournisseur comme la réponse."
 
-#: settings.slint:273
+#: settings.slint:282
 #, x-machine
 msgid "This model can think before it answers (a reasoning model)"
 msgstr "Ce modèle réfléchit avant de répondre (modèle de raisonnement)"
 
-#: settings.slint:286
+#: settings.slint:295
 #, x-machine
 msgid "Your GitHub name (the prefix of plugin ids)"
 msgstr "Votre nom GitHub (le préfixe des identifiants de plugins)"
 
-#: settings.slint:304
+#: settings.slint:313
 #, x-machine
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "La clé est conservée uniquement dans le trousseau du système (macOS) ou le Gestionnaire d'identification (Windows), jamais dans un fichier, un journal ou l'historique d'une conversation."

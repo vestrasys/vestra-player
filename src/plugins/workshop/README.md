@@ -16,6 +16,17 @@ An AI assistant inside the player, based on [pi](https://github.com/earendil-wor
 6. "Open Folder" opens the current chat's working folder.
 7. Enter your GitHub user name under "Plugin author" on the settings page: plugins the AI creates get the id `<user name>.<name>` (the official plugin repository requires the id prefix to be the GitHub user or organization that owns the source repository). Without it the id is `local.<name>`, which is only for use on your own machine; change the id before publishing. `vestra.` is reserved for official plugins and cannot be used.
 
+## Ask Vestra (first version)
+
+The command palette (Ctrl+Shift+P, or the search button on the bottom bar) has "Ask Vestra" as its first row. Type what you want ("1.25× speed", "a bit slower") and press Enter on that row: the palette closes, the model you chose in the settings plans the steps and the player carries them out; the on-screen line says what was done, with **Undo**. When what you type names a command ("pause"), the cursor starts on that command instead, so Enter runs it as before; ↑ goes to Ask Vestra.
+
+- This version changes the playback speed only (0.25–4×). Running player commands and picture effects come later.
+- The first request to a provider asks once whether to send it there. Only what you typed and the playback state (playing or paused, position, duration, speed) are sent, never the file name; it costs a model call on your provider account.
+- While it works, the palette's first row reads "Vestra is working…"; Enter on it, **Stop** on the on-screen line or "Vestra: Stop" stops it. A new request stops the one running.
+- "Vestra: Undo Last Request" (or **Undo** on the on-screen line) restores the speed from before the request; the last 10 requests can be undone one by one until the player quits.
+- Without a model set up the row says "Set up a model first" and Enter opens the settings.
+- The row is offered only by the built-in plugin; a development load of the plugin runs without it.
+
 ## Writing plugins
 
 When you ask the AI to write a plugin, it first reads the plugin SDK reference (read-only, inside the plugin package) and then uses these tools; the status line shows their display names:

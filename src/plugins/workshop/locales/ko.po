@@ -46,7 +46,7 @@ msgstr "찾기"
 msgid "Search"
 msgstr "검색"
 
-#: ai.slint:175 main.ts:542 settings.slint:197
+#: ai.slint:175 main.ts:546 settings.slint:206
 #, x-machine
 msgid "Delete"
 msgstr "삭제"
@@ -508,6 +508,176 @@ msgstr "보내기"
 msgid "■ Stop"
 msgstr "■ 중지"
 
+#: askvestra/ask.ts:95
+#, x-machine
+msgid "Ask Vestra"
+msgstr "Vestra에게 요청"
+
+#: askvestra/ask.ts:97
+#, x-machine
+msgid "Type a command or ask Vestra"
+msgstr "명령을 입력하거나 Vestra에게 요청"
+
+#: askvestra/ask.ts:98
+#, x-machine
+msgid "Type a request or a question"
+msgstr "요청이나 질문을 입력하세요"
+
+#: askvestra/ask.ts:99
+#, x-machine
+msgid "Set up a model first"
+msgstr "먼저 모델을 설정하세요"
+
+#: askvestra/ask.ts:103
+#, x-machine
+msgid "Vestra is working · Step {0} of {1} · {2}"
+msgstr "Vestra 작업 중 · {1}단계 중 {0}단계 · {2}"
+
+#: askvestra/ask.ts:104
+#, x-machine
+msgid "Vestra is working · Planning…"
+msgstr "Vestra 작업 중 · 계획 중…"
+
+#: askvestra/ask.ts:105
+#, x-machine
+msgid "Enter stops"
+msgstr "Enter로 중지"
+
+#: askvestra/ask.ts:132
+#, x-machine
+msgid "Undo"
+msgstr "실행 취소"
+
+#: askvestra/ask.ts:133 askvestra/ask.ts:392
+#, x-machine
+msgid "Stop"
+msgstr "중지"
+
+#: askvestra/ask.ts:145
+#, x-machine
+msgid "Speed {}×"
+msgstr "속도 {}×"
+
+#: askvestra/ask.ts:177
+#, x-machine
+msgid "Vestra · Took too long"
+msgstr "Vestra · 시간이 너무 오래 걸렸습니다"
+
+#: askvestra/ask.ts:179
+#, x-machine
+msgid "Vestra · Could not reach {0}: {1}"
+msgstr "Vestra · {0}에 연결할 수 없습니다: {1}"
+
+#: askvestra/ask.ts:213 askvestra/ask.ts:315 askvestra/ask.ts:325
+#, x-machine
+msgid "Vestra · {}"
+msgstr "Vestra · {}"
+
+#: askvestra/ask.ts:230 askvestra/ask.ts:239 askvestra/ask.ts:372
+#, x-machine
+msgid "Nothing is playing"
+msgstr "재생 중인 항목이 없습니다"
+
+#: askvestra/ask.ts:231 askvestra/ask.ts:238
+#, x-machine
+msgid "This source cannot change speed"
+msgstr "이 소스는 속도를 바꿀 수 없습니다"
+
+#: askvestra/ask.ts:237
+#, x-machine
+msgid "Playback changed meanwhile"
+msgstr "그 사이 재생이 바뀌었습니다"
+
+#: askvestra/ask.ts:267
+#, x-machine
+msgid "Ask Vestra sends your request to {}"
+msgstr "‘Vestra에게 요청’은 요청을 {}(으)로 보냅니다"
+
+#: askvestra/ask.ts:269
+#, x-machine
+msgid "What you type in the command palette, the player's command list and the playback state (speed, position, volume, tracks) go to this provider with your API key, as in the chat. File names, playlists, history and subtitles are not sent. The provider charges your account."
+msgstr "명령 팔레트에 입력한 내용, 플레이어의 명령 목록과 재생 상태(속도, 위치, 볼륨, 트랙)는 채팅과 마찬가지로 API 키와 함께 이 제공업체로 전송됩니다. 파일 이름, 재생 목록, 기록, 자막은 전송되지 않습니다. 요금은 제공업체가 사용자 계정에 청구합니다."
+
+#: askvestra/ask.ts:271
+#, x-machine
+msgid "Continue"
+msgstr "계속"
+
+#: askvestra/ask.ts:285
+#, x-machine
+msgid "Vestra · Cannot read the API key; save it again in the settings"
+msgstr "Vestra · API 키를 읽을 수 없습니다. 설정에서 다시 저장하세요"
+
+#: askvestra/ask.ts:297
+#, x-machine
+msgid "Vestra · Planning…"
+msgstr "Vestra · 계획 중…"
+
+#: askvestra/ask.ts:305
+#, x-machine
+msgid "Vestra · {0}/{1} · {2}"
+msgstr "Vestra · {0}/{1} · {2}"
+
+#: askvestra/ask.ts:309 askvestra/ask.ts:342 askvestra/ask.ts:344
+#, x-machine
+msgid "Vestra · Step {0} failed: {1}"
+msgstr "Vestra · {0}단계 실패: {1}"
+
+#: askvestra/ask.ts:320
+#, x-machine
+msgid "Vestra · Stopped"
+msgstr "Vestra · 중지됨"
+
+#: askvestra/ask.ts:336
+#, x-machine
+msgid "Vestra · The model gave no steps"
+msgstr "Vestra · 모델이 단계를 제시하지 않았습니다"
+
+#: askvestra/ask.ts:340
+#, x-machine
+msgid "Vestra · The plan has more than {} steps"
+msgstr "Vestra · 계획이 {}단계를 넘습니다"
+
+#: askvestra/ask.ts:342
+#, x-machine
+msgid "Vestra cannot do “{}” yet"
+msgstr "Vestra는 아직 ‘{}’을(를) 할 수 없습니다"
+
+#: askvestra/ask.ts:344
+#, x-machine
+msgid "The speed must be between {0}× and {1}×"
+msgstr "속도는 {0}×에서 {1}× 사이여야 합니다"
+
+#: askvestra/ask.ts:367
+#, x-machine
+msgid "Vestra · Nothing to undo"
+msgstr "Vestra · 실행 취소할 항목이 없습니다"
+
+#: askvestra/ask.ts:375
+#, x-machine
+msgid "Vestra · Undone"
+msgstr "Vestra · 실행 취소됨"
+
+#: askvestra/ask.ts:377
+#, x-machine
+msgid "Vestra · Undo failed: {}"
+msgstr "Vestra · 실행 취소 실패: {}"
+
+#: askvestra/ask.ts:382
+#, x-machine
+msgid "Undo Last Request"
+msgstr "마지막 요청 실행 취소"
+
+#: askvestra/ask.ts:387
+#, x-machine
+msgid "Vestra is working"
+msgstr "Vestra 작업 중"
+
+#: askvestra/ask.ts:396
+#, x-machine
+msgid "Vestra is not working on a request"
+msgstr "Vestra가 처리 중인 요청이 없습니다"
+
 #: delivery.ts:203
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
@@ -546,12 +716,12 @@ msgstr "이 플러그인은 다른 곳에서 설치되었습니다 (Vestra Playe
 msgid "Replace"
 msgstr "바꾸기"
 
-#: labels.slint:6 main.ts:633
+#: labels.slint:6 main.ts:637
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "사용자 지정 · OpenAI 형식"
 
-#: labels.slint:7 main.ts:635
+#: labels.slint:7 main.ts:639
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "사용자 지정 · Anthropic 형식"
@@ -561,52 +731,52 @@ msgstr "사용자 지정 · Anthropic 형식"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "이전에 선택한 제공자(“{}”)는 더 이상 제공되지 않습니다. 다른 제공자나 “사용자 지정 · OpenAI/Anthropic 형식”을 사용하세요."
 
-#: main.ts:538
+#: main.ts:542
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "대화 “{}”을(를) 삭제할까요?"
 
-#: main.ts:538
+#: main.ts:542
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "이 대화를 삭제할까요?"
 
-#: main.ts:539
+#: main.ts:543
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "메시지와 이 대화에서 만든 플러그인 프로젝트(소스 폴더와 패키징된 .vxp 파일)가 삭제됩니다. 내보낸 파일은 그대로 남습니다. 이 대화에서 설치한 플러그인은 플레이어에 그대로 설치되어 있습니다({1}). 더 이상 필요 없으면 플러그인 관리자에서 제거하세요."
 
-#: main.ts:539
+#: main.ts:543
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "메시지와 이 대화에서 만든 플러그인 프로젝트(소스 폴더와 패키징된 .vxp 파일)가 삭제됩니다. 내보낸 파일은 그대로 남습니다."
 
-#: main.ts:601
+#: main.ts:605
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "플러그인 패키지 내보내기"
 
-#: main.ts:616
+#: main.ts:620
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "소스 내보내기 (GitHub 저장소로 바로 사용 가능)"
 
-#: main.ts:637 manifest.json
+#: main.ts:641 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:645
+#: main.ts:649
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{} (더 이상 제공되지 않음)"
 
-#: main.ts:870
+#: main.ts:879
 #, x-machine
 msgid "Plugins"
 msgstr "플러그인"
 
-#: main.ts:871
+#: main.ts:880
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
@@ -792,107 +962,107 @@ msgstr "“local”은 이름을 입력하지 않았다는 뜻입니다. 본인�
 msgid "A GitHub name has only letters, digits and “-”, at most 39 characters (new plugins use local.<name> for now)"
 msgstr "GitHub 이름에는 영문자, 숫자, “-”만 쓸 수 있으며 최대 39자입니다 (새 플러그인은 당분간 local.<이름>을 사용함)"
 
-#: settings.slint:118 settings.slint:143
-#, x-machine
-msgid "Provider"
-msgstr "제공자"
-
-#: settings.slint:118 settings.slint:154
-#, x-machine
-msgid "Base URL"
-msgstr "Base URL"
-
-#: settings.slint:118 settings.slint:168
-#, x-machine
-msgid "API key"
-msgstr "API 키"
-
-#: settings.slint:118 settings.slint:202 settings.slint:225
-#, x-machine
-msgid "Model"
-msgstr "모델"
-
-#: settings.slint:118 settings.slint:225
-#, x-machine
-msgid "Model ID"
-msgstr "모델 ID"
-
-#: settings.slint:118 settings.slint:247
-#, x-machine
-msgid "Thinking"
-msgstr "생각"
-
-#: settings.slint:118 settings.slint:281
-#, x-machine
-msgid "Plugin author"
-msgstr "플러그인 작성자"
-
-#: settings.slint:138
-#, x-machine
-msgid "Delete Old Key"
-msgstr "이전 키 삭제"
-
-#: settings.slint:174
-#, x-machine
-msgid "A local service may leave this empty"
-msgstr "로컬 서비스는 비워 둘 수 있습니다"
-
-#: settings.slint:174
-#, x-machine
-msgid "Paste the API key"
-msgstr "API 키 붙여넣기"
-
-#: settings.slint:181
-#, x-machine
-msgid "Save"
-msgstr "저장"
-
-#: settings.slint:216 settings.slint:239
-#, x-machine
-msgid "Fetching…"
-msgstr "가져오는 중…"
-
-#: settings.slint:216 settings.slint:239
-#, x-machine
-msgid "Fetch Models"
-msgstr "모델 가져오기"
-
-#: settings.slint:230
-#, x-machine
-msgid "Model ID, e.g. qwen3:8b"
-msgstr "모델 ID (예: qwen3:8b)"
-
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Off"
 msgstr "끄기"
 
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Low"
 msgstr "낮음"
 
-#: settings.slint:251
+#: settings.slint:116
 #, x-machine
 msgid "Medium (recommended)"
 msgstr "중간(권장)"
 
-#: settings.slint:260
+#: settings.slint:127 settings.slint:152
+#, x-machine
+msgid "Provider"
+msgstr "제공자"
+
+#: settings.slint:127 settings.slint:163
+#, x-machine
+msgid "Base URL"
+msgstr "Base URL"
+
+#: settings.slint:127 settings.slint:177
+#, x-machine
+msgid "API key"
+msgstr "API 키"
+
+#: settings.slint:127 settings.slint:211 settings.slint:234
+#, x-machine
+msgid "Model"
+msgstr "모델"
+
+#: settings.slint:127 settings.slint:234
+#, x-machine
+msgid "Model ID"
+msgstr "모델 ID"
+
+#: settings.slint:127 settings.slint:256
+#, x-machine
+msgid "Thinking"
+msgstr "생각"
+
+#: settings.slint:127 settings.slint:290
+#, x-machine
+msgid "Plugin author"
+msgstr "플러그인 작성자"
+
+#: settings.slint:147
+#, x-machine
+msgid "Delete Old Key"
+msgstr "이전 키 삭제"
+
+#: settings.slint:183
+#, x-machine
+msgid "A local service may leave this empty"
+msgstr "로컬 서비스는 비워 둘 수 있습니다"
+
+#: settings.slint:183
+#, x-machine
+msgid "Paste the API key"
+msgstr "API 키 붙여넣기"
+
+#: settings.slint:190
+#, x-machine
+msgid "Save"
+msgstr "저장"
+
+#: settings.slint:224 settings.slint:248
+#, x-machine
+msgid "Fetching…"
+msgstr "가져오는 중…"
+
+#: settings.slint:224 settings.slint:248
+#, x-machine
+msgid "Fetch Models"
+msgstr "모델 가져오기"
+
+#: settings.slint:239
+#, x-machine
+msgid "Model ID, e.g. qwen3:8b"
+msgstr "모델 ID (예: qwen3:8b)"
+
+#: settings.slint:269
 #, x-machine
 msgid "For reasoning models. Thinking tokens are billed by the provider like the answer."
 msgstr "추론 모델용입니다. 생각에 쓰인 토큰도 답변처럼 제공자가 요금을 청구합니다."
 
-#: settings.slint:273
+#: settings.slint:282
 #, x-machine
 msgid "This model can think before it answers (a reasoning model)"
 msgstr "이 모델은 답하기 전에 생각합니다(추론 모델)"
 
-#: settings.slint:286
+#: settings.slint:295
 #, x-machine
 msgid "Your GitHub name (the prefix of plugin ids)"
 msgstr "GitHub 이름 (플러그인 ID의 접두사)"
 
-#: settings.slint:304
+#: settings.slint:313
 #, x-machine
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "키는 시스템 키체인(macOS) 또는 자격 증명 관리자(Windows)에만 보관되며, 파일, 로그, 대화 기록에는 절대 저장되지 않습니다."
