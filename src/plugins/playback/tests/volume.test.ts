@@ -6,6 +6,7 @@ import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { OUTPUT_SAVE_MS } from "../output-memory.ts";
+import { eventually, until } from "./eventually.ts";
 
 const directory = new URL("..", import.meta.url);
 const start = (dataDirectory: string, host = new TestHost()) => startPlugin(activate, { directory, host, dataDirectory });
@@ -17,13 +18,6 @@ const read = (data: string) => {
     return null;
   }
 };
-async function until(predicate: () => boolean, ms = 2000) {
-  const deadline = Date.now() + ms;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
 const pause = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 const output = (host: TestHost) => host.source.output;
 
@@ -40,8 +34,7 @@ test("volume: the bar's volume comes back after a restart, before anything is op
   withData("volume", async (data) => {
     const first = await start(data);
     first.host.mounted("bottom").emit("volume-released", 35);
-    await until(() => read(data)?.volume === 35);
-    assert.deepEqual(read(data), { volume: 35, muted: false });
+    await eventually(() => read(data), { volume: 35, muted: false });
     await first.stop();
 
     const second = await start(data);
@@ -63,13 +56,11 @@ test("volume: mute is remembered with the volume", () =>
     first.host.mounted("bottom").emit("volume-released", 40);
     await until(() => output(first.host).volume === 40);
     first.host.mounted("bottom").emit("action", "mute");
-    await until(() => read(data)?.muted === true);
-    assert.deepEqual(read(data), { volume: 40, muted: true });
+    await eventually(() => read(data), { volume: 40, muted: true });
     await first.stop();
 
     const second = await start(data);
-    await until(() => output(second.host).muted);
-    assert.deepEqual(output(second.host), { volume: 40, muted: true });
+    await eventually(() => output(second.host), { volume: 40, muted: true });
     await until(() => second.host.mounted("bottom").props.muted === true);
     // Unmuting is remembered too.
     second.host.mounted("bottom").emit("action", "mute");
@@ -129,14 +120,12 @@ test("volume: out-of-range values are clamped to the player's range; bad fields 
   withData("range", async (data) => {
     writeFileSync(file(data), JSON.stringify({ volume: 999, muted: "yes" }));
     const high = await start(data);
-    await until(() => output(high.host).volume === 200);
-    assert.equal(output(high.host).muted, false);
+    await eventually(() => output(high.host), { volume: 200, muted: false });
     await high.stop();
 
     writeFileSync(file(data), JSON.stringify({ volume: -5, muted: true }));
     const low = await start(data);
-    await until(() => output(low.host).muted);
-    assert.equal(output(low.host).volume, 0);
+    await eventually(() => output(low.host), { volume: 0, muted: true });
     await low.stop();
 
     writeFileSync(file(data), JSON.stringify({ volume: "loud" }));

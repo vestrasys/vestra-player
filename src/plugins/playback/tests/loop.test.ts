@@ -210,6 +210,8 @@ test("B23: held nudges are committed once, after they pause", async () => {
     await host.settle();
     assert.equal(host.osd.at(-1), "A-B loop: 0:10.0 ~ 0:19.5");
     assert.equal(loops(host).length, before);
+    await eventually(() => loops(host).slice(before), [{ a: 10, b: 19.5 }]);
+    // Once: a pause past the commit delay brings no further commits.
     await host.settle(loopTiming.loopCommit + WAIT);
     assert.deepEqual(loops(host).slice(before), [{ a: 10, b: 19.5 }]);
   } finally {
