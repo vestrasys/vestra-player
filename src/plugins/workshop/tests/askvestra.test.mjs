@@ -169,7 +169,7 @@ test("Stop while planning: Enter on the status row stops the request; the plugin
   assert.equal(host.command("askvestra.stop").state.enabled, false);
 });
 
-test("the busy helper command is in no menu, palette or key", async (t) => {
+test("the busy helper command is in no menu, palette or bar, and has no key", async (t) => {
   const ai = await startAi({ builtin: true });
   t.after(() => ai.stop());
   const { declaration } = ai.host.command("askvestra.working");

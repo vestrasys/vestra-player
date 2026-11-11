@@ -32,7 +32,7 @@ const QUOTE_CHARS = 120;
 
 export const STOP_COMMAND = "askvestra.stop";
 /**
- * A command outside every menu, palette and key (panel-only, no panel, no
+ * A command in no menu, palette or bar (panel-only in a plugin without a panel, no
  * keys) whose only job is to be busy while a request runs: the supervisor
  * does not put a plugin in standby while one of its commands is busy
  * (doc/architecture/supervisor.md §4, declared work). Stop cannot carry the
@@ -424,7 +424,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     title: "Vestra is working",
     // i18n-ignore: the assistant's name, the same in every language
     category: "Vestra",
-    focus: "panel", // in no menu, palette or key: the plugin has no panel
+    focus: "panel", // in no menu, palette or bar: the plugin has no panel
     busy: () => !!current,
     reason: "Vestra is working",
     run: () => {},
