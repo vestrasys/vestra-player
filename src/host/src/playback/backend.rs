@@ -905,7 +905,13 @@ impl Backend {
                                 // At once on resume: the device starts now anyway.
                                 let state = audio_state(sources.phase(), *paused);
                                 hold_audio(&mpv, &mut audio_hold, state);
-                                warm_gpu(&mpv, &out_render, &mut gpu_warm, state);
+                                // Stop only: keep-open's pause at the end comes while
+                                // the phase still reads Ready, so a pause starts the
+                                // GPU warm from the state push (`push.paused` makes it
+                                // due at once), which sees the end.
+                                if state != crate::playback::audio_hold::Source::Paused {
+                                    warm_gpu(&mpv, &out_render, &mut gpu_warm, state);
+                                }
                             }
                             continue;
                         }
@@ -2141,8 +2147,13 @@ fn warm_gpu(
 }
 
 /// The video's frame period (as `estimated-vf-fps` or `container-fps` say);
-/// `None` without one (no video, a still picture).
+/// `None` without one (no video), and for a still picture or cover art, which
+/// report 1 fps but draw nothing new while playing either.
 fn frame_period(mpv: &Mpv) -> Option<Duration> {
+    let still = |name: &str| mpv.get_property::<bool>(name).unwrap_or(false);
+    if still("current-tracks/video/image") || still("current-tracks/video/albumart") {
+        return None;
+    }
     ["estimated-vf-fps", "container-fps"]
         .iter()
         .find_map(|name| {

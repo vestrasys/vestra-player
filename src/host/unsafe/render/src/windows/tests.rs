@@ -343,15 +343,17 @@ fn warp_a_renderer_kept_warm_republishes_the_paused_frame() {
     thread::sleep(Duration::from_millis(300));
     assert_eq!(handle.frames(), paused, "paused: nothing new");
     handle.keep_warm(Some(Duration::from_millis(25)));
-    assert!(until(5, || handle.frames() >= paused + 10), "not kept warm");
+    assert!(until(5, || handle.warm_frames() >= 10), "not kept warm");
+    assert_eq!(handle.frames(), paused, "warm frames are not video frames");
     let (_, frame) = handle.latest().expect("latest");
     let pixels = d3d::readback::wgpu(&warp_gpu(), &frame.0.texture);
     assert!(red(&pixels, 64, 2) > 200 && red(&pixels, 64, 61) < 50, "the paused picture");
     handle.keep_warm(None);
     thread::sleep(Duration::from_millis(200));
-    let stopped = handle.frames();
+    let stopped = handle.warm_frames();
     thread::sleep(Duration::from_millis(300));
-    assert_eq!(handle.frames(), stopped, "no longer kept warm");
+    assert_eq!(handle.warm_frames(), stopped, "no longer kept warm");
+    assert_eq!(handle.frames(), paused);
     drop(renderer);
 }
 

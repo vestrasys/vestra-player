@@ -346,6 +346,9 @@ struct Payload {
     /// The `ready` value that marks it finished.
     ready: u64,
     size: Size,
+    /// Rendered only to keep the GPU warm (`Handle::keep_warm`): the same
+    /// picture again, not counted as a frame.
+    warm: bool,
 }
 
 /// The ring and, per texture of its current generation, the `done` value
@@ -418,6 +421,9 @@ struct Shared {
     /// (`count_shown`), and the newest frame counted.
     shown: AtomicU64,
     shown_sequence: AtomicU64,
+    /// Frames published only to keep the GPU warm (`Handle::frames`
+    /// leaves them out).
+    warm_frames: AtomicU64,
     /// The newest window attached without a notifier (`attach_direct`).
     direct_generation: AtomicU64,
     /// Bumped by [`Handle::retarget`]: windows hand their current image to
@@ -483,6 +489,7 @@ impl Shared {
             reshow: Mutex::default(),
             shown: AtomicU64::new(0),
             shown_sequence: AtomicU64::new(0),
+            warm_frames: AtomicU64::new(0),
             direct_generation: AtomicU64::new(0),
             retargets: AtomicU64::new(0),
             signalled: AtomicU64::new(0),
@@ -541,8 +548,9 @@ impl Shared {
     }
     /// A window shows frame `sequence`: counted once, whichever window and
     /// however often (several attached windows, a rebuilt main window).
-    fn count_shown(&self, sequence: u64) {
-        if self.shown_sequence.fetch_max(sequence, Ordering::AcqRel) < sequence {
+    /// A warm frame (`Payload::warm`) is not counted.
+    fn count_shown(&self, sequence: u64, warm: bool) {
+        if self.shown_sequence.fetch_max(sequence, Ordering::AcqRel) < sequence && !warm {
             self.shown.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -985,12 +993,13 @@ fn produce(
         let warm = warm_period(*lock(&shared.warm), pace);
         // Paced: wait for the next start on the display's grid, so frames
         // come at the display rate however often mpv asks (`Cadence`).
-        // Kept warm: no longer than until the next warm frame is due.
+        // Kept warm: no longer than until the next warm frame is due (mpv's
+        // update callback and `keep_warm` still end the wait at once).
         match cadence.wait(pace, Instant::now()) {
             left if !left.is_zero() => thread::sleep(left),
             _ => match warm_left(warm, last_render, Instant::now()) {
-                Some(left) if left < IDLE_WAIT => thread::sleep(left),
-                _ => shared.wait(IDLE_WAIT),
+                Some(left) => shared.wait(left.min(IDLE_WAIT)),
+                None => shared.wait(IDLE_WAIT),
             },
         }
         let size = *lock(&shared.size);
@@ -1048,9 +1057,12 @@ fn produce(
         // Kept warm (a pause): mpv's current frame again, through the same
         // render, report and publish as a new one (mpv redraws it).
         let warm_due = warm_left(warm, last_render, Instant::now()) == Some(Duration::ZERO);
-        if !(render.update() || ((resized || warm_due) && published > 0)) {
+        let updated = render.update();
+        if !(updated || ((resized || warm_due) && published > 0)) {
             continue;
         }
+        // Only the warm period asked for it: not counted as a video frame.
+        let warm_only = !updated && !resized;
         cadence.started(pace, Instant::now());
         last_render = Some(Instant::now());
         // A free texture. Windows hold a claim only during a draw; one left
@@ -1201,8 +1213,18 @@ fn produce(
         render.report_swap();
         if publish.load(Ordering::Acquire) && !shared.halted() {
             let texture = slots[index].texture.clone();
-            let payload = Payload { texture, ready: ready_value, size: slots_size.unwrap_or(size) };
-            lock(&shared.exchange).ring.publish(index, payload);
+            let payload = Payload {
+                texture,
+                ready: ready_value,
+                size: slots_size.unwrap_or(size),
+                warm: warm_only,
+            };
+            {
+                // Counted under the lock, so `Handle::frames` never sees it.
+                let mut exchange = lock(&shared.exchange);
+                exchange.ring.publish(index, payload);
+                shared.warm_frames.fetch_add(u64::from(warm_only), Ordering::AcqRel);
+            }
             shared.ask_redraw();
             lock(&shared.notify).iter().for_each(|notify| notify());
         }
@@ -1302,9 +1324,15 @@ impl Handle {
     pub fn failed(&self) -> Option<String> {
         lock(&self.0.failed).clone()
     }
-    /// Frames published so far.
+    /// Video frames published so far (frames published only to keep the
+    /// GPU warm left out: a paused player shows no frame rate).
     pub fn frames(&self) -> u64 {
-        lock(&self.0.exchange).ring.sequence()
+        let exchange = lock(&self.0.exchange);
+        exchange.ring.sequence() - self.0.warm_frames.load(Ordering::Acquire)
+    }
+    /// Frames published only to keep the GPU warm ([`keep_warm`](Self::keep_warm)).
+    pub fn warm_frames(&self) -> u64 {
+        self.0.warm_frames.load(Ordering::Acquire)
     }
     /// How far rendering got ([`Progress`]): the host's plugin shader guard
     /// tells from it whether a frame rendered after a new `glsl-shaders`
@@ -1336,7 +1364,7 @@ impl Handle {
     /// The caller replaced the image on the video area: windows show no
     /// frame published so far and set the next one's image again.
     pub fn reshow(&self) {
-        let hold = self.frames();
+        let hold = lock(&self.0.exchange).ring.sequence();
         let mut reshow = lock(&self.0.reshow);
         *reshow = (reshow.0 + 1, hold);
     }
@@ -1700,12 +1728,12 @@ impl View {
             };
             self.showing = Some(frame.slot);
             if new {
-                shared.count_shown(frame.sequence);
+                shared.count_shown(frame.sequence, frame.payload.warm);
             }
             return (Some(image), new);
         }
         if new {
-            shared.count_shown(frame.sequence);
+            shared.count_shown(frame.sequence, frame.payload.warm);
         }
         (None, new)
     }
@@ -1767,7 +1795,7 @@ impl View {
         self.claim = Some(frame.slot);
         self.showing = Some(frame.slot);
         (self.sequence, self.epoch) = (frame.sequence, epoch);
-        shared.count_shown(frame.sequence);
+        shared.count_shown(frame.sequence, frame.payload.warm);
         Some(image)
     }
     /// The draw was submitted: `done` follows it on the windows' queue, and
