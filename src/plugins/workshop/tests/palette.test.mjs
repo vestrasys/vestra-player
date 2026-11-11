@@ -13,7 +13,7 @@ test("palette: every command has a category in every language: the player's word
     const host = new TestHost();
     const { stop } = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, locale });
     try {
-      assert.deepEqual([...host.commands.keys()], ["workshop.open", "askvestra.undo", "askvestra.stop"]);
+      assert.deepEqual([...host.commands.keys()], ["workshop.open", "askvestra.stop", "askvestra.working"]);
       for (const [id, { declaration, display }] of host.commands) {
         assert.ok(typeof display.category === "string" && display.category.trim() !== "", `${locale}: ${id} has no category`);
         assert.equal(display.category, id === "workshop.open" ? category : "Vestra", `${locale}: ${id}`);

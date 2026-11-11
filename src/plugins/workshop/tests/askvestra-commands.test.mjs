@@ -3,7 +3,8 @@
 // that table before any step runs, and runs through `commands.run` with the
 // request's ticket; Don't Run, a disabled command and a third-party command
 // (confirmed by the player) end or continue the request as the PROPOSAL's
-// flows say; commands cannot be undone (v1). A local mock model only.
+// flows say. Commands only, no Undo (user ruling 2026-11-11). A local mock
+// model only.
 //
 // The TestHost lists only the player's core commands and this plugin's own,
 // so the tests that need other plugins' rows answer `commands.list` and
@@ -18,7 +19,6 @@ import { HostError } from "@vestra-player/sdk/testing";
 import { dataDirectory, server, startAi } from "./fixture.mjs";
 
 const plan = (...steps) => ({ toolCalls: [{ name: "run_steps", args: { steps } }] });
-const speed = (rate) => ({ kind: "speed", rate });
 const command = (id) => ({ kind: "command", id });
 const CONTINUE = { confirmed: true, checked: false };
 const DONT_RUN = { confirmed: false, checked: false };
@@ -75,15 +75,17 @@ async function ready(reply, options = {}) {
   return { ...ai, mock, osd: () => ai.host.osd.at(-1), system: () => mock.chats.at(-1).body.messages[0].content };
 }
 
-test("a command of the player runs through commands.run with the request's ticket; it cannot be undone", async (t) => {
+test("a command of the player runs through commands.run with the request's ticket; a plain result line", async (t) => {
   const ai = await ready(() => plan(command("host/mute")));
   t.after(() => ai.stop());
   const { host } = ai;
   host.dialogAnswers.push(CONTINUE);
   const ticket = await host.runPaletteLead("mute");
-  await ai.until(() => ai.osd()?.endsWith("· Cannot be undone"), "result");
+  const { commands } = await ai.plugin.commands.list();
+  const mute = commands.find((each) => each.id === "host/mute").label;
+  await ai.until(() => ai.osd() === `Vestra · ${mute}`, "result");
   assert.ok(host.coreRuns.includes("mute"), "the player's Mute ran");
-  // The player's own line for the run, then the result line without Undo.
+  // The player's own line for the run, then the result line, without buttons.
   assert.ok(host.osd.some((line) => line.startsWith("vestra.workshop · ")));
   assert.deepEqual(host.osdActions.at(-1), []);
   assert.ok(ticket);
@@ -91,59 +93,61 @@ test("a command of the player runs through commands.run with the request's ticke
   const system = ai.system();
   assert.match(system, /^host\/mute \| Vestra Player: Mute \|.*\| M \| toggle off$/m);
   assert.doesNotMatch(system, /vestra\.workshop\//);
-  await host.command("askvestra.undo").run();
-  await ai.until(() => ai.osd() === "Vestra · Nothing to undo", "nothing to undo");
 });
 
-test("a command and a speed: steps i/n, the result names what cannot be undone, Undo restores the speed", async (t) => {
-  const ai = await ready(() => plan(command("vestra.video/video.rotate.90"), speed(1.25)));
+test("several commands: the player's line counts the steps (step/of), the result lists them", async (t) => {
+  const ai = await ready(() => plan(command("vestra.video/video.rotate.90"), command("host/mute")));
   t.after(() => ai.stop());
   const { host } = ai;
-  const runs = table(host, [row("vestra.video/video.rotate.90", "Rotate: 90°")]);
+  const runs = table(host, [row("vestra.video/video.rotate.90", "Rotate: 90°"), row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false })]);
   host.dialogAnswers.push(CONTINUE);
-  const ticket = await host.runPaletteLead("rotate and 1.25x");
-  await ai.until(() => ai.osd() === "Vestra · Rotate: 90°, Speed 1.25× · Cannot be undone: Rotate: 90°", "result");
-  assert.deepEqual(runs, [{ id: "vestra.video/video.rotate.90", ticket, step: 1, of: 2 }]);
-  assert.ok(host.osd.includes("Vestra · 2/2 · Speed 1.25×"));
-  assert.deepEqual(host.osdActions.at(-1), [{ title: "Undo", command: "askvestra.undo" }]);
-  await host.pressOsdAction(0);
-  await ai.until(() => ai.osd() === "Vestra · Undone · Cannot be undone: Rotate: 90°", "undone");
-  assert.equal(host.source.rate, 1);
-  assert.equal(runs.length, 1, "Undo runs no command");
+  const ticket = await host.runPaletteLead("rotate and mute");
+  await ai.until(() => ai.osd() === "Vestra · Rotate: 90°, Vestra Player: Mute", "result");
+  assert.deepEqual(runs, [
+    { id: "vestra.video/video.rotate.90", ticket, step: 1, of: 2 },
+    { id: "host/mute", ticket, step: 2, of: 2 },
+  ]);
+  assert.deepEqual(host.osdActions.at(-1), []);
 });
 
-test("a disabled command: the step fails with the command's reason, earlier steps stay and can be undone", async (t) => {
-  const ai = await ready(() => plan(speed(1.5), command("vestra.capture/snapshot"), command("host/mute")));
+test("a disabled command: the step fails with the command's reason, the steps after it do not run", async (t) => {
+  const ai = await ready(() => plan(command("host/volume-up"), command("vestra.capture/snapshot"), command("host/mute")));
   t.after(() => ai.stop());
   const { host } = ai;
   const runs = table(host, [
+    row("host/volume-up", "Vestra Player: Volume Up"),
     row("vestra.capture/snapshot", "Snapshot: Save Snapshot", { enabled: false, reason: "Nothing to capture" }),
     row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false }),
   ]);
   host.dialogAnswers.push(CONTINUE);
-  await host.runPaletteLead("faster, snapshot, mute");
+  await host.runPaletteLead("louder, snapshot, mute");
   await ai.until(() => ai.osd() === "Vestra · Step 2 failed: Nothing to capture", "failure");
-  assert.equal(host.source.rate, 1.5);
-  assert.deepEqual(runs, [], "nothing after the failed step");
-  assert.deepEqual(host.osdActions.at(-1), [{ title: "Undo", command: "askvestra.undo" }]);
-  // The model saw the state: disabled with its reason, the toggle off.
+  assert.deepEqual(
+    runs.map((run) => run.id),
+    ["host/volume-up"],
+    "the step before ran, nothing after the failed one",
+  );
+  // The model saw the state: disabled with its reason.
   assert.match(ai.system(), /^vestra\.capture\/snapshot \| Snapshot: Save Snapshot \| - \| - \| disabled: Nothing to capture$/m);
 });
 
 test("Don't Run on a destructive command stops the whole request; the steps before it stay", async (t) => {
-  const ai = await ready(() => plan(speed(1.25), command("vestra.playlist/playlist.clear"), command("host/mute")));
+  const ai = await ready(() => plan(command("host/volume-up"), command("vestra.playlist/playlist.clear"), command("host/mute")));
   t.after(() => ai.stop());
   const { host } = ai;
   const runs = table(host, [
+    row("host/volume-up", "Vestra Player: Volume Up"),
     row("vestra.playlist/playlist.clear", "Playlist: Clear", { dangerous: true }),
     row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false }),
   ]);
   host.dialogAnswers.push(CONTINUE, DONT_RUN); // consent, then the player's Run / Don't Run
-  await host.runPaletteLead("faster and clear the playlist and mute");
+  await host.runPaletteLead("louder and clear the playlist and mute");
   await ai.until(() => ai.osd() === "Vestra · Stopped: Playlist: Clear was not run", "declined");
-  assert.deepEqual(runs, [{ id: "vestra.playlist/playlist.clear", declined: true }]);
-  assert.equal(host.source.rate, 1.25);
-  assert.deepEqual(host.osdActions.at(-1), [{ title: "Undo", command: "askvestra.undo" }]);
+  assert.deepEqual(
+    runs.map((run) => run.id),
+    ["host/volume-up", "vestra.playlist/playlist.clear"],
+  );
+  assert.equal(runs[1].declined, true);
   assert.match(ai.system(), /^vestra\.playlist\/playlist\.clear \| Playlist: Clear \|.*\| asks the user first$/m);
 });
 
@@ -154,32 +158,34 @@ test("a third-party command runs after the player's confirmation", async (t) => 
   const runs = table(host, [row("acme.obs/record.start", "Mini OBS: Start Recording", { builtin: false, plugin: "Mini OBS", dangerous: true })]);
   host.dialogAnswers.push(CONTINUE, CONTINUE); // consent, then Run
   const ticket = await host.runPaletteLead("start recording");
-  await ai.until(() => ai.osd() === "Vestra · Mini OBS: Start Recording · Cannot be undone", "result");
+  await ai.until(() => ai.osd() === "Vestra · Mini OBS: Start Recording", "result");
   assert.deepEqual(runs, [{ id: "acme.obs/record.start", ticket, step: undefined, of: undefined }]);
   assert.match(ai.system(), /^acme\.obs\/record\.start \| Mini OBS: Start Recording \|.*\| asks the user first, third-party: Mini OBS$/m);
 });
 
 test("an id outside the table is refused before any step runs", async (t) => {
-  const ai = await ready(() => plan(speed(2), command("host/format-disk")));
+  const ai = await ready(() => plan(command("host/mute"), command("host/format-disk")));
   t.after(() => ai.stop());
   const { host } = ai;
   const runs = table(host, [row("host/mute", "Vestra Player: Mute")]);
   host.dialogAnswers.push(CONTINUE);
-  await host.runPaletteLead("double speed and format the disk");
+  await host.runPaletteLead("mute and format the disk");
   await ai.until(() => ai.osd() === "Vestra · Step 2 failed: There is no command “host/format-disk”", "refused");
-  assert.equal(host.source.rate, 1, "checked before the speed step ran");
-  assert.deepEqual(runs, []);
+  assert.deepEqual(runs, [], "checked before the first step ran");
 });
 
 test("a command that opens a window ends the request", async (t) => {
-  const ai = await ready(() => plan(command("vestra.subtitles/tune"), speed(2)));
+  const ai = await ready(() => plan(command("vestra.subtitles/tune"), command("host/mute")));
   t.after(() => ai.stop());
   const { host } = ai;
-  table(host, [row("vestra.subtitles/tune", "Subtitles: Subtitle Tuning…")]);
+  const runs = table(host, [row("vestra.subtitles/tune", "Subtitles: Subtitle Tuning…"), row("host/mute", "Vestra Player: Mute")]);
   host.dialogAnswers.push(CONTINUE);
-  await host.runPaletteLead("subtitle tuning then double speed");
+  await host.runPaletteLead("subtitle tuning then mute");
   await ai.until(() => ai.osd() === "Vestra · Opened Subtitles: Subtitle Tuning…", "opened");
-  assert.equal(host.source.rate, 1);
+  assert.deepEqual(
+    runs.map((run) => run.id),
+    ["vestra.subtitles/tune"],
+  );
 });
 
 test("personal rows never reach the model, and naming one is refused", async (t) => {
@@ -213,7 +219,7 @@ test("personal rows never reach the model, and naming one is refused", async (t)
 
 test("consent given for the first slice (scope v1) is asked again now that the command list is sent", async (t) => {
   const data = await dataDirectory();
-  const mock = await server(() => plan(speed(1.25)));
+  const mock = await server(() => plan(command("host/mute")));
   // What 2.2.38's first slice saved after Continue.
   await fs.writeFile(path.join(data, "askvestra.json"), JSON.stringify({ providers: [`v1 custom-openai ${mock.url}`] }));
   const ai = await startAi({ compat: mock.url, builtin: true, data });
@@ -222,27 +228,11 @@ test("consent given for the first slice (scope v1) is asked again now that the c
   host.openElsewhere("/media/a.mkv");
   await host.settle();
   host.dialogAnswers.push(CONTINUE);
-  await host.runPaletteLead("1.25x");
-  await ai.until(() => host.osd.at(-1) === "Vestra · Speed 1.25×", "result");
+  await host.runPaletteLead("mute");
+  await ai.until(() => host.coreRuns.includes("mute") && !host.paletteLead.status, "result");
   assert.equal(host.confirms.length, 1, "asked again");
   assert.match(host.confirmTexts[0].detail, /command list/);
   await new Promise((resolve) => setTimeout(resolve, 500)); // the store writes after its debounce
   const saved = JSON.parse(await fs.readFile(path.join(data, "askvestra.json"), "utf8"));
   assert.ok(saved.providers.includes(`v2 custom-openai ${mock.url}`), JSON.stringify(saved));
-});
-
-test("Undo: a speed a hair off counts as the one set; a second press while undoing does nothing", async (t) => {
-  const ai = await ready(() => plan(speed(1.25)));
-  t.after(() => ai.stop());
-  const { host } = ai;
-  host.dialogAnswers.push(CONTINUE);
-  await host.runPaletteLead("1.25x");
-  await ai.until(() => ai.osd() === "Vestra · Speed 1.25×", "result");
-  host.setSource({ rate: 1.2500001 }); // the player rounds
-  await host.settle();
-  const shown = host.osd.length;
-  await Promise.all([host.command("askvestra.undo").run(), host.command("askvestra.undo").run()]);
-  await ai.until(() => ai.osd() === "Vestra · Undone", "undone");
-  assert.equal(host.source.rate, 1);
-  assert.deepEqual(host.osd.slice(shown), ["Vestra · Undone"], "no 'changed since' from the second press");
 });
