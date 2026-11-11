@@ -48,6 +48,41 @@ fn command_row(info: &bindings::Info, declaration: &crate::commands::Declaration
     })
 }
 
+/// `bindings.list`: every command the user can bind, and the overlay's
+/// entries for commands nothing declares (`orphans`).
+///
+/// A `focus: "panel"` command fires only while its plugin's panel has the
+/// keys, so one of a plugin whose manifest declares no `ui.mount` (no panel
+/// in the bottom bar, the sidebar, the adjust column or behind the video)
+/// can never fire from a key: it is left out, so the Keyboard Shortcuts
+/// page offers no dead key for it. It stays registered and runnable
+/// (`commands.run`, the plugin's own controls), and a user binding stored
+/// for it stays in the overlay (it is declared, so no orphan either): it is
+/// listed again once a version of the plugin declares a panel. Decided by
+/// the manifest, not by a panel mounted now, so the list does not change as
+/// panels come and go (or as the plugin parks).
+fn list<'a>(
+    table: &bindings::Table,
+    declaration: impl Fn(&bindings::Info) -> Option<&'a crate::commands::Declaration>,
+    mut has_panel: impl FnMut(&str) -> bool,
+) -> Value {
+    let commands = table
+        .infos()
+        .into_iter()
+        .filter(|info| !info.panel || has_panel(&info.manifest))
+        .filter_map(|info| Some(command_row(&info, declaration(&info)?)))
+        .collect::<Vec<_>>();
+    let orphans = table
+        .orphans()
+        .into_iter()
+        .filter_map(|(key, inputs)| {
+            let (manifest, id) = key.split_once('/')?;
+            Some(json!({"ref":json_ref(manifest, id),"inputs":inputs}))
+        })
+        .collect::<Vec<_>>();
+    json!({"commands":commands,"orphans":orphans})
+}
+
 impl Host {
     pub(super) fn bindings_dispatch(
         &mut self,
@@ -105,23 +140,17 @@ impl Host {
     }
     fn bindings_list(&self) -> Value {
         let table = &self.input.borrow().table;
-        let commands = table
-            .infos()
-            .into_iter()
-            .filter_map(|info| {
-                let declaration = &self.commands.get(info.owner, &info.id)?.declaration;
-                Some(command_row(&info, declaration))
-            })
-            .collect::<Vec<_>>();
-        let orphans = table
-            .orphans()
-            .into_iter()
-            .filter_map(|(key, inputs)| {
-                let (manifest, id) = key.split_once('/')?;
-                Some(json!({"ref":json_ref(manifest, id),"inputs":inputs}))
-            })
-            .collect::<Vec<_>>();
-        json!({"commands":commands,"orphans":orphans})
+        // Read once per plugin: each reading copies its manifest.
+        let mut panels = std::collections::HashMap::new();
+        list(
+            table,
+            |info| Some(&self.commands.get(info.owner, &info.id)?.declaration),
+            |manifest| {
+                *panels
+                    .entry(manifest.to_owned())
+                    .or_insert_with(|| self.declares_ui_mount(manifest))
+            },
+        )
     }
     /// `bindings.changed` (declarations or overlay) and `packages.changed`
     /// (the plugin list) to the plugins that subscribed; at most every 200 ms.
@@ -670,6 +699,65 @@ mod tests {
         // The first list of a run (nothing sent yet) is a change.
         assert!(!same_but_process(&running, &Value::Null));
         assert!(same_but_process(&json!([]), &json!([])));
+    }
+
+    /// A panel-scoped command of a plugin without panels can never fire from
+    /// a key: `bindings.list` leaves it out (and its stored binding is kept,
+    /// not an orphan). One of a plugin with a panel and every global command
+    /// stay.
+    #[test]
+    fn panel_commands_of_a_plugin_without_panels_are_not_listed() {
+        let mut table = bindings::Table::default();
+        let mut declarations = std::collections::BTreeMap::new();
+        let mut declare = |owner, manifest: &str, id: &str, panel| {
+            let mut declaration = crate::commands::Declaration::new(id, &[]);
+            if panel {
+                declaration.focus = Some(crate::commands::Focus::Panel);
+            }
+            table
+                .declare(owner, id, manifest, &["B".into()], panel, false)
+                .unwrap();
+            declarations.insert((owner, id.to_owned()), declaration);
+        };
+        declare(bindings::HOST, "host", "quit", false);
+        declare(4, "p.ask", "busy", true);
+        declare(4, "p.ask", "ask", false);
+        declare(5, "p.list", "remove", true);
+        let overlay = [("p.ask/busy".to_owned(), vec!["Ctrl+K".to_owned()])];
+        table.set_overlay(overlay.into_iter().collect());
+        let mut asked = Vec::new();
+        let listed = list(
+            &table,
+            |info| declarations.get(&(info.owner, info.id.clone())),
+            |manifest| {
+                asked.push(manifest.to_owned());
+                manifest == "p.list"
+            },
+        );
+        let rows = listed["commands"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|row| {
+                format!(
+                    "{}/{}",
+                    row["plugin"].as_str().unwrap(),
+                    row["command"].as_str().unwrap()
+                )
+            })
+            .collect::<std::collections::BTreeSet<_>>();
+        assert_eq!(
+            rows,
+            ["host/quit", "p.ask/ask", "p.list/remove"]
+                .map(String::from)
+                .into()
+        );
+        // Asked only for panel-scoped commands.
+        asked.sort();
+        assert_eq!(asked, ["p.ask", "p.list"]);
+        // The hidden command's binding is stored, not offered as an orphan.
+        assert_eq!(listed["orphans"], json!([]));
+        assert!(table.declares("p.ask", "busy"));
     }
 
     /// `bindings.list` names the player's own commands and the core actions
