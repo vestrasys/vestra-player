@@ -295,6 +295,8 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 
 - **Palette button icon (11-11 night, user):** the `search-ai` icon drops the magnifier (the cross read as zoom-in, nothing said "ask"); design B — a speech bubble with the ✦ sparkle breaking out at the top right (precedent: VS Code codicon chat-sparkle). "Finds commands" is carried by the tooltip (Command Palette and Ask Vestra + key). GUI checks while the user uses the machine are done offline (headless renders and tests), not on the screen.
 
+- **Context menu, short enough to remember (11-11 night, user; option B over a separate plugin zone):** top level is Open ▸ (Open File… moves in as its first item), Close, Play/Pause, third-party domain submenus (e.g. Games ▸), Tools ▸, Options…, Quit. Tools ▸ holds Audio Track ▸, Subtitle Track ▸, Snapshot ▸, Chapter and Bookmark List…, Vestra Player AI…, Plugin Store…, Command Palette…, About. Adjustments and Effects, Sidebar and Fullscreen leave the menu (bottom-bar buttons, Esc, palette). Close stays at the top level. Rejected: a dedicated plugin zone (the goal is a tidy menu, not a special area).
+
 ### State
 
 | # | Item | State |
