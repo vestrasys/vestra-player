@@ -543,9 +543,12 @@ fn own_process(
     let write_events = events.clone();
     thread::spawn(move || {
         for message in output {
+            // One write per line: `to_writer` on the unbuffered pipe made a
+            // system call per JSON token (stress measurement 2026-11-11).
             let mut write = || -> Result<()> {
-                serde_json::to_writer(&mut stdin, &message)?;
-                stdin.write_all(b"\n")?;
+                let mut line = serde_json::to_vec(&message)?;
+                line.push(b'\n');
+                stdin.write_all(&line)?;
                 stdin.flush()?;
                 Ok(())
             };

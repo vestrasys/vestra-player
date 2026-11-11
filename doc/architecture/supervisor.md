@@ -136,7 +136,7 @@ A start waiting for a slot has no deadline of its own: the slots free up within 
 | "Starting *name*…" notice | after 400 ms |
 | Wake events after start-up settles | muted for 1 s |
 | Shared runner without members | exits after the idle time, at least 30 s |
-| Shared runner heartbeat | every 2 s; 5 missed in a row = hung |
+| Shared runner heartbeat | every 2 s; 5 missed in a row = hung (a hello or pong counts when the runner's reader thread sees it, not when the UI thread handles it) |
 | Memory pressure reading | every 5 s |
 
 ## 7. Faults, restart and backoff
@@ -167,7 +167,7 @@ The doubling starts over once the plugin has run for 60 s. During a Normal plugi
 
 ### Shared runner
 
-The built-ins share one Node process. An uncaught exception the runner traces to one member stops that member only, which then runs in its own process for the rest of the session. Anything that affects the whole runner restarts every member: a hang (5 missed heartbeats), a fault no member owns, the runner exiting, a member's full input queue (1024 messages). The runner is killed, its members get no stop message, and each gets a Restart job: the first runner restart is immediate (panels back in about 1.3 s), later ones wait 3 s, doubling, with the count starting over after 60 s of stable running. On the third runner restart within 60 s every built-in runs in its own process until the player quits ("fail-open"). Members that have a recording go back to standby from it instead of starting.
+The built-ins share one Node process. An uncaught exception the runner traces to one member stops that member only, which then runs in its own process for the rest of the session. Anything that affects the whole runner restarts every member: a hang (5 missed heartbeats; the reader thread records each `runner.hello` and `runner.pong` as it reads them, so a queue on the UI thread, such as another plugin's burst of requests, is not taken for a hang: stress measurement 2026-11-11, where a third-party plugin's 100 000 requests held the queue for 21 s and the answering runner was restarted twice), a fault no member owns, the runner exiting, a member's full input queue (1024 messages). The runner is killed, its members get no stop message, and each gets a Restart job: the first runner restart is immediate (panels back in about 1.3 s), later ones wait 3 s, doubling, with the count starting over after 60 s of stable running. On the third runner restart within 60 s every built-in runs in its own process until the player quits ("fail-open"). Members that have a recording go back to standby from it instead of starting.
 
 ## 8. Memory
 
