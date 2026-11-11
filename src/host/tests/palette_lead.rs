@@ -4,7 +4,9 @@
 //! activated (`VESTRA_TEST_EXECUTE=lead:<query>@<ms>`, as Enter would), runs
 //! its own command with it (the OSD line names it), a destructive one after
 //! the host's confirmation, and hits the ticket's limits; a development load
-//! (not built-in) is refused both capabilities. The fixtures speak the wire
+//! (not built-in) is refused both capabilities. A second run parks the
+//! holder, wakes it with the row (its ticket moves to the woken run) and
+//! answers Don't Run. The fixtures speak the wire
 //! directly (their own process, `VESTRA_SHARED=0`), so the test does not
 //! wait for the SDK release that wraps these calls. Built-ins from a
 //! `builtin.json` schema 3 under `VESTRA_BUILTIN_PLUGINS`, the development
@@ -150,9 +152,9 @@ fn lines(log: &str, prefix: &str) -> String {
         .join("\n")
 }
 
-#[test]
-#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
-fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
+/// Runs the host headless for `seconds` with the built-in fixture and the
+/// development load, and `env`; its stderr.
+fn run(seconds: u32, env: &[(&str, &str)]) -> String {
     let root = tempfile::tempdir().unwrap();
     let plugins = root.path().join("plugins");
     std::fs::create_dir(&plugins).unwrap();
@@ -174,28 +176,52 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
         &["commands.run", "palette.lead"],
         third(),
     );
-    let output = Command::new(env!("CARGO_BIN_EXE_vestra-host"))
-        .args(["--headless", "--silent", "--seconds", "8", "--plugin"])
+    let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+    command
+        .args([
+            "--headless",
+            "--silent",
+            "--seconds",
+            &seconds.to_string(),
+            "--plugin",
+        ])
         .arg(development.join(THIRD))
         .env("VESTRA_BUILTIN_PLUGINS", &plugins)
         .env("VESTRA_PACKAGE_STORE", root.path().join("store"))
         .env("VESTRA_PLUGIN_DATA", root.path().join("data"))
         .env("VESTRA_SHARED", "0")
-        .env("VESTRA_TEST_CONFIRM", "run")
-        .env("VESTRA_TEST_EXECUTE", "lead:make it faster@4000")
+        .env_remove("VESTRA_TEST_CONFIRM")
         .env_remove("VESTRA_IDLE_MS")
-        .env_remove("VESTRA_INSTANCE_DIR")
-        .output()
-        .unwrap();
+        .env_remove("VESTRA_INSTANCE_DIR");
+    for (key, value) in env {
+        command.env(key, value);
+    }
+    let output = command.output().unwrap();
     let log = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "{log}");
-    let fix = lines(&log, "FIX ");
-    let expect = |text: &str| {
-        assert!(
-            fix.contains(text),
-            "{text:?} in:\n{fix}\n\nfull log:\n{log}"
-        )
-    };
+    log
+}
+
+/// `text` is in the fixture's lines of `log`.
+fn expect(log: &str, text: &str) {
+    let fix = lines(log, "FIX ");
+    assert!(
+        fix.contains(text),
+        "{text:?} in:\n{fix}\n\nfull log:\n{log}"
+    );
+}
+
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
+    let log = run(
+        8,
+        &[
+            ("VESTRA_TEST_CONFIRM", "run"),
+            ("VESTRA_TEST_EXECUTE", "lead:make it faster@4000"),
+        ],
+    );
+    let expect = |text: &str| expect(&log, text);
     // Set while no one else holds it; no run without a live ticket.
     expect("FIX set null");
     expect("FIX forged error ticket");
@@ -237,4 +263,42 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
         third.contains("THIRD list error capability"),
         "{third}\n{log}"
     );
+}
+
+/// The holder is parked while idle (its lead recorded); activating the row
+/// wakes it, the ticket minted for the parked owner moves to the woken run
+/// (`rekey`) and works there; the user answers Don't Run to the destructive
+/// command (headless without `VESTRA_TEST_CONFIRM`), which does not run.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_parked_holder_wakes_with_a_working_ticket_and_dont_run_declines() {
+    let log = run(
+        12,
+        &[
+            ("VESTRA_IDLE_MS", "500"),
+            ("VESTRA_TEST_EXECUTE", "lead:faster please@7000"),
+        ],
+    );
+    let parked = log
+        .find(&format!("lazy: {ID} parked"))
+        .unwrap_or_else(|| panic!("parked: {log}"));
+    let activated = log
+        .find("VESTRA_TEST_EXECUTE lead:faster please")
+        .unwrap_or_else(|| panic!("activated: {log}"));
+    let woken = log
+        .find(&format!("lazy: {ID} woken by palette.lead"))
+        .unwrap_or_else(|| panic!("woken: {log}"));
+    let query = log
+        .find("FIX lead query=faster please")
+        .unwrap_or_else(|| panic!("event: {log}"));
+    assert!(
+        parked < activated && activated < woken && woken < query,
+        "{log}"
+    );
+    let expect = |text: &str| expect(&log, text);
+    expect("FIX run hello {\"ran\":true}");
+    expect("FIX run wipe {\"declined\":true,\"ran\":false}");
+    assert!(!lines(&log, "FIX ").contains("FIX wipe ran"), "{log}");
+    expect("FIX done null");
+    expect("FIX after done error ticket");
 }

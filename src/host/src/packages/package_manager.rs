@@ -1226,21 +1226,36 @@ impl Host {
         let Some(plugin) = self.plugins.get(&owner) else {
             return false;
         };
-        self.is_builtin_package(&plugin.manifest.id, &plugin.directory)
+        let installed = self.packages.store.get(&plugin.manifest.id);
+        builtin_provenance(
+            self.packages
+                .builtins
+                .get(&plugin.manifest.id)
+                .map(|b| b.directory.as_path()),
+            installed.instance.as_ref(),
+            &plugin.directory,
+            |guid| matches!(&plugin.data_key, process::DataKey::Instance(key) if key == guid),
+        )
     }
-    /// The package `id` in `directory` is a built-in plugin's (also for a
-    /// plugin in standby, which has no process: its replayed sidebar tab).
-    pub(crate) fn is_builtin_package(&self, id: &str, directory: &std::path::Path) -> bool {
-        self.packages
-            .builtins
-            .get(id)
-            .is_some_and(|builtin| builtin.directory == directory)
-            && self
-                .packages
-                .store
-                .get(id)
-                .instance
-                .is_some_and(|instance| instance.builtin)
+    /// The package `origin` is a built-in plugin's (also for a plugin in
+    /// standby, which has no process: its replayed sidebar tab, the
+    /// built-in-only check of a replay): its directory and its data
+    /// directory are the built-in instance's.
+    pub(crate) fn is_builtin_package(&self, origin: &crate::host::Origin) -> bool {
+        let installed = self.packages.store.get(&origin.id);
+        builtin_provenance(
+            self.packages
+                .builtins
+                .get(&origin.id)
+                .map(|b| b.directory.as_path()),
+            installed.instance.as_ref(),
+            &origin.directory,
+            |guid| {
+                origin.data_directory
+                    == process::data_root()
+                        .map(|root| process::DataKey::Instance(guid.to_owned()).directory(&root))
+            },
+        )
     }
     /// Where a running plugin's shaders go in the shader channel
     /// (`playback/video_shaders.rs`): `(0, 0)` built-in, `(1, first
@@ -2457,6 +2472,21 @@ fn trust_of(
         None => own("its digest was not checked"),
     }
 }
+/// Built-in by provenance: `builtin.json` lists the id with this directory
+/// (`listed`), the store records its instance built-in, and the run uses
+/// that instance's data key (`runs_as(guid)`). A development load of the
+/// same id, even of the installation's directory, runs under a
+/// development key and is not built-in.
+pub(crate) fn builtin_provenance(
+    listed: Option<&std::path::Path>,
+    instance: Option<&package_store::Instance>,
+    directory: &std::path::Path,
+    runs_as: impl Fn(&str) -> bool,
+) -> bool {
+    listed == Some(directory)
+        && instance.is_some_and(|instance| instance.builtin && runs_as(&instance.guid))
+}
+
 pub(crate) fn check_reserved(
     id: &str,
     instance: Option<&Instance>,
@@ -2809,6 +2839,69 @@ fn install_instance(
 mod tests {
     use super::*;
     use crate::packages::package_store::Installed;
+
+    /// Built-in by provenance only: a development load of a built-in's id
+    /// (even of the installation's own directory) runs under a development
+    /// key and is not built-in (built-in-only capabilities, the shader rank).
+    #[test]
+    fn a_development_load_of_a_built_in_is_not_built_in() {
+        let directory = std::path::Path::new("/app/plugins/vestra.workshop");
+        let mut instance = package_store::Instance::new(package_store::Source::File);
+        instance.builtin = true;
+        let guid = instance.guid.clone();
+        fn installed(key: &process::DataKey) -> impl Fn(&str) -> bool + use<'_> {
+            move |g: &str| matches!(key, process::DataKey::Instance(k) if k == g)
+        }
+        let ours = process::DataKey::Instance(guid.clone());
+        let development = process::DataKey::Development("vestra.workshop".into());
+        assert!(builtin_provenance(
+            Some(directory),
+            Some(&instance),
+            directory,
+            installed(&ours)
+        ));
+        // The same directory, loaded with --plugin.
+        assert!(!builtin_provenance(
+            Some(directory),
+            Some(&instance),
+            directory,
+            installed(&development)
+        ));
+        // Another directory, another instance, an instance not built-in.
+        let elsewhere = std::path::Path::new("/src/plugins/workshop");
+        assert!(!builtin_provenance(
+            Some(directory),
+            Some(&instance),
+            elsewhere,
+            installed(&ours)
+        ));
+        assert!(!builtin_provenance(
+            None,
+            Some(&instance),
+            directory,
+            installed(&ours)
+        ));
+        let other = process::DataKey::Instance("another".into());
+        assert!(!builtin_provenance(
+            Some(directory),
+            Some(&instance),
+            directory,
+            installed(&other)
+        ));
+        instance.builtin = false;
+        assert!(!builtin_provenance(
+            Some(directory),
+            Some(&instance),
+            directory,
+            installed(&ours)
+        ));
+        assert!(!builtin_provenance(
+            Some(directory),
+            None,
+            directory,
+            installed(&ours)
+        ));
+    }
 
     /// The start order (formerly `StartQueue::new`): built-ins first, then
     /// the others, each in id order. A built-in still being

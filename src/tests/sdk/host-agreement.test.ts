@@ -1040,6 +1040,14 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   ],
   // SDK 1.6.7, player 0.7.6: the labels of the plugin's own commands.
   "Commands.keys": ["commands.keys", "event:commands.keys"],
+  // SDK 1.7.9, player 0.7.x: built-in only (Ask Vestra).
+  "Commands.list": ["commands.list"],
+  "Commands.run": ["commands.run"],
+  "Palette.lead": [
+    "palette.lead.set",
+    "palette.lead.clear",
+    "palette.lead.done",
+  ],
   "Host.run": ["host.run", "source.state?"],
   "Windows.create": ["ui.open", "ui.set", "ui.show", "ui.close"],
   "Panels.mount": [

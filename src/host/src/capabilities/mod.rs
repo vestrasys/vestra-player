@@ -288,7 +288,7 @@ pub fn replay(
     }
     // A recording of a package that is not built-in (the same id loaded for
     // development or from another directory) replays nothing built-in-only.
-    let builtin = host.is_builtin_package(&origin.id, &origin.directory);
+    let builtin = host.is_builtin_package(origin);
     builtin_only_check(needs, builtin)?;
     capability.replay(host, owner, origin, call)
 }

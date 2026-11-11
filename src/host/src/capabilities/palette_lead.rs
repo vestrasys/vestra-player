@@ -34,7 +34,7 @@ pub const EVENT: &str = "palette.lead";
 /// What the row shows, in the interface language.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LeadRow {
-    /// "title: <query>", or the title alone for an empty query.
+    /// `title: <query>`, or the title alone for an empty query.
     pub title: String,
     pub icon: ButtonIcon,
     /// The field's placeholder while the lead is set.

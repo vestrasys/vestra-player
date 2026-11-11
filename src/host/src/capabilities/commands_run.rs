@@ -41,9 +41,12 @@ pub const RUNS_PER_MINUTE: usize = 120;
 /// The longest request text kept with a ticket (quoted in the alert).
 const QUERY_KEPT: usize = 200;
 /// The player's own commands that ask first: Playback ▸ Close and Quit.
+/// Only the player's: a plugin marks its own with `CommandOptions.destructive`
+/// (the core never lists plugin commands).
 const HOST_DESTRUCTIVE: [&str; 2] = ["stop", "quit"];
-/// Top-level menus (path keys) whose every command asks first.
-const DESTRUCTIVE_MENUS: [&str; 2] = ["Settings", "Plugins"];
+/// The built-in top-level menus whose every command asks first, by the key
+/// `commands::normalize` gives them: `@settings` and `@reset`.
+const DESTRUCTIVE_MENUS: [&str; 2] = ["Settings", "Reset"];
 
 /// One ticket: whose, for which request, and its runs.
 #[derive(Debug)]
@@ -194,8 +197,8 @@ impl CommandRuns {
 }
 
 /// Whether running `item` asks first: a destructive command (its own
-/// `destructive`, the player's Close and Quit, anything in the Settings and
-/// Plugins menus) or any command of a plugin that is not built-in. Opening
+/// `destructive`, the player's Close and Quit, anything in the built-in
+/// `@settings` and `@reset` menus) or any command of a plugin that is not built-in. Opening
 /// a dialog ("…") does not ask: the user is in the dialog then.
 pub fn dangerous(item: &Item, builtin: bool) -> bool {
     !builtin
@@ -215,7 +218,7 @@ fn builtin_owner(host: &Host, owner: u64) -> bool {
         || host
             .on_demand
             .held(owner)
-            .is_some_and(|held| host.is_builtin_package(&held.origin.id, &held.origin.directory))
+            .is_some_and(|held| host.is_builtin_package(&held.origin))
 }
 
 /// One row of `commands.list`.
@@ -616,7 +619,7 @@ mod tests {
         let mut marked = plain.clone();
         marked.destructive = true;
         assert!(dangerous(&marked, true));
-        // The player's Close and Quit; Settings and Plugins menus.
+        // The player's Close and Quit; the @settings and @reset menus.
         assert!(dangerous(&item(bindings::HOST, "stop", &["Close"]), true));
         assert!(dangerous(&item(bindings::HOST, "quit", &["Quit"]), true));
         assert!(!dangerous(
@@ -624,7 +627,12 @@ mod tests {
             true
         ));
         assert!(dangerous(&item(4, "theme", &["Settings", "Theme"]), true));
-        assert!(dangerous(&item(4, "manage", &["Plugins", "Manage…"]), true));
+        assert!(dangerous(&item(4, "picture", &["Reset", "Picture"]), true));
+        // "Plugins" is a category, not a built-in menu.
+        assert!(!dangerous(
+            &item(4, "manage", &["Plugins", "Manage…"]),
+            true
+        ));
         // A dialog ("…") does not ask by itself.
         assert!(!dangerous(
             &item(4, "tune", &["Subtitles", "Subtitle Tuning…"]),

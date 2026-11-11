@@ -48,6 +48,12 @@ refused before), so a store or file install of a package declaring one fails the
   commands, labels and places. `id` is the global id `<manifest>/<local>` (`host/<id>` for the
   player's). `revision` is the registry revision. `keys` are every active key label
   (`bindings::Table::labels`). `builtin` says whether the command's plugin is built-in.
+- **Personal data**: the host cannot tell which commands a plugin generated from the user's data
+  (a Recently Played item titled with a file name), so the rows carry no such mark. A caller that
+  must keep personal data from a model recognises them by owner and place: it leaves out the rows
+  whose `path`/`place` is a plugin's list of files (Recently Played, a playlist) and the rows of
+  plugins it does not know, and sends the rest. A general mark (`CommandOptions.personal`) would be
+  a later addition once a second user needs it.
 - A run follows `PaletteAction::Run`: the same `enabled` and `busy` checks, the palette's own
   command refused, then `Host::execute_command`. It does not touch the palette's recent list.
 - **Tickets** (`CommandRuns`): minted only by a user's activation of the palette lead (§3), bound
@@ -58,8 +64,12 @@ refused before), so a store or file install of a package declaring one fails the
   counts when it passes the command checks, before any confirmation.
 - **Confirmation** (`dangerous`): the host's own alert (`platform::confirm`, destructive style,
   "Run" / "Don't Run", the caller's name, the command, the request text and why) before a command
-  marked `CommandOptions.destructive`, the player's Close (`host/stop`) and Quit, anything under
-  the Settings or Plugins menus, and every command of a plugin that is not built-in (PROPOSAL Q3 A).
+  marked `CommandOptions.destructive`, the player's own Close (`host/stop`) and Quit (the host's
+  list names only the player's commands), anything under the built-in `@settings` and `@reset`
+  menus, and every command of a plugin that is not built-in (PROPOSAL Q3 A). The core never lists
+  plugin commands: **plugins mark their destructive commands with `CommandOptions.destructive`**, and
+  the built-in plugins mark theirs (Remove All, Clear History, Delete, …) before any caller uses
+  `commands.run` (a gate the coordinator records).
   The caller cannot answer or skip it. "Don't Run" answers `{ ran: false, declined: true }`. The
   ticket and the command are checked again after the answer. Headless there is no alert:
   `VESTRA_TEST_CONFIRM=run` answers Run (tests), anything else Don't Run.
@@ -116,4 +126,8 @@ player's (tickets, rates, confirmation, the OSD line). Opening either needs the 
 - Integration, ignored by default (`npm run ci:local`): `src/host/tests/palette_lead.rs`, the
   vertical slice with the real host headless: a built-in fixture sets the lead, gets the query and
   a ticket, runs its own command (OSD line), a destructive one after the confirmation, hits the
-  rate limit and the ended ticket; a development load is refused both capabilities.
+  rate limit and the ended ticket; a development load is refused both capabilities; a parked
+  holder is woken by the row and its ticket works in the woken run; Don't Run declines.
+- `package_manager.rs`: a development load of a built-in's id (even of the installation's
+  directory) is not built-in (`builtin_provenance`: the run must use the built-in instance's data
+  key).
