@@ -9,7 +9,7 @@ msgstr ""
 msgid "Picture"
 msgstr "画面"
 
-#: main.ts:232 picture.slint:1312
+#: main.ts:232 picture.slint:1314
 msgid "Shader failed to load"
 msgstr "着色器载入失败"
 
@@ -41,15 +41,15 @@ msgstr "宽高比：{}"
 msgid "Aspect ratio: Custom - {}"
 msgstr "宽高比：自定义 - {}"
 
-#: main.ts:658 main.ts:1162 picture.slint:1917
+#: main.ts:658 main.ts:1162 picture.slint:1923
 msgid "Keep Aspect Ratio"
 msgstr "保持宽高比"
 
-#: main.ts:658 main.ts:1162 picture.slint:1917
+#: main.ts:658 main.ts:1162 picture.slint:1923
 msgid "Ignore Aspect Ratio"
 msgstr "不保持宽高比"
 
-#: main.ts:658 picture.slint:1917
+#: main.ts:658 picture.slint:1923
 msgid "Fill Window"
 msgstr "填满窗口"
 
@@ -431,11 +431,11 @@ msgstr "像素着色"
 msgid "HDR Tone Mapping"
 msgstr "HDR 色调映射"
 
-#: main.ts:1050 picture.slint:1980
+#: main.ts:1050 picture.slint:1986
 msgid "Deinterlace"
 msgstr "反交错"
 
-#: main.ts:1051 picture.slint:1893
+#: main.ts:1051 picture.slint:1899
 msgid "Aspect"
 msgstr "比例"
 
@@ -463,7 +463,7 @@ msgstr "复位"
 msgid "Use Shaders"
 msgstr "使用着色器"
 
-#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1806 ui/shaders.slint:131
+#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1815 ui/shaders.slint:131
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "需要 GPU 渲染（当前为软件渲染）"
 
@@ -479,11 +479,11 @@ msgstr "打开着色器文件夹"
 msgid "Reload Shaders"
 msgstr "重新载入着色器"
 
-#: main.ts:1085 main.ts:1135 picture.slint:1335 picture.slint:1336
+#: main.ts:1085 main.ts:1135 picture.slint:1337 picture.slint:1338
 msgid "Auto"
 msgstr "自动"
 
-#: main.ts:1085 picture.slint:1336 picture.slint:1864
+#: main.ts:1085 picture.slint:1338 picture.slint:1870
 msgid "Off"
 msgstr "关"
 
@@ -503,11 +503,11 @@ msgstr "Mobius"
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:1085 picture.slint:1336
+#: main.ts:1085 picture.slint:1338
 msgid "Clip"
 msgstr "裁剪"
 
-#: main.ts:1097 picture.slint:2062
+#: main.ts:1097 picture.slint:2068
 msgid "Dynamic Peak Detection"
 msgstr "动态峰值检测"
 
@@ -519,11 +519,11 @@ msgstr "HDR 设置…"
 msgid "Cycle"
 msgstr "按序切换"
 
-#: main.ts:1135 picture.slint:1335
+#: main.ts:1135 picture.slint:1337
 msgid "Always"
 msgstr "总是使用"
 
-#: main.ts:1135 picture.slint:1335
+#: main.ts:1135 picture.slint:1337
 msgid "Never"
 msgstr "不使用"
 
@@ -531,11 +531,11 @@ msgstr "不使用"
 msgid "By Frame"
 msgstr "按帧"
 
-#: main.ts:1147 picture.slint:1998
+#: main.ts:1147 picture.slint:2004
 msgid "By Field (Double Rate)"
 msgstr "按场（倍帧率）"
 
-#: main.ts:1154 picture.slint:1997
+#: main.ts:1154 picture.slint:2003
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr "自动按场输出（倍帧率）；此设置用于“总是使用”"
 
@@ -547,11 +547,11 @@ msgstr "填满窗口（裁去多余）"
 msgid "Cycle Aspect Ratio"
 msgstr "依次切换比例"
 
-#: main.ts:1183 picture.slint:1320 picture.slint:1321
+#: main.ts:1183 picture.slint:1322 picture.slint:1323
 msgid "Default (Source)"
 msgstr "默认（按来源）"
 
-#: main.ts:1230 picture.slint:1321
+#: main.ts:1230 picture.slint:1323
 msgid "Custom ({})"
 msgstr "自定义（{}）"
 
@@ -563,7 +563,7 @@ msgstr "自定义（x:y）"
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "先用「自定义比例…」输入"
 
-#: main.ts:1234 picture.slint:1910
+#: main.ts:1234 picture.slint:1916
 msgid "Custom Aspect Ratio…"
 msgstr "自定义比例…"
 
@@ -655,19 +655,19 @@ msgstr "偏移 ↑"
 msgid "Pan ↓"
 msgstr "偏移 ↓"
 
-#: main.ts:1314 picture.slint:1826
+#: main.ts:1314 picture.slint:1832
 msgid "Center Frame"
 msgstr "帧位居中"
 
-#: main.ts:1339 picture.slint:1802
+#: main.ts:1339 picture.slint:1808
 msgid "Flip Vertically"
 msgstr "上下翻转"
 
-#: main.ts:1350 picture.slint:1809
+#: main.ts:1350 picture.slint:1815
 msgid "Flip Horizontally"
 msgstr "左右翻转"
 
-#: main.ts:1361 picture.slint:1591 picture.slint:1672
+#: main.ts:1361 picture.slint:1597 picture.slint:1678
 msgid "Gaussian Blur"
 msgstr "高斯模糊"
 
@@ -679,7 +679,7 @@ msgstr "高斯模糊: 开"
 msgid "Gaussian blur: off"
 msgstr "高斯模糊: 关"
 
-#: main.ts:1387 picture.slint:1572 picture.slint:1573 picture.slint:1651 picture.slint:1652
+#: main.ts:1387 picture.slint:1578 picture.slint:1579 picture.slint:1657 picture.slint:1658
 msgid "Sharpen"
 msgstr "锐化"
 
@@ -687,23 +687,23 @@ msgstr "锐化"
 msgid "Edge Sharpen"
 msgstr "边缘锐化"
 
-#: main.ts:1387 picture.slint:1599 picture.slint:1600 picture.slint:1682
+#: main.ts:1387 picture.slint:1605 picture.slint:1606 picture.slint:1688
 msgid "Deblock"
 msgstr "去块"
 
-#: main.ts:1387 picture.slint:1608 picture.slint:1609 picture.slint:1692 picture.slint:1693
+#: main.ts:1387 picture.slint:1614 picture.slint:1615 picture.slint:1698 picture.slint:1699
 msgid "Deband"
 msgstr "消色带"
 
-#: main.ts:1387 picture.slint:1738
+#: main.ts:1387 picture.slint:1744
 msgid "3D Denoise"
 msgstr "3D 降噪"
 
-#: main.ts:1387 picture.slint:1749
+#: main.ts:1387 picture.slint:1755
 msgid "Gradual Denoise"
 msgstr "渐进降噪"
 
-#: main.ts:1387 picture.slint:1760
+#: main.ts:1387 picture.slint:1766
 msgid "Temporal Denoise"
 msgstr "瞬态降噪"
 
@@ -784,7 +784,7 @@ msgstr "GPU 渲染（重启后生效）"
 msgid "GPU Rendering (Experimental)"
 msgstr "GPU 渲染（实验性）"
 
-#: main.ts:1538 main.ts:1806 picture.slint:1343 picture.slint:1353 picture.slint:1437
+#: main.ts:1538 main.ts:1815 picture.slint:1345 picture.slint:1355 picture.slint:1443
 msgid "Switching…"
 msgstr "正在切换…"
 
@@ -860,27 +860,27 @@ msgstr "等待中 · 关闭 {} 的效果"
 msgid "{} keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale."
 msgstr "{} 的效果需要在内存中处理帧，而超分需要帧留在 GPU 上。关闭它们的效果即可超分。"
 
-#: main.ts:1734
+#: main.ts:1743
 msgid "Not available on this GPU: {}"
 msgstr "此 GPU 不支持：{}"
 
-#: main.ts:1775
+#: main.ts:1784
 msgid "AI upscaling unavailable: {}"
 msgstr "AI 超分辨率不可用：{}"
 
-#: main.ts:1781
+#: main.ts:1790
 msgid "AI upscaling: on (Super Resolution must also be on in the NVIDIA app)"
 msgstr "AI 超分辨率: 开（还需在 NVIDIA App 中打开 Super Resolution）"
 
-#: main.ts:1786
+#: main.ts:1795
 msgid "AI upscaling: off"
 msgstr "AI 超分辨率: 关"
 
-#: main.ts:1799 picture.slint:1485
+#: main.ts:1808 picture.slint:1491
 msgid "AI Upscaling"
 msgstr "AI 超分辨率"
 
-#: main.ts:1806 picture.slint:1373
+#: main.ts:1815 picture.slint:1377
 msgid "Not available on this system (Windows with an NVIDIA RTX GPU)"
 msgstr "此系统不支持（需 Windows 与 NVIDIA RTX GPU）"
 
@@ -916,436 +916,452 @@ msgstr "色彩"
 msgid "filters"
 msgstr "滤镜"
 
-#: picture.slint:605 picture.slint:755 picture.slint:792 picture.slint:2032
+#: picture.slint:607 picture.slint:757 picture.slint:794 picture.slint:2038
 msgid "· double-click: Default"
 msgstr "· 双击：默认值"
 
-#: picture.slint:670
+#: picture.slint:672
 msgid "· click: on or off"
 msgstr "· 单击：开 / 关"
 
-#: picture.slint:1204
+#: picture.slint:1206
 msgid "Pick a ratio below"
 msgstr "在下方选择比例"
 
-#: picture.slint:1204
+#: picture.slint:1206
 msgid "Screen"
 msgstr "屏幕"
 
-#: picture.slint:1308
+#: picture.slint:1310
 msgid "Needs GPU rendering: turn it on under Rendering, then restart"
 msgstr "需要 GPU 渲染：在“渲染”中打开，然后重启"
 
-#: picture.slint:1309
+#: picture.slint:1311
 msgid "No picture in the current source"
 msgstr "当前来源没有画面"
 
-#: picture.slint:1310
+#: picture.slint:1312
 msgid "Picture processing failed"
 msgstr "画面处理失败"
 
-#: picture.slint:1311
+#: picture.slint:1313
 msgid "Display unavailable"
 msgstr "画面显示不可用"
 
-#: picture.slint:1313
+#: picture.slint:1315
 msgid "Render options unavailable"
 msgstr "渲染选项不可用"
 
-#: picture.slint:1314
+#: picture.slint:1316
 msgid "Render settings failed"
 msgstr "渲染设置失败"
 
-#: picture.slint:1317
+#: picture.slint:1319
 msgid "Another plugin controls the display"
 msgstr "另一个插件正在控制画面显示"
 
-#: picture.slint:1318
+#: picture.slint:1320
 msgid "Another plugin controls the render options"
 msgstr "另一个插件正在控制渲染选项"
 
-#: picture.slint:1325 picture.slint:1621 picture.slint:1737
+#: picture.slint:1327 picture.slint:1627 picture.slint:1743
 msgid "3D"
 msgstr "3D"
 
-#: picture.slint:1327 picture.slint:1748
+#: picture.slint:1329 picture.slint:1754
 msgid "Gradual"
 msgstr "渐进"
 
-#: picture.slint:1329 picture.slint:1621 picture.slint:1759
+#: picture.slint:1331 picture.slint:1627 picture.slint:1765
 msgid "Temporal"
 msgstr "瞬态"
 
-#: picture.slint:1333
+#: picture.slint:1335
 msgid "{} with bars"
 msgstr "{}（加黑边）"
 
-#: picture.slint:1337
+#: picture.slint:1339
 msgid "Advanced"
 msgstr "高级"
 
-#: picture.slint:1338
+#: picture.slint:1340
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] "{n} 个着色器"
 
 #. the closed Advanced row's summary: {0} the deinterlace mode, {1} the HDR tone mapping, {2} "3 shaders".
-#: picture.slint:1340
+#: picture.slint:1342
 msgid "Deinterlace {0} · HDR {1} · {2}"
 msgstr "反交错 {0} · HDR {1} · {2}"
 
-#: picture.slint:1344
+#: picture.slint:1346
 msgid "Restart to apply · GPU from the next start"
 msgstr "重启后生效 · 下次启动起使用 GPU"
 
-#: picture.slint:1345
+#: picture.slint:1347
 msgid "Restart to apply · software rendering from the next start"
 msgstr "重启后生效 · 下次启动起使用软件渲染"
 
-#: picture.slint:1346
+#: picture.slint:1348
 msgid "On the GPU · {}"
 msgstr "正在使用 GPU · {}"
 
-#: picture.slint:1346
+#: picture.slint:1348
 msgid "On the GPU"
 msgstr "正在使用 GPU"
 
-#: picture.slint:1347
+#: picture.slint:1349
 msgid "Software rendering · {}"
 msgstr "软件渲染 · {}"
 
-#: picture.slint:1348
+#: picture.slint:1350
 msgid "Software rendering · turn on, then restart"
 msgstr "软件渲染 · 打开后重启"
 
 #. {0} and {1} are the video's height and the shown height in pixels (1080, 2160), {2} the GPU's name.
-#: picture.slint:1357
+#: picture.slint:1359
 msgid "Upscaling {0}p → {1}p on {2}"
 msgstr "正在超分 {0}p → {1}p（{2}）"
 
-#: picture.slint:1358
+#: picture.slint:1360
 msgid "Upscaling {0}p → {1}p"
 msgstr "正在超分 {0}p → {1}p"
 
-#: picture.slint:1359
+#: picture.slint:1361
 msgid "Upscaling on the GPU"
 msgstr "正在 GPU 上超分"
 
-#: picture.slint:1360
+#: picture.slint:1362
 msgid "On · upscales video shown larger than its size"
 msgstr "开 · 放大显示的视频会被超分"
 
-#: picture.slint:1361
+#: picture.slint:1363
 msgid "On · this video is not shown larger than its size"
 msgstr "开 · 此视频未放大显示"
 
-#: picture.slint:1365
+#: picture.slint:1367
 msgid "Waiting · reset picture adjustments"
 msgstr "等待中 · 复位画面调节"
 
-#: picture.slint:1367
+#: picture.slint:1368
+msgid "Waiting · set Deinterlace to Auto"
+msgstr "等待中 · 将反交错设为自动"
+
+#: picture.slint:1369
+msgid "Waiting · turn off picture effects"
+msgstr "等待中 · 关闭画面效果"
+
+#: picture.slint:1371
 msgid "Waiting · frames copied to memory"
 msgstr "等待中 · 帧被复制到内存"
 
-#: picture.slint:1368
+#: picture.slint:1372
 msgid "Waiting · hardware decoding is off"
 msgstr "等待中 · 硬件解码已关闭"
 
-#: picture.slint:1369
+#: picture.slint:1373
 msgid "Waiting · video decoded in software"
 msgstr "等待中 · 此视频为软件解码"
 
-#: picture.slint:1370
+#: picture.slint:1374
 msgid "Waiting · another hardware decoder"
 msgstr "等待中 · 使用另一种硬件解码器"
 
-#: picture.slint:1371
+#: picture.slint:1375
 msgid "Waiting · {}"
 msgstr "等待中 · {}"
 
-#: picture.slint:1372
+#: picture.slint:1376
 msgid "Needs GPU rendering (software rendering now)"
 msgstr "需要 GPU 渲染（当前为软件渲染）"
 
-#: picture.slint:1374
+#: picture.slint:1378
 msgid "Not available on this GPU · {}"
 msgstr "此 GPU 不支持 · {}"
 
-#: picture.slint:1376
+#: picture.slint:1380
 msgid "Off · sharpens video shown larger than its size"
 msgstr "关 · 让放大显示的视频更清晰"
 
-#: picture.slint:1379
-msgid "Colour, Effects or Geometry (flip, rotation, crop/stretch) away from their defaults, or Deinterlace Always, need the frames in memory, but upscaling needs them on the GPU. Reset them to upscale."
-msgstr "色彩、效果或几何（翻转、旋转、裁剪/拉伸）不是默认值，或反交错为“总是使用”时，画面调节需要在内存中处理帧，而超分需要帧留在 GPU 上。将它们复位即可超分。"
+#: picture.slint:1383
+msgid "Colour, Effects or Geometry (flip, rotation, crop/stretch) away from their defaults need the frames in memory, but upscaling needs them on the GPU. Reset them (Reset All) to upscale."
+msgstr "色彩、效果或几何（翻转、旋转、裁剪/拉伸）不是默认值时，画面调节需要在内存中处理帧，而超分需要帧留在 GPU 上。将它们复位（全部复位）即可超分。"
 
-#: picture.slint:1381
+#: picture.slint:1384
+msgid "Deinterlace Always filters every frame in memory, but upscaling needs the frames on the GPU. Auto still deinterlaces interlaced video and lets it upscale."
+msgstr "反交错为“总是使用”时，每一帧都在内存中处理，而超分需要帧留在 GPU 上。设为“自动”仍会对隔行视频反交错，并且可以超分。"
+
+#: picture.slint:1385
+msgid "Deinterlace Always and Colour, Effects or Geometry away from their defaults need the frames in memory, but upscaling needs them on the GPU. Turn off picture effects (or Reset All and set Deinterlace to Auto) to upscale."
+msgstr "反交错为“总是使用”，且色彩、效果或几何不是默认值时，需要在内存中处理帧，而超分需要帧留在 GPU 上。关闭画面效果（或全部复位并将反交错设为“自动”）即可超分。"
+
+#: picture.slint:1387
 msgid "The video is decoded on the GPU, but its frames are copied to memory, and upscaling needs them on the GPU."
 msgstr "视频在 GPU 上解码，但帧被复制到内存，而超分需要帧留在 GPU 上。"
 
-#: picture.slint:1382
+#: picture.slint:1388
 msgid "Hardware decoding is off, and upscaling needs the video decoded on the GPU."
 msgstr "硬件解码已关闭，而超分需要视频在 GPU 上解码。"
 
-#: picture.slint:1383
+#: picture.slint:1389
 msgid "This video is decoded in software (for example a format the GPU does not decode), but upscaling needs it decoded on the GPU. Videos the GPU decodes are upscaled."
 msgstr "此视频为软件解码（例如 GPU 不能解码的格式），而超分需要视频在 GPU 上解码。GPU 能解码的视频会被超分。"
 
-#: picture.slint:1384
+#: picture.slint:1390
 msgid "This video is decoded with another hardware decoder, and upscaling needs it decoded on the GPU that renders it."
 msgstr "此视频使用另一种硬件解码器，而超分需要视频在渲染它的 GPU 上解码。"
 
-#: picture.slint:1424
+#: picture.slint:1430
 msgid "Rendering"
 msgstr "渲染"
 
-#: picture.slint:1439
+#: picture.slint:1445
 msgid "Restart Vestra Player to apply"
 msgstr "重启 Vestra Player 后生效"
 
-#: picture.slint:1440
+#: picture.slint:1446
 msgid "Draw the video on the GPU from the next start"
 msgstr "从下次启动起用 GPU 绘制视频"
 
-#: picture.slint:1445
+#: picture.slint:1451
 msgid "GPU Rendering"
 msgstr "GPU 渲染"
 
-#: picture.slint:1452
+#: picture.slint:1458
 msgid "Experimental"
 msgstr "实验性"
 
-#: picture.slint:1453
+#: picture.slint:1459
 msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
 msgstr "实验性 —— GPU 渲染路径是新功能。如果画面出错，在这里关闭并重启；GPU 崩溃后播放器会自动回到软件渲染。"
 
-#: picture.slint:1461
+#: picture.slint:1467
 msgid "Restart"
 msgstr "重启"
 
-#: picture.slint:1481
+#: picture.slint:1487
 msgid "NVIDIA RTX Video Super Resolution: sharpens video shown larger than its size. Needs GPU rendering on an NVIDIA RTX GPU, and Super Resolution turned on in the NVIDIA app (System ▸ Video ▸ RTX Video Enhancement)."
 msgstr "NVIDIA RTX Video Super Resolution：让放大显示的视频更清晰。需要在 NVIDIA RTX GPU 上使用 GPU 渲染，并在 NVIDIA App 中打开 Super Resolution（系统 ▸ 视频 ▸ RTX 视频增强）。"
 
-#: picture.slint:1494
+#: picture.slint:1500
 msgid "NVIDIA RTX Video Super Resolution"
 msgstr "NVIDIA RTX Video Super Resolution"
 
-#: picture.slint:1505
+#: picture.slint:1511
 msgid "Colour"
 msgstr "色彩"
 
-#: picture.slint:1509
+#: picture.slint:1515
 msgid "Original"
 msgstr "原始"
 
-#: picture.slint:1510
+#: picture.slint:1516
 msgid "Vivid"
 msgstr "鲜艳"
 
-#: picture.slint:1511
+#: picture.slint:1517
 msgid "Cinema"
 msgstr "电影"
 
-#: picture.slint:1512
+#: picture.slint:1518
 msgid "Soft"
 msgstr "柔和"
 
-#: picture.slint:1518
+#: picture.slint:1524
 msgid "Brightness"
 msgstr "亮度"
 
-#: picture.slint:1527
+#: picture.slint:1533
 msgid "Contrast"
 msgstr "对比度"
 
-#: picture.slint:1536
+#: picture.slint:1542
 msgid "Saturation"
 msgstr "饱和度"
 
-#: picture.slint:1545
+#: picture.slint:1551
 msgid "Hue"
 msgstr "色调"
 
-#: picture.slint:1554
+#: picture.slint:1560
 msgid "Gamma"
 msgstr "Gamma"
 
-#: picture.slint:1566
+#: picture.slint:1572
 msgid "Effects"
 msgstr "效果"
 
-#: picture.slint:1581 picture.slint:1661
+#: picture.slint:1587 picture.slint:1667
 msgid "Edges"
 msgstr "边缘锐化"
 
-#: picture.slint:1582 picture.slint:1662
+#: picture.slint:1588 picture.slint:1668
 msgid "Wide-radius sharpening that mainly strengthens outlines"
 msgstr "大范围锐化，主要增强轮廓"
 
-#: picture.slint:1590 picture.slint:1671
+#: picture.slint:1596 picture.slint:1677
 msgid "Blur"
 msgstr "高斯模糊"
 
-#: picture.slint:1619 picture.slint:1721
+#: picture.slint:1625 picture.slint:1727
 msgid "Denoise"
 msgstr "降噪"
 
-#: picture.slint:1620
+#: picture.slint:1626
 msgid "Denoise: turns the denoisers on or off"
 msgstr "降噪：打开或关闭降噪器"
 
-#: picture.slint:1628
+#: picture.slint:1634
 msgid "Doubling"
 msgstr "倍帧"
 
-#: picture.slint:1629
+#: picture.slint:1635
 msgid "Rate already high enough"
 msgstr "当前帧率已足够"
 
-#: picture.slint:1630
+#: picture.slint:1636
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr "把帧率提高到 2 倍（最高 60），中间帧由前后两帧混合生成"
 
-#: picture.slint:1638
+#: picture.slint:1644
 msgid "Interpolate"
 msgstr "运动补偿"
 
-#: picture.slint:1639
+#: picture.slint:1645
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr "GPU 按显示器刷新率插帧；与倍帧互斥"
 
-#: picture.slint:1683
+#: picture.slint:1689
 msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
 msgstr "小于 50 为弱、50 及以上为强；对低码率 MPEG-2/MPEG-4 效果最明显"
 
-#: picture.slint:1776
+#: picture.slint:1782
 msgid "Geometry"
 msgstr "几何"
 
-#: picture.slint:1782
+#: picture.slint:1788
 msgid "Rotate Left"
 msgstr "向左旋转"
 
-#: picture.slint:1787
+#: picture.slint:1793
 msgid "Rotate Right"
 msgstr "向右旋转"
 
-#: picture.slint:1817
+#: picture.slint:1823
 msgid "Leave Crop Mode"
 msgstr "退出裁剪模式"
 
-#: picture.slint:1817
+#: picture.slint:1823
 msgid "Crop: pick a ratio, then drag the box"
 msgstr "裁剪：选一个比例，再拖动裁剪框"
 
-#: picture.slint:1827
+#: picture.slint:1833
 msgid "Reset Framing"
 msgstr "复位帧位"
 
-#: picture.slint:1835
+#: picture.slint:1841
 msgid "Zoom {}%"
 msgstr "缩放 {}%"
 
 #. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
-#: picture.slint:1840
+#: picture.slint:1846
 msgid "Offset {0}, {1}"
 msgstr "偏移 {0}, {1}"
 
-#: picture.slint:1842
+#: picture.slint:1848
 msgid "Crop {}"
 msgstr "裁剪 {}"
 
 #. the crop box's position in percent, across and down (50 = centred).
-#: picture.slint:1847
+#: picture.slint:1853
 msgid "at {0}%, {1}%"
 msgstr "位于 {0}%, {1}%"
 
-#: picture.slint:1858
+#: picture.slint:1864
 msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
 msgstr "按比例裁剪；在编辑器里拖动裁剪框，选择保留的部分"
 
-#: picture.slint:1876
+#: picture.slint:1882
 msgid "Stretch to the ratio: add bars instead of cutting the picture"
 msgstr "拉伸到该比例：加黑边，而不是裁掉画面"
 
-#: picture.slint:1880
+#: picture.slint:1886
 msgid "Add bars instead of cutting"
 msgstr "加黑边，不裁剪"
 
-#: picture.slint:1894
+#: picture.slint:1900
 msgid "Aspect ratio"
 msgstr "宽高比"
 
-#: picture.slint:1916
+#: picture.slint:1922
 msgid "Fit"
 msgstr "适应"
 
-#: picture.slint:1921
+#: picture.slint:1927
 msgid "Keep"
 msgstr "保持"
 
-#: picture.slint:1922
+#: picture.slint:1928
 msgid "Stretch"
 msgstr "拉伸"
 
-#: picture.slint:1923
+#: picture.slint:1929
 msgid "Fill"
 msgstr "填满"
 
-#: picture.slint:2002
+#: picture.slint:2008
 msgid "Double rate"
 msgstr "倍帧率"
 
-#: picture.slint:2010
+#: picture.slint:2016
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:2012
+#: picture.slint:2018
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射 · 当前片源不是 HDR"
 
-#: picture.slint:2013
+#: picture.slint:2019
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr "HDR 片源（PQ / HLG）在 SDR 显示器上的色调映射"
 
-#: picture.slint:2031
+#: picture.slint:2037
 msgid "Target brightness"
 msgstr "目标亮度"
 
-#: picture.slint:2048
+#: picture.slint:2054
 msgid "{} nits"
 msgstr "{} 尼特"
 
-#: picture.slint:2066
+#: picture.slint:2072
 msgid "Peak detection"
 msgstr "峰值检测"
 
-#: picture.slint:2075
+#: picture.slint:2081
 msgid "Shaders"
 msgstr "着色器"
 
-#: picture.slint:2076
+#: picture.slint:2082
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr "mpv 用户着色器（.glsl），按列表顺序执行"
 
-#: picture.slint:2087
+#: picture.slint:2093
 msgid "List…"
 msgstr "列表…"
 
-#: picture.slint:2117
+#: picture.slint:2123
 msgid "Retry"
 msgstr "重试"
 
-#: picture.slint:2133 picture.slint:2137
+#: picture.slint:2139 picture.slint:2143
 msgid "Enable picture effects"
 msgstr "启用画面效果"
 
-#: picture.slint:2146
+#: picture.slint:2152
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr "色彩、效果和几何恢复默认；高级设置保留"
 
-#: picture.slint:2151
+#: picture.slint:2157
 msgid "Reset All"
 msgstr "全部复位"
 
