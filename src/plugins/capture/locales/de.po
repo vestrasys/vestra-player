@@ -33,8 +33,8 @@ msgstr "Serienaufnahmen brauchen eine bekannte Mediendauer."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "The selected range is past the end of the media."
-msgstr "Der gewählte Bereich liegt hinter dem Medienende."
+msgid "The frame is past the end of the media."
+msgstr "Das Bild liegt hinter dem Medienende."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -58,8 +58,8 @@ msgstr "Das Bild konnte nicht aufgenommen werden."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "One export is running and four are queued. Please wait."
-msgstr "Ein Export läuft, vier sind in der Warteschlange. Bitte warten Sie."
+msgid "Five captures are still being saved. Please wait."
+msgstr "Fünf Aufnahmen werden noch gespeichert. Bitte warten Sie."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -93,18 +93,18 @@ msgstr "Keine Schreibberechtigung"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "This media cannot be encoded"
-msgstr "Diese Medien können nicht kodiert werden"
+msgid "This frame cannot be encoded"
+msgstr "Dieses Bild kann nicht kodiert werden"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Export failed"
-msgstr "Export fehlgeschlagen"
+msgid "Could not create the image file"
+msgstr "Die Bilddatei konnte nicht erstellt werden"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "This task has no output file yet."
-msgstr "Diese Aufgabe hat noch keine Ausgabedatei."
+msgid "No snapshot saved yet."
+msgstr "Noch kein Schnappschuss gespeichert."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -201,107 +201,107 @@ msgstr "Aktuelles Bild speichern unter"
 msgid "Frame copied without subtitles: they cannot be drawn into a frame"
 msgstr "Bild ohne Untertitel kopiert: Sie lassen sich nicht ins Bild zeichnen"
 
-#: main.ts:261 main.ts:426
+#: main.ts:261 main.ts:431
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "Bild in die Zwischenablage kopiert"
 
-#: main.ts:302 main.ts:384 main.ts:385 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
+#: main.ts:302 main.ts:389 main.ts:390 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
 #, x-machine
 msgid "Snapshot"
 msgstr "Schnappschuss"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Current Frame"
 msgstr "Aktuelles Bild speichern"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "Aktuelles Bild kopieren"
 
-#: main.ts:384 main.ts:385 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
+#: main.ts:389 main.ts:390 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
 #, x-machine
 msgid "Burst"
 msgstr "Serienaufnahme"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "Schnappschuss-Einstellungen…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "Aktuelles Bild speichern unter…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "Gerendertes Bild speichern"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "Gerendertes Bild speichern unter…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "Gerendertes Bild kopieren"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as PNG"
 msgstr "Als PNG aufnehmen"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "Als JPEG aufnehmen"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as BMP"
 msgstr "Als BMP aufnehmen"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "Untertitel im gerenderten Bild einbeziehen"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "Schnappschuss-Ordner…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "Schnappschuss-Ordner öffnen"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Show Last Capture in Folder"
 msgstr "Letzte Aufnahme im Ordner anzeigen"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Last Snapshot"
 msgstr "Letzten Schnappschuss kopieren"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Video Frame Only"
 msgstr "Nur das Videobild speichern"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Video Frame Only"
 msgstr "Nur das Videobild kopieren"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "No frame to capture"
 msgstr "Kein Bild zum Aufnehmen"

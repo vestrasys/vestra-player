@@ -346,6 +346,9 @@ struct Payload {
     /// The `ready` value that marks it finished.
     ready: u64,
     size: Size,
+    /// Rendered only to keep the GPU warm (`Handle::keep_warm`): the same
+    /// picture again, not counted as a frame.
+    warm: bool,
 }
 
 /// The ring and, per texture of its current generation, the `done` value
@@ -397,6 +400,9 @@ struct Shared {
     /// `Some(period)`: render at most once per period and report each frame
     /// as presented (mpv's display-synced timing, for interpolation).
     pace: Mutex<Option<Duration>>,
+    /// `Some(period)`: with nothing new from mpv (a pause), render and
+    /// publish its current frame once per period anyway ([`Handle::keep_warm`]).
+    warm: Mutex<Option<Duration>>,
     exchange: Mutex<Exchange>,
     /// Set by the render thread before `Renderer::start` returns.
     fences: OnceLock<Fences>,
@@ -415,6 +421,9 @@ struct Shared {
     /// (`count_shown`), and the newest frame counted.
     shown: AtomicU64,
     shown_sequence: AtomicU64,
+    /// Frames published only to keep the GPU warm (`Handle::frames`
+    /// leaves them out).
+    warm_frames: AtomicU64,
     /// The newest window attached without a notifier (`attach_direct`).
     direct_generation: AtomicU64,
     /// Bumped by [`Handle::retarget`]: windows hand their current image to
@@ -471,6 +480,7 @@ impl Shared {
             stop: AtomicBool::new(false),
             size: Mutex::new(size),
             pace: Mutex::new(None),
+            warm: Mutex::new(None),
             exchange: Mutex::default(),
             fences: OnceLock::new(),
             pending: Default::default(),
@@ -479,6 +489,7 @@ impl Shared {
             reshow: Mutex::default(),
             shown: AtomicU64::new(0),
             shown_sequence: AtomicU64::new(0),
+            warm_frames: AtomicU64::new(0),
             direct_generation: AtomicU64::new(0),
             retargets: AtomicU64::new(0),
             signalled: AtomicU64::new(0),
@@ -537,8 +548,9 @@ impl Shared {
     }
     /// A window shows frame `sequence`: counted once, whichever window and
     /// however often (several attached windows, a rebuilt main window).
-    fn count_shown(&self, sequence: u64) {
-        if self.shown_sequence.fetch_max(sequence, Ordering::AcqRel) < sequence {
+    /// A warm frame (`Payload::warm`) is not counted.
+    fn count_shown(&self, sequence: u64, warm: bool) {
+        if self.shown_sequence.fetch_max(sequence, Ordering::AcqRel) < sequence && !warm {
             self.shown.fetch_add(1, Ordering::Relaxed);
         }
     }
@@ -940,6 +952,8 @@ fn produce(
     // `SETTLE` (a border drag asks for a new size every frame).
     let mut asked_size = None::<(Size, Instant)>;
     let (mut cadence, mut ready_value, mut timeouts) = (Cadence::default(), 0u64, 0u64);
+    // When the last render call started (`Handle::keep_warm`).
+    let mut last_render = None::<Instant>;
     // GPU rendering cannot go on: release every GPU wait on the shared
     // fences (neither queue may wait forever) and tell the host, which
     // switches to software rendering (`Handle::failed`).
@@ -976,11 +990,17 @@ fn produce(
             break;
         }
         let pace = *lock(&shared.pace);
+        let warm = warm_period(*lock(&shared.warm), pace);
         // Paced: wait for the next start on the display's grid, so frames
         // come at the display rate however often mpv asks (`Cadence`).
+        // Kept warm: no longer than until the next warm frame is due (mpv's
+        // update callback and `keep_warm` still end the wait at once).
         match cadence.wait(pace, Instant::now()) {
             left if !left.is_zero() => thread::sleep(left),
-            _ => shared.wait(Duration::from_millis(20)),
+            _ => match warm_left(warm, last_render, Instant::now()) {
+                Some(left) => shared.wait(left.min(IDLE_WAIT)),
+                None => shared.wait(IDLE_WAIT),
+            },
         }
         let size = *lock(&shared.size);
         let mut resized = false;
@@ -1034,10 +1054,17 @@ fn produce(
             continue;
         }
         let published = lock(&shared.exchange).ring.sequence();
-        if !(render.update() || (resized && published > 0)) {
+        // Kept warm (a pause): mpv's current frame again, through the same
+        // render, report and publish as a new one (mpv redraws it).
+        let warm_due = warm_left(warm, last_render, Instant::now()) == Some(Duration::ZERO);
+        let updated = render.update();
+        if !(updated || ((resized || warm_due) && published > 0)) {
             continue;
         }
+        // Only the warm period asked for it: not counted as a video frame.
+        let warm_only = !updated && !resized;
         cadence.started(pace, Instant::now());
+        last_render = Some(Instant::now());
         // A free texture. Windows hold a claim only during a draw; one left
         // by a draw that never finished is released at the window's next
         // draw, so after 100 ms the windows are asked to draw.
@@ -1186,8 +1213,18 @@ fn produce(
         render.report_swap();
         if publish.load(Ordering::Acquire) && !shared.halted() {
             let texture = slots[index].texture.clone();
-            let payload = Payload { texture, ready: ready_value, size: slots_size.unwrap_or(size) };
-            lock(&shared.exchange).ring.publish(index, payload);
+            let payload = Payload {
+                texture,
+                ready: ready_value,
+                size: slots_size.unwrap_or(size),
+                warm: warm_only,
+            };
+            {
+                // Counted under the lock, so `Handle::frames` never sees it.
+                let mut exchange = lock(&shared.exchange);
+                exchange.ring.publish(index, payload);
+                shared.warm_frames.fetch_add(u64::from(warm_only), Ordering::AcqRel);
+            }
             shared.ask_redraw();
             lock(&shared.notify).iter().for_each(|notify| notify());
         }
@@ -1209,6 +1246,23 @@ fn produce(
 
 /// How long a new video-area size must hold before the ring is remade at it.
 const SETTLE: Duration = Duration::from_millis(150);
+
+/// The longest wait for mpv's update callback between two looks.
+const IDLE_WAIT: Duration = Duration::from_millis(20);
+
+/// The period of warm frames: the host's (the video's frame rate), or the
+/// display's while paced (interpolation renders at the display rate).
+fn warm_period(warm: Option<Duration>, pace: Option<Duration>) -> Option<Duration> {
+    warm.map(|warm| pace.map_or(warm, |pace| pace.min(warm)))
+}
+
+/// How long until the next warm frame is due (zero: now); `None` when not
+/// kept warm.
+fn warm_left(warm: Option<Duration>, last: Option<Instant>, now: Instant) -> Option<Duration> {
+    warm.map(|period| {
+        last.map_or(Duration::ZERO, |last| (last + period).saturating_duration_since(now))
+    })
+}
 
 /// How far rendering got ([`Handle::progress`]).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -1254,14 +1308,31 @@ impl Handle {
         *lock(&self.0.pace) = period;
         mpv::Wake::wake(&*self.0);
     }
+    /// `Some(period)`: with nothing new from mpv (a pause), render its
+    /// current frame and publish it once per `period` anyway, so the windows
+    /// draw and present as during playback and the GPU keeps its clocks
+    /// (resume after a pause stuttered while it clocked up again);
+    /// `None`: only what mpv asks for. The host's `gpu_warm` decides.
+    pub fn keep_warm(&self, period: Option<Duration>) {
+        let period = period.filter(|period| !period.is_zero());
+        if std::mem::replace(&mut *lock(&self.0.warm), period) != period {
+            mpv::Wake::wake(&*self.0);
+        }
+    }
     /// Why the render thread stopped (the device was removed, a fence could
     /// not be signalled), if it did: the host renders in software then.
     pub fn failed(&self) -> Option<String> {
         lock(&self.0.failed).clone()
     }
-    /// Frames published so far.
+    /// Video frames published so far (frames published only to keep the
+    /// GPU warm left out: a paused player shows no frame rate).
     pub fn frames(&self) -> u64 {
-        lock(&self.0.exchange).ring.sequence()
+        let exchange = lock(&self.0.exchange);
+        exchange.ring.sequence() - self.0.warm_frames.load(Ordering::Acquire)
+    }
+    /// Frames published only to keep the GPU warm ([`keep_warm`](Self::keep_warm)).
+    pub fn warm_frames(&self) -> u64 {
+        self.0.warm_frames.load(Ordering::Acquire)
     }
     /// How far rendering got ([`Progress`]): the host's plugin shader guard
     /// tells from it whether a frame rendered after a new `glsl-shaders`
@@ -1293,7 +1364,7 @@ impl Handle {
     /// The caller replaced the image on the video area: windows show no
     /// frame published so far and set the next one's image again.
     pub fn reshow(&self) {
-        let hold = self.frames();
+        let hold = lock(&self.0.exchange).ring.sequence();
         let mut reshow = lock(&self.0.reshow);
         *reshow = (reshow.0 + 1, hold);
     }
@@ -1657,12 +1728,12 @@ impl View {
             };
             self.showing = Some(frame.slot);
             if new {
-                shared.count_shown(frame.sequence);
+                shared.count_shown(frame.sequence, frame.payload.warm);
             }
             return (Some(image), new);
         }
         if new {
-            shared.count_shown(frame.sequence);
+            shared.count_shown(frame.sequence, frame.payload.warm);
         }
         (None, new)
     }
@@ -1724,7 +1795,7 @@ impl View {
         self.claim = Some(frame.slot);
         self.showing = Some(frame.slot);
         (self.sequence, self.epoch) = (frame.sequence, epoch);
-        shared.count_shown(frame.sequence);
+        shared.count_shown(frame.sequence, frame.payload.warm);
         Some(image)
     }
     /// The draw was submitted: `done` follows it on the windows' queue, and

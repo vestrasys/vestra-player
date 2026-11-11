@@ -295,7 +295,7 @@ test("no command is in the menu (the player's Adjustments and Effects opens the 
     ["Hue +1%", 449, "video-color", "O"],
     // The GPU switch comes last: it is added once the player's rendering state is read.
     ["AI Upscaling", 461, "video-rendering", ""],
-    ["GPU Rendering (Experimental)", 460, "video-rendering", ""],
+    ["GPU Rendering", 460, "video-rendering", ""],
   ];
   assert.deepEqual(
     [...host.commands.values()].map(({ declaration: d, display }) => [display.title, d.order, d.group, d.bindings.join(",")]),
@@ -435,7 +435,7 @@ test("Simplified Chinese: the palette names commands with the menu's translation
     "复位: 画面面板",
     ...["亮度", "对比度", "饱和度", "色调"].flatMap((t) => [`画面: ${t} -1%`, `画面: ${t} +1%`]),
     "画面: AI 超分辨率",
-    "画面: GPU 渲染（实验性）",
+    "画面: GPU 渲染",
   ]);
   assert.deepEqual(host.command("video.picture").display.path, []);
   assert.equal(host.command("video.picture").display.title, "画面…");
@@ -1921,7 +1921,7 @@ test("render options owned by another plugin: silent at start, a reason on use, 
   await stop();
 });
 
-// ---------------------------------------------------------------- GPU Rendering (Experimental): the player's renderer choice
+// ---------------------------------------------------------------- GPU Rendering: the player's renderer choice
 const gpuItem = (host: TestHost) => host.command("video.gpu-rendering");
 const gpuTitle = (host: TestHost) => gpuItem(host).declaration.title;
 const restartItem = "video.gpu-rendering.restart";
@@ -1932,7 +1932,7 @@ test("GPU rendering: macOS defaults to Auto on the GPU, so the item is checked a
   const host = new TestHost();
   const { stop } = await start(host);
   await host.settle();
-  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.equal(gpuTitle(host), "GPU Rendering");
   assert.equal(gpuItem(host).declaration.order, 460);
   assert.deepEqual(shownState(host), { enabled: true, checked: true, busy: false, reason: null });
   assert.deepEqual(host.sent("rendering.setPreference"), [], "reading the state changes nothing");
@@ -1947,7 +1947,7 @@ test("GPU rendering: Windows without a GPU renderer greys the item out with the 
   host.rendering.gpu = { available: false, reason: host.rendering.reason };
   const { stop } = await start(host);
   await host.settle();
-  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.equal(gpuTitle(host), "GPU Rendering");
   assert.deepEqual(shownState(host), { enabled: false, checked: false, busy: false, reason: "This player has no GPU renderer on Windows yet" });
   await stop();
 });
@@ -1989,7 +1989,7 @@ test("GPU rendering: switching off waits for a restart; Later keeps the choice; 
   await gpuItem(host).run();
   await host.settle();
   assert.equal(host.rendering.preference, "gpu");
-  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.equal(gpuTitle(host), "GPU Rendering");
   assert.equal(gpuItem(host).state.checked, true);
   assert.equal(host.confirms.length, 1, "no restart is offered when nothing would change");
   assert.equal(host.commands.has(restartItem), false, "the restart item goes with the pending choice");
@@ -2046,7 +2046,7 @@ test("GPU rendering: a refused choice says why and greys the item out; a new sou
   await gpuItem(host).run();
   await host.settle();
   assert.equal(host.osd.at(-1), "Could not save the rendering choice: disk full");
-  assert.equal(gpuTitle(host), "GPU Rendering (Experimental)");
+  assert.equal(gpuTitle(host), "GPU Rendering");
   assert.deepEqual(host.confirms, []);
   await stop();
 });
@@ -2068,7 +2068,7 @@ test("GPU rendering: a restart the player cannot start is said; the choice stays
 test("GPU rendering: Simplified Chinese titles, dialog and on-screen text", async () => {
   const host = new TestHost();
   const { stop } = await start(host, undefined, zh);
-  assert.equal(gpuItem(host).display.title, "GPU 渲染（实验性）");
+  assert.equal(gpuItem(host).display.title, "GPU 渲染");
   host.dialogAnswers.push({ confirmed: false, checked: false });
   await gpuItem(host).run();
   await host.settle();
@@ -2418,6 +2418,66 @@ test("AI Upscaling: not needed for a video shown at its size; waits while this p
   }
 });
 
+/** Playing with upscaling on and the saved Deinterlace Always (the user's state on 2026-11-11). */
+async function upscalingWithAlways(data: string) {
+  // Everything at its default except Deinterlace Always (an Advanced preference), picture effects on.
+  await writeFile(join(data, "settings.json"), JSON.stringify({ version: 1, deinterlace: { mode: "on", output: "frame" } }));
+  const started = await playing(data);
+  const { host, window } = started;
+  await eventually(() => applied(host), [{ kind: "deinterlace", when: "all", output: "frame" }], "bwdif: a filter, so the frames are in memory");
+  window.emit("run", "video.upscaling");
+  await until(host, () => upOf(host).kind === "upscaling", "on");
+  /** The player reports that only this plugin's chain keeps the frames in memory. */
+  const waits = async (kind: string, what: string) => {
+    host.upscalingDecoding("copy-back", [{ id: "vestra.video", name: "Picture Adjustments" }]);
+    host.upscalingChanged();
+    await until(host, () => upOf(host).kind === kind, `${what} → ${kind}`);
+  };
+  return { ...started, waits };
+}
+
+test("AI Upscaling: Deinterlace Always alone waits for Deinterlace Auto, not a reset (user report 2026-11-11)", async () => {
+  await withData(async (data) => {
+    const { host, window, stop, waits } = await upscalingWithAlways(data);
+    try {
+      await waits("deinterlace", "Deinterlace Always alone");
+      // Deinterlace Auto is the player's own deinterlacer, not a filter: nothing of this panel waits.
+      window.emit("choose", "deinterlace", 0);
+      await eventually(() => applied(host), [autoDeinterlace], "the panel at its defaults: only the player's deinterlacer");
+      window.emit("choose", "deinterlace", 1);
+      // Reset All keeps the Advanced preferences: the line still asks for Auto, never for a reset.
+      window.emit("run", "video.resetPanel");
+      await until(host, () => host.osd.at(-1) === "Picture panel reset", "reset");
+      await eventually(() => applied(host), [{ kind: "deinterlace", when: "all", output: "frame" }]);
+      await waits("deinterlace", "after Reset All");
+    } finally {
+      await stop();
+    }
+  });
+});
+
+test("AI Upscaling: Deinterlace Always with a colour waits for the effects switch; a colour alone for Reset All", async () => {
+  await withData(async (data) => {
+    const { host, window, stop, waits } = await upscalingWithAlways(data);
+    try {
+      // Deinterlace Auto with a colour: Reset All clears it.
+      window.emit("choose", "deinterlace", 0);
+      window.emit("commit", "brightness", 10);
+      await eventually(() => applied(host), [autoDeinterlace, { ...neutralEq, brightness: 0.1 }]);
+      await waits("effects", "a colour alone");
+      // Both: no single reset clears them; turning picture effects off does.
+      window.emit("choose", "deinterlace", 1);
+      await waits("effects-off", "Deinterlace Always and a colour");
+      window.emit("toggle-effect", false);
+      await eventually(() => applied(host) ?? [], [], "effects off: no chain, so nothing keeps the frames in memory");
+      window.emit("toggle-effect", true);
+      await waits("effects-off", "effects on again");
+    } finally {
+      await stop();
+    }
+  });
+});
+
 test("AI Upscaling: while it waits for the decoder, the status says why and names the other plugins in the way", async () => {
   const { host, window, stop } = await playing();
   try {
@@ -2480,7 +2540,7 @@ test("AI Upscaling: greyed with the reason where it cannot work, never asking th
   const soft = new TestHost();
   soft.videoRender.gpu = false;
   soft.rendering.startedWith = "software";
-  soft.rendering.reason = { code: "default", message: "GPU rendering on Windows is experimental and off until it is turned on" };
+  soft.rendering.reason = { code: "default", message: "GPU rendering on Windows is off until it is turned on" };
   soft.openElsewhere("/movie.mp4");
   const first = await start(soft);
   try {

@@ -6,6 +6,7 @@ pub(crate) mod audio_hold;
 pub(crate) mod backend;
 pub(crate) mod cover_listing;
 pub(crate) mod effects;
+pub(crate) mod gpu_warm;
 pub(crate) mod media_copy;
 pub(crate) mod media_jobs;
 pub(crate) mod media_join;
