@@ -35,8 +35,8 @@ mod version;
 
 use anyhow::{Result, bail};
 use host::{
-    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, event_loop_ended,
-    restart_log, restart_logged, restart_player, run_through_loss, teardown_step,
+    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, RESIZE_SINK,
+    event_loop_ended, restart_log, restart_logged, restart_player, run_through_loss, teardown_step,
 };
 use packages::package_manager;
 use playback::{backend::Backend, frame_pacing, render_mode, render_target};
@@ -578,6 +578,7 @@ fn player() -> Result<()> {
         pip_log: None,
         render_area: None,
         render_sent: None,
+        render_continuous: false,
         pip_gpu: Default::default(),
         gpu_paced: false,
         drops: Default::default(),
@@ -812,6 +813,15 @@ fn player() -> Result<()> {
             // A GPU frame a window without a notifier refused (Windows).
             platform::update_gpu_frames();
         })));
+        let resize_host = host.clone();
+        RESIZE_SINK.with(|sink| {
+            *sink.borrow_mut() = Some(Box::new(move || {
+                // Busy (a tick runs): that tick or the next follows the area.
+                if let Ok(mut host) = resize_host.try_borrow_mut() {
+                    host.resized();
+                }
+            }))
+        });
         let pip_host = host.clone();
         PIP_GPU_SINK.with(|sink| {
             *sink.borrow_mut() = Some(Box::new(move || {
@@ -996,6 +1006,7 @@ fn player() -> Result<()> {
         frame_pacing::on_deliver(None);
         FRAME_SINK.with(|sink| sink.borrow_mut().take());
         PIP_GPU_SINK.with(|sink| sink.borrow_mut().take());
+        RESIZE_SINK.with(|sink| sink.borrow_mut().take());
         host.borrow_mut().ui_state.flush();
         // Native windows/resources must be released before process teardown.
         teardown_step("closing the secondary windows");

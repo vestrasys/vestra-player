@@ -105,13 +105,6 @@ impl Host {
         let video = (number("video-width"), number("video-height"));
         self.backdrop_cover_art();
         let scale = f64::from(shell.window().scale_factor());
-        if let Some(area) = self
-            .sizing
-            .observe(video, scale, fullscreen, Instant::now())
-        {
-            self.render_area = Some(area);
-        }
-        self.apply_render_size();
         let presentation = &self.backend.render.presentation;
         presentation.sample(Instant::now());
         if let Some(log) = self.frame_log.as_mut() {
@@ -150,6 +143,7 @@ impl Host {
         if self.measured_shell != Some(self.shell_generation)
             && (viewport.width <= 0. || viewport.height <= 0.)
         {
+            self.follow_video_area(&shell, fullscreen);
             return;
         }
         // IA-CORE-03: the normal frame and whether the window is maximized;
@@ -289,6 +283,10 @@ impl Host {
                 json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
             )
         })();
+        // The render size from the layout this tick leaves, after the bar,
+        // the columns and fullscreen above changed it (read before them, a
+        // toggled column reached the renderer a tick later).
+        let video = self.follow_video_area(&shell, fullscreen);
         self.answer_video_area(video, now);
         self.bar_tick(&shell, columns_seen);
         match result {

@@ -1407,6 +1407,9 @@ impl crate::playback::renderer::GpuBackend for GpuHandle {
     fn set_size(&self, size: (u32, u32)) {
         vestra_gpu_render::Handle::set_size(self, size);
     }
+    fn set_size_now(&self, size: (u32, u32)) {
+        vestra_gpu_render::Handle::set_size_now(self, size);
+    }
     fn set_display_fps(&self, fps: Option<f64>) {
         vestra_gpu_render::Handle::set_display_fps(self, fps);
     }

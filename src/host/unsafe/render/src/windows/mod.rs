@@ -397,6 +397,9 @@ struct Stats {
 struct Shared {
     stop: AtomicBool,
     size: Mutex<Size>,
+    /// A size asked for with [`Handle::set_size_now`]: the ring is remade at
+    /// it without waiting for it to hold (`SETTLE`).
+    at_once: Mutex<Option<Size>>,
     /// `Some(period)`: render at most once per period and report each frame
     /// as presented (mpv's display-synced timing, for interpolation).
     pace: Mutex<Option<Duration>>,
@@ -479,6 +482,7 @@ impl Shared {
         Self {
             stop: AtomicBool::new(false),
             size: Mutex::new(size),
+            at_once: Mutex::new(None),
             pace: Mutex::new(None),
             warm: Mutex::new(None),
             exchange: Mutex::default(),
@@ -950,7 +954,7 @@ fn produce(
     let (mut slots, mut slots_size) = (Vec::<d3d::Slot>::new(), None::<Size>);
     // A new size first seen when; the ring changes once it has held for
     // `SETTLE` (a border drag asks for a new size every frame).
-    let mut asked_size = None::<(Size, Instant)>;
+    let mut asked_size = None::<Asked>;
     let (mut cadence, mut ready_value, mut timeouts) = (Cadence::default(), 0u64, 0u64);
     // When the last render call started (`Handle::keep_warm`).
     let mut last_render = None::<Instant>;
@@ -1007,12 +1011,23 @@ fn produce(
         if slots_size == Some(size) {
             asked_size = None;
         } else {
-            let since = match asked_size {
-                Some((asked, since)) if asked == size => since,
-                _ => asked_size.insert((size, Instant::now())).1,
+            let now = Instant::now();
+            // A single step's size is taken once (used up here, so a later
+            // drag through the same size settles as usual).
+            let at_once = {
+                let mut asked = lock(&shared.at_once);
+                *asked == Some(size) && asked.take().is_some()
             };
-            // Until then the old ring keeps rendering (Slint scales it).
-            if slots.is_empty() || since.elapsed() >= SETTLE {
+            let asked = match &mut asked_size {
+                Some(asked) if asked.size == size => {
+                    asked.at_once |= at_once;
+                    asked
+                }
+                _ => asked_size.insert(Asked::new(size, at_once, now)),
+            };
+            // Until then the old ring keeps rendering (the window shows its
+            // picture scaled into the new area).
+            if asked.due(!slots.is_empty(), now) {
                 let made: Result<Vec<_>, _> =
                     (0..RING).map(|_| d3d::shared_slot(&gpu, &d3d11, size)).collect();
                 match made {
@@ -1030,7 +1045,9 @@ fn produce(
                     }
                     // A removed device, or the third failure in a row, ends
                     // GPU rendering; otherwise the old ring (if any) keeps
-                    // rendering and the size is tried again after `SETTLE`.
+                    // rendering and the size is tried again after `SETTLE`
+                    // (also a single step's: a transient allocation failure,
+                    // VRAM pressure while entering fullscreen, gets time).
                     Err(error) => {
                         ring_failures += 1;
                         let reason = format!("no ring at {}x{}: {error}", size.0, size.1);
@@ -1039,7 +1056,7 @@ fn produce(
                             break;
                         }
                         shared.diag(format!("{reason}; trying again"));
-                        asked_size = Some((size, Instant::now()));
+                        asked.failed(Instant::now());
                         continue;
                     }
                 }
@@ -1244,8 +1261,36 @@ fn produce(
     drop(render);
 }
 
-/// How long a new video-area size must hold before the ring is remade at it.
+/// How long a new video-area size must hold before the ring is remade at it
+/// (a border drag asks for a new size every few frames), unless it was asked
+/// for with [`Handle::set_size_now`] (a single step: fullscreen, maximize, a
+/// toggled column).
 const SETTLE: Duration = Duration::from_millis(150);
+
+/// A new size the ring is not yet made at: since when it is asked for (or
+/// last failed), and whether it is a single step ([`Handle::set_size_now`]).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct Asked {
+    size: Size,
+    since: Instant,
+    at_once: bool,
+}
+impl Asked {
+    fn new(size: Size, at_once: bool, now: Instant) -> Self {
+        Self { size, since: now, at_once }
+    }
+    /// Whether the ring is remade at the size now: there is none yet, the
+    /// size is a single step, or it held for `SETTLE`.
+    fn due(&self, have_ring: bool, now: Instant) -> bool {
+        !have_ring || self.at_once || now.saturating_duration_since(self.since) >= SETTLE
+    }
+    /// Making the ring failed: the next try comes after `SETTLE`, a single
+    /// step's too (three failures in a row end GPU rendering).
+    fn failed(&mut self, now: Instant) {
+        self.since = now;
+        self.at_once = false;
+    }
+}
 
 /// The longest wait for mpv's update callback between two looks.
 const IDLE_WAIT: Duration = Duration::from_millis(20);
@@ -1293,8 +1338,21 @@ impl Frame {
 }
 
 impl Handle {
-    /// The physical size to render at (the video area).
+    /// The physical size to render at (the video area); the ring is remade
+    /// at it once it held for `SETTLE` (a border drag).
     pub fn set_size(&self, size: Size) {
+        // A drag's size: an earlier single step's no longer applies.
+        *lock(&self.0.at_once) = None;
+        self.store_size(size);
+    }
+    /// `set_size` for a single step of the video area (fullscreen, maximize,
+    /// a toggled column): the ring is remade at once, so the window shows a
+    /// frame of the new size a frame later instead of after `SETTLE`.
+    pub fn set_size_now(&self, size: Size) {
+        *lock(&self.0.at_once) = Some(clamp(size));
+        self.store_size(size);
+    }
+    fn store_size(&self, size: Size) {
         if std::mem::replace(&mut *lock(&self.0.size), clamp(size)) != clamp(size) {
             mpv::Wake::wake(&*self.0);
         }
