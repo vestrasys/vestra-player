@@ -24,6 +24,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &[],
     residency: Residency::Live,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     Method::this("ui.mount"),
@@ -137,7 +138,7 @@ impl Capability for UiMount {
                 "only a tab of the sidebar or the adjust column is recorded",
             ));
         }
-        let builtin = host.is_builtin_package(&origin.id, &origin.directory);
+        let builtin = host.is_builtin_package(origin);
         let (mut mount, _) = new_mount(
             owner,
             &origin.directory,

@@ -33,6 +33,8 @@ export const CAPABILITIES = {
   "plugins.manage": { text: "Install, uninstall and disable other plugins", risky: true },
   "rendering.manage": { text: "Choose GPU or software rendering and restart the player", risky: true },
   "video.upscaling": { text: "Upscale the video with the GPU's video upscaler" },
+  "commands.run": { text: "Run any player or plugin command", risky: true },
+  "palette.lead": { text: "Add the first row of the command palette" },
 } as const satisfies Record<string, { text: string; risky?: true }>;
 
 /** The words of a capability (a template of text.ts). */

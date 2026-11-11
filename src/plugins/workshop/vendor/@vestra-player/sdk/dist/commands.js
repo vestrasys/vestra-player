@@ -139,7 +139,8 @@ export const MENU_IDS = [
  * icon of the player's V-Line set, `@vestra/icons.slint` (draw one in your own
  * Slint with `Icon { name: "store"; }`). The player's tests check that this
  * list is its icon set. `"sliders"` (three sliders, the player's Adjustments
- * and Effects button).
+ * and Effects button); `"search-ai"` (the magnifier with the AI icon's
+ * cross, the palette's button while a plugin holds its lead row).
  *
  * @example Check in a test that the button's icon exists
  * The test fails before release if the plugin's bar button names an icon
@@ -197,6 +198,7 @@ export const BAR_BUTTON_ICONS = [
     "store",
     "ai",
     "sliders",
+    "search-ai",
 ];
 /**
  * The player's limits on bottom-bar buttons (`CommandOptions.button`), the same
@@ -670,5 +672,9 @@ export function commandClient(transport) {
             state,
             ...(when ? { when: when } : {}),
         }),
+        /** The palette's table (`commands.run`). */
+        list: () => transport.request("commands.list", {}),
+        /** Run any listed command for a user action's ticket (`commands.run`). */
+        run: (params) => transport.request("commands.run", params),
     };
 }

@@ -83,6 +83,9 @@ pub struct Inputs {
     pub adjust: Option<(bool, bool)>,
     pub locale: &'static str,
     pub windows: (u64, Option<u64>),
+    /// The palette lead's title (`palette.lead`): the palette cell's icon
+    /// and tip.
+    pub lead: Option<String>,
 }
 
 /// What the windows show, and what was logged.
@@ -338,16 +341,28 @@ impl Host {
     /// shown, right of `»`.
     fn palette_item(&self) -> Option<Item> {
         let entry = self.commands.get(bindings::HOST, palette::PALETTE)?;
-        let label = label(entry.declaration.shown_title());
+        let mut label = label(entry.declaration.shown_title());
         let key = self
             .input
             .borrow()
             .table
             .label(bindings::HOST, palette::PALETTE);
+        // While a plugin holds the palette's first row (`palette.lead`):
+        // the magnifier with the AI cross, and the row named in the tip.
+        let icon = match &self.lead {
+            Some(lead) => {
+                label = i18n::tr_args(
+                    "{palette} and {lead}",
+                    &json!({"palette":label,"lead":lead.row.title}),
+                );
+                "search-ai"
+            }
+            None => "search",
+        };
         Some(Item {
             owner: bindings::HOST,
             id: palette::PALETTE.into(),
-            icon: commands::ButtonIcon::Name("search".into()),
+            icon: commands::ButtonIcon::Name(icon.into()),
             tip: tip(&label, key.as_deref(), &entry.state),
             label,
             enabled: entry.state.enabled && !entry.state.busy,
@@ -480,6 +495,7 @@ impl Host {
                 self.shell_generation,
                 self.floating.as_ref().map(|floating| floating.generation),
             ),
+            lead: self.lead.as_ref().map(|lead| lead.row.title.clone()),
         }
     }
 
@@ -730,6 +746,7 @@ mod tests {
             adjust: None,
             locale: "en",
             windows: (2, None),
+            lead: None,
         };
         let mut strip = Strip::default();
         assert!(strip.begin(&inputs));
@@ -761,12 +778,17 @@ mod tests {
                 adjust: Some((true, false)),
                 ..inputs.clone()
             },
+            // A palette lead came: the palette cell's icon and tip.
+            Inputs {
+                lead: Some("Ask Vestra".into()),
+                ..inputs.clone()
+            },
         ] {
             assert!(strip.begin(&changed));
             strip.inputs = Some(changed.clone());
             assert!(!strip.begin(&changed));
         }
-        assert_eq!(strip.rebuilds, 6);
+        assert_eq!(strip.rebuilds, 7);
     }
 
     #[test]

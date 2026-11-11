@@ -26,6 +26,8 @@
 //!   plugin command that long after start, as a menu click would, or
 //!   `@park+<ms>` that long after the plugin's next park. Headless tests
 //!   have no other way in without input.
+//!   An entry `lead:<query>@<ms>` activates the command palette's first
+//!   row (`palette.lead`) with that query, as Enter on it would.
 //! - `VESTRA_TEST_CLASSIFY_LATE=<ms>`: the playback worker's answer to a
 //!   run's first classification question is handled that long after it
 //!   came (under the 5 s classification deadline), so a request the
@@ -108,6 +110,8 @@ pub(crate) struct TestExecute {
     manifest: String,
     command: String,
     at: When,
+    /// `lead:<query>`: the palette lead with `command` as the query.
+    lead: bool,
 }
 #[derive(Clone, Copy, Debug, PartialEq)]
 enum When {
@@ -119,10 +123,15 @@ pub(crate) fn test_executes(text: &str) -> Vec<TestExecute> {
     text.split(',')
         .filter_map(|entry| {
             let (command, at) = entry.trim().rsplit_once('@')?;
-            let (manifest, command) = command.split_once('/')?;
+            let lead = command.strip_prefix("lead:");
+            let (manifest, command) = match lead {
+                Some(query) => ("", query),
+                None => command.split_once('/')?,
+            };
             Some(TestExecute {
                 manifest: manifest.into(),
                 command: command.into(),
+                lead: lead.is_some(),
                 at: match at.strip_prefix("park+") {
                     Some(ms) => When::AfterPark(ms.parse().ok()?),
                     None => When::At(at.parse().ok()?),
@@ -180,6 +189,11 @@ impl Host {
             .partition(|test| matches!(test.at, When::At(at) if at <= now));
         self.on_demand.tests = waiting;
         for test in due {
+            if test.lead {
+                diag!("lazy: VESTRA_TEST_EXECUTE lead:{}", test.command);
+                self.lead_activated(test.command, false);
+                continue;
+            }
             let owner = self
                 .plugins
                 .iter()
@@ -348,7 +362,8 @@ mod tests {
 
     #[test]
     fn test_executes_name_a_plugin_command_and_a_time() {
-        let tests = test_executes("a.b/hello@1500, c.d/x/y@park+20,bad,e.f/g@soon");
+        let tests =
+            test_executes("a.b/hello@1500, c.d/x/y@park+20,bad,e.f/g@soon,lead:faster please@900");
         let read = tests
             .iter()
             .map(|t| (t.manifest.as_str(), t.command.as_str(), t.at))
@@ -357,9 +372,11 @@ mod tests {
             read,
             [
                 ("a.b", "hello", When::At(1500)),
-                ("c.d", "x/y", When::AfterPark(20))
+                ("c.d", "x/y", When::AfterPark(20)),
+                ("", "faster please", When::At(900))
             ]
         );
+        assert!(tests[2].lead && !tests[0].lead);
         assert!(test_executes("").is_empty());
     }
 }

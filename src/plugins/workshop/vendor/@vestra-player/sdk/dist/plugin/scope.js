@@ -1,6 +1,6 @@
 /** Scopes own handles. Disposal runs newest first and never throws. */
 import { failure, toError } from "./errors.js";
-import { commands, keysOf } from "./commands.js";
+import { commands, keysOf, palette } from "./commands.js";
 import { WHEN } from "./when.js";
 import { dialogs } from "./services/dialogs.js";
 import { ui } from "./view/image.js";
@@ -88,6 +88,7 @@ export class ScopeImpl {
     resolvers = resolvers(this);
     packages = packages(this);
     osd = osd(this);
+    palette = palette(this);
     host = host(this);
     clipboard = clipboard(this);
     power = power(this);

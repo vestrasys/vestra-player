@@ -25,6 +25,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &["playback.read"],
     residency: Residency::Live,
+    builtin_only: false,
 };
 const BY_STAGE: Needs = Needs::Param {
     key: "stage",

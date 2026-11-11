@@ -13,6 +13,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &["media.read"],
     residency: Residency::Live,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[Method::this("snapshot.*"), Method::this("jobs.*")];
 impl Capability for MediaControl {

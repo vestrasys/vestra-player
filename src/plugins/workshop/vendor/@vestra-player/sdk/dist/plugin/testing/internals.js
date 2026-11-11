@@ -47,7 +47,20 @@ export class Internals {
         gone.catch(() => { });
         return gone;
     })();
-    next = { snapshot: 0, job: 0, producer: 0, source: 0, resolution: 0 };
+    next = {
+        snapshot: 0,
+        job: 0,
+        producer: 0,
+        source: 0,
+        resolution: 0,
+        ticket: 0,
+    };
+    /** `commands.run` tickets: runs, run times in the last second, last use (ms). */
+    tickets = new Map();
+    /** The last `commands.list` table (JSON) and its revision. */
+    listed = { text: "", revision: 0 };
+    /** The times of the plugin's `commands.run` calls in the last minute. */
+    runs = [];
     sourceBook = new Map();
     /** The pending resolutions' stamps and operations (beside `resolutions`). */
     resolving = new Map();

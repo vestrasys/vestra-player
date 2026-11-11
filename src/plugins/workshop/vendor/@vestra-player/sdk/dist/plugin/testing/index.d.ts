@@ -2326,6 +2326,68 @@ export declare class TestHost implements Transport {
     /** Every core action run (`host.run`, a core command, a pressed core binding), newest last. */
     readonly coreRuns: string[];
     /**
+     * The plugin is built into the player (`startPlugin`'s `builtin`). Only
+     * then does the host take the built-in-only capabilities
+     * (`commands.run`, `palette.lead`); otherwise their calls fail with
+     * `capability`, as in the player.
+     *
+     * @since 1.7.9
+     */
+    builtin: boolean;
+    /**
+     * The palette's lead row as the plugin last set it (`palette.lead.set`,
+     * wire form), `null` without one. Wire-level.
+     *
+     * @since 1.7.9
+     */
+    paletteLead: Record<string, Json> | null;
+    /**
+     * Simulate the user activating the palette's lead row: Enter (`keep`:
+     * Shift+Enter) with `query` typed, or Enter on the status row
+     * (`status`). Mints a ticket, sends the `palette.lead` event, waits until
+     * the host is idle and returns the ticket.
+     *
+     * Like the player, `commands.run` takes the ticket until
+     * `PaletteLead.done` or 120 s after its last run, at most 30 runs, 4 a
+     * second, and 120 runs a minute per plugin (`limit`). A command declared
+     * `destructive` (and the player's `host/stop`) is confirmed first: the
+     * answer comes from {@link TestHost.dialogAnswers}
+     * (`{ confirmed: false, checked: false }` is Don't Run); each run adds
+     * the command's title (and ` · step/of`) to {@link TestHost.osd}.
+     *
+     * @param query - What the user typed.
+     * @param options - `keep`: Shift+Enter; `status`: the status row.
+     * @returns The ticket of this user action.
+     *
+     * @example Test a request that runs a destructive command
+     * The user asks the plugin to stop playback and declines the
+     * confirmation. `builtin` lets the plugin hold the lead; the ticket
+     * minted here is what its listener passes to `commands.run`, and the
+     * queued answer declines the player's alert for `host/stop`.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * import { startPlugin } from "@vestra-player/sdk/testing";
+     * import activate from "../main.ts";
+     *
+     * const { host, stop } = await startPlugin(activate, {
+     *   directory: new URL("..", import.meta.url),
+     *   builtin: true, // as a plugin built into the player
+     * });
+     * host.dialogAnswers.push({ confirmed: false, checked: false }); // Don't Run
+     * await host.runPaletteLead("stop playback");
+     * assert.deepEqual(host.coreRuns, []); // declined: nothing ran
+     * await stop();
+     * ```
+     *
+     * @capability None.
+     * @throws `Error` without a code (rejects) The plugin has no lead row.
+     * @since 1.7.9
+     */
+    runPaletteLead(query: string, options?: {
+        keep?: boolean;
+        status?: boolean;
+    }): Promise<string>;
+    /**
      * One of the 14 core actions (`play-pause`, `stop`, `seek-forward`, ...)
      * that the test host registers like the player, as `host/<id>`. Throws for
      * an unknown id. `run()` executes it like its menu item: a disabled
@@ -3189,6 +3251,14 @@ export declare function startPlugin(activate: (plugin: Plugin) => unknown, optio
     id?: string;
     /** Use these capabilities instead of reading `manifest.json`. */
     capabilities?: string[];
+    /**
+     * Run the plugin as one built into the player
+     * ({@link TestHost.builtin}): only then do `commands.run` and
+     * `palette.lead` work. Default `false`.
+     *
+     * @since 1.7.9
+     */
+    builtin?: boolean;
     /** A host to use (to preset data before activation). Default: a new one. */
     host?: TestHost;
     /** Use an existing directory as `plugin.dataDirectory` (to test a restart). */

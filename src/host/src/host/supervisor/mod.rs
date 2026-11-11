@@ -81,6 +81,8 @@ pub(crate) const TRIGGERS: &[&str] = &[
     "source.resolveRequest",
     "drops.drop",
     "ui.callback",
+    // The command palette's first row activated (capabilities/palette_lead.rs).
+    "palette.lead",
 ];
 
 /// What of a run's resources in the playback worker (its answer to
@@ -1681,7 +1683,8 @@ mod tests {
                 "commands.execute",
                 "source.resolveRequest",
                 "drops.drop",
-                "ui.callback"
+                "ui.callback",
+                "palette.lead"
             ]
         );
     }

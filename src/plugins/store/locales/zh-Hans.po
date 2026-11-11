@@ -1411,6 +1411,14 @@ msgstr "选择 GPU 渲染或软件渲染，并重启播放器"
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "使用 GPU 的视频超分辨率功能放大视频"
 
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+msgid "Run any player or plugin command"
+msgstr "运行播放器或插件的任意命令"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+msgid "Add the first row of the command palette"
+msgstr "添加命令面板的第一行"
+
 #: store.ts:598 store.ts:599 store.ts:601
 msgid "Replace"
 msgstr "替换"

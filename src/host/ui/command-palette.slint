@@ -32,6 +32,22 @@ export struct PaletteRow {
     shown: bool,
 }
 
+// The first row a built-in plugin holds (`palette.lead`, palette.rs): its
+// icon, "title: query" (the title alone and `empty` dimmed for an empty
+// query), a note on the right; or its status (`status`) while the query is
+// empty. Drawn above the commands in view, never scrolled away.
+export struct PaletteLead {
+    shown: bool,
+    // A name of the icon set; "" draws `image`.
+    icon: string,
+    image: image,
+    title: string,
+    query: string,
+    empty: string,
+    note: string,
+    status: bool,
+}
+
 component KeyCap inherits Rectangle {
     in property <string> text;
     in property <bool> dim;
@@ -154,6 +170,90 @@ component PaletteItem inherits Rectangle {
     }
 }
 
+component LeadItem inherits Rectangle {
+    in property <PaletteLead> lead;
+    in property <bool> current;
+    callback activated();
+    private property <bool> typed: !root.lead.status && root.lead.query != "";
+    height: 28px;
+    border-radius: Theme.radius-control;
+    background: root.current ? Theme.selected-bg : touch.has-hover ? Theme.hover-bg : transparent;
+    accessible-role: button;
+    accessible-label: root.typed ? root.lead.title + ": " + root.lead.query : root.lead.title;
+    accessible-description: root.lead.note;
+    accessible-action-default => { root.activated(); }
+    Rectangle {
+        visible: root.current;
+        x: 0;
+        y: 7px;
+        width: 2px;
+        height: 14px;
+        border-radius: 1px;
+        background: Theme.accent;
+    }
+    HorizontalLayout {
+        padding-left: 4px;
+        padding-right: 8px;
+        spacing: 6px;
+        // The icon in the commands' check column, in the accent colour.
+        Rectangle {
+            width: 18px;
+            Icon {
+                visible: root.lead.icon != "";
+                name: root.lead.icon;
+                color: Theme.accent;
+            }
+            Image {
+                visible: root.lead.icon == "";
+                width: 14px;
+                height: 12px;
+                source: root.lead.image;
+                image-fit: contain;
+                colorize: Theme.accent;
+            }
+        }
+        // "Title:" in semibold, then what is typed; the whole row is for
+        // the text, elided at its end.
+        HorizontalLayout {
+            horizontal-stretch: 1;
+            min-width: 0px;
+            spacing: 4px;
+            Text {
+                horizontal-stretch: 0;
+                max-width: self.preferred-width;
+                text: root.typed ? root.lead.title + ":" : root.lead.title;
+                font-size: 12px;
+                font-weight: root.lead.status ? 400 : 600;
+                color: root.current ? Theme.text : Theme.text-list;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+            Text {
+                horizontal-stretch: 1;
+                min-width: 0px;
+                text: root.typed ? root.lead.query : root.lead.status ? "" : root.lead.empty;
+                font-size: 12px;
+                color: !root.typed ? Theme.text-dim : root.current ? Theme.text : Theme.text-list;
+                vertical-alignment: center;
+                overflow: elide;
+            }
+        }
+        Text {
+            horizontal-stretch: 0;
+            min-width: 0px;
+            max-width: 200px;
+            text: root.lead.note;
+            font-size: 11px;
+            color: Theme.text-dim;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+    }
+    touch := TouchArea {
+        clicked => { root.activated(); }
+    }
+}
+
 export component PaletteView inherits Rectangle {
     in property <[PaletteRow]> rows;
     // The cursor's row among `rows`, -1 for none.
@@ -161,6 +261,12 @@ export component PaletteView inherits Rectangle {
     // Rows shown (the rest of `rows` are hidden).
     in property <int> shown: 0;
     in property <string> count;
+    // The lead's row (`palette.lead`): slot 0 of `current` and `run` while
+    // shown, the commands after it.
+    in property <PaletteLead> lead;
+    // The field's placeholder while there is a lead (empty: the palette's own).
+    in property <string> placeholder;
+    private property <int> leading: root.lead.shown ? 1 : 0;
     // The footer's keys as this system's menus write them (the host's
     // binding labels: `Shift+Enter`, `⇧Enter` on macOS).
     in property <string> run-key: "Enter";
@@ -191,7 +297,7 @@ export component PaletteView inherits Rectangle {
         x: (root.width - self.width) / 2;
         y: 16px;
         width: root.panel-width;
-        height: 92px + max(1, root.shown) * 28px;
+        height: 92px + (root.leading + max(1, root.shown)) * 28px;
         background: Theme.bg-panel;
         border-color: Theme.line;
         border-width: 1px;
@@ -225,7 +331,7 @@ export component PaletteView inherits Rectangle {
                 x: 9px;
                 width: parent.width - 18px;
                 height: parent.height;
-                text: root.query == "" ? @tr("Type a command name") : "";
+                text: root.query != "" ? "" : root.placeholder != "" ? root.placeholder : @tr("Type a command name");
                 font-size: 13px;
                 color: Theme.text-dim;
                 vertical-alignment: center;
@@ -293,23 +399,35 @@ export component PaletteView inherits Rectangle {
             color: Theme.text-dim;
             vertical-alignment: center;
         }
-        // Rows from y 48px.
+        // Rows from y 48px: the lead's first, then the commands.
+        LeadItem {
+            visible: root.lead.shown;
+            x: 4px;
+            y: 48px;
+            width: parent.width - 8px;
+            lead: root.lead;
+            current: root.lead.shown && root.current == 0;
+            activated => {
+                field.focus();
+                root.run(0, false);
+            }
+        }
         for row[i] in root.rows: PaletteItem {
             visible: row.shown;
             x: 4px;
-            y: 48px + i * 28px;
+            y: 48px + (i + root.leading) * 28px;
             width: parent.width - 8px;
             item: row;
-            current: i == root.current;
+            current: i + root.leading == root.current;
             activated => {
                 field.focus();
-                if row.enabled { root.run(i, false); }
+                if row.enabled { root.run(i + root.leading, false); }
             }
         }
         Text {
             visible: root.shown == 0;
             x: 12px;
-            y: 48px;
+            y: 48px + root.leading * 28px;
             height: 28px;
             text: @tr("No matching commands");
             color: Theme.text-dim;

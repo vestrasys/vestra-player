@@ -44,6 +44,7 @@ export const CAPABILITY_INFO = Object.freeze(Object.fromEntries(Object.entries(c
         requires: Object.freeze(info.requires),
         label: info.label,
         risky: info.risky,
+        builtinOnly: info.builtinOnly,
     }),
 ])));
 /**

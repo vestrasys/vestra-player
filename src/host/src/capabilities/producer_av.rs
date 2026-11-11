@@ -10,6 +10,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &["playback.control"],
     residency: Residency::Live,
+    builtin_only: false,
 };
 static METHODS: &[Method] = &[
     Method::this("producer.prepare"),

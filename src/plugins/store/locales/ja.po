@@ -1679,6 +1679,16 @@ msgstr "GPU レンダリングとソフトウェアレンダリングの切り�
 msgid "Upscale the video with the GPU's video upscaler"
 msgstr "GPU のビデオアップスケーラーによる映像のアップスケール"
 
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Run any player or plugin command"
+msgstr "プレーヤーやプラグインの任意のコマンドの実行"
+
+#: store.ts:581 store.ts:596 store.ts:597 text.ts:409
+#, x-machine
+msgid "Add the first row of the command palette"
+msgstr "コマンドパレットの先頭行の追加"
+
 #: store.ts:598 store.ts:599 store.ts:601
 #, x-machine
 msgid "Replace"

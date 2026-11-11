@@ -10,6 +10,7 @@ static INFO: Info = Info {
     risky: false,
     requires: &[],
     residency: Residency::Live,
+    builtin_only: false,
 };
 /// Plugin and binding changes have their own (or no) capability.
 const BY_EVENT: Needs = Needs::Param {
