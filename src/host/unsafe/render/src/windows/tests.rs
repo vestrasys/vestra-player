@@ -571,6 +571,136 @@ fn real_gpu_interpolation_on_and_off_at_4k60() {
     drop(renderer);
 }
 
+/// Resize latency measurement (2026-11-11): from `set_size` (a drag's
+/// size) and `set_size_now` (a single step) to the first draw of a
+/// simulated 60 Hz window that finds a frame of the new size, playing and
+/// paused, on the high-performance GPU. Prints the numbers (`--nocapture`,
+/// or `VESTRA_PROBE_OUT`); asserts nothing. `VESTRA_GPU_CLIP` names the clip.
+#[test]
+#[ignore = "measurement: needs a GPU and a 4K60 clip (about 25 s)"]
+fn real_gpu_resize_latency() {
+    let clip = std::env::var("VESTRA_GPU_CLIP")
+        .unwrap_or_else(|_| r"C:\vestra\testmedia\bbb_sunflower_2160p_60fps_normal.mp4".into());
+    let gpu = Arc::new(Gpu::open(Choice::HighPerformance).expect("Direct3D 12"));
+    let mpv = player("auto-safe");
+    mpv.set_property("loop-file", "inf").unwrap();
+    let renderer = Renderer::start_on(gpu.clone(), mpv.clone(), (1248, 702), Arc::new(true.into()))
+        .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", &clip]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 0), "no frame");
+    let (shared, mut view) = (handle.0.clone(), View::default());
+    let mut draw = || {
+        let tick = Instant::now();
+        let _ = view.before(&shared);
+        gpu.queue.submit([]);
+        view.after(&shared);
+        thread::sleep(Duration::from_micros(16_667).saturating_sub(tick.elapsed()));
+    };
+    let start = Instant::now();
+    while start.elapsed() < Duration::from_secs(2) {
+        draw();
+    }
+    let sizes = [(1920u32, 1080u32), (1248, 702)];
+    let mut out = format!("{}\n", gpu.facts.name);
+    for (at_once, paused) in [(false, false), (false, true), (true, false), (true, true)] {
+        mpv.set_property("pause", paused).unwrap();
+        let settle = Instant::now();
+        while settle.elapsed() < Duration::from_millis(500) {
+            draw();
+        }
+        let label = format!(
+            "{} {}",
+            if at_once { "set_size_now" } else { "set_size" },
+            if paused { "paused" } else { "playing" }
+        );
+        let mut gaps = Vec::new();
+        for n in 0..10usize {
+            let size = sizes[n % 2];
+            let at = Instant::now();
+            if at_once {
+                handle.set_size_now(size);
+            } else {
+                handle.set_size(size);
+            }
+            loop {
+                draw();
+                if handle.latest().is_some_and(|(_, frame)| frame.size() == size) {
+                    gaps.push(at.elapsed().as_secs_f64() * 1e3);
+                    break;
+                }
+                if at.elapsed() > Duration::from_secs(3) {
+                    out += &format!("{label} -> {size:?}: none in 3 s\n");
+                    break;
+                }
+            }
+            let rest = Instant::now();
+            while rest.elapsed() < Duration::from_millis(250 + (n as u64 * 37) % 100) {
+                draw();
+            }
+        }
+        gaps.sort_by(f64::total_cmp);
+        if let (Some(first), Some(last)) = (gaps.first(), gaps.last()) {
+            out += &format!(
+                "{label}: n {} min {first:.1} median {:.1} max {last:.1} ms\n",
+                gaps.len(),
+                gaps[gaps.len() / 2]
+            );
+        }
+    }
+    if let Ok(path) = std::env::var("VESTRA_PROBE_OUT") {
+        let _ = std::fs::write(path, &out);
+    }
+    let _ = writeln!(std::io::stderr(), "{out}");
+    drop(renderer);
+}
+
+/// A drag's sizes remake the ring once one held for `SETTLE`; a single step
+/// (`set_size_now`) and the first ring at once.
+#[test]
+fn single_steps_remake_the_ring_at_once_and_drags_after_settling() {
+    assert!(remake_due(false, false, Duration::ZERO), "no ring yet");
+    assert!(remake_due(true, true, Duration::ZERO), "a single step");
+    assert!(!remake_due(true, false, SETTLE - Duration::from_millis(1)), "a drag");
+    assert!(remake_due(true, false, SETTLE), "the drag's size held");
+}
+
+/// `set_size_now` on WARP: the new size's frame comes well within `SETTLE`,
+/// `set_size` only after it.
+#[test]
+fn warp_a_single_step_resizes_without_settling() {
+    let mpv = player("no");
+    let renderer = Renderer::start_on(warp_gpu(), mpv.clone(), (64, 64), Arc::new(true.into()))
+        .expect("renderer");
+    let handle = renderer.handle();
+    mpv.command(&["loadfile", &SOURCE.replace("d=30", "r=60:d=30")]).expect("loadfile");
+    assert!(until(10, || handle.frames() > 0), "no frame");
+    let (shared, mut view) = (handle.0.clone(), View::default());
+    let mut resized = |size: Size, now: bool| {
+        let at = Instant::now();
+        if now {
+            handle.set_size_now(size);
+        } else {
+            handle.set_size(size);
+        }
+        while at.elapsed() < Duration::from_secs(5) {
+            let _ = view.before(&shared);
+            view.after(&shared);
+            if handle.latest().is_some_and(|(_, frame)| frame.size() == size) {
+                return at.elapsed();
+            }
+            thread::sleep(Duration::from_millis(2));
+        }
+        panic!("no frame of {size:?}");
+    };
+    let settled = resized((48, 32), false);
+    let at_once = resized((32, 48), true);
+    let _ = writeln!(std::io::stderr(), "set_size {settled:?}, set_size_now {at_once:?}");
+    assert!(settled >= SETTLE, "{settled:?}");
+    assert!(at_once < SETTLE, "{at_once:?}");
+    drop(renderer);
+}
+
 /// A render call that fails (no removed device) took mpv's frame all the
 /// same: it is reported too, or mpv's flip waits 200 ms for each such frame.
 #[test]

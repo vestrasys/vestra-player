@@ -2234,6 +2234,57 @@ export component W inherits Window {
         }
     }
 
+    /// The video area's `video-clip-*` bindings crop a frame of another
+    /// shape to its picture exactly as `render_target::picture_clip` does
+    /// (they run in the draw that follows a resize, before any host code).
+    #[test]
+    fn the_video_clip_follows_picture_clip() {
+        use crate::playback::render_target::picture_clip;
+        headless();
+        let source = crate::ui::composition::shell_source(&[]).unwrap();
+        let shell = crate::ui::composition::build(source, "HostWindow")
+            .unwrap()
+            .create()
+            .unwrap();
+        let number = |name: &str| match shell.get_property(name).unwrap() {
+            slint_interpreter::Value::Number(n) => n,
+            other => panic!("{other:?}"),
+        };
+        let frame = |width, height| {
+            slint_interpreter::Value::Image(slint::Image::from_rgb8(slint::SharedPixelBuffer::new(
+                width, height,
+            )))
+        };
+        for (frame_size, window, aspect) in [
+            ((1280, 860), (1600., 900.), 16. / 9.),
+            ((1600, 860), (1280., 900.), 16. / 9.),
+            ((1600, 860), (2560., 1480.), 16. / 9.),
+            ((1600, 860), (1600., 900.), 16. / 9.),
+            ((1000, 1000), (1600., 940.), 9. / 16.),
+            ((1920, 800), (800., 640.), 2.4),
+            ((1280, 860), (1600., 900.), 0.),
+        ] {
+            shell
+                .window()
+                .set_size(slint::LogicalSize::new(window.0, window.1));
+            shell
+                .set_property("video-frame", frame(frame_size.0, frame_size.1))
+                .unwrap();
+            shell
+                .set_property(
+                    "video-picture-aspect",
+                    slint_interpreter::Value::Number(aspect),
+                )
+                .unwrap();
+            let area = (number("video-width"), number("video-height"));
+            let expected = picture_clip(frame_size, area, Some(aspect))
+                .unwrap_or([0, 0, frame_size.0, frame_size.1])
+                .map(f64::from);
+            let got = ["x", "y", "width", "height"].map(|n| number(&format!("video-clip-{n}")));
+            assert_eq!(got, expected, "{frame_size:?} in {area:?}, aspect {aspect}");
+        }
+    }
+
     /// A long OSD message ends in "…" so that its action buttons stay whole
     /// inside the video area (GUI finding 2026-11-07: a long saved path
     /// pushed "Show in Folder" past the right edge); a short one keeps its

@@ -397,6 +397,9 @@ struct Stats {
 struct Shared {
     stop: AtomicBool,
     size: Mutex<Size>,
+    /// A size asked for with [`Handle::set_size_now`]: the ring is remade at
+    /// it without waiting for it to hold (`SETTLE`).
+    at_once: Mutex<Option<Size>>,
     /// `Some(period)`: render at most once per period and report each frame
     /// as presented (mpv's display-synced timing, for interpolation).
     pace: Mutex<Option<Duration>>,
@@ -479,6 +482,7 @@ impl Shared {
         Self {
             stop: AtomicBool::new(false),
             size: Mutex::new(size),
+            at_once: Mutex::new(None),
             pace: Mutex::new(None),
             warm: Mutex::new(None),
             exchange: Mutex::default(),
@@ -1011,8 +1015,10 @@ fn produce(
                 Some((asked, since)) if asked == size => since,
                 _ => asked_size.insert((size, Instant::now())).1,
             };
-            // Until then the old ring keeps rendering (Slint scales it).
-            if slots.is_empty() || since.elapsed() >= SETTLE {
+            // Until then the old ring keeps rendering (the window shows its
+            // picture scaled into the new area).
+            let at_once = *lock(&shared.at_once) == Some(size);
+            if remake_due(!slots.is_empty(), at_once, since.elapsed()) {
                 let made: Result<Vec<_>, _> =
                     (0..RING).map(|_| d3d::shared_slot(&gpu, &d3d11, size)).collect();
                 match made {
@@ -1244,8 +1250,17 @@ fn produce(
     drop(render);
 }
 
-/// How long a new video-area size must hold before the ring is remade at it.
+/// How long a new video-area size must hold before the ring is remade at it
+/// (a border drag asks for a new size every few frames), unless it was asked
+/// for with [`Handle::set_size_now`] (a single step: fullscreen, maximize, a
+/// toggled column).
 const SETTLE: Duration = Duration::from_millis(150);
+
+/// Whether the ring is remade at a new size now: there is none yet, the
+/// size is a single step, or it held for `SETTLE`.
+fn remake_due(have_ring: bool, at_once: bool, held: Duration) -> bool {
+    !have_ring || at_once || held >= SETTLE
+}
 
 /// The longest wait for mpv's update callback between two looks.
 const IDLE_WAIT: Duration = Duration::from_millis(20);
@@ -1293,11 +1308,19 @@ impl Frame {
 }
 
 impl Handle {
-    /// The physical size to render at (the video area).
+    /// The physical size to render at (the video area); the ring is remade
+    /// at it once it held for `SETTLE` (a border drag).
     pub fn set_size(&self, size: Size) {
         if std::mem::replace(&mut *lock(&self.0.size), clamp(size)) != clamp(size) {
             mpv::Wake::wake(&*self.0);
         }
+    }
+    /// `set_size` for a single step of the video area (fullscreen, maximize,
+    /// a toggled column): the ring is remade at once, so the window shows a
+    /// frame of the new size a frame later instead of after `SETTLE`.
+    pub fn set_size_now(&self, size: Size) {
+        *lock(&self.0.at_once) = Some(clamp(size));
+        self.set_size(size);
     }
     /// `Some(fps)`: start a frame every `1 / fps` seconds at most (mpv
     /// `video-sync=display-*`); `None`: mpv's own timing. Every frame is

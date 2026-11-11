@@ -41,6 +41,8 @@ impl Host {
                 // Before Slint lays out and draws at the new size.
                 if matches!(event, winit::event::WindowEvent::Resized(_)) {
                     platform::fullscreen_resized(slint_window);
+                    // The render size follows once Slint has the new layout.
+                    video::queue_resized();
                 }
                 track_pointer(&input, generation, slint_window, event);
                 let dead = observe_key(&input, &modifiers, event);

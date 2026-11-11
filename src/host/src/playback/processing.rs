@@ -3149,4 +3149,169 @@ mod tests {
         };
         assert_eq!(playback.current(), expected, "next file");
     }
+
+    /// Resize latency measurement (2026-11-11, the video area following
+    /// fullscreen and the columns): the software renderer's loop as
+    /// `backend.rs` runs it (render on mpv's update, and once after the
+    /// target changed), timed from a size change to the end of the first
+    /// render call at the new size, during playback and paused. Prints the
+    /// numbers (`--nocapture`, or `VESTRA_PROBE_OUT`); asserts nothing.
+    /// `VESTRA_PROBE_CLIP` names a clip (default: a generated 1080p30 H.264).
+    #[test]
+    #[ignore = "measurement: needs a hardware decoder and ffmpeg"]
+    fn probe_software_resize_latency() {
+        use std::sync::{Arc, Mutex, atomic::AtomicBool, atomic::Ordering, mpsc};
+        use std::time::{Duration, Instant};
+        let _one = one_mpv_at_a_time();
+        let dir = std::env::temp_dir().join(format!("vestra-resize-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let clip = match std::env::var("VESTRA_PROBE_CLIP") {
+            Ok(clip) => clip,
+            Err(_) => {
+                let file = dir.join("h264-1080p30.mkv");
+                let made = std::process::Command::new("ffmpeg")
+                    .args(["-loglevel", "error", "-y", "-f", "lavfi", "-i"])
+                    .arg("testsrc2=size=1920x1080:rate=30")
+                    .args(["-t", "30", "-c:v", "libx264", "-preset", "ultrafast"])
+                    .args(["-pix_fmt", "yuv420p"])
+                    .arg(&file)
+                    .status()
+                    .unwrap();
+                assert!(made.success());
+                file.to_string_lossy().into_owned()
+            }
+        };
+        let mpv = Arc::new(mpv(&crate::playback::renderer::hwdec(None, true)));
+        mpv.set_property("keep-open", true).unwrap();
+        mpv.set_property("vo", "libmpv").unwrap();
+        // (revision, size) as `render_target::Shared`.
+        let shared = Arc::new(Mutex::new((0u64, (1248u32, 702u32))));
+        type Call = (Instant, Instant, (u32, u32), bool);
+        let log = Arc::new(Mutex::new(Vec::<Call>::new()));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (wake, woke) = mpsc::sync_channel::<()>(1);
+        let thread = {
+            let (mpv, shared, log, stop, wake) = (
+                mpv.clone(),
+                shared.clone(),
+                log.clone(),
+                stop.clone(),
+                wake.clone(),
+            );
+            std::thread::spawn(move || {
+                let mut render = rsmpv::render::RenderContext::new_software(mpv).unwrap();
+                render.set_update_callback(move || {
+                    let _ = wake.try_send(());
+                });
+                let (mut seen, mut rendered, mut pixels) = (0u64, false, Vec::<u8>::new());
+                while !stop.load(Ordering::Relaxed) {
+                    let update = render.update();
+                    let (revision, (width, height)) = *shared.lock().unwrap();
+                    let resized = revision != seen;
+                    if update || (resized && rendered) {
+                        (seen, rendered) = (revision, true);
+                        pixels.resize(width as usize * height as usize * 3, 0);
+                        let began = Instant::now();
+                        render
+                            .render_software(
+                                width as i32,
+                                height as i32,
+                                rsmpv::render::SwPixelFormat::Rgb24,
+                                width as usize * 3,
+                                &mut pixels,
+                            )
+                            .unwrap();
+                        log.lock()
+                            .unwrap()
+                            .push((began, Instant::now(), (width, height), update));
+                    } else if resized {
+                        seen = revision;
+                    }
+                    if woke.recv().is_err() {
+                        break;
+                    }
+                }
+            })
+        };
+        mpv.command(&["loadfile", &clip]).unwrap();
+        let start = Instant::now();
+        while log.lock().unwrap().len() < 30 && start.elapsed() < Duration::from_secs(20) {
+            std::thread::sleep(Duration::from_millis(10));
+        }
+        std::thread::sleep(Duration::from_secs(1));
+        let sizes = [(1920u32, 1080u32), (1248, 702)];
+        let mut switches = Vec::<(Instant, (u32, u32), bool)>::new();
+        let mut switch = |n: usize, paused: bool| {
+            // Irregular against the frame interval.
+            std::thread::sleep(Duration::from_millis(250 + (n as u64 * 37) % 100));
+            let size = sizes[n % 2];
+            let at = {
+                let mut shared = shared.lock().unwrap();
+                *shared = (shared.0 + 1, size);
+                Instant::now()
+            };
+            let _ = wake.try_send(());
+            switches.push((at, size, paused));
+        };
+        for n in 0..20 {
+            switch(n, false);
+        }
+        mpv.set_property("pause", true).unwrap();
+        std::thread::sleep(Duration::from_millis(500));
+        for n in 0..10 {
+            switch(n, true);
+        }
+        std::thread::sleep(Duration::from_millis(300));
+        stop.store(true, Ordering::Relaxed);
+        let _ = wake.try_send(());
+        drop(wake);
+        let hwdec: String = mpv.get_property("hwdec-current").unwrap_or_default();
+        let fps: f64 = mpv.get_property("container-fps").unwrap_or(0.);
+        let _ = thread.join();
+        let log = log.lock().unwrap();
+        let ms = |d: Duration| d.as_secs_f64() * 1e3;
+        let mut out = format!("clip {clip} fps {fps:.2} hwdec {hwdec}\n");
+        let fresh: Vec<f64> = log.iter().filter(|c| c.3).map(|c| ms(c.1 - c.0)).collect();
+        out += &format!(
+            "fresh render calls {} mean {:.1} max {:.1} ms\n",
+            fresh.len(),
+            fresh.iter().sum::<f64>() / fresh.len().max(1) as f64,
+            fresh.iter().copied().fold(0., f64::max)
+        );
+        for (paused, label) in [(false, "playing"), (true, "paused")] {
+            let mut gaps = Vec::new();
+            for (at, size, _) in switches.iter().filter(|s| s.2 == paused) {
+                let first = log.iter().find(|c| c.0 >= *at && c.2 == *size);
+                match first {
+                    Some(call) => {
+                        gaps.push(ms(call.1 - *at));
+                        out += &format!(
+                            "{label} -> {}x{}: starts +{:.1} ms, done +{:.1} ms ({}, call {:.1} ms)\n",
+                            size.0,
+                            size.1,
+                            ms(call.0 - *at),
+                            ms(call.1 - *at),
+                            if call.3 { "new frame" } else { "resize-only" },
+                            ms(call.1 - call.0)
+                        );
+                    }
+                    None => out += &format!("{label} -> {}x{}: no render\n", size.0, size.1),
+                }
+            }
+            gaps.sort_by(f64::total_cmp);
+            if !gaps.is_empty() {
+                out += &format!(
+                    "{label}: n {} min {:.1} median {:.1} max {:.1} ms\n",
+                    gaps.len(),
+                    gaps[0],
+                    gaps[gaps.len() / 2],
+                    gaps[gaps.len() - 1]
+                );
+            }
+        }
+        let path = std::env::var("VESTRA_PROBE_OUT")
+            .unwrap_or_else(|_| dir.join("probe.txt").to_string_lossy().into_owned());
+        std::fs::write(&path, &out).unwrap();
+        let _ = std::io::Write::write_all(&mut std::io::stderr(), out.as_bytes());
+    }
 }
