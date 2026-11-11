@@ -38,6 +38,10 @@ pub trait GpuBackend {
     fn set_size(&self, size: (u32, u32));
     /// Pace to the display (`Some(fps)`, interpolation) or to the video.
     fn set_display_fps(&self, fps: Option<f64>);
+    /// `Some(period)`: render and present the current (paused) frame once
+    /// per period while mpv draws nothing new (`gpu_warm`); `None`: only
+    /// what mpv asks for. Windows only; nothing by default.
+    fn keep_warm(&self, _period: Option<std::time::Duration>) {}
     /// Frames rendered so far.
     fn frames(&self) -> u64;
     /// How far rendering got (the plugin shader guard); `None` where the

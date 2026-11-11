@@ -90,7 +90,7 @@ impl Preference {
 pub enum Reason {
     /// Nothing rules GPU rendering out.
     Default,
-    /// This system's GPU renderer is experimental and off until the user
+    /// This system's GPU renderer is off until the user
     /// turns it on (Windows): the platform's default is software rendering.
     /// Code `default`, as the SDK documents it ("the platform's default").
     OffByDefault,
@@ -136,7 +136,7 @@ impl Reason {
         match self {
             Self::Default => "nothing rules GPU rendering out".into(),
             Self::OffByDefault => format!(
-                "GPU rendering on {} is experimental and off until it is turned on",
+                "GPU rendering on {} is off until it is turned on",
                 system_name(std::env::consts::OS)
             ),
             Self::Pending => "GPU rendering is starting".into(),
@@ -961,7 +961,7 @@ mod tests {
                 .contains("software rendering, Direct3D 12 (wgpu) windows")
         );
         assert_eq!(auto.reason.code(), "default", "the SDK's code");
-        assert!(auto.reason.message().contains("experimental"));
+        assert!(auto.reason.message().contains("off until it is turned on"));
         assert_eq!(windows.gpu_available(), Ok(()), "the switch can turn it on");
         let chosen = decide(&windows, Preference::Gpu);
         assert_eq!(

@@ -11,7 +11,7 @@ msgstr ""
 msgid "Picture"
 msgstr "映像"
 
-#: main.ts:232 picture.slint:1312
+#: main.ts:232 picture.slint:1314
 #, x-machine
 msgid "Shader failed to load"
 msgstr "シェーダの読み込みに失敗しました"
@@ -51,17 +51,17 @@ msgstr "アスペクト比：{}"
 msgid "Aspect ratio: Custom - {}"
 msgstr "アスペクト比：カスタム - {}"
 
-#: main.ts:658 main.ts:1162 picture.slint:1917
+#: main.ts:658 main.ts:1162 picture.slint:1919
 #, x-machine
 msgid "Keep Aspect Ratio"
 msgstr "アスペクト比を保持"
 
-#: main.ts:658 main.ts:1162 picture.slint:1917
+#: main.ts:658 main.ts:1162 picture.slint:1919
 #, x-machine
 msgid "Ignore Aspect Ratio"
 msgstr "アスペクト比を無視"
 
-#: main.ts:658 picture.slint:1917
+#: main.ts:658 picture.slint:1919
 #, x-machine
 msgid "Fill Window"
 msgstr "ウインドウに合わせる"
@@ -538,12 +538,12 @@ msgstr "ピクセルシェーダ"
 msgid "HDR Tone Mapping"
 msgstr "HDR トーンマッピング"
 
-#: main.ts:1050 picture.slint:1980
+#: main.ts:1050 picture.slint:1982
 #, x-machine
 msgid "Deinterlace"
 msgstr "インターレース解除"
 
-#: main.ts:1051 picture.slint:1893
+#: main.ts:1051 picture.slint:1895
 #, x-machine
 msgid "Aspect"
 msgstr "アスペクト比"
@@ -578,7 +578,7 @@ msgstr "リセット"
 msgid "Use Shaders"
 msgstr "シェーダを使用"
 
-#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1806 ui/shaders.slint:131
+#: main.ts:1075 main.ts:1081 main.ts:1092 main.ts:1103 main.ts:1114 main.ts:1416 main.ts:1815 ui/shaders.slint:131
 #, x-machine
 msgid "Needs GPU rendering (currently software rendering)"
 msgstr "GPU レンダリングが必要です（現在はソフトウェアレンダリング）"
@@ -598,12 +598,12 @@ msgstr "シェーダのフォルダを開く"
 msgid "Reload Shaders"
 msgstr "シェーダを再読み込み"
 
-#: main.ts:1085 main.ts:1135 picture.slint:1335 picture.slint:1336
+#: main.ts:1085 main.ts:1135 picture.slint:1337 picture.slint:1338
 #, x-machine
 msgid "Auto"
 msgstr "自動"
 
-#: main.ts:1085 picture.slint:1336 picture.slint:1864
+#: main.ts:1085 picture.slint:1338 picture.slint:1866
 #, x-machine
 msgid "Off"
 msgstr "オフ"
@@ -628,12 +628,12 @@ msgstr "Mobius"
 msgid "Reinhard"
 msgstr "Reinhard"
 
-#: main.ts:1085 picture.slint:1336
+#: main.ts:1085 picture.slint:1338
 #, x-machine
 msgid "Clip"
 msgstr "クリップ"
 
-#: main.ts:1097 picture.slint:2062
+#: main.ts:1097 picture.slint:2064
 #, x-machine
 msgid "Dynamic Peak Detection"
 msgstr "動的ピーク検出"
@@ -648,12 +648,12 @@ msgstr "HDR の設定…"
 msgid "Cycle"
 msgstr "順に切り替え"
 
-#: main.ts:1135 picture.slint:1335
+#: main.ts:1135 picture.slint:1337
 #, x-machine
 msgid "Always"
 msgstr "常に使用"
 
-#: main.ts:1135 picture.slint:1335
+#: main.ts:1135 picture.slint:1337
 #, x-machine
 msgid "Never"
 msgstr "使用しない"
@@ -663,12 +663,12 @@ msgstr "使用しない"
 msgid "By Frame"
 msgstr "フレーム単位"
 
-#: main.ts:1147 picture.slint:1998
+#: main.ts:1147 picture.slint:2000
 #, x-machine
 msgid "By Field (Double Rate)"
 msgstr "フィールド単位（倍レート）"
 
-#: main.ts:1154 picture.slint:1997
+#: main.ts:1154 picture.slint:1999
 #, x-machine
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr "自動はフィールド単位（倍レート）で出力します。この設定は「常に使用」に適用されます"
@@ -683,12 +683,12 @@ msgstr "ウインドウに合わせる（はみ出しを切り取り）"
 msgid "Cycle Aspect Ratio"
 msgstr "アスペクト比を順に切り替え"
 
-#: main.ts:1183 picture.slint:1320 picture.slint:1321
+#: main.ts:1183 picture.slint:1322 picture.slint:1323
 #, x-machine
 msgid "Default (Source)"
 msgstr "デフォルト（ソース）"
 
-#: main.ts:1230 picture.slint:1321
+#: main.ts:1230 picture.slint:1323
 #, x-machine
 msgid "Custom ({})"
 msgstr "カスタム（{}）"
@@ -703,7 +703,7 @@ msgstr "カスタム（x:y）"
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr "先に「カスタムアスペクト比…」で入力してください"
 
-#: main.ts:1234 picture.slint:1910
+#: main.ts:1234 picture.slint:1912
 #, x-machine
 msgid "Custom Aspect Ratio…"
 msgstr "カスタムアスペクト比…"
@@ -818,22 +818,22 @@ msgstr "パン ↑"
 msgid "Pan ↓"
 msgstr "パン ↓"
 
-#: main.ts:1314 picture.slint:1826
+#: main.ts:1314 picture.slint:1828
 #, x-machine
 msgid "Center Frame"
 msgstr "フレームを中央に"
 
-#: main.ts:1339 picture.slint:1802
+#: main.ts:1339 picture.slint:1804
 #, x-machine
 msgid "Flip Vertically"
 msgstr "上下反転"
 
-#: main.ts:1350 picture.slint:1809
+#: main.ts:1350 picture.slint:1811
 #, x-machine
 msgid "Flip Horizontally"
 msgstr "左右反転"
 
-#: main.ts:1361 picture.slint:1591 picture.slint:1672
+#: main.ts:1361 picture.slint:1593 picture.slint:1674
 #, x-machine
 msgid "Gaussian Blur"
 msgstr "ガウスぼかし"
@@ -848,7 +848,7 @@ msgstr "ガウスぼかし：オン"
 msgid "Gaussian blur: off"
 msgstr "ガウスぼかし：オフ"
 
-#: main.ts:1387 picture.slint:1572 picture.slint:1573 picture.slint:1651 picture.slint:1652
+#: main.ts:1387 picture.slint:1574 picture.slint:1575 picture.slint:1653 picture.slint:1654
 #, x-machine
 msgid "Sharpen"
 msgstr "シャープ"
@@ -858,27 +858,27 @@ msgstr "シャープ"
 msgid "Edge Sharpen"
 msgstr "エッジシャープ"
 
-#: main.ts:1387 picture.slint:1599 picture.slint:1600 picture.slint:1682
+#: main.ts:1387 picture.slint:1601 picture.slint:1602 picture.slint:1684
 #, x-machine
 msgid "Deblock"
 msgstr "ブロックノイズ除去"
 
-#: main.ts:1387 picture.slint:1608 picture.slint:1609 picture.slint:1692 picture.slint:1693
+#: main.ts:1387 picture.slint:1610 picture.slint:1611 picture.slint:1694 picture.slint:1695
 #, x-machine
 msgid "Deband"
 msgstr "バンディング除去"
 
-#: main.ts:1387 picture.slint:1738
+#: main.ts:1387 picture.slint:1740
 #, x-machine
 msgid "3D Denoise"
 msgstr "3D ノイズ除去"
 
-#: main.ts:1387 picture.slint:1749
+#: main.ts:1387 picture.slint:1751
 #, x-machine
 msgid "Gradual Denoise"
 msgstr "段階的ノイズ除去"
 
-#: main.ts:1387 picture.slint:1760
+#: main.ts:1387 picture.slint:1762
 #, x-machine
 msgid "Temporal Denoise"
 msgstr "時間軸ノイズ除去"
@@ -974,12 +974,12 @@ msgstr "{}"
 msgid "GPU Rendering (Restart to Apply)"
 msgstr "GPU レンダリング（再起動で適用）"
 
-#: main.ts:1528
+#: main.ts:1528 picture.slint:1451
 #, x-machine
-msgid "GPU Rendering (Experimental)"
-msgstr "GPU レンダリング（試験的）"
+msgid "GPU Rendering"
+msgstr "GPU レンダリング"
 
-#: main.ts:1538 main.ts:1806 picture.slint:1343 picture.slint:1353 picture.slint:1437
+#: main.ts:1538 main.ts:1815 picture.slint:1345 picture.slint:1355 picture.slint:1443
 #, x-machine
 msgid "Switching…"
 msgstr "切り替え中…"
@@ -1074,32 +1074,32 @@ msgstr "待機中 · {} の効果をオフに"
 msgid "{} keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale."
 msgstr "{} は効果のためにフレームをメモリに保持していますが、アップスケーリングにはフレームが GPU 上にある必要があります。それらの効果をオフにするとアップスケーリングできます。"
 
-#: main.ts:1734
+#: main.ts:1743
 #, x-machine
 msgid "Not available on this GPU: {}"
 msgstr "この GPU では使用できません: {}"
 
-#: main.ts:1775
+#: main.ts:1784
 #, x-machine
 msgid "AI upscaling unavailable: {}"
 msgstr "AI アップスケーリングを使用できません: {}"
 
-#: main.ts:1781
+#: main.ts:1790
 #, x-machine
 msgid "AI upscaling: on (Super Resolution must also be on in the NVIDIA app)"
 msgstr "AI アップスケーリング: オン（NVIDIA アプリで Super Resolution もオンにしてください）"
 
-#: main.ts:1786
+#: main.ts:1795
 #, x-machine
 msgid "AI upscaling: off"
 msgstr "AI アップスケーリング: オフ"
 
-#: main.ts:1799 picture.slint:1485
+#: main.ts:1808 picture.slint:1487
 #, x-machine
 msgid "AI Upscaling"
 msgstr "AI アップスケーリング"
 
-#: main.ts:1806 picture.slint:1373
+#: main.ts:1815 picture.slint:1377
 #, x-machine
 msgid "Not available on this system (Windows with an NVIDIA RTX GPU)"
 msgstr "このシステムでは使用できません（Windows と NVIDIA RTX GPU が必要）"
@@ -1143,542 +1143,547 @@ msgstr "色"
 msgid "filters"
 msgstr "フィルタ"
 
-#: picture.slint:605 picture.slint:755 picture.slint:792 picture.slint:2032
+#: picture.slint:607 picture.slint:757 picture.slint:794 picture.slint:2034
 #, x-machine
 msgid "· double-click: Default"
 msgstr "· ダブルクリック: デフォルト"
 
-#: picture.slint:670
+#: picture.slint:672
 #, x-machine
 msgid "· click: on or off"
 msgstr "· クリック：オン / オフ"
 
-#: picture.slint:1204
+#: picture.slint:1206
 #, x-machine
 msgid "Pick a ratio below"
 msgstr "下で比率を選択"
 
-#: picture.slint:1204
+#: picture.slint:1206
 #, x-machine
 msgid "Screen"
 msgstr "画面"
 
-#: picture.slint:1308
+#: picture.slint:1310
 #, x-machine
 msgid "Needs GPU rendering: turn it on under Rendering, then restart"
 msgstr "GPU レンダリングが必要です: 「レンダリング」でオンにしてから再起動してください"
 
-#: picture.slint:1309
+#: picture.slint:1311
 #, x-machine
 msgid "No picture in the current source"
 msgstr "現在のソースには映像がありません"
 
-#: picture.slint:1310
+#: picture.slint:1312
 #, x-machine
 msgid "Picture processing failed"
 msgstr "映像の処理に失敗しました"
 
-#: picture.slint:1311
+#: picture.slint:1313
 #, x-machine
 msgid "Display unavailable"
 msgstr "表示を使用できません"
 
-#: picture.slint:1313
+#: picture.slint:1315
 #, x-machine
 msgid "Render options unavailable"
 msgstr "レンダリングオプションを使用できません"
 
-#: picture.slint:1314
+#: picture.slint:1316
 #, x-machine
 msgid "Render settings failed"
 msgstr "レンダリングの設定に失敗しました"
 
-#: picture.slint:1317
+#: picture.slint:1319
 #, x-machine
 msgid "Another plugin controls the display"
 msgstr "別のプラグインが表示を制御しています"
 
-#: picture.slint:1318
+#: picture.slint:1320
 #, x-machine
 msgid "Another plugin controls the render options"
 msgstr "別のプラグインがレンダリングオプションを制御しています"
 
-#: picture.slint:1325 picture.slint:1621 picture.slint:1737
+#: picture.slint:1327 picture.slint:1623 picture.slint:1739
 #, x-machine
 msgid "3D"
 msgstr "3D"
 
-#: picture.slint:1327 picture.slint:1748
+#: picture.slint:1329 picture.slint:1750
 #, x-machine
 msgid "Gradual"
 msgstr "段階的"
 
-#: picture.slint:1329 picture.slint:1621 picture.slint:1759
+#: picture.slint:1331 picture.slint:1623 picture.slint:1761
 #, x-machine
 msgid "Temporal"
 msgstr "時間軸"
 
-#: picture.slint:1333
+#: picture.slint:1335
 #, x-machine
 msgid "{} with bars"
 msgstr "{}（黒帯付き）"
 
-#: picture.slint:1337
+#: picture.slint:1339
 #, x-machine
 msgid "Advanced"
 msgstr "詳細"
 
-#: picture.slint:1338
+#: picture.slint:1340
 #, x-machine
 msgid "{n} shader"
 msgid_plural "{n} shaders"
 msgstr[0] "シェーダ {n} 個"
 
 #. the closed Advanced row's summary: {0} the deinterlace mode, {1} the HDR tone mapping, {2} "3 shaders".
-#: picture.slint:1340
+#: picture.slint:1342
 #, x-machine
 msgid "Deinterlace {0} · HDR {1} · {2}"
 msgstr "インターレース解除 {0} · HDR {1} · {2}"
 
-#: picture.slint:1344
+#: picture.slint:1346
 #, x-machine
 msgid "Restart to apply · GPU from the next start"
 msgstr "再起動で適用 · 次回の起動から GPU"
 
-#: picture.slint:1345
+#: picture.slint:1347
 #, x-machine
 msgid "Restart to apply · software rendering from the next start"
 msgstr "再起動で適用 · 次回の起動からソフトウェアレンダリング"
 
-#: picture.slint:1346
+#: picture.slint:1348
 #, x-machine
 msgid "On the GPU · {}"
 msgstr "GPU で描画中 · {}"
 
-#: picture.slint:1346
+#: picture.slint:1348
 #, x-machine
 msgid "On the GPU"
 msgstr "GPU で描画中"
 
-#: picture.slint:1347
+#: picture.slint:1349
 #, x-machine
 msgid "Software rendering · {}"
 msgstr "ソフトウェアレンダリング · {}"
 
-#: picture.slint:1348
+#: picture.slint:1350
 #, x-machine
 msgid "Software rendering · turn on, then restart"
 msgstr "ソフトウェアレンダリング · オンにしてから再起動"
 
 #. {0} and {1} are the video's height and the shown height in pixels (1080, 2160), {2} the GPU's name.
-#: picture.slint:1357
+#: picture.slint:1359
 #, x-machine
 msgid "Upscaling {0}p → {1}p on {2}"
 msgstr "アップスケーリング中 {0}p → {1}p（{2}）"
 
-#: picture.slint:1358
+#: picture.slint:1360
 #, x-machine
 msgid "Upscaling {0}p → {1}p"
 msgstr "アップスケーリング中 {0}p → {1}p"
 
-#: picture.slint:1359
+#: picture.slint:1361
 #, x-machine
 msgid "Upscaling on the GPU"
 msgstr "GPU でアップスケーリング中"
 
-#: picture.slint:1360
+#: picture.slint:1362
 #, x-machine
 msgid "On · upscales video shown larger than its size"
 msgstr "オン · 元のサイズより大きく表示される動画をアップスケール"
 
-#: picture.slint:1361
+#: picture.slint:1363
 #, x-machine
 msgid "On · this video is not shown larger than its size"
 msgstr "オン · この動画は元のサイズより大きく表示されていません"
 
-#: picture.slint:1365
+#: picture.slint:1367
 #, x-machine
 msgid "Waiting · reset picture adjustments"
 msgstr "待機中 · 映像の調整をリセット"
 
-#: picture.slint:1367
+#: picture.slint:1368
+#, x-machine
+msgid "Waiting · set Deinterlace to Auto"
+msgstr "待機中 · インターレース解除を自動に"
+
+#: picture.slint:1369
+#, x-machine
+msgid "Waiting · turn off picture effects"
+msgstr "待機中 · 映像エフェクトをオフに"
+
+#: picture.slint:1371
 #, x-machine
 msgid "Waiting · frames copied to memory"
 msgstr "待機中 · フレームをメモリにコピー"
 
-#: picture.slint:1368
+#: picture.slint:1372
 #, x-machine
 msgid "Waiting · hardware decoding is off"
 msgstr "待機中 · ハードウェアデコード無効"
 
-#: picture.slint:1369
+#: picture.slint:1373
 #, x-machine
 msgid "Waiting · video decoded in software"
 msgstr "待機中 · ソフトウェアでデコード中"
 
-#: picture.slint:1370
+#: picture.slint:1374
 #, x-machine
 msgid "Waiting · another hardware decoder"
 msgstr "待機中 · 別のデコーダーを使用中"
 
-#: picture.slint:1371
+#: picture.slint:1375
 #, x-machine
 msgid "Waiting · {}"
 msgstr "待機中 · {}"
 
-#: picture.slint:1372
+#: picture.slint:1376
 #, x-machine
 msgid "Needs GPU rendering (software rendering now)"
 msgstr "GPU レンダリングが必要（現在はソフトウェアレンダリング）"
 
-#: picture.slint:1374
+#: picture.slint:1378
 #, x-machine
 msgid "Not available on this GPU · {}"
 msgstr "この GPU では使用不可 · {}"
 
-#: picture.slint:1376
+#: picture.slint:1380
 #, x-machine
 msgid "Off · sharpens video shown larger than its size"
 msgstr "オフ · 拡大表示される動画を鮮明にします"
 
-#: picture.slint:1379
+#: picture.slint:1383
 #, x-machine
-msgid "Colour, Effects or Geometry (flip, rotation, crop/stretch) away from their defaults, or Deinterlace Always, need the frames in memory, but upscaling needs them on the GPU. Reset them to upscale."
-msgstr "色・エフェクト・ジオメトリ（反転、回転、クロップ/引き伸ばし）がデフォルトでないとき、またはインターレース解除が「常に使用」のとき、フレームはメモリで処理されますが、アップスケーリングにはフレームが GPU 上にある必要があります。これらをリセットするとアップスケーリングできます。"
+msgid "Colour, Effects or Geometry (flip, rotation, crop/stretch) away from their defaults need the frames in memory, but upscaling needs them on the GPU. Reset them (Reset All) to upscale."
+msgstr "色・エフェクト・ジオメトリ（反転、回転、クロップ/引き伸ばし）がデフォルトでないとき、フレームはメモリで処理されますが、アップスケーリングにはフレームが GPU 上にある必要があります。これらをリセット（すべてリセット）するとアップスケーリングできます。"
 
-#: picture.slint:1381
+#: picture.slint:1384
+#, x-machine
+msgid "Deinterlace Always filters every frame in memory, but upscaling needs the frames on the GPU. Auto still deinterlaces interlaced video and lets it upscale."
+msgstr "インターレース解除が「常に使用」のとき、すべてのフレームはメモリで処理されますが、アップスケーリングにはフレームが GPU 上にある必要があります。「自動」でもインターレース映像は解除され、アップスケーリングもできます。"
+
+#: picture.slint:1385
+#, x-machine
+msgid "Deinterlace Always and Colour, Effects or Geometry away from their defaults need the frames in memory, but upscaling needs them on the GPU. Turn off picture effects (or Reset All and set Deinterlace to Auto) to upscale."
+msgstr "インターレース解除が「常に使用」で、色・エフェクト・ジオメトリもデフォルトでないとき、フレームはメモリで処理されますが、アップスケーリングにはフレームが GPU 上にある必要があります。映像エフェクトをオフにする（またはすべてリセットしてインターレース解除を「自動」にする）とアップスケーリングできます。"
+
+#: picture.slint:1387
 #, x-machine
 msgid "The video is decoded on the GPU, but its frames are copied to memory, and upscaling needs them on the GPU."
 msgstr "動画は GPU でデコードされていますが、フレームがメモリにコピーされており、アップスケーリングにはフレームが GPU 上にある必要があります。"
 
-#: picture.slint:1382
+#: picture.slint:1388
 #, x-machine
 msgid "Hardware decoding is off, and upscaling needs the video decoded on the GPU."
 msgstr "ハードウェアデコードがオフで、アップスケーリングには GPU でのデコードが必要です。"
 
-#: picture.slint:1383
+#: picture.slint:1389
 #, x-machine
 msgid "This video is decoded in software (for example a format the GPU does not decode), but upscaling needs it decoded on the GPU. Videos the GPU decodes are upscaled."
 msgstr "この動画はソフトウェアでデコードされています（GPU がデコードできない形式など）が、アップスケーリングには GPU でのデコードが必要です。GPU がデコードする動画はアップスケーリングされます。"
 
-#: picture.slint:1384
+#: picture.slint:1390
 #, x-machine
 msgid "This video is decoded with another hardware decoder, and upscaling needs it decoded on the GPU that renders it."
 msgstr "この動画は別のハードウェアデコーダーでデコードされており、アップスケーリングには描画する GPU でのデコードが必要です。"
 
-#: picture.slint:1424
+#: picture.slint:1430
 #, x-machine
 msgid "Rendering"
 msgstr "レンダリング"
 
-#: picture.slint:1439
+#: picture.slint:1445
 #, x-machine
 msgid "Restart Vestra Player to apply"
 msgstr "適用するには Vestra Player を再起動してください"
 
-#: picture.slint:1440
+#: picture.slint:1446
 #, x-machine
 msgid "Draw the video on the GPU from the next start"
 msgstr "次回の起動から映像を GPU で描画します"
 
-#: picture.slint:1445
-#, x-machine
-msgid "GPU Rendering"
-msgstr "GPU レンダリング"
-
-#: picture.slint:1452
-#, x-machine
-msgid "Experimental"
-msgstr "試験的"
-
-#: picture.slint:1453
-#, x-machine
-msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
-msgstr "試験的 — GPU 描画は新しい機能です。映像が乱れたらここでオフにして再起動してください。GPU がクラッシュした後は、プレーヤーが自動でソフトウェアレンダリングに戻ります。"
-
-#: picture.slint:1461
+#: picture.slint:1463
 #, x-machine
 msgid "Restart"
 msgstr "再起動"
 
-#: picture.slint:1481
+#: picture.slint:1483
 #, x-machine
 msgid "NVIDIA RTX Video Super Resolution: sharpens video shown larger than its size. Needs GPU rendering on an NVIDIA RTX GPU, and Super Resolution turned on in the NVIDIA app (System ▸ Video ▸ RTX Video Enhancement)."
 msgstr "NVIDIA RTX Video Super Resolution: 拡大表示される動画を鮮明にします。NVIDIA RTX GPU での GPU レンダリングと、NVIDIA アプリで Super Resolution をオンにすることが必要です（システム ▸ ビデオ ▸ RTX ビデオ強化）。"
 
-#: picture.slint:1494
+#: picture.slint:1496
 #, x-machine
 msgid "NVIDIA RTX Video Super Resolution"
 msgstr "NVIDIA RTX Video Super Resolution"
 
-#: picture.slint:1505
+#: picture.slint:1507
 #, x-machine
 msgid "Colour"
 msgstr "色"
 
-#: picture.slint:1509
+#: picture.slint:1511
 #, x-machine
 msgid "Original"
 msgstr "オリジナル"
 
-#: picture.slint:1510
+#: picture.slint:1512
 #, x-machine
 msgid "Vivid"
 msgstr "鮮やか"
 
-#: picture.slint:1511
+#: picture.slint:1513
 #, x-machine
 msgid "Cinema"
 msgstr "シネマ"
 
-#: picture.slint:1512
+#: picture.slint:1514
 #, x-machine
 msgid "Soft"
 msgstr "ソフト"
 
-#: picture.slint:1518
+#: picture.slint:1520
 #, x-machine
 msgid "Brightness"
 msgstr "明るさ"
 
-#: picture.slint:1527
+#: picture.slint:1529
 #, x-machine
 msgid "Contrast"
 msgstr "コントラスト"
 
-#: picture.slint:1536
+#: picture.slint:1538
 #, x-machine
 msgid "Saturation"
 msgstr "彩度"
 
-#: picture.slint:1545
+#: picture.slint:1547
 #, x-machine
 msgid "Hue"
 msgstr "色相"
 
-#: picture.slint:1554
+#: picture.slint:1556
 #, x-machine
 msgid "Gamma"
 msgstr "ガンマ"
 
-#: picture.slint:1566
+#: picture.slint:1568
 #, x-machine
 msgid "Effects"
 msgstr "エフェクト"
 
-#: picture.slint:1581 picture.slint:1661
+#: picture.slint:1583 picture.slint:1663
 #, x-machine
 msgid "Edges"
 msgstr "エッジ"
 
-#: picture.slint:1582 picture.slint:1662
+#: picture.slint:1584 picture.slint:1664
 #, x-machine
 msgid "Wide-radius sharpening that mainly strengthens outlines"
 msgstr "広い範囲のシャープ処理で、主に輪郭を強調します"
 
-#: picture.slint:1590 picture.slint:1671
+#: picture.slint:1592 picture.slint:1673
 #, x-machine
 msgid "Blur"
 msgstr "ぼかし"
 
-#: picture.slint:1619 picture.slint:1721
+#: picture.slint:1621 picture.slint:1723
 #, x-machine
 msgid "Denoise"
 msgstr "ノイズ除去"
 
-#: picture.slint:1620
+#: picture.slint:1622
 #, x-machine
 msgid "Denoise: turns the denoisers on or off"
 msgstr "ノイズ除去：ノイズ除去をオン / オフ"
 
-#: picture.slint:1628
+#: picture.slint:1630
 #, x-machine
 msgid "Doubling"
 msgstr "倍増"
 
-#: picture.slint:1629
+#: picture.slint:1631
 #, x-machine
 msgid "Rate already high enough"
 msgstr "フレームレートは十分に高いです"
 
-#: picture.slint:1630
+#: picture.slint:1632
 #, x-machine
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr "フレームレートを 2 倍（最大 60）にし、中間フレームを前後のフレームから合成します"
 
-#: picture.slint:1638
+#: picture.slint:1640
 #, x-machine
 msgid "Interpolate"
 msgstr "補間"
 
-#: picture.slint:1639
+#: picture.slint:1641
 #, x-machine
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr "ディスプレイのリフレッシュレートに合わせた GPU 補間。フレーム倍増とは併用できません"
 
-#: picture.slint:1683
+#: picture.slint:1685
 #, x-machine
 msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
 msgstr "50 未満は弱、50 以上は強。低ビットレートの MPEG-2/MPEG-4 で最も効果があります"
 
-#: picture.slint:1776
+#: picture.slint:1778
 #, x-machine
 msgid "Geometry"
 msgstr "ジオメトリ"
 
-#: picture.slint:1782
+#: picture.slint:1784
 #, x-machine
 msgid "Rotate Left"
 msgstr "左に回転"
 
-#: picture.slint:1787
+#: picture.slint:1789
 #, x-machine
 msgid "Rotate Right"
 msgstr "右に回転"
 
-#: picture.slint:1817
+#: picture.slint:1819
 #, x-machine
 msgid "Leave Crop Mode"
 msgstr "切り抜きモードを終了"
 
-#: picture.slint:1817
+#: picture.slint:1819
 #, x-machine
 msgid "Crop: pick a ratio, then drag the box"
 msgstr "切り抜き：比率を選び、枠をドラッグ"
 
-#: picture.slint:1827
+#: picture.slint:1829
 #, x-machine
 msgid "Reset Framing"
 msgstr "フレーミングをリセット"
 
-#: picture.slint:1835
+#: picture.slint:1837
 #, x-machine
 msgid "Zoom {}%"
 msgstr "ズーム {}%"
 
 #. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
-#: picture.slint:1840
+#: picture.slint:1842
 #, x-machine
 msgid "Offset {0}, {1}"
 msgstr "オフセット {0}, {1}"
 
-#: picture.slint:1842
+#: picture.slint:1844
 #, x-machine
 msgid "Crop {}"
 msgstr "切り抜き {}"
 
 #. the crop box's position in percent, across and down (50 = centred).
-#: picture.slint:1847
+#: picture.slint:1849
 #, x-machine
 msgid "at {0}%, {1}%"
 msgstr "位置 {0}%, {1}%"
 
-#: picture.slint:1858
+#: picture.slint:1860
 #, x-machine
 msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
 msgstr "比率で切り抜き。エディターで枠をドラッグして残す部分を選択"
 
-#: picture.slint:1876
+#: picture.slint:1878
 #, x-machine
 msgid "Stretch to the ratio: add bars instead of cutting the picture"
 msgstr "比率に合わせる：画面を切らずに黒帯を追加"
 
-#: picture.slint:1880
+#: picture.slint:1882
 #, x-machine
 msgid "Add bars instead of cutting"
 msgstr "切らずに黒帯を追加"
 
-#: picture.slint:1894
+#: picture.slint:1896
 #, x-machine
 msgid "Aspect ratio"
 msgstr "アスペクト比"
 
-#: picture.slint:1916
+#: picture.slint:1918
 #, x-machine
 msgid "Fit"
 msgstr "フィット"
 
-#: picture.slint:1921
+#: picture.slint:1923
 #, x-machine
 msgid "Keep"
 msgstr "保持"
 
-#: picture.slint:1922
+#: picture.slint:1924
 #, x-machine
 msgid "Stretch"
 msgstr "ストレッチ"
 
-#: picture.slint:1923
+#: picture.slint:1925
 #, x-machine
 msgid "Fill"
 msgstr "全体"
 
-#: picture.slint:2002
+#: picture.slint:2004
 #, x-machine
 msgid "Double rate"
 msgstr "倍レート"
 
-#: picture.slint:2010
+#: picture.slint:2012
 #, x-machine
 msgid "HDR"
 msgstr "HDR"
 
-#: picture.slint:2012
+#: picture.slint:2014
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr "SDR ディスプレイでの HDR ソース（PQ / HLG）のトーンマッピング · HDR ソースではありません"
 
-#: picture.slint:2013
+#: picture.slint:2015
 #, x-machine
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr "SDR ディスプレイでの HDR ソース（PQ / HLG）のトーンマッピング"
 
-#: picture.slint:2031
+#: picture.slint:2033
 #, x-machine
 msgid "Target brightness"
 msgstr "目標の明るさ"
 
-#: picture.slint:2048
+#: picture.slint:2050
 #, x-machine
 msgid "{} nits"
 msgstr "{} nit"
 
-#: picture.slint:2066
+#: picture.slint:2068
 #, x-machine
 msgid "Peak detection"
 msgstr "ピーク検出"
 
-#: picture.slint:2075
+#: picture.slint:2077
 #, x-machine
 msgid "Shaders"
 msgstr "シェーダ"
 
-#: picture.slint:2076
+#: picture.slint:2078
 #, x-machine
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr "mpv ユーザーシェーダ（.glsl）。一覧の順に実行されます"
 
-#: picture.slint:2087
+#: picture.slint:2089
 #, x-machine
 msgid "List…"
 msgstr "一覧…"
 
-#: picture.slint:2117
+#: picture.slint:2119
 #, x-machine
 msgid "Retry"
 msgstr "再試行"
 
-#: picture.slint:2133 picture.slint:2137
+#: picture.slint:2135 picture.slint:2139
 #, x-machine
 msgid "Enable picture effects"
 msgstr "映像エフェクトを有効にする"
 
-#: picture.slint:2146
+#: picture.slint:2148
 #, x-machine
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr "色・エフェクト・ジオメトリをデフォルトに戻します。詳細設定はそのままです"
 
-#: picture.slint:2151
+#: picture.slint:2153
 #, x-machine
 msgid "Reset All"
 msgstr "すべてリセット"
@@ -1764,17 +1769,13 @@ msgid "Open Folder"
 msgstr "フォルダを開く"
 
 #, x-machine
+#~ msgid "GPU Rendering (Experimental)"
+#~ msgstr "GPU レンダリング（試験的）"
 
 #, x-machine
+#~ msgid "Experimental"
+#~ msgstr "試験的"
 
 #, x-machine
-
-#, x-machine
-
-#, x-machine
-
-#, x-machine
-
-#, x-machine
-
-#, x-machine
+#~ msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
+#~ msgstr "試験的 — GPU 描画は新しい機能です。映像が乱れたらここでオフにして再起動してください。GPU がクラッシュした後は、プレーヤーが自動でソフトウェアレンダリングに戻ります。"

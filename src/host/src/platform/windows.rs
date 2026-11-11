@@ -1395,7 +1395,7 @@ pub use vestra_gpu_render::{Draw as GpuDraw, Handle as GpuHandle, Renderer as Gp
 pub const GPU_RENDER: bool = true;
 /// GPU mode's windows draw with femtovg on wgpu (Direct3D 12), not OpenGL.
 pub const GPU_WINDOWS_WGPU: bool = true;
-/// GPU rendering is experimental here: only the user's preference `gpu`
+/// GPU rendering is off by default here: only the user's preference `gpu`
 /// (the Video menu's switch) or `VESTRA_RENDER=gpu` turns it on
 /// (`render_mode::Facts::gpu_opt_in`; doc/architecture/README.md §4.3).
 pub const GPU_OPT_IN: bool = true;
@@ -1409,6 +1409,9 @@ impl crate::playback::renderer::GpuBackend for GpuHandle {
     }
     fn set_display_fps(&self, fps: Option<f64>) {
         vestra_gpu_render::Handle::set_display_fps(self, fps);
+    }
+    fn keep_warm(&self, period: Option<std::time::Duration>) {
+        vestra_gpu_render::Handle::keep_warm(self, period);
     }
     fn frames(&self) -> u64 {
         vestra_gpu_render::Handle::frames(self)
