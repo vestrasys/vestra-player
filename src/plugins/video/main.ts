@@ -1709,8 +1709,17 @@ export default async function activate(plugin: Plugin) {
                 tip: plugin.i18n.text("{} keep the frames in memory for their effects, but upscaling needs them on the GPU. Turn their effects off to upscale.", [names]),
               };
         }
-        // Only this plugin's own filters do: say so.
-        if (cause === "copy-back" && plugins.length > 0) return { kind: "effects", detail: message };
+        // Only this plugin's own filters do: say which, so the line names what works. Deinterlace
+        // Auto is the player's own deinterlacer and neutral values make no node, so with the
+        // panel at its defaults nothing here waits. Deinterlace Always (bwdif) is an Advanced
+        // preference that neither reset touches: "deinterlace" asks for Auto; with Colour,
+        // Effects or Geometry away from their defaults too, "effects-off" asks for the master
+        // switch (the one action that clears both); those alone, "effects" (Reset All).
+        if (cause === "copy-back" && plugins.length > 0) {
+          const always = enabled && look.deinterlace.mode === "on";
+          const adjusted = enabled && nodesFor(look, blendRate()).some((n) => n.kind !== "deinterlace");
+          return { kind: always ? (adjusted ? "effects-off" : "deinterlace") : "effects", detail: message };
+        }
         // No plugin named: copy-back for another reason (the player has no hardware decoding setting).
         if (cause === "copy-back") return { kind: "copy-back", detail: message };
         if (cause === "hwdec-off" || cause === "software" || cause === "other-hwdec") return { kind: cause, detail: message };

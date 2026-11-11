@@ -74,7 +74,9 @@ export struct Gpu {
 // AI Upscaling (`plugin.video.upscaling`, RTX Video Super Resolution). `checked`: the saved choice.
 // `kind` says what the status line words: "off"; "on" (on, not read yet); "upscaling" (`from`p to
 // `to`p on `gpu`; 0 / "" when not known); "idle" (on, the video is not shown larger than its size);
-// "effects" (waits: this panel's adjustments need the frames in memory); "plugins" (waits: other
+// "effects" (waits: this panel's Colour, Effects or Geometry need the frames in memory; Reset All
+// clears them); "deinterlace" (waits: Deinterlace Always does; Auto does not); "effects-off"
+// (waits: both do; the master switch clears both); "plugins" (waits: other
 // plugins' filters need the frames in memory); "copy-back" (waits: decoded with copy-back, no
 // plugin named); "hwdec-off" (waits: hardware decoding is off); "software" (waits: this video is
 // decoded in software); "other-hwdec" (waits: another hardware decoder); "waiting" (waits:
@@ -1363,6 +1365,8 @@ export component Picture inherits Rectangle {
         // tooltip the reason (`up-tip`). Only what the user can change in the player is worded as
         // something to do (this panel, other plugins' effects): hardware decoding has no setting.
         : root.up-kind == "effects" ? @tr("Waiting · reset picture adjustments")
+        : root.up-kind == "deinterlace" ? @tr("Waiting · set Deinterlace to Auto")
+        : root.up-kind == "effects-off" ? @tr("Waiting · turn off picture effects")
         : root.up-kind == "plugins" ? PictureBridge.upscaling.detail
         : root.up-kind == "copy-back" ? @tr("Waiting · frames copied to memory")
         : root.up-kind == "hwdec-off" ? @tr("Waiting · hardware decoding is off")
@@ -1376,7 +1380,9 @@ export component Picture inherits Rectangle {
         : @tr("Off · sharpens video shown larger than its size");
     // Its tooltip: why it waits, where the line only says what to do; else the line itself.
     private property <string> up-tip: PictureBridge.upscaling.busy ? root.up-status
-        : root.up-kind == "effects" ? @tr("Colour, Effects or Geometry (flip, rotation, crop/stretch) away from their defaults, or Deinterlace Always, need the frames in memory, but upscaling needs them on the GPU. Reset them to upscale.")
+        : root.up-kind == "effects" ? @tr("Colour, Effects or Geometry (flip, rotation, crop/stretch) away from their defaults need the frames in memory, but upscaling needs them on the GPU. Reset them (Reset All) to upscale.")
+        : root.up-kind == "deinterlace" ? @tr("Deinterlace Always filters every frame in memory, but upscaling needs the frames on the GPU. Auto still deinterlaces interlaced video and lets it upscale.")
+        : root.up-kind == "effects-off" ? @tr("Deinterlace Always and Colour, Effects or Geometry away from their defaults need the frames in memory, but upscaling needs them on the GPU. Turn off picture effects (or Reset All and set Deinterlace to Auto) to upscale.")
         : root.up-kind == "plugins" ? PictureBridge.upscaling.tip
         : root.up-kind == "copy-back" ? @tr("The video is decoded on the GPU, but its frames are copied to memory, and upscaling needs them on the GPU.")
         : root.up-kind == "hwdec-off" ? @tr("Hardware decoding is off, and upscaling needs the video decoded on the GPU.")
@@ -1384,7 +1390,7 @@ export component Picture inherits Rectangle {
         : root.up-kind == "other-hwdec" ? @tr("This video is decoded with another hardware decoder, and upscaling needs it decoded on the GPU that renders it.")
         : root.up-status;
     private property <string> up-tone: root.up-kind == "upscaling" ? "on"
-        : root.up-kind == "effects" || root.up-kind == "plugins" || root.up-kind == "copy-back"
+        : root.up-kind == "effects" || root.up-kind == "deinterlace" || root.up-kind == "effects-off" || root.up-kind == "plugins" || root.up-kind == "copy-back"
             || root.up-kind == "hwdec-off" || root.up-kind == "software" || root.up-kind == "other-hwdec"
             || root.up-kind == "waiting" ? "pending" : "off";
     private property <int> advanced-serial: PictureBridge.advanced-serial;
