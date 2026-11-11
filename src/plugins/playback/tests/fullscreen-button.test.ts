@@ -4,6 +4,7 @@ import test from "node:test";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import { time } from "../format.ts";
 import activate from "../main.ts";
+import { until } from "./eventually.ts";
 
 /**
  * 0.2.4, UI-BAR-05 / UI-BAR-10: the bottom bar's Fullscreen button. A click
@@ -20,13 +21,6 @@ function withMedia(host = new TestHost()) {
   host.openElsewhere("/movie.mp4");
   host.setSource({ duration: 600, position: 12 });
   return host;
-}
-async function until(predicate: () => boolean) {
-  const deadline = Date.now() + 2000;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
 }
 /** The icon `bar.slint` draws from the bar's data (the test host does not run Slint). */
 const icon = (props: Record<string, unknown>) => (props["fullscreen"] ? "exit-fullscreen" : "fullscreen");

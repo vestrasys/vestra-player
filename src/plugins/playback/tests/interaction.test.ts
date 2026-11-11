@@ -8,6 +8,7 @@ import type { BindingInfo } from "@vestra-player/sdk";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { firstKey } from "../tips.ts";
+import { eventually, until } from "./eventually.ts";
 
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string, locale: "en" | "zh-Hans" | "ja" = "zh-Hans") =>
@@ -49,13 +50,6 @@ function withMedia(host = new TestHost()) {
   host.setSource({ duration: 100, position: 12 });
   return host;
 }
-async function until(predicate: () => boolean | Promise<boolean>) {
-  const deadline = Date.now() + 2000;
-  while (!(await predicate())) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
 const settingsFile = async (data: string) => {
   try {
     return JSON.parse(await readFile(join(data, "settings.json"), "utf8")) as Record<string, unknown>;
@@ -71,24 +65,24 @@ test("G-07 every bar element has a tooltip naming its key; Previous/Next name Pg
   const bar = host.mounted("bottom");
   // The player announces the table after the plugin's commands are declared.
   host.emit("bindings.changed", null);
-  // Properties are written one at a time: `key-mute` comes after `key-open`.
-  await until(() => bar.props["key-open"] === "Ctrl+O" && bar.props["key-mute"] === "M");
+  // Properties are written one at a time: wait for every tooltip asserted.
   // The test host labels a binding with its input name (the player shows ← → PgUp PgDn).
-  let tip = tips(host, bar.props);
-  assert.equal(tip.playPause, "暂停 (Space)");
-  assert.equal(tip.stop, "停止 (F4)");
-  assert.equal(tip.previous, "上一个 (PageUp)");
-  assert.equal(tip.next, "下一个 (PageDown)");
-  assert.equal(tip.open, "打开文件 (Ctrl+O)");
-  assert.equal(tip.time, "点击切换剩余时间");
-  assert.equal(tip.mute, "静音 (M)");
-  assert.equal(tip.volume, "音量: 100%");
+  await eventually(() => tips(host, bar.props), {
+    playPause: "暂停 (Space)",
+    stop: "停止 (F4)",
+    previous: "上一个 (PageUp)",
+    next: "下一个 (PageDown)",
+    open: "打开文件 (Ctrl+O)",
+    time: "点击切换剩余时间",
+    mute: "静音 (M)",
+    volume: "音量: 100%",
+  });
   // The sidebar toggle is the player's (its button strip, Toggle Sidebar): the bar sends no key for it.
   assert.equal("key-sidebar" in bar.props, false);
 
   host.setSource({ paused: true, output: { volume: 35, muted: true } });
   await host.settle();
-  tip = tips(host, bar.props);
+  let tip = tips(host, bar.props);
   assert.equal(tip.playPause, "播放 (Space)");
   assert.equal(tip.mute, "取消静音 (M)");
   assert.equal(tip.volume, "音量: 35%");
@@ -108,12 +102,10 @@ test("G-07 in English the tooltips are the source texts", async () => {
   const { host, stop } = await start(withMedia(), undefined, "en");
   const bar = host.mounted("bottom");
   host.emit("bindings.changed", null);
-  await until(() => bar.props["key-open"] === "Ctrl+O");
-  const tip = tips(host, bar.props);
-  assert.equal(tip.playPause, "Pause (Space)");
-  assert.equal(tip.previous, "Previous (PageUp)");
-  assert.equal(tip.next, "Next (PageDown)");
-  assert.equal(tip.volume, "Volume: 100%");
+  await eventually(
+    () => (({ playPause, previous, next, volume }) => ({ playPause, previous, next, volume }))(tips(host, bar.props)),
+    { playPause: "Pause (Space)", previous: "Previous (PageUp)", next: "Next (PageDown)", volume: "Volume: 100%" },
+  );
   await stop();
 });
 

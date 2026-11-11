@@ -12,7 +12,7 @@ import { HOST_RULES, isLocalPath, type PathRules } from "../local-path.ts";
 import { FIRST_LINE_ONLY, parseAddress } from "../open-url.ts";
 import { displayName } from "../reopen.ts";
 import { parseStep, stepText } from "../settings.ts";
-import { eventually } from "./eventually.ts";
+import { eventually, until } from "./eventually.ts";
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
   // The Chinese texts are what the plugin showed before English became the source.
@@ -21,13 +21,6 @@ function withMedia(host = new TestHost(), source = "/movie.mp4") {
   host.openElsewhere(source);
   host.setSource({ duration: 100, position: 0 });
   return host;
-}
-async function until(predicate: () => boolean) {
-  const deadline = Date.now() + 1500;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
 }
 const intents = (host: TestHost) => host.sent("source.submit").map((p) => p.intent as Record<string, unknown>);
 const seeks = (host: TestHost) =>

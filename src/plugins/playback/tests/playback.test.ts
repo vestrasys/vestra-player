@@ -8,7 +8,7 @@ import type { Text } from "@vestra-player/sdk";
 import { HostError, startPlugin, TestHost } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { parseTime, rateText, time } from "../format.ts";
-import { eventually } from "./eventually.ts";
+import { eventually, until } from "./eventually.ts";
 
 const directory = new URL("..", import.meta.url);
 /** The player registers the basic actions itself (`host.coreCommands`). */
@@ -21,14 +21,6 @@ function withMedia(host = newHost()) {
   host.openElsewhere("/movie.mp4");
   host.setSource({ duration: 100, position: 0 });
   return host;
-}
-/** Poll while a request is deliberately held (settle waits for idle). */
-async function until(predicate: () => boolean) {
-  const deadline = Date.now() + 1500;
-  while (!predicate()) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
 }
 const seeks = (host: TestHost) =>
   host
@@ -309,7 +301,7 @@ test("open asks for a file (Ctrl+O, F3), is busy while selecting, and cancelling
   host.handle("dialogs.open", () => new Promise((resolve) => (answer = (paths) => resolve(paths ? { cancelled: false, paths } : { cancelled: true, paths: [] }))));
   host.mounted("bottom").emit("action", "open");
   await until(() => host.command("open").state.busy);
-  assert.equal(host.sent("dialogs.open").at(-1)!.title, "Open Media (replaces the current source)");
+  await eventually(() => host.sent("dialogs.open").at(-1)?.title, "Open Media (replaces the current source)");
   assert.equal(host.translate("Open Media (replaces the current source)"), "打开媒体（将替换当前来源）");
   assert.deepEqual(host.command("open").state, {
     enabled: false,
@@ -799,10 +791,9 @@ test("volume: latest value wins, volume before unmute, mute excluded while pendi
   bar.emit("volume-changed", 60);
   bar.emit("volume-released", 35);
   bar.emit("action", "mute"); // dropped: the volume has not landed yet
-  // `can-mute` is written after `volume` (one property at a time): wait for both.
-  await until(() => bar.props.volume === 35 && bar.props["can-mute"] === false);
+  // `can-mute` is written after `volume` (one property at a time): wait for both, and the text.
+  await eventually(() => [bar.props.volume, bar.props["can-mute"], lastOsd(host)], [35, false, "音量: 35%"]);
   assert.deepEqual(calls, [["volume", 80]]);
-  assert.equal(lastOsd(host), "音量: 35%");
   release();
   await host.settle();
   assert.deepEqual(calls, [["volume", 80], ["muted", false], ["volume", 35], ["muted", false]]);

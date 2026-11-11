@@ -72,6 +72,7 @@ import {
   START_FALLBACK_MS,
   WORKERS,
 } from "../thumbs.ts";
+import { until } from "./eventually.ts";
 
 const directory = new URL("..", import.meta.url);
 const start = (host = new TestHost(), dataDirectory?: string) =>
@@ -97,15 +98,6 @@ const SMALL_VIDEO = {
   hwdec: "no",
 } as unknown as PlaybackStats["video"];
 const facts = (video: PlaybackStats["video"], over: Partial<NonNullable<PlaybackStats["video"]>> = {}) => ({ ...video!, ...over });
-
-// A ceiling, not a delay: generous because the whole suite runs in parallel.
-async function until(predicate: () => boolean | Promise<boolean>, ms = 5000) {
-  const deadline = Date.now() + ms;
-  while (!(await predicate())) {
-    if (Date.now() > deadline) throw new Error("plugin did not settle");
-    await new Promise((resolve) => setTimeout(resolve, 5));
-  }
-}
 
 /** A real file to open (the sprite is keyed on its realpath, size and mtime), removed after the test. */
 function mediaFile(name = "movie.mkv") {
@@ -1295,8 +1287,12 @@ test("I07 failed cells show their neighbours; after five in a row the source is 
     const { stop } = await start(host);
     const bar = host.mounted("bottom");
     await generating(host, time);
-    await time.advance(1000);
-    await until(() => bar.props["hover-thumbnail"] === false);
+    // The clock moves while waiting: on a loaded machine a failure can be
+    // handled after one advance's settle, its next step then due on this clock.
+    await until(async () => {
+      await time.advance(500);
+      return bar.props["hover-thumbnail"] === false;
+    });
     // The failed runs of five are tried cell by cell; the other worker's cell
     // may already be running when the fifth single cell fails.
     const runs = cellRuns(host).length;
@@ -1359,8 +1355,10 @@ test("I07 ffmpeg gone after the start: the run fails as unavailable and the opti
     });
     const { stop } = await start(host);
     await generating(host, time);
-    await until(() => host.command("hover-thumbnail").state.reason === NEEDS_FFMPEG);
-    await until(() => host.mounted("bottom").props["hover-thumbnail"] === false);
+    await until(async () => {
+      await time.advance(500);
+      return host.command("hover-thumbnail").state.reason === NEEDS_FFMPEG && host.mounted("bottom").props["hover-thumbnail"] === false;
+    });
     const runs = cellRuns(host).length; // the two workers' first cells
     assert.ok(runs <= WORKERS, String(runs));
     await time.advance(10_000);
