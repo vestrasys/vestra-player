@@ -100,7 +100,8 @@ test("one sentence → consent once → plan → setRate → OSD with Undo → U
   await host.runPaletteLead("1.25x speed");
   await ai.until(() => host.confirms.length === 1, "consent asked");
   assert.equal(host.confirmTexts[0].message, "Ask Vestra sends your request to Custom · OpenAI format");
-  assert.match(host.confirmTexts[0].detail, /File names, playlists, history and subtitles are not sent/);
+  assert.match(host.confirmTexts[0].detail, /the player.s command list/);
+  assert.match(host.confirmTexts[0].detail, /File names, playlists, history, track and chapter titles and subtitles are not sent/);
   assert.equal(host.confirmTexts[0].confirm, "Continue");
   await host.settle();
   assert.equal(mock.chats.length, 0);
