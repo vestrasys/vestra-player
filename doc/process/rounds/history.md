@@ -295,6 +295,8 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 
 - **Palette button icon (11-11 night, user):** the `search-ai` icon drops the magnifier (the cross read as zoom-in, nothing said "ask"); design B — a speech bubble with the ✦ sparkle breaking out at the top right (precedent: VS Code codicon chat-sparkle). "Finds commands" is carried by the tooltip (Command Palette and Ask Vestra + key). GUI checks while the user uses the machine are done offline (headless renders and tests), not on the screen.
 
+- **Context menu, short enough to remember (11-11 night, user; option B over a separate plugin zone):** top level is Open ▸ (Open File… moves in as its first item), Close, Play/Pause, third-party domain submenus (e.g. Games ▸), Tools ▸, Options…, Quit. Tools ▸ holds Audio Track ▸, Subtitle Track ▸, Snapshot ▸, Chapter and Bookmark List…, Vestra Player AI…, Plugin Store…, Command Palette…, About. Adjustments and Effects, Sidebar and Fullscreen leave the menu (bottom-bar buttons, Esc, palette). Close stays at the top level. Rejected: a dedicated plugin zone (the goal is a tidy menu, not a special area).
+
 ### State
 
 | # | Item | State |
@@ -319,6 +321,7 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 | G | GPU test clip default | Done: env.ps1 sets VESTRA_GPU_CLIP to the testmedia 4K60 clip |
 | H | **Fullscreen title strip (Windows), side lane** (user request 11-07) | Merged (#192), spec G-19. GUI: reveal/hide, top-right vs sidebar, 60 fps, minimize→restore→exit returns maximized |
 | I | **Capture** | Split (11-09, user): built-in keeps snapshots (#235, settings in Options ▸ Video ▸ Snapshot); clip export is the store plugin Clip Export 0.1.0 (plugins #37, published) |
+| J | **Resume-after-pause stutter** | CPU mode fixed and measured (#265: audio device kept, 10 s pause 261 → 24–35 ms; hold now 180 s). GPU mode: warm hold for 180 s merged (#271), verified only on WARP. **Needs the user:** test stage-installer10 on an NVIDIA-driven display (GPU Rendering on, pause 10 s and 1–2 min). If it still stutters, bring measurements before reopening plan A (video on its own composition layer). |
 
 ### Log (newest first)
 
