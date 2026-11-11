@@ -173,6 +173,7 @@ export function capabilityInfo(rules = RULES) {
             requires: [...capability.requires],
             label: capability.label,
             risky: capability.risky,
+            builtinOnly: capability.builtinOnly === true,
         };
     for (const [api, requests] of Object.entries(rules.apis))
         for (const request of requests) {

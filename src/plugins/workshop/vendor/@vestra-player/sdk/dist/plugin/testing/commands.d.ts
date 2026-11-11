@@ -62,3 +62,10 @@ export declare function press(host: TestHost, inner: Internals, binding: string,
 export declare function barButtons(host: TestHost, _inner: Internals): readonly FakeBarButton[];
 /** The default handlers of this area's wire methods, by method name. */
 export declare function commandsHandlers(host: TestHost, inner: Internals): Record<string, Handler>;
+/** The default handlers of `commands.run` and `palette.lead`. */
+export declare function builtinHandlers(host: TestHost, inner: Internals): Record<string, Handler>;
+/** Implements `TestHost.runPaletteLead`. */
+export declare function runPaletteLead(host: TestHost, inner: Internals, query: string, options: {
+    keep?: boolean;
+    status?: boolean;
+}): Promise<string>;

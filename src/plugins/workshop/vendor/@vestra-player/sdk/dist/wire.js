@@ -86,6 +86,12 @@ export function createWire(transport) {
         ...mediaClients(transport),
         processing: processingClient(transport),
         commands: commandClient(transport),
+        /** The command palette's lead row (`palette.lead`). */
+        palette: {
+            set: (options) => transport.request("palette.lead.set", options),
+            clear: () => transport.request("palette.lead.clear", {}),
+            done: (ticket) => transport.request("palette.lead.done", { ticket }),
+        },
         dialogs: {
             open: (options) => transport.request("dialogs.open", options),
             /** Message and detail are templates formatted with `args`. */
