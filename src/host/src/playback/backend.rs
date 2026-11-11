@@ -798,8 +798,14 @@ impl Backend {
                             crate::input_trace::mark(&format!(
                                 "playback worker: {action} received"
                             ));
-                            let done = Completion::Action(command.reply, action);
+                            let received = crate::host::stall::clock_us();
+                            let done = Completion::Action(command.reply, action.clone());
                             let result = actions.run(&mut context, &command.params, done);
+                            crate::host::stall::action_done(
+                                &action,
+                                command.params["queuedUs"].as_u64(),
+                                received,
+                            );
                             push.soon();
                             processing.note_source(sources.generation(), sources.phase());
                             subtitles.note_source(sources.generation(), sources.phase());
@@ -2171,6 +2177,151 @@ fn frame_period(mpv: &Mpv) -> Option<Duration> {
 mod tests {
     use super::*;
     use crate::playback::session::Phase;
+
+    /// The whole control worker (`Backend::start`, software rendering, the
+    /// system's audio output; the audio hold as shipped): Play/Pause sent as
+    /// the host loop sends it (`host.action`), timed to the action's
+    /// completion, the first `source.state` with the new pause, and the last
+    /// (pause) / first (resume) frame the renderer produced. Prints only.
+    /// `VESTRA_PROBE_CLIP` names the clip.
+    #[test]
+    #[ignore = "measurement: real audio device and a local clip"]
+    fn probe_backend_pause_latency() {
+        use crate::playback::render_mode::{Decision, Mode, Reason, WindowKind};
+        use std::sync::Mutex;
+        let clip = std::env::var("VESTRA_PROBE_CLIP").unwrap_or_else(|_| {
+            r"C:\vestra\testmedia\Open Movies\Caminandes 2 - Gran Dillama (2013).mp4".into()
+        });
+        let decision = Decision {
+            mode: Mode::Cpu,
+            windows: WindowKind::Default,
+            cpu_windows: WindowKind::Default,
+            fallback_windows: WindowKind::Default,
+            reason: Reason::OffByDefault,
+            notes: Vec::new(),
+        };
+        let (events, received) = mpsc::channel();
+        let backend = Backend::start(events, false, &decision).unwrap();
+        backend.target.set_area((1280, 720));
+        type Log = Arc<Mutex<Vec<(Instant, String)>>>;
+        let log: Log = Arc::default();
+        {
+            let log = log.clone();
+            thread::spawn(move || {
+                for event in received {
+                    let line = match event {
+                        Event::ActionDone(_, action, result) => {
+                            format!("done {action} {:?}", result.map(|v| v["osd"].clone()))
+                        }
+                        Event::Broadcast(name, value) if name == "source.state" => {
+                            format!("state phase={} paused={}", value["phase"], value["paused"])
+                        }
+                        _ => continue,
+                    };
+                    log.lock().unwrap().push((Instant::now(), line));
+                }
+            });
+        }
+        // The UI's side: take each frame as it comes (1 ms poll).
+        let frames = Arc::new(Mutex::new(Vec::<Instant>::new()));
+        {
+            let (slot, frames) = (backend.frame.clone(), frames.clone());
+            thread::spawn(move || {
+                loop {
+                    if slot.take().is_some() {
+                        frames.lock().unwrap().push(Instant::now());
+                    }
+                    thread::sleep(Duration::from_millis(1));
+                }
+            });
+        }
+        let send = |id: u64, method: &str, params: Value| {
+            backend
+                .commands
+                .send(Command {
+                    reply: Reply {
+                        owner: crate::bindings::HOST,
+                        id,
+                    },
+                    method: method.into(),
+                    params,
+                })
+                .unwrap();
+        };
+        send(
+            1,
+            "source.submit",
+            json!({"operationId":1,"intent":{"kind":"open","source":clip,"startPaused":false}}),
+        );
+        thread::sleep(Duration::from_secs(4));
+        // The core actions number their own operations from 1: the open
+        // took 1, so this first one is refused (`conflict`) and nothing
+        // else changes.
+        send(
+            2,
+            "host.action",
+            json!({"action":"rate-normal","step":5.0,"keyframes":false,
+                "sequence":{"next":false,"previous":false}}),
+        );
+        thread::sleep(Duration::from_millis(200));
+        let ms = |d: Duration| d.as_secs_f64() * 1000.;
+        let first = |from: Instant, what: &str| {
+            log.lock()
+                .unwrap()
+                .iter()
+                .find(|(at, line)| *at >= from && line.contains(what))
+                .map_or(-1., |(at, _)| ms(*at - from))
+        };
+        for cycle in 0..6u64 {
+            thread::sleep(Duration::from_millis(1500 + cycle * 117));
+            for paused in [true, false] {
+                let t0 = Instant::now();
+                send(
+                    10 + cycle,
+                    "host.action",
+                    json!({"action":"play-pause","step":5.0,"keyframes":false,
+                        "sequence":{"next":false,"previous":false}}),
+                );
+                thread::sleep(Duration::from_millis(if paused { 1500 } else { 800 }));
+                let after: Vec<f64> = frames
+                    .lock()
+                    .unwrap()
+                    .iter()
+                    .filter(|at| **at >= t0)
+                    .map(|at| ms(*at - t0))
+                    .collect();
+                if cycle == 0 || std::env::var_os("VESTRA_PROBE_EVENTS").is_some() {
+                    let mut last = String::new();
+                    for (at, line) in log.lock().unwrap().iter().filter(|(at, _)| *at >= t0) {
+                        if *line != last {
+                            diag!("  +{:7.1} ms {line}", ms(*at - t0));
+                            last = line.clone();
+                        }
+                    }
+                }
+                let done = first(t0, "done play-pause");
+                let state = first(t0, &format!("paused={paused}"));
+                if paused {
+                    diag!(
+                        "pause  #{cycle}: done {done:6.1} ms | state paused {state:6.1} ms | frames after {} last {:6.1} ms",
+                        after.len(),
+                        after.last().copied().unwrap_or(-1.)
+                    );
+                } else {
+                    let gap = after.windows(2).map(|w| w[1] - w[0]).fold(0., f64::max);
+                    diag!(
+                        "resume #{cycle}: done {done:6.1} ms | state playing {state:6.1} ms | first frame {:6.1} ms (frames {} in 800 ms, longest gap {gap:5.1})",
+                        after.first().copied().unwrap_or(-1.),
+                        after.len()
+                    );
+                }
+            }
+        }
+        for (at, line) in log.lock().unwrap().iter().rev().take(3) {
+            diag!("last events: {:?} {line}", at.elapsed());
+        }
+        drop(backend);
+    }
 
     /// Resume after a short pause must not wait for the audio device to
     /// start again (`keep_audio_device_running`): Windows only.

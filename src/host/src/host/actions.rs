@@ -305,7 +305,9 @@ impl Host {
             .send(Command {
                 reply,
                 method: "host.action".into(),
-                params: json!({"action":action,"step":step.unwrap_or_else(|| self.step_seconds()),
+                // `queuedUs`: a slow way to the worker is logged (`stall.rs`).
+                params: json!({"action":action,"queuedUs":super::stall::clock_us(),
+                    "step":step.unwrap_or_else(|| self.step_seconds()),
                     "keyframes":self.step_keyframes(),
                     "sequence":{"next":facts.next,"previous":facts.previous}}),
             })
