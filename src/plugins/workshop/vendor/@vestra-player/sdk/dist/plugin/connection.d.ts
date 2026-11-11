@@ -1,3 +1,4 @@
+import { RequestQueue } from "../request-queue.ts";
 import type { Json, LocalServices, Transport, Wire } from "../wire.ts";
 import type { App, Disposable, Locale, StopReason, SystemInfo } from "./types.ts";
 /**
@@ -57,6 +58,11 @@ export declare class Connection {
     readonly local: LocalServices | undefined;
     /** Registrations that activation must wait for before reporting ready. */
     readonly startup: Set<Promise<unknown>>;
+    /**
+     * Every request of this plugin goes through it: at most
+     * `REQUEST_LIMITS` in flight, the rest wait in order (`request-queue.ts`).
+     */
+    readonly requests: RequestQueue;
     readonly views: Map<string, (callback: string, args: Json[]) => void>;
     readonly commands: Map<string, () => void>;
     /**
@@ -150,7 +156,7 @@ export declare class Connection {
      * One request by its method name, as given (`plugin.wire.request`): nothing
      * added, nothing checked here, the player checks the capability. Every other
      * part of the SDK uses the typed clients (`host`); `scripts/check-layers.mjs`
-     * keeps it so.
+     * keeps it so. It waits in the request queue like every other.
      */
     request<T>(method: string, params?: Json): Promise<T>;
     /** Raw transport events the host pushes without a subscription. */
