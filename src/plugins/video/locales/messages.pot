@@ -40,15 +40,15 @@ msgstr ""
 msgid "Aspect ratio: Custom - {}"
 msgstr ""
 
-#: main.ts:658 main.ts:1162 picture.slint:1917
+#: main.ts:658 main.ts:1162 picture.slint:1913
 msgid "Keep Aspect Ratio"
 msgstr ""
 
-#: main.ts:658 main.ts:1162 picture.slint:1917
+#: main.ts:658 main.ts:1162 picture.slint:1913
 msgid "Ignore Aspect Ratio"
 msgstr ""
 
-#: main.ts:658 picture.slint:1917
+#: main.ts:658 picture.slint:1913
 msgid "Fill Window"
 msgstr ""
 
@@ -430,11 +430,11 @@ msgstr ""
 msgid "HDR Tone Mapping"
 msgstr ""
 
-#: main.ts:1050 picture.slint:1980
+#: main.ts:1050 picture.slint:1976
 msgid "Deinterlace"
 msgstr ""
 
-#: main.ts:1051 picture.slint:1893
+#: main.ts:1051 picture.slint:1889
 msgid "Aspect"
 msgstr ""
 
@@ -482,7 +482,7 @@ msgstr ""
 msgid "Auto"
 msgstr ""
 
-#: main.ts:1085 picture.slint:1336 picture.slint:1864
+#: main.ts:1085 picture.slint:1336 picture.slint:1860
 msgid "Off"
 msgstr ""
 
@@ -506,7 +506,7 @@ msgstr ""
 msgid "Clip"
 msgstr ""
 
-#: main.ts:1097 picture.slint:2062
+#: main.ts:1097 picture.slint:2058
 msgid "Dynamic Peak Detection"
 msgstr ""
 
@@ -530,11 +530,11 @@ msgstr ""
 msgid "By Frame"
 msgstr ""
 
-#: main.ts:1147 picture.slint:1998
+#: main.ts:1147 picture.slint:1994
 msgid "By Field (Double Rate)"
 msgstr ""
 
-#: main.ts:1154 picture.slint:1997
+#: main.ts:1154 picture.slint:1993
 msgid "Auto outputs by field (double rate); this setting applies to Always"
 msgstr ""
 
@@ -562,7 +562,7 @@ msgstr ""
 msgid "Enter one with Custom Aspect Ratio… first"
 msgstr ""
 
-#: main.ts:1234 picture.slint:1910
+#: main.ts:1234 picture.slint:1906
 msgid "Custom Aspect Ratio…"
 msgstr ""
 
@@ -654,19 +654,19 @@ msgstr ""
 msgid "Pan ↓"
 msgstr ""
 
-#: main.ts:1314 picture.slint:1826
+#: main.ts:1314 picture.slint:1822
 msgid "Center Frame"
 msgstr ""
 
-#: main.ts:1339 picture.slint:1802
+#: main.ts:1339 picture.slint:1798
 msgid "Flip Vertically"
 msgstr ""
 
-#: main.ts:1350 picture.slint:1809
+#: main.ts:1350 picture.slint:1805
 msgid "Flip Horizontally"
 msgstr ""
 
-#: main.ts:1361 picture.slint:1591 picture.slint:1672
+#: main.ts:1361 picture.slint:1587 picture.slint:1668
 msgid "Gaussian Blur"
 msgstr ""
 
@@ -678,7 +678,7 @@ msgstr ""
 msgid "Gaussian blur: off"
 msgstr ""
 
-#: main.ts:1387 picture.slint:1572 picture.slint:1573 picture.slint:1651 picture.slint:1652
+#: main.ts:1387 picture.slint:1568 picture.slint:1569 picture.slint:1647 picture.slint:1648
 msgid "Sharpen"
 msgstr ""
 
@@ -686,23 +686,23 @@ msgstr ""
 msgid "Edge Sharpen"
 msgstr ""
 
-#: main.ts:1387 picture.slint:1599 picture.slint:1600 picture.slint:1682
+#: main.ts:1387 picture.slint:1595 picture.slint:1596 picture.slint:1678
 msgid "Deblock"
 msgstr ""
 
-#: main.ts:1387 picture.slint:1608 picture.slint:1609 picture.slint:1692 picture.slint:1693
+#: main.ts:1387 picture.slint:1604 picture.slint:1605 picture.slint:1688 picture.slint:1689
 msgid "Deband"
 msgstr ""
 
-#: main.ts:1387 picture.slint:1738
+#: main.ts:1387 picture.slint:1734
 msgid "3D Denoise"
 msgstr ""
 
-#: main.ts:1387 picture.slint:1749
+#: main.ts:1387 picture.slint:1745
 msgid "Gradual Denoise"
 msgstr ""
 
-#: main.ts:1387 picture.slint:1760
+#: main.ts:1387 picture.slint:1756
 msgid "Temporal Denoise"
 msgstr ""
 
@@ -779,8 +779,8 @@ msgstr ""
 msgid "GPU Rendering (Restart to Apply)"
 msgstr ""
 
-#: main.ts:1528
-msgid "GPU Rendering (Experimental)"
+#: main.ts:1528 picture.slint:1445
+msgid "GPU Rendering"
 msgstr ""
 
 #: main.ts:1538 main.ts:1806 picture.slint:1343 picture.slint:1353 picture.slint:1437
@@ -875,7 +875,7 @@ msgstr ""
 msgid "AI upscaling: off"
 msgstr ""
 
-#: main.ts:1799 picture.slint:1485
+#: main.ts:1799 picture.slint:1481
 msgid "AI Upscaling"
 msgstr ""
 
@@ -913,7 +913,7 @@ msgstr ""
 msgid "filters"
 msgstr ""
 
-#: picture.slint:605 picture.slint:755 picture.slint:792 picture.slint:2032
+#: picture.slint:605 picture.slint:755 picture.slint:792 picture.slint:2028
 msgid "· double-click: Default"
 msgstr ""
 
@@ -961,15 +961,15 @@ msgstr ""
 msgid "Another plugin controls the render options"
 msgstr ""
 
-#: picture.slint:1325 picture.slint:1621 picture.slint:1737
+#: picture.slint:1325 picture.slint:1617 picture.slint:1733
 msgid "3D"
 msgstr ""
 
-#: picture.slint:1327 picture.slint:1748
+#: picture.slint:1327 picture.slint:1744
 msgid "Gradual"
 msgstr ""
 
-#: picture.slint:1329 picture.slint:1621 picture.slint:1759
+#: picture.slint:1329 picture.slint:1617 picture.slint:1755
 msgid "Temporal"
 msgstr ""
 
@@ -1105,245 +1105,233 @@ msgstr ""
 msgid "Draw the video on the GPU from the next start"
 msgstr ""
 
-#: picture.slint:1445
-msgid "GPU Rendering"
-msgstr ""
-
-#: picture.slint:1452
-msgid "Experimental"
-msgstr ""
-
-#: picture.slint:1453
-msgid "Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself."
-msgstr ""
-
-#: picture.slint:1461
+#: picture.slint:1457
 msgid "Restart"
 msgstr ""
 
-#: picture.slint:1481
+#: picture.slint:1477
 msgid "NVIDIA RTX Video Super Resolution: sharpens video shown larger than its size. Needs GPU rendering on an NVIDIA RTX GPU, and Super Resolution turned on in the NVIDIA app (System ▸ Video ▸ RTX Video Enhancement)."
 msgstr ""
 
-#: picture.slint:1494
+#: picture.slint:1490
 msgid "NVIDIA RTX Video Super Resolution"
 msgstr ""
 
-#: picture.slint:1505
+#: picture.slint:1501
 msgid "Colour"
 msgstr ""
 
-#: picture.slint:1509
+#: picture.slint:1505
 msgid "Original"
 msgstr ""
 
-#: picture.slint:1510
+#: picture.slint:1506
 msgid "Vivid"
 msgstr ""
 
-#: picture.slint:1511
+#: picture.slint:1507
 msgid "Cinema"
 msgstr ""
 
-#: picture.slint:1512
+#: picture.slint:1508
 msgid "Soft"
 msgstr ""
 
-#: picture.slint:1518
+#: picture.slint:1514
 msgid "Brightness"
 msgstr ""
 
-#: picture.slint:1527
+#: picture.slint:1523
 msgid "Contrast"
 msgstr ""
 
-#: picture.slint:1536
+#: picture.slint:1532
 msgid "Saturation"
 msgstr ""
 
-#: picture.slint:1545
+#: picture.slint:1541
 msgid "Hue"
 msgstr ""
 
-#: picture.slint:1554
+#: picture.slint:1550
 msgid "Gamma"
 msgstr ""
 
-#: picture.slint:1566
+#: picture.slint:1562
 msgid "Effects"
 msgstr ""
 
-#: picture.slint:1581 picture.slint:1661
+#: picture.slint:1577 picture.slint:1657
 msgid "Edges"
 msgstr ""
 
-#: picture.slint:1582 picture.slint:1662
+#: picture.slint:1578 picture.slint:1658
 msgid "Wide-radius sharpening that mainly strengthens outlines"
 msgstr ""
 
-#: picture.slint:1590 picture.slint:1671
+#: picture.slint:1586 picture.slint:1667
 msgid "Blur"
 msgstr ""
 
-#: picture.slint:1619 picture.slint:1721
+#: picture.slint:1615 picture.slint:1717
 msgid "Denoise"
 msgstr ""
 
-#: picture.slint:1620
+#: picture.slint:1616
 msgid "Denoise: turns the denoisers on or off"
 msgstr ""
 
-#: picture.slint:1628
+#: picture.slint:1624
 msgid "Doubling"
 msgstr ""
 
-#: picture.slint:1629
+#: picture.slint:1625
 msgid "Rate already high enough"
 msgstr ""
 
-#: picture.slint:1630
+#: picture.slint:1626
 msgid "Doubles the frame rate (up to 60), blending each in-between frame from its neighbours"
 msgstr ""
 
-#: picture.slint:1638
+#: picture.slint:1634
 msgid "Interpolate"
 msgstr ""
 
-#: picture.slint:1639
+#: picture.slint:1635
 msgid "GPU interpolation to the display refresh rate; excludes frame doubling"
 msgstr ""
 
-#: picture.slint:1683
+#: picture.slint:1679
 msgid "Below 50 is weak, 50 and above strong; most visible on low-bitrate MPEG-2/MPEG-4"
 msgstr ""
 
-#: picture.slint:1776
+#: picture.slint:1772
 msgid "Geometry"
 msgstr ""
 
-#: picture.slint:1782
+#: picture.slint:1778
 msgid "Rotate Left"
 msgstr ""
 
-#: picture.slint:1787
+#: picture.slint:1783
 msgid "Rotate Right"
 msgstr ""
 
-#: picture.slint:1817
+#: picture.slint:1813
 msgid "Leave Crop Mode"
 msgstr ""
 
-#: picture.slint:1817
+#: picture.slint:1813
 msgid "Crop: pick a ratio, then drag the box"
 msgstr ""
 
-#: picture.slint:1827
+#: picture.slint:1823
 msgid "Reset Framing"
 msgstr ""
 
-#: picture.slint:1835
+#: picture.slint:1831
 msgid "Zoom {}%"
 msgstr ""
 
 #. {0} and {1} are the picture's offset in percent, across and down (+3, -2).
-#: picture.slint:1840
+#: picture.slint:1836
 msgid "Offset {0}, {1}"
 msgstr ""
 
-#: picture.slint:1842
+#: picture.slint:1838
 msgid "Crop {}"
 msgstr ""
 
 #. the crop box's position in percent, across and down (50 = centred).
-#: picture.slint:1847
+#: picture.slint:1843
 msgid "at {0}%, {1}%"
 msgstr ""
 
-#: picture.slint:1858
+#: picture.slint:1854
 msgid "Crop to a ratio; drag the box in the editor to choose the part kept"
 msgstr ""
 
-#: picture.slint:1876
+#: picture.slint:1872
 msgid "Stretch to the ratio: add bars instead of cutting the picture"
 msgstr ""
 
-#: picture.slint:1880
+#: picture.slint:1876
 msgid "Add bars instead of cutting"
 msgstr ""
 
-#: picture.slint:1894
+#: picture.slint:1890
 msgid "Aspect ratio"
 msgstr ""
 
-#: picture.slint:1916
+#: picture.slint:1912
 msgid "Fit"
 msgstr ""
 
-#: picture.slint:1921
+#: picture.slint:1917
 msgid "Keep"
 msgstr ""
 
-#: picture.slint:1922
+#: picture.slint:1918
 msgid "Stretch"
 msgstr ""
 
-#: picture.slint:1923
+#: picture.slint:1919
 msgid "Fill"
 msgstr ""
 
-#: picture.slint:2002
+#: picture.slint:1998
 msgid "Double rate"
 msgstr ""
 
-#: picture.slint:2010
+#: picture.slint:2006
 msgid "HDR"
 msgstr ""
 
-#: picture.slint:2012
+#: picture.slint:2008
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays · Not an HDR source"
 msgstr ""
 
-#: picture.slint:2013
+#: picture.slint:2009
 msgid "Tone mapping of HDR sources (PQ / HLG) on SDR displays"
 msgstr ""
 
-#: picture.slint:2031
+#: picture.slint:2027
 msgid "Target brightness"
 msgstr ""
 
-#: picture.slint:2048
+#: picture.slint:2044
 msgid "{} nits"
 msgstr ""
 
-#: picture.slint:2066
+#: picture.slint:2062
 msgid "Peak detection"
 msgstr ""
 
-#: picture.slint:2075
+#: picture.slint:2071
 msgid "Shaders"
 msgstr ""
 
-#: picture.slint:2076
+#: picture.slint:2072
 msgid "mpv user shaders (.glsl), run in list order"
 msgstr ""
 
-#: picture.slint:2087
+#: picture.slint:2083
 msgid "List…"
 msgstr ""
 
-#: picture.slint:2117
+#: picture.slint:2113
 msgid "Retry"
 msgstr ""
 
-#: picture.slint:2133 picture.slint:2137
+#: picture.slint:2129 picture.slint:2133
 msgid "Enable picture effects"
 msgstr ""
 
-#: picture.slint:2146
+#: picture.slint:2142
 msgid "Colour, effects and geometry back to their defaults; the Advanced settings stay"
 msgstr ""
 
-#: picture.slint:2151
+#: picture.slint:2147
 msgid "Reset All"
 msgstr ""
 

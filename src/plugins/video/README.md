@@ -10,7 +10,7 @@ Adjusts the picture's color, effects, aspect ratio and how it is shown.
 - **Aspect ratio and crop**: keep or ignore the aspect ratio, fill the window; common and custom ratios; crop or stretch to a ratio.
 - **Framing**: zoom and pan the picture.
 - **GPU render options**: HDR tone mapping, pixel shaders, motion interpolation.
-- **GPU rendering switch**: GPU Rendering (Experimental) at the top of the panel (Rendering) chooses GPU or software rendering for the next start and offers a restart (a Restart button while one is pending); a status line says what draws now (on the GPU, restart to apply, software rendering and why); greyed out with the player's reason where the GPU cannot be chosen, but always usable while checked.
+- **GPU rendering switch**: GPU Rendering at the top of the panel (Rendering) chooses GPU or software rendering for the next start and offers a restart (a Restart button while one is pending); a status line says what draws now (on the GPU, restart to apply, software rendering and why); greyed out with the player's reason where the GPU cannot be chosen, but always usable while checked.
 - **AI Upscaling** (NVIDIA RTX Video Super Resolution, `plugin.video.upscaling`): a switch under GPU Rendering and the palette command Picture: AI Upscaling; saved and asked for again at each start. It needs Windows, an NVIDIA RTX GPU, GPU rendering and Super Resolution turned on in the NVIDIA app; elsewhere it is greyed out with the reason. The status line says what it does (Upscaling 1080p → 2160p on the GPU) or why it waits (the picture effects keep the frames in memory, which the upscaler cannot use).
 - Color, effect and aspect settings carry over between files and restarts; flip, rotation and framing apply to the current file only.
 

@@ -292,7 +292,7 @@ component Preset inherits Rectangle {
     }
 }
 
-// A small rounded tag after a switch's label ("Experimental", "RTX VSR"), with its own tooltip.
+// A small rounded tag after a switch's label ("RTX VSR"), with its own tooltip.
 component Badge {
     in property <string> text;
     in property <string> tip;
@@ -1447,10 +1447,6 @@ export component Picture inherits Rectangle {
                                     checked: PictureBridge.gpu.checked;
                                     toggled(on) => { PictureBridge.run("video.gpu-rendering"); }
                                 }
-                            }
-                            Badge {
-                                text: @tr("Experimental");
-                                tip: @tr("Experimental — the GPU path is new. If the picture breaks, turn it off here and restart; after a GPU crash the player returns to software rendering by itself.");
                             }
                             Rectangle { horizontal-stretch: 1; }
                             VerticalLayout {
