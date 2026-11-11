@@ -106,8 +106,11 @@ export declare const COMMAND_LIMITS: {
  * to put a command into that menu whatever language the player's menus are in.
  * Later segments are titles.
  * `reset`: the Reset menu, directly below Settings, gathers every command that
- * puts something back to its default. The player's tests check that this list
- * agrees with the player's.
+ * puts something back to its default. `tools` (SDK 1.7.12): the Tools menu,
+ * after the domain menus and before Options…, the home of the player's tools
+ * (tracks, snapshot, Vestra Player AI, the store, the command palette) and of
+ * any plugin's own. The player's tests check that this list agrees with the
+ * player's.
  *
  * @example Put a command into the built-in Video menu
  * "Blur" appears in the player's Video menu in every interface language.
@@ -129,7 +132,7 @@ export declare const COMMAND_LIMITS: {
  * @since 1.3.0
  * @category Testing
  */
-export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video", "audio", "screen", "settings", "reset"];
+export declare const MENU_IDS: readonly ["open", "playback", "subtitles", "video", "audio", "screen", "settings", "reset", "tools"];
 /**
  * The icons a bottom-bar button may name (`CommandOptions.button.icon`): every
  * icon of the player's V-Line set, `@vestra/icons.slint` (draw one in your own
@@ -208,11 +211,10 @@ export interface BuiltinSubmenu {
  * released.
  *
  * @example Add an item to the built-in Snapshot submenu
- * "Copy Snapshot" appears in Snapshot ▸ next to the built-in capture
- * plugin's items. Paths merge by their English keys, so a command whose
- * path starts with the submenu's keys (`["Snapshot"]`, a top-level submenu)
- * lands in the same submenu whatever the interface
- * language.
+ * "Copy Snapshot" appears in Tools ▸ Snapshot ▸ next to the built-in
+ * capture plugin's items. Paths merge by their English keys, so a command
+ * whose path starts with the submenu's keys (`["Tools", "Snapshot"]`) lands
+ * in the same submenu whatever the interface language.
  * ```ts
  * import type { Plugin } from "@vestra-player/sdk";
  * declare const plugin: Plugin;
@@ -223,7 +225,7 @@ export interface BuiltinSubmenu {
  * const snapshot = BUILTIN_SUBMENUS.find((menu) => menu.path.at(-1) === "Snapshot")!;
  * plugin.commands.add({
  *   id: "snapshot-to-clipboard",
- *   // ["Snapshot", "Copy Snapshot"]
+ *   // ["Tools", "Snapshot", "Copy Snapshot"]
  *   path: [...snapshot.path, "Copy Snapshot"],
  *   run: copySnapshot,
  * });
