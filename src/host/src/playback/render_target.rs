@@ -169,12 +169,21 @@ impl Throttle {
     }
 }
 
+/// After fullscreen or the scale factor changed, the window's layouts within
+/// this long all belong to that one step and apply at once: entering
+/// fullscreen lays out the old window without its bar (the tick that sets
+/// it), then the screen (the resize, possibly in more than one system
+/// resize), and none of them may count as a drag.
+pub const TRANSITION: Duration = Duration::from_millis(250);
+
 /// The UI side: the video area each tick → the area to send to the renderer.
 #[derive(Debug, Default)]
 pub struct Sizing {
     throttle: Throttle,
     /// (fullscreen, scale factor) last seen; a change applies at once.
     seen: Option<(bool, u64)>,
+    /// When they last changed (`TRANSITION`).
+    changed: Option<Instant>,
 }
 impl Sizing {
     pub fn observe(
@@ -185,8 +194,13 @@ impl Sizing {
         now: Instant,
     ) -> Option<Applied> {
         let facts = (fullscreen, scale.to_bits());
-        let immediate = self.seen.is_some_and(|seen| seen != facts);
+        if self.seen.is_some_and(|seen| seen != facts) {
+            self.changed = Some(now);
+        }
         self.seen = Some(facts);
+        let immediate = self
+            .changed
+            .is_some_and(|at| now.saturating_duration_since(at) < TRANSITION);
         match physical(logical, scale) {
             Some(area) => self.throttle.offer(area, immediate, now),
             None => self.throttle.poll(now),
@@ -297,8 +311,10 @@ impl Layout {
     /// The picture's shape (width / height) while mpv letterboxes it into
     /// its frames: the picture lies whole inside the frame, centred, and
     /// touches two opposite edges (keep aspect, no zoom or pan). `None`
-    /// otherwise (zoomed, panned, filled, stretched, or nothing measured):
-    /// then no frame's picture can be told from its bars.
+    /// otherwise (zoomed, panned, filled, or nothing measured): then no
+    /// frame's picture can be told from its bars. Stretched (no keep aspect)
+    /// the picture fills the frame, so this is the frame's own shape and a
+    /// frame is shown whole, as before.
     pub fn letterbox_aspect(&self) -> Option<f64> {
         let (width, height) = self.picture();
         let [left, top, right, bottom] = self.margins;
@@ -1167,11 +1183,66 @@ mod tests {
             None,
             "minimised"
         );
-        assert_eq!(sizing.observe((1000., 800.), 1., true, ms(45)), None);
+        // Still the screen change's step.
         assert_eq!(
-            size(sizing.observe((0., 0.), 1., true, ms(90))),
-            Some(((1000, 800), true))
+            size(sizing.observe((1000., 800.), 1., true, ms(45))),
+            Some(((1000, 800), false))
         );
+        // Later, a drag: two layouts at once, then held, then the newest.
+        assert_eq!(
+            size(sizing.observe((1010., 800.), 1., true, ms(400))),
+            Some(((1010, 800), false))
+        );
+        assert_eq!(
+            size(sizing.observe((1020., 800.), 1., true, ms(416))),
+            Some(((1020, 800), false))
+        );
+        assert_eq!(sizing.observe((1030., 800.), 1., true, ms(432)), None);
+        assert_eq!(sizing.observe((1040., 800.), 1., true, ms(448)), None);
+        assert_eq!(
+            size(sizing.observe((0., 0.), 1., true, ms(470))),
+            Some(((1040, 800), true))
+        );
+    }
+
+    /// Entering fullscreen on Windows can take more layouts than a step's
+    /// two: the tick that sets the fullscreen bar and columns (the old
+    /// window without its bar), one or two system resizes, the tick after.
+    /// All apply at once and none as a drag (the GPU renderer would wait
+    /// `SETTLE` for it).
+    #[test]
+    fn every_layout_of_a_fullscreen_change_is_one_step() {
+        let start = Instant::now();
+        let ms = |n| start + Duration::from_millis(n);
+        let mut sizing = Sizing::default();
+        let step = |applied: Option<Applied>| applied.is_some_and(|a| !a.continuous);
+        assert!(step(sizing.observe((1600., 860.), 1., false, ms(0))));
+        // A drag just before does not make the change a run either.
+        assert!(step(sizing.observe((1610., 860.), 1., false, ms(10))));
+        let _ = sizing.observe((1620., 860.), 1., false, ms(20));
+        for (n, area) in [
+            (30, (1600., 900.)),
+            (31, (1600., 930.)),
+            (32, (2560., 1440.)),
+            (46, (2560., 1400.)),
+            (62, (2560., 1440.)),
+        ] {
+            assert!(
+                step(sizing.observe(area, 1., true, ms(n))),
+                "{area:?} at {n} ms"
+            );
+        }
+        // Leaving it again: the same.
+        for (n, area) in [
+            (1000, (2560., 1400.)),
+            (1001, (1600., 900.)),
+            (1016, (1280., 860.)),
+        ] {
+            assert!(
+                step(sizing.observe(area, 1., false, ms(n))),
+                "{area:?} at {n} ms"
+            );
+        }
     }
 
     #[test]

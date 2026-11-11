@@ -659,10 +659,36 @@ fn real_gpu_resize_latency() {
 /// (`set_size_now`) and the first ring at once.
 #[test]
 fn single_steps_remake_the_ring_at_once_and_drags_after_settling() {
-    assert!(remake_due(false, false, Duration::ZERO), "no ring yet");
-    assert!(remake_due(true, true, Duration::ZERO), "a single step");
-    assert!(!remake_due(true, false, SETTLE - Duration::from_millis(1)), "a drag");
-    assert!(remake_due(true, false, SETTLE), "the drag's size held");
+    let t = Instant::now();
+    let ms = |n| t + Duration::from_millis(n);
+    let settle = SETTLE.as_millis() as u64;
+    assert!(Asked::new((8, 8), false, t).due(false, t), "no ring yet");
+    assert!(Asked::new((8, 8), true, t).due(true, t), "a single step");
+    let drag = Asked::new((8, 8), false, t);
+    assert!(!drag.due(true, ms(settle - 1)), "a drag");
+    assert!(drag.due(true, ms(settle)), "the drag's size held");
+}
+
+/// A failed ring for a single step is retried after `SETTLE`, not at the
+/// render thread's next look (20 ms): the three tries that end GPU rendering
+/// span at least twice `SETTLE`, time for a transient allocation failure.
+#[test]
+fn a_failed_ring_is_retried_after_settling_also_for_a_single_step() {
+    let t = Instant::now();
+    let ms = |n| t + Duration::from_millis(n);
+    let settle = SETTLE.as_millis() as u64;
+    let mut asked = Asked::new((8, 8), true, t);
+    // The render thread looks every 20 ms; record when it tries.
+    let mut tries = Vec::new();
+    for now in (0..1000).step_by(20) {
+        if tries.len() < 3 && asked.due(true, ms(now)) {
+            tries.push(now);
+            asked.failed(ms(now));
+        }
+    }
+    assert_eq!(tries.len(), 3, "{tries:?}");
+    assert_eq!(tries[0], 0, "a single step tries at once");
+    assert!(tries.windows(2).all(|w| w[1] - w[0] >= settle), "{tries:?}");
 }
 
 /// `set_size_now` on WARP: the new size's frame comes well within `SETTLE`,

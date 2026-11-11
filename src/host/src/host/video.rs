@@ -20,7 +20,7 @@ pub(crate) fn queue_resized() {
     if QUEUED.swap(true, Ordering::AcqRel) {
         return;
     }
-    let _ = slint::invoke_from_event_loop(|| {
+    let queued = slint::invoke_from_event_loop(|| {
         QUEUED.store(false, Ordering::Release);
         RESIZE_SINK.with(|sink| {
             if let Some(resized) = &*sink.borrow() {
@@ -28,6 +28,10 @@ pub(crate) fn queue_resized() {
             }
         });
     });
+    // No event loop (any more): the next resize may try again.
+    if queued.is_err() {
+        QUEUED.store(false, Ordering::Release);
+    }
 }
 
 /// `VESTRA_TEST_NO_VIDEO_IMAGE=1` (diagnostics): frames are rendered,

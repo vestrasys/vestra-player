@@ -3309,9 +3309,12 @@ mod tests {
                 );
             }
         }
-        let path = std::env::var("VESTRA_PROBE_OUT")
-            .unwrap_or_else(|_| dir.join("probe.txt").to_string_lossy().into_owned());
-        std::fs::write(&path, &out).unwrap();
+        if let Ok(path) = std::env::var("VESTRA_PROBE_OUT") {
+            std::fs::write(&path, &out).unwrap();
+        }
         let _ = std::io::Write::write_all(&mut std::io::stderr(), out.as_bytes());
+        // The generated clip and its directory (mpv closed it first).
+        drop(mpv);
+        let _ = std::fs::remove_dir_all(dir);
     }
 }
