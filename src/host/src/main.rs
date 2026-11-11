@@ -676,18 +676,21 @@ fn player() -> Result<()> {
                 Err(mpsc::RecvTimeoutError::Timeout) => None,
                 Err(_) => break,
             };
-            // Up to 128 events a tick, as the windowed tick: one a tick fell
+            // At least 128 events a tick, then what its time budget allows,
+            // as the windowed tick (`host::drain_events`): one a tick fell
             // behind while the start-up queue held each tick (`START_BUDGET`),
             // and the shared runner's answered pings waited past its
             // heartbeat limit.
-            for event in first.into_iter().chain(receiver.try_iter().take(127)) {
+            let mut handle = |event: Event| {
                 if let Event::Broadcast(name, data) = &event
                     && name == "source.state"
                 {
                     observed_source = data.clone();
                 }
                 host.handle(event);
-            }
+            };
+            let handled = first.map(&mut handle).map_or(0, |()| 1);
+            host::drain_events(&receiver, began, handled, handle);
             host.activation_tick();
             host.on_demand_tick();
             host.power_tick();
@@ -843,9 +846,7 @@ fn player() -> Result<()> {
             move || {
                 let began = Instant::now();
                 let mut host = tick_host.borrow_mut();
-                for event in receiver.try_iter().take(128) {
-                    host.handle(event);
-                }
+                host::drain_events(&receiver, began, 0, |event| host.handle(event));
                 if first_draws.is_some() {
                     let (draws, pictures) = host.backend.render.presentation.counts();
                     let opening = opened_at_start || host.last_source["phase"] == "loading";

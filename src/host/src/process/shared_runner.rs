@@ -145,6 +145,14 @@ struct LinkState {
     waiters: BTreeMap<u64, mpsc::Sender<bool>>,
     /// Members whose cleanup outlived the stop window.
     leaked: usize,
+    /// What the reader thread saw of the runner's liveness, before the UI
+    /// thread handles those lines: `runner.hello` came, and the last
+    /// `runner.pong`'s `seq`. The heartbeat judges the runner by these,
+    /// not by the UI thread's queue, which a burst of another plugin's
+    /// requests can hold for longer than the heartbeat's 10 s (stress
+    /// measurement 2026-11-11: the runner, answering, was restarted).
+    hello_heard: bool,
+    pong_heard: Option<u64>,
 }
 impl Link {
     fn state(&self) -> std::sync::MutexGuard<'_, LinkState> {
@@ -520,8 +528,15 @@ impl SharedRunner {
     /// The heartbeat at a host tick: a ping when due; `Err` with the reason
     /// once the runner counts as hung (no hello within the hello window,
     /// or [`MISSED_LIMIT`] pings unanswered).
+    /// Its hello and pongs count when its reader thread sees them, before
+    /// the UI thread handles them (`LinkState::hello_heard`).
     pub fn tick(&mut self, now: u64, interval: u64) -> std::result::Result<(), String> {
-        if self.hello.is_none() {
+        let (hello_heard, pong_heard) = {
+            let state = self.link.state();
+            (state.hello_heard, state.pong_heard)
+        };
+        self.heartbeat.pong(pong_heard);
+        if self.hello.is_none() && !hello_heard {
             return if now.saturating_sub(self.heartbeat.since) >= interval * MISSED_LIMIT as u64 {
                 Err(format!(
                     "no hello within {} s",
@@ -705,6 +720,13 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             },
             Ok(_) => match parse_line(&bytes) {
                 Ok((0, message)) => {
+                    match message["event"].as_str() {
+                        Some("runner.hello") => link.state().hello_heard = true,
+                        Some("runner.pong") => {
+                            link.state().pong_heard = message["data"]["seq"].as_u64();
+                        }
+                        _ => {}
+                    }
                     if message["event"] == "runner.stopped" {
                         if let Some(g) = message["data"]["g"].as_u64() {
                             link.stopped(g, message["data"]["timedOut"] == true);
@@ -1133,6 +1155,46 @@ mod tests {
             assert!(matches!(beat.tick(at, 2000), Beat::Ping(_)), "{at}");
         }
         assert_eq!(beat.tick(18000, 2000), Beat::Hung);
+    }
+
+    /// Stress measurement 2026-11-11: another plugin's burst held the UI
+    /// thread's queue past 10 s, and the runner, answering every ping, was
+    /// restarted. Its hello and pongs count when its reader sees them.
+    #[test]
+    fn the_heartbeat_counts_what_the_reader_saw_not_what_the_ui_thread_handled() {
+        let (link, _output) = link(&[]);
+        let mut runner = SharedRunner {
+            link: Arc::new(link),
+            child: None,
+            stderr_done: Arc::new(AtomicBool::new(true)),
+            hello: None,
+            heartbeat: Heartbeat::new(0),
+            stats: Value::Null,
+            heap_warned: false,
+            empty_since: None,
+        };
+        // Its hello, read but never handled (`runner.hello` not given to
+        // `control`): no "no hello" fault.
+        let held = read(
+            &runner.link,
+            b"{\"g\":0,\"event\":\"runner.hello\",\"data\":{}}\n".to_vec(),
+        );
+        assert_eq!(held.len(), 1);
+        let mut now = 0;
+        for seq in 1..=10 {
+            now += 2000;
+            assert_eq!(runner.tick(now, 2000), Ok(()), "ping {seq}");
+            let pong =
+                format!("{{\"g\":0,\"event\":\"runner.pong\",\"data\":{{\"seq\":{seq}}}}}\n");
+            assert_eq!(read(&runner.link, pong.into_bytes()).len(), 1);
+        }
+        // It stops answering: hung after five pings, as before.
+        let mut result = Ok(());
+        for _ in 0..6 {
+            now += 2000;
+            result = runner.tick(now, 2000);
+        }
+        assert!(result.is_err(), "{result:?}");
     }
 
     #[test]

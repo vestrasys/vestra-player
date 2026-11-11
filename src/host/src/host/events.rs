@@ -119,3 +119,61 @@ pub(crate) enum Event {
     /// (owner, `{ live, resolvers }`).
     OwnerResources(u64, Value),
 }
+
+/// Events one tick of the UI thread's loop handles at least, when that many
+/// are queued.
+pub(crate) const EVENTS_PER_TICK: usize = 128;
+/// Past [`EVENTS_PER_TICK`], a tick goes on handling queued events while
+/// its handling has taken less than this. One queue carries every event
+/// (keys and clicks, playback replies and state, the shared runner's
+/// heartbeat, every plugin's requests), so a fixed count capped it at
+/// 128 a tick (about 4 600 events/s at the measured 36 ticks/s under load):
+/// a plugin's burst of 100 000 cheap requests held everything behind it
+/// for 21 s and the shared runner was restarted for a missed heartbeat
+/// (stress measurement 2026-11-11). A tick with nothing more queued, or
+/// with costly events, is as before.
+pub(crate) const DRAIN_BUDGET: Duration = Duration::from_millis(4);
+
+/// The events of one tick that began at `began`, `handled` of them handled
+/// already: each queued one, until [`EVENTS_PER_TICK`] are handled and the
+/// tick has taken [`DRAIN_BUDGET`]. Returns how many it handled in all.
+pub(crate) fn drain(
+    receiver: &mpsc::Receiver<Event>,
+    began: Instant,
+    mut handled: usize,
+    mut handle: impl FnMut(Event),
+) -> usize {
+    while handled < EVENTS_PER_TICK || began.elapsed() < DRAIN_BUDGET {
+        let Ok(event) = receiver.try_recv() else {
+            break;
+        };
+        handle(event);
+        handled += 1;
+    }
+    handled
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_tick_handles_its_count_then_what_its_time_budget_allows() {
+        let (events, receiver) = mpsc::channel();
+        for _ in 0..1000 {
+            events.send(Event::MainClosed).unwrap();
+        }
+        // Over the budget already: the count, as before.
+        let late = Instant::now() - Duration::from_secs(1);
+        assert_eq!(drain(&receiver, late, 0, |_| ()), EVENTS_PER_TICK);
+        // One handled before (the headless loop's first): one fewer here.
+        let mut here = 0;
+        assert_eq!(drain(&receiver, late, 1, |_| here += 1), EVENTS_PER_TICK);
+        assert_eq!(here, EVENTS_PER_TICK - 1);
+        // Within it: cheap events go on being handled, here all the rest.
+        let rest = 1000 - 2 * EVENTS_PER_TICK + 1;
+        assert_eq!(drain(&receiver, Instant::now(), 0, |_| ()), rest);
+        // Nothing queued: nothing to do.
+        assert_eq!(drain(&receiver, Instant::now(), 0, |_| ()), 0);
+    }
+}

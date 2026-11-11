@@ -63,7 +63,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub(crate) use events::{Event, Injected, MenuAction};
+pub(crate) use events::{Event, Injected, MenuAction, drain as drain_events};
 #[cfg(feature = "producer-audio")]
 pub(crate) use input::host_key;
 pub(crate) use input::{
