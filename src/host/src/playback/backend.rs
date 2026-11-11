@@ -158,6 +158,7 @@ impl Backend {
                     builder = builder.set_property("ao", "null")?;
                 }
                 no_builtin_scripts(&builder)?;
+                keep_audio_device_running(&builder)?;
                 let mpv = Arc::new(builder.build()?);
                 // Before any render context exists (mpv reads it when its
                 // renderer starts); a failure costs only the cache.
@@ -382,6 +383,7 @@ impl Backend {
                     crate::playback::media_join::clean_scratch(&root);
                 }
                 let mut push = StatePush::new();
+                let mut audio_hold = crate::playback::audio_hold::AudioHold::for_player();
                 let mut actions = CoreActions::default();
                 let mut upscaling = crate::playback::upscaling::Upscaling::default();
                 let upscaling_wake = worker_wake.clone();
@@ -899,6 +901,9 @@ impl Backend {
                                 && !processing.stepping()
                             {
                                 push.paused(*paused);
+                                // At once on resume: the device starts now anyway.
+                                let state = audio_state(sources.phase(), *paused);
+                                hold_audio(&mpv, &mut audio_hold, state);
                             }
                             continue;
                         }
@@ -1071,6 +1076,9 @@ impl Backend {
                         // Natural EOF is found by the snapshot itself and is in it.
                         push.seen(sources.generation(), sources.phase());
                         push.published_paused(source_snapshot["paused"].as_bool());
+                        // The pause timer and the end (`audio_hold`).
+                        let paused = source_snapshot["paused"].as_bool() == Some(true);
+                        hold_audio(&mpv, &mut audio_hold, audio_state(sources.phase(), paused));
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
                     }
@@ -2066,10 +2074,80 @@ fn no_builtin_scripts(builder: &rsmpv::Builder) -> Result<()> {
     Ok(())
 }
 
+/// Windows: the audio device keeps running through short pauses
+/// (`audio_hold`: mpv's `audio-stream-silence`, released after
+/// `audio_hold::HOLD` or at the end); elsewhere mpv's default.
+fn keep_audio_device_running(builder: &rsmpv::Builder) -> Result<()> {
+    if !cfg!(windows) {
+        return Ok(());
+    }
+    rsmpv::Handle::set_property(builder, "audio-stream-silence", true)
+        .map_err(|error| anyhow::anyhow!("mpv option audio-stream-silence: {error}"))
+}
+
+/// What the audio hold sees of the source (`audio_hold::Source`).
+fn audio_state(
+    phase: crate::playback::session::Phase,
+    paused: bool,
+) -> crate::playback::audio_hold::Source {
+    use crate::playback::audio_hold::Source;
+    use crate::playback::session::Phase;
+    match phase {
+        Phase::Ready if paused => Source::Paused,
+        Phase::Ready => Source::Playing,
+        Phase::Loading => Source::Loading,
+        Phase::Empty | Phase::Ended | Phase::Error => Source::Stopped,
+    }
+}
+
+/// Apply what the audio hold decided (`audio_hold::apply`).
+fn hold_audio(
+    mpv: &Mpv,
+    hold: &mut crate::playback::audio_hold::AudioHold,
+    state: crate::playback::audio_hold::Source,
+) {
+    if let Some(change) = hold.observe(state, Instant::now())
+        && let Err(error) = crate::playback::audio_hold::apply(mpv, change)
+    {
+        diag!("playback: audio device {change:?}: {error}");
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::playback::session::Phase;
+
+    /// Resume after a short pause must not wait for the audio device to
+    /// start again (`keep_audio_device_running`): Windows only.
+    #[test]
+    fn the_audio_device_keeps_running_while_paused() {
+        let builder = rsmpv::Mpv::builder()
+            .unwrap()
+            .set_property("vo", "null")
+            .unwrap()
+            .set_property("ao", "null")
+            .unwrap();
+        keep_audio_device_running(&builder).unwrap();
+        let mpv = builder.build().unwrap();
+        assert_eq!(
+            mpv.get_property::<bool>("audio-stream-silence").unwrap(),
+            cfg!(windows)
+        );
+    }
+
+    /// The end of the file (keep-open's pause) releases the device like no
+    /// source; only a ready source pauses or plays.
+    #[test]
+    fn the_audio_hold_sees_the_end_as_stopped() {
+        use crate::playback::audio_hold::Source;
+        assert_eq!(audio_state(Phase::Ready, false), Source::Playing);
+        assert_eq!(audio_state(Phase::Ready, true), Source::Paused);
+        assert_eq!(audio_state(Phase::Ended, true), Source::Stopped);
+        assert_eq!(audio_state(Phase::Empty, false), Source::Stopped);
+        assert_eq!(audio_state(Phase::Error, false), Source::Stopped);
+        assert_eq!(audio_state(Phase::Loading, false), Source::Loading);
+    }
 
     /// `jobs.check` takes parts or a snapshotId (missing and null alike
     /// absent); typed fields; parts go on to `media_sources::request`.

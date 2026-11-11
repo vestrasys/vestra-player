@@ -1,9 +1,9 @@
 // Options ▸ Plugins ▸ Vestra Player AI: the service, its API key (kept in the
 // system keychain; only the last four characters are ever shown) and the model.
 // The plugin passes data and codes; the words are here (@tr).
-import { ComboBox, LineEdit } from "std-widgets.slint";
+import { LineEdit } from "std-widgets.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, Check } from "@vestra/widgets.slint";
+import { Button, Check, Choice } from "@vestra/widgets.slint";
 import { Labels } from "labels.slint";
 
 // A text: a code, its arguments and a count.
@@ -110,10 +110,19 @@ export component AiSettingsPage inherits Rectangle {
     height: 480px;
     // The label column: 76px, or the widest label.
     private property <length> column: max(76px, label-measure.preferred-width);
+    // The drop-downs: one width, their longest entry (and the label and V, 21px), at most 280px
+    // (a longer model id is cut short with an ellipsis).
+    private property <length> choice-width: min(280px, max(160px, choice-measure.preferred-width + 21px));
+    private property <[string]> thinking-modes: [@tr("Off"), @tr("Low"), @tr("Medium (recommended)")];
     Rectangle {
         visible: false;
         width: 0;
         height: 0;
+        choice-measure := VerticalLayout {
+            for text in AiSettings.providers: Text { text: text; font-size: Theme.font-body; }
+            for text in AiSettings.models: Text { text: text; font-size: Theme.font-body; }
+            for text in root.thinking-modes: Text { text: text; font-size: Theme.font-body; }
+        }
         label-measure := VerticalLayout {
             for text in [@tr("Provider"), @tr("Base URL"), @tr("API key"), @tr("Model"), @tr("Model ID"), @tr("Thinking"), @tr("Plugin author")]: Text { text: text; font-size: Theme.font-body; }
         }
@@ -141,13 +150,13 @@ export component AiSettingsPage inherits Rectangle {
         HorizontalLayout {
             spacing: 8px;
             Label { column: root.column; text: @tr("Provider"); }
-            ComboBox {
-                height: Theme.input-height;
-                horizontal-stretch: 1;
+            Choice {
+                width: root.choice-width;
                 model: AiSettings.providers;
                 current-index <=> AiSettings.provider-index;
-                selected => { AiSettings.choose-provider(self.current-index); }
+                selected(index) => { AiSettings.choose-provider(index); }
             }
+            Rectangle { horizontal-stretch: 1; }
         }
         if AiSettings.custom: HorizontalLayout {
             spacing: 8px;
@@ -200,12 +209,11 @@ export component AiSettingsPage inherits Rectangle {
         if AiSettings.models.length > 0: HorizontalLayout {
             spacing: 8px;
             Label { column: root.column; text: @tr("Model"); }
-            ComboBox {
-                height: Theme.input-height;
-                horizontal-stretch: 1;
+            Choice {
+                width: root.choice-width;
                 model: AiSettings.models;
                 current-index <=> AiSettings.model-index;
-                selected(value) => { AiSettings.choose-model(value); }
+                selected(index) => { AiSettings.choose-model(AiSettings.models[index]); }
             }
             // Custom endpoints have the button on the model id row below.
             if !AiSettings.custom && AiSettings.can-list: VerticalLayout {
@@ -218,6 +226,7 @@ export component AiSettingsPage inherits Rectangle {
                     clicked => { AiSettings.fetch-models(); }
                 }
             }
+            Rectangle { horizontal-stretch: 1; }
         }
         // Custom endpoints: the id can always be typed (when the endpoint lists none, or another one).
         if AiSettings.custom: HorizontalLayout {
@@ -245,13 +254,13 @@ export component AiSettingsPage inherits Rectangle {
         HorizontalLayout {
             spacing: 8px;
             Label { column: root.column; text: @tr("Thinking"); }
-            ComboBox {
-                height: Theme.input-height;
-                horizontal-stretch: 1;
-                model: [@tr("Off"), @tr("Low"), @tr("Medium (recommended)")];
+            Choice {
+                width: root.choice-width;
+                model: root.thinking-modes;
                 current-index <=> AiSettings.thinking-index;
-                selected => { AiSettings.choose-thinking(self.current-index); }
+                selected(index) => { AiSettings.choose-thinking(index); }
             }
+            Rectangle { horizontal-stretch: 1; }
         }
         HorizontalLayout {
             spacing: 8px;
