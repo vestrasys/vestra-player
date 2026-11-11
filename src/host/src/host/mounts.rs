@@ -353,25 +353,20 @@ impl Host {
             let compiled_tabs = Column::ALL
                 .into_iter()
                 .zip(&plans)
-                // The adjust column's panels compile at its first opening.
+                // The adjust column's panels compile at its first opening,
+                // all its front tabs at once (as the sidebar's): a later
+                // first switch to one of them recompiles nothing (a shell
+                // swap stalls the UI thread and reconfigures the window's
+                // surface, a visible flash).
                 .filter(|(column, _)| self.compiles(*column))
-                .flat_map(|(column, plan)| {
-                    let front = sidebar_tabs::compiled(
+                .flat_map(|(_, plan)| {
+                    sidebar_tabs::compiled(
                         &plan.order,
                         plan.active,
                         recorded,
                         |owner| failed.contains(&owner),
                         &self.shell_compiled,
-                    );
-                    // The adjust column compiles a front tab once it is
-                    // shown: the current one and those already compiled
-                    // (`sidebar_tabs::shown_or_compiled`), so its first
-                    // opening compiles one panel, not four.
-                    if column == Column::Adjust {
-                        sidebar_tabs::shown_or_compiled(front, plan.active, &self.shell_compiled)
-                    } else {
-                        front
-                    }
+                    )
                 })
                 .collect::<Vec<_>>();
             shown = next
@@ -591,9 +586,10 @@ impl Host {
         )
     }
     /// Whether a column's panels are compiled into the shell: the sidebar's
-    /// always (its front tabs), the adjust column's once it was opened in
-    /// this run (menu redesign, open question 1: compiled on demand, so a
-    /// player whose adjust column stays closed never pays for its panels).
+    /// always (its front tabs), the adjust column's (its front tabs, all at
+    /// once) once it was opened in this run (menu redesign, open question 1:
+    /// compiled on demand, so a player whose adjust column stays closed never
+    /// pays for its panels).
     pub(crate) fn compiles(&self, column: Column) -> bool {
         column != Column::Adjust || self.columns[column.index()].opened
     }
