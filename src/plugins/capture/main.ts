@@ -20,7 +20,7 @@ const ROOM = 160;
 const fit = (path: string) => (path.length <= ROOM ? path : basename(path).slice(0, ROOM));
 const cut = (text: string) => text.slice(0, ROOM);
 
-/** The titles of the commands, by id. The first three are the right-click menu's Snapshot ▸. */
+/** The titles of the commands, by id. The first three are the right-click menu's Tools ▸ Snapshot ▸. */
 const TITLE = {
   "capture.save": "Save Current Frame",
   "capture.copy": "Copy Current Frame",
@@ -42,7 +42,7 @@ const TITLE = {
   "capture.copyVideo": "Copy Video Frame Only",
 } as const;
 type CommandId = keyof typeof TITLE;
-/** The commands shown in the right-click menu's Snapshot ▸; the rest are in the command palette only. */
+/** The commands shown in the right-click menu's Tools ▸ Snapshot ▸; the rest are in the command palette only. */
 const IN_MENU: readonly CommandId[] = ["capture.save", "capture.copy", "capture.burst"];
 /** The OSD prefix of a failed capture; the reason (or the player's or system's own message) goes after it. */
 const FAILED = { image: "Snapshot failed: {}", burst: "Burst failed: {}" } as const;
@@ -68,7 +68,7 @@ interface Saved {
 /**
  * Snapshot: save, save as or copy the current frame (the subtitles shown, or
  * the rendered frame with the video effects) as PNG, JPEG or BMP, and capture
- * bursts. No panel: the right-click menu's Snapshot ▸, the command palette
+ * bursts. No panel: the right-click menu's Tools ▸ Snapshot ▸, the command palette
  * and the keys run it; its settings are a page of the Options window
  * (Options ▸ Video ▸ Snapshot). Exporting clips is a store plugin's job.
  * Every text is English source text (locales/ has the translations).
@@ -381,12 +381,12 @@ export default async function activate(plugin: Plugin) {
   type Extra = Omit<CommandOptions, "id" | "path" | "title" | "order" | "run" | "reason" | "category"> & { reason?: "No frame to capture"; category?: Text };
   /** Where an option's control lives: the settings page (Snapshot Settings…). */
   const inSettings = { home: "capture.settings" };
-  // "Snapshot" is this plugin's own top-level submenu (menu sweep B5: moved out of the Video menu);
+  // "Snapshot" is this plugin's submenu in Tools ▸ (user ruling 2026-11-11; top-level since menu sweep B5 before);
   // its first item's group "domain" puts it with Audio Track ▸ and Subtitle Track ▸, no separator between.
   // The command palette shows "Snapshot: Title" for every command.
   const entry = (id: CommandId, order: number, run: () => unknown, extra: Extra = {}) =>
     IN_MENU.includes(id)
-      ? plugin.commands.add({ id, path: ["Snapshot", TITLE[id]], order, run, category: "Snapshot", ...extra })
+      ? plugin.commands.add({ id, path: ["@tools", "Snapshot", TITLE[id]], order, run, category: "Snapshot", ...extra })
       : plugin.commands.add({ id, title: TITLE[id], order, run, category: "Snapshot", ...extra });
   const quick = { group: "domain" };
   entry("capture.save", 420, () => saveFrame("frame"), { bindings: ["Ctrl+E"], ...quick, ...canCapture });

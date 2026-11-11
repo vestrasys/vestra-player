@@ -84,7 +84,7 @@ test.afterEach(async () => {
   for (const stop of [...running]) await stop();
 });
 
-test("I05: top-level Playback Properties… (811, windows, Ctrl+F1) opens the window; a second Ctrl+F1 keeps it open", async () => {
+test("I05: palette-only Playback Properties… (811, windows, Ctrl+F1) opens the window; a second Ctrl+F1 keeps it open", async () => {
   const { host, stop } = await start();
   assert.deepEqual(host.command("info.properties").declaration, {
     title: "Playback Properties…", path: [], order: 811, group: "windows", radio: false, bindings: ["Ctrl+F1"], focus: null, repeat: false, category: { $vestraText: "Info" },

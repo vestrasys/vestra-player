@@ -1,17 +1,19 @@
 # Menus and UI ownership
 
-> This table records the current implementation and corresponds to the top-level structure in [UI spec](ui-spec.md) §6.2. Menu redesign (user rulings 2026-11-07/08, design `menu-redesign` proposal v2 §4, mockup 04): the built-in task panels replaced the Video, Audio, Subtitles and Playback submenus, and the right-click menu keeps only what has no panel home. Everything else stays a command with its id, key and state, reachable from the **command palette** (Ctrl+Shift+P, the 🔍 button, or Command Palette… in the menu) as "Category: Title".
+> This table records the current implementation and corresponds to the top-level structure in [UI spec](ui-spec.md) §6.2. Menu redesign (user rulings 2026-11-07/08, design `menu-redesign` proposal v2 §4, mockup 04): the built-in task panels replaced the Video, Audio, Subtitles and Playback submenus, and the right-click menu keeps only what has no panel home. The short menu (user ruling 2026-11-11) cut the top level to what can be remembered: Open ▸, Close, Play/Pause, Tools ▸, Options…, Quit. Everything else stays a command with its id, key and state, reachable from the **command palette** (Ctrl+Shift+P, the 🔍 button, or Command Palette… in the menu) as "Category: Title".
 
-The product's context menu tree is merged from the commands registered by the 16 built-in plugins (`youtube` and `bilibili` live in the plugin repository and are installed through the store; their two items only exist once they are installed), the host's core actions, and the host's own commands (Adjustments and Effects, Sidebar, Toggle Fullscreen, Command Palette…, Quit). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table so that nothing is duplicated and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)). A command that a panel or an Options page already covers does **not** get a menu entry: it is registered without `path` and lives in the palette.
+The product's context menu tree is merged from the commands registered by the 16 built-in plugins (`youtube` and `bilibili` live in the plugin repository and are installed through the store; their two items only exist once they are installed), the host's core actions, and the host's own commands (Command Palette… and Quit in the menu; Adjustments and Effects, Sidebar and Toggle Fullscreen outside it). Menus are organised by user domain, not by plugin. Before adding or moving an entry, check it against this table so that nothing is duplicated and nothing is scattered into the wrong domain ([interaction requirements §1](interaction-requirements.md#1-menus-are-organised-by-user-domain)). A command that a panel or an Options page already covers does **not** get a menu entry: it is registered without `path` and lives in the palette.
 
 ## Menu tree
 
-2026-11-08, baseline branch `b5-menu` (B5 of the menu redesign). Compiled from the snapshot exported by `OUT=<file> node --test tests/menus-snapshot.test.ts` (run in `src/`; it covers every plugin under `src/plugins`). Menu `order` values are listed per item below; the separators come from each item's group (open · domain · windows · screen · windows · settings-main · exit), not from fixed number ranges — the two column toggles (791 and 800, group `windows`) and Fullscreen (810, group `screen`) sit outside the ranges the proposal once gave. Checked, radio and initially disabled states come from each command's `state` in the same test host.
+2026-11-11, the short menu (user ruling 2026-11-11, branch `menu-short`; before: B5 of the menu redesign, 2026-11-08). Compiled from the snapshot exported by `OUT=<file> node --test tests/menus-snapshot.test.ts` (run in `src/`; it covers every plugin under `src/plugins` and records each item's `order` and `group`). Menu `order` values are listed per item below; the separators come from each item's group, not from fixed number ranges. Checked, radio and initially disabled states come from each command's `state` in the same test host.
 
 The labels below are the English interface text (the English source text of each string); the Simplified Chinese interface shows the translations from the `zh-Hans.po` catalogs.
 
 - Order is ascending by declared `order`; for equal `order`, by plugin id, then registration order. A submenu takes the smallest `order` among its items, and a group (`group`) takes the group of its first item.
-- The 8 built-in anchors (`@open`, `@playback`, `@subtitles`, `@video`, `@audio`, `@screen`, `@settings`, `@reset`; fixed positions Open 110, Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Settings 830, Reset 840, `MENU_ANCHORS` in `src/host/src/commands.rs`) stay valid for third-party plugins and keep their positions; an anchor is not shown while no command is in it. Since B5 no built-in plugin puts a command into `@playback`, `@subtitles`, `@video`, `@audio`, `@screen`, `@settings` or `@reset`, so these submenus appear only when a third-party plugin fills them (for example Games ▸ VestraNES). The SDK's menu guidelines still allow them.
+- The 9 built-in anchors (`@open`, `@playback`, `@subtitles`, `@video`, `@audio`, `@screen`, `@settings`, `@reset`, `@tools`; fixed positions Open 110, Playback 200, Subtitles 300, Video 400, Audio 500, Screen 710, Tools 820, Settings 830, Reset 840, `MENU_ANCHORS` in `src/host/src/commands.rs`) stay valid for third-party plugins and keep their positions; an anchor is not shown while no command is in it. A plugin item inside an anchor cannot move it, and one without an `order` goes to the end of it.
+- Tools ▸ (`@tools`, key `Tools`, added with the short menu) is the built-in plugins' home for their tools and any plugin's own (`["Tools", …]` or `["@tools", …]`). It sits after the domain section and before Options…, and it is always drawn in the `settings-main` group, as are Settings ▸ and Reset ▸ (`FIXED_GROUPS`, `SHARES_GROUP_WITH`), so no separator splits Tools ▸, Options… and Quit whatever a plugin's first item inside declares.
+- The domain anchors `@playback`, `@subtitles`, `@video`, `@audio` and `@screen` are not used by any built-in plugin; they appear in the domain section between Play/Pause and Tools ▸ when a third-party plugin fills them, as do third-party top-level submenus such as Games ▸ (VestraNES). `@settings` and `@reset` appear in the settings group around Options… (Settings ▸ directly above it, Reset ▸ directly below it).
 - "Plugin" column: "core" is a host core action (`host/<id>`), "host" is the host's own command.
 - Top-level separators are drawn as "——" rows (two adjacent items with different `group`). Inside a submenu a separator is also drawn between adjacent items with different `group`.
 - Shortcuts work in the global scope (when the video area, bottom bar, adjust column or sidebar has focus; not inside tool windows). Shortcuts written with `Ctrl` can be triggered on macOS by both ⌃ and ⌘. Users can rebind them in Keyboard Shortcuts… (palette, or the Options window), or turn off all default bindings with "Ignore Default Shortcuts".
@@ -19,40 +21,38 @@ The labels below are the English interface text (the English source text of each
 
 | Menu path | Plugin | Shortcut | Notes |
 | --- | --- | --- | --- |
-| Open File… | playback | Ctrl+O, F3 | `order` 100, group `open` |
+| Open ▸ Open File… | playback | Ctrl+O, F3 | `order` 100, group `open`; first item of Open ▸ since the short menu (top level before) |
 | Open ▸ Open URL… | playback | Ctrl+U | 110 |
 | Open ▸ Open Folder… | playlist | F2 | 110 |
 | Open ▸ Open Subtitle… | subtitles | Alt+O | 113 |
 | Open ▸ Load External Audio… | audio | | 114; disabled when no file is playing |
 | Open ▸ Add Secondary Subtitle… | subtitles | | 114; disabled when there is no playable media |
-| Open ▸ Search and Download Subtitles… | subtitle-online | | 115; moved here from Subtitles ▸ Online Subtitles ▸ (B5). Its settings item is palette-only |
+| Open ▸ Search and Download Subtitles… | subtitle-online | | 115; its settings item is palette-only |
 | Open ▸ YouTube Video… · Bilibili Video… | youtube · bilibili | | Official plugins from the plugin repository; appear after installation (`@open`, unchanged) |
 | Open ▸ —— Recently Played ▸ (one item per recent entry) | history | | 119, group `recent`; dynamic; with no entries shows a greyed-out "(No Entries)" |
 | Open ▸ Recently Played ▸ Remove Invalid Entries · Clear Entries · Record Playback History | history | | Group `recent-manage`; Record Playback History is checked. They move to an Options ▸ Playback ▸ Resume page in proposal step 9 |
-| Close | core | F4 | 120 |
+| Close | core | F4 | 120, group `open` |
 | —— | | | |
-| Play/Pause | core | Space, left click on the video | 201, group `domain`; top level since B5 (Previous/Next, the seek, frame and speed actions are palette-only; the Playback panel and the bottom bar have their controls) |
-| Audio Track ▸ (actual audio track names) | audio | | 301, `domain`; radio; dynamic; with no audio tracks a greyed-out "No Audio Tracks" ("Loading…" while loading) |
-| Subtitle Track ▸ Off · (actual track names) | subtitles | | 302, `domain`; radio; dynamic |
-| Snapshot ▸ Save Current Frame · Copy Current Frame | capture | Ctrl+E · Ctrl+C | 420/422, `domain`; top level since B5 (was Video ▸ Snapshot ▸); disabled when there is no frame to capture |
-| Snapshot ▸ Burst | capture | Ctrl+G | 426; takes the burst at once from the frame shown, with the count and interval of Options ▸ Video ▸ Snapshot. Clip export is not built in: it comes from a store plugin |
+| Play/Pause | core | Space, left click on the video | 201, group `domain` (Previous/Next, the seek, frame and speed actions are palette-only; the Playback panel and the bottom bar have their controls) |
+| (third-party domain submenus, e.g. Games ▸) | third-party | | Their own orders, group `domain` by default; the domain anchors when filled (above) |
 | —— | | | |
-| Adjustments and Effects | host | | 791, group `windows` (id `adjust`); checked; shows or hides the adjust column at its last tab (Picture, Audio, Subtitles, Playback); the same name as the bottom-bar sliders button. Replaced Picture… · Audio… · Subtitles… · Playback… (791–794) here (user ruling 2026-11-08); disabled while no panel is in the column |
-| Sidebar | host | | 800 (id `sidebar`); checked; shows or hides the sidebar at its last tab; the same name as the bottom-bar sidebar button. Replaced Playlist (800) here (user ruling 2026-11-08); disabled while no panel is in the sidebar |
-| Chapter and Bookmark List… | marks | H | 801; top level since B5 (was Playback ▸ Chapters and Bookmarks ▸). Becomes a Chapters sidebar tab in proposal step 8 |
-| —— | | | |
-| Fullscreen | host | Esc | 810, group `screen`; checked; key `Toggle Fullscreen` (id `fullscreen`); Esc is its only default (user ruling 2026-11-01). "Enter Fullscreen" and "Leave Fullscreen" are not in the menu and have no default key |
-| —— | | | |
-| Vestra Player AI… | workshop | | 820, `windows` |
-| Plugin Store… | store | | 822, `windows`; when plugins have updates the title is "Plugin Store (N updates)…". Other entry points: drop a `.vxp` onto the video area; the "Options ▸ Plugins ▸ Plugin Store" page |
-| —— | | | |
-| Command Palette… | host | Ctrl+Shift+P | 829, group `settings-main` (id `palette`); also the 🔍 button at the right end of the bottom bar |
-| Options… | preferences | F5 | 830, `settings-main`; top level since B5 (was Settings ▸ Options…). The Options window holds the pages that replaced Settings ▸: Appearance (theme, idle logo), Language, Keyboard Shortcuts, Mouse, Plugins, Updates |
-| About Vestra Player… | info | F1 | 880, `settings-main`; Check for Updates… is palette-only (and a button in About) |
-| —— | | | |
-| Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | 990, group `exit`; key `Quit` |
+| Tools ▸ | host anchor `@tools` | | 820, group `settings-main` (fixed) |
+| Tools ▸ Audio Track ▸ (actual audio track names) | audio | | 301, `domain`; radio; dynamic; with no audio tracks a greyed-out "No Audio Tracks" ("Loading…" while loading) |
+| Tools ▸ Subtitle Track ▸ Off · (actual track names) | subtitles | | 302, `domain`; radio; dynamic |
+| Tools ▸ Snapshot ▸ Save Current Frame · Copy Current Frame | capture | Ctrl+E · Ctrl+C | 420/422, `domain`; disabled when there is no frame to capture |
+| Tools ▸ Snapshot ▸ Burst | capture | Ctrl+G | 426; takes the burst at once from the frame shown, with the count and interval of Options ▸ Video ▸ Snapshot. Clip export is not built in: it comes from a store plugin |
+| Tools ▸ —— Chapter and Bookmark List… | marks | H | 801, group `marks`. Becomes a Chapters sidebar tab in proposal step 8 |
+| Tools ▸ —— Vestra Player AI… | workshop | | 820, `windows` |
+| Tools ▸ Plugin Store… | store | | 822, `windows`; when plugins have updates the title is "Plugin Store (N updates)…". Other entry points: drop a `.vxp` onto the video area; the "Options ▸ Plugins ▸ Plugin Store" page |
+| Tools ▸ Command Palette… | host | Ctrl+Shift+P | 829, `windows` (id `palette`); also the 🔍 button at the right end of the bottom bar |
+| Tools ▸ —— About Vestra Player… | info | F1 | 880, `settings-main`; Check for Updates… is palette-only (and a button in About) |
+| Tools ▸ (third-party tools) | third-party | | `["Tools", …]` or `["@tools", …]`; without an `order`, after About |
+| Options… | preferences | F5 | 830, `settings-main`. The Options window holds the pages that replaced Settings ▸: Appearance (theme, idle logo), Language, Keyboard Shortcuts, Mouse, Plugins, Updates |
+| Quit | host | Cmd+Q (shown on macOS; on Windows and Linux the menu shows no shortcut, the close button and Alt+F4 quit) | 990, group `settings-main` (no separator above it since the short menu; `exit` before); key `Quit` |
 
-Top level: 17 entries plus third-party anchors; 30 fixed items in all, the rest are dynamic lists. Items with the same `order` sort by plugin id, which is why Open ▸ Load External Audio… (audio, 114) comes before Add Secondary Subtitle… (subtitles, 114); mockup 04 drew them the other way round.
+Top level: 6 entries (Open ▸, Close, Play/Pause, Tools ▸, Options…, Quit) plus third-party submenus and anchors; 27 fixed items in all, the rest are dynamic lists. Items with the same `order` sort by plugin id, which is why Open ▸ Load External Audio… (audio, 114) comes before Add Secondary Subtitle… (subtitles, 114).
+
+Left the menu with the short menu (user ruling 2026-11-11), each keeping its id, key, category and state: Adjustments and Effects (`host/adjust`, the bottom bar's sliders button), Sidebar (`host/sidebar`, the bottom bar's sidebar button), Toggle Fullscreen (`host/fullscreen`, Esc and the bottom bar's fullscreen button); all three stay in the palette.
 
 ## Commands outside the menu
 
@@ -60,6 +60,7 @@ Every command below keeps its id, default key, category and checked/radio state.
 
 | Plugin | Outside the menu (left in B4 or B5, or never in it) | Where it lives now |
 | --- | --- | --- |
+| host | Adjustments and Effects (`adjust`), Sidebar (`sidebar`), Toggle Fullscreen (`fullscreen`, Esc) (left 2026-11-11, user ruling) · Enter Fullscreen · Leave Fullscreen | The bottom bar's sliders, sidebar and fullscreen buttons; Esc; palette (category Window) |
 | core (host) | Previous · Next (PgUp · PgDn, mouse X2 · X1); Seek ▸ Previous/Next Frame (D · F), Back/Forward 5 s (← · →); Speed ▸ Normal (Z), Slower/Faster 0.1 (X · C) | Bottom bar; Playback panel (speed ruler, frame steps); palette (category Playback / Seek / Speed) |
 | playback | Reopen Current/Last File (Ctrl+Y); Copy to Clipboard ▸ File Name · Folder Path · Full Path; Seek ▸ Previous/Next Keyframe (Ctrl+Shift+←/→), Back/Forward 30 s (Ctrl+←/→), 60 s (Shift+←/→), 300 s (Ctrl+Alt+←/→), Jump to Start (Backspace), Seek Steps…; Jump to Time… (G); Speed ▸ 0.5× · 1.5× · 2× · Custom…; Disable Screen Saver While Playing; Show Time / Show Thumbnail on Seek Bar Hover | Playback panel (speed, jump, frame and keyframe steps, seek steps); the three toggles are palette-only until the Options ▸ Playback ▸ General page (proposal step 9) |
 | video | Everything that was under Video ▸ (colour ±1 % keys W/E, R/T, Y/U, I/O; aspect, crop/stretch, framing, rotation, deinterlace, flip, image processing toggles and their keys; pixel shaders, HDR, GPU rendering) and Reset ▸ Picture (Q) · Framing (Numpad5, Alt+Backspace) · Crop Position; Reset: Picture Panel (the panel's Reset All, palette only) | Picture panel: Colour (sliders with ↺), Effects (toggle chips with strength, Frames Off / Doubling / Interpolate), Geometry (editor on a still: pan, zoom, crop with ratio chips; aspect; rotation; flip), Advanced (deinterlace, shaders, HDR, GPU rendering). Reset / Reset All at the panel bottom |
@@ -69,8 +70,8 @@ Every command below keeps its id, default key, category and checked/radio state.
 | capture | Save Current Frame As…; Save/Copy Rendered Frame (Ctrl+Alt+E · Ctrl+Alt+C) and As…; Save/Copy Video Frame Only; Snapshot Settings… (opens Options ▸ Video ▸ Snapshot); Capture as PNG · JPEG · BMP; Include Subtitles in Rendered Frame; Snapshot Folder… · Open Snapshot Folder; Show Last Capture in Folder; Copy Last Snapshot | Options ▸ Video ▸ Snapshot (folder, format and quality, effects, burst, file names); keyboard commands stay in the palette |
 | marks | Add Bookmark (P); Previous/Next Bookmark or Chapter (Shift+PgUp/PgDn); Previous/Next Chapter (Ctrl+PgUp/PgDn); the dynamic chapter and bookmark entries; Show Marks on Seek Bar | Chapter and Bookmark List… window (H) now; the Chapters sidebar tab in proposal step 8 |
 | playback (A-B Loop, from marks) | A-B Loop ▸ (all: `[` `]` `{` `}`, Ctrl/Alt+`[`/`]`, Ctrl+Alt+`[`/`]`, Alt+\, `\`, Loop Count ▸); the 18 `ab.*` commands moved from `vestra.marks` to `vestra.playback` with the same ids and keys, and user overrides are migrated | Playback panel A-B Loop section (mini timeline, A and B rows with nudges and clear, Loop switch, Count, ↺ Chapter); palette (categories A-B Loop and Loop Count) |
-| video · audio · subtitles · playback | Picture… (Alt+1) · Audio… (Alt+2) · Subtitles… (Alt+3) · Playback… (Alt+4), `video.picture` · `audio.workbench` · `tune` · `panel` (left 2026-11-08, user ruling) | Adjustments and Effects (menu and bottom-bar button) at the column's last tab, then the tab; the keys open their own tab |
-| playlist | Playlist (F6), `playlist.visibility` (left 2026-11-08, user ruling) | Sidebar (menu and bottom-bar button) at the sidebar's last tab, then the Playlist tab; F6 opens the Playlist tab |
+| video · audio · subtitles · playback | Picture… (Alt+1) · Audio… (Alt+2) · Subtitles… (Alt+3) · Playback… (Alt+4), `video.picture` · `audio.workbench` · `tune` · `panel` (left 2026-11-08, user ruling) | Adjustments and Effects (bottom-bar button, palette) at the column's last tab, then the tab; the keys open their own tab |
+| playlist | Playlist (F6), `playlist.visibility` (left 2026-11-08, user ruling) | Sidebar (bottom-bar button, palette) at the sidebar's last tab, then the Playlist tab; F6 opens the Playlist tab |
 | playlist | Playback ▸ Playlist ▸ (Add Files… · Add Link… · Add Folder…, Repeat ▸ Off · All · One (+ Stop After Current, playlist 0.2.6: palette, the settings page's Repeat list and the bar's Repeat button), Shuffle, Open List File… · Save List…, When Opening a File ▸, Fast Advance to Next, Remember List, Confirm Before Removing All) | Playlist sidebar (Add ＋ button, list context menu); Repeat is the playlist bottom bar's Repeat button (design B2, 2026-11-09; Shuffle stays palette and settings page); the four settings are palette-only until an Options ▸ Playback ▸ Playlist page |
 | history | Resume Playback ▸ Don't Resume · Resume Automatically · Ask Every Time, Also Remember Audio Files, Clear All Saved Positions | Palette until the Options ▸ Playback ▸ Resume page (proposal step 9) |
 | window | Hide Pointer While Playing; Screen ▸ Picture-in-Picture, Mini Size (`` ` ``), 0.5× · 1× · 1.5× · 2× (1 · 2 · 3 · 4), Fit to Video Aspect Ratio (8), When Playback Starts ▸, Always on Top ▸ Cycle Mode (Ctrl+T) · modes | Palette (category Screen / Window); the "Options ▸ Playback ▸ Window" page holds the settings |
@@ -131,7 +132,7 @@ Menus merge by English key ([i18n §5](../architecture/i18n.md#5-declarations-an
 
 ## UI forms
 
-Slots: `bottom` (the control bar), `adjust` (one column of task panels beside the video, Alt+1–4, Adjustments and Effects in the menu and on the bottom bar), `sidebar` (tabs, always rightmost, Sidebar in the menu and on the bottom bar), `backdrop` (video-area layers), plus tool windows (`ui.window`, owned by the main window since host 0.7.7: they stay above it, hide and restore with it, and have no taskbar button or minimize button). The bottom bar's right end is the host-owned button strip: `[plugin buttons…][»][🔍][Adjustments and Effects][Sidebar]`.
+Slots: `bottom` (the control bar), `adjust` (one column of task panels beside the video, Alt+1–4, Adjustments and Effects on the bottom bar and in the palette), `sidebar` (tabs, always rightmost, Sidebar on the bottom bar and in the palette), `backdrop` (video-area layers), plus tool windows (`ui.window`, owned by the main window since host 0.7.7: they stay above it, hide and restore with it, and have no taskbar button or minimize button). The bottom bar's right end is the host-owned button strip: `[plugin buttons…][»][🔍][Adjustments and Effects][Sidebar]`.
 
 | Plugin | UI |
 | --- | --- |

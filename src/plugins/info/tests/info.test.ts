@@ -97,7 +97,7 @@ test("Simplified Chinese shows the menus of before", async () => {
   assert.deepEqual([host.command("info.toggle").display.path, host.command("info.toggle").display.title], [[], "播放信息"]);
   assert.equal(host.command("info.brief").display.title, "简要信息");
   assert.deepEqual([host.command("info.properties").display.path, host.command("info.properties").display.title], [[], "播放属性…"]);
-  assert.deepEqual(host.command("info.about").display.path, ["关于 Vestra Player…"]);
+  assert.deepEqual(host.command("info.about").display.path, ["工具", "关于 Vestra Player…"]);
   await stop();
 });
 

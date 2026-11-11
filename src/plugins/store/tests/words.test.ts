@@ -27,7 +27,7 @@ test("English by default: the menu, the list and the OSD", async () => {
   publish(net, OFFICIAL, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] }]);
   const { host, store, stop } = await start({ net, packages: [BUILTIN], locale: "en" });
   try {
-    assert.deepEqual(host.command("open").display.path, ["Plugin Store…"]);
+    assert.deepEqual(host.command("open").display.path, ["Tools", "Plugin Store…"]);
     await openStore(host);
     await showBuiltins(host);
     await until(host, () => store.items.length === 2);

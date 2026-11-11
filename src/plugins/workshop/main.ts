@@ -877,7 +877,7 @@ export default async function activate(plugin: Plugin) {
     // Command palette category (player 0.7.6): "Plugins: Vestra Player AI…", next to the
     // Plugin Store's. A text value, so `i18n extract` finds it; the player's word for plugins.
     category: plugin.i18n.text("Plugins"),
-    path: ["Vestra Player AI…"],
+    path: ["@tools", "Vestra Player AI…"],
     order: 820,
     group: "windows",
     // The bottom bar's button (player 0.5.10), left of the Plugin Store's (200).

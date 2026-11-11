@@ -508,7 +508,7 @@ export class Store {
     }
   }
 
-  /** "Plugin Store…", with the number of updates in the title (design §1.2). */
+  /** Tools ▸ "Plugin Store…", with the number of updates in the title (design §1.2). */
   updateMenu(afterRefresh = false): Promise<void> {
     this.#menuChain = this.#menuChain.then(async () => {
       if (this.#disposed) return;
@@ -523,7 +523,8 @@ export class Store {
         // Command palette category (player 0.7.6): "Plugins: Plugin Store…", next to Vestra
         // Player AI…. A text value, so `i18n extract` finds it; the player's word for plugins.
         category: this.plugin.i18n.text("Plugins"),
-        path: [count > 0 ? this.plugin.i18n.text("Plugin Store ({} updates)…", [count]) : "Plugin Store…"],
+        // Tools ▸ Plugin Store… (user ruling 2026-11-11), after Vestra Player AI… and before Command Palette….
+        path: ["@tools", count > 0 ? this.plugin.i18n.text("Plugin Store ({} updates)…", [count]) : "Plugin Store…"],
         order: MENU_ORDER,
         group: "windows",
         button: { icon: "store", order: BUTTON_ORDER },

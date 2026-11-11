@@ -477,7 +477,15 @@ fn local_id(value: &str) -> Result<()> {
 /// reset-to-default command, directly below Settings and in its separator
 /// group (`SHARES_GROUP_WITH`); like every built-in menu it shows only once
 /// a command is in it.
-pub const MENU_ANCHORS: [(&str, &str, i32); 8] = [
+///
+/// Tools (`@tools`, the short menu, user ruling 2026-11-11): the
+/// right-click menu's home for the built-in plugins' tools (tracks,
+/// snapshot, the chapter list, Vestra Player AI, the store, the command
+/// palette, About) and any plugin's own (the SDK's examples already name a
+/// `Tools` menu). After the domain menus and before Options… (830), in the
+/// settings group (`FIXED_GROUPS`). Appended, not inserted by order: the
+/// SDK's `MENU_IDS` grows by additions only.
+pub const MENU_ANCHORS: [(&str, &str, i32); 9] = [
     ("open", "Open", 110),
     ("playback", "Playback", 200),
     ("subtitles", "Subtitles", 300),
@@ -486,7 +494,15 @@ pub const MENU_ANCHORS: [(&str, &str, i32); 8] = [
     ("screen", "Screen", 710),
     ("settings", "Settings", 830),
     ("reset", "Reset", 840),
+    ("tools", "Tools", 820),
 ];
+
+/// Built-in top-level menus drawn in a fixed separator group (key, group),
+/// whatever groups their commands declare: Tools and Settings sit with
+/// Options… and Quit (`settings-main`), so a plugin's first item inside
+/// cannot draw a separator between them. Reset follows Settings
+/// (`SHARES_GROUP_WITH`).
+const FIXED_GROUPS: [(&str, &str); 2] = [("Tools", "settings-main"), ("Settings", "settings-main")];
 
 /// Built-in top-level menus drawn in the separator group of another (key,
 /// key it joins): Reset belongs with Settings, whatever groups the commands
@@ -526,6 +542,7 @@ pub fn host_group_label(path: &[String]) -> Option<String> {
         ["Screen"] => tr("Screen"),
         ["Settings"] => tr("Settings"),
         ["Reset"] => tr("Reset"),
+        ["Tools"] => tr("Tools"),
         ["Playback", "Speed"] => tr("Speed"),
         ["Playback", "Seek"] => tr("Seek"),
         _ => return None,
@@ -1388,9 +1405,17 @@ fn tree(entries: &[&CommandSnapshot], depth: usize, appended: bool) -> Vec<MenuN
     nodes
 }
 
-/// A top-level built-in menu in `SHARES_GROUP_WITH` takes the separator
-/// group of the menu it joins, when that menu is shown.
+/// A top-level built-in menu in `FIXED_GROUPS` takes its fixed separator
+/// group; one in `SHARES_GROUP_WITH` takes the group of the menu it joins,
+/// when that menu is shown.
 fn share_groups(nodes: &mut [MenuNode]) {
+    for node in nodes.iter_mut() {
+        if let MenuNode::Group { title, group, .. } = node
+            && let Some((_, fixed)) = FIXED_GROUPS.iter().find(|(key, _)| key == title)
+        {
+            *group = (*fixed).to_owned();
+        }
+    }
     for (key, joins) in SHARES_GROUP_WITH {
         let shared = nodes.iter().find_map(|node| match node {
             MenuNode::Group { title, group, .. } if title == joins => Some(group.clone()),
@@ -1854,7 +1879,7 @@ mod tests {
             registry.get(3, "at").unwrap().declaration.path,
             ["Audio", "@home", "X"]
         );
-        assert_eq!(MENU_ANCHORS.len(), 8);
+        assert_eq!(MENU_ANCHORS.len(), 9);
     }
 
     /// A plugin item in a built-in menu, with no `order` (0), does not move
@@ -2001,6 +2026,102 @@ mod tests {
             children.iter().map(MenuNode::group).collect::<Vec<_>>(),
             ["reset-video", "reset-subtitles"]
         );
+    }
+
+    /// The short menu (user ruling 2026-11-11): `@tools` sits after the
+    /// domain menus and before Options…, in the settings group whatever its
+    /// first item declares, and a plugin's `["Tools", …]` without an order
+    /// joins it at the end; Settings, shown by a plugin, keeps that group
+    /// too, so no separator splits Tools ▸, Settings ▸, Options… and Quit.
+    #[test]
+    fn tools_sits_before_options_in_the_settings_group() {
+        let mut registry = Registry::new();
+        let add = |registry: &mut Registry, owner, id: &str, path: &[&str], order, group: &str| {
+            let mut declaration = ordered(path, order);
+            declaration.group = group.into();
+            registry
+                .register(owner, "m", id.into(), 1, declaration, state(true))
+                .unwrap();
+        };
+        add(&mut registry, 1, "play", &["Play/Pause"], 201, "domain");
+        add(
+            &mut registry,
+            1,
+            "track",
+            &["@tools", "Audio Track", "A"],
+            301,
+            "domain",
+        );
+        add(
+            &mut registry,
+            1,
+            "ai",
+            &["@tools", "Vestra Player AI…"],
+            820,
+            "windows",
+        );
+        add(
+            &mut registry,
+            1,
+            "options",
+            &["Options…"],
+            830,
+            "settings-main",
+        );
+        add(&mut registry, 1, "quit", &["Quit"], 990, "settings-main");
+        add(&mut registry, 2, "nes", &["Games", "NES"], 600, "domain");
+        add(
+            &mut registry,
+            3,
+            "hello",
+            &["Tools", "Say hello"],
+            0,
+            "domain",
+        );
+        add(
+            &mut registry,
+            3,
+            "pref",
+            &["@settings", "Hello…"],
+            0,
+            "domain",
+        );
+        let roots = registry.snapshot().roots.clone();
+        let shown: Vec<String> = roots
+            .iter()
+            .map(|node| match node {
+                MenuNode::Group { title, group, .. } => format!("▸{title}:{group}"),
+                MenuNode::Command { entry } => {
+                    format!("{}:{}", entry.declaration.title, entry.declaration.group)
+                }
+            })
+            .collect();
+        assert_eq!(
+            shown,
+            [
+                "Play/Pause:domain",
+                "▸Games:domain",
+                "▸Tools:settings-main",
+                "▸Settings:settings-main",
+                "Options…:settings-main",
+                "Quit:settings-main",
+            ]
+        );
+        let MenuNode::Group {
+            children, label, ..
+        } = &roots[2]
+        else {
+            panic!("Tools is a submenu");
+        };
+        assert_eq!(label, "Tools");
+        let titles: Vec<&str> = children
+            .iter()
+            .map(|node| match node {
+                MenuNode::Group { title, .. } => title.as_str(),
+                MenuNode::Command { entry } => entry.declaration.title.as_str(),
+            })
+            .collect();
+        assert_eq!(titles, ["Audio Track", "Vestra Player AI…", "Say hello"]);
     }
 
     #[test]

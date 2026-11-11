@@ -140,7 +140,7 @@ function entries(p: Playback, f: Features): Entry[] {
   return [
     {
       id: "open",
-      path: ["Open File…"],
+      path: ["@open", "Open File…"],
       category: "File",
       order: 100,
       group: "open",
