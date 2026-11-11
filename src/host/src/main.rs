@@ -874,6 +874,7 @@ fn player() -> Result<()> {
                     {
                         guard.settle();
                     }
+                    turn.step("crash guard first draws");
                 }
                 host.placements.tick();
                 host.mount_callbacks();

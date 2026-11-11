@@ -2183,15 +2183,17 @@ mod tests {
     /// the host loop sends it (`host.action`), timed to the action's
     /// completion, the first `source.state` with the new pause, and the last
     /// (pause) / first (resume) frame the renderer produced. Prints only.
-    /// `VESTRA_PROBE_CLIP` names the clip.
+    /// `VESTRA_PROBE_CLIP` names a clip with audio and video; without it
+    /// the probe does nothing.
     #[test]
     #[ignore = "measurement: real audio device and a local clip"]
     fn probe_backend_pause_latency() {
         use crate::playback::render_mode::{Decision, Mode, Reason, WindowKind};
         use std::sync::Mutex;
-        let clip = std::env::var("VESTRA_PROBE_CLIP").unwrap_or_else(|_| {
-            r"C:\vestra\testmedia\Open Movies\Caminandes 2 - Gran Dillama (2013).mp4".into()
-        });
+        let Ok(clip) = std::env::var("VESTRA_PROBE_CLIP") else {
+            diag!("probe_backend_pause_latency: VESTRA_PROBE_CLIP is not set; skipped");
+            return;
+        };
         let decision = Decision {
             mode: Mode::Cpu,
             windows: WindowKind::Default,
@@ -2254,9 +2256,14 @@ mod tests {
             json!({"operationId":1,"intent":{"kind":"open","source":clip,"startPaused":false}}),
         );
         thread::sleep(Duration::from_secs(4));
-        // The core actions number their own operations from 1: the open
-        // took 1, so this first one is refused (`conflict`) and nothing
-        // else changes.
+        // `CoreActions` numbers its `source.submit` operations from 1
+        // (`CoreActions::submit`, `self.operation += 1`) and the session
+        // refuses an operation id not newer than the last one it took
+        // (`conflict` for the same, `unknown-expired` for an older one). The open above
+        // took 1, so this first action is refused and changes nothing; the
+        // measured ones then go out as 2, 3, … If the core actions ever
+        // number differently, the first Play/Pause below may be refused
+        // too: its `done` line then shows the error.
         send(
             2,
             "host.action",

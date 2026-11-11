@@ -6,10 +6,13 @@
 //! late (user report, 2026-11-11) was gone after a restart and left nothing
 //! to look at; this leaves a line: a turn of more than [`STALL`] says how
 //! long it took and on what (the step of the tick, or the slowest event and
-//! its plugin), and a gap of more than [`STALL`] between two ticks says the
-//! loop was held outside them (Slint's rendering, window events, the
-//! system). At most one line every [`EVERY`]; the turns left out meanwhile
-//! are counted in the next line, so the log cannot fill with them.
+//! its plugin), and a gap of more than [`STALL`] from the end of one tick to
+//! the start of the next says the loop was held outside them (Slint's
+//! rendering, window events, the system). At most one line every [`EVERY`];
+//! after [`BURST`] lines in a row (a lasting slow state: a request flood,
+//! 4K software rendering) one line every [`SUMMARY`], back to [`EVERY`]
+//! after [`QUIET`] without a slow turn. The turns left out are counted in
+//! the next line, so the 512 KB log keeps its start and render lines.
 #![forbid(unsafe_code)]
 
 use std::cell::RefCell;
@@ -19,6 +22,12 @@ use std::time::{Duration, Instant};
 pub(crate) const STALL: Duration = Duration::from_millis(100);
 /// At most one line this often.
 pub(crate) const EVERY: Duration = Duration::from_secs(1);
+/// After this many lines in a row, [`SUMMARY`] apart.
+pub(crate) const BURST: u32 = 10;
+/// The interval of a lasting slow state's lines.
+pub(crate) const SUMMARY: Duration = Duration::from_secs(60);
+/// No slow turn for this long ends a lasting slow state.
+pub(crate) const QUIET: Duration = Duration::from_secs(60);
 /// The tick's period (`main.rs`): a gap this much over [`STALL`] counts.
 const PERIOD: Duration = Duration::from_millis(16);
 /// A longer gap is the system's sleep or a debugger, not the loop.
@@ -91,19 +100,29 @@ impl Turn {
 #[derive(Debug, Default)]
 pub(crate) struct StallLog {
     written: Option<Instant>,
+    /// Lines written since the last quiet [`QUIET`].
+    streak: u32,
+    /// The last slow turn, written or not.
+    seen: Option<Instant>,
     /// Slow turns left out since the last line, and the longest of them.
     left_out: u32,
     worst: Duration,
-    last_tick: Option<Instant>,
+    /// The end of the last tick.
+    last_end: Option<Instant>,
 }
 
 impl StallLog {
+    /// A tick ended at `now` (every tick, slow or not).
+    pub(crate) fn tick_ended(&mut self, now: Instant) {
+        self.last_end = Some(now);
+    }
     /// A tick began at `now`: the gap's line when the loop was held outside
-    /// the ticks for [`STALL`] or more.
+    /// the ticks (from the last one's end) for [`STALL`] or more. A slow
+    /// tick is its own line, not a gap.
     pub(crate) fn tick_began(&mut self, now: Instant) -> Option<(String, Duration)> {
         let gap = self
-            .last_tick
-            .replace(now)
+            .last_end
+            .take()
             .map(|last| now.saturating_duration_since(last))?;
         (gap >= STALL + PERIOD && gap < ASLEEP).then(|| {
             let line = format!(
@@ -117,24 +136,37 @@ impl StallLog {
     /// anything, with the turns left out before it.
     pub(crate) fn note(&mut self, line: String, took: Duration, now: Instant) -> Option<String> {
         if self
+            .seen
+            .replace(now)
+            .is_some_and(|seen| now.saturating_duration_since(seen) >= QUIET)
+        {
+            self.streak = 0;
+        }
+        let every = if self.streak >= BURST { SUMMARY } else { EVERY };
+        if self
             .written
-            .is_some_and(|written| now.saturating_duration_since(written) < EVERY)
+            .is_some_and(|written| now.saturating_duration_since(written) < every)
         {
             self.left_out += 1;
             self.worst = self.worst.max(took);
             return None;
         }
         self.written = Some(now);
+        self.streak += 1;
         let left_out = std::mem::take(&mut self.left_out);
         let worst = std::mem::take(&mut self.worst);
-        Some(if left_out == 0 {
+        let mut line = if left_out == 0 {
             line
         } else {
             format!(
                 "{line} [and {left_out} more since the last line, the longest {}]",
                 ms(worst)
             )
-        })
+        };
+        if self.streak == BURST {
+            line += " [slow turns go on: one line a minute until a quiet minute]";
+        }
+        Some(line)
     }
 }
 
@@ -154,14 +186,16 @@ pub(crate) fn tick_began(now: Instant) {
     }
 }
 
-/// The turn ended: logged when it was slow.
+/// The turn ended: logged when it was slow. Its end starts the next gap.
 pub(crate) fn tick_ended(turn: &Turn, name: impl Fn(u64) -> String) {
     let now = Instant::now();
-    let Some(line) = turn.finish(now, name) else {
-        return;
-    };
-    let took = now.saturating_duration_since(turn.began);
-    if let Some(line) = LOG.with(|log| log.borrow_mut().note(line, took, now)) {
+    let line = LOG.with(|log| {
+        let mut log = log.borrow_mut();
+        log.tick_ended(now);
+        let line = turn.finish(now, name)?;
+        log.note(line, now.saturating_duration_since(turn.began), now)
+    });
+    if let Some(line) = line {
         logged!("{line}");
     }
 }
@@ -175,7 +209,10 @@ pub(crate) fn clock_us() -> u64 {
 
 /// The line for a core action (Play/Pause and the others) that took
 /// [`STALL`] or more from the host loop's send (`queued`, [`clock_us`]) to
-/// the end of its work on the playback worker; `None` otherwise.
+/// the end of its synchronous part on the playback worker (`received` to
+/// `done`: `CoreActions::run`, the mpv calls it makes); what it leaves to
+/// later turns (a seek landing, a frame step, a keyframe seek's next
+/// press) is not in "ran there". `None` otherwise.
 pub(crate) fn action_line(action: &str, queued: u64, received: u64, done: u64) -> Option<String> {
     let wait = Duration::from_micros(received.saturating_sub(queued));
     let work = Duration::from_micros(done.saturating_sub(received));
@@ -256,15 +293,49 @@ mod tests {
         );
     }
 
+    /// Ten slow turns a second from `from` for `seconds`: the lines.
+    fn flood(log: &mut StallLog, from: Instant, seconds: u32) -> Vec<String> {
+        (0..seconds * 10)
+            .filter_map(|n| log.note("x".into(), 100 * MS, from + n * 100 * MS))
+            .collect()
+    }
+
     #[test]
-    fn a_flood_of_slow_turns_writes_one_line_a_second() {
+    fn a_lasting_slow_state_backs_off_to_one_line_a_minute() {
         let t = Instant::now();
         let mut log = StallLog::default();
-        // Ten slow turns a second for a minute: 60 lines.
-        let lines = (0..600u32)
-            .filter_map(|n| log.note("x".into(), 100 * MS, t + n * 100 * MS))
-            .count();
-        assert_eq!(lines, 60);
+        // The first ten a second apart, the tenth says so, then a minute.
+        let lines = flood(&mut log, t, 60);
+        assert_eq!(lines.len(), BURST as usize);
+        assert!(lines[9].ends_with("until a quiet minute]"), "{}", lines[9]);
+        assert!(lines[1].contains("[and 9 more"), "{}", lines[1]);
+        let next = flood(&mut log, t + 60 * EVERY, 60);
+        assert_eq!(next.len(), 1);
+        assert!(next[0].contains("[and 599 more"), "{}", next[0]);
+    }
+
+    #[test]
+    fn an_hour_of_slow_turns_writes_a_few_dozen_lines() {
+        let t = Instant::now();
+        let mut log = StallLog::default();
+        let lines = flood(&mut log, t, 3600);
+        // 10 at first, then one a minute: well under 1 KB a minute.
+        assert!((60..=72).contains(&lines.len()), "{}", lines.len());
+    }
+
+    #[test]
+    fn a_quiet_minute_ends_the_back_off() {
+        let t = Instant::now();
+        let mut log = StallLog::default();
+        assert_eq!(flood(&mut log, t, 30).len(), BURST as usize);
+        // A minute without a slow turn: one a second again.
+        let again = t + 30 * EVERY + QUIET;
+        assert_eq!(flood(&mut log, again, 5).len(), 5);
+        // Less than a quiet minute keeps the back-off.
+        let mut log = StallLog::default();
+        assert_eq!(flood(&mut log, t, 30).len(), BURST as usize);
+        let soon = t + 30 * EVERY + QUIET / 2;
+        assert!(flood(&mut log, soon, 5).len() <= 1);
     }
 
     #[test]
@@ -287,11 +358,27 @@ mod tests {
         let t = Instant::now();
         let mut log = StallLog::default();
         assert_eq!(log.tick_began(t), None, "the first tick");
+        log.tick_ended(t + 2 * MS);
         assert_eq!(log.tick_began(t + 16 * MS), None);
-        assert_eq!(log.tick_began(t + 16 * MS + 115 * MS), None, "under");
-        let (line, gap) = log.tick_began(t + 131 * MS + 600 * MS).unwrap();
+        log.tick_ended(t + 20 * MS);
+        assert_eq!(log.tick_began(t + 20 * MS + 115 * MS), None, "under");
+        log.tick_ended(t + 140 * MS);
+        let (line, gap) = log.tick_began(t + 740 * MS).unwrap();
         assert_eq!(gap, 600 * MS);
         assert!(line.starts_with("ui stall: no tick for 600 ms"), "{line}");
-        assert_eq!(log.tick_began(t + 731 * MS + ASLEEP), None, "asleep");
+        log.tick_ended(t + 750 * MS);
+        assert_eq!(log.tick_began(t + 750 * MS + ASLEEP), None, "asleep");
+    }
+
+    #[test]
+    fn a_slow_tick_is_not_also_a_gap() {
+        let t = Instant::now();
+        let mut log = StallLog::default();
+        assert_eq!(log.tick_began(t), None);
+        // A 150 ms tick, then the next one on the timer.
+        log.tick_ended(t + 150 * MS);
+        assert_eq!(log.tick_began(t + 160 * MS), None);
+        log.tick_ended(t + 162 * MS);
+        assert_eq!(log.tick_began(t + 176 * MS), None);
     }
 }
