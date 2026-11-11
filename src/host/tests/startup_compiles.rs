@@ -117,20 +117,69 @@ fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
 }
 
 /// The staged built-ins (`VESTRA_TEST_BUILTINS`, or staged under `root`).
-fn builtins(root: &Path) -> PathBuf {
+///
+/// Staging packs each plugin in place (`plugins/*/dist`), so two stagings at
+/// once break each other (ENOENT, "pack ... failed"): this process stages
+/// once, for all its tests (cargo runs them in parallel), into a directory
+/// kept until it ends; another process staging at the same time waits for a
+/// lock file (one older than ten minutes is taken for a crashed holder's).
+fn builtins() -> PathBuf {
+    use std::sync::OnceLock;
     if let Some(dir) = std::env::var_os("VESTRA_TEST_BUILTINS") {
         return PathBuf::from(dir);
     }
-    let staged = root.join("plugins");
-    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
-    let status = Command::new("node")
-        .arg("scripts/stage-plugins.mjs")
-        .arg(&staged)
-        .current_dir(&source)
-        .status()
-        .expect("node on PATH");
-    assert!(status.success(), "stage-plugins.mjs failed");
-    staged
+    static STAGED: OnceLock<(tempfile::TempDir, PathBuf)> = OnceLock::new();
+    STAGED
+        .get_or_init(|| {
+            let root = tempfile::tempdir().unwrap();
+            let staged = root.path().join("plugins");
+            let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("..");
+            // In the system's temp directory, not the source tree (stagings
+            // of other worktrees wait too, which costs only time).
+            let _lock = StageLock::take(&std::env::temp_dir().join("vestra-stage-plugins.lock"));
+            let status = Command::new("node")
+                .arg("scripts/stage-plugins.mjs")
+                .arg(&staged)
+                .current_dir(&source)
+                .status()
+                .expect("node on PATH");
+            assert!(status.success(), "stage-plugins.mjs failed");
+            (root, staged)
+        })
+        .1
+        .clone()
+}
+
+/// A lock file held while staging (`builtins`), removed when dropped.
+struct StageLock(PathBuf);
+
+impl StageLock {
+    fn take(path: &Path) -> Self {
+        loop {
+            match std::fs::File::create_new(path) {
+                Ok(_) => return Self(path.to_owned()),
+                Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                    let stale = std::fs::metadata(path)
+                        .and_then(|m| m.modified())
+                        .ok()
+                        .and_then(|at| at.elapsed().ok())
+                        .is_some_and(|age| age > Duration::from_secs(600));
+                    if stale {
+                        let _ = std::fs::remove_file(path);
+                    } else {
+                        std::thread::sleep(Duration::from_millis(500));
+                    }
+                }
+                Err(error) => panic!("stage lock {}: {error}", path.display()),
+            }
+        }
+    }
+}
+
+impl Drop for StageLock {
+    fn drop(&mut self) {
+        let _ = std::fs::remove_file(&self.0);
+    }
 }
 
 /// A short video clip under `dir`.
@@ -434,7 +483,7 @@ fn writeln_stderr(line: &str) -> std::io::Result<()> {
 #[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
 fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
     let work = tempfile::tempdir().unwrap();
-    let plugins = builtins(work.path());
+    let plugins = builtins();
     let first = clip(work.path(), "first.mp4");
     let second = clip(work.path(), "second.mp4");
     let mut failures = Vec::new();
@@ -571,7 +620,7 @@ const ADJUST_TABS: [(&str, &str); 4] = [
 #[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
 fn opening_the_adjust_column_compiles_its_tabs_once_and_switching_compiles_nothing() {
     let work = tempfile::tempdir().unwrap();
-    let plugins = builtins(work.path());
+    let plugins = builtins();
     let file = clip(work.path(), "first.mp4");
     // A debug build compiles about seven times slower.
     let (warm_up, open, step, seconds) = if cfg!(debug_assertions) {
