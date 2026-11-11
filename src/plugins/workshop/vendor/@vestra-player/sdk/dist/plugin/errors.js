@@ -20,8 +20,14 @@ export function toError(error) {
     return new HostError("error", String(error));
 }
 export const failure = (code, message = code) => new HostError(code, message);
-/** Host replies are definite; anything else (lost reply, client timeout) is not. */
-export const uncertain = (error) => !(error instanceof HostError) || error.code === "timeout";
+/**
+ * Host replies are definite; anything else (lost reply, client timeout) is
+ * not. An abort is definite too: the SDK's request queue rejects a waiting
+ * request with it, unsent (`request-queue.ts`).
+ */
+export const uncertain = (error) => error instanceof HostError
+    ? error.code === "timeout"
+    : !(error instanceof Error && error.name === "AbortError");
 /** Mark a promise as observed so an unused `ready` never crashes the runner. */
 export function quiet(promise) {
     promise.catch(() => { });

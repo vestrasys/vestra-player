@@ -7,6 +7,7 @@
  * nothing of update passes (`passes.ts`); `Runtime` (`runtime.ts`) adds them.
  */
 import { createWire, HostError } from "../wire.js";
+import { RequestQueue } from "../request-queue.js";
 import { LOCALES } from "../i18n.js";
 import { failure } from "./errors.js";
 import { basename, isAbsolute, relative } from "node:path";
@@ -81,6 +82,11 @@ export class Connection {
     /** Declarations skipped during activation: reported once it completes. */
     #refusals = [];
     #transport;
+    /**
+     * Every request of this plugin goes through it: at most
+     * `REQUEST_LIMITS` in flight, the rest wait in order (`request-queue.ts`).
+     */
+    requests;
     #events = new Map();
     /** The missing `events` warning was given (once per plugin). */
     #warnedEvents = false;
@@ -127,7 +133,14 @@ export class Connection {
         this.#strict = options.strictDeclarations ?? false;
         this.dataDirectory = dataDirectory;
         this.local = transport.local;
-        this.host = createWire(transport);
+        const requests = new RequestQueue(transport);
+        this.requests = requests;
+        this.host = createWire({
+            request: (method, params, options) => requests.request(method, params, options),
+            on: (event, listener) => transport.on(event, listener),
+            local: transport.local,
+            locale: transport.locale,
+        });
         const host = this.host;
         this.app = appInfo(app, () => host.app.system());
         const features = app
@@ -419,10 +432,10 @@ export class Connection {
      * One request by its method name, as given (`plugin.wire.request`): nothing
      * added, nothing checked here, the player checks the capability. Every other
      * part of the SDK uses the typed clients (`host`); `scripts/check-layers.mjs`
-     * keeps it so.
+     * keeps it so. It waits in the request queue like every other.
      */
     request(method, params) {
-        return this.#transport.request(method, params);
+        return this.requests.request(method, params);
     }
     /** Raw transport events the host pushes without a subscription. */
     raw(event, listener) {

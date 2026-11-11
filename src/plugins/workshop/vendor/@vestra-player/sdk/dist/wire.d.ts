@@ -655,7 +655,13 @@ export type TemplateArgsJson = ArgJson[] | {
 /** A text the player shows: source text, or a text value. */
 export type TextValueJson = string | TextJson | ListJson;
 export interface Transport {
-    request<T>(method: string, params?: Json): Promise<T>;
+    /**
+     * One request. `options` belong to the plugin's side (the SDK's request
+     * queue, `request-queue.ts`) and are never sent; a runner ignores them.
+     */
+    request<T>(method: string, params?: Json, options?: {
+        signal?: AbortSignal;
+    }): Promise<T>;
     on(event: string, listener: (data: unknown) => void): () => void;
     /** Replaces the real local services (test host). */
     local?: LocalServices;
@@ -1082,7 +1088,7 @@ export declare function createWire(transport: Transport): {
     };
     source: {
         state: () => Promise<import("./source.ts").SourceState>;
-        submit: (intent: import("./source.ts").SourceIntent, operationId?: number) => Promise<import("./source.ts").SourceOperation>;
+        submit: (intent: import("./source.ts").SourceIntent, operationId?: number, signal?: AbortSignal) => Promise<import("./source.ts").SourceOperation>;
         operation: (operationId: number) => Promise<import("./source.ts").SourceOperation>;
     };
     sourceResolvers: {
@@ -1135,8 +1141,8 @@ export declare function createWire(transport: Transport): {
             expected: import("./subtitles.ts").SubtitleStamp;
             style: import("./subtitles.ts").SubtitleStyle | null;
         }) => Promise<import("./subtitles.ts").SubtitleState>;
-        begin: (uploadId: number, generation: number, expectedBytes: number) => Promise<import("./subtitles.ts").SubtitleUpload>;
-        append: (uploadId: number, offset: number, base64: string) => Promise<import("./subtitles.ts").SubtitleUpload>;
+        begin: (uploadId: number, generation: number, expectedBytes: number, signal?: AbortSignal) => Promise<import("./subtitles.ts").SubtitleUpload>;
+        append: (uploadId: number, offset: number, base64: string, signal?: AbortSignal) => Promise<import("./subtitles.ts").SubtitleUpload>;
         discard: (uploadId: number) => Promise<void>;
         commit: (options: {
             operationId: number;

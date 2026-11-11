@@ -52,6 +52,7 @@ import {
   parsePo,
   PATCH_FEATURE,
   PATCH_OPS,
+  REQUEST_LIMITS,
   rewriteSlint,
   scanSlint,
   SECRET_LIMITS,
@@ -61,6 +62,7 @@ import {
   UI_VALUE_LIMITS,
   LIST_SEPARATORS,
   TEXT_LIMITS,
+  UNQUEUED_METHODS,
   VIDEO_PROCESSING_LIMITS,
 } from "@vestra-player/sdk/runtime";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
@@ -1323,6 +1325,75 @@ test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the playe
     constant("src/process/mod.rs", "MAX_MESSAGE_BYTES"),
     MESSAGE_LIMIT,
     "MESSAGE_LIMIT vs process/mod.rs MAX_MESSAGE_BYTES",
+  );
+});
+
+test("REQUEST_LIMITS fit under the player's backstop with room for UNQUEUED_METHODS (process/unanswered.rs)", () => {
+  // Contract data: past the backstop the player answers `limit`, which a
+  // plugin on the SDK must never meet. The SDK keeps `inFlight` requests and
+  // `inFlightBytes` in flight and queues the rest; the unqueued methods
+  // (answers to the player's own calls) go out at once on top of them, so
+  // the margin must hold as many as the player can have waiting for.
+  const number = (file: string, pattern: RegExp, what: string) => {
+    const value = found(pattern.exec(host(file))?.[1], `${what} in ${file}`);
+    return value
+      .split("*")
+      .map((part) => Number(part.trim().replaceAll("_", "")))
+      .reduce((a, b) => a * b, 1);
+  };
+  const constant = (file: string, name: string) =>
+    number(file, new RegExp(`const ${name}: \\w+ = ([^;]+);`), name);
+  const maxLines = constant(
+    "src/process/unanswered.rs",
+    "MAX_UNANSWERED_REQUESTS",
+  );
+  const maxBytes = constant(
+    "src/process/unanswered.rs",
+    "MAX_UNANSWERED_BYTES",
+  );
+  const messageBytes = constant("src/process/mod.rs", "MAX_MESSAGE_BYTES");
+  // What the player can have waiting for each unqueued method's answer.
+  const resolutions = number(
+    "src/playback/source_backend.rs",
+    /self\.resolutions\.len\(\) >= (\d+)/,
+    "the cap on waiting resolutions",
+  );
+  const inputNotices = constant(
+    "src/playback/producer_input_delivery.rs",
+    "CAPACITY",
+  );
+  const waiting = {
+    // One answer per resolution the player waits for.
+    "sourceResolvers.respond": resolutions,
+    // The SDK acknowledges the front notice and waits for its answer; the
+    // player queues at most CAPACITY. Counted at the queue's size, the
+    // bound a client that acknowledged every notice at once could reach.
+    "producer.ackInput": inputNotices,
+    // One pending control at a time.
+    "producer.ack": 1,
+  };
+  assert.deepEqual(
+    [...UNQUEUED_METHODS].sort(),
+    Object.keys(waiting).sort(),
+    "UNQUEUED_METHODS changed: bound each new method's answers here and in unanswered.rs",
+  );
+  assert.ok(
+    REQUEST_LIMITS.inFlight < maxLines,
+    `REQUEST_LIMITS.inFlight ${REQUEST_LIMITS.inFlight} vs MAX_UNANSWERED_REQUESTS ${maxLines}`,
+  );
+  // The SDK acknowledges input one notice at a time, so the resolutions,
+  // one input acknowledgement and one control answer can be out together;
+  // the queue's size alone must fit too.
+  const sdkUnqueued =
+    waiting["sourceResolvers.respond"] + 1 + waiting["producer.ack"];
+  const headroom = maxLines - REQUEST_LIMITS.inFlight;
+  assert.ok(
+    sdkUnqueued <= headroom && inputNotices <= headroom,
+    `the backstop leaves ${headroom} lines over REQUEST_LIMITS.inFlight; the unqueued methods need ${sdkUnqueued} (input notices ${inputNotices})`,
+  );
+  assert.ok(
+    REQUEST_LIMITS.inFlightBytes + messageBytes <= maxBytes,
+    `REQUEST_LIMITS.inFlightBytes ${REQUEST_LIMITS.inFlightBytes} + MAX_MESSAGE_BYTES ${messageBytes} vs MAX_UNANSWERED_BYTES ${maxBytes}`,
   );
 });
 
