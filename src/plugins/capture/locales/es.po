@@ -33,8 +33,8 @@ msgstr "Las ráfagas necesitan una duración del medio conocida."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "The selected range is past the end of the media."
-msgstr "El intervalo seleccionado sobrepasa el final del medio."
+msgid "The frame is past the end of the media."
+msgstr "El fotograma está más allá del final del medio."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -58,8 +58,8 @@ msgstr "No se pudo capturar el fotograma."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "One export is running and four are queued. Please wait."
-msgstr "Hay una exportación en curso y cuatro en cola. Espera, por favor."
+msgid "Five snapshots are still being saved. Please wait."
+msgstr "Aún se están guardando cinco capturas. Espere, por favor."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -93,18 +93,18 @@ msgstr "Sin permiso de escritura"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "This media cannot be encoded"
-msgstr "Este medio no se puede codificar"
+msgid "This frame cannot be encoded"
+msgstr "No se puede codificar este fotograma"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Export failed"
-msgstr "Error al exportar"
+msgid "Could not write the image file"
+msgstr "No se pudo escribir el archivo de imagen"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "This task has no output file yet."
-msgstr "Esta tarea aún no tiene archivo de salida."
+msgid "No snapshot saved yet."
+msgstr "Aún no se ha guardado ninguna captura."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -201,107 +201,107 @@ msgstr "Guardar fotograma actual como"
 msgid "Frame copied without subtitles: they cannot be drawn into a frame"
 msgstr "Fotograma copiado sin subtítulos: no se pueden dibujar en el fotograma"
 
-#: main.ts:261 main.ts:426
+#: main.ts:261 main.ts:431
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "Fotograma copiado al portapapeles"
 
-#: main.ts:302 main.ts:384 main.ts:385 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
+#: main.ts:302 main.ts:389 main.ts:390 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
 #, x-machine
 msgid "Snapshot"
 msgstr "Captura"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Current Frame"
 msgstr "Guardar fotograma actual"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "Copiar fotograma actual"
 
-#: main.ts:384 main.ts:385 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
+#: main.ts:389 main.ts:390 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
 #, x-machine
 msgid "Burst"
 msgstr "Ráfaga"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "Configuración de captura…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "Guardar fotograma actual como…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "Guardar fotograma renderizado"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "Guardar fotograma renderizado como…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "Copiar fotograma renderizado"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as PNG"
 msgstr "Capturar como PNG"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "Capturar como JPEG"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as BMP"
 msgstr "Capturar como BMP"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "Incluir subtítulos en el fotograma renderizado"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "Carpeta de capturas…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "Abrir carpeta de capturas"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Show Last Capture in Folder"
 msgstr "Mostrar la última captura en la carpeta"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Last Snapshot"
 msgstr "Copiar la última captura"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Video Frame Only"
 msgstr "Guardar solo el fotograma de vídeo"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Video Frame Only"
 msgstr "Copiar solo el fotograma de vídeo"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "No frame to capture"
 msgstr "No hay fotograma que capturar"

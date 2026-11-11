@@ -223,7 +223,7 @@ test("F07: a failed JPEG export fails the task like a PNG one; nothing is left b
       return current;
     });
     await host.press("Ctrl+E");
-    await until(() => lastOsd(host) === "截图失败：导出失败");
+    await until(() => lastOsd(host) === "截图失败：无法写入图片文件");
     assert.equal(stills(host)[0]!.kind, "rawJpeg");
     assert.deepEqual(await readdir(folder), []);
   } finally {
@@ -316,7 +316,7 @@ test("F09: the saved message's buttons act on the newest capture: Show in Folder
   const { host, folder, stop } = await setup();
   try {
     await host.command("capture.revealLast").run();
-    await until(() => lastOsd(host) === host.translate("This task has no output file yet."));
+    await until(() => lastOsd(host) === host.translate("No snapshot saved yet."));
     await host.press("Ctrl+E");
     await until(() => lastOsd(host).startsWith("帧已保存为"));
     const frame = join(folder, "source-one_00.02.000.png");

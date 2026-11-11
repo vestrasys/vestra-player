@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.0.14
+
+- Wording left over from the clip tasks, now about snapshots: Show Last Capture in Folder and Copy Last Snapshot before any snapshot was saved say "No snapshot saved yet." (was "This task has no output file yet."); a sixth snapshot while five are saving says "Five snapshots are still being saved. Please wait." (was "One export is running and four are queued."); a failed write says "Could not write the image file" (was "Export failed"); "This frame cannot be encoded" (was "This media"); "The frame is past the end of the media." (was "The selected range"). Translations: zh-Hans by hand, de, es, fr, ja and ko machine (`x-machine`); the old texts removed from the catalogs.
+
 ## 1.0.13
 
 - **Snapshot only** (user ruling 2026-11-09): clip export leaves the built-in plugin and becomes a store plugin; this plugin keeps saving, saving as and copying the current frame, the rendered frame and the video frame, bursts, their settings, keys and the right-click Snapshot ▸. Who must change: users who export clips install the store plugin. What users see: no Capture sidebar tab and no Export commands.

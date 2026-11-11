@@ -35,8 +35,8 @@ msgstr "Les rafales nécessitent une durée de média connue."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "The selected range is past the end of the media."
-msgstr "La plage sélectionnée dépasse la fin du média."
+msgid "The frame is past the end of the media."
+msgstr "L’image se situe après la fin du média."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -60,8 +60,8 @@ msgstr "Impossible de capturer l'image."
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "One export is running and four are queued. Please wait."
-msgstr "Une exportation est en cours et quatre sont en attente. Veuillez patienter."
+msgid "Five snapshots are still being saved. Please wait."
+msgstr "Cinq captures sont encore en cours d’enregistrement. Veuillez patienter."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -95,18 +95,18 @@ msgstr "Pas d'autorisation d'écriture"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "This media cannot be encoded"
-msgstr "Ce média ne peut pas être encodé"
+msgid "This frame cannot be encoded"
+msgstr "Impossible d’encoder cette image"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "Export failed"
-msgstr "Échec de l'exportation"
+msgid "Could not write the image file"
+msgstr "Impossible d’écrire le fichier image"
 
 #: main.ts:85 main.ts:90
 #, x-machine
-msgid "This task has no output file yet."
-msgstr "Cette tâche n'a pas encore de fichier de sortie."
+msgid "No snapshot saved yet."
+msgstr "Aucune capture enregistrée pour l’instant."
 
 #: main.ts:85 main.ts:90
 #, x-machine
@@ -203,107 +203,107 @@ msgstr "Enregistrer l'image actuelle sous"
 msgid "Frame copied without subtitles: they cannot be drawn into a frame"
 msgstr "Image copiée sans sous-titres : ils ne peuvent pas être dessinés dans l’image"
 
-#: main.ts:261 main.ts:426
+#: main.ts:261 main.ts:431
 #, x-machine
 msgid "Frame copied to the clipboard"
 msgstr "Image copiée dans le presse-papiers"
 
-#: main.ts:302 main.ts:384 main.ts:385 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
+#: main.ts:302 main.ts:389 main.ts:390 manifest.json ui/settings.slint:132 ui/settings.slint:141 ui/settings.slint:223
 #, x-machine
 msgid "Snapshot"
 msgstr "Capture"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Current Frame"
 msgstr "Enregistrer l'image actuelle"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Current Frame"
 msgstr "Copier l'image actuelle"
 
-#: main.ts:384 main.ts:385 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
+#: main.ts:389 main.ts:390 ui/settings.slint:132 ui/settings.slint:188 ui/settings.slint:231
 #, x-machine
 msgid "Burst"
 msgstr "Rafale"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Snapshot Settings…"
 msgstr "Paramètres de capture…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Current Frame As…"
 msgstr "Enregistrer l'image actuelle sous…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Rendered Frame"
 msgstr "Enregistrer l'image rendue"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Rendered Frame As…"
 msgstr "Enregistrer l'image rendue sous…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Rendered Frame"
 msgstr "Copier l'image rendue"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as PNG"
 msgstr "Capturer en PNG"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as JPEG"
 msgstr "Capturer en JPEG"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Capture as BMP"
 msgstr "Capturer en BMP"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Include Subtitles in Rendered Frame"
 msgstr "Inclure les sous-titres dans l'image rendue"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Snapshot Folder…"
 msgstr "Dossier des captures…"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Open Snapshot Folder"
 msgstr "Ouvrir le dossier des captures"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Show Last Capture in Folder"
 msgstr "Afficher la dernière capture dans le dossier"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Last Snapshot"
 msgstr "Copier la dernière capture"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Save Video Frame Only"
 msgstr "Enregistrer l’image vidéo seule"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "Copy Video Frame Only"
 msgstr "Copier l’image vidéo seule"
 
-#: main.ts:384 main.ts:385
+#: main.ts:389 main.ts:390
 #, x-machine
 msgid "No frame to capture"
 msgstr "Aucune image à capturer"
