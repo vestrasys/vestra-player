@@ -291,6 +291,8 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 
 - **Destructive marks (11-11 evening, coordinator, following established practice):** a built-in marks `destructive` on commands that remove user data or list contents, or reset several settings at once, and cannot be undone. Not marked: one value back to its default, toggles and single choices, commands that open a dialog the user must complete (Save List, Open Folder, Choose Logo), and commands that already ask the user themselves (Open List asks "Replace…?") — so the user is never asked twice. Marked so far: playlist remove / remove-unselected / remove-invalid / clear; history recent.clear / recent.prune / resume.clear; subtitles remove; video.reset (Q) and video.resetPanel; audio.reset; visualizer reset-logo. Store uninstall, Workshop deletes and bookmark removal are window buttons, not commands, so commands.run cannot reach them.
 
+- **One change, one merge (11-11 evening, user; supersedes the 11-08 "one player ci:local per batch"):** each piece of work is its own version on its own branch and goes to main by itself once reviewed and checked, instead of being held and combined into a batch branch. The batches already combined that day stay as they are.
+
 ### State
 
 | # | Item | State |
@@ -307,7 +309,7 @@ In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-
 | B3b | **Adjust slot**: adjust column, narrow-window overlay, fullscreen slide-out, Adjust button; SDK patch (`adjust` slot value, docs) | Merged (#209, SDK 1.6.11–1.6.13). Host multi-panel (one panel per slot per plugin, SDK 1.6.15) merged (#214) |
 | B4 | **Panels**: Picture, Audio, Subtitles, Playback | Merged after the v3 redesign (player 0.7.6: one flat Picture panel, A-B Loop in Playback). Follow-ups: tab-switch compile stall (spike), startup recompile stall (fix running) |
 | B5 | **Slim right-click menu**, `menus.md` refreshed | Merged (#219: Adjustments and Effects / Sidebar entries) |
-| B6 | Full GUI test, then a release | Release tag needs the user |
+| B6 | Full GUI test, then a release | **Tracked by the user** (11-11): removed from the coordinator's plan |
 | C | **SDK review → SDK refactor** (user, 11-08): inventory by a researcher (module map and consumers, duplicated rules SDK↔host, change history, specialised vs generic APIs, heavy runtime parts, ranked refactor batches as patch releases); plan goes to the user before any change | Plan written: `doc/specs/sdk-refactor.md` (three layers, three plugin styles, plugin.state, batches 4.0 → Step 1–3 → D/E/F, docs refactor); five open questions for the user; timing not decided |
 | D | **Download page**: re-record the clips that show menus, fix copy for the panels and the palette. Push only, no deploy | After B6 |
 | E | **Signing** (Apple enrolment, Windows choice), page deploy and SEO | Needs the user |
