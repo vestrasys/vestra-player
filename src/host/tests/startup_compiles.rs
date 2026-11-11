@@ -531,15 +531,104 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
                 "{name}: {after_open} compile(s) after a file opened"
             ));
         }
-        if adjust_open
-            && !compiles
-                .iter()
-                .any(|c| c.panels.contains("vestra.video:adjust"))
-        {
+        let adjust = compiles
+            .iter()
+            .filter(|c| c.panels.contains(":adjust"))
+            .count();
+        if adjust_open && adjust == 0 {
             failures.push(format!(
                 "{name}: the remembered Picture tab was never compiled"
             ));
         }
+        // The user's ruling: a closed adjust column costs no compile.
+        if !adjust_open && adjust > 0 {
+            failures.push(format!(
+                "{name}: {adjust} compile(s) with adjust panels while the column stayed closed"
+            ));
+        }
     }
     assert!(failures.is_empty(), "{failures:#?}");
+}
+
+/// The adjust column's four built-in tabs (Picture, Audio, Subtitles,
+/// Playback), in their order, and the command that shows each.
+const ADJUST_TABS: [(&str, &str); 4] = [
+    ("vestra.video", "video.picture"),
+    ("vestra.audio", "audio.workbench"),
+    ("vestra.subtitles", "tune"),
+    ("vestra.playback", "panel"),
+];
+
+/// The tab-switch flash (coordinator ruling 2026-11-11): a shell compile
+/// swaps the main window's tree, which stalls the UI thread and makes Slint
+/// configure the window's surface again (a visible flash, as a resize). So
+/// the adjust column's first opening compiles all its front tabs in one
+/// compile, and a first switch to each of them afterwards compiles nothing;
+/// while it is closed, nothing of it compiles. The column is opened and the
+/// tabs switched through their commands (`VESTRA_TEST_EXECUTE`), as the
+/// menus and keys do.
+#[test]
+#[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
+fn opening_the_adjust_column_compiles_its_tabs_once_and_switching_compiles_nothing() {
+    let work = tempfile::tempdir().unwrap();
+    let plugins = builtins(work.path());
+    let file = clip(work.path(), "first.mp4");
+    // A debug build compiles about seven times slower.
+    let (warm_up, open, step, seconds) = if cfg!(debug_assertions) {
+        (20, 20_000u64, 4_000u64, 50)
+    } else {
+        (10, 8_000, 2_000, 20)
+    };
+    let profile = Profile::new(&plugins, false, ThirdParty::None);
+    profile.run(warm_up, None, None);
+    // Open the column on Picture, then switch to Audio, Subtitles and
+    // Playback (each a first showing), and back to Picture.
+    let switches = ADJUST_TABS
+        .iter()
+        .chain(&ADJUST_TABS[..1])
+        .enumerate()
+        .map(|(i, (id, command))| {
+            let at = if i == 0 {
+                open
+            } else {
+                open + 2 * step + i as u64 * step
+            };
+            format!("{id}/{command}@{at}")
+        })
+        .collect::<Vec<_>>()
+        .join(",");
+    let seconds = seconds.to_string();
+    let output = profile
+        .command(&[
+            std::ffi::OsStr::new("--seconds"),
+            seconds.as_ref(),
+            file.as_os_str(),
+        ])
+        .env("VESTRA_TEST_EXECUTE", &switches)
+        .output()
+        .unwrap();
+    let log = String::from_utf8_lossy(&output.stderr).into_owned();
+    assert!(output.status.success(), "{log}");
+    let (compiles, _) = report("adjust opened, then every tab shown", &log);
+    let ran = log.matches("lazy: VESTRA_TEST_EXECUTE vestra.").count();
+    assert_eq!(ran, 5, "every switch ran\n{log}");
+    let before = compiles
+        .iter()
+        .filter(|c| c.at_ms.saturating_sub(c.took_ms as u64) < open)
+        .collect::<Vec<_>>();
+    assert!(
+        before.iter().all(|c| !c.panels.contains(":adjust")),
+        "an adjust panel compiled while the column was closed: {before:#?}"
+    );
+    let after = compiles
+        .iter()
+        .filter(|c| c.at_ms.saturating_sub(c.took_ms as u64) >= open)
+        .collect::<Vec<_>>();
+    assert_eq!(after.len(), 1, "one compile at the opening: {after:#?}");
+    for (id, _) in ADJUST_TABS {
+        assert!(
+            after[0].panels.contains(&format!("{id}:adjust")),
+            "{id} in the opening's compile: {after:#?}"
+        );
+    }
 }
