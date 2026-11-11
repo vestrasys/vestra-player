@@ -44,9 +44,10 @@ const SETTLED = ["key-saved", "fetched", "fetched-replaced", "fetch-failed-custo
 /**
  * The plugin, its window opened. `compat`: a mock server URL to configure as
  * "Custom · OpenAI format" (its first listed model, mock-1) with KEY.
- * `locale`: the interface language (English when unset).
+ * `locale`: the interface language (English when unset). `builtin`: run as the
+ * player's built-in plugin (the palette's lead row, Ask Vestra).
  */
-export async function startAi({ data, compat, secrets = {}, deny = false, locale } = {}) {
+export async function startAi({ data, compat, secrets = {}, deny = false, locale, builtin = false } = {}) {
   const host = new TestHost();
   // `deny`: the user refuses the keychain's authorization dialog.
   if (deny)
@@ -54,7 +55,7 @@ export async function startAi({ data, compat, secrets = {}, deny = false, locale
       throw new HostError("failed", "User canceled the operation.");
     });
   for (const [name, value] of Object.entries(secrets)) host.secrets.set(name, value);
-  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, ...(data ? { dataDirectory: data } : {}), ...(locale ? { locale } : {}) });
+  const started = await startPlugin(activate, { directory: new URL("..", import.meta.url), host, ...(data ? { dataDirectory: data } : {}), ...(locale ? { locale } : {}), builtin });
   // Also after a failed test: the plugin's workers end with it.
   let stopped = false;
   const stop = () => (stopped ? undefined : ((stopped = true), started.stop()));

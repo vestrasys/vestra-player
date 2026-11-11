@@ -19,13 +19,15 @@ import {
 } from "../vendor/pi/pi.mjs";
 import path from "node:path";
 import { resolveModel } from "./models.ts";
-import { pluginTools } from "./plugin-tools.ts";
+import { askTools, pluginTools } from "./plugin-tools.ts";
 import { type StartMessage, type ToPlugin, type ToolReply, type ToWorker, type WorkerEvent } from "./protocol.ts";
 import { Folders, TOOL_NAMES, createTools } from "./tools.ts";
 
 type Session = Awaited<ReturnType<typeof createAgentSession>>["session"];
 
 let session: Session | undefined;
+/** The working directory an Ask Vestra session tells the model: no real path (see start). */
+const ASK_CWD = "/vestra";
 let secret = "";
 /** Plugin tool calls waiting for the plugin's answer. */
 const waiting = new Map<string, (reply: ToolReply) => void>();
@@ -132,8 +134,13 @@ function forward(e: AgentSessionEvent) {
 async function start(message: StartMessage) {
   secret = message.key;
   docsRoots = message.docsRoots ?? [];
-  const folders = await Folders.open(message.workDir, docsRoots);
-  const folder = folders.work;
+  // Ask Vestra: no files at all, only its own tools, nothing written.
+  const ask = message.profile === "ask";
+  const folders = ask ? null : await Folders.open(message.workDir, docsRoots);
+  // pi writes the working directory into the system prompt (<cwd>); Ask
+  // Vestra has no files, and its folder is under the user's home (the
+  // account name): the model gets a neutral name instead.
+  const cwd = folders ? folders.work.root : ASK_CWD;
   const modelRuntime = await ModelRuntime.create({
     credentials: new InMemoryCredentialStore(),
     modelsPath: null,
@@ -180,11 +187,14 @@ async function start(message: StartMessage) {
     reload: async () => {},
   } as unknown as ResourceLoader;
 
-  const sessionManager = message.sessionFile
-    ? SessionManager.open(message.sessionFile, message.sessionDir, folder.root)
-    : SessionManager.create(folder.root, message.sessionDir);
+  const sessionManager = ask
+    ? SessionManager.inMemory(cwd)
+    : message.sessionFile
+      ? SessionManager.open(message.sessionFile, message.sessionDir, cwd)
+      : SessionManager.create(cwd, message.sessionDir);
+  const plugins = message.pluginTools ?? [];
   ({ session } = await createAgentSession({
-    cwd: folder.root,
+    cwd,
     // Never written: credentials, settings and models are in memory. The
     // worker may not write there anyway (only the session folder).
     agentDir: message.sessionDir,
@@ -197,8 +207,8 @@ async function start(message: StartMessage) {
     // Two automatic retries for transient failures (1.5 s, 3 s), then the error row with Retry.
     settingsManager: SettingsManager.inMemory({ retry: { enabled: true, maxRetries: 2, baseDelayMs: 1500 } }),
     noTools: "builtin",
-    customTools: createTools(folders, pluginTools(message.pluginTools ?? [], askPlugin)),
-    tools: [...TOOL_NAMES, ...(message.pluginTools ?? [])],
+    customTools: folders ? createTools(folders, pluginTools(plugins, askPlugin)) : askTools(plugins, askPlugin),
+    tools: folders ? [...TOOL_NAMES, ...plugins] : plugins,
   }));
   session.subscribe(forward);
   send({ type: "ready", sessionFile: session.sessionFile ?? null });

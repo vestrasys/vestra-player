@@ -11,7 +11,11 @@
     "secrets",
     "clipboard",
     "plugins.manage",
-    "bindings.manage"
+    "bindings.manage",
+    "ui.osd",
+    "playback.read",
+    "playback.control",
+    "palette.lead"
   ],
   "name": "Vestra Player AI",
   "author": "Vestra Player",

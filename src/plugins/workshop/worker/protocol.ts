@@ -30,8 +30,16 @@ export interface StartMessage {
    * generated reference): real paths, outside the session folder.
    */
   docsRoots: string[];
-  /** Plugin tools the plugin process runs for the agent (PLUGIN_TOOLS names). */
+  /** Plugin tools the plugin process runs for the agent (PLUGIN_TOOLS names; ASK_TOOLS names for "ask"). */
   pluginTools: string[];
+  /**
+   * "maker" (default): the plugin maker's chat, with the file and
+   * documentation tools and the session JSONL. "ask": one Ask Vestra request,
+   * kept in memory only (no session file), without file or documentation
+   * tools: only the ASK_TOOLS named in `pluginTools`, whose result ends the
+   * turn (no model call after it).
+   */
+  profile?: "maker" | "ask";
 }
 
 /** What a plugin tool call returned (the plugin process ran it). */
