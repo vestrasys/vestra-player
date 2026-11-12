@@ -392,6 +392,10 @@ impl Backend {
                 // No upscaler in the chain while a new source's geometry is
                 // prepared: its scaled output never matched (`upscaling.rs`).
                 upscaling.follow_gate(publish_gate.clone());
+                // Motion smoothing (`motion.rs`): AMD's frame-rate converter.
+                let mut motion = crate::playback::motion::Motion::default();
+                // Out of the chain while a new source opens (`motion.rs`).
+                motion.follow_gate(publish_gate.clone());
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;
@@ -401,6 +405,20 @@ impl Backend {
                     }
                     jobs.poll();
                     upscaling.poll(&mpv, &out_render, &events, || processing.copy_back_owners());
+                    motion.note_upscaling(upscaling.asked());
+                    motion.note_doubling(processing.doubles_frames());
+                    motion.poll(
+                        &mpv,
+                        &out_render,
+                        &events,
+                        &mut MotionEffects {
+                            mpv: &mpv,
+                            processing: &mut processing,
+                            options: &mut render_options,
+                            render: &out_render,
+                        },
+                        sources.generation(),
+                    );
                     // The plugin shader guard re-checks a list after the video's
                     // size changes (`//!WHEN` hooks compile at their first use).
                     if out_render.gpu().is_some() {
@@ -431,6 +449,46 @@ impl Backend {
                         // named in a `decoding` reason, as they are now.
                         if command.method.starts_with("video.upscaling.") {
                             upscaling.note_copy_back(processing.copy_back_owners());
+                        }
+                        // Motion smoothing (`motion.rs`): its requests; a
+                        // stopped plugin's filter goes, then on below.
+                        // AI upscaling turned on: the converter leaves first
+                        // (copy-back released), so upscaling's answer does
+                        // not name it.
+                        if command.method == "video.upscaling.set"
+                            && command.params["enabled"] == true
+                            && upscaling.would_accept(&mpv, &out_render)
+                        {
+                            motion.yield_to_upscaling(
+                                &mpv,
+                                &out_render,
+                                &mut MotionEffects {
+                                    mpv: &mpv,
+                                    processing: &mut processing,
+                                    options: &mut render_options,
+                                    render: &out_render,
+                                },
+                            );
+                        }
+                        if command.method.starts_with("video.motion.")
+                            || command.method == "owner.disabled"
+                        {
+                            motion.note_upscaling(upscaling.asked());
+                            motion.note_doubling(processing.doubles_frames());
+                            if motion.command(
+                                &mpv,
+                                &out_render,
+                                &command,
+                                &events,
+                                &mut MotionEffects {
+                                    mpv: &mpv,
+                                    processing: &mut processing,
+                                    options: &mut render_options,
+                                    render: &out_render,
+                                },
+                            ) {
+                                continue;
+                            }
                         }
                         if upscaling.command(&mpv, &out_render, &command, &events) {
                             continue;
@@ -463,6 +521,9 @@ impl Backend {
                                 if upscaling.holds(owner) {
                                     live.push("video upscaling");
                                 }
+                                if motion.holds(owner) {
+                                    live.push("motion smoothing");
+                                }
                                 // Of `live`, what the plugin's next activation
                                 // takes up again from its settings (the rest
                                 // is work in flight: a resolution, a job, a
@@ -485,6 +546,9 @@ impl Backend {
                                 }
                                 if upscaling.owns(owner) {
                                     held.push("video upscaling");
+                                }
+                                if motion.holds(owner) {
+                                    held.push("motion smoothing");
                                 }
                                 let answer = json!({"live":live,"held":held,
                                     "resolvers":sources.resolvers_of(owner)});
@@ -586,7 +650,7 @@ impl Backend {
                                     json!({"code":error.code,"message":error.message}),
                                 ));
                             }
-                            pace(&out_render, render_options.settings());
+                            pace(&out_render, &render_options);
                             let _ = events.send(Event::BackendCleaned(command.reply.owner));
                             continue;
                         }
@@ -741,7 +805,7 @@ impl Backend {
                                 let values = &command.params["values"];
                                 render_options.set(owner, values, ready, refresh, &mut player)
                             };
-                            pace(&out_render, render_options.settings());
+                            pace(&out_render, &render_options);
                             guard_processed(&out_render, &command.params);
                             let _ = events.send(Event::Reply(command.reply, result));
                             continue;
@@ -782,7 +846,13 @@ impl Backend {
                         if command.method == "playback.stats" {
                             let frames = sequence.load(Ordering::Relaxed)
                                 + out_render.gpu().map_or(0, |gpu| gpu.frames());
-                            let stats = stats(&mpv, sources.generation(), frames, &out_render);
+                            let stats = stats(
+                                &mpv,
+                                sources.generation(),
+                                frames,
+                                &out_render,
+                                motion.input_fps(),
+                            );
                             let _ = events.send(Event::Reply(command.reply, Ok(stats)));
                             continue;
                         }
@@ -867,6 +937,7 @@ impl Backend {
                     }
                     while let Some(event) = mpv.poll_event() {
                         if let rsmpv::Event::LogMessage(message) = &event {
+                            motion.log(&message.prefix, &message.level, &message.text);
                             if crate::playback::video_render::compile_line(
                                 &message.prefix,
                                 &message.level,
@@ -1124,6 +1195,9 @@ impl Backend {
                         if let Some(due) = upscaling.due_in(now) {
                             timeout = timeout.min(due);
                         }
+                        if let Some(due) = motion.due_in(now) {
+                            timeout = timeout.min(due);
+                        }
                         if let Some(due) = processing.due_in(&mpv, now) {
                             timeout = timeout.min(due);
                         }
@@ -1271,13 +1345,38 @@ fn guard_processed(render: &crate::playback::renderer::Render, params: &Value) {
 fn software_hwdec() -> String {
     crate::playback::renderer::hwdec(std::env::var("VESTRA_HWDEC").ok(), true)
 }
-/// Interpolation (`video.render()`) paces the GPU renderer to the display.
+/// Interpolation (`video.render()`, motion smoothing's Match Display)
+/// paces the GPU renderer to the display.
 fn pace(
     render: &crate::playback::renderer::Render,
-    settings: &crate::playback::video_render::Settings,
+    options: &crate::playback::video_render::Options,
 ) {
     if let Some(gpu) = render.gpu() {
-        gpu.set_display_fps(settings.interpolation.then(|| render.refresh()));
+        gpu.set_display_fps(options.interpolating().then(|| render.refresh()));
+    }
+}
+/// What motion smoothing changes besides mpv's chain (`motion::Effects`):
+/// copy-back decoding through the processing chain's switch, Match
+/// Display through the render options (the only writer of mpv's
+/// interpolation options) and the GPU renderer's pacing.
+struct MotionEffects<'a> {
+    mpv: &'a rsmpv::Mpv,
+    processing: &'a mut crate::playback::processing::Processing,
+    options: &'a mut crate::playback::video_render::Options,
+    render: &'a crate::playback::renderer::Render,
+}
+impl crate::playback::motion::Effects for MotionEffects<'_> {
+    fn frames_in_memory(&mut self, held: bool) {
+        self.processing.hold_frames_in_memory(self.mpv, held);
+    }
+    fn resample(&mut self, refresh: Option<f64>) {
+        let mut player = crate::playback::video_render::Mpv(self.mpv);
+        let on = refresh.is_some();
+        let refresh = refresh.unwrap_or_else(|| self.render.refresh());
+        if let Err(error) = self.options.set_resample(on, refresh, &mut player) {
+            diag!("motion: Match Display: {}", error.message);
+        }
+        pace(self.render, self.options);
     }
 }
 impl Drop for Backend {
@@ -1362,6 +1461,7 @@ fn stats(
     session: u64,
     frames: u64,
     render: &crate::playback::renderer::Render,
+    motion_input: Option<f64>,
 ) -> Value {
     let text = |name: &str| {
         mpv.get_property::<String>(name)
@@ -1378,7 +1478,7 @@ fn stats(
     let signed = |name: &str| mpv.get_property::<f64>(name).ok().filter(|v| v.is_finite());
     let video = text("video-codec").map(|codec| {
         json!({"codec":codec,"width":int("video-params/w"),"height":int("video-params/h"),
-            "fps":float("estimated-vf-fps").or_else(|| float("container-fps")),
+            "fps":crate::playback::motion::stats_fps(mpv, motion_input),
             "decoder":text("current-tracks/video/decoder"),
             "pixelFormat":text("video-params/pixelformat"),
             "colorspace":text("video-params/colormatrix"),
@@ -1835,16 +1935,9 @@ impl CoreActions {
                 let target = if keyframes {
                     (at - 0.001).max(0.)
                 } else {
-                    let fps = ["estimated-vf-fps", "container-fps"]
-                        .iter()
-                        .find_map(|name| {
-                            context
-                                .mpv
-                                .get_property::<f64>(name)
-                                .ok()
-                                .filter(|fps| fps.is_finite() && *fps > 0.)
-                        })
-                        .unwrap_or(30.);
+                    // Motion smoothing's converter in the chain: one frame
+                    // of what goes into it, not half of one.
+                    let fps = crate::playback::motion::step_fps(context.mpv).unwrap_or(30.);
                     (at - 1. / fps).max(0.)
                 };
                 // A step back from the end stays paused (other seeks from

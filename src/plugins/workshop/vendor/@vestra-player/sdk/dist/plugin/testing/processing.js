@@ -247,6 +247,69 @@ export function upscalingDecoding(host, _inner, cause, plugins = []) {
     host.upscaling.hwdecCurrent = current;
     return reason;
 }
+/** `video.motion.state` from {@link TestHost.motion}. */
+/** The player's message for the reserved engine (as playback/motion.rs). */
+const NO_NVIDIA = {
+    code: "engine",
+    message: "this player has no NVIDIA frame-rate converter; motion smoothing works with AMD's (engine amd)",
+};
+/** `video.motion.state` of the reserved `nvidia` engine: every mode `engine`. */
+function nvidiaState(host) {
+    return {
+        engine: "nvidia",
+        mode: "off",
+        active: "off",
+        double: { ...NO_NVIDIA },
+        display: { ...NO_NVIDIA },
+        searchMode: null,
+        sourceFps: host.motion.sourceFps,
+        outputFps: null,
+        displayFps: host.motion.displayFps,
+        gpu: null,
+        inChain: false,
+    };
+}
+/** The engine a request names, checked as the player does. */
+function engineOf(p) {
+    if (p.engine !== "amd" && p.engine !== "nvidia")
+        throw new HostError("invalid", 'engine must be "amd" or "nvidia"');
+    return p.engine;
+}
+export function motionState(host) {
+    const { mode, double, display, sourceFps, displayFps, gpu } = host.motion;
+    const reasonOf = (wanted) => wanted === "double" ? double : wanted === "display" ? display : null;
+    const works = mode !== "off" && reasonOf(mode) === null && sourceFps !== null;
+    const active = works ? mode : "off";
+    const copy = (reason) => reason ? structuredClone(reason) : null;
+    return {
+        engine: "amd",
+        mode,
+        active,
+        double: copy(double),
+        display: copy(display),
+        searchMode: works
+            ? host.motion.performance
+                ? "performance"
+                : "native"
+            : null,
+        sourceFps,
+        outputFps: works
+            ? (host.motion.outputFps ?? Math.round(sourceFps * 20) / 10)
+            : null,
+        displayFps,
+        gpu,
+        inChain: works,
+    };
+}
+/** The reason codes that hold for the whole run (`set` rejects them). */
+const MOTION_FIXED = [
+    "engine",
+    "platform",
+    "no-gpu",
+    "runtime",
+    "filter",
+    "rendering",
+];
 /** The default handlers of this area's wire methods, by method name. */
 export function processingHandlers(host, inner) {
     return {
@@ -291,6 +354,27 @@ export function processingHandlers(host, inner) {
             }
             host.upscaling.enabled = true;
             return upscalingState(host, inner);
+        },
+        // As the player 0.8.1 (see TestHost.motion for the model).
+        "video.motion.state": (p) => engineOf(p) === "amd" ? motionState(host) : nvidiaState(host),
+        "video.motion.set": (p) => {
+            const engine = engineOf(p);
+            const mode = p.mode;
+            if (mode !== "off" && mode !== "double" && mode !== "display")
+                throw new HostError("invalid", 'mode must be "off", "double" or "display"');
+            if (engine === "nvidia") {
+                if (mode !== "off")
+                    throw new HostError("unsupported", `motion smoothing cannot work here: ${NO_NVIDIA.message}`);
+                return nvidiaState(host);
+            }
+            if (mode !== "off") {
+                const reason = host.motion[mode];
+                const passes = reason?.code === "rendering" && host.motion.renderingStarting;
+                if (reason && MOTION_FIXED.includes(reason.code) && !passes)
+                    throw new HostError("unsupported", `motion smoothing cannot work here: ${reason.message}`);
+            }
+            host.motion.mode = mode;
+            return motionState(host);
         },
         "video.view.set": (p) => {
             const owner = host.videoView.owner;

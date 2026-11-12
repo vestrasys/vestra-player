@@ -92,7 +92,7 @@ import { mountOther, unmountOther, mounted, setTimelineRanges, setTimelineLayer,
 import { osdHandlers } from "./osd.js";
 import { packageDirectories } from "./slint-types.js";
 import { failStream, jobsHandlers } from "./jobs.js";
-import { upscalingState, failVideoRender, failVideoShaders, upscalingDecoding, processingHandlers, } from "./processing.js";
+import { motionState, upscalingState, failVideoRender, failVideoShaders, upscalingDecoding, processingHandlers, } from "./processing.js";
 import { sourceIntent, startResolution, setSource, mediaHandlers, initialSource, } from "./media.js";
 import { drop, setMainWindow, servicesHandlers, sortedJson, } from "./services.js";
 /** Throw one of these from `host.handle(...)` to simulate a definite refusal. */
@@ -193,7 +193,7 @@ export { LOCALES };
  *   {@link TestHost.chapters}, {@link TestHost.audioDevices},
  *   {@link TestHost.secrets}, {@link TestHost.clipboard},
  *   {@link TestHost.tools}, {@link TestHost.rendering},
- *   {@link TestHost.upscaling}.
+ *   {@link TestHost.upscaling}, {@link TestHost.motion}.
  * - **Assert** on records: {@link TestHost.osd}, {@link TestHost.calls},
  *   {@link TestHost.sent}, {@link TestHost.conflicts},
  *   {@link TestHost.layout}, {@link TestHost.menus}, and many more.
@@ -1709,6 +1709,79 @@ export class TestHost {
             return;
         const { enabled: _, ...state } = upscalingState(this, this.#inner, false);
         this.emit("video.upscaling.changed", state);
+    }
+    /**
+     * Motion smoothing behind `plugin.video.motion`, answered as the player
+     * would:
+     *
+     * - `state()` and `set()` report this plugin's `mode`, the reasons
+     *   `double` and `display` (`null`: that mode works) and `active`: the
+     *   mode while its reason is `null` and `sourceFps` is known, else
+     *   `off`; while active, `searchMode` (`performance` with
+     *   `performance`) and `outputFps` (`outputFps`, or twice `sourceFps`).
+     * - `set(mode)` refuses with `unsupported` and the reason's message while
+     *   that mode's reason is `platform`, `no-gpu`, `runtime`, `filter` or
+     *   `rendering` (unless `renderingStarting`): those hold for the run. The
+     *   others can pass, so the player keeps the request. `off` always
+     *   succeeds; an unknown mode is `invalid`.
+     *
+     * Inject other answers with `host.handle("video.motion.set", …)`. The
+     * defaults are a player where both modes work on a 24 fps video and a
+     * 60 Hz display.
+     *
+     * @example Test the Picture panel on software rendering
+     * Match Display needs GPU rendering: the plugin greys it with the
+     * player's reason, and Double waits for a rate that fits.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.motion.display = { code: "rendering", message: "Match Display needs GPU rendering" };
+     * host.motion.double = { code: "rate", message: "24 fps doubled is 48 fps on a 60 Hz display" };
+     * host.motionChanged();
+     * await host.settle();
+     * assert.equal(host.motion.mode, "off");
+     * ```
+     *
+     * @since 1.7.19
+     */
+    motion = {
+        mode: "off",
+        double: null,
+        display: null,
+        renderingStarting: false,
+        sourceFps: 24,
+        outputFps: null,
+        performance: false,
+        displayFps: 60,
+        gpu: "AMD Radeon 780M Graphics",
+    };
+    /**
+     * Send `video.motion.changed` with the state {@link TestHost.motion}
+     * describes now (without `mode`), as the player does when it changes; a
+     * plugin listening with `plugin.video.motion("amd").onChange` receives it.
+     * Nothing reaches a plugin that does not listen.
+     *
+     * @capability None.
+     *
+     * @example The GPU fell behind
+     * The player turned the converter off for this video; the plugin's
+     * panel shows the reason.
+     * ```ts
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.motion.double = { code: "overload", message: "the GPU could not keep up with this video" };
+     * host.motionChanged();
+     * await host.settle();
+     * ```
+     *
+     * @since 1.7.19
+     */
+    motionChanged() {
+        if (!this.subscriptions.has("video.motion.changed"))
+            return;
+        const { mode: _, ...state } = motionState(this);
+        this.emit("video.motion.changed", state);
     }
     /** What `player.chapters()` lists while media is ready. */
     chapters = [];

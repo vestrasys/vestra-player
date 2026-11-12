@@ -1514,6 +1514,15 @@ pub fn select_wgpu_windows(
     } else {
         return Err(format!("no graphics adapter ({})", adapter.how));
     };
+    // wgpu's Direct3D 12 backend keeps the FXC compiler's COM object from
+    // `d3dcompiler_47.dll` for the life of the device; another component
+    // that loads and frees the DLL once too often (AMD's AMF runtime when
+    // motion smoothing's converter is torn down, measured 2026-11-12) would
+    // unmap it under wgpu, and the next pipeline crashes the UI thread or
+    // hangs the player. Pinned before the device exists.
+    if let Err(error) = vestra_win32::pin_module("d3dcompiler_47.dll") {
+        diag!("render: {error}");
+    }
     let device = vestra_gpu_render::WindowDevice::open(choice, &adapter.how)
         .map_err(|error| format!("no Direct3D 12 device ({error})"))?;
     let any_adapter =
@@ -1876,6 +1885,79 @@ fn d3d11vpp_filter(factor: f64, standard: bool) -> String {
 /// device (not copied back).
 pub const UPSCALER_HWDEC: &str = "d3d11va";
 
+// ------------------------------------------------------- motion smoothing
+
+/// AMD's PCI vendor id.
+const AMD: u32 = 0x1002;
+
+/// Where motion smoothing works (`playback/motion.rs`): an AMD adapter
+/// (vendor `0x1002`, not software) and AMD's AMF runtime (`amfrt64.dll` in
+/// System32, installed with the AMD driver), which FFmpeg's `frc_amf` loads.
+/// No device is created, so no GPU is woken; whether the runtime starts on
+/// this GPU shows when the filter starts (`playback/motion.rs` follows mpv's
+/// log).
+pub fn motion_probe() -> super::MotionProbe {
+    let adapters = vestra_win32::dxgi_adapters().map_err(|error| super::MotionRefusal {
+        code: "no-gpu",
+        message: format!("the graphics adapters cannot be listed ({error})"),
+    })?;
+    let Some(amd) = adapters
+        .iter()
+        .find(|adapter| adapter.vendor_id == AMD && !adapter.software)
+    else {
+        return Err(super::MotionRefusal {
+            code: "no-gpu",
+            message: "no AMD GPU: motion smoothing uses AMD's frame-rate converter (AMF), which needs an AMD Radeon GPU".into(),
+        });
+    };
+    let runtime = std::env::var_os("SystemRoot")
+        .map(std::path::PathBuf::from)
+        .unwrap_or_else(|| std::path::PathBuf::from(r"C:\Windows"))
+        .join("System32")
+        .join("amfrt64.dll");
+    if !runtime.is_file() {
+        return Err(super::MotionRefusal {
+            code: "runtime",
+            message: format!(
+                "AMD's AMF runtime (amfrt64.dll) is not installed; install or update the AMD driver for {}",
+                amd.name
+            ),
+        });
+    }
+    Ok(super::MotionGpu {
+        name: amd.name.clone(),
+    })
+}
+
+/// mpv's filter for motion smoothing: FFmpeg's `frc_amf` doubles the frame
+/// rate on the AMD GPU from frames in memory (`format=nv12`; frames still
+/// on a Direct3D 11 device fail with AMF error 4), and the result is copied
+/// back (`hwdownload`) for either renderer. `large`: the deeper motion
+/// search AMF recommends above 1440p; `performance`: the motion search on
+/// downscaled frames (the fallback when the GPU cannot keep up).
+///
+/// `hwdec_interop=vaapi`: an interop that cannot load with Vestra's
+/// renderers (this libmpv has vaapi-win32, but it needs EGL or Vulkan
+/// dmabuf import, which Vestra's Direct3D 11 and software renderers lack),
+/// so the graph gets no hardware device. A name that is no interop at all
+/// (`no`, `none`) mpv refuses as the option's value, and the filter is
+/// not added. With GPU rendering mpv otherwise hands
+/// the graph its Direct3D 11 device (the renderer's, the NVIDIA GPU on a
+/// hybrid laptop), and `frc_amf` then accepts only Direct3D 11 input and
+/// the graph fails to configure ("dst: d3d11"; measured 2026-11-12). With
+/// no device it takes frames in memory and opens AMF on the AMD GPU itself.
+pub fn motion_filter(large: bool, performance: bool) -> Option<String> {
+    Some(frc_amf_filter(large, performance))
+}
+
+fn frc_amf_filter(large: bool, performance: bool) -> String {
+    format!(
+        "lavfi=graph=[format=nv12,frc_amf=profile={}:mv_search_mode={},hwdownload,format=nv12]:hwdec_interop=vaapi",
+        if large { "super" } else { "high" },
+        if performance { "performance" } else { "native" }
+    )
+}
+
 /// Windows 11 still says "Windows 10" in `ProductName`; the build decides.
 pub fn windows_name(build: Option<u32>) -> String {
     match build {
@@ -2050,6 +2132,18 @@ mod tests {
         assert_eq!(
             d3d11vpp_filter(2., true),
             "d3d11vpp=scale=2.00:scaling-mode=standard"
+        );
+    }
+
+    #[test]
+    fn the_motion_filter_converts_in_memory_and_copies_back() {
+        assert_eq!(
+            frc_amf_filter(false, false),
+            "lavfi=graph=[format=nv12,frc_amf=profile=high:mv_search_mode=native,hwdownload,format=nv12]:hwdec_interop=vaapi"
+        );
+        assert_eq!(
+            frc_amf_filter(true, true),
+            "lavfi=graph=[format=nv12,frc_amf=profile=super:mv_search_mode=performance,hwdownload,format=nv12]:hwdec_interop=vaapi"
         );
     }
 

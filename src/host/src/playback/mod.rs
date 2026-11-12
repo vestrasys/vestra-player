@@ -46,6 +46,7 @@ pub mod subtitle_upload;
 pub(crate) mod frame_pacing;
 #[cfg(any(windows, test))]
 pub(crate) mod lease_stream;
+pub(crate) mod motion;
 pub(crate) mod render_denylist;
 pub(crate) mod render_mode;
 pub(crate) mod render_state;

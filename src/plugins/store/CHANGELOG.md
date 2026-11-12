@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.17
+
+- The permission list names the new capability `video.motion` (SDK 1.7.19): **Smooth motion with the GPU's frame-rate converter**, translated by machine (marked `x-machine`; zh-Hans by hand). Who must change: nobody.
+
 ## 0.2.16
 
 - The permission list names the new capability `media.sources` (SDK 1.7.8): **Remember videos you add and export from them later**, translated by machine (marked `x-machine`). Who must change: nobody.

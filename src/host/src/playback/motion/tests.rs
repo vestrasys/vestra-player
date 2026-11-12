@@ -1,0 +1,1259 @@
+use super::*;
+use crate::host::Reply;
+use crate::platform::{MotionGpu, MotionRefusal};
+use crate::playback::render_mode::{Facts as RenderFacts, Preference, decide};
+
+fn amd() -> MotionProbe {
+    Ok(MotionGpu {
+        name: "AMD Radeon 780M Graphics".into(),
+    })
+}
+
+fn no_amd() -> MotionProbe {
+    Err(MotionRefusal {
+        code: "no-gpu",
+        message: "no AMD GPU".into(),
+    })
+}
+
+/// GPU rendering, a 24 fps video on a 60 Hz display, nothing in the way.
+fn facts<'a>(probe: &'a MotionProbe, reason: &'a RenderReason, rendering: &'a Value) -> Facts<'a> {
+    Facts {
+        probe,
+        refused: None,
+        gpu_now: true,
+        render_reason: reason,
+        rendering,
+        upscaling: false,
+        failed: None,
+        overload: None,
+        source_fps: Some(24.),
+        display_fps: 60.,
+        any_rate: false,
+        video: Some((1920., 1080.)),
+        doubling: false,
+        broken: None,
+        format: None,
+    }
+}
+
+#[test]
+fn the_reasons_come_in_order_and_say_what_to_do() {
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = amd();
+    for mode in [Mode::Off, Mode::Double, Mode::Display] {
+        assert_eq!(check(&facts(&probe, &reason, &rendering), mode), Ok(()));
+    }
+    // The system's check first; Off always works.
+    let none = no_amd();
+    let error = check(&facts(&none, &reason, &rendering), Mode::Double).unwrap_err();
+    assert_eq!(
+        (error.code(), error.message().as_str()),
+        ("no-gpu", "no AMD GPU")
+    );
+    assert!(error.fixed());
+    assert_eq!(check(&facts(&none, &reason, &rendering), Mode::Off), Ok(()));
+    // The filter mpv refused.
+    let error = check(
+        &Facts {
+            refused: Some("no such filter"),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "filter");
+    assert!(error.fixed());
+    // Match Display needs GPU rendering; Double does not.
+    let off = RenderReason::OffByDefault;
+    let software = json!({"engine":"amd","mode":"software","nextMode":"software","gpu":{"available":true,"reason":null}});
+    let cpu = Facts {
+        gpu_now: false,
+        source_fps: Some(30.),
+        ..facts(&probe, &off, &software)
+    };
+    let error = check(&cpu, Mode::Display).unwrap_err();
+    assert_eq!(error.code(), "rendering");
+    assert!(error.fixed());
+    assert!(
+        error
+            .message()
+            .contains("turn on GPU Rendering in Picture ▸ Rendering and restart the player"),
+        "{}",
+        error.message()
+    );
+    assert_eq!(check(&cpu, Mode::Double), Ok(()));
+    // Starting: not fixed.
+    let pending = RenderReason::Pending;
+    let error = check(
+        &Facts {
+            gpu_now: false,
+            ..facts(&probe, &pending, &rendering)
+        },
+        Mode::Display,
+    )
+    .unwrap_err();
+    assert_eq!(error, Reason::Starting);
+    assert!(!error.fixed());
+    // AI upscaling, then this video's failure and overload: none fixed.
+    let error = check(
+        &Facts {
+            upscaling: true,
+            failed: Some("AMFFRC->Init() failed with error 4"),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "upscaling");
+    assert!(!error.fixed());
+    let error = check(
+        &Facts {
+            failed: Some("AMFFRC->Init() failed with error 4"),
+            overload: Some("behind"),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!(error.code(), "failed");
+    assert!(error.message().contains("error 4"), "{}", error.message());
+    let error = check(
+        &Facts {
+            overload: Some("behind"),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Display,
+    )
+    .unwrap_err();
+    assert_eq!((error.code(), error.fixed()), ("overload", false));
+    assert_eq!(
+        error.json(),
+        json!({"code":"overload","message":"behind"}),
+        "the API shape"
+    );
+}
+
+#[test]
+fn the_rate_must_fit_the_display_and_software_rendering_needs_twice_the_rate() {
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = amd();
+    let at = |fps: f64, display: f64, gpu: bool| Facts {
+        source_fps: Some(fps),
+        display_fps: display,
+        gpu_now: gpu,
+        // The size rule apart (its own test).
+        video: None,
+        ..facts(&probe, &reason, &rendering)
+    };
+    // GPU rendering: any double up to the display.
+    assert_eq!(check(&at(23.976, 60., true), Mode::Double), Ok(()));
+    assert_eq!(check(&at(30., 60., true), Mode::Display), Ok(()));
+    assert_eq!(check(&at(30., 144., true), Mode::Display), Ok(()));
+    // Past the display: nothing to gain.
+    let error = check(&at(30., 50., true), Mode::Double).unwrap_err();
+    assert_eq!(error.code(), "rate");
+    assert_eq!(
+        error.message(),
+        "this video plays at 30 fps; doubled it would be 60 fps, more than the display's 50 Hz"
+    );
+    // Out of the converter's range.
+    // Above 30 fps: not measured, not offered (1080p60 on 120 Hz dropped 2–3 %).
+    let error = check(&at(60., 144., true), Mode::Double).unwrap_err();
+    assert!(
+        error.message().contains("10 to 30 fps"),
+        "{}",
+        error.message()
+    );
+    assert!(check(&at(5., 60., true), Mode::Double).is_err());
+    // Software rendering: Double only where twice the rate is the display's
+    // (within 1 %).
+    assert_eq!(check(&at(30., 60., false), Mode::Double), Ok(()));
+    assert_eq!(check(&at(29.97, 60., false), Mode::Double), Ok(()));
+    assert_eq!(check(&at(30., 59.94, false), Mode::Double), Ok(()));
+    let error = check(&at(24., 60., false), Mode::Double).unwrap_err();
+    assert_eq!(error.code(), "rate");
+    assert!(
+        error
+            .message()
+            .contains("24 fps doubled is 48 fps on a 60 Hz display"),
+        "{}",
+        error.message()
+    );
+    // The test switch lifts the display rule, not the range.
+    let any = |fps: f64| Facts {
+        any_rate: true,
+        ..at(fps, 60., false)
+    };
+    assert_eq!(check(&any(24.), Mode::Double), Ok(()));
+    assert!(check(&any(120.), Mode::Double).is_err());
+    // An unknown rate is not judged yet.
+    let unknown = Facts {
+        source_fps: None,
+        ..at(24., 60., false)
+    };
+    assert_eq!(check(&unknown, Mode::Double), Ok(()));
+}
+
+#[test]
+fn a_window_is_behind_when_slow_or_dropping() {
+    // 48 fps for 4 s with no drops: fine.
+    assert_eq!(judge(48., &[48., 47.9, 48.1], 0, 4.), None);
+    // Up to 5 % dropped: fine (9.6 of 192).
+    assert_eq!(judge(48., &[48.], 9, 4.), None);
+    // More: behind.
+    assert_eq!(
+        judge(48., &[48.], 25, 4.).as_deref(),
+        Some("48 of 48 frames a second, 25 frames dropped in 4 s")
+    );
+    // Below 90 % of the doubled rate: behind.
+    assert!(judge(48., &[40., 41.], 0, 4.).is_some());
+    // Nothing measured: no verdict.
+    assert_eq!(judge(48., &[], 100, 4.), None);
+}
+
+#[test]
+fn modes_parse_and_the_strongest_applies() {
+    for mode in [Mode::Off, Mode::Double, Mode::Display] {
+        assert_eq!(Mode::parse(mode.as_str()), Some(mode));
+    }
+    assert_eq!(Mode::parse("triple"), None);
+    let mut motion = Motion::with_probe(amd);
+    assert_eq!(motion.wanted(), Mode::Off);
+    motion.owners.insert(1, Mode::Double);
+    motion.owners.insert(2, Mode::Display);
+    assert_eq!(motion.wanted(), Mode::Display);
+    motion.owners.remove(&2);
+    assert_eq!(motion.wanted(), Mode::Double);
+}
+
+#[test]
+fn the_worker_waits_only_while_motion_smoothing_is_asked_for() {
+    let mut motion = Motion::with_probe(amd);
+    let start = Instant::now();
+    assert_eq!(motion.due_in(start), None);
+    motion.owners.insert(1, Mode::Double);
+    assert_eq!(motion.due_in(start), Some(Duration::ZERO));
+    motion.checked = Some(start);
+    assert_eq!(
+        motion.due_in(start + Duration::from_millis(200)),
+        Some(Duration::from_millis(300))
+    );
+}
+
+// ------------------------------------------------------- with a real libmpv
+
+fn one_mpv_at_a_time() -> std::sync::MutexGuard<'static, ()> {
+    static MPV: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    MPV.lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
+}
+
+fn mpv() -> Mpv {
+    Mpv::builder()
+        .unwrap()
+        .set_property("vo", "null")
+        .unwrap()
+        .set_property("ao", "null")
+        .unwrap()
+        .set_property("vf", crate::playback::source_geometry::INITIAL_FILTERS)
+        .unwrap()
+        .build()
+        .unwrap()
+}
+
+/// Software rendering by choice: Double only at half the display's rate
+/// (60 Hz when unknown).
+fn software() -> std::sync::Arc<Render> {
+    Render::new(&decide(
+        &RenderFacts {
+            gpu_backend: true,
+            ..RenderFacts::default()
+        },
+        Preference::Software,
+    ))
+}
+
+/// A paused test video at `rate`, once mpv knows its rate.
+/// A test video at `rate`, played until mpv estimates the chain's output
+/// rate (the converter's input, `Motion::input`), then paused.
+fn play(mpv: &Mpv, rate: u32) {
+    mpv.command(&[
+        "loadfile",
+        &format!("av://lavfi:testsrc=size=320x240:rate={rate}"),
+    ])
+    .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while source_fps(mpv).is_none()
+        || mpv
+            .get_property::<f64>("estimated-vf-fps")
+            .map_or(true, |fps| (fps - f64::from(rate)).abs() > 1.)
+    {
+        assert!(Instant::now() < deadline, "no rate");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    mpv.set_property("pause", true).unwrap();
+}
+
+fn command(owner: u64, method: &str, params: Value) -> Command {
+    Command {
+        reply: Reply { owner, id: 1 },
+        method: method.into(),
+        params,
+    }
+}
+
+/// What the backend would have done.
+#[derive(Debug, Default)]
+struct Recorded {
+    held: Vec<bool>,
+    resample: Vec<Option<f64>>,
+}
+impl Effects for Recorded {
+    fn frames_in_memory(&mut self, held: bool) {
+        self.held.push(held);
+    }
+    fn resample(&mut self, refresh: Option<f64>) {
+        if self.resample.last() != Some(&refresh) {
+            self.resample.push(refresh);
+        }
+    }
+}
+
+/// The platform's filter is Windows only; the chain handling is the same
+/// for any filter, so these tests put in one every mpv build accepts.
+fn stand_in(large: bool, performance: bool) -> Option<String> {
+    Some(format!(
+        "lavfi=[scale=w=iw{}:h=ih{}]",
+        if performance { "/2*2" } else { "" },
+        if large { "/2*2" } else { "" }
+    ))
+}
+
+fn with_stand_in() -> Motion {
+    let mut motion = Motion::with_probe(amd);
+    motion.filter = stand_in;
+    motion.any_rate = false;
+    // The test videos play at 30 fps; measured as the player measures it
+    // where a test needs that (`input` None there).
+    motion.input = Some(30.);
+    motion.generation = Some(1);
+    motion
+}
+
+fn reply(received: &mpsc::Receiver<Event>) -> Result<Value, RpcError> {
+    while let Ok(event) = received.try_recv() {
+        if let Event::Reply(_, result) = event {
+            return result;
+        }
+    }
+    panic!("no reply");
+}
+
+#[test]
+fn mpv_takes_the_platform_filter() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let mut motion = Motion::with_probe(amd);
+    let mut effects = Recorded::default();
+    let applied = Applied {
+        mode: Mode::Double,
+        large: false,
+        performance: false,
+    };
+    let added = motion.add(&mpv, &mut effects, applied);
+    if cfg!(target_os = "windows") {
+        // mpv accepts the text; the graph is built (and AMF asked) only
+        // when a video plays.
+        assert!(added);
+        let filter = mpv.get_property::<String>("vf").unwrap();
+        assert!(filter.contains("frc_amf"), "{filter}");
+        assert_eq!(labels(&mpv).last().map(String::as_str), Some(LABEL));
+    } else {
+        assert!(!added);
+        assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    }
+}
+
+#[test]
+fn double_goes_in_last_with_frames_in_memory_and_off_takes_it_out() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut motion = with_stand_in();
+    let mut effects = Recorded::default();
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"amd","mode":"double"}),
+    );
+    assert!(motion.command(&mpv, &render, &on, &events, &mut effects));
+    let state = reply(&received).unwrap();
+    assert_eq!(state["mode"], "double", "{state}");
+    assert_eq!(state["active"], "double", "{state}");
+    assert_eq!(state["double"], Value::Null, "{state}");
+    assert_eq!(state["display"]["code"], "rendering", "{state}");
+    assert_eq!(state["sourceFps"], 30., "{state}");
+    assert_eq!(state["gpu"], "AMD Radeon 780M Graphics", "{state}");
+    assert_eq!(state["inChain"], true, "{state}");
+    assert_eq!(labels(&mpv).last().map(String::as_str), Some(LABEL));
+    assert_eq!(effects.held, [true]);
+    assert!(effects.resample.is_empty(), "Double asks for no resampling");
+    // A plugin's first chain lands after it; the next look moves it back.
+    mpv.command(&["vf", "add", "@vestra-owned:lavfi=[null]"])
+        .unwrap();
+    motion.checked = None;
+    motion.poll(&mpv, &render, &events, &mut effects, 1);
+    let chain = labels(&mpv);
+    assert_eq!(
+        &chain[chain.len() - 2..],
+        ["vestra-owned", LABEL],
+        "{chain:?}"
+    );
+    // Off: out, and the frames go back to the GPU.
+    let off = command(1, "video.motion.set", json!({"engine":"amd","mode":"off"}));
+    assert!(motion.command(&mpv, &render, &off, &events, &mut effects));
+    while received.try_recv().is_ok() {}
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    assert_eq!(effects.held, [true, false]);
+    assert_eq!(motion.due_in(Instant::now()), None);
+}
+
+#[test]
+fn set_is_refused_where_it_cannot_work_and_waits_where_it_may() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 24);
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut effects = Recorded::default();
+    // Match Display under software rendering: refused for this run.
+    let mut motion = with_stand_in();
+    let display = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"amd","mode":"display"}),
+    );
+    motion.command(&mpv, &render, &display, &events, &mut effects);
+    let error = reply(&received).unwrap_err();
+    assert_eq!(error.code, "unsupported");
+    assert!(error.message.contains("GPU rendering"), "{}", error.message);
+    // Double at 24 fps on 60 Hz in software: kept, waiting for a rate that
+    // fits (the next video), the reason in the state.
+    let double = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"amd","mode":"double"}),
+    );
+    motion.command(&mpv, &render, &double, &events, &mut effects);
+    let state = reply(&received).unwrap();
+    assert_eq!(
+        (state["mode"].as_str(), state["active"].as_str()),
+        (Some("double"), Some("off"))
+    );
+    assert_eq!(state["double"]["code"], "rate", "{state}");
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    // No AMD GPU: refused.
+    let mut none = Motion::with_probe(no_amd);
+    none.command(&mpv, &render, &double, &events, &mut effects);
+    assert_eq!(reply(&received).unwrap_err().code, "unsupported");
+    // An unknown mode: invalid.
+    let triple = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"amd","mode":"triple"}),
+    );
+    motion.command(&mpv, &render, &triple, &events, &mut effects);
+    assert_eq!(reply(&received).unwrap_err().code, "invalid");
+}
+
+#[test]
+fn a_disabled_filter_goes_for_this_video_and_comes_back_with_the_next() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.poll(&mpv, &render, &events, &mut effects, 1);
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"amd","mode":"double"}),
+    );
+    motion.command(&mpv, &render, &on, &events, &mut effects);
+    reply(&received).unwrap();
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+    // mpv's log as the converter fails on Direct3D 11 frames.
+    motion.log("ffmpeg", "error", "AMFFRC->Init() failed with error 4\n");
+    motion.log(
+        "vf",
+        "error",
+        "Disabling filter vestra-motion because it has failed.\n",
+    );
+    motion.poll(&mpv, &render, &events, &mut effects, 1);
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    assert_eq!(state["double"]["code"], "failed", "{state}");
+    assert!(
+        state["double"]["message"]
+            .as_str()
+            .unwrap()
+            .contains("AMFFRC->Init() failed with error 4"),
+        "{state}"
+    );
+    assert_eq!(state["mode"], "double");
+    // The change was published.
+    let published = received
+        .try_iter()
+        .filter_map(|event| match event {
+            Event::Broadcast(name, data) if name == CHANGED => Some(data),
+            _ => None,
+        })
+        .last()
+        .unwrap();
+    assert_eq!(published["active"], "off");
+    assert!(published.get("mode").is_none(), "each plugin's own");
+    // Another video: tried again.
+    motion.generation = Some(2);
+    motion.new_video();
+    motion.input = Some(30.);
+    motion.poll(&mpv, &render, &events, &mut effects, 2);
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+}
+
+#[test]
+fn falling_behind_steps_to_the_faster_search_then_off() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.probe = Some(amd());
+    motion.owners.insert(1, Mode::Double);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    let first = mpv.get_property::<String>("vf").unwrap();
+    // A verdict (as `watch` gives it after a window behind): the faster
+    // search, rebuilt at the next look.
+    motion.performance = true;
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    let faster = mpv.get_property::<String>("vf").unwrap();
+    assert_ne!(first, faster);
+    assert!(faster.contains("/2*2"), "{faster}");
+    assert_eq!(motion.applied.map(|a| a.performance), Some(true));
+    // Behind again: off for this video, with the reason.
+    motion.overload = Some("the GPU could not keep up".into());
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    assert_eq!(state["double"]["code"], "overload");
+    // The next video starts with the full search again.
+    motion.new_video();
+    motion.input = Some(30.);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert_eq!(motion.applied.map(|a| a.performance), Some(false));
+}
+
+#[test]
+fn upscaling_and_a_stopped_plugin_take_the_filter_out() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let (events, _received) = mpsc::channel();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.probe = Some(amd());
+    motion.owners.insert(1, Mode::Double);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+    // AI upscaling turned on: motion smoothing waits.
+    motion.note_upscaling(true);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    assert_eq!(state["double"]["code"], "upscaling");
+    motion.note_upscaling(false);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+    // The plugin stops: its request and the filter go.
+    let stopped = command(1, "owner.disabled", json!({}));
+    assert!(!motion.command(&mpv, &render, &stopped, &events, &mut effects));
+    assert!(motion.owners.is_empty());
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    assert_eq!(effects.held.last(), Some(&false));
+}
+
+/// The filter waits for frames in memory: with a hardware decoding mode
+/// that is not copy-back, the hold is asked for and the filter stays out.
+#[test]
+fn the_filter_waits_until_the_frames_are_in_memory() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    mpv.set_property("hwdec", "d3d11va,videotoolbox,vaapi")
+        .unwrap();
+    let render = software();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.probe = Some(amd());
+    motion.owners.insert(1, Mode::Double);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert_eq!(effects.held, [true], "copy-back asked for first");
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL), "not before");
+    // Software decoding (`no`: frames in memory), once the decoder reopened.
+    mpv.set_property("hwdec", "no").unwrap();
+    let deadline = Instant::now() + Duration::from_secs(5);
+    while !labels(&mpv).iter().any(|l| l == LABEL) {
+        assert!(Instant::now() < deadline, "the filter never went in");
+        motion.update(&mpv, &render, &mut effects, Instant::now());
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    assert_eq!(effects.held, [true]);
+    motion.owners.clear();
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert_eq!(effects.held, [true, false]);
+}
+
+/// Out of the chain while the publish gate is closed (a new source
+/// opens), back once it opens; copy-back stays held meanwhile.
+#[test]
+fn the_filter_stays_out_while_a_new_source_opens() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    let gate = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    motion.follow_gate(gate.clone());
+    motion.probe = Some(amd());
+    motion.owners.insert(1, Mode::Double);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+    gate.store(false, std::sync::atomic::Ordering::Release);
+    assert_eq!(motion.due_in(Instant::now()), Some(Duration::ZERO));
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL));
+    assert_eq!(effects.held, [true], "copy-back kept");
+    assert_eq!(motion.input_fps(), None, "the new source is measured anew");
+    gate.store(true, std::sync::atomic::Ordering::Release);
+    assert_eq!(motion.due_in(Instant::now()), Some(Duration::ZERO));
+    // Playing, as mpv estimates the new source's rate only from frames it
+    // passes on; nothing goes in before that.
+    mpv.set_property("pause", false).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !labels(&mpv).iter().any(|l| l == LABEL) {
+        assert!(Instant::now() < deadline, "not back in the chain");
+        motion.update(&mpv, &render, &mut effects, Instant::now());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let input = motion.input_fps().unwrap();
+    assert!((input - 30.).abs() < 1., "{input}");
+}
+
+/// The player's file change with the converter, on libmpv's Direct3D 11
+/// renderer (WARP, as the GPU renderer draws), headless: the converter in,
+/// the next file (`loadfile replace`), out while it opens, the orientation
+/// filter again (`vf pre`), the converter in again. A watchdog ends the
+/// test when mpv stops answering. Real machine: needs an AMD GPU and
+/// `VESTRA_MOTION_CLIPS` (a folder with m1080p30.mp4 and m1080p24.mp4).
+#[cfg(windows)]
+#[test]
+#[ignore = "real machine: AMD GPU and clips"]
+fn warp_file_change_with_the_converter() {
+    use std::sync::Arc;
+    use std::sync::atomic::{AtomicU64, Ordering};
+    let Some(clips) = std::env::var_os("VESTRA_MOTION_CLIPS") else {
+        diag!("VESTRA_MOTION_CLIPS not set");
+        return;
+    };
+    let clip = |name: &str| {
+        std::path::Path::new(&clips)
+            .join(name)
+            .to_string_lossy()
+            .into_owned()
+    };
+    let mpv = Arc::new(
+        Mpv::builder()
+            .unwrap()
+            .set_property("vo", "libmpv")
+            .unwrap()
+            .set_property(
+                "ao",
+                std::env::var("MOTION_AO").unwrap_or("null".into()).as_str(),
+            )
+            .unwrap()
+            .set_property(
+                "hwdec",
+                std::env::var("MOTION_HWDEC")
+                    .unwrap_or("auto-safe".into())
+                    .as_str(),
+            )
+            .unwrap()
+            .set_property("vf", crate::playback::source_geometry::INITIAL_FILTERS)
+            .unwrap()
+            .build()
+            .unwrap(),
+    );
+    mpv.request_log_messages("v").unwrap();
+    mpv.set_property("keep-open", true).unwrap();
+    mpv.set_property("volume", 0.).unwrap();
+    // As the host opens local files (`MOTION_LEASE`): leased, through stream_cb.
+    let lease = std::env::var_os("MOTION_LEASE").is_some();
+    crate::playback::lease_stream::register(&mpv).unwrap();
+    let mut leases = Vec::new();
+    let mut open = |name: &str| -> (String, String) {
+        if !lease {
+            return (clip(name), "pause=no".into());
+        }
+        let file = std::fs::File::open(clip(name)).unwrap();
+        let registration = crate::playback::lease_stream::Registration::new(file);
+        let url = registration.url();
+        leases.push(registration);
+        (
+            url,
+            "pause=no,demuxer=lavf,demuxer-lavf-probe-info=yes,rebase-start-time=yes".into(),
+        )
+    };
+    let publish = Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let renderer = vestra_gpu_render::start_on_warp(mpv.clone(), (1920, 1080), publish).unwrap();
+    let handle = renderer.handle();
+    // Watchdog: the step counter must move.
+    let step = Arc::new(AtomicU64::new(0));
+    let watched = step.clone();
+    std::thread::spawn(move || {
+        let mut last = (u64::MAX, Instant::now());
+        loop {
+            std::thread::sleep(Duration::from_millis(500));
+            let now = watched.load(Ordering::Relaxed);
+            if now == 999 {
+                return;
+            }
+            if now != last.0 {
+                last = (now, Instant::now());
+            } else if last.1.elapsed() > Duration::from_secs(10) {
+                diag!("HANG at step {now}");
+                std::process::exit(3);
+            }
+        }
+    });
+    let filter = format!(
+        "@{LABEL}:{}",
+        crate::platform::motion_filter(false, false).unwrap()
+    );
+    let drain = |mpv: &Mpv, what: &str| {
+        while let Some(event) = mpv.poll_event() {
+            if let rsmpv::Event::LogMessage(m) = &event {
+                if m.level == "error" || m.prefix == "vf" || m.text.contains("AMF") {
+                    diag!("{what} [{}] {}: {}", m.prefix, m.level, m.text.trim_end());
+                }
+            } else {
+                diag!("{what} event {event:?}");
+            }
+        }
+    };
+    let wait = |mpv: &Mpv, seconds: f64, what: &str| {
+        let until = Instant::now() + Duration::from_secs_f64(seconds);
+        while Instant::now() < until {
+            drain(mpv, what);
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        diag!(
+            "{what}: pos {:?} vf-fps {:?} frames {} hwdec {:?}",
+            mpv.get_property::<f64>("time-pos").ok(),
+            mpv.get_property::<f64>("estimated-vf-fps").ok(),
+            handle.frames(),
+            mpv.get_property::<String>("hwdec-current").ok()
+        );
+    };
+    let orientation = "@vestra-orientation:lavfi=[null,sidedata=mode=delete:type=DISPLAYMATRIX]";
+    step.store(1, Ordering::Relaxed);
+    let (first, options) = open("m1080p30.mp4");
+    mpv.command(&["loadfile", &first, "replace", "-1", &options])
+        .unwrap();
+    wait(&mpv, 1.5, "file 1");
+    mpv.command(&["vf", "pre", orientation]).unwrap();
+    if std::env::var("MOTION_HWDEC").is_err() {
+        mpv.set_property("hwdec", "auto-copy-safe").unwrap();
+    }
+    wait(&mpv, 1.5, "copy-back");
+    step.store(2, Ordering::Relaxed);
+    mpv.command(&["vf", "add", &filter]).unwrap();
+    wait(&mpv, 3., "converter 1");
+    // On the GPU renderer (its Direct3D 11 interop loaded by the first
+    // second's native decoding) the graph configures and doubles: the
+    // `hwdec_interop` the platform filter names keeps the device away.
+    let first = mpv.get_property::<f64>("estimated-vf-fps").unwrap_or(0.);
+    assert!(first > 50., "the first converter doubles 30 fps: {first}");
+    step.store(3, Ordering::Relaxed);
+    let (second, options) = open("m1080p24.mp4");
+    mpv.command(&["loadfile", &second, "replace", "-1", &options])
+        .unwrap();
+    // `MOTION_KEEP`: the converter stays in the chain across the change;
+    // `MOTION_GAP`: seconds between the steps (the host's are milliseconds).
+    let keep = std::env::var_os("MOTION_KEEP").is_some();
+    let gap: f64 = std::env::var("MOTION_GAP")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(1.);
+    if !keep {
+        mpv.command(&["vf", "remove", &format!("@{LABEL}")])
+            .unwrap();
+    }
+    wait(&mpv, gap, "file 2 opens");
+    step.store(4, Ordering::Relaxed);
+    mpv.command(&["vf", "pre", orientation]).unwrap();
+    wait(&mpv, gap, "orientation 2");
+    step.store(5, Ordering::Relaxed);
+    if !keep {
+        mpv.command(&["vf", "add", &filter]).unwrap();
+    }
+    step.store(6, Ordering::Relaxed);
+    for second in 0..5 {
+        step.store(10 + second, Ordering::Relaxed);
+        wait(&mpv, 1., "converter 2");
+    }
+    step.store(999, Ordering::Relaxed);
+    let fps = mpv.get_property::<f64>("estimated-vf-fps").unwrap_or(0.);
+    assert!(fps > 40., "the second converter runs: {fps}");
+}
+
+/// The size rule, calibrated to the measurements: software rendering up to
+/// 1080p30 → 60, GPU Double up to 4K24 → 48, Match Display up to 1080p30.
+#[test]
+fn a_video_too_large_for_the_renderer_is_not_offered() {
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = amd();
+    let at = |w: f64, h: f64, fps: f64, gpu: bool| Facts {
+        video: Some((w, h)),
+        source_fps: Some(fps),
+        gpu_now: gpu,
+        any_rate: true,
+        ..facts(&probe, &reason, &rendering)
+    };
+    // Software rendering.
+    assert_eq!(check(&at(1920., 1080., 30., false), Mode::Double), Ok(()));
+    let error = check(&at(3840., 2160., 24., false), Mode::Double).unwrap_err();
+    assert_eq!((error.code(), error.fixed()), ("size", false));
+    assert_eq!(
+        error.message(),
+        "this video (3840×2160 at 24 fps) is too large for motion smoothing with software rendering; it works up to 1080p at 30 fps"
+    );
+    assert!(check(&at(2560., 1440., 30., false), Mode::Double).is_err());
+    // GPU rendering, Double: 4K24 passes, 4K30 does not.
+    assert_eq!(check(&at(3840., 2160., 24., true), Mode::Double), Ok(()));
+    assert_eq!(check(&at(3840., 2160., 23.976, true), Mode::Double), Ok(()));
+    assert_eq!(
+        check(&at(3840., 2160., 30., true), Mode::Double)
+            .unwrap_err()
+            .code(),
+        "size"
+    );
+    // Match Display: 1080p30 passes, 4K24 does not.
+    assert_eq!(check(&at(1920., 1080., 30., true), Mode::Display), Ok(()));
+    // 1080p on a 144 Hz display: Match Display draws 144 frames a second.
+    let fast = Facts {
+        display_fps: 144.,
+        ..at(1920., 1080., 24., true)
+    };
+    assert_eq!(check(&fast, Mode::Display).unwrap_err().code(), "size");
+    assert_eq!(check(&fast, Mode::Double), Ok(()));
+    let error = check(&at(3840., 2160., 24., true), Mode::Display).unwrap_err();
+    assert!(
+        error.message().contains("with Match Display"),
+        "{}",
+        error.message()
+    );
+    // Unknown size: not judged yet.
+    let unknown = Facts {
+        video: None,
+        ..at(3840., 2160., 30., true)
+    };
+    assert_eq!(check(&unknown, Mode::Double), Ok(()));
+}
+
+#[test]
+fn the_reserved_engine_answers_without_a_converter() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let render = software();
+    let (events, received) = mpsc::channel();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    let state = command(1, "video.motion.state", json!({"engine":"nvidia"}));
+    assert!(motion.command(&mpv, &render, &state, &events, &mut effects));
+    let state = reply(&received).unwrap();
+    assert_eq!(state["engine"], "nvidia");
+    assert_eq!(state["double"]["code"], "engine", "{state}");
+    assert_eq!(state["display"]["code"], "engine", "{state}");
+    let on = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"nvidia","mode":"double"}),
+    );
+    motion.command(&mpv, &render, &on, &events, &mut effects);
+    assert_eq!(reply(&received).unwrap_err().code, "unsupported");
+    let off = command(
+        1,
+        "video.motion.set",
+        json!({"engine":"nvidia","mode":"off"}),
+    );
+    motion.command(&mpv, &render, &off, &events, &mut effects);
+    assert_eq!(reply(&received).unwrap()["mode"], "off");
+    let other = command(1, "video.motion.state", json!({"engine":"intel"}));
+    motion.command(&mpv, &render, &other, &events, &mut effects);
+    assert_eq!(reply(&received).unwrap_err().code, "invalid");
+    // Nothing of AMD's was touched.
+    assert!(motion.owners.is_empty());
+    assert!(effects.held.is_empty());
+}
+
+/// Frame Doubling, an unmeasured format and a converter that failed the
+/// same way twice: each its own reason.
+#[test]
+fn doubling_format_and_a_repeated_failure_have_their_reasons() {
+    let (reason, rendering) = (RenderReason::Default, Value::Null);
+    let probe = amd();
+    let error = check(
+        &Facts {
+            doubling: true,
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!((error.code(), error.fixed()), ("doubling", false));
+    let error = check(
+        &Facts {
+            format: Some("10-bit".into()),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!((error.code(), error.fixed()), ("format", false));
+    assert!(error.message().contains("10-bit"), "{}", error.message());
+    let error = check(
+        &Facts {
+            broken: Some("AMFFRC->Init() failed with error 4"),
+            ..facts(&probe, &reason, &rendering)
+        },
+        Mode::Double,
+    )
+    .unwrap_err();
+    assert_eq!((error.code(), error.fixed()), ("runtime", true));
+    // The fixed set is FIXED_CODES (the SDK's TestHost and docs agree).
+    assert!(!Reason::Starting.fixed());
+    assert!(Reason::Engine.fixed());
+}
+
+#[test]
+fn the_same_failure_on_two_videos_ends_tries_for_the_run() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.probe = Some(amd());
+    motion.owners.insert(1, Mode::Double);
+    for video in 0..2 {
+        motion.new_video();
+        motion.input = Some(30.);
+        motion.update(&mpv, &render, &mut effects, Instant::now());
+        assert!(labels(&mpv).iter().any(|l| l == LABEL), "video {video}");
+        motion.log("ffmpeg", "error", "AMFFRC->Init() failed with error 4");
+        motion.log(
+            "vf",
+            "error",
+            "Disabling filter vestra-motion because it has failed.",
+        );
+        motion.update(&mpv, &render, &mut effects, Instant::now());
+    }
+    motion.new_video();
+    motion.input = Some(30.);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(
+        !labels(&mpv).iter().any(|l| l == LABEL),
+        "not tried a third time"
+    );
+    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    assert_eq!(state["double"]["code"], "runtime", "{state}");
+}
+
+/// Match Display's resampling and copy-back never outlive the filter:
+/// removed by the gate, then a check that fails on the next video; a failed
+/// re-add after someone took the filter out; Off while the gate is closed.
+#[test]
+fn resampling_and_copy_back_end_on_every_path_out() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let gate = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true));
+    let open = |on: bool| gate.store(on, std::sync::atomic::Ordering::Release);
+    let display = || Applied {
+        mode: Mode::Display,
+        large: false,
+        performance: false,
+    };
+    let start = |motion: &mut Motion, effects: &mut Recorded| {
+        motion.probe = Some(amd());
+        motion.owners.insert(1, Mode::Double);
+        motion.update(&mpv, &render, effects, Instant::now());
+        // As if Match Display ran (software rendering here cannot).
+        motion.applied = Some(display());
+        motion.resample(effects, Some(60.));
+    };
+
+    // 1. The gate takes the filter out; the next video fails a check.
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.follow_gate(gate.clone());
+    start(&mut motion, &mut effects);
+    open(false);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert_eq!(motion.applied, None);
+    assert_eq!(motion.resampling, Some(60.), "kept while the source opens");
+    open(true);
+    motion.note_upscaling(true);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert_eq!(motion.resampling, None);
+    assert_eq!(effects.resample.last(), Some(&None));
+    assert_eq!(effects.held.last(), Some(&false));
+
+    // 2. Someone took the filter out; putting it back fails.
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    start(&mut motion, &mut effects);
+    mpv.command(&["vf", "remove", &format!("@{LABEL}")])
+        .unwrap();
+    motion.filter = |_, _| Some("lavfi=[no_such_filter_here]".into());
+    motion.keep_last(&mpv, &mut effects, display());
+    assert_eq!(motion.resampling, None);
+    assert_eq!(effects.held.last(), Some(&false));
+    let _ = mpv.command(&["vf", "remove", &format!("@{LABEL}")]);
+
+    // 3. Off (or the plugin stops) while the gate is closed: all of it at
+    // once, and nothing is left for a look that would never come.
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.follow_gate(gate.clone());
+    start(&mut motion, &mut effects);
+    open(false);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    motion.owners.clear();
+    assert!(
+        motion.due_in(Instant::now()).is_some(),
+        "still holding: looked at"
+    );
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert_eq!(motion.resampling, None);
+    assert_eq!(effects.held.last(), Some(&false));
+    assert_eq!(motion.due_in(Instant::now()), None);
+    open(true);
+}
+
+#[test]
+fn bit_depth_reads_the_pixel_format_name() {
+    for (name, depth) in [
+        ("nv12", 8),
+        ("yuv420p", 8),
+        ("yuvj420p", 8),
+        ("rgb24", 8),
+        ("p010", 10),
+        ("yuv420p10", 10),
+        ("yuv420p10le", 10),
+        ("gbrp12le", 12),
+        ("d3d11", 8),
+        ("dxva2_vld", 8),
+        ("", 8),
+    ] {
+        assert_eq!(bit_depth(name), depth, "{name}");
+    }
+}
+
+/// Native hardware decoding names the surface, copy-back the format: the
+/// depth is the same both ways, so a 10-bit video is refused once, not
+/// turned on and off every look (copy-back on: 10-bit; off: 8-bit read).
+#[test]
+fn the_depth_is_the_same_decoded_natively_or_with_copy_back() {
+    for (pixelformat, hw, depth) in [
+        ("d3d11", "p010", 10),
+        ("dxva2_vld", "p010", 10),
+        ("d3d11", "nv12", 8),
+        ("p010", "", 10),
+        ("nv12", "", 8),
+        ("d3d11", "", 8),
+        ("dxva2_vld", "", 8),
+    ] {
+        assert_eq!(stream_depth(pixelformat, hw), depth, "{pixelformat} {hw}");
+    }
+    // The loop: native (before copy-back) and copy-back (after) agree.
+    assert_eq!(stream_depth("d3d11", "p010"), stream_depth("p010", ""));
+    assert_eq!(stream_depth("d3d11", "nv12"), stream_depth("nv12", ""));
+}
+
+#[test]
+fn only_a_repeated_amf_start_failure_is_run_long() {
+    assert!(amf_init_failure("AMFFRC->Init() failed with error 4"));
+    assert!(!amf_init_failure("failed to configure the filter graph"));
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.probe = Some(amd());
+    motion.owners.insert(1, Mode::Double);
+    for _ in 0..2 {
+        motion.new_video();
+        motion.input = Some(30.);
+        motion.update(&mpv, &render, &mut effects, Instant::now());
+        motion.log("lavfi", "error", "failed to configure the filter graph");
+        motion.log(
+            "vf",
+            "error",
+            "Disabling filter vestra-motion because it has failed.",
+        );
+        motion.update(&mpv, &render, &mut effects, Instant::now());
+    }
+    assert_eq!(motion.broken, None, "another failure stays per video");
+    motion.new_video();
+    motion.input = Some(30.);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(labels(&mpv).iter().any(|l| l == LABEL), "tried again");
+}
+
+/// `player.stats()` reports the rate before the converter, so Frame
+/// Doubling, which measures the source there, does not read 60 for a 30 fps
+/// video and back off.
+#[test]
+fn stats_report_the_rate_before_the_converter() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    mpv.command(&["loadfile", "av://lavfi:testsrc=size=160x120:rate=30"])
+        .unwrap();
+    // A doubling filter under motion's label (the platform's needs AMD).
+    mpv.command(&["vf", "add", &format!("@{LABEL}:lavfi=[fps=fps=60]")])
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while mpv
+        .get_property::<f64>("estimated-vf-fps")
+        .map_or(true, |fps| fps < 55.)
+    {
+        assert!(Instant::now() < deadline, "no doubled output");
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    // The measured input rate while the converter is in; the container's
+    // while it is not known.
+    assert_eq!(stats_fps(&mpv, Some(30.)), Some(30.));
+    let fps = stats_fps(&mpv, None).unwrap();
+    assert!((fps - 30.).abs() < 0.5, "{fps}");
+    // A frame step back is one input frame.
+    let step = step_fps(&mpv).unwrap();
+    assert!((step - 30.).abs() < 3., "{step}");
+    mpv.command(&["vf", "remove", &format!("@{LABEL}")])
+        .unwrap();
+    let after = stats_fps(&mpv, None).unwrap();
+    assert!(after > 25., "{after}");
+}
+
+/// Field-rate deinterlacing (or any filter before the converter that raises
+/// the rate) doubles 25i or 30i to 50 or 60 before the converter: the rate
+/// rule judges the converter's real input (measured with the converter out
+/// of the chain), so motion smoothing is not offered (100 or 120 fps on a
+/// 60 Hz display, falling behind for seconds).
+#[test]
+fn the_rate_rule_judges_the_converters_real_input() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    // A 30 fps source and a plugin chain that outputs one frame per field.
+    mpv.command(&["vf", "add", "@vestra-owned:lavfi=[fps=fps=60]"])
+        .unwrap();
+    mpv.command(&["loadfile", "av://lavfi:testsrc=size=320x240:rate=30"])
+        .unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while mpv
+        .get_property::<f64>("estimated-vf-fps")
+        .map_or(true, |fps| fps < 55.)
+    {
+        assert!(Instant::now() < deadline, "no field-rate output");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    mpv.set_property("pause", true).unwrap();
+    assert_eq!(
+        source_fps(&mpv).map(f64::round),
+        Some(30.),
+        "the container says 30"
+    );
+    let render = software();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.input = None;
+    motion.any_rate = true;
+    motion.probe = Some(amd());
+    motion.owners.insert(1, Mode::Double);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(!labels(&mpv).iter().any(|l| l == LABEL), "not offered");
+    let state = motion.state(&mpv, &render, 1, &Value::Null);
+    assert_eq!(state["double"]["code"], "rate", "{state}");
+    assert!(
+        (state["sourceFps"].as_f64().unwrap() - 60.).abs() < 2.,
+        "{state}"
+    );
+    assert!(effects.held.is_empty(), "no copy-back for it");
+}
+
+/// Until the input rate is measured nothing goes in; once in, the input is
+/// kept (mpv's estimate is then the doubled rate).
+#[test]
+fn the_input_rate_is_measured_out_of_the_chain_and_kept_in_it() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    let render = software();
+    let mut effects = Recorded::default();
+    let mut motion = with_stand_in();
+    motion.probe = Some(amd());
+    motion.input = None;
+    motion.owners.insert(1, Mode::Double);
+    assert_eq!(motion.input_fps(), None);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    let input = motion.input_fps().unwrap();
+    assert!((input - 30.).abs() < 1., "{input}");
+    assert!(labels(&mpv).iter().any(|l| l == LABEL));
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert_eq!(motion.input_fps(), Some(input), "kept while in the chain");
+    // The stand-in passes 30 fps on: half of it is not a rise, but it is
+    // above a kept 10 fps by more than RERATE, so it becomes the input.
+    // Playing, as mpv estimates only from frames it passes on.
+    mpv.set_property("pause", false).unwrap();
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while mpv
+        .get_property::<f64>("estimated-vf-fps")
+        .map_or(true, |fps| (fps - 30.).abs() > 1.)
+    {
+        assert!(Instant::now() < deadline, "no steady rate");
+        std::thread::sleep(Duration::from_millis(20));
+    }
+    motion.input = Some(10.);
+    while motion.input_fps() == Some(10.) {
+        assert!(Instant::now() < deadline, "no new input");
+        motion.update(&mpv, &render, &mut effects, Instant::now());
+        std::thread::sleep(Duration::from_millis(50));
+    }
+    let risen = motion.input_fps().unwrap();
+    assert!((risen - 15.).abs() < 1., "{risen}");
+    motion.new_video();
+    assert_eq!(
+        motion.input_fps(),
+        None,
+        "measured again for the next video"
+    );
+}

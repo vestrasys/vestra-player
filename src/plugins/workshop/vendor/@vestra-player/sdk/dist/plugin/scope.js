@@ -1,4 +1,3 @@
-/** Scopes own handles. Disposal runs newest first and never throws. */
 import { failure, toError } from "./errors.js";
 import { commands, keysOf, palette } from "./commands.js";
 import { WHEN } from "./when.js";
@@ -24,7 +23,7 @@ import { mainWindow } from "./window.js";
 import { bindingsApi } from "./bindings.js";
 import { trackedState } from "./state.js";
 import { wire } from "./wire-facade.js";
-import { clipboard, host, power, rendering, secrets, storage, system, tools, videoUpscaling, } from "./services.js";
+import { clipboard, host, power, rendering, secrets, storage, system, tools, videoMotion, videoUpscaling, } from "./services.js";
 /**
  * The SDK's state copies that a player event keeps current, by event: a
  * `player.on` listener of the event starts its copy first, so the copy
@@ -81,6 +80,7 @@ export class ScopeImpl {
         render: () => videoRender(this),
         shaders: (id) => videoShaders(this, id),
         upscaling: videoUpscaling(this),
+        motion: (engine) => videoMotion(this, engine),
     };
     audio = audioFilters(this);
     subtitles = subtitles(this);

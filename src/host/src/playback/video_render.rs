@@ -178,11 +178,17 @@ pub struct Options {
     /// The shader channel's joined list (`video_shaders`), written to mpv
     /// after `settings.shaders`: this is the only writer of `glsl-shaders`.
     channel: Vec<String>,
+    /// Motion smoothing's Match Display (`playback/motion.rs`) asks for
+    /// interpolation to the display, whatever the owner's settings: the
+    /// display rate it resamples to, while it does. Options is the only
+    /// writer of `interpolation`, `video-sync` and `display-fps-override`.
+    resample: Option<f64>,
 }
 impl Options {
     pub fn owner(&self) -> Option<u64> {
         self.owner
     }
+    #[cfg_attr(not(test), allow(dead_code))]
     pub fn settings(&self) -> &Settings {
         &self.settings
     }
@@ -248,6 +254,55 @@ impl Options {
         self.channel = list;
         Ok(())
     }
+    /// Whether mpv interpolates now: the owner's `interpolation`, or motion
+    /// smoothing's Match Display (`set_resample`). The GPU renderer paces
+    /// to the display while it does (`backend::pace`).
+    pub fn interpolating(&self) -> bool {
+        self.resample.is_some() || (self.owner.is_some() && self.settings.interpolation)
+    }
+    /// Motion smoothing's Match Display: interpolation to the display
+    /// (`on`), or back to what the owner's settings say; `refresh` is the
+    /// display's rate either way (the owner's interpolation paces to it
+    /// too). Fails with `backend` when mpv refuses an option.
+    pub fn set_resample(
+        &mut self,
+        on: bool,
+        refresh: f64,
+        player: &mut impl Player,
+    ) -> Result<(), RpcError> {
+        let next = on.then_some(refresh);
+        if self.resample == next {
+            return Ok(());
+        }
+        self.resample = next;
+        let settings = self.owner.map(|_| self.settings.clone());
+        let props = self.with_resample(properties(settings.as_ref(), refresh));
+        for (name, value) in props {
+            if matches!(
+                name,
+                "interpolation" | "video-sync" | "display-fps-override"
+            ) {
+                player
+                    .set(name, &value)
+                    .map_err(|e| RpcError::new("backend", format!("{name}: {e}")))?;
+            }
+        }
+        Ok(())
+    }
+    /// `properties` with Match Display's interpolation over the owner's.
+    fn with_resample(&self, mut props: Vec<(&'static str, String)>) -> Vec<(&'static str, String)> {
+        if let Some(refresh) = self.resample {
+            for (name, value) in &mut props {
+                match *name {
+                    "interpolation" => *value = "yes".into(),
+                    "video-sync" => *value = "display-resample".into(),
+                    "display-fps-override" => *value = refresh.to_string(),
+                    _ => {}
+                }
+            }
+        }
+        props
+    }
     /// Writes every option; on a refusal the previous values are restored
     /// (best effort) and the call fails with `backend`.
     fn write(
@@ -257,7 +312,7 @@ impl Options {
         player: &mut impl Player,
     ) -> Result<(), RpcError> {
         let attempt = |player: &mut dyn FnMut(&str, &str) -> Result<(), String>| {
-            properties(next.as_ref(), refresh)
+            self.with_resample(properties(next.as_ref(), refresh))
                 .iter()
                 .find_map(|(name, value)| player(name, value).err().map(|e| format!("{name}: {e}")))
         };
@@ -273,7 +328,7 @@ impl Options {
         });
         if let Some(error) = failed {
             let previous = self.owner.map(|_| self.settings.clone());
-            for (name, value) in properties(previous.as_ref(), refresh) {
+            for (name, value) in self.with_resample(properties(previous.as_ref(), refresh)) {
                 let _ = player.set(name, &value);
             }
             let _ = player.shaders(&joined(previous.as_ref()));
@@ -616,5 +671,44 @@ pub(crate) mod tests {
         assert!(options.settings().interpolation);
         assert_eq!(options.settings().target_peak, 203.);
         assert_eq!(fake.props["interpolation"], "yes");
+    }
+
+    /// Motion smoothing's Match Display interpolates to the display over
+    /// any owner's settings, and the owner's come back when it ends.
+    #[test]
+    fn match_display_interpolates_over_the_owners_settings() {
+        let (mut fake, mut options) = (Fake::default(), Options::default());
+        // No owner: on, then mpv's defaults again.
+        options.set_resample(true, 60., &mut fake).unwrap();
+        assert!(options.interpolating());
+        assert_eq!(fake.props["interpolation"], "yes");
+        assert_eq!(fake.props["video-sync"], "display-resample");
+        assert_eq!(fake.props["display-fps-override"], "60");
+        // An owner without interpolation does not turn it off.
+        options
+            .set(1, &json!({"toneMapping":"hable"}), true, 60., &mut fake)
+            .unwrap();
+        assert_eq!(fake.props["interpolation"], "yes");
+        assert_eq!(fake.props["video-sync"], "display-resample");
+        // Its release neither.
+        options.release(1, &mut fake).unwrap();
+        assert_eq!(fake.props["interpolation"], "yes");
+        options.set_resample(false, 60., &mut fake).unwrap();
+        assert!(!options.interpolating());
+        assert_eq!(fake.props["interpolation"], "no");
+        assert_eq!(fake.props["video-sync"], "audio");
+        assert_eq!(fake.props["display-fps-override"], "0");
+        // An owner's own interpolation stays when Match Display ends.
+        options
+            .set(1, &json!({"interpolation":true}), true, 60., &mut fake)
+            .unwrap();
+        options.set_resample(true, 144., &mut fake).unwrap();
+        assert_eq!(fake.props["display-fps-override"], "144");
+        // Back to the owner's interpolation, still at the 144 Hz display's
+        // rate (not a fixed 60).
+        options.set_resample(false, 144., &mut fake).unwrap();
+        assert!(options.interpolating());
+        assert_eq!(fake.props["interpolation"], "yes");
+        assert_eq!(fake.props["display-fps-override"], "144");
     }
 }

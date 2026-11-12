@@ -17,7 +17,7 @@ import type { CommandDeclaration } from "../../commands.ts";
 import type { SourceState } from "../../source.ts";
 import type { SubtitleState } from "../../subtitles.ts";
 import { VIDEO_PROCESSING_LIMITS } from "../../processing.ts";
-import type { RenderingMode, RenderingPreference, RenderingReason, RenderSettings, UpscalingDecodingCause, UpscalingPlugin, UpscalingReason, UpscalingVideoSize, ViewSettings } from "../types.ts";
+import type { MotionMode, MotionReason, RenderingMode, RenderingPreference, RenderingReason, RenderSettings, UpscalingDecodingCause, UpscalingPlugin, UpscalingReason, UpscalingVideoSize, ViewSettings } from "../types.ts";
 import type { MediaJob } from "../../media.ts";
 import type { LanguagePreference, Locale, Plugin, StopReason, TemplateArgs, TextValue, ThemeId } from "../types.ts";
 import { LOCALES, LIST_SEPARATORS, TEXT_LIMITS } from "../../i18n.ts";
@@ -534,7 +534,7 @@ export type FakePanel = Omit<FakeWindow, "callbacks" | "userClose"> & {
  *   {@link TestHost.chapters}, {@link TestHost.audioDevices},
  *   {@link TestHost.secrets}, {@link TestHost.clipboard},
  *   {@link TestHost.tools}, {@link TestHost.rendering},
- *   {@link TestHost.upscaling}.
+ *   {@link TestHost.upscaling}, {@link TestHost.motion}.
  * - **Assert** on records: {@link TestHost.osd}, {@link TestHost.calls},
  *   {@link TestHost.sent}, {@link TestHost.conflicts},
  *   {@link TestHost.layout}, {@link TestHost.menus}, and many more.
@@ -2225,6 +2225,83 @@ export declare class TestHost implements Transport {
      * @since 1.5.43
      */
     upscalingChanged(): void;
+    /**
+     * Motion smoothing behind `plugin.video.motion`, answered as the player
+     * would:
+     *
+     * - `state()` and `set()` report this plugin's `mode`, the reasons
+     *   `double` and `display` (`null`: that mode works) and `active`: the
+     *   mode while its reason is `null` and `sourceFps` is known, else
+     *   `off`; while active, `searchMode` (`performance` with
+     *   `performance`) and `outputFps` (`outputFps`, or twice `sourceFps`).
+     * - `set(mode)` refuses with `unsupported` and the reason's message while
+     *   that mode's reason is `platform`, `no-gpu`, `runtime`, `filter` or
+     *   `rendering` (unless `renderingStarting`): those hold for the run. The
+     *   others can pass, so the player keeps the request. `off` always
+     *   succeeds; an unknown mode is `invalid`.
+     *
+     * Inject other answers with `host.handle("video.motion.set", …)`. The
+     * defaults are a player where both modes work on a 24 fps video and a
+     * 60 Hz display.
+     *
+     * @example Test the Picture panel on software rendering
+     * Match Display needs GPU rendering: the plugin greys it with the
+     * player's reason, and Double waits for a rate that fits.
+     * ```ts
+     * import assert from "node:assert/strict";
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.motion.display = { code: "rendering", message: "Match Display needs GPU rendering" };
+     * host.motion.double = { code: "rate", message: "24 fps doubled is 48 fps on a 60 Hz display" };
+     * host.motionChanged();
+     * await host.settle();
+     * assert.equal(host.motion.mode, "off");
+     * ```
+     *
+     * @since 1.7.19
+     */
+    readonly motion: {
+        /** This plugin's mode (`set`); a test may preset it. */
+        mode: MotionMode;
+        /** Why Double Frame Rate does not work; `null` while it does. */
+        double: MotionReason | null;
+        /** Why Match Display does not work; `null` while it does. */
+        display: MotionReason | null;
+        /** GPU rendering is still starting: a `rendering` reason then lets `set` keep the request. */
+        renderingStarting: boolean;
+        /** The video's rate; `null`: not known yet (nothing is active). */
+        sourceFps: number | null;
+        /** The measured output rate while active; `null`: twice `sourceFps`. */
+        outputFps: number | null;
+        /** The faster motion search (the player's first fallback step). */
+        performance: boolean;
+        /** The display's refresh rate. */
+        displayFps: number;
+        /** The converting GPU's name; `null`: none. */
+        gpu: string | null;
+    };
+    /**
+     * Send `video.motion.changed` with the state {@link TestHost.motion}
+     * describes now (without `mode`), as the player does when it changes; a
+     * plugin listening with `plugin.video.motion("amd").onChange` receives it.
+     * Nothing reaches a plugin that does not listen.
+     *
+     * @capability None.
+     *
+     * @example The GPU fell behind
+     * The player turned the converter off for this video; the plugin's
+     * panel shows the reason.
+     * ```ts
+     * declare const host: TestHost;
+     * // ---cut---
+     * host.motion.double = { code: "overload", message: "the GPU could not keep up with this video" };
+     * host.motionChanged();
+     * await host.settle();
+     * ```
+     *
+     * @since 1.7.19
+     */
+    motionChanged(): void;
     /** What `player.chapters()` lists while media is ready. */
     chapters: {
         /** The chapter title, `null` without one. */

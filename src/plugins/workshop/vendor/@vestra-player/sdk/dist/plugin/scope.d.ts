@@ -1,3 +1,5 @@
+/** Scopes own handles. Disposal runs newest first and never throws. */
+import type { MotionEngine } from "./types.ts";
 import type { Change } from "./passes.ts";
 import type { Runtime } from "./runtime.ts";
 import type { Disposable, DisposeInfo, Plugin, PluginError, Scope, StopReason } from "./types.ts";
@@ -26,6 +28,7 @@ export declare class ScopeImpl implements Plugin {
         render: () => import("./types.ts").RenderOptions;
         shaders: (id?: string) => import("./types.ts").VideoShaders;
         upscaling: import("./types.ts").VideoUpscaling;
+        motion: (engine: MotionEngine) => import("./types.ts").VideoMotion;
         filter(id: string): import("./types.ts").VideoFilter;
     };
     readonly audio: {

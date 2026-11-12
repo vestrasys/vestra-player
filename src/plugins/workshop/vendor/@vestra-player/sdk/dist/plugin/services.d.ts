@@ -1,5 +1,5 @@
 import type { ScopeImpl } from "./scope.ts";
-import type { Clipboard, Host, Power, Rendering, Secrets, Storage, System, Tools, VideoUpscaling } from "./types.ts";
+import type { Clipboard, Host, Power, Rendering, Secrets, Storage, System, Tools, MotionEngine, VideoMotion, VideoUpscaling } from "./types.ts";
 export declare const clipboard: (scope: ScopeImpl) => Clipboard;
 export declare const host: (scope: ScopeImpl) => Host;
 export declare const power: (scope: ScopeImpl) => Power;
@@ -118,3 +118,10 @@ export declare const rendering: (scope: ScopeImpl) => Rendering;
  * answers once its GPU check ran (the first call starts it).
  */
 export declare const videoUpscaling: (scope: ScopeImpl) => VideoUpscaling;
+/**
+ * `plugin.video.motion(engine)`: both requests need `video.motion` and
+ * name the engine; the event names it too and leaves out each plugin's own
+ * `mode`, which the SDK keeps from the answers per engine (only this
+ * plugin's `set` changes it).
+ */
+export declare const videoMotion: (scope: ScopeImpl, engine: MotionEngine) => VideoMotion;
