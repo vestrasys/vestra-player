@@ -2,7 +2,7 @@
 
 This directory holds the release notes for each version: `v<version>.md`, for example `v0.3.0.md`. `release.yml` uses the file as-is as the body of the GitHub release; **if the file does not exist when the tag is pushed, the release fails** (a dry run only gives a warning). [unreleased.md](unreleased.md) collects user-facing notes of versions without a release of their own, as material for the next one.
 
-Installers are published on this repository's own GitHub Releases (coordinator decision 14). Until the repository is public there are only internal test builds; every release is a draft and its title says "unsigned test build".
+Installers are published on this repository's own GitHub Releases (coordinator decision 14). Until the repository is public there are only internal test builds; every release is a draft. The release title is "Vestra Player <version>", signed or not; the release notes say whether a build is unsigned and how to install it (see below).
 
 ## Release steps
 

@@ -367,5 +367,5 @@ jobs:
           jq -e '.hosts["windows-x64"] and .hosts["macos-arm64"]' dist/host.json > /dev/null \
             || { echo "::error::host.json must list windows-x64 and macos-arm64"; exit 1; }
           gh release create "$TAG" --draft --verify-tag \
-            --title "Vestra Player $VERSION (unsigned test build)" \
+            --title "Vestra Player $VERSION" \
             --notes-file "doc/releases/v$VERSION.md" dist/*
