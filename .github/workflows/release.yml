@@ -10,8 +10,10 @@
 # the download page) and a draft GitHub release in this repository with the notes from
 # doc/releases/v<version>.md. <version> is the player release version in
 # src/release.json; the host binary has its own (src/host/Cargo.toml, never
-# higher). Signing and notarization are TODO
-# jobs in the `release` environment. How to cut a release: doc/releases/README.md.
+# higher). sign-macos signs the macOS .app and DMG with the Developer ID
+# certificate and notarizes both (doc/releases/macos-signing.md; secrets in
+# the `release` environment); Windows stays unsigned for now (sign-windows is
+# a TODO). How to cut a release: doc/releases/README.md.
 name: release
 
 on:
@@ -40,6 +42,14 @@ on:
         description: >
           Build the host even when a published release has one built from
           the same host inputs. Tag releases always reuse when they can.
+        type: boolean
+        default: false
+      sign_macos:
+        description: >
+          Dry runs only: sign and notarize the macOS packages too, to test
+          them before a tag (about 15-25 macOS minutes). Without the signing
+          secrets the job warns and the packages stay unsigned. Tag releases
+          always sign, and fail without the secrets.
         type: boolean
         default: false
 
@@ -211,11 +221,14 @@ jobs:
   # it with `sha256sum -c --ignore-missing SHA256SUMS`. The copies are not
   # uploaded as an artifact (the 500 MB artifact quota); draft-release makes
   # them again from the uploaded files and checks them against this list.
-  # TODO(S7 signing): hash the signed files (needs the sign-* jobs).
+  # macOS: the signed and notarized files (artifact vestra-signed-macos and
+  # its host.json entry) when sign-macos signed, the unsigned ones in a dry
+  # run that did not sign. Windows: unsigned (no sign-windows yet).
   checksums:
     name: SHA256SUMS
-    needs: [verify, package-windows, package-macos]
-    # One system may be skipped in a dry run (platforms); at least one must have packaged.
+    needs: [verify, package-windows, package-macos, sign-macos]
+    # One system may be skipped in a dry run (platforms); at least one must
+    # have packaged. A failed sign-macos stops it (and so the draft release).
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && (needs.package-windows.result == 'success' || needs.package-macos.result == 'success') }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
@@ -228,16 +241,27 @@ jobs:
           sparse-checkout: |
             .github/scripts
             src/packaging/windows
+      # One download per packaged system (a dry run may skip one).
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.package-windows.result == 'success'
         with:
-          pattern: vestra-unsigned-*
+          name: vestra-unsigned-windows
           path: dist
-          merge-multiple: true
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.package-windows.result == 'success'
         with:
-          pattern: host-vestra-unsigned-*
+          name: host-vestra-unsigned-windows
           path: host-records
-          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.package-macos.result == 'success'
+        with:
+          name: ${{ needs.sign-macos.outputs.signed == 'true' && 'vestra-signed-macos' || 'vestra-unsigned-macos' }}
+          path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: needs.package-macos.result == 'success'
+        with:
+          name: ${{ needs.sign-macos.outputs.signed == 'true' && 'host-vestra-signed-macos' || 'host-vestra-unsigned-macos' }}
+          path: host-records
       # host.json: one entry per packaged platform (_package.yml "host.json
       # entry"), listed in SHA256SUMS so that a later release checks it
       # before it reuses the host binary (src/packaging/host.mjs fetch).
@@ -276,38 +300,348 @@ jobs:
           bash .github/scripts/latest-json.sh check dist "$VERSION" "$REPO"
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          name: vestra-unsigned-SHA256SUMS
+          name: vestra-checksums
           path: |
             dist/SHA256SUMS
             dist/host.json
           retention-days: 1
           if-no-files-found: error
 
-  # TODO(S7 signing): sign + notarize on Ubuntu with rcodesign (ci-research
-  # §10.2, packaging-proposal §8): every Mach-O inside out with
-  # src/packaging/macos/*.entitlements and the Hardened Runtime, the .app,
-  # then a new DMG, notarize and staple both. Secrets only in the `release`
-  # environment (tag-only deployments, required reviewer).
+  # Developer ID signing and notarization with Apple's own tools
+  # (doc/releases/macos-signing.md has the secrets and how to make them).
+  # From the packaged (ad-hoc signed) .app.zip: every nested Mach-O inside
+  # out with the Hardened Runtime and a timestamp (dylibs, ffmpeg, ffprobe,
+  # anything else found), node with node.entitlements (V8's JIT), the host
+  # and then the bundle with host.entitlements; no --deep signing. Notarize
+  # and staple the .app, zip it, build a new DMG from it, sign, notarize and
+  # staple the DMG; check both with codesign, spctl and stapler. Output:
+  # artifact vestra-signed-macos (same file names as vestra-unsigned-macos)
+  # and host-vestra-signed-macos (the host.json entry with the signed host
+  # binary's SHA-256, which a later release checks before it reuses it).
+  # Runs no repository code: the entitlements files are the only checkout.
+  #
+  # Missing secrets: a tag release (or a dispatch with dry_run off) fails
+  # here; a dry run with sign_macos warns and ships the unsigned packages on
+  # (`signed` output false).
   sign-macos:
-    name: sign macOS (TODO)
+    name: sign and notarize macOS
     needs: package-macos
     # !cancelled(): the implicit success() also fails when a job further up
     # was skipped (the build-test jobs are, when main.yml already tested the
     # commit), which skipped signing and the draft release in v0.6.2.
-    if: ${{ !cancelled() && !inputs.dry_run && needs.package-macos.result == 'success' }}
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    if: >-
+      ${{ !cancelled() && needs.package-macos.result == 'success'
+      && (!inputs.dry_run || inputs.sign_macos) }}
+    # The image the package job builds on.
+    runs-on: macos-15
+    # Notarization usually takes 2-10 minutes per submission, sometimes more.
+    timeout-minutes: 75
     environment: release
     permissions:
       contents: read
+    outputs:
+      signed: ${{ steps.secrets.outputs.signed }}
+    defaults:
+      run:
+        shell: bash
     steps:
-      - run: echo "TODO(S7) macOS signing and notarization; the artifact stays unsigned."
+      - name: Signing secrets present?
+        id: secrets
+        env:
+          # Empty on a tag push: a real release.
+          DRY_RUN: ${{ inputs.dry_run }}
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          missing=()
+          for name in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD APPLE_API_KEY_P8_BASE64 \
+            APPLE_API_KEY_ID APPLE_API_ISSUER_ID APPLE_TEAM_ID; do
+            [ -n "${!name}" ] || missing+=("$name")
+          done
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$DRY_RUN" = true ]; then
+            echo "::warning::macOS signing skipped (dry run): missing secrets ${missing[*]} (doc/releases/macos-signing.md). The macOS packages stay unsigned."
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "::error::macOS signing needs the secrets ${missing[*]} (doc/releases/macos-signing.md); a release does not ship unsigned macOS packages."
+          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        if: steps.secrets.outputs.signed == 'true'
+        with:
+          persist-credentials: false
+          sparse-checkout: src/packaging/macos
+          sparse-checkout-cone-mode: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.secrets.outputs.signed == 'true'
+        with:
+          name: vestra-unsigned-macos
+          path: ${{ runner.temp }}/unsigned
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: steps.secrets.outputs.signed == 'true'
+        with:
+          name: host-vestra-unsigned-macos
+          path: ${{ runner.temp }}/host-record
+      # A keychain of its own with a random password (never stored), holding
+      # only the Developer ID Application identity; deleted at the end.
+      - name: Keychain with the Developer ID certificate
+        id: keychain
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
+          MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          umask 077
+          keychain="$RUNNER_TEMP/vestra-signing.keychain-db"
+          password=$(openssl rand -hex 24)
+          echo "::add-mask::$password"
+          p12="$RUNNER_TEMP/vestra-signing.p12"
+          printf '%s' "$MACOS_CERT_P12_BASE64" | tr -d ' \r\n' | base64 --decode > "$p12"
+          security create-keychain -p "$password" "$keychain"
+          security set-keychain-settings -lut 21600 "$keychain"
+          security unlock-keychain -p "$password" "$keychain"
+          security import "$p12" -k "$keychain" -f pkcs12 -P "$MACOS_CERT_PASSWORD" \
+            -T /usr/bin/codesign > /dev/null \
+            || { rm -f "$p12"; echo "::error::MACOS_CERT_P12_BASE64 / MACOS_CERT_PASSWORD: the .p12 does not import"; exit 1; }
+          rm -f "$p12"
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          # Searched first, after it the user keychains already listed.
+          old=()
+          while IFS= read -r line; do
+            line=${line#"${line%%[![:space:]]*}"}
+            line=${line#\"}
+            old+=("${line%\"}")
+          done < <(security list-keychains -d user)
+          security list-keychains -d user -s "$keychain" "${old[@]}"
+          identities=$(security find-identity -v -p codesigning "$keychain")
+          line=$(grep -F "Developer ID Application: " <<< "$identities" | grep -F "($APPLE_TEAM_ID)" | head -n 1 || true)
+          if [ -z "$line" ]; then
+            echo "$identities" | sed -E 's/[0-9A-F]{40}/<hash>/'
+            echo "::error::the .p12 holds no valid \"Developer ID Application: … (APPLE_TEAM_ID)\" identity"
+            exit 1
+          fi
+          echo "Signing as: $(sed -E 's/^ *[0-9]+\) [0-9A-F]{40} //' <<< "$line")"
+          {
+            echo "identity=$(awk '{ print $2 }' <<< "$line")"
+            echo "path=$keychain"
+          } >> "$GITHUB_OUTPUT"
+      - name: Sign the .app inside out
+        id: sign
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          IDENTITY: ${{ steps.keychain.outputs.identity }}
+          KEYCHAIN: ${{ steps.keychain.outputs.path }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          zip=$(ls "$RUNNER_TEMP"/unsigned/*-macos-arm64.app.zip)
+          dmg=$(ls "$RUNNER_TEMP"/unsigned/*-macos-arm64.dmg)
+          work="$RUNNER_TEMP/sign"
+          rm -rf "$work" && mkdir -p "$work"
+          ditto -x -k "$zip" "$work"
+          app=$(ls -d "$work"/*.app)
+          contents="$app/Contents"
+          main="$contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$contents/Info.plist")"
+          node="$contents/MacOS/node"
+          entitlements="$GITHUB_WORKSPACE/src/packaging/macos"
+          test -f "$main" && test -f "$node"
+          sign() {
+            codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" \
+              --options runtime --timestamp "$@"
+          }
+          # Every Mach-O but node and the host, deepest path first.
+          find "$contents" -type f > "$work/files.txt"
+          : > "$work/nested.txt"
+          while IFS= read -r file; do
+            [ "$file" = "$main" ] || [ "$file" = "$node" ] && continue
+            case $(file -b "$file") in
+              Mach-O*) printf '%s\t%s\n' "$(tr -cd / <<< "$file" | wc -c)" "$file" >> "$work/nested.txt" ;;
+            esac
+          done < "$work/files.txt"
+          sort -rn "$work/nested.txt" | cut -f2- > "$work/order.txt"
+          test -s "$work/order.txt" || { echo "::error::no nested Mach-O files in $app"; exit 1; }
+          while IFS= read -r file; do
+            echo "sign ${file#"$work/"}"
+            sign "$file"
+          done < "$work/order.txt"
+          sign --entitlements "$entitlements/node.entitlements" "$node"
+          sign --entitlements "$entitlements/host.entitlements" "$main"
+          sign --entitlements "$entitlements/host.entitlements" "$app"
+          codesign --verify --deep --strict --verbose=2 "$app"
+          # Each Mach-O: our team, the Hardened Runtime, a secure timestamp.
+          { cat "$work/order.txt"; echo "$node"; echo "$main"; } | while IFS= read -r file; do
+            details=$(codesign -d --verbose=4 "$file" 2>&1)
+            grep -qx "TeamIdentifier=$APPLE_TEAM_ID" <<< "$details" \
+              || { echo "::error::${file#"$work/"}: not signed by team $APPLE_TEAM_ID"; exit 1; }
+            grep -q '^CodeDirectory .*flags=.*runtime' <<< "$details" \
+              || { echo "::error::${file#"$work/"}: no Hardened Runtime"; exit 1; }
+            grep -q '^Timestamp=' <<< "$details" \
+              || { echo "::error::${file#"$work/"}: no secure timestamp"; exit 1; }
+          done
+          codesign -d --entitlements - "$node"
+          {
+            echo "app=$app"
+            echo "zip=$(basename "$zip")"
+            echo "dmg=$(basename "$dmg")"
+          } >> "$GITHUB_OUTPUT"
+      # notarytool exits 0 for a rejected submission too: the status decides.
+      # The log (issues, also warnings on an accepted one) is printed always.
+      - name: Notarize and staple (.app, then the DMG built from it)
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          IDENTITY: ${{ steps.keychain.outputs.identity }}
+          KEYCHAIN: ${{ steps.keychain.outputs.path }}
+          APP: ${{ steps.sign.outputs.app }}
+          ZIP: ${{ steps.sign.outputs.zip }}
+          DMG: ${{ steps.sign.outputs.dmg }}
+          APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
+        run: |
+          umask 077
+          key="$RUNNER_TEMP/vestra-notary.p8"
+          # The base64 of the .p8 file; its PEM text as is works too.
+          if grep -q -- '-----BEGIN' <<< "$APPLE_API_KEY_P8_BASE64"; then
+            printf '%s\n' "$APPLE_API_KEY_P8_BASE64" > "$key"
+          else
+            printf '%s' "$APPLE_API_KEY_P8_BASE64" | tr -d ' \r\n' | base64 --decode > "$key"
+          fi
+          grep -q -- '-----BEGIN PRIVATE KEY-----' "$key" \
+            || { echo "::error::APPLE_API_KEY_P8_BASE64 is not a .p8 private key"; exit 1; }
+          auth=(--key "$key" --key-id "$APPLE_API_KEY_ID" --issuer "$APPLE_API_ISSUER_ID")
+          notarize() {
+            local result id status
+            echo "notarytool submit $(basename "$1")"
+            result=$(xcrun notarytool submit "$1" "${auth[@]}" --wait --timeout 45m --output-format json)
+            id=$(jq -r '.id // empty' <<< "$result")
+            status=$(jq -r '.status // empty' <<< "$result")
+            echo "submission ${id:-?}: ${status:-?}"
+            if [ -n "$id" ]; then
+              xcrun notarytool log "$id" "${auth[@]}" || true
+            fi
+            [ "$status" = Accepted ] || { echo "::error::notarization of $(basename "$1"): ${status:-no result}"; return 1; }
+          }
+          out="$RUNNER_TEMP/signed"
+          rm -rf "$out" && mkdir -p "$out"
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$RUNNER_TEMP/notarize-app.zip"
+          notarize "$RUNNER_TEMP/notarize-app.zip"
+          xcrun stapler staple "$APP"
+          xcrun stapler validate "$APP"
+          # The released .app.zip: the stapled app.
+          ditto -c -k --sequesterRsrc --keepParent "$APP" "$out/$ZIP"
+          # The DMG as bundle-macos.mjs makes it: the app and an
+          # Applications link, ULMO, HFS+. hdiutil sometimes reports the
+          # device busy on CI runners: three tries.
+          stage="$RUNNER_TEMP/dmg-stage"
+          rm -rf "$stage" && mkdir -p "$stage"
+          name=$(basename "$APP" .app)
+          ditto "$APP" "$stage/$name.app"
+          ln -s /Applications "$stage/Applications"
+          for try in 1 2 3; do
+            hdiutil create -volname "$name" -srcfolder "$stage" -format ULMO -fs HFS+ -ov "$out/$DMG" && break
+            [ "$try" = 3 ] && exit 1
+            sleep 10
+          done
+          codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --timestamp "$out/$DMG"
+          notarize "$out/$DMG"
+          xcrun stapler staple "$out/$DMG"
+          ls -l "$out"
+      # What a user's Mac checks: the files as uploaded, unpacked fresh.
+      - name: Verify (codesign, spctl, stapler)
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          ZIP: ${{ steps.sign.outputs.zip }}
+          DMG: ${{ steps.sign.outputs.dmg }}
+        run: |
+          out="$RUNNER_TEMP/signed"
+          check="$RUNNER_TEMP/check"
+          rm -rf "$check" && mkdir -p "$check/zip"
+          # spctl must say the source is a notarized Developer ID. Should the
+          # runner image have Gatekeeper assessments off, spctl reports an
+          # override instead: then only codesign and stapler can decide.
+          notarized() {
+            local result
+            result=$(spctl "$@" 2>&1) || { echo "$result"; return 1; }
+            echo "$result"
+            if grep -q 'override=security disabled' <<< "$result"; then
+              echo "::warning::Gatekeeper assessments are off on this runner; spctl cannot confirm the notarization (stapler validate does)"
+              return 0
+            fi
+            grep -q 'source=Notarized Developer ID' <<< "$result"
+          }
+          codesign --verify --verbose=2 "$out/$DMG"
+          notarized -a -vvv -t open --context context:primary-signature "$out/$DMG"
+          xcrun stapler validate "$out/$DMG"
+          mount="$check/mount"
+          mkdir -p "$mount"
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$out/$DMG" > /dev/null
+          app=$(ls -d "$mount"/*.app)
+          status=0
+          codesign --verify --deep --strict --verbose=2 "$app" || status=1
+          notarized -a -vvv -t exec "$app" || status=1
+          xcrun stapler validate "$app" || status=1
+          hdiutil detach "$mount" > /dev/null
+          [ "$status" = 0 ] || { echo "::error::the app in the DMG does not verify"; exit 1; }
+          ditto -x -k "$out/$ZIP" "$check/zip"
+          app=$(ls -d "$check/zip"/*.app)
+          codesign --verify --deep --strict --verbose=2 "$app"
+          notarized -a -vvv -t exec "$app"
+          xcrun stapler validate "$app"
+      # The macOS host.json entry, for the signed binary: a later release
+      # that reuses this host checks the binary in this .app.zip against it.
+      - name: host.json entry of the signed host
+        if: steps.secrets.outputs.signed == 'true'
+        env:
+          ZIP: ${{ steps.sign.outputs.zip }}
+        run: |
+          record="$RUNNER_TEMP/host-record/host-macos.json"
+          binary=$(jq -er '.["macos-arm64"].binary' "$record")
+          jq -e --arg zip "$ZIP" '.["macos-arm64"].archive == $zip' "$record" > /dev/null \
+            || { echo "::error::host.json entry names another archive than $ZIP"; exit 1; }
+          sum=$(unzip -p "$RUNNER_TEMP/signed/$ZIP" "$binary" | shasum -a 256 | cut -d ' ' -f 1)
+          [[ "$sum" =~ ^[0-9a-f]{64}$ ]] || { echo "::error::cannot read $binary from $ZIP"; exit 1; }
+          mkdir -p "$RUNNER_TEMP/host-record-signed"
+          jq --arg sum "$sum" '.["macos-arm64"].binarySha256 = $sum' "$record" \
+            > "$RUNNER_TEMP/host-record-signed/host-macos.json"
+          cat "$RUNNER_TEMP/host-record-signed/host-macos.json"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.secrets.outputs.signed == 'true'
+        with:
+          name: vestra-signed-macos
+          path: ${{ runner.temp }}/signed
+          retention-days: 1
+          if-no-files-found: error
+          compression-level: 0
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.secrets.outputs.signed == 'true'
+        with:
+          name: host-vestra-signed-macos
+          path: ${{ runner.temp }}/host-record-signed
+          retention-days: 1
+          if-no-files-found: error
+      - name: Delete the keychain and the key files
+        if: always()
+        env:
+          KEYCHAIN: ${{ steps.keychain.outputs.path }}
+        run: |
+          if [ -n "$KEYCHAIN" ] && [ -f "$KEYCHAIN" ]; then
+            security delete-keychain "$KEYCHAIN" || true
+          fi
+          rm -f "$RUNNER_TEMP/vestra-signing.p12" "$RUNNER_TEMP/vestra-notary.p8"
 
-  # TODO(S7 signing): Azure Artifact Signing with OIDC (id-token: write):
-  # vestra-host.exe, libmpv-2.dll, ffmpeg/*, then iscc with SignTool= for
-  # setup.exe and the uninstaller; signtool verify /pa.
+  # TODO(S7 signing): Windows stays unsigned for now; SignPath comes later
+  # (vestra-host.exe, libmpv-2.dll, ffmpeg/*, node.exe, then iscc with
+  # SignTool= for setup.exe and the uninstaller; signtool verify /pa). The
+  # Windows packages go to the release as packaged (vestra-unsigned-windows).
   sign-windows:
-    name: sign Windows (TODO)
+    name: sign Windows (TODO, unsigned)
     needs: package-windows
     if: ${{ !cancelled() && !inputs.dry_run && needs.package-windows.result == 'success' }}
     runs-on: ubuntu-24.04
@@ -324,7 +658,8 @@ jobs:
     if: >-
       ${{ !cancelled() && !inputs.dry_run && github.ref_type == 'tag'
       && needs.verify.result == 'success' && needs.checksums.result == 'success'
-      && needs.sign-macos.result == 'success' && needs.sign-windows.result == 'success' }}
+      && needs.sign-macos.result == 'success' && needs.sign-macos.outputs.signed == 'true'
+      && needs.sign-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
@@ -337,11 +672,20 @@ jobs:
             doc/releases
             .github/scripts
             src/packaging/windows
+      # By name: a missing one fails here. macOS signed and notarized,
+      # Windows unsigned, SHA256SUMS and host.json from checksums.
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
-          pattern: vestra-unsigned-*
+          name: vestra-signed-macos
           path: dist
-          merge-multiple: true
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vestra-unsigned-windows
+          path: dist
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vestra-checksums
+          path: dist
       - name: gh release create --draft
         env:
           GH_TOKEN: ${{ github.token }}
@@ -349,7 +693,7 @@ jobs:
           TAG: ${{ github.ref_name }}
           VERSION: ${{ needs.verify.outputs.version }}
         # The fixed-name copies are made here, from the files that are
-        # uploaded (the signed ones once sign-* sign), and checked with the
+        # uploaded (macOS signed; Windows once sign-windows signs), and checked with the
         # rest: releases/latest/download/<fixed name> serves them. Then
         # latest.json describes them (releases/latest/download/latest.json;
         # not in SHA256SUMS, see doc/releases/README.md) and is checked
