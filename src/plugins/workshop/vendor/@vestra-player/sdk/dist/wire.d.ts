@@ -696,7 +696,7 @@ export declare function createWire(transport: Transport): {
             id: string;
             ticket: string;
             step?: number;
-            of? /** What listens (the player logs it). */: number;
+            of?: number;
             then?: string[];
         }) => Promise<import("./index.ts").CommandRunResult>;
     };
