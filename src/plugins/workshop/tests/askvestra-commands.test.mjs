@@ -1,17 +1,19 @@
 // Ask Vestra, commands (PROPOSAL §9 step 5): the model gets the palette's
 // command table without personal rows, a `command` step is checked against
 // that table before any step runs, and runs through `commands.run` with the
-// request's ticket; Don't Run, a disabled command and a third-party command
-// (confirmed by the player) end or continue the request as the PROPOSAL's
-// flows say. Commands only, no Undo (user ruling 2026-11-11). A local mock
+// request's ticket, the first step naming the rest of the plan (`then`) so
+// the player's approval sheet asks once for all of it (Ask Vestra UX
+// PROPOSAL step 3, P2/P4); Don't Run, a disabled or busy command and a
+// third-party command end or continue the request as the PROPOSAL's flows
+// say. Commands only, no Undo (user ruling 2026-11-11). A local mock
 // model only. How a request ended is an end state of the palette's status
 // (`status.state`), which the player shows in its status strip.
 //
 // The TestHost lists only the player's core commands and this plugin's own,
 // so the tests that need other plugins' rows answer `commands.list` and
-// `commands.run` themselves (`table`), the way the player does: a dangerous
-// row asks first (the queued dialog answer), a disabled one fails with its
-// reason, an unknown id fails `missing`.
+// `commands.run` themselves (`table`), the way the player does: a plan with
+// a dangerous row asks once (the queued dialog answer), a disabled or busy
+// one fails with its reason, an unknown id fails `missing`.
 import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
@@ -59,24 +61,59 @@ const row = (id, label, extra = {}) => ({
   ...extra,
 });
 
-/** Answers `commands.list` and `commands.run` with `rows`, as the player would; returns the runs. */
-function table(host, rows) {
+/**
+ * Answers `commands.list` and `commands.run` with `rows`, as the player
+ * would (doc/architecture/palette-lead.md §2, SDK 1.7.16's TestHost): a run
+ * with `then` is judged with its plan, and when any of it asks the
+ * approval sheet asks once (one queued dialog answer, recorded in `asks`
+ * as the plan's ids); Run keeps the rest of the plan for the ticket, each
+ * later run of a planned id uses up one entry without asking, anything
+ * else asks on its own. `rows` may change between runs (`busy`).
+ * Returns the runs, the sheets asked (`runs.asks`) and a way to drop the
+ * kept plan (`runs.forget`); `ran(params)` is called after each run.
+ */
+function table(host, rows, ran = () => {}) {
   const runs = [];
+  const asks = [];
+  let kept = null;
   host.handle("commands.list", () => ({ revision: 1, commands: rows }));
   host.handle("commands.run", (p) => {
-    const found = rows.find((each) => each.id === p.id);
-    if (!found) throw new HostError("missing", `no command ${p.id}`);
+    const find = (id) => {
+      const found = rows.find((each) => each.id === id);
+      if (!found) throw new HostError("missing", `no command ${id}`);
+      return found;
+    };
+    const found = find(p.id);
     if (!found.enabled) throw new HostError("disabled", found.reason ?? `${found.label} is disabled`);
-    if (found.dangerous) {
+    if (found.busy) throw new HostError("busy", found.reason ?? `${found.label} is busy`);
+    const then = p.then ?? null;
+    let plan = [p.id];
+    let ask;
+    if (then !== null) {
+      kept = null;
+      plan = [p.id, ...then];
+      ask = plan.map(find).some((each) => each.dangerous);
+    } else {
+      const at = kept?.indexOf(p.id) ?? -1;
+      if (at >= 0) kept.splice(at, 1);
+      ask = at < 0 && found.dangerous;
+    }
+    if (ask) {
+      asks.push(plan);
       const answer = host.dialogAnswers.shift();
       if (!answer?.confirmed) {
         runs.push({ id: p.id, declined: true });
         return { ran: false, declined: true };
       }
+      if (then !== null) kept = [...then];
     }
-    runs.push({ id: p.id, ticket: p.ticket, step: p.step, of: p.of });
+    runs.push({ id: p.id, ticket: p.ticket, step: p.step, of: p.of, ...(then !== null ? { then } : {}) });
+    ran(p);
     return { ran: true };
   });
+  // Not enumerable: `assert.deepEqual(runs, [...])` compares the runs alone.
+  Object.defineProperty(runs, "asks", { value: asks });
+  Object.defineProperty(runs, "forget", { value: () => (kept = null) });
   return runs;
 }
 
@@ -119,11 +156,97 @@ test("several commands: the player's line counts the steps (step/of), the result
   host.dialogAnswers.push(CONTINUE);
   const ticket = await host.runPaletteLead("rotate and mute");
   await ai.until(() => ai.end() === "done: Done · Rotate: 90°, Vestra Player: Mute", "result");
+  // The first run names the rest of the plan (`then`), the later ones do not.
   assert.deepEqual(runs, [
-    { id: "vestra.video/video.rotate.90", ticket, step: 1, of: 2 },
+    { id: "vestra.video/video.rotate.90", ticket, step: 1, of: 2, then: ["host/mute"] },
     { id: "host/mute", ticket, step: 2, of: 2 },
   ]);
+  assert.deepEqual(runs.asks, [], "nothing in the plan asks: no sheet");
   assert.deepEqual(host.sent("osd.show"), []);
+});
+
+test("one answer covers the plan: the sheet asks once, before the first step, for every step", async (t) => {
+  const ai = await ready(() =>
+    plan(command("host/volume-up"), command("vestra.playlist/playlist.clear"), command("acme.obs/record.start"), command("vestra.playlist/playlist.clear"), command("host/mute")),
+  );
+  t.after(() => ai.stop());
+  const { host } = ai;
+  const runs = table(host, [
+    row("host/volume-up", "Vestra Player: Volume Up"),
+    row("vestra.playlist/playlist.clear", "Playlist: Clear", { dangerous: true }),
+    row("acme.obs/record.start", "Mini OBS: Start Recording", { builtin: false, plugin: "Mini OBS", dangerous: true }),
+    row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false }),
+  ]);
+  host.dialogAnswers.push(CONTINUE, CONTINUE); // consent, then Run on the sheet: no more answers queued
+  const ticket = await host.runPaletteLead("louder, clear, record, clear again, mute");
+  await ai.until(() => ai.end()?.startsWith("done: "), "result");
+  const ids = ["host/volume-up", "vestra.playlist/playlist.clear", "acme.obs/record.start", "vestra.playlist/playlist.clear", "host/mute"];
+  assert.deepEqual(runs.asks, [ids], "one sheet listing the whole plan, the repeated step too");
+  assert.deepEqual(runs, [
+    { id: ids[0], ticket, step: 1, of: 5, then: ids.slice(1) },
+    ...ids.slice(1).map((id, i) => ({ id, ticket, step: i + 2, of: 5 })),
+  ]);
+  assert.equal(host.dialogAnswers.length, 0);
+});
+
+test("Don't Run on the sheet runs nothing, not even the steps that do not ask, and ends the request", async (t) => {
+  const ai = await ready(() => plan(command("host/volume-up"), command("vestra.playlist/playlist.clear"), command("host/mute")));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  const runs = table(host, [
+    row("host/volume-up", "Vestra Player: Volume Up"),
+    row("vestra.playlist/playlist.clear", "Playlist: Clear", { dangerous: true }),
+    row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false }),
+  ]);
+  host.dialogAnswers.push(CONTINUE, DONT_RUN); // consent, then Don't Run on the sheet
+  await host.runPaletteLead("louder and clear the playlist and mute");
+  await ai.until(() => ai.end() === "note: Stopped: nothing was run", "declined");
+  assert.deepEqual(runs.asks, [["host/volume-up", "vestra.playlist/playlist.clear", "host/mute"]]);
+  assert.deepEqual(runs, [{ id: "host/volume-up", declined: true }], "the sheet came before the first step; nothing ran");
+  await new Promise((resolve) => setTimeout(resolve, 400)); // longer than a step's gap: no later step is tried
+  assert.equal(runs.length, 1);
+  assert.deepEqual(ends(host), ["note: Stopped: nothing was run"]);
+  assert.match(ai.system(), /^vestra\.playlist\/playlist\.clear \| Playlist: Clear \|.*\| asks the user first$/m);
+});
+
+test("a step the player no longer holds in the plan asks again; Don't Run then stops there, the steps before stay", async (t) => {
+  // Not reachable through the plugin alone (it runs the plan it named, in
+  // order, on one ticket); the player's rule is that a used-up or dropped
+  // plan entry asks on its own, and the plugin then says what was not run.
+  const ai = await ready(() => plan(command("host/volume-up"), command("vestra.playlist/playlist.clear"), command("host/mute")));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  const rows = [
+    row("host/volume-up", "Vestra Player: Volume Up"),
+    row("vestra.playlist/playlist.clear", "Playlist: Clear", { dangerous: true }),
+    row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false }),
+  ];
+  // The plan is gone after the first step.
+  const runs = table(host, rows, (p) => p.id === "host/volume-up" && runs.forget());
+  host.dialogAnswers.push(CONTINUE, CONTINUE, DONT_RUN); // consent, Run on the sheet, Don't Run when step 2 asks again
+  await host.runPaletteLead("louder and clear the playlist and mute");
+  await ai.until(() => ai.end() === "note: Stopped: Playlist: Clear was not run", "declined");
+  assert.deepEqual(runs.asks, [["host/volume-up", "vestra.playlist/playlist.clear", "host/mute"], ["vestra.playlist/playlist.clear"]]);
+  assert.deepEqual(
+    runs.map((run) => [run.id, !!run.declined]),
+    [
+      ["host/volume-up", false],
+      ["vestra.playlist/playlist.clear", true],
+    ],
+  );
+});
+
+test("busy: the step fails with the player's message as given", async (t) => {
+  const ai = await ready(() => plan(command("acme.obs/record.start")));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  const message = "another command of this request is waiting for the user's answer";
+  const runs = table(host, [row("acme.obs/record.start", "Mini OBS: Start Recording", { builtin: false, plugin: "Mini OBS", busy: true, reason: message })]);
+  host.dialogAnswers.push(CONTINUE);
+  await host.runPaletteLead("start recording");
+  await ai.until(() => !!ai.end(), "failure");
+  assert.equal(ai.end(), `failed: Step 1 failed: ${message}`);
+  assert.deepEqual(runs, []);
 });
 
 test("a disabled command: the step fails with the command's reason, the steps after it do not run", async (t) => {
@@ -148,27 +271,7 @@ test("a disabled command: the step fails with the command's reason, the steps af
   assert.match(ai.system(), /^vestra\.capture\/snapshot \| Snapshot: Save Snapshot \| - \| - \| disabled: Nothing to capture$/m);
 });
 
-test("Don't Run on a destructive command stops the whole request; the steps before it stay", async (t) => {
-  const ai = await ready(() => plan(command("host/volume-up"), command("vestra.playlist/playlist.clear"), command("host/mute")));
-  t.after(() => ai.stop());
-  const { host } = ai;
-  const runs = table(host, [
-    row("host/volume-up", "Vestra Player: Volume Up"),
-    row("vestra.playlist/playlist.clear", "Playlist: Clear", { dangerous: true }),
-    row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false }),
-  ]);
-  host.dialogAnswers.push(CONTINUE, DONT_RUN); // consent, then the player's Run / Don't Run
-  await host.runPaletteLead("louder and clear the playlist and mute");
-  await ai.until(() => ai.end() === "note: Stopped: Playlist: Clear was not run", "declined");
-  assert.deepEqual(
-    runs.map((run) => run.id),
-    ["host/volume-up", "vestra.playlist/playlist.clear"],
-  );
-  assert.equal(runs[1].declined, true);
-  assert.match(ai.system(), /^vestra\.playlist\/playlist\.clear \| Playlist: Clear \|.*\| asks the user first$/m);
-});
-
-test("Don't Run on the first step: nothing was run", async (t) => {
+test("Don't Run when the first step is the one that asks: nothing was run", async (t) => {
   const ai = await ready(() => plan(command("vestra.playlist/playlist.clear"), command("host/mute")));
   t.after(() => ai.stop());
   const { host } = ai;
@@ -180,6 +283,7 @@ test("Don't Run on the first step: nothing was run", async (t) => {
   await host.runPaletteLead("clear the playlist and mute");
   await ai.until(() => ai.end() === "note: Stopped: nothing was run", "declined");
   assert.deepEqual(runs, [{ id: "vestra.playlist/playlist.clear", declined: true }]);
+  assert.deepEqual(runs.asks, [["vestra.playlist/playlist.clear", "host/mute"]]);
   assert.deepEqual(host.sent("osd.show"), []);
 });
 
@@ -214,7 +318,9 @@ test("a third-party command runs after the player's confirmation", async (t) => 
   host.dialogAnswers.push(CONTINUE, CONTINUE); // consent, then Run
   const ticket = await host.runPaletteLead("start recording");
   await ai.until(() => ai.end() === "done: Done · Mini OBS: Start Recording", "result");
-  assert.deepEqual(runs, [{ id: "acme.obs/record.start", ticket, step: undefined, of: undefined }]);
+  // A plan of one command: `then` is empty, the sheet lists it alone.
+  assert.deepEqual(runs, [{ id: "acme.obs/record.start", ticket, step: undefined, of: undefined, then: [] }]);
+  assert.deepEqual(runs.asks, [["acme.obs/record.start"]]);
   assert.match(ai.system(), /^acme\.obs\/record\.start \| Mini OBS: Start Recording \|.*\| asks the user first, third-party: Mini OBS$/m);
 });
 
@@ -229,18 +335,23 @@ test("an id outside the table is refused before any step runs", async (t) => {
   assert.deepEqual(runs, [], "checked before the first step ran");
 });
 
-test("a command that opens a window ends the request", async (t) => {
-  const ai = await ready(() => plan(command("vestra.subtitles/tune"), command("host/mute")));
+test("a command that opens a window ends the request: the plan, and so the sheet, goes up to it", async (t) => {
+  const ai = await ready(() => plan(command("host/volume-up"), command("vestra.subtitles/tune"), command("vestra.playlist/playlist.clear")));
   t.after(() => ai.stop());
   const { host } = ai;
-  const runs = table(host, [row("vestra.subtitles/tune", "Subtitles: Subtitle Tuning…"), row("host/mute", "Vestra Player: Mute")]);
+  const runs = table(host, [
+    row("host/volume-up", "Vestra Player: Volume Up"),
+    row("vestra.subtitles/tune", "Subtitles: Subtitle Tuning…"),
+    row("vestra.playlist/playlist.clear", "Playlist: Clear", { dangerous: true }),
+  ]);
   host.dialogAnswers.push(CONTINUE);
-  await host.runPaletteLead("subtitle tuning then mute");
+  const ticket = await host.runPaletteLead("louder, subtitle tuning, then clear the playlist");
   await ai.until(() => ai.end() === "done: Opened Subtitles: Subtitle Tuning…", "opened");
-  assert.deepEqual(
-    runs.map((run) => run.id),
-    ["vestra.subtitles/tune"],
-  );
+  assert.deepEqual(runs, [
+    { id: "host/volume-up", ticket, step: 1, of: 2, then: ["vestra.subtitles/tune"] },
+    { id: "vestra.subtitles/tune", ticket, step: 2, of: 2 },
+  ]);
+  assert.deepEqual(runs.asks, [], "the step after the window is not in the plan: no sheet for it");
 });
 
 test("personal rows never reach the model, and naming one is refused", async (t) => {

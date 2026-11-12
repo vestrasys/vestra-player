@@ -10,7 +10,7 @@ import os from "node:os";
 import test from "node:test";
 import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
-import { RUNS_PER_SECOND, pace } from "../askvestra/ask.ts";
+import { RUNS_PER_SECOND, STEP_GAP_MS, pace } from "../askvestra/ask.ts";
 import { KEY, server, startAi } from "./fixture.mjs";
 import { guard, shown, track } from "./lead-status.mjs";
 
@@ -295,11 +295,25 @@ test("a plan the plugin refuses runs no step: another step kind (the old speed s
   assert.ok(!host.coreRuns.includes("mute"));
 });
 
-test("a plan of the most steps runs them all within the player's rate (4 a second per ticket)", async (t) => {
+/** Records when each of the player's own commands ran (`host.coreRuns`), in `performance.now()` time. */
+const timed = (host) => {
+  const times = [];
+  const push = host.coreRuns.push.bind(host.coreRuns);
+  host.coreRuns.push = (...runs) => {
+    for (let i = 0; i < runs.length; i++) times.push(performance.now());
+    return push(...runs);
+  };
+  return times;
+};
+/** The gaps between successive times, in ms. */
+const gaps = (times) => times.slice(1).map((at, i) => at - times[i]);
+
+test("a plan of the most steps runs them all within the player's rate (4 a second per ticket), each step at least STEP_GAP_MS after the one before", async (t) => {
   const steps = Array.from({ length: 8 }, (_, i) => command(i % 2 ? "host/volume-down" : "host/volume-up"));
   const ai = await ready(() => plan(...steps));
   t.after(() => ai.stop());
   const { host } = ai;
+  const times = timed(host);
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("up and down four times");
   await ai.until(() => !host.paletteLead.status && !!ai.end(), "result", 30_000);
@@ -314,6 +328,49 @@ test("a plan of the most steps runs them all within the player's rate (4 a secon
     lines.map((line) => line.match(/ · (\d)\/8 · /)[1]),
     ["1", "2", "3", "4", "5", "6", "7", "8"],
   );
+  // The first run named the other seven (`then`), the later ones nothing; no sheet (nothing asks).
+  const sent = host.sent("commands.run");
+  assert.deepEqual(
+    sent[0].then,
+    steps.slice(1).map((step) => step.id),
+  );
+  assert.ok(sent.slice(1).every((p) => p.then === undefined));
+  assert.equal(host.dialogAnswers.length, 0);
+  // Each step's line stays at least STEP_GAP_MS (measured here from run to run, which is longer than from the answer).
+  for (const gap of gaps(times)) assert.ok(gap >= STEP_GAP_MS - 1, `steps ${gaps(times).map(Math.round).join(", ")} ms apart`);
+});
+
+for (const length of [5, 6, 7, 8]) {
+  test(`a plan of ${length} steps with one that asks: one answer, every step runs, within the player's limits (the TestHost's plan model)`, async (t) => {
+    // The player's Close (`host/stop`) asks first; the TestHost (SDK 1.7.16)
+    // judges the plan as the player does and applies its rates.
+    const steps = [...Array.from({ length: length - 1 }, () => command("host/volume-up")), command("host/stop")];
+    const ai = await ready(() => plan(...steps));
+    t.after(() => ai.stop());
+    const { host } = ai;
+    host.dialogAnswers.push(CONTINUE, CONTINUE); // consent, Run on the sheet
+    await host.runPaletteLead(`louder ${length - 1} times and close`);
+    await ai.until(() => !host.paletteLead.status && !!ai.end(), "result", 30_000);
+    assert.match(ai.end(), /^done: /);
+    assert.equal(host.coreRuns.filter((run) => run === "volume-up").length, length - 1);
+    assert.ok(host.coreRuns.includes("stop"), "Close ran without asking again");
+    assert.equal(host.dialogAnswers.length, 0, "one answer covered the plan");
+  });
+}
+
+test("Don't Run on the sheet (the TestHost's plan model): nothing runs, the request ends", async (t) => {
+  const ai = await ready(() => plan(command("host/volume-up"), command("host/stop"), MUTE));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  host.dialogAnswers.push(CONTINUE, CANCEL); // consent, Don't Run on the sheet
+  await host.runPaletteLead("louder, close, mute");
+  await ai.until(() => ai.end() === "note: Stopped: nothing was run", "declined");
+  await new Promise((resolve) => setTimeout(resolve, 2 * STEP_GAP_MS));
+  assert.deepEqual(
+    host.coreRuns.filter((run) => ["volume-up", "stop", "mute"].includes(run)),
+    [],
+  );
+  assert.equal(host.sent("commands.run").length, 1, "no later step was tried");
 });
 
 test("the row says Vestra is working from the moment it is sent; Enter on it then stops, nothing is sent again", async (t) => {
@@ -347,11 +404,16 @@ test("the row says Vestra is working from the moment it is sent; Enter on it the
   assert.equal(host.command("askvestra.stop").state.enabled, false);
 });
 
-test("pace: the run after RUNS_PER_SECOND answers waits until one second after the first of them, never less", async () => {
+test("pace: the first step at once, a later one STEP_GAP_MS after the answer before it, and one second after the answer RUNS_PER_SECOND before, never less", async () => {
   const signal = new AbortController().signal;
-  const start = performance.now();
-  await pace([start, start, start], signal);
-  assert.ok(performance.now() - start < 50, "fewer than RUNS_PER_SECOND runs: no wait");
+  assert.ok(STEP_GAP_MS >= 1000 / RUNS_PER_SECOND, "the gap alone keeps the rate");
+  let start = performance.now();
+  await pace([], signal);
+  assert.ok(performance.now() - start < 50, "the first step: no wait");
+  start = performance.now();
+  await pace([start - 2000, start - 1500, start], signal);
+  assert.ok(performance.now() >= start + STEP_GAP_MS, `waited ${performance.now() - start} ms after the last answer`);
+  // Four answers at once (as if the gap had not been kept): the rate decides.
   const answered = Array.from({ length: RUNS_PER_SECOND }, () => performance.now());
   await pace(answered, signal);
   assert.ok(performance.now() >= answered[0] + 1000, `waited ${performance.now() - answered[0]} ms`);
@@ -380,13 +442,16 @@ test("Stop between steps: the paced wait ends at once", async (t) => {
   const { host } = ai;
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("louder eight times");
-  // Steps 1–4 run at once; step 5 waits for the ticket's rate.
-  await ai.until(() => host.coreRuns.filter((run) => run === "volume-up").length === 4, "four steps", 30_000);
-  const started = Date.now();
+  // Each step waits STEP_GAP_MS after the answer to the one before.
+  await ai.until(() => host.coreRuns.filter((run) => run === "volume-up").length === 2, "two steps", 30_000);
+  const started = performance.now();
   await host.command("askvestra.stop").run();
   await ai.until(() => ai.end() === "note: Stopped", "stopped");
-  assert.ok(Date.now() - started < 900, "not after the wait");
-  assert.equal(host.coreRuns.filter((run) => run === "volume-up").length, 4);
+  assert.ok(performance.now() - started < 900, "at once");
+  const ranAtStop = host.coreRuns.filter((run) => run === "volume-up").length;
+  assert.ok(ranAtStop <= 3, `${ranAtStop} steps ran`);
+  await new Promise((resolve) => setTimeout(resolve, 3 * STEP_GAP_MS));
+  assert.equal(host.coreRuns.filter((run) => run === "volume-up").length, ranAtStop, "no step after Stop");
 });
 
 test("consent: two requests while the dialog is open ask once and the latest one runs; a new Base URL asks again", async (t) => {

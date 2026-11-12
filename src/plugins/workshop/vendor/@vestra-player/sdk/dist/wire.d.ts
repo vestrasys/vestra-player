@@ -696,7 +696,8 @@ export declare function createWire(transport: Transport): {
             id: string;
             ticket: string;
             step?: number;
-            of?: number;
+            of? /** What listens (the player logs it). */: number;
+            then?: string[];
         }) => Promise<import("./index.ts").CommandRunResult>;
     };
     /** The command palette's lead row (`palette.lead`). */

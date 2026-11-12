@@ -130,7 +130,7 @@ msgid "{n} step"
 msgid_plural "{n} steps"
 msgstr[0] "{n}단계"
 
-#: ai.slint:217 askvestra/status.ts:131
+#: ai.slint:217 askvestra/status.ts:130
 #, x-machine
 msgid "Stopped"
 msgstr "중지됨"
@@ -508,162 +508,157 @@ msgstr "보내기"
 msgid "■ Stop"
 msgstr "■ 중지"
 
-#: askvestra/ask.ts:180
+#: askvestra/ask.ts:188
 #, x-machine
 msgid "Ask Vestra"
 msgstr "Vestra에게 요청"
 
-#: askvestra/ask.ts:182
+#: askvestra/ask.ts:190
 #, x-machine
 msgid "Type a command or ask Vestra"
 msgstr "명령을 입력하거나 Vestra에게 요청"
 
-#: askvestra/ask.ts:183
+#: askvestra/ask.ts:191
 #, x-machine
 msgid "Type a request or a question"
 msgstr "요청이나 질문을 입력하세요"
 
-#: askvestra/ask.ts:184
+#: askvestra/ask.ts:192
 #, x-machine
 msgid "Set up a model first"
 msgstr "먼저 모델을 설정하세요"
 
-#: askvestra/ask.ts:194
+#: askvestra/ask.ts:202
 #, x-machine
 msgid "Enter stops"
 msgstr "Enter로 중지"
 
-#: askvestra/ask.ts:395
+#: askvestra/ask.ts:415
 #, x-machine
 msgid "Ask Vestra sends your request to {}"
 msgstr "‘Vestra에게 요청’은 요청을 {}(으)로 보냅니다"
 
-#: askvestra/ask.ts:397
+#: askvestra/ask.ts:417
 #, x-machine
 msgid "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and whether something is open and playing go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account."
 msgstr "명령 팔레트에 입력한 내용, 플레이어의 명령 목록(이름, 메뉴, 단축키, 각 명령의 켜짐 및 사용 가능 여부)과 무언가 열려 재생 중인지 여부는 채팅과 마찬가지로 API 키와 함께 이 제공업체로 전송됩니다. 파일 이름, 재생 목록, 기록, 트랙 및 챕터 제목, 자막은 전송되지 않습니다. 요금은 제공업체가 사용자 계정에 청구합니다."
 
-#: askvestra/ask.ts:399
+#: askvestra/ask.ts:419
 #, x-machine
 msgid "Continue"
 msgstr "계속"
 
-#: askvestra/ask.ts:537
+#: askvestra/ask.ts:565
 #, x-machine
 msgid "Stop"
 msgstr "중지"
 
-#: askvestra/ask.ts:541
+#: askvestra/ask.ts:569
 #, x-machine
 msgid "Vestra is not working on a request"
 msgstr "Vestra가 처리 중인 요청이 없습니다"
 
-#: askvestra/ask.ts:547 askvestra/ask.ts:552
+#: askvestra/ask.ts:575 askvestra/ask.ts:580
 #, x-machine
 msgid "Vestra is working"
 msgstr "Vestra 작업 중"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Planning…"
 msgstr "계획 중…"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Vestra is working · Step {0} of {1} · {2}"
 msgstr "Vestra 작업 중 · {1}단계 중 {0}단계 · {2}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Stopped: nothing was run"
 msgstr "중지됨: 아무것도 실행되지 않았습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Stopped: {} was not run"
 msgstr "중지됨: {}은(는) 실행되지 않았습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Done · {}"
 msgstr "완료 · {}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Opened {}"
 msgstr "{}을(를) 열었습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Step {0} failed: {1}"
 msgstr "{0}단계 실패: {1}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Took too long"
 msgstr "시간이 너무 오래 걸렸습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Could not reach {0}: {1}"
 msgstr "{0}에 연결할 수 없습니다: {1}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "The model gave no steps"
 msgstr "모델이 단계를 제시하지 않았습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "The plan has more than {} steps"
 msgstr "계획이 {}단계를 넘습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Cannot read the API key; save it again in the settings"
 msgstr "API 키를 읽을 수 없습니다. 설정에서 다시 저장하세요"
 
-#: askvestra/status.ts:131
-#, x-machine
-msgid "{} is busy"
-msgstr "{}이(가) 사용 중입니다"
-
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "{} is no longer there"
 msgstr "{}이(가) 더 이상 없습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Too many commands at once"
 msgstr "한 번에 실행하는 명령이 너무 많습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "The request has ended"
 msgstr "요청이 끝났습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "This player does not let Vestra run commands"
 msgstr "이 플레이어에서는 Vestra가 명령을 실행할 수 없습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Vestra cannot do “{}”"
 msgstr "Vestra는 ‘{}’을(를) 할 수 없습니다"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "There is no command “{}”"
 msgstr "‘{}’ 명령이 없습니다"
 
-#: askvestra/status.ts:131 labels.slint:6 main.ts:637
+#: askvestra/status.ts:130 labels.slint:6 main.ts:637
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "사용자 지정 · OpenAI 형식"
 
-#: askvestra/status.ts:131 labels.slint:7 main.ts:639
+#: askvestra/status.ts:130 labels.slint:7 main.ts:639
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "사용자 지정 · Anthropic 형식"

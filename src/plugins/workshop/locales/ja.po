@@ -130,7 +130,7 @@ msgid "{n} step"
 msgid_plural "{n} steps"
 msgstr[0] "{n} ステップ"
 
-#: ai.slint:217 askvestra/status.ts:131
+#: ai.slint:217 askvestra/status.ts:130
 #, x-machine
 msgid "Stopped"
 msgstr "停止しました"
@@ -508,162 +508,157 @@ msgstr "送信"
 msgid "■ Stop"
 msgstr "■ 停止"
 
-#: askvestra/ask.ts:180
+#: askvestra/ask.ts:188
 #, x-machine
 msgid "Ask Vestra"
 msgstr "Vestra に頼む"
 
-#: askvestra/ask.ts:182
+#: askvestra/ask.ts:190
 #, x-machine
 msgid "Type a command or ask Vestra"
 msgstr "コマンドを入力するか Vestra に頼む"
 
-#: askvestra/ask.ts:183
+#: askvestra/ask.ts:191
 #, x-machine
 msgid "Type a request or a question"
 msgstr "依頼や質問を入力"
 
-#: askvestra/ask.ts:184
+#: askvestra/ask.ts:192
 #, x-machine
 msgid "Set up a model first"
 msgstr "先にモデルを設定してください"
 
-#: askvestra/ask.ts:194
+#: askvestra/ask.ts:202
 #, x-machine
 msgid "Enter stops"
 msgstr "Enter で停止"
 
-#: askvestra/ask.ts:395
+#: askvestra/ask.ts:415
 #, x-machine
 msgid "Ask Vestra sends your request to {}"
 msgstr "「Vestra に頼む」は依頼を {} に送信します"
 
-#: askvestra/ask.ts:397
+#: askvestra/ask.ts:417
 #, x-machine
 msgid "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and whether something is open and playing go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account."
 msgstr "コマンドパレットに入力した内容、プレーヤーのコマンド一覧（名前、メニュー、キー、各コマンドがオンか使えるか）と、何かが開いていて再生中かどうかは、チャットと同じくあなたの API キーでこのプロバイダーに送信されます。ファイル名、プレイリスト、履歴、トラックやチャプターのタイトル、字幕は送信されません。料金はプロバイダーからあなたのアカウントに請求されます。"
 
-#: askvestra/ask.ts:399
+#: askvestra/ask.ts:419
 #, x-machine
 msgid "Continue"
 msgstr "続行"
 
-#: askvestra/ask.ts:537
+#: askvestra/ask.ts:565
 #, x-machine
 msgid "Stop"
 msgstr "停止"
 
-#: askvestra/ask.ts:541
+#: askvestra/ask.ts:569
 #, x-machine
 msgid "Vestra is not working on a request"
 msgstr "Vestra は依頼を処理していません"
 
-#: askvestra/ask.ts:547 askvestra/ask.ts:552
+#: askvestra/ask.ts:575 askvestra/ask.ts:580
 #, x-machine
 msgid "Vestra is working"
 msgstr "Vestra が処理中です"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Planning…"
 msgstr "計画中…"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Vestra is working · Step {0} of {1} · {2}"
 msgstr "Vestra が処理中 · ステップ {0}/{1} · {2}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Stopped: nothing was run"
 msgstr "停止しました: 何も実行されていません"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Stopped: {} was not run"
 msgstr "停止しました: {} は実行されませんでした"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Done · {}"
 msgstr "完了 · {}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Opened {}"
 msgstr "{} を開きました"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Step {0} failed: {1}"
 msgstr "ステップ {0} が失敗しました: {1}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Took too long"
 msgstr "時間がかかりすぎました"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Could not reach {0}: {1}"
 msgstr "{0} に接続できません: {1}"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "The model gave no steps"
 msgstr "モデルがステップを返しませんでした"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "The plan has more than {} steps"
 msgstr "計画のステップが {} を超えています"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Cannot read the API key; save it again in the settings"
 msgstr "API キーを読み取れません。設定で保存し直してください"
 
-#: askvestra/status.ts:131
-#, x-machine
-msgid "{} is busy"
-msgstr "{} は処理中です"
-
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "{} is no longer there"
 msgstr "{} はもうありません"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Too many commands at once"
 msgstr "一度に実行するコマンドが多すぎます"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "The request has ended"
 msgstr "依頼は終了しました"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "This player does not let Vestra run commands"
 msgstr "このプレーヤーでは Vestra はコマンドを実行できません"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "Vestra cannot do “{}”"
 msgstr "Vestra は「{}」を実行できません"
 
-#: askvestra/status.ts:131
+#: askvestra/status.ts:130
 #, x-machine
 msgid "There is no command “{}”"
 msgstr "コマンド「{}」はありません"
 
-#: askvestra/status.ts:131 labels.slint:6 main.ts:637
+#: askvestra/status.ts:130 labels.slint:6 main.ts:637
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "カスタム · OpenAI 形式"
 
-#: askvestra/status.ts:131 labels.slint:7 main.ts:639
+#: askvestra/status.ts:130 labels.slint:7 main.ts:639
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "カスタム · Anthropic 形式"
