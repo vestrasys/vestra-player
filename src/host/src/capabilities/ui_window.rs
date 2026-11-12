@@ -101,6 +101,9 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     )
     .inspect_err(|_| host.images.release_view(reply.owner, &view_key))?;
     host.theme_pending |= missed.get();
+    // The user looks at the window the plugin just showed: its
+    // confirmations go there (`host/origins`).
+    host.act(reply.owner, crate::host::origins::Origin::View(id.clone()));
     host.views.insert((reply.owner, id), view);
     Ok(())
 }
@@ -214,6 +217,7 @@ fn change(
                 .ok_or_else(|| RpcError::invalid("visible requires boolean"))?
             {
                 show(&view.instance, platform::app_in_foreground())?;
+                host.act(key.0, crate::host::origins::Origin::View(key.1.clone()));
             } else {
                 view.instance.hide().map_err(anyhow::Error::from)?;
             }

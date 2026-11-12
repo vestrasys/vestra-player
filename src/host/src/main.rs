@@ -460,6 +460,8 @@ fn player() -> Result<()> {
         events,
         headless,
         dialog_busy: false,
+        origins: Default::default(),
+        confirm_open: false,
         shell: None,
         mounts: BTreeMap::new(),
         mount_queue: std::collections::VecDeque::new(),

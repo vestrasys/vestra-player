@@ -623,6 +623,7 @@ impl Host {
         };
         input_trace::mark(&format!("host loop: bar button → {owner}/{id}"));
         self.policy.activity(self.now_ms());
+        self.acted_in(owner, generation);
         if let Err(error) = self.execute_command(owner, &id) {
             diag!("bar button execute: {error:?}");
         }

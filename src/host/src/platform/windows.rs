@@ -36,6 +36,8 @@ pub const MENU_SHOWS_CMD: bool = false;
 /// The fullscreen title strip (Edge/Chrome F11, PotPlayer): a fullscreen
 /// window has no title bar, so the player reveals its own at the top edge.
 pub const FULLSCREEN_TITLE_STRIP: bool = true;
+/// `confirm` shows a system dialog (the quiet task dialog).
+pub const SYSTEM_ALERTS: bool = true;
 
 // ------------------------------------------------------------------ windows
 
@@ -749,7 +751,8 @@ pub fn clipboard_write_image(kind: Image, bytes: Vec<u8>) -> std::result::Result
 
 // ------------------------------------------------------------------ dialogs
 
-/// A task dialog owned by the active host window (else `parent`), centred
+/// A task dialog owned by `owner` (the tool window the request came from,
+/// `host/origins`), else the active host window, else `parent`, centred
 /// on it: the message as the main instruction, the detail under it, the
 /// plugin's own confirm and cancel labels, the checkbox as the dialog's own
 /// checkbox (`vestra_win32::task_dialog`; build.rs embeds the Common
@@ -758,15 +761,23 @@ pub fn clipboard_write_image(kind: Image, bytes: Vec<u8>) -> std::result::Result
 /// plays no sound either. `done` runs on the dialog's own thread.
 pub fn confirm(
     options: &crate::ui::confirm::Options,
+    owner: Option<&slint::Window>,
     parent: Option<HostWindowId>,
     done: impl Fn(bool, bool) + Send + 'static,
 ) -> std::result::Result<(), RpcError> {
-    let owner = live()
-        .into_iter()
-        .find(|(_, window)| window.has_focus())
-        .map(|(_, window)| window)
+    // The window the request came from (`host/origins`), else the focused
+    // one, else the main window.
+    let owner = owner
+        .and_then(native_of)
+        .or_else(|| {
+            live()
+                .into_iter()
+                .find(|(_, window)| window.has_focus())
+                .map(|(_, window)| window)
+        })
         .or_else(|| parent.and_then(|id| window(id).ok()))
         .and_then(|window| native_hwnd(&window));
+    CONFIRM_OWNER.set(owner);
     let options = options.clone();
     std::thread::Builder::new()
         .name("confirm".into())
@@ -791,6 +802,33 @@ pub fn confirm(
         })
         .map_err(|error| RpcError::new("failed", format!("dialog thread: {error}")))?;
     Ok(())
+}
+
+thread_local! {
+    /// The owner (HWND) of the last confirmation `confirm` showed.
+    static CONFIRM_OWNER: Cell<Option<isize>> = const { Cell::new(None) };
+}
+
+/// Bring the open confirmation into view (another request was refused
+/// `busy`): the task dialog itself, the last active popup of its owner
+/// (the owner is disabled while it is open), to the front while the player
+/// is in the `foreground`; otherwise its owner asks for attention.
+pub fn show_open_confirm(foreground: bool) {
+    let Some(owner) = CONFIRM_OWNER.get() else {
+        return;
+    };
+    if foreground {
+        if !vestra_win32::set_foreground(vestra_win32::last_active_popup(owner)) {
+            diag!("platform: the open confirmation could not come to the front");
+        }
+        return;
+    }
+    if let Some((_, window)) = live()
+        .into_iter()
+        .find(|(_, window)| native_hwnd(window) == Some(owner))
+    {
+        window.request_user_attention(Some(winit::window::UserAttentionType::Informational));
+    }
 }
 
 // -------------------------------------------------------------------- power

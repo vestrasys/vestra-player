@@ -211,18 +211,39 @@ rulings of 2026-11-03/04): the store review and uninstall remain the gate.
 Design: PROPOSAL §4.4, §5.1 H5, §5.4 step 5, §7 Q5/Q6 (user rulings of 2026-11-12: Ask Vestra's
 first-use consent in the player; every other main-window confirmation too, as a separate step).
 `capabilities/ui_dialog.rs` (`ask`), `host/review_sheet.rs` (`Asks::Confirm`, `confirm_sheet`,
-`open_confirm`), `platform::tool_window_focused`. No API change: `dialogs.confirm` keeps its
-parameters and its answer `{ confirmed, checked }`.
+`open_confirm`), `host/origins.rs`, `platform::tool_window_focused`. No API change:
+`dialogs.confirm` keeps its parameters and its answer `{ confirmed, checked }`.
 
-- **Which window's**: the one `platform::confirm` gives its dialog to, the established test: a
-  tool window (a plugin's window, Options, the floating sidebar: Windows, a host window other than
-  the main one with winit's `has_focus`; macOS, the visible key window without a sheet, one of
-  winit's other than the main one) when one has the focus, the main window otherwise, also when
-  the player is not in the foreground (it then takes no focus). A tool window's confirmation stays
-  a system dialog (Windows: the quiet task dialog, step 1; macOS: an `NSAlert` sheet on that
-  window). The main window's is drawn on the sheet of §2.1. On other systems there are no system
-  alerts, so every confirmation is drawn on the sheet (before: `unsupported`). Headless: still
-  `unavailable`.
+- **Which window's**: the window where the user last acted for the caller (`host/origins.rs`), not
+  the focus when the request arrives: a confirmation reaches the host after the click has gone to
+  the plugin's process and back, sometimes after a download or a check, and a click in the main
+  window meanwhile, or the player in the background, sent the Plugin Store's Update to the main
+  window's sheet, under the store window (tool windows stay above the main window), while the
+  store's next click was refused `busy` (bug of 2026-11-12, player 0.8.1). What counts, newest
+  first: a UI callback of the plugin's window, of its settings page (Options) or of its panel (the
+  main window, or the floating sidebar's window); its command run from a menu, the command
+  palette, a key, a bottom-bar button or a message's button (the window of that menu or key); a
+  request typed in the palette's first row, or the status strip's Stop, for the lead's holder (the
+  main window: Ask Vestra's first-use consent and the confirmations of the commands it runs go to
+  the sheet with the request box, also after the Workshop's own window was shown); the plugin
+  showing its own window (`ui.open`, `ui.show` visible): the user then looks there. A command
+  another plugin runs (`commands.run`) takes the caller's origin, or none when the caller has
+  none. Only a running or parked plugin's input counts (a stopped owner's, or the host's own
+  commands', records nothing). A tool window still shown (a plugin's window, Options, the
+  floating sidebar) gets a system dialog owned by it, brought to the front first (with the focus
+  while the player is in the foreground, a taskbar flash or Dock bounce otherwise): Windows, the
+  quiet task dialog (step 1); macOS, an `NSAlert` sheet on that window. The main window gets the
+  sheet of §2.1 and comes forward the same way; a tool window over the sheet's place stays above
+  it (Windows owned windows, the floating level on macOS), which is acceptable because the sheet
+  is only for requests made in the main window, where the user is looking. An origin whose window
+  closed falls back to the plugin's own window still shown, and with neither (a timer's request
+  of a plugin without a window) to the earlier test: a tool window with the focus (Windows, a host
+  window other than the main one with winit's `has_focus`; macOS, the visible key window without
+  a sheet, one of winit's other than the main one) gets the system dialog, else the main window
+  the sheet, also when the player is not in the foreground (it then takes no focus). Entries are
+  keyed by owner generation: a parked plugin's moves to its woken generation, and it goes when
+  the plugin stops. On other systems there are no system alerts, so every confirmation is drawn on
+  the sheet (before: `unsupported`). Headless: still `unavailable`.
 - **What it shows**: on the palette's plate at its place, the caller's message (12px semibold,
   28px, taller when it wraps) and detail (11px `text-list`, wraps), its checkbox at the footer's
   left, [confirm `Enter`] [cancel `Esc`] at its right. The request box (§2.1) only when the caller
@@ -241,8 +262,12 @@ parameters and its answer `{ confirmed, checked }`.
 - **One at a time**: while a sheet waits, a plan's or a confirmation's, `dialogs.confirm` (the
   main window's or a tool window's) and a `commands.run` that would ask are refused `busy`
   ("another confirmation is waiting for the user's answer"), as `dialogs.confirm` is while a system
-  dialog is open. A waiting confirmation keeps plugins running as an open dialog does
-  (`Busy::Dialog`).
+  dialog is open. A refusal brings the confirmation to answer first into view, so a wait is never
+  somewhere the user cannot see: the sheet's main window, or the open system dialog itself, whichever
+  window owns it (Windows: the owner's last active popup, since the owner is disabled while it is
+  open; macOS: the window with the sheet), to the front while the player is in the foreground,
+  asking for attention otherwise. A waiting confirmation keeps plugins running as an open dialog
+  does (`Busy::Dialog`).
 - stderr gets the caller's id, never the texts (they may name the user's file).
 
 Offline renders: `widgets_tests::render_confirm_sheet_states` (ignored; the same variables as
