@@ -229,7 +229,10 @@ parameters and its answer `{ confirmed, checked }`.
   holds the lead and has a live ticket (Ask Vestra's consent, asked while the request waits for
   it): its title and the request. `destructive` draws nothing: no reason label and no colour (user
   ruling 2 of 2026-11-12; the approval sheet marks no destructive step either); Enter confirms
-  either way, as the system dialog's default button did.
+  either way, as the system dialog's default button did. The panel ends 16px above the window's
+  bottom at most: a longer detail (a store install's permission list, up to 2000 characters)
+  scrolls in a std-widgets `ScrollView` (at least 48px of it shown), and the footer (checkbox and
+  buttons) stays in view.
 - **Input and lifetime**: as §2.1 (the focus, the 0.5 s guard, repeats, a press outside it is
   Cancel, the native-dialog wait, showing again after another menu). The checkbox is the caller's:
   a click toggles it (Space does not), its state is answered with Confirm and with Cancel, and
@@ -245,7 +248,8 @@ parameters and its answer `{ confirmed, checked }`.
 Offline renders: `widgets_tests::render_confirm_sheet_states` (ignored; the same variables as
 §2.1): Ask Vestra's consent (`r07-consent`), a plain confirmation (`h5-plain-replace-list`), a
 destructive one with its checkbox unchecked and checked (`h5-destructive-checkbox`,
-`h5-destructive-checked`); both palettes, 2×.
+`h5-destructive-checked`); both palettes, 2×; and, English only, a 2000-character install detail
+in a 640×360 window (`h5-long-detail-small`).
 
 ## 3. `palette.lead` (built-in only, residency recordable)
 
@@ -356,7 +360,8 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
   states' times, the shell value), `ui/command_palette.rs` (`names`, `aim`, `lead_shows_status`, no
   change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,
   repeats and buttons; the checkbox: click, Run, Enter, Ctrl+Enter, Space, a wrapping text; a
-  confirmation's size with and without the request box and detail, its keys and buttons),
+  confirmation's size with and without the request box and detail, its keys and buttons; a
+  2000-character detail in a small window scrolls and keeps the buttons in it),
   `host/supervisor/probe.rs`. `src/tests/sdk/host-agreement.test.ts`: TestHost accepts the
   player's `StatusState::NAMES` and refuses another with the player's code and message (skipped
   before SDK 1.7.15).

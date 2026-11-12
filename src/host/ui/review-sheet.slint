@@ -29,6 +29,7 @@ import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Check, KeyHint } from "@vestra/widgets.slint";
 import { MenuChrome } from "menu-view.slint";
+import { ScrollView } from "std-widgets.slint";
 
 export struct ReviewStep {
     shown: bool,
@@ -125,6 +126,8 @@ export component ReviewSheetView inherits Rectangle {
     out property <length> panel-width: panel.width;
     out property <length> panel-height: panel.height;
     out property <bool> has-keys: keys.has-focus;
+    // The detail scrolls (it is taller than the room the window leaves).
+    out property <bool> detail-scrolls: root.detail-shown < root.detail-height;
     // The buttons' centres in the view (tests press them).
     out property <length> run-x: run.absolute-position.x - root.absolute-position.x + run.width / 2;
     out property <length> cancel-x: cancel.absolute-position.x - root.absolute-position.x + cancel.width / 2;
@@ -145,14 +148,19 @@ export component ReviewSheetView inherits Rectangle {
     // question, the rows and the note, or a confirmation's message (28px,
     // taller when it wraps) and its detail; the footer (separator and
     // buttons) as the palette's: 44px, taller only when the checkbox's text
-    // wraps (two long plugin names).
+    // wraps (two long plugin names). A confirmation's panel ends 16px above
+    // the window's bottom at most: a longer detail (a store install's
+    // permission list, up to 2000 characters) scrolls, keeping at least
+    // 48px of it, and the footer stays in view.
     private property <length> head: root.sheet.request ? 44px : 6px;
     private property <bool> confirmation: root.sheet.message != "";
     private property <length> note-height: root.sheet.note == "" ? 0px : note.preferred-height + 8px;
     private property <length> message-height: max(28px, message.preferred-height + 12px);
     private property <length> detail-height: root.sheet.detail == "" ? 0px : detail.preferred-height + 8px;
-    private property <length> body-height: root.confirmation ? root.message-height + root.detail-height : 28px + root.sheet.count * 28px + root.note-height;
     private property <length> footer-height: root.sheet.remember == "" ? 44px : max(44px, remember.preferred-height + 20px);
+    private property <length> detail-room: root.height - root.top - 16px - root.head - root.message-height - root.footer-height;
+    private property <length> detail-shown: max(min(root.detail-height, 48px), min(root.detail-height, root.detail-room));
+    private property <length> body-height: root.confirmation ? root.message-height + root.detail-shown : 28px + root.sheet.count * 28px + root.note-height;
 
     keys := FocusScope {
         x: 0;
@@ -274,16 +282,27 @@ export component ReviewSheetView inherits Rectangle {
             vertical-alignment: center;
             wrap: word-wrap;
         }
-        detail := Text {
+        // In a ScrollView that is as tall as the detail while the window
+        // has the room (no scrolling then); the scroll bar sits in the
+        // panel's right margin, so the text wraps as without it.
+        ScrollView {
             visible: root.confirmation && root.sheet.detail != "";
             x: 12px;
             y: root.head + root.message-height;
-            width: parent.width - 24px;
-            height: self.preferred-height;
-            text: root.sheet.detail;
-            font-size: Theme.font-body;
-            color: Theme.text-list;
-            wrap: word-wrap;
+            width: parent.width - 16px;
+            height: max(0px, root.detail-shown - 8px);
+            content-width: self.width;
+            content-height: detail.preferred-height;
+            detail := Text {
+                x: 0px;
+                y: 0px;
+                width: panel.width - 24px;
+                height: self.preferred-height;
+                text: root.sheet.detail;
+                font-size: Theme.font-body;
+                color: Theme.text-list;
+                wrap: word-wrap;
+            }
         }
         // The steps below the question, as the palette's rows: the number, the
         // label (it keeps up to 60% of the row), the plugin, the reason.

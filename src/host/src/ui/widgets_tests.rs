@@ -1251,6 +1251,7 @@ export component W inherits Window {
     out property <length> pw: v.panel-width;
     out property <length> ph: v.panel-height;
     out property <bool> keys: v.has-keys;
+    out property <bool> detail-scrolls: v.detail-scrolls;
     out property <length> run-x: v.run-x;
     out property <length> cancel-x: v.cancel-x;
     out property <length> buttons-y: v.buttons-y;
@@ -1949,5 +1950,112 @@ fn render_confirm_sheet_states() {
                 .unwrap();
             w.hide().unwrap();
         }
+        // A store install's 2000-character detail in a small window: it
+        // scrolls, the footer stays in view (English only).
+        if !zh {
+            let (width, height) = (640., 360.);
+            let w = build(SHEET, width, height);
+            crate::ui::theme::apply_fonts(&w).unwrap();
+            crate::ui::theme::apply(&w, palette).unwrap();
+            if let Some(image) = &backdrop {
+                w.set_property("backdrop", Value::Image(image.clone()))
+                    .unwrap();
+            }
+            let detail = long_detail();
+            w.set_property(
+                "s",
+                confirm_value(
+                    None,
+                    "Install “Shader Upscale” 1.4.0 from an unofficial repository?",
+                    Some(&detail),
+                    "Install Anyway",
+                    &cancel,
+                    None,
+                ),
+            )
+            .unwrap();
+            settle();
+            render(&w, scale, width, height)
+                .save(out.join(format!("h5-long-detail-small-{theme}.png")))
+                .unwrap();
+            w.hide().unwrap();
+        }
     }
+}
+
+/// A store install's detail at `dialogs.confirm`'s limit (2000
+/// characters): the repository warning and a long permission list.
+fn long_detail() -> String {
+    let mut detail = String::from(
+        "Repository: Foo (https://foo.example/). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.\n\nIt will be able to:",
+    );
+    let lines = [
+        "Control playback",
+        "Read the playlist",
+        "Read and write the clipboard",
+        "Use the network",
+        "Read files you open",
+        "Show windows",
+        "Add video shaders",
+        "Process audio",
+    ];
+    for at in 0.. {
+        let line = format!("\n· {} ({})", lines[at % lines.len()], at + 1);
+        if detail.chars().count() + line.chars().count() > 2000 {
+            break;
+        }
+        detail.push_str(&line);
+    }
+    detail
+}
+
+/// Follow-up review of H5: a 2000-character detail in a small window: the
+/// panel ends 16px above the window's bottom, the detail scrolls, and the
+/// buttons and the checkbox stay inside the window and answer.
+#[test]
+fn a_long_detail_scrolls_and_keeps_the_buttons_in_a_small_window() {
+    let (width, height) = (640., 360.);
+    let w = build(SHEET, width, height);
+    let detail = long_detail();
+    assert!(detail.chars().count() > 1900);
+    w.set_property(
+        "s",
+        confirm_value(
+            None,
+            "Install “X” 1.3.0 from an unofficial repository?",
+            Some(&detail),
+            "Install Anyway",
+            "Cancel",
+            Some("Also delete its settings and data"),
+        ),
+    )
+    .unwrap();
+    settle();
+    assert!(boolean(&w, "detail-scrolls"));
+    let (y, h) = (number(&w, "py"), number(&w, "ph"));
+    assert!(y + h <= f64::from(height) - 16. + 0.5, "{y} + {h}");
+    let buttons = number(&w, "buttons-y");
+    assert!(buttons > y && buttons < y + h, "{buttons}");
+    assert!(number(&w, "remember-y") < y + h);
+    click(
+        &w,
+        number(&w, "run-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "run");
+    click(
+        &w,
+        number(&w, "cancel-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "decline");
+    // The same detail in a tall window: no scrolling.
+    let tall = build(SHEET, 1100., 1400.);
+    tall.set_property(
+        "s",
+        confirm_value(None, "Install?", Some(&detail), "Install", "Cancel", None),
+    )
+    .unwrap();
+    settle();
+    assert!(!boolean(&tall, "detail-scrolls"));
 }

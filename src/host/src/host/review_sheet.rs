@@ -531,6 +531,9 @@ impl Host {
                     .send(Event::CommandRunAnswered(review.reply, yes, checked));
             }
             Asks::Confirm { .. } => {
+                // As `Event::ConfirmDone` (the system dialog's answer) and
+                // `Event::CommandRunAnswered` (a plan's) do.
+                self.policy.activity(self.now_ms());
                 self.respond(
                     review.reply,
                     Ok(json!({"confirmed": yes, "checked": checked})),
