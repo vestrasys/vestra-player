@@ -1,6 +1,6 @@
 //! `plugin.dialogs.confirm`: a system alert with a confirm and a cancel button
 //! and an optional checkbox. The options are checked here; showing the alert
-//! is `platform::confirm` (an NSAlert sheet on macOS, a message box on
+//! is `platform::confirm` (an NSAlert sheet on macOS, a task dialog on
 //! Windows).
 #![forbid(unsafe_code)]
 
@@ -50,26 +50,6 @@ pub fn parse(params: &Value) -> Result<Options, RpcError> {
     })
 }
 
-/// The two button labels for a dialog that reports the chosen button by its
-/// label (Windows task dialogs): when both are the same text, the cancel
-/// label gets a trailing no-break space, so the answer stays unambiguous.
-#[cfg_attr(not(windows), allow(dead_code))]
-pub fn button_labels(options: &Options) -> (String, String) {
-    let cancel = if options.cancel == options.confirm {
-        format!("{}\u{a0}", options.cancel)
-    } else {
-        options.cancel.clone()
-    };
-    (options.confirm.clone(), cancel)
-}
-
-/// Whether a label-reporting dialog's answer confirms (`None`: closed or
-/// cancelled without a button).
-#[cfg_attr(not(windows), allow(dead_code))]
-pub fn confirmed_by(answer: Option<&str>, labels: &(String, String)) -> bool {
-    answer == Some(labels.0.as_str())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -101,21 +81,5 @@ mod tests {
         }
         // 200 CJK characters are 200 characters, not 600 bytes.
         assert!(parse(&json!({"message":"中".repeat(200),"confirm":"好"})).is_ok());
-    }
-
-    #[test]
-    fn label_answers_tell_confirm_from_cancel_even_with_equal_labels() {
-        let options = parse(&json!({"message":"删除？","confirm":"删除","cancel":"保留"})).unwrap();
-        let labels = button_labels(&options);
-        assert_eq!(labels, ("删除".into(), "保留".into()));
-        assert!(confirmed_by(Some("删除"), &labels));
-        assert!(!confirmed_by(Some("保留"), &labels));
-        assert!(!confirmed_by(None, &labels));
-        let same = parse(&json!({"message":"好？","confirm":"好","cancel":"好"})).unwrap();
-        let labels = button_labels(&same);
-        assert_ne!(labels.0, labels.1);
-        assert_eq!(labels.1.trim_end_matches('\u{a0}'), "好", "looks the same");
-        assert!(confirmed_by(Some(&labels.0), &labels));
-        assert!(!confirmed_by(Some(&labels.1), &labels));
     }
 }

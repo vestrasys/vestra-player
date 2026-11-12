@@ -695,29 +695,29 @@ msgstr "{plugin} · {step}/{of} · {command}"
 msgid "{plugin} · {command}"
 msgstr "{plugin} · {command}"
 
-#. commands.run: the alert before a plugin runs a command that asks first.
+#. commands.run: the alert's question before a command that asks first ({command}: the command as the command palette shows it).
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "{plugin} wants to run “{command}”"
-msgstr "{plugin} quiere ejecutar «{command}»"
+msgid "Run “{command}”?"
+msgstr "¿Ejecutar «{command}»?"
 
-#. commands.run: why the alert asks, for a built-in plugin's destructive command.
+#. commands.run: who asks, under the alert's question, when the request is empty ({plugin}: the asking plugin's name).
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "This command cannot be undone."
-msgstr "Este comando no se puede deshacer."
+msgid "{plugin} asks."
+msgstr "Lo pide {plugin}."
+
+#. commands.run: who asks and for which request, under the alert's question ({plugin}: the asking plugin's name, {request}: the text typed in the command palette).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{plugin} asks, for your request “{request}”."
+msgstr "{plugin} lo pide para tu solicitud «{request}»."
 
 #. commands.run: why the alert asks, for a command of a plugin that is not built in ({owner}: that plugin's name).
 #: src/capabilities/commands_run.rs
 #, x-machine
 msgid "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does."
 msgstr "Este comando pertenece a {owner}, que no es un complemento integrado: el reproductor no puede saber qué hace."
-
-#. commands.run: the user's request quoted in the alert ({}: the text typed in the command palette).
-#: src/capabilities/commands_run.rs
-#, x-machine
-msgid "Request: “{}”"
-msgstr "Solicitud: «{}»"
 
 #. commands.run: the alert's button that runs the command.
 #: src/capabilities/commands_run.rs
