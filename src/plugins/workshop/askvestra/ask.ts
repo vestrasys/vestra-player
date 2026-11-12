@@ -128,12 +128,17 @@ const pause = (ms: number, signal: AbortSignal) =>
  * the next one after it was sent, so a run sent one second after the answer
  * to the run RUNS_PER_SECOND before it is within the rate whatever the
  * delays between the processes. The first RUNS_PER_SECOND runs go at once.
+ * A timer may fire a little early (Node measured 49.66 ms for 50), so the
+ * time is read again after each pause and the wait goes on until it is
+ * really over.
  */
-export const pace = (answered: readonly number[], signal: AbortSignal): Promise<void> => {
+export const pace = async (answered: readonly number[], signal: AbortSignal): Promise<void> => {
   signal.throwIfAborted();
-  if (answered.length < RUNS_PER_SECOND) return Promise.resolve();
-  const wait = answered[answered.length - RUNS_PER_SECOND]! + 1000 - performance.now();
-  return wait > 0 ? pause(Math.ceil(wait), signal) : Promise.resolve();
+  if (answered.length < RUNS_PER_SECOND) return;
+  const until = answered[answered.length - RUNS_PER_SECOND]! + 1000;
+  for (let wait = until - performance.now(); wait > 0; wait = until - performance.now()) {
+    await pause(Math.ceil(wait), signal);
+  }
 };
 
 export function askVestra(plugin: Plugin, model: AskModel) {
@@ -390,8 +395,14 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       else await osd(i18n.text("Vestra · Cannot read the API key; save it again in the settings"));
       return;
     }
-    const consentGiven = await consented();
-    waited();
+    let consentGiven: boolean;
+    try {
+      consentGiven = await consented();
+    } finally {
+      // Also when the dialog is refused (`busy`: another native dialog is
+      // open): the row and the busy command must not stay "working".
+      waited();
+    }
     if (!consentGiven || order !== latest) return;
     // This request replaces the one running, if any (PROPOSAL Q6 A).
     stop(false);

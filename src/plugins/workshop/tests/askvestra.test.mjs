@@ -9,6 +9,7 @@ import os from "node:os";
 import test from "node:test";
 import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
+import { RUNS_PER_SECOND, pace } from "../askvestra/ask.ts";
 import { KEY, server, startAi } from "./fixture.mjs";
 
 const plan = (...steps) => ({ toolCalls: [{ name: "run_steps", args: { steps } }] });
@@ -289,6 +290,32 @@ test("the row says Vestra is working from the moment it is sent; Enter on it the
   assert.equal(mock.chats.length, 0, "nothing sent");
   assert.ok(!host.coreRuns.includes("mute"));
   assert.equal(host.command("askvestra.stop").state.enabled, false);
+});
+
+test("pace: the run after RUNS_PER_SECOND answers waits until one second after the first of them, never less", async () => {
+  const signal = new AbortController().signal;
+  const start = performance.now();
+  await pace([start, start, start], signal);
+  assert.ok(performance.now() - start < 50, "fewer than RUNS_PER_SECOND runs: no wait");
+  const answered = Array.from({ length: RUNS_PER_SECOND }, () => performance.now());
+  await pace(answered, signal);
+  assert.ok(performance.now() >= answered[0] + 1000, `waited ${performance.now() - answered[0]} ms`);
+});
+
+test("the consent dialog refused by the player (busy): the row and the busy command do not stay working", async (t) => {
+  const ai = await ready(() => plan(MUTE));
+  t.after(() => ai.stop());
+  const { host, mock } = ai;
+  host.handle("dialogs.confirm", async () => {
+    const error = new Error("a native dialog is already open");
+    error.code = "busy";
+    throw error;
+  });
+  await host.runPaletteLead("mute");
+  await ai.until(() => (host.paletteLead.status ?? null) === null, "status cleared");
+  assert.equal(host.command("askvestra.working").state.busy, false);
+  assert.equal(host.command("askvestra.stop").state.enabled, false);
+  assert.equal(mock.chats.length, 0);
 });
 
 test("Stop between steps: the paced wait ends at once", async (t) => {

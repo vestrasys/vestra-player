@@ -75,8 +75,8 @@ refused before), so a store or file install of a package declaring one fails the
   `VESTRA_TEST_CONFIRM=run` answers Run (tests), anything else Don't Run.
 - **OSD**: each run shows "<plugin> · <command label>" (or "<plugin> · i/n · <label>" with
   `step`/`of`) before the command runs, and logs `commands.run: <id> ran <global> (osd: …)` on
-  stderr and `commands.run: <id> ran <global>` (with ` (step i/n)`) in the host log: ids only, never
-  the label or the OSD line, which may name the user's file (README §4.3, Host log).
+  stderr and `commands.run: <id> ran <global>` (with ` (step i/n)`) in the host log: ids only,
+  never the label or the OSD line, which may name the user's file (README §4.3, Host log).
 
 `CommandOptions.destructive` (`commands::Declaration::destructive`, optional, absent = false) is
 the general part: any plugin may mark a command, and other places (the bar's `»` menu) may ask
@@ -100,10 +100,10 @@ The palette with a lead (nothing changes without one):
   column (accent), "title: query" in semibold and plain (the title alone and `empty` dimmed for an
   empty query), `note` on the right; while a `status` is set and the query is empty, or is still
   the query the row sent with the palette kept open (Shift+Enter; typing ends that,
-  `PaletteState::sent`), the status text and note instead
-  (`command_palette::lead_shows_status`). The event's `status` follows the same rule, so a second
-  Enter after Shift+Enter stops the request instead of sending it again. It takes one of the 12 slots; `Results: N` counts commands only; "No
-  matching commands" moves to row 1; the field shows `placeholder`.
+  `PaletteState::sent`), the status text and note instead (`command_palette::lead_shows_status`).
+  The event's `status` follows the same rule, so a second Enter after Shift+Enter stops the
+  request instead of sending it again. It takes one of the 12 slots; `Results: N` counts commands
+  only; "No matching commands" moves to row 1; the field shows `placeholder`.
 - The cursor (`command_palette::aim`): on the first command the query names (its title or full
   label equals the query, or its title continues the query from a word start for 3 or more
   characters, case ignored, category not part of the title: "pause" goes to Playback:
