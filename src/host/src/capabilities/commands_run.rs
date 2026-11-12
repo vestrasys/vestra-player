@@ -436,18 +436,19 @@ fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
 /// again before any command of a plugin that is not built in; its OSD line.
 pub(crate) fn ask_again(host: &mut Host) {
     if host.ui_state.state.clear_trust() {
-        let now = host.now_ms();
-        host.ui_state.touch(now);
+        // Written now, not a second later: a crash right after must not
+        // bring the trust back.
+        host.ui_state.flush();
         crate::diag::log_only("commands.run: plugin commands ask again");
     }
     host.show_osd(&i18n::tr("Plugin commands will ask again"));
 }
 
-/// `id` was uninstalled: no caller trusts it any more.
+/// `id` was uninstalled, or replaced from another source: no caller
+/// trusts it any more (written at once, as for [`ask_again`]).
 pub(crate) fn forget_trust(host: &mut Host, id: &str) {
     if host.ui_state.state.forget_trust(id) {
-        let now = host.now_ms();
-        host.ui_state.touch(now);
+        host.ui_state.flush();
     }
 }
 
@@ -791,7 +792,15 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool)
         return;
     }
     if remember && !run.remember.is_empty() {
-        trust_plugins(host, reply.owner, &run.remember);
+        // Re-resolved now: a plugin uninstalled while the sheet was open
+        // is not trusted again.
+        let still: Vec<String> = run
+            .remember
+            .iter()
+            .filter(|id| host.trustable_plugin(id))
+            .cloned()
+            .collect();
+        trust_plugins(host, reply.owner, &still);
     }
     let now = host.now_ms();
     let result = if host

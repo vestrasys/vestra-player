@@ -21,8 +21,10 @@
 //!   when the plan's steps that ask include some only because their plugin
 //!   is not built in and no step is destructive (user ruling 3 of
 //!   2026-11-12); Run with it checked, or Ctrl+Enter, runs and remembers.
-//!   What is remembered is the host's list (`ConfirmedRun::remember`); the
-//!   view only says whether the box was checked.
+//!   The host owns the box (`Review::remember_checked`, unchecked for every
+//!   sheet): a click asks it to toggle and counts for nothing within the
+//!   guard, as every other input ([`decide`]). What is remembered is the
+//!   host's list (`ConfirmedRun::remember`).
 //!
 //! doc/architecture/palette-lead.md §2.1.
 use super::*;
@@ -60,8 +62,45 @@ pub(crate) struct Review {
     pub(crate) steps: Vec<Step>,
     /// The "Don't ask again" checkbox's text; empty: no checkbox.
     pub(crate) remember: String,
+    /// The box is checked (the host's state; unchecked for every sheet).
+    pub(crate) remember_checked: bool,
     /// When it last showed (`Host::now_ms`); `None` while it waits to show.
     pub(crate) shown_at: Option<u64>,
+}
+
+/// What an action on the sheet does.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Decision {
+    /// Within the guard, unknown, or a toggle with no checkbox.
+    Ignore,
+    /// "Don't ask again" changes.
+    Toggle,
+    /// The answer: (run, remember).
+    Answer(bool, bool),
+}
+
+/// An action on a sheet shown at `shown_at`, at `now`, which offers "Don't
+/// ask again" (`offered`) and has it `checked`: `run` (remembering when
+/// checked), `run-remember` (Ctrl+Enter: remembering when offered),
+/// `toggle-remember` (a click on the box) or `decline`. Everything, the
+/// box included, counts for nothing within [`GUARD_MS`].
+pub(crate) fn decide(
+    action: &str,
+    shown_at: u64,
+    now: u64,
+    offered: bool,
+    checked: bool,
+) -> Decision {
+    if !accepts(shown_at, now) {
+        return Decision::Ignore;
+    }
+    match action {
+        "run" => Decision::Answer(true, offered && checked),
+        "run-remember" => Decision::Answer(true, offered),
+        "toggle-remember" if offered => Decision::Toggle,
+        "decline" => Decision::Answer(false, false),
+        _ => Decision::Ignore,
+    }
 }
 
 /// Whether input at `now` counts on a sheet shown at `shown_at`.
@@ -167,6 +206,7 @@ impl Host {
             query,
             steps,
             remember,
+            remember_checked: false,
             shown_at: None,
         });
         self.present_review();
@@ -218,6 +258,7 @@ impl Host {
             &review.remember,
             [&keys[0], &keys[2]],
         );
+        let remember_checked = review.remember_checked;
         let image = self.lead_image(owner, &icon);
         self.menu_open = true;
         self.menu_generation = self.shell_generation;
@@ -228,6 +269,8 @@ impl Host {
                 fields.set_field("image".into(), SValue::Image(image.unwrap_or_default()));
             }
             shell.set_property("review-sheet", value)?;
+            // Set with every value: a new sheet starts unchecked.
+            shell.set_property("review-remember-checked", remember_checked.into())?;
             shell.set_property("palette-open", false.into())?;
             shell.set_property("review-open", true.into())?;
             shell.set_property("menu-open", true.into())?;
@@ -274,26 +317,35 @@ impl Host {
         self.present_review();
     }
     /// A key or press on the sheet (`review-sheet-action`, a press outside
-    /// it): `run`, `run-remember` (Run with "Don't ask again" checked, or
-    /// Ctrl+Enter; plain Run when the sheet offers no checkbox) or
-    /// `decline`, ignored within the guard.
+    /// it), as [`decide`] takes it.
     pub(crate) fn review_action(&mut self, action: &str) {
         if !self.review_presented() {
             return;
         }
-        let shown_at = self.review.as_ref().and_then(|r| r.shown_at).unwrap_or(0);
-        if !accepts(shown_at, self.now_ms()) {
-            input_trace::follow(&format!("review sheet: {action} within the guard, ignored"));
+        let Some(review) = self.review.as_ref() else {
             return;
-        }
-        match action {
-            "run" => self.end_review(Some((true, false))),
-            "run-remember" => {
-                let offered = self.review.as_ref().is_some_and(|r| !r.remember.is_empty());
-                self.end_review(Some((true, offered)));
+        };
+        let decision = decide(
+            action,
+            review.shown_at.unwrap_or(0),
+            self.now_ms(),
+            !review.remember.is_empty(),
+            review.remember_checked,
+        );
+        match decision {
+            Decision::Ignore => {
+                input_trace::follow(&format!("review sheet: {action} ignored"));
             }
-            "decline" => self.end_review(Some((false, false))),
-            _ => {}
+            Decision::Toggle => {
+                let checked = !review.remember_checked;
+                if let Some(review) = self.review.as_mut() {
+                    review.remember_checked = checked;
+                }
+                if let Some(shell) = &self.shell {
+                    let _ = shell.set_property("review-remember-checked", checked.into());
+                }
+            }
+            Decision::Answer(yes, remember) => self.end_review(Some((yes, remember))),
         }
     }
     /// The sheet goes, with the user's answer, (run, remember) (`None`:
@@ -403,6 +455,43 @@ mod tests {
             ["Enter", "Esc"],
         );
         assert_eq!(export["remember"], "Don't ask again for Clip Export");
+    }
+
+    /// Review fix 1: the box too counts for nothing within the guard; Run
+    /// remembers only when it is offered and checked, Ctrl+Enter when it
+    /// is offered; a toggle without a box is nothing.
+    #[test]
+    fn the_guard_covers_the_checkbox_and_run_follows_the_hosts_box() {
+        use Decision::*;
+        assert_eq!(decide("toggle-remember", 1_000, 1_200, true, false), Ignore);
+        assert_eq!(decide("run-remember", 1_000, 1_499, true, false), Ignore);
+        assert_eq!(decide("toggle-remember", 1_000, 1_500, true, false), Toggle);
+        assert_eq!(
+            decide("toggle-remember", 1_000, 1_500, false, false),
+            Ignore
+        );
+        assert_eq!(
+            decide("run", 1_000, 2_000, true, false),
+            Answer(true, false)
+        );
+        assert_eq!(decide("run", 1_000, 2_000, true, true), Answer(true, true));
+        assert_eq!(
+            decide("run", 1_000, 2_000, false, true),
+            Answer(true, false)
+        );
+        assert_eq!(
+            decide("run-remember", 1_000, 2_000, true, false),
+            Answer(true, true)
+        );
+        assert_eq!(
+            decide("run-remember", 1_000, 2_000, false, false),
+            Answer(true, false)
+        );
+        assert_eq!(
+            decide("decline", 1_000, 2_000, true, true),
+            Answer(false, false)
+        );
+        assert_eq!(decide("other", 1_000, 2_000, true, true), Ignore);
     }
 
     /// PROPOSAL §4.5: one or two plugins by name, more by count.

@@ -667,7 +667,14 @@ impl Host {
                         "installed revision changed",
                     ));
                 }
+                let new_source = source_changes(&before, &source);
                 let (instance, fresh) = self.install_instance(&id, &before, source, replace)?;
+                // A replace from another source is another plugin to the
+                // user: "Don't ask again" for the old one does not carry over
+                // (an update from the same source keeps it).
+                if new_source {
+                    crate::capabilities::forget_command_trust(self, &id);
+                }
                 // Garbage is collected off the UI thread, not here. Staging
                 // reuses an identical directory still in the library, so it
                 // waits while the cleanup thread removes that one.
@@ -1219,6 +1226,15 @@ impl Host {
             Ok(running) => self.packages.cleanup = Some(running),
             Err(error) => diag!("package library: {error}"),
         }
+    }
+    /// Whether `id` may still be trusted when the approval sheet is
+    /// answered: installed and not a built-in, or loaded for development.
+    /// One uninstalled while the sheet was open is not trusted again.
+    pub(crate) fn trustable_plugin(&self, id: &str) -> bool {
+        trustable(
+            &self.packages.store.get(id),
+            self.development.contains_key(id),
+        )
     }
     /// A running built-in plugin: shipped with the player and running from
     /// the installation (not a development load of the same id).
@@ -2790,6 +2806,27 @@ mod cleanup {
     }
 }
 
+/// Whether the plugin of the catalog record `installed` may still be
+/// trusted ("Don't ask again", Ask Vestra UX step 4): installed and not a
+/// built-in, or a development load (`development`).
+fn trustable(installed: &package_store::Installed, development: bool) -> bool {
+    development
+        || (installed.current.is_some()
+            && !installed
+                .instance
+                .as_ref()
+                .is_some_and(|instance| instance.builtin))
+}
+
+/// Whether installing from `source` replaces an installed instance of
+/// another source (`replace`), not an update from the same one.
+fn source_changes(before: &package_store::Installed, source: &Source) -> bool {
+    before
+        .instance
+        .as_ref()
+        .is_some_and(|current| current.source.identity() != source.identity())
+}
+
 /// Which instance an install goes into (store proposal §1.3).
 fn install_instance(
     store: &Store,
@@ -3055,6 +3092,20 @@ mod tests {
         )
         .unwrap();
         let guid = first.instance.unwrap().guid;
+        // "Don't ask again" goes with another source only (Ask Vestra UX
+        // step 4): not with an update, nor a first install.
+        assert!(!source_changes(
+            &store.get("a.b"),
+            &repo("https://one/index.json")
+        ));
+        assert!(source_changes(
+            &store.get("a.b"),
+            &repo("https://two/index.json")
+        ));
+        assert!(!source_changes(
+            &store.get("c.d"),
+            &repo("https://two/index.json")
+        ));
         let second = install(
             &mut store,
             "a.b",
@@ -3204,7 +3255,13 @@ mod tests {
             .instance
             .unwrap()
             .guid;
+        // "Don't ask again" (Ask Vestra UX step 4): an installed plugin may
+        // be trusted, one uninstalled while the sheet was open may not
+        // (unless a development load of its id runs).
+        assert!(trustable(&store.get("k"), false));
         store.uninstall("k", "rm", json!({}), true).unwrap();
+        assert!(!trustable(&store.get("k"), false));
+        assert!(trustable(&store.get("k"), true));
         let again = install(&mut store, "k", "1.0.0", Source::File, false).unwrap();
         assert_eq!(again.instance.unwrap().guid, guid);
         store.uninstall("k", "rm2", json!({}), false).unwrap();

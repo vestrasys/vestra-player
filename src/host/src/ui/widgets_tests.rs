@@ -1255,7 +1255,7 @@ export component W inherits Window {
     out property <length> cancel-x: v.cancel-x;
     out property <length> buttons-y: v.buttons-y;
     out property <bool> remember-shown: v.remember-shown;
-    out property <bool> remember-checked: v.remember-checked;
+    in-out property <bool> remember-checked;
     out property <length> remember-x: v.remember-x;
     out property <length> remember-y: v.remember-y;
     background: Theme.bg-video;
@@ -1269,6 +1269,7 @@ export component W inherits Window {
     v := ReviewSheetView {
         width: root.width; height: root.height;
         sheet: root.s;
+        remember-checked: root.remember-checked;
         action(name) => { root.last = name; }
     }
 }"#;
@@ -1438,10 +1439,11 @@ fn ctrl_enter(w: &ComponentInstance) {
     settle();
 }
 
-/// H4 (§4.3, §4.6): "Don't ask again" at the footer's left, unchecked;
-/// a click checks it and Run (or Enter) then runs and remembers; Space
-/// does not touch it; Ctrl+Enter runs and remembers; the footer keeps the
-/// palette's 44px for one line and grows when the text wraps.
+/// H4 (§4.3, §4.6): "Don't ask again" at the footer's left, drawn as the
+/// host says (it owns the box and its guard): a click asks it to toggle,
+/// Run and Enter stay `run` (the host remembers when checked); Space does
+/// nothing; Ctrl+Enter runs and remembers; the footer keeps the palette's
+/// 44px for one line and grows when the text wraps.
 #[test]
 fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
     let w = build(SHEET, 1100., 600.);
@@ -1478,25 +1480,26 @@ fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
     ctrl_enter(&w);
     assert_eq!(string(&w, "last"), "run-remember");
     // Space is not the checkbox's (the keys stay on the sheet).
+    w.set_property("last", Value::String("".into())).unwrap();
     key(&w, Key::Space);
-    assert!(!boolean(&w, "remember-checked"));
+    assert_eq!(string(&w, "last"), "");
     assert!(boolean(&w, "keys"));
+    // A click asks the host (which owns the box and its guard); the view
+    // does not check it by itself.
     click(&w, bx as f32, by as f32);
-    assert!(boolean(&w, "remember-checked"));
+    assert_eq!(string(&w, "last"), "toggle-remember");
+    assert!(!boolean(&w, "remember-checked"));
     assert!(
         boolean(&w, "keys"),
         "the click leaves the keys on the sheet"
     );
+    // Checked by the host: Enter and Run stay "run" (the host remembers).
+    w.set_property("remember-checked", true.into()).unwrap();
+    settle();
     key(&w, Key::Return);
-    assert_eq!(string(&w, "last"), "run-remember");
-    click(
-        &w,
-        number(&w, "run-x") as f32,
-        number(&w, "buttons-y") as f32,
-    );
-    assert_eq!(string(&w, "last"), "run-remember");
-    // Unchecked again: Run is plain.
+    assert_eq!(string(&w, "last"), "run");
     click(&w, bx as f32, by as f32);
+    assert_eq!(string(&w, "last"), "toggle-remember");
     click(
         &w,
         number(&w, "run-x") as f32,
@@ -1621,7 +1624,7 @@ fn render_review_sheet_states() {
     ]
     .into();
     // (name, request, steps, "Don't ask again" plugins as the host offers
-    // them: none with a destructive step; checked by a click).
+    // them: none with a destructive step; checked as the host sets it).
     type State<'a> = (
         &'a str,
         &'a str,
@@ -1705,15 +1708,8 @@ fn render_review_sheet_states() {
                 .unwrap();
             settle();
             if *checked {
-                click(
-                    &w,
-                    number(&w, "remember-x") as f32,
-                    number(&w, "remember-y") as f32,
-                );
-                // Away from the box, so it is drawn without hover.
-                w.window().dispatch_event(WindowEvent::PointerMoved {
-                    position: LogicalPosition::new(4., 390.),
-                });
+                // As the host sets it after a click.
+                w.set_property("remember-checked", true.into()).unwrap();
                 settle();
             }
             render(&w, scale, width, height)

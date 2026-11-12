@@ -168,13 +168,18 @@ plugins to remember (`r04-remember-two`), Close, eight steps; both palettes, 2×
 Design: PROPOSAL §3.2 B3, §4.3, §4.5, §4.6, §4.7, §5.1 H4 (step 4; user rulings of 2026-11-12: per
 plugin, kept until reset by a palette command; never offered with a destructive step).
 `capabilities/commands_run.rs` (`Judged`, `trust_offer`, `trust_plugins`, `ask_again`,
-`forget_trust`), `ui/ui_state.rs` (`trustedPlugins`), `host/review_sheet.rs` (`remember_text`),
-`host/actions.rs` (`ASK_AGAIN`), `packages/package_manager.rs` (`uninstall`).
+`forget_trust`), `ui/ui_state.rs` (`trustedPlugins`), `host/review_sheet.rs`
+(`remember_text`, `decide`), `host/actions.rs` (`ASK_AGAIN`), `packages/package_manager.rs`
+(`uninstall`, `source_changes`, `trustable_plugin`).
 
 - **What it trusts**: per caller (the `commands.run` caller's manifest id), the plugins (manifest
   ids) that are not built in whose steps on the sheet ask only for that reason, in plan order, each
-  once. The host keeps that list with the waiting run (`ConfirmedRun::remember`); the view only says
-  whether the box was checked, so it cannot widen it.
+  once. The host keeps that list with the waiting run (`ConfirmedRun::remember`) and owns the box
+  (`Review::remember_checked`, unchecked for every sheet): a click asks it to toggle
+  (`toggle-remember`) and, like every other input, counts for nothing within the 0.5 s guard
+  (`review_sheet::decide`). The view cannot widen the list. At the answer the list is resolved
+  again: only plugins still installed (not built in) or loaded for development are written, so one
+  uninstalled while the sheet was open is not trusted again.
 - **When it is offered**: when the list is not empty and no step of the plan always asks
   (`always_asks`: a command marked `destructive`, the player's Close and Quit, anything under the
   built-in `@settings` and `@reset` menus), trusted plugin or not (user ruling 3 of 2026-11-12). A
@@ -184,13 +189,17 @@ plugin, kept until reset by a palette command; never offered with a destructive 
   (a model sees no "asks the user first" for them). Built-in rules are unchanged; trust never applies
   to a built-in (nothing to trust).
 - **Where it lives**: `ui-state.json` `trustedPlugins` (README §ui-state; headless runs keep it in
-  memory only), written 1 s after Run and on exit, so it survives restarts. At most 256 plugins per
+  memory only), written 1 s after Run and on exit, so it survives restarts; written at once when trust
+  is removed (Ask Again, an uninstall, a replace), so a crash cannot bring it back. At most 256 plugins per
   caller (the oldest go first); an unreadable entry is dropped alone.
 - **How it ends**: `Command Palette: Ask Again Before Plugin Commands` (`host/ask-again`, palette
   only, no menu path or default key; also runnable through `commands.run`, harmlessly) clears every
   caller's list and shows the OSD line "Plugin commands will ask again". Uninstalling a plugin
   (`packages.uninstall`, with or without its data) removes it from every list, and its own list as a
-  caller; an update keeps it (PROPOSAL §4.7). Disabling keeps it.
+  caller. Installing it from another source (`packages.install` with `replace: true`, a new source
+  identity: another plugin to the user) removes it too, at the request; an update from the same
+  source keeps it (PROPOSAL §4.7), and so does disabling. Trust is by manifest id: a development
+  load (`--plugin DIR`) of a trusted id inherits it.
 - **Host log**: `commands.run: <caller> no longer asks before the commands of <id>, …` and
   `commands.run: plugin commands ask again` (manifest ids only).
 

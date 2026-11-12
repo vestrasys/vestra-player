@@ -13,7 +13,8 @@
 // a held-down key's repeats count for nothing (the host also ignores input
 // in the first 0.5 s). Space does not toggle the checkbox (it keeps the
 // focus off it: a press of Space meant for pause must not check it); a
-// click does, and the box starts unchecked each time the sheet shows.
+// click asks the host to (it owns the state, starts it unchecked for each
+// sheet and ignores the click within the 0.5 s guard).
 // Presses outside it reach the menu layer's dismiss (Don't Run). Rows:
 // always SLOTS (8) of them, unused ones hidden by `visible` (the no-churn
 // rule in menu-view.slint).
@@ -96,8 +97,12 @@ export component ReviewSheetView inherits Rectangle {
     // The panel's top edge: 16px, below the fullscreen title strip while
     // it is out.
     in property <length> top: 16px;
-    // `run`, `run-remember` (Run with "Don't ask again" checked, or
-    // Ctrl+Enter with the checkbox there) or `decline`.
+    // "Don't ask again" is checked: the host's state (`toggle-remember`
+    // asks it to change; it starts unchecked for every sheet).
+    in property <bool> remember-checked;
+    // `run` (the host remembers when its box is checked), `run-remember`
+    // (Ctrl+Enter with the checkbox there), `toggle-remember` (a click on
+    // the checkbox) or `decline`.
     callback action(string);
     // Tests read the panel's place and height.
     out property <length> panel-x: panel.x;
@@ -111,15 +116,14 @@ export component ReviewSheetView inherits Rectangle {
     out property <length> buttons-y: run.absolute-position.y - root.absolute-position.y + run.height / 2;
     // The checkbox: shown, checked, its box's centre in the view.
     out property <bool> remember-shown: remember.visible;
-    out property <bool> remember-checked: remember.checked;
     out property <length> remember-x: remember.absolute-position.x - root.absolute-position.x + 6px;
     out property <length> remember-y: remember.absolute-position.y - root.absolute-position.y + remember.height / 2;
 
     init => { keys.focus(); }
 
-    // Run, remembering when the box is checked (and offered).
+    // Run: the host remembers when its box is checked (and offered).
     function run() {
-        root.action(root.sheet.remember != "" && remember.checked ? "run-remember" : "run");
+        root.action("run");
     }
 
     // 6px, the 32px request box, 6px; the 28px question; the rows; the
@@ -318,10 +322,15 @@ export component ReviewSheetView inherits Rectangle {
                 alignment: center;
                 horizontal-stretch: 1;
                 min-width: 0px;
+                // The host owns the state: a click asks it to toggle
+                // (`toggle-remember`), which it ignores within the 0.5 s
+                // guard, as any other input.
                 remember := Check {
                     visible: root.sheet.remember != "";
                     text: root.sheet.remember;
-                    checked: false;
+                    self-toggle: false;
+                    checked: root.remember-checked;
+                    toggled(_) => { root.action("toggle-remember"); }
                 }
             }
             VerticalLayout {
