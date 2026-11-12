@@ -18,14 +18,15 @@ import path from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { dataDirectory, server, startAi } from "./fixture.mjs";
+import { guard, shown, track } from "./lead-status.mjs";
+
+guard(test);
 
 const plan = (...steps) => ({ toolCalls: [{ name: "run_steps", args: { steps } }] });
 const command = (id) => ({ kind: "command", id });
 const CONTINUE = { confirmed: true, checked: false };
 const DONT_RUN = { confirmed: false, checked: false };
 
-/** A text of the lead row (wire form) as the palette shows it. */
-const shown = (host, value) => (typeof value === "string" ? host.translate(value) : host.translate(value.$vestraText, value.args ?? []));
 /**
  * The end states the plugin sent (`palette.lead.set` with `status.state`
  * done, failed or note: the player's status strip shows each once), as
@@ -83,6 +84,7 @@ function table(host, rows) {
 async function ready(reply, options = {}) {
   const mock = await server(reply);
   const ai = await startAi({ compat: mock.url, builtin: true, ...options });
+  track(ai.host);
   ai.host.openElsewhere("/media/Secret Holiday Film.mkv");
   ai.host.setSource({ duration: 600, position: 30, paused: false });
   await ai.host.settle();

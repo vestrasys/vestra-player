@@ -908,7 +908,11 @@ export default async function activate(plugin: Plugin) {
       const p = provider();
       return p.api ? `${p.id} ${settings.value.baseUrls[p.id] ?? ""}` : p.id;
     },
-    providerName: () => entry(provider()),
+    // As a status line (askvestra/status.ts): the custom entries are templates the player translates.
+    providerName: () => {
+      const x = provider();
+      return x.id === "custom-openai" ? { source: "Custom · OpenAI format" } : x.id === "custom-anthropic" ? { source: "Custom · Anthropic format" } : x.label;
+    },
     openSettings: () => plugin.settings.show("byok"),
     openWindow,
   });

@@ -12,17 +12,15 @@ import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { RUNS_PER_SECOND, pace } from "../askvestra/ask.ts";
 import { KEY, server, startAi } from "./fixture.mjs";
+import { guard, shown, track } from "./lead-status.mjs";
+
+guard(test);
 
 const plan = (...steps) => ({ toolCalls: [{ name: "run_steps", args: { steps } }] });
 const command = (id) => ({ kind: "command", id });
 const MUTE = command("host/mute");
 const CONTINUE = { confirmed: true, checked: false };
 const CANCEL = { confirmed: false, checked: false };
-/** A text of the lead row (wire form: a string or { $vestraText, args }) as the palette shows it. */
-const shown = (host, value) => {
-  if (value === undefined || value === null) return value;
-  return typeof value === "string" ? host.translate(value) : host.translate(value.$vestraText, value.args ?? []);
-};
 const leadText = (host, field) => shown(host, host.paletteLead?.[field]);
 /**
  * The end states the plugin sent (`palette.lead.set` with `status.state`
@@ -44,6 +42,7 @@ const byCall = (...replies) => {
 async function ready(reply, options = {}) {
   const mock = await server(reply);
   const ai = await startAi({ compat: mock.url, builtin: true, ...options });
+  track(ai.host);
   ai.host.openElsewhere("/media/Secret Holiday Film.mkv");
   ai.host.setSource({ duration: 600, position: 30, paused: false });
   await ai.host.settle();
@@ -243,7 +242,11 @@ test("a model error: a note names the provider and the message", async (t) => {
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("mute");
   await ai.until(() => ai.end()?.startsWith("note: Could not reach"), "error");
-  assert.match(ai.end(), /^note: Could not reach Custom · OpenAI format: .*Incorrect API key provided/);
+  // The provider message is cut to the player's 80 characters (it was refused whole: the user saw nothing).
+  assert.match(ai.end(), /^note: Could not reach Custom · OpenAI format: \S/);
+  const [text] = ai.ends().map((line) => line.slice("note: ".length));
+  assert.ok([...text].length <= 80, text);
+  assert.ok(text.includes("Incorrect API key provided") || text.endsWith("…"), text);
   assert.deepEqual(host.sent("osd.show"), []);
   assert.ok(!host.coreRuns.includes("mute"));
   await ai.until(() => !host.paletteLead.status, "status cleared");
@@ -255,6 +258,26 @@ test("the model answers without steps: its sentence is shown", async (t) => {
   ai.host.dialogAnswers.push(CONTINUE);
   await ai.host.runPaletteLead("warmer");
   await ai.until(() => ai.end() === "note: No command changes the picture's warmth.", "refusal");
+});
+
+test("a long sentence of the model is cut to the player's 80 characters, in the interface language too", async (t) => {
+  for (const locale of ["en", "zh-Hans"]) {
+    const sentence = `${"没有命令可以把音量设为某个具体数值。".repeat(4)} ${"No command sets an exact volume. ".repeat(4)}`;
+    const ai = await ready(() => ({ text: [sentence] }), { locale });
+    try {
+      ai.host.dialogAnswers.push(CONTINUE);
+      await ai.host.runPaletteLead("volume 37");
+      await ai.until(() => !!ai.end(), `${locale}: sentence`);
+      const text = ai.end().slice("note: ".length);
+      assert.equal([...text].length, 80, text);
+      assert.ok(text.endsWith("…"));
+      assert.ok(sentence.startsWith(text.slice(0, -1)));
+      // Accepted by the TestHost as well: nothing was logged as refused (guard), and the row is idle again.
+      await ai.until(() => !ai.host.paletteLead.status, `${locale}: idle`);
+    } finally {
+      await ai.stop();
+    }
+  }
 });
 
 test("a plan the plugin refuses runs no step: another step kind (the old speed step), too many steps", async (t) => {
@@ -280,7 +303,9 @@ test("a plan of the most steps runs them all within the player's rate (4 a secon
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("up and down four times");
   await ai.until(() => !host.paletteLead.status && !!ai.end(), "result", 30_000);
-  assert.match(ai.end(), /^done: Done · /);
+  // Eight labels do not fit the player's 80 characters: the list ends with a cut label.
+  assert.match(ai.end(), /^done: Done · Vestra Player: .*…$/);
+  assert.ok([...ai.end().slice("done: ".length)].length <= 80, ai.end());
   const ran = host.coreRuns.filter((run) => run === "volume-up" || run === "volume-down");
   assert.equal(ran.length, 8);
   // The player's own lines, one per step, in order (the TestHost records them in `osd`; the player draws them in the strip).
