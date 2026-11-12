@@ -109,7 +109,10 @@ The palette with a lead (nothing changes without one):
   status text and note instead (`command_palette::lead_shows_status`). The event's `status`
   follows the same rule. Shift+Enter on the row clears the field after sending (`run_lead`;
   PROPOSAL F1, Ask Vestra UX H6), so the row shows the status of the request just sent and a
-  second Enter stops it instead of sending it again; typing another query is another request. It
+  second Enter stops it instead of sending it again: the cursor stays on the lead row, and until
+  that request's status has come and gone (or something is typed, or it is stopped) Enter there
+  with nothing typed sends `status: true`, also before the status arrives (a parked holder takes
+  a moment to wake; `PaletteState::sent`). Typing another query is another request. It
   takes one of the 12 slots; `Results: N` counts commands only; "No matching commands" moves to
   row 1; the field shows `placeholder`.
 - The cursor (`command_palette::aim`): on the first command the query names (its title or full
@@ -118,7 +121,8 @@ The palette with a lead (nothing changes without one):
   Play/Pause), else on the lead. With an empty query it is on the first command (the most recent,
   so Enter repeats the last command as before), or on the lead while it shows a status. It is
   placed again after opening, typing, when the lead comes or goes, and when its status comes or
-  goes while nothing is typed (the status arrives after Shift+Enter cleared the field).
+  goes while nothing is typed (the status arrives after Shift+Enter cleared the field); not by
+  Shift+Enter itself, which leaves it on the lead row.
 - `PaletteState::cursor` counts the lead as row 0; `Run(slot)` from the view uses the same slots
   (the lead's is 0), so the command rows' slot is `i + 1`.
 - The bottom bar's palette cell shows `search-ai` (a speech bubble with the AI sparkle breaking out at its
@@ -139,7 +143,8 @@ TestHost does. A working status is the row's status (above) and the strip's text
 row and out of the recorded call (`Lead::sent`), so a parked or restarted holder is never shown it
 again, and the row goes back to its usual form at once. The same end status sent again by the next
 `set` (an update of other fields: the SDK's `update` sends them all) is not shown again
-(`Lead::ended`). The holder needs no timer and may call `palette.lead.done` right away.
+(`Lead::ended`); a new request (a new ticket) forgets it, so the same failure twice in a row shows
+twice. The holder needs no timer and may call `palette.lead.done` right away.
 
 The strip is where the palette was: centred, y 16 (below the fullscreen title strip while it is
 out), above the video, the OSD and the title strip, below the menu layer; the palette's plate
