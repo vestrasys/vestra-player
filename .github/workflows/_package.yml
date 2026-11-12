@@ -116,7 +116,8 @@ jobs:
       # them): the host input hash, host version, the commit the binary was
       # built from and its SHA-256 inside the archive, so a later release
       # with the same inputs can reuse it.
-      # TODO(S7 signing): record from the signed archive.
+      # release.yml's sign-macos rewrites the macOS entry for the signed
+      # archive. TODO(S7 signing): the same for Windows once it is signed.
       - name: host.json entry
         timeout-minutes: 5
         env:
