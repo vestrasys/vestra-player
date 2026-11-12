@@ -191,6 +191,31 @@ Kept so that old commits and comments make sense:
 
 ## Current round
 
+### Loop: technical follow-ups (started 2026-11-12 night)
+
+The user handed the remaining technical follow-ups to an unattended loop ([agentic-workflow-loop.md](../../../agentic-workflow/agentic-workflow-loop.md)). **Done when** T1–T6 are merged and released (or each remaining item is recorded as waiting on the user). T7 and T8 are not part of the done criteria.
+
+**Authority (user rulings 2026-11-12):** bug fixes, patch releases of the player, SDK and store plugins, and merges go ahead without asking ("0.8.1完成后可以直接发版", "以后这种command不要问我"). Still asked: new visible UI not already approved, real trade-offs, paid services, workflow-file edits, anything outward-facing beyond releases (no upstream issue to wgpu/AMD: user, 11-12). Long GUI work runs in a background agent with the screen-free.flag protocol; the user may be at the machine.
+
+**Released today (11-12):** player 0.8.1 (#307: Ask Vestra UX steps 1-5, motion smoothing host, d3dcompiler_47 pinned at D3D12 window start) and 0.8.2 (#309: confirmations follow the window the user acted in, #308); SDK 1.7.19 (video.motion per vendor engine); store: Clip Export 0.5.1, 0.6.0, 0.6.1 (fresh-install work folder), 0.6.2 (Highlights step 2), AMD Motion Smoothing 0.1.0 (#56, engine "amd"; NVIDIA later as its own plugin), VestraBili retired (#57: delisted without revocation). Release titles no longer say "(unsigned test build)" (#310; older titles edited). Plugins-repo code-scanning alerts dismissed with reasons (0 open). Download page and promo v9 rebuilt (page branch feature-themes, not deployed); music bed = the user's local-model take, commercial use confirmed by the user; tagline left to the user. Windows signing route: SignPath Foundation (needs a public repository and CI-built releases; user to decide).
+
+| # | Item | Role | State |
+| --- | --- | --- | --- |
+| T1 | Records of 11-12 (this entry) | Coordinator | Done |
+| T2 | Small fixes → player 0.8.3: Subtitles tab Reset / choosing "Subtitles Off" shows "The player cannot load this subtitle."; motion smoothing does not yield on the run's first AI Upscaling request; SDK `MotionState.sourceFps` doc says "the video's frame rate" but it is the converter's input rate (SDK doc patch, released with the next player release) | API maintainer | Pending |
+| T3 | Disk cleanup: merged worktrees and target dirs under C:estra, old GUI test profiles, research media (2 h test file 7.3 GB); check each is merged and clean first (memory: worktree cleanup) | Coordinator | Pending |
+| T4 | Clip Export 0.6.3: Highlights F6 (Show may scan a newly opened file), F8 (pictures only for visible rows, design §11), GIF palette-pass progress, Collection intermediate without audio when the export has none, Korean part-count wording, dev-load file references | Plugin author | Pending |
+| T5 | Ask Vestra follow-ups (two-line end state, parked holder sweeping, OS animations off, stopped icon dim, key-cap slot, sheet checkbox after its remember list emptied, minimized window hint for a waiting confirm, extreme minimum window, scrollbar overlap, consent row with a second ticket, palette "Planning…" row text) plus GUI checks of confirmations in Options / floating sidebar / busy bring-into-view | API maintainer, workshop author; GUI agent | Pending |
+| T6 | Highlights step 3 (sound model CED-mini int8, research C:estraesearchaudio-tagger) then step 4 (scene-cut snapping); design C:estradesignclipexport-highlights | Plugin author | Pending |
+| T7 | macOS build check (uncompiled macOS code in #306/#308) | Infrastructure | Waits on the user's macOS release decision |
+| T8 | NVIDIA motion smoothing plugin (needs libmpv on newer FFmpeg) | API maintainer | Later |
+
+#### Loop log (newest first)
+
+- 11-12 night: loop started; T1 done.
+
+### Earlier round (2026-11-07, menu redesign; to be folded)
+
 In progress (2026-11-07). If a loop is used, the procedure is [agentic-workflow-loop.md](../../../agentic-workflow/agentic-workflow-loop.md).
 
 **Goal:** a calmer UI after a week of real use: task panels in a new adjust slot, a host-owned bottom button strip, a command palette, visible shortcuts and a slim right-click menu. The in-flight fixes go first. After that come the SDK review, the download page touch-ups and the launch video, in that order. **Done when** B6 is merged and released, and C and D are reviewed by the user. E is not part of the done criteria.
