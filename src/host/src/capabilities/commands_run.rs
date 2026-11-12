@@ -335,6 +335,15 @@ fn perform(
         host.plugin_id(caller),
         item.global
     );
+    // In the host log too: what a plugin ran on the user's behalf, for a bug
+    // report from an installed build. The ids only: a label may name the
+    // user's file (a Recently Played row), and the host log never does.
+    let step = step.map_or_else(String::new, |(step, of)| format!(" (step {step}/{of})"));
+    crate::diag::log_only(&format!(
+        "commands.run: {} ran {}{step}",
+        host.plugin_id(caller),
+        item.global
+    ));
     host.show_osd(&line);
     host.execute_command(item.owner, &item.id)
 }

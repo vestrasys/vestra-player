@@ -1,5 +1,10 @@
 # Changelog
 
+## 2.2.39
+
+- Steps are paced to the player's rate for one ticket (4 `commands.run` a second): steps 1–4 run at once, each later step waits until one second after the player answered the run four steps before it (`pace` in `askvestra/ask.ts`). Before, a plan of 5 to 8 steps of commands that answer at once failed at step 5 with "Step 5 failed: Too many commands at once" (reproduced with the TestHost, which applies the player's limits). Stop during that wait ends the request at once.
+- The row says "Vestra is working · Planning…" from the moment a request arrives, also while it waits for the keychain or the consent dialog, and Enter on it (or Stop) then ends that request before anything is sent. With the player's row rule from the same change (`command_palette::lead_shows_status`: the status also shows while the query is still the one sent with Shift+Enter), a second Enter after Shift+Enter stops the request instead of sending it again. When the player refuses the consent dialog (`busy`: another native dialog is open), the row and `askvestra.working` go back to idle. Tests: an 8-step plan runs all steps, `pace` never waits less than the second (a timer may fire early, so it reads the time again), Stop during the wait, the row working from the first moment and Enter on it stopping, the refused consent dialog.
+
 ## 2.2.38
 
 - The vendored SDK is 1.7.14 (`npm run vendor:sdk`), the version the player now uses (1.7.14 syncs the built-in table after Ask Vestra became commands-only): the Tools menu (`@tools`), the built-in tables of the short context menu and the Slint copy with the new palette icon. Who must change: nobody.

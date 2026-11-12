@@ -514,6 +514,16 @@ pub fn named_by(item: &Item, query: &str) -> bool {
     })
 }
 
+/// Whether the lead's row shows its status (`palette.lead.set`'s
+/// `status`, `has_status`) instead of "title: query": while the query is
+/// empty, and while it is still the query the row sent with the palette
+/// kept open (Shift+Enter, `sent`; typing ends that). The status is then
+/// about that very request, so Enter on the row reaches the holder as
+/// `status` (Enter stops) rather than as the same request again.
+pub fn lead_shows_status(has_status: bool, query: &str, sent: Option<&str>) -> bool {
+    has_status && (query.trim().is_empty() || sent == Some(query))
+}
+
 /// Where the cursor starts in a palette whose first row is a lead
 /// (`palette.lead`): on the first command the query names (1 + its place
 /// among `hits`), else on the lead (0). With an empty query: on the lead
@@ -910,6 +920,22 @@ mod tests {
         assert_eq!(aim(&items, &[], "", true, false), 0);
         assert!(named_by(&items[hits[0].index], "Toggle Fullscreen"));
         assert!(!named_by(&items[hits[0].index], ""));
+    }
+
+    #[test]
+    fn the_lead_shows_its_status_for_an_empty_query_or_the_request_it_sent() {
+        // No status: never.
+        assert!(!lead_shows_status(false, "", None));
+        assert!(!lead_shows_status(false, "mute", Some("mute")));
+        // An empty query (the palette opened while a request runs).
+        assert!(lead_shows_status(true, "", None));
+        assert!(lead_shows_status(true, "  ", Some("mute")));
+        // Shift+Enter kept the palette open with the query: a second Enter
+        // stops that request instead of sending it again.
+        assert!(lead_shows_status(true, "mute", Some("mute")));
+        // Another query is another request (it replaces the running one).
+        assert!(!lead_shows_status(true, "mute", None));
+        assert!(!lead_shows_status(true, "mute twice", Some("mute")));
     }
 
     #[test]

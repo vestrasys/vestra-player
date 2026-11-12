@@ -9,6 +9,7 @@ import os from "node:os";
 import test from "node:test";
 import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
+import { RUNS_PER_SECOND, pace } from "../askvestra/ask.ts";
 import { KEY, server, startAi } from "./fixture.mjs";
 
 const plan = (...steps) => ({ toolCalls: [{ name: "run_steps", args: { steps } }] });
@@ -240,6 +241,97 @@ test("a plan the plugin refuses runs no step: another step kind (the old speed s
   await host.runPaletteLead("mute nine times");
   await ai.until(() => ai.osd() === "Vestra · The plan has more than 8 steps", "too many");
   assert.ok(!host.coreRuns.includes("mute"));
+});
+
+test("a plan of the most steps runs them all within the player's rate (4 a second per ticket)", async (t) => {
+  const steps = Array.from({ length: 8 }, (_, i) => command(i % 2 ? "host/volume-down" : "host/volume-up"));
+  const ai = await ready(() => plan(...steps));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  host.dialogAnswers.push(CONTINUE);
+  await host.runPaletteLead("up and down four times");
+  await ai.until(() => !host.paletteLead.status && host.osd.at(-1)?.startsWith("Vestra · "), "result", 30_000);
+  assert.doesNotMatch(ai.osd(), /failed/);
+  const ran = host.coreRuns.filter((run) => run === "volume-up" || run === "volume-down");
+  assert.equal(ran.length, 8);
+  // The player's own lines, one per step, in order.
+  const lines = host.osd.filter((line) => / · \d\/8 · /.test(line));
+  assert.deepEqual(
+    lines.map((line) => line.match(/ · (\d)\/8 · /)[1]),
+    ["1", "2", "3", "4", "5", "6", "7", "8"],
+  );
+});
+
+test("the row says Vestra is working from the moment it is sent; Enter on it then stops, nothing is sent again", async (t) => {
+  // Shift+Enter keeps the palette open on the request; the player shows the
+  // row's status for it (host command_palette::lead_shows_status) as soon as
+  // the plugin sets one, so the plugin sets it before any wait (here the consent).
+  const ai = await ready(() => plan(MUTE));
+  t.after(() => ai.stop());
+  const { host, mock } = ai;
+  let answer;
+  const answered = new Promise((resolve) => (answer = resolve));
+  host.handle("dialogs.confirm", async () => {
+    await answered;
+    return CONTINUE;
+  });
+  void host.runPaletteLead("mute", { keep: true });
+  await ai.until(() => !!host.paletteLead.status, "working");
+  assert.equal(shown(host, host.paletteLead.status.text), "Vestra is working · Planning…");
+  assert.equal(host.command("askvestra.working").state.busy, true);
+  assert.equal(host.command("askvestra.stop").state.enabled, true);
+  // The second Enter reaches the plugin as the status row's (not awaited:
+  // the test host's settle would wait for the consent dialog held open).
+  void host.runPaletteLead("mute", { keep: true, status: true });
+  await ai.until(() => !host.paletteLead.status, "status cleared");
+  answer();
+  await host.settle();
+  await new Promise((resolve) => setTimeout(resolve, 300));
+  assert.equal(mock.chats.length, 0, "nothing sent");
+  assert.ok(!host.coreRuns.includes("mute"));
+  assert.equal(host.command("askvestra.stop").state.enabled, false);
+});
+
+test("pace: the run after RUNS_PER_SECOND answers waits until one second after the first of them, never less", async () => {
+  const signal = new AbortController().signal;
+  const start = performance.now();
+  await pace([start, start, start], signal);
+  assert.ok(performance.now() - start < 50, "fewer than RUNS_PER_SECOND runs: no wait");
+  const answered = Array.from({ length: RUNS_PER_SECOND }, () => performance.now());
+  await pace(answered, signal);
+  assert.ok(performance.now() >= answered[0] + 1000, `waited ${performance.now() - answered[0]} ms`);
+});
+
+test("the consent dialog refused by the player (busy): the row and the busy command do not stay working", async (t) => {
+  const ai = await ready(() => plan(MUTE));
+  t.after(() => ai.stop());
+  const { host, mock } = ai;
+  host.handle("dialogs.confirm", async () => {
+    const error = new Error("a native dialog is already open");
+    error.code = "busy";
+    throw error;
+  });
+  await host.runPaletteLead("mute");
+  await ai.until(() => (host.paletteLead.status ?? null) === null, "status cleared");
+  assert.equal(host.command("askvestra.working").state.busy, false);
+  assert.equal(host.command("askvestra.stop").state.enabled, false);
+  assert.equal(mock.chats.length, 0);
+});
+
+test("Stop between steps: the paced wait ends at once", async (t) => {
+  const steps = Array.from({ length: 8 }, () => command("host/volume-up"));
+  const ai = await ready(() => plan(...steps));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  host.dialogAnswers.push(CONTINUE);
+  await host.runPaletteLead("louder eight times");
+  // Steps 1–4 run at once; step 5 waits for the ticket's rate.
+  await ai.until(() => host.coreRuns.filter((run) => run === "volume-up").length === 4, "four steps", 30_000);
+  const started = Date.now();
+  await host.command("askvestra.stop").run();
+  await ai.until(() => ai.osd() === "Vestra · Stopped", "stopped");
+  assert.ok(Date.now() - started < 900, "not after the wait");
+  assert.equal(host.coreRuns.filter((run) => run === "volume-up").length, 4);
 });
 
 test("consent: two requests while the dialog is open ask once and the latest one runs; a new Base URL asks again", async (t) => {

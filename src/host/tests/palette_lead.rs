@@ -214,11 +214,14 @@ fn expect(log: &str, text: &str) {
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
+    let logs = tempfile::tempdir().unwrap();
+    let host_log = logs.path().join("host.log");
     let log = run(
         8,
         &[
             ("VESTRA_TEST_CONFIRM", "run"),
             ("VESTRA_TEST_EXECUTE", "lead:make it faster@4000"),
+            ("VESTRA_LOG_FILE", host_log.to_str().unwrap()),
         ],
     );
     let expect = |text: &str| expect(&log, text);
@@ -237,6 +240,15 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
             && log.contains("· 1/2 ·"),
         "{log}"
     );
+    // The host log keeps what ran, by id (an installed build's stderr goes
+    // nowhere), never the label or the OSD line, which may name a file.
+    let kept = std::fs::read_to_string(&host_log).unwrap();
+    assert!(
+        kept.contains(&format!("commands.run: {ID} ran {ID}/hello (step 1/2)"))
+            && kept.contains(&format!("commands.run: {ID} ran {ID}/wipe")),
+        "{kept}"
+    );
+    assert!(!kept.contains("osd:") && !kept.contains("Hello"), "{kept}");
     // A destructive command: the host asks first (headless: VESTRA_TEST_CONFIRM).
     assert!(
         log.contains(&format!("commands.run: {ID} asks to run {ID}/wipe")),
