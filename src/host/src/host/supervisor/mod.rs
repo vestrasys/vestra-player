@@ -122,7 +122,7 @@ enum Busy {
     /// Its activation is not over (`runtime.ready`, a UI request it waits
     /// on).
     Activation,
-    /// A host dialog is open.
+    /// A host dialog is open, or a confirmation waits on the sheet.
     Dialog,
     /// A package RPC of it is in flight.
     PackageRpc,
@@ -1126,7 +1126,8 @@ impl Host {
         {
             busy.insert(Busy::Activation);
         }
-        if self.dialog_busy {
+        // A confirmation on the sheet counts as a dialog open (H5).
+        if self.dialog_busy || self.confirm_waiting() {
             busy.insert(Busy::Dialog);
         }
         if self.package_rpc_busy(&id) {

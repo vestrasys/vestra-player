@@ -8,27 +8,48 @@
 //! step asks when that is a fact (not built in; the player's Close and
 //! Quit). The caller cannot answer, skip or word it.
 //!
+//! The same sheet asks a plugin's `dialogs.confirm` raised for the main
+//! window (step 5, H5; `capabilities/ui_dialog.rs`): Ask Vestra's first-use
+//! consent, clearing the playlist or the history, removing subtitles. A
+//! confirmation is the main window's unless a tool window (a plugin's
+//! window, Options, the floating sidebar) has the focus
+//! (`platform::tool_window_focused`, the test `platform::confirm` uses to
+//! pick its dialog's owner); a tool window's stays a system dialog. It shows
+//! the caller's message, detail, checkbox and button texts; the request box
+//! only when the caller holds the palette's first row and its request is
+//! live (the consent asked while a request waits for it), and then that
+//! request ending (120 s unused, `palette.lead.done`) answers Cancel. Its
+//! checkbox is the caller's: its state is reported with either answer, and
+//! Ctrl+Enter is a plain Enter. `destructive` draws nothing (user ruling 2
+//! of 2026-11-12: no reason label; the approval sheet marks no destructive
+//! step either).
+//!
 //! - It is modal: Enter or Run runs the plan, Esc, Don't Run or a press
 //!   outside it runs nothing; keys and presses within [`GUARD_MS`] of it
 //!   showing count for nothing (a carried-over Enter), and so do held-down
 //!   repeats (the view).
+//! - One at a time, a plan's or a confirmation's: while one waits, a run
+//!   that would ask and a confirmation are refused `busy`
+//!   ([`Host::sheet_waiting`]).
 //! - It waits while a native dialog is open (`dialog_busy`), and shows again
 //!   when something else closed the menu layer (a rebuilt shell, another
-//!   menu): only an answer, the ticket's end (Don't Run) or the caller's end
-//!   removes it. It does not take the focus from another program.
-//! - The answer goes the usual way (`Event::CommandRunAnswered`).
+//!   menu): only an answer, the ticket's end (Don't Run, Cancel) or the
+//!   caller's end removes it. It does not take the focus from another
+//!   program.
+//! - A plan's answer goes the usual way (`Event::CommandRunAnswered`); a
+//!   confirmation's is the reply to `dialogs.confirm`.
 //! - `"Don't ask again for <plugin>"` (step 4, H4) sits at the footer's left
 //!   when the plan's steps that ask include some only because their plugin
 //!   is not built in and no step is destructive (user ruling 3 of
 //!   2026-11-12); Run with it checked, or Ctrl+Enter, runs and remembers.
-//!   The host owns the box (`Review::remember_checked`, unchecked for every
-//!   sheet): a click asks it to toggle and counts for nothing within the
-//!   guard, as every other input ([`decide`]). What is remembered is the
-//!   host's list (`ConfirmedRun::remember`).
+//!   The host owns the box (`Review::checked`, unchecked for every sheet):
+//!   a click asks it to toggle and counts for nothing within the guard, as
+//!   every other input ([`decide`]). What is remembered is the host's list
+//!   (`ConfirmedRun::remember`).
 //!
 //! doc/architecture/palette-lead.md §2.1.
 use super::*;
-use crate::ui::command_palette;
+use crate::ui::{command_palette, confirm};
 
 /// Input within this long of the sheet showing is ignored (Chromium's
 /// rule for security-sensitive UI; PROPOSAL §4.3).
@@ -52,20 +73,49 @@ pub(crate) struct Step {
     pub(crate) builtin: bool,
 }
 
+/// What a sheet asks about.
+pub(crate) enum Asks {
+    /// A `commands.run` plan on `ticket`, minted for the request `query`.
+    Run {
+        ticket: String,
+        query: String,
+        steps: Vec<Step>,
+    },
+    /// A `dialogs.confirm` raised for the main window; `request`: the
+    /// caller's live ticket and its request, when it holds the lead.
+    Confirm {
+        options: confirm::Options,
+        request: Option<(String, String)>,
+    },
+}
+
 /// A sheet waiting for the user's answer.
 pub(crate) struct Review {
-    /// The waiting `commands.run`'s reply (`CommandRuns::confirming`).
+    /// The waiting call's reply (a run's: `CommandRuns::confirming`).
     pub(crate) reply: Reply,
-    pub(crate) ticket: String,
-    /// The request the ticket was minted for.
-    pub(crate) query: String,
-    pub(crate) steps: Vec<Step>,
-    /// The "Don't ask again" checkbox's text; empty: no checkbox.
-    pub(crate) remember: String,
+    pub(crate) asks: Asks,
+    /// The footer's checkbox text: "Don't ask again" (a plan) or the
+    /// caller's (a confirmation); empty: no checkbox.
+    pub(crate) checkbox: String,
     /// The box is checked (the host's state; unchecked for every sheet).
-    pub(crate) remember_checked: bool,
+    pub(crate) checked: bool,
     /// When it last showed (`Host::now_ms`); `None` while it waits to show.
     pub(crate) shown_at: Option<u64>,
+}
+
+impl Review {
+    /// The ticket whose end ends the sheet.
+    fn ticket(&self) -> Option<&str> {
+        match &self.asks {
+            Asks::Run { ticket, .. } => Some(ticket),
+            Asks::Confirm { request, .. } => request.as_ref().map(|(ticket, _)| ticket.as_str()),
+        }
+    }
+    /// The checkbox is the caller's (a confirmation): reported with either
+    /// answer.
+    fn reports_checkbox(&self) -> bool {
+        matches!(self.asks, Asks::Confirm { .. })
+    }
 }
 
 /// What an action on the sheet does.
@@ -73,32 +123,37 @@ pub(crate) struct Review {
 pub(crate) enum Decision {
     /// Within the guard, unknown, or a toggle with no checkbox.
     Ignore,
-    /// "Don't ask again" changes.
+    /// The checkbox changes.
     Toggle,
-    /// The answer: (run, remember).
+    /// The answer: (yes, checked) — for a plan, (run, remember).
     Answer(bool, bool),
 }
 
-/// An action on a sheet shown at `shown_at`, at `now`, which offers "Don't
-/// ask again" (`offered`) and has it `checked`: `run` (remembering when
-/// checked), `run-remember` (Ctrl+Enter: remembering when offered),
-/// `toggle-remember` (a click on the box) or `decline`. Everything, the
-/// box included, counts for nothing within [`GUARD_MS`].
+/// An action on a sheet shown at `shown_at`, at `now`, with a checkbox
+/// (`offered`) that is `checked`: `run` (with the box's state),
+/// `run-remember` (Ctrl+Enter: on a plan, remembering when offered),
+/// `toggle-remember` (a click on the box) or `decline`. `reported`: the box
+/// is a confirmation's (the caller's), so its state goes with either answer
+/// and Ctrl+Enter is a plain Enter; a plan's box ("Don't ask again") counts
+/// only with Run. Everything, the box included, counts for nothing within
+/// [`GUARD_MS`].
 pub(crate) fn decide(
     action: &str,
     shown_at: u64,
     now: u64,
     offered: bool,
     checked: bool,
+    reported: bool,
 ) -> Decision {
     if !accepts(shown_at, now) {
         return Decision::Ignore;
     }
+    let checked = offered && checked;
     match action {
-        "run" => Decision::Answer(true, offered && checked),
-        "run-remember" => Decision::Answer(true, offered),
+        "run" => Decision::Answer(true, checked),
+        "run-remember" => Decision::Answer(true, if reported { checked } else { offered }),
         "toggle-remember" if offered => Decision::Toggle,
-        "decline" => Decision::Answer(false, false),
+        "decline" => Decision::Answer(false, reported && checked),
         _ => Decision::Ignore,
     }
 }
@@ -134,10 +189,11 @@ pub(crate) fn remember_text(plugins: &[String]) -> String {
     }
 }
 
-/// The `ReviewSheet` value (ui/review-sheet.slint), less its image: `title`
-/// and `icon` of the request box, the request, the steps in [`SLOTS`] rows,
-/// the note when a step's plugin is not built in, the "Don't ask again"
-/// text (empty: no checkbox), and the buttons' texts and keys.
+/// The `ReviewSheet` value (ui/review-sheet.slint) of a plan, less its
+/// image: `title` and `icon` of the request box, the request, the steps in
+/// [`SLOTS`] rows, the note when a step's plugin is not built in, the
+/// "Don't ask again" text (empty: no checkbox), and the buttons' texts and
+/// keys.
 pub(crate) fn sheet(
     title: &str,
     icon: &str,
@@ -151,8 +207,7 @@ pub(crate) fn sheet(
             Some(step) => json!({"shown": true, "number": (at + 1).to_string(),
                 "label": step.label, "plugin": step.plugin, "reason": step.reason,
                 "asks": step.asks}),
-            None => json!({"shown": false, "number": "", "label": "", "plugin": "",
-                "reason": "", "asks": false}),
+            None => empty_row(),
         })
         .collect();
     let note = if steps.iter().any(|step| !step.builtin) {
@@ -161,16 +216,52 @@ pub(crate) fn sheet(
         String::new()
     };
     json!({
+        "request": true,
         "icon": icon,
         "title": title,
         "query": query.trim(),
         "question": question(steps.len()),
+        "message": "",
+        "detail": "",
         "count": steps.len().min(SLOTS),
         "steps": rows,
         "note": note,
         "remember": remember,
         "run": i18n::tr("Run"),
         "cancel": i18n::tr("Don't Run"),
+        "run-key": keys[0],
+        "cancel-key": keys[1],
+    })
+}
+
+fn empty_row() -> Value {
+    json!({"shown": false, "number": "", "label": "", "plugin": "", "reason": "", "asks": false})
+}
+
+/// The `ReviewSheet` value of a confirmation, less its image: the request
+/// box's (title, icon, request) when there is one, the caller's message,
+/// detail, checkbox and buttons (as `confirm::parse` checked them), and
+/// the buttons' keys. No question, no steps, no note.
+pub(crate) fn confirm_sheet(
+    request: Option<(&str, &str, &str)>,
+    options: &confirm::Options,
+    keys: [&str; 2],
+) -> Value {
+    let (title, icon, query) = request.unwrap_or_default();
+    json!({
+        "request": request.is_some(),
+        "icon": icon,
+        "title": title,
+        "query": query.trim(),
+        "question": "",
+        "message": options.message,
+        "detail": options.detail.as_deref().unwrap_or_default(),
+        "count": 0,
+        "steps": (0..SLOTS).map(|_| empty_row()).collect::<Vec<_>>(),
+        "note": "",
+        "remember": options.checkbox.as_deref().unwrap_or_default(),
+        "run": options.confirm,
+        "cancel": options.cancel,
         "run-key": keys[0],
         "cancel-key": keys[1],
     })
@@ -192,24 +283,75 @@ impl Host {
     ) {
         // The count only: the labels may name the user's file.
         diag!("review sheet: asks about {} steps", steps.len());
-        // A sheet left by a caller that stopped (gone at the next tick) is
-        // replaced; a waiting one never is.
-        debug_assert!(
-            self.review
-                .as_ref()
-                .is_none_or(|old| !self.command_runs.waiting(&old.reply)),
-            "one approval sheet at a time"
-        );
-        self.review = Some(Review {
+        self.open_sheet(Review {
             reply,
-            ticket,
-            query,
-            steps,
-            remember,
-            remember_checked: false,
+            asks: Asks::Run {
+                ticket,
+                query,
+                steps,
+            },
+            checkbox: remember,
+            checked: false,
             shown_at: None,
         });
+    }
+    /// `dialogs.confirm` raised for the main window: the sheet asks it, with
+    /// the request box when `request` (the caller's live ticket and its
+    /// request) is given. One at a time: `dialogs.confirm` refuses (`busy`)
+    /// while any sheet waits.
+    pub(crate) fn open_confirm(
+        &mut self,
+        reply: Reply,
+        options: confirm::Options,
+        request: Option<(String, String)>,
+    ) {
+        // Nothing of the texts: they may name the user's file.
+        diag!(
+            "review sheet: {} asks to confirm",
+            self.plugin_id(reply.owner)
+        );
+        self.open_sheet(Review {
+            reply,
+            checkbox: options.checkbox.clone().unwrap_or_default(),
+            asks: Asks::Confirm { options, request },
+            checked: false,
+            shown_at: None,
+        });
+    }
+    fn open_sheet(&mut self, review: Review) {
+        // A sheet left by a caller that stopped (gone at the next tick) is
+        // replaced; a waiting one never is.
+        debug_assert!(!self.sheet_waiting(), "one sheet at a time");
+        self.review = Some(review);
         self.present_review();
+    }
+    /// A sheet waits for the user's answer (its caller did not stop): no
+    /// other one may ask now.
+    pub(crate) fn sheet_waiting(&self) -> bool {
+        self.review
+            .as_ref()
+            .is_some_and(|review| match review.asks {
+                Asks::Run { .. } => self.command_runs.waiting(&review.reply),
+                Asks::Confirm { .. } => true,
+            })
+    }
+    /// A confirmation waits on the sheet: as a native dialog open, its wait
+    /// keeps the plugins running (`Busy::Dialog`).
+    pub(crate) fn confirm_waiting(&self) -> bool {
+        self.review
+            .as_ref()
+            .is_some_and(|review| matches!(review.asks, Asks::Confirm { .. }))
+    }
+    /// `owner` stopped: its confirmation goes unanswered (a plan's goes
+    /// with `CommandRuns::revoke`, at the next tick).
+    pub(crate) fn drop_confirm_of(&mut self, owner: u64) {
+        if self
+            .review
+            .as_ref()
+            .is_some_and(|review| review.reply.owner == owner && review.reports_checkbox())
+        {
+            self.end_review(None);
+        }
     }
     /// The sheet is on screen in the main window.
     pub(crate) fn review_presented(&self) -> bool {
@@ -238,7 +380,8 @@ impl Host {
         };
         let owner = review.reply.owner;
         // The request box: the lead's icon and title when the caller holds
-        // it (always, today: only the lead mints tickets), else its name.
+        // it (always for a plan, today: only the lead mints tickets), else
+        // its name.
         let (title, icon) = match self.lead.as_ref().filter(|lead| lead.owner == owner) {
             Some(lead) => (lead.row.title.clone(), lead.row.icon.clone()),
             None => (
@@ -246,20 +389,34 @@ impl Host {
                 commands::ButtonIcon::Name("ai".into()),
             ),
         };
+        let icon_name = match &icon {
+            commands::ButtonIcon::Name(name) => name.as_str(),
+            commands::ButtonIcon::Image { .. } => "",
+        };
         let keys = command_palette::footer_keys();
-        let value = sheet(
-            &title,
-            match &icon {
-                commands::ButtonIcon::Name(name) => name,
-                commands::ButtonIcon::Image { .. } => "",
-            },
-            &review.query,
-            &review.steps,
-            &review.remember,
-            [&keys[0], &keys[2]],
-        );
-        let remember_checked = review.remember_checked;
-        let image = self.lead_image(owner, &icon);
+        let keys = [keys[0].as_str(), keys[2].as_str()];
+        let (value, request) = match &review.asks {
+            Asks::Run { query, steps, .. } => (
+                sheet(&title, icon_name, query, steps, &review.checkbox, keys),
+                true,
+            ),
+            Asks::Confirm { options, request } => (
+                confirm_sheet(
+                    request
+                        .as_ref()
+                        .map(|(_, query)| (title.as_str(), icon_name, query.as_str())),
+                    options,
+                    keys,
+                ),
+                request.is_some(),
+            ),
+        };
+        let checked = review.checked;
+        let image = if request {
+            self.lead_image(owner, &icon)
+        } else {
+            None
+        };
         self.menu_open = true;
         self.menu_generation = self.shell_generation;
         self.menu_mode = MenuMode::Review;
@@ -270,7 +427,7 @@ impl Host {
             }
             shell.set_property("review-sheet", value)?;
             // Set with every value: a new sheet starts unchecked.
-            shell.set_property("review-remember-checked", remember_checked.into())?;
+            shell.set_property("review-remember-checked", checked.into())?;
             shell.set_property("palette-open", false.into())?;
             shell.set_property("review-open", true.into())?;
             shell.set_property("menu-open", true.into())?;
@@ -293,19 +450,24 @@ impl Host {
         }
     }
     /// Every window tick: the sheet goes when its caller stopped, answers
-    /// Don't Run when its ticket ended (120 s unused, `palette.lead.done`),
-    /// steps aside while a native dialog is open and shows again otherwise.
+    /// Don't Run (Cancel) when its ticket ended (120 s unused,
+    /// `palette.lead.done`), steps aside while a native dialog is open and
+    /// shows again otherwise.
     pub(crate) fn review_tick(&mut self, now: u64) {
         let Some(review) = &self.review else {
             return;
         };
-        if !self.command_runs.waiting(&review.reply) {
+        if !self.sheet_waiting() {
             self.end_review(None);
             return;
         }
-        if !self.command_runs.is_live(&review.ticket, now) {
+        if review
+            .ticket()
+            .is_some_and(|ticket| !self.command_runs.is_live(ticket, now))
+        {
             diag!("review sheet: the ticket ended: Don't Run");
-            self.end_review(Some((false, false)));
+            let checked = review.reports_checkbox() && review.checked;
+            self.end_review(Some((false, checked)));
             return;
         }
         if self.dialog_busy {
@@ -329,26 +491,27 @@ impl Host {
             action,
             review.shown_at.unwrap_or(0),
             self.now_ms(),
-            !review.remember.is_empty(),
-            review.remember_checked,
+            !review.checkbox.is_empty(),
+            review.checked,
+            review.reports_checkbox(),
         );
         match decision {
             Decision::Ignore => {
                 input_trace::follow(&format!("review sheet: {action} ignored"));
             }
             Decision::Toggle => {
-                let checked = !review.remember_checked;
+                let checked = !review.checked;
                 if let Some(review) = self.review.as_mut() {
-                    review.remember_checked = checked;
+                    review.checked = checked;
                 }
                 if let Some(shell) = &self.shell {
                     let _ = shell.set_property("review-remember-checked", checked.into());
                 }
             }
-            Decision::Answer(yes, remember) => self.end_review(Some((yes, remember))),
+            Decision::Answer(yes, checked) => self.end_review(Some((yes, checked))),
         }
     }
-    /// The sheet goes, with the user's answer, (run, remember) (`None`:
+    /// The sheet goes, with the user's answer, (yes, checked) (`None`:
     /// nobody waits for it).
     fn end_review(&mut self, answer: Option<(bool, bool)>) {
         let Some(review) = self.review.take() else {
@@ -357,13 +520,22 @@ impl Host {
         if self.menu_open && self.menu_mode == MenuMode::Review {
             self.close_menu();
         }
-        if let Some((yes, remember)) = answer {
-            input_trace::follow(&format!(
-                "review sheet: answered {yes} (remember {remember})"
-            ));
-            let _ = self
-                .events
-                .send(Event::CommandRunAnswered(review.reply, yes, remember));
+        let Some((yes, checked)) = answer else {
+            return;
+        };
+        input_trace::follow(&format!("review sheet: answered {yes} (checked {checked})"));
+        match review.asks {
+            Asks::Run { .. } => {
+                let _ = self
+                    .events
+                    .send(Event::CommandRunAnswered(review.reply, yes, checked));
+            }
+            Asks::Confirm { .. } => {
+                self.respond(
+                    review.reply,
+                    Ok(json!({"confirmed": yes, "checked": checked})),
+                );
+            }
         }
     }
 }
@@ -463,35 +635,26 @@ mod tests {
     #[test]
     fn the_guard_covers_the_checkbox_and_run_follows_the_hosts_box() {
         use Decision::*;
-        assert_eq!(decide("toggle-remember", 1_000, 1_200, true, false), Ignore);
-        assert_eq!(decide("run-remember", 1_000, 1_499, true, false), Ignore);
-        assert_eq!(decide("toggle-remember", 1_000, 1_500, true, false), Toggle);
+        assert_eq!(plan("toggle-remember", 1_000, 1_200, true, false), Ignore);
+        assert_eq!(plan("run-remember", 1_000, 1_499, true, false), Ignore);
+        assert_eq!(plan("toggle-remember", 1_000, 1_500, true, false), Toggle);
+        assert_eq!(plan("toggle-remember", 1_000, 1_500, false, false), Ignore);
+        assert_eq!(plan("run", 1_000, 2_000, true, false), Answer(true, false));
+        assert_eq!(plan("run", 1_000, 2_000, true, true), Answer(true, true));
+        assert_eq!(plan("run", 1_000, 2_000, false, true), Answer(true, false));
         assert_eq!(
-            decide("toggle-remember", 1_000, 1_500, false, false),
-            Ignore
-        );
-        assert_eq!(
-            decide("run", 1_000, 2_000, true, false),
-            Answer(true, false)
-        );
-        assert_eq!(decide("run", 1_000, 2_000, true, true), Answer(true, true));
-        assert_eq!(
-            decide("run", 1_000, 2_000, false, true),
-            Answer(true, false)
-        );
-        assert_eq!(
-            decide("run-remember", 1_000, 2_000, true, false),
+            plan("run-remember", 1_000, 2_000, true, false),
             Answer(true, true)
         );
         assert_eq!(
-            decide("run-remember", 1_000, 2_000, false, false),
+            plan("run-remember", 1_000, 2_000, false, false),
             Answer(true, false)
         );
         assert_eq!(
-            decide("decline", 1_000, 2_000, true, true),
+            plan("decline", 1_000, 2_000, true, true),
             Answer(false, false)
         );
-        assert_eq!(decide("other", 1_000, 2_000, true, true), Ignore);
+        assert_eq!(plan("other", 1_000, 2_000, true, true), Ignore);
     }
 
     /// PROPOSAL §4.5: one or two plugins by name, more by count.
@@ -510,6 +673,91 @@ mod tests {
         assert_eq!(
             remember_text(&names(&["Clip Export", "Auto Frame", "VestraTube"])),
             "Don't ask again for these 3 plugins"
+        );
+    }
+
+    /// A plan's decision ([`decide`] with its own "Don't ask again").
+    fn plan(action: &str, shown_at: u64, now: u64, offered: bool, checked: bool) -> Decision {
+        decide(action, shown_at, now, offered, checked, false)
+    }
+
+    /// H5: a confirmation's box is the caller's: its state goes with
+    /// either answer, Ctrl+Enter is a plain Enter, and the guard holds.
+    #[test]
+    fn a_confirmations_checkbox_is_reported_with_either_answer() {
+        use Decision::*;
+        let confirm =
+            |action, now, offered, checked| decide(action, 1_000, now, offered, checked, true);
+        assert_eq!(confirm("run", 1_499, true, true), Ignore);
+        assert_eq!(confirm("toggle-remember", 1_200, true, false), Ignore);
+        assert_eq!(confirm("toggle-remember", 1_500, true, false), Toggle);
+        assert_eq!(confirm("toggle-remember", 1_500, false, false), Ignore);
+        assert_eq!(confirm("run", 2_000, true, true), Answer(true, true));
+        assert_eq!(confirm("run", 2_000, true, false), Answer(true, false));
+        assert_eq!(
+            confirm("run-remember", 2_000, true, false),
+            Answer(true, false)
+        );
+        assert_eq!(
+            confirm("run-remember", 2_000, true, true),
+            Answer(true, true)
+        );
+        assert_eq!(confirm("decline", 2_000, true, true), Answer(false, true));
+        assert_eq!(confirm("decline", 2_000, false, true), Answer(false, false));
+    }
+
+    /// H5: a confirmation shows the caller's texts and nothing of a plan;
+    /// the request box only with a request.
+    #[test]
+    fn a_confirmation_sheet_carries_the_callers_texts() {
+        let options = confirm::Options {
+            message: "Clear the playlist?".into(),
+            detail: Some("All 12 entries are removed.".into()),
+            confirm: "Clear".into(),
+            cancel: "Cancel".into(),
+            destructive: true,
+            checkbox: Some("Also clear the history".into()),
+        };
+        let plain = confirm_sheet(None, &options, ["Enter", "Esc"]);
+        assert_eq!(plain["request"], false);
+        assert_eq!(plain["title"], "");
+        assert_eq!(plain["message"], "Clear the playlist?");
+        assert_eq!(plain["detail"], "All 12 entries are removed.");
+        assert_eq!(plain["remember"], "Also clear the history");
+        assert_eq!(
+            (&plain["run"], &plain["cancel"]),
+            (&json!("Clear"), &json!("Cancel"))
+        );
+        assert_eq!(
+            (&plain["question"], &plain["note"], &plain["count"]),
+            (&json!(""), &json!(""), &json!(0))
+        );
+        let rows = plain["steps"].as_array().unwrap();
+        assert_eq!(rows.len(), SLOTS);
+        assert!(rows.iter().all(|row| row["shown"] == false));
+        let consent = confirm_sheet(
+            Some(("Ask Vestra", "ai", " mute ")),
+            &confirm::Options {
+                detail: None,
+                checkbox: None,
+                ..options
+            },
+            ["Enter", "Esc"],
+        );
+        assert_eq!(consent["request"], true);
+        assert_eq!(
+            (&consent["title"], &consent["query"]),
+            (&json!("Ask Vestra"), &json!("mute"))
+        );
+        assert_eq!(
+            (&consent["detail"], &consent["remember"]),
+            (&json!(""), &json!(""))
+        );
+        // A plan's sheet has no message: the view draws its question.
+        let plan = sheet("Ask Vestra", "ai", "x", &[], "", ["Enter", "Esc"]);
+        assert_eq!(
+            (&plan["request"], &plan["message"]),
+            (&json!(true), &json!(""))
         );
     }
 }

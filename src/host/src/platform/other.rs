@@ -39,6 +39,11 @@ pub fn window_attributes(
     attributes
 }
 pub fn tool_windows_tick() {}
+/// There are no system alerts here ([`confirm`]): every confirmation is
+/// the main window's, drawn in the player (`host/review_sheet.rs`).
+pub fn tool_window_focused() -> bool {
+    false
+}
 /// Not known here: the window manager decides (its focus-stealing
 /// prevention applies to `focus_own_window`).
 pub fn app_in_foreground() -> bool {

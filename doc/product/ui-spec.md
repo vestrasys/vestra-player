@@ -398,6 +398,7 @@ The rules for plugin authors are on the SDK documentation site, [Design rules �
 | UI-DLG-04 | Burst | No window: Ctrl+G captures from the frame shown; count, interval, effects and subtitles are on the Options page Video ▸ Snapshot | capture |
 | UI-DLG-05 | Export Clip | Not built in (2026-11-09): a store plugin | — |
 | UI-DLG-06 | Plugin Workshop | Only the §7.3 common requirements | workshop |
+| UI-DLG-07 | Confirmations (`dialogs.confirm`) | Raised for the main window (no tool window has the focus; Ask Vestra UX H5, 2026-11-12): drawn in the player on the approval sheet of UI-OSD-04, not as a system dialog: the request box only for Ask Vestra's first-use consent (the caller holds the palette's first row with a live request), the message (12px semibold, wraps), the detail (11px `text-list`, wraps), the caller's checkbox at the footer's left, [confirm `Enter`] [cancel `Esc`] at its right; `destructive` adds no label or colour; the checkbox's state is answered with either button; the same guard, keys and wait as UI-OSD-04; one confirmation or sheet at a time. Raised while a tool window (a plugin's window, Options, the floating sidebar) has the focus: a system dialog on that window. Details: doc/architecture/palette-lead.md §2.3 | host |
 
 ## 8. Keyboard and mouse
 
