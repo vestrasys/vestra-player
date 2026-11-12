@@ -707,38 +707,50 @@ msgstr "{step}/{of} · {command}"
 msgid "Stop"
 msgstr "停止"
 
-#. commands.run: the alert's question before a command that asks first ({command}: the command as the command palette shows it).
+#. The approval sheet's question when the plan has one command.
+#: src/host/review_sheet.rs
+#, x-machine
+msgid "Run this command?"
+msgstr "このコマンドを実行しますか？"
+
+#. The approval sheet's question when the plan has several commands ({n}: how many).
+#: src/host/review_sheet.rs
+#, x-machine
+msgid "Run these {n} commands?"
+msgstr "これら {n} 件のコマンドを実行しますか？"
+
+#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "Run “{command}”?"
-msgstr "「{command}」を実行しますか？"
+msgid "Not built in"
+msgstr "組み込みではありません"
 
-#. commands.run: who asks, under the alert's question, when the request is empty ({plugin}: the asking plugin's name).
+#. The approval sheet: why the player's Close asks.
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "{plugin} asks."
-msgstr "{plugin} からの確認です。"
+msgid "Closes the video"
+msgstr "動画を閉じます"
 
-#. commands.run: who asks and for which request, under the alert's question ({plugin}: the asking plugin's name, {request}: the text typed in the command palette).
+#. The approval sheet: why the player's Quit asks.
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "{plugin} asks, for your request “{request}”."
-msgstr "{plugin} が、リクエスト「{request}」のために確認しています。"
+msgid "Quits the player"
+msgstr "プレーヤーを終了します"
 
-#. commands.run: why the alert asks, for a command of a plugin that is not built in ({owner}: that plugin's name).
-#: src/capabilities/commands_run.rs
+#. The approval sheet's note under the steps, when a step's plugin is not built in.
+#: src/host/review_sheet.rs
 #, x-machine
-msgid "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does."
-msgstr "このコマンドは組み込みではないプラグイン {owner} のものです。プレーヤーはその動作を判断できません。"
+msgid "The player cannot tell what commands of plugins that are not built in will do."
+msgstr "プレーヤーは、組み込みではないプラグインのコマンドが何をするかを判断できません。"
 
-#. commands.run: the alert's button that runs the command.
-#: src/capabilities/commands_run.rs
+#. The approval sheet's button that runs the plan.
+#: src/host/review_sheet.rs
 #, x-machine
 msgid "Run"
 msgstr "実行"
 
-#. commands.run: the alert's button that does not run the command (and stops the request).
-#: src/capabilities/commands_run.rs
+#. The approval sheet's button that runs nothing (and stops the request).
+#: src/host/review_sheet.rs
 #, x-machine
 msgid "Don't Run"
 msgstr "実行しない"

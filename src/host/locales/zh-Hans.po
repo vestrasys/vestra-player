@@ -606,38 +606,44 @@ msgstr "{step}/{of} · {command}"
 msgid "Stop"
 msgstr "停止"
 
-#. commands.run: the alert's question before a command that asks first ({command}: the command as the command palette shows it).
-#: src/capabilities/commands_run.rs
-#, x-machine
-msgid "Run “{command}”?"
-msgstr "运行“{command}”？"
+#. The approval sheet's question when the plan has one command.
+#: src/host/review_sheet.rs
+msgid "Run this command?"
+msgstr "运行这条命令？"
 
-#. commands.run: who asks, under the alert's question, when the request is empty ({plugin}: the asking plugin's name).
-#: src/capabilities/commands_run.rs
-#, x-machine
-msgid "{plugin} asks."
-msgstr "由 {plugin} 询问。"
+#. The approval sheet's question when the plan has several commands ({n}: how many).
+#: src/host/review_sheet.rs
+msgid "Run these {n} commands?"
+msgstr "运行这 {n} 条命令？"
 
-#. commands.run: who asks and for which request, under the alert's question ({plugin}: the asking plugin's name, {request}: the text typed in the command palette).
+#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
 #: src/capabilities/commands_run.rs
-#, x-machine
-msgid "{plugin} asks, for your request “{request}”."
-msgstr "{plugin} 为你的请求“{request}”询问。"
+msgid "Not built in"
+msgstr "非内置插件"
 
-#. commands.run: why the alert asks, for a command of a plugin that is not built in ({owner}: that plugin's name).
+#. The approval sheet: why the player's Close asks.
 #: src/capabilities/commands_run.rs
-#, x-machine
-msgid "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does."
-msgstr "此命令属于非内置插件 {owner}：播放器无法判断它会做什么。"
+msgid "Closes the video"
+msgstr "会关闭当前视频"
 
-#. commands.run: the alert's button that runs the command.
+#. The approval sheet: why the player's Quit asks.
 #: src/capabilities/commands_run.rs
+msgid "Quits the player"
+msgstr "会退出播放器"
+
+#. The approval sheet's note under the steps, when a step's plugin is not built in.
+#: src/host/review_sheet.rs
+msgid "The player cannot tell what commands of plugins that are not built in will do."
+msgstr "播放器无法判断非内置插件的命令会做什么。"
+
+#. The approval sheet's button that runs the plan.
+#: src/host/review_sheet.rs
 #, x-machine
 msgid "Run"
 msgstr "运行"
 
-#. commands.run: the alert's button that does not run the command (and stops the request).
-#: src/capabilities/commands_run.rs
+#. The approval sheet's button that runs nothing (and stops the request).
+#: src/host/review_sheet.rs
 #, x-machine
 msgid "Don't Run"
 msgstr "不运行"

@@ -178,6 +178,33 @@ export declare const BAR_BUTTON_LIMITS: {
     readonly maxOrder: 999;
 };
 /**
+ * The player's limits on `commands.run` (built-in plugins only), the same
+ * values as the player's (its agreement test checks that they agree).
+ * Internal: exported from `@vestra-player/sdk/runtime` only.
+ *
+ * @internal
+ */
+export declare const COMMAND_RUN_LIMITS: {
+    /** Commands of one plan: the run and the ids of its `then` (8). */
+    readonly plan: 8;
+    /** Runs of one ticket (30). */
+    readonly perTicket: 30;
+    /** Runs a second, per ticket (4). */
+    readonly perSecond: 4;
+    /** Runs a minute, per plugin (120). */
+    readonly perMinute: 120;
+    /** A ticket ends this long after it was given or last ran a command (ms). */
+    readonly ticketIdleMs: 120000;
+};
+/**
+ * What is wrong with `commands.run`'s `then` (given, not `null`), as
+ * the player words it; `null` when nothing is. The SDK and `TestHost`
+ * check it the same way.
+ *
+ * @internal
+ */
+export declare function thenProblem(then: unknown): string | null;
+/**
  * A submenu that one of the player's built-in plugins declares: an entry of
  * {@link BUILTIN_SUBMENUS}.
  *
@@ -393,5 +420,6 @@ export declare function commandClient(transport: Transport): {
         ticket: string;
         step?: number;
         of?: number;
+        then?: string[];
     }) => Promise<CommandRunResult>;
 };

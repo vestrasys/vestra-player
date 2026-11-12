@@ -39,6 +39,13 @@ const CONSENT_SCOPE = "v2";
  * MAX_STEPS (8), so its steps are paced to stay within it (`pace`).
  */
 export const RUNS_PER_SECOND = 4;
+/**
+ * Between the player's answer to one step and the next step at least this
+ * long, so each step's line stays in the status strip long enough to read
+ * (UX PROPOSAL §4.2 "every step at least about 250 ms", F2). Not shorter
+ * than 1000 / RUNS_PER_SECOND, so it also keeps the rate by itself.
+ */
+export const STEP_GAP_MS = 260;
 /** Model text quoted in a status (an error, a refusal), at most: the player's limit for the whole text (status.ts). */
 const QUOTE_CHARS = STATUS_CHARS;
 
@@ -96,7 +103,7 @@ class Failure extends Error {
   }
 }
 
-/** The user chose Don't Run in the player's confirmation: the request stops there. */
+/** The user chose Don't Run on the player's approval sheet: the request stops there. */
 class Declined extends Error {
   readonly label: string;
   constructor(label: string) {
@@ -141,20 +148,21 @@ const pause = (ms: number, signal: AbortSignal) =>
   });
 
 /**
- * Waits until one more `commands.run` stays within RUNS_PER_SECOND.
- * `answered`: when the player answered each earlier run of the ticket
- * (`performance.now()`). The player counts a run before it answers it and
- * the next one after it was sent, so a run sent one second after the answer
- * to the run RUNS_PER_SECOND before it is within the rate whatever the
- * delays between the processes. The first RUNS_PER_SECOND runs go at once.
- * A timer may fire a little early (Node measured 49.66 ms for 50), so the
- * time is read again after each pause and the wait goes on until it is
- * really over.
+ * Waits until the next step may go: STEP_GAP_MS after the player answered
+ * the step before, and within RUNS_PER_SECOND. `answered`: when the player
+ * answered each earlier run of the ticket (`performance.now()`). The player
+ * counts a run before it answers it and the next one after it was sent, so
+ * a run sent one second after the answer to the run RUNS_PER_SECOND before
+ * it is within the rate whatever the delays between the processes. The
+ * first step goes at once. A timer may fire a little early (Node measured
+ * 49.66 ms for 50), so the time is read again after each pause and the wait
+ * goes on until it is really over.
  */
 export const pace = async (answered: readonly number[], signal: AbortSignal): Promise<void> => {
   signal.throwIfAborted();
-  if (answered.length < RUNS_PER_SECOND) return;
-  const until = answered[answered.length - RUNS_PER_SECOND]! + 1000;
+  if (!answered.length) return;
+  const gap = answered.at(-1)! + STEP_GAP_MS;
+  const until = answered.length < RUNS_PER_SECOND ? gap : Math.max(gap, answered[answered.length - RUNS_PER_SECOND]! + 1000);
   for (let wait = until - performance.now(); wait > 0; wait = until - performance.now()) {
     await pause(Math.ceil(wait), signal);
   }
@@ -329,19 +337,31 @@ export function askVestra(plugin: Plugin, model: AskModel) {
 
   /**
    * Runs a command step as the palette would, with the request's ticket:
-   * the player checks it (enabled, not busy) and asks the user first for a
-   * dangerous one (Don't Run: Declined). `index`/`of` go to the player's
-   * own line in the status strip for a request of several steps.
+   * the player checks it (enabled, not busy). `index`/`of` go to the
+   * player's own line in the status strip for a request of several steps.
+   * The first step carries `then`, the ids of the steps after it (SDK
+   * 1.7.16): when any step of the plan asks first, the player shows its
+   * approval sheet for the whole plan once, before this step runs (Don't
+   * Run: Declined, nothing ran), and the later steps, sent without `then`,
+   * use up the approved plan without asking again.
    */
-  const runCommand = async (id: string, label: string, ticket: string, index: number, of: number, signal: AbortSignal): Promise<void> => {
+  const runCommand = async (
+    id: string,
+    label: string,
+    ticket: string,
+    index: number,
+    of: number,
+    then: string[] | null,
+    signal: AbortSignal,
+  ): Promise<void> => {
     signal.throwIfAborted();
     let result;
     try {
-      result = await plugin.commands.run(id, of > 1 ? { ticket, step: index, of } : { ticket });
+      result = await plugin.commands.run(id, { ticket, ...(of > 1 ? { step: index, of } : {}), ...(then ? { then } : {}) });
     } catch (error) {
       const code = codeOf(error);
-      if (code === "disabled") throw new Refusal(cut((error as Error).message)); // the command's reason, as shown
-      if (code === "busy") throw new Refusal({ source: "{} is busy", args: [label] });
+      // The command's reason, or the player's own words for why it cannot run now (busy), as given.
+      if (code === "disabled" || code === "busy") throw new Refusal(cut((error as Error).message));
       if (code === "missing") throw new Refusal({ source: "{} is no longer there", args: [label] });
       if (code === "limit") throw new Refusal({ source: "Too many commands at once" });
       if (code === "ticket") throw new Refusal({ source: "The request has ended" });
@@ -448,8 +468,12 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     const labels: string[] = [];
     let end: End | null = null;
     try {
-      const { steps, rows } = await plan(mine, query);
+      const { steps: planned, rows } = await plan(mine, query);
       stopWorker(mine);
+      // A command that opens a window ends the request (PROPOSAL §4): the
+      // plan, and so the approval sheet, goes up to it (UX PROPOSAL §4.7).
+      const window = planned.findIndex((step) => rows.get(step.id)?.title.endsWith("…"));
+      const steps = window < 0 ? planned : planned.slice(0, window + 1);
       let opened: string | null = null;
       /** When the player answered each step's run, for the ticket's rate. */
       const answered: number[] = [];
@@ -460,8 +484,10 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         mine.step = { index: index + 1, of: steps.length, label };
         refresh();
         try {
-          // The player shows its own line for each command it runs (step/of) in the strip.
-          await runCommand(step.id, label, ticket, index + 1, steps.length, mine.controller.signal);
+          // The player shows its own line for each command it runs (step/of) in the strip;
+          // the first step names the rest of the plan, so the player asks once for all of it.
+          const then = index === 0 ? steps.slice(1).map((each) => each.id) : null;
+          await runCommand(step.id, label, ticket, index + 1, steps.length, then, mine.controller.signal);
         } catch (error) {
           if (error instanceof Refusal) throw new Failure({ source: "Step {0} failed: {1}", args: [index + 1, error.reason] }, "failed");
           throw error;
@@ -484,8 +510,10 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         // Replaced by a newer request: nothing to say, the newer one shows.
         if (mine.stopped) end = { text: { source: "Stopped" }, state: "note" };
       } else if (error instanceof Declined) {
-        // Don't Run in the player's confirmation, asked before that step:
-        // "nothing was run" only while it is true.
+        // Don't Run on the player's approval sheet, which asks for the whole
+        // plan before its first step: nothing was run. A step after the
+        // first asks again only if the player no longer holds the plan for
+        // it; "nothing was run" is said only while it is true.
         end = labels.length
           ? { text: { source: "Stopped: {} was not run", args: [error.label] }, state: "note" }
           : { text: { source: "Stopped: nothing was run" }, state: "note" };

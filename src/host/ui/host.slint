@@ -4,6 +4,8 @@ import { MenuView, MenuLevel } from "menu-view.slint";
 import { PaletteView, PaletteRow, PaletteLead } from "command-palette.slint";
 // The status strip: the palette lead's status while the palette is closed.
 import { LeadStripView, LeadStrip } from "lead-strip.slint";
+// The approval sheet of `commands.run` (host/review_sheet.rs).
+import { ReviewSheetView, ReviewSheet } from "review-sheet.slint";
 import { Theme } from "@vestra/theme.slint";
 import { TitleStrip } from "title-strip.slint";
 // The bottom-bar button strip (bar_buttons.rs; composition.rs places it).
@@ -99,6 +101,11 @@ export component HostWindow inherits Window {
     in property <LeadStrip> lead-strip;
     callback lead-strip-action(string);
     out property <bool> lead-strip-hover: lead-strip-view.hover;
+    // The approval sheet (host/review_sheet.rs) on the menu layer: shown
+    // instead of the menu while `menu-open`; its answers (`run`, `decline`).
+    in property <bool> review-open: false;
+    in property <ReviewSheet> review-sheet;
+    callback review-sheet-action(string);
     in property <bool> input-blocked: false;
     in property <bool> cursor-hidden: false;
     // No video frame to show (R-U3): the backdrop panel, if any, is drawn instead.
@@ -509,7 +516,7 @@ export component HostWindow inherits Window {
                 if event.kind == PointerEventKind.down { root.menu-dismiss(); }
             }
         }
-        if !root.palette-open: MenuView {
+        if !root.palette-open && !root.review-open: MenuView {
             width: root.width; height: root.height;
             levels: root.menu-levels;
             hovered(level, token, now) => { root.menu-hover(level, token, now); }
@@ -535,6 +542,13 @@ export component HostWindow inherits Window {
             scrolled(by) => { root.palette-scrolled(by); }
             run(slot, keep) => { root.palette-run(slot, keep); }
             dismissed => { root.menu-dismiss(); }
+        }
+        // Where the status strip is: below the title strip while it is out.
+        if root.review-open: ReviewSheetView {
+            width: root.width; height: root.height;
+            top: 16px + title-strip.covered;
+            sheet: root.review-sheet;
+            action(name) => { root.review-sheet-action(name); }
         }
     }
 }

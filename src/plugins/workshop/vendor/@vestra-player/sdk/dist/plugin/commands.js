@@ -2,7 +2,7 @@
 import { Latest } from "./latest.js";
 import { failure, quiet, uncertain } from "./errors.js";
 import { checkBindings } from "./bindings.js";
-import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, MENU_IDS } from "../commands.js";
+import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, MENU_IDS, thenProblem, } from "../commands.js";
 import { ImageHandle } from "./view/image.js";
 import { isTextValue, textProblem } from "../i18n.js";
 import { conditionJson, isCondition } from "./when.js";
@@ -366,7 +366,7 @@ export const commands = (scope) => ({
         needs(scope, "commands.run");
         if (typeof id !== "string" || id === "")
             throw failure("invalid", "run takes a command id: <plugin>/<id>");
-        const { ticket, step, of } = (options ?? {});
+        const { ticket, step, of, then } = (options ?? {});
         if (typeof ticket !== "string" || ticket === "")
             throw failure("ticket", "run needs the ticket of a user action");
         // As the player: both or neither, 1 <= step <= of <= 99.
@@ -376,11 +376,21 @@ export const commands = (scope) => ({
         if ((step === undefined) !== (of === undefined) ||
             (step !== undefined && (!whole(step) || !whole(of) || step > of)))
             throw failure("invalid", "step and of go together, 1 <= step <= of <= 99");
+        // As the player: the rest of the plan, 0–7 non-empty ids.
+        const planned = then ?? undefined;
+        if (planned !== undefined) {
+            const problem = thenProblem(planned);
+            if (problem)
+                throw failure("invalid", problem);
+        }
         return scope.runtime.host.commands.run({
             id,
             ticket,
             ...(step === undefined ? {} : { step }),
             ...(of === undefined ? {} : { of }),
+            // An array, never called: not a thenable.
+            // oxlint-disable-next-line unicorn/no-thenable
+            ...(planned === undefined ? {} : { then: [...planned] }),
         });
     },
 });

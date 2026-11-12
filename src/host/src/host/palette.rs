@@ -99,6 +99,10 @@ pub(crate) enum PaletteAction {
 impl Host {
     /// Open the palette in the main window, closing any open menu.
     pub(crate) fn open_palette(&mut self) {
+        // The approval sheet waits for its answer first.
+        if self.review_presented() {
+            return;
+        }
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
@@ -277,7 +281,11 @@ impl Host {
     }
     /// A lead's image icon, loaded for the row's icon box (the "failed"
     /// icon shows when it cannot be read).
-    fn lead_image(&mut self, owner: u64, icon: &commands::ButtonIcon) -> Option<slint::Image> {
+    pub(crate) fn lead_image(
+        &mut self,
+        owner: u64,
+        icon: &commands::ButtonIcon,
+    ) -> Option<slint::Image> {
         let commands::ButtonIcon::Image { path, max_side } = icon else {
             self.images.assign(owner, "$palette", "lead", None);
             return None;

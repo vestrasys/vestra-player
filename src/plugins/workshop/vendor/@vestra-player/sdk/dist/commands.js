@@ -224,6 +224,41 @@ export const BAR_BUTTON_LIMITS = {
     maxOrder: 999,
 };
 /**
+ * The player's limits on `commands.run` (built-in plugins only), the same
+ * values as the player's (its agreement test checks that they agree).
+ * Internal: exported from `@vestra-player/sdk/runtime` only.
+ *
+ * @internal
+ */
+export const COMMAND_RUN_LIMITS = {
+    /** Commands of one plan: the run and the ids of its `then` (8). */
+    plan: 8,
+    /** Runs of one ticket (30). */
+    perTicket: 30,
+    /** Runs a second, per ticket (4). */
+    perSecond: 4,
+    /** Runs a minute, per plugin (120). */
+    perMinute: 120,
+    /** A ticket ends this long after it was given or last ran a command (ms). */
+    ticketIdleMs: 120_000,
+};
+/**
+ * What is wrong with `commands.run`'s `then` (given, not `null`), as
+ * the player words it; `null` when nothing is. The SDK and `TestHost`
+ * check it the same way.
+ *
+ * @internal
+ */
+export function thenProblem(then) {
+    if (!Array.isArray(then))
+        return "then is an array of command ids";
+    if (then.length > COMMAND_RUN_LIMITS.plan - 1)
+        return `then has at most ${COMMAND_RUN_LIMITS.plan - 1} command ids`;
+    if (then.some((id) => typeof id !== "string" || id === ""))
+        return "then has command ids: non-empty strings";
+    return null;
+}
+/**
  * The submenus the player's built-in plugins declare, by key path, in menu
  * order (built-in menus as in {@link MENU_IDS}, then top-level submenus).
  * Menu paths merge by their English key, so a command whose path starts

@@ -710,38 +710,50 @@ msgstr "{step}/{of} · {command}"
 msgid "Stop"
 msgstr "Stopp"
 
-#. commands.run: the alert's question before a command that asks first ({command}: the command as the command palette shows it).
+#. The approval sheet's question when the plan has one command.
+#: src/host/review_sheet.rs
+#, x-machine
+msgid "Run this command?"
+msgstr "Diesen Befehl ausführen?"
+
+#. The approval sheet's question when the plan has several commands ({n}: how many).
+#: src/host/review_sheet.rs
+#, x-machine
+msgid "Run these {n} commands?"
+msgstr "Diese {n} Befehle ausführen?"
+
+#. The approval sheet: why a step asks, for a command of a plugin that is not built in.
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "Run “{command}”?"
-msgstr "„{command}“ ausführen?"
+msgid "Not built in"
+msgstr "Nicht integriert"
 
-#. commands.run: who asks, under the alert's question, when the request is empty ({plugin}: the asking plugin's name).
+#. The approval sheet: why the player's Close asks.
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "{plugin} asks."
-msgstr "Anfrage von {plugin}."
+msgid "Closes the video"
+msgstr "Schließt das Video"
 
-#. commands.run: who asks and for which request, under the alert's question ({plugin}: the asking plugin's name, {request}: the text typed in the command palette).
+#. The approval sheet: why the player's Quit asks.
 #: src/capabilities/commands_run.rs
 #, x-machine
-msgid "{plugin} asks, for your request “{request}”."
-msgstr "{plugin} fragt für deine Anfrage „{request}“."
+msgid "Quits the player"
+msgstr "Beendet den Player"
 
-#. commands.run: why the alert asks, for a command of a plugin that is not built in ({owner}: that plugin's name).
-#: src/capabilities/commands_run.rs
+#. The approval sheet's note under the steps, when a step's plugin is not built in.
+#: src/host/review_sheet.rs
 #, x-machine
-msgid "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does."
-msgstr "Dieser Befehl gehört zu {owner}, einem nicht integrierten Plugin: Der Player kann nicht erkennen, was er tut."
+msgid "The player cannot tell what commands of plugins that are not built in will do."
+msgstr "Der Player kann nicht erkennen, was Befehle nicht integrierter Plugins tun."
 
-#. commands.run: the alert's button that runs the command.
-#: src/capabilities/commands_run.rs
+#. The approval sheet's button that runs the plan.
+#: src/host/review_sheet.rs
 #, x-machine
 msgid "Run"
 msgstr "Ausführen"
 
-#. commands.run: the alert's button that does not run the command (and stops the request).
-#: src/capabilities/commands_run.rs
+#. The approval sheet's button that runs nothing (and stops the request).
+#: src/host/review_sheet.rs
 #, x-machine
 msgid "Don't Run"
 msgstr "Nicht ausführen"

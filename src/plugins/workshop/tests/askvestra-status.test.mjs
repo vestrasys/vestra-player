@@ -63,7 +63,6 @@ const cases = {
   "the result list": { source: "Done · {}", args: [{ list: Array.from({ length: 8 }, (_, i) => label(i)) }] },
   "an opened window": { source: "Opened {}", args: [long] },
   "a step failed with the command's reason": { source: "Step {0} failed: {1}", args: [8, long] },
-  "a step failed: busy": { source: "Step {0} failed: {1}", args: [8, { source: "{} is busy", args: [long] }] },
   "a step failed: no such command": { source: "Step {0} failed: {1}", args: [8, { source: "There is no command “{}”", args: [long] }] },
   "a step failed: another kind": { source: "Step {0} failed: {1}", args: [8, { source: "Vestra cannot do “{}”", args: [long] }] },
   "a step failed: the player lets no command run": { source: "Step {0} failed: {1}", args: [8, { source: "This player does not let Vestra run commands" }] },

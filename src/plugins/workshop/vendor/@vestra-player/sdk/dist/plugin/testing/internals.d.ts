@@ -72,11 +72,15 @@ export declare class Internals {
         resolution: number;
         ticket: number;
     };
-    /** `commands.run` tickets: runs, run times in the last second, last use (ms). */
+    /**
+     * `commands.run` tickets: runs, run times in the last second, last use
+     * (ms), and the rest of an approved plan (`then`), `null` without one.
+     */
     readonly tickets: Map<string, {
         count: number;
         runs: number[];
         last: number;
+        plan: string[] | null;
     }>;
     /** The last `commands.list` table (JSON) and its revision. */
     listed: {

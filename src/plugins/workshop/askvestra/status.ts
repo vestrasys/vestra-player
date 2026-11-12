@@ -39,7 +39,6 @@ export const WORDS = {
   "The model gave no steps": [23, 8, 17, 18, 39, 32, 28],
   "The plan has more than {} steps": [29, 7, 17, 12, 31, 30, 27],
   "Cannot read the API key; save it again in the settings": [54, 21, 28, 31, 71, 76, 66],
-  "{} is busy": [8, 3, 7, 12, 16, 11, 13],
   "{} is no longer there": [19, 5, 9, 14, 19, 14, 13],
   "Too many commands at once": [25, 9, 17, 21, 27, 27, 28],
   "The request has ended": [21, 5, 9, 9, 21, 23, 24],

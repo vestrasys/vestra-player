@@ -20,6 +20,7 @@ pub(crate) mod palette;
 pub(crate) mod panel_restart;
 mod rendering;
 mod restart;
+pub(crate) mod review_sheet;
 pub(crate) mod revised;
 pub(crate) use rendering::{Relaunch, Rendering, startup as rendering_startup};
 mod rpc;
@@ -220,6 +221,9 @@ pub(crate) enum MenuMode {
     Tabs(sidebar_tabs::Column),
     /// The command palette (`host/palette`), in the main window.
     Palette,
+    /// The approval sheet of `commands.run` (`host/review_sheet`), in the
+    /// main window.
+    Review,
     /// The bottom-bar strip's `»` (bar_buttons.rs): the plugin buttons not
     /// in the strip, in strip order (owner, command id).
     Bar(Vec<(u64, String)>),
@@ -419,6 +423,8 @@ pub(crate) struct Host {
     pub(crate) lead: Option<crate::capabilities::Lead>,
     /// The status strip: the lead's status while the palette is closed.
     pub(crate) lead_strip: lead_strip::LeadStrip,
+    /// The approval sheet waiting for the user (`MenuMode::Review`).
+    pub(crate) review: Option<review_sheet::Review>,
     /// `commands.run` tickets and rates.
     pub(crate) command_runs: crate::capabilities::CommandRuns,
     pub(crate) policy: window_state::Policy,

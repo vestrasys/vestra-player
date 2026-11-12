@@ -6,7 +6,9 @@
 //! the host's confirmation, and hits the ticket's limits; a development load
 //! (not built-in) is refused both capabilities. A second run parks the
 //! holder, wakes it with the row (its ticket moves to the woken run) and
-//! answers Don't Run. The fixtures speak the wire
+//! answers Don't Run. A query starting with "plan" runs a plan (`then`):
+//! asked once before its first step, or declined and nothing runs. The
+//! fixtures speak the wire
 //! directly (their own process, `VESTRA_SHARED=0`), so the test does not
 //! wait for the SDK release that wraps these calls. Built-ins from a
 //! `builtin.json` schema 3 under `VESTRA_BUILTIN_PLUGINS`, the development
@@ -111,6 +113,23 @@ export default async function activate(plugin) {{
     const {{ query, ticket, keep, status }} = message.data;
     log(`FIX lead query=${{query}} keep=${{keep}} status=${{status}} ticket=${{ticket.length}}`);
     const run = (id, more = {{}}) => call("commands.run", {{ id, ticket, ...more }});
+    if (query.startsWith("plan")) {{
+      // A plan (`then`): asked once before the first step; a command
+      // outside the approved plan asks on its own.
+      log("FIX plan bad then", said(await run("{ID}/hello", {{ then: "{ID}/wipe" }})));
+      log("FIX plan bad id", said(await run("{ID}/hello", {{ then: [7] }})));
+      log("FIX plan long", said(await run("{ID}/hello", {{ then: Array(8).fill("{ID}/hello") }})));
+      log("FIX plan unknown", said(await run("{ID}/hello", {{ then: ["nobody/none"] }})));
+      const first = await run("{ID}/hello", {{ step: 1, of: 3, then: ["{ID}/wipe", "{ID}/hello"] }});
+      log("FIX plan first", said(first));
+      if (first.result?.ran) {{
+        log("FIX plan second", said(await run("{ID}/wipe", {{ step: 2, of: 3 }})));
+        log("FIX plan third", said(await run("{ID}/hello", {{ step: 3, of: 3 }})));
+        log("FIX plan again", said(await run("{ID}/wipe")));
+      }}
+      log("FIX plan done", said(await call("palette.lead.done", {{ ticket }})));
+      return;
+    }}
     log("FIX run hello", said(await run("{ID}/hello", {{ step: 1, of: 2 }})));
     log("FIX run wipe", said(await run("{ID}/wipe")));
     log("FIX run missing", said(await run("nobody/none")));
@@ -353,4 +372,69 @@ fn a_parked_holder_wakes_with_a_working_ticket_and_dont_run_declines() {
     assert!(!lines(&log, "FIX ").contains("FIX wipe ran"), "{log}");
     expect("FIX done null");
     expect("FIX after done error ticket");
+}
+
+/// A plan (`commands.run` `then`, Ask Vestra UX step 3): bad `then` values
+/// and an unknown id are refused before anything runs or asks; the host
+/// asks once, before the first step, for the whole plan (headless:
+/// `VESTRA_TEST_CONFIRM=always` answers Run, as `run` does); the planned
+/// destructive step then runs without asking; once used, it asks again.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_plan_is_asked_once_before_its_first_step() {
+    let log = run(
+        8,
+        &[
+            ("VESTRA_TEST_CONFIRM", "always"),
+            ("VESTRA_TEST_EXECUTE", "lead:plan it@4000"),
+        ],
+    );
+    let expect = |text: &str| expect(&log, text);
+    expect("FIX lead query=plan it");
+    expect("FIX plan bad then error invalid");
+    expect("FIX plan bad id error invalid");
+    expect("FIX plan long error invalid");
+    expect("FIX plan unknown error missing");
+    expect("FIX plan first {\"ran\":true}");
+    assert!(
+        log.contains(&format!(
+            "commands.run: {ID} asks to run {ID}/hello, {ID}/wipe, {ID}/hello (headless: true)"
+        )),
+        "{log}"
+    );
+    expect("FIX plan second {\"ran\":true}");
+    expect("FIX plan third {\"ran\":true}");
+    expect("FIX plan again {\"ran\":true}");
+    expect("FIX plan done null");
+    // Asked twice in all: the plan, then the wipe outside it.
+    assert_eq!(log.matches("asks to run").count(), 2, "{log}");
+    assert_eq!(
+        log.matches(&format!("asks to run {ID}/wipe (headless: true)"))
+            .count(),
+        1,
+        "{log}"
+    );
+    assert_eq!(lines(&log, "FIX hello ran").lines().count(), 2, "{log}");
+    assert_eq!(lines(&log, "FIX wipe ran").lines().count(), 2, "{log}");
+}
+
+/// Don't Run on a plan's sheet: nothing of the plan runs, not even its
+/// first step, which does not ask by itself.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn dont_run_on_a_plan_runs_nothing() {
+    let log = run(8, &[("VESTRA_TEST_EXECUTE", "lead:plan it@4000")]);
+    expect(&log, "FIX plan first {\"declined\":true,\"ran\":false}");
+    expect(&log, "FIX plan done null");
+    assert!(
+        log.contains(&format!(
+            "commands.run: {ID} asks to run {ID}/hello, {ID}/wipe, {ID}/hello (headless: false)"
+        )),
+        "{log}"
+    );
+    let fix = lines(&log, "FIX ");
+    assert!(
+        !fix.contains("FIX hello ran") && !fix.contains("FIX wipe ran"),
+        "{log}"
+    );
 }

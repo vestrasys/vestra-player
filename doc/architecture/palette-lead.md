@@ -42,7 +42,7 @@ refused before), so a store or file install of a package declaring one fails the
 | Method | Params | Result | Errors |
 | --- | --- | --- | --- |
 | `commands.list` | `{}` | `{ revision, commands: [{ id, label, labelSource, title, category, path, place, keys, plugin, builtin, enabled, reason?, checkable, checked?, radio, group, busy, dangerous }] }` | — |
-| `commands.run` | `{ id, ticket, step?, of? }` | `{ ran: true }` or `{ ran: false, declined: true }` | `missing`, `disabled` (with `reason`), `busy`, `invalid` (the palette's own command, bad `step`/`of`), `ticket`, `limit` |
+| `commands.run` | `{ id, ticket, step?, of?, then? }` | `{ ran: true }` or `{ ran: false, declined: true }` | `missing` (also an unknown `then` id, with `detail.id`), `disabled` (with `reason`), `busy`, `invalid` (the palette's own command, also in `then`; bad `step`/`of`/`then`), `ticket`, `limit` |
 
 - The list is the palette's (`Host::palette_items`, `ui/command_palette.rs` `items`): the same
   commands, labels and places. `id` is the global id `<manifest>/<local>` (`host/<id>` for the
@@ -62,20 +62,43 @@ refused before), so a store or file install of a package declaring one fails the
   command. A parked holder woken by the lead event keeps it (`rekey`).
 - **Rates**: 4 runs a second per ticket, 30 per ticket, 120 a minute per plugin (`limit`). A run
   counts when it passes the command checks, before any confirmation.
-- **Confirmation** (`dangerous`): the host's own alert (`platform::confirm`, not destructive
-  style: no icon on Windows, so no system sound): the question "Run “<command>”?" as its title, then
-  "<caller> asks, for your request “<request>”." and, for a plugin that is not built in, that the
-  player cannot tell what its command does;
-  "Run" / "Don't Run". It comes before a command
-  marked `CommandOptions.destructive`, the player's own Close (`host/stop`) and Quit (the host's
-  list names only the player's commands), anything under the built-in `@settings` and `@reset`
-  menus, and every command of a plugin that is not built-in (PROPOSAL Q3 A). The core never lists
-  plugin commands: **plugins mark their destructive commands with `CommandOptions.destructive`**, and
-  the built-in plugins mark theirs (Remove All, Clear History, Delete, …) before any caller uses
-  `commands.run` (a gate the coordinator records).
-  The caller cannot answer or skip it. "Don't Run" answers `{ ran: false, declined: true }`. The
-  ticket and the command are checked again after the answer. Headless there is no alert:
-  `VESTRA_TEST_CONFIRM=run` answers Run (tests), anything else Don't Run.
+- **Which commands ask** (`dangerous`): a command marked `CommandOptions.destructive`, the
+  player's own Close (`host/stop`) and Quit (the host's list names only the player's commands),
+  anything under the built-in `@settings` and `@reset` menus (judged on the whole path normalized,
+  `commands::normalize`: an old root "设置" with items below it is Settings), and every command of
+  a plugin that is not built-in (PROPOSAL Q3 A). The core never lists plugin commands: **plugins mark their
+  destructive commands with `CommandOptions.destructive`**, and the built-in plugins mark theirs
+  (Remove All, Clear History, Delete, …) before any caller uses `commands.run` (a gate the
+  coordinator records).
+- **Plans** (`then`, SDK 1.7.16; the SDK's TestHost has the same rules and messages): the global
+  ids the same ticket runs next, in order. Checked in this order: the ticket given, `step`/`of`,
+  `then`'s shape, the command, `then`'s ids, then the ticket and the rates (`count`); a refused
+  call is not counted. Absent or null names no new plan; `[]` is a new plan of this command
+  alone (it drops the rest of the old one and asks only if this command asks). Shape errors are
+  `invalid`:
+  "then is an array of command ids" (not an array), "then has at most 7 command ids" (with the
+  run's own at most `PLAN_STEPS`, 8: the sheet's rows and `COMMAND_RUN_LIMITS.plan`), "then has
+  command ids: non-empty strings". Each id must name a listed command (`missing`, "no command
+  <id>", `detail.id`) other than the palette's own (`invalid`); repeats are allowed; its state
+  (enabled, busy) is checked only when it runs, as an earlier step may change it.
+- **Asked once, before the first step** (§2.1): a call with `then` drops what is left of the
+  ticket's earlier plan. When any command of `[id, ...then]` asks, the host shows the approval
+  sheet for the whole plan before anything runs; Run runs `id` and keeps `then` as the ticket's
+  plan (repeats counted); Don't Run runs nothing, keeps no plan and answers
+  `{ ran: false, declined: true }` (the caller ends the request). When none asks there is no sheet
+  and no plan is kept. A call without `then` whose id is in the plan uses up its first occurrence
+  and runs without asking, even a destructive command (`CommandRuns::take_planned`); any other
+  command asks as it would alone (a sheet of one step), so a used-up plan entry asks again. The
+  plan lives as long as the ticket (done, a new request, the plugin stopping or parking, 120 s
+  unused). The caller cannot answer, skip or word the sheet. The ticket and the command are
+  checked again after the answer. One sheet at a time, whoever asks: a run that would ask while any
+  sheet waits fails `busy` ("another command is waiting for the user's answer"), decided before
+  it is counted or touches the plan (`CommandRuns::admit`); the waiting sheet is the user's open
+  question, so a later caller neither replaces it nor answers it in the user's place;
+  an open native dialog no longer refuses a run (PROPOSAL F4): the sheet waits for it. Headless
+  there is no sheet: `VESTRA_TEST_CONFIRM=run` answers Run for the whole sheet (tests), `always`
+  Run too (and, from step 4, remember), anything else Don't Run; `commands.run: <id> asks to run
+  <global>, <global>, … (headless: <answer>)` goes to stderr.
 - **Where the run is named**: when the caller holds the palette lead (its ticket is the lead's),
   the step goes to the status strip (§3.1): "i/n · <command label>" with `step`/`of`, the label
   alone without, the line filled to i/n (full for a lone command). Any other caller (none yet: both
@@ -88,6 +111,49 @@ refused before), so a store or file install of a package declaring one fails the
 `CommandOptions.destructive` (`commands::Declaration::destructive`, optional, absent = false) is
 the general part: any plugin may mark a command, and other places (the bar's `»` menu) may ask
 before running such a command later.
+
+
+### 2.1 The approval sheet
+
+Design: `C:\vestra\design\ask-vestra-ux\PROPOSAL.md` §4.3, §4.6, §4.7 (user rulings of
+2026-11-12; step 3: H3, H7). `host/review_sheet.rs`, `ui/review-sheet.slint`, `ui/host.slint`,
+`capabilities/commands_run.rs` (`ask`, `reason`).
+
+A menu-layer mode beside the palette (`MenuMode::Review`) in the main window, drawn by the host from
+its own data: where the palette and the status strip are (centred, y 16, below the fullscreen
+title strip while it is out), on the palette's plate at its width (520px, at most the window less
+16px); the status strip yields to it as to any menu. No system dialog, so no system sound; it
+follows the theme. From the top:
+
+| Part | Content |
+| --- | --- |
+| Request box (the palette field's box, read-only) | the lead's icon, its title and a colon in semibold (13px, `text`), the request the ticket was minted for (`text-list`, elided) |
+| Question (28px, 12px semibold) | "Run this command?" / "Run these {n} commands?" |
+| Steps (28px each, 8 fixed slots) | number (11px `text-dim`), palette label (12px; `text` for a step that asks, `text-list` for one that does not), the plugin's shown name (11px `text-dim`), a reason (11px `text-dim`) |
+| Note (11px `text-dim`, wraps), only when a step's plugin is not built in | "The player cannot tell what commands of plugins that are not built in will do." |
+| Footer (the palette's separator; 44px) | right: [Run `Enter`] [Don't Run `Esc`] (the library Button's plate with a `KeyHint`; confirm first, as `UrlInputRow`). The left is kept for "Don't ask again" (step 4, H4). |
+
+Reasons are facts only (H7; user ruling 2 of 2026-11-12): "Not built in" for a command of a plugin
+that is not built in, "Closes the video" for the player's Close, "Quits the player" for its Quit;
+none for a destructive command (no "Cannot be undone") nor for a step that does not ask.
+
+Input (§4.6): it takes the keyboard focus; Enter runs, Esc does not; held-down repeats count for
+nothing (the Enter that sent the request); Run and Don't Run by pointer; a press outside it is Don't
+Run. Nothing counts within 500 ms of it showing (`review_sheet::GUARD_MS`, Chromium's rule for
+sensitive UI), each time it shows. Bindings pause while it shows (it is the menu layer), and the
+palette and other menus do not open over it.
+
+Edge cases (§4.7): while a native dialog is open (`dialog_busy`) it waits, and steps aside if one
+opens over it; it shows again when something else closed the menu layer (a rebuilt shell, another
+menu); it stays when the window is not active and takes no focus from another program. Only an
+answer, the end of the ticket (120 s unused, `palette.lead.done`: answered Don't Run) or the end of
+the caller (it stopped: the sheet just goes) removes it (`review_tick`, every window tick). The
+answer goes the usual way, `Event::CommandRunAnswered`. stderr gets the number of steps asked
+about, never the labels or the request.
+
+Offline renders: `widgets_tests::render_review_sheet_states` (ignored; `VESTRA_SHEET_SHOTS=<dir>`,
+`VESTRA_SHEET_LANG=en|zh-Hans`, `VESTRA_SHEET_BACKDROP=<png>`): a plan of three steps with one not
+built in, one destructive step, one step not built in, Close, eight steps; both palettes, 2×.
 
 ## 3. `palette.lead` (built-in only, residency recordable)
 
@@ -189,11 +255,13 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
 ## 4. Tests
 
 - Unit: `capabilities/commands_run.rs` (tickets, idle end, rates, revoke and rekey, which commands
-  ask first, `step`/`of`), `capabilities/palette_lead.rs` (parameters, the capability's flags),
+  ask first, `step`/`of`, `then`, plan approvals, the sheet's reasons), `host/review_sheet.rs` (the
+  guard, the question, the sheet's value), `capabilities/palette_lead.rs` (parameters, the capability's flags),
   `capabilities/mod.rs` (built-in-only refusal for live requests and replays, the JSON field),
   `capabilities/palette_lead.rs` (`status.state`), `host/lead_strip.rs` (what the strip shows, end
   states' times, the shell value), `ui/command_palette.rs` (`names`, `aim`, `lead_shows_status`, no
-  change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation),
+  change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,
+  repeats and buttons),
   `host/supervisor/probe.rs`. `src/tests/sdk/host-agreement.test.ts`: TestHost accepts the
   player's `StatusState::NAMES` and refuses another with the player's code and message (skipped
   before SDK 1.7.15).
@@ -201,7 +269,9 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
   vertical slice with the real host headless: a built-in fixture sets the lead, gets the query and
   a ticket, runs its own command (the strip's line), a destructive one after the confirmation, hits
   the rate limit, an unknown `status.state` and an end state, and the ended ticket; a development load is refused both capabilities; a parked
-  holder is woken by the row and its ticket works in the woken run; Don't Run declines.
+  holder is woken by the row and its ticket works in the woken run; Don't Run declines; a plan
+  (`then`) is refused when malformed, asked once before its first step, its approved steps run
+  without asking and a step outside it asks again; Don't Run on a plan runs nothing.
 - `package_manager.rs`: a development load of a built-in's id (even of the installation's
   directory) is not built-in (`builtin_provenance`: the run must use the built-in instance's data
   key).
