@@ -62,8 +62,11 @@ refused before), so a store or file install of a package declaring one fails the
   command. A parked holder woken by the lead event keeps it (`rekey`).
 - **Rates**: 4 runs a second per ticket, 30 per ticket, 120 a minute per plugin (`limit`). A run
   counts when it passes the command checks, before any confirmation.
-- **Confirmation** (`dangerous`): the host's own alert (`platform::confirm`, destructive style,
-  "Run" / "Don't Run", the caller's name, the command, the request text and why) before a command
+- **Confirmation** (`dangerous`): the host's own alert (`platform::confirm`, not destructive
+  style: no icon on Windows, so no system sound): the question "Run “<command>”?" as its title, then
+  "<caller> asks, for your request “<request>”." and, for a plugin that is not built in, that the
+  player cannot tell what its command does;
+  "Run" / "Don't Run". It comes before a command
   marked `CommandOptions.destructive`, the player's own Close (`host/stop`) and Quit (the host's
   list names only the player's commands), anything under the built-in `@settings` and `@reset`
   menus, and every command of a plugin that is not built-in (PROPOSAL Q3 A). The core never lists

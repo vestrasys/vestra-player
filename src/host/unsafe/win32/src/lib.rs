@@ -27,7 +27,9 @@
 //! (`dxgi_adapters`, through the `windows` crate's COM interfaces; no device
 //! is created), and whether an adapter's driver offers RTX Video Super
 //! Resolution (`video_super_resolution`: a short-lived Direct3D 11 device
-//! and video processor). Each is one call with plain integer arguments, a
+//! and video processor), and a confirmation as a task dialog with its
+//! question as the main instruction, a native checkbox and no standard
+//! icon, so no system sound (`task_dialog`). Each is one call with plain integer arguments, a
 //! borrowed handle, or local out-parameters; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
@@ -1407,6 +1409,170 @@ fn placement_steps(
         SW_SHOWNORMAL
     };
     (0, [Some(SW_SHOWNORMAL), Some(last)])
+}
+
+/// A confirmation as a task dialog ([`task_dialog`]).
+pub struct TaskDialog<'a> {
+    /// The owner window (a raw HWND value): disabled while the dialog is
+    /// open, and the dialog is centred on it.
+    pub owner: Option<isize>,
+    pub title: &'a str,
+    /// The question, in the dialog's large main-instruction text.
+    pub instruction: &'a str,
+    /// The text under the question.
+    pub content: Option<&'a str>,
+    /// The default button (Enter).
+    pub confirm: &'a str,
+    /// The cancel button (Esc and the close box pick it too).
+    pub cancel: &'a str,
+    /// A checkbox under the text (the dialog's verification checkbox).
+    pub checkbox: Option<&'a str>,
+    /// The system's warning icon, given as an icon handle: a task dialog
+    /// plays the system sound of a standard icon (`TD_WARNING_ICON`,
+    /// `TD_INFORMATION_ICON`…) but not of an icon handle.
+    pub warning_icon: bool,
+}
+
+/// How the user closed a [`TaskDialog`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct TaskDialogAnswer {
+    /// The confirm button was picked.
+    pub confirmed: bool,
+    /// The checkbox's state when the dialog closed, whichever way it closed.
+    pub checked: bool,
+}
+
+type TaskDialogIndirectFn = unsafe extern "system" fn(
+    *const windows_sys::Win32::UI::Controls::TASKDIALOGCONFIG,
+    *mut i32,
+    *mut i32,
+    *mut windows_sys::core::BOOL,
+) -> windows_sys::core::HRESULT;
+type LoadIconWithScaleDownFn = unsafe extern "system" fn(
+    windows_sys::Win32::Foundation::HINSTANCE,
+    windows_sys::core::PCWSTR,
+    i32,
+    i32,
+    *mut windows_sys::Win32::UI::WindowsAndMessaging::HICON,
+) -> windows_sys::core::HRESULT;
+
+/// A function of Common Controls 6 (`comctl32.dll` as the process's
+/// activation context resolves it: version 6 only with the application
+/// manifest that asks for it). Looked up at run time, so a binary without
+/// that manifest (a unit-test binary) still starts.
+fn comctl32_function(name: &std::ffi::CStr) -> Option<unsafe extern "system" fn() -> isize> {
+    use windows_sys::Win32::System::LibraryLoader::{GetProcAddress, LoadLibraryW};
+    let library: Vec<u16> = "comctl32.dll\0".encode_utf16().collect();
+    // SAFETY: a NUL-terminated wide string alive for the call. The module
+    // stays loaded for the life of the process (no FreeLibrary), so the
+    // address returned below stays valid.
+    let module = unsafe { LoadLibraryW(library.as_ptr()) };
+    if module.is_null() {
+        return None;
+    }
+    // SAFETY: a module handle from LoadLibraryW and a NUL-terminated name.
+    unsafe { GetProcAddress(module, name.as_ptr().cast()) }
+}
+
+/// Show `dialog` and wait for the answer: a task dialog (Common Controls
+/// 6) with the question as its main instruction, two custom buttons, an
+/// optional native checkbox, and no standard icon, so no system sound.
+/// Blocks the calling thread in the dialog's own message loop: call it on
+/// a thread of its own. `Err` when the dialog could not be shown (Common
+/// Controls 6 missing, the system refused).
+pub fn task_dialog(dialog: &TaskDialog) -> Result<TaskDialogAnswer, String> {
+    use windows_sys::Win32::UI::Controls::{
+        TASKDIALOG_BUTTON, TASKDIALOGCONFIG, TASKDIALOGCONFIG_0, TDF_ALLOW_DIALOG_CANCELLATION,
+        TDF_POSITION_RELATIVE_TO_WINDOW, TDF_SIZE_TO_CONTENT, TDF_USE_HICON_MAIN,
+    };
+    use windows_sys::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi};
+    use windows_sys::Win32::UI::WindowsAndMessaging::{DestroyIcon, IDI_WARNING, SM_CXICON};
+    const CONFIRM: i32 = 1000;
+    const CANCEL: i32 = 1001;
+    let wide = |text: &str| -> Vec<u16> { text.encode_utf16().chain([0]).collect() };
+    let title = wide(dialog.title);
+    let instruction = wide(dialog.instruction);
+    let content = dialog.content.map(wide);
+    let checkbox = dialog.checkbox.map(wide);
+    let labels = [wide(dialog.confirm), wide(dialog.cancel)];
+    let buttons = [
+        TASKDIALOG_BUTTON {
+            nButtonID: CONFIRM,
+            pszButtonText: labels[0].as_ptr(),
+        },
+        TASKDIALOG_BUTTON {
+            nButtonID: CANCEL,
+            pszButtonText: labels[1].as_ptr(),
+        },
+    ];
+    let show = comctl32_function(c"TaskDialogIndirect")
+        .ok_or("TaskDialogIndirect is missing: Common Controls 6 is not active")?;
+    // SAFETY: TaskDialogIndirect has this signature (CommCtrl.h); the
+    // pointer comes from GetProcAddress for that very name.
+    let show: TaskDialogIndirectFn = unsafe { std::mem::transmute(show) };
+    let owner = dialog.owner.unwrap_or(0) as HWND;
+    let mut icon: windows_sys::Win32::UI::WindowsAndMessaging::HICON = std::ptr::null_mut();
+    if dialog.warning_icon
+        && let Some(load) = comctl32_function(c"LoadIconWithScaleDown")
+    {
+        // SAFETY: LoadIconWithScaleDown has this signature (CommCtrl.h); the
+        // pointer comes from GetProcAddress for that very name.
+        let load: LoadIconWithScaleDownFn = unsafe { std::mem::transmute(load) };
+        // SAFETY: both take plain values; an invalid or null HWND makes
+        // GetDpiForWindow return 0.
+        let size = unsafe {
+            let dpi = match GetDpiForWindow(owner) {
+                0 => 96,
+                dpi => dpi,
+            };
+            GetSystemMetricsForDpi(SM_CXICON, dpi)
+        };
+        // SAFETY: a system icon (null instance, IDI_ resource id) at a
+        // positive size into a live local out-parameter; on failure `icon`
+        // stays null and the dialog shows no icon.
+        if unsafe { load(std::ptr::null_mut(), IDI_WARNING, size, size, &mut icon) } < 0 {
+            icon = std::ptr::null_mut();
+        }
+    }
+    let mut flags = TDF_ALLOW_DIALOG_CANCELLATION | TDF_SIZE_TO_CONTENT;
+    if !owner.is_null() {
+        flags |= TDF_POSITION_RELATIVE_TO_WINDOW;
+    }
+    if !icon.is_null() {
+        flags |= TDF_USE_HICON_MAIN;
+    }
+    let text = |text: &Option<Vec<u16>>| text.as_ref().map_or(std::ptr::null(), |t| t.as_ptr());
+    let config = TASKDIALOGCONFIG {
+        cbSize: size_of::<TASKDIALOGCONFIG>() as u32,
+        hwndParent: owner,
+        dwFlags: flags,
+        pszWindowTitle: title.as_ptr(),
+        // No icon unless the handle above: `pszMainIcon` null.
+        Anonymous1: TASKDIALOGCONFIG_0 { hMainIcon: icon },
+        pszMainInstruction: instruction.as_ptr(),
+        pszContent: text(&content),
+        cButtons: buttons.len() as u32,
+        pButtons: buttons.as_ptr(),
+        nDefaultButton: CONFIRM,
+        pszVerificationText: text(&checkbox),
+        ..Default::default()
+    };
+    let (mut button, mut checked) = (0i32, 0 as windows_sys::core::BOOL);
+    // SAFETY: `config` and every string and button it points to are locals
+    // alive until the call returns (it is modal); the out-parameters are
+    // live locals, the radio-button one may be null.
+    let result = unsafe { show(&config, &mut button, std::ptr::null_mut(), &mut checked) };
+    if !icon.is_null() {
+        // SAFETY: an icon this function loaded and no longer uses.
+        unsafe { DestroyIcon(icon) };
+    }
+    if result < 0 {
+        return Err(format!("TaskDialogIndirect failed: HRESULT {result:#010x}"));
+    }
+    Ok(TaskDialogAnswer {
+        confirmed: button == CONFIRM,
+        checked: checked != 0,
+    })
 }
 
 #[cfg(test)]
