@@ -23,6 +23,18 @@ export declare function splitCommandKey(_host: TestHost, _inner: Internals, key:
     plugin: string;
     command: string;
 };
+/**
+ * The capabilities of the plugin under test's manifest, set by
+ * `startPlugin`; a host without an entry (requests sent by hand) lists
+ * every command in `bindings.list`.
+ */
+export declare const pluginCapabilities: WeakMap<TestHost, readonly string[]>;
+/**
+ * `bindings.list`, as the player's (binding_manager.rs `list`, player
+ * 0.8.0): a `focus: "panel"` command of a plugin whose manifest declares no
+ * `ui.mount` can never fire from a key, so it is left out; it stays declared
+ * (its stored binding is no orphan, `bindings.set` accepts it).
+ */
 export declare function bindingTable(host: TestHost, inner: Internals): {
     commands: {
         title: string;
