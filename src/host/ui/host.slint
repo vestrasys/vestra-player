@@ -105,6 +105,8 @@ export component HostWindow inherits Window {
     // instead of the menu while `menu-open`; its answers (`run`, `decline`).
     in property <bool> review-open: false;
     in property <ReviewSheet> review-sheet;
+    // Its "Don't ask again" box is checked (the host's state).
+    in property <bool> review-remember-checked: false;
     callback review-sheet-action(string);
     in property <bool> input-blocked: false;
     in property <bool> cursor-hidden: false;
@@ -548,6 +550,7 @@ export component HostWindow inherits Window {
             width: root.width; height: root.height;
             top: 16px + title-strip.covered;
             sheet: root.review-sheet;
+            remember-checked: root.review-remember-checked;
             action(name) => { root.review-sheet-action(name); }
         }
     }

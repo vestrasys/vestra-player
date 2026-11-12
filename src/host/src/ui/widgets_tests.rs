@@ -1254,6 +1254,10 @@ export component W inherits Window {
     out property <length> run-x: v.run-x;
     out property <length> cancel-x: v.cancel-x;
     out property <length> buttons-y: v.buttons-y;
+    out property <bool> remember-shown: v.remember-shown;
+    in-out property <bool> remember-checked;
+    out property <length> remember-x: v.remember-x;
+    out property <length> remember-y: v.remember-y;
     background: Theme.bg-video;
     Image {
         x: 0px; y: 0px;
@@ -1265,6 +1269,7 @@ export component W inherits Window {
     v := ReviewSheetView {
         width: root.width; height: root.height;
         sheet: root.s;
+        remember-checked: root.remember-checked;
         action(name) => { root.last = name; }
     }
 }"#;
@@ -1288,11 +1293,23 @@ fn sheet_step(
 
 /// A `ReviewSheet` value as the host writes it.
 fn sheet_value(title: &str, query: &str, steps: &[crate::host::review_sheet::Step]) -> Value {
+    sheet_value_remembering(title, query, steps, &[])
+}
+
+/// [`sheet_value`] offering "Don't ask again" for the plugins `remember`.
+fn sheet_value_remembering(
+    title: &str,
+    query: &str,
+    steps: &[crate::host::review_sheet::Step],
+    remember: &[&str],
+) -> Value {
+    let remember: Vec<String> = remember.iter().map(|s| (*s).to_owned()).collect();
     crate::ui::ui_values::from_json(&crate::host::review_sheet::sheet(
         title,
         "ai",
         query,
         steps,
+        &crate::host::review_sheet::remember_text(&remember),
         ["Enter", "Esc"],
     ))
     .unwrap()
@@ -1402,6 +1419,112 @@ fn the_review_sheet_answers_enter_esc_and_its_buttons_but_not_a_repeat() {
     w.set_property("last", Value::String("".into())).unwrap();
     click(&w, x + 40., y + 60.);
     assert_eq!(string(&w, "last"), "");
+    // No checkbox here: none shown, and Ctrl+Enter is a plain Run.
+    assert!(!boolean(&w, "remember-shown"));
+    ctrl_enter(&w);
+    assert_eq!(string(&w, "last"), "run");
+    assert_eq!(number(&w, "ph"), 72. + 28. + 44.);
+}
+
+/// Ctrl+Enter: Control held around an Enter.
+fn ctrl_enter(w: &ComponentInstance) {
+    let window = w.window();
+    window.dispatch_event(WindowEvent::KeyPressed {
+        text: Key::Control.into(),
+    });
+    key(w, Key::Return);
+    window.dispatch_event(WindowEvent::KeyReleased {
+        text: Key::Control.into(),
+    });
+    settle();
+}
+
+/// H4 (§4.3, §4.6): "Don't ask again" at the footer's left, drawn as the
+/// host says (it owns the box and its guard): a click asks it to toggle,
+/// Run and Enter stay `run` (the host remembers when checked); Space does
+/// nothing; Ctrl+Enter runs and remembers; the footer keeps the palette's
+/// 44px for one line and grows when the text wraps.
+#[test]
+fn the_review_sheet_offers_dont_ask_again_by_click_or_ctrl_enter() {
+    let w = build(SHEET, 1100., 600.);
+    let export = sheet_step(
+        "Export: Export Last 30 Seconds",
+        "Clip Export",
+        "Not built in",
+        true,
+        false,
+    );
+    w.set_property(
+        "s",
+        sheet_value_remembering(
+            "Ask Vestra",
+            "export the last 30 s",
+            std::slice::from_ref(&export),
+            &["Clip Export"],
+        ),
+    )
+    .unwrap();
+    settle();
+    assert!(boolean(&w, "remember-shown"));
+    assert!(!boolean(&w, "remember-checked"));
+    let one_line = number(&w, "ph");
+    let (x, y) = (number(&w, "px"), number(&w, "py"));
+    let (bx, by) = (number(&w, "remember-x"), number(&w, "remember-y"));
+    // At the footer's left, level with the buttons.
+    assert!(bx > x && bx < x + 40., "{bx}");
+    assert!((by - number(&w, "buttons-y")).abs() < 2., "{by}");
+    assert!(by > y + one_line - 38.);
+    // Enter with the box unchecked: a plain Run; Ctrl+Enter remembers.
+    key(&w, Key::Return);
+    assert_eq!(string(&w, "last"), "run");
+    ctrl_enter(&w);
+    assert_eq!(string(&w, "last"), "run-remember");
+    // Space is not the checkbox's (the keys stay on the sheet).
+    w.set_property("last", Value::String("".into())).unwrap();
+    key(&w, Key::Space);
+    assert_eq!(string(&w, "last"), "");
+    assert!(boolean(&w, "keys"));
+    // A click asks the host (which owns the box and its guard); the view
+    // does not check it by itself.
+    click(&w, bx as f32, by as f32);
+    assert_eq!(string(&w, "last"), "toggle-remember");
+    assert!(!boolean(&w, "remember-checked"));
+    assert!(
+        boolean(&w, "keys"),
+        "the click leaves the keys on the sheet"
+    );
+    // Checked by the host: Enter and Run stay "run" (the host remembers).
+    w.set_property("remember-checked", true.into()).unwrap();
+    settle();
+    key(&w, Key::Return);
+    assert_eq!(string(&w, "last"), "run");
+    click(&w, bx as f32, by as f32);
+    assert_eq!(string(&w, "last"), "toggle-remember");
+    click(
+        &w,
+        number(&w, "run-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "run");
+    key(&w, Key::Escape);
+    assert_eq!(string(&w, "last"), "decline");
+    // Two long names wrap: the footer grows, the buttons stay inside.
+    let long = "A Plugin With A Very Long Shown Name Indeed";
+    w.set_property(
+        "s",
+        sheet_value_remembering(
+            "Ask Vestra",
+            "x",
+            std::slice::from_ref(&export),
+            &[long, long],
+        ),
+    )
+    .unwrap();
+    settle();
+    let wrapped = number(&w, "ph");
+    assert!(wrapped > one_line, "{wrapped} > {one_line}");
+    let (y, buttons) = (number(&w, "py"), number(&w, "buttons-y"));
+    assert!(buttons < y + wrapped - 8., "{buttons}");
 }
 
 /// The sheet as the spec's renders show it (PROPOSAL §4.3,
@@ -1470,6 +1593,13 @@ fn render_review_sheet_states() {
         "reset the picture, mute, export the last 30 s",
         "重置画面，静音，导出最后 30 秒",
     );
+    let frame = sheet_step(
+        pick("Auto Frame: Frame the Speaker", "Auto Frame: 跟随说话人"),
+        "Auto Frame",
+        &not_built_in,
+        true,
+        false,
+    );
     let eight: Vec<_> = [
         reset.clone(),
         mute.clone(),
@@ -1481,13 +1611,7 @@ fn render_review_sheet_states() {
             false,
             true,
         ),
-        sheet_step(
-            pick("Auto Frame: Frame the Speaker", "Auto Frame: 跟随说话人"),
-            "Auto Frame",
-            &not_built_in,
-            true,
-            false,
-        ),
+        frame.clone(),
         export.clone(),
         sheet_step(
             pick("Playlist: Remove All", "播放列表: 全部移除"),
@@ -1499,26 +1623,60 @@ fn render_review_sheet_states() {
         close.clone(),
     ]
     .into();
-    let states: Vec<(&str, &str, Vec<crate::host::review_sheet::Step>)> = vec![
+    // (name, request, steps, "Don't ask again" plugins as the host offers
+    // them: none with a destructive step; checked as the host sets it).
+    type State<'a> = (
+        &'a str,
+        &'a str,
+        Vec<crate::host::review_sheet::Step>,
+        Vec<&'a str>,
+        bool,
+    );
+    let states: Vec<State> = vec![
         (
             "r03-plan",
             request,
             vec![reset.clone(), mute.clone(), export.clone()],
+            vec![],
+            false,
         ),
         (
             "r03-one-destructive",
             pick("reset the picture", "重置画面"),
             vec![reset.clone()],
+            vec![],
+            false,
         ),
         (
             "r03-one-not-built-in",
             pick("export the last 30 s", "导出最后 30 秒"),
             vec![export.clone()],
+            vec!["Clip Export"],
+            false,
+        ),
+        (
+            "r04-remember-one-checked",
+            pick("mute and export the last 30 s", "静音并导出最后 30 秒"),
+            vec![mute.clone(), export.clone()],
+            vec!["Clip Export"],
+            true,
+        ),
+        (
+            "r04-remember-two",
+            pick(
+                "mute, follow the speaker and export the last 30 s",
+                "静音，跟随说话人，导出最后 30 秒",
+            ),
+            vec![mute.clone(), frame.clone(), export.clone()],
+            vec!["Auto Frame", "Clip Export"],
+            false,
         ),
         (
             "r03-close",
             pick("mute and close the video", "静音并关闭视频"),
             vec![mute.clone(), close.clone()],
+            vec![],
+            false,
         ),
         (
             "r03-eight",
@@ -1527,6 +1685,8 @@ fn render_review_sheet_states() {
                 "全部重置，大声点，跟随说话人，导出，清空播放列表然后关闭",
             ),
             eight,
+            vec![],
+            false,
         ),
     ];
     let backdrop = std::env::var_os("VESTRA_SHEET_BACKDROP")
@@ -1536,7 +1696,7 @@ fn render_review_sheet_states() {
     let title = pick("Ask Vestra", "问 Vestra");
     for palette in ["vestra", "vestra-light"] {
         let theme = if palette == "vestra" { "dark" } else { "light" };
-        for (name, query, steps) in &states {
+        for (name, query, steps, remember, checked) in &states {
             let w = build(SHEET, width, height);
             crate::ui::theme::apply_fonts(&w).unwrap();
             crate::ui::theme::apply(&w, palette).unwrap();
@@ -1544,9 +1704,14 @@ fn render_review_sheet_states() {
                 w.set_property("backdrop", Value::Image(image.clone()))
                     .unwrap();
             }
-            w.set_property("s", sheet_value(title, query, steps))
+            w.set_property("s", sheet_value_remembering(title, query, steps, remember))
                 .unwrap();
             settle();
+            if *checked {
+                // As the host sets it after a click.
+                w.set_property("remember-checked", true.into()).unwrap();
+                settle();
+            }
             render(&w, scale, width, height)
                 .save(out.join(format!("{prefix}{name}-{theme}.png")))
                 .unwrap();

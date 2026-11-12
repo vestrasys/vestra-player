@@ -17,9 +17,15 @@
 //!   menu): only an answer, the ticket's end (Don't Run) or the caller's end
 //!   removes it. It does not take the focus from another program.
 //! - The answer goes the usual way (`Event::CommandRunAnswered`).
+//! - `"Don't ask again for <plugin>"` (step 4, H4) sits at the footer's left
+//!   when the plan's steps that ask include some only because their plugin
+//!   is not built in and no step is destructive (user ruling 3 of
+//!   2026-11-12); Run with it checked, or Ctrl+Enter, runs and remembers.
+//!   The host owns the box (`Review::remember_checked`, unchecked for every
+//!   sheet): a click asks it to toggle and counts for nothing within the
+//!   guard, as every other input ([`decide`]). What is remembered is the
+//!   host's list (`ConfirmedRun::remember`).
 //!
-//! Step 4 (H4) adds `"Don't ask again for <plugin>"` at the footer's left;
-//! the footer keeps that place free.
 //! doc/architecture/palette-lead.md §2.1.
 use super::*;
 use crate::ui::command_palette;
@@ -54,8 +60,47 @@ pub(crate) struct Review {
     /// The request the ticket was minted for.
     pub(crate) query: String,
     pub(crate) steps: Vec<Step>,
+    /// The "Don't ask again" checkbox's text; empty: no checkbox.
+    pub(crate) remember: String,
+    /// The box is checked (the host's state; unchecked for every sheet).
+    pub(crate) remember_checked: bool,
     /// When it last showed (`Host::now_ms`); `None` while it waits to show.
     pub(crate) shown_at: Option<u64>,
+}
+
+/// What an action on the sheet does.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Decision {
+    /// Within the guard, unknown, or a toggle with no checkbox.
+    Ignore,
+    /// "Don't ask again" changes.
+    Toggle,
+    /// The answer: (run, remember).
+    Answer(bool, bool),
+}
+
+/// An action on a sheet shown at `shown_at`, at `now`, which offers "Don't
+/// ask again" (`offered`) and has it `checked`: `run` (remembering when
+/// checked), `run-remember` (Ctrl+Enter: remembering when offered),
+/// `toggle-remember` (a click on the box) or `decline`. Everything, the
+/// box included, counts for nothing within [`GUARD_MS`].
+pub(crate) fn decide(
+    action: &str,
+    shown_at: u64,
+    now: u64,
+    offered: bool,
+    checked: bool,
+) -> Decision {
+    if !accepts(shown_at, now) {
+        return Decision::Ignore;
+    }
+    match action {
+        "run" => Decision::Answer(true, offered && checked),
+        "run-remember" => Decision::Answer(true, offered),
+        "toggle-remember" if offered => Decision::Toggle,
+        "decline" => Decision::Answer(false, false),
+        _ => Decision::Ignore,
+    }
 }
 
 /// Whether input at `now` counts on a sheet shown at `shown_at`.
@@ -72,15 +117,33 @@ pub(crate) fn question(steps: usize) -> String {
     }
 }
 
+/// The "Don't ask again" checkbox's text for the plugins it would trust,
+/// by shown name (PROPOSAL §4.5): one or two by name, more by count (their
+/// rows show which); none: empty (no checkbox).
+pub(crate) fn remember_text(plugins: &[String]) -> String {
+    match plugins {
+        [] => String::new(),
+        [one] => i18n::tr_args("Don't ask again for {plugin}", &json!({ "plugin": one })),
+        [first, second] => {
+            i18n::tr_args("Don't ask again for {0} and {1}", &json!([first, second]))
+        }
+        more => i18n::tr_args(
+            "Don't ask again for these {n} plugins",
+            &json!({ "n": more.len() }),
+        ),
+    }
+}
+
 /// The `ReviewSheet` value (ui/review-sheet.slint), less its image: `title`
 /// and `icon` of the request box, the request, the steps in [`SLOTS`] rows,
-/// the note when a step's plugin is not built in, and the buttons' texts
-/// and keys.
+/// the note when a step's plugin is not built in, the "Don't ask again"
+/// text (empty: no checkbox), and the buttons' texts and keys.
 pub(crate) fn sheet(
     title: &str,
     icon: &str,
     query: &str,
     steps: &[Step],
+    remember: &str,
     keys: [&str; 2],
 ) -> Value {
     let rows: Vec<Value> = (0..SLOTS)
@@ -105,6 +168,7 @@ pub(crate) fn sheet(
         "count": steps.len().min(SLOTS),
         "steps": rows,
         "note": note,
+        "remember": remember,
         "run": i18n::tr("Run"),
         "cancel": i18n::tr("Don't Run"),
         "run-key": keys[0],
@@ -114,8 +178,9 @@ pub(crate) fn sheet(
 
 impl Host {
     /// `commands.run` asks the user about `steps` (the run's own first) on
-    /// `ticket`: the sheet shows now, or once nothing is in its way. One at
-    /// a time: `CommandRuns::admit` refuses (`busy`) a run that would ask
+    /// `ticket`, offering "Don't ask again" with the text `remember` (empty:
+    /// not offered): the sheet shows now, or once nothing is in its way. One
+    /// at a time: `CommandRuns::admit` refuses (`busy`) a run that would ask
     /// while any sheet waits, so this never replaces a waiting one.
     pub(crate) fn open_review(
         &mut self,
@@ -123,6 +188,7 @@ impl Host {
         ticket: String,
         query: String,
         steps: Vec<Step>,
+        remember: String,
     ) {
         // The count only: the labels may name the user's file.
         diag!("review sheet: asks about {} steps", steps.len());
@@ -139,6 +205,8 @@ impl Host {
             ticket,
             query,
             steps,
+            remember,
+            remember_checked: false,
             shown_at: None,
         });
         self.present_review();
@@ -187,8 +255,10 @@ impl Host {
             },
             &review.query,
             &review.steps,
+            &review.remember,
             [&keys[0], &keys[2]],
         );
+        let remember_checked = review.remember_checked;
         let image = self.lead_image(owner, &icon);
         self.menu_open = true;
         self.menu_generation = self.shell_generation;
@@ -199,6 +269,8 @@ impl Host {
                 fields.set_field("image".into(), SValue::Image(image.unwrap_or_default()));
             }
             shell.set_property("review-sheet", value)?;
+            // Set with every value: a new sheet starts unchecked.
+            shell.set_property("review-remember-checked", remember_checked.into())?;
             shell.set_property("palette-open", false.into())?;
             shell.set_property("review-open", true.into())?;
             shell.set_property("menu-open", true.into())?;
@@ -233,7 +305,7 @@ impl Host {
         }
         if !self.command_runs.is_live(&review.ticket, now) {
             diag!("review sheet: the ticket ended: Don't Run");
-            self.end_review(Some(false));
+            self.end_review(Some((false, false)));
             return;
         }
         if self.dialog_busy {
@@ -245,35 +317,53 @@ impl Host {
         self.present_review();
     }
     /// A key or press on the sheet (`review-sheet-action`, a press outside
-    /// it): `run` or `decline`, ignored within the guard.
+    /// it), as [`decide`] takes it.
     pub(crate) fn review_action(&mut self, action: &str) {
         if !self.review_presented() {
             return;
         }
-        let shown_at = self.review.as_ref().and_then(|r| r.shown_at).unwrap_or(0);
-        if !accepts(shown_at, self.now_ms()) {
-            input_trace::follow(&format!("review sheet: {action} within the guard, ignored"));
+        let Some(review) = self.review.as_ref() else {
             return;
-        }
-        match action {
-            "run" => self.end_review(Some(true)),
-            "decline" => self.end_review(Some(false)),
-            _ => {}
+        };
+        let decision = decide(
+            action,
+            review.shown_at.unwrap_or(0),
+            self.now_ms(),
+            !review.remember.is_empty(),
+            review.remember_checked,
+        );
+        match decision {
+            Decision::Ignore => {
+                input_trace::follow(&format!("review sheet: {action} ignored"));
+            }
+            Decision::Toggle => {
+                let checked = !review.remember_checked;
+                if let Some(review) = self.review.as_mut() {
+                    review.remember_checked = checked;
+                }
+                if let Some(shell) = &self.shell {
+                    let _ = shell.set_property("review-remember-checked", checked.into());
+                }
+            }
+            Decision::Answer(yes, remember) => self.end_review(Some((yes, remember))),
         }
     }
-    /// The sheet goes, with the user's answer (`None`: nobody waits for it).
-    fn end_review(&mut self, answer: Option<bool>) {
+    /// The sheet goes, with the user's answer, (run, remember) (`None`:
+    /// nobody waits for it).
+    fn end_review(&mut self, answer: Option<(bool, bool)>) {
         let Some(review) = self.review.take() else {
             return;
         };
         if self.menu_open && self.menu_mode == MenuMode::Review {
             self.close_menu();
         }
-        if let Some(yes) = answer {
-            input_trace::follow(&format!("review sheet: answered {yes}"));
+        if let Some((yes, remember)) = answer {
+            input_trace::follow(&format!(
+                "review sheet: answered {yes} (remember {remember})"
+            ));
             let _ = self
                 .events
-                .send(Event::CommandRunAnswered(review.reply, yes));
+                .send(Event::CommandRunAnswered(review.reply, yes, remember));
         }
     }
 }
@@ -327,9 +417,11 @@ mod tests {
             "ai",
             "  reset, mute, export ",
             &steps,
+            "",
             ["Enter", "Esc"],
         );
         assert_eq!(value["question"], "Run these 3 commands?");
+        assert_eq!(value["remember"], "");
         assert_eq!(value["query"], "reset, mute, export");
         assert_eq!(value["count"], 3);
         let rows = value["steps"].as_array().unwrap();
@@ -351,8 +443,73 @@ mod tests {
             (&value["run-key"], &value["cancel-key"]),
             (&json!("Enter"), &json!("Esc"))
         );
-        let one = sheet("Ask Vestra", "ai", "", &steps[..1], ["Enter", "Esc"]);
+        let one = sheet("Ask Vestra", "ai", "", &steps[..1], "", ["Enter", "Esc"]);
         assert_eq!(one["question"], "Run this command?");
         assert_eq!(one["note"], "");
+        let export = sheet(
+            "Ask Vestra",
+            "ai",
+            "",
+            &steps[2..],
+            &remember_text(&["Clip Export".into()]),
+            ["Enter", "Esc"],
+        );
+        assert_eq!(export["remember"], "Don't ask again for Clip Export");
+    }
+
+    /// Review fix 1: the box too counts for nothing within the guard; Run
+    /// remembers only when it is offered and checked, Ctrl+Enter when it
+    /// is offered; a toggle without a box is nothing.
+    #[test]
+    fn the_guard_covers_the_checkbox_and_run_follows_the_hosts_box() {
+        use Decision::*;
+        assert_eq!(decide("toggle-remember", 1_000, 1_200, true, false), Ignore);
+        assert_eq!(decide("run-remember", 1_000, 1_499, true, false), Ignore);
+        assert_eq!(decide("toggle-remember", 1_000, 1_500, true, false), Toggle);
+        assert_eq!(
+            decide("toggle-remember", 1_000, 1_500, false, false),
+            Ignore
+        );
+        assert_eq!(
+            decide("run", 1_000, 2_000, true, false),
+            Answer(true, false)
+        );
+        assert_eq!(decide("run", 1_000, 2_000, true, true), Answer(true, true));
+        assert_eq!(
+            decide("run", 1_000, 2_000, false, true),
+            Answer(true, false)
+        );
+        assert_eq!(
+            decide("run-remember", 1_000, 2_000, true, false),
+            Answer(true, true)
+        );
+        assert_eq!(
+            decide("run-remember", 1_000, 2_000, false, false),
+            Answer(true, false)
+        );
+        assert_eq!(
+            decide("decline", 1_000, 2_000, true, true),
+            Answer(false, false)
+        );
+        assert_eq!(decide("other", 1_000, 2_000, true, true), Ignore);
+    }
+
+    /// PROPOSAL §4.5: one or two plugins by name, more by count.
+    #[test]
+    fn dont_ask_again_names_one_or_two_plugins_and_counts_more() {
+        let names = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        assert_eq!(remember_text(&[]), "");
+        assert_eq!(
+            remember_text(&names(&["Clip Export"])),
+            "Don't ask again for Clip Export"
+        );
+        assert_eq!(
+            remember_text(&names(&["Clip Export", "Auto Frame"])),
+            "Don't ask again for Clip Export and Auto Frame"
+        );
+        assert_eq!(
+            remember_text(&names(&["Clip Export", "Auto Frame", "VestraTube"])),
+            "Don't ask again for these 3 plugins"
+        );
     }
 }

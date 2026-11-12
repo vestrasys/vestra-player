@@ -1,6 +1,9 @@
 //! Host commands and core actions (step seek, on-screen messages).
 use super::*;
 
+/// Command Palette: Ask Again Before Plugin Commands (Ask Vestra UX step 4).
+pub(crate) const ASK_AGAIN: &str = "ask-again";
+
 impl Host {
     pub(crate) fn execute_command(
         &mut self,
@@ -133,6 +136,13 @@ impl Host {
         let mut adjust = commands::Declaration::new("Adjustments and Effects", &[]);
         adjust.localize(|_| i18n::tr("Adjustments and Effects"));
         core_actions::categorize(&mut adjust, "Window");
+        // Ask Vestra UX step 4 (H4): forget every "Don't ask again" of the
+        // approval sheet, so `commands.run` callers ask again before any
+        // command of a plugin that is not built in. In the palette only (no
+        // menu path), no default key.
+        let mut ask_again = commands::Declaration::new("Ask Again Before Plugin Commands", &[]);
+        ask_again.localize(|_| i18n::tr("Ask Again Before Plugin Commands"));
+        core_actions::categorize(&mut ask_again, "Command Palette");
         vec![
             ("fullscreen", fullscreen, state(true, Some(false))),
             ("enter-fullscreen", enter, state(true, None)),
@@ -144,6 +154,8 @@ impl Host {
             ("palette", palette, state(true, None)),
             // `bar_buttons::ADJUST` (a literal: tests/sdk/host-agreement.test.ts reads it).
             ("adjust", adjust, state(false, Some(false))),
+            // `ASK_AGAIN`.
+            ("ask-again", ask_again, state(true, None)),
         ]
     }
     pub(crate) fn register_core_action(
@@ -497,6 +509,10 @@ impl Host {
             self.open_palette();
             return;
         }
+        if id == ASK_AGAIN {
+            crate::capabilities::ask_again_before_plugin_commands(self);
+            return;
+        }
         if id == "quit" {
             // Before anything waits on the GPU.
             platform::release_gpu_waits();
@@ -776,6 +792,7 @@ mod tests {
                 ("sidebar", category("Window")),
                 ("palette", category("Help")),
                 ("adjust", category("Window")),
+                ("ask-again", category("Command Palette")),
             ]
         );
         let own = Host::host_declarations()

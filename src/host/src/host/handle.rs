@@ -442,9 +442,9 @@ impl Host {
             Event::OpenFiles(files, front) => self.open_files(files, front),
             Event::Settings(generation, index) => self.settings_event(generation, index),
             Event::SettingsChecked(serial, result) => self.settings_checked(serial, result),
-            Event::CommandRunAnswered(reply, yes) => {
+            Event::CommandRunAnswered(reply, yes, remember) => {
                 self.policy.activity(self.now_ms());
-                crate::capabilities::command_run_answered(self, reply, yes);
+                crate::capabilities::command_run_answered(self, reply, yes, remember);
             }
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
