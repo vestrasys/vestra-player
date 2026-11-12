@@ -240,7 +240,7 @@ test("busy: the step fails with the player's message as given", async (t) => {
   const ai = await ready(() => plan(command("acme.obs/record.start")));
   t.after(() => ai.stop());
   const { host } = ai;
-  const message = "another command of this request is waiting for the user's answer";
+  const message = "another command is waiting for the user's answer";
   const runs = table(host, [row("acme.obs/record.start", "Mini OBS: Start Recording", { builtin: false, plugin: "Mini OBS", busy: true, reason: message })]);
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("start recording");
