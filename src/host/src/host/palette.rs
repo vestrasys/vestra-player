@@ -29,6 +29,10 @@ pub(crate) struct PaletteState {
     pub(crate) follow: Option<String>,
     /// The last projection showed a lead row first.
     pub(crate) lead: bool,
+    /// The query the lead's row sent with the palette kept open
+    /// (Shift+Enter), until the query changes: the row shows the holder's
+    /// status for it (`command_palette::lead_shows_status`).
+    pub(crate) sent: Option<String>,
     /// The next projection places the cursor by the lead's rule
     /// (`command_palette::aim`): after opening, typing, or the lead coming
     /// or going.
@@ -157,7 +161,13 @@ impl Host {
         let status = lead
             .as_ref()
             .and_then(|(_, row)| row.status.clone())
-            .filter(|_| empty);
+            .filter(|_| {
+                command_palette::lead_shows_status(
+                    true,
+                    &self.palette.query,
+                    self.palette.sent.as_deref(),
+                )
+            });
         let palette = &mut self.palette;
         if palette.lead != lead.is_some() {
             palette.lead = lead.is_some();
@@ -264,16 +274,24 @@ impl Host {
     /// wakes it from standby). `status`: the row showed its status (stop).
     fn run_lead(&mut self, keep: bool) {
         let query = self.palette.query.clone();
-        self.lead_activated(query, keep);
+        let sent = self.palette.sent.take();
+        self.lead_activated(query.clone(), keep, sent.as_deref());
+        // Kept open: the row shows the holder's status for this request
+        // until the query changes, and Enter on it stops the request
+        // instead of sending it again.
+        if keep {
+            self.palette.sent = Some(query);
+        }
     }
     /// The lead's row activated with `query` (also `VESTRA_TEST_EXECUTE`'s
-    /// `lead:<query>@<ms>`, headless).
-    pub(crate) fn lead_activated(&mut self, query: String, keep: bool) {
+    /// `lead:<query>@<ms>`, headless); `sent`: the query it sent with the
+    /// palette kept open, if unchanged since (`PaletteState::sent`).
+    pub(crate) fn lead_activated(&mut self, query: String, keep: bool, sent: Option<&str>) {
         let Some(lead) = &self.lead else {
             return;
         };
         let owner = lead.owner;
-        let status = query.trim().is_empty() && lead.row.status.is_some();
+        let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query, sent);
         let now = self.now_ms();
         let ticket = self.command_runs.mint(owner, &query, now);
         input_trace::follow(&format!("palette lead to plugin {owner} (keep {keep})"));
@@ -296,6 +314,7 @@ impl Host {
                     return;
                 }
                 self.palette.query = query;
+                self.palette.sent = None;
                 self.palette.cursor = 0;
                 self.palette.offset = 0;
                 self.palette.aim = true;

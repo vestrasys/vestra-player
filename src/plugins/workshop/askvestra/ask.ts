@@ -27,6 +27,13 @@ export const MAX_MODEL_CALLS = 4;
  * playback state; v2: also the command table.
  */
 const CONSENT_SCOPE = "v2";
+/**
+ * The player's rate for one ticket: at most this many `commands.run` a
+ * second (host `capabilities/commands_run.rs` RUNS_PER_SECOND; the SDK's
+ * `commands.run` reference: `limit`, 4 a second). A plan has up to
+ * MAX_STEPS (8), so its steps are paced to stay within it (`pace`).
+ */
+export const RUNS_PER_SECOND = 4;
 /** Model text quoted on the OSD (an error, a refusal), at most. */
 const QUOTE_CHARS = 120;
 
@@ -99,6 +106,36 @@ const cut = (text: string) => {
 };
 const codeOf = (error: unknown) => (error as { code?: string } | null)?.code;
 
+/** Waits `ms`, or rejects with the signal's reason when it aborts first. */
+const pause = (ms: number, signal: AbortSignal) =>
+  new Promise<void>((resolve, reject) => {
+    signal.throwIfAborted();
+    const aborted = () => {
+      clearTimeout(timer);
+      reject(signal.reason as Error);
+    };
+    const timer = setTimeout(() => {
+      signal.removeEventListener("abort", aborted);
+      resolve();
+    }, ms);
+    signal.addEventListener("abort", aborted, { once: true });
+  });
+
+/**
+ * Waits until one more `commands.run` stays within RUNS_PER_SECOND.
+ * `answered`: when the player answered each earlier run of the ticket
+ * (`performance.now()`). The player counts a run before it answers it and
+ * the next one after it was sent, so a run sent one second after the answer
+ * to the run RUNS_PER_SECOND before it is within the rate whatever the
+ * delays between the processes. The first RUNS_PER_SECOND runs go at once.
+ */
+export const pace = (answered: readonly number[], signal: AbortSignal): Promise<void> => {
+  signal.throwIfAborted();
+  if (answered.length < RUNS_PER_SECOND) return Promise.resolve();
+  const wait = answered[answered.length - RUNS_PER_SECOND]! + 1000 - performance.now();
+  return wait > 0 ? pause(Math.ceil(wait), signal) : Promise.resolve();
+};
+
 export function askVestra(plugin: Plugin, model: AskModel) {
   const { i18n } = plugin;
   const consent = plugin.storage.json<{ providers: string[] }>("askvestra", {
@@ -106,6 +143,13 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     validate: (v: unknown): v is { providers: string[] } => !!v && Array.isArray((v as { providers?: unknown }).providers),
   });
   let current: Request | null = null;
+  /**
+   * The latest request while it waits for the key or the consent (its
+   * order, `latest`): the row already says Vestra is working, so a second
+   * Enter on it stops instead of sending the request again.
+   */
+  let waiting: number | null = null;
+  const working = () => current !== null || waiting !== null;
 
   // ---- the palette's lead row
   const leadOptions = (): PaletteLeadOptions => ({
@@ -114,9 +158,9 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     placeholder: i18n.text("Type a command or ask Vestra"),
     empty: i18n.text("Type a request or a question"),
     ...(model.setUp() ? {} : { note: i18n.text("Set up a model first") }),
-    status: current
+    status: working()
       ? {
-          text: current.step
+          text: current?.step
             ? i18n.text("Vestra is working · Step {0} of {1} · {2}", [current.step.index, current.step.of, current.step.label])
             : i18n.text("Vestra is working · Planning…"),
           note: i18n.text("Enter stops"),
@@ -285,6 +329,16 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     refresh();
   };
 
+  /** Stop from the user: the running request, and one waiting for the key or the consent. */
+  const stopByUser = () => {
+    if (waiting !== null) {
+      waiting = null;
+      latest++; // the waiting request goes no further
+      refresh();
+    }
+    stop(true);
+  };
+
   /**
    * Asks once per recipient before the first request goes to it (PROPOSAL
    * §8, Q12 A). Requests made while the dialog is open share its answer.
@@ -317,18 +371,28 @@ export function askVestra(plugin: Plugin, model: AskModel) {
   let latest = 0;
   const request = async (query: string, ticket: string) => {
     const order = ++latest;
+    waiting = order;
+    refresh();
+    /** This request waits no longer (a newer one may wait now: its own). */
+    const waited = () => {
+      if (waiting !== order) return;
+      waiting = null;
+      refresh();
+    };
     // A user action: reading the key may wait on the keychain's dialog.
     const ready = await model.ready().catch(() => false);
     if (order !== latest) return;
     if (!ready) {
-      refresh();
+      waited();
       // Flow 7: the settings page (the palette keeps the typed text, Q8);
       // set up but the key cannot be read: say so.
       if (!model.setUp()) await model.openSettings();
       else await osd(i18n.text("Vestra · Cannot read the API key; save it again in the settings"));
       return;
     }
-    if (!(await consented()) || order !== latest) return;
+    const consentGiven = await consented();
+    waited();
+    if (!consentGiven || order !== latest) return;
     // This request replaces the one running, if any (PROPOSAL Q6 A).
     stop(false);
     const mine: Request = { ticket, controller: new AbortController(), step: null, stopped: false };
@@ -340,9 +404,12 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       const { steps, rows } = await plan(mine, query);
       stopWorker(mine);
       let opened: string | null = null;
+      /** When the player answered each step's run, for the ticket's rate. */
+      const answered: number[] = [];
       for (const [index, step] of steps.entries()) {
         mine.controller.signal.throwIfAborted();
         const label = stepLabel(step, rows);
+        await pace(answered, mine.controller.signal);
         mine.step = { index: index + 1, of: steps.length, label };
         refresh();
         try {
@@ -352,6 +419,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
           if (error instanceof Refusal) throw new Failure(i18n.text("Vestra · Step {0} failed: {1}", [index + 1, error.reason]));
           throw error;
         }
+        answered.push(performance.now());
         labels.push(label);
         // A command that opens a window ends the request: the user is in it now (PROPOSAL §4).
         if (rows.get(step.id)?.title.endsWith("…")) {
@@ -399,7 +467,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     const text = query.trim();
     (async () => {
       try {
-        if (status) stop(true); // Enter on the status row (flow 3)
+        if (status) stopByUser(); // Enter on the status row (flow 3)
         else if (!text) await model.openWindow(); // Q2 A: the empty row opens the AI window
         else await request(text, ticket);
       } finally {
@@ -414,9 +482,9 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     title: "Stop",
     // i18n-ignore: the assistant's name, the same in every language
     category: "Vestra",
-    enabled: () => !!current,
+    enabled: working,
     reason: "Vestra is not working on a request",
-    run: () => stop(true),
+    run: stopByUser,
   });
   // Busy while a request runs: the player does not put the plugin in standby meanwhile (WORKING_COMMAND).
   plugin.commands.add({
@@ -425,7 +493,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     // i18n-ignore: the assistant's name, the same in every language
     category: "Vestra",
     focus: "panel", // in no menu, palette or bar: the plugin has no panel
-    busy: () => !!current,
+    busy: working,
     reason: "Vestra is working",
     run: () => {},
   });
