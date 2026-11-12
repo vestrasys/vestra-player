@@ -1170,6 +1170,9 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "VideoUpscaling.state": ["video.upscaling.state"],
   "VideoUpscaling.set": ["video.upscaling.set"],
   "VideoUpscaling.onChange": ["event:video.upscaling.changed"],
+  "VideoMotion.state": ["video.motion.state"],
+  "VideoMotion.set": ["video.motion.set"],
+  "VideoMotion.onChange": ["event:video.motion.changed"],
   // SDK 1.7.0: plugin.wire.commands.register (register, then update and
   // unregister through the WireCommand it returns).
   "WireCommands.register": [
@@ -1496,6 +1499,66 @@ test("WireUpscalingState has the fields video.upscaling answers with (playback/u
   );
 });
 
+test("WireMotionState has the fields video.motion answers with (playback/motion.rs Motion::state and shared_state; SDK 1.7.19, player 0.8.1)", () => {
+  const wire = /export interface WireMotionState \{([\s\S]*?)\n\}/.exec(
+    sdkFile("wire.d.ts"),
+  )?.[1];
+  assert.ok(wire, "WireMotionState in the SDK's wire.d.ts");
+  const sdk = [
+    ...new Set([...wire.matchAll(/(\w+)\??:/g)].map((m) => m[1]!)),
+  ].sort();
+  const motion = host("src/playback/motion.rs");
+  const state = /fn state\(&mut self[\s\S]*?\n {4}\}/.exec(motion)?.[0];
+  assert.ok(state, "Motion::state in motion.rs");
+  const shared = /fn shared_state\(&self[\s\S]*?\n {4}\}/.exec(motion)?.[0];
+  assert.ok(shared, "Motion::shared_state in motion.rs");
+  const player = [
+    ...new Set([
+      ...[...shared.matchAll(/"(\w+)":/g)].map((m) => m[1]!),
+      ...[...state.matchAll(/state\["(\w+)"\]/g)].map((m) => m[1]!),
+    ]),
+  ].sort();
+  assert.deepEqual(sdk, player);
+  assert.ok(
+    motion.includes(`json!({"code":self.code(),"message":self.message()})`),
+    "motion Reason::json is { code, message }",
+  );
+  assert.ok(
+    motion.includes(`pub const CHANGED: &str = "video.motion.changed";`),
+    "the event's name",
+  );
+});
+
+test("MotionReasonCode names the player's motion smoothing reason codes (playback/motion.rs, platform; SDK 1.7.19, player 0.8.1)", () => {
+  const sdk = /export type MotionReasonCode = ([^;]+);/.exec(sdkTypes())?.[1];
+  assert.ok(sdk, "MotionReasonCode in the SDK's plugin types");
+  const own = /pub fn code\(&self\) -> &'static str \{([\s\S]*?)\n {4}\}/.exec(
+    host("src/playback/motion.rs"),
+  )?.[1];
+  assert.ok(own, "Reason::code in motion.rs");
+  const refusals = ["src/platform/mod.rs", "src/platform/windows.rs"].flatMap(
+    (file) =>
+      [...host(file).matchAll(/MotionRefusal \{\s*code: "([a-z-]+)"/g)].map(
+        (m) => m[1]!,
+      ),
+  );
+  const values = (text: string) =>
+    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  assert.deepEqual(
+    [...new Set(values(sdk))].sort(),
+    [...new Set([...values(own), ...refusals])].sort(),
+  );
+  // The modes `set` accepts.
+  const modes =
+    /pub fn parse\(text: &str\) -> Option<Self> \{([\s\S]*?)\n {4}\}/.exec(
+      host("src/playback/motion.rs"),
+    )?.[1];
+  assert.ok(modes, "Mode::parse in motion.rs");
+  const mode = /export type MotionMode = ([^;]+);/.exec(sdkTypes())?.[1];
+  assert.ok(mode, "MotionMode in the SDK's plugin types");
+  assert.deepEqual(values(mode).sort(), values(modes).sort());
+});
+
 test("UpscalingDecodingCause names the player's causes (playback/upscaling.rs Cause::as_str; SDK 1.5.43, player 0.5.25)", () => {
   const sdk = /export type UpscalingDecodingCause = ([^;]+);/.exec(
     sdkTypes(),
@@ -1526,9 +1589,11 @@ test("UpscalingReasonCode names the player's upscaling reason codes (playback/up
     "src/platform/windows.rs",
     "src/playback/upscaling.rs",
   ].flatMap((file) =>
-    [...host(file).matchAll(/code: "([a-z-]+)"|refuse\(\s*"([a-z-]+)"/g)].map(
-      (m) => (m[1] ?? m[2])!,
-    ),
+    [
+      ...host(file).matchAll(
+        /UpscalerRefusal \{\s*code: "([a-z-]+)"|refuse\(\s*"([a-z-]+)"/g,
+      ),
+    ].map((m) => (m[1] ?? m[2])!),
   );
   const values = (text: string) =>
     [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
@@ -2464,4 +2529,44 @@ test("TestHost asks for a commands.run plan as the player does (commands_run.rs 
   await quiet(() => run("louder", { ticket: at, then: null }));
   await quiet(() => run("louder", { ticket: at, then: [] }));
   await stop();
+});
+
+test("motion smoothing's run-long reasons, engines and the reserved engine's text agree (playback/motion.rs FIXED_CODES, AMD, NVIDIA, NO_NVIDIA; SDK TestHost and docs)", () => {
+  const motion = host("src/playback/motion.rs");
+  const values = (text: string) =>
+    [...text.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  const fixed = /pub const FIXED_CODES: &\[&str\] = &\[([^\]]+)\]/.exec(
+    motion,
+  )?.[1];
+  assert.ok(fixed, "FIXED_CODES in motion.rs");
+  const testHost = /const MOTION_FIXED = \[([^\]]+)\]/.exec(
+    sdkFile("plugin/testing/processing.js"),
+  )?.[1];
+  assert.ok(testHost, "MOTION_FIXED in the SDK's TestHost");
+  assert.deepEqual(values(testHost).sort(), values(fixed).sort());
+  // The docs list them as the codes that hold until the player restarts.
+  const docs =
+    /\* (`engine`[^.]*?) \(once GPU\s*\n?\s*\* rendering is not just starting\) hold until the player restarts/.exec(
+      sdkTypes(),
+    )?.[1];
+  assert.ok(docs, "MotionReasonCode's run-long sentence");
+  assert.deepEqual(
+    [...docs.matchAll(/`([a-z-]+)`/g)].map((m) => m[1]!).sort(),
+    values(fixed).sort(),
+  );
+  // Engines.
+  const engines = [
+    /pub const AMD: &str = "([^"]+)";/.exec(motion)?.[1],
+    /pub const NVIDIA: &str = "([^"]+)";/.exec(motion)?.[1],
+  ];
+  const sdk = /export type MotionEngine = ([^;]+);/.exec(sdkTypes())?.[1];
+  assert.ok(sdk, "MotionEngine in the SDK's plugin types");
+  assert.deepEqual(values(sdk).sort(), [...engines].sort());
+  // The reserved engine's message.
+  const own = /const NO_NVIDIA: &str =\s*"([^"]+)";/.exec(motion)?.[1];
+  assert.ok(own, "NO_NVIDIA in motion.rs");
+  assert.ok(
+    sdkFile("plugin/testing/processing.js").includes(own),
+    "TestHost's NO_NVIDIA is the player's",
+  );
 });

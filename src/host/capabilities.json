@@ -171,6 +171,7 @@
               "bindings.changed": "bindings.manage",
               "commands.keys": "commands",
               "packages.changed": null,
+              "video.motion.changed": "video.motion",
               "video.upscaling.changed": "video.upscaling"
             },
             "otherwise": "events",
@@ -184,6 +185,7 @@
               "bindings.changed": "bindings.manage",
               "commands.keys": "commands",
               "packages.changed": null,
+              "video.motion.changed": "video.motion",
               "video.upscaling.changed": "video.upscaling"
             },
             "otherwise": "events",
@@ -694,6 +696,24 @@
         }
       ],
       "name": "video.upscaling",
+      "requires": [],
+      "residency": "live",
+      "risky": false
+    },
+    {
+      "builtinOnly": false,
+      "label": "Smooth motion with the GPU's frame-rate converter",
+      "methods": [
+        {
+          "name": "video.motion.state",
+          "needs": "video.motion"
+        },
+        {
+          "name": "video.motion.set",
+          "needs": "video.motion"
+        }
+      ],
+      "name": "video.motion",
       "requires": [],
       "residency": "live",
       "risky": false

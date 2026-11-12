@@ -295,7 +295,17 @@ fn rendering_reason(reason: &RenderReason, rendering: &Value) -> Reason {
     if *reason == RenderReason::Pending {
         return Reason::Starting;
     }
-    let advice = if rendering["gpu"]["available"] == false {
+    Reason::Rendering(format!(
+        "upscaling needs GPU rendering, and the player renders in software ({}); {}",
+        reason.message(),
+        rendering_advice(reason, rendering)
+    ))
+}
+
+/// What the user can do to get GPU rendering, from the rendering state
+/// (`host/rendering.rs`); also motion smoothing's Match Display's advice.
+pub(crate) fn rendering_advice(reason: &RenderReason, rendering: &Value) -> String {
+    if rendering["gpu"]["available"] == false {
         format!(
             "GPU rendering cannot be turned on here: {}",
             rendering["gpu"]["reason"]["message"]
@@ -311,11 +321,7 @@ fn rendering_reason(reason: &RenderReason, rendering: &Value) -> Reason {
         "GPU rendering is turned on for the next start: restart the player".into()
     } else {
         "turn on GPU Rendering in Picture ▸ Rendering and restart the player".into()
-    };
-    Reason::Rendering(format!(
-        "upscaling needs GPU rendering, and the player renders in software ({}); {advice}",
-        reason.message()
-    ))
+    }
 }
 
 /// The video's size as the upscaler gets it (after the orientation filter)
@@ -676,6 +682,11 @@ impl Upscaling {
                 Pending::State(reply, _) | Pending::Set(reply, ..) => reply.owner == owner,
             })
     }
+    /// Some plugin has upscaling on: motion smoothing waits meanwhile
+    /// (`playback/motion.rs`: the two filters cannot share the chain).
+    pub fn asked(&self) -> bool {
+        !self.owners.is_empty()
+    }
     /// `owner` has upscaling on (not only a request waiting): what its next
     /// activation turns on again (lazy activation's `held`).
     pub fn owns(&self, owner: u64) -> bool {
@@ -776,6 +787,18 @@ impl Upscaling {
             copy_back_owners: &self.copy_back_owners,
             os: std::env::consts::OS,
         })
+    }
+
+    /// Whether `set(true)` would be accepted now: the system's check
+    /// answered, and no reason that holds for the run stands in the way.
+    /// Motion smoothing yields to upscaling only then
+    /// (`Motion::yield_to_upscaling`); before the check, or where upscaling
+    /// is refused (no NVIDIA GPU), it stays.
+    pub fn would_accept(&self, mpv: &Mpv, render: &Render) -> bool {
+        matches!(self.probe, Probe::Done(_))
+            && self
+                .availability(mpv, render, &Value::Null)
+                .map_or_else(|reason| !reason.fixed(), |()| true)
     }
 
     /// The `UpscalingState` for `owner`.

@@ -90,6 +90,9 @@ pub struct Processing {
     /// The user asked to play during a preview step (`pause_request`):
     /// applied once the step is over.
     resume: bool,
+    /// Motion smoothing's filter needs frames in memory too
+    /// (`hold_frames_in_memory`, `playback/motion.rs`).
+    held: bool,
     /// Retries made, for the hardware tests.
     #[cfg(test)]
     hwdec_retries: u32,
@@ -668,6 +671,17 @@ impl Processing {
         self.config_revision += 1;
         Ok(result)
     }
+    /// Some owned video chain raises the frame rate (a `frameBlend` node:
+    /// Frame Doubling); motion smoothing waits meanwhile
+    /// (`playback/motion.rs`): the two would double twice.
+    pub fn doubles_frames(&self) -> bool {
+        self.video.values().any(|(_, resource)| {
+            resource
+                .nodes
+                .iter()
+                .any(|node| matches!(node, VideoNode::FrameBlend { .. }))
+        })
+    }
     /// `owner` has a chain applied (lazy activation: it stays running).
     pub fn holds(&self, owner: u64) -> bool {
         self.video
@@ -751,6 +765,20 @@ impl Processing {
             return Err(RpcError::new("backend-uncertain", failures.join("; ")));
         }
         Ok(())
+    }
+    /// Motion smoothing (`playback/motion.rs`) holds frames in memory
+    /// while its filter is in the chain: AMF's frame-rate converter fails
+    /// on Direct3D 11 frames (`AMFFRC->Init() failed with error 4`). The
+    /// same copy-back switch as an owned chain's (`frames_in_memory`),
+    /// made before the filter goes in and undone after it went, unless an
+    /// owned chain still needs it.
+    pub fn hold_frames_in_memory(&mut self, mpv: &Mpv, held: bool) {
+        if self.held == held {
+            return;
+        }
+        self.held = held;
+        let chains = !self.installed.is_empty();
+        self.frames_in_memory(mpv, chains);
     }
     /// The renderer switched (GPU to software) and set its own `hwdec`:
     /// the mode saved before the owned chain is no longer the one to come
@@ -1177,6 +1205,7 @@ impl Processing {
     /// on hardware decoding for the rest of the file, `hwdec_check` asks
     /// for it once more (`HwdecWatch`).
     fn frames_in_memory(&mut self, mpv: &Mpv, needed: bool) {
+        let needed = needed || self.held;
         let current = mpv.get_property::<String>("hwdec").unwrap_or_default();
         if needed {
             if self.hwdec.is_some() {

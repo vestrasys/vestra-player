@@ -32,6 +32,7 @@
 //! | redraw pacing | `VBLANK_CLOCK`, `vblank_waiter` → `VBlankWaiter` (Windows: vertical blanks through `vestra-win32`; elsewhere `no_vblank` below: Slint paces, with a display link on macOS) |
 //! | rendering | `window_refresh` (here, through winit on every system), `select_wgpu_windows`, `GPU_RENDER`, `GPU_WINDOWS_WGPU`, `GPU_OPT_IN`, `gpu_start` → `GpuRenderer` / `GpuHandle` (implements `playback::renderer::GpuBackend`) / `GpuFrame` / `GpuDraw`, `gpu_started`, `gpu_failed`, `window_device_lost` (macOS: OpenGL windows, `vestra-gpu-render` with OpenGL; Windows: wgpu/Direct3D 12 windows, `vestra-gpu-render` with Direct3D 11 into shared textures; elsewhere `no_gpu` below refuses, so the host renders in software) |
 //! | video upscaling | `upscaler_probe` → `UpscalerProbe` (blocking: it wakes a sleeping discrete GPU), `gpu_render_adapter`, `upscaler_filter`, `UPSCALER_HWDEC` (Windows: NVIDIA RTX Video Super Resolution through mpv's `d3d11vpp`, checked through `vestra-win32`; elsewhere `no_upscaler` below: `platform`) |
+//! | motion smoothing | `motion_probe` → `MotionProbe` (no device is created), `motion_filter` (Windows: AMD AMF's `frc_amf` through mpv's `lavfi`; elsewhere `no_motion` below: `platform`) |
 //! | picture-in-picture | `pip_supported`, `PipWindow` (UI thread; macOS: AVKit through `vestra-pip`; elsewhere `pip_unsupported.rs`: `unsupported`) |
 //!
 //! Window rectangles are logical points. macOS uses the Cocoa lower-left
@@ -469,6 +470,45 @@ mod no_upscaler {
 }
 #[cfg(not(target_os = "windows"))]
 pub use no_upscaler::*;
+
+/// The GPU that converts the frame rate for motion smoothing
+/// (`motion_probe`).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MotionGpu {
+    pub name: String,
+}
+
+/// Why motion smoothing cannot run on this system: a stable code
+/// (`platform`, `no-gpu`, `runtime`; the API's `MotionReasonCode`) and the
+/// English text.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct MotionRefusal {
+    pub code: &'static str,
+    pub message: String,
+}
+
+/// What `motion_probe` found.
+pub type MotionProbe = std::result::Result<MotionGpu, MotionRefusal>;
+
+/// No frame-rate converter on this system (macOS, Linux): `platform`.
+#[cfg(not(target_os = "windows"))]
+mod no_motion {
+    pub fn motion_probe() -> super::MotionProbe {
+        Err(super::MotionRefusal {
+            code: "platform",
+            message: format!(
+                "the player has no frame-rate converter on {}; motion smoothing uses AMD's AMF on Windows",
+                crate::playback::render_mode::system_name(std::env::consts::OS)
+            ),
+        })
+    }
+    /// No motion smoothing filter.
+    pub fn motion_filter(_large: bool, _performance: bool) -> Option<String> {
+        None
+    }
+}
+#[cfg(not(target_os = "windows"))]
+pub use no_motion::*;
 
 /// One display for `plugin.app.system()`.
 #[derive(Clone, Debug, PartialEq)]

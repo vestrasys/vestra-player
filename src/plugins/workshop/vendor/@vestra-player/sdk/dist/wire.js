@@ -154,6 +154,12 @@ export function createWire(transport) {
             upscalingSet: (enabled) => transport.request("video.upscaling.set", {
                 enabled,
             }),
+            /** Motion smoothing (`plugin.video.motion`). */
+            motionState: (engine) => transport.request("video.motion.state", { engine }),
+            motionSet: (engine, mode) => transport.request("video.motion.set", {
+                engine,
+                mode,
+            }),
         },
         /** Mark layers on the seek bar (`plugin.timeline`). */
         timeline: {

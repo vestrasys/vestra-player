@@ -29,7 +29,9 @@
 //! Resolution (`video_super_resolution`: a short-lived Direct3D 11 device
 //! and video processor), and a confirmation as a task dialog with its
 //! question as the main instruction, a native checkbox and no standard
-//! icon, so no system sound (`task_dialog`). Each is one call with plain integer arguments, a
+//! icon, so no system sound (`task_dialog`), and keeping a system DLL
+//! loaded for the life of the process (`pin_module`: `d3dcompiler_47.dll`
+//! under wgpu's Direct3D 12 windows). Each is one call with plain integer arguments, a
 //! borrowed handle, or local out-parameters; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
@@ -1573,6 +1575,44 @@ pub fn task_dialog(dialog: &TaskDialog) -> Result<TaskDialogAnswer, String> {
         confirmed: button == CONFIRM,
         checked: checked != 0,
     })
+}
+
+/// Load `name` (a system DLL, for example `d3dcompiler_47.dll`) and pin it:
+/// it stays mapped for the life of the process whatever `FreeLibrary`
+/// calls follow. The host pins `d3dcompiler_47.dll` before wgpu's Direct3D
+/// 12 windows start (`platform::select_wgpu_windows`): wgpu holds the
+/// compiler's COM object, and AMD's AMF runtime unloads the DLL when
+/// motion smoothing's frame-rate converter is torn down, after which the
+/// next pipeline called into unmapped memory (access violation, measured
+/// 2026-11-12). `Err` with the system's
+/// error when it cannot be loaded or pinned.
+pub fn pin_module(name: &str) -> Result<(), String> {
+    use windows_sys::Win32::Foundation::{GetLastError, HMODULE};
+    use windows_sys::Win32::System::LibraryLoader::{
+        GET_MODULE_HANDLE_EX_FLAG_PIN, GetModuleHandleExW, LoadLibraryW,
+    };
+    let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
+    // SAFETY: a NUL-terminated wide string alive for the call; the handle
+    // is never freed (the module is pinned below).
+    let module = unsafe { LoadLibraryW(wide.as_ptr()) };
+    if module.is_null() {
+        // SAFETY: no arguments; reads this thread's last error.
+        return Err(format!("LoadLibraryW({name}) failed: {}", unsafe {
+            GetLastError()
+        }));
+    }
+    let mut pinned: HMODULE = std::ptr::null_mut();
+    // SAFETY: the same NUL-terminated name, and an out pointer to a local
+    // the call writes the handle to.
+    let ok =
+        unsafe { GetModuleHandleExW(GET_MODULE_HANDLE_EX_FLAG_PIN, wide.as_ptr(), &mut pinned) };
+    if ok == 0 {
+        // SAFETY: no arguments; reads this thread's last error.
+        return Err(format!("pinning {name} failed: {}", unsafe {
+            GetLastError()
+        }));
+    }
+    Ok(())
 }
 
 #[cfg(test)]

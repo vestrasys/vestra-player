@@ -48,6 +48,7 @@ mod ui_settings;
 mod ui_theme;
 mod ui_window;
 mod uncapable;
+mod video_motion;
 mod video_upscaling;
 mod window_control;
 
@@ -356,6 +357,7 @@ pub static ALL: &[&dyn Capability] = &[
     &secrets::Secrets,
     &rendering_manage::RenderingManage,
     &video_upscaling::VideoUpscaling,
+    &video_motion::VideoMotion,
     // Built-in only (Ask Vestra, doc/architecture/palette-lead.md).
     &commands_run::CommandsRun,
     &palette_lead::PaletteLead,

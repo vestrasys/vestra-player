@@ -35,6 +35,7 @@ The labels below are the English interface text (the English source text of each
 | —— | | | |
 | Play/Pause | core | Space, left click on the video | 201, group `domain` (Previous/Next, the seek, frame and speed actions are palette-only; the Playback panel and the bottom bar have their controls) |
 | (third-party domain submenus, e.g. Games ▸) | third-party | | Their own orders, group `domain` by default; the domain anchors when filled (above) |
+| Video ▸ AMD Motion Smoothing… | AMD Motion Smoothing (`zysilm.amdmotion`, store) | | Appears after installation (`@video`, order 464, group `video-rendering`); opens its window: Mode (Off / Double Frame Rate / Match Display) and the player's reason when a mode waits or cannot work (needs Windows with an AMD Radeon GPU). Next to Shader Upscale's Video ▸ Shader Upscaling… |
 | —— | | | |
 | Tools ▸ | host anchor `@tools` | | 820, group `settings-main` (fixed) |
 | Tools ▸ Audio Track ▸ (actual audio track names) | audio | | 301, `domain`; radio; dynamic; with no audio tracks a greyed-out "No Audio Tracks" ("Loading…" while loading) |
