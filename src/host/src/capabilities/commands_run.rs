@@ -232,6 +232,14 @@ impl CommandRuns {
             .position(|run| run.reply.owner == reply.owner && run.reply.id == reply.id)?;
         Some(self.confirming.remove(at))
     }
+    /// What the waiting sheets would trust ("Don't ask again") loses `id`
+    /// (`None`: everything): it was uninstalled, replaced from another
+    /// source, or the user asked again before plugin commands.
+    pub fn forget_remembered(&mut self, id: Option<&str>) {
+        for run in &mut self.confirming {
+            run.remember.retain(|kept| id.is_some_and(|id| kept != id));
+        }
+    }
     /// Whether the run answering `reply` still waits for the user (its
     /// caller did not stop).
     pub fn waiting(&self, reply: &Reply) -> bool {
@@ -435,6 +443,8 @@ fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
 /// The palette command Ask Again Before Plugin Commands: every caller asks
 /// again before any command of a plugin that is not built in; its OSD line.
 pub(crate) fn ask_again(host: &mut Host) {
+    // A sheet open now does not trust anything either.
+    host.command_runs.forget_remembered(None);
     if host.ui_state.state.clear_trust() {
         // Written now, not a second later: a crash right after must not
         // bring the trust back.
@@ -447,6 +457,8 @@ pub(crate) fn ask_again(host: &mut Host) {
 /// `id` was uninstalled, or replaced from another source: no caller
 /// trusts it any more (written at once, as for [`ask_again`]).
 pub(crate) fn forget_trust(host: &mut Host, id: &str) {
+    // Nor does a sheet opened before (it would trust the new source).
+    host.command_runs.forget_remembered(Some(id));
     if host.ui_state.state.forget_trust(id) {
         host.ui_state.flush();
     }
@@ -1175,6 +1187,22 @@ mod tests {
         assert!(runs.admit(1, &ticket, "a/wipe", true, true, 1_000).unwrap());
         assert!(!runs.planned(1, &ticket, "a/wipe"));
         assert_eq!(runs.tickets[&ticket].runs, 5);
+    }
+
+    /// A waiting sheet forgets a plugin uninstalled or replaced meanwhile,
+    /// and everything on Ask Again.
+    #[test]
+    fn a_waiting_sheet_forgets_a_replaced_plugin_and_everything_on_ask_again() {
+        let mut runs = CommandRuns::default();
+        let ticket = runs.mint(1, "x", 0);
+        waiting_run(&mut runs, 1, &ticket);
+        runs.confirming[0].remember = vec!["a.b".into(), "c.d".into()];
+        runs.forget_remembered(Some("a.b"));
+        assert_eq!(runs.confirming[0].remember, ["c.d"]);
+        runs.forget_remembered(Some("x.y"));
+        assert_eq!(runs.confirming[0].remember, ["c.d"]);
+        runs.forget_remembered(None);
+        assert!(runs.confirming[0].remember.is_empty());
     }
 
     /// Review fix 1: a call that would ask while a sheet waits fails `busy`
