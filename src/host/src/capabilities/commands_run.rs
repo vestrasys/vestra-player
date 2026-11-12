@@ -276,7 +276,7 @@ impl CommandRuns {
         now: u64,
     ) -> Result<bool, RpcError> {
         let planned = !then && self.planned(owner, ticket, global);
-        let asks = plan_asks && !planned;
+        let asks = self.would_ask(owner, ticket, global, then, plan_asks);
         // A dead or foreign ticket is refused as such by `count`.
         if asks && !self.confirming.is_empty() && self.query(owner, ticket, now).is_some() {
             // H7 (PROPOSAL F4): why, so the caller does not blame the command.
@@ -292,6 +292,27 @@ impl CommandRuns {
             self.take_planned(owner, ticket, global);
         }
         Ok(asks)
+    }
+    /// Whether [`Self::admit`] would have the call ask (read-only): its plan
+    /// asks and it is not a step of the approved plan.
+    pub fn would_ask(
+        &self,
+        owner: u64,
+        ticket: &str,
+        global: &str,
+        then: bool,
+        plan_asks: bool,
+    ) -> bool {
+        plan_asks && (then || !self.planned(owner, ticket, global))
+    }
+    /// `owner`'s live ticket and the request it was minted for (one at a
+    /// time, [`Self::mint`]), if any: a confirmation it asks then shows that
+    /// request (`dialogs.confirm`, Ask Vestra's first-use consent).
+    pub fn live_request(&self, owner: u64, now: u64) -> Option<(String, String)> {
+        self.tickets
+            .iter()
+            .find(|(_, t)| t.owner == owner && now.saturating_sub(t.last) <= TICKET_IDLE_MS)
+            .map(|(id, t)| (id.clone(), t.query.clone()))
     }
     /// Whether `ticket` is live at `now`, whoever holds it (the status
     /// strip shows a ticket's steps while it is; the sheet asks while it is).
@@ -691,6 +712,19 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         .collect();
     let plan_asks = steps.iter().any(Judged::dangerous);
     let now = host.now_ms();
+    // A confirmation on the sheet (`dialogs.confirm`, H5): one sheet at a
+    // time, as `admit` keeps it among runs; a dead ticket is refused as such.
+    if host.confirm_waiting()
+        && host
+            .command_runs
+            .would_ask(reply.owner, &ticket, global, then.is_some(), plan_asks)
+        && host.command_runs.query(reply.owner, &ticket, now).is_some()
+    {
+        return Err(RpcError::new(
+            "busy",
+            "another confirmation is waiting for the user's answer",
+        ));
+    }
     let asks =
         host.command_runs
             .admit(reply.owner, &ticket, global, then.is_some(), plan_asks, now)?;

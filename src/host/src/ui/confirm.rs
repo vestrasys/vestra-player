@@ -1,7 +1,8 @@
 //! `plugin.dialogs.confirm`: a system alert with a confirm and a cancel button
-//! and an optional checkbox. The options are checked here; showing the alert
-//! is `platform::confirm` (an NSAlert sheet on macOS, a task dialog on
-//! Windows).
+//! and an optional checkbox. The options are checked here; the main
+//! window's confirmations are drawn in the player (`host/review_sheet.rs`),
+//! a tool window's are `platform::confirm` (an NSAlert sheet on macOS, a
+//! task dialog on Windows).
 #![forbid(unsafe_code)]
 
 use crate::host::RpcError;

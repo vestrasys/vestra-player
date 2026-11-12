@@ -143,6 +143,20 @@ pub fn tool_windows_tick() {
     }
 }
 
+/// Whether the key window is a tool window (one of winit's other than the
+/// main window: a plugin's window, Options, the floating sidebar).
+/// [`confirm`] gives its sheet to that window, and otherwise to the main
+/// window: this is the same test (the visible key window without a sheet).
+pub fn tool_window_focused() -> bool {
+    let Ok(app) = app() else { return false };
+    let Some(main) = main_view() else {
+        return false;
+    };
+    app.keyWindow().is_some_and(|window| {
+        window.isVisible() && window.attachedSheet().is_none() && is_tool_window(&window, main)
+    })
+}
+
 /// Whether the player is the active application (the user works in one of
 /// its windows).
 pub fn app_in_foreground() -> bool {

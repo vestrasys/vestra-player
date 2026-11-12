@@ -1251,6 +1251,7 @@ export component W inherits Window {
     out property <length> pw: v.panel-width;
     out property <length> ph: v.panel-height;
     out property <bool> keys: v.has-keys;
+    out property <bool> detail-scrolls: v.detail-scrolls;
     out property <length> run-x: v.run-x;
     out property <length> cancel-x: v.cancel-x;
     out property <length> buttons-y: v.buttons-y;
@@ -1718,4 +1719,343 @@ fn render_review_sheet_states() {
             w.hide().unwrap();
         }
     }
+}
+
+/// A main-window `dialogs.confirm` on the sheet (H5) as the host writes it:
+/// with the request box when `request` is (title, request).
+fn confirm_value(
+    request: Option<(&str, &str)>,
+    message: &str,
+    detail: Option<&str>,
+    confirm: &str,
+    cancel: &str,
+    checkbox: Option<&str>,
+) -> Value {
+    let options = crate::ui::confirm::Options {
+        message: message.into(),
+        detail: detail.map(str::to_owned),
+        confirm: confirm.into(),
+        cancel: cancel.into(),
+        destructive: checkbox.is_some(),
+        checkbox: checkbox.map(str::to_owned),
+    };
+    crate::ui::ui_values::from_json(&crate::host::review_sheet::confirm_sheet(
+        request.map(|(title, query)| (title, "ai", query)),
+        &options,
+        ["Enter", "Esc"],
+    ))
+    .unwrap()
+}
+
+/// Ask Vestra's consent text (workshop `ask.ts`), English and Chinese.
+const CONSENT_DETAIL: [&str; 2] = [
+    "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and whether something is open and playing go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account.",
+    "你在命令面板中输入的内容、播放器的命令列表（名称、菜单、快捷键，以及各命令是否开启或可用）以及是否有内容打开并在播放，会和对话一样，用你的 API 密钥发送给该服务商。文件名、播放列表、历史记录、轨道和章节标题以及字幕不会发送。费用由服务商向你的账户收取。",
+];
+
+/// H5 (§4.4): a confirmation at the palette's place: without the request
+/// box, the 28px message and the 44px footer; with it, 38px more, and the
+/// detail grows the panel; the caller's checkbox at the footer's left;
+/// Enter and Esc answer, its buttons too, a repeat does not.
+#[test]
+fn a_confirmation_sheet_sizes_to_its_texts_and_answers() {
+    let w = build(SHEET, 1100., 600.);
+    w.set_property(
+        "s",
+        confirm_value(
+            None,
+            "Replace the current list with Films.m3u?",
+            None,
+            "Replace",
+            "Cancel",
+            None,
+        ),
+    )
+    .unwrap();
+    settle();
+    assert_eq!(
+        (number(&w, "px"), number(&w, "py"), number(&w, "pw")),
+        (290., 16., 520.)
+    );
+    assert_eq!(number(&w, "ph"), 6. + 28. + 44.);
+    assert!(!boolean(&w, "remember-shown"));
+    assert!(boolean(&w, "keys"));
+    w.window().dispatch_event(WindowEvent::KeyPressRepeated {
+        text: Key::Return.into(),
+    });
+    settle();
+    assert_eq!(string(&w, "last"), "");
+    key(&w, Key::Return);
+    assert_eq!(string(&w, "last"), "run");
+    key(&w, Key::Escape);
+    assert_eq!(string(&w, "last"), "decline");
+    click(
+        &w,
+        number(&w, "run-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "run");
+    click(
+        &w,
+        number(&w, "cancel-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "decline");
+    // The request box and a four-line detail.
+    w.set_property(
+        "s",
+        confirm_value(
+            Some(("Ask Vestra", "mute")),
+            "Ask Vestra sends your request to MiniMax",
+            Some(CONSENT_DETAIL[0]),
+            "Continue",
+            "Cancel",
+            None,
+        ),
+    )
+    .unwrap();
+    settle();
+    let height = number(&w, "ph");
+    assert!(
+        height > 44. + 28. + 44. + 40. && height < 44. + 28. + 44. + 100.,
+        "{height}"
+    );
+    // The caller's checkbox at the footer's left; a click asks the host.
+    w.set_property(
+        "s",
+        confirm_value(
+            None,
+            "Remove all 12 items from the playlist?",
+            Some("The media that is playing continues to play."),
+            "Remove All",
+            "Cancel",
+            Some("Don't ask again"),
+        ),
+    )
+    .unwrap();
+    settle();
+    assert!(boolean(&w, "remember-shown"));
+    let (bx, by) = (number(&w, "remember-x"), number(&w, "remember-y"));
+    assert!(bx > number(&w, "px") && bx < number(&w, "px") + 40., "{bx}");
+    click(&w, bx as f32, by as f32);
+    assert_eq!(string(&w, "last"), "toggle-remember");
+    assert!(!boolean(&w, "remember-checked"));
+}
+
+/// The main window's confirmations on the sheet (H5; PROPOSAL §4.4,
+/// proposed/r07-consent-*.png): Ask Vestra's first-use consent (with the
+/// request box), a plain one (Open List's Replace) and a destructive one
+/// with a checkbox (the playlist's Remove All), both palettes, at 2×:
+/// `VESTRA_SHEET_SHOTS=<dir>`, `VESTRA_SHEET_LANG=en|zh-Hans` (one language
+/// per process: run this test alone), `VESTRA_SHEET_BACKDROP=<png>`.
+#[test]
+#[ignore = "draws the confirmation sheet: VESTRA_SHEET_SHOTS=<dir>"]
+fn render_confirm_sheet_states() {
+    let Some(out) = std::env::var_os("VESTRA_SHEET_SHOTS") else {
+        return;
+    };
+    let out = PathBuf::from(out);
+    std::fs::create_dir_all(&out).unwrap();
+    let lang = std::env::var("VESTRA_SHEET_LANG").unwrap_or_else(|_| "en".into());
+    let locale = crate::i18n::LOCALES
+        .iter()
+        .copied()
+        .find(|l| *l == lang)
+        .expect("a player language");
+    headless();
+    crate::i18n::init(locale);
+    crate::ui::ui_fonts::install(locale);
+    let zh = locale == "zh-Hans";
+    let pick = |en: &'static str, zh_text: &'static str| if zh { zh_text } else { en };
+    let cancel = crate::i18n::tr("Cancel");
+    let remove = (
+        pick(
+            "Remove all 12 items from the playlist?",
+            "移除播放列表中的全部 12 项？",
+        ),
+        Some(pick(
+            "The media that is playing continues to play.",
+            "正在播放的媒体继续播放。",
+        )),
+        pick("Remove All", "移除全部"),
+        Some(pick("Don't ask again", "不再询问")),
+    );
+    // (name, request, (message, detail, confirm, checkbox), checked)
+    type Texts<'a> = (&'a str, Option<&'a str>, &'a str, Option<&'a str>);
+    type State<'a> = (&'a str, Option<(&'a str, &'a str)>, Texts<'a>, bool);
+    let states: Vec<State> = vec![
+        (
+            "r07-consent",
+            Some((
+                pick("Ask Vestra", "问 Vestra"),
+                pick(
+                    "reset the picture, mute, export the last 30 s",
+                    "重置画面，静音，导出最后 30 秒",
+                ),
+            )),
+            (
+                pick(
+                    "Ask Vestra sends your request to MiniMax",
+                    "“问 Vestra”会把你的请求发送给 MiniMax",
+                ),
+                Some(CONSENT_DETAIL[usize::from(zh)]),
+                pick("Continue", "继续"),
+                None,
+            ),
+            false,
+        ),
+        (
+            "h5-plain-replace-list",
+            None,
+            (
+                pick(
+                    "Replace the current list with Films.m3u?",
+                    "用 Films.m3u 替换当前列表？",
+                ),
+                None,
+                pick("Replace", "替换"),
+                None,
+            ),
+            false,
+        ),
+        ("h5-destructive-checkbox", None, remove, false),
+        ("h5-destructive-checked", None, remove, true),
+    ];
+    let backdrop = std::env::var_os("VESTRA_SHEET_BACKDROP")
+        .map(|path| slint::Image::load_from_path(std::path::Path::new(&path)).unwrap());
+    let (width, height, scale) = (1100., 400., 2.);
+    let prefix = if zh { "zh-" } else { "" };
+    for palette in ["vestra", "vestra-light"] {
+        let theme = if palette == "vestra" { "dark" } else { "light" };
+        for (name, request, (message, detail, confirm, checkbox), checked) in &states {
+            let w = build(SHEET, width, height);
+            crate::ui::theme::apply_fonts(&w).unwrap();
+            crate::ui::theme::apply(&w, palette).unwrap();
+            if let Some(image) = &backdrop {
+                w.set_property("backdrop", Value::Image(image.clone()))
+                    .unwrap();
+            }
+            w.set_property(
+                "s",
+                confirm_value(*request, message, *detail, confirm, &cancel, *checkbox),
+            )
+            .unwrap();
+            settle();
+            if *checked {
+                w.set_property("remember-checked", true.into()).unwrap();
+                settle();
+            }
+            render(&w, scale, width, height)
+                .save(out.join(format!("{prefix}{name}-{theme}.png")))
+                .unwrap();
+            w.hide().unwrap();
+        }
+        // A store install's 2000-character detail in a small window: it
+        // scrolls, the footer stays in view (English only).
+        if !zh {
+            let (width, height) = (640., 360.);
+            let w = build(SHEET, width, height);
+            crate::ui::theme::apply_fonts(&w).unwrap();
+            crate::ui::theme::apply(&w, palette).unwrap();
+            if let Some(image) = &backdrop {
+                w.set_property("backdrop", Value::Image(image.clone()))
+                    .unwrap();
+            }
+            let detail = long_detail();
+            w.set_property(
+                "s",
+                confirm_value(
+                    None,
+                    "Install “Shader Upscale” 1.4.0 from an unofficial repository?",
+                    Some(&detail),
+                    "Install Anyway",
+                    &cancel,
+                    None,
+                ),
+            )
+            .unwrap();
+            settle();
+            render(&w, scale, width, height)
+                .save(out.join(format!("h5-long-detail-small-{theme}.png")))
+                .unwrap();
+            w.hide().unwrap();
+        }
+    }
+}
+
+/// A store install's detail at `dialogs.confirm`'s limit (2000
+/// characters): the repository warning and a long permission list.
+fn long_detail() -> String {
+    let mut detail = String::from(
+        "Repository: Foo (https://foo.example/). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.\n\nIt will be able to:",
+    );
+    let lines = [
+        "Control playback",
+        "Read the playlist",
+        "Read and write the clipboard",
+        "Use the network",
+        "Read files you open",
+        "Show windows",
+        "Add video shaders",
+        "Process audio",
+    ];
+    for at in 0.. {
+        let line = format!("\n· {} ({})", lines[at % lines.len()], at + 1);
+        if detail.chars().count() + line.chars().count() > 2000 {
+            break;
+        }
+        detail.push_str(&line);
+    }
+    detail
+}
+
+/// Follow-up review of H5: a 2000-character detail in a small window: the
+/// panel ends 16px above the window's bottom, the detail scrolls, and the
+/// buttons and the checkbox stay inside the window and answer.
+#[test]
+fn a_long_detail_scrolls_and_keeps_the_buttons_in_a_small_window() {
+    let (width, height) = (640., 360.);
+    let w = build(SHEET, width, height);
+    let detail = long_detail();
+    assert!(detail.chars().count() > 1900);
+    w.set_property(
+        "s",
+        confirm_value(
+            None,
+            "Install “X” 1.3.0 from an unofficial repository?",
+            Some(&detail),
+            "Install Anyway",
+            "Cancel",
+            Some("Also delete its settings and data"),
+        ),
+    )
+    .unwrap();
+    settle();
+    assert!(boolean(&w, "detail-scrolls"));
+    let (y, h) = (number(&w, "py"), number(&w, "ph"));
+    assert!(y + h <= f64::from(height) - 16. + 0.5, "{y} + {h}");
+    let buttons = number(&w, "buttons-y");
+    assert!(buttons > y && buttons < y + h, "{buttons}");
+    assert!(number(&w, "remember-y") < y + h);
+    click(
+        &w,
+        number(&w, "run-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "run");
+    click(
+        &w,
+        number(&w, "cancel-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "decline");
+    // The same detail in a tall window: no scrolling.
+    let tall = build(SHEET, 1100., 1400.);
+    tall.set_property(
+        "s",
+        confirm_value(None, "Install?", Some(&detail), "Install", "Cancel", None),
+    )
+    .unwrap();
+    settle();
+    assert!(!boolean(&tall, "detail-scrolls"));
 }

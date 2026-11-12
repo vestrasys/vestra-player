@@ -101,8 +101,9 @@ export component HostWindow inherits Window {
     in property <LeadStrip> lead-strip;
     callback lead-strip-action(string);
     out property <bool> lead-strip-hover: lead-strip-view.hover;
-    // The approval sheet (host/review_sheet.rs) on the menu layer: shown
-    // instead of the menu while `menu-open`; its answers (`run`, `decline`).
+    // The approval sheet (host/review_sheet.rs) on the menu layer, which
+    // also asks the main window's `dialogs.confirm`: shown instead of the
+    // menu while `menu-open`; its answers (`run`, `decline`).
     in property <bool> review-open: false;
     in property <ReviewSheet> review-sheet;
     // Its "Don't ask again" box is checked (the host's state).

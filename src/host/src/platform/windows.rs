@@ -261,18 +261,35 @@ pub fn set_main_window(instance: &slint_interpreter::ComponentInstance) {
     });
 }
 
-/// The main window's HWND, once its native window exists and while it does.
-fn main_hwnd() -> Option<isize> {
+/// The main window's native window, once it exists and while it does.
+fn main_native() -> Option<Arc<winit::window::Window>> {
     use slint::ComponentHandle;
-    let native = MAIN.with_borrow_mut(|main| {
+    MAIN.with_borrow_mut(|main| {
         if let Some(native) = main.native.upgrade() {
             return Some(native);
         }
         let native = native_of(main.instance.as_ref()?.upgrade()?.window())?;
         main.native = Arc::downgrade(&native);
         Some(native)
-    })?;
+    })
+}
+
+/// The main window's HWND, once its native window exists and while it does.
+fn main_hwnd() -> Option<isize> {
+    let native = main_native()?;
     native_hwnd(&native)
+}
+
+/// Whether one of the host's windows other than the main window (a tool
+/// window: a plugin's window, Options, the floating sidebar) has the
+/// keyboard focus. [`confirm`] gives its dialog to that window, and
+/// otherwise to the main window: this is the same test (winit's
+/// `has_focus` over the host's windows).
+pub fn tool_window_focused() -> bool {
+    let main = main_native();
+    live().into_iter().any(|(_, window)| {
+        window.has_focus() && !main.as_ref().is_some_and(|main| Arc::ptr_eq(main, &window))
+    })
 }
 
 /// Slint's winit hook for each window it creates (`main.rs`, the backend

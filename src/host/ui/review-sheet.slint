@@ -8,8 +8,15 @@
 // first) and, when the host offers it, "Don't ask again for <plugin>" at
 // its left (step 4, H4).
 //
+// The same sheet asks a plugin's `dialogs.confirm` raised for the main
+// window (step 5, H5; §4.4): the request box only when the caller holds the
+// palette's first row and its request is live (Ask Vestra's first-use
+// consent), then the message, the detail, the caller's checkbox at the
+// footer's left and its two buttons with Enter and Esc.
+//
 // It is modal and takes the keyboard focus: Enter runs, Esc does not,
-// Ctrl+Enter (⌘↵ on macOS) runs and remembers when the checkbox is there;
+// Ctrl+Enter (⌘↵ on macOS) runs and remembers when the checkbox is there
+// (on a confirmation the host takes it as Enter: the box is the caller's);
 // a held-down key's repeats count for nothing (the host also ignores input
 // in the first 0.5 s). Space does not toggle the checkbox (it keeps the
 // focus off it: a press of Space meant for pause must not check it); a
@@ -22,6 +29,7 @@ import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
 import { Check, KeyHint } from "@vestra/widgets.slint";
 import { MenuChrome } from "menu-view.slint";
+import { ScrollView } from "std-widgets.slint";
 
 export struct ReviewStep {
     shown: bool,
@@ -37,6 +45,9 @@ export struct ReviewStep {
 }
 
 export struct ReviewSheet {
+    // The request box is shown (always for a plan; for a confirmation only
+    // when its caller holds the lead with a live request).
+    request: bool,
     // The request box: the lead's icon (a name of the icon set; "" draws
     // `image`) and title, and the request.
     icon: string,
@@ -44,12 +55,17 @@ export struct ReviewSheet {
     title: string,
     query: string,
     question: string,
+    // A confirmation (`dialogs.confirm`): its message (non-empty: drawn
+    // instead of the question and the steps) and its detail.
+    message: string,
+    detail: string,
     // Steps shown (the rest of `steps` are hidden).
     count: int,
     steps: [ReviewStep],
     // Shown when a step's plugin is not built in; empty otherwise.
     note: string,
-    // "Don't ask again for <plugin>" (H4); empty: no checkbox.
+    // The footer's checkbox: "Don't ask again for <plugin>" (H4) on a plan,
+    // the caller's checkbox on a confirmation; empty: no checkbox.
     remember: string,
     run: string,
     cancel: string,
@@ -110,6 +126,8 @@ export component ReviewSheetView inherits Rectangle {
     out property <length> panel-width: panel.width;
     out property <length> panel-height: panel.height;
     out property <bool> has-keys: keys.has-focus;
+    // The detail scrolls (it is taller than the room the window leaves).
+    out property <bool> detail-scrolls: root.detail-shown < root.detail-height;
     // The buttons' centres in the view (tests press them).
     out property <length> run-x: run.absolute-position.x - root.absolute-position.x + run.width / 2;
     out property <length> cancel-x: cancel.absolute-position.x - root.absolute-position.x + cancel.width / 2;
@@ -126,11 +144,23 @@ export component ReviewSheetView inherits Rectangle {
         root.action("run");
     }
 
-    // 6px, the 32px request box, 6px; the 28px question; the rows; the
-    // note; the footer (separator and buttons) as the palette's: 44px, taller
-    // only when "Don't ask again" wraps (two long plugin names).
+    // 6px, the 32px request box, 6px (or 6px without the box); the 28px
+    // question, the rows and the note, or a confirmation's message (28px,
+    // taller when it wraps) and its detail; the footer (separator and
+    // buttons) as the palette's: 44px, taller only when the checkbox's text
+    // wraps (two long plugin names). A confirmation's panel ends 16px above
+    // the window's bottom at most: a longer detail (a store install's
+    // permission list, up to 2000 characters) scrolls, keeping at least
+    // 48px of it, and the footer stays in view.
+    private property <length> head: root.sheet.request ? 44px : 6px;
+    private property <bool> confirmation: root.sheet.message != "";
     private property <length> note-height: root.sheet.note == "" ? 0px : note.preferred-height + 8px;
+    private property <length> message-height: max(28px, message.preferred-height + 12px);
+    private property <length> detail-height: root.sheet.detail == "" ? 0px : detail.preferred-height + 8px;
     private property <length> footer-height: root.sheet.remember == "" ? 44px : max(44px, remember.preferred-height + 20px);
+    private property <length> detail-room: root.height - root.top - 16px - root.head - root.message-height - root.footer-height;
+    private property <length> detail-shown: max(min(root.detail-height, 48px), min(root.detail-height, root.detail-room));
+    private property <length> body-height: root.confirmation ? root.message-height + root.detail-shown : 28px + root.sheet.count * 28px + root.note-height;
 
     keys := FocusScope {
         x: 0;
@@ -162,7 +192,7 @@ export component ReviewSheetView inherits Rectangle {
         x: (root.width - self.width) / 2;
         y: root.top;
         width: min(520px, root.width - 16px);
-        height: 72px + root.sheet.count * 28px + root.note-height + root.footer-height;
+        height: root.head + root.body-height + root.footer-height;
         background: Theme.bg-panel;
         border-color: Theme.line;
         border-width: 1px;
@@ -174,6 +204,7 @@ export component ReviewSheetView inherits Rectangle {
         // The request, in the palette field's box: the lead's icon,
         // "Title:" in semibold, the request elided at its end.
         Rectangle {
+            visible: root.sheet.request;
             x: 8px;
             y: 6px;
             width: parent.width - 16px;
@@ -224,8 +255,9 @@ export component ReviewSheetView inherits Rectangle {
             }
         }
         Text {
+            visible: !root.confirmation;
             x: 12px;
-            y: 44px;
+            y: root.head;
             width: parent.width - 24px;
             height: 28px;
             text: root.sheet.question;
@@ -235,12 +267,49 @@ export component ReviewSheetView inherits Rectangle {
             vertical-alignment: center;
             overflow: elide;
         }
-        // The steps from y 72px, as the palette's rows: the number, the
+        // A confirmation: the message as the question (wrapping), the
+        // detail below it as the note but in `text-list` (§4.4).
+        message := Text {
+            visible: root.confirmation;
+            x: 12px;
+            y: root.head;
+            width: parent.width - 24px;
+            height: root.message-height;
+            text: root.sheet.message;
+            font-size: Theme.font-tab;
+            font-weight: 600;
+            color: Theme.text;
+            vertical-alignment: center;
+            wrap: word-wrap;
+        }
+        // In a ScrollView that is as tall as the detail while the window
+        // has the room (no scrolling then); the scroll bar sits in the
+        // panel's right margin, so the text wraps as without it.
+        ScrollView {
+            visible: root.confirmation && root.sheet.detail != "";
+            x: 12px;
+            y: root.head + root.message-height;
+            width: parent.width - 16px;
+            height: max(0px, root.detail-shown - 8px);
+            content-width: self.width;
+            content-height: detail.preferred-height;
+            detail := Text {
+                x: 0px;
+                y: 0px;
+                width: panel.width - 24px;
+                height: self.preferred-height;
+                text: root.sheet.detail;
+                font-size: Theme.font-body;
+                color: Theme.text-list;
+                wrap: word-wrap;
+            }
+        }
+        // The steps below the question, as the palette's rows: the number, the
         // label (it keeps up to 60% of the row), the plugin, the reason.
         for step[i] in root.sheet.steps: Rectangle {
             visible: step.shown;
             x: 4px;
-            y: 72px + i * 28px;
+            y: root.head + 28px + i * 28px;
             width: parent.width - 8px;
             height: 28px;
             accessible-role: text;
@@ -293,7 +362,7 @@ export component ReviewSheetView inherits Rectangle {
         note := Text {
             visible: root.sheet.note != "";
             x: 12px;
-            y: 72px + root.sheet.count * 28px + 2px;
+            y: root.head + 28px + root.sheet.count * 28px + 2px;
             width: parent.width - 24px;
             height: self.preferred-height;
             text: root.sheet.note;
@@ -301,8 +370,8 @@ export component ReviewSheetView inherits Rectangle {
             color: Theme.text-dim;
             wrap: word-wrap;
         }
-        // Footer: the palette's separator, the buttons at its right,
-        // "Don't ask again" at its left.
+        // Footer: the palette's separator, the buttons at its right, the
+        // checkbox at its left.
         Rectangle {
             x: 8px;
             y: parent.height - root.footer-height + 6px;

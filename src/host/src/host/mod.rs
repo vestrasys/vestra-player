@@ -221,8 +221,8 @@ pub(crate) enum MenuMode {
     Tabs(sidebar_tabs::Column),
     /// The command palette (`host/palette`), in the main window.
     Palette,
-    /// The approval sheet of `commands.run` (`host/review_sheet`), in the
-    /// main window.
+    /// The approval sheet of `commands.run`, or a main-window
+    /// `dialogs.confirm` (`host/review_sheet`), in the main window.
     Review,
     /// The bottom-bar strip's `»` (bar_buttons.rs): the plugin buttons not
     /// in the strip, in strip order (owner, command id).
@@ -423,7 +423,8 @@ pub(crate) struct Host {
     pub(crate) lead: Option<crate::capabilities::Lead>,
     /// The status strip: the lead's status while the palette is closed.
     pub(crate) lead_strip: lead_strip::LeadStrip,
-    /// The approval sheet waiting for the user (`MenuMode::Review`).
+    /// The sheet waiting for the user (`MenuMode::Review`): a plan's or a
+    /// confirmation's.
     pub(crate) review: Option<review_sheet::Review>,
     /// `commands.run` tickets and rates.
     pub(crate) command_runs: crate::capabilities::CommandRuns,

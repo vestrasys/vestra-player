@@ -206,6 +206,51 @@ plugin, kept until reset by a palette command; never offered with a destructive 
 This record exists to ask less; it is not a security boundary (plugin processes are not sandboxed,
 rulings of 2026-11-03/04): the store review and uninstall remain the gate.
 
+### 2.3 The main window's confirmations
+
+Design: PROPOSAL §4.4, §5.1 H5, §5.4 step 5, §7 Q5/Q6 (user rulings of 2026-11-12: Ask Vestra's
+first-use consent in the player; every other main-window confirmation too, as a separate step).
+`capabilities/ui_dialog.rs` (`ask`), `host/review_sheet.rs` (`Asks::Confirm`, `confirm_sheet`,
+`open_confirm`), `platform::tool_window_focused`. No API change: `dialogs.confirm` keeps its
+parameters and its answer `{ confirmed, checked }`.
+
+- **Which window's**: the one `platform::confirm` gives its dialog to, the established test: a
+  tool window (a plugin's window, Options, the floating sidebar: Windows, a host window other than
+  the main one with winit's `has_focus`; macOS, the visible key window without a sheet, one of
+  winit's other than the main one) when one has the focus, the main window otherwise, also when
+  the player is not in the foreground (it then takes no focus). A tool window's confirmation stays
+  a system dialog (Windows: the quiet task dialog, step 1; macOS: an `NSAlert` sheet on that
+  window). The main window's is drawn on the sheet of §2.1. On other systems there are no system
+  alerts, so every confirmation is drawn on the sheet (before: `unsupported`). Headless: still
+  `unavailable`.
+- **What it shows**: on the palette's plate at its place, the caller's message (12px semibold,
+  28px, taller when it wraps) and detail (11px `text-list`, wraps), its checkbox at the footer's
+  left, [confirm `Enter`] [cancel `Esc`] at its right. The request box (§2.1) only when the caller
+  holds the lead and has a live ticket (Ask Vestra's consent, asked while the request waits for
+  it): its title and the request. `destructive` draws nothing: no reason label and no colour (user
+  ruling 2 of 2026-11-12; the approval sheet marks no destructive step either); Enter confirms
+  either way, as the system dialog's default button did. The panel ends 16px above the window's
+  bottom at most: a longer detail (a store install's permission list, up to 2000 characters)
+  scrolls in a std-widgets `ScrollView` (at least 48px of it shown), and the footer (checkbox and
+  buttons) stays in view.
+- **Input and lifetime**: as §2.1 (the focus, the 0.5 s guard, repeats, a press outside it is
+  Cancel, the native-dialog wait, showing again after another menu). The checkbox is the caller's:
+  a click toggles it (Space does not), its state is answered with Confirm and with Cancel, and
+  Ctrl+Enter is a plain Enter. The end of the request's ticket (with a request box) answers Cancel;
+  a caller that stops (`Capability::revoke`) leaves it unanswered and it goes.
+- **One at a time**: while a sheet waits, a plan's or a confirmation's, `dialogs.confirm` (the
+  main window's or a tool window's) and a `commands.run` that would ask are refused `busy`
+  ("another confirmation is waiting for the user's answer"), as `dialogs.confirm` is while a system
+  dialog is open. A waiting confirmation keeps plugins running as an open dialog does
+  (`Busy::Dialog`).
+- stderr gets the caller's id, never the texts (they may name the user's file).
+
+Offline renders: `widgets_tests::render_confirm_sheet_states` (ignored; the same variables as
+§2.1): Ask Vestra's consent (`r07-consent`), a plain confirmation (`h5-plain-replace-list`), a
+destructive one with its checkbox unchecked and checked (`h5-destructive-checkbox`,
+`h5-destructive-checked`); both palettes, 2×; and, English only, a 2000-character install detail
+in a 640×360 window (`h5-long-detail-small`).
+
 ## 3. `palette.lead` (built-in only, residency recordable)
 
 `capabilities/palette_lead.rs`, `host/palette.rs`, `ui/command_palette.rs`,
@@ -308,13 +353,15 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
 - Unit: `capabilities/commands_run.rs` (tickets, idle end, rates, revoke and rekey, which commands
   ask first, trusted plugins, what "Don't ask again" offers, `step`/`of`, `then`, plan approvals,
   the sheet's reasons), `host/review_sheet.rs` (the guard, the question, the sheet's value, the
-  checkbox's text), `ui/ui_state.rs` (`trustedPlugins`: per caller, bounded, uninstall, reset, lenient
+  checkbox's text; a confirmation's value and its checkbox answered with either button), `ui/ui_state.rs` (`trustedPlugins`: per caller, bounded, uninstall, reset, lenient
   reading, round trip), `capabilities/palette_lead.rs` (parameters, the capability's flags),
   `capabilities/mod.rs` (built-in-only refusal for live requests and replays, the JSON field),
   `capabilities/palette_lead.rs` (`status.state`), `host/lead_strip.rs` (what the strip shows, end
   states' times, the shell value), `ui/command_palette.rs` (`names`, `aim`, `lead_shows_status`, no
   change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,
-  repeats and buttons; the checkbox: click, Run, Enter, Ctrl+Enter, Space, a wrapping text),
+  repeats and buttons; the checkbox: click, Run, Enter, Ctrl+Enter, Space, a wrapping text; a
+  confirmation's size with and without the request box and detail, its keys and buttons; a
+  2000-character detail in a small window scrolls and keeps the buttons in it),
   `host/supervisor/probe.rs`. `src/tests/sdk/host-agreement.test.ts`: TestHost accepts the
   player's `StatusState::NAMES` and refuses another with the player's code and message (skipped
   before SDK 1.7.15).

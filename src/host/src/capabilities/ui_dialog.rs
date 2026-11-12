@@ -1,4 +1,7 @@
-//! `ui.dialog`: native file pickers and confirmations.
+//! `ui.dialog`: native file pickers, and confirmations: a tool window's
+//! (one of them has the focus, `platform::tool_window_focused`) as a system
+//! dialog, the main window's on the sheet drawn in the player
+//! (`host/review_sheet.rs`, Ask Vestra UX H5).
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
     host::{Event, Host, Reply, RpcError, string},
@@ -31,6 +34,10 @@ impl Capability for UiDialog {
         Recorded::Nothing
     }
     fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
+    /// A confirmation of a plugin that stopped leaves the sheet unanswered.
+    fn revoke(&self, host: &mut Host, owner: u64, _keep_recorded: bool) {
+        host.drop_confirm_of(owner);
+    }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "dialogs.confirm" => ask(host, reply, params)?,
@@ -40,6 +47,9 @@ impl Capability for UiDialog {
     }
 }
 
+/// `dialogs.confirm`: answered when the user answers (`Event::ConfirmDone`
+/// for a system dialog, the sheet's answer otherwise). One confirmation at
+/// a time, a system dialog's or a sheet's (an approval sheet's too).
 fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
     if host.headless {
         return Err(RpcError::new(
@@ -49,6 +59,12 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     }
     if host.dialog_busy {
         return Err(RpcError::new("busy", "a native dialog is already open"));
+    }
+    if host.sheet_waiting() {
+        return Err(RpcError::new(
+            "busy",
+            "another confirmation is waiting for the user's answer",
+        ));
     }
     // Message and detail are templates (`args`); the button and
     // checkbox texts are translated as they are.
@@ -68,6 +84,19 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
         shown[field] = host.plugin_sentence(reply.owner, text, args)?.into();
     }
     let options = confirm::parse(&shown)?;
+    // The main window's (no tool window has the focus: the owner
+    // `platform::confirm` would give its dialog): drawn in the player, with
+    // the request box while the caller holds the lead with a live request.
+    if host.shell.is_some() && !platform::tool_window_focused() {
+        let now = host.now_ms();
+        let request = host
+            .lead
+            .as_ref()
+            .filter(|lead| lead.owner == reply.owner)
+            .and_then(|_| host.command_runs.live_request(reply.owner, now));
+        host.open_confirm(reply.clone(), options, request);
+        return Ok(());
+    }
     let events = host.events.clone();
     let answer = reply.clone();
     host.dialog_busy = true;
