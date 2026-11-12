@@ -11,7 +11,10 @@
 //! answer or skip; asked once, before the first step, for the whole plan a
 //! run names with `then`), and every run is named before it runs: in the
 //! status strip for the palette lead's holder, else on the OSD
-//! (doc/architecture/palette-lead.md).
+//! (doc/architecture/palette-lead.md). "Don't ask again" on the sheet
+//! (Ask Vestra UX step 4, H4) trusts plugins that are not built in, per
+//! caller, in the host's `ui-state.json`: their ordinary commands no longer
+//! ask that caller; their destructive ones still do.
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
     bindings,
@@ -90,6 +93,10 @@ pub struct ConfirmedRun {
     pub step: Option<(u64, u64)>,
     /// The run's `then`: on Run, the ticket's plan.
     pub then: Option<Vec<String>>,
+    /// What "Don't ask again" trusts (H4): the manifest ids of the plugins
+    /// whose steps ask only because they are not built in; empty when the
+    /// sheet offers no checkbox.
+    pub remember: Vec<String>,
 }
 
 impl CommandRuns {
@@ -291,15 +298,21 @@ impl CommandRuns {
     }
 }
 
-/// Whether running `item` asks first: a destructive command (its own
-/// `destructive`, the player's Close and Quit, anything in the built-in
-/// `@settings` and `@reset` menus) or any command of a plugin that is not built-in. Opening
-/// a dialog ("…") does not ask: the user is in the dialog then. The menu is
-/// judged by the whole path normalized (`commands::normalize`: `@settings`,
-/// an old root "设置" with items below it), as the SDK's TestHost does.
-pub fn dangerous(item: &Item, builtin: bool) -> bool {
-    !builtin
-        || item.destructive
+/// Whether running `item` asks first: a command that always asks
+/// ([`always_asks`]) or any command of a plugin that is not built-in,
+/// unless the caller trusts that plugin (`trusted`, H4: "Don't ask again").
+/// Opening a dialog ("…") does not ask: the user is in the dialog then.
+pub fn dangerous(item: &Item, builtin: bool, trusted: bool) -> bool {
+    (!builtin && !trusted) || always_asks(item)
+}
+
+/// Whether `item` asks every time, trusted or not: a destructive command
+/// (its own `destructive`, the player's Close and Quit, anything in the
+/// built-in `@settings` and `@reset` menus). The menu is judged by the
+/// whole path normalized (`commands::normalize`: `@settings`, an old root
+/// "设置" with items below it), as the SDK's TestHost does.
+pub fn always_asks(item: &Item) -> bool {
+    item.destructive
         || (item.owner == bindings::HOST && HOST_DESTRUCTIVE.contains(&item.id.as_str()))
         || in_destructive_menu(&item.path_keys)
 }
@@ -324,9 +337,123 @@ fn builtin_owner(host: &Host, owner: u64) -> bool {
             .is_some_and(|held| host.is_builtin_package(&held.origin))
 }
 
-/// One row of `commands.list`.
-fn listed(host: &Host, item: &Item) -> Value {
-    let builtin = builtin_owner(host, item.owner);
+/// The manifest id of the plugin whose commands `owner` registered,
+/// running or in standby; `None` for the player's own.
+fn owner_id(host: &Host, owner: u64) -> Option<String> {
+    if owner == bindings::HOST {
+        return None;
+    }
+    host.plugins
+        .get(&owner)
+        .map(|plugin| plugin.manifest.id.clone())
+        .or_else(|| host.held_id(owner).map(str::to_owned))
+}
+
+/// The plugins `caller` runs without asking (H4), by manifest id.
+fn trusted_by(host: &Host, caller: u64) -> &[String] {
+    host.ui_state
+        .state
+        .trusted_plugins
+        .get(&host.plugin_id(caller))
+        .map_or(&[], Vec::as_slice)
+}
+
+/// A command as `caller` would run it: whether its plugin is built in, its
+/// plugin's manifest id, and whether the caller trusts that plugin (never a
+/// built-in: there is nothing to trust).
+#[derive(Clone, Debug)]
+struct Judged {
+    item: Item,
+    builtin: bool,
+    plugin_id: Option<String>,
+    trusted: bool,
+}
+
+/// For a command of `owner`: built in, its plugin's manifest id, trusted
+/// (by a caller that trusts `trusted`).
+fn judge(host: &Host, trusted: &[String], owner: u64) -> (bool, Option<String>, bool) {
+    let builtin = builtin_owner(host, owner);
+    let plugin_id = owner_id(host, owner);
+    let trusted = !builtin && plugin_id.as_ref().is_some_and(|id| trusted.contains(id));
+    (builtin, plugin_id, trusted)
+}
+
+impl Judged {
+    fn new(host: &Host, trusted: &[String], item: Item) -> Self {
+        let (builtin, plugin_id, trusted) = judge(host, trusted, item.owner);
+        Self {
+            item,
+            builtin,
+            plugin_id,
+            trusted,
+        }
+    }
+    fn dangerous(&self) -> bool {
+        dangerous(&self.item, self.builtin, self.trusted)
+    }
+}
+
+/// What "Don't ask again" offers to trust on a sheet of `steps` (H4):
+/// the plugins of the steps that ask only because they are not built in,
+/// as (manifest id, shown name), in plan order, each once. None when a step
+/// always asks: the checkbox is never offered with a destructive step (user
+/// ruling 3 of 2026-11-12, PROPOSAL §4.3).
+fn trust_offer(steps: &[Judged]) -> Vec<(String, String)> {
+    if steps.iter().any(|step| always_asks(&step.item)) {
+        return Vec::new();
+    }
+    let mut plugins: Vec<(String, String)> = Vec::new();
+    for step in steps {
+        if !step.dangerous() {
+            continue;
+        }
+        if let Some(id) = &step.plugin_id
+            && !plugins.iter().any(|(known, _)| known == id)
+        {
+            plugins.push((id.clone(), step.item.plugin.clone()));
+        }
+    }
+    plugins
+}
+
+/// "Don't ask again" was checked on `caller`'s sheet: it trusts `plugins`
+/// from now on (kept in `ui-state.json`, across restarts).
+fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
+    let caller_id = host.plugin_id(caller);
+    if !host.ui_state.state.trust(&caller_id, plugins) {
+        return;
+    }
+    let now = host.now_ms();
+    host.ui_state.touch(now);
+    // Manifest ids only (README §4.3, Host log).
+    crate::diag::log_only(&format!(
+        "commands.run: {caller_id} no longer asks before the commands of {}",
+        plugins.join(", ")
+    ));
+}
+
+/// The palette command Ask Again Before Plugin Commands: every caller asks
+/// again before any command of a plugin that is not built in; its OSD line.
+pub(crate) fn ask_again(host: &mut Host) {
+    if host.ui_state.state.clear_trust() {
+        let now = host.now_ms();
+        host.ui_state.touch(now);
+        crate::diag::log_only("commands.run: plugin commands ask again");
+    }
+    host.show_osd(&i18n::tr("Plugin commands will ask again"));
+}
+
+/// `id` was uninstalled: no caller trusts it any more.
+pub(crate) fn forget_trust(host: &mut Host, id: &str) {
+    if host.ui_state.state.forget_trust(id) {
+        let now = host.now_ms();
+        host.ui_state.touch(now);
+    }
+}
+
+/// One row of `commands.list` for a caller that trusts `trusted`.
+fn listed(host: &Host, trusted: &[String], item: &Item) -> Value {
+    let (builtin, _, trusted) = judge(host, trusted, item.owner);
     let keys = host.input.borrow().table.labels(item.owner, &item.id);
     let mut row = json!({
         "id": item.global,
@@ -344,7 +471,7 @@ fn listed(host: &Host, item: &Item) -> Value {
         "radio": item.radio,
         "group": item.group,
         "busy": item.busy,
-        "dangerous": dangerous(item, builtin),
+        "dangerous": dangerous(item, builtin, trusted),
     });
     if let Some(checked) = item.checked {
         row["checked"] = checked.into();
@@ -544,16 +671,12 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
             plan.push(listed_command(&items, global)?);
         }
     }
-    let steps: Vec<(Item, bool)> = plan
+    let trusted = trusted_by(host, reply.owner).to_vec();
+    let steps: Vec<Judged> = plan
         .into_iter()
-        .map(|item| {
-            let builtin = builtin_owner(host, item.owner);
-            (item, builtin)
-        })
+        .map(|item| Judged::new(host, &trusted, item))
         .collect();
-    let plan_asks = steps
-        .iter()
-        .any(|(item, builtin)| dangerous(item, *builtin));
+    let plan_asks = steps.iter().any(Judged::dangerous);
     let now = host.now_ms();
     let asks =
         host.command_runs
@@ -569,50 +692,71 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         .query(reply.owner, &ticket, now)
         .unwrap_or_default()
         .to_owned();
-    ask(host, reply, &ticket, &steps, &query);
+    let (remember, names): (Vec<String>, Vec<String>) = trust_offer(&steps).into_iter().unzip();
+    ask(host, reply, &ticket, &steps, &query, &names);
     host.command_runs.confirming.push(ConfirmedRun {
         reply: reply.clone(),
         ticket,
         global: global.to_owned(),
         step,
         then,
+        remember,
     });
     Ok(None)
 }
 
 /// The host's approval sheet before the plan `steps` runs (the first is the
-/// run's own): `host/review_sheet.rs` shows it in the main window, after any
-/// native dialog closes. Headless (tests) there is no sheet:
-/// `VESTRA_TEST_CONFIRM=run` answers Run for the whole sheet, `always` too
-/// (Run and remember: step 4 adds the remembering), anything else Don't Run.
-fn ask(host: &mut Host, reply: &Reply, ticket: &str, steps: &[(Item, bool)], query: &str) {
+/// run's own), with "Don't ask again" for the plugins named `remember`
+/// (none: no checkbox): `host/review_sheet.rs` shows it in the main window,
+/// after any native dialog closes. Headless (tests) there is no sheet:
+/// `VESTRA_TEST_CONFIRM=run` answers Run for the whole sheet, `always` Run
+/// with "Don't ask again" checked (remembered only where the sheet would
+/// offer it), anything else Don't Run.
+fn ask(
+    host: &mut Host,
+    reply: &Reply,
+    ticket: &str,
+    steps: &[Judged],
+    query: &str,
+    remember: &[String],
+) {
     if host.headless {
-        let yes = matches!(
-            std::env::var("VESTRA_TEST_CONFIRM").as_deref(),
-            Ok("run" | "always")
-        );
-        let globals: Vec<&str> = steps.iter().map(|(item, _)| item.global.as_str()).collect();
+        let answer = std::env::var("VESTRA_TEST_CONFIRM");
+        let yes = matches!(answer.as_deref(), Ok("run" | "always"));
+        let always = answer.as_deref() == Ok("always");
+        let globals: Vec<&str> = steps.iter().map(|step| step.item.global.as_str()).collect();
         diag!(
-            "commands.run: {} asks to run {} (headless: {yes})",
+            "commands.run: {} asks to run {} (headless: {yes}{})",
             host.plugin_id(reply.owner),
-            globals.join(", ")
+            globals.join(", "),
+            if always && !remember.is_empty() {
+                ", remember"
+            } else {
+                ""
+            }
         );
         let _ = host
             .events
-            .send(Event::CommandRunAnswered(reply.clone(), yes));
+            .send(Event::CommandRunAnswered(reply.clone(), yes, always));
         return;
     }
     let rows: Vec<review_sheet::Step> = steps
         .iter()
-        .map(|(item, builtin)| review_sheet::Step {
-            label: item.label.clone(),
-            plugin: item.plugin.clone(),
-            reason: reason(item, *builtin),
-            asks: dangerous(item, *builtin),
-            builtin: *builtin,
+        .map(|step| review_sheet::Step {
+            label: step.item.label.clone(),
+            plugin: step.item.plugin.clone(),
+            reason: reason(&step.item, step.builtin),
+            asks: step.dangerous(),
+            builtin: step.builtin,
         })
         .collect();
-    host.open_review(reply.clone(), ticket.to_owned(), query.to_owned(), rows);
+    host.open_review(
+        reply.clone(),
+        ticket.to_owned(),
+        query.to_owned(),
+        rows,
+        review_sheet::remember_text(remember),
+    );
 }
 
 /// The reason a step shows on the sheet (Ask Vestra UX §4.5, user ruling 2
@@ -633,16 +777,21 @@ fn reason(item: &Item, builtin: bool) -> String {
 }
 
 /// The user answered the sheet of a run (`Event::CommandRunAnswered`): Run
-/// keeps the run's `then` as the ticket's plan and runs this one if the
-/// ticket is still live and the command still runnable; Don't Run runs
-/// nothing and keeps no plan. The caller gets the answer either way.
-pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool) {
+/// with "Don't ask again" checked (`remember`) first trusts the plugins the
+/// sheet offered (the host's list, not the view's); Run keeps the run's
+/// `then` as the ticket's plan and runs this one if the ticket is still
+/// live and the command still runnable; Don't Run runs nothing, keeps no
+/// plan and trusts nothing. The caller gets the answer either way.
+pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool) {
     let Some(run) = host.command_runs.answered(&reply) else {
         return;
     };
     if !yes {
         host.respond(reply, Ok(json!({"ran": false, "declined": true})));
         return;
+    }
+    if remember && !run.remember.is_empty() {
+        trust_plugins(host, reply.owner, &run.remember);
     }
     let now = host.now_ms();
     let result = if host
@@ -686,7 +835,12 @@ impl Capability for CommandsRun {
         match method {
             "commands.list" => {
                 let items = host.palette_items();
-                let commands: Vec<Value> = items.iter().map(|item| listed(host, item)).collect();
+                // `dangerous` as this caller's runs judge it (H4).
+                let trusted = trusted_by(host, reply.owner);
+                let commands: Vec<Value> = items
+                    .iter()
+                    .map(|item| listed(host, trusted, item))
+                    .collect();
                 Ok(Some(json!({
                     "revision": host.commands.revision(),
                     "commands": commands,
@@ -804,39 +958,103 @@ mod tests {
 
     #[test]
     fn destructive_and_third_party_commands_ask_first() {
+        // Untrusted (the trusted case: the next test).
+        let asks = |item: &Item, builtin: bool| dangerous(item, builtin, false);
         let plain = item(3, "louder", &["Audio", "Louder"]);
-        assert!(!dangerous(&plain, true));
+        assert!(!asks(&plain, true));
         // Any command of a plugin that is not built-in.
-        assert!(dangerous(&plain, false));
+        assert!(asks(&plain, false));
         let mut marked = plain.clone();
         marked.destructive = true;
-        assert!(dangerous(&marked, true));
+        assert!(asks(&marked, true));
         // The player's Close and Quit; the @settings and @reset menus.
-        assert!(dangerous(&item(bindings::HOST, "stop", &["Close"]), true));
-        assert!(dangerous(&item(bindings::HOST, "quit", &["Quit"]), true));
-        assert!(!dangerous(
+        assert!(asks(&item(bindings::HOST, "stop", &["Close"]), true));
+        assert!(asks(&item(bindings::HOST, "quit", &["Quit"]), true));
+        assert!(!asks(
             &item(bindings::HOST, "play-pause", &["Play/Pause"]),
             true
         ));
-        assert!(dangerous(&item(4, "theme", &["Settings", "Theme"]), true));
-        assert!(dangerous(&item(4, "picture", &["Reset", "Picture"]), true));
+        assert!(asks(&item(4, "theme", &["Settings", "Theme"]), true));
+        assert!(asks(&item(4, "picture", &["Reset", "Picture"]), true));
         // The whole path normalized: a menu id, an old root with items below.
-        assert!(dangerous(&item(4, "theme", &["@settings", "Theme"]), true));
-        assert!(dangerous(&item(4, "look", &["设置", "外观", "Dark"]), true));
-        assert!(dangerous(
-            &item(4, "start", &["@reset", "Start Over"]),
-            true
-        ));
+        assert!(asks(&item(4, "theme", &["@settings", "Theme"]), true));
+        assert!(asks(&item(4, "look", &["设置", "外观", "Dark"]), true));
+        assert!(asks(&item(4, "start", &["@reset", "Start Over"]), true));
         // "Plugins" is a category, not a built-in menu.
-        assert!(!dangerous(
-            &item(4, "manage", &["Plugins", "Manage…"]),
-            true
-        ));
+        assert!(!asks(&item(4, "manage", &["Plugins", "Manage…"]), true));
         // A dialog ("…") does not ask by itself.
-        assert!(!dangerous(
+        assert!(!asks(
             &item(4, "tune", &["Subtitles", "Subtitle Tuning…"]),
             true
         ));
+    }
+
+    /// H4: a trusted plugin's ordinary commands no longer ask; its
+    /// destructive ones (and any under @settings or @reset) still do.
+    #[test]
+    fn a_trusted_plugins_ordinary_commands_do_not_ask() {
+        let plain = item(3, "last30", &["Export", "Export Last 30 Seconds"]);
+        assert!(dangerous(&plain, false, false));
+        assert!(!dangerous(&plain, false, true));
+        let mut marked = plain.clone();
+        marked.destructive = true;
+        assert!(always_asks(&marked));
+        assert!(dangerous(&marked, false, true));
+        assert!(dangerous(
+            &item(3, "theme", &["@settings", "Export Theme"]),
+            false,
+            true
+        ));
+        assert!(!always_asks(&plain));
+    }
+
+    fn judged(owner: u64, id: &str, plugin: &str, builtin: bool, trusted: bool) -> Judged {
+        let mut item = item(owner, id, &["Tools", id]);
+        item.plugin = plugin.to_uppercase();
+        Judged {
+            item,
+            builtin,
+            plugin_id: (owner != bindings::HOST).then(|| plugin.to_owned()),
+            trusted,
+        }
+    }
+
+    /// H4, user ruling 3 of 2026-11-12: "Don't ask again" names the plugins
+    /// of the steps that ask only because they are not built in, each once,
+    /// in plan order; never with a destructive step in the plan.
+    #[test]
+    fn dont_ask_again_offers_the_untrusted_plugins_and_never_with_a_destructive_step() {
+        let export = judged(9, "last30", "zysilm.clipexport", false, false);
+        let frame = judged(8, "speaker", "zysilm.autoframe", false, false);
+        let mute = judged(bindings::HOST, "mute", "host", true, false);
+        let trusted = judged(7, "upscale", "zysilm.shaderupscale", false, true);
+        assert_eq!(
+            trust_offer(&[
+                export.clone(),
+                mute.clone(),
+                frame.clone(),
+                export.clone(),
+                trusted.clone()
+            ]),
+            [
+                (
+                    "zysilm.clipexport".to_owned(),
+                    "ZYSILM.CLIPEXPORT".to_owned()
+                ),
+                ("zysilm.autoframe".to_owned(), "ZYSILM.AUTOFRAME".to_owned()),
+            ]
+        );
+        // Nothing to remember: built-in or trusted steps only.
+        assert!(trust_offer(&[mute.clone(), trusted.clone()]).is_empty());
+        // A destructive step anywhere in the plan: no checkbox.
+        let mut reset = judged(4, "reset", "vestra.video", true, false);
+        reset.item.destructive = true;
+        assert!(trust_offer(&[export.clone(), reset]).is_empty());
+        let mut wipe = export.clone();
+        wipe.item.destructive = true;
+        assert!(trust_offer(&[wipe, frame.clone()]).is_empty());
+        let close = judged(bindings::HOST, "stop", "host", true, false);
+        assert!(trust_offer(&[frame, close]).is_empty());
     }
 
     #[test]
@@ -927,6 +1145,7 @@ mod tests {
             global: "a/wipe".into(),
             step: None,
             then: None,
+            remember: Vec::new(),
         });
     }
 

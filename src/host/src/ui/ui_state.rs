@@ -1,7 +1,8 @@
 //! Interface state kept across launches (core-ui-design.md §8): window frame
 //! and whether it was maximized, sidebar width, the sidebar slot (shown, floating, current tab, tab order,
-//! floating frame), and the user's binding overlay. One JSON file, written
-//! atomically and debounced.
+//! floating frame), the user's binding overlay, and the plugins whose
+//! commands a `commands.run` caller runs without asking (Ask Vestra UX step
+//! 4, H4). One JSON file, written atomically and debounced.
 #![forbid(unsafe_code)]
 
 use serde::{Deserialize, Serialize};
@@ -246,6 +247,65 @@ pub struct UiState {
     /// (`<manifest id>/<command id>`, at most `command_palette::RECENT_LIMIT`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub palette_recent: Vec<String>,
+    /// "Don't ask again" on the approval sheet (Ask Vestra UX step 4, H4):
+    /// by `commands.run` caller (its manifest id), the plugins (manifest
+    /// ids, none built in) whose ordinary commands it runs without asking;
+    /// destructive ones still ask. Cleared by the palette command Ask Again
+    /// Before Plugin Commands; a plugin's entries go when it is uninstalled.
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
+    pub trusted_plugins: BTreeMap<String, Vec<String>>,
+}
+
+/// At most this many plugins are trusted per caller (the oldest go first).
+pub const TRUST_LIMIT: usize = 256;
+
+impl UiState {
+    /// Whether `caller` runs the ordinary commands of `plugin` without
+    /// asking (manifest ids). (`commands_run` reads the caller's list once
+    /// per call instead.)
+    #[cfg(test)]
+    pub fn trusts(&self, caller: &str, plugin: &str) -> bool {
+        self.trusted_plugins
+            .get(caller)
+            .is_some_and(|list| list.iter().any(|id| id == plugin))
+    }
+    /// `caller` runs the ordinary commands of `plugins` without asking from
+    /// now on; whether anything changed.
+    pub fn trust(&mut self, caller: &str, plugins: &[String]) -> bool {
+        let list = self.trusted_plugins.entry(caller.to_owned()).or_default();
+        let before = list.len();
+        for plugin in plugins {
+            if !plugin.is_empty() && !list.contains(plugin) {
+                list.push(plugin.clone());
+            }
+        }
+        let added = list.len() != before;
+        let excess = list.len().saturating_sub(TRUST_LIMIT);
+        list.drain(..excess);
+        if list.is_empty() {
+            self.trusted_plugins.remove(caller);
+        }
+        added
+    }
+    /// `plugin` was uninstalled: no caller trusts it any more, and what it
+    /// trusted as a caller goes; whether anything changed.
+    pub fn forget_trust(&mut self, plugin: &str) -> bool {
+        let mut changed = self.trusted_plugins.remove(plugin).is_some();
+        self.trusted_plugins.retain(|_, list| {
+            let before = list.len();
+            list.retain(|id| id != plugin);
+            changed |= list.len() != before;
+            !list.is_empty()
+        });
+        changed
+    }
+    /// Ask Again Before Plugin Commands: every caller asks again; whether
+    /// anything was trusted.
+    pub fn clear_trust(&mut self) -> bool {
+        let had = !self.trusted_plugins.is_empty();
+        self.trusted_plugins.clear();
+        had
+    }
 }
 
 #[derive(Serialize, Deserialize)]
@@ -318,6 +378,26 @@ impl UiState {
         let mut palette_recent: Vec<String> =
             serde_json::from_value(field("paletteRecent")).unwrap_or_default();
         palette_recent.truncate(crate::ui::command_palette::RECENT_LIMIT);
+        // Lists of non-empty ids, each kept once and bounded.
+        let trusted_plugins = field("trustedPlugins")
+            .as_object()
+            .map(|callers| {
+                callers
+                    .iter()
+                    .filter_map(|(caller, list)| {
+                        let mut kept: Vec<String> = Vec::new();
+                        for id in list.as_array()?.iter().filter_map(|id| id.as_str()) {
+                            if !id.is_empty() && !kept.iter().any(|known| known == id) {
+                                kept.push(id.to_owned());
+                            }
+                        }
+                        let excess = kept.len().saturating_sub(TRUST_LIMIT);
+                        kept.drain(..excess);
+                        (!caller.is_empty() && !kept.is_empty()).then(|| (caller.clone(), kept))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default();
         // The per-panel entries of older players become the slot's state;
         // they are not written again.
         let sidebar_slot = serde_json::from_value::<SidebarSlot>(field("sidebarSlot"))
@@ -349,6 +429,7 @@ impl UiState {
             appearance,
             settings,
             palette_recent,
+            trusted_plugins,
         }
     }
 }
@@ -498,6 +579,10 @@ mod tests {
             last_page: Some("vestra.preferences/appearance".into()),
         });
         store.state.palette_recent = vec!["host/mute".into(), "vestra.video/video.reset".into()];
+        // Ask Vestra UX step 4: the trusted plugins survive a restart.
+        store
+            .state
+            .trust("vestra.workshop", &["zysilm.clipexport".into()]);
         // Menu redesign step 3b: the adjust column's own state.
         store.state.adjust_slot = Some(AdjustSlot {
             visible: true,
@@ -517,6 +602,63 @@ mod tests {
         assert!(text.contains("\"bindingsMigrated\""), "{text}");
         assert!(text.contains("\"windowMaximized\": true"), "{text}");
         assert!(text.contains("\"paletteRecent\""), "{text}");
+        assert!(text.contains("\"trustedPlugins\""), "{text}");
+    }
+
+    /// H4: trust is per caller, kept once, bounded; an uninstalled plugin's
+    /// entries go (as trusted and as a caller); the reset clears all.
+    #[test]
+    fn trusted_plugins_are_per_caller_and_go_with_an_uninstall_or_the_reset() {
+        let mut state = UiState::default();
+        assert!(!state.trusts("vestra.workshop", "zysilm.clipexport"));
+        assert!(state.trust(
+            "vestra.workshop",
+            &["zysilm.clipexport".into(), "zysilm.autoframe".into()]
+        ));
+        assert!(!state.trust("vestra.workshop", &["zysilm.clipexport".into()]));
+        assert!(!state.trust("vestra.other", &[]));
+        assert!(!state.trusted_plugins.contains_key("vestra.other"));
+        assert!(state.trusts("vestra.workshop", "zysilm.clipexport"));
+        // Per caller: another caller still asks.
+        assert!(!state.trusts("vestra.other", "zysilm.clipexport"));
+        state.trust("zysilm.autoframe", &["zysilm.clipexport".into()]);
+        assert!(state.forget_trust("zysilm.autoframe"));
+        assert_eq!(
+            state.trusted_plugins,
+            BTreeMap::from([(
+                "vestra.workshop".to_owned(),
+                vec!["zysilm.clipexport".to_owned()]
+            )])
+        );
+        assert!(!state.forget_trust("zysilm.autoframe"));
+        assert!(state.forget_trust("zysilm.clipexport"));
+        assert!(state.trusted_plugins.is_empty());
+        state.trust("vestra.workshop", &["a.b".into()]);
+        assert!(state.clear_trust());
+        assert!(!state.clear_trust());
+        // Bounded: the oldest go first.
+        let many: Vec<String> = (0..TRUST_LIMIT + 3).map(|n| format!("p.{n}")).collect();
+        state.trust("vestra.workshop", &many);
+        let list = &state.trusted_plugins["vestra.workshop"];
+        assert_eq!(list.len(), TRUST_LIMIT);
+        assert_eq!(list[0], "p.3");
+    }
+
+    #[test]
+    fn trusted_plugins_read_leniently() {
+        let read =
+            |text: &str| UiState::from_value(serde_json::from_str(text).unwrap()).trusted_plugins;
+        assert_eq!(
+            read(
+                r#"{"trustedPlugins":{"a.caller":["x.y",7,"","x.y","z.w"],"b.caller":"x.y","c.caller":[],"":["x.y"]}}"#
+            ),
+            BTreeMap::from([(
+                "a.caller".to_owned(),
+                vec!["x.y".to_owned(), "z.w".to_owned()]
+            )])
+        );
+        assert!(read(r#"{"trustedPlugins":[1]}"#).is_empty());
+        assert!(read("{}").is_empty());
     }
 
     /// The adjust column starts closed at the default width; a bad width

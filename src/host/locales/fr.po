@@ -768,3 +768,39 @@ msgstr "La première ligne de la palette de commandes appartient à {}"
 #, x-machine
 msgid "{palette} and {lead}"
 msgstr "{palette} et {lead}"
+
+#. The approval sheet's "Don't ask again" checkbox, for one plugin ({plugin}: its shown name).
+#: src/host/review_sheet.rs
+#, x-machine
+msgid "Don't ask again for {plugin}"
+msgstr "Ne plus demander pour {plugin}"
+
+#. The approval sheet's "Don't ask again" checkbox, for two plugins ({0}, {1}: their shown names).
+#: src/host/review_sheet.rs
+#, x-machine
+msgid "Don't ask again for {0} and {1}"
+msgstr "Ne plus demander pour {0} et {1}"
+
+#. The approval sheet's "Don't ask again" checkbox, for three plugins or more ({n}: how many; the rows name them).
+#: src/host/review_sheet.rs
+#, x-machine
+msgid "Don't ask again for these {n} plugins"
+msgstr "Ne plus demander pour ces {n} plugins"
+
+#. A category of the player's own commands in the command palette (Command Palette: Ask Again Before Plugin Commands).
+#: src/core_actions.rs
+#, x-machine
+msgid "Command Palette"
+msgstr "Palette de commandes"
+
+#. The player's command that forgets every "Don't ask again" of the approval sheet: plugin commands ask first again.
+#: src/host/actions.rs
+#, x-machine
+msgid "Ask Again Before Plugin Commands"
+msgstr "Redemander avant les commandes des plugins"
+
+#. The OSD line after Ask Again Before Plugin Commands.
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "Plugin commands will ask again"
+msgstr "Les commandes des plugins redemanderont"

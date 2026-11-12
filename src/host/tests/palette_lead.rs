@@ -7,7 +7,9 @@
 //! (not built-in) is refused both capabilities. A second run parks the
 //! holder, wakes it with the row (its ticket moves to the woken run) and
 //! answers Don't Run. A query starting with "plan" runs a plan (`then`):
-//! asked once before its first step, or declined and nothing runs. The
+//! asked once before its first step, or declined and nothing runs. A query
+//! starting with "trust" runs the development load's commands with "Don't
+//! ask again" (step 4) and then Ask Again Before Plugin Commands. The
 //! fixtures speak the wire
 //! directly (their own process, `VESTRA_SHARED=0`), so the test does not
 //! wait for the SDK release that wraps these calls. Built-ins from a
@@ -113,6 +115,31 @@ export default async function activate(plugin) {{
     const {{ query, ticket, keep, status }} = message.data;
     log(`FIX lead query=${{query}} keep=${{keep}} status=${{status}} ticket=${{ticket.length}}`);
     const run = (id, more = {{}}) => call("commands.run", {{ id, ticket, ...more }});
+    const dangerous = async () => {{
+      const list = (await call("commands.list", {{}})).result;
+      const row = (id) => list.commands.find((c) => c.id === id);
+      return JSON.stringify([row("{THIRD}/export")?.dangerous, row("{THIRD}/purge")?.dangerous,
+        row("{THIRD}/export")?.builtin]);
+    }};
+    const pause = () => new Promise((done) => setTimeout(done, 300));
+    if (query.startsWith("trust")) {{
+      // Don't ask again (H4): the development load's plain command asks
+      // once and is remembered; its destructive one still asks; the
+      // palette command Ask Again Before Plugin Commands forgets it.
+      log("FIX trust list before", await dangerous());
+      log("FIX trust export", said(await run("{THIRD}/export")));
+      await pause();
+      log("FIX trust list after", await dangerous());
+      log("FIX trust export again", said(await run("{THIRD}/export")));
+      await pause();
+      log("FIX trust purge", said(await run("{THIRD}/purge")));
+      await pause();
+      log("FIX trust ask again", said(await run("host/ask-again")));
+      await pause();
+      log("FIX trust list reset", await dangerous());
+      log("FIX trust done", said(await call("palette.lead.done", {{ ticket }})));
+      return;
+    }}
     if (query.startsWith("plan")) {{
       // A plan (`then`): asked once before the first step; a command
       // outside the approved plan asks on its own.
@@ -157,11 +184,21 @@ export default async function activate(plugin) {{
     )
 }
 
-/// The development load: not built-in, whatever it declares.
+/// The development load: not built-in, whatever it declares. Its commands
+/// are a plugin's that is not built in: `export` (plain) and `purge`
+/// (destructive).
 fn third() -> String {
     format!(
         r#"{WIRE}
 export default async function activate(plugin) {{
+  handlers.push((message) => {{
+    if (message.event === "commands.execute") log(`THIRD ${{message.data.id}} ran`);
+  }});
+  for (const [id, destructive] of [["export", false], ["purge", true]]) {{
+    log(`THIRD register ${{id}}`, said(await call("commands.register", {{ id, revision: 1,
+      declaration: {{ title: id, path: ["Tools", id], destructive }},
+      state: {{ enabled: true, busy: false }} }})));
+  }}
   log("THIRD set", said(await call("palette.lead.set", {{ title: "Mine", icon: "ai" }})));
   log("THIRD list", said(await call("commands.list", {{}})));
 }}
@@ -198,7 +235,7 @@ fn run(seconds: u32, env: &[(&str, &str)]) -> String {
     package(
         &development,
         THIRD,
-        &["commands.run", "palette.lead"],
+        &["commands", "commands.run", "palette.lead"],
         third(),
     );
     let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
@@ -416,6 +453,61 @@ fn a_plan_is_asked_once_before_its_first_step() {
     );
     assert_eq!(lines(&log, "FIX hello ran").lines().count(), 2, "{log}");
     assert_eq!(lines(&log, "FIX wipe ran").lines().count(), 2, "{log}");
+}
+
+/// "Don't ask again" (Ask Vestra UX step 4, H4; headless:
+/// `VESTRA_TEST_CONFIRM=always` answers Run with it checked): a plain
+/// command of a plugin that is not built in asks once, then neither asks
+/// nor lists as `dangerous` for this caller; that plugin's destructive
+/// command still asks (no checkbox: nothing remembered); the palette
+/// command Ask Again Before Plugin Commands, run as any command, forgets
+/// it (its OSD line, the host log).
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn dont_ask_again_trusts_a_plugins_plain_commands_until_ask_again() {
+    let logs = tempfile::tempdir().unwrap();
+    let host_log = logs.path().join("host.log");
+    let log = run(
+        9,
+        &[
+            ("VESTRA_TEST_CONFIRM", "always"),
+            ("VESTRA_TEST_EXECUTE", "lead:trust it@4000"),
+            ("VESTRA_LOG_FILE", host_log.to_str().unwrap()),
+        ],
+    );
+    let expect = |text: &str| expect(&log, text);
+    expect("FIX trust list before [true,true,false]");
+    expect("FIX trust export {\"ran\":true}");
+    assert!(
+        log.contains(&format!(
+            "commands.run: {ID} asks to run {THIRD}/export (headless: true, remember)"
+        )),
+        "{log}"
+    );
+    expect("FIX trust list after [false,true,false]");
+    expect("FIX trust export again {\"ran\":true}");
+    expect("FIX trust purge {\"ran\":true}");
+    // The destructive one asked, with nothing to remember.
+    assert!(
+        log.contains(&format!(
+            "commands.run: {ID} asks to run {THIRD}/purge (headless: true)"
+        )),
+        "{log}"
+    );
+    // Asked twice in all: the first export and the purge.
+    assert_eq!(log.matches("asks to run").count(), 2, "{log}");
+    assert_eq!(lines(&log, "THIRD export ran").lines().count(), 2, "{log}");
+    assert_eq!(lines(&log, "THIRD purge ran").lines().count(), 1, "{log}");
+    expect("FIX trust ask again {\"ran\":true}");
+    expect("FIX trust list reset [true,true,false]");
+    expect("FIX trust done null");
+    let kept = std::fs::read_to_string(&host_log).unwrap();
+    assert!(
+        kept.contains(&format!(
+            "commands.run: {ID} no longer asks before the commands of {THIRD}"
+        )) && kept.contains("commands.run: plugin commands ask again"),
+        "{kept}"
+    );
 }
 
 /// Don't Run on a plan's sheet: nothing of the plan runs, not even its

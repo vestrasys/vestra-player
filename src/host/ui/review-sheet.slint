@@ -3,18 +3,23 @@
 // once, where the palette was (top centre), on the palette's plate and at
 // its width: the request in the field's box (read-only), the question,
 // every step of the plan (number, palette label, plugin, a reason when it
-// is a fact), a note when a step's plugin is not built in, and [Run Enter]
+// is a fact), a note when a step's plugin is not built in, [Run Enter]
 // [Don't Run Esc] at the right of the footer (as UrlInputRow: confirm
-// first). The footer's left is kept for "Don't ask again" (step 4).
+// first) and, when the host offers it, "Don't ask again for <plugin>" at
+// its left (step 4, H4).
 //
-// It is modal and takes the keyboard focus: Enter runs, Esc does not; a
-// held-down key's repeats count for nothing (the host also ignores input
-// in the first 0.5 s). Presses outside it reach the menu layer's dismiss
-// (Don't Run). Rows: always SLOTS (8) of them, unused ones hidden by
-// `visible` (the no-churn rule in menu-view.slint).
+// It is modal and takes the keyboard focus: Enter runs, Esc does not,
+// Ctrl+Enter (⌘↵ on macOS) runs and remembers when the checkbox is there;
+// a held-down key's repeats count for nothing (the host also ignores input
+// in the first 0.5 s). Space does not toggle the checkbox (it keeps the
+// focus off it: a press of Space meant for pause must not check it); a
+// click does, and the box starts unchecked each time the sheet shows.
+// Presses outside it reach the menu layer's dismiss (Don't Run). Rows:
+// always SLOTS (8) of them, unused ones hidden by `visible` (the no-churn
+// rule in menu-view.slint).
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { KeyHint } from "@vestra/widgets.slint";
+import { Check, KeyHint } from "@vestra/widgets.slint";
 import { MenuChrome } from "menu-view.slint";
 
 export struct ReviewStep {
@@ -43,6 +48,8 @@ export struct ReviewSheet {
     steps: [ReviewStep],
     // Shown when a step's plugin is not built in; empty otherwise.
     note: string,
+    // "Don't ask again for <plugin>" (H4); empty: no checkbox.
+    remember: string,
     run: string,
     cancel: string,
     run-key: string,
@@ -89,7 +96,8 @@ export component ReviewSheetView inherits Rectangle {
     // The panel's top edge: 16px, below the fullscreen title strip while
     // it is out.
     in property <length> top: 16px;
-    // `run` or `decline`.
+    // `run`, `run-remember` (Run with "Don't ask again" checked, or
+    // Ctrl+Enter with the checkbox there) or `decline`.
     callback action(string);
     // Tests read the panel's place and height.
     out property <length> panel-x: panel.x;
@@ -101,12 +109,24 @@ export component ReviewSheetView inherits Rectangle {
     out property <length> run-x: run.absolute-position.x - root.absolute-position.x + run.width / 2;
     out property <length> cancel-x: cancel.absolute-position.x - root.absolute-position.x + cancel.width / 2;
     out property <length> buttons-y: run.absolute-position.y - root.absolute-position.y + run.height / 2;
+    // The checkbox: shown, checked, its box's centre in the view.
+    out property <bool> remember-shown: remember.visible;
+    out property <bool> remember-checked: remember.checked;
+    out property <length> remember-x: remember.absolute-position.x - root.absolute-position.x + 6px;
+    out property <length> remember-y: remember.absolute-position.y - root.absolute-position.y + remember.height / 2;
 
     init => { keys.focus(); }
 
+    // Run, remembering when the box is checked (and offered).
+    function run() {
+        root.action(root.sheet.remember != "" && remember.checked ? "run-remember" : "run");
+    }
+
     // 6px, the 32px request box, 6px; the 28px question; the rows; the
-    // note; the footer (separator and buttons) as the palette's: 44px.
+    // note; the footer (separator and buttons) as the palette's: 44px, taller
+    // only when "Don't ask again" wraps (two long plugin names).
     private property <length> note-height: root.sheet.note == "" ? 0px : note.preferred-height + 8px;
+    private property <length> footer-height: root.sheet.remember == "" ? 44px : max(44px, remember.preferred-height + 20px);
 
     keys := FocusScope {
         x: 0;
@@ -116,8 +136,14 @@ export component ReviewSheetView inherits Rectangle {
         key-pressed(event) => {
             // A held-down key (the Enter that sent the request) is no answer.
             if event.repeat { return accept; }
+            // Ctrl+Enter (⌘↵): run and remember, where the box is offered
+            // (Raycast's Always Allow); Enter alone follows the box.
+            if event.text == Key.Return && event.modifiers.control && root.sheet.remember != "" {
+                root.action("run-remember");
+                return accept;
+            }
             if event.text == Key.Return {
-                root.action("run");
+                root.run();
                 return accept;
             }
             if event.text == Key.Escape {
@@ -132,7 +158,7 @@ export component ReviewSheetView inherits Rectangle {
         x: (root.width - self.width) / 2;
         y: root.top;
         width: min(520px, root.width - 16px);
-        height: 72px + root.sheet.count * 28px + root.note-height + 44px;
+        height: 72px + root.sheet.count * 28px + root.note-height + root.footer-height;
         background: Theme.bg-panel;
         border-color: Theme.line;
         border-width: 1px;
@@ -271,27 +297,39 @@ export component ReviewSheetView inherits Rectangle {
             color: Theme.text-dim;
             wrap: word-wrap;
         }
-        // Footer: the palette's separator, the buttons at its right.
+        // Footer: the palette's separator, the buttons at its right,
+        // "Don't ask again" at its left.
         Rectangle {
             x: 8px;
-            y: parent.height - 38px;
+            y: parent.height - root.footer-height + 6px;
             width: parent.width - 16px;
             height: 1px;
             background: Theme.line;
         }
         HorizontalLayout {
             x: 10px;
-            y: parent.height - 32px;
+            y: parent.height - root.footer-height + 12px;
             width: parent.width - 20px;
-            height: 24px;
+            height: root.footer-height - 20px;
             spacing: 6px;
-            alignment: end;
+            // The checkbox takes the room the buttons leave; its text wraps
+            // (two long plugin names) and the footer grows with it.
+            VerticalLayout {
+                alignment: center;
+                horizontal-stretch: 1;
+                min-width: 0px;
+                remember := Check {
+                    visible: root.sheet.remember != "";
+                    text: root.sheet.remember;
+                    checked: false;
+                }
+            }
             VerticalLayout {
                 alignment: center;
                 run := SheetButton {
                     text: root.sheet.run;
                     key: root.sheet.run-key;
-                    clicked => { root.action("run"); }
+                    clicked => { root.run(); }
                 }
             }
             VerticalLayout {

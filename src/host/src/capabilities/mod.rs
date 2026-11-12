@@ -53,7 +53,9 @@ mod window_control;
 
 pub(crate) use commands::refresh_conditions;
 pub(crate) use commands_run::{
-    CommandRuns, PLAN_STEPS, answered as command_run_answered, shown_name,
+    CommandRuns, PLAN_STEPS, answered as command_run_answered,
+    ask_again as ask_again_before_plugin_commands, forget_trust as forget_command_trust,
+    shown_name,
 };
 pub(crate) use events::WAKE_EVENTS;
 pub(crate) use media_sources::locate_dialog;

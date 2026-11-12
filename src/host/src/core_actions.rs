@@ -298,8 +298,15 @@ pub fn declarations(step: f64) -> Vec<(&'static str, Declaration)> {
 /// The categories of the player's own commands: the command palette and
 /// Keyboard Shortcuts name a command `Category: Title` in the built-in
 /// plugins' words ("Seek: Back 5 s", "Window: Toggle Fullscreen").
-pub const CATEGORIES: [&str; 7] = [
-    "Playback", "Seek", "Speed", "Audio", "Window", "File", "Help",
+pub const CATEGORIES: [&str; 8] = [
+    "Playback",
+    "Seek",
+    "Speed",
+    "Audio",
+    "Window",
+    "File",
+    "Help",
+    "Command Palette",
 ];
 
 /// A category of [`CATEGORIES`] in the interface language.
@@ -312,6 +319,7 @@ fn category_text(key: &str) -> String {
         "Window" => tr("Window"),
         "File" => tr("File"),
         "Help" => tr("Help"),
+        "Command Palette" => tr("Command Palette"),
         _ => key.to_owned(),
     }
 }

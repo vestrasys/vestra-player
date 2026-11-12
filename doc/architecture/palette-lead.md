@@ -47,7 +47,8 @@ refused before), so a store or file install of a package declaring one fails the
 - The list is the palette's (`Host::palette_items`, `ui/command_palette.rs` `items`): the same
   commands, labels and places. `id` is the global id `<manifest>/<local>` (`host/<id>` for the
   player's). `revision` is the registry revision. `keys` are every active key label
-  (`bindings::Table::labels`). `builtin` says whether the command's plugin is built-in.
+  (`bindings::Table::labels`). `builtin` says whether the command's plugin is built-in. `dangerous` is for this caller (§2.2: it
+  follows the plugins it trusts) and does not move `revision`, which is the registry's.
 - **Personal data**: the host cannot tell which commands a plugin generated from the user's data
   (a Recently Played item titled with a file name), so the rows carry no such mark. A caller that
   must keep personal data from a model recognises them by owner and place: it leaves out the rows
@@ -66,7 +67,8 @@ refused before), so a store or file install of a package declaring one fails the
   player's own Close (`host/stop`) and Quit (the host's list names only the player's commands),
   anything under the built-in `@settings` and `@reset` menus (judged on the whole path normalized,
   `commands::normalize`: an old root "设置" with items below it is Settings), and every command of
-  a plugin that is not built-in (PROPOSAL Q3 A). The core never lists plugin commands: **plugins mark their
+  a plugin that is not built-in (PROPOSAL Q3 A) unless the caller trusts that plugin ("Don't ask
+  again", §2.2: then only its destructive commands ask). The core never lists plugin commands: **plugins mark their
   destructive commands with `CommandOptions.destructive`**, and the built-in plugins mark theirs
   (Remove All, Clear History, Delete, …) before any caller uses `commands.run` (a gate the
   coordinator records).
@@ -97,8 +99,9 @@ refused before), so a store or file install of a package declaring one fails the
   question, so a later caller neither replaces it nor answers it in the user's place;
   an open native dialog no longer refuses a run (PROPOSAL F4): the sheet waits for it. Headless
   there is no sheet: `VESTRA_TEST_CONFIRM=run` answers Run for the whole sheet (tests), `always`
-  Run too (and, from step 4, remember), anything else Don't Run; `commands.run: <id> asks to run
-  <global>, <global>, … (headless: <answer>)` goes to stderr.
+  Run with "Don't ask again" checked (remembered only where the sheet would offer it, §2.2),
+  anything else Don't Run; `commands.run: <id> asks to run <global>, <global>, … (headless:
+  <answer>[, remember])` goes to stderr.
 - **Where the run is named**: when the caller holds the palette lead (its ticket is the lead's),
   the step goes to the status strip (§3.1): "i/n · <command label>" with `step`/`of`, the label
   alone without, the line filled to i/n (full for a lone command). Any other caller (none yet: both
@@ -131,13 +134,16 @@ follows the theme. From the top:
 | Question (28px, 12px semibold) | "Run this command?" / "Run these {n} commands?" |
 | Steps (28px each, 8 fixed slots) | number (11px `text-dim`), palette label (12px; `text` for a step that asks, `text-list` for one that does not), the plugin's shown name (11px `text-dim`), a reason (11px `text-dim`) |
 | Note (11px `text-dim`, wraps), only when a step's plugin is not built in | "The player cannot tell what commands of plugins that are not built in will do." |
-| Footer (the palette's separator; 44px) | right: [Run `Enter`] [Don't Run `Esc`] (the library Button's plate with a `KeyHint`; confirm first, as `UrlInputRow`). The left is kept for "Don't ask again" (step 4, H4). |
+| Footer (the palette's separator; 44px, taller only when the checkbox's text wraps) | right: [Run `Enter`] [Don't Run `Esc`] (the library Button's plate with a `KeyHint`; confirm first, as `UrlInputRow`). Left, when offered (§2.2): the library `Check` "Don't ask again for {plugin}" / "… for {0} and {1}" / "… for these {n} plugins", unchecked each time the sheet shows. |
 
 Reasons are facts only (H7; user ruling 2 of 2026-11-12): "Not built in" for a command of a plugin
 that is not built in, "Closes the video" for the player's Close, "Quits the player" for its Quit;
 none for a destructive command (no "Cannot be undone") nor for a step that does not ask.
 
-Input (§4.6): it takes the keyboard focus; Enter runs, Esc does not; held-down repeats count for
+Input (§4.6): it takes the keyboard focus; Enter runs (remembering when the box is checked), Ctrl+Enter
+(⌘↵: Slint's `control` is Command on macOS) runs and remembers when the box is offered and is a plain
+Run otherwise, Esc does not; a click toggles the box, Space does not (the focus stays on the sheet,
+so a Space meant for pause cannot check it); held-down repeats count for
 nothing (the Enter that sent the request); Run and Don't Run by pointer; a press outside it is Don't
 Run. Nothing counts within 500 ms of it showing (`review_sheet::GUARD_MS`, Chromium's rule for
 sensitive UI), each time it shows. Bindings pause while it shows (it is the menu layer), and the
@@ -148,12 +154,48 @@ opens over it; it shows again when something else closed the menu layer (a rebui
 menu); it stays when the window is not active and takes no focus from another program. Only an
 answer, the end of the ticket (120 s unused, `palette.lead.done`: answered Don't Run) or the end of
 the caller (it stopped: the sheet just goes) removes it (`review_tick`, every window tick). The
-answer goes the usual way, `Event::CommandRunAnswered`. stderr gets the number of steps asked
+answer goes the usual way, `Event::CommandRunAnswered` (caller, run, remember). stderr gets the number of steps asked
 about, never the labels or the request.
 
 Offline renders: `widgets_tests::render_review_sheet_states` (ignored; `VESTRA_SHEET_SHOTS=<dir>`,
 `VESTRA_SHEET_LANG=en|zh-Hans`, `VESTRA_SHEET_BACKDROP=<png>`): a plan of three steps with one not
-built in, one destructive step, one step not built in, Close, eight steps; both palettes, 2×.
+built in (and a destructive one: no checkbox), one destructive step, one step not built in (with the
+checkbox), two steps with the checkbox checked (`r04-remember-one-checked`), three steps with two
+plugins to remember (`r04-remember-two`), Close, eight steps; both palettes, 2×.
+
+### 2.2 Don't ask again
+
+Design: PROPOSAL §3.2 B3, §4.3, §4.5, §4.6, §4.7, §5.1 H4 (step 4; user rulings of 2026-11-12: per
+plugin, kept until reset by a palette command; never offered with a destructive step).
+`capabilities/commands_run.rs` (`Judged`, `trust_offer`, `trust_plugins`, `ask_again`,
+`forget_trust`), `ui/ui_state.rs` (`trustedPlugins`), `host/review_sheet.rs` (`remember_text`),
+`host/actions.rs` (`ASK_AGAIN`), `packages/package_manager.rs` (`uninstall`).
+
+- **What it trusts**: per caller (the `commands.run` caller's manifest id), the plugins (manifest
+  ids) that are not built in whose steps on the sheet ask only for that reason, in plan order, each
+  once. The host keeps that list with the waiting run (`ConfirmedRun::remember`); the view only says
+  whether the box was checked, so it cannot widen it.
+- **When it is offered**: when the list is not empty and no step of the plan always asks
+  (`always_asks`: a command marked `destructive`, the player's Close and Quit, anything under the
+  built-in `@settings` and `@reset` menus), trusted plugin or not (user ruling 3 of 2026-11-12). A
+  trusted plugin's destructive command keeps asking, without the box.
+- **What it changes**: `dangerous(item, builtin, trusted)` is false for a trusted plugin's ordinary
+  command, so that caller's runs no longer ask and its `commands.list` rows say `dangerous: false`
+  (a model sees no "asks the user first" for them). Built-in rules are unchanged; trust never applies
+  to a built-in (nothing to trust).
+- **Where it lives**: `ui-state.json` `trustedPlugins` (README §ui-state; headless runs keep it in
+  memory only), written 1 s after Run and on exit, so it survives restarts. At most 256 plugins per
+  caller (the oldest go first); an unreadable entry is dropped alone.
+- **How it ends**: `Command Palette: Ask Again Before Plugin Commands` (`host/ask-again`, palette
+  only, no menu path or default key; also runnable through `commands.run`, harmlessly) clears every
+  caller's list and shows the OSD line "Plugin commands will ask again". Uninstalling a plugin
+  (`packages.uninstall`, with or without its data) removes it from every list, and its own list as a
+  caller; an update keeps it (PROPOSAL §4.7). Disabling keeps it.
+- **Host log**: `commands.run: <caller> no longer asks before the commands of <id>, …` and
+  `commands.run: plugin commands ask again` (manifest ids only).
+
+This record exists to ask less; it is not a security boundary (plugin processes are not sandboxed,
+rulings of 2026-11-03/04): the store review and uninstall remain the gate.
 
 ## 3. `palette.lead` (built-in only, residency recordable)
 
@@ -255,13 +297,15 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
 ## 4. Tests
 
 - Unit: `capabilities/commands_run.rs` (tickets, idle end, rates, revoke and rekey, which commands
-  ask first, `step`/`of`, `then`, plan approvals, the sheet's reasons), `host/review_sheet.rs` (the
-  guard, the question, the sheet's value), `capabilities/palette_lead.rs` (parameters, the capability's flags),
+  ask first, trusted plugins, what "Don't ask again" offers, `step`/`of`, `then`, plan approvals,
+  the sheet's reasons), `host/review_sheet.rs` (the guard, the question, the sheet's value, the
+  checkbox's text), `ui/ui_state.rs` (`trustedPlugins`: per caller, bounded, uninstall, reset, lenient
+  reading, round trip), `capabilities/palette_lead.rs` (parameters, the capability's flags),
   `capabilities/mod.rs` (built-in-only refusal for live requests and replays, the JSON field),
   `capabilities/palette_lead.rs` (`status.state`), `host/lead_strip.rs` (what the strip shows, end
   states' times, the shell value), `ui/command_palette.rs` (`names`, `aim`, `lead_shows_status`, no
   change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,
-  repeats and buttons),
+  repeats and buttons; the checkbox: click, Run, Enter, Ctrl+Enter, Space, a wrapping text),
   `host/supervisor/probe.rs`. `src/tests/sdk/host-agreement.test.ts`: TestHost accepts the
   player's `StatusState::NAMES` and refuses another with the player's code and message (skipped
   before SDK 1.7.15).
@@ -271,7 +315,9 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
   the rate limit, an unknown `status.state` and an end state, and the ended ticket; a development load is refused both capabilities; a parked
   holder is woken by the row and its ticket works in the woken run; Don't Run declines; a plan
   (`then`) is refused when malformed, asked once before its first step, its approved steps run
-  without asking and a step outside it asks again; Don't Run on a plan runs nothing.
+  without asking and a step outside it asks again; Don't Run on a plan runs nothing; "Don't ask
+  again" on a development load's plain command (it stops asking and listing as `dangerous`, its
+  destructive command still asks), then Ask Again Before Plugin Commands (both in the host log).
 - `package_manager.rs`: a development load of a built-in's id (even of the installation's
   directory) is not built-in (`builtin_provenance`: the run must use the built-in instance's data
   key).

@@ -1825,6 +1825,9 @@ impl Host {
         }
         self.packages.receipts = self.packages.store.operations();
         self.failures.edit().remove(&id);
+        // "Don't ask again" for its commands goes too (Ask Vestra UX §4.7):
+        // a later install of the same id asks again.
+        crate::capabilities::forget_command_trust(self, &id);
         // Session values go with every uninstall, whether or not the files do.
         if let Some(instance) = &installed.instance {
             self.session_storage
