@@ -4,13 +4,13 @@ version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, foreground window, double-click time, menu show delay, sleep prevention, dark title bars, windows cloaked until their first frame, display work areas and window placements, vertical blank waits, files on network file systems, a volume's free space, the DXGI adapters and their driver versions, whether a GPU's driver offers RTX Video Super Resolution, the process's private memory and the system commit charge, the physical memory and the system's low-memory notification)"
+description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, foreground window, double-click time, menu show delay, sleep prevention, dark title bars, windows cloaked until their first frame, display work areas and window placements, vertical blank waits, files on network file systems, a volume's free space, the DXGI adapters and their driver versions, whether a GPU's driver offers RTX Video Super Resolution, the process's private memory and the system commit charge, the physical memory and the system's low-memory notification, confirmation task dialogs without a system sound)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.
 # Empty on other systems.
 [target.'cfg(windows)'.dependencies]
-windows-sys = { version = "0.61", features = ["Wdk_Graphics_Direct3D", "Wdk_Storage_FileSystem", "Wdk_System_SystemServices", "Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_Memory", "Win32_System_Power", "Win32_System_ProcessStatus", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
+windows-sys = { version = "0.61", features = ["Wdk_Graphics_Direct3D", "Wdk_Storage_FileSystem", "Wdk_System_SystemServices", "Win32_Foundation", "Win32_Graphics_Dwm", "Win32_Graphics_Gdi", "Win32_Storage_FileSystem", "Win32_System_IO", "Win32_System_LibraryLoader", "Win32_System_Memory", "Win32_System_Power", "Win32_System_ProcessStatus", "Win32_System_SystemInformation", "Win32_System_Threading", "Win32_System_WindowsProgramming", "Win32_UI_Controls", "Win32_UI_HiDpi", "Win32_UI_Input_KeyboardAndMouse", "Win32_UI_WindowsAndMessaging"] }
 # DXGI and Direct3D 11 are COM: the `windows` crate's interfaces (the version
 # Slint already brings in through i-slint-core and its winit backend).
 # Direct3D 11's video device: the video upscaler check (`video_super_resolution`).

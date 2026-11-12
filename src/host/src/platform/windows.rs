@@ -732,67 +732,47 @@ pub fn clipboard_write_image(kind: Image, bytes: Vec<u8>) -> std::result::Result
 
 // ------------------------------------------------------------------ dialogs
 
-/// A task dialog owned by the active host window (else `parent`): the
-/// message and detail as its text, the plugin's own confirm and cancel labels
-/// (rfd's `common-controls-v6`; build.rs embeds the Common Controls v6
-/// manifest it needs), a warning icon for destructive actions. A checkbox
-/// becomes a second Yes/No dialog after confirming (task dialogs through rfd
-/// have no checkbox). `done` runs on a worker thread.
+/// A task dialog owned by the active host window (else `parent`), centred
+/// on it: the message as the main instruction, the detail under it, the
+/// plugin's own confirm and cancel labels, the checkbox as the dialog's own
+/// checkbox (`vestra_win32::task_dialog`; build.rs embeds the Common
+/// Controls 6 manifest it needs). No standard icon, so no system sound;
+/// `destructive` shows the system's warning icon as an icon handle, which
+/// plays no sound either. `done` runs on the dialog's own thread.
 pub fn confirm(
     options: &crate::ui::confirm::Options,
     parent: Option<HostWindowId>,
     done: impl Fn(bool, bool) + Send + 'static,
 ) -> std::result::Result<(), RpcError> {
-    use rfd::{AsyncMessageDialog, MessageButtons, MessageDialogResult, MessageLevel};
     let owner = live()
         .into_iter()
         .find(|(_, window)| window.has_focus())
         .map(|(_, window)| window)
-        .or_else(|| parent.and_then(|id| window(id).ok()));
-    let dialog = |text: String, buttons: MessageButtons, level: MessageLevel| {
-        let dialog = AsyncMessageDialog::new()
-            .set_title("Vestra Player")
-            .set_description(text)
-            .set_buttons(buttons)
-            .set_level(level);
-        match &owner {
-            Some(window) => dialog.set_parent(window.as_ref()),
-            None => dialog,
-        }
-    };
-    let text = match &options.detail {
-        Some(detail) => format!("{}\n\n{detail}", options.message),
-        None => options.message.clone(),
-    };
-    let level = if options.destructive {
-        MessageLevel::Warning
-    } else {
-        MessageLevel::Info
-    };
-    // Built here, on the UI thread that owns the windows; only waiting for
-    // the answers happens on the worker.
-    let labels = crate::ui::confirm::button_labels(options);
-    let first = dialog(
-        text,
-        MessageButtons::OkCancelCustom(labels.0.clone(), labels.1.clone()),
-        level,
-    )
-    .show();
-    let second = options
-        .checkbox
-        .clone()
-        .map(|checkbox| dialog(checkbox, MessageButtons::YesNo, MessageLevel::Info).show());
-    std::thread::spawn(move || {
-        let confirmed = match pollster::block_on(first) {
-            MessageDialogResult::Custom(label) => {
-                crate::ui::confirm::confirmed_by(Some(&label), &labels)
+        .or_else(|| parent.and_then(|id| window(id).ok()))
+        .and_then(|window| native_hwnd(&window));
+    let options = options.clone();
+    std::thread::Builder::new()
+        .name("confirm".into())
+        .spawn(move || {
+            let answer = vestra_win32::task_dialog(&vestra_win32::TaskDialog {
+                owner,
+                title: "Vestra Player",
+                instruction: &options.message,
+                content: options.detail.as_deref(),
+                confirm: &options.confirm,
+                cancel: &options.cancel,
+                checkbox: options.checkbox.as_deref(),
+                warning_icon: options.destructive,
+            });
+            match answer {
+                Ok(answer) => done(answer.confirmed, answer.checked),
+                Err(error) => {
+                    logged!("dialogs: the confirmation was not shown: {error}");
+                    done(false, false);
+                }
             }
-            _ => false,
-        };
-        let checked = confirmed
-            && second.is_some_and(|ask| pollster::block_on(ask) == MessageDialogResult::Yes);
-        done(confirmed, checked);
-    });
+        })
+        .map_err(|error| RpcError::new("failed", format!("dialog thread: {error}")))?;
     Ok(())
 }
 

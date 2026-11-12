@@ -411,33 +411,7 @@ fn ask(
     if host.dialog_busy {
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
-    let name = shown_name(host, reply.owner);
-    let message = i18n::tr_args(
-        "{plugin} wants to run “{command}”",
-        &json!({"plugin":name,"command":item.label}),
-    );
-    let why = if builtin {
-        i18n::tr("This command cannot be undone.")
-    } else {
-        i18n::tr_args(
-            "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does.",
-            &json!({"owner":item.plugin}),
-        )
-    };
-    let detail = if query.trim().is_empty() {
-        why
-    } else {
-        let request = i18n::tr_args("Request: “{}”", &json!([query.trim()]));
-        format!("{request}\n\n{why}")
-    };
-    let options = crate::ui::confirm::Options {
-        message: message.chars().take(200).collect(),
-        detail: Some(detail.chars().take(2000).collect()),
-        confirm: i18n::tr("Run"),
-        cancel: i18n::tr("Don't Run"),
-        destructive: true,
-        checkbox: None,
-    };
+    let options = alert(&shown_name(host, reply.owner), item, builtin, query);
     host.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
     host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
@@ -448,6 +422,41 @@ fn ask(
         return Err(error);
     }
     Ok(())
+}
+
+/// The alert's text: the question as its title, then who asks for which
+/// request, then, for a plugin that is not built in, that the player cannot
+/// tell what its command does. No icon (it is a routine question, the same
+/// for every command that asks) and no reason for the others: the command's
+/// name says what it does.
+fn alert(caller: &str, item: &Item, builtin: bool, query: &str) -> crate::ui::confirm::Options {
+    let message = i18n::tr_args("Run “{command}”?", &json!({"command":item.label}));
+    let query = query.trim();
+    let asks = if query.is_empty() {
+        i18n::tr_args("{plugin} asks.", &json!({"plugin":caller}))
+    } else {
+        i18n::tr_args(
+            "{plugin} asks, for your request “{request}”.",
+            &json!({"plugin":caller,"request":query}),
+        )
+    };
+    let detail = if builtin {
+        asks
+    } else {
+        let why = i18n::tr_args(
+            "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does.",
+            &json!({"owner":item.plugin}),
+        );
+        format!("{asks}\n\n{why}")
+    };
+    crate::ui::confirm::Options {
+        message: message.chars().take(200).collect(),
+        detail: Some(detail.chars().take(2000).collect()),
+        confirm: i18n::tr("Run"),
+        cancel: i18n::tr("Don't Run"),
+        destructive: false,
+        checkbox: None,
+    }
 }
 
 /// The user answered the alert of a run (`Event::CommandRunAnswered`): run
@@ -663,5 +672,37 @@ mod tests {
         ] {
             assert_eq!(step(&bad).unwrap_err().code, "invalid", "{bad}");
         }
+    }
+
+    /// B1: the question is the dialog's title; no icon and no "cannot be
+    /// undone" reason; only a plugin that is not built in gets a reason.
+    #[test]
+    fn the_alert_asks_a_plain_question() {
+        let mut reset = item(0, "reset", &["Picture", "Reset"]);
+        reset.label = "Reset: Picture".into();
+        reset.destructive = true;
+        let options = alert("Vestra Player AI", &reset, true, "  reset the picture ");
+        assert_eq!(options.message, "Run “Reset: Picture”?");
+        assert_eq!(
+            options.detail.as_deref(),
+            Some("Vestra Player AI asks, for your request “reset the picture”.")
+        );
+        assert_eq!(
+            (options.confirm.as_str(), options.cancel.as_str()),
+            ("Run", "Don't Run")
+        );
+        assert!(!options.destructive && options.checkbox.is_none());
+        let mut export = item(9, "last30", &["Export"]);
+        export.label = "Export: Export Last 30 Seconds".into();
+        export.plugin = "Clip Export".into();
+        let options = alert("Vestra Player AI", &export, false, "");
+        assert_eq!(
+            options.detail.as_deref(),
+            Some(
+                "Vestra Player AI asks.\n\nThis command belongs to Clip Export, which is not a \
+                 built-in plugin: the player cannot tell what it does."
+            )
+        );
+        assert!(!options.destructive);
     }
 }
