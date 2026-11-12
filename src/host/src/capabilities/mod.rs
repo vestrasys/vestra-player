@@ -55,7 +55,7 @@ pub(crate) use commands::refresh_conditions;
 pub(crate) use commands_run::{CommandRuns, answered as command_run_answered};
 pub(crate) use events::WAKE_EVENTS;
 pub(crate) use media_sources::locate_dialog;
-pub(crate) use palette_lead::{EVENT as LEAD_EVENT, Lead};
+pub(crate) use palette_lead::{EVENT as LEAD_EVENT, Lead, LeadStatus, StatusState};
 
 /// What a capability is, as the manifest, the store and the SDK name it.
 // Read by the JSON generator (`json`, a test) and the lazy activation to come.

@@ -91,6 +91,11 @@ impl Host {
         if self.osd_clear_at.is_some_and(|at| now >= at) {
             self.clear_osd_titles();
         }
+        let hover = matches!(
+            shell.get_property("lead-strip-hover"),
+            Ok(slint_interpreter::Value::Bool(true))
+        );
+        self.lead_strip_tick(now, hover);
         self.host_command_states(fullscreen);
         // The sidebar and plugin panels show and hide `if` elements.
         view::settle_layout(shell.window());

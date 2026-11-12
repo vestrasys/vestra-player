@@ -740,6 +740,8 @@ impl Host {
             self.osd_debug(&OsdEvent::Kept);
         }
         self.write_osd();
+        // And the status strip.
+        self.write_strip();
         // And the plugins' information blocks (`osd.panel`), lost likewise.
         self.show_info_panels();
         if self.menu_generation == self.shell_generation {

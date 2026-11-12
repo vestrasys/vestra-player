@@ -2,6 +2,8 @@
 // insertion markers with the mounted panels; without mounts it is the bare shell.
 import { MenuView, MenuLevel } from "menu-view.slint";
 import { PaletteView, PaletteRow, PaletteLead } from "command-palette.slint";
+// The status strip: the palette lead's status while the palette is closed.
+import { LeadStripView, LeadStrip } from "lead-strip.slint";
 import { Theme } from "@vestra/theme.slint";
 import { TitleStrip } from "title-strip.slint";
 // The bottom-bar button strip (bar_buttons.rs; composition.rs places it).
@@ -91,6 +93,12 @@ export component HostWindow inherits Window {
     callback palette-moved(int);
     callback palette-scrolled(int);
     callback palette-run(int, bool);
+    // The status strip (host/lead_strip.rs): what it shows, presses on it
+    // (`stop`, `open`, `dismiss`), and whether the pointer is on it
+    // (sampled by the host's tick: an end state stays while it is).
+    in property <LeadStrip> lead-strip;
+    callback lead-strip-action(string);
+    out property <bool> lead-strip-hover: lead-strip-view.hover;
     in property <bool> input-blocked: false;
     in property <bool> cursor-hidden: false;
     // No video frame to show (R-U3): the backdrop panel, if any, is drawn instead.
@@ -158,7 +166,9 @@ export component HostWindow inherits Window {
     private property <length> osd-pad-y: round(5px * root.osd-size / 18px / 1px) * 1px;
     // The OSD message's text width budget: the video width less the plate's
     // 10px margins, its padding and the action buttons (never negative).
-    out property <length> osd-text-room: max(0px, canvas.width - 20px - 2 * root.osd-pad-x - osd-first.width - osd-second.width);
+    out property <length> osd-text-room: max(0px, min(canvas.width - 20px, root.osd-strip-room) - 2 * root.osd-pad-x - osd-first.width - osd-second.width);
+    // While the status strip shows, the message ends 8px left of it (§4.7).
+    private property <length> osd-strip-room: root.lead-strip.visible ? lead-strip-view.x - 8px - 10px : 100000px;
     // Where the message's plate ends, and its text's width (tests read them).
     out property <length> osd-right: osd.x + osd.width;
     out property <length> osd-text-width: osd-label.width;
@@ -479,6 +489,16 @@ export component HostWindow inherits Window {
             }
             reject
         }
+    }
+    // Where the palette was (top centre, y 16), above the video, the OSD and
+    // the title strip, below the menu layer (it yields to an open menu:
+    // the host hides it). Below the title strip while it is out.
+    lead-strip-view := LeadStripView {
+        x: (root.width - self.width) / 2;
+        y: 16px + title-strip.covered;
+        room: root.width - 16px;
+        strip: root.lead-strip;
+        action(name) => { root.lead-strip-action(name); }
     }
     if root.menu-open: Rectangle {
         width: root.width; height: root.height;

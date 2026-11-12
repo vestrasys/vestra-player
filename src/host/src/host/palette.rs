@@ -29,13 +29,11 @@ pub(crate) struct PaletteState {
     pub(crate) follow: Option<String>,
     /// The last projection showed a lead row first.
     pub(crate) lead: bool,
-    /// The query the lead's row sent with the palette kept open
-    /// (Shift+Enter), until the query changes: the row shows the holder's
-    /// status for it (`command_palette::lead_shows_status`).
-    pub(crate) sent: Option<String>,
+    /// The last projection's lead row showed its holder's status.
+    pub(crate) status: bool,
     /// The next projection places the cursor by the lead's rule
-    /// (`command_palette::aim`): after opening, typing, or the lead coming
-    /// or going.
+    /// (`command_palette::aim`): after opening, typing, the lead coming or
+    /// going, or its status coming or going while nothing is typed.
     pub(crate) aim: bool,
 }
 
@@ -95,6 +93,8 @@ impl Host {
         self.report_menu(result);
         let result = self.refresh_menu();
         self.report_menu(result);
+        // The status strip yields: the first row shows the status.
+        self.refresh_strip();
     }
     /// The shown name of each plugin with commands, by manifest id.
     fn plugin_names(&self) -> BTreeMap<String, String> {
@@ -134,6 +134,7 @@ impl Host {
             let result = self.refresh_menu();
             self.report_menu(result);
         }
+        self.lead_strip_follow();
     }
     /// Project the open palette into `window` (`refresh_menu`): the
     /// commands as they are now, matched against the query.
@@ -161,17 +162,18 @@ impl Host {
         let status = lead
             .as_ref()
             .and_then(|(_, row)| row.status.clone())
-            .filter(|_| {
-                command_palette::lead_shows_status(
-                    true,
-                    &self.palette.query,
-                    self.palette.sent.as_deref(),
-                )
-            });
+            .filter(|_| command_palette::lead_shows_status(true, &self.palette.query));
         let palette = &mut self.palette;
         if palette.lead != lead.is_some() {
             palette.lead = lead.is_some();
             palette.aim = true;
+        }
+        // The status came or went with nothing typed (it came after
+        // Shift+Enter cleared the field): the cursor goes where the rule
+        // puts it, on the status row while there is one (Enter stops).
+        if palette.status != status.is_some() {
+            palette.status = status.is_some();
+            palette.aim |= empty;
         }
         if std::mem::take(&mut palette.aim) {
             palette.cursor = command_palette::aim(
@@ -213,9 +215,9 @@ impl Host {
             None => json!({"shown": false, "icon": "", "title": "", "query": "",
                 "empty": "", "note": "", "status": false}),
             Some((_, row)) => match &status {
-                Some((text, note)) => json!({"shown": true, "icon": lead_icon(&row.icon),
-                    "title": text, "query": "", "empty": "",
-                    "note": note.clone().unwrap_or_default(), "status": true}),
+                Some(status) => json!({"shown": true, "icon": lead_icon(&row.icon),
+                    "title": status.text, "query": "", "empty": "",
+                    "note": status.note.clone().unwrap_or_default(), "status": true}),
                 None => json!({"shown": true, "icon": lead_icon(&row.icon),
                     "title": row.title, "query": self.palette.query,
                     "empty": if empty { row.empty.clone().unwrap_or_default() } else { String::new() },
@@ -274,24 +276,40 @@ impl Host {
     /// wakes it from standby). `status`: the row showed its status (stop).
     fn run_lead(&mut self, keep: bool) {
         let query = self.palette.query.clone();
-        let sent = self.palette.sent.take();
-        self.lead_activated(query.clone(), keep, sent.as_deref());
-        // Kept open: the row shows the holder's status for this request
-        // until the query changes, and Enter on it stops the request
-        // instead of sending it again.
-        if keep {
-            self.palette.sent = Some(query);
+        self.lead_activated(query, keep);
+        // Kept open (Shift+Enter): the field is cleared, so the row shows
+        // the holder's status for the request it just sent, and a second
+        // Enter stops it instead of sending it again (PROPOSAL §4.6, F1).
+        if keep && !self.palette.query.is_empty() {
+            self.palette.query.clear();
+            self.palette.cursor = 0;
+            self.palette.offset = 0;
+            self.palette.aim = true;
+            if let Some(shell) = &self.shell
+                && let Err(error) = shell.set_property("palette-query", SValue::String("".into()))
+            {
+                diag!("host.error palette: {error}");
+            }
         }
     }
     /// The lead's row activated with `query` (also `VESTRA_TEST_EXECUTE`'s
-    /// `lead:<query>@<ms>`, headless); `sent`: the query it sent with the
-    /// palette kept open, if unchanged since (`PaletteState::sent`).
-    pub(crate) fn lead_activated(&mut self, query: String, keep: bool, sent: Option<&str>) {
+    /// `lead:<query>@<ms>`, headless): the row showed the holder's status
+    /// when it has one and nothing is typed.
+    pub(crate) fn lead_activated(&mut self, query: String, keep: bool) {
+        let Some(lead) = &self.lead else {
+            return;
+        };
+        let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query);
+        self.lead_event(query, keep, status);
+    }
+    /// The `palette.lead` event to the holder, with a new ticket; `status`:
+    /// the user activated the status (Enter on the status row, the strip's
+    /// Stop), which stops the running request.
+    pub(crate) fn lead_event(&mut self, query: String, keep: bool, status: bool) {
         let Some(lead) = &self.lead else {
             return;
         };
         let owner = lead.owner;
-        let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query, sent);
         let now = self.now_ms();
         let ticket = self.command_runs.mint(owner, &query, now);
         input_trace::follow(&format!("palette lead to plugin {owner} (keep {keep})"));
@@ -314,7 +332,6 @@ impl Host {
                     return;
                 }
                 self.palette.query = query;
-                self.palette.sent = None;
                 self.palette.cursor = 0;
                 self.palette.offset = 0;
                 self.palette.aim = true;

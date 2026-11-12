@@ -124,6 +124,10 @@ export default async function activate(plugin) {{
       hello: [row("{ID}/hello")?.dangerous, row("{ID}/hello")?.builtin, row("{ID}/hello")?.title],
       wipe: row("{ID}/wipe")?.dangerous, quit: row("host/quit")?.dangerous,
       keys: Array.isArray(row("host/play-pause")?.keys) }}));
+    log("FIX bad state", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "x", state: "stopped" }} }})));
+    log("FIX end", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "Done · Hello", state: "done" }} }})));
     log("FIX done", said(await call("palette.lead.done", {{ ticket }})));
     log("FIX after done", said(await run("{ID}/hello")));
   }});
@@ -232,12 +236,13 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
     expect("FIX register wipe {\"revision\"");
     // Activated with the typed text and a ticket.
     expect("FIX lead query=make it faster keep=false status=false ticket=32");
-    // Its own command runs, named on the OSD.
+    // Its own command runs, named in the status strip (it holds the lead).
     expect("FIX run hello {\"ran\":true}");
     expect("FIX hello ran");
     assert!(
-        log.contains(&format!("commands.run: {ID} ran {ID}/hello (osd: "))
-            && log.contains("· 1/2 ·"),
+        log.contains(&format!(
+            "commands.run: {ID} ran {ID}/hello (strip: 1/2 · Tools: Hello)"
+        )),
         "{log}"
     );
     // The host log keeps what ran, by id (an installed build's stderr goes
@@ -263,6 +268,11 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
     expect(
         r#"FIX list {"revision":"number","hello":[false,true,"Hello"],"wipe":true,"quit":true,"keys":true}"#,
     );
+    // The status state (SDK 1.7.15): an unknown one is refused; an end state
+    // goes to the strip once.
+    expect("FIX bad state error invalid");
+    expect("FIX end null");
+    assert!(log.contains("lead strip: done"), "{log}");
     expect("FIX done null");
     expect("FIX after done error ticket");
     // Not built-in: refused both, by provenance.

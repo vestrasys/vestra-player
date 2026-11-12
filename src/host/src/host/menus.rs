@@ -620,5 +620,7 @@ impl Host {
                 .map_err(anyhow::Error::from);
             self.report_menu(result);
         }
+        // The status strip comes back (it yields to a menu).
+        self.refresh_strip();
     }
 }

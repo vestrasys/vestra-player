@@ -43,18 +43,68 @@ pub struct LeadRow {
     pub empty: Option<String>,
     /// The row's right side.
     pub note: Option<String>,
-    /// Replaces the row while the query is empty: (text, note).
-    pub status: Option<(String, Option<String>)>,
+    /// What a request of its holder is doing, or how it ended. A working
+    /// status replaces the row while the query is empty and shows in the
+    /// status strip while the palette is closed (`host/lead_strip.rs`); an
+    /// end state shows only in the strip, once.
+    pub status: Option<LeadStatus>,
+}
+
+/// `status` of `palette.lead.set`, as shown.
+#[derive(Clone, Debug, PartialEq)]
+pub struct LeadStatus {
+    /// 1–80 characters.
+    pub text: String,
+    /// The palette row's right side, up to 40 characters.
+    pub note: Option<String>,
+    pub state: StatusState,
+}
+
+/// `status.state` (SDK 1.7.15): still working (absent: the default) or one
+/// of the end states, which the host shows once in the strip, removes after
+/// their time and never keeps or replays.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum StatusState {
+    Working,
+    Done,
+    Failed,
+    Note,
+}
+
+impl StatusState {
+    /// The wire names (`PaletteLeadStatus.state`).
+    pub const NAMES: [&'static str; 4] = ["working", "done", "failed", "note"];
+    fn parse(value: &Value) -> Result<Self, RpcError> {
+        match value.as_str() {
+            _ if value.is_null() => Ok(Self::Working),
+            Some("working") => Ok(Self::Working),
+            Some("done") => Ok(Self::Done),
+            Some("failed") => Ok(Self::Failed),
+            Some("note") => Ok(Self::Note),
+            _ => Err(RpcError::invalid(format!(
+                "status.state is one of {}",
+                Self::NAMES.join(", ")
+            ))),
+        }
+    }
+    /// Done, failed or a note: shown once, then gone.
+    pub fn ended(self) -> bool {
+        self != Self::Working
+    }
 }
 
 /// The palette's lead: its holder and what it sent (recorded as sent).
 #[derive(Clone, Debug)]
 pub struct Lead {
     pub owner: u64,
+    /// What it sent, less an end-state status (never replayed).
     pub sent: Value,
     pub row: LeadRow,
     /// Replayed for a parked holder and not set again since it woke.
     pub recorded: bool,
+    /// The end-state status of the last `set`, already shown: the same one
+    /// sent again (an update of the other fields) does not show again.
+    pub ended: Option<LeadStatus>,
 }
 
 /// A text field of `palette.lead.set`: a string (source text, translated
@@ -121,17 +171,25 @@ pub fn parse(
     let status = match &params["status"] {
         Value::Null => None,
         Value::Object(status) => {
-            if let Some(unknown) = status.keys().find(|key| *key != "text" && *key != "note") {
+            if let Some(unknown) = status
+                .keys()
+                .find(|key| !["text", "note", "state"].contains(&key.as_str()))
+            {
                 return Err(RpcError::invalid(format!("unknown status field {unknown}")));
             }
             let shown = text(texts, &params["status"]["text"], "status.text", 1, 80)?
                 .ok_or_else(|| RpcError::invalid("status.text is required"))?;
-            Some((
-                shown,
-                text(texts, &params["status"]["note"], "status.note", 1, 40)?,
-            ))
+            Some(LeadStatus {
+                text: shown,
+                note: text(texts, &params["status"]["note"], "status.note", 1, 40)?,
+                state: StatusState::parse(&params["status"]["state"])?,
+            })
         }
-        _ => return Err(RpcError::invalid("status is { text, note? } or null")),
+        _ => {
+            return Err(RpcError::invalid(
+                "status is { text, note?, state? } or null",
+            ));
+        }
     };
     Ok(LeadRow {
         title,
@@ -164,14 +222,28 @@ fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(
             json!({"owner": holder}),
         ));
     }
-    let row = parse(&origin.texts(), &origin.image_roots(), params)?;
+    let mut row = parse(&origin.texts(), &origin.image_roots(), params)?;
     let appeared = host.lead.is_none();
+    // An end state goes to the strip once and is neither kept on the row
+    // nor recorded: the row goes back to its usual form.
+    let mut sent = params.clone();
+    let ended = row.status.take_if(|status| status.state.ended());
+    if ended.is_some()
+        && let Some(object) = sent.as_object_mut()
+    {
+        object.remove("status");
+    }
+    let before = host.lead.as_ref().and_then(|lead| lead.ended.clone());
     host.lead = Some(Lead {
         owner,
-        sent: params.clone(),
+        sent,
         row,
         recorded: false,
+        ended: ended.clone(),
     });
+    if let Some(status) = ended.filter(|status| before.as_ref() != Some(status)) {
+        host.lead_ended(&status);
+    }
     host.lead_changed(appeared);
     Ok(())
 }
@@ -267,7 +339,11 @@ mod tests {
         assert_eq!(row.note.as_deref(), Some("Set up a model first"));
         assert_eq!(
             row.status,
-            Some(("Working · Step 2 of 2".into(), Some("Enter stops".into())))
+            Some(LeadStatus {
+                text: "Working · Step 2 of 2".into(),
+                note: Some("Enter stops".into()),
+                state: StatusState::Working,
+            })
         );
         let minimal = parse(&english(), &[], &json!({"title":"Calc","icon":"search"})).unwrap();
         assert_eq!((minimal.placeholder, minimal.status), (None, None));
@@ -291,6 +367,10 @@ mod tests {
             json!({"title":"Ask","icon":"ai","status":{"text":"x".repeat(81)}}),
             json!({"title":"Ask","icon":"ai","status":{"text":"t","other":1}}),
             json!({"title":"Ask","icon":"ai","status":"busy"}),
+            json!({"title":"Ask","icon":"ai","status":{"text":"t","state":"stopped"}}),
+            json!({"title":"Ask","icon":"ai","status":{"text":"t","state":"Done"}}),
+            json!({"title":"Ask","icon":"ai","status":{"text":"t","state":1}}),
+            json!({"title":"Ask","icon":"ai","status":{"text":"t","state":""}}),
             json!({"title":"Ask","icon":"ai","extra":true}),
             json!({"title":"two\nlines","icon":"ai"}),
             json!({"title":3,"icon":"ai"}),
@@ -310,6 +390,35 @@ mod tests {
             )
             .is_ok()
         );
+    }
+
+    #[test]
+    fn a_status_is_working_unless_its_state_says_it_ended() {
+        let state = |status: Value| {
+            parse(
+                &english(),
+                &[],
+                &json!({"title":"Ask","icon":"ai","status":status}),
+            )
+            .unwrap()
+            .status
+            .unwrap()
+            .state
+        };
+        assert_eq!(state(json!({"text":"Planning…"})), StatusState::Working);
+        assert_eq!(
+            state(json!({"text":"Planning…","state":null})),
+            StatusState::Working
+        );
+        for (name, expected) in StatusState::NAMES.iter().zip([
+            StatusState::Working,
+            StatusState::Done,
+            StatusState::Failed,
+            StatusState::Note,
+        ]) {
+            assert_eq!(state(json!({"text":"t","state":name})), expected);
+            assert_eq!(expected.ended(), *name != "working");
+        }
     }
 
     #[test]

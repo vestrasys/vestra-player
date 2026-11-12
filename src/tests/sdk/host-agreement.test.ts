@@ -2216,3 +2216,62 @@ test("the SDK's wake events are the player's (capabilities/events.rs WAKE_EVENTS
   };
   assert.deepEqual([...WAKE_EVENTS].sort(), [...player].sort());
 });
+
+test("palette.lead's status states are the player's (palette_lead.rs StatusState::NAMES; SDK 1.7.15)", async (t) => {
+  const rust = host("src/capabilities/palette_lead.rs");
+  const block = found(
+    /pub const NAMES: \[&'static str; \d+\] = \[([^\]]*)\];/.exec(rust)?.[1],
+    "StatusState::NAMES in capabilities/palette_lead.rs",
+  );
+  const player = [...block.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  const version = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../node_modules/@vestra-player/sdk/package.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ).version as string;
+  const [major, minor, patch] = version.split(".").map(Number);
+  if (major! * 1e6 + minor! * 1e3 + patch! < 1_007_015) {
+    t.skip(`the installed SDK ${version} predates status.state (1.7.15)`);
+    return;
+  }
+  // TestHost accepts each of the player's states and refuses another with
+  // the player's error code and message.
+  const fake = new TestHost();
+  // Typed loosely: an SDK before 1.7.15 has no `state` in its types.
+  let lead:
+    | { ready: Promise<unknown>; update(options: unknown): Promise<unknown> }
+    | undefined;
+  const options = (state: string) => ({
+    title: "Ask",
+    icon: "ai",
+    status: { text: "t", state },
+  });
+  const { stop } = await startPlugin(
+    (plugin) => {
+      lead = plugin.palette.lead({
+        title: "Ask",
+        icon: "ai",
+        status: { text: "Planning…" },
+      });
+    },
+    {
+      capabilities: ["palette.lead"],
+      host: fake,
+      builtin: true,
+      id: "vestra.agreement",
+    },
+  );
+  await lead!.ready;
+  for (const state of player) await lead!.update(options(state));
+  await assert.rejects(
+    lead!.update(options("stopped")),
+    (error: { code?: string; message?: string }) =>
+      error.code === "invalid" &&
+      error.message === `status.state is one of ${player.join(", ")}`,
+  );
+  await stop();
+});

@@ -12,6 +12,7 @@ mod dispatch;
 mod events;
 mod handle;
 mod input;
+pub(crate) mod lead_strip;
 mod lifecycle;
 mod menus;
 mod mounts;
@@ -416,6 +417,8 @@ pub(crate) struct Host {
     pub(crate) palette: palette::PaletteState,
     /// The palette's first row and its holder (`palette.lead`).
     pub(crate) lead: Option<crate::capabilities::Lead>,
+    /// The status strip: the lead's status while the palette is closed.
+    pub(crate) lead_strip: lead_strip::LeadStrip,
     /// `commands.run` tickets and rates.
     pub(crate) command_runs: crate::capabilities::CommandRuns,
     pub(crate) policy: window_state::Policy,
