@@ -114,7 +114,9 @@ pub(crate) fn sheet(
 
 impl Host {
     /// `commands.run` asks the user about `steps` (the run's own first) on
-    /// `ticket`: the sheet shows now, or once nothing is in its way.
+    /// `ticket`: the sheet shows now, or once nothing is in its way. One at
+    /// a time: `CommandRuns::admit` refuses (`busy`) a run that would ask
+    /// while any sheet waits, so this never replaces a waiting one.
     pub(crate) fn open_review(
         &mut self,
         reply: Reply,
@@ -124,6 +126,14 @@ impl Host {
     ) {
         // The count only: the labels may name the user's file.
         diag!("review sheet: asks about {} steps", steps.len());
+        // A sheet left by a caller that stopped (gone at the next tick) is
+        // replaced; a waiting one never is.
+        debug_assert!(
+            self.review
+                .as_ref()
+                .is_none_or(|old| !self.command_runs.waiting(&old.reply)),
+            "one approval sheet at a time"
+        );
         self.review = Some(Review {
             reply,
             ticket,

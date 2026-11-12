@@ -91,8 +91,10 @@ refused before), so a store or file install of a package declaring one fails the
   command asks as it would alone (a sheet of one step), so a used-up plan entry asks again. The
   plan lives as long as the ticket (done, a new request, the plugin stopping or parking, 120 s
   unused). The caller cannot answer, skip or word the sheet. The ticket and the command are
-  checked again after the answer. A run that would ask while another run of the same plugin waits
-  for the user fails `busy` ("another command of this request is waiting for the user's answer");
+  checked again after the answer. One sheet at a time, whoever asks: a run that would ask while any
+  sheet waits fails `busy` ("another command is waiting for the user's answer"), decided before
+  it is counted or touches the plan (`CommandRuns::admit`); the waiting sheet is the user's open
+  question, so a later caller neither replaces it nor answers it in the user's place;
   an open native dialog no longer refuses a run (PROPOSAL F4): the sheet waits for it. Headless
   there is no sheet: `VESTRA_TEST_CONFIRM=run` answers Run for the whole sheet (tests), `always`
   Run too (and, from step 4, remember), anything else Don't Run; `commands.run: <id> asks to run
@@ -139,7 +141,7 @@ Input (§4.6): it takes the keyboard focus; Enter runs, Esc does not; held-down 
 nothing (the Enter that sent the request); Run and Don't Run by pointer; a press outside it is Don't
 Run. Nothing counts within 500 ms of it showing (`review_sheet::GUARD_MS`, Chromium's rule for
 sensitive UI), each time it shows. Bindings pause while it shows (it is the menu layer), and the
-palette does not open over it.
+palette and other menus do not open over it.
 
 Edge cases (§4.7): while a native dialog is open (`dialog_busy`) it waits, and steps aside if one
 opens over it; it shows again when something else closed the menu layer (a rebuilt shell, another

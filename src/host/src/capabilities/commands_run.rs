@@ -232,9 +232,51 @@ impl CommandRuns {
             .iter()
             .any(|run| run.reply.owner == reply.owner && run.reply.id == reply.id)
     }
-    /// Whether a run of `owner` waits for the user's answer.
-    fn asking(&self, owner: u64) -> bool {
-        self.confirming.iter().any(|run| run.reply.owner == owner)
+    /// Whether `global` is in what is left of `owner`'s `ticket`'s plan
+    /// (read-only).
+    fn planned(&self, owner: u64, ticket: &str, global: &str) -> bool {
+        self.tickets
+            .get(ticket)
+            .is_some_and(|t| t.owner == owner && t.plan.iter().any(|g| g == global))
+    }
+    /// A checked call of `owner` running `global` on `ticket` (`then`: it
+    /// named a plan; `plan_asks`: a command of its plan, or the command
+    /// alone without `then`, asks first): whether it asks the user.
+    ///
+    /// Decided read-only first: a call that would ask while any sheet waits
+    /// for the user fails `busy` before it is counted and before it touches
+    /// the ticket's plan (a refused call is not counted). One sheet at a
+    /// time, whoever's: the waiting one is the user's open question, so a
+    /// second caller neither replaces it (its caller would wait for ever)
+    /// nor answers it in the user's place. Then the run is counted
+    /// (`ticket`, `limit`), a new plan drops the rest of the old one, and a
+    /// planned step uses up its entry and does not ask.
+    pub fn admit(
+        &mut self,
+        owner: u64,
+        ticket: &str,
+        global: &str,
+        then: bool,
+        plan_asks: bool,
+        now: u64,
+    ) -> Result<bool, RpcError> {
+        let planned = !then && self.planned(owner, ticket, global);
+        let asks = plan_asks && !planned;
+        // A dead or foreign ticket is refused as such by `count`.
+        if asks && !self.confirming.is_empty() && self.query(owner, ticket, now).is_some() {
+            // H7 (PROPOSAL F4): why, so the caller does not blame the command.
+            return Err(RpcError::new(
+                "busy",
+                "another command is waiting for the user's answer",
+            ));
+        }
+        self.count(owner, ticket, now)?;
+        if then {
+            self.set_plan(ticket, Vec::new());
+        } else if planned {
+            self.take_planned(owner, ticket, global);
+        }
+        Ok(asks)
     }
     /// Whether `ticket` is live at `now`, whoever holds it (the status
     /// strip shows a ticket's steps while it is; the sheet asks while it is).
@@ -502,18 +544,6 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
             plan.push(listed_command(&items, global)?);
         }
     }
-    let now = host.now_ms();
-    host.command_runs.count(reply.owner, &ticket, now)?;
-    match &then {
-        // A new plan: what is left of the ticket's earlier one goes.
-        Some(_) => host.command_runs.set_plan(&ticket, Vec::new()),
-        // A step of the approved plan runs without asking (once each).
-        None if host.command_runs.take_planned(reply.owner, &ticket, global) => {
-            perform(host, reply.owner, &ticket, &item, step)?;
-            return Ok(Some(json!({"ran": true})));
-        }
-        None => {}
-    }
     let steps: Vec<(Item, bool)> = plan
         .into_iter()
         .map(|item| {
@@ -521,20 +551,18 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
             (item, builtin)
         })
         .collect();
-    if !steps
+    let plan_asks = steps
         .iter()
-        .any(|(item, builtin)| dangerous(item, *builtin))
-    {
-        // Nothing asks: no sheet, and no plan is kept.
+        .any(|(item, builtin)| dangerous(item, *builtin));
+    let now = host.now_ms();
+    let asks =
+        host.command_runs
+            .admit(reply.owner, &ticket, global, then.is_some(), plan_asks, now)?;
+    if !asks {
+        // Nothing asks, or a step of the approved plan (used up now): no
+        // sheet, and no new plan is kept.
         perform(host, reply.owner, &ticket, &item, step)?;
         return Ok(Some(json!({"ran": true})));
-    }
-    if host.command_runs.asking(reply.owner) {
-        // H7 (PROPOSAL F4): why, so the caller does not blame the command.
-        return Err(RpcError::new(
-            "busy",
-            "another command of this request is waiting for the user's answer",
-        ));
     }
     let query = host
         .command_runs
@@ -889,6 +917,92 @@ mod tests {
             listed_command(&items, "host/palette").unwrap_err().code,
             "invalid"
         );
+    }
+
+    /// A run of `owner` waiting for the user on the sheet.
+    fn waiting_run(runs: &mut CommandRuns, owner: u64, ticket: &str) {
+        runs.confirming.push(ConfirmedRun {
+            reply: Reply { owner, id: 1 },
+            ticket: ticket.into(),
+            global: "a/wipe".into(),
+            step: None,
+            then: None,
+        });
+    }
+
+    /// `admit`: what asks and what does not; a planned step uses up its
+    /// entry; a new plan drops the old one.
+    #[test]
+    fn admit_decides_who_asks_and_keeps_the_plan() {
+        let mut runs = CommandRuns::default();
+        let ticket = runs.mint(1, "plan", 0);
+        assert!(!runs.admit(1, &ticket, "a/louder", false, false, 0).unwrap());
+        assert!(runs.admit(1, &ticket, "a/wipe", false, true, 0).unwrap());
+        runs.set_plan(&ticket, vec!["a/wipe".into()]);
+        // Planned: no ask, the entry used up; then it asks again.
+        assert!(!runs.admit(1, &ticket, "a/wipe", false, true, 0).unwrap());
+        assert!(runs.admit(1, &ticket, "a/wipe", false, true, 0).unwrap());
+        // A new plan (`then`, even `[]`) drops the rest of the old one.
+        runs.set_plan(&ticket, vec!["a/wipe".into()]);
+        assert!(runs.admit(1, &ticket, "a/wipe", true, true, 1_000).unwrap());
+        assert!(!runs.planned(1, &ticket, "a/wipe"));
+        assert_eq!(runs.tickets[&ticket].runs, 5);
+    }
+
+    /// Review fix 1: a call that would ask while a sheet waits fails `busy`
+    /// before it is counted and before it touches the plan; a call that
+    /// does not ask (plain, or planned) still runs.
+    #[test]
+    fn a_busy_refusal_is_not_counted_and_keeps_the_plan() {
+        let mut runs = CommandRuns::default();
+        let ticket = runs.mint(1, "plan", 0);
+        runs.set_plan(&ticket, vec!["a/wipe".into()]);
+        waiting_run(&mut runs, 1, &ticket);
+        for then in [false, true] {
+            let error = runs
+                .admit(1, &ticket, "a/forget", then, true, 0)
+                .unwrap_err();
+            assert_eq!(error.code, "busy");
+            assert_eq!(
+                error.message,
+                "another command is waiting for the user's answer"
+            );
+        }
+        assert_eq!(runs.tickets[&ticket].runs, 0);
+        assert!(runs.planned(1, &ticket, "a/wipe"));
+        // Not asking: runs (counted) while the sheet waits.
+        assert!(!runs.admit(1, &ticket, "a/louder", false, false, 0).unwrap());
+        assert!(!runs.admit(1, &ticket, "a/wipe", false, true, 0).unwrap());
+        assert_eq!(runs.tickets[&ticket].runs, 2);
+        // A dead ticket is refused as one, not as busy.
+        assert_eq!(
+            runs.admit(1, "made-up", "a/forget", false, true, 0)
+                .unwrap_err()
+                .code,
+            "ticket"
+        );
+    }
+
+    /// Review fix 2: one sheet at a time, whoever's: another plugin's run
+    /// that would ask fails `busy` instead of replacing the waiting sheet.
+    #[test]
+    fn another_callers_run_that_asks_waits_for_no_sheet_but_fails_busy() {
+        let mut runs = CommandRuns::default();
+        let first = runs.mint(1, "first", 0);
+        let second = runs.mint(2, "second", 0);
+        waiting_run(&mut runs, 1, &first);
+        assert_eq!(
+            runs.admit(2, &second, "b/wipe", false, true, 0)
+                .unwrap_err()
+                .code,
+            "busy"
+        );
+        assert_eq!(runs.tickets[&second].runs, 0);
+        // The first sheet's run still waits for its answer.
+        assert!(runs.waiting(&Reply { owner: 1, id: 1 }));
+        // Once answered, the other caller may ask.
+        assert!(runs.answered(&Reply { owner: 1, id: 1 }).is_some());
+        assert!(runs.admit(2, &second, "b/wipe", false, true, 0).unwrap());
     }
 
     /// The ticket's plan: each id of it runs once without asking (repeats

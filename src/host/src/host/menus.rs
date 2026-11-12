@@ -454,6 +454,11 @@ impl Host {
     }
     /// Show the menu in the window of `generation` (shell or floating).
     pub(crate) fn open_menu(&mut self, generation: u64, mode: MenuMode) {
+        // The approval sheet is modal: no other menu opens over it (it would
+        // close it, and the sheet's next tick would close that menu again).
+        if self.review_presented() {
+            return;
+        }
         if self.menu_open && self.menu_generation != generation {
             self.close_menu();
         }
