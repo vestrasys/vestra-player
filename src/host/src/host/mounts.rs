@@ -806,6 +806,8 @@ impl Host {
             // To the panel's plugin: `view` stays `"$mount"` for SDKs before
             // 1.6.15 (one panel each); `slot` says which panel.
             let (owner, slot) = (panel_plugin(event.owner), slot_of(event.owner));
+            // The main window's panel, or the floating sidebar's.
+            self.acted_in(owner, event.shell_generation);
             match event.args {
                 Ok(args)=>self.send(owner,json!({"event":"ui.callback","data":{"view":"$mount","slot":slot,"callback":event.callback,"args":args}})),
                 Err(error)=>self.send(owner,json!({"event":"ui.error","data":{"code":"ui","slot":slot,"message":format!("callback {}: {error}",event.callback)}})),

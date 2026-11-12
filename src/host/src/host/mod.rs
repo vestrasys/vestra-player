@@ -16,6 +16,7 @@ pub(crate) mod lead_strip;
 mod lifecycle;
 mod menus;
 mod mounts;
+pub(crate) mod origins;
 pub(crate) mod palette;
 pub(crate) mod panel_restart;
 mod rendering;
@@ -384,6 +385,12 @@ pub(crate) struct Host {
     pub(crate) headless: bool,
     pub(crate) commands: commands::Registry,
     pub(crate) dialog_busy: bool,
+    /// Where the user last acted for each plugin: the window its
+    /// `dialogs.confirm` belongs to (`origins`, palette-lead.md §2.3).
+    pub(crate) origins: origins::Origins,
+    /// A system confirmation is open (`dialog_busy` is also a file
+    /// picker): it comes into view when another request is refused `busy`.
+    pub(crate) confirm_open: bool,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
     pub(crate) mounts: BTreeMap<u64, Mount>,
     pub(crate) mount_queue: std::collections::VecDeque<MountChange>,

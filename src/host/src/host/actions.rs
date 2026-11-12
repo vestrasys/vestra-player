@@ -451,6 +451,8 @@ impl Host {
         };
         let owner = self.osd_actions.as_ref().map_or(0, |actions| actions.owner);
         self.hide_osd("action pressed");
+        // The message is on the main window's video area.
+        self.act(owner, origins::Origin::Main);
         if let Err(error) = self.execute_command(owner, &id) {
             diag!("osd action {id}: {}", error.message);
         }

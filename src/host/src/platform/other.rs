@@ -24,6 +24,9 @@ pub const MENU_SHOWS_CMD: bool = false;
 /// The fullscreen title strip, as on Windows: a fullscreen window has no
 /// title bar of its own.
 pub const FULLSCREEN_TITLE_STRIP: bool = true;
+/// No system alerts: every confirmation is drawn on the main window's
+/// sheet (`capabilities/ui_dialog.rs`).
+pub const SYSTEM_ALERTS: bool = false;
 
 const WINDOWS: Unavailable = Unavailable("native windows are not supported on this system");
 
@@ -101,6 +104,7 @@ pub fn clipboard_write_image(_kind: Image, _bytes: Vec<u8>) -> std::result::Resu
 
 pub fn confirm(
     _options: &crate::ui::confirm::Options,
+    _owner: Option<&slint::Window>,
     _parent: Option<HostWindowId>,
     _done: impl Fn(bool, bool) + Send + 'static,
 ) -> std::result::Result<(), RpcError> {
@@ -209,3 +213,6 @@ pub fn background_tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::pro
         std::process::Command::new(program)
     }
 }
+
+/// No system alerts: nothing open to show.
+pub fn show_open_confirm(_foreground: bool) {}

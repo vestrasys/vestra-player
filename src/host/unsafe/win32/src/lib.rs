@@ -531,6 +531,22 @@ pub fn set_foreground(hwnd: isize) -> bool {
     unsafe { SetForegroundWindow(hwnd as HWND) != 0 }
 }
 
+/// The popup window `hwnd` (a raw HWND value) most recently activated, such
+/// as the dialog it owns while one is open (`GetLastActivePopup`): `hwnd`
+/// itself when it owns none, or for an invalid handle.
+pub fn last_active_popup(hwnd: isize) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::GetLastActivePopup;
+    // SAFETY: GetLastActivePopup takes the handle by value and returns a
+    // handle value, which is not dereferenced here; an invalid handle makes
+    // it return null.
+    let popup = unsafe { GetLastActivePopup(hwnd as HWND) };
+    if popup.is_null() {
+        hwnd
+    } else {
+        popup as isize
+    }
+}
+
 /// Minimize window `hwnd` (a raw HWND value) as the system does
 /// (`ShowWindow(SW_MINIMIZE)`, what the taskbar and Win+Down do), not
 /// through winit's minimized flag: winit maximizes a window flagged maximized

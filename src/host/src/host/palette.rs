@@ -353,6 +353,11 @@ impl Host {
             return;
         };
         let owner = lead.owner;
+        // The palette's first row and the status strip's Stop are the main
+        // window's: the holder's confirmations for this request (Ask
+        // Vestra's consent, the commands it runs) go to its sheet, with the
+        // request box, even after the holder's own window was shown.
+        self.act(owner, origins::Origin::Main);
         let now = self.now_ms();
         let ticket = self.command_runs.mint(owner, &query, now);
         // A new request: its end state shows even when it is the same as
@@ -457,6 +462,8 @@ impl Host {
                 if !keep {
                     self.close_menu();
                 }
+                // The palette is the main window's.
+                self.act(item.owner, origins::Origin::Main);
                 if let Err(error) = self.execute_command(item.owner, &item.id) {
                     diag!("palette execute: {:?}", error);
                 }

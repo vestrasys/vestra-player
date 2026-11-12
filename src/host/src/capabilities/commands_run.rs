@@ -669,6 +669,8 @@ fn perform(
     } else {
         host.show_osd(&line);
     }
+    // Run on the caller's behalf: a confirmation goes where the caller's would.
+    host.origins.inherit(caller, item.owner);
     host.execute_command(item.owner, &item.id)
 }
 
@@ -720,6 +722,8 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
             .would_ask(reply.owner, &ticket, global, then.is_some(), plan_asks)
         && host.command_runs.query(reply.owner, &ticket, now).is_some()
     {
+        // The confirmation to answer first comes into view.
+        host.show_waiting_confirmation();
         return Err(RpcError::new(
             "busy",
             "another confirmation is waiting for the user's answer",

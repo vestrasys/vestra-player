@@ -194,6 +194,7 @@ impl Host {
                     MenuAction::Invoke(token) => match menu::parse_token(&token) {
                         Some(menu::Token::Group(path)) => self.set_menu_path(path),
                         Some(menu::Token::Command { owner, id }) => {
+                            self.acted_in(owner, self.menu_generation);
                             self.close_menu();
                             if let Err(error) = self.execute_command(owner, &id) {
                                 diag!("menu execute: {:?}", error);
@@ -270,6 +271,7 @@ impl Host {
                         reason: Some(reason),
                     }) => self.show_osd(&reason),
                     _ => {
+                        self.acted_in(owner, generation);
                         if let Err(error) = self.execute_command(owner, &id) {
                             diag!("binding execute: {error:?}");
                         }
@@ -397,6 +399,10 @@ impl Host {
                 }
             }
             Event::UiCallback(owner, data) => {
+                // A confirmation it asks for now belongs to this window.
+                if let Some(view) = data["view"].as_str() {
+                    self.acted_in_view(owner, view);
+                }
                 self.send(owner, json!({"event":"ui.callback","data":data}))
             }
             Event::InjectKey(generation, key, kind, physical) => {
@@ -449,6 +455,7 @@ impl Host {
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.now_ms());
                 self.dialog_busy = false;
+                self.confirm_open = false;
                 self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
             }
             Event::SourceLocate(reply, fields) => {

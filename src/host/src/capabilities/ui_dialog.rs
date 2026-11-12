@@ -1,14 +1,16 @@
-//! `ui.dialog`: native file pickers, and confirmations: a tool window's
-//! (one of them has the focus, `platform::tool_window_focused`) as a system
-//! dialog, the main window's on the sheet drawn in the player
-//! (`host/review_sheet.rs`, Ask Vestra UX H5).
+//! `ui.dialog`: native file pickers, and confirmations in the window where
+//! the user last acted for the caller (`host/origins.rs`; without one, the
+//! focus decides: `platform::tool_window_focused`): a tool window's as a
+//! system dialog owned by it, the main window's on the sheet drawn in the
+//! player (`host/review_sheet.rs`, Ask Vestra UX H5).
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
-    host::{Event, Host, Reply, RpcError, string},
+    host::{Event, Host, Reply, RpcError, origins::Route, string},
     i18n, platform,
-    ui::confirm,
+    ui::{confirm, view},
 };
 use serde_json::Value;
+use slint::ComponentHandle;
 
 pub struct UiDialog;
 static INFO: Info = Info {
@@ -33,10 +35,18 @@ impl Capability for UiDialog {
     fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    /// A confirmation of a plugin that stopped leaves the sheet unanswered.
-    fn revoke(&self, host: &mut Host, owner: u64, _keep_recorded: bool) {
+    /// Where the user last acted for the plugin stays its origin when it
+    /// wakes (`host/origins`): the click that woke it is recorded first.
+    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
+        host.origins.rekey(from, to);
+    }
+    /// A confirmation of a plugin that stopped leaves the sheet unanswered;
+    /// its origin goes unless it only stands by.
+    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         host.drop_confirm_of(owner);
+        if !keep_recorded {
+            host.origins.forget(owner);
+        }
     }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
@@ -57,10 +67,14 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
             "native dialogs require a running native window",
         ));
     }
+    // Refused while another waits; that one comes into view, so the wait
+    // is never somewhere the user cannot see.
     if host.dialog_busy {
+        host.show_waiting_confirmation();
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
     if host.sheet_waiting() {
+        host.show_waiting_confirmation();
         return Err(RpcError::new(
             "busy",
             "another confirmation is waiting for the user's answer",
@@ -84,28 +98,69 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
         shown[field] = host.plugin_sentence(reply.owner, text, args)?.into();
     }
     let options = confirm::parse(&shown)?;
-    // The main window's (no tool window has the focus: the owner
-    // `platform::confirm` would give its dialog): drawn in the player, with
-    // the request box while the caller holds the lead with a live request.
-    if host.shell.is_some() && !platform::tool_window_focused() {
-        let now = host.now_ms();
-        let request = host
-            .lead
-            .as_ref()
-            .filter(|lead| lead.owner == reply.owner)
-            .and_then(|_| host.command_runs.live_request(reply.owner, now));
-        host.open_confirm(reply.clone(), options, request);
-        return Ok(());
+    // The window where the user last acted for the caller (`host/origins`):
+    // a tool window owns a system dialog, the main window gets the sheet.
+    // Without an origin or a window of the caller's shown, the focus at
+    // arrival decides, as before (a tool window's: the owner
+    // `platform::confirm` gives its dialog).
+    // Systems without system alerts draw every one on the sheet.
+    let route = match host.confirm_route(reply.owner) {
+        _ if !platform::SYSTEM_ALERTS && host.shell.is_some() => Route::Sheet,
+        Route::Focus if host.shell.is_some() && !platform::tool_window_focused() => Route::Sheet,
+        route => route,
+    };
+    let place = match route {
+        Route::Sheet => {
+            // The main window's: drawn in the player, with the request box
+            // while the caller holds the lead with a live request. The main
+            // window comes forward (with the focus while the player is in
+            // the foreground, asking for attention otherwise); a tool window
+            // over the sheet's place stays above it (owned windows, the
+            // floating level on macOS): the sheet is only for requests made
+            // in the main window, where the user is looking.
+            if let Some(shell) = &host.shell {
+                view::show_again(shell, platform::app_in_foreground());
+            }
+            let now = host.now_ms();
+            let request = host
+                .lead
+                .as_ref()
+                .filter(|lead| lead.owner == reply.owner)
+                .and_then(|_| host.command_runs.live_request(reply.owner, now));
+            host.open_confirm(reply.clone(), options, request);
+            return Ok(());
+        }
+        Route::Owned(place) => Some(place),
+        Route::Focus => None,
+    };
+    // A system dialog: owned by the origin's tool window, brought to the
+    // front first (with the focus while the player is in the foreground,
+    // asking for attention otherwise); else the focused window's, else
+    // the main window's (`platform::confirm`).
+    let owner = place
+        .as_ref()
+        .and_then(|place| host.place_window(reply.owner, place))
+        .map(ComponentHandle::clone_strong);
+    if let Some(instance) = &owner {
+        view::show_again(instance, platform::app_in_foreground());
     }
     let events = host.events.clone();
     let answer = reply.clone();
+    // Busy before it shows: macOS without a window runs it modally here.
     host.dialog_busy = true;
+    host.confirm_open = true;
     #[cfg(feature = "producer-audio")]
     host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
-    if let Err(error) = platform::confirm(&options, host.native_window, move |yes, checked| {
-        let _ = events.send(Event::ConfirmDone(answer.clone(), yes, checked));
-    }) {
+    if let Err(error) = platform::confirm(
+        &options,
+        owner.as_ref().map(|instance| instance.window()),
+        host.native_window,
+        move |yes, checked| {
+            let _ = events.send(Event::ConfirmDone(answer.clone(), yes, checked));
+        },
+    ) {
         host.dialog_busy = false;
+        host.confirm_open = false;
         return Err(error);
     }
     Ok(())

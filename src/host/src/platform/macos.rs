@@ -31,6 +31,8 @@ pub const MENU_SHOWS_CMD: bool = true;
 /// No fullscreen title strip: a fullscreen space shows the system menu
 /// bar and the window title bar when the pointer reaches the top.
 pub const FULLSCREEN_TITLE_STRIP: bool = false;
+/// `confirm` shows a system alert (an `NSAlert` sheet).
+pub const SYSTEM_ALERTS: bool = true;
 
 // ------------------------------------------------------------------ windows
 
@@ -467,12 +469,31 @@ pub fn clipboard_write_image(kind: Image, bytes: Vec<u8>) -> std::result::Result
 
 // ------------------------------------------------------------------ dialogs
 
+/// The NSWindow of a host window: the one whose content view is its winit
+/// view (as [`main_view`] tells the main window).
+fn ns_window_of(window: &slint::Window) -> Option<objc2::rc::Retained<objc2_app_kit::NSWindow>> {
+    use slint::winit_030::WinitWindowAccessor;
+    use slint::winit_030::winit::raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    let view = window
+        .with_winit_window(|native| match native.window_handle().ok()?.as_raw() {
+            RawWindowHandle::AppKit(handle) => Some(handle.ns_view.as_ptr() as usize),
+            _ => None,
+        })
+        .flatten()?;
+    app().ok()?.windows().iter().find(|each| {
+        each.contentView()
+            .is_some_and(|content| objc2::rc::Retained::as_ptr(&content) as usize == view)
+    })
+}
+
 /// Show an NSAlert; `done(confirmed, checked)` runs on the main thread when
-/// the user answered. A sheet on the active host window (a tool window that
-/// asked, the floating sidebar), else on `parent`, else app-modal (`done`
-/// then runs before this returns): the sheet never hides its caller.
+/// the user answered. A sheet on `owner` (the tool window the request came
+/// from, `host/origins`), else on the active host window (a tool window
+/// that asked, the floating sidebar), else on `parent`, else app-modal
+/// (`done` then runs before this returns): the sheet never hides its caller.
 pub fn confirm(
     options: &crate::ui::confirm::Options,
+    owner: Option<&slint::Window>,
     parent: Option<HostWindowId>,
     done: impl Fn(bool, bool) + Send + 'static,
 ) -> std::result::Result<(), RpcError> {
@@ -501,10 +522,16 @@ pub fn confirm(
             .is_some_and(|button| button.state() == NSControlStateValueOn);
         done(response == NSAlertFirstButtonReturn, checked);
     };
+    let free =
+        |window: &objc2_app_kit::NSWindow| window.isVisible() && window.attachedSheet().is_none();
+    let origin = owner.and_then(ns_window_of).filter(|window| free(window));
     let key = NSApplication::sharedApplication(marker)
         .keyWindow()
-        .filter(|window| window.isVisible() && window.attachedSheet().is_none());
-    match key.or_else(|| parent.and_then(|id| window(id).ok())) {
+        .filter(|window| free(window));
+    match origin
+        .or(key)
+        .or_else(|| parent.and_then(|id| window(id).ok()))
+    {
         Some(window) => {
             let handler = block2::RcBlock::new(answer);
             alert.beginSheetModalForWindow_completionHandler(&window, Some(&handler));
@@ -512,6 +539,24 @@ pub fn confirm(
         None => answer(alert.runModal()),
     }
     Ok(())
+}
+
+/// Bring the open confirmation into view (another request was refused
+/// `busy`): the window its `NSAlert` sheet is attached to comes to the
+/// front as the key window while the player is the active application
+/// (an app-modal alert is in front already).
+pub fn show_open_confirm(foreground: bool) {
+    let Ok(app) = app() else { return };
+    if !foreground {
+        return;
+    }
+    if let Some(window) = app
+        .windows()
+        .iter()
+        .find(|window| window.attachedSheet().is_some())
+    {
+        window.makeKeyAndOrderFront(None);
+    }
 }
 
 // -------------------------------------------------------------------- power

@@ -11,10 +11,11 @@
 //! The same sheet asks a plugin's `dialogs.confirm` raised for the main
 //! window (step 5, H5; `capabilities/ui_dialog.rs`): Ask Vestra's first-use
 //! consent, clearing the playlist or the history, removing subtitles. A
-//! confirmation is the main window's unless a tool window (a plugin's
-//! window, Options, the floating sidebar) has the focus
-//! (`platform::tool_window_focused`, the test `platform::confirm` uses to
-//! pick its dialog's owner); a tool window's stays a system dialog. It shows
+//! confirmation is the main window's when the user last acted for the
+//! caller there (`host/origins.rs`), or, without an origin, when no tool
+//! window (a plugin's window, Options, the floating sidebar) has the focus
+//! (`platform::tool_window_focused`); a tool window's stays a system
+//! dialog owned by it. It shows
 //! the caller's message, detail, checkbox and button texts; the request box
 //! only when the caller holds the palette's first row and its request is
 //! live (the consent asked while a request waits for it), and then that
