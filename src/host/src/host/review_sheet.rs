@@ -18,7 +18,7 @@
 //!   removes it. It does not take the focus from another program.
 //! - The answer goes the usual way (`Event::CommandRunAnswered`).
 //!
-//! Step 4 (H4) adds "Don't ask again for <plugin>" at the footer's left;
+//! Step 4 (H4) adds `"Don't ask again for <plugin>"` at the footer's left;
 //! the footer keeps that place free.
 //! doc/architecture/palette-lead.md §2.1.
 use super::*;
