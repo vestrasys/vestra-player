@@ -85,7 +85,7 @@ import { PATCH_FEATURE } from "../patch.js";
 import { LOCALES, LIST_SEPARATORS, loadPackageCatalog, TEXT_LIMITS, } from "../../i18n.js";
 import { Internals } from "./internals.js";
 import { on, emit, settle, close, keepsRunning, transportHandlers, tick, takenErrors, tellResidency, } from "./transport.js";
-import { bindingClaims, bindingKey, keysChanged, press, barButtons, commandsHandlers, builtinHandlers, runPaletteLead, } from "./commands.js";
+import { bindingClaims, bindingKey, keysChanged, press, barButtons, commandsHandlers, builtinHandlers, runPaletteLead, pluginCapabilities, } from "./commands.js";
 import { registerCoreActions, windowFacts, coreActionsHandlers, } from "./core-actions.js";
 import { translate, i18nHandlers } from "./i18n.js";
 import { mountOther, unmountOther, mounted, setTimelineRanges, setTimelineLayer, layoutHandlers, } from "./layout.js";
@@ -2840,6 +2840,7 @@ export async function startPlugin(activate, options = {}) {
         manifest = { id: read.id, capabilities: read.capabilities };
     }
     host.manifestId = manifest.id;
+    pluginCapabilities.set(host, manifest.capabilities);
     if (options.builtin)
         host.builtin = true;
     host.loadCatalog(directory);
