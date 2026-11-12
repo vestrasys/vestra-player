@@ -1,6 +1,7 @@
 // Ask Vestra, the palette row and the request's life (PROPOSAL §9 steps 4–5):
 // the lead row, Enter → consent once → the model's plan (a local mock model,
-// never a paid one) → the player's command through commands.run → the OSD;
+// never a paid one) → the player's command through commands.run → the
+// palette status the player shows in its status strip (no OSD of its own);
 // Stop, a newer request replacing the running one, a model error, no model
 // set up, and a plan the plugin refuses. Commands only (user ruling
 // 2026-11-11): no speed step, no Undo.
@@ -11,18 +12,26 @@ import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import activate from "../main.ts";
 import { RUNS_PER_SECOND, pace } from "../askvestra/ask.ts";
 import { KEY, server, startAi } from "./fixture.mjs";
+import { guard, shown, track } from "./lead-status.mjs";
+
+guard(test);
 
 const plan = (...steps) => ({ toolCalls: [{ name: "run_steps", args: { steps } }] });
 const command = (id) => ({ kind: "command", id });
 const MUTE = command("host/mute");
 const CONTINUE = { confirmed: true, checked: false };
 const CANCEL = { confirmed: false, checked: false };
-/** A text of the lead row (wire form: a string or { $vestraText, args }) as the palette shows it. */
-const shown = (host, value) => {
-  if (value === undefined || value === null) return value;
-  return typeof value === "string" ? host.translate(value) : host.translate(value.$vestraText, value.args ?? []);
-};
 const leadText = (host, field) => shown(host, host.paletteLead?.[field]);
+/**
+ * The end states the plugin sent (`palette.lead.set` with `status.state`
+ * done, failed or note: the player's status strip shows each once), as
+ * "state: text" in English.
+ */
+const ends = (host) =>
+  host
+    .sent("palette.lead.set")
+    .filter((p) => p.status?.state && p.status.state !== "working")
+    .map((p) => `${p.status.state}: ${shown(host, p.status.text)}`);
 /** Replies by model call (the model list requests do not count): `replies[i]` for call i, the last one after. */
 const byCall = (...replies) => {
   let calls = 0;
@@ -33,13 +42,14 @@ const byCall = (...replies) => {
 async function ready(reply, options = {}) {
   const mock = await server(reply);
   const ai = await startAi({ compat: mock.url, builtin: true, ...options });
+  track(ai.host);
   ai.host.openElsewhere("/media/Secret Holiday Film.mkv");
   ai.host.setSource({ duration: 600, position: 30, paused: false });
   await ai.host.settle();
   // The palette's label of the player's Mute, as the result line names it.
   const { commands } = await ai.plugin.commands.list();
   const mute = commands.find((row) => row.id === "host/mute").label;
-  return { ...ai, mock, mute, osd: () => ai.host.osd.at(-1) };
+  return { ...ai, mock, mute, end: () => ends(ai.host).at(-1), ends: () => ends(ai.host) };
 }
 
 test("lead row: title, icon, placeholder and hint; 'Set up a model first' until a model is set up", async (t) => {
@@ -113,14 +123,30 @@ test("one sentence → consent once → plan → the command runs → a plain re
   assert.equal(mock.chats.length, 0);
 
   host.dialogAnswers.push(CONTINUE);
-  await host.runPaletteLead("mute");
-  await ai.until(() => ai.osd() === `Vestra · ${ai.mute}`, "result OSD");
+  const ticket = await host.runPaletteLead("mute");
+  await ai.until(() => ai.end() === `done: Done · ${ai.mute}`, "result");
   assert.ok(host.coreRuns.includes("mute"));
   assert.equal(host.confirms.length, 2);
-  assert.ok(host.osd.includes("Vestra · Planning…"));
-  assert.deepEqual(host.osdActions.at(-1), [], "no Undo");
-  assert.deepEqual(host.osdActions[host.osd.lastIndexOf("Vestra · Planning…")], [{ title: "Stop", command: "askvestra.stop" }]);
-  // The lead row is back to its idle state.
+  // The end state, then the row without a status, then the ticket's done: no timer of the plugin's own.
+  await ai.until(() => host.sent("palette.lead.done").some((p) => p.ticket === ticket), "done");
+  const order = host.calls.map((call) =>
+    call.method === "palette.lead.done" && call.params.ticket === ticket
+      ? "done"
+      : call.method === "palette.lead.set" && call.params.status?.state === "done"
+        ? "end"
+        : call.method === "palette.lead.set" && !call.params.status
+          ? "idle"
+          : null,
+  );
+  const end = order.lastIndexOf("end");
+  assert.ok(end >= 0 && order.indexOf("idle", end) > end && order.indexOf("done", end) > order.indexOf("idle", end), order.filter(Boolean).join(" "));
+  // Planning… while the model planned (working: the default state), then one end state.
+  const statuses = host.sent("palette.lead.set").map((p) => p.status);
+  assert.ok(statuses.some((status) => status && shown(host, status.text) === "Planning…" && status.state === undefined), "Planning…");
+  assert.deepEqual(ai.ends(), [`done: Done · ${ai.mute}`], "one end state");
+  // Nothing on the OSD from the plugin: no progress, result or Stop button there.
+  assert.deepEqual(host.sent("osd.show"), []);
+  // The lead row is back to its idle state, and the end state is not kept on it.
   await ai.until(() => !host.paletteLead.status, "status cleared");
 
   // What the model saw: the request and whether something plays, never the file.
@@ -157,14 +183,15 @@ test("Stop while planning: Enter on the status row stops the request; the plugin
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("mute");
   await ai.until(() => mock.chats.length === 1 && !!host.paletteLead.status, "planning");
-  assert.equal(shown(host, host.paletteLead.status.text), "Vestra is working · Planning…");
+  assert.equal(shown(host, host.paletteLead.status.text), "Planning…");
+  assert.equal(host.paletteLead.status.state, undefined, "working");
   assert.equal(shown(host, host.paletteLead.status.note), "Enter stops");
   // A busy command meanwhile keeps the plugin out of standby; Stop itself stays runnable.
   assert.equal(host.command("askvestra.working").state.busy, true);
   assert.equal(host.command("askvestra.stop").state.enabled, true);
   assert.equal(host.command("askvestra.stop").state.busy, false);
   await host.runPaletteLead("", { status: true });
-  await ai.until(() => ai.osd() === "Vestra · Stopped" && !host.paletteLead.status, "stopped");
+  await ai.until(() => ai.end() === "note: Stopped" && !host.paletteLead.status, "stopped");
   assert.ok(!host.coreRuns.includes("mute"));
   assert.equal(host.command("askvestra.working").state.busy, false);
   assert.equal(host.command("askvestra.stop").state.enabled, false);
@@ -182,15 +209,15 @@ test("the busy helper command is in no menu, palette or bar, and has no key", as
   assert.ok(!ai.host.commands.has("askvestra.undo"), "no Undo command");
 });
 
-test("Stop from the OSD's button", async (t) => {
+test("Stop from the palette command Vestra: Stop", async (t) => {
   const ai = await ready(() => ({ hang: true }));
   t.after(() => ai.stop());
   const { host, mock } = ai;
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("mute");
-  await ai.until(() => mock.chats.length === 1 && ai.osd() === "Vestra · Planning…", "planning");
-  await host.pressOsdAction(0);
-  await ai.until(() => ai.osd() === "Vestra · Stopped", "stopped");
+  await ai.until(() => mock.chats.length === 1 && !!host.paletteLead.status, "planning");
+  await host.command("askvestra.stop").run();
+  await ai.until(() => ai.end() === "note: Stopped", "stopped");
   assert.ok(!host.coreRuns.includes("mute"));
 });
 
@@ -203,19 +230,24 @@ test("a new request stops the running one and runs", async (t) => {
   await ai.until(() => mock.chats.length === 1, "first planning");
   await host.runPaletteLead("louder");
   await ai.until(() => host.coreRuns.includes("volume-up") && !host.paletteLead.status, "second result");
-  assert.ok(!host.osd.includes("Vestra · Stopped"), "a replaced request is not reported as stopped");
+  assert.equal(ai.ends().length, 1, "a replaced request is not reported as stopped");
+  assert.match(ai.end(), /^done: Done · /);
   assert.equal(mock.chats.length, 2);
 });
 
-test("a model error: the OSD names the provider and the message", async (t) => {
+test("a model error: a note names the provider and the message", async (t) => {
   const ai = await ready(() => ({ status: 401, error: "Incorrect API key provided" }));
   t.after(() => ai.stop());
   const { host } = ai;
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("mute");
-  await ai.until(() => ai.osd()?.startsWith("Vestra · Could not reach"), "error OSD");
-  assert.match(ai.osd(), /^Vestra · Could not reach Custom · OpenAI format: .*Incorrect API key provided/);
-  assert.deepEqual(host.osdActions.at(-1), []);
+  await ai.until(() => ai.end()?.startsWith("note: Could not reach"), "error");
+  // The provider message is cut to the player's 80 characters (it was refused whole: the user saw nothing).
+  assert.match(ai.end(), /^note: Could not reach Custom · OpenAI format: \S/);
+  const [text] = ai.ends().map((line) => line.slice("note: ".length));
+  assert.ok([...text].length <= 80, text);
+  assert.ok(text.includes("Incorrect API key provided") || text.endsWith("…"), text);
+  assert.deepEqual(host.sent("osd.show"), []);
   assert.ok(!host.coreRuns.includes("mute"));
   await ai.until(() => !host.paletteLead.status, "status cleared");
 });
@@ -225,7 +257,27 @@ test("the model answers without steps: its sentence is shown", async (t) => {
   t.after(() => ai.stop());
   ai.host.dialogAnswers.push(CONTINUE);
   await ai.host.runPaletteLead("warmer");
-  await ai.until(() => ai.osd() === "Vestra · No command changes the picture's warmth.", "refusal");
+  await ai.until(() => ai.end() === "note: No command changes the picture's warmth.", "refusal");
+});
+
+test("a long sentence of the model is cut to the player's 80 characters, in the interface language too", async (t) => {
+  for (const locale of ["en", "zh-Hans"]) {
+    const sentence = `${"没有命令可以把音量设为某个具体数值。".repeat(4)} ${"No command sets an exact volume. ".repeat(4)}`;
+    const ai = await ready(() => ({ text: [sentence] }), { locale });
+    try {
+      ai.host.dialogAnswers.push(CONTINUE);
+      await ai.host.runPaletteLead("volume 37");
+      await ai.until(() => !!ai.end(), `${locale}: sentence`);
+      const text = ai.end().slice("note: ".length);
+      assert.equal([...text].length, 80, text);
+      assert.ok(text.endsWith("…"));
+      assert.ok(sentence.startsWith(text.slice(0, -1)));
+      // Accepted by the TestHost as well: nothing was logged as refused (guard), and the row is idle again.
+      await ai.until(() => !ai.host.paletteLead.status, `${locale}: idle`);
+    } finally {
+      await ai.stop();
+    }
+  }
 });
 
 test("a plan the plugin refuses runs no step: another step kind (the old speed step), too many steps", async (t) => {
@@ -235,11 +287,11 @@ test("a plan the plugin refuses runs no step: another step kind (the old speed s
   const { host } = ai;
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("mute and faster");
-  await ai.until(() => ai.osd() === "Vestra · Step 2 failed: Vestra cannot do “speed”", "unknown kind");
+  await ai.until(() => ai.end() === "failed: Step 2 failed: Vestra cannot do “speed”", "unknown kind");
   assert.equal(host.source.rate, 1);
   assert.ok(!host.coreRuns.includes("mute"), "checked before any step runs");
   await host.runPaletteLead("mute nine times");
-  await ai.until(() => ai.osd() === "Vestra · The plan has more than 8 steps", "too many");
+  await ai.until(() => ai.end() === "note: The plan has more than 8 steps", "too many");
   assert.ok(!host.coreRuns.includes("mute"));
 });
 
@@ -250,11 +302,13 @@ test("a plan of the most steps runs them all within the player's rate (4 a secon
   const { host } = ai;
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("up and down four times");
-  await ai.until(() => !host.paletteLead.status && host.osd.at(-1)?.startsWith("Vestra · "), "result", 30_000);
-  assert.doesNotMatch(ai.osd(), /failed/);
+  await ai.until(() => !host.paletteLead.status && !!ai.end(), "result", 30_000);
+  // Eight labels do not fit the player's 80 characters: the list ends with a cut label.
+  assert.match(ai.end(), /^done: Done · Vestra Player: .*…$/);
+  assert.ok([...ai.end().slice("done: ".length)].length <= 80, ai.end());
   const ran = host.coreRuns.filter((run) => run === "volume-up" || run === "volume-down");
   assert.equal(ran.length, 8);
-  // The player's own lines, one per step, in order.
+  // The player's own lines, one per step, in order (the TestHost records them in `osd`; the player draws them in the strip).
   const lines = host.osd.filter((line) => / · \d\/8 · /.test(line));
   assert.deepEqual(
     lines.map((line) => line.match(/ · (\d)\/8 · /)[1]),
@@ -277,7 +331,7 @@ test("the row says Vestra is working from the moment it is sent; Enter on it the
   });
   void host.runPaletteLead("mute", { keep: true });
   await ai.until(() => !!host.paletteLead.status, "working");
-  assert.equal(shown(host, host.paletteLead.status.text), "Vestra is working · Planning…");
+  assert.equal(shown(host, host.paletteLead.status.text), "Planning…");
   assert.equal(host.command("askvestra.working").state.busy, true);
   assert.equal(host.command("askvestra.stop").state.enabled, true);
   // The second Enter reaches the plugin as the status row's (not awaited:
@@ -288,6 +342,7 @@ test("the row says Vestra is working from the moment it is sent; Enter on it the
   await host.settle();
   await new Promise((resolve) => setTimeout(resolve, 300));
   assert.equal(mock.chats.length, 0, "nothing sent");
+  assert.deepEqual(ai.ends(), ["note: Stopped"], "the strip says Stopped once");
   assert.ok(!host.coreRuns.includes("mute"));
   assert.equal(host.command("askvestra.stop").state.enabled, false);
 });
@@ -329,7 +384,7 @@ test("Stop between steps: the paced wait ends at once", async (t) => {
   await ai.until(() => host.coreRuns.filter((run) => run === "volume-up").length === 4, "four steps", 30_000);
   const started = Date.now();
   await host.command("askvestra.stop").run();
-  await ai.until(() => ai.osd() === "Vestra · Stopped", "stopped");
+  await ai.until(() => ai.end() === "note: Stopped", "stopped");
   assert.ok(Date.now() - started < 900, "not after the wait");
   assert.equal(host.coreRuns.filter((run) => run === "volume-up").length, 4);
 });
@@ -351,7 +406,7 @@ test("consent: two requests while the dialog is open ask once and the latest one
   void host.runPaletteLead("second");
   await new Promise((resolve) => setTimeout(resolve, 200));
   answer();
-  await ai.until(() => ai.osd() === `Vestra · ${ai.mute}`, "result");
+  await ai.until(() => ai.end() === `done: Done · ${ai.mute}`, "result");
   assert.equal(asked, 1);
   assert.equal(mock.chats.length, 1);
   assert.match(JSON.stringify(mock.chats[0].body.messages), /Request: second/);

@@ -595,6 +595,17 @@ msgstr "{plugin} · {step}/{of} · {command}"
 msgid "{plugin} · {command}"
 msgstr "{plugin} · {command}"
 
+#. The status strip (the command palette lead's status while the palette is closed): the line naming the step a built-in plugin ran ({step}/{of}: the step of its request, {command}: the command's palette label).
+#: src/capabilities/commands_run.rs
+#, x-machine
+msgid "{step}/{of} · {command}"
+msgstr "{step}/{of} · {command}"
+
+#. The status strip's button: stops the request it shows.
+#: ui/lead-strip.slint
+msgid "Stop"
+msgstr "停止"
+
 #. commands.run: the alert's question before a command that asks first ({command}: the command as the command palette shows it).
 #: src/capabilities/commands_run.rs
 #, x-machine

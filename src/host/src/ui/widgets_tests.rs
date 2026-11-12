@@ -849,3 +849,390 @@ export component W inherits Window {
         model: ["System Default", "Speakers (Realtek(R) Audio)", "Headphones (USB Audio)", "LG HDR 4K (NVIDIA High Definition Audio)",
             "Digital Output (S/PDIF)", "Microphone Array", "Virtual Cable", "Bluetooth Earbuds", "Monitor Speakers", "Dock Audio"]; }
 }"#;
+
+/// The status strip (ui/lead-strip.slint, host/lead_strip.rs) in a window
+/// `room` + 16px wide: its size, presses and fade.
+const STRIP: &str = r#"
+import { LeadStripView, LeadStrip } from "lead-strip.slint";
+export component W inherits Window {
+    in property <LeadStrip> s;
+    in property <bool> still;
+    in-out property <string> last;
+    out property <length> w: v.width;
+    out property <length> h: v.height;
+    out property <bool> shown: v.visible;
+    out property <length> right: v.x + v.width;
+    v := LeadStripView {
+        x: 8px; y: 8px;
+        room: root.width - 16px;
+        strip: root.s;
+        still: root.still;
+        action(name) => { root.last = name; }
+    }
+}"#;
+
+/// A `LeadStrip` value as the host writes it.
+fn strip_value(kind: &str, text: &str, progress: f64, visible: bool) -> Value {
+    let stop = matches!(kind, "working" | "running");
+    Value::Struct(
+        [
+            ("visible", Value::Bool(visible)),
+            ("kind", Value::String(kind.into())),
+            ("text", Value::String(text.into())),
+            ("progress", Value::Number(progress)),
+            ("stop", Value::Bool(stop)),
+        ]
+        .into_iter()
+        .map(|(k, v)| (k.to_owned(), v))
+        .collect(),
+    )
+}
+
+fn set_strip(w: &ComponentInstance, value: Value) {
+    w.set_property("s", value).unwrap();
+    settle();
+}
+
+/// §4.2: one line 32px high, 168–420px wide (an end state two lines, 48px,
+/// up to 520px), never wider than the window allows.
+#[test]
+fn the_lead_strip_sizes_to_its_text() {
+    let w = build(STRIP, 600., 120.);
+    set_strip(&w, strip_value("working", "Planning…", 0., true));
+    assert_eq!((number(&w, "h"), number(&w, "w")), (32., 168.));
+    set_strip(
+        &w,
+        strip_value("running", &"Vestra Player: Mute ".repeat(8), 0.5, true),
+    );
+    assert_eq!((number(&w, "h"), number(&w, "w")), (32., 420.));
+    let long = "No command sets an exact volume. Ask for Volume Up or Volume Down, or drag the volume slider in the bar.";
+    set_strip(&w, strip_value("note", long, 0., true));
+    assert_eq!((number(&w, "h"), number(&w, "w")), (48., 520.));
+    // Two lines at most.
+    set_strip(&w, strip_value("note", &long.repeat(4), 0., true));
+    assert_eq!(number(&w, "h"), 48.);
+    set_strip(
+        &w,
+        strip_value("done", "Done · Vestra Player: Mute", 0., true),
+    );
+    let one = number(&w, "w");
+    assert!(number(&w, "h") == 32. && one > 168. && one < 420., "{one}");
+    // A narrow window: the window's width less 16px.
+    let narrow = build(STRIP, 200., 120.);
+    set_strip(
+        &narrow,
+        strip_value("working", &"Planning ".repeat(10), 0., true),
+    );
+    assert_eq!(number(&narrow, "w"), 184.);
+}
+
+/// Stop, a press elsewhere (opens the palette; an end state goes), and no
+/// press once it faded out.
+#[test]
+fn the_lead_strip_reports_presses_and_takes_none_once_gone() {
+    let w = build(STRIP, 600., 120.);
+    set_strip(&w, strip_value("working", "Planning…", 0., true));
+    let right = number(&w, "right") as f32;
+    click(&w, right - 20., 24.);
+    assert_eq!(string(&w, "last"), "stop");
+    click(&w, 20., 24.);
+    assert_eq!(string(&w, "last"), "open");
+    set_strip(
+        &w,
+        strip_value("done", "Done · Vestra Player: Mute", 0., true),
+    );
+    let right = number(&w, "right") as f32;
+    click(&w, right - 20., 24.);
+    assert_eq!(string(&w, "last"), "dismiss");
+    w.set_property("last", Value::String("".into())).unwrap();
+    set_strip(
+        &w,
+        strip_value("done", "Done · Vestra Player: Mute", 0., false),
+    );
+    // The 300 ms fade-out, then nothing of it is there.
+    std::thread::sleep(std::time::Duration::from_millis(400));
+    settle();
+    assert!(!boolean(&w, "shown"));
+    click(&w, 20., 24.);
+    assert_eq!(string(&w, "last"), "");
+}
+
+/// Only a working strip that shows animates (the sweep reads
+/// `animation-tick()`): a step, an end state, a hidden or a still strip
+/// asks for no frame.
+#[test]
+fn the_lead_strip_animates_only_while_it_sweeps() {
+    let w = build(STRIP, 600., 120.);
+    let animating = |value: Value, still: bool| {
+        w.set_property("still", Value::Bool(still)).unwrap();
+        w.set_property("s", value).unwrap();
+        // Past any fade and fill transition.
+        std::thread::sleep(std::time::Duration::from_millis(400));
+        settle();
+        // Drawing evaluates the line; only the sweep reads the tick.
+        let _ = render(&w, 1., 600., 120.);
+        w.window().has_active_animations()
+    };
+    assert!(animating(
+        strip_value("working", "Planning…", 0., true),
+        false
+    ));
+    assert!(!animating(
+        strip_value("working", "Planning…", 0., true),
+        true
+    ));
+    assert!(!animating(
+        strip_value("running", "1/2 · Mute", 0.5, true),
+        false
+    ));
+    assert!(!animating(
+        strip_value("done", "Done · Mute", 1., true),
+        false
+    ));
+    assert!(!animating(
+        strip_value("working", "Planning…", 0., false),
+        false
+    ));
+}
+
+/// The strip's states as the spec's renders show them (PROPOSAL §4.1,
+/// proposed/detail-*.png), over the spec's video still, at the top of a
+/// 1100px window at 2×, both palettes: `VESTRA_STRIP_SHOTS=<dir>`,
+/// `VESTRA_STRIP_LANG=en|zh-Hans` (one language per process: run this test
+/// alone), `VESTRA_STRIP_BACKDROP=<png>` (optional).
+#[test]
+#[ignore = "draws the status strip's states: VESTRA_STRIP_SHOTS=<dir>"]
+fn render_lead_strip_states() {
+    let Some(out) = std::env::var_os("VESTRA_STRIP_SHOTS") else {
+        return;
+    };
+    let out = PathBuf::from(out);
+    std::fs::create_dir_all(&out).unwrap();
+    let lang = std::env::var("VESTRA_STRIP_LANG").unwrap_or_else(|_| "en".into());
+    let locale = crate::i18n::LOCALES
+        .iter()
+        .copied()
+        .find(|l| *l == lang)
+        .expect("a player language");
+    headless();
+    crate::i18n::init(locale);
+    crate::ui::ui_fonts::install(locale);
+    let zh = locale == "zh-Hans";
+    let pick = |en: &'static str, zh_text: &'static str| if zh { zh_text } else { en };
+    let states: Vec<(&str, &str, &str, f64)> = vec![
+        ("r02-working", "working", pick("Planning…", "规划中…"), 0.),
+        (
+            "r04-running",
+            "running",
+            pick("2/3 · Vestra Player: Mute", "2/3 · Vestra Player: 静音"),
+            2. / 3.,
+        ),
+        (
+            "r04-single",
+            "running",
+            pick("Vestra Player: Mute", "Vestra Player: 静音"),
+            1.,
+        ),
+        (
+            "r05-done",
+            "done",
+            pick(
+                "Done · Reset: Picture, Vestra Player: Mute, Export: Export Last 30 Seconds",
+                "完成 · 重置: 画面、Vestra Player: 静音、导出: 导出最后 30 秒",
+            ),
+            1.,
+        ),
+        (
+            "r05-done-one",
+            "done",
+            pick("Done · Vestra Player: Mute", "完成 · Vestra Player: 静音"),
+            1.,
+        ),
+        (
+            "r06-failed",
+            "failed",
+            pick(
+                "Step 2 failed: Nothing to capture",
+                "第 2 步失败：没有可截取的画面",
+            ),
+            1.,
+        ),
+        (
+            "r09-stopped",
+            "note",
+            pick("Stopped: nothing was run", "已停止：没有运行任何命令"),
+            0.,
+        ),
+        (
+            "r10-sentence",
+            "note",
+            pick(
+                "No command sets an exact volume. Ask for Volume Up or Volume Down, or drag the volume slider in the bar.",
+                "没有命令可以把音量设为某个具体数值。可以让我执行“增大音量”或“减小音量”，或者拖动底栏的音量滑块。",
+            ),
+            0.,
+        ),
+    ];
+    let source = r#"
+import { LeadStripView, LeadStrip } from "lead-strip.slint";
+import { Theme } from "@vestra/theme.slint";
+export component W inherits Window {
+    in property <image> backdrop;
+    in property <LeadStrip> s;
+    background: Theme.bg-video;
+    Image {
+        x: 0px; y: 0px;
+        width: root.width;
+        height: root.width * root.backdrop.height / max(1, root.backdrop.width);
+        source: root.backdrop;
+        image-fit: fill;
+    }
+    LeadStripView {
+        x: (root.width - self.width) / 2; y: 16px;
+        room: root.width - 16px;
+        strip: root.s;
+        still: true;
+    }
+}"#;
+    let backdrop = std::env::var_os("VESTRA_STRIP_BACKDROP")
+        .map(|path| slint::Image::load_from_path(std::path::Path::new(&path)).unwrap());
+    let (width, height, scale) = (1100., 80., 2.);
+    let prefix = if zh { "zh-" } else { "" };
+    for palette in ["vestra", "vestra-light"] {
+        let theme = if palette == "vestra" { "dark" } else { "light" };
+        let mut sheet: Vec<image::RgbaImage> = Vec::new();
+        for (name, kind, text, progress) in &states {
+            let w = build(source, width, height);
+            crate::ui::theme::apply_fonts(&w).unwrap();
+            crate::ui::theme::apply(&w, palette).unwrap();
+            if let Some(image) = &backdrop {
+                w.set_property("backdrop", Value::Image(image.clone()))
+                    .unwrap();
+            }
+            set_strip(&w, strip_value(kind, text, *progress, true));
+            let picture = render(&w, scale, width, height);
+            picture
+                .save(out.join(format!("{prefix}{name}-{theme}.png")))
+                .unwrap();
+            sheet.push(picture);
+            w.hide().unwrap();
+        }
+        let (pw, ph) = (sheet[0].width(), sheet[0].height());
+        let mut all = image::RgbaImage::new(pw, ph * sheet.len() as u32);
+        for (i, picture) in sheet.iter().enumerate() {
+            image::imageops::replace(&mut all, picture, 0, i64::from(ph) * i as i64);
+        }
+        all.save(out.join(format!("{prefix}sheet-{theme}.png")))
+            .unwrap();
+    }
+}
+
+/// What the strip's sweep costs a CPU-drawn window (the frame-rate rule: the
+/// interface keeps the display rate on CPU rendering too): the window over
+/// the spec's video still at 1100×700, 2560×1600 and 3840×2160, drawn by
+/// Slint's software renderer at 60 Hz pacing for 4 s, every frame whole
+/// (as a renderer without partial repaint) and only the changed region.
+/// Prints draw times; `VESTRA_STRIP_BENCH=1`, `VESTRA_STRIP_BACKDROP=<png>`.
+#[test]
+#[ignore = "measures the status strip's sweep: VESTRA_STRIP_BENCH=1"]
+fn lead_strip_sweep_frame_cost() {
+    if std::env::var_os("VESTRA_STRIP_BENCH").is_none() {
+        return;
+    }
+    let backdrop = std::env::var_os("VESTRA_STRIP_BACKDROP").map(PathBuf::from);
+    for (width, height) in [(1100u32, 700u32), (2560, 1600), (3840, 2160)] {
+        for reused in [false, true] {
+            let backdrop = backdrop.clone();
+            let line = std::thread::spawn(move || sweep_cost(width, height, reused, backdrop))
+                .join()
+                .unwrap();
+            diag!("lead strip sweep: {line}");
+        }
+    }
+}
+
+/// One measurement on a thread of its own (its own platform and window).
+fn sweep_cost(width: u32, height: u32, reused: bool, backdrop: Option<PathBuf>) -> String {
+    use std::time::{Duration, Instant};
+    let window = MinimalSoftwareWindow::new(if reused {
+        RepaintBufferType::ReusedBuffer
+    } else {
+        RepaintBufferType::NewBuffer
+    });
+    slint::platform::set_platform(Box::new(Headless(window.clone()))).unwrap();
+    let mut source = r#"
+import { LeadStripView, LeadStrip } from "lead-strip.slint";
+import { Theme } from "@vestra/theme.slint";
+export component W inherits Window {
+    in property <image> backdrop;
+    in property <LeadStrip> s;
+    background: Theme.bg-video;
+    Image { x: 0px; y: 0px; width: root.width; height: root.height; source: root.backdrop; image-fit: cover; }
+    LeadStripView { x: (root.width - self.width) / 2; y: 16px; room: root.width - 16px; strip: root.s; }
+}"#
+    .to_owned();
+    source.push('\n');
+    source.push_str(&crate::ui::theme::export_line());
+    let path: PathBuf = crate::ui::view::ui_dir().join("widgets-test.slint");
+    let result = pollster::block_on(crate::ui::view::compiler().build_from_source(source, path));
+    let w = result.component("W").unwrap().create().unwrap();
+    w.show().unwrap();
+    w.window().set_size(slint::PhysicalSize::new(width, height));
+    if let Some(path) = backdrop {
+        w.set_property(
+            "backdrop",
+            Value::Image(slint::Image::load_from_path(&path).unwrap()),
+        )
+        .unwrap();
+    }
+    let mut buffer = vec![PremultipliedRgbaColor::default(); width as usize * height as usize];
+    let mut frames = |kind: &str, seconds: f64| {
+        w.set_property("s", strip_value(kind, "Planning…", 0.5, true))
+            .unwrap();
+        let period = Duration::from_micros(16_667);
+        let start = Instant::now();
+        let mut times = Vec::new();
+        let mut ticks = 0;
+        while start.elapsed().as_secs_f64() < seconds {
+            let due = start + period * ticks;
+            if let Some(wait) = due.checked_duration_since(Instant::now()) {
+                std::thread::sleep(wait);
+            }
+            ticks += 1;
+            let began = Instant::now();
+            slint::platform::update_timers_and_animations();
+            let drawn = window.draw_if_needed(|renderer| {
+                renderer.render(&mut buffer, width as usize);
+            });
+            if drawn {
+                times.push(began.elapsed().as_secs_f64() * 1000.);
+            }
+        }
+        // The first draws of a state settle it (the fade, the first layout).
+        let steady: Vec<f64> = times.iter().copied().skip(3).collect();
+        (ticks, times.len(), steady)
+    };
+    // Warm up (glyphs, the image), then the sweep, then a step (static).
+    let _ = frames("working", 0.5);
+    let (ticks, draws, mut steady) = frames("working", 4.);
+    let (_, still_draws, _) = frames("running", 1.);
+    steady.sort_by(f64::total_cmp);
+    let avg = steady.iter().sum::<f64>() / steady.len().max(1) as f64;
+    let at = |q: f64| {
+        steady
+            .get(((steady.len() as f64 - 1.) * q).round() as usize)
+            .copied()
+            .unwrap_or(0.)
+    };
+    w.hide().unwrap();
+    format!(
+        "{width}x{height} {}: {draws} draws in {ticks} 60 Hz ticks while sweeping, draw avg {avg:.2} ms, p95 {:.2} ms, max {:.2} ms; a step (static) drew {still_draws} times in 1 s",
+        if reused {
+            "changed region"
+        } else {
+            "whole frame"
+        },
+        at(0.95),
+        at(1.),
+    )
+}

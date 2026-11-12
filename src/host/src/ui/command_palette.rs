@@ -514,14 +514,15 @@ pub fn named_by(item: &Item, query: &str) -> bool {
     })
 }
 
-/// Whether the lead's row shows its status (`palette.lead.set`'s
-/// `status`, `has_status`) instead of "title: query": while the query is
-/// empty, and while it is still the query the row sent with the palette
-/// kept open (Shift+Enter, `sent`; typing ends that). The status is then
-/// about that very request, so Enter on the row reaches the holder as
-/// `status` (Enter stops) rather than as the same request again.
-pub fn lead_shows_status(has_status: bool, query: &str, sent: Option<&str>) -> bool {
-    has_status && (query.trim().is_empty() || sent == Some(query))
+/// Whether the lead's row shows its status (`palette.lead.set`'s working
+/// `status`, `has_status`) instead of "title: query": while nothing is
+/// typed. Shift+Enter on the row clears the field (`host/palette.rs`
+/// `run_lead`), so the status shows for the request just sent, and Enter on
+/// the row then reaches the holder as `status` (Enter stops) rather than as
+/// the same request again; typing another query is another request (it
+/// replaces the running one).
+pub fn lead_shows_status(has_status: bool, query: &str) -> bool {
+    has_status && query.trim().is_empty()
 }
 
 /// Where the cursor starts in a palette whose first row is a lead
@@ -923,19 +924,16 @@ mod tests {
     }
 
     #[test]
-    fn the_lead_shows_its_status_for_an_empty_query_or_the_request_it_sent() {
+    fn the_lead_shows_its_status_while_nothing_is_typed() {
         // No status: never.
-        assert!(!lead_shows_status(false, "", None));
-        assert!(!lead_shows_status(false, "mute", Some("mute")));
-        // An empty query (the palette opened while a request runs).
-        assert!(lead_shows_status(true, "", None));
-        assert!(lead_shows_status(true, "  ", Some("mute")));
-        // Shift+Enter kept the palette open with the query: a second Enter
-        // stops that request instead of sending it again.
-        assert!(lead_shows_status(true, "mute", Some("mute")));
-        // Another query is another request (it replaces the running one).
-        assert!(!lead_shows_status(true, "mute", None));
-        assert!(!lead_shows_status(true, "mute twice", Some("mute")));
+        assert!(!lead_shows_status(false, ""));
+        assert!(!lead_shows_status(false, "mute"));
+        // An empty query: the palette opened while a request runs, or
+        // Shift+Enter sent one and cleared the field.
+        assert!(lead_shows_status(true, ""));
+        assert!(lead_shows_status(true, "  "));
+        // A typed query is another request (it replaces the running one).
+        assert!(!lead_shows_status(true, "mute"));
     }
 
     #[test]

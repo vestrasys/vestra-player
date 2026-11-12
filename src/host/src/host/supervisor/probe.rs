@@ -191,7 +191,7 @@ impl Host {
         for test in due {
             if test.lead {
                 diag!("lazy: VESTRA_TEST_EXECUTE lead:{}", test.command);
-                self.lead_activated(test.command, false, None);
+                self.lead_activated(test.command, false);
                 continue;
             }
             let owner = self

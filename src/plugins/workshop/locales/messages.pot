@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.38\n"
+"Project-Id-Version: vestra.workshop 2.2.39\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -106,7 +106,7 @@ msgid_plural "{n} steps"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ai.slint:217
+#: ai.slint:217 askvestra/status.ts:131
 msgid "Stopped"
 msgstr ""
 
@@ -412,128 +412,132 @@ msgstr ""
 msgid "■ Stop"
 msgstr ""
 
-#: askvestra/ask.ts:112
+#: askvestra/ask.ts:180
 msgid "Ask Vestra"
 msgstr ""
 
-#: askvestra/ask.ts:114
+#: askvestra/ask.ts:182
 msgid "Type a command or ask Vestra"
 msgstr ""
 
-#: askvestra/ask.ts:115
+#: askvestra/ask.ts:183
 msgid "Type a request or a question"
 msgstr ""
 
-#: askvestra/ask.ts:116
+#: askvestra/ask.ts:184
 msgid "Set up a model first"
 msgstr ""
 
-#: askvestra/ask.ts:120
-msgid "Vestra is working · Step {0} of {1} · {2}"
-msgstr ""
-
-#: askvestra/ask.ts:121
-msgid "Vestra is working · Planning…"
-msgstr ""
-
-#: askvestra/ask.ts:122
+#: askvestra/ask.ts:194
 msgid "Enter stops"
 msgstr ""
 
-#: askvestra/ask.ts:149 askvestra/ask.ts:414
-msgid "Stop"
-msgstr ""
-
-#: askvestra/ask.ts:197
-msgid "Vestra · Took too long"
-msgstr ""
-
-#: askvestra/ask.ts:199
-msgid "Vestra · Could not reach {0}: {1}"
-msgstr ""
-
-#: askvestra/ask.ts:233 askvestra/ask.ts:364 askvestra/ask.ts:373
-msgid "Vestra · {}"
-msgstr ""
-
-#: askvestra/ask.ts:261
-msgid "{} is busy"
-msgstr ""
-
-#: askvestra/ask.ts:262
-msgid "{} is no longer there"
-msgstr ""
-
-#: askvestra/ask.ts:263
-msgid "Too many commands at once"
-msgstr ""
-
-#: askvestra/ask.ts:264
-msgid "The request has ended"
-msgstr ""
-
-#: askvestra/ask.ts:265
-msgid "This player does not let Vestra run commands"
-msgstr ""
-
-#: askvestra/ask.ts:300
+#: askvestra/ask.ts:395
 msgid "Ask Vestra sends your request to {}"
 msgstr ""
 
-#: askvestra/ask.ts:302
+#: askvestra/ask.ts:397
 msgid "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and whether something is open and playing go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account."
 msgstr ""
 
-#: askvestra/ask.ts:304
+#: askvestra/ask.ts:399
 msgid "Continue"
 msgstr ""
 
-#: askvestra/ask.ts:328
-msgid "Vestra · Cannot read the API key; save it again in the settings"
+#: askvestra/ask.ts:537
+msgid "Stop"
 msgstr ""
 
-#: askvestra/ask.ts:339
-msgid "Vestra · Planning…"
-msgstr ""
-
-#: askvestra/ask.ts:352 askvestra/ask.ts:390 askvestra/ask.ts:392
-msgid "Vestra · Step {0} failed: {1}"
-msgstr ""
-
-#: askvestra/ask.ts:363
-msgid "Vestra · Opened {}"
-msgstr ""
-
-#: askvestra/ask.ts:367
-msgid "Vestra · Stopped"
-msgstr ""
-
-#: askvestra/ask.ts:368
-msgid "Vestra · Stopped: {} was not run"
-msgstr ""
-
-#: askvestra/ask.ts:384
-msgid "Vestra · The model gave no steps"
-msgstr ""
-
-#: askvestra/ask.ts:388
-msgid "Vestra · The plan has more than {} steps"
-msgstr ""
-
-#: askvestra/ask.ts:390
-msgid "Vestra cannot do “{}”"
-msgstr ""
-
-#: askvestra/ask.ts:392
-msgid "There is no command “{}”"
-msgstr ""
-
-#: askvestra/ask.ts:418
+#: askvestra/ask.ts:541
 msgid "Vestra is not working on a request"
 msgstr ""
 
-#: askvestra/ask.ts:424 askvestra/ask.ts:429
+#: askvestra/ask.ts:547 askvestra/ask.ts:552
 msgid "Vestra is working"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Planning…"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Vestra is working · Step {0} of {1} · {2}"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Stopped: nothing was run"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Stopped: {} was not run"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Done · {}"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Opened {}"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Step {0} failed: {1}"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Took too long"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Could not reach {0}: {1}"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "The model gave no steps"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "The plan has more than {} steps"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Cannot read the API key; save it again in the settings"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "{} is busy"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "{} is no longer there"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Too many commands at once"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "The request has ended"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "This player does not let Vestra run commands"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "Vestra cannot do “{}”"
+msgstr ""
+
+#: askvestra/status.ts:131
+msgid "There is no command “{}”"
+msgstr ""
+
+#: askvestra/status.ts:131 labels.slint:6 main.ts:637
+msgid "Custom · OpenAI format"
+msgstr ""
+
+#: askvestra/status.ts:131 labels.slint:7 main.ts:639
+msgid "Custom · Anthropic format"
 msgstr ""
 
 #: delivery.ts:203
@@ -562,14 +566,6 @@ msgstr ""
 
 #: delivery.ts:237
 msgid "Replace"
-msgstr ""
-
-#: labels.slint:6 main.ts:637
-msgid "Custom · OpenAI format"
-msgstr ""
-
-#: labels.slint:7 main.ts:639
-msgid "Custom · Anthropic format"
 msgstr ""
 
 #: labels.slint:11

@@ -63,6 +63,9 @@ pub(crate) enum Event {
     TitleStrip(u64, String),
     /// A button of the OSD message: (shell generation, its index).
     OsdAction(u64, usize),
+    /// A press on the status strip: (shell generation, `stop`, `open` or
+    /// `dismiss`; `host/lead_strip.rs`).
+    LeadStrip(u64, String),
     PluginMessage(u64, String, Value),
     Exited(u64),
     /// A control line of the shared runner (`g` 0): (runner, message).
@@ -148,6 +151,7 @@ impl Event {
             Self::MainClosed => ("MainClosed", None),
             Self::TitleStrip(..) => ("TitleStrip", None),
             Self::OsdAction(..) => ("OsdAction", None),
+            Self::LeadStrip(..) => ("LeadStrip", None),
             Self::PluginMessage(owner, ..) => ("PluginMessage", Some(*owner)),
             Self::Exited(owner) => ("Exited", Some(*owner)),
             Self::Runner(..) => ("Runner", None),

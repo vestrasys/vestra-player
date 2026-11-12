@@ -7,8 +7,9 @@
 //! sandboxed): a run needs a live ticket of the caller's, the rates are
 //! capped ([`CommandRuns`]), a destructive command and any command of a
 //! plugin that is not built-in asks the user first (the host's own alert,
-//! which the caller cannot answer or skip), and every run puts an OSD line
-//! naming the caller and the command (doc/architecture/palette-lead.md).
+//! which the caller cannot answer or skip), and every run is named before it
+//! runs: in the status strip for the palette lead's holder, else on the OSD
+//! (doc/architecture/palette-lead.md).
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
     bindings,
@@ -190,6 +191,13 @@ impl CommandRuns {
             .position(|run| run.reply.owner == reply.owner && run.reply.id == reply.id)?;
         Some(self.confirming.remove(at))
     }
+    /// Whether `ticket` is live at `now`, whoever holds it (the status
+    /// strip shows a ticket's steps while it is).
+    pub fn is_live(&self, ticket: &str, now: u64) -> bool {
+        self.tickets
+            .get(ticket)
+            .is_some_and(|t| now.saturating_sub(t.last) <= TICKET_IDLE_MS)
+    }
     #[cfg(test)]
     fn live(&self) -> usize {
         self.tickets.len()
@@ -312,39 +320,60 @@ fn shown_name(host: &Host, owner: u64) -> String {
 }
 
 /// Runs `item` for `caller` the way the palette does (not added to the
-/// palette's recent list), after the OSD line naming it.
+/// palette's recent list), after the line naming it: in the status strip
+/// when the caller holds the palette lead (whose ticket this is), else on
+/// the OSD.
 fn perform(
     host: &mut Host,
     caller: u64,
+    ticket: &str,
     item: &Item,
     step: Option<(u64, u64)>,
 ) -> Result<(), RpcError> {
-    let name = shown_name(host, caller);
-    let line = match step {
-        Some((step, of)) => i18n::tr_args(
-            "{plugin} · {step}/{of} · {command}",
-            &json!({"plugin":name,"step":step,"of":of,"command":item.label}),
-        ),
-        None => i18n::tr_args(
-            "{plugin} · {command}",
-            &json!({"plugin":name,"command":item.label}),
-        ),
+    let holds_lead = host.lead.as_ref().is_some_and(|lead| lead.owner == caller);
+    let line = if holds_lead {
+        // The strip's icon says who is working: the step and the command.
+        match step {
+            Some((step, of)) => i18n::tr_args(
+                "{step}/{of} · {command}",
+                &json!({"step":step,"of":of,"command":item.label}),
+            ),
+            None => item.label.clone(),
+        }
+    } else {
+        let name = shown_name(host, caller);
+        match step {
+            Some((step, of)) => i18n::tr_args(
+                "{plugin} · {step}/{of} · {command}",
+                &json!({"plugin":name,"step":step,"of":of,"command":item.label}),
+            ),
+            None => i18n::tr_args(
+                "{plugin} · {command}",
+                &json!({"plugin":name,"command":item.label}),
+            ),
+        }
     };
+    let place = if holds_lead { "strip" } else { "osd" };
     diag!(
-        "commands.run: {} ran {} (osd: {line})",
+        "commands.run: {} ran {} ({place}: {line})",
         host.plugin_id(caller),
         item.global
     );
     // In the host log too: what a plugin ran on the user's behalf, for a bug
     // report from an installed build. The ids only: a label may name the
     // user's file (a Recently Played row), and the host log never does.
-    let step = step.map_or_else(String::new, |(step, of)| format!(" (step {step}/{of})"));
+    let logged = step.map_or_else(String::new, |(step, of)| format!(" (step {step}/{of})"));
     crate::diag::log_only(&format!(
-        "commands.run: {} ran {}{step}",
+        "commands.run: {} ran {}{logged}",
         host.plugin_id(caller),
         item.global
     ));
-    host.show_osd(&line);
+    if holds_lead {
+        let progress = step.map_or(1., |(step, of)| step as f32 / of.max(1) as f32);
+        host.lead_step(ticket, &line, progress);
+    } else {
+        host.show_osd(&line);
+    }
     host.execute_command(item.owner, &item.id)
 }
 
@@ -368,7 +397,7 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
     host.command_runs.count(reply.owner, &ticket, now)?;
     let builtin = builtin_owner(host, item.owner);
     if !dangerous(&item, builtin) {
-        perform(host, reply.owner, &item, step)?;
+        perform(host, reply.owner, &ticket, &item, step)?;
         return Ok(Some(json!({"ran": true})));
     }
     let query = host
@@ -485,7 +514,7 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool) {
         ))
     } else {
         runnable(host, &run.global)
-            .and_then(|item| perform(host, reply.owner, &item, run.step))
+            .and_then(|item| perform(host, reply.owner, &run.ticket, &item, run.step))
             .map(|()| json!({"ran": true}))
     };
     host.respond(reply, result);

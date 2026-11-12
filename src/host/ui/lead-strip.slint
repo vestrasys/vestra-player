@@ -1,0 +1,154 @@
+// The status strip (host/lead_strip.rs; Ask Vestra UX §4.2): the command
+// palette lead's status while the palette is closed, where the palette was
+// (top centre), in the palette's style: its plate, 12px text, an icon, a
+// 2px brand-gradient line along the bottom and, while working, Stop. It
+// takes no keyboard focus. Every element stays; `visible` and widths
+// change (the no-churn rule in menu-view.slint).
+import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
+import { Button } from "@vestra/widgets.slint";
+import { MenuChrome } from "menu-view.slint";
+
+export struct LeadStrip {
+    visible: bool,
+    // working (the line sweeps), running (a step: the line filled to
+    // `progress`), done, failed, note.
+    kind: string,
+    text: string,
+    progress: float,
+    // The Stop button (working and running).
+    stop: bool,
+}
+
+export component LeadStripView inherits Rectangle {
+    in property <LeadStrip> strip;
+    // The widest the strip may be: the window's width less 16px.
+    in property <length> room: 1000px;
+    // The line rests in the middle instead of sweeping (offline renders).
+    in property <bool> still;
+    // `stop`, `open` (a press elsewhere while working), `dismiss` (a press
+    // on an end state).
+    callback action(string);
+    out property <bool> hover: touch.has-hover;
+
+    private property <bool> ended: root.strip.kind == "done" || root.strip.kind == "failed" || root.strip.kind == "note";
+    // §4.2: 168–420px (an end state up to 520px, the palette's width).
+    private property <length> widest: min(root.ended ? 520px : 420px, root.room);
+    private property <length> stop-width: root.strip.stop ? stop.preferred-width + 6px : 0px;
+    // 1px border, 10px padding, the 14px icon box and an 8px gap.
+    private property <length> chrome: 2px + 20px + 14px + 8px + root.stop-width;
+    private property <length> text-room: root.widest - root.chrome;
+    private property <bool> sweeping: root.strip.visible && root.strip.kind == "working" && !root.still;
+
+    width: max(min(168px, root.widest), min(root.widest, root.chrome + label.preferred-width + 1px));
+    // One line 32px, two (an end state) 48px.
+    height: 2px + 14px + label.height;
+    background: Theme.bg-panel;
+    border-color: Theme.line;
+    border-width: 1px;
+    border-radius: Theme.radius-panel;
+    drop-shadow-blur: 8px;
+    drop-shadow-color: MenuChrome.shadow;
+    opacity: 0;
+    // Gone once faded out: nothing of it takes a press then.
+    visible: self.opacity > 0;
+    states [
+        shown when root.strip.visible: {
+            opacity: 1;
+            out {
+                animate opacity { duration: 300ms; }
+            }
+        }
+    ]
+
+    touch := TouchArea {
+        mouse-cursor: MouseCursor.pointer;
+        clicked => { root.action(root.ended ? "dismiss" : "open"); }
+    }
+    // The icon box (14×16, the line's height): ai, a check, or failed.
+    Rectangle {
+        x: 11px;
+        y: 8px;
+        width: 14px;
+        height: 16px;
+        Icon {
+            name: root.strip.kind == "done" ? "menu-check" : root.strip.kind == "failed" ? "failed" : "ai";
+            color: root.strip.kind == "failed" ? Theme.danger : Theme.accent;
+        }
+    }
+    label := Text {
+        x: 33px;
+        y: 8px;
+        width: min(self.preferred-width + 1px, root.text-room);
+        // 16px a line (the spec's line height), two lines at most.
+        height: self.preferred-height > 24px ? 32px : 16px;
+        text: root.strip.text;
+        font-size: Theme.font-tab;
+        color: Theme.text;
+        vertical-alignment: center;
+        wrap: root.ended ? word-wrap : no-wrap;
+        overflow: elide;
+    }
+    stop := Button {
+        visible: root.strip.stop;
+        x: parent.width - 7px - self.width;
+        y: 7px;
+        width: self.preferred-width;
+        height: 18px;
+        small: true;
+        text: @tr("Stop");
+        clicked => { root.action("stop"); }
+    }
+    // The line: 2px along the bottom edge, 8px in from each side.
+    line := Rectangle {
+        x: 8px;
+        y: parent.height - 2px;
+        width: parent.width - 16px;
+        height: 2px;
+        border-radius: 1px;
+        clip: true;
+        // Working: a 36% segment of the brand gradient sweeps left to right,
+        // 1.4 s a pass, easing in and out; its ends fade into the plate.
+        // animation-tick() is read only while sweeping, so nothing redraws
+        // otherwise.
+        property <float> phase: root.sweeping ? mod(animation-tick() / 1ms, 1400) / 1400 : 0.5;
+        property <float> eased: self.phase < 0.5 ? 2 * self.phase * self.phase : 1 - (2 - 2 * self.phase) * (2 - 2 * self.phase) / 2;
+        Rectangle {
+            visible: root.strip.kind == "working";
+            x: root.still ? parent.width * 0.34 : parent.width * (-0.36 + 1.36 * parent.eased);
+            width: parent.width * 0.36;
+            height: 2px;
+            background: Theme.accent-fill;
+            Rectangle {
+                x: 0px;
+                width: parent.width * 0.3;
+                background: @linear-gradient(90deg, Theme.bg-panel 0%, Theme.bg-panel.transparentize(100%) 100%);
+            }
+            Rectangle {
+                x: parent.width * 0.7;
+                width: parent.width * 0.3;
+                background: @linear-gradient(90deg, Theme.bg-panel.transparentize(100%) 0%, Theme.bg-panel 100%);
+            }
+        }
+        // Running (to step / of, 150 ms per change) and done (full): the
+        // gradient spans the whole line and shows up to the fill.
+        Rectangle {
+            visible: root.strip.kind == "running" || root.strip.kind == "done";
+            x: 0px;
+            width: parent.width * (root.strip.kind == "done" ? 1 : clamp(root.strip.progress, 0, 1));
+            height: 2px;
+            clip: true;
+            animate width { duration: 150ms; easing: ease-out; }
+            Rectangle {
+                x: 0px;
+                width: line.width;
+                height: 2px;
+                background: Theme.accent-fill;
+            }
+        }
+        Rectangle {
+            visible: root.strip.kind == "failed";
+            background: Theme.danger;
+        }
+    }
+}

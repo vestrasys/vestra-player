@@ -4,7 +4,8 @@
 // request's ticket; Don't Run, a disabled command and a third-party command
 // (confirmed by the player) end or continue the request as the PROPOSAL's
 // flows say. Commands only, no Undo (user ruling 2026-11-11). A local mock
-// model only.
+// model only. How a request ended is an end state of the palette's status
+// (`status.state`), which the player shows in its status strip.
 //
 // The TestHost lists only the player's core commands and this plugin's own,
 // so the tests that need other plugins' rows answer `commands.list` and
@@ -17,11 +18,25 @@ import path from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { dataDirectory, server, startAi } from "./fixture.mjs";
+import { guard, shown, track } from "./lead-status.mjs";
+
+guard(test);
 
 const plan = (...steps) => ({ toolCalls: [{ name: "run_steps", args: { steps } }] });
 const command = (id) => ({ kind: "command", id });
 const CONTINUE = { confirmed: true, checked: false };
 const DONT_RUN = { confirmed: false, checked: false };
+
+/**
+ * The end states the plugin sent (`palette.lead.set` with `status.state`
+ * done, failed or note: the player's status strip shows each once), as
+ * "state: text" in English.
+ */
+const ends = (host) =>
+  host
+    .sent("palette.lead.set")
+    .filter((p) => p.status?.state && p.status.state !== "working")
+    .map((p) => `${p.status.state}: ${shown(host, p.status.text)}`);
 
 /** A row of the palette's table as `commands.list` gives it. */
 const row = (id, label, extra = {}) => ({
@@ -69,10 +84,11 @@ function table(host, rows) {
 async function ready(reply, options = {}) {
   const mock = await server(reply);
   const ai = await startAi({ compat: mock.url, builtin: true, ...options });
+  track(ai.host);
   ai.host.openElsewhere("/media/Secret Holiday Film.mkv");
   ai.host.setSource({ duration: 600, position: 30, paused: false });
   await ai.host.settle();
-  return { ...ai, mock, osd: () => ai.host.osd.at(-1), system: () => mock.chats.at(-1).body.messages[0].content };
+  return { ...ai, mock, end: () => ends(ai.host).at(-1), system: () => mock.chats.at(-1).body.messages[0].content };
 }
 
 test("a command of the player runs through commands.run with the request's ticket; a plain result line", async (t) => {
@@ -83,11 +99,11 @@ test("a command of the player runs through commands.run with the request's ticke
   const ticket = await host.runPaletteLead("mute");
   const { commands } = await ai.plugin.commands.list();
   const mute = commands.find((each) => each.id === "host/mute").label;
-  await ai.until(() => ai.osd() === `Vestra · ${mute}`, "result");
+  await ai.until(() => ai.end() === `done: Done · ${mute}`, "result");
   assert.ok(host.coreRuns.includes("mute"), "the player's Mute ran");
-  // The player's own line for the run, then the result line, without buttons.
+  // The player's own line for the run (the TestHost's `osd`; the player's strip), and no OSD from the plugin.
   assert.ok(host.osd.some((line) => line.startsWith("vestra.workshop · ")));
-  assert.deepEqual(host.osdActions.at(-1), []);
+  assert.deepEqual(host.sent("osd.show"), []);
   assert.ok(ticket);
   // The table the model got: the player's commands, not Ask Vestra's own.
   const system = ai.system();
@@ -102,12 +118,12 @@ test("several commands: the player's line counts the steps (step/of), the result
   const runs = table(host, [row("vestra.video/video.rotate.90", "Rotate: 90°"), row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false })]);
   host.dialogAnswers.push(CONTINUE);
   const ticket = await host.runPaletteLead("rotate and mute");
-  await ai.until(() => ai.osd() === "Vestra · Rotate: 90°, Vestra Player: Mute", "result");
+  await ai.until(() => ai.end() === "done: Done · Rotate: 90°, Vestra Player: Mute", "result");
   assert.deepEqual(runs, [
     { id: "vestra.video/video.rotate.90", ticket, step: 1, of: 2 },
     { id: "host/mute", ticket, step: 2, of: 2 },
   ]);
-  assert.deepEqual(host.osdActions.at(-1), []);
+  assert.deepEqual(host.sent("osd.show"), []);
 });
 
 test("a disabled command: the step fails with the command's reason, the steps after it do not run", async (t) => {
@@ -121,7 +137,8 @@ test("a disabled command: the step fails with the command's reason, the steps af
   ]);
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("louder, snapshot, mute");
-  await ai.until(() => ai.osd() === "Vestra · Step 2 failed: Nothing to capture", "failure");
+  await ai.until(() => ai.end() === "failed: Step 2 failed: Nothing to capture", "failure");
+  assert.deepEqual(host.sent("osd.show"), []);
   assert.deepEqual(
     runs.map((run) => run.id),
     ["host/volume-up"],
@@ -142,13 +159,51 @@ test("Don't Run on a destructive command stops the whole request; the steps befo
   ]);
   host.dialogAnswers.push(CONTINUE, DONT_RUN); // consent, then the player's Run / Don't Run
   await host.runPaletteLead("louder and clear the playlist and mute");
-  await ai.until(() => ai.osd() === "Vestra · Stopped: Playlist: Clear was not run", "declined");
+  await ai.until(() => ai.end() === "note: Stopped: Playlist: Clear was not run", "declined");
   assert.deepEqual(
     runs.map((run) => run.id),
     ["host/volume-up", "vestra.playlist/playlist.clear"],
   );
   assert.equal(runs[1].declined, true);
   assert.match(ai.system(), /^vestra\.playlist\/playlist\.clear \| Playlist: Clear \|.*\| asks the user first$/m);
+});
+
+test("Don't Run on the first step: nothing was run", async (t) => {
+  const ai = await ready(() => plan(command("vestra.playlist/playlist.clear"), command("host/mute")));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  const runs = table(host, [
+    row("vestra.playlist/playlist.clear", "Playlist: Clear", { dangerous: true }),
+    row("host/mute", "Vestra Player: Mute", { checkable: true, checked: false }),
+  ]);
+  host.dialogAnswers.push(CONTINUE, DONT_RUN);
+  await host.runPaletteLead("clear the playlist and mute");
+  await ai.until(() => ai.end() === "note: Stopped: nothing was run", "declined");
+  assert.deepEqual(runs, [{ id: "vestra.playlist/playlist.clear", declined: true }]);
+  assert.deepEqual(host.sent("osd.show"), []);
+});
+
+test("store fallback: the prompt runs Plugin Store… alone only when no listed command but a plugin could do it", async (t) => {
+  const ai = await ready(() => plan(command("host/store")));
+  t.after(() => ai.stop());
+  const { host } = ai;
+  const runs = table(host, [row("host/store", "Vestra Player: Plugin Store…", { title: "Plugin Store…" }), row("host/mute", "Vestra Player: Mute")]);
+  host.dialogAnswers.push(CONTINUE);
+  await host.runPaletteLead("play this YouTube link");
+  await ai.until(() => ai.end() === "done: Opened Vestra Player: Plugin Store…", "store opened");
+  assert.deepEqual(
+    runs.map((run) => run.id),
+    ["host/store"],
+  );
+  const system = ai.system();
+  assert.ok(
+    system.includes(
+      "- Only when no listed command can do what the user asked but a plugin for the player could (online video sites such as YouTube or Bilibili, games and emulators, cutting and exporting clips, extra video filters or upscaling shaders), run Plugin Store… as the only step. If a listed command can do it, use that command instead.",
+    ),
+  );
+  assert.ok(system.includes("- Otherwise, if no command does what the user asked, do not call the tool"));
+  // Not the half the user left out: the model does not say which kind of plugin to look for.
+  assert.doesNotMatch(system, /which (kind of )?plugin to look for/i);
 });
 
 test("a third-party command runs after the player's confirmation", async (t) => {
@@ -158,7 +213,7 @@ test("a third-party command runs after the player's confirmation", async (t) => 
   const runs = table(host, [row("acme.obs/record.start", "Mini OBS: Start Recording", { builtin: false, plugin: "Mini OBS", dangerous: true })]);
   host.dialogAnswers.push(CONTINUE, CONTINUE); // consent, then Run
   const ticket = await host.runPaletteLead("start recording");
-  await ai.until(() => ai.osd() === "Vestra · Mini OBS: Start Recording", "result");
+  await ai.until(() => ai.end() === "done: Done · Mini OBS: Start Recording", "result");
   assert.deepEqual(runs, [{ id: "acme.obs/record.start", ticket, step: undefined, of: undefined }]);
   assert.match(ai.system(), /^acme\.obs\/record\.start \| Mini OBS: Start Recording \|.*\| asks the user first, third-party: Mini OBS$/m);
 });
@@ -170,7 +225,7 @@ test("an id outside the table is refused before any step runs", async (t) => {
   const runs = table(host, [row("host/mute", "Vestra Player: Mute")]);
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("mute and format the disk");
-  await ai.until(() => ai.osd() === "Vestra · Step 2 failed: There is no command “host/format-disk”", "refused");
+  await ai.until(() => ai.end() === "failed: Step 2 failed: There is no command “host/format-disk”", "refused");
   assert.deepEqual(runs, [], "checked before the first step ran");
 });
 
@@ -181,7 +236,7 @@ test("a command that opens a window ends the request", async (t) => {
   const runs = table(host, [row("vestra.subtitles/tune", "Subtitles: Subtitle Tuning…"), row("host/mute", "Vestra Player: Mute")]);
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("subtitle tuning then mute");
-  await ai.until(() => ai.osd() === "Vestra · Opened Subtitles: Subtitle Tuning…", "opened");
+  await ai.until(() => ai.end() === "done: Opened Subtitles: Subtitle Tuning…", "opened");
   assert.deepEqual(
     runs.map((run) => run.id),
     ["vestra.subtitles/tune"],
@@ -207,8 +262,8 @@ test("personal rows never reach the model, and naming one is refused", async (t)
   ]);
   host.dialogAnswers.push(CONTINUE);
   await host.runPaletteLead("open the film from last summer");
-  await ai.until(() => ai.osd()?.startsWith("Vestra · Step 1 failed"), "refused");
-  assert.equal(ai.osd(), "Vestra · Step 1 failed: There is no command “vestra.history/recent.item.0”");
+  await ai.until(() => ai.end()?.startsWith("failed: Step 1 failed"), "refused");
+  assert.equal(ai.end(), "failed: Step 1 failed: There is no command “vestra.history/recent.item.0”");
   assert.deepEqual(runs, []);
   const sent = JSON.stringify(mock.chats[0].body);
   for (const secret of ["Holiday", "holiday", "Commentary", "AirPods", "Wedding", "Grandma", "anna", "recent.item", "audio.track", "audio.device", "chapter.3", "bookmark.0", "track-1"])

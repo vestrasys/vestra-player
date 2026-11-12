@@ -480,6 +480,7 @@ fn player() -> Result<()> {
         menu_shown: Default::default(),
         palette: Default::default(),
         lead: None,
+        lead_strip: Default::default(),
         command_runs: Default::default(),
         policy: window_state::Policy::new(0),
         clock: Instant::now(),

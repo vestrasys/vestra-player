@@ -522,6 +522,8 @@ const LEAD_TEXTS = {
     "status.text": 80,
     "status.note": 40,
 };
+/** `palette.lead.set`'s `status.state` (absent or null: `working`). */
+const LEAD_STATES = ["working", "done", "failed", "note"];
 /** The default handlers of `commands.run` and `palette.lead`. */
 export function builtinHandlers(host, inner) {
     return {
@@ -612,6 +614,12 @@ export function builtinHandlers(host, inner) {
             }
             if (typeof p.icon !== "string" && host.imagePath(p.icon) === null)
                 throw new HostError("invalid", "icon is an icon name or an image");
+            const state = p.status
+                ?.state;
+            if (state !== undefined &&
+                state !== null &&
+                !LEAD_STATES.includes(state))
+                throw new HostError("invalid", `status.state is one of ${LEAD_STATES.join(", ")}`);
             host.paletteLead = { ...p };
         },
         "palette.lead.clear": () => {

@@ -132,7 +132,7 @@ msgid_plural "{n} steps"
 msgstr[0] "{n} paso"
 msgstr[1] "{n} pasos"
 
-#: ai.slint:217
+#: ai.slint:217 askvestra/status.ts:131
 #, x-machine
 msgid "Stopped"
 msgstr "Detenido"
@@ -511,160 +511,165 @@ msgstr "Enviar"
 msgid "■ Stop"
 msgstr "■ Detener"
 
-#: askvestra/ask.ts:112
+#: askvestra/ask.ts:180
 #, x-machine
 msgid "Ask Vestra"
 msgstr "Preguntar a Vestra"
 
-#: askvestra/ask.ts:114
+#: askvestra/ask.ts:182
 #, x-machine
 msgid "Type a command or ask Vestra"
 msgstr "Escribe un comando o pregunta a Vestra"
 
-#: askvestra/ask.ts:115
+#: askvestra/ask.ts:183
 #, x-machine
 msgid "Type a request or a question"
 msgstr "Escribe una petición o una pregunta"
 
-#: askvestra/ask.ts:116
+#: askvestra/ask.ts:184
 #, x-machine
 msgid "Set up a model first"
 msgstr "Configura primero un modelo"
 
-#: askvestra/ask.ts:120
-#, x-machine
-msgid "Vestra is working · Step {0} of {1} · {2}"
-msgstr "Vestra está trabajando · Paso {0} de {1} · {2}"
-
-#: askvestra/ask.ts:121
-#, x-machine
-msgid "Vestra is working · Planning…"
-msgstr "Vestra está trabajando · Planificando…"
-
-#: askvestra/ask.ts:122
+#: askvestra/ask.ts:194
 #, x-machine
 msgid "Enter stops"
 msgstr "Intro detiene"
 
-#: askvestra/ask.ts:149 askvestra/ask.ts:414
-#, x-machine
-msgid "Stop"
-msgstr "Detener"
-
-#: askvestra/ask.ts:197
-#, x-machine
-msgid "Vestra · Took too long"
-msgstr "Vestra · Tardó demasiado"
-
-#: askvestra/ask.ts:199
-#, x-machine
-msgid "Vestra · Could not reach {0}: {1}"
-msgstr "Vestra · No se pudo contactar con {0}: {1}"
-
-#: askvestra/ask.ts:233 askvestra/ask.ts:364 askvestra/ask.ts:373
-#, x-machine
-msgid "Vestra · {}"
-msgstr "Vestra · {}"
-
-#: askvestra/ask.ts:261
-#, x-machine
-msgid "{} is busy"
-msgstr "{} está ocupado"
-
-#: askvestra/ask.ts:262
-#, x-machine
-msgid "{} is no longer there"
-msgstr "{} ya no existe"
-
-#: askvestra/ask.ts:263
-#, x-machine
-msgid "Too many commands at once"
-msgstr "Demasiados comandos a la vez"
-
-#: askvestra/ask.ts:264
-#, x-machine
-msgid "The request has ended"
-msgstr "La petición ha terminado"
-
-#: askvestra/ask.ts:265
-#, x-machine
-msgid "This player does not let Vestra run commands"
-msgstr "Este reproductor no permite que Vestra ejecute comandos"
-
-#: askvestra/ask.ts:300
+#: askvestra/ask.ts:395
 #, x-machine
 msgid "Ask Vestra sends your request to {}"
 msgstr "«Preguntar a Vestra» envía tu petición a {}"
 
-#: askvestra/ask.ts:302
+#: askvestra/ask.ts:397
 #, x-machine
 msgid "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and whether something is open and playing go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account."
 msgstr "Lo que escribes en la paleta de comandos, la lista de comandos del reproductor (nombres, menús, teclas y si cada uno está activado o disponible) y si hay algo abierto y reproduciéndose se envían a este proveedor con tu clave de API, como en el chat. No se envían nombres de archivo, listas de reproducción, historial, títulos de pistas y capítulos ni subtítulos. El proveedor cobra a tu cuenta."
 
-#: askvestra/ask.ts:304
+#: askvestra/ask.ts:399
 #, x-machine
 msgid "Continue"
 msgstr "Continuar"
 
-#: askvestra/ask.ts:328
+#: askvestra/ask.ts:537
 #, x-machine
-msgid "Vestra · Cannot read the API key; save it again in the settings"
-msgstr "Vestra · No se puede leer la clave de API; guárdala de nuevo en los ajustes"
+msgid "Stop"
+msgstr "Detener"
 
-#: askvestra/ask.ts:339
-#, x-machine
-msgid "Vestra · Planning…"
-msgstr "Vestra · Planificando…"
-
-#: askvestra/ask.ts:352 askvestra/ask.ts:390 askvestra/ask.ts:392
-#, x-machine
-msgid "Vestra · Step {0} failed: {1}"
-msgstr "Vestra · Falló el paso {0}: {1}"
-
-#: askvestra/ask.ts:363
-#, x-machine
-msgid "Vestra · Opened {}"
-msgstr "Vestra · Se abrió {}"
-
-#: askvestra/ask.ts:367
-#, x-machine
-msgid "Vestra · Stopped"
-msgstr "Vestra · Detenido"
-
-#: askvestra/ask.ts:368
-#, x-machine
-msgid "Vestra · Stopped: {} was not run"
-msgstr "Vestra · Detenido: {} no se ejecutó"
-
-#: askvestra/ask.ts:384
-#, x-machine
-msgid "Vestra · The model gave no steps"
-msgstr "Vestra · El modelo no dio ningún paso"
-
-#: askvestra/ask.ts:388
-#, x-machine
-msgid "Vestra · The plan has more than {} steps"
-msgstr "Vestra · El plan tiene más de {} pasos"
-
-#: askvestra/ask.ts:390
-#, x-machine
-msgid "Vestra cannot do “{}”"
-msgstr "Vestra no puede hacer «{}»"
-
-#: askvestra/ask.ts:392
-#, x-machine
-msgid "There is no command “{}”"
-msgstr "No hay ningún comando «{}»"
-
-#: askvestra/ask.ts:418
+#: askvestra/ask.ts:541
 #, x-machine
 msgid "Vestra is not working on a request"
 msgstr "Vestra no está trabajando en ninguna petición"
 
-#: askvestra/ask.ts:424 askvestra/ask.ts:429
+#: askvestra/ask.ts:547 askvestra/ask.ts:552
 #, x-machine
 msgid "Vestra is working"
 msgstr "Vestra está trabajando"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Planning…"
+msgstr "Planificando…"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Vestra is working · Step {0} of {1} · {2}"
+msgstr "Vestra está trabajando · Paso {0} de {1} · {2}"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Stopped: nothing was run"
+msgstr "Detenido: no se ejecutó nada"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Stopped: {} was not run"
+msgstr "Detenido: {} no se ejecutó"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Done · {}"
+msgstr "Hecho · {}"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Opened {}"
+msgstr "Se abrió {}"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Step {0} failed: {1}"
+msgstr "Falló el paso {0}: {1}"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Took too long"
+msgstr "Tardó demasiado"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Could not reach {0}: {1}"
+msgstr "No se pudo contactar con {0}: {1}"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "The model gave no steps"
+msgstr "El modelo no dio ningún paso"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "The plan has more than {} steps"
+msgstr "El plan tiene más de {} pasos"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Cannot read the API key; save it again in the settings"
+msgstr "No se puede leer la clave de API; guárdala de nuevo en los ajustes"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "{} is busy"
+msgstr "{} está ocupado"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "{} is no longer there"
+msgstr "{} ya no existe"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Too many commands at once"
+msgstr "Demasiados comandos a la vez"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "The request has ended"
+msgstr "La petición ha terminado"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "This player does not let Vestra run commands"
+msgstr "Este reproductor no permite que Vestra ejecute comandos"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "Vestra cannot do “{}”"
+msgstr "Vestra no puede hacer «{}»"
+
+#: askvestra/status.ts:131
+#, x-machine
+msgid "There is no command “{}”"
+msgstr "No hay ningún comando «{}»"
+
+#: askvestra/status.ts:131 labels.slint:6 main.ts:637
+#, x-machine
+msgid "Custom · OpenAI format"
+msgstr "Personalizado · formato OpenAI"
+
+#: askvestra/status.ts:131 labels.slint:7 main.ts:639
+#, x-machine
+msgid "Custom · Anthropic format"
+msgstr "Personalizado · formato Anthropic"
 
 #: delivery.ts:203
 #, x-machine
@@ -703,16 +708,6 @@ msgstr "Se instaló desde otro origen (no lo creó Vestra Player AI). Tras el re
 #, x-machine
 msgid "Replace"
 msgstr "Reemplazar"
-
-#: labels.slint:6 main.ts:637
-#, x-machine
-msgid "Custom · OpenAI format"
-msgstr "Personalizado · formato OpenAI"
-
-#: labels.slint:7 main.ts:639
-#, x-machine
-msgid "Custom · Anthropic format"
-msgstr "Personalizado · formato Anthropic"
 
 #: labels.slint:11
 #, x-machine

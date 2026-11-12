@@ -29,13 +29,17 @@ pub(crate) struct PaletteState {
     pub(crate) follow: Option<String>,
     /// The last projection showed a lead row first.
     pub(crate) lead: bool,
-    /// The query the lead's row sent with the palette kept open
-    /// (Shift+Enter), until the query changes: the row shows the holder's
-    /// status for it (`command_palette::lead_shows_status`).
-    pub(crate) sent: Option<String>,
+    /// The last projection's lead row showed its holder's status.
+    pub(crate) status: bool,
+    /// Shift+Enter sent a request from this palette and cleared the field;
+    /// until its status has come and gone (or something is typed, or the
+    /// request is stopped), Enter on the lead row with nothing typed stops
+    /// it, also before the holder's status arrives (a parked holder takes
+    /// a moment to wake).
+    pub(crate) sent: bool,
     /// The next projection places the cursor by the lead's rule
-    /// (`command_palette::aim`): after opening, typing, or the lead coming
-    /// or going.
+    /// (`command_palette::aim`): after opening, typing, the lead coming or
+    /// going, or its status coming or going while nothing is typed.
     pub(crate) aim: bool,
 }
 
@@ -47,6 +51,35 @@ impl PaletteState {
     /// The command under the cursor (an index into `hits`), `None` on the lead.
     fn command_at_cursor(&self) -> Option<usize> {
         self.cursor.checked_sub(usize::from(self.lead))
+    }
+    /// Shift+Enter sent the query: the field is cleared and the cursor
+    /// stays on the lead row (not placed by `aim`, which with nothing typed
+    /// and no status yet would pick the most recent command, so a second
+    /// Enter would run it); the status, once it comes, re-aims onto itself.
+    fn kept_sent(&mut self) {
+        self.query.clear();
+        self.cursor = 0;
+        self.offset = 0;
+        self.aim = false;
+        self.follow = None;
+        self.sent = true;
+    }
+    /// The lead row and its status as the next projection shows them:
+    /// whether the cursor is placed again (`aim`). The lead coming or going
+    /// re-aims; so does its status coming or going while nothing is typed.
+    /// The status going ends `sent` (that request is over).
+    fn track_lead(&mut self, lead: bool, status: bool) {
+        if self.lead != lead {
+            self.lead = lead;
+            self.aim = true;
+        }
+        if self.status != status {
+            if !status {
+                self.sent = false;
+            }
+            self.status = status;
+            self.aim |= self.query.trim().is_empty();
+        }
     }
 }
 
@@ -95,6 +128,8 @@ impl Host {
         self.report_menu(result);
         let result = self.refresh_menu();
         self.report_menu(result);
+        // The status strip yields: the first row shows the status.
+        self.refresh_strip();
     }
     /// The shown name of each plugin with commands, by manifest id.
     fn plugin_names(&self) -> BTreeMap<String, String> {
@@ -134,6 +169,7 @@ impl Host {
             let result = self.refresh_menu();
             self.report_menu(result);
         }
+        self.lead_strip_follow();
     }
     /// Project the open palette into `window` (`refresh_menu`): the
     /// commands as they are now, matched against the query.
@@ -161,18 +197,12 @@ impl Host {
         let status = lead
             .as_ref()
             .and_then(|(_, row)| row.status.clone())
-            .filter(|_| {
-                command_palette::lead_shows_status(
-                    true,
-                    &self.palette.query,
-                    self.palette.sent.as_deref(),
-                )
-            });
+            .filter(|_| command_palette::lead_shows_status(true, &self.palette.query));
         let palette = &mut self.palette;
-        if palette.lead != lead.is_some() {
-            palette.lead = lead.is_some();
-            palette.aim = true;
-        }
+        // The status came or went with nothing typed (it came after
+        // Shift+Enter cleared the field): the cursor goes where the rule
+        // puts it, on the status row while there is one (Enter stops).
+        palette.track_lead(lead.is_some(), status.is_some());
         if std::mem::take(&mut palette.aim) {
             palette.cursor = command_palette::aim(
                 &items,
@@ -213,9 +243,9 @@ impl Host {
             None => json!({"shown": false, "icon": "", "title": "", "query": "",
                 "empty": "", "note": "", "status": false}),
             Some((_, row)) => match &status {
-                Some((text, note)) => json!({"shown": true, "icon": lead_icon(&row.icon),
-                    "title": text, "query": "", "empty": "",
-                    "note": note.clone().unwrap_or_default(), "status": true}),
+                Some(status) => json!({"shown": true, "icon": lead_icon(&row.icon),
+                    "title": status.text, "query": "", "empty": "",
+                    "note": status.note.clone().unwrap_or_default(), "status": true}),
                 None => json!({"shown": true, "icon": lead_icon(&row.icon),
                     "title": row.title, "query": self.palette.query,
                     "empty": if empty { row.empty.clone().unwrap_or_default() } else { String::new() },
@@ -274,26 +304,54 @@ impl Host {
     /// wakes it from standby). `status`: the row showed its status (stop).
     fn run_lead(&mut self, keep: bool) {
         let query = self.palette.query.clone();
-        let sent = self.palette.sent.take();
-        self.lead_activated(query.clone(), keep, sent.as_deref());
-        // Kept open: the row shows the holder's status for this request
-        // until the query changes, and Enter on it stops the request
-        // instead of sending it again.
-        if keep {
-            self.palette.sent = Some(query);
+        let has_status = self
+            .lead
+            .as_ref()
+            .is_some_and(|lead| lead.row.status.is_some());
+        // Nothing typed after Shift+Enter: Enter stops that request, also
+        // before its status arrived.
+        let status = command_palette::lead_shows_status(has_status || self.palette.sent, &query);
+        self.lead_event(query, keep, status);
+        if status {
+            self.palette.sent = false;
+        }
+        // Kept open (Shift+Enter): the field is cleared, so the row shows
+        // the holder's status for the request it just sent, and a second
+        // Enter stops it instead of sending it again (PROPOSAL §4.6, F1).
+        if keep && !self.palette.query.is_empty() {
+            self.palette.kept_sent();
+            if let Some(shell) = &self.shell
+                && let Err(error) = shell.set_property("palette-query", SValue::String("".into()))
+            {
+                diag!("host.error palette: {error}");
+            }
         }
     }
     /// The lead's row activated with `query` (also `VESTRA_TEST_EXECUTE`'s
-    /// `lead:<query>@<ms>`, headless); `sent`: the query it sent with the
-    /// palette kept open, if unchanged since (`PaletteState::sent`).
-    pub(crate) fn lead_activated(&mut self, query: String, keep: bool, sent: Option<&str>) {
+    /// `lead:<query>@<ms>`, headless): the row showed the holder's status
+    /// when it has one and nothing is typed.
+    pub(crate) fn lead_activated(&mut self, query: String, keep: bool) {
+        let Some(lead) = &self.lead else {
+            return;
+        };
+        let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query);
+        self.lead_event(query, keep, status);
+    }
+    /// The `palette.lead` event to the holder, with a new ticket; `status`:
+    /// the user activated the status (Enter on the status row, the strip's
+    /// Stop), which stops the running request.
+    pub(crate) fn lead_event(&mut self, query: String, keep: bool, status: bool) {
         let Some(lead) = &self.lead else {
             return;
         };
         let owner = lead.owner;
-        let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query, sent);
         let now = self.now_ms();
         let ticket = self.command_runs.mint(owner, &query, now);
+        // A new request: its end state shows even when it is the same as
+        // the last one's (the same failure twice in a row).
+        if let Some(lead) = self.lead.as_mut() {
+            lead.ended = None;
+        }
         input_trace::follow(&format!("palette lead to plugin {owner} (keep {keep})"));
         if !keep && self.menu_open {
             self.close_menu();
@@ -314,7 +372,7 @@ impl Host {
                     return;
                 }
                 self.palette.query = query;
-                self.palette.sent = None;
+                self.palette.sent = false;
                 self.palette.cursor = 0;
                 self.palette.offset = 0;
                 self.palette.aim = true;
@@ -460,3 +518,55 @@ fn lead_icon(icon: &commands::ButtonIcon) -> String {
 
 /// The palette's own command id (`host/palette`).
 pub(crate) const PALETTE: &str = "palette";
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A palette showing a lead without a status, the cursor on the first
+    /// command, the query typed.
+    fn typed() -> PaletteState {
+        PaletteState {
+            query: "mute and go fullscreen".into(),
+            cursor: 1,
+            lead: true,
+            ..PaletteState::default()
+        }
+    }
+
+    #[test]
+    fn after_shift_enter_the_cursor_stays_on_the_lead_until_the_status_comes() {
+        let mut palette = typed();
+        palette.kept_sent();
+        assert_eq!((palette.query.as_str(), palette.cursor), ("", 0));
+        assert!(palette.sent);
+        // The next projection, before the holder's status arrived (a parked
+        // holder waking): the cursor is not placed on the recent command.
+        palette.track_lead(true, false);
+        assert!(!palette.aim);
+        assert_eq!(palette.cursor, 0);
+        // Enter on the lead row now stops the request just sent.
+        assert!(command_palette::lead_shows_status(
+            palette.sent,
+            &palette.query
+        ));
+        // The status comes: the cursor is placed again (onto it).
+        palette.track_lead(true, true);
+        assert!(palette.aim && palette.sent);
+        assert_eq!(command_palette::aim(&[], &[], "", true, true), 0);
+        // It goes (the request ended): Enter sends a new request again.
+        palette.aim = false;
+        palette.track_lead(true, false);
+        assert!(palette.aim && !palette.sent);
+    }
+
+    #[test]
+    fn a_status_change_while_typing_leaves_the_cursor_alone() {
+        let mut palette = typed();
+        palette.track_lead(true, true);
+        assert!(!palette.aim);
+        // The lead going away re-aims whatever is typed.
+        palette.track_lead(false, true);
+        assert!(palette.aim);
+    }
+}

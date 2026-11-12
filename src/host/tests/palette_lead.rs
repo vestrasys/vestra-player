@@ -124,6 +124,12 @@ export default async function activate(plugin) {{
       hello: [row("{ID}/hello")?.dangerous, row("{ID}/hello")?.builtin, row("{ID}/hello")?.title],
       wipe: row("{ID}/wipe")?.dangerous, quit: row("host/quit")?.dangerous,
       keys: Array.isArray(row("host/play-pause")?.keys) }}));
+    log("FIX bad state", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "x", state: "stopped" }} }})));
+    log("FIX end", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "Done · Hello", state: "done" }} }})));
+    log("FIX end again", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      placeholder: "Type a command or ask", status: {{ text: "Done · Hello", state: "done" }} }})));
     log("FIX done", said(await call("palette.lead.done", {{ ticket }})));
     log("FIX after done", said(await run("{ID}/hello")));
   }});
@@ -232,12 +238,13 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
     expect("FIX register wipe {\"revision\"");
     // Activated with the typed text and a ticket.
     expect("FIX lead query=make it faster keep=false status=false ticket=32");
-    // Its own command runs, named on the OSD.
+    // Its own command runs, named in the status strip (it holds the lead).
     expect("FIX run hello {\"ran\":true}");
     expect("FIX hello ran");
     assert!(
-        log.contains(&format!("commands.run: {ID} ran {ID}/hello (osd: "))
-            && log.contains("· 1/2 ·"),
+        log.contains(&format!(
+            "commands.run: {ID} ran {ID}/hello (strip: 1/2 · Tools: Hello)"
+        )),
         "{log}"
     );
     // The host log keeps what ran, by id (an installed build's stderr goes
@@ -263,6 +270,13 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
     expect(
         r#"FIX list {"revision":"number","hello":[false,true,"Hello"],"wipe":true,"quit":true,"keys":true}"#,
     );
+    // The status state (SDK 1.7.15): an unknown one is refused; an end state
+    // goes to the strip once.
+    expect("FIX bad state error invalid");
+    expect("FIX end null");
+    expect("FIX end again null");
+    // Once: the second set repeats the same end status (an update).
+    assert_eq!(log.matches("lead strip: done").count(), 1, "{log}");
     expect("FIX done null");
     expect("FIX after done error ticket");
     // Not built-in: refused both, by provenance.
@@ -275,6 +289,32 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
         third.contains("THIRD list error capability"),
         "{third}\n{log}"
     );
+}
+
+/// The same end state for two requests in a row shows both times: a new
+/// ticket forgets the last end state shown (`Lead::ended`), while the same
+/// end status sent again within one request shows once.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn the_same_end_state_shows_again_for_the_next_request() {
+    let log = run(
+        10,
+        &[
+            ("VESTRA_TEST_CONFIRM", "run"),
+            ("VESTRA_TEST_EXECUTE", "lead:first@4000,lead:second@6500"),
+        ],
+    );
+    expect(
+        &log,
+        "FIX lead query=first keep=false status=false ticket=32",
+    );
+    expect(
+        &log,
+        "FIX lead query=second keep=false status=false ticket=32",
+    );
+    // Each request sets it twice (the second an update of other fields).
+    assert_eq!(lines(&log, "FIX end").lines().count(), 4, "{log}");
+    assert_eq!(log.matches("lead strip: done").count(), 2, "{log}");
 }
 
 /// The holder is parked while idle (its lead recorded); activating the row

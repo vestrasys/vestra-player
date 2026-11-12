@@ -374,6 +374,11 @@ impl Host {
                     self.osd_action(index);
                 }
             }
+            Event::LeadStrip(generation, action) => {
+                if generation == self.shell_generation {
+                    self.lead_strip_action(&action);
+                }
+            }
             Event::ViewClosed(owner, id) => {
                 if let Some(view) = self.views.remove(&(owner, id.clone())) {
                     let _ = view.instance.hide();
