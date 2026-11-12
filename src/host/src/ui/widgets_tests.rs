@@ -1236,3 +1236,321 @@ export component W inherits Window {
         at(1.),
     )
 }
+
+/// The approval sheet (ui/review-sheet.slint, host/review_sheet.rs) in a
+/// window: its answers and its panel's geometry.
+const SHEET: &str = r#"
+import { ReviewSheetView, ReviewSheet } from "review-sheet.slint";
+import { Theme } from "@vestra/theme.slint";
+export component W inherits Window {
+    in property <image> backdrop;
+    in property <ReviewSheet> s;
+    in-out property <string> last;
+    out property <length> px: v.panel-x;
+    out property <length> py: v.panel-y;
+    out property <length> pw: v.panel-width;
+    out property <length> ph: v.panel-height;
+    out property <bool> keys: v.has-keys;
+    out property <length> run-x: v.run-x;
+    out property <length> cancel-x: v.cancel-x;
+    out property <length> buttons-y: v.buttons-y;
+    background: Theme.bg-video;
+    Image {
+        x: 0px; y: 0px;
+        width: root.width;
+        height: root.width * root.backdrop.height / max(1, root.backdrop.width);
+        source: root.backdrop;
+        image-fit: fill;
+    }
+    v := ReviewSheetView {
+        width: root.width; height: root.height;
+        sheet: root.s;
+        action(name) => { root.last = name; }
+    }
+}"#;
+
+/// One step of a sheet: label, plugin, reason, asks, built in.
+fn sheet_step(
+    label: &str,
+    plugin: &str,
+    reason: &str,
+    asks: bool,
+    builtin: bool,
+) -> crate::host::review_sheet::Step {
+    crate::host::review_sheet::Step {
+        label: label.into(),
+        plugin: plugin.into(),
+        reason: reason.into(),
+        asks,
+        builtin,
+    }
+}
+
+/// A `ReviewSheet` value as the host writes it.
+fn sheet_value(title: &str, query: &str, steps: &[crate::host::review_sheet::Step]) -> Value {
+    crate::ui::ui_values::from_json(&crate::host::review_sheet::sheet(
+        title,
+        "ai",
+        query,
+        steps,
+        ["Enter", "Esc"],
+    ))
+    .unwrap()
+}
+
+/// §4.3: the palette's place and width (520px, at most the window less
+/// 16px); 72px of request box and question, 28px a step, the note when a
+/// step is not built in, the 44px footer.
+#[test]
+fn the_review_sheet_sizes_to_its_steps() {
+    let w = build(SHEET, 1100., 600.);
+    let reset = sheet_step("Reset: Picture", "Video", "", true, true);
+    w.set_property(
+        "s",
+        sheet_value(
+            "Ask Vestra",
+            "reset the picture",
+            std::slice::from_ref(&reset),
+        ),
+    )
+    .unwrap();
+    settle();
+    assert_eq!(
+        (number(&w, "px"), number(&w, "py"), number(&w, "pw")),
+        (290., 16., 520.)
+    );
+    assert_eq!(number(&w, "ph"), 72. + 28. + 44.);
+    let export = sheet_step(
+        "Export: Export Last 30 Seconds",
+        "Clip Export",
+        "Not built in",
+        true,
+        false,
+    );
+    let mute = sheet_step("Vestra Player: Mute", "Vestra Player", "", false, true);
+    w.set_property(
+        "s",
+        sheet_value("Ask Vestra", "reset, mute, export", &[reset, mute, export]),
+    )
+    .unwrap();
+    settle();
+    let height = number(&w, "ph");
+    // One line of note in 520px, and 8px around it.
+    assert!(
+        height > 72. + 84. + 44. + 8. && height < 72. + 84. + 44. + 30.,
+        "{height}"
+    );
+    let narrow = build(SHEET, 300., 600.);
+    narrow
+        .set_property(
+            "s",
+            sheet_value(
+                "Ask Vestra",
+                "x",
+                &[sheet_step("A: B", "C", "", true, true)],
+            ),
+        )
+        .unwrap();
+    settle();
+    assert_eq!(number(&narrow, "pw"), 284.);
+}
+
+/// It takes the keys: Enter runs, Esc does not, a held-down key's repeats
+/// are nothing (the Enter that sent the request); its buttons answer too.
+#[test]
+fn the_review_sheet_answers_enter_esc_and_its_buttons_but_not_a_repeat() {
+    let w = build(SHEET, 1100., 600.);
+    w.set_property(
+        "s",
+        sheet_value(
+            "Ask Vestra",
+            "reset the picture",
+            &[sheet_step("Reset: Picture", "Video", "", true, true)],
+        ),
+    )
+    .unwrap();
+    settle();
+    assert!(boolean(&w, "keys"));
+    w.window().dispatch_event(WindowEvent::KeyPressRepeated {
+        text: Key::Return.into(),
+    });
+    settle();
+    assert_eq!(string(&w, "last"), "");
+    key(&w, Key::Return);
+    assert_eq!(string(&w, "last"), "run");
+    key(&w, Key::Escape);
+    assert_eq!(string(&w, "last"), "decline");
+    let (x, y, width, height) = (
+        number(&w, "px") as f32,
+        number(&w, "py") as f32,
+        number(&w, "pw") as f32,
+        number(&w, "ph") as f32,
+    );
+    let (run, cancel, buttons) = (
+        number(&w, "run-x") as f32,
+        number(&w, "cancel-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    // Confirm first, both at the footer's right, inside the panel.
+    assert!(x + width / 2. < run && run < cancel && cancel < x + width);
+    assert!(y + height - 38. < buttons && buttons < y + height);
+    click(&w, run, buttons);
+    assert_eq!(string(&w, "last"), "run");
+    click(&w, cancel, buttons);
+    assert_eq!(string(&w, "last"), "decline");
+    // A press on the panel elsewhere answers nothing.
+    w.set_property("last", Value::String("".into())).unwrap();
+    click(&w, x + 40., y + 60.);
+    assert_eq!(string(&w, "last"), "");
+}
+
+/// The sheet as the spec's renders show it (PROPOSAL §4.3,
+/// proposed/r03-approve-*.png and detail-*.png): the top 1100×400 of the
+/// window over the spec's video still at 2×, both palettes; one step (a
+/// destructive one; one of a plugin not built in), several steps with one
+/// not built in, Close, and eight steps: `VESTRA_SHEET_SHOTS=<dir>`,
+/// `VESTRA_SHEET_LANG=en|zh-Hans` (one language per process: run this test
+/// alone), `VESTRA_SHEET_BACKDROP=<png>` (optional).
+#[test]
+#[ignore = "draws the approval sheet: VESTRA_SHEET_SHOTS=<dir>"]
+fn render_review_sheet_states() {
+    let Some(out) = std::env::var_os("VESTRA_SHEET_SHOTS") else {
+        return;
+    };
+    let out = PathBuf::from(out);
+    std::fs::create_dir_all(&out).unwrap();
+    let lang = std::env::var("VESTRA_SHEET_LANG").unwrap_or_else(|_| "en".into());
+    let locale = crate::i18n::LOCALES
+        .iter()
+        .copied()
+        .find(|l| *l == lang)
+        .expect("a player language");
+    headless();
+    crate::i18n::init(locale);
+    crate::ui::ui_fonts::install(locale);
+    let zh = locale == "zh-Hans";
+    let pick = |en: &'static str, zh_text: &'static str| if zh { zh_text } else { en };
+    let not_built_in = crate::i18n::tr("Not built in");
+    let reset = sheet_step(
+        pick("Reset: Picture", "重置: 画面"),
+        pick("Video", "视频"),
+        "",
+        true,
+        true,
+    );
+    let mute = sheet_step(
+        pick("Vestra Player: Mute", "Vestra Player: 静音"),
+        "Vestra Player",
+        "",
+        false,
+        true,
+    );
+    let export = sheet_step(
+        pick("Export: Export Last 30 Seconds", "导出: 导出最后 30 秒"),
+        "Clip Export",
+        &not_built_in,
+        true,
+        false,
+    );
+    let close = sheet_step(
+        pick("Vestra Player: Close", "Vestra Player: 关闭"),
+        "Vestra Player",
+        &crate::i18n::tr("Closes the video"),
+        true,
+        true,
+    );
+    let fullscreen = sheet_step(
+        pick("Vestra Player: Fullscreen", "Vestra Player: 全屏"),
+        "Vestra Player",
+        "",
+        false,
+        true,
+    );
+    let request = pick(
+        "reset the picture, mute, export the last 30 s",
+        "重置画面，静音，导出最后 30 秒",
+    );
+    let eight: Vec<_> = [
+        reset.clone(),
+        mute.clone(),
+        fullscreen.clone(),
+        sheet_step(
+            pick("Audio: Volume Up", "音频: 增大音量"),
+            pick("Audio", "音频"),
+            "",
+            false,
+            true,
+        ),
+        sheet_step(
+            pick("Auto Frame: Frame the Speaker", "Auto Frame: 跟随说话人"),
+            "Auto Frame",
+            &not_built_in,
+            true,
+            false,
+        ),
+        export.clone(),
+        sheet_step(
+            pick("Playlist: Remove All", "播放列表: 全部移除"),
+            pick("Playlist", "播放列表"),
+            "",
+            true,
+            true,
+        ),
+        close.clone(),
+    ]
+    .into();
+    let states: Vec<(&str, &str, Vec<crate::host::review_sheet::Step>)> = vec![
+        (
+            "r03-plan",
+            request,
+            vec![reset.clone(), mute.clone(), export.clone()],
+        ),
+        (
+            "r03-one-destructive",
+            pick("reset the picture", "重置画面"),
+            vec![reset.clone()],
+        ),
+        (
+            "r03-one-not-built-in",
+            pick("export the last 30 s", "导出最后 30 秒"),
+            vec![export.clone()],
+        ),
+        (
+            "r03-close",
+            pick("mute and close the video", "静音并关闭视频"),
+            vec![mute.clone(), close.clone()],
+        ),
+        (
+            "r03-eight",
+            pick(
+                "reset everything, louder, follow the speaker, export, clear the playlist and close",
+                "全部重置，大声点，跟随说话人，导出，清空播放列表然后关闭",
+            ),
+            eight,
+        ),
+    ];
+    let backdrop = std::env::var_os("VESTRA_SHEET_BACKDROP")
+        .map(|path| slint::Image::load_from_path(std::path::Path::new(&path)).unwrap());
+    let (width, height, scale) = (1100., 400., 2.);
+    let prefix = if zh { "zh-" } else { "" };
+    let title = pick("Ask Vestra", "问 Vestra");
+    for palette in ["vestra", "vestra-light"] {
+        let theme = if palette == "vestra" { "dark" } else { "light" };
+        for (name, query, steps) in &states {
+            let w = build(SHEET, width, height);
+            crate::ui::theme::apply_fonts(&w).unwrap();
+            crate::ui::theme::apply(&w, palette).unwrap();
+            if let Some(image) = &backdrop {
+                w.set_property("backdrop", Value::Image(image.clone()))
+                    .unwrap();
+            }
+            w.set_property("s", sheet_value(title, query, steps))
+                .unwrap();
+            settle();
+            render(&w, scale, width, height)
+                .save(out.join(format!("{prefix}{name}-{theme}.png")))
+                .unwrap();
+            w.hide().unwrap();
+        }
+    }
+}

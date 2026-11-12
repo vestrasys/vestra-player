@@ -193,6 +193,13 @@ impl Host {
             SValue::Void
         })?;
         let events = self.events.clone();
+        window.set_callback("review-sheet-action", move |args| {
+            if let Some(SValue::String(action)) = args.first() {
+                let _ = events.send(Event::ReviewSheet(generation, action.to_string()));
+            }
+            SValue::Void
+        })?;
+        let events = self.events.clone();
         window.set_callback("osd-action", move |args| {
             if let Some(SValue::Number(index)) = args.first()
                 && (0. ..2.).contains(index)

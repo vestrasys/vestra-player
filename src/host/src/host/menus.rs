@@ -457,6 +457,7 @@ impl Host {
         if self.menu_open && self.menu_generation != generation {
             self.close_menu();
         }
+        self.review_hidden();
         self.menu_open = true;
         self.menu_generation = generation;
         self.menu_mode = mode;
@@ -467,6 +468,8 @@ impl Host {
             let _ = window.set_property("menu-open", true.into());
             // A menu replaces an open palette (the floating window has none).
             let _ = window.set_property("palette-open", false.into());
+            // And the approval sheet, which shows again at the next tick.
+            let _ = window.set_property("review-open", false.into());
         }
         let result = self.refresh_menu();
         self.report_menu(result);
@@ -549,6 +552,8 @@ impl Host {
                 value
             }
             MenuMode::Palette => return self.refresh_palette(window),
+            // Written whole when it shows (`present_review`).
+            MenuMode::Review => return Ok(()),
             MenuMode::Bar(items) => {
                 // A button whose command went while `»` is open drops out.
                 let entries: Vec<_> = items
@@ -602,6 +607,8 @@ impl Host {
         self.menu_aim.clear();
         self.menu_mode = MenuMode::Main;
         self.palette = palette::PaletteState::default();
+        // An approval sheet still waiting shows again at the next tick.
+        self.review_hidden();
         for window in [
             self.shell.as_ref(),
             self.floating.as_ref().map(|f| &f.instance),
@@ -612,6 +619,7 @@ impl Host {
             let _ = window.set_property("menu-open", false.into());
             // The floating window has no palette: its refusal is nothing.
             let _ = window.set_property("palette-open", false.into());
+            let _ = window.set_property("review-open", false.into());
         }
         if let Some(shell) = &self.shell {
             let result = shell

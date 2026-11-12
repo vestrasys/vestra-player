@@ -48,6 +48,8 @@ impl Host {
         if native.is_some_and(|facts| !facts.active)
             && self.menu_open
             && self.menu_generation == self.shell_generation
+            // The approval sheet stays while the user is elsewhere.
+            && self.menu_mode != MenuMode::Review
         {
             self.close_menu();
             self.policy.activity(now);
@@ -96,6 +98,7 @@ impl Host {
             Ok(slint_interpreter::Value::Bool(true))
         );
         self.lead_strip_tick(now, hover);
+        self.review_tick(now);
         self.host_command_states(fullscreen);
         // The sidebar and plugin panels show and hide `if` elements.
         view::settle_layout(shell.window());

@@ -6,14 +6,16 @@
 //! The boundary is the player's, not the plugin's (plugin processes are not
 //! sandboxed): a run needs a live ticket of the caller's, the rates are
 //! capped ([`CommandRuns`]), a destructive command and any command of a
-//! plugin that is not built-in asks the user first (the host's own alert,
-//! which the caller cannot answer or skip), and every run is named before it
-//! runs: in the status strip for the palette lead's holder, else on the OSD
+//! plugin that is not built-in asks the user first (the host's approval
+//! sheet in the main window, `host/review_sheet.rs`, which the caller cannot
+//! answer or skip; asked once, before the first step, for the whole plan a
+//! run names with `then`), and every run is named before it runs: in the
+//! status strip for the palette lead's holder, else on the OSD
 //! (doc/architecture/palette-lead.md).
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
     bindings,
-    host::{Event, Host, Reply, RpcError, palette::PALETTE, string},
+    host::{Event, Host, Reply, RpcError, palette::PALETTE, review_sheet, string},
     i18n,
     ui::command_palette::Item,
 };
@@ -39,12 +41,16 @@ pub const RUNS_PER_TICKET: u32 = 30;
 pub const RUNS_PER_SECOND: usize = 4;
 /// Runs per minute, per plugin (all its tickets).
 pub const RUNS_PER_MINUTE: usize = 120;
-/// The longest request text kept with a ticket (quoted in the alert).
+/// The most commands one plan names: the run's own and its `then` (the
+/// approval sheet's step rows, `ui/review-sheet.slint`; Ask Vestra's plan
+/// cap).
+pub const PLAN_STEPS: usize = 8;
+/// The longest request text kept with a ticket (quoted in the sheet).
 const QUERY_KEPT: usize = 200;
 /// The player's own commands that ask first: Playback ▸ Close and Quit.
 /// Only the player's: a plugin marks its own with `CommandOptions.destructive`
 /// (the core never lists plugin commands).
-const HOST_DESTRUCTIVE: [&str; 2] = ["stop", "quit"];
+pub(crate) const HOST_DESTRUCTIVE: [&str; 2] = ["stop", "quit"];
 /// The built-in top-level menus whose every command asks first, by the key
 /// `commands::normalize` gives them: `@settings` and `@reset`.
 const DESTRUCTIVE_MENUS: [&str; 2] = ["Settings", "Reset"];
@@ -59,6 +65,10 @@ struct Ticket {
     runs: u32,
     /// Run times within the last second.
     recent: VecDeque<u64>,
+    /// The rest of the plan the user approved on the sheet (the `then` of
+    /// the run that named it; global ids, repeats counted): each runs once
+    /// on this ticket without asking.
+    plan: Vec<String>,
 }
 
 /// The tickets the palette minted and the per-plugin run times.
@@ -71,13 +81,15 @@ pub struct CommandRuns {
     confirming: Vec<ConfirmedRun>,
 }
 
-/// A run waiting for the user's answer to the host's alert.
+/// A run waiting for the user's answer on the approval sheet.
 #[derive(Clone)]
 pub struct ConfirmedRun {
     pub reply: Reply,
     pub ticket: String,
     pub global: String,
     pub step: Option<(u64, u64)>,
+    /// The run's `then`: on Run, the ticket's plan.
+    pub then: Option<Vec<String>>,
 }
 
 impl CommandRuns {
@@ -94,6 +106,7 @@ impl CommandRuns {
                 last: now,
                 runs: 0,
                 recent: VecDeque::new(),
+                plan: Vec::new(),
             },
         );
         id
@@ -159,6 +172,27 @@ impl CommandRuns {
         entry.last = now;
         Ok(())
     }
+    /// `ticket`'s plan becomes `plan` (empty: none), replacing what was
+    /// left of an earlier one.
+    pub fn set_plan(&mut self, ticket: &str, plan: Vec<String>) {
+        if let Some(entry) = self.tickets.get_mut(ticket) {
+            entry.plan = plan;
+        }
+    }
+    /// Whether `global` is in what is left of `owner`'s `ticket`'s plan:
+    /// if so, its first occurrence is used up (it runs without asking).
+    pub fn take_planned(&mut self, owner: u64, ticket: &str, global: &str) -> bool {
+        let Some(entry) = self.tickets.get_mut(ticket).filter(|t| t.owner == owner) else {
+            return false;
+        };
+        match entry.plan.iter().position(|g| g == global) {
+            Some(at) => {
+                entry.plan.remove(at);
+                true
+            }
+            None => false,
+        }
+    }
     /// `palette.lead.done`: the ticket ends (unknown ones are ignored).
     pub fn done(&mut self, owner: u64, ticket: &str) {
         if self.tickets.get(ticket).is_some_and(|t| t.owner == owner) {
@@ -182,7 +216,7 @@ impl CommandRuns {
             self.minute.insert(to, minute);
         }
     }
-    /// The run waiting for the alert answered for `reply`, if its caller
+    /// The run waiting for the sheet answered for `reply`, if its caller
     /// still runs.
     pub fn answered(&mut self, reply: &Reply) -> Option<ConfirmedRun> {
         let at = self
@@ -191,8 +225,19 @@ impl CommandRuns {
             .position(|run| run.reply.owner == reply.owner && run.reply.id == reply.id)?;
         Some(self.confirming.remove(at))
     }
+    /// Whether the run answering `reply` still waits for the user (its
+    /// caller did not stop).
+    pub fn waiting(&self, reply: &Reply) -> bool {
+        self.confirming
+            .iter()
+            .any(|run| run.reply.owner == reply.owner && run.reply.id == reply.id)
+    }
+    /// Whether a run of `owner` waits for the user's answer.
+    fn asking(&self, owner: u64) -> bool {
+        self.confirming.iter().any(|run| run.reply.owner == owner)
+    }
     /// Whether `ticket` is live at `now`, whoever holds it (the status
-    /// strip shows a ticket's steps while it is).
+    /// strip shows a ticket's steps while it is; the sheet asks while it is).
     pub fn is_live(&self, ticket: &str, now: u64) -> bool {
         self.tickets
             .get(ticket)
@@ -207,15 +252,23 @@ impl CommandRuns {
 /// Whether running `item` asks first: a destructive command (its own
 /// `destructive`, the player's Close and Quit, anything in the built-in
 /// `@settings` and `@reset` menus) or any command of a plugin that is not built-in. Opening
-/// a dialog ("…") does not ask: the user is in the dialog then.
+/// a dialog ("…") does not ask: the user is in the dialog then. The menu is
+/// judged by the whole path normalized (`commands::normalize`: `@settings`,
+/// an old root "设置" with items below it), as the SDK's TestHost does.
 pub fn dangerous(item: &Item, builtin: bool) -> bool {
     !builtin
         || item.destructive
         || (item.owner == bindings::HOST && HOST_DESTRUCTIVE.contains(&item.id.as_str()))
-        || item
-            .path_keys
-            .first()
-            .is_some_and(|root| DESTRUCTIVE_MENUS.contains(&root.as_str()))
+        || in_destructive_menu(&item.path_keys)
+}
+
+/// Whether a command at `path` is under the built-in Settings or Reset menu.
+fn in_destructive_menu(path: &[String]) -> bool {
+    let mut path = path.to_vec();
+    // A path the registry refused never got here; keep it as it is if so.
+    let _ = crate::commands::normalize(&mut path);
+    path.first()
+        .is_some_and(|root| DESTRUCTIVE_MENUS.contains(&root.as_str()))
 }
 
 /// Whether the commands of `owner` are a built-in's: the player's own, a
@@ -277,17 +330,56 @@ fn step(params: &Value) -> Result<Option<(u64, u64)>, RpcError> {
     }
 }
 
-/// The listed command with this global id, checked as the palette checks
-/// a row before running it.
-fn runnable(host: &Host, global: &str) -> Result<Item, RpcError> {
-    let item = host
-        .palette_items()
-        .into_iter()
+/// `then` of a run: the global ids the same ticket runs next (absent or
+/// null: none named). Each a non-empty string; with the run's own at most
+/// [`PLAN_STEPS`]. The messages are the SDK's TestHost's, word for word.
+fn then(params: &Value) -> Result<Option<Vec<String>>, RpcError> {
+    let list = match &params["then"] {
+        Value::Null => return Ok(None),
+        Value::Array(list) => list,
+        _ => return Err(RpcError::invalid("then is an array of command ids")),
+    };
+    if list.len() >= PLAN_STEPS {
+        return Err(RpcError::invalid(format!(
+            "then has at most {} command ids",
+            PLAN_STEPS - 1
+        )));
+    }
+    list.iter()
+        .map(|id| match id {
+            Value::String(id) if !id.is_empty() => Ok(id.clone()),
+            _ => Err(RpcError::invalid("then has command ids: non-empty strings")),
+        })
+        .collect::<Result<_, _>>()
+        .map(Some)
+}
+
+/// The listed command with this global id (any state), refused as the
+/// palette refuses it: unknown (`missing`), the palette's own (`invalid`).
+fn listed_command(items: &[Item], global: &str) -> Result<Item, RpcError> {
+    let item = items
+        .iter()
         .find(|item| item.global == global)
-        .ok_or_else(|| RpcError::new("missing", format!("no command {global}")))?;
+        .cloned()
+        .ok_or_else(|| {
+            let mut error = RpcError::new("missing", format!("no command {global}"));
+            error.detail = Some(
+                [("id".to_owned(), Value::from(global))]
+                    .into_iter()
+                    .collect(),
+            );
+            error
+        })?;
     if item.owner == bindings::HOST && item.id == PALETTE {
         return Err(RpcError::invalid("the command palette is not run this way"));
     }
+    Ok(item)
+}
+
+/// The listed command with this global id, checked as the palette checks
+/// a row before running it.
+fn runnable(host: &Host, global: &str) -> Result<Item, RpcError> {
+    let item = listed_command(&host.palette_items(), global)?;
     if !item.enabled {
         let mut error = RpcError::new("disabled", format!("{} is disabled", item.label));
         if !item.reason.is_empty() {
@@ -307,7 +399,7 @@ fn runnable(host: &Host, global: &str) -> Result<Item, RpcError> {
 }
 
 /// The shown name of a running plugin.
-fn shown_name(host: &Host, owner: u64) -> String {
+pub(crate) fn shown_name(host: &Host, owner: u64) -> String {
     host.plugins.get(&owner).map_or_else(
         || owner.to_string(),
         |plugin| {
@@ -377,8 +469,15 @@ fn perform(
     host.execute_command(item.owner, &item.id)
 }
 
-/// `commands.run`: checked, counted against the ticket, then run now or
-/// after the user's answer (`Event::CommandRunAnswered`).
+/// `commands.run` (the order and rules are the SDK's TestHost's, 1.7.16):
+/// checked (`step`/`of`, `then`'s shape, the command, `then`'s ids), counted
+/// against the ticket, then run now or after the user's answer on the
+/// approval sheet (`Event::CommandRunAnswered`). With `then`, the ticket's
+/// earlier plan goes; when any command of the plan asks, the sheet lists the
+/// whole plan once, before the first step, and Run keeps `then` as the
+/// ticket's plan. Without `then`, a command in that plan runs without
+/// asking (its first occurrence used up, even a destructive one); any other
+/// asks as it would alone.
 fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
     let global = string(params, "id")?;
     let ticket = match &params["ticket"] {
@@ -392,109 +491,124 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         _ => return Err(RpcError::invalid("ticket requires string")),
     };
     let step = step(params)?;
+    let then = then(params)?;
     let item = runnable(host, global)?;
+    // The rest of the plan: listed now (their state is checked when each
+    // runs; an earlier step may enable a later one).
+    let mut plan = vec![item.clone()];
+    if let Some(then) = &then {
+        let items = host.palette_items();
+        for global in then {
+            plan.push(listed_command(&items, global)?);
+        }
+    }
     let now = host.now_ms();
     host.command_runs.count(reply.owner, &ticket, now)?;
-    let builtin = builtin_owner(host, item.owner);
-    if !dangerous(&item, builtin) {
+    match &then {
+        // A new plan: what is left of the ticket's earlier one goes.
+        Some(_) => host.command_runs.set_plan(&ticket, Vec::new()),
+        // A step of the approved plan runs without asking (once each).
+        None if host.command_runs.take_planned(reply.owner, &ticket, global) => {
+            perform(host, reply.owner, &ticket, &item, step)?;
+            return Ok(Some(json!({"ran": true})));
+        }
+        None => {}
+    }
+    let steps: Vec<(Item, bool)> = plan
+        .into_iter()
+        .map(|item| {
+            let builtin = builtin_owner(host, item.owner);
+            (item, builtin)
+        })
+        .collect();
+    if !steps
+        .iter()
+        .any(|(item, builtin)| dangerous(item, *builtin))
+    {
+        // Nothing asks: no sheet, and no plan is kept.
         perform(host, reply.owner, &ticket, &item, step)?;
         return Ok(Some(json!({"ran": true})));
+    }
+    if host.command_runs.asking(reply.owner) {
+        // H7 (PROPOSAL F4): why, so the caller does not blame the command.
+        return Err(RpcError::new(
+            "busy",
+            "another command of this request is waiting for the user's answer",
+        ));
     }
     let query = host
         .command_runs
         .query(reply.owner, &ticket, now)
         .unwrap_or_default()
         .to_owned();
-    ask(host, reply, &item, builtin, &query)?;
+    ask(host, reply, &ticket, &steps, &query);
     host.command_runs.confirming.push(ConfirmedRun {
         reply: reply.clone(),
         ticket,
         global: global.to_owned(),
         step,
+        then,
     });
     Ok(None)
 }
 
-/// The host's alert before a dangerous run: the caller's name, the command,
-/// the request and why it asks; "Run" / "Don't Run". Headless (tests) there
-/// is no alert: `VESTRA_TEST_CONFIRM=run` answers Run, anything else Don't Run.
-fn ask(
-    host: &mut Host,
-    reply: &Reply,
-    item: &Item,
-    builtin: bool,
-    query: &str,
-) -> Result<(), RpcError> {
-    let events = host.events.clone();
-    let answer = reply.clone();
+/// The host's approval sheet before the plan `steps` runs (the first is the
+/// run's own): `host/review_sheet.rs` shows it in the main window, after any
+/// native dialog closes. Headless (tests) there is no sheet:
+/// `VESTRA_TEST_CONFIRM=run` answers Run for the whole sheet, `always` too
+/// (Run and remember: step 4 adds the remembering), anything else Don't Run.
+fn ask(host: &mut Host, reply: &Reply, ticket: &str, steps: &[(Item, bool)], query: &str) {
     if host.headless {
-        let yes = std::env::var("VESTRA_TEST_CONFIRM").as_deref() == Ok("run");
+        let yes = matches!(
+            std::env::var("VESTRA_TEST_CONFIRM").as_deref(),
+            Ok("run" | "always")
+        );
+        let globals: Vec<&str> = steps.iter().map(|(item, _)| item.global.as_str()).collect();
         diag!(
             "commands.run: {} asks to run {} (headless: {yes})",
             host.plugin_id(reply.owner),
-            item.global
+            globals.join(", ")
         );
-        let _ = events.send(Event::CommandRunAnswered(answer, yes));
-        return Ok(());
+        let _ = host
+            .events
+            .send(Event::CommandRunAnswered(reply.clone(), yes));
+        return;
     }
-    if host.dialog_busy {
-        return Err(RpcError::new("busy", "a native dialog is already open"));
-    }
-    let options = alert(&shown_name(host, reply.owner), item, builtin, query);
-    host.dialog_busy = true;
-    #[cfg(feature = "producer-audio")]
-    host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
-    if let Err(error) = crate::platform::confirm(&options, host.native_window, move |yes, _| {
-        let _ = events.send(Event::CommandRunAnswered(answer.clone(), yes));
-    }) {
-        host.dialog_busy = false;
-        return Err(error);
-    }
-    Ok(())
+    let rows: Vec<review_sheet::Step> = steps
+        .iter()
+        .map(|(item, builtin)| review_sheet::Step {
+            label: item.label.clone(),
+            plugin: item.plugin.clone(),
+            reason: reason(item, *builtin),
+            asks: dangerous(item, *builtin),
+            builtin: *builtin,
+        })
+        .collect();
+    host.open_review(reply.clone(), ticket.to_owned(), query.to_owned(), rows);
 }
 
-/// The alert's text: the question as its title, then who asks for which
-/// request, then, for a plugin that is not built in, that the player cannot
-/// tell what its command does. No icon (it is a routine question, the same
-/// for every command that asks) and no reason for the others: the command's
-/// name says what it does.
-fn alert(caller: &str, item: &Item, builtin: bool, query: &str) -> crate::ui::confirm::Options {
-    let message = i18n::tr_args("Run “{command}”?", &json!({"command":item.label}));
-    let query = query.trim();
-    let asks = if query.is_empty() {
-        i18n::tr_args("{plugin} asks.", &json!({"plugin":caller}))
-    } else {
-        i18n::tr_args(
-            "{plugin} asks, for your request “{request}”.",
-            &json!({"plugin":caller,"request":query}),
-        )
-    };
-    let detail = if builtin {
-        asks
-    } else {
-        let why = i18n::tr_args(
-            "This command belongs to {owner}, which is not a built-in plugin: the player cannot tell what it does.",
-            &json!({"owner":item.plugin}),
-        );
-        format!("{asks}\n\n{why}")
-    };
-    crate::ui::confirm::Options {
-        message: message.chars().take(200).collect(),
-        detail: Some(detail.chars().take(2000).collect()),
-        confirm: i18n::tr("Run"),
-        cancel: i18n::tr("Don't Run"),
-        destructive: false,
-        checkbox: None,
+/// The reason a step shows on the sheet (Ask Vestra UX §4.5, user ruling 2
+/// of 2026-11-12: facts only, none for a destructive command): a plugin
+/// that is not built in, the player's Close and Quit.
+fn reason(item: &Item, builtin: bool) -> String {
+    if !builtin {
+        return i18n::tr("Not built in");
+    }
+    if item.owner != bindings::HOST {
+        return String::new();
+    }
+    match item.id.as_str() {
+        "stop" => i18n::tr("Closes the video"),
+        "quit" => i18n::tr("Quits the player"),
+        _ => String::new(),
     }
 }
 
-/// The user answered the alert of a run (`Event::CommandRunAnswered`): run
-/// it if the ticket is still live and the command still runnable, and
-/// answer the caller.
+/// The user answered the sheet of a run (`Event::CommandRunAnswered`): Run
+/// keeps the run's `then` as the ticket's plan and runs this one if the
+/// ticket is still live and the command still runnable; Don't Run runs
+/// nothing and keeps no plan. The caller gets the answer either way.
 pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool) {
-    if !host.headless {
-        host.dialog_busy = false;
-    }
     let Some(run) = host.command_runs.answered(&reply) else {
         return;
     };
@@ -513,6 +627,9 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool) {
             "the ticket ended while the user was asked",
         ))
     } else {
+        if let Some(then) = run.then {
+            host.command_runs.set_plan(&run.ticket, then);
+        }
         runnable(host, &run.global)
             .and_then(|item| perform(host, reply.owner, &run.ticket, &item, run.step))
             .map(|()| json!({"ran": true}))
@@ -675,6 +792,13 @@ mod tests {
         ));
         assert!(dangerous(&item(4, "theme", &["Settings", "Theme"]), true));
         assert!(dangerous(&item(4, "picture", &["Reset", "Picture"]), true));
+        // The whole path normalized: a menu id, an old root with items below.
+        assert!(dangerous(&item(4, "theme", &["@settings", "Theme"]), true));
+        assert!(dangerous(&item(4, "look", &["设置", "外观", "Dark"]), true));
+        assert!(dangerous(
+            &item(4, "start", &["@reset", "Start Over"]),
+            true
+        ));
         // "Plugins" is a category, not a built-in menu.
         assert!(!dangerous(
             &item(4, "manage", &["Plugins", "Manage…"]),
@@ -703,35 +827,120 @@ mod tests {
         }
     }
 
-    /// B1: the question is the dialog's title; no icon and no "cannot be
-    /// undone" reason; only a plugin that is not built in gets a reason.
+    /// `then`: command ids (non-empty strings), the run's own and its
+    /// `then` at most `PLAN_STEPS`; absent or null names no plan.
     #[test]
-    fn the_alert_asks_a_plain_question() {
-        let mut reset = item(0, "reset", &["Picture", "Reset"]);
-        reset.label = "Reset: Picture".into();
+    fn then_names_a_plan_of_at_most_eight_commands() {
+        assert_eq!(then(&json!({})).unwrap(), None);
+        assert_eq!(then(&json!({"then":null})).unwrap(), None);
+        assert_eq!(then(&json!({"then":[]})).unwrap(), Some(vec![]));
+        assert_eq!(
+            then(&json!({"then":["a/b","a/b"]})).unwrap(),
+            Some(vec!["a/b".to_owned(), "a/b".to_owned()])
+        );
+        let seven = vec!["a/b"; PLAN_STEPS - 1];
+        assert_eq!(then(&json!({ "then": seven })).unwrap().unwrap().len(), 7);
+        let eight = vec!["a/b"; PLAN_STEPS];
+        // The SDK's TestHost's messages, word for word.
+        for (bad, message) in [
+            (json!({"then":"a/b"}), "then is an array of command ids"),
+            (json!({"then":{}}), "then is an array of command ids"),
+            (
+                json!({"then":[7]}),
+                "then has command ids: non-empty strings",
+            ),
+            (
+                json!({"then":[""]}),
+                "then has command ids: non-empty strings",
+            ),
+            (
+                json!({"then":[null]}),
+                "then has command ids: non-empty strings",
+            ),
+            (json!({ "then": eight }), "then has at most 7 command ids"),
+        ] {
+            let error = then(&bad).unwrap_err();
+            assert_eq!(
+                (error.code.as_str(), error.message.as_str()),
+                ("invalid", message),
+                "{bad}"
+            );
+        }
+    }
+
+    /// A `then` id must name a listed command other than the palette's own.
+    #[test]
+    fn a_plan_names_listed_commands() {
+        let mut hello = item(3, "hello", &["Tools", "Hello"]);
+        hello.global = "x/hello".into();
+        hello.enabled = false;
+        let mut palette = item(bindings::HOST, PALETTE, &["Command Palette…"]);
+        palette.global = "host/palette".into();
+        let items = [hello, palette];
+        // Disabled is fine: it is checked when it runs.
+        assert_eq!(listed_command(&items, "x/hello").unwrap().id, "hello");
+        let missing = listed_command(&items, "x/none").unwrap_err();
+        assert_eq!(missing.code, "missing");
+        assert_eq!(
+            missing.detail.unwrap().get("id"),
+            Some(&Value::from("x/none"))
+        );
+        assert_eq!(
+            listed_command(&items, "host/palette").unwrap_err().code,
+            "invalid"
+        );
+    }
+
+    /// The ticket's plan: each id of it runs once without asking (repeats
+    /// counted, first occurrence used up); a new plan replaces the rest;
+    /// another plugin's or a new request's ticket has none.
+    #[test]
+    fn a_plan_runs_each_of_its_ids_once_without_asking() {
+        let mut runs = CommandRuns::default();
+        let ticket = runs.mint(1, "plan", 0);
+        let ids = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        assert!(!runs.take_planned(1, &ticket, "a/wipe"));
+        runs.set_plan(&ticket, ids(&["a/wipe", "b/export", "a/wipe"]));
+        // Another plugin's ticket: nothing.
+        assert!(!runs.take_planned(2, &ticket, "a/wipe"));
+        assert!(runs.take_planned(1, &ticket, "a/wipe"));
+        assert!(runs.take_planned(1, &ticket, "a/wipe"));
+        assert!(!runs.take_planned(1, &ticket, "a/wipe"));
+        // A new plan replaces what is left.
+        runs.set_plan(&ticket, ids(&["d/close"]));
+        assert!(!runs.take_planned(1, &ticket, "b/export"));
+        runs.set_plan(&ticket, ids(&["d/close"]));
+        // A new request's ticket starts with none; the old one ended.
+        let next = runs.mint(1, "again", 10);
+        assert!(!runs.take_planned(1, &next, "d/close"));
+        assert!(!runs.take_planned(1, &ticket, "d/close"));
+    }
+
+    /// H7: the sheet's reasons are facts: a plugin that is not built in,
+    /// the player's Close and Quit; none for a destructive command (user
+    /// ruling 2 of 2026-11-12) or a plain one.
+    #[test]
+    fn the_sheet_gives_reasons_only_for_facts() {
+        let mut reset = item(4, "reset", &["Picture", "Reset"]);
         reset.destructive = true;
-        let options = alert("Vestra Player AI", &reset, true, "  reset the picture ");
-        assert_eq!(options.message, "Run “Reset: Picture”?");
+        assert_eq!(reason(&reset, true), "");
+        assert_eq!(reason(&item(4, "louder", &["Audio"]), true), "");
+        assert_eq!(reason(&reset, false), "Not built in");
         assert_eq!(
-            options.detail.as_deref(),
-            Some("Vestra Player AI asks, for your request “reset the picture”.")
+            reason(&item(9, "last30", &["Export"]), false),
+            "Not built in"
         );
         assert_eq!(
-            (options.confirm.as_str(), options.cancel.as_str()),
-            ("Run", "Don't Run")
+            reason(&item(bindings::HOST, "stop", &["Close"]), true),
+            "Closes the video"
         );
-        assert!(!options.destructive && options.checkbox.is_none());
-        let mut export = item(9, "last30", &["Export"]);
-        export.label = "Export: Export Last 30 Seconds".into();
-        export.plugin = "Clip Export".into();
-        let options = alert("Vestra Player AI", &export, false, "");
         assert_eq!(
-            options.detail.as_deref(),
-            Some(
-                "Vestra Player AI asks.\n\nThis command belongs to Clip Export, which is not a \
-                 built-in plugin: the player cannot tell what it does."
-            )
+            reason(&item(bindings::HOST, "quit", &["Quit"]), true),
+            "Quits the player"
         );
-        assert!(!options.destructive);
+        assert_eq!(
+            reason(&item(bindings::HOST, "play-pause", &["Play/Pause"]), true),
+            ""
+        );
     }
 }

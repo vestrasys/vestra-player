@@ -149,6 +149,10 @@ impl Host {
                         path.pop();
                         self.set_menu_path(path);
                     }
+                    // A press outside the approval sheet answers Don't Run.
+                    MenuAction::Dismiss if self.menu_mode == MenuMode::Review => {
+                        self.review_action("decline");
+                    }
                     MenuAction::Dismiss => self.close_menu(),
                     MenuAction::Palette(action) => self.palette_action(action),
                     MenuAction::Hover(level, token, now) => {
@@ -377,6 +381,12 @@ impl Host {
             Event::LeadStrip(generation, action) => {
                 if generation == self.shell_generation {
                     self.lead_strip_action(&action);
+                }
+            }
+            Event::ReviewSheet(generation, action) => {
+                if generation == self.shell_generation {
+                    self.policy.activity(self.now_ms());
+                    self.review_action(&action);
                 }
             }
             Event::ViewClosed(owner, id) => {

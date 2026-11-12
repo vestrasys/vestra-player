@@ -1,0 +1,307 @@
+// The approval sheet (host/review_sheet.rs; Ask Vestra UX §4.3): before a
+// `commands.run` plan with a command that asks first runs, the host asks
+// once, where the palette was (top centre), on the palette's plate and at
+// its width: the request in the field's box (read-only), the question,
+// every step of the plan (number, palette label, plugin, a reason when it
+// is a fact), a note when a step's plugin is not built in, and [Run Enter]
+// [Don't Run Esc] at the right of the footer (as UrlInputRow: confirm
+// first). The footer's left is kept for "Don't ask again" (step 4).
+//
+// It is modal and takes the keyboard focus: Enter runs, Esc does not; a
+// held-down key's repeats count for nothing (the host also ignores input
+// in the first 0.5 s). Presses outside it reach the menu layer's dismiss
+// (Don't Run). Rows: always SLOTS (8) of them, unused ones hidden by
+// `visible` (the no-churn rule in menu-view.slint).
+import { Theme } from "@vestra/theme.slint";
+import { Icon } from "@vestra/icons.slint";
+import { KeyHint } from "@vestra/widgets.slint";
+import { MenuChrome } from "menu-view.slint";
+
+export struct ReviewStep {
+    shown: bool,
+    number: string,
+    // `Category: Title` as the palette shows it.
+    label: string,
+    plugin: string,
+    // Why it asks, when that is a fact ("Not built in", "Closes the
+    // video"); empty otherwise.
+    reason: string,
+    // It asks first: drawn in `text`, the others in `text-list`.
+    asks: bool,
+}
+
+export struct ReviewSheet {
+    // The request box: the lead's icon (a name of the icon set; "" draws
+    // `image`) and title, and the request.
+    icon: string,
+    image: image,
+    title: string,
+    query: string,
+    question: string,
+    // Steps shown (the rest of `steps` are hidden).
+    count: int,
+    steps: [ReviewStep],
+    // Shown when a step's plugin is not built in; empty otherwise.
+    note: string,
+    run: string,
+    cancel: string,
+    run-key: string,
+    cancel-key: string,
+}
+
+// The library Button's plate (widgets.slint) with the key that presses it
+// in a KeyHint after the label.
+component SheetButton inherits Rectangle {
+    in property <string> text;
+    in property <string> key;
+    callback clicked();
+    min-width: Theme.button-min-width;
+    preferred-width: max(Theme.button-min-width, row.preferred-width);
+    height: Theme.button-height;
+    border-radius: Theme.radius-control;
+    background: touch.pressed ? Theme.button-press : touch.has-hover ? Theme.button-hover : Theme.button-bg;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-action-default => { root.clicked(); }
+    row := HorizontalLayout {
+        padding-left: Theme.button-padding;
+        padding-right: Theme.button-padding;
+        spacing: 6px;
+        alignment: center;
+        Text {
+            text: root.text;
+            color: Theme.text-list;
+            font-size: Theme.font-body;
+            vertical-alignment: center;
+        }
+        VerticalLayout {
+            alignment: center;
+            KeyHint { text: root.key; }
+        }
+    }
+    touch := TouchArea {
+        clicked => { root.clicked(); }
+    }
+}
+
+export component ReviewSheetView inherits Rectangle {
+    in property <ReviewSheet> sheet;
+    // The panel's top edge: 16px, below the fullscreen title strip while
+    // it is out.
+    in property <length> top: 16px;
+    // `run` or `decline`.
+    callback action(string);
+    // Tests read the panel's place and height.
+    out property <length> panel-x: panel.x;
+    out property <length> panel-y: panel.y;
+    out property <length> panel-width: panel.width;
+    out property <length> panel-height: panel.height;
+    out property <bool> has-keys: keys.has-focus;
+    // The buttons' centres in the view (tests press them).
+    out property <length> run-x: run.absolute-position.x - root.absolute-position.x + run.width / 2;
+    out property <length> cancel-x: cancel.absolute-position.x - root.absolute-position.x + cancel.width / 2;
+    out property <length> buttons-y: run.absolute-position.y - root.absolute-position.y + run.height / 2;
+
+    init => { keys.focus(); }
+
+    // 6px, the 32px request box, 6px; the 28px question; the rows; the
+    // note; the footer (separator and buttons) as the palette's: 44px.
+    private property <length> note-height: root.sheet.note == "" ? 0px : note.preferred-height + 8px;
+
+    keys := FocusScope {
+        x: 0;
+        y: 0;
+        width: 0;
+        height: 0;
+        key-pressed(event) => {
+            // A held-down key (the Enter that sent the request) is no answer.
+            if event.repeat { return accept; }
+            if event.text == Key.Return {
+                root.action("run");
+                return accept;
+            }
+            if event.text == Key.Escape {
+                root.action("decline");
+                return accept;
+            }
+            reject
+        }
+    }
+
+    panel := Rectangle {
+        x: (root.width - self.width) / 2;
+        y: root.top;
+        width: min(520px, root.width - 16px);
+        height: 72px + root.sheet.count * 28px + root.note-height + 44px;
+        background: Theme.bg-panel;
+        border-color: Theme.line;
+        border-width: 1px;
+        border-radius: Theme.radius-panel;
+        drop-shadow-blur: 8px;
+        drop-shadow-color: MenuChrome.shadow;
+        // Presses on the panel do not dismiss it.
+        TouchArea { }
+        // The request, in the palette field's box: the lead's icon,
+        // "Title:" in semibold, the request elided at its end.
+        Rectangle {
+            x: 8px;
+            y: 6px;
+            width: parent.width - 16px;
+            height: 32px;
+            background: Theme.bg-list;
+            border-color: Theme.line;
+            border-width: 1px;
+            border-radius: Theme.radius-control;
+            HorizontalLayout {
+                padding-left: 9px;
+                padding-right: 9px;
+                spacing: 6px;
+                Rectangle {
+                    width: 14px;
+                    Icon {
+                        visible: root.sheet.icon != "";
+                        name: root.sheet.icon;
+                        color: Theme.accent;
+                    }
+                    Image {
+                        visible: root.sheet.icon == "";
+                        width: 14px;
+                        height: 12px;
+                        source: root.sheet.image;
+                        image-fit: contain;
+                        colorize: Theme.accent;
+                    }
+                }
+                Text {
+                    horizontal-stretch: 0;
+                    max-width: self.preferred-width;
+                    text: root.sheet.title + ":";
+                    font-size: 13px;
+                    font-weight: 600;
+                    color: Theme.text;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    min-width: 0px;
+                    text: root.sheet.query;
+                    font-size: 13px;
+                    color: Theme.text-list;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+        Text {
+            x: 12px;
+            y: 44px;
+            width: parent.width - 24px;
+            height: 28px;
+            text: root.sheet.question;
+            font-size: Theme.font-tab;
+            font-weight: 600;
+            color: Theme.text;
+            vertical-alignment: center;
+            overflow: elide;
+        }
+        // The steps from y 72px, as the palette's rows: the number, the
+        // label (it keeps up to 60% of the row), the plugin, the reason.
+        for step[i] in root.sheet.steps: Rectangle {
+            visible: step.shown;
+            x: 4px;
+            y: 72px + i * 28px;
+            width: parent.width - 8px;
+            height: 28px;
+            accessible-role: text;
+            accessible-label: step.label;
+            accessible-description: step.reason;
+            HorizontalLayout {
+                padding-left: 8px;
+                // An empty reason still takes the spacing before it: the
+                // plugin column ends 8px in either way.
+                padding-right: step.reason == "" ? 0px : 8px;
+                spacing: 8px;
+                Text {
+                    width: 10px;
+                    text: step.number;
+                    font-size: Theme.font-body;
+                    color: Theme.text-dim;
+                    vertical-alignment: center;
+                }
+                Text {
+                    horizontal-stretch: 1;
+                    min-width: min(self.preferred-width, (parent.width - 34px) * 0.6);
+                    text: step.label;
+                    font-size: Theme.font-tab;
+                    color: step.asks ? Theme.text : Theme.text-list;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Text {
+                    horizontal-stretch: 0;
+                    min-width: 0px;
+                    max-width: 160px;
+                    text: step.plugin;
+                    font-size: Theme.font-body;
+                    color: Theme.text-dim;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+                Text {
+                    visible: step.reason != "";
+                    horizontal-stretch: 0;
+                    width: step.reason == "" ? 0px : min(self.preferred-width, 140px);
+                    text: step.reason;
+                    font-size: Theme.font-body;
+                    color: Theme.text-dim;
+                    vertical-alignment: center;
+                    overflow: elide;
+                }
+            }
+        }
+        note := Text {
+            visible: root.sheet.note != "";
+            x: 12px;
+            y: 72px + root.sheet.count * 28px + 2px;
+            width: parent.width - 24px;
+            height: self.preferred-height;
+            text: root.sheet.note;
+            font-size: Theme.font-body;
+            color: Theme.text-dim;
+            wrap: word-wrap;
+        }
+        // Footer: the palette's separator, the buttons at its right.
+        Rectangle {
+            x: 8px;
+            y: parent.height - 38px;
+            width: parent.width - 16px;
+            height: 1px;
+            background: Theme.line;
+        }
+        HorizontalLayout {
+            x: 10px;
+            y: parent.height - 32px;
+            width: parent.width - 20px;
+            height: 24px;
+            spacing: 6px;
+            alignment: end;
+            VerticalLayout {
+                alignment: center;
+                run := SheetButton {
+                    text: root.sheet.run;
+                    key: root.sheet.run-key;
+                    clicked => { root.action("run"); }
+                }
+            }
+            VerticalLayout {
+                alignment: center;
+                cancel := SheetButton {
+                    text: root.sheet.cancel;
+                    key: root.sheet.cancel-key;
+                    clicked => { root.action("decline"); }
+                }
+            }
+        }
+    }
+}

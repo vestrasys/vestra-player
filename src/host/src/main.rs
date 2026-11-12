@@ -481,6 +481,7 @@ fn player() -> Result<()> {
         palette: Default::default(),
         lead: None,
         lead_strip: Default::default(),
+        review: None,
         command_runs: Default::default(),
         policy: window_state::Policy::new(0),
         clock: Instant::now(),

@@ -2275,3 +2275,193 @@ test("palette.lead's status states are the player's (palette_lead.rs StatusState
   );
   await stop();
 });
+
+test("COMMAND_RUN_LIMITS are the player's (commands_run.rs; SDK 1.7.16)", async (t) => {
+  // Typed loosely: an SDK before 1.7.16 has no COMMAND_RUN_LIMITS.
+  const runtime = (await import("@vestra-player/sdk/runtime")) as unknown as {
+    COMMAND_RUN_LIMITS?: object;
+  };
+  if (!runtime.COMMAND_RUN_LIMITS)
+    return t.skip("the installed SDK is older than 1.7.16");
+  const rust = host("src/capabilities/commands_run.rs");
+  const constant = (name: string) =>
+    Number(
+      found(
+        new RegExp(`pub const ${name}: \\w+ = ([\\d_]+);`).exec(rust)?.[1],
+        `${name} in capabilities/commands_run.rs`,
+      ).replaceAll("_", ""),
+    );
+  assert.deepEqual(
+    { ...runtime.COMMAND_RUN_LIMITS },
+    {
+      plan: constant("PLAN_STEPS"),
+      perTicket: constant("RUNS_PER_TICKET"),
+      perSecond: constant("RUNS_PER_SECOND"),
+      perMinute: constant("RUNS_PER_MINUTE"),
+      ticketIdleMs: constant("TICKET_IDLE_MS"),
+    },
+  );
+});
+
+test("TestHost asks for a commands.run plan as the player does (commands_run.rs run; SDK 1.7.16)", async (t) => {
+  const version = JSON.parse(
+    readFileSync(
+      new URL(
+        "../../node_modules/@vestra-player/sdk/package.json",
+        import.meta.url,
+      ),
+      "utf8",
+    ),
+  ).version as string;
+  const [major, minor, patch] = version.split(".").map(Number);
+  if (major! * 1e6 + minor! * 1e3 + patch! < 1_007_016) {
+    t.skip(`the installed SDK ${version} predates commands.run then (1.7.16)`);
+    return;
+  }
+  const rust = host("src/capabilities/commands_run.rs");
+  const fake = new TestHost();
+  fake.setSource({ phase: "ready", duration: 60, position: 0 });
+  const ran: string[] = [];
+  // Typed loosely: an SDK before 1.7.16 has no `then` in its types.
+  let run!: (id: string, options: Record<string, unknown>) => Promise<unknown>;
+  const { stop } = await startPlugin(
+    (plugin) => {
+      const add = (id: string, path: string[], destructive = false) =>
+        plugin.commands.add({
+          id,
+          path,
+          ...(destructive ? { destructive } : {}),
+          run: () => void ran.push(id),
+        });
+      add("forget-all", ["Extras", "Forget All"], true);
+      add("louder", ["Extras", "Louder"]);
+      add("softer", ["Extras", "Softer"]);
+      add("tune", ["@settings", "Tune"]);
+      add("start-over", ["@reset", "Start Over"]);
+      add("manage", ["Plugins", "Manage"]);
+      plugin.palette.lead({ title: "Ask", icon: "ai" });
+      run = (id, options) =>
+        (
+          plugin.commands.run as unknown as (
+            id: string,
+            options: Record<string, unknown>,
+          ) => Promise<unknown>
+        )(`vestra.agreement/${id}`, options);
+    },
+    {
+      capabilities: ["commands", "commands.run", "palette.lead"],
+      host: fake,
+      builtin: true,
+      id: "vestra.agreement",
+    },
+  );
+  const id = (local: string) => `vestra.agreement/${local}`;
+  const yes = () =>
+    fake.dialogAnswers.push({ confirmed: true, checked: false });
+  const no = () =>
+    fake.dialogAnswers.push({ confirmed: false, checked: false });
+  // Four runs a second per ticket: a fresh ticket per case.
+  const ticket = () => fake.runPaletteLead("agreement");
+  const asked = async (
+    answer: () => void,
+    call: () => Promise<unknown>,
+    expected: unknown,
+  ) => {
+    answer();
+    assert.deepEqual(await call(), expected);
+    assert.equal(fake.dialogAnswers.length, 0, "asked once");
+  };
+  const quiet = async (call: () => Promise<unknown>) => {
+    assert.deepEqual(await call(), { ran: true });
+  };
+
+  // Asked once, before step 1, when only a later step asks; the planned
+  // destructive step then runs without asking; used up, it asks again.
+  let at = await ticket();
+  await asked(
+    yes,
+    () => run("louder", { ticket: at, then: [id("forget-all")] }),
+    { ran: true },
+  );
+  await quiet(() => run("forget-all", { ticket: at }));
+  await asked(no, () => run("forget-all", { ticket: at }), {
+    ran: false,
+    declined: true,
+  });
+  // Don't Run runs nothing and keeps no plan: its later steps still ask.
+  at = await ticket();
+  const before = ran.length;
+  await asked(
+    no,
+    () => run("louder", { ticket: at, then: [id("forget-all")] }),
+    { ran: false, declined: true },
+  );
+  assert.equal(ran.length, before);
+  await asked(no, () => run("forget-all", { ticket: at }), {
+    ran: false,
+    declined: true,
+  });
+  // A command outside the plan asks on its own; a second plan replaces
+  // the rest of the first.
+  at = await ticket();
+  await asked(
+    yes,
+    () => run("louder", { ticket: at, then: [id("forget-all")] }),
+    { ran: true },
+  );
+  await asked(yes, () => run("start-over", { ticket: at }), { ran: true });
+  await quiet(() => run("softer", { ticket: at, then: [id("louder")] }));
+  await asked(no, () => run("forget-all", { ticket: at }), {
+    ran: false,
+    declined: true,
+  });
+  // Nothing in the plan asks: no sheet. @settings and @reset ask, a
+  // category named "Plugins" does not (dangerous() in the player).
+  at = await ticket();
+  await quiet(() =>
+    run("louder", { ticket: at, then: [id("softer"), id("manage")] }),
+  );
+  await asked(no, () => run("tune", { ticket: at }), {
+    ran: false,
+    declined: true,
+  });
+  // The shape, word for word as the player has it; refused calls are not
+  // counted (more than four in this second).
+  at = await ticket();
+  const messages = [
+    ["not an array", { then: "x" }, "then is an array of command ids"],
+    [
+      "eight ids",
+      { then: Array(8).fill(id("louder")) },
+      "then has at most 7 command ids",
+    ],
+    ["a number", { then: [7] }, "then has command ids: non-empty strings"],
+    ["empty", { then: [""] }, "then has command ids: non-empty strings"],
+  ] as const;
+  for (const [what, options, message] of messages) {
+    // The limit is formatted in: its source has `{}`.
+    const source = message.replace("at most 7", "at most {}");
+    assert.ok(rust.includes(`"${source}"`), `${source} in commands_run.rs`);
+    await assert.rejects(
+      run("louder", { ticket: at, ...options }),
+      (error: { code?: string; message?: string }) =>
+        error.code === "invalid" && error.message === message,
+      what,
+    );
+  }
+  await assert.rejects(
+    run("louder", { ticket: at, then: ["nobody/none"] }),
+    (error: { code?: string; message?: string }) =>
+      error.code === "missing" && error.message === "no command nobody/none",
+  );
+  await assert.rejects(run("louder", { ticket: at, then: ["host/palette"] }), {
+    code: "invalid",
+  });
+  // Seven ids, null and [] are plans (none of them asks).
+  await quiet(() =>
+    run("louder", { ticket: at, then: Array(7).fill(id("softer")) }),
+  );
+  await quiet(() => run("louder", { ticket: at, then: null }));
+  await quiet(() => run("louder", { ticket: at, then: [] }));
+  await stop();
+});
