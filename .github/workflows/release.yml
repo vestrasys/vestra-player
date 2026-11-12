@@ -334,8 +334,9 @@ jobs:
       && (!inputs.dry_run || inputs.sign_macos) }}
     # The image the package job builds on.
     runs-on: macos-15
-    # Notarization usually takes 2-10 minutes per submission, sometimes more.
-    timeout-minutes: 75
+    # Two notarizations of up to 30 minutes each (notarytool --timeout;
+    # usually 2-10), plus signing with timestamps, the DMG and the checks.
+    timeout-minutes: 100
     environment: release
     permissions:
       contents: read
@@ -355,23 +356,25 @@ jobs:
           APPLE_API_KEY_P8_BASE64: ${{ secrets.APPLE_API_KEY_P8_BASE64 }}
           APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
           APPLE_API_ISSUER_ID: ${{ secrets.APPLE_API_ISSUER_ID }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
           missing=()
           for name in MACOS_CERT_P12_BASE64 MACOS_CERT_PASSWORD APPLE_API_KEY_P8_BASE64 \
-            APPLE_API_KEY_ID APPLE_API_ISSUER_ID APPLE_TEAM_ID; do
-            [ -n "${!name}" ] || missing+=("$name")
+            APPLE_API_KEY_ID APPLE_API_ISSUER_ID; do
+            [ -n "${!name}" ] || missing+=("secret $name")
           done
+          # Not secret: a repository variable.
+          [[ "$APPLE_TEAM_ID" =~ ^[A-Z0-9]{10}$ ]] || missing+=("variable APPLE_TEAM_ID")
           if [ ${#missing[@]} -eq 0 ]; then
             echo "signed=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           if [ "$DRY_RUN" = true ]; then
-            echo "::warning::macOS signing skipped (dry run): missing secrets ${missing[*]} (doc/releases/macos-signing.md). The macOS packages stay unsigned."
+            echo "::warning::macOS signing skipped (dry run): missing ${missing[*]} (doc/releases/macos-signing.md). The macOS packages stay unsigned."
             echo "signed=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-          echo "::error::macOS signing needs the secrets ${missing[*]} (doc/releases/macos-signing.md); a release does not ship unsigned macOS packages."
+          echo "::error::macOS signing needs ${missing[*]} (doc/releases/macos-signing.md); a release does not ship unsigned macOS packages."
           exit 1
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         if: steps.secrets.outputs.signed == 'true'
@@ -397,7 +400,10 @@ jobs:
         env:
           MACOS_CERT_P12_BASE64: ${{ secrets.MACOS_CERT_P12_BASE64 }}
           MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
+          # DeveloperIDG2CA.cer (CN=Developer ID Certification Authority,
+          # OU=G2; valid to 2031-09-17).
+          DEVELOPER_ID_G2_SHA256: f16cd3c54c7f83cea4bf1a3e6a0819c8aaa8e4a1528fd144715f350643d2df3a
         run: |
           umask 077
           keychain="$RUNNER_TEMP/vestra-signing.keychain-db"
@@ -413,6 +419,12 @@ jobs:
             || { rm -f "$p12"; echo "::error::MACOS_CERT_P12_BASE64 / MACOS_CERT_PASSWORD: the .p12 does not import"; exit 1; }
           rm -f "$p12"
           security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$password" "$keychain" > /dev/null
+          # Apple's Developer ID intermediate (G2), so that the chain resolves
+          # whatever the runner image carries; pinned by SHA-256.
+          ca="$RUNNER_TEMP/DeveloperIDG2CA.cer"
+          curl -sSfL --retry 3 -o "$ca" https://www.apple.com/certificateauthority/DeveloperIDG2CA.cer
+          echo "$DEVELOPER_ID_G2_SHA256  $ca" | shasum -a 256 -c -
+          security import "$ca" -k "$keychain" > /dev/null
           # Searched first, after it the user keychains already listed.
           old=()
           while IFS= read -r line; do
@@ -439,7 +451,7 @@ jobs:
         env:
           IDENTITY: ${{ steps.keychain.outputs.identity }}
           KEYCHAIN: ${{ steps.keychain.outputs.path }}
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_TEAM_ID: ${{ vars.APPLE_TEAM_ID }}
         run: |
           zip=$(ls "$RUNNER_TEMP"/unsigned/*-macos-arm64.app.zip)
           dmg=$(ls "$RUNNER_TEMP"/unsigned/*-macos-arm64.dmg)
@@ -451,10 +463,31 @@ jobs:
           main="$contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$contents/Info.plist")"
           node="$contents/MacOS/node"
           entitlements="$GITHUB_WORKSPACE/src/packaging/macos"
-          test -f "$main" && test -f "$node"
+          test -f "$main"
+          test -f "$node"
+          # Nested bundles would need signing as bundles, inside out; the
+          # layout has none (bundle-macos.mjs), so one appearing is an error.
+          bundles=$(find "$contents" \( -name '*.framework' -o -name '*.app' -o -name '*.xpc' -o -name '*.bundle' \) -print)
+          if [ -n "$bundles" ]; then
+            echo "$bundles"
+            echo "::error::nested bundles under Contents (see above): sign-macos signs plain Mach-O files only"
+            exit 1
+          fi
+          # codesign, retried when the timestamp server fails (3 more tries,
+          # 15 s apart); any other error fails at once.
           sign() {
-            codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" \
-              --options runtime --timestamp "$@"
+            local try output
+            for try in 1 2 3 4; do
+              if output=$(codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" \
+                --options runtime --timestamp "$@" 2>&1); then
+                [ -z "$output" ] || echo "$output"
+                return 0
+              fi
+              echo "$output"
+              grep -qi 'timestamp' <<< "$output" && [ "$try" != 4 ] || return 1
+              echo "::warning::timestamp server error (try $try), again in 15 s"
+              sleep 15
+            done
           }
           # Every Mach-O but node and the host, deepest path first.
           find "$contents" -type f > "$work/files.txt"
@@ -491,8 +524,10 @@ jobs:
             echo "zip=$(basename "$zip")"
             echo "dmg=$(basename "$dmg")"
           } >> "$GITHUB_OUTPUT"
-      # notarytool exits 0 for a rejected submission too: the status decides.
-      # The log (issues, also warnings on an accepted one) is printed always.
+      # The status decides, not notarytool's exit code (`|| true`, so that a
+      # failed wait still prints the submission id and fetches its log). The
+      # log (issues, also warnings on an accepted one) is printed always.
+      # stapler and the timestamp server sometimes fail transiently: retried.
       - name: Notarize and staple (.app, then the DMG built from it)
         if: steps.secrets.outputs.signed == 'true'
         env:
@@ -519,7 +554,7 @@ jobs:
           notarize() {
             local result id status
             echo "notarytool submit $(basename "$1")"
-            result=$(xcrun notarytool submit "$1" "${auth[@]}" --wait --timeout 45m --output-format json)
+            result=$(xcrun notarytool submit "$1" "${auth[@]}" --wait --timeout 30m --output-format json) || true
             id=$(jq -r '.id // empty' <<< "$result")
             status=$(jq -r '.status // empty' <<< "$result")
             echo "submission ${id:-?}: ${status:-?}"
@@ -528,11 +563,35 @@ jobs:
             fi
             [ "$status" = Accepted ] || { echo "::error::notarization of $(basename "$1"): ${status:-no result}"; return 1; }
           }
+          staple() {
+            local try
+            for try in 1 2 3 4 5; do
+              xcrun stapler staple "$1" && return 0
+              [ "$try" != 5 ] || return 1
+              echo "::warning::stapler staple failed (try $try), again in 15 s"
+              sleep 15
+            done
+          }
+          # The DMG's signature (no Hardened Runtime: not code), retried like
+          # the app's on a timestamp server error.
+          sign_dmg() {
+            local try output
+            for try in 1 2 3 4; do
+              if output=$(codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --timestamp "$1" 2>&1); then
+                [ -z "$output" ] || echo "$output"
+                return 0
+              fi
+              echo "$output"
+              grep -qi 'timestamp' <<< "$output" && [ "$try" != 4 ] || return 1
+              echo "::warning::timestamp server error (try $try), again in 15 s"
+              sleep 15
+            done
+          }
           out="$RUNNER_TEMP/signed"
           rm -rf "$out" && mkdir -p "$out"
           ditto -c -k --sequesterRsrc --keepParent "$APP" "$RUNNER_TEMP/notarize-app.zip"
           notarize "$RUNNER_TEMP/notarize-app.zip"
-          xcrun stapler staple "$APP"
+          staple "$APP"
           xcrun stapler validate "$APP"
           # The released .app.zip: the stapled app.
           ditto -c -k --sequesterRsrc --keepParent "$APP" "$out/$ZIP"
@@ -549,9 +608,9 @@ jobs:
             [ "$try" = 3 ] && exit 1
             sleep 10
           done
-          codesign --force --sign "$IDENTITY" --keychain "$KEYCHAIN" --timestamp "$out/$DMG"
+          sign_dmg "$out/$DMG"
           notarize "$out/$DMG"
-          xcrun stapler staple "$out/$DMG"
+          staple "$out/$DMG"
           ls -l "$out"
       # What a user's Mac checks: the files as uploaded, unpacked fresh.
       - name: Verify (codesign, spctl, stapler)
@@ -636,6 +695,48 @@ jobs:
           fi
           rm -f "$RUNNER_TEMP/vestra-signing.p12" "$RUNNER_TEMP/vestra-notary.p8"
 
+  # The signed app runs: the package job's smoke test, again on the files
+  # sign-macos made (Hardened Runtime and entitlements change what may run:
+  # node's JIT, loading the Frameworks/ dylibs). No secrets, no environment.
+  smoke-macos-signed:
+    name: smoke test (signed macOS)
+    needs: sign-macos
+    if: ${{ !cancelled() && needs.sign-macos.result == 'success' && needs.sign-macos.outputs.signed == 'true' }}
+    runs-on: macos-15
+    # The host runs 15 s (smoke.mjs kills it 60 s later).
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          sparse-checkout: src/packaging
+      # smoke.mjs uses Node built-ins only: no npm ci.
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "26"
+          package-manager-cache: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: vestra-signed-macos
+          path: ${{ runner.temp }}/signed
+      - name: Smoke test (the signed DMG's app)
+        timeout-minutes: 10
+        run: |
+          dmg=$(ls "$RUNNER_TEMP"/signed/*.dmg)
+          mount=$(mktemp -d)
+          hdiutil attach -nobrowse -readonly -mountpoint "$mount" "$dmg"
+          ditto "$mount/Vestra Player.app" "$RUNNER_TEMP/smoke/Vestra Player.app"
+          hdiutil detach "$mount"
+          app="$RUNNER_TEMP/smoke/Vestra Player.app"
+          codesign --verify --deep --strict "$app"
+          node src/packaging/smoke.mjs --exe "$app/Contents/MacOS/vestra-host" \
+            --plugins "$app/Contents/Resources/plugins"
+
   # TODO(S7 signing): Windows stays unsigned for now; SignPath comes later
   # (vestra-host.exe, libmpv-2.dll, ffmpeg/*, node.exe, then iscc with
   # SignTool= for setup.exe and the uninstaller; signtool verify /pa). The
@@ -654,12 +755,12 @@ jobs:
 
   draft-release:
     name: draft GitHub release
-    needs: [verify, checksums, sign-macos, sign-windows]
+    needs: [verify, checksums, sign-macos, smoke-macos-signed, sign-windows]
     if: >-
       ${{ !cancelled() && !inputs.dry_run && github.ref_type == 'tag'
       && needs.verify.result == 'success' && needs.checksums.result == 'success'
       && needs.sign-macos.result == 'success' && needs.sign-macos.outputs.signed == 'true'
-      && needs.sign-windows.result == 'success' }}
+      && needs.smoke-macos-signed.result == 'success' && needs.sign-windows.result == 'success' }}
     runs-on: ubuntu-24.04
     timeout-minutes: 15
     permissions:
