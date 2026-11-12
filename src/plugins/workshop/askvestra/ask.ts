@@ -2,7 +2,11 @@
 // row hands the typed sentence to this plugin, a model of the user's choice
 // turns it into steps (worker profile "ask") over the palette's command
 // table (commands.ts), the steps run as the player's commands through
-// `commands.run` with the request's ticket, and the OSD names what ran.
+// `commands.run` with the request's ticket. What happens shows in the
+// palette's status, which the player draws as a status strip where the
+// palette was while the palette is closed (UX PROPOSAL §4.2): Planning…
+// while the model plans, the player's own line for each step, then one end
+// state (done, failed or a note) that the player times and removes itself.
 // User ruling 2026-11-11: Ask Vestra runs commands only (no parameters, no
 // direct playback control), so nothing it does is undone by it: there is
 // no Undo.
@@ -34,7 +38,7 @@ const CONSENT_SCOPE = "v2";
  * MAX_STEPS (8), so its steps are paced to stay within it (`pace`).
  */
 export const RUNS_PER_SECOND = 4;
-/** Model text quoted on the OSD (an error, a refusal), at most. */
+/** Model text quoted in the status strip (an error, a refusal), at most. */
 const QUOTE_CHARS = 120;
 
 export const STOP_COMMAND = "askvestra.stop";
@@ -73,12 +77,21 @@ interface Request {
   stopped: boolean;
 }
 
-/** A failure the OSD names: the whole line as the OSD says it. */
+/** How a request ended, as the status strip shows it (`status.state`, SDK 1.7.15). */
+export type EndState = "done" | "failed" | "note";
+interface End {
+  text: Text | string;
+  state: EndState;
+}
+
+/** A failure the status strip names: the whole line; `failed` for a step that failed, else a `note`. */
 class Failure extends Error {
-  readonly text: Text;
-  constructor(text: Text) {
+  readonly text: Text | string;
+  readonly state: EndState;
+  constructor(text: Text | string, state: EndState = "note") {
     super("Ask Vestra failure");
     this.text = text;
+    this.state = state;
   }
 }
 
@@ -167,7 +180,8 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       ? {
           text: current?.step
             ? i18n.text("Vestra is working · Step {0} of {1} · {2}", [current.step.index, current.step.of, current.step.label])
-            : i18n.text("Vestra is working · Planning…"),
+            : // Also the strip's text while the model plans; from the first step on the player writes the strip.
+              i18n.text("Planning…"),
           note: i18n.text("Enter stops"),
         }
       : null,
@@ -192,13 +206,24 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     plugin.update();
   };
 
-  type Action = { title: Text; command: string };
-  const osd = (text: Text, actions: Action[] = []) =>
-    plugin.osd.show(text, null, actions.length ? { actions } : undefined).catch((error) => console.error(`Ask Vestra: OSD: ${(error as Error).message}`));
-  const stopAction = (): Action => ({ title: i18n.text("Stop"), command: STOP_COMMAND });
+  /**
+   * Shows how a request ended: once, as an end state of the row's status
+   * (the player shows it in the strip, times it, and never keeps it on the
+   * row), then the row as it is now (no status, or a newer request's).
+   * Called once the request is no longer `current`, so the row's next form
+   * is not this request's working status. No timer: `lead.done` may follow
+   * at once.
+   */
+  const finish = async (end: End) => {
+    if (!leadHeld) return;
+    const options: PaletteLeadOptions = { ...leadOptions(), status: { text: end.text, state: end.state } };
+    shownLead = JSON.stringify(options);
+    await lead.update(options).catch((error) => console.error(`Ask Vestra: lead row: ${(error as Error).message}`));
+    refresh();
+  };
 
   // ---- one request
-  /** A step as the OSD names it: the command's label as the palette shows it (data). */
+  /** A step as the strip names it:the command's label as the palette shows it (data). */
   const stepLabel = (step: Step, rows: ReadonlyMap<string, CommandInfo>): string => rows.get(step.id)?.label ?? step.id;
 
   /** The player state for the model, for toggles such as Play/Pause: no source name (§8). */
@@ -243,9 +268,9 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       };
       const fail = (failure: Error) => end(() => reject(failure));
       const aborted = () => fail(request.controller.signal.reason as Error);
-      const timer = setTimeout(() => fail(new Failure(i18n.text("Vestra · Took too long"))), REQUEST_TIMEOUT_MS);
+      const timer = setTimeout(() => fail(new Failure(i18n.text("Took too long"))), REQUEST_TIMEOUT_MS);
       request.controller.signal.addEventListener("abort", aborted, { once: true });
-      const reachFailure = (message: string) => new Failure(i18n.text("Vestra · Could not reach {0}: {1}", [model.providerName(), cut(message)]));
+      const reachFailure = (message: string) => new Failure(i18n.text("Could not reach {0}: {1}", [model.providerName(), cut(message)]));
       const worker = new AgentWorker(
         {
           ...connection,
@@ -279,7 +304,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
               lastError = event.error;
             } else if (event.kind === "settled") {
               if (lastError) fail(reachFailure(lastError));
-              else if (lastText.trim()) fail(new Failure(i18n.text("Vestra · {}", [cut(lastText)])));
+              else if (lastText.trim()) fail(new Failure(cut(lastText))); // the model's sentence as it wrote it
               else fail(noSteps());
             }
           },
@@ -297,7 +322,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
    * Runs a command step as the palette would, with the request's ticket:
    * the player checks it (enabled, not busy) and asks the user first for a
    * dangerous one (Don't Run: Declined). `index`/`of` go to the player's
-   * own OSD line for a request of several steps.
+   * own line in the status strip for a request of several steps.
    */
   const runCommand = async (id: string, label: string, ticket: string, index: number, of: number, signal: AbortSignal): Promise<void> => {
     signal.throwIfAborted();
@@ -323,7 +348,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     worker?.stop(300).catch(() => {});
   };
 
-  /** Stops the running request: `user` from Stop (the OSD says so), else a newer request replaces it. */
+  /** Stops the running request: `user` from Stop (the strip says so), else a newer request replaces it. */
   const stop = (user: boolean) => {
     const request = current;
     if (!request) return;
@@ -340,6 +365,8 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       waiting = null;
       latest++; // the waiting request goes no further
       refresh();
+      // The strip said Planning… for it; a running request says Stopped itself.
+      if (!current) void finish({ text: i18n.text("Stopped"), state: "note" });
     }
     stop(true);
   };
@@ -392,7 +419,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       // Flow 7: the settings page (the palette keeps the typed text, Q8);
       // set up but the key cannot be read: say so.
       if (!model.setUp()) await model.openSettings();
-      else await osd(i18n.text("Vestra · Cannot read the API key; save it again in the settings"));
+      else await finish({ text: i18n.text("Cannot read the API key; save it again in the settings"), state: "note" });
       return;
     }
     let consentGiven: boolean;
@@ -410,8 +437,8 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     current = mine;
     refresh();
     const labels: string[] = [];
+    let end: End | null = null;
     try {
-      await osd(i18n.text("Vestra · Planning…"), [stopAction()]);
       const { steps, rows } = await plan(mine, query);
       stopWorker(mine);
       let opened: string | null = null;
@@ -424,10 +451,10 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         mine.step = { index: index + 1, of: steps.length, label };
         refresh();
         try {
-          // The player shows its own line for each command it runs (with i/n).
+          // The player shows its own line for each command it runs (step/of) in the strip.
           await runCommand(step.id, label, ticket, index + 1, steps.length, mine.controller.signal);
         } catch (error) {
-          if (error instanceof Refusal) throw new Failure(i18n.text("Vestra · Step {0} failed: {1}", [index + 1, error.reason]));
+          if (error instanceof Refusal) throw new Failure(i18n.text("Step {0} failed: {1}", [index + 1, error.reason]), "failed");
           throw error;
         }
         answered.push(performance.now());
@@ -439,38 +466,46 @@ export function askVestra(plugin: Plugin, model: AskModel) {
         }
       }
       mine.controller.signal.throwIfAborted(); // stopped during the last step: "Stopped", not the result
-      if (opened !== null) await osd(i18n.text("Vestra · Opened {}", [opened]));
-      else await osd(i18n.text("Vestra · {}", [i18n.list(labels)]));
+      end =
+        opened !== null
+          ? { text: i18n.text("Opened {}", [opened]), state: "done" }
+          : { text: i18n.text("Done · {}", [i18n.list(labels)]), state: "done" };
     } catch (error) {
       if (mine.controller.signal.aborted) {
-        if (mine.stopped) await osd(i18n.text("Vestra · Stopped"));
-      } else if (error instanceof Declined) await osd(i18n.text("Vestra · Stopped: {} was not run", [error.label]));
-      else if (error instanceof Failure) await osd(error.text);
-      else if (error instanceof PlanError) await osd(planFailure(error));
+        // Replaced by a newer request: nothing to say, the newer one shows.
+        if (mine.stopped) end = { text: i18n.text("Stopped"), state: "note" };
+      } else if (error instanceof Declined) {
+        // Don't Run in the player's confirmation, asked before that step:
+        // "nothing was run" only while it is true.
+        end = labels.length
+          ? { text: i18n.text("Stopped: {} was not run", [error.label]), state: "note" }
+          : { text: i18n.text("Stopped: nothing was run"), state: "note" };
+      } else if (error instanceof Failure) end = { text: error.text, state: error.state };
+      else if (error instanceof PlanError) end = planFailure(error);
       else {
         console.error(`Ask Vestra: ${(error as Error).stack ?? error}`);
-        await osd(i18n.text("Vestra · {}", [cut((error as Error).message)]));
+        end = { text: cut((error as Error).message), state: "note" };
       }
     } finally {
       stopWorker(mine);
-      if (current === mine) {
-        current = null;
-        refresh();
-      }
+      if (current === mine) current = null;
     }
+    // The row stops saying "working" with the end state (at once without one).
+    if (end) await finish(end);
+    else refresh();
   };
 
-  const noSteps = () => new Failure(i18n.text("Vestra · The model gave no steps"));
-  const planFailure = (error: PlanError): Text => {
+  const noSteps = () => new Failure(i18n.text("The model gave no steps"));
+  const planFailure = (error: PlanError): End => {
     switch (error.code) {
       case "too-many":
-        return i18n.text("Vestra · The plan has more than {} steps", [MAX_STEPS]);
+        return { text: i18n.text("The plan has more than {} steps", [MAX_STEPS]), state: "note" };
       case "unknown-kind":
-        return i18n.text("Vestra · Step {0} failed: {1}", [error.step, i18n.text("Vestra cannot do “{}”", [error.value])]);
+        return { text: i18n.text("Step {0} failed: {1}", [error.step, i18n.text("Vestra cannot do “{}”", [error.value])]), state: "failed" };
       case "unknown-command":
-        return i18n.text("Vestra · Step {0} failed: {1}", [error.step, i18n.text("There is no command “{}”", [error.value])]);
+        return { text: i18n.text("Step {0} failed: {1}", [error.step, i18n.text("There is no command “{}”", [error.value])]), state: "failed" };
       default:
-        return noSteps().text;
+        return { text: noSteps().text, state: "note" };
     }
   };
 
@@ -487,7 +522,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     })().catch((error) => console.error(`Ask Vestra: ${(error as Error).stack ?? error}`));
   });
 
-  // ---- Stop: a palette command and the OSD's button
+  // ---- Stop: a palette command (the strip's Stop is Enter on the status row)
   plugin.commands.add({
     id: STOP_COMMAND,
     title: "Stop",

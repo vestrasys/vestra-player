@@ -13,7 +13,6 @@
     "plugins.manage",
     "bindings.manage",
     "commands.run",
-    "ui.osd",
     "playback.read",
     "palette.lead"
   ],

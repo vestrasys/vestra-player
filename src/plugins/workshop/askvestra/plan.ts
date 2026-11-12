@@ -10,7 +10,7 @@ export const MAX_STEPS = 8;
 export type Step = { kind: "command"; id: string };
 
 /**
- * Why a plan is refused, for the OSD: `step` counts from 1 (0: the whole
+ * Why a plan is refused, for the status strip: `step` counts from 1 (0: the whole
  * plan), `value` is the offending value as data.
  */
 export class PlanError extends Error {
