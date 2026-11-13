@@ -25,7 +25,7 @@ import {
 import { clean } from "./index-format.ts";
 import { Icons } from "./icons.ts";
 import * as installer from "./installer.ts";
-import { day, hostOf, permissions, reasonOf, sourceName } from "./labels.ts";
+import { addedBy, categories, day, hostOf, reasonOf, sourceName } from "./labels.ts";
 import { get, NetError } from "./net.ts";
 import { Revocations, revocationKey } from "./revocations.ts";
 import { Repos, type Deps } from "./repos.ts";
@@ -735,7 +735,12 @@ export class Store {
       clearSearch: this.#clearSearch,
     };
     if (!item) return base;
-    const caps = item.best?.capabilities ?? item.installed?.capabilities ?? item.entry?.versions[0]?.capabilities ?? [];
+    // The scanned categories of the version shown (the one to install, else the installed one as the index lists
+    // it, else the newest); without a scan nothing: declared capabilities are not shown (user ruling 2026-11-13).
+    const indexed = item.installed
+      ? item.entry?.versions.find((v) => v.version === item.installed?.version)
+      : item.entry?.versions[0];
+    const scan = (item.best ?? indexed)?.scan ?? null;
     return {
       ...base,
       dName: item.name,
@@ -753,7 +758,8 @@ export class Store {
         text: shown(text),
         link: url !== null || act !== undefined,
       })),
-      permissions: permissions(caps).map(({ text, risky }) => ({ text: shown(text), risky })),
+      permissions: scan ? categories(scan.uses).map((text) => ({ text: shown(text), risky: true })) : [],
+      scanned: scan !== null,
     };
   }
 
@@ -1096,8 +1102,9 @@ export class Store {
       if (item.repo.local) add(msg("This is a test repository on this machine, without encryption"), 2);
     }
     if (item.state === "update" && item.best && info) {
-      const added = permissions(item.best.capabilities.filter((c) => !info.capabilities.includes(c)));
-      if (added.length) add(msg("The new version needs new permissions: {}", list(added.map((p) => p.text))), 2);
+      // As the update confirmation compares them (scanned categories when both versions have them).
+      const added = addedBy(item.entry?.versions ?? [], info, item.best);
+      if (added.length) add(msg("The new version needs new permissions: {}", list(added)), 2);
     }
     if (item.state === "otherSource" && info)
       add(

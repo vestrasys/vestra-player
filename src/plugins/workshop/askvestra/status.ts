@@ -1,6 +1,7 @@
 // The palette row's status text, which the player also shows in its status
 // strip (Ask Vestra UX PROPOSAL §4.2), fitted to the player's limit: 1–80
-// characters as shown, translated and filled in, counted as Unicode scalar
+// characters as shown while working, 1–160 for an end state (the strip's two
+// lines; SDK 1.8.0), translated and filled in, counted as Unicode scalar
 // values (host `capabilities/palette_lead.rs` `text`: `chars().count()`;
 // JavaScript's string iterator counts the same). A longer text is refused
 // (`invalid`) and the user would see nothing, so the data in it (labels,
@@ -12,8 +13,16 @@
 // catalog). The data then gets what is left.
 import type { I18n, Locale, Text, TextArg } from "@vestra-player/sdk";
 
-/** The player's limit for `status.text` (and the strip's text). */
+/** The player's limit for `status.text` of a working status (and for `status.strip`). */
 export const STATUS_CHARS = 80;
+/**
+ * The player's limit for `status.text` of an end state (done, failed, note,
+ * stopped): the strip's two lines. The SDK's
+ * `PALETTE_LEAD_LIMITS.statusEndText`, which a plugin cannot import (the
+ * runtime entry is the player's); `tests/askvestra-lead-status.test.mjs`
+ * checks that the two agree.
+ */
+export const END_STATUS_CHARS = 160;
 
 /** The player's languages, in the order of WORDS' rows. */
 export const LOCALES = ["en", "zh-Hans", "ja", "ko", "de", "fr", "es"] as const satisfies readonly Locale[];
@@ -27,6 +36,7 @@ export const LIST_SEPARATORS: Readonly<Record<Locale, string>> = { en: ", ", "zh
  */
 export const WORDS = {
   "Planning…": [9, 4, 4, 5, 6, 14, 13],
+  "Vestra is working · Planning…": [29, 18, 18, 19, 24, 33, 38],
   "Vestra is working · Step {0} of {1} · {2}": [32, 22, 23, 24, 34, 33, 37],
   Stopped: [7, 3, 6, 3, 8, 6, 8],
   "Stopped: nothing was run": [24, 12, 19, 20, 36, 29, 28],
@@ -130,9 +140,13 @@ export function build(i18n: I18n, line: Line): TextArg {
   return i18n.text(line.source, (line.args ?? []).map((arg) => build(i18n, arg)));
 }
 
-/** A status text that fits the player's limit in the interface language, for `status.text`. */
-export const statusText = (i18n: I18n, line: Line): string | Text => {
-  const value = build(i18n, fit(line, i18n.locale));
+/**
+ * A status text that fits the player's limit in the interface language, for
+ * `status.text` (and `status.strip`): `max` is STATUS_CHARS for a working
+ * status, END_STATUS_CHARS for an end state.
+ */
+export const statusText = (i18n: I18n, line: Line, max = STATUS_CHARS): string | Text => {
+  const value = build(i18n, fit(line, i18n.locale, max));
   // A status is a template or a string; a number or a list alone is never one.
   return typeof value === "string" ? value : typeof value === "number" ? String(value) : (value as Text);
 };

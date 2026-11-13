@@ -105,7 +105,7 @@ msgid "{n} step"
 msgid_plural "{n} steps"
 msgstr[0] "{n} 个步骤"
 
-#: ai.slint:217 askvestra/status.ts:130
+#: ai.slint:217 askvestra/status.ts:140
 msgid "Stopped"
 msgstr "已停止"
 
@@ -430,136 +430,141 @@ msgstr "输入请求或问题"
 msgid "Set up a model first"
 msgstr "请先设置模型"
 
-#: askvestra/ask.ts:202
+#: askvestra/ask.ts:203
 #, x-machine
 msgid "Enter stops"
 msgstr "Enter 停止"
 
-#: askvestra/ask.ts:415
+#: askvestra/ask.ts:416
 #, x-machine
 msgid "Ask Vestra sends your request to {}"
 msgstr "“问 Vestra”会把你的请求发送给 {}"
 
-#: askvestra/ask.ts:417
+#: askvestra/ask.ts:418
 #, x-machine
 msgid "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and whether something is open and playing go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account."
 msgstr "你在命令面板中输入的内容、播放器的命令列表（名称、菜单、快捷键，以及各命令是否开启或可用）以及是否有内容打开并在播放，会和对话一样，用你的 API 密钥发送给该服务商。文件名、播放列表、历史记录、轨道和章节标题以及字幕不会发送。费用由服务商向你的账户收取。"
 
-#: askvestra/ask.ts:419
+#: askvestra/ask.ts:420
 #, x-machine
 msgid "Continue"
 msgstr "继续"
 
-#: askvestra/ask.ts:565
+#: askvestra/ask.ts:566
 #, x-machine
 msgid "Stop"
 msgstr "停止"
 
-#: askvestra/ask.ts:569
+#: askvestra/ask.ts:570
 #, x-machine
 msgid "Vestra is not working on a request"
 msgstr "Vestra 没有正在处理的请求"
 
-#: askvestra/ask.ts:575 askvestra/ask.ts:580
+#: askvestra/ask.ts:576 askvestra/ask.ts:581
 #, x-machine
 msgid "Vestra is working"
 msgstr "Vestra 正在处理"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Planning…"
 msgstr "规划中…"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
+#, x-machine
+msgid "Vestra is working · Planning…"
+msgstr "Vestra 正在处理 · 规划中…"
+
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Vestra is working · Step {0} of {1} · {2}"
 msgstr "Vestra 正在处理 · 第 {0}/{1} 步 · {2}"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Stopped: nothing was run"
 msgstr "已停止：没有运行任何命令"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Stopped: {} was not run"
 msgstr "已停止：未运行 {}"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Done · {}"
 msgstr "完成 · {}"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Opened {}"
 msgstr "已打开 {}"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Step {0} failed: {1}"
 msgstr "第 {0} 步失败：{1}"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Took too long"
 msgstr "用时过长"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Could not reach {0}: {1}"
 msgstr "无法连接 {0}：{1}"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "The model gave no steps"
 msgstr "模型没有给出步骤"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "The plan has more than {} steps"
 msgstr "计划超过 {} 步"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Cannot read the API key; save it again in the settings"
 msgstr "无法读取 API 密钥；请在设置中重新保存"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "{} is no longer there"
 msgstr "{} 已不存在"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Too many commands at once"
 msgstr "一次运行的命令太多"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "The request has ended"
 msgstr "请求已结束"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "This player does not let Vestra run commands"
 msgstr "此播放器不允许 Vestra 运行命令"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "Vestra cannot do “{}”"
 msgstr "Vestra 无法执行“{}”"
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 #, x-machine
 msgid "There is no command “{}”"
 msgstr "没有命令“{}”"
 
-#: askvestra/status.ts:130 labels.slint:6 main.ts:637
+#: askvestra/status.ts:140 labels.slint:6 main.ts:637
 msgid "Custom · OpenAI format"
 msgstr "自定义 · OpenAI 格式"
 
-#: askvestra/status.ts:130 labels.slint:7 main.ts:639
+#: askvestra/status.ts:140 labels.slint:7 main.ts:639
 msgid "Custom · Anthropic format"
 msgstr "自定义 · Anthropic 格式"
 

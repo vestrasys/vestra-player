@@ -5,11 +5,11 @@ import type { PackageCandidate, PackageChange, PackageSource, PluginInfo } from 
 import type { Item } from "./catalog.ts";
 import type { IndexVersion } from "./index-format.ts";
 import { MAX_PACKAGE } from "./index-format.ts";
-import { permissionList, reservedId, reservedText, sourceName } from "./labels.ts";
+import { addedBy, bulletList, categoryList, reservedId, reservedText, sourceName } from "./labels.ts";
 import { get, isHttps, NetError } from "./net.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import type { Store } from "./store.ts";
-import { msg, raw, type Msg } from "./text.ts";
+import { joined, msg, raw, type Arg, type Msg } from "./text.ts";
 
 /**
  * Installing (design §3.8, §3.9): every path asks first, downloads with
@@ -91,12 +91,24 @@ function replaceDetail(info: PluginInfo, name: string): Msg {
   );
 }
 
-/** What the plugin will be able to do. */
-const willBeAble = (capabilities: readonly string[]) =>
-  msg(
-    "It will be able to:\n{}",
-    permissionList(capabilities),
-  );
+/**
+ * What the plugin will be able to do: the categories the repository's scan
+ * found in its code (`scan`, from the index). Without a scan (an index
+ * from before it, a package from a file or a link): `null`, nothing is
+ * said; the capabilities a package declares are not shown.
+ */
+function willBeAble(scan: { uses: string[] } | null): Msg | null {
+  if (!scan) return null;
+  return scan.uses.length
+    ? msg("It will be able to:\n{}", categoryList(scan.uses))
+    : msg("It uses none of the player's sensitive features.");
+}
+
+/** Said of every plugin, before what it will be able to do (an unofficial repository's own text says it already). */
+function withAccess(able: Msg | null): Arg {
+  const access = msg("Plugins may read your files or use the network.");
+  return able ? joined([access, able], "{}\n\n{}") : access;
+}
 
 // ------------------------------------------------------------ repository
 
@@ -121,34 +133,38 @@ export async function installFromRepository(store: Store, item: Item, version: I
         repo.label,
         repo.url,
       );
-  const perms = willBeAble(version.capabilities);
+  const perms = willBeAble(version.scan);
   let question: Question;
   if (replace) {
     question = {
       message: msg("Replace the installed “{}”?", name),
       detail: repo.official
-        ? msg("{1}\n\nWill install {2} from the official repository.\n\n{3}", replaceDetail(info, name), version.version, perms)
-        : msg(
-            "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
-            replaceDetail(info, name),
-            version.version,
-            perms,
-            unofficial,
-          ),
+        ? msg("{1}\n\nWill install {2} from the official repository.\n\n{3}", replaceDetail(info, name), version.version, withAccess(perms))
+        : perms
+          ? msg(
+              "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
+              replaceDetail(info, name),
+              version.version,
+              perms,
+              unofficial,
+            )
+          : msg("{1}\n\nWill install {2} from the unofficial repository.\n\n{3}", replaceDetail(info, name), version.version, unofficial),
       confirm: "Replace",
       destructive: true,
     };
   } else if (sameSource && info.version && isVersion(info.version)) {
     const order = compareVersions(version.version, info.version);
-    const added = version.capabilities.filter((c) => !info.capabilities.includes(c));
+    // What the window's notice names too (labels.ts).
+    const lines = addedBy(entry.versions, info, version);
+    const added = lines.length ? bulletList(lines) : null;
     const current = info.version;
     if (order > 0)
-      question = added.length
+      question = added
         ? {
             message: msg("Update “{}” to {}? The new version needs more permissions", name, version.version),
             detail: msg(
               "Added:\n{2}\n\nCurrent: {3}.",
-              permissionList(added),
+              added,
               current,
             ),
             confirm: "Update",
@@ -163,8 +179,8 @@ export async function installFromRepository(store: Store, item: Item, version: I
     else
       question = {
         message: msg("Install “{}” {} (reinstall)?", name, version.version),
-        detail: added.length
-          ? msg("Current: {2}.\n\nThis version needs more permissions:\n{3}", current, permissionList(added))
+        detail: added
+          ? msg("Current: {2}.\n\nThis version needs more permissions:\n{3}", current, added)
           : msg("Current: {2}.", current),
         confirm: "Install",
       };
@@ -175,13 +191,13 @@ export async function installFromRepository(store: Store, item: Item, version: I
           detail: msg(
             "From the Vestra Player official repository, author {2}.\n\n{3}",
             item.author ?? msg("Unknown"),
-            perms,
+            withAccess(perms),
           ),
           confirm: "Install",
         }
       : {
           message: msg("Install “{}” {} from an unofficial repository?", name, version.version),
-          detail: msg("{2}\n\n{3}", unofficial, perms),
+          detail: perms ? msg("{2}\n\n{3}", unofficial, perms) : msg("{2}", unofficial),
           confirm: "Install Anyway",
           destructive: true,
         };
@@ -437,7 +453,8 @@ function sideloadQuestion(store: Store, candidate: PackageCandidate, from: { fil
   const manifest = candidate.manifest;
   const name = manifest.name ?? manifest.id;
   const info = installedOf(store, manifest.id);
-  const perms = willBeAble(manifest.capabilities);
+  // A package from a file or a link has no scan: only the sentence.
+  const perms = withAccess(null);
   const warning =
     "file" in from
       ? msg(

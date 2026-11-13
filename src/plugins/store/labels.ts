@@ -36,12 +36,84 @@ export const CAPABILITIES = {
   "video.motion": { text: "Smooth motion with the GPU's frame-rate converter" },
   "commands.run": { text: "Run any player or plugin command", risky: true },
   "palette.lead": { text: "Add the first row of the command palette" },
+  mpv: { text: "Control the playback engine (mpv) directly: send its commands and change its options", risky: true },
 } as const satisfies Record<string, { text: string; risky?: true }>;
 
-/** The words of a capability (a template of text.ts). */
-export type CapabilityText = (typeof CAPABILITIES)[keyof typeof CAPABILITIES]["text"];
+/**
+ * The categories of the SDK's capability scan (`vestra-plugin scan`, its
+ * `uses`) in plain words, in the scan's order. A repository's index stores
+ * them per version (`scan.uses`). They are all the store tells the user
+ * about what a plugin does with the player: the capabilities a package
+ * declares are not shown (user ruling 2026-11-13); without a scan there is
+ * nothing to show.
+ */
+export const CATEGORIES = {
+  player: "Change your player settings (shortcuts, theme, language, rendering) or control the playback engine directly",
+  plugins: "Install, uninstall, disable or reload other plugins, or run any command",
+  clipboard: "Read and write the clipboard",
+  credentials: "Store sign-in details in the system keychain",
+  camera: "Use the camera",
+  microphone: "Record from the microphone",
+  screen: "Capture the screen or other windows",
+  notifications: "Show system notifications",
+} as const satisfies Record<string, string>;
+
+/** The words of a capability or of a scanned category (a template of text.ts). */
+export type CapabilityText =
+  | (typeof CAPABILITIES)[keyof typeof CAPABILITIES]["text"]
+  | (typeof CATEGORIES)[keyof typeof CATEGORIES];
 
 const KNOWN: Partial<Record<string, { text: CapabilityText; risky?: true }>> = CAPABILITIES;
+const CATEGORY: Partial<Record<string, CapabilityText>> = CATEGORIES;
+
+/**
+ * Scanned categories in plain words: each once, in the scan's order; a word
+ * the store does not know is named, after the others.
+ */
+export function categories(uses: readonly string[]): Msg[] {
+  const given = new Set(uses);
+  return [
+    ...Object.keys(CATEGORIES)
+      .filter((word) => given.has(word))
+      .map((word) => msg(CATEGORY[word]!)),
+    ...[...given].filter((word) => !Object.hasOwn(CATEGORIES, word)).map((word) => msg("Unknown permission: {}", word)),
+  ];
+}
+
+/**
+ * What a newer version adds to the installed one, in plain words (empty:
+ * nothing to say). Only the repository's scan of the code counts, never the
+ * capabilities a package declares (user ruling 2026-11-13). The update
+ * confirmation and the window's notice both go by this.
+ *
+ * - The new version has no scan: nothing.
+ * - Both scanned: the categories the new one adds.
+ * - Only the new one scanned: every category it uses (there is nothing to
+ *   compare with).
+ */
+export function addedBy(
+  versions: readonly { version: string; scan: { uses: string[] } | null }[],
+  installed: { version: string | null },
+  next: { scan: { uses: string[] } | null },
+): Msg[] {
+  if (!next.scan) return [];
+  const before = versions.find((v) => v.version === installed.version)?.scan ?? null;
+  return categories(before ? next.scan.uses.filter((word) => !before.uses.includes(word)) : next.scan.uses);
+}
+
+/** `lines` as a bullet list for a confirmation, at most 20 lines. */
+export function bulletList(lines: readonly Msg[]): Arg {
+  const shown: Arg[] = lines.slice(0, 20).map((line) => msg("· {}", line));
+  if (lines.length > 20) shown.push(msg("{} in total", lines.length));
+  return list(shown, "lines");
+}
+
+/** Bullet list of scanned categories for a confirmation; `uses` is not empty. */
+export const categoryList = (uses: readonly string[]): Arg =>
+  list(
+    categories(uses).map((line) => msg("· {}", line)),
+    "lines",
+  );
 
 /**
  * `vestra` and `vestra.<name>` (any case) belong to the player's built-in

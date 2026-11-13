@@ -171,6 +171,10 @@ export const API_REQUESTS = Object.freeze({
     "VideoMotion.set": [{ method: "video.motion.set" }],
     "VideoMotion.onChange": [listen("video.motion.changed")],
     "WireCommands.register": [{ method: "commands.register" }],
+    "Mpv.command": [{ method: "mpv.command" }],
+    "Mpv.get": [{ method: "mpv.get" }],
+    "Mpv.set": [{ method: "mpv.set" }],
+    "Mpv.observe": [{ method: "mpv.observe" }],
 });
 /**
  * The events whose listener subscribes (`events.subscribe` with the event

@@ -48,12 +48,46 @@ pub struct LeadRow {
     /// status strip while the palette is closed (`host/lead_strip.rs`); an
     /// end state shows only in the strip, once.
     pub status: Option<LeadStatus>,
+    /// `status.strip` (SDK 1.8.0): what the status strip shows instead of
+    /// the status's `text` while working, for a row that says more than the
+    /// strip has room for. Only with a working status.
+    pub strip: Option<String>,
 }
+
+impl LeadRow {
+    /// What the status strip shows of a working status: its `strip` text
+    /// when the holder gave one, else its `text`. `None` without a working
+    /// status.
+    pub fn working_strip(&self) -> Option<&str> {
+        self.status
+            .as_ref()
+            .filter(|status| status.state == StatusState::Working)
+            .map(|status| self.strip.as_deref().unwrap_or(&status.text))
+    }
+}
+
+/// The longest texts of `palette.lead.set`, in characters as shown, each on
+/// one line as sent. The SDK repeats them (`PALETTE_LEAD_LIMITS`);
+/// src/tests/sdk/lead-status-agreement.test.ts checks they agree.
+pub const TITLE_CHARS: usize = 40;
+pub const PLACEHOLDER_CHARS: usize = 60;
+pub const EMPTY_CHARS: usize = 80;
+pub const NOTE_CHARS: usize = 40;
+/// A working `status.text`: one line of the row and of the strip.
+pub const STATUS_TEXT_CHARS: usize = 80;
+/// An end state's `status.text` (SDK 1.8.0): it shows in the strip alone,
+/// which wraps it to two lines.
+pub const STATUS_END_TEXT_CHARS: usize = 160;
+pub const STATUS_NOTE_CHARS: usize = 40;
+/// `status.strip` (SDK 1.8.0): one line of the strip.
+pub const STATUS_STRIP_CHARS: usize = 80;
 
 /// `status` of `palette.lead.set`, as shown.
 #[derive(Clone, Debug, PartialEq)]
 pub struct LeadStatus {
-    /// 1–80 characters.
+    /// What the palette's row shows while working, and the strip too unless
+    /// `LeadRow::strip` is given: 1–80 characters. An end state's shows in
+    /// the strip alone, on up to two lines: 1–160 (SDK 1.8.0).
     pub text: String,
     /// The palette row's right side, up to 40 characters.
     pub note: Option<String>,
@@ -68,12 +102,15 @@ pub enum StatusState {
     Working,
     Done,
     Failed,
+    /// A sentence for the user.
     Note,
+    /// The user stopped the work (SDK 1.8.0): shown plain, no answer.
+    Stopped,
 }
 
 impl StatusState {
     /// The wire names (`PaletteLeadStatus.state`).
-    pub const NAMES: [&'static str; 4] = ["working", "done", "failed", "note"];
+    pub const NAMES: [&'static str; 5] = ["working", "done", "failed", "note", "stopped"];
     fn parse(value: &Value) -> Result<Self, RpcError> {
         match value.as_str() {
             _ if value.is_null() => Ok(Self::Working),
@@ -81,13 +118,18 @@ impl StatusState {
             Some("done") => Ok(Self::Done),
             Some("failed") => Ok(Self::Failed),
             Some("note") => Ok(Self::Note),
+            Some("stopped") => Ok(Self::Stopped),
             _ => Err(RpcError::invalid(format!(
                 "status.state is one of {}",
                 Self::NAMES.join(", ")
             ))),
         }
     }
-    /// Done, failed or a note: shown once, then gone.
+    /// The wire name.
+    pub fn name(self) -> &'static str {
+        Self::NAMES[self as usize]
+    }
+    /// Done, failed, a note or stopped: shown once, then gone.
     pub fn ended(self) -> bool {
         self != Self::Working
     }
@@ -115,6 +157,8 @@ impl Lead {
     /// woken holder starts without it. Whether a status went.
     pub fn park(&mut self) -> bool {
         self.recorded = true;
+        // The strip's own text belongs to the working status.
+        self.row.strip = None;
         if self.row.status.take().is_none() {
             return false;
         }
@@ -153,6 +197,13 @@ fn text(
 
 /// `palette.lead.set`'s parameters as the row shows them; an image icon is
 /// checked against the plugin's directories (`roots`).
+///
+/// The checks keep the order they had before SDK 1.8.0 (the title, the
+/// icon, the status: its fields' names, `text`, `note`, `state`; then
+/// `placeholder`, `empty`, `note`), so a request with several faults is
+/// answered as before. What 1.8.0 added is checked where it belongs: an end
+/// state's `text` may be twice as long, and `strip` comes after `state`
+/// (first that it is for a working status, then its length).
 pub fn parse(
     texts: &i18n::text::Texts,
     roots: &[std::path::PathBuf],
@@ -165,7 +216,7 @@ pub fn parse(
     if let Some(unknown) = object.keys().find(|key| !KEYS.contains(&key.as_str())) {
         return Err(RpcError::invalid(format!("unknown field {unknown}")));
     }
-    let title = text(texts, &params["title"], "title", 1, 40)?
+    let title = text(texts, &params["title"], "title", 1, TITLE_CHARS)?
         .ok_or_else(|| RpcError::invalid("title is required"))?;
     let icon = match &params["icon"] {
         Value::String(name) if BUTTON_ICONS.contains(&name.as_str()) => {
@@ -186,22 +237,50 @@ pub fn parse(
             )));
         }
     };
+    let mut strip = None;
     let status = match &params["status"] {
         Value::Null => None,
         Value::Object(status) => {
             if let Some(unknown) = status
                 .keys()
-                .find(|key| !["text", "note", "state"].contains(&key.as_str()))
+                .find(|key| !["text", "note", "state", "strip"].contains(&key.as_str()))
             {
                 return Err(RpcError::invalid(format!("unknown status field {unknown}")));
             }
-            let shown = text(texts, &params["status"]["text"], "status.text", 1, 80)?
+            // An end state's text shows in the strip alone, on two lines.
+            // Any other state (working, none, one that is refused below)
+            // keeps the one line.
+            let ends = StatusState::parse(&params["status"]["state"]).is_ok_and(StatusState::ended);
+            let longest = if ends {
+                STATUS_END_TEXT_CHARS
+            } else {
+                STATUS_TEXT_CHARS
+            };
+            let shown = text(texts, &params["status"]["text"], "status.text", 1, longest)?
                 .ok_or_else(|| RpcError::invalid("status.text is required"))?;
-            Some(LeadStatus {
+            let status = LeadStatus {
                 text: shown,
-                note: text(texts, &params["status"]["note"], "status.note", 1, 40)?,
+                note: text(
+                    texts,
+                    &params["status"]["note"],
+                    "status.note",
+                    1,
+                    STATUS_NOTE_CHARS,
+                )?,
                 state: StatusState::parse(&params["status"]["state"])?,
-            })
+            };
+            // An end state's text is already the strip's.
+            if status.state.ended() && !params["status"]["strip"].is_null() {
+                return Err(RpcError::invalid("status.strip is for a working status"));
+            }
+            strip = text(
+                texts,
+                &params["status"]["strip"],
+                "status.strip",
+                1,
+                STATUS_STRIP_CHARS,
+            )?;
+            Some(status)
         }
         _ => {
             return Err(RpcError::invalid(
@@ -212,10 +291,17 @@ pub fn parse(
     Ok(LeadRow {
         title,
         icon,
-        placeholder: text(texts, &params["placeholder"], "placeholder", 1, 60)?,
-        empty: text(texts, &params["empty"], "empty", 1, 80)?,
-        note: text(texts, &params["note"], "note", 1, 40)?,
+        placeholder: text(
+            texts,
+            &params["placeholder"],
+            "placeholder",
+            1,
+            PLACEHOLDER_CHARS,
+        )?,
+        empty: text(texts, &params["empty"], "empty", 1, EMPTY_CHARS)?,
+        note: text(texts, &params["note"], "note", 1, NOTE_CHARS)?,
         status,
+        strip,
     })
 }
 
@@ -389,7 +475,7 @@ mod tests {
             json!({"title":"Ask","icon":"ai","status":{"text":"x".repeat(81)}}),
             json!({"title":"Ask","icon":"ai","status":{"text":"t","other":1}}),
             json!({"title":"Ask","icon":"ai","status":"busy"}),
-            json!({"title":"Ask","icon":"ai","status":{"text":"t","state":"stopped"}}),
+            json!({"title":"Ask","icon":"ai","status":{"text":"t","state":"halted"}}),
             json!({"title":"Ask","icon":"ai","status":{"text":"t","state":"Done"}}),
             json!({"title":"Ask","icon":"ai","status":{"text":"t","state":1}}),
             json!({"title":"Ask","icon":"ai","status":{"text":"t","state":""}}),
@@ -475,5 +561,251 @@ mod tests {
         assert!(super::super::builtin_only("palette.lead"));
         assert!(super::super::builtin_only("commands.run"));
         assert!(!super::super::builtin_only("commands"));
+    }
+}
+
+/// SDK 1.8.0's additions to the status: an end state's longer text and the
+/// strip's own text. What was there before is in `tests`, unchanged.
+#[cfg(test)]
+mod tests_1_8 {
+    use super::*;
+
+    fn english() -> i18n::text::Texts<'static> {
+        i18n::text::Texts::english()
+    }
+
+    fn row(status: Value) -> Result<LeadRow, RpcError> {
+        parse(
+            &english(),
+            &[],
+            &json!({"title":"Ask","icon":"ai","status":status}),
+        )
+    }
+
+    fn message(params: Value) -> String {
+        let error = parse(&english(), &[], &params).unwrap_err();
+        assert_eq!(error.code, "invalid", "{params}");
+        error.message
+    }
+
+    /// A working text is one line of the row and of the strip (80
+    /// characters); an end state's shows in the strip alone, on up to two
+    /// lines (160), for every end state.
+    #[test]
+    fn an_end_states_text_may_be_twice_as_long_as_a_working_one() {
+        let refused = |status: Value| message(json!({"title":"Ask","icon":"ai","status":status}));
+        for working in [json!(null), json!("working")] {
+            assert!(row(json!({"text":"x".repeat(80),"state":working})).is_ok());
+            assert_eq!(
+                refused(json!({"text":"x".repeat(81),"state":working})),
+                "status.text must be 1–80 characters on one line"
+            );
+        }
+        for end in ["done", "failed", "note", "stopped"] {
+            let long = row(json!({"text":"问".repeat(160),"state":end})).unwrap();
+            let status = long.status.unwrap();
+            assert_eq!(status.text.chars().count(), 160);
+            assert!(status.state.ended());
+            assert_eq!(
+                refused(json!({"text":"x".repeat(161),"state":end})),
+                "status.text must be 1–160 characters on one line",
+                "{end}"
+            );
+            // Still one line as sent: the strip wraps it.
+            assert_eq!(
+                refused(json!({"text":"two\nlines","state":end})),
+                "status.text must be 1–160 characters on one line"
+            );
+            assert_eq!(
+                refused(json!({"text":"","state":end})),
+                "status.text must be 1–160 characters on one line"
+            );
+        }
+        // A state that is refused gives no longer text: the text's fault is
+        // named first, as before, then the state's.
+        assert_eq!(
+            refused(json!({"text":"x".repeat(81),"state":"halted"})),
+            "status.text must be 1–80 characters on one line"
+        );
+        assert_eq!(
+            refused(json!({"text":"x".repeat(80),"state":"halted"})),
+            format!("status.state is one of {}", StatusState::NAMES.join(", "))
+        );
+        // The limits as the SDK repeats them.
+        assert_eq!(
+            [
+                TITLE_CHARS,
+                PLACEHOLDER_CHARS,
+                EMPTY_CHARS,
+                NOTE_CHARS,
+                STATUS_TEXT_CHARS,
+                STATUS_END_TEXT_CHARS,
+                STATUS_NOTE_CHARS,
+                STATUS_STRIP_CHARS
+            ],
+            [40, 60, 80, 40, 80, 160, 40, 80]
+        );
+    }
+
+    /// `status.strip` is what the strip shows instead of `text` while
+    /// working; the row keeps `text`. An end state has none.
+    #[test]
+    fn a_working_status_may_give_the_strip_its_own_text() {
+        let both =
+            row(json!({"text":"Vestra is working · Planning…","strip":"Planning…"})).unwrap();
+        assert_eq!(
+            both.status.as_ref().unwrap().text,
+            "Vestra is working · Planning…"
+        );
+        assert_eq!(both.strip.as_deref(), Some("Planning…"));
+        assert_eq!(both.working_strip(), Some("Planning…"));
+        // Without one (absent or null) the strip shows the text.
+        for plain in [
+            json!({"text":"Planning…"}),
+            json!({"text":"Planning…","strip":null}),
+            json!({"text":"Planning…","state":"working"}),
+        ] {
+            let plain = row(plain).unwrap();
+            assert_eq!(
+                (plain.strip.as_deref(), plain.working_strip()),
+                (None, Some("Planning…"))
+            );
+        }
+        let explicit = row(json!({"text":"t","state":"working","strip":"s".repeat(80)})).unwrap();
+        assert_eq!(explicit.working_strip(), Some("s".repeat(80).as_str()));
+        // A text value is shown rendered, as the other texts.
+        let value =
+            row(json!({"text":"t","strip":{"$vestraText":"Step {}","args":["2"]}})).unwrap();
+        assert_eq!(value.working_strip(), Some("Step 2"));
+        let refused = |status: Value| message(json!({"title":"Ask","icon":"ai","status":status}));
+        for bad in [json!("s".repeat(81)), json!(""), json!("a\nb")] {
+            assert_eq!(
+                refused(json!({"text":"t","strip":bad})),
+                "status.strip must be 1–80 characters on one line"
+            );
+        }
+        assert_eq!(
+            refused(json!({"text":"t","strip":3})),
+            "status.strip is a string or a text"
+        );
+        for end in ["done", "failed", "note", "stopped"] {
+            assert_eq!(
+                refused(json!({"text":"t","state":end,"strip":"s"})),
+                "status.strip is for a working status",
+                "{end}"
+            );
+            // A null strip is no strip; an end state shows its text.
+            let ended = row(json!({"text":"t","state":end,"strip":null})).unwrap();
+            assert_eq!(
+                (ended.strip.as_deref(), ended.working_strip()),
+                (None, None)
+            );
+        }
+        // No status, no strip text.
+        let none = parse(&english(), &[], &json!({"title":"Ask","icon":"ai"})).unwrap();
+        assert_eq!((none.strip, none.status), (None, None));
+    }
+
+    /// The order of the checks is the one from before SDK 1.8.0, with the
+    /// strip's two checks after the state's: a request with several faults
+    /// is answered as it was.
+    #[test]
+    fn a_request_with_several_faults_names_the_same_one_as_before() {
+        // The title, then the icon, before anything of the status.
+        assert_eq!(
+            message(
+                json!({"title":"","icon":"rocket","placeholder":"p".repeat(61),
+                "status":{"text":"x".repeat(200),"state":"halted","strip":"s".repeat(99)}})
+            ),
+            "title must be 1–40 characters on one line"
+        );
+        assert!(
+            message(
+                json!({"title":"Ask","icon":"rocket","placeholder":"p".repeat(61),
+                "status":{"text":"x".repeat(200),"state":"halted","strip":"s".repeat(99)}})
+            )
+            .starts_with("icon is one of ")
+        );
+        // Of the status: an unknown field, its text, its note, its state.
+        assert_eq!(
+            message(json!({"title":"Ask","icon":"ai",
+                "status":{"text":"x".repeat(200),"other":1,"state":"halted"}})),
+            "unknown status field other"
+        );
+        assert_eq!(
+            message(json!({"title":"Ask","icon":"ai",
+                "status":{"text":"x".repeat(81),"note":"n".repeat(41),"state":"halted"}})),
+            "status.text must be 1–80 characters on one line"
+        );
+        assert_eq!(
+            message(json!({"title":"Ask","icon":"ai","status":{"note":"n","state":"halted"}})),
+            "status.text is required"
+        );
+        assert_eq!(
+            message(json!({"title":"Ask","icon":"ai",
+                "status":{"text":"t","note":"n".repeat(41),"state":"halted"}})),
+            "status.note must be 1–40 characters on one line"
+        );
+        assert_eq!(
+            message(
+                json!({"title":"Ask","icon":"ai","placeholder":"p".repeat(61),
+                "status":{"text":"t","state":"halted","strip":"s".repeat(99)}})
+            ),
+            format!("status.state is one of {}", StatusState::NAMES.join(", "))
+        );
+        // Then the strip: that it is for a working status, then its length.
+        assert_eq!(
+            message(
+                json!({"title":"Ask","icon":"ai","placeholder":"p".repeat(61),
+                "status":{"text":"t","state":"done","strip":"s".repeat(99)}})
+            ),
+            "status.strip is for a working status"
+        );
+        assert_eq!(
+            message(
+                json!({"title":"Ask","icon":"ai","placeholder":"p".repeat(61),
+                "status":{"text":"t","strip":"s".repeat(81)}})
+            ),
+            "status.strip must be 1–80 characters on one line"
+        );
+        // The row's other texts last.
+        assert_eq!(
+            message(
+                json!({"title":"Ask","icon":"ai","placeholder":"p".repeat(61),
+                "empty":"e".repeat(81),"note":"n".repeat(41),"status":{"text":"t","strip":"s"}})
+            ),
+            "placeholder must be 1–60 characters on one line"
+        );
+        assert_eq!(
+            message(json!({"title":"Ask","icon":"ai","empty":"e".repeat(81),
+                "note":"n".repeat(41)})),
+            "empty must be 1–80 characters on one line"
+        );
+        assert_eq!(
+            message(json!({"title":"Ask","icon":"ai","note":"n".repeat(41)})),
+            "note must be 1–40 characters on one line"
+        );
+    }
+
+    /// A parked holder keeps its row without its working status: the
+    /// strip's own text goes with it, from the row and the recorded call.
+    #[test]
+    fn a_parked_holder_loses_the_strips_text_with_its_working_status() {
+        let sent = json!({"title":"Ask Vestra","icon":"ai",
+            "status":{"text":"Vestra is working · Planning…","strip":"Planning…"}});
+        let mut lead = Lead {
+            owner: 3,
+            row: parse(&english(), &[], &sent).unwrap(),
+            sent,
+            recorded: false,
+            ended: None,
+        };
+        assert_eq!(lead.row.working_strip(), Some("Planning…"));
+        assert!(lead.park());
+        assert_eq!(
+            (lead.row.strip.as_deref(), lead.row.working_strip()),
+            (None, None)
+        );
+        assert_eq!(lead.sent, json!({"title":"Ask Vestra","icon":"ai"}));
     }
 }

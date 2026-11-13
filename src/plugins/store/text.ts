@@ -280,6 +280,8 @@ export const HOST = [
   "Replace the installed “{}”?",
   "{1}\n\nWill install {2} from the official repository.\n\n{3}",
   "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
+  // The same without a scan: nothing about what it will be able to do.
+  "{1}\n\nWill install {2} from the unofficial repository.\n\n{3}",
   "Update “{}” to {}? The new version needs more permissions",
   "Added:\n{2}\n\nCurrent: {3}.",
   "Update “{}” to {}?",
@@ -290,6 +292,7 @@ export const HOST = [
   "From the Vestra Player official repository, author {2}.\n\n{3}",
   "Install “{}” {} from an unofficial repository?",
   "{2}\n\n{3}",
+  "{2}",
   "{1}",
   "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source.",
   // Parts of those confirmations.
@@ -297,6 +300,10 @@ export const HOST = [
   "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.",
   "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption.",
   "It will be able to:\n{}",
+  // Every plugin, from any source (the unofficial repository's own text says it already).
+  "Plugins may read your files or use the network.",
+  // A scan that found no category.
+  "It uses none of the player's sensitive features.",
   "Unknown",
   // The permission list: one line each, at most 20.
   "· {}",

@@ -12,7 +12,8 @@ import { MenuChrome } from "menu-view.slint";
 export struct LeadStrip {
     visible: bool,
     // working (the line sweeps), running (a step: the line filled to
-    // `progress`), done, failed, note.
+    // `progress`), done, failed, note, stopped (the user stopped the work:
+    // the icon dimmed, no line).
     kind: string,
     text: string,
     progress: float,
@@ -36,7 +37,7 @@ export component LeadStripView inherits Rectangle {
     callback action(string);
     out property <bool> hover: touch.has-hover;
 
-    private property <bool> ended: root.strip.kind == "done" || root.strip.kind == "failed" || root.strip.kind == "note";
+    private property <bool> ended: root.strip.kind == "done" || root.strip.kind == "failed" || root.strip.kind == "note" || root.strip.kind == "stopped";
     // §4.2: 168–420px (an end state up to 520px, the palette's width).
     private property <length> widest: min(root.ended ? 520px : 420px, root.room);
     private property <length> stop-width: root.strip.stop ? stop.preferred-width + 6px : 0px;
@@ -78,7 +79,7 @@ export component LeadStripView inherits Rectangle {
         height: 16px;
         Icon {
             name: root.strip.kind == "done" ? "menu-check" : root.strip.kind == "failed" ? "failed" : "ai";
-            color: root.strip.kind == "failed" ? Theme.danger : Theme.accent;
+            color: root.strip.kind == "failed" ? Theme.danger : root.strip.kind == "stopped" ? Theme.text-dim : Theme.accent;
         }
     }
     label := Text {

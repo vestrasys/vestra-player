@@ -27,6 +27,22 @@ export interface IndexVersion {
   sha256: string;
   size: number;
   published: string;
+  /**
+   * What the repository's capability scan found in this version's code
+   * (`scan: { uses: [...] }`, the `uses` of `vestra-plugin scan`): category
+   * words, each once. `null`: not given (an index from before the scan) or
+   * malformed; the store then goes by the declared capabilities.
+   */
+  scan: { uses: string[] } | null;
+}
+
+const CATEGORY = /^[a-z][a-z0-9.-]{0,31}$/;
+
+/** `scan`: an object whose `uses` is an array of category words; anything else is no scan. */
+function readScan(value: unknown): { uses: string[] } | null {
+  if (!object(value) || !Array.isArray(value.uses)) return null;
+  if (value.uses.length > 32 || value.uses.some((word) => typeof word !== "string" || !CATEGORY.test(word))) return null;
+  return { uses: [...new Set(value.uses as string[])] };
 }
 
 /** Expected size and sha256 of a store asset (README, changelog, icon); `null`: not given (older index). */
@@ -281,6 +297,7 @@ function readVersion(entry: unknown, url: (value: unknown) => string | null): In
     sha256: entry.sha256,
     size: entry.size as number,
     published: entry.published,
+    scan: readScan(entry.scan),
   };
 }
 

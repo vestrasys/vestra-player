@@ -1,6 +1,6 @@
 msgid ""
 msgstr ""
-"Project-Id-Version: vestra.workshop 2.2.39\n"
+"Project-Id-Version: vestra.workshop 2.2.41\n"
 "Content-Type: text/plain; charset=UTF-8\n"
 "Content-Transfer-Encoding: 8bit\n"
 
@@ -106,7 +106,7 @@ msgid_plural "{n} steps"
 msgstr[0] ""
 msgstr[1] ""
 
-#: ai.slint:217 askvestra/status.ts:130
+#: ai.slint:217 askvestra/status.ts:140
 msgid "Stopped"
 msgstr ""
 
@@ -428,111 +428,115 @@ msgstr ""
 msgid "Set up a model first"
 msgstr ""
 
-#: askvestra/ask.ts:202
+#: askvestra/ask.ts:203
 msgid "Enter stops"
 msgstr ""
 
-#: askvestra/ask.ts:415
+#: askvestra/ask.ts:416
 msgid "Ask Vestra sends your request to {}"
 msgstr ""
 
-#: askvestra/ask.ts:417
+#: askvestra/ask.ts:418
 msgid "What you type in the command palette, the player's command list (names, menus, keys and whether each is on or available) and whether something is open and playing go to this provider with your API key, as in the chat. File names, playlists, history, track and chapter titles and subtitles are not sent. The provider charges your account."
 msgstr ""
 
-#: askvestra/ask.ts:419
+#: askvestra/ask.ts:420
 msgid "Continue"
 msgstr ""
 
-#: askvestra/ask.ts:565
+#: askvestra/ask.ts:566
 msgid "Stop"
 msgstr ""
 
-#: askvestra/ask.ts:569
+#: askvestra/ask.ts:570
 msgid "Vestra is not working on a request"
 msgstr ""
 
-#: askvestra/ask.ts:575 askvestra/ask.ts:580
+#: askvestra/ask.ts:576 askvestra/ask.ts:581
 msgid "Vestra is working"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Planning…"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
+msgid "Vestra is working · Planning…"
+msgstr ""
+
+#: askvestra/status.ts:140
 msgid "Vestra is working · Step {0} of {1} · {2}"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Stopped: nothing was run"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Stopped: {} was not run"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Done · {}"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Opened {}"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Step {0} failed: {1}"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Took too long"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Could not reach {0}: {1}"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "The model gave no steps"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "The plan has more than {} steps"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Cannot read the API key; save it again in the settings"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "{} is no longer there"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Too many commands at once"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "The request has ended"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "This player does not let Vestra run commands"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "Vestra cannot do “{}”"
 msgstr ""
 
-#: askvestra/status.ts:130
+#: askvestra/status.ts:140
 msgid "There is no command “{}”"
 msgstr ""
 
-#: askvestra/status.ts:130 labels.slint:6 main.ts:637
+#: askvestra/status.ts:140 labels.slint:6 main.ts:637
 msgid "Custom · OpenAI format"
 msgstr ""
 
-#: askvestra/status.ts:130 labels.slint:7 main.ts:639
+#: askvestra/status.ts:140 labels.slint:7 main.ts:639
 msgid "Custom · Anthropic format"
 msgstr ""
 

@@ -27,6 +27,7 @@ mod events;
 mod media_control;
 mod media_read;
 mod media_sources;
+mod mpv;
 pub(crate) mod palette_lead;
 mod playback_control;
 mod playback_read;
@@ -60,6 +61,8 @@ pub(crate) use commands_run::{
 };
 pub(crate) use events::WAKE_EVENTS;
 pub(crate) use media_sources::locate_dialog;
+#[cfg(test)]
+pub(crate) use mpv::check as mpv_check;
 pub(crate) use palette_lead::{EVENT as LEAD_EVENT, Lead, LeadStatus, StatusState};
 
 /// What a capability is, as the manifest, the store and the SDK name it.
@@ -361,6 +364,9 @@ pub static ALL: &[&dyn Capability] = &[
     // Built-in only (Ask Vestra, doc/architecture/palette-lead.md).
     &commands_run::CommandsRun,
     &palette_lead::PaletteLead,
+    // The mpv pass-through (SDK 1.8.0): last, so the manifest order of the
+    // capabilities before it is unchanged.
+    &mpv::Mpv,
 ];
 
 /// Whether `name` is a manifest capability.

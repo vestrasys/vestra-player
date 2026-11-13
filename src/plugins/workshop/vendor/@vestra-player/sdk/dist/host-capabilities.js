@@ -459,6 +459,21 @@ export const HOST_CAPABILITIES = {
             residency: "recordable",
             risky: false,
         },
+        {
+            builtinOnly: false,
+            label: "Control the playback engine (mpv) directly: send its commands and change its options",
+            methods: [
+                { name: "mpv.command", needs: "mpv" },
+                { name: "mpv.get", needs: "mpv" },
+                { name: "mpv.set", needs: "mpv" },
+                { name: "mpv.observe", needs: "mpv" },
+                { name: "mpv.unobserve", needs: "mpv" },
+            ],
+            name: "mpv",
+            requires: [],
+            residency: "live",
+            risky: true,
+        },
     ],
     uncapable: [
         { name: "packages.list", needs: null },

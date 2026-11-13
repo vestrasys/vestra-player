@@ -920,6 +920,21 @@ export declare function createWire(transport: Transport): {
         openPath: (path: string) => Promise<void>;
         openUrl: (url: string) => Promise<void>;
     };
+    /**
+     * The mpv pass-through (`mpv`): commands and properties as mpv names
+     * them. The observed values arrive as `mpv.property` events.
+     */
+    mpv: {
+        command: (args: (string | number | boolean)[]) => Promise<{
+            result: Json;
+        }>;
+        get: (name: string) => Promise<{
+            value: Json;
+        }>;
+        set: (name: string, value: Json) => Promise<void>;
+        observeProperty: (name: string) => Promise<void>;
+        unobserveProperty: (name: string) => Promise<void>;
+    };
     /** The system's secret store, per plugin (`secrets`). */
     secrets: {
         get: (name: string) => Promise<string | null>;
