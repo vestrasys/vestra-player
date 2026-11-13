@@ -112,8 +112,11 @@
       "ab-loop-count": "managed",
       "af": "managed",
       "aid": "managed",
+      "alang": "managed",
       "ao": "managed",
+      "ao-mute": "managed",
       "ao-pcm-file": "files",
+      "ao-volume": "managed",
       "audio": "managed",
       "audio-delay": "managed",
       "audio-device": "managed",
@@ -124,6 +127,7 @@
       "border": "managed",
       "cache-dir": "files",
       "chapter": "managed",
+      "chapter-list": "managed",
       "clipboard": "clipboard",
       "config": "code",
       "config-dir": "code",
@@ -181,7 +185,9 @@
       "script-opts": "code",
       "scripts": "code",
       "secondary-sid": "managed",
+      "shuffle": "managed",
       "sid": "managed",
+      "slang": "managed",
       "speed": "managed",
       "start": "managed",
       "stop-screensaver": "managed",
@@ -192,17 +198,23 @@
       "time-pos": "managed",
       "title": "managed",
       "tone-mapping": "managed",
+      "use-filedir-conf": "code",
       "vf": "managed",
       "vid": "managed",
       "video": "managed",
       "video-aspect-override": "managed",
+      "video-crop": "managed",
       "video-pan-x": "managed",
       "video-pan-y": "managed",
       "video-rotate": "managed",
+      "video-scale-x": "managed",
+      "video-scale-y": "managed",
       "video-sync": "managed",
       "video-zoom": "managed",
+      "vlang": "managed",
       "vo": "managed",
       "volume": "managed",
+      "volume-gain": "managed",
       "wid": "clients",
       "window-maximized": "managed",
       "window-minimized": "managed",
@@ -245,6 +257,10 @@
         "managed"
       ],
       [
+        "video-align-",
+        "managed"
+      ],
+      [
         "sub-",
         "managed"
       ],
@@ -257,6 +273,9 @@
       "clipboard"
     ],
     "reservedLabel": "vestra-",
+    "reservedLabels": [
+      "all"
+    ],
     "writers": [
       "set",
       "del",

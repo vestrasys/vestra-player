@@ -187,6 +187,8 @@ pub static PROPERTIES: &[(&str, Category)] = &[
     ("config", Code),
     ("config-dir", Code),
     ("osc", Code),
+    // Per-directory configuration files, read at each load.
+    ("use-filedir-conf", Code),
     // Control channels.
     ("wid", Clients),
     // Files the player would write.
@@ -217,10 +219,15 @@ pub static PROPERTIES: &[(&str, Category)] = &[
     ("speed", Managed),
     ("volume", Managed),
     ("mute", Managed),
+    // The gain on top of the volume, and the system's own mixer.
+    ("volume-gain", Managed),
+    ("ao-volume", Managed),
+    ("ao-mute", Managed),
     ("time-pos", Managed),
     ("playback-time", Managed),
     ("percent-pos", Managed),
     ("chapter", Managed),
+    ("chapter-list", Managed),
     ("edition", Managed),
     ("start", Managed),
     ("end", Managed),
@@ -228,6 +235,7 @@ pub static PROPERTIES: &[(&str, Category)] = &[
     ("loop", Managed),
     ("loop-file", Managed),
     ("loop-playlist", Managed),
+    ("shuffle", Managed),
     ("ab-loop-a", Managed),
     ("ab-loop-b", Managed),
     ("ab-loop-count", Managed),
@@ -249,6 +257,10 @@ pub static PROPERTIES: &[(&str, Category)] = &[
     ("cover-art-files", Managed),
     ("audio-display", Managed),
     ("embeddedfonts", Managed),
+    // Which tracks a load selects.
+    ("alang", Managed),
+    ("slang", Managed),
+    ("vlang", Managed),
     // The filter chains as a whole, the output and the decoder
     // (processing.rs, audio_hold.rs, render_mode.rs).
     ("vf", Managed),
@@ -280,6 +292,10 @@ pub static PROPERTIES: &[(&str, Category)] = &[
     ("video-aspect-override", Managed),
     // The picture's orientation is the player's (source_geometry.rs).
     ("video-rotate", Managed),
+    // Where the picture sits in the video area (video_view.rs lays it out).
+    ("video-crop", Managed),
+    ("video-scale-x", Managed),
+    ("video-scale-y", Managed),
     ("keepaspect", Managed),
     ("panscan", Managed),
     // The window.
@@ -305,6 +321,7 @@ pub static PROPERTY_PREFIXES: &[(&str, Category)] = &[
     ("watch-later-", Files),
     ("playlist-", Managed),
     ("autofit", Managed),
+    ("video-align-", Managed),
     // Subtitle selection, files and style (subtitle_backend.rs).
     ("sub-", Managed),
     ("secondary-sub-", Managed),
@@ -335,6 +352,10 @@ pub static FILTER_MESSAGES: &[(&str, &str)] = &[("vf-command", "vf"), ("af-comma
 /// The start of the player's own filter labels (`@vestra-owned`,
 /// `@vestra-orientation`, ...): no plugin's.
 pub const RESERVED_LABEL: &str = "vestra-";
+/// Labels with a meaning of mpv's own, no plugin's either: `all` addresses
+/// every filter of a chain in `vf-command` / `af-command`, the player's
+/// included.
+pub static RESERVED_LABELS: &[&str] = &["all"];
 
 /// A command or property name as mpv writes one:
 /// `^[a-z0-9][a-z0-9/_-]*$`, case ignored, at most [`NAME_CHARS`].
@@ -383,7 +404,7 @@ pub fn command_problem(args: &Value) -> Option<String> {
     (!args.get(1).is_some_and(Value::is_string)
         && FILTER_MESSAGES
             .iter()
-            .any(|(command, _)| Some(*command) == args[0].as_str()))
+            .any(|(command, _)| *command == command_key(args)))
     .then(|| "vf-command and af-command take a filter label as their first argument".into())
 }
 
@@ -432,15 +453,25 @@ pub fn property_refusal(name: &str, write: bool) -> Option<String> {
     property_category(name, write).map(|category| refusal("property", name, category))
 }
 
+/// A command's name as mpv reads it, for every lookup: mpv takes `_` for
+/// `-` in a command's name (`cycle_values` is `cycle-values`), so the rules
+/// do too. Nothing else is folded: mpv knows no command or property in
+/// another case or with `_` in a property's name (it answers those itself).
+fn command_key(args: &[Value]) -> String {
+    args[0].as_str().unwrap_or_default().replace('_', "-")
+}
+
 /// The label of a filter value, `@label` or `@label:…`: 1–[`LABEL_CHARS`]
-/// of letters, digits, `.`, `_`, `-`, not the player's.
+/// of letters, digits, `.`, `_`, `-`, not the player's and not one of
+/// mpv's own ([`RESERVED_LABELS`]).
 fn filter_label(value: &str) -> Option<&str> {
     let label = value.strip_prefix('@')?.split(':').next()?;
     ((1..=LABEL_CHARS).contains(&label.len())
         && label
             .bytes()
             .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'.' | b'_' | b'-'))
-        && !label.starts_with(RESERVED_LABEL))
+        && !label.starts_with(RESERVED_LABEL)
+        && !RESERVED_LABELS.contains(&label))
     .then_some(label)
 }
 
@@ -459,9 +490,12 @@ fn shown(arg: Option<&Value>) -> String {
 /// it (playback/mpv_passthrough.rs): whose a label is, and whether a filter
 /// value holds more than the one labelled filter.
 pub fn command_refusal(args: &[Value]) -> Option<String> {
-    let name = args[0].as_str()?;
+    // The name as given in the message, as mpv reads it for the rules.
+    let given = args[0].as_str()?;
+    let key = command_key(args);
+    let name = key.as_str();
     if let Some((_, category)) = COMMANDS.iter().find(|(command, _)| *command == name) {
-        return Some(refusal("command", name, *category));
+        return Some(refusal("command", given, *category));
     }
     if WRITERS.contains(&name) {
         let reverse =
@@ -475,13 +509,13 @@ pub fn command_refusal(args: &[Value]) -> Option<String> {
                 .get(2)
                 .and_then(Value::as_str)
                 .is_some_and(|value| filter_label(value).is_some());
-        return (!allowed).then(|| refusal("command", name, Filters));
+        return (!allowed).then(|| refusal("command", given, Filters));
     }
     if FILTER_MESSAGES.iter().any(|(command, _)| *command == name) {
         let label = format!("@{}", shown(args.get(1)));
         return filter_label(&label)
             .is_none()
-            .then(|| refusal("command", name, Filters));
+            .then(|| refusal("command", given, Filters));
     }
     None
 }
@@ -497,9 +531,8 @@ pub struct FilterChange<'a> {
 /// The change of a filter chain command that passed [`command_refusal`];
 /// `None` for any other command.
 pub fn filter_change(args: &[Value]) -> Option<FilterChange<'_>> {
-    let stage = FILTER_STAGES
-        .iter()
-        .find(|stage| Some(**stage) == args[0].as_str())?;
+    let key = command_key(args);
+    let stage = FILTER_STAGES.iter().find(|stage| **stage == key)?;
     Some(FilterChange {
         stage,
         label: filter_label(args.get(2)?.as_str()?)?,
@@ -509,9 +542,10 @@ pub fn filter_change(args: &[Value]) -> Option<FilterChange<'_>> {
 /// The stage and label a filter message (`vf-command`, `af-command`) that
 /// passed [`command_refusal`] addresses; `None` for any other command.
 pub fn filter_message(args: &[Value]) -> Option<(&'static str, String)> {
+    let key = command_key(args);
     let (_, stage) = FILTER_MESSAGES
         .iter()
-        .find(|(command, _)| Some(*command) == args[0].as_str())?;
+        .find(|(command, _)| *command == key)?;
     let label = format!("@{}", shown(args.get(1)));
     filter_label(&label).map(|label| (*stage, label.to_owned()))
 }
@@ -552,6 +586,7 @@ pub fn json() -> Value {
                 .collect::<serde_json::Map<_, _>>(),
             "filterMessages": FILTER_MESSAGES.iter().map(|(command, _)| *command).collect::<Vec<_>>(),
             "reservedLabel": RESERVED_LABEL,
+            "reservedLabels": RESERVED_LABELS,
         },
     })
 }
@@ -940,5 +975,161 @@ mod tests {
             Some(("af", "loud".to_owned()))
         );
         assert_eq!(filter_message(&args(&["vf", "add", "@mine:hflip"])), None);
+    }
+
+    /// mpv reads `_` as `-` in a command's name (libmpv 0.41: `cycle_values`
+    /// runs `cycle-values`), so every table is looked up by the name as mpv
+    /// reads it; the message keeps the name as given.
+    #[test]
+    fn an_underscore_in_a_commands_name_is_a_hyphen_for_every_table() {
+        let refused = |list: &[&str]| command_refusal(&args(list));
+        // The refused commands, each under its `_` spelling.
+        for (command, category) in COMMANDS {
+            let spelled = command.replace('-', "_");
+            assert_eq!(
+                refused(&[spelled.as_str(), "x"]),
+                Some(format!(
+                    "mpv command {} is refused: {}",
+                    Value::from(spelled.as_str()),
+                    category.sentence()
+                )),
+                "{command}"
+            );
+        }
+        for spelled in [
+            "playlist_clear",
+            "load_script",
+            "quit_watch_later",
+            "screenshot_to_file",
+            "hook_add",
+            "script_message_to",
+            "playlist-play_index",
+        ] {
+            assert!(refused(&[spelled, "x"]).is_some(), "{spelled}");
+        }
+        // The writers: a write of their first argument.
+        for writer in WRITERS {
+            let spelled = writer.replace('-', "_");
+            assert_eq!(
+                refused(&[spelled.as_str(), "pause", "yes"]),
+                refused(&[writer, "pause", "yes"]),
+                "{writer}"
+            );
+            assert!(
+                refused(&[spelled.as_str(), "pause", "yes"]).is_some(),
+                "{writer}"
+            );
+            assert_eq!(
+                refused(&[spelled.as_str(), "brightness", "1"]),
+                None,
+                "{writer}"
+            );
+        }
+        assert!(refused(&["cycle_values", "!reverse", "hwdec", "no", "auto"]).is_some());
+        assert!(refused(&["change_list", "glsl-shaders", "append", "x.glsl"]).is_some());
+        // The filter messages: the label is checked, and the worker finds
+        // the stage and the label for the owner's check.
+        for (message, stage) in FILTER_MESSAGES {
+            let spelled = message.replace('-', "_");
+            assert_eq!(
+                refused(&[spelled.as_str(), "vestra-owned", "x", "1"]),
+                Some(format!(
+                    "mpv command {} is refused: {}",
+                    Value::from(spelled.as_str()),
+                    Filters.sentence()
+                ))
+            );
+            assert!(refused(&[spelled.as_str(), "all", "x", "1"]).is_some());
+            assert_eq!(refused(&[spelled.as_str(), "mine", "x", "1"]), None);
+            assert_eq!(
+                filter_message(&args(&[spelled.as_str(), "mine", "x", "1"])),
+                Some((*stage, "mine".to_owned()))
+            );
+            assert_eq!(
+                command_problem(&json!([spelled])).as_deref(),
+                Some("vf-command and af-command take a filter label as their first argument")
+            );
+        }
+        // The stages have no `-` to spell otherwise; a name that only looks
+        // like one is no command of the rules (mpv answers it).
+        for stage in FILTER_STAGES {
+            assert!(!stage.contains('-'));
+            assert!(refused(&[*stage, "set", "x"]).is_some());
+        }
+        assert_eq!(refused(&["v_f", "set", "x"]), None);
+        // Nothing else is folded: mpv knows no command in another case and
+        // no property with `_` (it answers `property not found`).
+        assert_eq!(refused(&["QUIT"]), None);
+        assert_eq!(property_category("sub_delay", true), None);
+    }
+
+    /// `all` is mpv's own label (every filter of the chain): no plugin's,
+    /// as a filter's label or in a filter message.
+    #[test]
+    fn the_label_all_is_reserved() {
+        let refused = |list: &[&str]| command_refusal(&args(list));
+        for stage in FILTER_STAGES {
+            for operation in FILTER_OPERATIONS {
+                assert!(refused(&[*stage, *operation, "@all:lavfi=[null]"]).is_some());
+                assert!(refused(&[*stage, *operation, "@all"]).is_some());
+            }
+        }
+        for (message, _) in FILTER_MESSAGES {
+            assert_eq!(
+                refused(&[*message, "all", "x", "1"]),
+                Some(format!(
+                    "mpv command \"{message}\" is refused: {}",
+                    Filters.sentence()
+                ))
+            );
+            assert_eq!(filter_message(&args(&[*message, "all", "x", "1"])), None);
+        }
+        assert_eq!(
+            filter_change(&args(&["vf", "add", "@all:lavfi=[null]"])),
+            None
+        );
+        // Only that word: a longer or differently cased label is a label.
+        for label in ["@ALL:x", "@all2:x", "@all.mine:x", "@small:x"] {
+            assert_eq!(refused(&["vf", "add", label]), None, "{label}");
+        }
+        assert_eq!(RESERVED_LABELS, ["all"]);
+    }
+
+    /// What else of the player's a property would go around (the P2
+    /// review): per-directory configuration, the volume beside the
+    /// player's, the play order, the chapters, where the picture sits,
+    /// which tracks a load selects.
+    #[test]
+    fn what_goes_around_the_players_state_is_refused() {
+        let write = |name: &str| property_category(name, true);
+        assert_eq!(write("use-filedir-conf"), Some(Code));
+        for name in [
+            "volume-gain",
+            "ao-volume",
+            "ao-mute",
+            "shuffle",
+            "chapter-list",
+            "video-crop",
+            "video-scale-x",
+            "video-scale-y",
+            "video-align-x",
+            "video-align-y",
+            "alang",
+            "slang",
+            "vlang",
+        ] {
+            assert_eq!(write(name), Some(Managed), "{name}");
+            // Reading stays open.
+            assert_eq!(property_category(name, false), None, "{name}");
+        }
+        // Their neighbours stay free.
+        for free in [
+            "volume-max",
+            "video-unscaled",
+            "video-margin-ratio-left",
+            "ao-null-untimed",
+        ] {
+            assert_eq!(write(free), None, "{free}");
+        }
     }
 }

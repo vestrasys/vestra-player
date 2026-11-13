@@ -537,3 +537,98 @@ fn nothing_is_watched_or_waiting_until_a_plugin_observes() {
     assert!(idle(&pass));
     assert_eq!(labels(&mpv, "vf"), ORIENTATION);
 }
+
+/// A labelled filter that left its chain behind the pass-through's back
+/// is nobody's again: at the next filter command of any plugin, and when
+/// the worker is asked what a plugin holds.
+#[test]
+fn a_label_whose_filter_left_the_chain_is_let_go() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let mut pass = two_plugins();
+    command(
+        &mut pass,
+        &mpv,
+        1,
+        json!(["vf", "add", "@mine:lavfi=[null]"]),
+    )
+    .unwrap();
+    command(
+        &mut pass,
+        &mpv,
+        1,
+        json!(["af", "add", "@loud:lavfi=[anull]"]),
+    )
+    .unwrap();
+    assert!(pass.holds(1) && pass.labelled());
+    // Gone from the video chain without a request of its plugin.
+    mpv.command(&["vf", "remove", "@mine"]).unwrap();
+    assert!(pass.holds(1), "not looked at yet");
+    // Another plugin may take the label: no conflict with a holder of nothing.
+    command(
+        &mut pass,
+        &mpv,
+        2,
+        json!(["vf", "add", "@mine:lavfi=[null]"]),
+    )
+    .unwrap();
+    let error = command(&mut pass, &mpv, 1, json!(["vf", "remove", "@mine"])).unwrap_err();
+    assert_eq!(
+        (error.code.as_str(), error.message.as_str()),
+        ("conflict", "the filter label @mine belongs to bb.second")
+    );
+    // The audio label too, when the worker asks (`owner.resources`).
+    mpv.command(&["af", "remove", "@loud"]).unwrap();
+    pass.refresh(&mpv);
+    assert!(!pass.holds(1) && pass.holds(2));
+    // A filter message to a label that is gone finds no holder either.
+    mpv.command(&["vf", "remove", "@mine"]).unwrap();
+    let gone = command(&mut pass, &mpv, 1, json!(["vf-command", "mine", "x", "1"])).unwrap_err();
+    assert_eq!(gone.code, "backend");
+    assert!(!pass.holds(2) && !pass.labelled());
+}
+
+/// mpv's `all` addresses every filter of a chain, the player's too: it is
+/// no plugin's label, in a filter message or as a filter's own.
+#[test]
+fn the_label_all_and_underscore_names_reach_no_filter_of_the_players() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let mut pass = two_plugins();
+    let before = chain(&mpv, "vf").unwrap();
+    for args in [
+        json!(["vf-command", "all", "angle", "1"]),
+        json!(["af-command", "all", "volume", "0"]),
+        json!(["vf_command", "all", "angle", "1"]),
+        json!(["vf_command", "vestra-orientation", "angle", "1"]),
+        json!(["vf", "add", "@all:lavfi=[null]"]),
+        json!(["af", "pre", "@all"]),
+        json!(["change_list", "vf", "clr", ""]),
+        json!(["cycle_values", "pause", "yes", "no"]),
+    ] {
+        let error = command(&mut pass, &mpv, 1, args.clone()).unwrap_err();
+        assert_eq!(error.code, "refused", "{args}");
+    }
+    assert_eq!(chain(&mpv, "vf").unwrap(), before);
+    assert!(!mpv.get_property::<bool>("pause").unwrap());
+    // mpv itself reads `_` as `-` in a command's name (why the rules do):
+    // a command that is not refused runs under either spelling.
+    command(
+        &mut pass,
+        &mpv,
+        1,
+        json!(["cycle_values", "brightness", "1", "2"]),
+    )
+    .unwrap();
+    // A label in another case is a label like any other.
+    command(
+        &mut pass,
+        &mpv,
+        1,
+        json!(["vf", "add", "@ALL:lavfi=[null]"]),
+    )
+    .unwrap();
+    assert!(pass.holds(1));
+    pass.stopped(&mpv, 1);
+    assert_eq!(chain(&mpv, "vf").unwrap(), before);
+}

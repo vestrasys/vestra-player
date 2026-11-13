@@ -547,6 +547,11 @@ impl Backend {
                                 // A labelled mpv filter or an observer
                                 // (`mpv_passthrough.rs`): last, the lists of
                                 // the plugins without one are as before.
+                                // A label whose filter left its chain is let go
+                                // first (mpv is asked only while one is held).
+                                if passthrough.labelled() {
+                                    passthrough.refresh(&mpv);
+                                }
                                 let passes = passthrough.holds(owner);
                                 if passes {
                                     live.push(crate::playback::mpv_passthrough::HELD);

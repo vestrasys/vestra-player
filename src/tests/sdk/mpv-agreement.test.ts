@@ -21,6 +21,7 @@ type Rules = {
   filterCommands: Record<string, readonly string[]>;
   filterMessages: readonly string[];
   reservedLabel: string;
+  reservedLabels: readonly string[];
 };
 
 // Typed loosely: an SDK before 1.8.0 has neither.
@@ -64,6 +65,7 @@ test("MPV_RULES are the player's (host/mpv-rules.json)", (t) => {
     ),
     filterMessages: [...sdk.filterMessages],
     reservedLabel: sdk.reservedLabel,
+    reservedLabels: [...(sdk.reservedLabels ?? [])],
   };
   assert.deepEqual(
     Object.keys(tables).sort(),

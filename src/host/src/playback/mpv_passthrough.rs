@@ -228,6 +228,36 @@ impl Passthrough {
         self.waiting
     }
 
+    /// Whether any plugin holds a filter label: only then is there a chain
+    /// to compare the labels with ([`Self::refresh`]).
+    pub fn labelled(&self) -> bool {
+        !self.labels.is_empty()
+    }
+
+    /// The labels whose filter is no longer in its chain are nobody's
+    /// again. Nothing in the player rewrites a chain as a whole and a
+    /// plugin's own removals are followed as they happen, so this is for
+    /// what leaves a chain behind the pass-through's back (mpv dropping a
+    /// filter it cannot build): without it such a label would keep its
+    /// plugin running and refuse the label to every other plugin for good.
+    pub fn refresh(&mut self, mpv: &Mpv) {
+        for stage in mpv_rules::FILTER_STAGES {
+            self.prune(mpv, stage);
+        }
+    }
+
+    fn prune(&mut self, mpv: &Mpv, stage: &'static str) {
+        if !self.labels.keys().any(|(held, _)| *held == stage) {
+            return;
+        }
+        let Ok(filters) = chain(mpv, stage) else {
+            return;
+        };
+        self.labels.retain(|(held, label), _| {
+            *held != stage || filters.iter().any(|filter| label_of(filter) == label)
+        });
+    }
+
     /// Whether `owner` holds something only its process serves here: a
     /// labelled filter (it may steer it) or an observer.
     pub fn holds(&self, owner: u64) -> bool {
@@ -334,6 +364,7 @@ impl Passthrough {
                 .map_err(backend)
         };
         if let Some((stage, label)) = mpv_rules::filter_message(args) {
+            self.prune(mpv, stage);
             if let Some(error) = self.taken(owner, stage, &label) {
                 return Err(error);
             }
@@ -342,6 +373,7 @@ impl Passthrough {
         let Some(change) = mpv_rules::filter_change(args) else {
             return run(mpv);
         };
+        self.prune(mpv, change.stage);
         if let Some(error) = self.taken(owner, change.stage, change.label) {
             return Err(error);
         }
