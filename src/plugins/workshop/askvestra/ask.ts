@@ -6,7 +6,7 @@
 // palette's status, which the player draws as a status strip where the
 // palette was while the palette is closed (UX PROPOSAL §4.2): Planning…
 // while the model plans, the player's own line for each step, then one end
-// state (done, failed or a note) that the player times and removes itself.
+// state (done, failed, a note or stopped) that the player times and removes itself.
 // User ruling 2026-11-11: Ask Vestra runs commands only (no parameters, no
 // direct playback control), so nothing it does is undone by it: there is
 // no Undo.
@@ -20,7 +20,7 @@ import type { StartMessage } from "../worker/protocol.ts";
 import { MAX_STEPS, PlanError, parsePlan, type Step } from "./plan.ts";
 import { askMessage, askSystemPrompt } from "./prompt.ts";
 import { commandTable, offered } from "./commands.ts";
-import { STATUS_CHARS, build, statusText, type Line } from "./status.ts";
+import { END_STATUS_CHARS, build, statusText, type Line } from "./status.ts";
 
 /** Wall time of one request (PROPOSAL §4). */
 export const REQUEST_TIMEOUT_MS = 90_000;
@@ -46,8 +46,8 @@ export const RUNS_PER_SECOND = 4;
  * than 1000 / RUNS_PER_SECOND, so it also keeps the rate by itself.
  */
 export const STEP_GAP_MS = 260;
-/** Model text quoted in a status (an error, a refusal), at most: the player's limit for the whole text (status.ts). */
-const QUOTE_CHARS = STATUS_CHARS;
+/** Model text quoted in an end state (an error, a refusal), at most: the player's limit for the whole text (status.ts). */
+const QUOTE_CHARS = END_STATUS_CHARS;
 
 export const STOP_COMMAND = "askvestra.stop";
 /**
@@ -85,8 +85,8 @@ interface Request {
   stopped: boolean;
 }
 
-/** How a request ended, as the status strip shows it (`status.state`, SDK 1.7.15). */
-export type EndState = "done" | "failed" | "note";
+/** How a request ended, as the status strip shows it (`status.state`, SDK 1.7.15; `stopped`, the user's Stop: SDK 1.8.0). */
+export type EndState = "done" | "failed" | "note" | "stopped";
 interface End {
   text: Line;
   state: EndState;
@@ -196,9 +196,10 @@ export function askVestra(plugin: Plugin, model: AskModel) {
             i18n,
             current?.step
               ? { source: "Vestra is working · Step {0} of {1} · {2}", args: [current.step.index, current.step.of, current.step.label] }
-              : // Also the strip's text while the model plans; from the first step on the player writes the strip.
-                { source: "Planning…" },
+              : { source: "Vestra is working · Planning…" },
           ),
+          // The strip's shorter text while the model plans; from the first step on the player writes the strip.
+          ...(current?.step ? {} : { strip: statusText(i18n, { source: "Planning…" }) }),
           note: i18n.text("Enter stops"),
         }
       : null,
@@ -233,7 +234,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
    */
   const finish = async (end: End) => {
     if (!leadHeld) return;
-    const options: PaletteLeadOptions = { ...leadOptions(), status: { text: statusText(i18n, end.text), state: end.state } };
+    const options: PaletteLeadOptions = { ...leadOptions(), status: { text: statusText(i18n, end.text, END_STATUS_CHARS), state: end.state } };
     shownLead = JSON.stringify(options);
     await lead.update(options).catch((error) => console.error(`Ask Vestra: lead row: ${(error as Error).message}`));
     refresh();
@@ -395,7 +396,7 @@ export function askVestra(plugin: Plugin, model: AskModel) {
       latest++; // the waiting request goes no further
       refresh();
       // The strip said Planning… for it; a running request says Stopped itself.
-      if (!current) void finish({ text: { source: "Stopped" }, state: "note" });
+      if (!current) void finish({ text: { source: "Stopped" }, state: "stopped" });
     }
     stop(true);
   };
@@ -508,15 +509,15 @@ export function askVestra(plugin: Plugin, model: AskModel) {
     } catch (error) {
       if (mine.controller.signal.aborted) {
         // Replaced by a newer request: nothing to say, the newer one shows.
-        if (mine.stopped) end = { text: { source: "Stopped" }, state: "note" };
+        if (mine.stopped) end = { text: { source: "Stopped" }, state: "stopped" };
       } else if (error instanceof Declined) {
         // Don't Run on the player's approval sheet, which asks for the whole
         // plan before its first step: nothing was run. A step after the
         // first asks again only if the player no longer holds the plan for
         // it; "nothing was run" is said only while it is true.
         end = labels.length
-          ? { text: { source: "Stopped: {} was not run", args: [error.label] }, state: "note" }
-          : { text: { source: "Stopped: nothing was run" }, state: "note" };
+          ? { text: { source: "Stopped: {} was not run", args: [error.label] }, state: "stopped" }
+          : { text: { source: "Stopped: nothing was run" }, state: "stopped" };
       } else if (error instanceof Failure) end = { text: error.text, state: error.state };
       else if (error instanceof PlanError) end = planFailure(error);
       else {

@@ -131,3 +131,46 @@ export declare function addCapabilityEdit(ts: typeof TS, text: string, capabilit
     length: number;
     newText: string;
 } | undefined;
+/** @internal One use of an SDK member, where {@link findMemberUses} found it. */
+export interface MemberUse {
+    readonly file: string;
+    /** 1-based line and column of the member's name. */
+    readonly line: number;
+    readonly column: number;
+    /** The member, as it was asked for (`Clipboard.readText`). */
+    readonly api: string;
+}
+/**
+ * @internal A request sent by name (`plugin.wire.request("clipboard.readText")`):
+ * the method when the types fix it to one string, else `undefined` (a
+ * computed name, a union of several, the member taken as a value).
+ */
+export interface RequestUse {
+    readonly file: string;
+    readonly line: number;
+    readonly column: number;
+    readonly method: string | undefined;
+}
+/**
+ * Every use, in `files`, of the SDK members named by `apis`
+ * (`Interface.member`), and every request sent by name
+ * (`ARGUMENT_APIS`' `method` members: `Wire.request`), in file and position
+ * order. The same type-aware resolution as {@link checkCapabilities}, for
+ * any list of members: a use is a property access, an element access with
+ * a literal name or a destructured property whose symbol is the SDK's
+ * declaration of the member. It reads no manifest and no capability rule
+ * (the capability scan, `capability-scan.ts`, gives it its own lists).
+ *
+ * `resolved` is `false` when the program has no import of
+ * `@vestra-player/sdk` that resolves: nothing can be found by type then.
+ *
+ * @internal
+ */
+export declare function findMemberUses(ts: typeof TS, program: TS.Program, options: {
+    readonly files: readonly string[];
+    readonly apis: Iterable<string>;
+}): {
+    resolved: boolean;
+    uses: MemberUse[];
+    requests: RequestUse[];
+};

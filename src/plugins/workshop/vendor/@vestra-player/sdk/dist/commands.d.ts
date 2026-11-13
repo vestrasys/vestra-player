@@ -197,6 +197,41 @@ export declare const COMMAND_RUN_LIMITS: {
     readonly ticketIdleMs: 120000;
 };
 /**
+ * The player's limits on the texts of `palette.lead.set`, in characters as
+ * shown (translated, a text value with its arguments), each on one line;
+ * the same values as the player's (its agreement test checks that they
+ * agree). The player checks them; `TestHost` does the same.
+ * Internal: exported from `@vestra-player/sdk/runtime` only.
+ *
+ * @internal
+ */
+export declare const PALETTE_LEAD_LIMITS: {
+    /** `title` (40). */
+    readonly title: 40;
+    /** `placeholder` (60). */
+    readonly placeholder: 60;
+    /** `empty` (80). */
+    readonly empty: 80;
+    /** `note` (40). */
+    readonly note: 40;
+    /** `status.text` of a working status: one line of the row and the strip (80). */
+    readonly statusText: 80;
+    /** `status.text` of an end state: what the strip's two lines hold (160). */
+    readonly statusEndText: 160;
+    /** `status.note` (40). */
+    readonly statusNote: 40;
+    /** `status.strip`: one line of the strip (80). */
+    readonly statusStrip: 80;
+};
+/**
+ * `palette.lead.set`'s `status.state` values, the first the default
+ * (absent or `null`); the others are end states. The same list as the
+ * player's. Internal: exported from `@vestra-player/sdk/runtime` only.
+ *
+ * @internal
+ */
+export declare const PALETTE_LEAD_STATES: readonly ["working", "done", "failed", "note", "stopped"];
+/**
  * What is wrong with `commands.run`'s `then` (given, not `null`), as
  * the player words it; `null` when nothing is. The SDK and `TestHost`
  * check it the same way.
