@@ -343,8 +343,8 @@ msgstr "無効な項目を削除"
 
 #: main.ts:602
 #, x-machine
-msgid "Show in Finder"
-msgstr "Finder に表示"
+msgid "Show in Folder"
+msgstr "フォルダーに表示"
 
 #: main.ts:602
 #, x-machine

@@ -115,7 +115,7 @@ The list's key bindings work only while the playlist (the list or its search box
 | Remove Unselected | Ctrl+Delete | List context menu | |
 | Remove Invalid Items | | List context menu | No shortcut (Ctrl+T stays Always on Top: Cycle Mode) |
 | Remove All | Alt+Delete | List context menu | |
-| Show in Finder | Ctrl+F | List context menu | The title is the same on every system (it also says "Finder" on Windows) |
+| Show in Folder | Ctrl+F | List context menu | The title is the same on every system (capture's notice and the player's OSD use the same words) |
 | Select All | Ctrl+A | List context menu | |
 | Search | Ctrl+S | List context menu | |
 | Open List File… | | List context menu | No shortcut (F3 stays Open File…) |

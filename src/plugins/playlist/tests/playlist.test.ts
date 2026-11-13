@@ -226,7 +226,7 @@ test("menu positions follow the round allocation table; list keys only work with
       ["(移除未选)", 0, "domain", "Ctrl+Delete", "panel"],
       ["(移除无效项)", 0, "domain", "", ""],
       ["(移除全部)", 0, "domain", "Alt+Delete", "panel"],
-      ["(在 Finder 中显示)", 0, "domain", "Ctrl+F", "panel"],
+      ["(在文件夹中显示)", 0, "domain", "Ctrl+F", "panel"],
       ["(置顶)", 0, "domain", "", ""],
       ["(上移)", 0, "domain", "Ctrl+ArrowUp", "panel"],
       ["(下移)", 0, "domain", "Ctrl+ArrowDown", "panel"],
@@ -1534,4 +1534,27 @@ test("list focus: the list takes ↑ ↓ PgUp PgDn Home End Enter Esc; its bindi
   // row, and the search box's Esc and ↓; and it shows no focus ring (user ruling 2026-11-08).
   assert.equal([...slint.matchAll(/list-focus\.focus\(\)/g)].length, 4);
   assert.doesNotMatch(slint, /visible: list-focus\.has-focus;/);
+});
+
+test("reveal is titled Show in Folder on every system, worded as capture's notice; id and key unchanged", async () => {
+  for (const [locale, title] of [["en", "Show in Folder"], ["zh-Hans", "在文件夹中显示"]] as const) {
+    const app = await start(fakeProbe(), locale);
+    try {
+      const reveal = app.command("reveal");
+      assert.equal(reveal.display.title, title, locale);
+      assert.deepEqual(reveal.declaration.bindings, ["Ctrl+F"]);
+      assert.equal(reveal.declaration.focus, "panel");
+    } finally {
+      await app.close();
+    }
+  }
+  // Every language says it as capture's "Show in Folder" does; "Finder" is gone from the texts.
+  const msgstr = (po: string) => po.match(/^msgid "Show in Folder"\nmsgstr "(.*)"$/m)?.[1];
+  for (const lang of ["de", "es", "fr", "ja", "ko", "zh-Hans"]) {
+    const own = await readFile(new URL(`../locales/${lang}.po`, import.meta.url), "utf8");
+    const capture = await readFile(new URL(`../../capture/locales/${lang}.po`, import.meta.url), "utf8");
+    assert.ok(msgstr(own), `${lang} translates Show in Folder`);
+    assert.equal(msgstr(own), msgstr(capture), lang);
+    assert.doesNotMatch(own, /Finder/, lang);
+  }
 });
