@@ -584,9 +584,9 @@ impl Upscaling {
         }
     }
 
-    /// Every worker iteration: answer requests once the system's check is
-    /// known; while upscaling is asked for, follow the size and the
-    /// decoding (every [`CHECK_EVERY`]).
+    /// Every worker iteration, after [`Upscaling::take_check`]: answer
+    /// requests once the system's check is taken; while upscaling is asked
+    /// for, follow the size and the decoding (every [`CHECK_EVERY`]).
     /// `copy_back`: [`Upscaling::note_copy_back`]'s list, read only when
     /// this iteration checks the availability (the check answered, or a
     /// look is due), not every worker iteration.
@@ -597,21 +597,13 @@ impl Upscaling {
         events: &mpsc::Sender<Event>,
         copy_back: impl Fn() -> Vec<ChainOwner>,
     ) {
-        if let Probe::Running(receiver) = &self.probe {
-            match receiver.try_recv() {
-                Ok(probe) => self.probe = Probe::Done(probe),
-                Err(mpsc::TryRecvError::Empty) => {}
-                Err(mpsc::TryRecvError::Disconnected) => {
-                    self.probe = Probe::Done(Err(platform::UpscalerRefusal {
-                        code: "gpu-unsupported",
-                        message: "the upscaler check stopped without an answer".into(),
-                    }));
-                }
-            }
-            if matches!(self.probe, Probe::Done(_)) {
-                self.copy_back_owners = copy_back();
-                self.answer(mpv, render, events);
-            }
+        // The check is taken only by `take_check`, which the worker calls
+        // before this, then lets motion smoothing step aside for a request
+        // that will be accepted (`Motion::hand_over`). Taking it here could
+        // answer a check that arrived after the hand-over looked.
+        if matches!(self.probe, Probe::Done(_)) && !self.pending.is_empty() {
+            self.copy_back_owners = copy_back();
+            self.answer(mpv, render, events);
         }
         let now = Instant::now();
         if self.due_in(now).is_some_and(|due| due.is_zero()) {
@@ -792,13 +784,44 @@ impl Upscaling {
     /// Whether `set(true)` would be accepted now: the system's check
     /// answered, and no reason that holds for the run stands in the way.
     /// Motion smoothing yields to upscaling only then
-    /// (`Motion::yield_to_upscaling`); before the check, or where upscaling
-    /// is refused (no NVIDIA GPU), it stays.
+    /// (`Motion::yield_to_upscaling`); where upscaling is refused (no
+    /// NVIDIA GPU) it stays. Before the check nothing is decided: the
+    /// request waits for it, and [`Upscaling::accepts_waiting`] decides.
     pub fn would_accept(&self, mpv: &Mpv, render: &Render) -> bool {
         matches!(self.probe, Probe::Done(_))
             && self
                 .availability(mpv, render, &Value::Null)
                 .map_or_else(|reason| !reason.fixed(), |()| true)
+    }
+
+    /// Take the system's check if its thread answered, without answering
+    /// the requests waiting for it ([`Upscaling::poll`] does that).
+    pub fn take_check(&mut self) {
+        if let Probe::Running(receiver) = &self.probe {
+            match receiver.try_recv() {
+                Ok(probe) => self.probe = Probe::Done(probe),
+                Err(mpsc::TryRecvError::Empty) => {}
+                Err(mpsc::TryRecvError::Disconnected) => {
+                    self.probe = Probe::Done(Err(platform::UpscalerRefusal {
+                        code: "gpu-unsupported",
+                        message: "the upscaler check stopped without an answer".into(),
+                    }));
+                }
+            }
+        }
+    }
+
+    /// Whether a `set(true)` that waited for the system's check (the run's
+    /// first request) will be accepted when [`Upscaling::poll`] answers
+    /// it: the check is taken ([`Upscaling::take_check`]) and
+    /// [`Upscaling::would_accept`]. A later `set(false)` from the same
+    /// plugin, waiting too, cancels it. Motion smoothing steps aside then,
+    /// before the answer (`Motion::hand_over`).
+    pub fn accepts_waiting(&self, mpv: &Mpv, render: &Render) -> bool {
+        self.pending
+            .iter()
+            .any(|pending| matches!(pending, Pending::Set(_, true, _)))
+            && self.would_accept(mpv, render)
     }
 
     /// The `UpscalingState` for `owner`.

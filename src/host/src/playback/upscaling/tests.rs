@@ -347,6 +347,8 @@ fn reply(
             }
         }
         assert!(Instant::now() < deadline, "no reply");
+        // The worker's order (`backend.rs`).
+        upscaling.take_check();
         upscaling.poll(mpv, render, events, Vec::new);
         std::thread::sleep(Duration::from_millis(5));
     }
@@ -720,6 +722,40 @@ fn the_check_wakes_the_worker_when_it_answers() {
         assert!(Instant::now() < deadline, "not woken");
         std::thread::sleep(Duration::from_millis(5));
     }
+}
+
+/// Only `take_check` takes the check: `poll` never answers one that
+/// arrived after the worker's hand-over looked (`Motion::hand_over`), so
+/// the converter cannot be passed over by a check answering in between.
+#[test]
+fn poll_answers_only_a_check_the_worker_took() {
+    use std::sync::atomic::{AtomicBool, Ordering};
+    static WOKEN: AtomicBool = AtomicBool::new(false);
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let render = starting();
+    let (events, received) = mpsc::channel();
+    let mut upscaling = Upscaling::with_probe(rtx);
+    upscaling.wake_with(|| WOKEN.store(true, Ordering::Release));
+    let on = command(1, "video.upscaling.set", json!({"enabled":true}));
+    assert!(upscaling.command(&mpv, &render, &on, &events));
+    let deadline = Instant::now() + Duration::from_secs(10);
+    while !WOKEN.load(Ordering::Acquire) {
+        assert!(Instant::now() < deadline, "no check");
+        std::thread::sleep(Duration::from_millis(5));
+    }
+    // The check answered, not taken yet: nothing is decided or answered.
+    assert!(!upscaling.accepts_waiting(&mpv, &render));
+    upscaling.poll(&mpv, &render, &events, Vec::new);
+    assert!(received.try_recv().is_err(), "answered before take_check");
+    upscaling.take_check();
+    assert!(upscaling.accepts_waiting(&mpv, &render));
+    upscaling.poll(&mpv, &render, &events, Vec::new);
+    let Ok(Event::Reply(_, state)) = received.try_recv() else {
+        panic!("no answer after take_check");
+    };
+    assert_eq!(state.unwrap()["enabled"], true);
+    assert!(!upscaling.accepts_waiting(&mpv, &render), "answered");
 }
 
 /// Review M1: a size that comes back to a factor mpv refused must not leave
