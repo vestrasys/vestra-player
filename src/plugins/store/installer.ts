@@ -242,10 +242,6 @@ function compare(candidate: PackageCandidate, id: string, version: IndexVersion)
     return msg("The plugin package does not match the repository's description (id); not installed");
   if (manifest.version !== version.version)
     return msg("The plugin package does not match the repository's description (version); not installed");
-  const declared = new Set(version.capabilities);
-  const actual = new Set(manifest.capabilities);
-  if (declared.size !== actual.size || [...actual].some((c) => !declared.has(c)))
-    return msg("The plugin package does not match the repository's description (permissions); not installed");
   return null;
 }
 

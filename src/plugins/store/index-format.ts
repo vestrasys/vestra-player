@@ -22,7 +22,6 @@ export interface IndexVersion {
   version: string;
   apiVersion: string;
   minPlayerVersion: string | null;
-  capabilities: string[];
   downloadUrl: string;
   sha256: string;
   size: number;
@@ -31,7 +30,9 @@ export interface IndexVersion {
    * What the repository's capability scan found in this version's code
    * (`scan: { uses: [...] }`, the `uses` of `vestra-plugin scan`): category
    * words, each once. `null`: not given (an index from before the scan) or
-   * malformed; the store then goes by the declared capabilities.
+   * malformed; the store then says nothing about what the version can do.
+   * A version's `capabilities` (signed indexes from before SDK 1.9.0 still
+   * carry it) is legacy data: accepted in any form and never read.
    */
   scan: { uses: string[] } | null;
 }
@@ -282,7 +283,6 @@ function readVersion(entry: unknown, url: (value: unknown) => string | null): In
   if (typeof entry.apiVersion !== "string" || !entry.apiVersion) return null;
   const min = entry.minPlayerVersion ?? null;
   if (min !== null && !isVersion(min)) return null;
-  if (!Array.isArray(entry.capabilities) || entry.capabilities.some((c) => typeof c !== "string")) return null;
   const downloadUrl = url(entry.downloadUrl);
   if (!downloadUrl) return null;
   if (typeof entry.sha256 !== "string" || !SHA256.test(entry.sha256)) return null;
@@ -292,7 +292,6 @@ function readVersion(entry: unknown, url: (value: unknown) => string | null): In
     version: entry.version,
     apiVersion: entry.apiVersion,
     minPlayerVersion: min as string | null,
-    capabilities: [...new Set(entry.capabilities as string[])].slice(0, 64),
     downloadUrl,
     sha256: entry.sha256,
     size: entry.size as number,

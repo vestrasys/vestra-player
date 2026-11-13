@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.19
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. The store declared none of the two that changed how a plugin ran (`events`, `playback.read`), so `activate()` needs no `plugin.player.subscribe()` or `read()` call.
+- A repository index version's `capabilities` is now optional legacy data: signed indexes from before SDK 1.9.0 still carry it, so it is accepted in any form (or absent) and never read. Formerly a version without a valid list was dropped from the index. The install check that a package declares exactly what its index entry lists is gone, since packages declare nothing; the package must still match the entry's id and version, and its size and checksum.
+- Unchanged: what the store tells you about a plugin comes only from the index `scan`, with no list without a scan (as in 0.2.18). Who must change: nobody; a repository may drop `capabilities` from new index versions.
+
 ## 0.2.18
 
 - What the store tells you about a plugin now comes only from the repository's scan of its code, never from the capabilities the package declares (SDK 1.8.0, plan A1/A6; user ruling 2026-11-13). A repository's index may carry the scan per version (`versions[].scan.uses`, the `uses` of `vestra-plugin scan`); the store shows its categories in plain words: player settings and the playback engine, other plugins, clipboard, credentials, camera, microphone, screen, notifications; a word the store does not know is named as an unknown permission. Without a scan (an index from before it, a `.vxp` from a file or a link) there is nothing to show.

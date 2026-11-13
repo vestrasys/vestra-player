@@ -96,6 +96,19 @@ test("index: a version's scan.uses is read; absent or malformed is no scan, and 
     assert.equal(scanOf({ scan: bad }), null, JSON.stringify(bad));
 });
 
+test("a version's capabilities is legacy data (SDK 1.9.0): optional, accepted in any form, never read", () => {
+  const versionOf = (entry: Record<string, unknown>) =>
+    parseIndex(JSON.stringify({ schema: 1, plugins: [{ id: "a.one", versions: [entry] }] })).index.plugins[0]?.versions[0];
+  const { capabilities: _, ...without } = version({});
+  const entries: Record<string, unknown>[] = [without, version({}), version({ capabilities: "commands" }), version({ capabilities: [1] }), version({ capabilities: null })];
+  for (const entry of entries) {
+    const parsed = versionOf(entry);
+    assert.ok(parsed, JSON.stringify(entry.capabilities));
+    assert.equal(parsed.version, "1.0.0");
+    assert.ok(!("capabilities" in parsed), JSON.stringify(entry.capabilities));
+  }
+});
+
 test("labels: mpv is risky; the eight categories in the scan's order, an unknown word named last", () => {
   assert.deepEqual(CAPABILITIES.mpv, {
     text: "Control the playback engine (mpv) directly: send its commands and change its options",
@@ -219,7 +232,7 @@ test("replacing a file install from an unofficial repository without a scan: no 
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   publish(net, THIRD, [{ id: "someone.viz", name: "Viz", versions: [{ version: "1.0.0", capabilities: ["commands", "secrets"] }] }]);
-  const { host, store, stop } = await start({ net, packages: [BUILTIN, info("someone.viz", { version: "0.9.0", capabilities: ["commands"] })] });
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, info("someone.viz", { version: "0.9.0" })] });
   try {
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
@@ -276,7 +289,7 @@ const UPDATE: PluginSpec = {
     { version: "0.2.0", capabilities: ["commands"] },
   ],
 };
-const INSTALLED = info("zysilm.youtube", { version: "0.2.0", capabilities: ["commands"], source: { kind: "repository", url: OFFICIAL } });
+const INSTALLED = info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } });
 
 test("update, both versions scanned: a new category is named, by the window's notice and the confirmation alike", async () => {
   const net = new FakeNet();
@@ -388,7 +401,7 @@ test("update from a version without a scan to a scanned one: its categories are 
     ],
   };
   publishScanned(net, OFFICIAL, [themed], { "zysilm.youtube 0.3.0": ["player"] });
-  const installed = info("zysilm.youtube", { version: "0.2.0", capabilities: ["commands", "ui.theme"], source: { kind: "repository", url: OFFICIAL } });
+  const installed = info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } });
   const { host, stop } = await ready(net, [BUILTIN, installed]);
   try {
     await choose(host, "YouTube");
@@ -408,7 +421,7 @@ test("a package from a file: the sentence and no list, whatever it declares", as
   const { host, store, stop } = await start({ net });
   try {
     const risky = join(scratch, "a.vxp");
-    writeFileSync(risky, vxp({ id: "someone.a", version: "1.0.0", name: "A", capabilities: ["commands", "bindings.manage", "playback.read"] }));
+    writeFileSync(risky, vxp({ id: "someone.a", version: "1.0.0", name: "A" }));
     host.dialogAnswers.push(yes);
     await host.drop([risky]);
     await until(host, () => host.confirms.length === 1 && !store.busy, "confirmation");
