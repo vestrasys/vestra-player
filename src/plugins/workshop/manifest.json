@@ -1,6 +1,6 @@
 {
   "id": "vestra.workshop",
-  "version": "2.2.39",
+  "version": "2.2.40",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "capabilities": [

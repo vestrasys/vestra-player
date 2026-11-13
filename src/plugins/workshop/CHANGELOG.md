@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.40
+
+- The vendored SDK is 1.7.20 (`npm run vendor:sdk`), the version the player now uses. 1.7.20 is docs only (`MotionState.sourceFps` is the converter's input rate as the player measures it); the Workshop does not use motion smoothing. Who must change: nobody.
+
 ## 2.2.39
 
 - The vendored SDK is 1.7.19 (`npm run vendor:sdk`), the version the player now uses. 1.7.19 adds `plugin.video.motion(engine)` (capability `video.motion`, the player's motion smoothing) and its TestHost model; the Workshop does not use it. 1.7.18 is docs only (`dialogs.confirm` drawn in the player for the main window). 1.7.17 only refreshes the AI's command table: the player's new `host/ask-again` (Command Palette: Ask Again Before Plugin Commands, palette only, no key). 1.7.15: `PaletteLeadOptions.status.state` (`working`, the default, or the end states `done`, `failed`, `note`), which the player's new status strip reads. 1.7.16: `CommandRunOptions.then` (the rest of a plan, asked about once), and the TestHost models plans, counts `palette.lead.set` texts as shown (translated, filled in, one line) and judges `dangerous` by the Settings and Reset menus over the whole path, as the player does; no Workshop test needed a change for the stricter checks. Who must change: nobody.
