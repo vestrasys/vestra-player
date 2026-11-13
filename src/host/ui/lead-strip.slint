@@ -18,14 +18,19 @@ export struct LeadStrip {
     progress: float,
     // The Stop button (working and running).
     stop: bool,
+    // The system animates nothing (Windows' Animation effects off, macOS'
+    // Reduce motion): a working line rests in the middle (PROPOSAL §4.7).
+    still: bool,
 }
 
 export component LeadStripView inherits Rectangle {
     in property <LeadStrip> strip;
     // The widest the strip may be: the window's width less 16px.
     in property <length> room: 1000px;
-    // The line rests in the middle instead of sweeping (offline renders).
+    // The line rests in the middle instead of sweeping (offline renders;
+    // the host sets `strip.still` for the system's setting).
     in property <bool> still;
+    private property <bool> resting: root.still || root.strip.still;
     // `stop`, `open` (a press elsewhere while working), `dismiss` (a press
     // on an end state).
     callback action(string);
@@ -38,7 +43,7 @@ export component LeadStripView inherits Rectangle {
     // 1px border, 10px padding, the 14px icon box and an 8px gap.
     private property <length> chrome: 2px + 20px + 14px + 8px + root.stop-width;
     private property <length> text-room: root.widest - root.chrome;
-    private property <bool> sweeping: root.strip.visible && root.strip.kind == "working" && !root.still;
+    private property <bool> sweeping: root.strip.visible && root.strip.kind == "working" && !root.resting;
 
     width: max(min(168px, root.widest), min(root.widest, root.chrome + label.preferred-width + 1px));
     // One line 32px, two (an end state) 48px.
@@ -115,7 +120,7 @@ export component LeadStripView inherits Rectangle {
         property <float> eased: self.phase < 0.5 ? 2 * self.phase * self.phase : 1 - (2 - 2 * self.phase) * (2 - 2 * self.phase) / 2;
         Rectangle {
             visible: root.strip.kind == "working";
-            x: root.still ? parent.width * 0.34 : parent.width * (-0.36 + 1.36 * parent.eased);
+            x: root.resting ? parent.width * 0.34 : parent.width * (-0.36 + 1.36 * parent.eased);
             width: parent.width * 0.36;
             height: 2px;
             background: Theme.accent-fill;

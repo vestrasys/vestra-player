@@ -31,6 +31,8 @@ pub(crate) const FAILED_MS: u64 = 6000;
 pub(crate) const NOTE_MS: u64 = 4000;
 pub(crate) const NOTE_CHAR_MS: u64 = 50;
 pub(crate) const NOTE_MAX_MS: u64 = 10_000;
+/// How long a reading of the system's animation setting is kept.
+const ANIMATIONS_READ_MS: u64 = 1000;
 
 /// How long an end state shows before it fades.
 pub(crate) fn end_ms(state: StatusState, text: &str) -> u64 {
@@ -98,6 +100,10 @@ pub(crate) struct LeadStrip {
     pub(crate) ended: Option<Ended>,
     /// As last written to the shell (again into a rebuilt one).
     pub(crate) shown: Shown,
+    /// The system's animation setting (`platform::system_animations`) and
+    /// when it was read: read again at most once a second, only while the
+    /// strip would sweep.
+    pub(crate) animations: Option<(u64, bool)>,
 }
 
 /// What the strip shows, as written to the shell's `lead-strip`.
@@ -108,6 +114,10 @@ pub(crate) struct Shown {
     pub(crate) text: String,
     /// The line's fill, 0–1 (`Running`; 1 for done and failed).
     pub(crate) progress: f32,
+    /// The system lets nothing animate (Windows' Animation effects off,
+    /// macOS' Reduce motion): a working line rests in the middle instead
+    /// of sweeping (PROPOSAL §4.7).
+    pub(crate) still: bool,
 }
 
 impl Shown {
@@ -118,19 +128,23 @@ impl Shown {
             "text": self.text,
             "progress": self.progress,
             "stop": !self.kind.ended(),
+            "still": self.still,
         }))
     }
 }
 
 /// The strip for these sources (first match wins, see the module); hidden
 /// without any, or while `covered` (a menu or the palette is open), keeping
-/// the last content so it fades out as it was.
+/// the last content so it fades out as it was. `animations`: whether the
+/// system lets the interface animate (asked only for a working strip, the
+/// one that sweeps).
 pub(crate) fn project(
     working: Option<&str>,
     step: Option<&Step>,
     ended: Option<&Ended>,
     covered: bool,
     last: &Shown,
+    animations: impl FnOnce() -> bool,
 ) -> Shown {
     let content = if let Some(ended) = ended {
         let (kind, progress) = match ended.state {
@@ -150,6 +164,7 @@ pub(crate) fn project(
             kind,
             text,
             progress,
+            still: kind == Kind::Working && !covered && !animations(),
         },
         None => Shown {
             visible: false,
@@ -214,13 +229,23 @@ impl Host {
     /// Write the strip into the shell if it changed.
     pub(crate) fn refresh_strip(&mut self) {
         let covered = self.menu_open && self.menu_generation == self.shell_generation;
+        let now = self.now_ms();
+        let cached = self.lead_strip.animations;
+        let mut read = None;
         let next = project(
             self.lead_working(),
             self.lead_strip.step.as_ref(),
             self.lead_strip.ended.as_ref(),
             covered,
             &self.lead_strip.shown,
+            || match cached {
+                Some((at, on)) if now.saturating_sub(at) < ANIMATIONS_READ_MS => on,
+                _ => *read.insert(crate::platform::system_animations()),
+            },
         );
+        if let Some(on) = read {
+            self.lead_strip.animations = Some((now, on));
+        }
         if next != self.lead_strip.shown {
             self.lead_strip.shown = next;
             self.write_strip();
@@ -315,7 +340,7 @@ mod tests {
     #[test]
     fn an_end_state_wins_over_a_step_and_a_step_over_the_working_text() {
         let none = Shown::default();
-        let working = project(Some("Planning…"), None, None, false, &none);
+        let working = project(Some("Planning…"), None, None, false, &none, || true);
         assert_eq!(
             (working.visible, working.kind, working.text.as_str()),
             (true, Kind::Working, "Planning…")
@@ -326,6 +351,7 @@ mod tests {
             None,
             false,
             &working,
+            || true,
         );
         assert_eq!(
             (running.kind, running.text.as_str()),
@@ -338,6 +364,7 @@ mod tests {
             Some(&ended("Done · Mute", StatusState::Done)),
             false,
             &running,
+            || true,
         );
         assert_eq!((done.kind, done.progress), (Kind::Done, 1.));
         let failed = project(
@@ -346,6 +373,7 @@ mod tests {
             Some(&ended("Step 2 failed", StatusState::Failed)),
             false,
             &none,
+            || true,
         );
         assert_eq!((failed.kind, failed.progress), (Kind::Failed, 1.));
         let note = project(
@@ -354,17 +382,25 @@ mod tests {
             Some(&ended("No command sets it", StatusState::Note)),
             false,
             &none,
+            || true,
         );
         assert_eq!((note.kind, note.progress), (Kind::Note, 0.));
     }
 
     #[test]
     fn it_hides_without_a_source_or_under_a_menu_keeping_its_content_for_the_fade() {
-        let shown = project(Some("Planning…"), None, None, false, &Shown::default());
-        let covered = project(Some("Planning…"), None, None, true, &shown);
+        let shown = project(
+            Some("Planning…"),
+            None,
+            None,
+            false,
+            &Shown::default(),
+            || true,
+        );
+        let covered = project(Some("Planning…"), None, None, true, &shown, || true);
         assert!(!covered.visible);
         assert_eq!(covered.text, "Planning…");
-        let gone = project(None, None, None, false, &shown);
+        let gone = project(None, None, None, false, &shown, || true);
         assert_eq!(
             gone,
             Shown {
@@ -372,6 +408,41 @@ mod tests {
                 ..shown
             }
         );
+    }
+
+    /// T5 (step 2 review follow-up; PROPOSAL §4.7): with the system's
+    /// animations off the working line rests in the middle; the setting is
+    /// asked only for a working strip that shows.
+    #[test]
+    fn a_working_strip_is_still_when_the_system_animates_nothing() {
+        let none = Shown::default();
+        let still = project(Some("Planning…"), None, None, false, &none, || false);
+        assert!(still.visible && still.still);
+        let moving = project(Some("Planning…"), None, None, false, &none, || true);
+        assert!(!moving.still);
+        let asked = std::cell::Cell::new(false);
+        let ask = || {
+            asked.set(true);
+            false
+        };
+        let running = project(
+            None,
+            Some(&step("1/2 · Mute", 0.5)),
+            None,
+            false,
+            &none,
+            ask,
+        );
+        assert!(!running.still && !asked.get());
+        let covered = project(Some("Planning…"), None, None, true, &still, || {
+            asked.set(true);
+            false
+        });
+        assert!(!covered.still && !asked.get());
+        let SValue::Struct(value) = still.value().unwrap() else {
+            panic!("a struct");
+        };
+        assert_eq!(value.get_field("still"), Some(&SValue::Bool(true)));
     }
 
     #[test]
@@ -399,6 +470,7 @@ mod tests {
                 kind,
                 text: "t".into(),
                 progress: 0.5,
+                still: false,
             };
             let SValue::Struct(value) = shown.value().unwrap() else {
                 panic!("a struct");

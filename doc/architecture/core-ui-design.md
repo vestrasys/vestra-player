@@ -107,6 +107,7 @@ export component ToolTipArea {           // wraps any content; after hovering 60
 }
 export component Button {                // dialog button (UI spec §2.3)
     in property <string> text;
+    in property <string> key;            // the key that presses it, a KeyHint 6px after the text; empty: none
     in property <string> icon;           // Path data; empty text and non-empty icon = icon button (step 2 R2)
     in property <length> icon-width: 14px;   // also the viewbox size
     in property <length> icon-height: 12px;

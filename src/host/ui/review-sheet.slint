@@ -27,7 +27,7 @@
 // rule in menu-view.slint).
 import { Theme } from "@vestra/theme.slint";
 import { Icon } from "@vestra/icons.slint";
-import { Check, KeyHint } from "@vestra/widgets.slint";
+import { Button, Check } from "@vestra/widgets.slint";
 import { MenuChrome } from "menu-view.slint";
 import { ScrollView } from "std-widgets.slint";
 
@@ -73,41 +73,6 @@ export struct ReviewSheet {
     cancel-key: string,
 }
 
-// The library Button's plate (widgets.slint) with the key that presses it
-// in a KeyHint after the label.
-component SheetButton inherits Rectangle {
-    in property <string> text;
-    in property <string> key;
-    callback clicked();
-    min-width: Theme.button-min-width;
-    preferred-width: max(Theme.button-min-width, row.preferred-width);
-    height: Theme.button-height;
-    border-radius: Theme.radius-control;
-    background: touch.pressed ? Theme.button-press : touch.has-hover ? Theme.button-hover : Theme.button-bg;
-    accessible-role: button;
-    accessible-label: root.text;
-    accessible-action-default => { root.clicked(); }
-    row := HorizontalLayout {
-        padding-left: Theme.button-padding;
-        padding-right: Theme.button-padding;
-        spacing: 6px;
-        alignment: center;
-        Text {
-            text: root.text;
-            color: Theme.text-list;
-            font-size: Theme.font-body;
-            vertical-alignment: center;
-        }
-        VerticalLayout {
-            alignment: center;
-            KeyHint { text: root.key; }
-        }
-    }
-    touch := TouchArea {
-        clicked => { root.clicked(); }
-    }
-}
-
 export component ReviewSheetView inherits Rectangle {
     in property <ReviewSheet> sheet;
     // The panel's top edge: 16px, below the fullscreen title strip while
@@ -126,8 +91,17 @@ export component ReviewSheetView inherits Rectangle {
     out property <length> panel-width: panel.width;
     out property <length> panel-height: panel.height;
     out property <bool> has-keys: keys.has-focus;
-    // The detail scrolls (it is taller than the room the window leaves).
-    out property <bool> detail-scrolls: root.detail-shown < root.detail-height;
+    // The body scrolls (it is taller than the room the window leaves): a
+    // confirmation's detail (or its message and detail together), a plan's
+    // steps and note.
+    out property <bool> detail-scrolls: root.scroll-shown < root.scroll-full;
+    // A confirmation's message scrolls with its detail (the window cannot
+    // keep it above them).
+    out property <bool> message-scrolls: root.confirmation && !root.pinned;
+    // The text's right edge and the vertical scroll bar's left edge in the
+    // panel (tests check that they do not meet).
+    out property <length> text-right: 12px + root.text-width;
+    out property <length> bar-left: body.x + body.width - 14px;
     // The buttons' centres in the view (tests press them).
     out property <length> run-x: run.absolute-position.x - root.absolute-position.x + run.width / 2;
     out property <length> cancel-x: cancel.absolute-position.x - root.absolute-position.x + cancel.width / 2;
@@ -148,19 +122,41 @@ export component ReviewSheetView inherits Rectangle {
     // question, the rows and the note, or a confirmation's message (28px,
     // taller when it wraps) and its detail; the footer (separator and
     // buttons) as the palette's: 44px, taller only when the checkbox's text
-    // wraps (two long plugin names). A confirmation's panel ends 16px above
-    // the window's bottom at most: a longer detail (a store install's
-    // permission list, up to 2000 characters) scrolls, keeping at least
-    // 48px of it, and the footer stays in view.
+    // wraps (two long plugin names). The panel ends 16px above the window's
+    // bottom at most, so the footer stays in view: a longer body scrolls in
+    // one std-widgets ScrollView (`body`). A confirmation keeps its message
+    // above and scrolls its detail (a store install's permission list, up to
+    // 2000 characters), keeping at least 48px of it; when the window cannot
+    // keep the message and 48px of detail (the smallest window, a long
+    // message), the message scrolls with the detail. A plan keeps its
+    // question above and scrolls its steps and note. While the body
+    // scrolls its text is narrower by the scroll bar's 14px track, which
+    // then never covers it (the track widens on hover); the decision is made
+    // on the texts at their full width (`*-measure`), so it does not depend
+    // on itself.
     private property <length> head: root.sheet.request ? 44px : 6px;
     private property <bool> confirmation: root.sheet.message != "";
-    private property <length> note-height: root.sheet.note == "" ? 0px : note.preferred-height + 8px;
-    private property <length> message-height: max(28px, message.preferred-height + 12px);
-    private property <length> detail-height: root.sheet.detail == "" ? 0px : detail.preferred-height + 8px;
+    // The texts' full width: the panel's less 12px each side.
+    private property <length> full: min(520px, root.width - 16px) - 24px;
+    private property <length> text-width: root.detail-scrolls ? root.full - 8px : root.full;
     private property <length> footer-height: root.sheet.remember == "" ? 44px : max(44px, remember.preferred-height + 20px);
-    private property <length> detail-room: root.height - root.top - 16px - root.head - root.message-height - root.footer-height;
-    private property <length> detail-shown: max(min(root.detail-height, 48px), min(root.detail-height, root.detail-room));
-    private property <length> body-height: root.confirmation ? root.message-height + root.detail-shown : 28px + root.sheet.count * 28px + root.note-height;
+    // What the window leaves the body (at least one 28px line).
+    private property <length> room: max(28px, root.height - root.top - 16px - root.head - root.footer-height);
+    // A confirmation, measured at the full width.
+    private property <length> message-height: max(28px, message.preferred-height + 12px);
+    private property <length> detail-height: root.sheet.detail == "" ? 0px : detail-measure.preferred-height + 8px;
+    private property <bool> pinned: root.message-height + min(root.detail-height, 48px) <= root.room;
+    private property <length> detail-shown: max(min(root.detail-height, 48px), min(root.detail-height, root.room - root.message-height));
+    // A plan's steps and note, measured at the full width.
+    private property <length> note-height: root.sheet.note == "" ? 0px : note-measure.preferred-height + 8px;
+    private property <length> steps-height: root.sheet.count * 28px + root.note-height;
+    // The scrolled part: its whole height and what is shown of it.
+    private property <length> scroll-full: !root.confirmation ? root.steps-height
+        : root.pinned ? root.detail-height : root.message-height + root.detail-height;
+    private property <length> scroll-shown: !root.confirmation ? min(root.steps-height, max(28px, root.room - 28px))
+        : root.pinned ? root.detail-shown : min(root.message-height + root.detail-height, root.room);
+    private property <length> body-height: !root.confirmation ? 28px + root.scroll-shown
+        : root.pinned ? root.message-height + root.scroll-shown : root.scroll-shown;
 
     keys := FocusScope {
         x: 0;
@@ -268,12 +264,14 @@ export component ReviewSheetView inherits Rectangle {
             overflow: elide;
         }
         // A confirmation: the message as the question (wrapping), the
-        // detail below it as the note but in `text-list` (§4.4).
+        // detail below it as the note but in `text-list` (§4.4). Above the
+        // scrolled detail while the window keeps it there (`pinned`); also
+        // the message's measure at the full width.
         message := Text {
-            visible: root.confirmation;
+            visible: root.confirmation && root.pinned;
             x: 12px;
             y: root.head;
-            width: parent.width - 24px;
+            width: root.full;
             height: root.message-height;
             text: root.sheet.message;
             font-size: Theme.font-tab;
@@ -282,93 +280,128 @@ export component ReviewSheetView inherits Rectangle {
             vertical-alignment: center;
             wrap: word-wrap;
         }
-        // In a ScrollView that is as tall as the detail while the window
-        // has the room (no scrolling then); the scroll bar sits in the
-        // panel's right margin, so the text wraps as without it.
-        ScrollView {
-            visible: root.confirmation && root.sheet.detail != "";
-            x: 12px;
-            y: root.head + root.message-height;
-            width: parent.width - 16px;
-            height: max(0px, root.detail-shown - 8px);
+        // The detail's and the note's heights at the full width (never
+        // drawn): whether the body scrolls is decided on them.
+        detail-measure := Text {
+            visible: false;
+            width: root.full;
+            text: root.sheet.detail;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+        }
+        note-measure := Text {
+            visible: false;
+            width: root.full;
+            text: root.sheet.note;
+            font-size: Theme.font-body;
+            wrap: word-wrap;
+        }
+        // The body's scrolled part, as tall as its content while the window
+        // has the room (no scrolling then). Its scroll bar's track (14px,
+        // at its right edge) sits in the panel's right margin and beside the
+        // text, which is narrower while it scrolls.
+        body := ScrollView {
+            visible: root.confirmation ? (!root.pinned || root.sheet.detail != "") : root.sheet.count > 0;
+            x: 4px;
+            y: !root.confirmation ? root.head + 28px : root.pinned ? root.head + root.message-height : root.head;
+            width: parent.width - 8px;
+            height: max(0px, root.confirmation && root.sheet.detail != "" ? root.scroll-shown - 8px : root.scroll-shown);
             content-width: self.width;
-            content-height: detail.preferred-height;
-            detail := Text {
-                x: 0px;
+            content-height: !root.confirmation ? root.sheet.count * 28px + (root.sheet.note == "" ? 0px : note.height + 8px)
+                : inner-message.height + (root.sheet.detail == "" ? 0px : detail.height);
+            // The message, when the window cannot keep it above the detail.
+            inner-message := Text {
+                visible: root.confirmation && !root.pinned;
+                x: 8px;
                 y: 0px;
-                width: panel.width - 24px;
+                width: root.text-width;
+                height: self.visible ? max(28px, self.preferred-height + 12px) : 0px;
+                text: root.sheet.message;
+                font-size: Theme.font-tab;
+                font-weight: 600;
+                color: Theme.text;
+                vertical-alignment: center;
+                wrap: word-wrap;
+            }
+            detail := Text {
+                visible: root.confirmation;
+                x: 8px;
+                y: inner-message.height;
+                width: root.text-width;
                 height: self.preferred-height;
                 text: root.sheet.detail;
                 font-size: Theme.font-body;
                 color: Theme.text-list;
                 wrap: word-wrap;
             }
-        }
-        // The steps below the question, as the palette's rows: the number, the
-        // label (it keeps up to 60% of the row), the plugin, the reason.
-        for step[i] in root.sheet.steps: Rectangle {
-            visible: step.shown;
-            x: 4px;
-            y: root.head + 28px + i * 28px;
-            width: parent.width - 8px;
-            height: 28px;
-            accessible-role: text;
-            accessible-label: step.label;
-            accessible-description: step.reason;
-            HorizontalLayout {
-                padding-left: 8px;
-                // An empty reason still takes the spacing before it: the
-                // plugin column ends 8px in either way.
-                padding-right: step.reason == "" ? 0px : 8px;
-                spacing: 8px;
-                Text {
-                    width: 10px;
-                    text: step.number;
-                    font-size: Theme.font-body;
-                    color: Theme.text-dim;
-                    vertical-alignment: center;
-                }
-                Text {
-                    horizontal-stretch: 1;
-                    min-width: min(self.preferred-width, (parent.width - 34px) * 0.6);
-                    text: step.label;
-                    font-size: Theme.font-tab;
-                    color: step.asks ? Theme.text : Theme.text-list;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-                Text {
-                    horizontal-stretch: 0;
-                    min-width: 0px;
-                    max-width: 160px;
-                    text: step.plugin;
-                    font-size: Theme.font-body;
-                    color: Theme.text-dim;
-                    vertical-alignment: center;
-                    overflow: elide;
-                }
-                Text {
-                    visible: step.reason != "";
-                    horizontal-stretch: 0;
-                    width: step.reason == "" ? 0px : min(self.preferred-width, 140px);
-                    text: step.reason;
-                    font-size: Theme.font-body;
-                    color: Theme.text-dim;
-                    vertical-alignment: center;
-                    overflow: elide;
+            // The steps below the question, as the palette's rows: the
+            // number, the label (it keeps up to 60% of the row), the plugin,
+            // the reason.
+            for step[i] in root.sheet.steps: Rectangle {
+                visible: !root.confirmation && step.shown;
+                x: 0px;
+                y: i * 28px;
+                // Clear of the scroll bar's track while the steps scroll.
+                width: root.detail-scrolls ? body.width - 16px : body.width;
+                height: 28px;
+                accessible-role: text;
+                accessible-label: step.label;
+                accessible-description: step.reason;
+                HorizontalLayout {
+                    padding-left: 8px;
+                    // An empty reason still takes the spacing before it: the
+                    // plugin column ends 8px in either way.
+                    padding-right: step.reason == "" ? 0px : 8px;
+                    spacing: 8px;
+                    Text {
+                        width: 10px;
+                        text: step.number;
+                        font-size: Theme.font-body;
+                        color: Theme.text-dim;
+                        vertical-alignment: center;
+                    }
+                    Text {
+                        horizontal-stretch: 1;
+                        min-width: min(self.preferred-width, (parent.width - 34px) * 0.6);
+                        text: step.label;
+                        font-size: Theme.font-tab;
+                        color: step.asks ? Theme.text : Theme.text-list;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        horizontal-stretch: 0;
+                        min-width: 0px;
+                        max-width: 160px;
+                        text: step.plugin;
+                        font-size: Theme.font-body;
+                        color: Theme.text-dim;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
+                    Text {
+                        visible: step.reason != "";
+                        horizontal-stretch: 0;
+                        width: step.reason == "" ? 0px : min(self.preferred-width, 140px);
+                        text: step.reason;
+                        font-size: Theme.font-body;
+                        color: Theme.text-dim;
+                        vertical-alignment: center;
+                        overflow: elide;
+                    }
                 }
             }
-        }
-        note := Text {
-            visible: root.sheet.note != "";
-            x: 12px;
-            y: root.head + 28px + root.sheet.count * 28px + 2px;
-            width: parent.width - 24px;
-            height: self.preferred-height;
-            text: root.sheet.note;
-            font-size: Theme.font-body;
-            color: Theme.text-dim;
-            wrap: word-wrap;
+            note := Text {
+                visible: !root.confirmation && root.sheet.note != "";
+                x: 8px;
+                y: root.sheet.count * 28px + 2px;
+                width: root.text-width;
+                height: self.preferred-height;
+                text: root.sheet.note;
+                font-size: Theme.font-body;
+                color: Theme.text-dim;
+                wrap: word-wrap;
+            }
         }
         // Footer: the palette's separator, the buttons at its right, the
         // checkbox at its left.
@@ -404,7 +437,7 @@ export component ReviewSheetView inherits Rectangle {
             }
             VerticalLayout {
                 alignment: center;
-                run := SheetButton {
+                run := Button {
                     text: root.sheet.run;
                     key: root.sheet.run-key;
                     clicked => { root.run(); }
@@ -412,7 +445,7 @@ export component ReviewSheetView inherits Rectangle {
             }
             VerticalLayout {
                 alignment: center;
-                cancel := SheetButton {
+                cancel := Button {
                     text: root.sheet.cancel;
                     key: root.sheet.cancel-key;
                     clicked => { root.action("decline"); }

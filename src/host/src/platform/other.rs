@@ -91,6 +91,10 @@ pub fn modifier_keys() -> (bool, bool, bool) {
 pub fn double_click_seconds() -> f64 {
     0.5
 }
+/// Not read here: animations stay on.
+pub fn system_animations() -> bool {
+    true
+}
 
 pub fn clipboard_read_text() -> std::result::Result<Option<String>, RpcError> {
     Err(unsupported("the clipboard"))

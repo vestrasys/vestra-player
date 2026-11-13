@@ -881,6 +881,7 @@ fn strip_value(kind: &str, text: &str, progress: f64, visible: bool) -> Value {
             ("text", Value::String(text.into())),
             ("progress", Value::Number(progress)),
             ("stop", Value::Bool(stop)),
+            ("still", Value::Bool(false)),
         ]
         .into_iter()
         .map(|(k, v)| (k.to_owned(), v))
@@ -981,6 +982,12 @@ fn the_lead_strip_animates_only_while_it_sweeps() {
         strip_value("working", "Planning…", 0., true),
         true
     ));
+    // T5: the host's `still` (the system animates nothing) rests it too.
+    let mut resting = strip_value("working", "Planning…", 0., true);
+    if let Value::Struct(fields) = &mut resting {
+        fields.set_field("still".into(), Value::Bool(true));
+    }
+    assert!(!animating(resting, false));
     assert!(!animating(
         strip_value("running", "1/2 · Mute", 0.5, true),
         false
@@ -1252,6 +1259,9 @@ export component W inherits Window {
     out property <length> ph: v.panel-height;
     out property <bool> keys: v.has-keys;
     out property <bool> detail-scrolls: v.detail-scrolls;
+    out property <bool> message-scrolls: v.message-scrolls;
+    out property <length> text-right: v.text-right;
+    out property <length> bar-left: v.bar-left;
     out property <length> run-x: v.run-x;
     out property <length> cancel-x: v.cancel-x;
     out property <length> buttons-y: v.buttons-y;
@@ -1979,6 +1989,35 @@ fn render_confirm_sheet_states() {
                 .save(out.join(format!("h5-long-detail-small-{theme}.png")))
                 .unwrap();
             w.hide().unwrap();
+            // The smallest main window (320×182): a 200-character message
+            // scrolls with the consent's detail, the footer in view (T5).
+            let (width, height) = (320., 182.);
+            let w = build(SHEET, width, height);
+            crate::ui::theme::apply_fonts(&w).unwrap();
+            crate::ui::theme::apply(&w, palette).unwrap();
+            let message: String =
+                "Ask Vestra sends your request to a provider you set up yourself. "
+                    .repeat(4)
+                    .chars()
+                    .take(200)
+                    .collect();
+            w.set_property(
+                "s",
+                confirm_value(
+                    Some(("Ask Vestra", "mute")),
+                    &message,
+                    Some(CONSENT_DETAIL[0]),
+                    "Continue",
+                    &cancel,
+                    None,
+                ),
+            )
+            .unwrap();
+            settle();
+            render(&w, scale, width, height)
+                .save(out.join(format!("t5-smallest-window-{theme}.png")))
+                .unwrap();
+            w.hide().unwrap();
         }
     }
 }
@@ -2058,4 +2097,172 @@ fn a_long_detail_scrolls_and_keeps_the_buttons_in_a_small_window() {
     .unwrap();
     settle();
     assert!(!boolean(&tall, "detail-scrolls"));
+}
+/// T5 (H5 review follow-up 1): the smallest main window (320×182) with the
+/// request box and a 200-character message (`dialogs.confirm`'s limit) and
+/// a detail: the message scrolls with the detail, the panel ends 16px above
+/// the window's bottom and both buttons are in it and answer. A message
+/// that fits stays above its detail.
+#[test]
+fn the_smallest_window_scrolls_a_long_message_and_keeps_the_buttons() {
+    let (width, height) = (320., 182.);
+    let w = build(SHEET, width, height);
+    let message = "Ask Vestra sends your request to a provider you set up yourself. ".repeat(4);
+    let message: String = message.chars().take(200).collect();
+    w.set_property(
+        "s",
+        confirm_value(
+            Some(("Ask Vestra", "mute")),
+            &message,
+            Some(CONSENT_DETAIL[0]),
+            "Continue",
+            "Cancel",
+            None,
+        ),
+    )
+    .unwrap();
+    settle();
+    assert!(boolean(&w, "message-scrolls"));
+    assert!(boolean(&w, "detail-scrolls"));
+    let (y, h) = (number(&w, "py"), number(&w, "ph"));
+    assert!(y + h <= f64::from(height) - 16. + 0.5, "{y} + {h}");
+    let buttons = number(&w, "buttons-y");
+    assert!(buttons > y && buttons < y + h, "{buttons}");
+    click(
+        &w,
+        number(&w, "run-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "run");
+    click(
+        &w,
+        number(&w, "cancel-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "decline");
+    // A short message in the same window stays above its detail.
+    w.set_property(
+        "s",
+        confirm_value(
+            None,
+            "Install?",
+            Some(CONSENT_DETAIL[0]),
+            "Install",
+            "Cancel",
+            None,
+        ),
+    )
+    .unwrap();
+    settle();
+    assert!(!boolean(&w, "message-scrolls"));
+    assert!(boolean(&w, "detail-scrolls"));
+    let (y, h) = (number(&w, "py"), number(&w, "ph"));
+    assert!(y + h <= f64::from(height) - 16. + 0.5, "{y} + {h}");
+}
+
+/// T5: a plan of eight steps in the smallest window scrolls its steps under
+/// the question and keeps the buttons in the window; in a tall window
+/// nothing scrolls and the panel is as before (the question, 28px a step,
+/// the note, the footer).
+#[test]
+fn the_smallest_window_scrolls_a_plans_steps_and_keeps_the_buttons() {
+    let steps: Vec<_> = (0..8)
+        .map(|n| {
+            sheet_step(
+                &format!("Export: Export Part {n}"),
+                "Clip Export",
+                "Not built in",
+                true,
+                false,
+            )
+        })
+        .collect();
+    let (width, height) = (320., 182.);
+    let w = build(SHEET, width, height);
+    w.set_property("s", sheet_value("Ask Vestra", "export", &steps))
+        .unwrap();
+    settle();
+    assert!(boolean(&w, "detail-scrolls"));
+    let (y, h) = (number(&w, "py"), number(&w, "ph"));
+    assert!(y + h <= f64::from(height) - 16. + 0.5, "{y} + {h}");
+    let buttons = number(&w, "buttons-y");
+    assert!(buttons > y && buttons < y + h, "{buttons}");
+    click(
+        &w,
+        number(&w, "run-x") as f32,
+        number(&w, "buttons-y") as f32,
+    );
+    assert_eq!(string(&w, "last"), "run");
+    let tall = build(SHEET, 1100., 900.);
+    tall.set_property("s", sheet_value("Ask Vestra", "export", &steps))
+        .unwrap();
+    settle();
+    assert!(!boolean(&tall, "detail-scrolls"));
+    let ph = number(&tall, "ph");
+    assert!(
+        ph > 72. + 8. * 28. + 44. && ph < 72. + 8. * 28. + 44. + 40.,
+        "{ph}"
+    );
+}
+
+/// T5 (H5 review follow-up 2): while the body scrolls its text ends left of
+/// the scroll bar's 14px track (which widens on hover), so the track never
+/// covers it; while it does not, the text has its full width.
+#[test]
+fn the_scroll_bar_never_covers_the_text() {
+    let w = build(SHEET, 640., 360.);
+    let detail = long_detail();
+    w.set_property(
+        "s",
+        confirm_value(None, "Install?", Some(&detail), "Install", "Cancel", None),
+    )
+    .unwrap();
+    settle();
+    assert!(boolean(&w, "detail-scrolls"));
+    let (right, bar) = (number(&w, "text-right"), number(&w, "bar-left"));
+    assert!(right <= bar, "{right} > {bar}");
+    w.set_property(
+        "s",
+        confirm_value(None, "Install?", Some("Short."), "Install", "Cancel", None),
+    )
+    .unwrap();
+    settle();
+    assert!(!boolean(&w, "detail-scrolls"));
+    assert_eq!(number(&w, "text-right"), number(&w, "pw") - 12.);
+}
+
+/// T5 (step 3 review follow-up): the library `Button` takes the key that
+/// presses it (the approval sheet's [Run `Enter`]): the cap follows the
+/// text 6px on and widens the button; an empty key adds nothing.
+#[test]
+fn a_button_shows_its_key_after_its_text() {
+    let w = build(
+        r#"import { Button, KeyHint } from "@vestra/widgets.slint";
+export component W inherits Window {
+    in-out property <int> clicks;
+    out property <length> plain: plain.preferred-width;
+    out property <length> keyed: keyed.preferred-width;
+    out property <length> empty: empty.preferred-width;
+    out property <length> cap: cap.width;
+    out property <length> kx: keyed.absolute-position.x + keyed.width / 2;
+    out property <length> ky: keyed.absolute-position.y + keyed.height / 2;
+    VerticalLayout {
+        alignment: start;
+        HorizontalLayout { alignment: start; plain := Button { text: "Don't Run Anyway"; } }
+        HorizontalLayout { alignment: start; keyed := Button { text: "Don't Run Anyway"; key: "Enter"; clicked => { root.clicks += 1; } } }
+        HorizontalLayout { alignment: start; empty := Button { text: "Don't Run Anyway"; key: ""; } }
+        HorizontalLayout { alignment: start; cap := KeyHint { text: "Enter"; } }
+    }
+}"#,
+        400.,
+        200.,
+    );
+    let (plain, keyed, cap) = (number(&w, "plain"), number(&w, "keyed"), number(&w, "cap"));
+    assert_eq!(number(&w, "empty"), plain);
+    assert!(
+        (keyed - (plain + 6. + cap)).abs() < 0.5,
+        "{keyed} {plain} {cap}"
+    );
+    click(&w, number(&w, "kx") as f32, number(&w, "ky") as f32);
+    assert_eq!(get(&w, "clicks"), Value::Number(1.));
 }

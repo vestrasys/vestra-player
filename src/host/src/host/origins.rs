@@ -37,6 +37,12 @@ use std::collections::BTreeMap;
 pub(crate) enum Origin {
     /// The main window: its menus, palette, keys, bottom bar, panels.
     Main,
+    /// The main window's palette first row: a request typed there for the
+    /// lead's holder, or its Stop in the status strip. Routed as [`Self::Main`];
+    /// the holder's confirmation then shows that request in its request box
+    /// (`capabilities/ui_dialog.rs`), which an action in its panel since
+    /// then (plain `Main`) does not.
+    Lead,
     /// The floating sidebar's window (its panels, menus and keys).
     Floating,
     /// The Options window (the plugin's settings page).
@@ -108,8 +114,8 @@ pub(crate) fn route(
     shown: impl Fn(&Place) -> bool,
 ) -> Route {
     let place = match origin {
-        Some(Origin::Main) if main => return Route::Sheet,
-        Some(Origin::Main) | None => None,
+        Some(Origin::Main | Origin::Lead) if main => return Route::Sheet,
+        Some(Origin::Main | Origin::Lead) | None => None,
         Some(Origin::Floating) => Some(Place::Floating),
         Some(Origin::Options) => Some(Place::Options),
         Some(Origin::View(id)) => Some(Place::View(id.clone())),
@@ -480,7 +486,7 @@ mod tests {
     fn a_palette_request_after_the_holders_window_confirms_on_the_sheet() {
         let mut origins = Origins::default();
         origins.acted(ASK, view("ai")); // ui.show / a click in the AI window
-        origins.acted(ASK, Origin::Main); // palette.lead: the typed request
+        origins.acted(ASK, Origin::Lead); // palette.lead: the typed request
         assert_eq!(
             route(origins.get(ASK), true, &["ai".into()], |_| true),
             Route::Sheet
@@ -495,7 +501,7 @@ mod tests {
         let mut origins = Origins::default();
         origins.acted(ASK, view("ai"));
         origins.acted(STORE, view("store"));
-        origins.acted(ASK, Origin::Main);
+        origins.acted(ASK, Origin::Lead);
         origins.inherit(ASK, STORE);
         assert_eq!(
             route(origins.get(STORE), true, &["store".into()], |_| true),
@@ -505,6 +511,35 @@ mod tests {
         assert_eq!(
             route(origins.get(ASK), true, &["ai".into()], |_| true),
             Route::Sheet
+        );
+    }
+
+    /// T5 (H5 review follow-up 4): the consent's request box belongs to a
+    /// request typed in the palette's first row. Once the user acted for the
+    /// holder elsewhere in the main window (its docked panel, while the
+    /// palette's ticket is still live), its confirmation still goes to the
+    /// sheet but is no longer that request's: no request box, and the old
+    /// ticket's end does not cancel it (`capabilities/ui_dialog.rs`).
+    #[test]
+    fn only_a_request_in_the_first_row_makes_a_confirmation_that_requests() {
+        let mut origins = Origins::default();
+        origins.acted(ASK, Origin::Lead);
+        assert_eq!(route(origins.get(ASK), true, &[], |_| true), Route::Sheet);
+        assert_eq!(origins.get(ASK), Some(&Origin::Lead));
+        origins.acted(ASK, Origin::Main); // a click in its docked panel
+        assert_eq!(route(origins.get(ASK), true, &[], |_| true), Route::Sheet);
+        assert_ne!(origins.get(ASK), Some(&Origin::Lead));
+        // Without the main window: the focus decides, as for `Main`.
+        origins.acted(ASK, Origin::Lead);
+        assert_eq!(route(origins.get(ASK), false, &[], |_| false), Route::Focus);
+        // Wiring: the request box asks for this origin.
+        assert!(
+            after(
+                include_str!("../capabilities/ui_dialog.rs"),
+                "let request = host",
+                8
+            )
+            .contains("== Some(&Origin::Lead)")
         );
     }
 
@@ -582,7 +617,7 @@ mod tests {
         );
         assert!(
             after(include_str!("palette.rs"), "fn lead_event", 12)
-                .contains("self.act(owner, origins::Origin::Main)")
+                .contains("self.act(owner, origins::Origin::Lead)")
         );
         let window = include_str!("../capabilities/ui_window.rs");
         assert!(

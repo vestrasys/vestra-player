@@ -102,6 +102,10 @@ pub(crate) struct Review {
     pub(crate) checked: bool,
     /// When it last showed (`Host::now_ms`); `None` while it waits to show.
     pub(crate) shown_at: Option<u64>,
+    /// It has shown once: the main window came into view for it
+    /// (`Host::present_review`), which is not repeated when it shows again
+    /// after another menu or a native dialog.
+    pub(crate) hinted: bool,
 }
 
 impl Review {
@@ -188,6 +192,22 @@ pub(crate) fn remember_text(plugins: &[String]) -> String {
             &json!({ "n": more.len() }),
         ),
     }
+}
+
+/// A plan's checkbox once what it would trust is down to the plugins
+/// `names` (an uninstall, a replace, Ask Again): `None` when its text
+/// (`current`) stays; else the new text and whether the box is still checked
+/// (never when it goes: an empty text draws no checkbox).
+pub(crate) fn offer_after(
+    names: &[String],
+    current: &str,
+    checked: bool,
+) -> Option<(String, bool)> {
+    let text = remember_text(names);
+    (text != current).then(|| {
+        let checked = checked && !text.is_empty();
+        (text, checked)
+    })
 }
 
 /// The `ReviewSheet` value (ui/review-sheet.slint) of a plan, less its
@@ -294,6 +314,7 @@ impl Host {
             checkbox: remember,
             checked: false,
             shown_at: None,
+            hinted: false,
         });
     }
     /// `dialogs.confirm` raised for the main window: the sheet asks it, with
@@ -317,6 +338,7 @@ impl Host {
             asks: Asks::Confirm { options, request },
             checked: false,
             shown_at: None,
+            hinted: false,
         });
     }
     fn open_sheet(&mut self, review: Review) {
@@ -376,9 +398,44 @@ impl Host {
         }
         #[cfg(feature = "producer-audio")]
         self.physical_revoke(producer_input::RevokeReason::Menu);
-        let Some(review) = &self.review else {
+        let Some(value) = self.review_value() else {
             return;
         };
+        let checked = self.review.as_ref().is_some_and(|review| review.checked);
+        self.menu_open = true;
+        self.menu_generation = self.shell_generation;
+        self.menu_mode = MenuMode::Review;
+        let result = (|| -> Result<()> {
+            shell.set_property("review-sheet", value)?;
+            // Set with every value: a new sheet starts unchecked.
+            shell.set_property("review-remember-checked", checked.into())?;
+            shell.set_property("palette-open", false.into())?;
+            shell.set_property("review-open", true.into())?;
+            shell.set_property("menu-open", true.into())?;
+            Ok(())
+        })();
+        self.report_menu(result);
+        let now = self.now_ms();
+        let first = self.review.as_mut().is_some_and(|review| {
+            review.shown_at = Some(now);
+            !std::mem::replace(&mut review.hinted, true)
+        });
+        input_trace::follow("review sheet: shown");
+        // The first time it shows, the main window comes into view: to the
+        // front, un-minimized, while the player is in the foreground, and
+        // asking for attention (the taskbar button flashes, the Dock icon
+        // bounces) otherwise. The sheet is in the main window only; a
+        // minimized or covered one would wait unseen.
+        if first {
+            crate::ui::view::show_again(&shell, crate::platform::app_in_foreground());
+        }
+        // The status strip yields to it.
+        self.refresh_strip();
+    }
+    /// The waiting sheet's `ReviewSheet` value, with the request box's
+    /// image.
+    fn review_value(&mut self) -> Option<SValue> {
+        let review = self.review.as_ref()?;
         let owner = review.reply.owner;
         // The request box: the lead's icon and title when the caller holds
         // it (always for a plan, today: only the lead mints tickets), else
@@ -412,26 +469,60 @@ impl Host {
                 request.is_some(),
             ),
         };
-        let checked = review.checked;
         let image = if request {
             self.lead_image(owner, &icon)
         } else {
             None
         };
-        self.menu_open = true;
-        self.menu_generation = self.shell_generation;
-        self.menu_mode = MenuMode::Review;
-        let result = (|| -> Result<()> {
-            let mut value = ui_values::from_json(&value)?;
-            if let SValue::Struct(fields) = &mut value {
-                fields.set_field("image".into(), SValue::Image(image.unwrap_or_default()));
+        let mut value = match ui_values::from_json(&value) {
+            Ok(value) => value,
+            Err(error) => {
+                diag!("host.error review sheet: {error:#}");
+                return None;
             }
+        };
+        if let SValue::Struct(fields) = &mut value {
+            fields.set_field("image".into(), SValue::Image(image.unwrap_or_default()));
+        }
+        Some(value)
+    }
+    /// What a waiting plan's "Don't ask again" would trust lost a plugin
+    /// (uninstalled, replaced from another source, Ask Again Before Plugin
+    /// Commands): its checkbox names only the plugins left, and goes,
+    /// unchecked, when none is. A sheet on screen is written again, and
+    /// its guard starts again (what it offers changed under the pointer).
+    pub(crate) fn review_offer_changed(&mut self) {
+        let Some(review) = &self.review else {
+            return;
+        };
+        if !matches!(review.asks, Asks::Run { .. }) {
+            return;
+        }
+        let Some((text, checked)) = self
+            .command_runs
+            .offered(&review.reply)
+            .and_then(|names| offer_after(names, &review.checkbox, review.checked))
+        else {
+            return;
+        };
+        let presented = self.review_presented();
+        if let Some(review) = self.review.as_mut() {
+            review.checkbox = text;
+            review.checked = checked;
+        }
+        if !presented {
+            return;
+        }
+        let (Some(shell), Some(value)) = (
+            self.shell.as_ref().map(ComponentHandle::clone_strong),
+            self.review_value(),
+        ) else {
+            return;
+        };
+        let checked = self.review.as_ref().is_some_and(|review| review.checked);
+        let result = (|| -> Result<()> {
             shell.set_property("review-sheet", value)?;
-            // Set with every value: a new sheet starts unchecked.
             shell.set_property("review-remember-checked", checked.into())?;
-            shell.set_property("palette-open", false.into())?;
-            shell.set_property("review-open", true.into())?;
-            shell.set_property("menu-open", true.into())?;
             Ok(())
         })();
         self.report_menu(result);
@@ -439,9 +530,6 @@ impl Host {
         if let Some(review) = self.review.as_mut() {
             review.shown_at = Some(now);
         }
-        input_trace::follow("review sheet: shown");
-        // The status strip yields to it.
-        self.refresh_strip();
     }
     /// The menu layer closed or changed under the sheet (`close_menu`,
     /// `open_menu`): it shows again at the next tick.
@@ -678,6 +766,25 @@ mod tests {
             remember_text(&names(&["Clip Export", "Auto Frame", "VestraTube"])),
             "Don't ask again for these 3 plugins"
         );
+    }
+
+    /// T5 (step 4 review follow-up): a sheet whose "Don't ask again" list
+    /// lost a plugin (uninstalled while it waited) names only the rest, and
+    /// one whose list was emptied shows no checkbox (and nothing checked).
+    #[test]
+    fn the_checkbox_follows_what_is_left_to_trust() {
+        let names = |list: &[&str]| list.iter().map(|s| (*s).to_owned()).collect::<Vec<_>>();
+        let two = remember_text(&names(&["Clip Export", "Auto Frame"]));
+        assert_eq!(
+            offer_after(&names(&["Clip Export", "Auto Frame"]), &two, true),
+            None
+        );
+        assert_eq!(
+            offer_after(&names(&["Auto Frame"]), &two, true),
+            Some(("Don't ask again for Auto Frame".into(), true))
+        );
+        assert_eq!(offer_after(&[], &two, true), Some((String::new(), false)));
+        assert_eq!(offer_after(&[], "", false), None);
     }
 
     /// A plan's decision ([`decide`] with its own "Don't ask again").

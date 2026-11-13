@@ -2,7 +2,8 @@
 //! platform module (`src/host/src/platform/windows.rs`): the pointer position
 //! while a file is dragged over a window (winit 0.30 reports no position for
 //! drags), the modifier keys held right now, the double-click time, the
-//! submenu show delay, the thread's sleep-prevention state, a window's
+//! submenu show delay, whether windows animate (client_area_animation),
+//! the thread's sleep-prevention state, a window's
 //! dark title bar, cloaking a window until its first frame (`set_cloaked`,
 //! `cloak_on_show`: a thread-local `WH_CALLWNDPROC` hook) and every window
 //! of the process once its GPU device was lost (`cloak_process_windows`),
@@ -152,6 +153,22 @@ pub fn disk_space(path: &std::path::Path) -> Option<(u64, String)> {
 pub fn double_click_ms() -> u32 {
     // SAFETY: no arguments, no preconditions.
     unsafe { GetDoubleClickTime() }
+}
+
+/// Whether the user lets windows animate (Settings ▸ Accessibility ▸
+/// Visual effects ▸ Animation effects, the "Show animations in Windows"
+/// switch: `SPI_GETCLIENTAREAANIMATION`). `true` when the system does not
+/// answer.
+pub fn client_area_animation() -> bool {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{
+        SPI_GETCLIENTAREAANIMATION, SystemParametersInfoW,
+    };
+    let mut on: windows_sys::core::BOOL = 1;
+    // SAFETY: `pvParam` points to a local BOOL that outlives the call, as
+    // SPI_GETCLIENTAREAANIMATION requires; `uiParam` and `fWinIni` are 0.
+    let ok =
+        unsafe { SystemParametersInfoW(SPI_GETCLIENTAREAANIMATION, 0, (&raw mut on).cast(), 0) };
+    ok == 0 || on != 0
 }
 
 /// Keep the system (and, with `display`, the display) awake until

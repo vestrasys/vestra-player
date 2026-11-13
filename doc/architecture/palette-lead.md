@@ -247,13 +247,25 @@ first-use consent in the player; every other main-window confirmation too, as a 
 - **What it shows**: on the palette's plate at its place, the caller's message (12px semibold,
   28px, taller when it wraps) and detail (11px `text-list`, wraps), its checkbox at the footer's
   left, [confirm `Enter`] [cancel `Esc`] at its right. The request box (§2.1) only when the caller
-  holds the lead and has a live ticket (Ask Vestra's consent, asked while the request waits for
-  it): its title and the request. `destructive` draws nothing: no reason label and no colour (user
+  holds the lead, the user last acted for it in the palette's first row (`origins::Origin::Lead`:
+  a request typed there or the strip's Stop; an action in its docked panel since then is plain
+  `Main`) and that request's ticket is live (Ask Vestra's consent, asked while the request waits
+  for it): its title and the request. `destructive` draws nothing: no reason label and no colour (user
   ruling 2 of 2026-11-12; the approval sheet marks no destructive step either); Enter confirms
   either way, as the system dialog's default button did. The panel ends 16px above the window's
   bottom at most: a longer detail (a store install's permission list, up to 2000 characters)
   scrolls in a std-widgets `ScrollView` (at least 48px of it shown), and the footer (checkbox and
-  buttons) stays in view.
+  buttons) stays in view. When the window cannot keep the message and 48px of detail (the
+  smallest window, 320×182, with a long message), the message scrolls with the detail; a plan's
+  steps and note scroll the same way under its question. While the body scrolls its text is
+  narrower by the scroll bar's 14px track, which never covers it (the decision is made on the
+  texts measured at their full width). The buttons are the library `Button` with its `key` (a
+  `KeyHint` after the text).
+- **Into view**: the first time a sheet (a plan's or a confirmation's) shows, the main window
+  comes into view (`view::show_again`): un-minimized and in front while the player is in the
+  foreground, asking for attention otherwise (the taskbar button flashes, the Dock icon bounces),
+  so a sheet never waits unseen in a minimized or covered window; not again when it shows again
+  after another menu or a native dialog.
 - **Input and lifetime**: as §2.1 (the focus, the 0.5 s guard, repeats, a press outside it is
   Cancel, the native-dialog wait, showing again after another menu). The checkbox is the caller's:
   a click toggles it (Space does not), its state is answered with Confirm and with Cancel, and
@@ -360,8 +372,11 @@ shell (`write_strip`). While it shows, the OSD message's text ends 8px left of i
 an end state, a hidden strip: none; `widgets_tests::the_lead_strip_animates_only_while_it_sweeps`).
 `widgets_tests::lead_strip_sweep_frame_cost` (ignored, `VESTRA_STRIP_BENCH=1`) draws the window
 over a video still with Slint's software renderer at 60 Hz pacing and prints the draw times, whole
-frame and changed region. Not done yet: a system setting without animations (Windows "Show
-animations") does not stop the sweep (`LeadStripView.still` is there for it).
+frame and changed region. With the system's animations off (Windows' Animation effects, macOS'
+Reduce motion: `platform::system_animations`, read at most once a second while the strip would
+sweep) the segment rests in the middle (`LeadStrip.still`). A holder parked (or restarting) while
+its status says it works keeps its row, but the working status goes from the row, the strip and the
+recorded call (`Lead::park`): its tickets ended with its process, so nothing is working.
 
 Offline renders: `widgets_tests::render_lead_strip_states` (ignored; `VESTRA_STRIP_SHOTS=<dir>`,
 `VESTRA_STRIP_LANG=en|zh-Hans`, `VESTRA_STRIP_BACKDROP=<png>`) draws each state at 2×, both
@@ -386,7 +401,9 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
   change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,
   repeats and buttons; the checkbox: click, Run, Enter, Ctrl+Enter, Space, a wrapping text; a
   confirmation's size with and without the request box and detail, its keys and buttons; a
-  2000-character detail in a small window scrolls and keeps the buttons in it),
+  2000-character detail in a small window scrolls and keeps the buttons in it; the smallest window
+  scrolls a 200-character message with its detail and a plan's eight steps, the scroll bar never
+  covers the text; `Button`'s key cap),
   `host/supervisor/probe.rs`. `src/tests/sdk/host-agreement.test.ts`: TestHost accepts the
   player's `StatusState::NAMES` and refuses another with the player's code and message (skipped
   before SDK 1.7.15).

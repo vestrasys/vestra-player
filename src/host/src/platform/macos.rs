@@ -401,6 +401,12 @@ pub fn double_click_seconds() -> f64 {
     objc2_app_kit::NSEvent::doubleClickInterval()
 }
 
+/// Whether the user lets the interface animate: Accessibility ▸ Display ▸
+/// Reduce motion is off.
+pub fn system_animations() -> bool {
+    !objc2_app_kit::NSWorkspace::sharedWorkspace().accessibilityDisplayShouldReduceMotion()
+}
+
 pub fn screen_for(id: HostWindowId) -> Result<ScreenFacts> {
     let window = window(id)?;
     let screen = window
