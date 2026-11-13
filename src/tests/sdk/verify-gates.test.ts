@@ -20,7 +20,9 @@ const {
   parseCapabilitiesTs,
   removedLines,
   runGates,
+  rustTestModules,
   rustTestRanges,
+  testModuleTargets,
 } = tool;
 
 const roots: string[] = [];
@@ -179,6 +181,7 @@ test("test files are recognised by directory and by name", () => {
     "plugins/clipexport/tests/clip.test.ts",
     "scripts/tests/index.test.mjs",
     "src/a.test.ts",
+    "src/a.spec.ts",
   ])
     assert.ok(isTestPath(path), path);
   for (const path of [
@@ -225,6 +228,84 @@ test("#[cfg(test)] items of a Rust file are found, strings and comments skipped"
     { start: 1, end: 3 },
   ]);
   assert.deepEqual(rustTestRanges("fn a() {}\n"), []);
+});
+
+test("#[test] items count as test code; a feature named test does not", () => {
+  assert.deepEqual(
+    rustTestRanges("fn a() {}\n#[test]\nfn lonely() {\n    assert!(true)\n}\n"),
+    [{ start: 2, end: 5 }],
+  );
+  assert.deepEqual(
+    rustTestRanges(
+      '#[tokio::test(flavor = "current_thread")]\nasync fn t() {}\nfn b() {}\n',
+    ),
+    [{ start: 1, end: 2 }],
+  );
+  assert.deepEqual(
+    rustTestRanges('#[cfg(feature = "test")]\nfn support() {}\n'),
+    [],
+  );
+  assert.deepEqual(
+    rustTestRanges("#[cfg_attr(test, derive(Debug))]\nstruct S;\n"),
+    [],
+  );
+});
+
+test("test modules declared for another file are found and resolved", () => {
+  const source = [
+    "mod real;",
+    "#[cfg(test)]",
+    "mod sim;",
+    "#[cfg(test)]",
+    '#[path = "support/shots.rs"]',
+    "mod ui_shots;",
+    '#[path = "../far/mod.rs"]',
+    "#[cfg(test)]",
+    "pub(crate) mod far;",
+    "#[cfg(not(test))]",
+    "mod prod;",
+    "#[cfg(test)]",
+    "mod inline { fn a() {} }",
+    "#[cfg(test)]",
+    "use std::fmt;",
+  ].join("\n");
+  assert.deepEqual(rustTestModules(source), [
+    { name: "sim", path: null },
+    { name: "ui_shots", path: "support/shots.rs" },
+    { name: "far", path: "../far/mod.rs" },
+  ]);
+  assert.deepEqual(rustTestModules("#![cfg(test)]\nmod x;\n"), []);
+  assert.deepEqual(
+    testModuleTargets(
+      "src/host/src/supervisor/mod.rs",
+      rustTestModules(source),
+    ),
+    {
+      files: [
+        "src/host/src/supervisor/sim.rs",
+        "src/host/src/supervisor/support/shots.rs",
+        "src/host/src/far/mod.rs",
+      ],
+      directories: [
+        "src/host/src/supervisor/sim",
+        "src/host/src/supervisor/support/shots",
+        "src/host/src/far",
+      ],
+    },
+  );
+  // Declared in a file that is not mod.rs: the module is under its name.
+  assert.deepEqual(
+    testModuleTargets("src/host/src/ui.rs", [{ name: "lists", path: null }]),
+    {
+      files: ["src/host/src/ui/lists.rs"],
+      directories: ["src/host/src/ui/lists"],
+    },
+  );
+  for (const file of ["src/lib.rs", "src/main.rs"])
+    assert.deepEqual(
+      testModuleTargets(file, [{ name: "t", path: null }]).files,
+      ["src/t.rs"],
+    );
 });
 
 test("removed lines carry their line number in the old file", () => {
@@ -343,6 +424,80 @@ test("the capability table: existing entries identical, additions noted", () => 
   assert.match(
     change((head) => (head.apiVersion = "vestra/2"))[0],
     /top-level "apiVersion" changed/,
+  );
+  // The host looks up the exact name first, then the first prefix in table
+  // order: a new exact name under an existing prefix takes the method over.
+  const wild = JSON.parse(table());
+  wild.capabilities[0].methods.push({ name: "packages.*", needs: "commands" });
+  wild.uncapable.push({ name: "packages.list", needs: null });
+  const routed = (edit: (head: any) => void): string[] => {
+    const head = structuredClone(wild);
+    edit(head);
+    return compareCapabilities(wild, head).problems;
+  };
+  assert.deepEqual(
+    routed(() => {}),
+    [],
+  );
+  assert.deepEqual(
+    routed((head) =>
+      head.uncapable.push({ name: "packages.validate", needs: null }),
+    ),
+    [
+      'method "packages.validate" was served by "commands" (entry "packages.*") and is now served by no capability (entry "packages.validate")',
+    ],
+  );
+  assert.deepEqual(
+    routed((head) =>
+      head.capabilities.push({
+        ...MPV,
+        methods: [{ name: "packages.install", needs: "mpv" }],
+      }),
+    ),
+    [
+      'method "packages.install" was served by "commands" (entry "packages.*") and is now served by "mpv" (entry "packages.install")',
+    ],
+  );
+  // A narrower or a wider new prefix placed before the existing one shadows it…
+  assert.deepEqual(
+    routed((head) =>
+      head.capabilities.unshift({
+        ...MPV,
+        methods: [{ name: "packages.install.*", needs: "mpv" }],
+      }),
+    ),
+    [
+      'method "packages.install.<any other>" was served by "commands" (entry "packages.*") and is now served by "mpv" (entry "packages.install.*")',
+    ],
+  );
+  assert.match(
+    routed((head) =>
+      head.capabilities.unshift({
+        ...MPV,
+        methods: [{ name: "pack*", needs: "mpv" }],
+      }),
+    ).join("\n"),
+    /method "packages\.<any other>" was served by "commands" \(entry "packages\.\*"\) and is now served by "mpv" \(entry "pack\*"\)/,
+  );
+  // …placed after it, it serves nothing that was served before.
+  assert.deepEqual(
+    routed((head) =>
+      head.capabilities.push({
+        ...MPV,
+        methods: [{ name: "packages.install.*", needs: "mpv" }],
+      }),
+    ),
+    [],
+  );
+  // A new name no existing entry serves is an addition.
+  assert.deepEqual(
+    routed((head) =>
+      head.capabilities.push({
+        ...MPV,
+        methods: [{ name: "mpv.*", needs: "mpv" }],
+      }),
+    ),
+    [],
   );
   // A new capability may not take over a method that exists.
   assert.match(
@@ -495,6 +650,83 @@ test("the player: Rust test modules, test directories, the JSON table", () => {
   assert.match(
     gateOf(runGates({ repo: repo.root, base, head: deleted }), "b").problems[0],
     /math\.rs: deleted with its #\[cfg\(test\)\] code \(lines 5-13\)/,
+  );
+});
+
+test("a test module in its own file is a test file (the reviewer's sim.rs case)", () => {
+  const files: Files = {
+    ...PLAYER,
+    "src/host/src/supervisor/mod.rs":
+      'pub fn f() -> u32 {\n    1\n}\n\n#[cfg(test)]\nmod sim;\n#[cfg(test)]\n#[path = "shots/ui_shots.rs"]\nmod ui_shots;\n',
+    "src/host/src/supervisor/sim.rs":
+      "#[test]\nfn f_is_one() {\n    assert_eq!(super::f(), 1);\n}\n",
+    "src/host/src/supervisor/sim/cases.rs": "pub const CASES: u32 = 3;\n",
+    "src/host/src/supervisor/shots/ui_shots.rs": "pub const SHOTS: u32 = 2;\n",
+    "src/host/src/supervisor/real.rs": "pub const REAL: u32 = 1;\n",
+  };
+  const repo = repository();
+  const base = repo.commit(files);
+  // A weakened assertion, a changed helper below the module, the #[path] file.
+  const weakened = repo.commit({
+    "src/host/src/supervisor/sim.rs":
+      "#[test]\nfn f_is_one() {\n    assert!(super::f() >= 0);\n}\n",
+    "src/host/src/supervisor/sim/cases.rs": "pub const CASES: u32 = 1;\n",
+    "src/host/src/supervisor/shots/ui_shots.rs": "pub const SHOTS: u32 = 1;\n",
+    "src/host/src/supervisor/real.rs": "pub const REAL: u32 = 2;\n",
+  });
+  const result = runGates({ repo: repo.root, base, head: weakened });
+  assert.equal(result.pass, false);
+  const problems = gateOf(result, "b").problems;
+  assert.equal(problems.length, 3, format(result));
+  assert.match(
+    problems.join("\n"),
+    /^src\/host\/src\/supervisor\/sim\.rs: 1 line\(s\) removed or modified \(a #\[cfg\(test\)\] module of src\/host\/src\/supervisor\/mod\.rs\)\n\s+3: assert_eq!\(super::f\(\), 1\);/m,
+  );
+  assert.match(
+    problems.join("\n"),
+    /^src\/host\/src\/supervisor\/sim\/cases\.rs: 1 line/m,
+  );
+  assert.match(
+    problems.join("\n"),
+    /^src\/host\/src\/supervisor\/shots\/ui_shots\.rs: 1 line/m,
+  );
+  // Deleting the module's file fails; adding a test to it passes.
+  const deleted = repo.commit({ "src/host/src/supervisor/sim.rs": null });
+  assert.match(
+    gateOf(runGates({ repo: repo.root, base: weakened, head: deleted }), "b")
+      .problems[0],
+    /sim\.rs: deleted \(a #\[cfg\(test\)\] module of/,
+  );
+  const repo2 = repository();
+  const base2 = repo2.commit(files);
+  const added = repo2.commit({
+    "src/host/src/supervisor/sim.rs":
+      files["src/host/src/supervisor/sim.rs"] + "\n#[test]\nfn more() {}\n",
+    "src/host/src/supervisor/real.rs": "pub const REAL: u32 = 2;\n",
+  });
+  assert.ok(runGates({ repo: repo2.root, base: base2, head: added }).pass);
+});
+
+test("an exact method under an existing prefix fails gate (d) in a repository", () => {
+  const withPrefix = JSON.parse(table());
+  withPrefix.capabilities[0].methods.push({
+    name: "packages.*",
+    needs: "commands",
+  });
+  const repo = repository();
+  const base = repo.commit({
+    ...PLAYER,
+    "src/host/capabilities.json": JSON.stringify(withPrefix, null, 2),
+  });
+  withPrefix.uncapable.push({ name: "packages.validate", needs: null });
+  const head = repo.commit({
+    "src/host/capabilities.json": JSON.stringify(withPrefix, null, 2),
+  });
+  const result = runGates({ repo: repo.root, base, head });
+  assert.equal(gateOf(result, "d").status, "fail");
+  assert.match(
+    gateOf(result, "d").problems[0],
+    /method "packages\.validate" was served by "commands" \(entry "packages\.\*"\) and is now served by no capability/,
   );
 });
 

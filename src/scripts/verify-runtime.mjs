@@ -56,8 +56,8 @@
  *              keeps running | may be stopped while idle`, `supervisor:`,
  *              `shared runner: <id> admitted`, `runtime.failed`
  *   console    what the plugin wrote to its console (plugins.log), except
- *              `HostError: plugin is stopping` (a request on its way when
- *              the plugin was stopped)
+ *              `HostError: plugin is stopping` / `plugin stopped` (a
+ *              request on its way when the plugin was stopped)
  *   recording  its standby recording after the step (residentAtReady, calls)
  *   and under `host`: the lines that name no plugin (`lazy: start-up settled`,
  *   `source: phase`, `open:`) and each `shell: compile with N panel(s) […]`

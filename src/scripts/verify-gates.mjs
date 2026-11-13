@@ -23,18 +23,23 @@
  *   (b) tests         no line of an existing test file is removed or modified
  *                     and no test file is deleted: only added lines and new
  *                     files. Test files: a path with a `test`, `tests` or
- *                     `__tests__` directory, `*.test.*`, `tests.rs`,
+ *                     `__tests__` directory, `*.test.*`, `*.spec.*`, `tests.rs`,
  *                     `*_test.rs`, `*_tests.rs`; and, in any other Rust file,
- *                     the lines of the base under `#[cfg(test)]` (a module, a
- *                     function, a `use`). A renamed or moved test file counts
- *                     as deleted.
+ *                     the lines of the base under `#[cfg(test)]` or `#[test]`
+ *                     (a module, a function, a `use`), and the files of a
+ *                     module the base declares as `#[cfg(test)] mod x;`
+ *                     (x.rs, x/mod.rs, a `#[path]`, and what is under x/).
+ *                     A renamed or moved test file counts as deleted.
  *   (c) api-surface   SDK: no line of test/fixtures/api-surface.txt is
  *                     removed (a changed signature is a removed line).
  *   (d) capabilities  player src/host/capabilities.json, SDK
  *                     src/host-capabilities.ts: every capability and every
  *                     capability-free method of the base is there unchanged
  *                     and in the same order; a new entry takes no existing
- *                     method; the other top-level fields are unchanged.
+ *                     method, also not one an existing `prefix.*` entry
+ *                     serves (the host looks up the exact name first, then
+ *                     the first prefix in table order); the other top-level
+ *                     fields are unchanged.
  *
  * Exit code: 0 all gates pass, 1 a gate fails, 2 usage or git error.
  * No dependencies; needs git on PATH.
@@ -76,13 +81,39 @@ function git(repo, args, { allowFail = false } = {}) {
   return result.stdout;
 }
 
+/** The text of `paths` at `commit`, in one git process: `[path, text]`. */
+function blobs(repo, commit, paths) {
+  if (!paths.length) return [];
+  const result = spawnSync("git", ["-C", repo, "cat-file", "--batch"], {
+    input: paths.map((path) => `${commit}:${path}\n`).join(""),
+    maxBuffer: 1 << 30,
+  });
+  if (result.error || result.status !== 0)
+    throw new GateError(
+      `git cat-file: ${result.error?.message ?? result.stderr.toString().trim()}`,
+    );
+  const out = [];
+  const data = result.stdout;
+  let at = 0;
+  for (const path of paths) {
+    const end = data.indexOf(10, at);
+    const header = data.toString("utf8", at, end).split(" ");
+    at = end + 1;
+    if (header[1] !== "blob") continue; // "<name> missing"
+    const size = Number(header[2]);
+    out.push([path, data.toString("utf8", at, at + size)]);
+    at += size + 1;
+  }
+  return out;
+}
+
 /** Whether `path` (forward slashes) is a test file by its name. */
 export function isTestPath(path) {
   const parts = path.split("/");
   const name = parts.pop();
   if (parts.some((part) => /^(tests?|__tests__)$/.test(part))) return true;
   return (
-    /\.test\.[cm]?[jt]sx?$/.test(name) ||
+    /\.(test|spec)\.[cm]?[jt]sx?$/.test(name) ||
     name === "tests.rs" ||
     /_tests?\.rs$/.test(name)
   );
@@ -93,11 +124,71 @@ export function isTestPath(path) {
  * 1-based and inclusive, from the attribute to the end of its item (the
  * matching `}` of a module, function or impl, or the `;` of a `use` or
  * `mod x;`). `#![cfg(test)]` covers the file. `cfg(not(test))` and
- * `cfg(any(…, test))` (code that also builds without tests) do not count.
+ * `cfg(any(…, test))` (code that also builds without tests) do not count,
+ * nor does `cfg(feature = "test…")` (a feature is not the test build). An
+ * item under `#[test]` (or `#[x::test]`) counts wherever it is.
  * Comments, strings (raw ones too) and character literals are skipped.
  */
 export function rustTestRanges(source) {
+  return scanRust(source).ranges;
+}
+
+/**
+ * The modules a Rust source declares for tests only, in another file:
+ * `#[cfg(test)] mod x;`, also with `#[path = "…"]`: `[{ name, path }]`
+ * (`path` null without the attribute).
+ */
+export function rustTestModules(source) {
+  return scanRust(source).modules;
+}
+
+/**
+ * Where the test modules declared in `file` live: `{ files, directories }`
+ * (repository paths with `/`). `mod x;` in `a/mod.rs`, `a/lib.rs` or
+ * `a/main.rs` is `a/x.rs` or `a/x/mod.rs`, in `a/b.rs` it is `a/b/x.rs` or
+ * `a/b/x/mod.rs`; a `#[path]` is relative to the declaring file's directory.
+ * Everything under the module's directory belongs to it.
+ */
+export function testModuleTargets(file, modules) {
+  const parts = file.split("/");
+  const name = parts.pop().replace(/\.rs$/, "");
+  const directory = parts.join("/");
+  const join = (...items) => {
+    const out = [];
+    for (const part of items.join("/").split("/")) {
+      if (part === "" || part === ".") continue;
+      if (part === ".." && out.length) out.pop();
+      else out.push(part);
+    }
+    return out.join("/");
+  };
+  const owner = ["mod", "lib", "main"].includes(name)
+    ? directory
+    : join(directory, name);
+  const files = [];
+  const directories = [];
+  for (const module of modules) {
+    if (module.path) {
+      const target = join(directory, module.path);
+      files.push(target);
+      directories.push(
+        target.endsWith("/mod.rs")
+          ? target.slice(0, -"/mod.rs".length)
+          : target.replace(/\.rs$/, ""),
+      );
+    } else {
+      files.push(join(owner, `${module.name}.rs`));
+      directories.push(join(owner, module.name));
+    }
+  }
+  return { files, directories };
+}
+
+function scanRust(source) {
   const ranges = [];
+  const modules = [];
+  /** Where the run of attributes before the current item began. */
+  let chain = null;
   const length = source.length;
   let at = 0;
   let line = 1;
@@ -163,6 +254,7 @@ export function rustTestRanges(source) {
     const c = source[at];
     if (c === "#" && /^#!?\[/.test(source.slice(at, at + 3))) {
       const startLine = line;
+      chain ??= at;
       const inner = source[at + 1] === "!";
       advance(at + (inner ? 2 : 1));
       let depth = 0;
@@ -181,15 +273,22 @@ export function rustTestRanges(source) {
       }
       const attribute = text.replace(/\s+/g, "");
       // `any(windows, test)` also builds without tests: not test code.
+      // (A string is not part of `attribute`: `feature = "test"` is none.)
       const isTest =
-        /^\[cfg\(.*\btest\b.*\)\]$/.test(attribute) &&
-        !/\b(not|any)\(/.test(attribute);
+        (/^\[cfg\(.*\btest\b.*\)\]$/.test(attribute) &&
+          !/\b(not|any)\(/.test(attribute)) ||
+        /^\[(\w+::)*test(\(.*\))?\]$/.test(attribute);
       if (isTest && inner) {
-        return [{ start: 1, end: source.split("\n").length }];
+        return {
+          ranges: [{ start: 1, end: source.split("\n").length }],
+          modules: [],
+        };
       }
-      if (isTest && !pending && !open) pending = { start: startLine, depth: 0 };
+      if (isTest && !pending && !open)
+        pending = { start: startLine, depth: 0, from: chain };
       continue;
     }
+    if (!/\s/.test(c)) chain = null;
     if (open) {
       if (c === "{") open.depth++;
       else if (c === "}" && --open.depth === 0) {
@@ -204,6 +303,14 @@ export function rustTestRanges(source) {
       else if (c === ")" || c === "]") pending.depth--;
       else if (c === ";" && pending.depth === 0) {
         ranges.push({ start: pending.start, end: line });
+        // `#[cfg(test)] #[path = "x.rs"] mod x;`: the module is a file.
+        const item = source.slice(pending.from, at);
+        const module = /\bmod\s+(\w+)\s*$/.exec(item);
+        if (module)
+          modules.push({
+            name: module[1],
+            path: /#\[\s*path\s*=\s*"([^"]*)"\s*\]/.exec(item)?.[1] ?? null,
+          });
         pending = null;
       } else if (c === "{" && pending.depth === 0) {
         open = { start: pending.start, depth: 1 };
@@ -215,7 +322,7 @@ export function rustTestRanges(source) {
   // An item cut off at the end of the file still counts to its end.
   const unfinished = open ?? pending;
   if (unfinished) ranges.push({ start: unfinished.start, end: line });
-  return ranges;
+  return { ranges, modules };
 }
 
 /**
@@ -366,6 +473,50 @@ export function compareCapabilities(base, head) {
       }
     }
   }
+  // The host looks a method up by its exact name first, then by the first
+  // `prefix.*` entry in table order (capabilities/mod.rs `lookup`): a new
+  // exact name under an existing prefix, or a new prefix before an existing
+  // one it overlaps, takes methods over without touching an old entry.
+  const routes = (table) => {
+    const exact = new Map();
+    const prefixes = [];
+    const add = (owner, method) => {
+      const route = { owner, needs: method.needs ?? null, by: method.name };
+      if (method.name.endsWith("*"))
+        prefixes.push([method.name.slice(0, -1), route]);
+      else exact.set(method.name, route);
+    };
+    for (const entry of table.capabilities ?? [])
+      for (const method of entry.methods ?? []) add(entry.name, method);
+    for (const entry of table.uncapable ?? []) add(null, entry);
+    return {
+      prefixes,
+      names: [...exact.keys()],
+      of: (name) =>
+        exact.get(name) ??
+        prefixes.find(([prefix]) => name.startsWith(prefix))?.[1] ??
+        null,
+    };
+  };
+  const [old, now] = [routes(base), routes(head)];
+  const probes = new Set([
+    ...now.names,
+    ...old.prefixes.map(([prefix]) => `${prefix}<any other>`),
+    ...now.prefixes.map(([prefix]) => `${prefix}<any other>`),
+  ]);
+  const served = (route) =>
+    `${route.owner === null ? "no capability" : `"${route.owner}"`} (entry "${route.by}")`;
+  for (const name of probes) {
+    const [before, after] = [old.of(name), now.of(name)];
+    if (!before || !after) continue;
+    // The same entry on both sides: a change of it is reported above.
+    if (before.by === after.by && before.owner === after.owner) continue;
+    if (before.owner === after.owner && same(before.needs, after.needs))
+      continue;
+    problems.push(
+      `method "${name}" was served by ${served(before)} and is now served by ${served(after)}`,
+    );
+  }
   return { problems, notes };
 }
 
@@ -468,6 +619,7 @@ export function runGates({
         "--no-renames",
         "--no-color",
         "--no-ext-diff",
+        "--no-textconv",
         ...range,
         "--",
         path,
@@ -524,6 +676,37 @@ export function runGates({
   const tests = gate("b", "existing tests: only added lines and new files");
   let testFiles = 0;
   let rustFiles = 0;
+  // Rust files that are test modules of the base by declaration
+  // (`#[cfg(test)] mod x;` somewhere): path or directory -> declaring file.
+  let declared = null;
+  const declaredBy = (path) => {
+    if (!declared) {
+      declared = { files: new Map(), directories: [] };
+      const sources = git(repo, [
+        "ls-tree",
+        "-r",
+        "--name-only",
+        "-z",
+        baseCommit,
+      ])
+        .split("\0")
+        .filter((name) => name.endsWith(".rs"));
+      for (const [file, source] of blobs(repo, baseCommit, sources)) {
+        if (!source.includes("mod ")) continue;
+        const modules = rustTestModules(source);
+        if (!modules.length) continue;
+        const targets = testModuleTargets(file, modules);
+        for (const target of targets.files) declared.files.set(target, file);
+        for (const target of targets.directories)
+          declared.directories.push([`${target}/`, file]);
+      }
+    }
+    return (
+      declared.files.get(path) ??
+      declared.directories.find(([prefix]) => path.startsWith(prefix))?.[1] ??
+      null
+    );
+  };
   for (const [status, path] of changes) {
     if (status === "A") continue;
     if (config.traces && path.startsWith(config.traces)) continue; // gate (a)
@@ -534,10 +717,13 @@ export function runGates({
         .map((l) => `\n        ${l.line}: ${l.text.trim().slice(0, 110)}`)
         .join("") +
       (lines.length > 3 ? `\n        … ${lines.length - 3} more` : "");
-    if (isTestPath(path)) {
+    const declarer =
+      !isTestPath(path) && path.endsWith(".rs") ? declaredBy(path) : null;
+    if (isTestPath(path) || declarer) {
       testFiles++;
+      const why = declarer ? ` (a #[cfg(test)] module of ${declarer})` : "";
       if (status !== "M") {
-        report(tests, path, `${path}: ${WHAT[status] ?? status}`);
+        report(tests, path, `${path}: ${WHAT[status] ?? status}${why}`);
         continue;
       }
       const { binary, removed } = diffOf(path);
@@ -546,7 +732,7 @@ export function runGates({
         report(
           tests,
           path,
-          `${path}: ${removed.length} line(s) removed or modified${preview(removed)}`,
+          `${path}: ${removed.length} line(s) removed or modified${why}${preview(removed)}`,
         );
       continue;
     }
