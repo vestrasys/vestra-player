@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.2.18
+
+- The install confirmations list what matters instead of every capability (SDK 1.8.0, plan A1/A6). When the repository's index carries the capability scan of the version (`versions[].scan.uses`, the `uses` of `vestra-plugin scan`), they list the scanned categories in plain words: player settings and the playback engine, other plugins, clipboard, credentials, camera, microphone, screen, notifications; a word the store does not know is named as an unknown permission. Without a scan (an index from before it, a `.vxp` from a file or a link) they list only the risky capabilities the package declares, and any the store does not know. With nothing to list they say **It uses none of the player's sensitive features.**
+- Every install confirmation says **Plugins may read your files or use the network.** before that list: the official repository's and a package from a file or a link (an unofficial repository's warning said it already, and is unchanged).
+- The update confirmation compares the scanned categories of the installed and the new version when the index has both, and otherwise the declared capabilities as before (all of them, not only the risky ones). The notice in the store window, "The new version needs new permissions: …", compares the same way, so the two never disagree.
+- The permission list names the new capability `mpv` (SDK 1.8.0), risky: **Control the playback engine (mpv) directly: send its commands and change its options**.
+- New texts are translated by machine (marked `x-machine`; zh-Hans by hand). Unchanged: the Permissions list in the store window, which goes by the declared capabilities; what is installed and how. Who must change: nobody; a repository that wants the categories shown adds `scan` to its index versions.
+
 ## 0.2.17
 
 - The permission list names the new capability `video.motion` (SDK 1.7.19): **Smooth motion with the GPU's frame-rate converter**, translated by machine (marked `x-machine`; zh-Hans by hand). Who must change: nobody.
