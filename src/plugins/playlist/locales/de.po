@@ -343,8 +343,8 @@ msgstr "Ungültige Einträge entfernen"
 
 #: main.ts:602
 #, x-machine
-msgid "Show in Finder"
-msgstr "Im Finder anzeigen"
+msgid "Show in Folder"
+msgstr "Im Ordner anzeigen"
 
 #: main.ts:602
 #, x-machine

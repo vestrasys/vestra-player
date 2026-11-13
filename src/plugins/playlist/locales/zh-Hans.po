@@ -274,8 +274,8 @@ msgid "Remove Invalid Items"
 msgstr "移除无效项"
 
 #: main.ts:602
-msgid "Show in Finder"
-msgstr "在 Finder 中显示"
+msgid "Show in Folder"
+msgstr "在文件夹中显示"
 
 #: main.ts:602
 msgid "Move to Top"

@@ -5,7 +5,7 @@ import type { I18n, TemplateArgs, Text, TextList } from "@vestra-player/sdk";
  * the player translates with `locales/<lang>.po`; `{}` and `{name}` take the
  * arguments (data: counts, file names, messages of the system, or texts).
  * Notices made of a varying number of parts are text values instead
- * (`Queue.summary`, `problemClauses`, Show in Finder).
+ * (`Queue.summary`, `problemClauses`, Show in Folder).
  */
 export const NOTICES = [
   // Adding (the summary is a list of clauses, see `Queue.summary`).
