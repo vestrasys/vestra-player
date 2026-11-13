@@ -5,7 +5,7 @@ import type { PackageCandidate, PackageChange, PackageSource, PluginInfo } from 
 import type { Item } from "./catalog.ts";
 import type { IndexVersion } from "./index-format.ts";
 import { MAX_PACKAGE } from "./index-format.ts";
-import { addedBy, bulletList, categoryList, permissionList, reservedId, reservedText, riskyOnly, sourceName } from "./labels.ts";
+import { addedBy, bulletList, categoryList, reservedId, reservedText, sourceName } from "./labels.ts";
 import { get, isHttps, NetError } from "./net.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import type { Store } from "./store.ts";
@@ -93,19 +93,22 @@ function replaceDetail(info: PluginInfo, name: string): Msg {
 
 /**
  * What the plugin will be able to do: the categories the repository's scan
- * found in its code (`scan`, from the index), else (a package from a file or
- * a link, an index without scans) the risky capabilities it declares.
+ * found in its code (`scan`, from the index). Without a scan (an index
+ * from before it, a package from a file or a link): `null`, nothing is
+ * said; the capabilities a package declares are not shown.
  */
-function willBeAble(capabilities: readonly string[], scan: { uses: string[] } | null = null): Msg {
-  if (scan) return scan.uses.length ? msg("It will be able to:\n{}", categoryList(scan.uses)) : NONE;
-  const risky = riskyOnly(capabilities);
-  return risky.length ? msg("It will be able to:\n{}", permissionList(risky)) : NONE;
+function willBeAble(scan: { uses: string[] } | null): Msg | null {
+  if (!scan) return null;
+  return scan.uses.length
+    ? msg("It will be able to:\n{}", categoryList(scan.uses))
+    : msg("It uses none of the player's sensitive features.");
 }
 
-const NONE = msg("It uses none of the player's sensitive features.");
-
 /** Said of every plugin, before what it will be able to do (an unofficial repository's own text says it already). */
-const withAccess = (able: Msg): Arg => joined([msg("Plugins may read your files or use the network."), able], "{}\n\n{}");
+function withAccess(able: Msg | null): Arg {
+  const access = msg("Plugins may read your files or use the network.");
+  return able ? joined([access, able], "{}\n\n{}") : access;
+}
 
 // ------------------------------------------------------------ repository
 
@@ -130,20 +133,22 @@ export async function installFromRepository(store: Store, item: Item, version: I
         repo.label,
         repo.url,
       );
-  const perms = willBeAble(version.capabilities, version.scan);
+  const perms = willBeAble(version.scan);
   let question: Question;
   if (replace) {
     question = {
       message: msg("Replace the installed “{}”?", name),
       detail: repo.official
         ? msg("{1}\n\nWill install {2} from the official repository.\n\n{3}", replaceDetail(info, name), version.version, withAccess(perms))
-        : msg(
-            "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
-            replaceDetail(info, name),
-            version.version,
-            perms,
-            unofficial,
-          ),
+        : perms
+          ? msg(
+              "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
+              replaceDetail(info, name),
+              version.version,
+              perms,
+              unofficial,
+            )
+          : msg("{1}\n\nWill install {2} from the unofficial repository.\n\n{3}", replaceDetail(info, name), version.version, unofficial),
       confirm: "Replace",
       destructive: true,
     };
@@ -192,7 +197,7 @@ export async function installFromRepository(store: Store, item: Item, version: I
         }
       : {
           message: msg("Install “{}” {} from an unofficial repository?", name, version.version),
-          detail: msg("{2}\n\n{3}", unofficial, perms),
+          detail: perms ? msg("{2}\n\n{3}", unofficial, perms) : msg("{2}", unofficial),
           confirm: "Install Anyway",
           destructive: true,
         };
@@ -448,7 +453,8 @@ function sideloadQuestion(store: Store, candidate: PackageCandidate, from: { fil
   const manifest = candidate.manifest;
   const name = manifest.name ?? manifest.id;
   const info = installedOf(store, manifest.id);
-  const perms = withAccess(willBeAble(manifest.capabilities));
+  // A package from a file or a link has no scan: only the sentence.
+  const perms = withAccess(null);
   const warning =
     "file" in from
       ? msg(

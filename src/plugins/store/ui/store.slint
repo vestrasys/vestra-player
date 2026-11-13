@@ -241,6 +241,8 @@ export component StoreWindow inherits Window {
     in property <[StoreVersion]> versions;
     in property <[StoreFact]> facts;
     in property <[StorePermission]> permissions;
+    // The index has a scan of the version shown: the Permissions heading shows (even over an empty list).
+    in property <bool> scanned;
     // Status line: one message, or a text per repository.
     in property <string> status;
     in property <bool> status-warn;
@@ -651,8 +653,9 @@ export component StoreWindow inherits Window {
                                 }
                             }
                             Rectangle { height: 6px; }
-                            Cell { text: @tr("Permissions ({})", root.permissions.length); color: Theme.text; }
-                            Rectangle { height: 1px; background: Theme.line; }
+                            // Only with a scan of the version shown: without one the store has nothing to say, not "(0)".
+                            if root.scanned: Cell { text: @tr("Permissions ({})", root.permissions.length); color: Theme.text; }
+                            if root.scanned: Rectangle { height: 1px; background: Theme.line; }
                             ListView {
                                 vertical-stretch: 1;
                                 for p in root.permissions: Text {

@@ -42,8 +42,10 @@ export const CAPABILITIES = {
 /**
  * The categories of the SDK's capability scan (`vestra-plugin scan`, its
  * `uses`) in plain words, in the scan's order. A repository's index stores
- * them per version (`scan.uses`); the confirmations then show them instead
- * of the declared capabilities.
+ * them per version (`scan.uses`). They are all the store tells the user
+ * about what a plugin does with the player: the capabilities a package
+ * declares are not shown (user ruling 2026-11-13); without a scan there is
+ * nothing to show.
  */
 export const CATEGORIES = {
   player: "Change your player settings (shortcuts, theme, language, rendering) or control the playback engine directly",
@@ -64,10 +66,6 @@ export type CapabilityText =
 const KNOWN: Partial<Record<string, { text: CapabilityText; risky?: true }>> = CAPABILITIES;
 const CATEGORY: Partial<Record<string, CapabilityText>> = CATEGORIES;
 
-/** The declared capabilities a confirmation names: the risky ones, and any the store does not know. */
-export const riskyOnly = (capabilities: readonly string[]): string[] =>
-  capabilities.filter((name) => KNOWN[name]?.risky === true || !Object.hasOwn(CAPABILITIES, name));
-
 /**
  * Scanned categories in plain words: each once, in the scan's order; a word
  * the store does not know is named, after the others.
@@ -84,36 +82,23 @@ export function categories(uses: readonly string[]): Msg[] {
 
 /**
  * What a newer version adds to the installed one, in plain words (empty:
- * nothing). The update confirmation and the window's notice both go by this.
+ * nothing to say). Only the repository's scan of the code counts, never the
+ * capabilities a package declares (user ruling 2026-11-13). The update
+ * confirmation and the window's notice both go by this.
  *
- * - Both versions scanned: the categories the new one adds.
- * - Neither scanned: the capabilities the new one declares anew.
- * - Only one of them scanned: the two cannot be compared, so nothing the
- *   user may not have been told is left out. The capabilities declared anew
- *   are named as always, and with them
- *   - installed scanned, new one not: every risky capability the new one
- *     declares (the installed one was shown by its scan, which may have
- *     found none of them in use);
- *   - installed not scanned, new one scanned: every category the new one
- *     uses (a category may be reached through a capability that was never
- *     drawn as risky). This asks once per plugin, on the first update after
- *     its repository starts scanning; from then on both are scanned.
- *   A line is said once (a category and a capability may share their words).
+ * - The new version has no scan: nothing.
+ * - Both scanned: the categories the new one adds.
+ * - Only the new one scanned: every category it uses (there is nothing to
+ *   compare with).
  */
 export function addedBy(
   versions: readonly { version: string; scan: { uses: string[] } | null }[],
-  installed: { version: string | null; capabilities: readonly string[] },
-  next: { capabilities: readonly string[]; scan: { uses: string[] } | null },
+  installed: { version: string | null },
+  next: { scan: { uses: string[] } | null },
 ): Msg[] {
+  if (!next.scan) return [];
   const before = versions.find((v) => v.version === installed.version)?.scan ?? null;
-  if (before && next.scan) return categories(next.scan.uses.filter((word) => !before.uses.includes(word)));
-  const anew = next.capabilities.filter((c) => !installed.capabilities.includes(c));
-  if (before) return permissions([...riskyOnly(next.capabilities), ...anew]).map((line) => line.text);
-  const declared = permissions(anew).map((line) => line.text);
-  if (!next.scan) return declared;
-  const scanned = categories(next.scan.uses);
-  const said = new Set(scanned.map((line) => JSON.stringify(line)));
-  return [...scanned, ...declared.filter((line) => !said.has(JSON.stringify(line)))];
+  return categories(before ? next.scan.uses.filter((word) => !before.uses.includes(word)) : next.scan.uses);
 }
 
 /** `lines` as a bullet list for a confirmation, at most 20 lines. */
