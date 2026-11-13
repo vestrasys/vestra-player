@@ -46,6 +46,7 @@
 //! waits at least 30 s without a member before it exits.
 use super::revised::Revised;
 use super::*;
+use crate::binding_manager::KEYS_EVENT;
 use crate::capabilities;
 use crate::supervisor::{Action, Delivery, Trigger, Tunables, UnitId, WorkKind};
 use std::collections::BTreeSet;
@@ -199,6 +200,18 @@ pub(crate) struct OnDemand {
     /// `packages.changed` and `bindings.changed` of a run (nothing changed
     /// for a plugin that last ran in an earlier one).
     pub mute: bool,
+    /// Each wake event's state as last announced in this run (`broadcast`):
+    /// its digest (`state_digest`) and the event's data.
+    /// `commands.keys` goes to one plugin at a time and is not here
+    /// (`keys_sent` is what each plugin has).
+    pub announced: BTreeMap<String, (u64, Value)>,
+    /// Plugins parked in this run while wake events are muted (start-up):
+    /// for each wake event they listen to, the digest of the state they
+    /// last had (`None`: the event was not announced to them, nor its keys
+    /// sent). Read once the mute ends (`wake_missed`), then empty.
+    pub seen: BTreeMap<u64, BTreeMap<String, Option<u64>>>,
+    /// The mute of start-up ended and `wake_missed` ran (once per run).
+    pub caught_up: bool,
     /// Start-up settled (latched once per run; the core's `settled`).
     settled: bool,
     next_check: u64,
@@ -671,6 +684,104 @@ impl Host {
         let trigger = Trigger::event(event, json!({"event":event,"data":data}));
         if self.supervisor.wake(Pid(owner), &trigger) == Delivery::Started {
             self.wake_started(owner);
+        }
+    }
+    /// `event`, a wake event, was announced with `data`: its state now
+    /// (`OnDemand::announced`). `bindings.changed` carries none (a listener
+    /// reads `bindings.list`): its state is the list it announces
+    /// (`bindings_list_sent`).
+    pub(crate) fn note_announced(&mut self, event: &str, data: &Value) {
+        let state = if event == "bindings.changed" {
+            &self.bindings_list_sent
+        } else {
+            data
+        };
+        let digest = state_digest(state);
+        self.on_demand
+            .announced
+            .insert(event.to_owned(), (digest, data.clone()));
+    }
+    /// `owner`, running, is parked (or kept in standby) listening to the
+    /// wake events `events`: while they are muted (start-up), the state of
+    /// each it last had is noted (`OnDemand::seen`), for `wake_missed`.
+    /// Nothing once that ran.
+    pub(crate) fn note_parked_listener(&mut self, owner: u64, events: &BTreeSet<String>) {
+        if self.on_demand.caught_up {
+            return;
+        }
+        let manifest = self.plugins.get(&owner).map(|p| p.manifest.id.clone());
+        let seen = events
+            .iter()
+            .map(|event| {
+                let digest = if event == KEYS_EVENT {
+                    manifest
+                        .as_ref()
+                        .and_then(|manifest| self.keys_sent.get(manifest))
+                        .map(state_digest)
+                } else {
+                    self.on_demand
+                        .announced
+                        .get(event)
+                        .map(|(digest, _)| *digest)
+                };
+                (event.clone(), digest)
+            })
+            .collect();
+        self.on_demand.seen.insert(owner, seen);
+    }
+    /// The mute of start-up ended (`on_demand_tick`): wake events muted
+    /// meanwhile were dropped, so a plugin parked before them would keep
+    /// what it had at its park. Each plugin parked in this run and still in
+    /// standby is woken once, with every wake event it listens to whose
+    /// state is not the one it last had (`missed_wakes`): the event's last
+    /// announcement, or its own current key labels (`commands.keys`). One
+    /// whose events did not change, or which never ran in this run
+    /// (replayed: it has what its recording has), is not woken. Whatever
+    /// the order plugins parked and registered in.
+    fn wake_missed(&mut self) {
+        let seen = std::mem::take(&mut self.on_demand.seen);
+        let mut current = BTreeMap::new();
+        for (owner, events) in &seen {
+            for event in events.keys() {
+                let state = if event == KEYS_EVENT {
+                    let keys = self.keys_state(*owner);
+                    Some((state_digest(&keys), keys))
+                } else {
+                    self.on_demand.announced.get(event).cloned()
+                };
+                if let Some(state) = state {
+                    current.insert((*owner, event.clone()), state);
+                }
+            }
+        }
+        let missed = missed_wakes(
+            &seen,
+            |owner, event| {
+                self.on_demand.held.contains_key(&owner)
+                    && self
+                        .on_demand
+                        .wakes
+                        .get(&owner)
+                        .is_some_and(|events| events.contains(event))
+            },
+            |owner, event| {
+                current
+                    .get(&(owner, event.to_owned()))
+                    .map(|(digest, _)| *digest)
+            },
+        );
+        for (owner, event) in missed {
+            let Some((_, state)) = current.remove(&(owner, event.clone())) else {
+                continue;
+            };
+            let id = self.held_id(owner).unwrap_or_default().to_owned();
+            diag!("lazy: {id} parked before {event} changed at start-up, waking it");
+            let data = if event == KEYS_EVENT {
+                self.keys_woken(owner, state)
+            } else {
+                state
+            };
+            self.wake_listener(owner, &event, &data);
         }
     }
     /// The manifest id of a plugin in standby.
@@ -1631,7 +1742,52 @@ impl Host {
             self.on_demand.settled = true;
             self.supervisor.settled(now);
         }
+        // The mute of start-up ended (`quiet_after_start` after it settled):
+        // what it dropped wakes now, where it changed something.
+        if self.on_demand.settled && !self.on_demand.caught_up {
+            self.supervisor.set_now(now);
+            if !self.supervisor.events_muted() {
+                self.on_demand.caught_up = true;
+                self.wake_missed();
+            }
+        }
     }
+}
+
+/// The digest of a wake event's state (`OnDemand::announced`, `seen`):
+/// equal states, equal digests.
+fn state_digest(state: &Value) -> u64 {
+    use std::hash::{Hash, Hasher};
+    let mut hasher = std::hash::DefaultHasher::new();
+    state.to_string().hash(&mut hasher);
+    hasher.finish()
+}
+
+/// The wakes the mute of start-up dropped (`Host::wake_missed`), in order:
+/// for each plugin parked meanwhile (`seen`: the state of each wake event
+/// it last had), each event it still listens to in standby (`listens`)
+/// whose state now (`current`; `None`: never announced in this run) is
+/// another. An event it never had (`None` in `seen`) differs from any
+/// announced state: what it read itself at its start is not known.
+fn missed_wakes(
+    seen: &BTreeMap<u64, BTreeMap<String, Option<u64>>>,
+    listens: impl Fn(u64, &str) -> bool,
+    current: impl Fn(u64, &str) -> Option<u64>,
+) -> Vec<(u64, String)> {
+    let mut missed = Vec::new();
+    for (owner, events) in seen {
+        for (event, had) in events {
+            if !listens(*owner, event) {
+                continue;
+            }
+            if let Some(now) = current(*owner, event)
+                && *had != Some(now)
+            {
+                missed.push((*owner, event.clone()));
+            }
+        }
+    }
+    missed
 }
 
 /// Deletes an uninstalled plugin's data directory (`Action::RemoveData`).
@@ -1780,5 +1936,61 @@ mod tests {
         // The unit table holds the standby holder by id and by pid.
         let unit = supervisor.by_id("b.two").unwrap();
         assert_eq!(supervisor.by_pid(Pid(2)), Some(unit));
+    }
+
+    /// The wakes start-up's mute dropped (`wake_missed`): a plugin parked
+    /// meanwhile is woken for each event whose state is not the one it last
+    /// had, and only then; the order plugins parked and registered in does
+    /// not matter, only the states.
+    #[test]
+    fn a_plugin_parked_at_start_up_is_woken_only_for_what_changed() {
+        let list = |n: usize| json!({"commands": (0..n).collect::<Vec<_>>()});
+        let (a, b) = (state_digest(&list(337)), state_digest(&list(372)));
+        assert_ne!(a, b);
+        assert_eq!(a, state_digest(&list(337)));
+        let had = |events: &[(&str, Option<u64>)]| {
+            events
+                .iter()
+                .map(|(event, digest)| ((*event).to_owned(), *digest))
+                .collect::<BTreeMap<_, _>>()
+        };
+        let seen = BTreeMap::from([
+            // Parked before the third-party plugins registered their commands.
+            (1, had(&[("bindings.changed", Some(a))])),
+            // Parked after: it has the current list.
+            (2, had(&[("bindings.changed", Some(b))])),
+            // Its palette never changed in this run (never announced).
+            (3, had(&[("appearance.changed", None)])),
+            // Its keys changed, its packages did not.
+            (
+                4,
+                had(&[("commands.keys", Some(7)), ("packages.changed", Some(9))]),
+            ),
+            // Parked before any announcement: what it read itself is not known.
+            (5, had(&[("packages.changed", None)])),
+            // Woken since (no longer in standby).
+            (6, had(&[("bindings.changed", Some(a))])),
+        ]);
+        let current = |owner: u64, event: &str| match (owner, event) {
+            (_, "bindings.changed") => Some(b),
+            (_, "appearance.changed") => None,
+            (4, "commands.keys") => Some(8),
+            (_, "packages.changed") => Some(9),
+            _ => None,
+        };
+        let missed = missed_wakes(&seen, |owner, _| owner != 6, current);
+        assert_eq!(
+            missed,
+            [
+                (1, "bindings.changed".to_owned()),
+                (4, "commands.keys".to_owned()),
+                (5, "packages.changed".to_owned()),
+            ]
+        );
+        // A normal start: every state as each had it, nothing is woken.
+        let same = |owner: u64, event: &str| seen[&owner][event];
+        assert!(missed_wakes(&seen, |_, _| true, same).is_empty());
+        // No longer listening to the event: not woken for it.
+        assert!(missed_wakes(&seen, |_, _| false, current).is_empty());
     }
 }

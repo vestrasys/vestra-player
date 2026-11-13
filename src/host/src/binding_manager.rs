@@ -282,6 +282,20 @@ impl Host {
         }
         self.keys_data(keys)
     }
+    /// `owner`'s key labels now (`keys_of`): the state of its
+    /// `commands.keys` (`Host::wake_missed`).
+    pub(crate) fn keys_state(&self, owner: u64) -> Value {
+        self.keys_of(owner).1
+    }
+    /// `owner` in standby is woken for its key labels `keys`
+    /// (`Host::wake_missed`): noted as what it has, as `push_command_keys`
+    /// notes a wake's; the event data.
+    pub(crate) fn keys_woken(&mut self, owner: u64, keys: Value) -> Value {
+        if let (Some(manifest), _) = self.keys_of(owner) {
+            self.keys_sent.insert(manifest, keys.clone());
+        }
+        self.keys_data(keys)
+    }
     /// The answer and event data: the labels by command id, and the table
     /// revision they are of (a larger one is newer: the SDK keeps the
     /// newest of an answer and an event that cross).
@@ -401,7 +415,7 @@ impl Host {
     }
 }
 
-const KEYS_EVENT: &str = "commands.keys";
+pub(crate) const KEYS_EVENT: &str = "commands.keys";
 
 /// A plugin `push_command_keys` considers: running (`subscribed`: it
 /// subscribed to `commands.keys`; `waking`: its start for a wake event is

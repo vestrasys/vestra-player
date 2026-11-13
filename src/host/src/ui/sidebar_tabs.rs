@@ -153,7 +153,7 @@ pub fn next_active(
 /// another, and no tab of that plugin is among the column's mounted ones
 /// (`column`, their plugin ids) yet. Plugins start one after another, and
 /// a placeholder replayed from a recording mounts at once: while the
-/// column waits, no other tab is shown or woken (`Host::current_tab`).
+/// column waits, no other tab is current for the host (`Host::current_in`).
 pub fn awaits_remembered<'a>(
     settled: bool,
     remembered: Option<&str>,

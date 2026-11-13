@@ -118,6 +118,8 @@ impl Capability for Events {
             .map(|(event, _)| event.clone())
             .collect::<std::collections::BTreeSet<_>>();
         if !wakes.is_empty() {
+            // What it last had of each, while start-up mutes them.
+            host.note_parked_listener(owner, &wakes);
             host.on_demand.wakes.insert(owner, wakes);
         }
     }

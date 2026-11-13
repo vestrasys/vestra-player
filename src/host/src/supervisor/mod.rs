@@ -1742,7 +1742,11 @@ impl<P: Clone> Supervisor<P> {
         (self.units.get(&u)?.pid() == Some(pid)).then_some(u)
     }
 
-    fn events_muted(&self) -> bool {
+    /// Wake events wake nothing now: start-up has not settled
+    /// (`set_muted`), or it settled less than `quiet_after_start` ago
+    /// (`settled`). The adapter wakes what a muted event would have woken
+    /// once this ends (the Host's `wake_missed`).
+    pub fn events_muted(&self) -> bool {
         self.muted || self.now < self.quiet_until
     }
 

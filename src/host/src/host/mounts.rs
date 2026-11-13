@@ -15,6 +15,28 @@ struct ColumnPlan {
     tabbed: bool,
 }
 
+/// A column's current tab for the host (`Host::current_in`, the start-up
+/// rule).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Current {
+    /// This tab (`None`: the column has none).
+    Tab(Option<u64>),
+    /// Start-up has not settled and the column's remembered tab has not
+    /// mounted yet: no tab is current.
+    Awaits,
+}
+impl Current {
+    pub(crate) fn tab(self) -> Option<u64> {
+        match self {
+            Current::Tab(tab) => tab,
+            Current::Awaits => None,
+        }
+    }
+    pub(crate) fn awaits(self) -> bool {
+        self == Current::Awaits
+    }
+}
+
 /// The wire name of a panel key's slot.
 fn slot_of(key: u64) -> &'static str {
     [
@@ -293,10 +315,15 @@ impl Host {
         for mount in &mounted {
             let shows = match Column::of(mount.spec.slot) {
                 None => true,
+                // The tab current for the host once `next` is mounted
+                // (`current_in`: none while the column waits for its
+                // remembered tab).
                 Some(column) => {
-                    plans[column.index()].active == Some(mount.spec.owner)
-                        && self.column_wanted(column)
-                        && !self.awaits_remembered(column, Some(mount.spec.owner), &next)
+                    self.column_wanted(column)
+                        && self
+                            .current_in(column, plans[column.index()].active, &next)
+                            .tab()
+                            == Some(mount.spec.owner)
                 }
             };
             if !shows {
@@ -460,20 +487,29 @@ impl Host {
             |(preferred, _)| preferred,
         )
     }
-    /// During start-up, a column whose remembered current tab has not
-    /// mounted yet (plugins start one after another) waits for it, instead
-    /// of compiling and showing the tab that is current meanwhile (a flash
-    /// of another tab, and a compile for nothing): the single shell waited
-    /// for every start-up mount. Once start-up settled (`startup_panels`)
-    /// the current tab shows, whatever it is (the remembered plugin may be
-    /// gone).
-    pub(super) fn awaits_remembered(
+    /// The start-up rule for a column's current tab, its one source of
+    /// truth: while start-up has not settled (`startup_panels`), a column
+    /// whose remembered current tab (the last run's) has not mounted yet
+    /// has no current tab (`Current::Awaits`), instead of the tab that is
+    /// current meanwhile (plugins start one after another, and a
+    /// placeholder replayed from a recording mounts at once: a flash of
+    /// another tab, a compile for nothing, a wake for nothing). Otherwise
+    /// it is `active`, the policy's (once settled, whatever it is: the
+    /// remembered plugin may be gone). Of the column with the mounts
+    /// `mounts`: `next` while a mount change is planned, else the mounted
+    /// ones. Every consumer asks this, through `current` or `current_tab`:
+    /// what the column shows and compiles (`apply_mounts`, `sync_panels`),
+    /// the floating sidebar, the panel keys, the tab's wake and its
+    /// kept-running work (`sync_column`, `tab_demand`) and
+    /// `Busy::ShownTab`. The tab strip marks the policy's current tab all
+    /// the same (the user's choice, kept).
+    fn current_in(
         &self,
         column: Column,
         active: Option<u64>,
         mounts: &BTreeMap<u64, Mount>,
-    ) -> bool {
-        crate::ui::sidebar_tabs::awaits_remembered(
+    ) -> Current {
+        let awaits = crate::ui::sidebar_tabs::awaits_remembered(
             self.startup_panels,
             self.column_memory(column).active.as_deref(),
             active
@@ -483,20 +519,27 @@ impl Host {
                 .values()
                 .filter(|mount| mount.spec.slot == column.slot())
                 .map(|mount| mount.manifest.as_str()),
+        );
+        if awaits {
+            Current::Awaits
+        } else {
+            Current::Tab(active)
+        }
+    }
+    /// A column's current tab for the host now (`current_in` over the
+    /// policy's current tab and the mounted panels).
+    pub(crate) fn current(&self, column: Column) -> Current {
+        self.current_in(
+            column,
+            self.policy.active(policy_column(column)),
+            &self.mounts,
         )
     }
-    /// A column's current tab as far as the host acts on it (its panel
-    /// shown, its plugin woken or kept running, the panel keys): the
-    /// policy's, except while the column waits for its remembered tab at
-    /// start-up (`awaits_remembered`). Meanwhile no other tab is current,
-    /// neither a placeholder replayed from a recording (it would be woken)
-    /// nor a running plugin's (it would be kept running); the tab strip
-    /// still marks the policy's.
+    /// The tab `current` names: none while the column waits for its
+    /// remembered tab (neither a placeholder, which would be woken, nor a
+    /// running plugin's, which would be kept running).
     pub(crate) fn current_tab(&self, column: Column) -> Option<u64> {
-        let active = self.policy.active(policy_column(column));
-        (!self.awaits_remembered(column, active, &self.mounts))
-            .then_some(active)
-            .flatten()
+        self.current(column).tab()
     }
     /// One line per compile of a panel's file (tests/startup_compiles.rs
     /// counts them): a compile blocks the UI thread. `took`: `None` when it
@@ -633,8 +676,8 @@ impl Host {
         for column in Column::ALL {
             let slot = column.slot();
             let active = self.policy.active(policy_column(column));
-            let wanted =
-                self.column_wanted(column) && !self.awaits_remembered(column, active, &self.mounts);
+            let current = self.current(column);
+            let wanted = self.column_wanted(column) && !current.awaits();
             // Not wanted shown (or waiting for its remembered tab): what it
             // showed stays (nothing compiles), unless that is no longer its
             // current tab.
@@ -649,13 +692,11 @@ impl Host {
             if shown || loaded {
                 self.panels.evict(slot);
             }
-            // The floating sidebar shows its current tab whatever it showed,
-            // but none while the column waits for its remembered tab.
-            let floating_key =
-                active.filter(|_| !self.awaits_remembered(column, active, &self.mounts));
+            // The floating sidebar shows its current tab whatever it showed
+            // (none while the column waits for its remembered tab).
             if column == Column::Sidebar
                 && let Some((window, floating)) = &floating
-                && self.show_panel(window, *floating, slot, floating_key)
+                && self.show_panel(window, *floating, slot, current.tab())
             {
                 view::settle_layout(window.window());
                 self.panels.evict(slot);

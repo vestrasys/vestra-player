@@ -912,6 +912,95 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
     assert!(!second.contains(&format!("] {PACKAGES} start")), "{second}");
 }
 
+const BINDINGS: &str = "vestra.fixture-bindings";
+const LATE: &str = "vestra.fixture-late";
+
+/// Wake events are muted during start-up (nothing wakes), and a muted one
+/// is not dropped for a plugin parked before it (V2, SDK 1.9.0: the hotkeys
+/// page parked with 337 rows instead of 372): once the mute ends, a plugin
+/// parked in this run whose event's state is not the one it last had is
+/// woken once, and reads the current state. A plugin registering a command
+/// late in start-up (its activation takes 4 s) changes `bindings.list`
+/// after the listener parked (idle 500 ms). The next start, with the same
+/// plugins and commands, wakes nothing.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_listener_parked_at_start_up_is_woken_once_for_a_muted_change() {
+    let root = root_with(|plugins| {
+        vec![
+            package(
+                plugins,
+                BINDINGS,
+                &["commands"],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     const late = async () => (await plugin.bindings.list()).commands\n\
+                     .filter((c) => c.plugin === \"{LATE}\").length;\n\
+                     console.error(`{BINDINGS} start sees ${{await late()}}`);\n\
+                     plugin.bindings.onChange(async () =>\n\
+                     console.error(`{BINDINGS} heard ${{await late()}}`));\n}}\n"
+                ),
+            ),
+            package(
+                plugins,
+                LATE,
+                &["commands"],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     await new Promise((done) => setTimeout(done, 4000));\n\
+                     plugin.commands.add({{ id: \"late\", path: [\"Tools\", \"Late\"], run: () => {{}} }});\n\
+                     console.error(`{LATE} added`);\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
+    let first = run(root.path(), 10, &lazy);
+    let at = |text: &str| {
+        first
+            .find(text)
+            .unwrap_or_else(|| panic!("{text}: {first}"))
+    };
+    // The set-up: the listener parked before the late command came, during
+    // start-up.
+    let parked = at(&format!("lazy: {BINDINGS} parked"));
+    let added = at(&format!("{LATE} added"));
+    let settled = at("lazy: start-up settled");
+    assert!(parked < added && added < settled, "{first}");
+    // Not woken while muted; once the mute ended, woken once for it.
+    let woken = at(&format!("lazy: {BINDINGS} woken by bindings.changed"));
+    assert!(settled < woken, "{first}");
+    assert_eq!(
+        count(&first, &format!("lazy: {BINDINGS} woken by")),
+        1,
+        "{first}"
+    );
+    assert!(
+        first.contains(&format!(
+            "lazy: {BINDINGS} parked before bindings.changed changed at start-up, waking it"
+        )),
+        "{first}"
+    );
+    // Its woken run sees the late command.
+    assert!(
+        first[woken..].contains(&format!("{BINDINGS} start sees 1"))
+            || first[woken..].contains(&format!("{BINDINGS} heard 1")),
+        "{first}"
+    );
+
+    // The next start: both replayed, the same commands; nothing is woken.
+    let second = run(root.path(), 4, &lazy);
+    for id in [BINDINGS, LATE] {
+        assert!(second.contains(&format!("lazy: {id} replayed")), "{second}");
+        assert!(!second.contains(&format!("lazy: {id} woken")), "{second}");
+        assert!(
+            !second.contains(&format!("lazy: {id} parked before")),
+            "{second}"
+        );
+    }
+    assert!(!second.contains(&format!("] {BINDINGS} start")), "{second}");
+}
+
 /// A test parks and wakes every built-in and diffs the registries: for
 /// each built-in, what the host's registries
 /// hold for it (commands with declaration, shown text, bar button, state
