@@ -86,7 +86,7 @@ msgstr "Prüfen"
 msgid "Pack"
 msgstr "Packen"
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:243
 #, x-machine
 msgid "Install"
 msgstr "Installieren"
@@ -671,27 +671,97 @@ msgstr "Benutzerdefiniert · OpenAI-Format"
 msgid "Custom · Anthropic format"
 msgstr "Benutzerdefiniert · Anthropic-Format"
 
-#: delivery.ts:202
+#: delivery.ts:65
+#, x-machine
+msgid "Change your player settings (shortcuts, theme, language, rendering) or control the playback engine directly"
+msgstr "Ihre Player-Einstellungen ändern (Tastenkürzel, Design, Sprache, Rendering) oder die Wiedergabe-Engine direkt steuern"
+
+#: delivery.ts:65
+#, x-machine
+msgid "Install, uninstall, disable or reload other plugins, or run any command"
+msgstr "Andere Plugins installieren, deinstallieren, deaktivieren oder neu laden oder beliebige Befehle ausführen"
+
+#: delivery.ts:65
+#, x-machine
+msgid "Read and write the clipboard"
+msgstr "Zwischenablage lesen und schreiben"
+
+#: delivery.ts:65
+#, x-machine
+msgid "Store sign-in details in the system keychain"
+msgstr "Anmeldedaten im Schlüsselbund des Systems speichern"
+
+#: delivery.ts:65
+#, x-machine
+msgid "Use the camera"
+msgstr "Die Kamera verwenden"
+
+#: delivery.ts:65
+#, x-machine
+msgid "Record from the microphone"
+msgstr "Über das Mikrofon aufnehmen"
+
+#: delivery.ts:65
+#, x-machine
+msgid "Capture the screen or other windows"
+msgstr "Den Bildschirm oder andere Fenster aufnehmen"
+
+#: delivery.ts:65
+#, x-machine
+msgid "Show system notifications"
+msgstr "Systembenachrichtigungen anzeigen"
+
+#: delivery.ts:66
+#, x-machine
+msgid "Unknown permission: {}"
+msgstr "Unbekannte Berechtigung: {}"
+
+#: delivery.ts:68
+#, x-machine
+msgid "· {}"
+msgstr "· {}"
+
+#: delivery.ts:69
+#, x-machine
+msgid ""
+"It will be able to:\n"
+"{}"
+msgstr ""
+"Es kann dann:\n"
+"{}"
+
+#: delivery.ts:241
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "KI-generiertes Plugin „{}“ installieren?"
 
-#: delivery.ts:203
+#: delivery.ts:242
+#, x-machine
+msgid ""
+"{1} {2}\n"
+"\n"
+"{3}"
+msgstr ""
+"{1} {2}\n"
+"\n"
+"{3}"
+
+#: delivery.ts:242
 #, x-machine
 msgid "{1} {2}"
 msgstr "{1} {2}"
 
-#: delivery.ts:233
+#: delivery.ts:272
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "Installiertes {} ersetzen?"
 
-#: delivery.ts:235
+#: delivery.ts:274
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "Es wurde aus einer anderen Quelle installiert (nicht von Vestra Player AI erstellt). Nach dem Ersetzen startet das neue Plugin mit einem neuen, leeren Datenordner; die Daten des ursprünglichen Plugins bleiben erhalten und werden wieder verwendet, wenn Sie es aus seiner ursprünglichen Quelle neu installieren."
 
-#: delivery.ts:236
+#: delivery.ts:275
 #, x-machine
 msgid "Replace"
 msgstr "Ersetzen"

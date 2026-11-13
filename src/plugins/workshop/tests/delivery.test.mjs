@@ -120,6 +120,46 @@ test("install_plugin asks the user first; there is no undo, and a click on 安�
   await ai.stop();
 });
 
+test("the install dialog says what the plugin's code uses, by the Workshop's own scan; on a scan failure it says nothing more and still asks", async () => {
+  const mock = await server(
+    scripted({
+      做个插件: [{ toolCalls: [{ name: "scaffold_plugin", args: { name: "demo", title: "演示" } }] }],
+      安装: [{ toolCalls: [{ name: "install_plugin", args: { id: "local.demo" } }] }],
+    }),
+  );
+  const ai = await startAi({ compat: mock.url, locale: "zh-Hans" });
+  await ai.ask("做个插件");
+  player(ai);
+  await ai.send("open-project");
+  const project = ai.host.system.opened.at(-1);
+  // Uses the clipboard and another plugin's package, written in the other
+  // order than the scan's (plugins before clipboard).
+  await fs.appendFile(
+    path.join(project, "main.ts"),
+    '\nexport async function copy(plugin: Plugin) {\n  await plugin.clipboard.writeText("demo");\n  await plugin.packages.reload("local.other");\n}\n',
+  );
+  ai.host.dialogAnswers.push({ confirmed: false, checked: false });
+  await ai.ask("安装");
+  assert.deepEqual(ai.host.confirmTexts.at(-1), {
+    message: "安装 AI 生成的插件「演示」？",
+    detail: "local.demo 0.1.0\n\n它将可以：\n· 安装、卸载、停用或重新加载其它插件，或运行任意命令\n· 读写剪贴板",
+    confirm: "安装",
+    cancel: ai.host.confirmTexts.at(-1).cancel,
+  });
+  assert.match(toolText(mock, mock.chats.length - 1), /The user cancelled the install/);
+
+  // The scan fails (a .js entry the scanner cannot read: a link to a folder):
+  // only the id and version, and the user is still asked.
+  await fs.symlink(path.join(project, "ui"), path.join(project, "broken.js"), "junction");
+  const asked = ai.host.confirms.length;
+  ai.host.dialogAnswers.push({ confirmed: false, checked: false });
+  await ai.ask("安装");
+  assert.equal(ai.host.confirms.length, asked + 1);
+  assert.equal(ai.host.confirmTexts.at(-1).detail, "local.demo 0.1.0");
+  assert.match(toolText(mock, mock.chats.length - 1), /The user cancelled the install/);
+  await ai.stop();
+});
+
 /**
  * The player after 0.6.3 (as in VS Code): an update or reinstall keeps a
  * disabled plugin disabled and does not start it; a first install runs.
