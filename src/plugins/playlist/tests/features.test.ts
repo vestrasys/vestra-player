@@ -770,7 +770,7 @@ test("C23: Ctrl+F reveals the first selected file of each folder; a missing file
     await app.addFiles([a!, b!, c!]);
     await app.press("Ctrl+A");
     await app.press("Ctrl+F");
-    assert.deepEqual(app.host.system.revealed, [a, c], "one Finder window per folder");
+    assert.deepEqual(app.host.system.revealed, [a, c], "one file-manager window per folder");
     await rm(a!);
     await app.click(0);
     await app.click(1, { ctrl: true });

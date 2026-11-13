@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.7
+
+- The list command Show in Folder (`reveal`, Ctrl+F) is called "Show in Folder" on every system, as capture's snapshot notice says it, in all six languages (it was "Show in Finder", also on Windows). Id, key and behaviour are unchanged. Who must change: nobody.
+
 ## 0.2.6
 
 - The commands that take rows out of the list declare `destructive` (SDK 1.7.9): Remove Selected (`remove`), Remove Unselected (`remove-unselected`), Remove Invalid Items (`remove-invalid`), Remove All (`clear`). When another built-in plugin runs one of them through `commands.run` (Ask Vestra), the player asks the user first; a menu pick, a key or the command palette runs them as before. Open List File… is not marked: it asks "Replace…?" itself, so the user is not asked twice. Who must change: nobody.
