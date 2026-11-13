@@ -104,6 +104,27 @@ pub fn order(column: Column, tabs: &[Tab<'_>], remembered: &[String]) -> Vec<u64
     ranked.into_iter().map(|(_, owner)| owner).collect()
 }
 
+/// The adjust column's front tabs before the current one: see [`front`].
+pub const FRONT_TABS: usize = 3;
+
+/// The adjust column's front tabs: its first [`FRONT_TABS`] in `order`,
+/// then the current one when it is not among them, else the next tab (the
+/// four built-in tabs when nothing else is in front of them). The column
+/// compiles all of them whenever it is wanted shown, from its first opening
+/// in a run on (user ruling 2026-11-11), so switching among them never
+/// compiles (`Host::preload_front`). Never more than
+/// `panels::MAX_LOADED`, so none of them is ever unloaded for another.
+pub fn front(order: &[u64], active: Option<u64>) -> Vec<u64> {
+    let mut front = order.iter().take(FRONT_TABS).copied().collect::<Vec<_>>();
+    match active {
+        Some(active) if order.contains(&active) && !front.contains(&active) => {
+            front.push(active);
+        }
+        _ => front.extend(order.get(FRONT_TABS).copied()),
+    }
+    front
+}
+
 /// The current tab after a mount change: `planned`, the policy's choice
 /// once the leaving tabs are gone (the next tab takes over a removed
 /// current one), unless the current tab left and that choice is a
@@ -194,6 +215,22 @@ mod tests {
                 builtin: id.starts_with("vestra."),
             })
             .collect()
+    }
+
+    /// The adjust column's front tabs: the first three and the current one
+    /// (else the fourth); never more than a column keeps loaded.
+    #[test]
+    fn front_tabs_are_the_first_three_and_the_current_one() {
+        let order = [1, 2, 3, 4, 5, 6];
+        assert_eq!(front(&order, Some(1)), [1, 2, 3, 4]);
+        assert_eq!(front(&order, None), [1, 2, 3, 4]);
+        assert_eq!(front(&order, Some(4)), [1, 2, 3, 4]);
+        assert_eq!(front(&order, Some(6)), [1, 2, 3, 6]);
+        // A current tab no longer in the order is not kept.
+        assert_eq!(front(&order, Some(9)), [1, 2, 3, 4]);
+        assert_eq!(front(&[1, 2], Some(2)), [1, 2]);
+        assert_eq!(front(&[], None), Vec::<u64>::new());
+        const { assert!(FRONT_TABS < crate::ui::panels::MAX_LOADED) };
     }
 
     #[test]

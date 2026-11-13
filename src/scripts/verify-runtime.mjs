@@ -64,6 +64,13 @@
  *   (what the shell compiled with, its panels sorted; not in the `park`
  *   scenario, where plugins park in any order between compiles; the first
  *   and the last only in installed/first), all sorted.
+ *   panels     each `panel: compile [<id>:<slot>] … (ready|failed)` (per-panel
+ *              compilation, player 0.9.0: a panel's file compiles on its own),
+ *              sorted (plugins start in any order). A difference here, and in
+ *              the `shell: compile` lines above, is the compile pattern: `diff`
+ *              lists it in a section of its own and does not count it in the
+ *              result (the ruled change of SDK 1.9.0 C1, compared against a
+ *              player before it; read it against the ruled pattern).
  *
  * Normalised away: owner, runtime and process numbers, times in ms, source
  * line numbers (`main.js:58`), instance GUIDs, package digests, the build
@@ -159,6 +166,7 @@ const COMPARED_LINES = [
   /^packages\.\w+ /,
   /^plugin recorder: /,
   /^shell: compile /,
+  /^panel: compile /,
   /^source: phase /,
   /^open: /,
   /^host\.warning /,
@@ -302,6 +310,7 @@ export function normaliseStep(raw, context) {
   }
   const host = [];
   const compiles = [];
+  const panelCompiles = [];
   for (const text of raw.stderr.split("\n")) {
     const trimmed = text.replace(/\r$/, "");
     if (!COMPARED_LINES.some((pattern) => pattern.test(trimmed))) continue;
@@ -313,6 +322,10 @@ export function normaliseStep(raw, context) {
         (_, panels) => `[${panels.split(", ").sort().join(", ")}]`,
       );
       compiles.push(normalise.line(sorted));
+      continue;
+    }
+    if (trimmed.startsWith("panel: compile ")) {
+      panelCompiles.push(normalise.line(trimmed));
       continue;
     }
     const id = normalise.pluginOf(trimmed);
@@ -355,6 +368,21 @@ export function normaliseStep(raw, context) {
         .map((id) => [id, plugins[id]]),
     ),
     host: { log: host.sort() },
+    panels: { compiles: panelCompiles.sort() },
+  };
+}
+
+/**
+ * The compile pattern among `differences` lines: the `panels` section's and
+ * the host's `shell: compile` lines (`compiles`), reported apart from the
+ * rest (`rest`, what decides the result).
+ */
+export function compilePattern(lines) {
+  const compile =
+    /^[^›]+ › [^›]+ › (?:panels(?: › compiles)?: |host › log: only in [AB](?: \(×\d+\))?: shell: (?:first |last )?compile with )/;
+  return {
+    compiles: lines.filter((line) => compile.test(line)),
+    rest: lines.filter((line) => !compile.test(line)),
   };
 }
 
@@ -582,9 +610,6 @@ async function runPlayer({ stage, profile, step, args, env, log, slow }) {
       APPDATA: join(profile, "appdata"),
       LOCALAPPDATA: join(profile, "local"),
       VESTRA_LANGUAGE: "en",
-      // As tests/startup_compiles.rs: on a loaded machine a plugin may take
-      // longer than the player's 5 s to ask for its panel.
-      VESTRA_TEST_MOUNT_LIMIT_MS: "60000",
       ...env,
     },
     stdio: ["ignore", "ignore", "pipe"],
@@ -1002,7 +1027,9 @@ function diff(a, b, report) {
     return readJson(file);
   };
   const [left, right] = [read(a), read(b)];
-  const lines = differences(left.scenarios, right.scenarios);
+  const { compiles, rest: lines } = compilePattern(
+    differences(left.scenarios, right.scenarios),
+  );
   const count = (doc) =>
     Object.values(doc.scenarios).reduce(
       (sum, steps) =>
@@ -1021,6 +1048,13 @@ function diff(a, b, report) {
     ...(lines.length
       ? [`RESULT: FAIL, ${lines.length} difference(s)`, ...lines]
       : ["RESULT: PASS, no difference"]),
+    ...(compiles.length
+      ? [
+          "",
+          `COMPILE PATTERN, not counted in the result (per-panel compilation, SDK 1.9.0 C1): ${compiles.length} difference(s)`,
+          ...compiles,
+        ]
+      : []),
   ].join("\n");
   console.log(text);
   if (report) writeFileSync(resolve(report), text + "\n");

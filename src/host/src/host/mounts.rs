@@ -197,10 +197,11 @@ impl Host {
     /// bottom bar, the backdrop, the tab that will be current in a column
     /// that is wanted shown) is compiled here, before anything changes, so
     /// one that does not compile fails its mount as before; a tab mounted
-    /// in the background compiles nothing, and one that turns out not to
-    /// compile when it is first shown is reported to its plugin then
-    /// (`show_panel`). The policy, the panel keys and the remembered state
-    /// follow.
+    /// in the background compiles nothing (but an adjust tab joining the
+    /// front tabs of the column wanted shown: right after, `preload_front`),
+    /// and one that turns out not to compile when it is first shown is
+    /// reported to its plugin then (`show_panel`). The policy, the panel
+    /// keys and the remembered state follow.
     pub(crate) fn apply_mounts(
         &mut self,
         next: BTreeMap<u64, Mount>,
@@ -540,6 +541,39 @@ impl Host {
             }
         }
     }
+    /// Compile the front tabs of `column` (`sidebar_tabs::front`) that are
+    /// not loaded, without showing them; logged as any compile. One that
+    /// does not compile is left out and reported to its plugin, as at its
+    /// showing (`show_panel`). A placeholder tab (no panel in this run) is
+    /// skipped. Whether anything was compiled.
+    fn preload_front(&mut self, column: Column, active: Option<u64>) -> bool {
+        let front = crate::ui::sidebar_tabs::front(&self.columns[column.index()].tabs, active);
+        let mut loaded = false;
+        for key in front {
+            if self.tabs_failed.contains(&key) || !self.panels.contains(key) {
+                continue;
+            }
+            match self.panels.load(key) {
+                Ok(None) => {}
+                Ok(Some(took)) => {
+                    loaded = true;
+                    if let (Some(took), Some(mount)) = (took, self.mounts.get(&key)) {
+                        self.log_compile(mount, Some(took));
+                    }
+                }
+                Err(error) => {
+                    if let Some(mount) = self.mounts.get(&key) {
+                        self.log_compile(mount, None);
+                    }
+                    diag!("panel {key}: it does not compile: {error:#}");
+                    self.tabs_failed.insert(key);
+                    let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
+                    self.send(panel_plugin(key), ui_error(&refusal));
+                }
+            }
+        }
+        loaded
+    }
     /// Every slot's container shows its panel (each tick, and at once after
     /// a mount change): the bottom bar, the backdrop, and each column's
     /// current tab while the column is wanted shown, in the shell and (the
@@ -590,8 +624,14 @@ impl Host {
             // showed stays (nothing compiles), unless that is no longer its
             // current tab.
             let key = active.filter(|&a| wanted || self.panels.shown(generation, slot) == Some(a));
-            if self.show_panel(&shell, generation, slot, key) {
-                changed = true;
+            let shown = self.show_panel(&shell, generation, slot, key);
+            changed |= shown;
+            // The adjust column wanted shown has all its front tabs compiled
+            // (user ruling 2026-11-11): its first opening compiles them at
+            // once, and a tab mounted into the front while it is open
+            // compiles at that mount, so a switch never compiles.
+            let loaded = column == Column::Adjust && wanted && self.preload_front(column, active);
+            if shown || loaded {
                 self.panels.evict(slot);
             }
             if column == Column::Sidebar

@@ -1,9 +1,9 @@
 //! Panel compiles at start-up, with the real built-ins and the windowed
 //! host running offscreen (`VESTRA_TEST_OFFSCREEN=1`, `ui::offscreen`: no
 //! window on screen). The shell compiles once a run and names no panel;
-//! each panel compiles on its own when it is first shown (`ui/panels.rs`),
-//! which blocks the UI thread for tens to a few hundred milliseconds, and a
-//! start with a file argument (a double-click in Explorer) used to play
+//! each panel compiles on its own when it is first shown (`ui/panels.rs`;
+//! the adjust column's front tabs all at its first opening), which blocks
+//! the UI thread for tens to a few hundred milliseconds, and a start with a file argument (a double-click in Explorer) used to play
 //! while the start-up panels still compiled: whatever layout was remembered
 //! (the adjust column open or closed, a third-party sidebar tab), each
 //! panel shown at start-up compiles once, before the file opens, a panel
@@ -581,10 +581,16 @@ fn startup_compiles_each_shown_panel_once_and_an_open_compiles_nothing() {
             .iter()
             .filter(|c| c.panels.contains(":adjust"))
             .count();
-        if adjust_open && adjust == 0 {
-            failures.push(format!(
-                "{name}: the remembered Picture tab was never compiled"
-            ));
+        // The column left open: its start-up showing is its first opening,
+        // which compiles all four built-in tabs (user ruling 2026-11-11).
+        if adjust_open {
+            for (id, _) in ADJUST_TABS {
+                if !seen.contains(format!("{id}:adjust").as_str()) {
+                    failures.push(format!(
+                        "{name}: the adjust tab of {id} was not compiled at the column's opening"
+                    ));
+                }
+            }
         }
         // The user's ruling: a closed adjust column costs no compile.
         if !adjust_open && adjust > 0 {
@@ -605,17 +611,17 @@ const ADJUST_TABS: [(&str, &str); 4] = [
     ("vestra.playback", "panel"),
 ];
 
-/// The adjust column compiles on demand (`ui/panels.rs`): nothing of it
-/// while it is closed; its opening compiles the current tab only, a first
-/// switch to each other tab compiles that tab once, and a switch back to a
-/// tab shown before compiles nothing (its instance stays). The window's
-/// tree is never swapped, so no compile reconfigures its surface (the
-/// tab-switch flash of 2026-11-11). The column is opened and the tabs
-/// switched through their commands (`VESTRA_TEST_EXECUTE`), as the menus
-/// and keys do.
+/// The adjust column's first opening compiles all its front tabs at once
+/// (user ruling 2026-11-11, `Host::preload_front`), each on its own
+/// (`ui/panels.rs`), and a first switch to each of them afterwards compiles
+/// nothing (only an instance is created; a switch back hands over the kept
+/// one); while it is closed, nothing of it compiles. The window's tree is
+/// never swapped, so no compile reconfigures its surface (the tab-switch
+/// flash of 2026-11-11). The column is opened and the tabs switched through
+/// their commands (`VESTRA_TEST_EXECUTE`), as the menus and keys do.
 #[test]
 #[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
-fn the_adjust_column_compiles_each_tab_once_when_first_shown() {
+fn opening_the_adjust_column_compiles_its_tabs_once_and_switching_compiles_nothing() {
     let work = tempfile::tempdir().unwrap();
     let plugins = builtins();
     let file = clip(work.path(), "first.mp4");
@@ -670,12 +676,17 @@ fn the_adjust_column_compiles_each_tab_once_when_first_shown() {
         .iter()
         .filter(|c| c.at_ms.saturating_sub(c.took_ms as u64) >= open)
         .collect::<Vec<_>>();
-    // Picture at the opening, then Audio, Subtitles and Playback at their
-    // first showing; the switch back to Picture compiles nothing.
+    // All four at the opening (Picture, the tab it shows, first), in the
+    // same tick before the first switch; the switches compile nothing.
     let order = after.iter().map(|c| c.panels.as_str()).collect::<Vec<_>>();
     let expected = ADJUST_TABS
         .iter()
         .map(|(id, _)| format!("{id}:adjust"))
         .collect::<Vec<_>>();
     assert_eq!(order, expected, "{after:#?}");
+    let first_switch = open + 3 * step;
+    assert!(
+        after.iter().all(|c| c.at_ms < first_switch),
+        "a compile at a switch: {after:#?}"
+    );
 }

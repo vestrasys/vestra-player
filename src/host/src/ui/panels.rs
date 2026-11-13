@@ -802,6 +802,28 @@ impl Panels {
         Ok(Shown::Changed { compiled_ms })
     }
 
+    /// Compile panel `key`'s file now if it is not loaded, without showing
+    /// it (the adjust column's front tabs at its opening,
+    /// `Host::preload_front`): its first showing then only creates an
+    /// instance. It counts as shown now for [`Panels::evict`]. `Ok(None)`:
+    /// already loaded (or no such panel); else the compile's milliseconds
+    /// (`None` inside: taken from the cache).
+    pub(crate) fn load(&mut self, key: u64) -> Result<Option<Option<f64>>> {
+        let Some(panel) = self.panel(key) else {
+            return Ok(None);
+        };
+        self.clock += 1;
+        panel.used.set(self.clock);
+        if panel.loaded() {
+            return Ok(None);
+        }
+        let (compiled, took) = self
+            .compiled(&panel.spec)
+            .with_context(|| format!("panel {}", panel.spec.file.display()))?;
+        *panel.compiled.borrow_mut() = Some(compiled);
+        Ok(Some(took))
+    }
+
     /// Bound what `slot`'s panels hold: beyond [`MAX_LOADED`] loaded ones,
     /// the least recently shown that no container shows is unloaded. The
     /// keys unloaded.
@@ -1436,5 +1458,140 @@ pub(crate) mod tests {
             let composed = Composed::new(&[fine]);
             assert_eq!(composed.panels.shown(1, Slot::Bottom), Some(31), "{name}");
         }
+    }
+
+    /// The other slots need no check like the bar's: their containers are
+    /// placed by hand (`composition::container`), never in a layout, so a
+    /// panel whose size constraints depend on its own size (in either
+    /// direction, its own or a child layout's) is no binding loop there.
+    /// Each such panel compiles, shows in the sidebar (docked, overlay,
+    /// floating window), the adjust column (docked, overlay) and the
+    /// backdrop, and the windows lay out and draw, also after a resize,
+    /// without Slint's "Recursion detected" (a panic, which fails the test).
+    #[test]
+    fn panels_whose_constraints_follow_their_size_run_in_the_other_slots() {
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let bodies = [
+            ("preferred-h", "preferred-height: self.height;"),
+            ("min-h", "min-height: self.height;"),
+            ("max-h", "max-height: self.height + 1px;"),
+            ("preferred-w", "preferred-width: self.width;"),
+            ("min-w", "min-width: self.width;"),
+            ("max-w", "max-width: self.width + 1px;"),
+            (
+                "layout",
+                "VerticalLayout { Rectangle { min-height: root.height / 2; min-width: root.width / 2; } }",
+            ),
+            (
+                "both",
+                "min-width: self.width; min-height: self.height; \
+                 preferred-width: self.width * 2; preferred-height: self.height * 2;",
+            ),
+        ];
+        let draw = |shell: &ComponentInstance, what: &str| {
+            for (width, height) in [(1400., 800.), (700., 420.), (1600., 900.)] {
+                shell
+                    .window()
+                    .set_size(slint::LogicalSize::new(width, height));
+                crate::ui::view::settle_layout(shell.window());
+                shell
+                    .window()
+                    .take_snapshot()
+                    .unwrap_or_else(|error| panic!("{what}: {error}"));
+            }
+        };
+        for (name, body) in bodies {
+            let text = format!(
+                "export global Bridge {{ in property <bool> tabbed; }}\n\
+                 export component Panel inherits Rectangle {{ background: #123; {body} }}\n"
+            );
+            let file = write(dir.path(), &format!("{name}.slint"), &text);
+            for slot in [Slot::Sidebar, Slot::Adjust, Slot::Backdrop] {
+                let what = format!("{name} in {}", slot.name());
+                let panel = spec(41, file.clone(), "Panel", slot);
+                assert!(Panels::default().precompile(&panel).is_ok(), "{what}");
+                let mut composed = Composed::new(std::slice::from_ref(&panel));
+                assert_eq!(composed.panels.shown(1, slot), Some(41), "{what}");
+                draw(&composed.shell, &what);
+                assert!(
+                    composed.panels.panel(41).unwrap().created.get() >= 1,
+                    "{what}: no instance"
+                );
+                // The columns' overlays (fullscreen, a narrow window), popped
+                // out: another container, a new instance.
+                if let Some(column) = crate::ui::sidebar_tabs::Column::of(slot) {
+                    let p = column.prefix();
+                    for (property, value) in [
+                        ("host-fullscreen", true),
+                        (&format!("{p}-overlay") as &str, true),
+                        (&format!("{p}-popped"), true),
+                    ] {
+                        let _ = composed.shell.set_property(property, value.into());
+                    }
+                    draw(&composed.shell, &format!("{what}, overlay"));
+                }
+                // The sidebar's floating window.
+                if slot == Slot::Sidebar {
+                    let floating = composition::floating().unwrap();
+                    let shown = composed
+                        .panels
+                        .show(&floating, 2, slot, Some(41), &composed.sender)
+                        .unwrap();
+                    assert!(matches!(shown, Shown::Changed { .. }), "{what}");
+                    draw(&floating, &format!("{what}, floating"));
+                    assert!(
+                        composed.panels.panel(41).unwrap().instance_in(2).is_some(),
+                        "{what}: floating instance"
+                    );
+                }
+                assert!(composed.panels.take_refused().is_empty(), "{what}");
+            }
+        }
+    }
+
+    /// The adjust column's front tabs at its opening (`Host::preload_front`):
+    /// a panel loaded without being shown compiles now and creates nothing;
+    /// its first showing then compiles nothing. Loading again does nothing;
+    /// a file that does not compile is an error and leaves it unloaded.
+    #[test]
+    fn a_loaded_panel_shows_without_a_compile() {
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let a = spec(
+            51,
+            write(dir.path(), "a.slint", COUNTER),
+            "Panel",
+            Slot::Adjust,
+        );
+        let b = spec(
+            55,
+            write(dir.path(), "b.slint", COUNTER),
+            "Panel",
+            Slot::Adjust,
+        );
+        let broken = spec(
+            59,
+            write(dir.path(), "broken.slint", "export component Panel {"),
+            "Panel",
+            Slot::Adjust,
+        );
+        let mut composed = Composed::new(std::slice::from_ref(&a));
+        let second = composed.panels.insert(b);
+        assert!(!second.loaded());
+        assert!(matches!(composed.panels.load(55), Ok(Some(Some(_)))));
+        assert!(second.loaded());
+        assert_eq!(second.created.get(), 0, "loaded, not created");
+        assert!(matches!(composed.panels.load(55), Ok(None)));
+        assert!(
+            matches!(composed.panels.load(99), Ok(None)),
+            "no such panel"
+        );
+        let shown = composed.show(Slot::Adjust, Some(55)).unwrap();
+        assert_eq!(shown, Shown::Changed { compiled_ms: None });
+        assert_eq!(second.created.get(), 1);
+        let third = composed.panels.insert(broken);
+        assert!(composed.panels.load(59).is_err());
+        assert!(!third.loaded());
     }
 }
