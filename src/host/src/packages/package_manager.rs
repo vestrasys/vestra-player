@@ -1327,11 +1327,13 @@ impl Host {
     /// asked for none yet (built-in or not, and any plugin: a manifest does
     /// not say which ones mount panels; one that asked waits for the compile
     /// before its activation ends, so it is not waited for). Until then the
-    /// shell waits, so that it compiles once for all of them (`prepare_mount_tick`). Plugins that start only
-    /// after the built-ins (third-party ones waiting for a place) cannot be
-    /// waited for: their panels compile once more, before a file given at
-    /// launch opens (`startup_panels`). What it waits for, for the log;
-    /// `None`: nothing.
+    /// shell waits, so that it compiles once for all of them
+    /// (`prepare_mount_tick`). Plugins that start only after the built-ins
+    /// (third-party ones waiting for a place) cannot be waited for, and
+    /// neither can one whose request is held until the built-ins have
+    /// started (`mount_awaited`): their panels compile once more, before a
+    /// file given at launch opens (`startup_panels`). What it waits for,
+    /// for the log; `None`: nothing.
     pub(crate) fn startup_mount_expected(&mut self) -> Option<String> {
         if !self.packages.booted || self.builtins_to_load() > 0 {
             return Some("the built-ins to load".into());
@@ -1340,18 +1342,16 @@ impl Host {
             return Some("a built-in's first run".into());
         }
         let now = self.now_ms();
-        let owners = self
-            .plugins
-            .keys()
-            .copied()
-            .filter(|owner| !self.mount_asked(*owner))
-            .collect::<Vec<_>>();
+        let owners = self.plugins.keys().copied().collect::<Vec<_>>();
         let mut waiting = Vec::new();
         for owner in owners {
-            if matches!(
+            let pending = matches!(
                 self.activation_status(owner, now),
                 Ok(activation::Status::Pending { .. })
-            ) {
+            );
+            let asked = self.mount_asked(owner);
+            let held = self.held_mounts.waiting(owner);
+            if mount_awaited(pending, asked, held) {
                 waiting.push(self.plugin_id(owner));
             }
         }
@@ -2865,10 +2865,40 @@ fn install_instance(
     })
 }
 
+/// Whether the start-up compile of the shell waits for a running plugin
+/// to ask for a panel (`Host::startup_mount_expected`): one still
+/// activating (`pending`) that has `asked` for none yet, unless a request
+/// of its own is `held` until the built-ins have started (`slot_claims::
+/// Gate`: a third-party plugin's `sequence.set` or resolver, and whatever
+/// it sends after it). Such a plugin cannot finish its activation before
+/// the built-ins finish theirs, and theirs wait for this compile: waiting
+/// for it would only end at the 5 s limit. A panel it mounts later compiles
+/// once more, as for any plugin that starts after the built-ins.
+fn mount_awaited(pending: bool, asked: bool, held: bool) -> bool {
+    pending && !asked && !held
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::packages::package_store::Installed;
+
+    /// The start-up compile waits for a plugin that may still ask for a
+    /// panel, never for one whose own request waits for the built-ins: that
+    /// one cannot become ready before this compile (it held the compile up
+    /// for the whole 5 s limit at every start).
+    #[test]
+    fn the_startup_compile_does_not_wait_for_a_plugin_held_behind_the_built_ins() {
+        // Still activating, nothing asked, nothing held: it may mount.
+        assert!(mount_awaited(true, false, false));
+        // Its sequence or resolver request is held: not waited for.
+        assert!(!mount_awaited(true, false, true));
+        // It asked (its mount joins the compile), or its activation is over.
+        assert!(!mount_awaited(true, true, false));
+        assert!(!mount_awaited(true, true, true));
+        assert!(!mount_awaited(false, false, false));
+        assert!(!mount_awaited(false, false, true));
+    }
 
     /// Built-in by provenance only: a development load of a built-in's id
     /// (even of the installation's own directory) runs under a development

@@ -53,13 +53,27 @@ enum ThirdParty {
     /// Resident at the last run, and now its process ends during every
     /// activation (restarted after a crash, with a growing delay).
     Crashing,
+    /// No panel: it listens to the playback state (it stays running) and
+    /// registers a resolver at its activation, which the host answers only
+    /// once the built-ins have started (`slot_claims::Gate`). Its
+    /// activation waits for that answer, so the start-up compile must not
+    /// wait for it (it did, for the whole mount limit, at every start).
+    Resolver,
 }
 
-/// A third-party plugin with a sidebar tab, installed in the library under
-/// `store` (its record in `catalog.json`).
+/// A third-party plugin with a sidebar tab (`ThirdParty::Resolver`: with a
+/// resolver and no tab), installed in the library under `store` (its record
+/// in `catalog.json`).
 fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
+    let mount = if kind == ThirdParty::Resolver {
+        "plugin.resolvers.add({ id: \"fixture\", extensions: [\"zzfixture\"], \
+         async resolve() { throw new Error(\"unused\"); } });\n"
+    } else {
+        "const panel = plugin.panels.mount(\"sidebar\", \"ui/list.slint\", { title: \"Fixture\" });\n\
+         if (crash) panel.ready.then(() => setTimeout(() => process.exit(7), 20));\n"
+    };
     let listen = match kind {
-        ThirdParty::Resident => "plugin.player.onChange(() => {});\n",
+        ThirdParty::Resident | ThirdParty::Resolver => "plugin.player.onChange(() => {});\n",
         // Its first run (the warm-up) records it resident; from the next
         // start on it exits as soon as its panel is in the shell (each run
         // mounts it, then crashes: the crash loop).
@@ -82,9 +96,7 @@ fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
             format!(
                 "import {{ existsSync, mkdirSync, writeFileSync }} from \"node:fs\";\n\
                  import {{ join }} from \"node:path\";\n\
-                 export default function activate(plugin) {{\nlet crash = false;\n{listen}\
-                 const panel = plugin.panels.mount(\"sidebar\", \"ui/list.slint\", {{ title: \"Fixture\" }});\n\
-                 if (crash) panel.ready.then(() => setTimeout(() => process.exit(7), 20));\n}}\n"
+                 export default function activate(plugin) {{\nlet crash = false;\n{listen}{mount}}}\n"
             ),
         ),
         (
@@ -502,12 +514,16 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
         .chain([
             (false, true, ThirdParty::Resident),
             (true, true, ThirdParty::Crashing),
+            (true, true, ThirdParty::Resolver),
         ])
         .filter(|&(ran_before, adjust_open, third_party)| {
             !debug
                 || (ran_before
                     && adjust_open
-                    && matches!(third_party, ThirdParty::None | ThirdParty::Resident))
+                    && matches!(
+                        third_party,
+                        ThirdParty::None | ThirdParty::Resident | ThirdParty::Resolver
+                    ))
         });
     for (ran_before, adjust_open, third_party) in cases {
         let profile = Profile::new(&plugins, adjust_open, third_party);
@@ -536,6 +552,13 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
         if let Some(dir) = std::env::var_os("VESTRA_TEST_LOG_DIR") {
             let file = name.replace([' ', ','], "-");
             std::fs::write(Path::new(&dir).join(format!("{file}.log")), &log).unwrap();
+        }
+        // The start-up compile waits for plugins that may still mount a
+        // panel, never until its limit (60 s here, so a wait for it also
+        // keeps the files from opening): a plugin whose resolver or
+        // sequence request waits for the built-ins is not waited for.
+        if log.contains("shell: start-up mounts still expected after") {
+            failures.push(format!("{name}: the start-up compile waited for its limit"));
         }
         if opens.len() != 2 {
             failures.push(format!("{name}: {} open(s), not 2", opens.len()));

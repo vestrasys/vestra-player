@@ -384,8 +384,9 @@ Offline renders: `widgets_tests::render_lead_strip_states` (ignored; `VESTRA_STR
 palettes, as the spec's `proposed/detail-*.png` do.
 
 
-Both were built-in only until SDK 1.8.0 (PROPOSAL §10: one lead slot, and a third-party lead sees
-every query typed while it holds the row; running any plugin's command is the widest boundary).
+Both were built-in only until SDK 1.8.0 (PROPOSAL §10: one lead slot, and its holder gets what
+the user typed each time they press Enter on the row or click it, nothing while they only type;
+running any plugin's command is the widest boundary).
 The user opened both on 2026-11-13 (a third-party voice or LLM assistant needs them): the lead
 by the first-holder rule of §1, `commands.run` under `plugins`. Plugin processes are not
 sandboxed, so the boundary stays the player's: tickets, rates, confirmation, the line naming each
