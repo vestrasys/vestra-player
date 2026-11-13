@@ -210,6 +210,34 @@ The user handed the remaining technical follow-ups to an unattended loop ([agent
 | T7 | macOS build check (uncompiled macOS code in #306/#308) | Infrastructure | Waits on the user's macOS release decision |
 | T8 | NVIDIA motion smoothing plugin (needs libmpv on newer FFmpeg) | API maintainer | Later |
 
+#### SDK rulings (2026-11-13, user; main thread)
+
+Input: an independent review of capabilities, TestHost and the API surface (Fable, read-only; local `C:\vestra\design\sdk-review\REPORT.md` and `INVENTORY.md`). **No implementation starts until the user says "开始".** When it starts, the points the user left open are decided by the implementing agent on its own judgement.
+
+- **Capabilities are reclassified by boundary, not by feature.** The old list grew with every feature (27 on 11-08, 31 now); features are unbounded, boundaries are not. Rule: a capability is decided by *whose things the plugin touches*, never by what feature it is. **No new capability category may be added after this change.** Layers: ① the plugin's own (its commands, windows, panels, settings pages, OSD, drops, resolvers, marks; gone when it is disabled) and ② the playback session (playback, subtitles, filters, upscaling, motion smoothing, snapshots and exports, media sources, main-window on-top/PiP, keep-awake) need **no declaration**; ③ the player, ④ other plugins and ⑤ the user's system are declared.
+- **The final list: 8 capabilities, 4 active and 4 reserved.**
+
+  | Name | Layer | State | Meaning | Old names folded in |
+  | --- | --- | --- | --- | --- |
+  | `player` | ③ | active | Changes the user's own player settings (shortcuts, theme, language, rendering and restart) or drives mpv directly; effects outlive the plugin | `bindings.manage`, `rendering.manage`, `ui.theme` (its methods are `appearance.set` / `setLanguage`), plus the new mpv pass-through |
+  | `plugins` | ④ | active | Install, uninstall, disable other plugins; run any command, and so act through any other plugin (transitive) | `plugins.manage`, `commands.run` |
+  | `clipboard` | ⑤ | active | Read and write the clipboard | `clipboard` |
+  | `credentials` | ⑤ | active | Keep sign-in details in the system keychain | `secrets` |
+  | `camera` | ⑤ | reserved | Use the camera | — |
+  | `microphone` | ⑤ | reserved | Use the microphone | — |
+  | `screen` | ⑤ | reserved | Record the screen | — |
+  | `notifications` | ⑤ | reserved | Send system notifications | — |
+
+  ⑤ copies the operating systems' own privacy categories (macOS TCC, Android dangerous permissions): a new host API for an OS-protected resource takes the matching OS category, it does not invent one. The other 24 old names (including `palette.lead`, and keep-awake under `playback.control`) need nothing.
+- **No built-in-only flag.** `commands.run` is `plugins` (disclosed as transitive; a future third-party voice/LLM assistant needs it); `palette.lead` (the palette's first row) leaves the capability system and the host arbitrates the slot.
+- **Network, files outside the plugin, child processes and native code are not capabilities**: the author does not declare them and the host cannot stop them. Disclosure instead: one sentence in every install dialog that a plugin runs with the user's access to files and the network (today only unofficial repositories show it). Per-plugin scan results in the store are a possible later store feature, not part of this.
+- **Migration: a clean cut, no aliases.** Plugins are not released publicly, so the old names are not kept: all 22 plugins and 11 examples are rewritten (most only delete lines), and the player, SDK and plugins ship together.
+- **mpv pass-through: built now, not experimental.** A plugin may send mpv commands and properties under `player`. The host blocks commands that cross other boundaries (`run`, `subprocess`, `load-script`, `input-ipc-server`, file-writing commands, `quit`, and the like) and protects its own labelled filters (`@vestra-*`) and the properties it manages. The channel is our contract; mpv's names and semantics are mpv's. The typed processing nodes stay. Background: AMD motion smoothing needed SDK 1.7.19 (about 1,000 lines, 200 of them TestHost) and 1.7.20 for a doc change; with pass-through such a plugin needs no new host method.
+- **TestHost stays as it is, not frozen** (the Workshop's AI loop tests generated plugins with it and cannot start a real player). It is a model of the host's plugin-facing rules (about 11k lines against about 150k of host), not a rewrite of the host. No generated-data improvement for now.
+- **Node-doable members** (`storage.json`, `tools`, `ui.remoteImage`, `i18n.resolve`): kept; no top-down slimming.
+- **Version: this ships as SDK 1.8.0** (supersedes "patch versions only" of 11-08 for this change).
+- **Open, not decided:** workflow edits proposed to the user (§1.6 necessity rule: what Node plus existing members can do is not a host method; "merge ≠ SDK release"; VestraBili mentions); an internal layer for built-in-only API members (about 80 of the 107 single-user members); `media.sources` left as is; deleting the review's list of unused members.
+
 #### Loop log (newest first)
 
 - 11-13 morning: the main thread works on the SDK with the user; a deputy coordinator runs this loop. **T6 runtime (coordinator decision by precedent, user informed):** CED-mini int8 (`model.int8.onnx`, 10.4 MB, Apache-2.0 via CED/mispeech) runs on onnxruntime-web (WebAssembly); the model (Hugging Face, pinned commit) and `ort-wasm-simd-threaded.wasm` (onnxruntime-web 1.31.1, jsDelivr) are downloaded together on the first "Download and Scan" (~25 MB), each sha256-pinned; native onnxruntime-node (repo forbids native code) and shipping the 14.8 MB wasm in the package (size limits) were rejected. Measured: ~114 s and ~195 MB per 2 h of video. T5 and T6 started. T3: five merged clean worktrees removed (audioflake, crashpanel, interp, lazysh, snapsub; contents in 67ea7678/410b9ebd), old stage dirs, 12 old GUI test profiles and the 0.8.2 dist copy (assets on the GitHub release) deleted; 52 GB free.
