@@ -72,6 +72,17 @@ pub fn secondary_pos(style: &Style) -> f64 {
     }
 }
 
+/// mpv's `sub-margin-y` range (an integer option, `M_RANGE(0, 600)`).
+const MPV_MARGIN_Y_MAX: i64 = 600;
+
+/// mpv `sub-margin-y`: the bottom margin in scaled pixels at height 720.
+/// mpv declares it as an integer, so a fractional value such as "43.2" (6%)
+/// is rejected with "unsupported format"; round to the nearest pixel instead.
+pub fn margin_y(margin_percent: u8) -> i64 {
+    let pixels = (f64::from(margin_percent) * 720.0 / 100.0).round() as i64;
+    pixels.clamp(0, MPV_MARGIN_Y_MAX)
+}
+
 /// The background box margin at the 1080p reference height.
 pub const BOX_MARGIN: f64 = 6.0;
 
@@ -193,10 +204,7 @@ pub fn mpv_properties(style: &Style, resolved_family: &str) -> Result<Vec<(&'sta
             "sub-border-size",
             (f64::from(style.outline) * 720.0 / 1080.0).to_string(),
         ),
-        (
-            "sub-margin-y",
-            (f64::from(style.margin_percent) * 720.0 / 100.0).to_string(),
-        ),
+        ("sub-margin-y", margin_y(style.margin_percent).to_string()),
         (
             "sub-delay",
             (f64::from(style.offset_ms) / 1000.0).to_string(),
@@ -481,6 +489,122 @@ mod tests {
             validate(&structurally_valid.style, &fonts()),
             Err(Error::UnsupportedFont)
         );
+    }
+
+    #[test]
+    fn margin_y_is_a_rounded_integer_in_mpv_range() {
+        for (percent, pixels) in [
+            (2, 14),  // 14.4
+            (3, 22),  // 21.6
+            (5, 36),  // exact
+            (6, 43),  // 43.2: the reported rejection
+            (7, 50),  // 50.4
+            (9, 65),  // 64.8
+            (11, 79), // 79.2
+            (13, 94), // 93.6
+            (15, 108),
+        ] {
+            assert_eq!(margin_y(percent), pixels, "{percent}%");
+            let mut style = style();
+            style.margin_percent = percent;
+            let properties: std::collections::BTreeMap<_, _> = mpv_properties(&style, "Family")
+                .unwrap()
+                .into_iter()
+                .collect();
+            assert_eq!(properties["sub-margin-y"], pixels.to_string());
+        }
+        assert_eq!(margin_y(0), 0);
+        assert_eq!(margin_y(u8::MAX), MPV_MARGIN_Y_MAX);
+    }
+
+    /// Every value this module maps is accepted by a real libmpv: each
+    /// property's option type matches the string we send (an integer option
+    /// rejects "43.2" with MPV_ERROR_PROPERTY_FORMAT), across the whole
+    /// validated range of every field.
+    #[test]
+    fn every_mapped_value_is_accepted_by_libmpv() {
+        let mpv = rsmpv::Mpv::builder().unwrap().build().unwrap();
+        let kind = |name: &str| {
+            mpv.get_property::<String>(&format!("option-info/{name}/type"))
+                .unwrap_or_else(|error| panic!("{name}: {error}"))
+        };
+        let expected = [
+            ("sub-ass-override", "Choice"),
+            ("sub-scale-by-window", "Flag"),
+            ("sub-scale-with-window", "Flag"),
+            ("sub-use-margins", "Flag"),
+            ("sub-align-x", "Choice"),
+            ("sub-align-y", "Choice"),
+            ("sub-margin-x", "Integer"),
+            ("sub-font", "String"),
+            ("sub-font-size", "Float"),
+            ("sub-border-size", "Float"),
+            ("sub-margin-y", "Integer"),
+            ("sub-delay", "Float"),
+            ("sub-color", "Color"),
+            ("sub-border-color", "Color"),
+            ("sub-bold", "Flag"),
+            ("sub-border-style", "Choice"),
+            ("sub-back-color", "Color"),
+            ("sub-shadow-offset", "Float"),
+            ("secondary-sub-pos", "Float"),
+        ];
+        let mapped: Vec<_> = mpv_properties(&style(), "Family")
+            .unwrap()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        assert_eq!(mapped, expected.map(|(name, _)| name));
+        // A decimal string fits a Float or Double option; only an Integer
+        // option needs a whole number.
+        let mismatches: Vec<_> = expected
+            .iter()
+            .map(|(name, want)| (name, *want, kind(name)))
+            .filter(|(_, want, got)| got != want && !(*want == "Float" && got.as_str() == "Double"))
+            .collect();
+        assert!(mismatches.is_empty(), "{mismatches:?}");
+        let mut styles = Vec::new();
+        for margin in 2..=15 {
+            for position in [SecondaryPosition::Top, SecondaryPosition::AboveMain] {
+                let mut style = style();
+                style.margin_percent = margin;
+                style.secondary_position = Some(position);
+                styles.push(style);
+            }
+        }
+        for (size, outline, offset, shadow, opacity) in [
+            (16, 0, -600_000, Some(0), None),
+            (17, 1, -1, Some(1), Some(0)),
+            (37, 3, 333, Some(4), Some(33)),
+            (72, 4, 600_000, None, Some(100)),
+        ] {
+            let mut style = style();
+            style.font_size = size;
+            style.outline = outline;
+            style.offset_ms = offset;
+            style.shadow = shadow;
+            style.box_opacity = opacity;
+            style.bold = Some(true);
+            style.ass_override = Some(AssOverride::Force);
+            style.secondary_position = Some(SecondaryPosition::AboveMain);
+            styles.push(style);
+        }
+        for color in [Color::White, Color::Yellow, Color::Cyan] {
+            let mut style = style();
+            style.color = color;
+            styles.push(style);
+        }
+        for style in styles {
+            for (name, value) in mpv_properties(&style, "Noto Sans CJK SC").unwrap() {
+                if let Err(error) = mpv.set_property(name, value.as_str()) {
+                    panic!("{name}={value}: {error} ({style:?})");
+                }
+            }
+            assert_eq!(
+                mpv.get_property::<i64>("sub-margin-y").unwrap(),
+                margin_y(style.margin_percent)
+            );
+        }
     }
 
     #[test]
