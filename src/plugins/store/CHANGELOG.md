@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.20
+
+- A package not from the official repository (another repository, a file, a link) is no longer silent about its permissions: its install and update confirmations say **It is not from the official repository, so its permissions were not checked.** (user ruling 2026-11-13). A file or a link: after "Plugins may read your files or use the network.". Another repository: after its warning, which says files and network already; its update and reinstall confirmations: "Current: x." then both sentences. Formerly a file or a link said only the files-and-network sentence, and another repository's update only "Current: x.".
+- Another repository's own `scan` is its claim, so it is shown nowhere: not in its install confirmation (formerly its categories followed the warning), its update confirmation and the window's notice "The new version needs new permissions: …" (formerly compared from its scans), nor the window's Permissions list and heading.
+- The official repository is unchanged from 0.2.19: the categories of the scan in its signed index, "It uses none of the player's sensitive features." when it found none, no list without a scan. Nothing is scanned on this machine. New text translated by machine (marked `x-machine`; zh-Hans by hand). Who must change: nobody.
+
 ## 0.2.19
 
 - Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. The store declared none of the two that changed how a plugin ran (`events`, `playback.read`), so `activate()` needs no `plugin.player.subscribe()` or `read()` call.
