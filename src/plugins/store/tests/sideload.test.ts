@@ -32,7 +32,7 @@ test("a .vxp dropped on the video area: the window opens, a side-load warning, i
     assert.equal(host.confirmTexts[0]!.confirm, "仍然安装");
     assert.equal(host.confirms[0]!["destructive"], true);
     assert.match(String(host.confirmTexts[0]!.detail), /来自文件 a\.vxp，未经任何仓库审核，也不会自动更新/);
-    assert.match(String(host.confirmTexts[0]!.detail), /· 修改所有快捷键/);
+    assert.doesNotMatch(String(host.confirmTexts[0]!.detail), /· 修改所有快捷键/);
     assert.equal(host.confirmTexts[1]!.message, "安装插件包「someone.b」2.0.0？");
     assert.deepEqual(installs(host), [{ method: "install", id: "someone.a", source: { kind: "file" }, replace: false }]);
     await until(host, () => host.osd.includes("已安装 A 1.0.0"));
@@ -104,7 +104,7 @@ test("从链接安装…: https only, 64 MB at most, the permissions come from t
     window.emit("linkAccepted", "https://example.org/x-1.0.0.vxp");
     await until(host, () => installs(host).length === 1);
     assert.match(String(host.confirmTexts.at(-1)!.detail), /来自链接 https:\/\/example\.org\/x-1\.0\.0\.vxp/);
-    assert.match(String(host.confirmTexts.at(-1)!.detail), /· 在系统钥匙串保存登录信息/);
+    assert.doesNotMatch(String(host.confirmTexts.at(-1)!.detail), /· 在系统钥匙串保存登录信息/);
     assert.deepEqual(installs(host)[0], {
       method: "install",
       id: "someone.x",

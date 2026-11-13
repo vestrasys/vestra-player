@@ -1,12 +1,13 @@
 /**
- * The capability scan in the confirmations (SDK 1.8.0, plan A1/A6): a
- * repository's index may carry, per version, the categories its scan found
- * in the code (`scan: { uses: [...] }`). The install confirmation then lists
- * those in plain words; without them (an older index, a package from a file
- * or a link) it lists the risky capabilities the package declares. Every
+ * The capability scan in the store (SDK 1.8.0, plan A1/A6; user ruling
+ * 2026-11-13): a repository's index may carry, per version, the categories
+ * its scan found in the code (`scan: { uses: [...] }`). They are all the
+ * store tells about what a plugin does with the player: the install
+ * confirmation and the window's Permissions list show them in plain words,
+ * and without a scan (an older index, a package from a file or a link) show
+ * nothing; the capabilities a package declares are never shown. Every
  * install confirmation says that plugins may read files or use the network.
- * The update confirmation compares the scanned categories when the index has
- * them for both versions, else the declared capabilities.
+ * The update confirmation and the window's notice compare scans only.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -14,9 +15,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { parseIndex } from "../index-format.ts";
-import { addedBy, categories, CATEGORIES, CAPABILITIES, riskyOnly } from "../labels.ts";
+import { installFromRepository } from "../installer.ts";
+import { addedBy, categories, CATEGORIES, CAPABILITIES } from "../labels.ts";
 import { msg } from "../text.ts";
-import { banners, BUILTIN, choose, FakeNet, info, OFFICIAL, openStore, publish, signWith, start, THIRD, until, vxp, yes, type PluginSpec } from "./helpers.ts";
+import { banners, BUILTIN, choose, props, FakeNet, info, OFFICIAL, openStore, publish, signWith, start, THIRD, until, vxp, yes, type PluginSpec } from "./helpers.ts";
 
 const SENTENCE = "插件可能读取你的文件或联网。";
 const NONE = "它不使用播放器的任何敏感功能。";
@@ -56,6 +58,9 @@ const installs = (host: Host) => host.packageCalls.filter((c) => c.method === "i
 
 /** The window's notice about an update's new permissions (of the chosen plugin), or none. */
 const notice = (host: Host) => banners(host).filter((text) => text.startsWith("新版本需要新的权限"));
+
+/** The window's Permissions list of the chosen plugin. */
+const listed = (host: Host) => props(host)["permissions"] as { text: string; risky: boolean }[];
 
 /** Choose `name`, press `action` and answer yes: the confirmation shown. */
 async function confirmation(host: Host, name: string, action: "install" | "update") {
@@ -103,9 +108,6 @@ test("labels: mpv is risky; the eight categories in the scan's order, an unknown
     msg("Unknown permission: {}", "future"),
   ]);
   assert.deepEqual(categories([]), []);
-  // The declared capabilities a confirmation names: risky ones, and those the store does not know.
-  assert.deepEqual(riskyOnly(["commands", "clipboard", "ui.window", "mpv", "future.thing", "playback.read"]), ["clipboard", "mpv", "future.thing"]);
-  assert.deepEqual(riskyOnly(["commands", "playback.control"]), []);
 });
 
 test("the categories, the mpv capability and the two sentences are translated in all six languages", () => {
@@ -139,6 +141,12 @@ test("official install with a scan: the scanned categories instead of the capabi
   const { host, stop } = await ready(net);
   try {
     const confirm = await confirmation(host, "Scanned", "install");
+    // The window lists the same categories, all drawn as ones to watch; not the four declared capabilities.
+    assert.deepEqual(listed(host), [
+      { text: PLAYER, risky: true },
+      { text: PLUGINS, risky: true },
+    ]);
+    assert.equal(props(host)["scanned"], true);
     assert.equal(confirm.message, "安装「Scanned」1.0.0？");
     assert.equal(
       confirm.detail,
@@ -161,29 +169,72 @@ test("official install with a scan that found nothing: no list, one sentence ins
   const { host, stop } = await ready(net);
   try {
     const confirm = await confirmation(host, "Quiet", "install");
+    assert.deepEqual(listed(host), [], "the window lists nothing either");
+    assert.equal(props(host)["scanned"], true, "scanned: the Permissions heading shows, over an empty list");
     assert.equal(confirm.detail, `来自 Vestra Player 官方仓库，作者 zysilm。\n\n${SENTENCE}\n\n${NONE}`);
   } finally {
     await stop();
   }
 });
 
-test("official install without a scan: only the declared risky capabilities, after the sentence", async () => {
+test("official install without a scan: only the sentence; no list in the confirmation or the window, whatever is declared", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     { id: "a.old", name: "Old Index", author: "zysilm", versions: [{ version: "1.0.0", capabilities: ["commands", "ui.window", "clipboard", "mpv"] }] },
-    { id: "a.plain", name: "Plain", author: "zysilm", versions: [{ version: "1.0.0", capabilities: ["commands", "playback.control"] }] },
   ]);
-  const { host, store, stop } = await ready(net);
+  const { host, stop } = await ready(net);
   try {
     const confirm = await confirmation(host, "Old Index", "install");
-    assert.equal(
-      confirm.detail,
-      `来自 Vestra Player 官方仓库，作者 zysilm。\n\n${SENTENCE}\n\n它将可以：\n· 读写剪贴板\n· 直接控制播放引擎（mpv）：发送它的命令、修改它的选项`,
-    );
-    await until(host, () => installs(host).length === 1 && !store.busy, "installed");
-    // Nothing risky declared: no list.
-    const plain = await confirmation(host, "Plain", "install");
-    assert.equal(plain.detail, `来自 Vestra Player 官方仓库，作者 zysilm。\n\n${SENTENCE}\n\n${NONE}`);
+    assert.equal(confirm.detail, `来自 Vestra Player 官方仓库，作者 zysilm。\n\n${SENTENCE}`);
+    assert.deepEqual(listed(host), []);
+    assert.equal(props(host)["scanned"], false, "no scan: no Permissions heading");
+    await until(host, () => installs(host).length === 1, "install");
+  } finally {
+    await stop();
+  }
+});
+
+test("unofficial install without a scan: the repository's warning alone", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publish(net, THIRD, [{ id: "someone.viz", name: "Viz", versions: [{ version: "1.0.0", capabilities: ["commands", "secrets"] }] }]);
+  const { host, store, stop } = await start({ net });
+  try {
+    store.settings.save({ ...store.settings.value, repos: [THIRD] });
+    store.repos.sync([THIRD]);
+    await openStore(host);
+    await until(host, () => store.items.some((i) => i.name === "Viz"));
+    const detail = String((await confirmation(host, "Viz", "install")).detail);
+    assert.match(detail, /^仓库：/);
+    assert.match(detail, /这个仓库未经 Vestra Player 审核/);
+    assert.ok(!detail.includes("\n"), "one paragraph: nothing after the warning");
+    assert.deepEqual(bullets(detail), []);
+    assert.deepEqual(listed(host), []);
+  } finally {
+    await stop();
+  }
+});
+
+test("replacing a file install from an unofficial repository without a scan: no list, no empty paragraph", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publish(net, THIRD, [{ id: "someone.viz", name: "Viz", versions: [{ version: "1.0.0", capabilities: ["commands", "secrets"] }] }]);
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, info("someone.viz", { version: "0.9.0", capabilities: ["commands"] })] });
+  try {
+    store.settings.save({ ...store.settings.value, repos: [THIRD] });
+    store.repos.sync([THIRD]);
+    await openStore(host);
+    await until(host, () => store.items.some((i) => i.entry !== null));
+    const item = store.items.find((i) => i.entry !== null)!;
+    host.dialogAnswers.push(yes);
+    await installFromRepository(store, item, item.entry!.versions[0]!);
+    const confirm = host.confirmTexts.at(-1)!;
+    assert.equal(confirm.message, "替换已安装的「Viz」？");
+    const detail = String(confirm.detail);
+    assert.match(detail, /将安装非官方仓库的 1\.0\.0。\n\n仓库：/);
+    assert.match(detail, /这个仓库未经 Vestra Player 审核/);
+    assert.deepEqual(bullets(detail), []);
+    assert.ok(!detail.endsWith("\n") && !detail.includes("\n\n\n"), detail);
   } finally {
     await stop();
   }
@@ -260,106 +311,68 @@ test("update, both versions scanned: the same categories ask plainly, whatever t
   }
 });
 
-test("update, only the new version scanned: the declared capabilities are compared, all of them", async () => {
+test("update, only the new version scanned: every category it uses is named; what it declares is not", async () => {
   const net = new FakeNet();
-  publishScanned(net, OFFICIAL, [UPDATE], { "zysilm.youtube 0.3.0": [] });
+  publishScanned(net, OFFICIAL, [UPDATE], { "zysilm.youtube 0.3.0": ["player"] });
   const { host, stop } = await ready(net, [BUILTIN, INSTALLED]);
   try {
     await choose(host, "YouTube");
-    const shown = notice(host);
-    assert.equal(shown.length, 1);
+    assert.deepEqual(notice(host), [`新版本需要新的权限：${PLAYER}`]);
     const confirm = await confirmation(host, "YouTube", "update");
     assert.equal(confirm.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
-    // The notice and the confirmation name the same two declared capabilities.
-    for (const line of bullets(confirm.detail)) assert.ok(shown[0]!.includes(line.slice(2)), line);
-    assert.equal(bullets(confirm.detail).length, 2, "clipboard and ui.window");
-    assert.equal(bullets(confirm.detail)[0], "· 读写剪贴板");
-    assert.match(String(confirm.detail), /^新增：\n/);
-    assert.match(String(confirm.detail), /\n\n当前 0\.2\.0。$/);
+    // Not the clipboard and ui.window it declares anew.
+    assert.equal(confirm.detail, `新增：\n· ${PLAYER}\n\n当前 0.2.0。`);
   } finally {
     await stop();
   }
 });
 
-test("addedBy, one version scanned and the other not: nothing the user may not have been told is left out", () => {
-  const words = (lines: readonly { text: string; args: readonly unknown[] }[]) => lines.map((line) => [line.text, ...line.args].join(" "));
-  // Installed scanned (nothing found, so its install named nothing), the new one not scanned and declaring the same.
-  assert.deepEqual(
-    words(
-      addedBy(
-        [{ version: "1.0.0", scan: { uses: [] } }],
-        { version: "1.0.0", capabilities: ["commands", "clipboard", "secrets"] },
-        { capabilities: ["commands", "clipboard", "secrets"], scan: null },
-      ),
-    ),
-    [CAPABILITIES.clipboard.text, CAPABILITIES.secrets.text],
-    "every risky capability the new version declares",
-  );
-  // The same, with capabilities declared anew: named too, risky or not, each once.
-  assert.deepEqual(
-    words(
-      addedBy(
-        [{ version: "1.0.0", scan: { uses: ["clipboard"] } }],
-        { version: "1.0.0", capabilities: ["commands", "clipboard"] },
-        { capabilities: ["commands", "clipboard", "ui.window", "mpv"], scan: null },
-      ),
-    ),
-    [CAPABILITIES.clipboard.text, CAPABILITIES.mpv.text, CAPABILITIES["ui.window"].text],
-  );
-  // Installed not scanned, declaring a capability that was never drawn as risky; the new one's scan finds the category.
-  assert.deepEqual(
-    words(
-      addedBy(
-        [{ version: "1.0.0", scan: null }],
-        { version: "1.0.0", capabilities: ["commands", "ui.theme"] },
-        { capabilities: ["commands", "ui.theme"], scan: { uses: ["player"] } },
-      ),
-    ),
-    [CATEGORIES.player],
-    "every category the new version uses",
-  );
-  // The same, with a capability declared anew: after the categories; the clipboard's words once.
-  assert.deepEqual(
-    words(
-      addedBy(
-        [{ version: "1.0.0", scan: null }],
-        { version: "1.0.0", capabilities: ["commands"] },
-        { capabilities: ["commands", "clipboard", "ui.window"], scan: { uses: ["player", "clipboard"] } },
-      ),
-    ),
-    [CATEGORIES.player, CATEGORIES.clipboard, CAPABILITIES["ui.window"].text],
-  );
-  // The installed version is not in the index (delisted version): as not scanned.
-  assert.deepEqual(
-    words(addedBy([], { version: "0.9.0", capabilities: ["commands"] }, { capabilities: ["commands"], scan: { uses: ["plugins"] } })),
-    [CATEGORIES.plugins],
-  );
-  // Neither scanned, nothing declared anew; a scan that found nothing: nothing to say.
-  assert.deepEqual(addedBy([{ version: "1.0.0", scan: null }], { version: "1.0.0", capabilities: ["clipboard"] }, { capabilities: ["clipboard"], scan: null }), []);
-  assert.deepEqual(addedBy([{ version: "1.0.0", scan: null }], { version: "1.0.0", capabilities: ["clipboard"] }, { capabilities: ["clipboard"], scan: { uses: [] } }), []);
-});
-
-test("update from a scanned version to one without a scan: its declared risky capabilities are named, in the notice and the confirmation", async () => {
+test("update, only the new version scanned and nothing found: asks plainly, though it declares more", async () => {
   const net = new FakeNet();
-  const same: PluginSpec = {
-    ...UPDATE,
-    versions: [
-      { version: "0.3.0", capabilities: ["commands", "clipboard", "secrets"] },
-      { version: "0.2.0", capabilities: ["commands", "clipboard", "secrets"] },
-    ],
-  };
-  // 0.2.0 was installed with a scan that found nothing in use; 0.3.0 has no scan.
-  publishScanned(net, OFFICIAL, [same], { "zysilm.youtube 0.2.0": [] });
-  const installed = info("zysilm.youtube", { version: "0.2.0", capabilities: ["commands", "clipboard", "secrets"], source: { kind: "repository", url: OFFICIAL } });
-  const { host, stop } = await ready(net, [BUILTIN, installed]);
+  publishScanned(net, OFFICIAL, [UPDATE], { "zysilm.youtube 0.3.0": [] });
+  const { host, stop } = await ready(net, [BUILTIN, INSTALLED]);
   try {
     await choose(host, "YouTube");
-    const shown = notice(host);
+    assert.deepEqual(notice(host), []);
     const confirm = await confirmation(host, "YouTube", "update");
-    assert.equal(confirm.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
-    assert.equal(confirm.detail, "新增：\n· 读写剪贴板\n· 在系统钥匙串保存登录信息\n\n当前 0.2.0。");
-    assert.equal(shown.length, 1);
-    for (const line of bullets(confirm.detail)) assert.ok(shown[0]!.includes(line.slice(2)), line);
+    assert.equal(confirm.message, "更新「YouTube」到 0.3.0？");
+    assert.equal(confirm.detail, "当前 0.2.0。");
+  } finally {
+    await stop();
+  }
+});
+
+test("addedBy compares scans only: nothing without a scan of the new version, every category without one of the installed", () => {
+  const words = (lines: readonly { text: string; args: readonly unknown[] }[]) => lines.map((line) => [line.text, ...line.args].join(" "));
+  const v = (version: string, uses: string[] | null) => ({ version, scan: uses ? { uses } : null });
+  // Both scanned: what the new one adds.
+  assert.deepEqual(words(addedBy([v("1.0.0", ["clipboard"])], { version: "1.0.0" }, v("1.1.0", ["player", "clipboard", "future"]))), [
+    CATEGORIES.player,
+    "Unknown permission: {} future",
+  ]);
+  assert.deepEqual(addedBy([v("1.0.0", ["clipboard", "player"])], { version: "1.0.0" }, v("1.1.0", ["clipboard"])), []);
+  // Only the new one scanned (or the installed version is not in the index): every category it uses.
+  assert.deepEqual(words(addedBy([v("1.0.0", null)], { version: "1.0.0" }, v("1.1.0", ["player", "clipboard"]))), [CATEGORIES.player, CATEGORIES.clipboard]);
+  assert.deepEqual(words(addedBy([], { version: "0.9.0" }, v("1.1.0", ["plugins"]))), [CATEGORIES.plugins]);
+  assert.deepEqual(addedBy([v("1.0.0", null)], { version: "1.0.0" }, v("1.1.0", [])), []);
+  // The new one not scanned: nothing, whatever the installed one's scan found.
+  assert.deepEqual(addedBy([v("1.0.0", [])], { version: "1.0.0" }, v("1.1.0", null)), []);
+  assert.deepEqual(addedBy([v("1.0.0", ["clipboard"])], { version: "1.0.0" }, v("1.1.0", null)), []);
+  assert.deepEqual(addedBy([v("1.0.0", null)], { version: "1.0.0" }, v("1.1.0", null)), []);
+});
+
+test("update to a version without a scan: nothing about permissions, in the notice or the confirmation, though it declares more", async () => {
+  const net = new FakeNet();
+  // 0.2.0 was scanned; 0.3.0 has no scan and declares clipboard and ui.window anew.
+  publishScanned(net, OFFICIAL, [UPDATE], { "zysilm.youtube 0.2.0": [] });
+  const { host, stop } = await ready(net, [BUILTIN, INSTALLED]);
+  try {
+    await choose(host, "YouTube");
+    assert.deepEqual(notice(host), []);
+    assert.deepEqual(listed(host), [], "0.3.0 has no scan: the window lists nothing");
+    const confirm = await confirmation(host, "YouTube", "update");
+    assert.equal(confirm.message, "更新「YouTube」到 0.3.0？");
+    assert.equal(confirm.detail, "当前 0.2.0。");
   } finally {
     await stop();
   }
@@ -388,7 +401,7 @@ test("update from a version without a scan to a scanned one: its categories are 
   }
 });
 
-test("a package from a file: the sentence, then only the declared risky capabilities", async () => {
+test("a package from a file: the sentence and no list, whatever it declares", async () => {
   const scratch = mkdtempSync(join(tmpdir(), "vestra-store-scan-"));
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
@@ -396,16 +409,16 @@ test("a package from a file: the sentence, then only the declared risky capabili
   try {
     const risky = join(scratch, "a.vxp");
     writeFileSync(risky, vxp({ id: "someone.a", version: "1.0.0", name: "A", capabilities: ["commands", "bindings.manage", "playback.read"] }));
-    const plain = join(scratch, "b.vxp");
-    writeFileSync(plain, vxp({ id: "someone.b", version: "2.0.0", name: "B", capabilities: ["commands"] }));
-    host.dialogAnswers.push(yes, yes);
-    await host.drop([risky, plain]);
-    await until(host, () => host.confirms.length === 2 && !store.busy, "two confirmations");
-    const first = String(host.confirmTexts[0]!.detail);
-    assert.match(first, /^来自文件 a\.vxp，未经任何仓库审核，也不会自动更新/);
-    assert.ok(first.endsWith(`\n\n${SENTENCE}\n\n它将可以：\n· 修改所有快捷键`), first);
-    const second = String(host.confirmTexts[1]!.detail);
-    assert.ok(second.endsWith(`\n\n${SENTENCE}\n\n${NONE}`), second);
+    host.dialogAnswers.push(yes);
+    await host.drop([risky]);
+    await until(host, () => host.confirms.length === 1 && !store.busy, "confirmation");
+    const detail = String(host.confirmTexts[0]!.detail);
+    assert.match(detail, /^来自文件 a\.vxp，未经任何仓库审核，也不会自动更新/);
+    assert.ok(detail.endsWith(`\n\n${SENTENCE}`), detail);
+    assert.deepEqual(bullets(detail), []);
+    // Installed from a file: no index entry, so the window lists nothing.
+    await until(host, () => store.selected === "\nsomeone.a", "selected");
+    assert.deepEqual(listed(host), []);
   } finally {
     await stop();
     rmSync(scratch, { recursive: true, force: true });
