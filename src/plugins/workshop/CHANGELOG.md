@@ -1,5 +1,13 @@
 # Changelog
 
+## 2.2.43
+
+- The install dialog for an AI-generated plugin says again what the plugin uses (user approval 2026-11-13; the "Capabilities: …" line went with the field in 2.2.42). Before asking, the Workshop runs its own vendored scanner (`vestra-plugin scan <project>`, `Toolchain.scan()`) on the project, under the same Node permission model as the type check (it reads the Workshop's package, the SDK copy, the project and its scratch folder; no child processes), with a 30 s limit. The detail is "{1} {2}" and then, as the Plugin Store words its scan-based disclosure, "It will be able to:" with one "· " line per category in the scan's order (a category word the table does not know: "Unknown permission: …", last).
+- No category found: the detail stays "{1} {2}", nothing more (the store's sentence for an empty scan is not repeated here: the dialog is about a plugin the user asked for, and an empty scan of code the AI just wrote says little). The scan failed, timed out or printed something else: also only "{1} {2}", and the install goes on (the user still decides; the scan is a disclosure, not a check). The scan runs while the card is busy (its buttons already disabled), about 0.3–0.9 s, so there is no new status text. A click on Install on the card has no dialog and runs no scan.
+- New texts: the eight category texts, "It will be able to:\n{}", "· {}", "Unknown permission: {}" (copied from the Plugin Store's catalogs with their translations and marks: `x-machine` except zh-Hans), and "{1} {2}\n\n{3}" (`x-machine`) in all six languages.
+- Tests: `delivery.test.mjs` adds the dialog with uses (a project that writes the clipboard and reloads another plugin: both lines, in the scan's order, in Chinese) and on a scan failure (a `.js` link to a folder the scanner cannot read: only the id and version, and the dialog still asks). The existing expectation "local.demo 0.1.0" is the no-uses case, unchanged.
+- Who must change: nobody.
+
 ## 2.2.42
 
 - Manifest capabilities are gone (SDK 1.9.0, player 0.9.0). The plugin's own manifest drops `capabilities`, and `activate()` starts with `await plugin.player.read()` (was `playback.read`, its only declaration that changed how it ran). Behaviour is unchanged, except the ruled start-up order (the player's `window.state` read comes first).

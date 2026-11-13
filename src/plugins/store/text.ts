@@ -279,20 +279,20 @@ export const HOST = [
   // Confirmation: install from a repository.
   "Replace the installed “{}”?",
   "{1}\n\nWill install {2} from the official repository.\n\n{3}",
-  "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
-  // The same without a scan: nothing about what it will be able to do.
+  // Another repository's: its warning, then the note that its permissions were not checked.
   "{1}\n\nWill install {2} from the unofficial repository.\n\n{3}",
   "Update “{}” to {}? The new version needs more permissions",
   "Added:\n{2}\n\nCurrent: {3}.",
   "Update “{}” to {}?",
   "Current: {2}.",
+  // Another repository's update or reinstall: then the files-and-network sentence and the note.
+  "Current: {2}.\n\n{3}",
   "Install “{}” {} (reinstall)?",
   "Current: {2}.\n\nThis version needs more permissions:\n{3}",
   "Install “{}” {}?",
   "From the Vestra Player official repository, author {2}.\n\n{3}",
   "Install “{}” {} from an unofficial repository?",
   "{2}\n\n{3}",
-  "{2}",
   "{1}",
   "This plugin has already been installed from another source. Replacing it continues with the data from an earlier install from this source, if there was one, otherwise with new, empty data. The original plugin's data is kept and is used again when you reinstall it from the original source.",
   // Parts of those confirmations.
@@ -304,6 +304,8 @@ export const HOST = [
   "Plugins may read your files or use the network.",
   // A scan that found no category.
   "It uses none of the player's sensitive features.",
+  // Any package not from the official repository (another repository, a file, a link): in place of a scan.
+  "It is not from the official repository, so its permissions were not checked.",
   "Unknown",
   // The permission list: one line each, at most 20.
   "· {}",

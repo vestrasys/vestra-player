@@ -737,10 +737,12 @@ export class Store {
     if (!item) return base;
     // The scanned categories of the version shown (the one to install, else the installed one as the index lists
     // it, else the newest); without a scan nothing: declared capabilities are not shown (user ruling 2026-11-13).
+    // Only the official repository's scan: another repository's is its own claim, and its install confirmation
+    // says that the permissions were not checked (user ruling 2026-11-13).
     const indexed = item.installed
       ? item.entry?.versions.find((v) => v.version === item.installed?.version)
       : item.entry?.versions[0];
-    const scan = (item.best ?? indexed)?.scan ?? null;
+    const scan = item.repo?.official ? ((item.best ?? indexed)?.scan ?? null) : null;
     return {
       ...base,
       dName: item.name,
@@ -1101,8 +1103,9 @@ export class Store {
       add(msg("Unofficial repository: not reviewed by Vestra Player; plugins may read your files or use the network"), 2);
       if (item.repo.local) add(msg("This is a test repository on this machine, without encryption"), 2);
     }
-    if (item.state === "update" && item.best && info) {
-      // As the update confirmation compares them (scanned categories when both versions have them).
+    if (item.state === "update" && item.best && info && item.repo?.official) {
+      // As the update confirmation compares them (scanned categories when both versions have them; the official
+      // repository's only).
       const added = addedBy(item.entry?.versions ?? [], info, item.best);
       if (added.length) add(msg("The new version needs new permissions: {}", list(added)), 2);
     }

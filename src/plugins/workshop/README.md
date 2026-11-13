@@ -40,7 +40,7 @@ When you ask the AI to write a plugin, it first reads the plugin SDK reference (
 | `test` | Run tests | Runs `tests/*.test.ts` in a separate restricted Node process: it can only read the plugin folder and only write a temporary folder, with no network and no child processes; on failure it returns the assertion messages and what the tests printed |
 | `check` | Check | id, dependencies, manifest, types, build, then the player's own package checks on the packed plugin (`packages.validateArchive`: every Slint file compiled, as at install); a Slint error comes back to the AI with the player's diagnostics |
 | `pack` | Pack | Creates `dist/<id>-<version>.vxp` |
-| `install_plugin` | Install | The player validates it (including Slint), asks for confirmation in a dialog, then installs it (only when you ask) |
+| `install_plugin` | Install | Asks for confirmation in a dialog that lists what the plugin's code uses of the player's sensitive features (the SDK's scan, worded as in the Plugin Store), then the player validates it (including Slint) and installs it (only when you ask) |
 
 The AI is done only when type check, tests and check all pass. Every tool has a time limit and an output limit; clicking "■ Stop" cancels the running tool. When the `vestra-plugin` command line fails without its usual report, the tool result carries its exit code and the end of its error output, never an empty failure.
 
