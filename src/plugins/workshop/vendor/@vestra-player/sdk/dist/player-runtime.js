@@ -9,8 +9,7 @@
  */
 export { createPlugin } from "./plugin/index.js";
 export { HostError } from "./wire.js";
-export { API_VERSION, CAPABILITIES, CAPABILITY_INFO, MESSAGE_LIMIT, } from "./capabilities.js";
-export { HOST_CAPABILITIES } from "./host-capabilities.js";
+export { API_VERSION, MESSAGE_LIMIT } from "./protocol.js";
 export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "./commands.js";
 export { BINDING_INPUTS } from "./plugin/bindings.js";
 export { MEDIA_SOURCE_LIMITS } from "./plugin/media.js";

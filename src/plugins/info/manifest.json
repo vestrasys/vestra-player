@@ -1,19 +1,8 @@
 {
   "id": "vestra.info",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "playback.read",
-    "subtitles.read",
-    "events",
-    "ui.osd",
-    "ui.window",
-    "ui.dialog",
-    "ui.settings",
-    "clipboard"
-  ],
   "name": "Playback Info",
   "author": "Vestra Player",
   "punchline": "Playback info overlay, playback properties and the About window",

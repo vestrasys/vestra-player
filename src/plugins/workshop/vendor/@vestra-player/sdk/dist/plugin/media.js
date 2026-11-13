@@ -324,7 +324,6 @@ export function mediaCapture(scope) {
             const service = serviceOf(runtime);
             if (typeof options !== "object" || options === null)
                 throw failure("invalid", "export options must be an object");
-            needSources(scope);
             const parts = checkParts(options.parts);
             let mode;
             if (options.format === "copy") {
@@ -377,7 +376,6 @@ export function mediaCapture(scope) {
             // As the player: parts carry their own ends; `end` is a snapshot's.
             if (options?.end !== undefined)
                 throw failure("invalid", "end belongs to a snapshot's check; parts carry their own end");
-            needSources(scope);
             return scope.runtime.host.jobs.check(checkParts(input), encoding);
         },
     };
@@ -431,14 +429,8 @@ function checkParts(parts) {
         throw failure("invalid", `the parts are ${total} s long; an export takes at most ${MEDIA_SOURCE_LIMITS.totalSeconds} s`);
     return checked;
 }
-/** The parts' tokens are media.sources': refuse at once without it, as the player does. */
-function needSources(scope) {
-    if (!scope.runtime.can("media.sources"))
-        throw failure("capability", "media.sources must be declared in manifest");
-}
 function mediaSources(scope) {
     const host = () => {
-        needSources(scope);
         return scope.runtime.host.mediaSources;
     };
     const token = (value) => {
@@ -459,10 +451,6 @@ function mediaSources(scope) {
         forget: async (value) => host().forget(token(value)),
         list: async () => host().list(),
         async open(value, options = {}) {
-            needSources(scope);
-            // An open like Player.open's: the player asks playback.control too.
-            if (!scope.runtime.can("playback.control"))
-                throw failure("capability", "playback.control must be declared in manifest");
             const start = options?.start;
             if (start !== undefined && !(Number.isFinite(start) && start >= 0))
                 throw failure("invalid", "start must be seconds from 0");

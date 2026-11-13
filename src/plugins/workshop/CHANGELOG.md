@@ -1,5 +1,16 @@
 # Changelog
 
+## 2.2.42
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0). The plugin's own manifest drops `capabilities`, and `activate()` starts with `await plugin.player.read()` (was `playback.read`, its only declaration that changed how it ran). Behaviour is unchanged, except the ruled start-up order (the player's `window.state` read comes first).
+- The vendored SDK is 1.9.0 (`npm run vendor:sdk`). The layout the store's install-time scan uses is unchanged: `vendor/@vestra-player/sdk/bin/vestra-plugin.mjs`, `vendor/@vestra-player/sdk/capability-scan.json`, `vendor/typescript`, and `vestra-plugin scan` prints the same `{ scan: 1, uses, … }` object.
+- **New plugin projects follow the new model.** `scaffold_plugin` writes a manifest without `capabilities` and with `minPlayerVersion` 0.9.0 (an older player requires the field), and no `@vestra-player/sdk/ts-plugin` in `tsconfig.json` (the SDK's checker is gone; the exported VS Code settings still select the project's TypeScript). The system prompt's manifest rule says there is no capabilities field, and that a plugin that follows the player's state calls `plugin.player.subscribe()` first in `activate`, plus `await plugin.player.read()` when it reads the state at start; nothing else is declared. The scaffold's "next" hint no longer says to edit the capabilities.
+- `typecheck` and `check` no longer have an `undeclared` list (the SDK's capability check is removed; `parseUndeclared` and `Project.capabilities` are gone). A manifest that still lists `capabilities` fails `typecheck` and `check` with the SDK's message, which names the two calls.
+- The install dialog for an AI-generated plugin shows its id and version ("{1} {2}"); the "Capabilities: …" line is gone with the field. New text "{1} {2}" in all six languages (`x-machine`); the two old texts are obsolete.
+- Tests: the template test checks the manifest has no `capabilities`, `minPlayerVersion` 0.9.0 and no `tsconfig.json` plugin (were: the ts-plugin listed, twice); the undeclared-capability test now checks that the same `plugin.player.seek` call passes `typecheck` and `check`, and that a manifest with `capabilities` fails both with the SDK's message; the parser test of the removed undeclared lines is gone; the install dialog test expects "local.demo 0.1.0" (was "local.demo 0.1.0
+能力：commands、ui.window"); the test host's package entry and the player test's helper manifest drop `capabilities`.
+- Who must change: nobody. A user's existing session project with `capabilities` in its manifest fails `typecheck`/`check` until the AI (or the user) deletes the field and adds the calls the message names.
+
 ## 2.2.41
 
 - The vendored SDK is 1.8.0 as published on npm (`npm run vendor:sdk`), now with its `capability-scan.json` (added to `SDK_FILES` in `tests/vendor-sdk.mjs`) for the install-time scan that comes next. 1.8.0 adds the mpv pass-through (`plugin.mpv`, its own risky capability, and its TestHost model), the capability scan (`vestra-plugin scan`, `capability-scan.json`) and the palette lead status additions below; the widget library has the Button key-cap slot and the command table "Show in Folder". The Workshop uses only the lead status additions.

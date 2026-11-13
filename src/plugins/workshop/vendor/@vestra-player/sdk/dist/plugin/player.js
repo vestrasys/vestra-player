@@ -156,14 +156,13 @@ function sourceFailure(error) {
  * One per plugin: the state store and the operation book client.
  *
  * The state copy (a mirror of `source.state`) follows the player's events
- * from the plugin's start when the manifest declares `events`
- * (`createPlugin` subscribes before the start-up read, as before 1.7.0, so
- * a read in any later handler is current). Without `events` no event can
- * arrive; `start` is then called by the first use of the state (a read of
+ * from `plugin.player.subscribe()` on (`subscribe`, first in `activate`
+ * as the plugin writes it). Before that no event can arrive; `start` is
+ * then called by the first use of the state (a read of
  * `plugin.player.state`, `onChange`, `isCurrent`, a media handle, a
  * scrub, a stream, a filter, a shader or view request, a capture) and
- * subscribes nothing. A start on demand with `events` and `playback.read`
- * would read the state again; `createPlugin` makes it unreachable today.
+ * subscribes nothing until `subscribe()`, which subscribes it and, after
+ * `read()`, reads the state once more (`#catchUp`).
  */
 export class PlayerService {
     runtime;
@@ -180,6 +179,8 @@ export class PlayerService {
     #started = false;
     /** The read that followed the subscription (resolved: none was needed). */
     #fresh = Promise.resolve();
+    /** `read()`'s one read, once asked for. */
+    #read;
     output;
     constructor(runtime) {
         this.runtime = runtime;
@@ -195,9 +196,41 @@ export class PlayerService {
             await this.refresh().catch(() => { });
         });
     }
-    async init() {
-        if (this.runtime.can("playback.read"))
-            await this.refresh();
+    /**
+     * `plugin.player.read()`: read the source state and the timeline now, and
+     * from now on read the state again after the plugin's own actions
+     * (`Connection.reads`). Idempotent: one read, however often it is called;
+     * a read that failed is tried again by the next call.
+     */
+    read() {
+        return (this.#read ??= (async () => {
+            this.runtime.reads = true;
+            try {
+                await Promise.all([
+                    this.refresh(),
+                    this.runtime.reread("timeline.changed"),
+                ]);
+            }
+            catch (error) {
+                this.#read = undefined;
+                throw error;
+            }
+        })());
+    }
+    /**
+     * `plugin.player.subscribe()`: turn event delivery on and follow
+     * `source.state` now. Idempotent.
+     */
+    subscribe() {
+        if (this.runtime.delivering)
+            return;
+        this.runtime.deliver();
+        // A copy started on demand heard nothing so far; it is subscribed now,
+        // and a change before that sent no event.
+        if (this.#started)
+            this.#catchUp();
+        else
+            void this.start();
     }
     /** Whether the mirror follows the player's events yet. */
     get started() {
@@ -206,22 +239,22 @@ export class PlayerService {
     /**
      * Follow `source.state` from now on: the SDK's copy of the state (a
      * mirror; a plugin listens through `watch` and the bindings that read
-     * `state`). Then read the state once more (with `playback.read` and
-     * `events`): a change between the start-up read and the subscription
-     * sent no event to this plugin. Resolves when that read is in.
-     * `reread: false`: subscribed before the start-up read
-     * (`createPlugin`), which then is that read.
+     * `state`). Then read the state once more (after `read()` and
+     * `subscribe()`): a change between that read and the subscription sent
+     * no event to this plugin. Resolves when that read is in.
      */
-    start(reread = true) {
+    start() {
         if (this.#started)
             return this.#fresh;
         this.#started = true;
         this.runtime.on("source.state", (data) => this.accept(data), "events", true);
-        if (reread &&
-            this.runtime.can("playback.read") &&
-            this.runtime.can("events"))
-            this.#fresh = this.refresh().then(() => { }, () => { });
+        this.#catchUp();
         return this.#fresh;
+    }
+    /** Read the state once more after a subscription, when it is read at all. */
+    #catchUp() {
+        if (this.runtime.reads && this.runtime.delivering)
+            this.#fresh = this.refresh().then(() => { }, () => { });
     }
     /** The state as the player has it now, for a call that needs a source. */
     async current() {
@@ -322,7 +355,7 @@ export class PlayerService {
     }
     /** Close only if `generation` is still the player's source. */
     async closeIfCurrent(generation) {
-        const raw = this.runtime.can("playback.read")
+        const raw = this.runtime.reads
             ? (await this.refresh(), this.raw)
             : this.raw;
         if (raw.stamp.generation !== generation || raw.phase === "empty")
@@ -385,7 +418,7 @@ class MediaHandle {
                 return abort();
             options.signal?.addEventListener("abort", abort, { once: true });
             // Without event delivery the state only moves when read.
-            if (!service.runtime.can("events"))
+            if (!service.runtime.delivering)
                 poll = setInterval(() => void service.refresh().catch(() => { }), 100);
             check();
         });
@@ -586,6 +619,8 @@ export function player(scope) {
             });
         },
         refresh: () => service().refresh(),
+        subscribe: () => service().subscribe(),
+        read: () => service().read(),
         on(event, listener) {
             // Checked first; the copy then starts before the listener subscribes
             // (it hears each event first in any case).

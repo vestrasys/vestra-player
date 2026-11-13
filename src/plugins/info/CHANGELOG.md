@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.14
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.1.13
 
 - Menu (the short menu, user ruling 2026-11-11, SDK 1.7.12): About Vestra Player… (F1) moves from the top level of the right-click menu to the end of the player's Tools ▸ (`["@tools", "About Vestra Player…"]`); id, order 880, group `settings-main`, key and category are unchanged. No other info command is in the menu (Playback Info, Brief Info, Playback Properties… and Check for Updates… stay palette-only). Who must change: nobody.

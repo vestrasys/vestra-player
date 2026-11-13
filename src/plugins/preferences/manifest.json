@@ -1,15 +1,8 @@
 {
   "id": "vestra.preferences",
-  "version": "0.3.4",
+  "version": "0.3.5",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "events",
-    "ui.osd",
-    "ui.settings",
-    "ui.theme"
-  ],
   "name": "Preferences",
   "author": "Vestra Player",
   "punchline": "Open the options window, change the palette and the language",

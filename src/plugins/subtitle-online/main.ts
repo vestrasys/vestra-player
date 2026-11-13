@@ -48,6 +48,8 @@ const aborted = (e: unknown) =>
 
 /** Online Subtitles (D16): search OpenSubtitles / assrt, download, load as this plugin's tracks. */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player, subtitles } = plugin;
   const { text } = plugin.i18n;
   const say = (id: StatusId, args: TextArg[] = []) => void plugin.osd.show(STATUS[id], args).catch(() => {});

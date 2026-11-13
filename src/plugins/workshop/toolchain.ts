@@ -42,7 +42,6 @@ export interface Project {
   name: string;
   version: string;
   directory: string;
-  capabilities: string[];
   modified: number;
 }
 
@@ -127,28 +126,6 @@ export function parseTsc(output: string): Diagnostic[] {
     const match = /^(.+?)\((\d+),(\d+)\): error (TS\d+): (.*)$/.exec(line);
     if (match) out.push({ file: match[1].split(path.sep).join("/"), line: Number(match[2]), column: Number(match[3]), code: match[4], message: match[5] });
     else if (out.length && /^\s+\S/.test(line)) out.at(-1)!.message += ` ${line.trim()}`;
-  }
-  return out;
-}
-
-export interface Undeclared {
-  file: string;
-  line: number;
-  column: number;
-  capability: string;
-  message: string;
-}
-
-/**
- * The CLI's undeclared-capability lines (SDK 1.5.26+): `file:line:col: <api>
- * needs the capability "<name>"…, which manifest.json does not declare
- * (request <method>)`. Its summary line ("add … to manifest.json") is a problem.
- */
-export function parseUndeclared(output: string): Undeclared[] {
-  const out: Undeclared[] = [];
-  for (const line of output.split(/\r?\n/)) {
-    const match = /^(.+?):(\d+):(\d+): (.* needs the capability "([^"]+)".*, which manifest\.json does not declare) \(request [^)]*\)$/.exec(line);
-    if (match) out.push({ file: match[1].split(path.sep).join("/"), line: Number(match[2]), column: Number(match[3]), capability: match[5], message: match[4] });
   }
   return out;
 }
@@ -322,7 +299,6 @@ export class Toolchain {
           name: typeof manifest.name === "string" ? manifest.name : name,
           version: typeof manifest.version === "string" ? manifest.version : "0.0.0",
           directory,
-          capabilities: Array.isArray(manifest.capabilities) ? manifest.capabilities.map(String) : [],
           modified: await newest(directory),
         });
       } catch {
@@ -428,11 +404,9 @@ export class Toolchain {
       .split(/\r?\n/)
       .map((line) => /: hint: (.*)$/.exec(line)?.[1])
       .filter((x): x is string => !!x);
-    const undeclared = parseUndeclared(all).map((d) => ({ ...d, file: path.isAbsolute(d.file) ? path.relative(directory, d.file).split(path.sep).join("/") : d.file }));
     const report: {
       errors: typeof errors;
       errorCount: number;
-      undeclared?: Undeclared[];
       problems: string[];
       hints: string[];
       exitCode?: number | null;
@@ -441,13 +415,12 @@ export class Toolchain {
     } = {
       errors: errors.slice(0, 50),
       errorCount: errors.length,
-      ...(undeclared.length ? { undeclared: undeclared.slice(0, 50) } : {}),
       problems,
       hints,
     };
     // A failure the CLI did not explain in its usual lines (it crashed,
     // could not start, or printed something else): never an empty "failed".
-    if (run.code !== 0 && !errors.length && !problems.length && !undeclared.length) {
+    if (run.code !== 0 && !errors.length && !problems.length) {
       report.exitCode = run.code;
       report.stderr = tail(run.stderr) || "(empty)";
       if (run.stdout.trim()) report.stdout = tail(run.stdout);
@@ -501,7 +474,7 @@ export class Toolchain {
       id,
       folder: `work/${id}`,
       files: Object.keys(files),
-      next: "Edit the capabilities in manifest.json, main.ts, ui/main.slint and tests/main.test.ts, then typecheck → test → check",
+      next: "Edit main.ts, ui/main.slint and tests/main.test.ts, then typecheck → test → check",
       ...(owner ? {} : { note: "No GitHub name in the settings: the id has the local. prefix (for this computer only)" }),
     });
   }
@@ -517,11 +490,7 @@ export class Toolchain {
       if (stop) return stop;
       const report = this.cliReport(run, directory);
       if (run.code === 0) return result(true, `Type check passed (${/\((\d+) files?\)/.exec(run.stdout)?.[1] ?? "?"} files)`, report.hints.length ? { hints: report.hints } : undefined);
-      const summary = report.errorCount
-        ? `Type check failed: ${report.errorCount} error(s)`
-        : report.undeclared
-          ? `Type check passed, but ${report.undeclared.length} SDK use(s) need a capability manifest.json does not declare`
-          : `Check failed${unexplained(report)}`;
+      const summary = report.errorCount ? `Type check failed: ${report.errorCount} error(s)` : `Check failed${unexplained(report)}`;
       return result(false, summary, report);
     });
   }
@@ -592,11 +561,7 @@ export class Toolchain {
         if (run.code !== 0)
           return result(
             false,
-            report.errorCount
-              ? `Check failed: ${report.errorCount} type error(s)`
-              : report.undeclared
-                ? `Check failed: ${report.undeclared.length} SDK use(s) need a capability manifest.json does not declare`
-                : `Check failed${unexplained(report)}`,
+            report.errorCount ? `Check failed: ${report.errorCount} type error(s)` : `Check failed${unexplained(report)}`,
             { ...report, warnings },
           );
         if (!scratch) return result(true, "Check passed (manifest, strict type check, build). The player compiles and checks Slint at install.", warnings.length ? { warnings } : undefined);
@@ -874,20 +839,14 @@ const TSCONFIG = {
     erasableSyntaxOnly: true,
     skipLibCheck: true,
     types: ["node"],
-    // The SDK's language-service plugin: in the editor, an SDK call whose
-    // capability manifest.json does not declare is an error with a quick fix
-    // (vestra-plugin check reports the same). tsc and the compiler API do not
-    // load language-service plugins, so the type check here is unaffected.
-    plugins: [{ name: "@vestra-player/sdk/ts-plugin" }],
   },
   include: ["*.ts", "tests/*.ts"],
 };
 
 /**
- * VS Code settings for the exported repository: editors load a project's
- * language-service plugins (tsconfig.json above) only with the project's own
- * TypeScript, which `npm install` puts in node_modules/ as a dependency of
- * @vestra-player/sdk. Not in the session's project: it has no node_modules/
+ * VS Code settings for the exported repository: the editor uses the project's
+ * own TypeScript, the version the SDK's `vestra-plugin check` uses, which
+ * `npm install` puts in node_modules/ as a dependency of @vestra-player/sdk. Not in the session's project: it has no node_modules/
  * of its own, and nothing opens it in an editor.
  */
 const VSCODE_SETTINGS = { "typescript.tsdk": "node_modules/typescript/lib", "typescript.enablePromptUseWorkspaceTsdk": true };
@@ -899,9 +858,9 @@ export function template(id: string, name: string, title: string, sdkVersion: st
     version: "0.1.0",
     apiVersion: "vestra/1",
     entry: "main.ts",
-    capabilities: ["commands", "ui.window"],
     name: title,
-    minPlayerVersion: "0.4.1",
+    // A player without manifest capabilities (SDK 1.9.0): an older one requires the field.
+    minPlayerVersion: "0.9.0",
   };
   return {
     "manifest.json": `${JSON.stringify(manifest, null, 2)}\n`,

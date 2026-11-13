@@ -89,23 +89,14 @@ export function splitCommandKey(_host, _inner, key) {
     return { plugin: key.slice(0, at), command: key.slice(at + 1) };
 }
 /**
- * The capabilities of the plugin under test's manifest, set by
- * `startPlugin`; a host without an entry (requests sent by hand) lists
- * every command in `bindings.list`.
- */
-export const pluginCapabilities = new WeakMap();
-/**
- * `bindings.list`, as the player's (binding_manager.rs `list`, player
- * 0.8.0): a `focus: "panel"` command of a plugin whose manifest declares no
- * `ui.mount` can never fire from a key, so it is left out; it stays declared
- * (its stored binding is no orphan, `bindings.set` accepts it).
+ * `bindings.list`, as the player's (binding_manager.rs `list`): every
+ * declared command, a `focus: "panel"` one included (since 1.9.0 no
+ * manifest says whether the plugin mounts a panel).
  */
 export function bindingTable(host, inner) {
     const all = bindingRows(host, inner);
-    const capabilities = pluginCapabilities.get(host);
-    const hidden = capabilities !== undefined && !capabilities.includes("ui.mount");
     const declared = new Set(all.map((c) => `${c.plugin}/${c.command}`));
-    const commands = all.filter((c) => !(hidden && c.scope === "panel" && c.plugin === host.manifestId));
+    const commands = all;
     const orphans = [...host.bindings.overlay]
         .filter(([key]) => !declared.has(key))
         .map(([key, inputs]) => ({
@@ -432,10 +423,10 @@ export function commandsHandlers(host, inner) {
     };
 }
 /// ---------------------------------------------------------------- built-in only: commands.run, palette.lead
-/** The player's refusal of a built-in-only capability to any other plugin. */
+/** The player's refusal of a built-in-only request to any other plugin. */
 function builtinOnly(host) {
     if (!host.builtin)
-        throw new HostError("capability", "this capability is for built-in plugins only");
+        throw new HostError("capability", "this is for built-in plugins only");
 }
 /** The palette's rows: the player's core commands and the plugin's own. */
 function rows(host) {

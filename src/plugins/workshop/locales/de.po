@@ -46,7 +46,7 @@ msgstr "Finden"
 msgid "Search"
 msgstr "Suchen"
 
-#: ai.slint:175 main.ts:546 settings.slint:206
+#: ai.slint:175 main.ts:547 settings.slint:206
 #, x-machine
 msgid "Delete"
 msgstr "Löschen"
@@ -86,7 +86,7 @@ msgstr "Prüfen"
 msgid "Pack"
 msgstr "Packen"
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:205
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
 #, x-machine
 msgid "Install"
 msgstr "Installieren"
@@ -661,50 +661,37 @@ msgstr "Vestra kann „{}“ nicht"
 msgid "There is no command “{}”"
 msgstr "Es gibt keinen Befehl „{}“"
 
-#: askvestra/status.ts:140 labels.slint:6 main.ts:637
+#: askvestra/status.ts:140 labels.slint:6 main.ts:638
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "Benutzerdefiniert · OpenAI-Format"
 
-#: askvestra/status.ts:140 labels.slint:7 main.ts:639
+#: askvestra/status.ts:140 labels.slint:7 main.ts:640
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "Benutzerdefiniert · Anthropic-Format"
 
-#: delivery.ts:203
+#: delivery.ts:202
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "KI-generiertes Plugin „{}“ installieren?"
 
-#: delivery.ts:204
+#: delivery.ts:203
 #, x-machine
-msgid ""
-"{1} {2}\n"
-"Capabilities: {3}"
-msgstr ""
-"{1} {2}\n"
-"Fähigkeiten: {3}"
+msgid "{1} {2}"
+msgstr "{1} {2}"
 
-#: delivery.ts:204
-#, x-machine
-msgid ""
-"{1} {2}\n"
-"Capabilities: none"
-msgstr ""
-"{1} {2}\n"
-"Fähigkeiten: keine"
-
-#: delivery.ts:234
+#: delivery.ts:233
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "Installiertes {} ersetzen?"
 
-#: delivery.ts:236
+#: delivery.ts:235
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "Es wurde aus einer anderen Quelle installiert (nicht von Vestra Player AI erstellt). Nach dem Ersetzen startet das neue Plugin mit einem neuen, leeren Datenordner; die Daten des ursprünglichen Plugins bleiben erhalten und werden wieder verwendet, wenn Sie es aus seiner ursprünglichen Quelle neu installieren."
 
-#: delivery.ts:237
+#: delivery.ts:236
 #, x-machine
 msgid "Replace"
 msgstr "Ersetzen"
@@ -714,52 +701,52 @@ msgstr "Ersetzen"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "Der zuvor gewählte Anbieter „{}“ wird nicht mehr angeboten; verwenden Sie einen anderen Anbieter oder „Benutzerdefiniert · OpenAI-/Anthropic-Format“."
 
-#: main.ts:542
+#: main.ts:543
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "Unterhaltung „{}“ löschen?"
 
-#: main.ts:542
+#: main.ts:543
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "Diese Unterhaltung löschen?"
 
-#: main.ts:543
+#: main.ts:544
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "Ihre Nachrichten und die darin erstellten Plugin-Projekte (Quellordner und gepackte .vxp-Dateien) werden gelöscht; exportierte Dateien bleiben erhalten. Daraus installierte Plugins bleiben im Player installiert ({1}); entferne sie in der Plugin-Verwaltung, wenn du sie nicht mehr brauchst."
 
-#: main.ts:543
+#: main.ts:544
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "Ihre Nachrichten und die darin erstellten Plugin-Projekte (Quellordner und gepackte .vxp-Dateien) werden gelöscht; exportierte Dateien bleiben erhalten."
 
-#: main.ts:605
+#: main.ts:606
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "Plugin-Paket exportieren"
 
-#: main.ts:620
+#: main.ts:621
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "Quellcode exportieren (direkt als GitHub-Repository nutzbar)"
 
-#: main.ts:641 manifest.json
+#: main.ts:642 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:649
+#: main.ts:650
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{} (nicht mehr angeboten)"
 
-#: main.ts:879
+#: main.ts:880
 #, x-machine
 msgid "Plugins"
 msgstr "Plugins"
 
-#: main.ts:880
+#: main.ts:881
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
@@ -1050,3 +1037,19 @@ msgstr "Ihr GitHub-Name (Präfix der Plugin-IDs)"
 #, x-machine
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "Der Schlüssel wird nur im Schlüsselbund des Systems (macOS) bzw. in der Anmeldeinformationsverwaltung (Windows) gespeichert, nie in einer Datei, einem Protokoll oder einem Chatverlauf."
+
+#, x-machine
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: {3}"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "Fähigkeiten: {3}"
+
+#, x-machine
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: none"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "Fähigkeiten: keine"

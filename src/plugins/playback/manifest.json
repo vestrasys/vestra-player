@@ -1,21 +1,8 @@
 {
   "id": "vestra.playback",
-  "version": "0.2.18",
+  "version": "0.2.19",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "ui.mount",
-    "ui.window",
-    "ui.dialog",
-    "playback.read",
-    "playback.control",
-    "events",
-    "commands",
-    "ui.osd",
-    "clipboard",
-    "bindings.manage",
-    "timeline.marks"
-  ],
   "name": "Basic Playback",
   "author": "Vestra Player",
   "punchline": "Bottom control bar, open files and links, seek and speed",

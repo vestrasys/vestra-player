@@ -36,7 +36,7 @@ msgstr ""
 msgid "Search"
 msgstr ""
 
-#: ai.slint:175 main.ts:546 settings.slint:206
+#: ai.slint:175 main.ts:547 settings.slint:206
 msgid "Delete"
 msgstr ""
 
@@ -68,7 +68,7 @@ msgstr ""
 msgid "Pack"
 msgstr ""
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:205
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
 msgid "Install"
 msgstr ""
 
@@ -532,39 +532,31 @@ msgstr ""
 msgid "There is no command “{}”"
 msgstr ""
 
-#: askvestra/status.ts:140 labels.slint:6 main.ts:637
+#: askvestra/status.ts:140 labels.slint:6 main.ts:638
 msgid "Custom · OpenAI format"
 msgstr ""
 
-#: askvestra/status.ts:140 labels.slint:7 main.ts:639
+#: askvestra/status.ts:140 labels.slint:7 main.ts:640
 msgid "Custom · Anthropic format"
 msgstr ""
 
-#: delivery.ts:203
+#: delivery.ts:202
 msgid "Install the AI-generated plugin “{}”?"
 msgstr ""
 
-#: delivery.ts:204
-msgid ""
-"{1} {2}\n"
-"Capabilities: {3}"
+#: delivery.ts:203
+msgid "{1} {2}"
 msgstr ""
 
-#: delivery.ts:204
-msgid ""
-"{1} {2}\n"
-"Capabilities: none"
-msgstr ""
-
-#: delivery.ts:234
+#: delivery.ts:233
 msgid "Replace the installed {}?"
 msgstr ""
 
-#: delivery.ts:236
+#: delivery.ts:235
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr ""
 
-#: delivery.ts:237
+#: delivery.ts:236
 msgid "Replace"
 msgstr ""
 
@@ -572,43 +564,43 @@ msgstr ""
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr ""
 
-#: main.ts:542
+#: main.ts:543
 msgid "Delete the conversation “{}”?"
 msgstr ""
 
-#: main.ts:542
+#: main.ts:543
 msgid "Delete this conversation?"
 msgstr ""
 
-#: main.ts:543
+#: main.ts:544
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr ""
 
-#: main.ts:543
+#: main.ts:544
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr ""
 
-#: main.ts:605
+#: main.ts:606
 msgid "Export Plugin Package"
 msgstr ""
 
-#: main.ts:620
+#: main.ts:621
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr ""
 
-#: main.ts:641 manifest.json
+#: main.ts:642 manifest.json
 msgid "Vestra Player AI"
 msgstr ""
 
-#: main.ts:649
+#: main.ts:650
 msgid "{} (no longer offered)"
 msgstr ""
 
-#: main.ts:879
+#: main.ts:880
 msgid "Plugins"
 msgstr ""
 
-#: main.ts:880
+#: main.ts:881
 msgid "Vestra Player AI…"
 msgstr ""
 

@@ -14,7 +14,7 @@ import type { Transport } from "./wire.ts";
  * and turned a quarter clockwise. The nodes run in array order; `set` sends
  * the whole chain as this plugin's desired value (last write wins), and the
  * player applies it to every source until it changes, needing
- * `processing.video`, `playback.read` and `events`.
+ * `plugin.player.subscribe()` and `plugin.player.read()`.
  * ```ts
  * const chain: VideoNode[] = [
  *   // Live fields: moving them later changes the picture in place.
@@ -306,8 +306,7 @@ export declare const VIDEO_PROCESSING_LIMITS: Readonly<{
  * Speech around 1 kHz is 3 dB louder and both speakers play the same mixed
  * channel. `set` sends this plugin's whole audio chain (the nodes in order,
  * plus an optional `delayMs`); the player joins it with other plugins'
- * chains and applies it to every source (`processing.audio`,
- * `playback.read`, `events`).
+ * chains and applies it to every source.
  * ```ts
  * plugin.audio.filter("sound").set({
  *   nodes: [

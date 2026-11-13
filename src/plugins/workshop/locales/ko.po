@@ -46,7 +46,7 @@ msgstr "찾기"
 msgid "Search"
 msgstr "검색"
 
-#: ai.slint:175 main.ts:546 settings.slint:206
+#: ai.slint:175 main.ts:547 settings.slint:206
 #, x-machine
 msgid "Delete"
 msgstr "삭제"
@@ -86,7 +86,7 @@ msgstr "검사"
 msgid "Pack"
 msgstr "패키징"
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:205
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
 #, x-machine
 msgid "Install"
 msgstr "설치"
@@ -658,50 +658,37 @@ msgstr "Vestra는 ‘{}’을(를) 할 수 없습니다"
 msgid "There is no command “{}”"
 msgstr "‘{}’ 명령이 없습니다"
 
-#: askvestra/status.ts:140 labels.slint:6 main.ts:637
+#: askvestra/status.ts:140 labels.slint:6 main.ts:638
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "사용자 지정 · OpenAI 형식"
 
-#: askvestra/status.ts:140 labels.slint:7 main.ts:639
+#: askvestra/status.ts:140 labels.slint:7 main.ts:640
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "사용자 지정 · Anthropic 형식"
 
-#: delivery.ts:203
+#: delivery.ts:202
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "AI가 생성한 “{}” 플러그인을 설치할까요?"
 
-#: delivery.ts:204
+#: delivery.ts:203
 #, x-machine
-msgid ""
-"{1} {2}\n"
-"Capabilities: {3}"
-msgstr ""
-"{1} {2}\n"
-"권한: {3}"
+msgid "{1} {2}"
+msgstr "{1} {2}"
 
-#: delivery.ts:204
-#, x-machine
-msgid ""
-"{1} {2}\n"
-"Capabilities: none"
-msgstr ""
-"{1} {2}\n"
-"권한: 없음"
-
-#: delivery.ts:234
+#: delivery.ts:233
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "설치된 {} 플러그인을 바꿀까요?"
 
-#: delivery.ts:236
+#: delivery.ts:235
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "이 플러그인은 다른 곳에서 설치되었습니다 (Vestra Player AI가 만든 것이 아님). 바꾸면 새 플러그인은 비어 있는 새 데이터 폴더로 시작합니다. 원래 플러그인의 데이터는 보관되며, 원래 출처에서 다시 설치하면 다시 사용됩니다."
 
-#: delivery.ts:237
+#: delivery.ts:236
 #, x-machine
 msgid "Replace"
 msgstr "바꾸기"
@@ -711,52 +698,52 @@ msgstr "바꾸기"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "이전에 선택한 제공자(“{}”)는 더 이상 제공되지 않습니다. 다른 제공자나 “사용자 지정 · OpenAI/Anthropic 형식”을 사용하세요."
 
-#: main.ts:542
+#: main.ts:543
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "대화 “{}”을(를) 삭제할까요?"
 
-#: main.ts:542
+#: main.ts:543
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "이 대화를 삭제할까요?"
 
-#: main.ts:543
+#: main.ts:544
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "메시지와 이 대화에서 만든 플러그인 프로젝트(소스 폴더와 패키징된 .vxp 파일)가 삭제됩니다. 내보낸 파일은 그대로 남습니다. 이 대화에서 설치한 플러그인은 플레이어에 그대로 설치되어 있습니다({1}). 더 이상 필요 없으면 플러그인 관리자에서 제거하세요."
 
-#: main.ts:543
+#: main.ts:544
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "메시지와 이 대화에서 만든 플러그인 프로젝트(소스 폴더와 패키징된 .vxp 파일)가 삭제됩니다. 내보낸 파일은 그대로 남습니다."
 
-#: main.ts:605
+#: main.ts:606
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "플러그인 패키지 내보내기"
 
-#: main.ts:620
+#: main.ts:621
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "소스 내보내기 (GitHub 저장소로 바로 사용 가능)"
 
-#: main.ts:641 manifest.json
+#: main.ts:642 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:649
+#: main.ts:650
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{} (더 이상 제공되지 않음)"
 
-#: main.ts:879
+#: main.ts:880
 #, x-machine
 msgid "Plugins"
 msgstr "플러그인"
 
-#: main.ts:880
+#: main.ts:881
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
@@ -1046,3 +1033,19 @@ msgstr "GitHub 이름 (플러그인 ID의 접두사)"
 #, x-machine
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "키는 시스템 키체인(macOS) 또는 자격 증명 관리자(Windows)에만 보관되며, 파일, 로그, 대화 기록에는 절대 저장되지 않습니다."
+
+#, x-machine
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: {3}"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "권한: {3}"
+
+#, x-machine
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: none"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "권한: 없음"

@@ -26,6 +26,8 @@ import type { Osd } from "./texts.ts";
  * (B23, moved from the marks plugin: the `ab.*` commands and the panel's A-B Loop section).
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const bar = plugin.panels.mount("bottom", "ui/bar.slint");
   // Headless hosts refuse the display; that never fails the action itself.

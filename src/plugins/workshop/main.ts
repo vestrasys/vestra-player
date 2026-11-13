@@ -56,6 +56,7 @@ interface Run {
 
 /** Vestra Player AI: chat with a model of the user's choice (BYOK); the agent works in the session folder. */
 export default async function activate(plugin: Plugin) {
+  await plugin.player.read(); // was "playback.read"
   const providers = loadProviders(import.meta.dirname);
   const sessions = new Sessions(plugin.dataDirectory);
   // check lets the player compile the package (Slint included) before any install.

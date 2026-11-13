@@ -137,8 +137,6 @@ class ShaderHandle {
 }
 export function videoShaders(scope, id) {
     const runtime = scope.runtime;
-    if (!runtime.can("processing.video"))
-        throw failure("capability", "processing.video must be declared in manifest");
     const name = id ?? DEFAULT_SHADERS_ID;
     const problem = shaderIdProblem(name);
     if (problem)

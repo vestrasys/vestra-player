@@ -304,10 +304,7 @@ class KeysService {
             return;
         this.#started = true;
         const runtime = this.#runtime;
-        // Without `commands` the plugin has no commands: every read is [].
-        if (!runtime.can("commands"))
-            return;
-        runtime.on(KEYS, (data) => this.#accept(data), "commands", true);
+        runtime.on(KEYS, (data) => this.#accept(data), null, true);
         // Subscribed first: a change after this answer comes as an event.
         runtime.host.commands.keys().then((answer) => this.#accept(answer), 
         // `unsupported`: no keys, as without a binding.
@@ -359,11 +356,9 @@ export const commands = (scope) => ({
         return service.get(id);
     },
     list: async () => {
-        needs(scope, "commands.run");
         return scope.runtime.host.commands.list();
     },
     async run(id, options) {
-        needs(scope, "commands.run");
         if (typeof id !== "string" || id === "")
             throw failure("invalid", "run takes a command id: <plugin>/<id>");
         const { ticket, step, of, then } = (options ?? {});
@@ -394,11 +389,6 @@ export const commands = (scope) => ({
         });
     },
 });
-/** Refuse at once without `capability`, as the player does. */
-function needs(scope, capability) {
-    if (!scope.runtime.can(capability))
-        throw failure("capability", `${capability} must be declared in manifest`);
-}
 // ---------------------------------------------------------------- palette lead
 /** `PaletteLeadOptions` checked and in wire form; the player checks lengths. */
 function leadJson(options) {
@@ -441,7 +431,6 @@ class LeadHandle {
     #event;
     #disposed = false;
     constructor(scope, options) {
-        needs(scope, "palette.lead");
         const first = leadJson(options);
         this.#scope = scope;
         const host = scope.runtime.host.palette;

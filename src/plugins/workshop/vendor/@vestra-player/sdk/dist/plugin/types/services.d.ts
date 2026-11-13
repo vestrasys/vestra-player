@@ -27,7 +27,6 @@ import type { Disposable } from "./base.ts";
  * The player reads and writes the system clipboard on the plugin's behalf.
  * Text is plain text; images are written from a PNG or JPEG file.
  *
- * @capability clipboard
  * @since 1.0.0
  * @category Services
  */
@@ -35,12 +34,9 @@ export interface Clipboard {
     /**
      * Plain text on the clipboard; `null` when it holds none.
      *
-     * @capability clipboard
      * @throws `unavailable` (rejects) The player runs without a user interface.
      * @throws `unsupported` (rejects) A system other than macOS and Windows.
      * @throws `failed` (rejects) The system refused (Windows).
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `clipboard`.
      *
      * @example Open a URL the user copied
      * A "Paste and play" command opens the address on the clipboard. `readText`
@@ -57,13 +53,10 @@ export interface Clipboard {
     /**
      * Replace the clipboard with text (at most 1 MiB of UTF-8).
      *
-     * @capability clipboard
      * @throws `invalid` (rejects) More than 1 MiB of UTF-8.
      * @throws `unavailable` (rejects) The player runs without a user interface.
      * @throws `unsupported` (rejects) A system other than macOS and Windows.
      * @throws `failed` (rejects) The system refused.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `clipboard`.
      *
      * @example Copy the playing file's path
      * The path of the playing file is put on the clipboard, replacing what was
@@ -79,15 +72,12 @@ export interface Clipboard {
     /**
      * Replace the clipboard with a PNG or JPEG file (absolute path, at most 16 MB).
      *
-     * @capability clipboard
      * @throws `missing` (rejects) The file does not exist.
      * @throws `invalid` (rejects) Not an absolute path, not PNG or JPEG, over
      *   16 MB, or (Windows) an image the system cannot decode.
      * @throws `unavailable` (rejects) The player runs without a user interface.
      * @throws `unsupported` (rejects) A system other than macOS and Windows.
      * @throws `failed` (rejects) The system refused.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `clipboard`.
      *
      * @example Copy a snapshot to the clipboard
      * A frame the plugin saved as PNG is put on the clipboard, ready to paste
@@ -105,14 +95,12 @@ export interface Clipboard {
     writeImage(path: string): Promise<void>;
 }
 /**
- * Keeping the computer awake (`playback.control`).
+ * Keeping the computer awake.
  *
  * @remarks
  * A request, not a command: the player keeps the system awake while any
  * plugin asks for it and a source plays, and withdraws a plugin's request
  * when it stops.
- *
- * @capability playback.control
  *
  * @example Keep the display on while playing
  * The screen does not dim or sleep while a video plays, and may again when
@@ -136,10 +124,7 @@ export interface Power {
      * macOS uses `caffeinate`, Windows the thread execution state; elsewhere
      * it has no effect.
      *
-     * @capability playback.control
      * @throws `invalid` (rejects) A mode other than `"off"` or `"playing"`.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `playback.control`.
      *
      * @example Follow the plugin's own "Keep awake" setting
      * The plugin keeps the display awake during playback only while its
@@ -168,8 +153,7 @@ export interface ToolResult {
     stderr: string;
 }
 /**
- * `plugin.tools`: ffmpeg and ffprobe, run in this plugin's process. No
- * capability.
+ * `plugin.tools`: ffmpeg and ffprobe, run in this plugin's process.
  *
  * @example Read a file's format with ffprobe
  * The plugin gets a media file's container details as JSON. `available`
@@ -199,7 +183,6 @@ export interface ToolResult {
  * again next time. Disposing the
  * scope ends a running process.
  *
- * @capability None.
  * @since 1.0.0
  * @category Services
  */
@@ -215,7 +198,6 @@ export interface Tools {
      * honoured. Ending sends SIGTERM, then SIGKILL after 300 ms (immediate on
      * Windows).
      *
-     * @capability None.
      * @throws `unavailable` (rejects) The tool was not found.
      * @throws `timeout` (rejects) It ran longer than `timeoutMs`; the process is
      *   ended.
@@ -251,7 +233,6 @@ export interface Tools {
     /**
      * Whether the tool can be found.
      *
-     * @capability None.
      * @throws Never; it resolves `false` when the tool cannot be found.
      *
      * @example Grey out a command when ffmpeg is missing
@@ -286,8 +267,6 @@ export interface Tools {
  * newest last. Disposing the store, its scope or stopping the plugin
  * writes a pending save first.
  *
- * @capability None.
- *
  * @example Count how often the plugin was started
  * The counter grows by one at every start and is kept in `stats.json`. The
  * store reads the file when it is made (the defaults when there is none),
@@ -307,8 +286,6 @@ export interface JsonStore<T> extends Disposable {
      * Replace the value now and write it after `debounceMs`.
      * Only `save` writes: mutating `value` in place is not saved.
      *
-     * @capability None.
-     *
      * @example Save a slider value without writing on every move
      * Dragging the plugin's volume slider updates the stored value at once but
      * writes the file only once the user stops for 300 ms. Each `save`
@@ -326,7 +303,6 @@ export interface JsonStore<T> extends Disposable {
     /**
      * Write a pending save now.
      *
-     * @capability None.
      * @throws `Error` (rejects) Node's file system error when the file cannot
      *   be written; its `code` is Node's (`ENOSPC`, `EACCES` and so on), not a
      *   player error code.
@@ -350,18 +326,15 @@ export interface JsonStore<T> extends Disposable {
     flush(): Promise<void>;
 }
 /**
- * `plugin.storage`: JSON settings files. No capability.
+ * `plugin.storage`: JSON settings files.
  *
  * @remarks
- * Two kinds of storage, both private to the plugin and needing no
- * capability. {@link Storage.json} keeps settings in JSON files in the
+ * Two kinds of storage, both private to the plugin. {@link Storage.json} keeps settings in JSON files in the
  * plugin's data directory: they last across player restarts and upgrades,
  * and are written by the plugin's own process. {@link Storage.session}
  * keeps values in the player's memory for one player run: they survive a
  * restart of the plugin's process but not of the player. Secrets belong in
  * {@link Secrets}, never in either.
- *
- * @capability None.
  *
  * @example Keep a setting across restarts and a queue for this run
  * The plugin's step size survives a restart of the player; its work queue
@@ -408,7 +381,6 @@ export interface Storage {
      * store.save({ ...store.value, recent: [path, ...store.value.recent].slice(0, 10) });
      * ```
      *
-     * @capability None.
      * @throws `invalid` (throws) A bad `name`, or a `debounceMs` that is not a
      *   non-negative number.
      * @since 1.0.0
@@ -429,8 +401,7 @@ export interface Storage {
 }
 /**
  * `plugin.storage.session`: JSON values that live as long as the **player**,
- * not as long as the plugin's process (like `chrome.storage.session`). No
- * capability.
+ * not as long as the plugin's process (like `chrome.storage.session`).
  *
  * `activate` can run more than once in one player session: the player stops
  * and starts a plugin's process again when the plugin is reloaded (also a
@@ -446,7 +417,7 @@ export interface Storage {
  * | --- | --- |
  * | The plugin's process restarts: reload, upgrade, crash | kept |
  * | The plugin failed to start or failed, and starts again | kept |
- * | The user, or a plugin with `plugins.manage` (`packages.setEnabled(id, false)`), disables the plugin | cleared |
+ * | The user, or a plugin that manages plugins (`packages.setEnabled(id, false)`), disables the plugin | cleared |
  * | An update or reinstall with `enabled: false` switches an enabled plugin off | cleared |
  * | The plugin is uninstalled | cleared |
  * | An earlier installation kept for a later reinstall (after a `replace`) is dropped because the player keeps only so many | cleared |
@@ -494,14 +465,12 @@ export interface Storage {
  * quits; the plugin's process may restart in between. Each call is one
  * request to the player, answered in order, with no debounce.
  *
- * @capability None.
  * @category Services
  */
 export interface SessionStorage {
     /**
      * The value stored under `key`, or `undefined` when there is none.
      *
-     * @capability None.
      * @throws `invalid` (rejects) A bad key (empty, over 1024 bytes, with NUL
      *   or a lone surrogate).
      * @throws `disabled` (rejects) The plugin is stopping.
@@ -525,7 +494,6 @@ export interface SessionStorage {
      * that is not JSON, `limit` when the plugin's values would be over 1 MiB
      * or the request over the 1 MiB message limit.
      *
-     * @capability None.
      * @throws `invalid` (rejects) A bad key, or a value JSON cannot hold (or a
      *   string with a lone surrogate).
      * @throws `disabled` (rejects) The plugin is stopping.
@@ -547,7 +515,6 @@ export interface SessionStorage {
     /**
      * Remove a key; removing a missing one is fine.
      *
-     * @capability None.
      * @throws `invalid` (rejects) A bad key.
      * @throws `disabled` (rejects) The plugin is stopping.
      * @throws `unsupported` (rejects) A player before 0.5.5.
@@ -565,7 +532,6 @@ export interface SessionStorage {
     /**
      * The keys stored, in code point order.
      *
-     * @capability None.
      * @throws `disabled` (rejects) The plugin is stopping.
      * @throws `unsupported` (rejects) A player before 0.5.5.
      *
@@ -582,7 +548,7 @@ export interface SessionStorage {
     keys(): Promise<string[]>;
 }
 /**
- * `plugin.system`: files and links, executed by the player. No capability.
+ * `plugin.system`: files and links, executed by the player.
  * Other systems than macOS and Windows: `unsupported`.
  *
  * @example Show an exported file and open the help page
@@ -607,7 +573,6 @@ export interface SessionStorage {
  * applications for the plugin, so the plugin never runs `open`,
  * `explorer` or a shell itself.
  *
- * @capability None.
  * @since 1.0.0
  * @category Services
  */
@@ -618,7 +583,6 @@ export interface System {
      * one Explorer window per folder, selecting its first path). Paths that do
      * not exist are skipped; `missing` when none exists; at most 256.
      *
-     * @capability None.
      * @throws `missing` (rejects) None of the paths exists.
      * @throws `invalid` (rejects) No paths, or more than 256.
      * @throws `failed` (rejects) The system refused.
@@ -641,7 +605,6 @@ export interface System {
     /**
      * Open the file or folder with its default application. `missing` if absent.
      *
-     * @capability None.
      * @throws `missing` (rejects) The path does not exist.
      * @throws `invalid` (rejects) An empty path.
      * @throws `failed` (rejects) The system refused.
@@ -662,7 +625,6 @@ export interface System {
      * Open an http(s) address in the default browser. `invalid` for another
      * protocol or a malformed address; `timeout` after 10 s, `failed` otherwise.
      *
-     * @capability None.
      * @throws `invalid` (rejects) Not an `http:` or `https:` address.
      * @throws `timeout` (rejects) macOS did not hand it to the browser within
      *   10 s.
@@ -718,7 +680,6 @@ export interface System {
  * `a-z 0-9 . _ -`, values 1–1024 bytes of text, at most 256 names per
  * plugin (`SECRET_LIMITS`).
  *
- * @capability secrets
  * @since 1.0.0
  * @category Services
  */
@@ -726,14 +687,11 @@ export interface Secrets {
     /**
      * The stored value, `null` when there is none.
      *
-     * @capability secrets
      * @throws `unsupported` (rejects) The system has no secret store.
      * @throws `unavailable` (rejects) The store cannot be reached (no keychain,
      *   a read-only store, no logged-in session on Windows).
      * @throws `failed` (rejects) The user denied access, or another system
      *   error.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `secrets`.
      * @throws `invalid` (rejects) A bad name.
      *
      * @example Read a stored token
@@ -752,7 +710,6 @@ export interface Secrets {
      * At most 256 different names per plugin: a new name beyond that rejects
      * `limit`. Uninstalling with `removeData` deletes them.
      *
-     * @capability secrets
      * @throws `invalid` (rejects) A bad name, or a value that is empty, has NUL
      *   or is over 1024 bytes.
      * @throws `limit` (rejects) A new name beyond 256.
@@ -761,8 +718,6 @@ export interface Secrets {
      *   a read-only store, no logged-in session on Windows).
      * @throws `failed` (rejects) The user denied access, or another system
      *   error.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `secrets`.
      *
      * @example Save the token the user entered
      * The token the user typed is kept in the system's secret store for later
@@ -783,15 +738,12 @@ export interface Secrets {
     /**
      * Remove; removing a missing secret is fine.
      *
-     * @capability secrets
      * @throws `invalid` (rejects) A bad name.
      * @throws `unsupported` (rejects) The system has no secret store.
      * @throws `unavailable` (rejects) The store cannot be reached (no keychain,
      *   a read-only store, no logged-in session on Windows).
      * @throws `failed` (rejects) The user denied access, or another system
      *   error.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `secrets`.
      *
      * @example Sign out by removing the token
      * Signing out removes the stored token, so the next start asks again.
@@ -967,9 +919,8 @@ export interface RenderingState {
     };
 }
 /**
- * `plugin.rendering`: the player's rendering choice, GPU or software.
- * Reading it needs no capability; changing the saved choice and restarting
- * the player need `rendering.manage`.
+ * `plugin.rendering`: the player's rendering choice, GPU or software: read
+ * it, change the saved choice, restart the player.
  *
  * @remarks
  * The choice works like a browser's hardware acceleration switch: the
@@ -1007,8 +958,6 @@ export interface RenderingState {
  * });
  * ```
  *
- * @capability None to read the state; `rendering.manage` to change the
- *   choice or restart the player.
  * @see [Offer a GPU rendering switch](../../../docs/guides/gpu-rendering.md)
  * @player 0.5.13
  * @since 1.5.35
@@ -1017,9 +966,8 @@ export interface RenderingState {
 export interface Rendering {
     /**
      * Read the renderer drawing now, the saved choice, what the next start
-     * will use and whether `"gpu"` can be chosen. No capability.
+     * will use and whether `"gpu"` can be chosen.
      *
-     * @capability None.
      * @throws `unsupported` (rejects) A player before 0.5.13, which does not
      *   know the request.
      *
@@ -1049,7 +997,6 @@ export interface Rendering {
      * @returns The new state; {@link RenderingState.restartPending} tells
      *   whether a restart would change the renderer.
      *
-     * @capability rendering.manage
      * @throws `invalid` (rejects) `preference` is not `"auto"`, `"gpu"` or
      *   `"software"`.
      * @throws `unsupported` (rejects) `"gpu"` where this player has no GPU
@@ -1060,8 +1007,6 @@ export interface Rendering {
      *   at an earlier start. The message says which, with the adapter's name
      *   and the driver version.
      * @throws `failed` (rejects) The player could not write its settings file.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `rendering.manage`.
      *
      * @example Switch back to the automatic choice
      * A Reset item returns the renderer to the player's own choice and tells
@@ -1090,7 +1035,6 @@ export interface Rendering {
      * or playing as it was; a stream or another source that is not a file is
      * not reopened.
      *
-     * @capability rendering.manage
      * @throws `unsupported` (rejects) The player runs without a user
      *   interface; also a player before 0.5.13.
      * @throws `busy` (rejects) A restart is already under way, or this player
@@ -1098,13 +1042,10 @@ export interface Rendering {
      *   that restarts on activation cannot make a loop).
      * @throws `failed` (rejects) The new player process could not be started;
      *   the player keeps running.
-     * @throws `capability` (rejects) The manifest does not declare
-     *   `rendering.manage`.
      *
      * @example Restart after asking the user
      * After the user changed the renderer, the plugin offers to restart now.
-     * `confirm` asks first, because a restart closes every window (it needs
-     * `ui.dialog`); once `restartPlayer` resolves, the player is quitting and
+     * `confirm` asks first, because a restart closes every window; once `restartPlayer` resolves, the player is quitting and
      * will stop this plugin, so nothing else is started after it.
      * ```ts
      * const { confirmed } = await plugin.dialogs.confirm({

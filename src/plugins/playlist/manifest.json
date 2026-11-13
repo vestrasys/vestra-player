@@ -1,20 +1,8 @@
 {
   "id": "vestra.playlist",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "playback.read",
-    "playback.control",
-    "events",
-    "commands",
-    "ui.mount",
-    "ui.dialog",
-    "ui.window",
-    "ui.osd",
-    "ui.drop",
-    "ui.settings"
-  ],
   "name": "Playlist",
   "author": "Vestra Player",
   "punchline": "Sidebar playlist: add, sort, repeat and shuffle",

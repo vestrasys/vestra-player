@@ -1,21 +1,8 @@
 {
   "id": "vestra.workshop",
-  "version": "2.2.41",
+  "version": "2.2.42",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "ui.window",
-    "ui.settings",
-    "ui.dialog",
-    "secrets",
-    "clipboard",
-    "plugins.manage",
-    "bindings.manage",
-    "commands.run",
-    "playback.read",
-    "palette.lead"
-  ],
   "name": "Vestra Player AI",
   "author": "Vestra Player",
   "punchline": "Chat with your chosen model; let AI write Vestra plugins: check, test, install, export (BYOK, experimental)",

@@ -1,19 +1,8 @@
 {
   "id": "vestra.subtitle-online",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "events",
-    "ui.window",
-    "ui.dialog",
-    "ui.osd",
-    "playback.read",
-    "subtitles.read",
-    "subtitles.control",
-    "secrets"
-  ],
   "name": "Online Subtitles",
   "author": "Vestra Player",
   "punchline": "Search and download subtitles for the current video",

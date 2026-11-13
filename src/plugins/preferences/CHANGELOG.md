@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.3.5
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`), the call that replaces the one declaration that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.3.4
 
 - Menu sweep (menu redesign §4): Options… (F5) moves from Settings ▸ to the top level (order 830, group `settings-main`, with About Vestra Player…); Settings ▸ Appearance ▸ and Settings ▸ Language ▸ leave the right-click menu and are in the command palette only ("Appearance: Vestra Dark", "Language: Follow System", …), with ids, radio and checked states unchanged. Who must change: nobody.

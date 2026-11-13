@@ -47,7 +47,7 @@ export const host = (scope) => ({
         await scope.runtime.host.host.run(action, seconds);
         // Like the player's own controls: `player.state` shows the result (the
         // player's state copy registered how to read it again).
-        if (scope.runtime.can("playback.read"))
+        if (scope.runtime.reads)
             await scope.runtime.reread("source.state");
     },
 });
@@ -417,8 +417,8 @@ export function system(scope) {
  * `invalid`. The store itself can still refuse (`unsupported` without a
  * system store, `unavailable` when it cannot be reached, `failed` when the
  * user denies access): only
- * those codes get the "could not be saved" message, anything else (a
- * missing `secrets` capability) is a bug and is thrown on.
+ * those codes get the "could not be saved" message, anything else (an
+ * invalid name) is a bug and is thrown on.
  * ```ts
  * import type { Plugin, PluginError } from "@vestra-player/sdk";
  * declare const plugin: Plugin;
@@ -458,8 +458,6 @@ export const SECRET_LIMITS = Object.freeze({
 const SECRET = new RegExp(`^[a-z0-9._-]{1,${SECRET_LIMITS.nameChars}}$`);
 export const secrets = (scope) => {
     const named = (name) => {
-        if (!scope.runtime.can("secrets"))
-            throw failure("capability", "secrets must be declared in manifest");
         if (typeof name !== "string" || !SECRET.test(name))
             throw failure("invalid", `secret names are 1–${SECRET_LIMITS.nameChars} of a-z, 0-9, ., _ and -`);
         return name;
@@ -479,33 +477,23 @@ export const secrets = (scope) => {
 };
 const PREFERENCES = new Set(["auto", "gpu", "software"]);
 export const rendering = (scope) => {
-    const manage = () => {
-        if (!scope.runtime.can("rendering.manage"))
-            throw failure("capability", "rendering.manage must be declared in manifest");
-    };
     return {
         state: async () => (await scope.runtime.host.rendering.state()),
         async setPreference(preference) {
-            manage();
             if (typeof preference !== "string" || !PREFERENCES.has(preference))
                 throw failure("invalid", 'the rendering preference is "auto", "gpu" or "software"');
             return (await scope.runtime.host.rendering.setPreference(preference));
         },
         async restartPlayer() {
-            manage();
             await scope.runtime.host.rendering.restart();
         },
     };
 };
 /**
- * `plugin.video.upscaling`: both requests need `video.upscaling`; the player
+ * `plugin.video.upscaling`: the player
  * answers once its GPU check ran (the first call starts it).
  */
 export const videoUpscaling = (scope) => {
-    const declared = () => {
-        if (!scope.runtime.can("video.upscaling"))
-            throw failure("capability", "video.upscaling must be declared in manifest");
-    };
     // This plugin's own request, kept from every answer for `onChange`: the
     // event leaves it out (it is each plugin's own), and only this plugin's
     // `set` changes it.
@@ -515,21 +503,18 @@ export const videoUpscaling = (scope) => {
     };
     return {
         async state() {
-            declared();
             return noted(await scope.runtime.host.video.upscalingState());
         },
         async set(enabled) {
-            declared();
             if (typeof enabled !== "boolean")
                 throw failure("invalid", "enabled must be true or false");
             return noted(await scope.runtime.host.video.upscalingSet(enabled));
         },
         onChange(listener) {
-            declared();
             const watch = scope.runtime.on("video.upscaling.changed", (data) => scope.run(listener, {
                 ...data,
                 enabled: enabledOf.get(scope.runtime) ?? false,
-            }), "video.upscaling");
+            }), null);
             return scope.add({
                 dispose: async () => {
                     scope.forget(watch);
@@ -546,7 +531,7 @@ const MOTION_MODES = ["off", "double", "display"];
 /** The engines `plugin.video.motion(engine)` accepts. */
 const MOTION_ENGINES = ["amd", "nvidia"];
 /**
- * `plugin.video.motion(engine)`: both requests need `video.motion` and
+ * `plugin.video.motion(engine)`: both requests
  * name the engine; the event names it too and leaves out each plugin's own
  * `mode`, which the SDK keeps from the answers per engine (only this
  * plugin's `set` changes it).
@@ -554,10 +539,6 @@ const MOTION_ENGINES = ["amd", "nvidia"];
 export const videoMotion = (scope, engine) => {
     if (typeof engine !== "string" || !MOTION_ENGINES.includes(engine))
         throw failure("invalid", 'engine must be "amd" or "nvidia"');
-    const declared = () => {
-        if (!scope.runtime.can("video.motion"))
-            throw failure("capability", "video.motion must be declared in manifest");
-    };
     const modes = () => {
         let map = modeOf.get(scope.runtime);
         if (!map)
@@ -570,17 +551,14 @@ export const videoMotion = (scope, engine) => {
     };
     return {
         async state() {
-            declared();
             return noted(await scope.runtime.host.video.motionState(engine));
         },
         async set(mode) {
-            declared();
             if (typeof mode !== "string" || !MOTION_MODES.includes(mode))
                 throw failure("invalid", 'mode must be "off", "double" or "display"');
             return noted(await scope.runtime.host.video.motionSet(engine, mode));
         },
         onChange(listener) {
-            declared();
             const watch = scope.runtime.on("video.motion.changed", (data) => {
                 const state = data;
                 // Another engine's change is not this handle's.
@@ -590,7 +568,7 @@ export const videoMotion = (scope, engine) => {
                     ...state,
                     mode: modes().get(engine) ?? "off",
                 });
-            }, "video.motion");
+            }, null);
             return scope.add({
                 dispose: async () => {
                     scope.forget(watch);

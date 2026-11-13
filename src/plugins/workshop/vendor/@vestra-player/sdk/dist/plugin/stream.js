@@ -190,7 +190,7 @@ async function retirement(service, generation, error) {
     const code = error?.code;
     if (code !== "unavailable" && code !== "stale")
         return undefined;
-    const readable = service.runtime.can("playback.read");
+    const readable = service.runtime.reads;
     if (readable)
         await service.refresh().catch(() => { });
     const raw = service.raw;
@@ -198,7 +198,7 @@ async function retirement(service, generation, error) {
         return null;
     if (raw.phase === "error")
         return failure("stream", service.state.error ?? "无法打开此媒体");
-    // Without `playback.read` the state may be behind: no failure was seen.
+    // Without `plugin.player.read()` the state may be behind: no failure was seen.
     return readable ? undefined : null;
 }
 /** Start-up timeouts say which step ran out of time. */

@@ -15,7 +15,7 @@
  * same queue: tests see the same waiting.
  */
 import { HostError } from "./wire.js";
-import { MESSAGE_LIMIT } from "./capabilities.js";
+import { MESSAGE_LIMIT } from "./protocol.js";
 import { abortError } from "./plugin/errors.js";
 /**
  * How much of the plugin's traffic the SDK keeps in flight, documented in

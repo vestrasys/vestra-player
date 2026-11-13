@@ -423,7 +423,7 @@ export function processingHandlers(host, inner) {
                 host.setVideoRenderOwner(null);
             return null;
         },
-        // The player's capability layer and `video_shaders.rs`.
+        // The player's request layer and `video_shaders.rs`.
         "video.shaders.set": (p) => {
             const idProblem = shaderIdProblem(p.id);
             if (idProblem)

@@ -37,7 +37,7 @@ msgstr "查找"
 msgid "Search"
 msgstr "搜索"
 
-#: ai.slint:175 main.ts:546 settings.slint:206
+#: ai.slint:175 main.ts:547 settings.slint:206
 msgid "Delete"
 msgstr "删除"
 
@@ -69,7 +69,7 @@ msgstr "检查"
 msgid "Pack"
 msgstr "打包"
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:205
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
 msgid "Install"
 msgstr "安装"
 
@@ -560,43 +560,32 @@ msgstr "Vestra 无法执行“{}”"
 msgid "There is no command “{}”"
 msgstr "没有命令“{}”"
 
-#: askvestra/status.ts:140 labels.slint:6 main.ts:637
+#: askvestra/status.ts:140 labels.slint:6 main.ts:638
 msgid "Custom · OpenAI format"
 msgstr "自定义 · OpenAI 格式"
 
-#: askvestra/status.ts:140 labels.slint:7 main.ts:639
+#: askvestra/status.ts:140 labels.slint:7 main.ts:640
 msgid "Custom · Anthropic format"
 msgstr "自定义 · Anthropic 格式"
 
-#: delivery.ts:203
+#: delivery.ts:202
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "安装 AI 生成的插件「{}」？"
 
-#: delivery.ts:204
-msgid ""
-"{1} {2}\n"
-"Capabilities: {3}"
-msgstr ""
-"{1} {2}\n"
-"能力：{3}"
+#: delivery.ts:203
+#, x-machine
+msgid "{1} {2}"
+msgstr "{1} {2}"
 
-#: delivery.ts:204
-msgid ""
-"{1} {2}\n"
-"Capabilities: none"
-msgstr ""
-"{1} {2}\n"
-"能力：无"
-
-#: delivery.ts:234
+#: delivery.ts:233
 msgid "Replace the installed {}?"
 msgstr "替换已安装的 {}？"
 
-#: delivery.ts:236
+#: delivery.ts:235
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "它是从别处安装的（不是 Vestra Player AI 生成的）。替换后新插件使用新的空数据目录；原插件的数据保留，以后从原来源重新安装时接上。"
 
-#: delivery.ts:237
+#: delivery.ts:236
 msgid "Replace"
 msgstr "替换"
 
@@ -604,44 +593,44 @@ msgstr "替换"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "之前选择的服务商「{}」已不再提供，请改用其他服务商或「自定义 · OpenAI/Anthropic 格式」。"
 
-#: main.ts:542
+#: main.ts:543
 msgid "Delete the conversation “{}”?"
 msgstr "删除对话「{}」？"
 
-#: main.ts:542
+#: main.ts:543
 msgid "Delete this conversation?"
 msgstr "删除这个对话？"
 
-#: main.ts:543
+#: main.ts:544
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "对话记录和其中做的插件项目（源码文件夹和打包好的 .vxp 文件）都会删除；你导出的文件不受影响。从这个对话安装的插件仍留在播放器中（{1}）；不再需要的话，请在插件管理中移除。"
 
-#: main.ts:543
+#: main.ts:544
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "对话记录和其中做的插件项目（源码文件夹和打包好的 .vxp 文件）都会删除；你导出的文件不受影响。"
 
-#: main.ts:605
+#: main.ts:606
 msgid "Export Plugin Package"
 msgstr "导出插件包"
 
-#: main.ts:620
+#: main.ts:621
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "导出源码（可以直接作为 GitHub 仓库）"
 
-#: main.ts:641 manifest.json
+#: main.ts:642 manifest.json
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:649
+#: main.ts:650
 msgid "{} (no longer offered)"
 msgstr "{}（已不再提供）"
 
-#: main.ts:879
+#: main.ts:880
 #, x-machine
 msgid "Plugins"
 msgstr "插件"
 
-#: main.ts:880
+#: main.ts:881
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
 
@@ -875,3 +864,17 @@ msgstr "你的 GitHub 用户名（插件 id 的前缀）"
 #: settings.slint:313
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "key 只保存在系统钥匙串（macOS）或凭据管理器（Windows）里，不写入任何文件、日志或会话记录。"
+
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: {3}"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "能力：{3}"
+
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: none"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "能力：无"

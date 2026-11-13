@@ -1,20 +1,8 @@
 {
   "id": "vestra.subtitles",
-  "version": "0.4.12",
+  "version": "0.4.13",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "subtitles.read",
-    "subtitles.control",
-    "commands",
-    "events",
-    "ui.window",
-    "ui.mount",
-    "ui.dialog",
-    "ui.osd",
-    "playback.read",
-    "playback.control"
-  ],
   "name": "Subtitles",
   "author": "Vestra Player",
   "punchline": "Load external subtitles, pick tracks, adjust style and sync",

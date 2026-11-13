@@ -436,7 +436,6 @@ export function servicesHandlers(host, inner) {
                 origin: "installed",
                 state: enabled ? "running" : "disabled",
                 error: null,
-                capabilities: [...manifest.capabilities],
                 directory: `/test-host/packages/${manifest.id}`,
                 builtin: false,
                 source,

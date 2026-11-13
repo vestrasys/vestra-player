@@ -44,6 +44,8 @@ const quiet = (shown: Promise<void>) => void shown.catch(() => undefined);
  * saved in `settings.json`; only the audio sync follows the source, as its keep mode says.
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const { text } = plugin.i18n;
   /**

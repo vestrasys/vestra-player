@@ -41,13 +41,7 @@ class Observers {
     }
 }
 export const mpv = (scope) => {
-    /** Refuse at once without `mpv`, as the player does. */
-    const declared = () => {
-        if (!scope.runtime.can("mpv"))
-            throw failure("capability", "mpv must be declared in manifest");
-    };
     const named = (name, write) => {
-        declared();
         const problem = mpvNameProblem(name);
         if (problem)
             throw failure("invalid", problem);
@@ -59,7 +53,6 @@ export const mpv = (scope) => {
     const observers = () => scope.runtime.service("mpv.observers", () => new Observers(scope.runtime));
     return {
         async command(args) {
-            declared();
             const problem = mpvCommandProblem(args);
             if (problem)
                 throw failure("invalid", problem);

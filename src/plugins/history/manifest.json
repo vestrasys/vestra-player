@@ -1,17 +1,8 @@
 {
   "id": "vestra.history",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "playback.read",
-    "playback.control",
-    "events",
-    "commands",
-    "ui.window",
-    "ui.osd",
-    "ui.dialog"
-  ],
   "name": "Playback History",
   "author": "Vestra Player",
   "punchline": "Recently played items, and resuming where you left off",

@@ -18,6 +18,8 @@ import { Settings } from "./store.ts";
  * Everything follows `player.state`, whoever opened the source.
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const osd = osdOf(plugin);
   plugin.onError((error) => {

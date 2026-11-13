@@ -38,6 +38,8 @@ export const PAGE_ID = "window";
  * core undoes its effects on deactivation.
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player, window } = plugin;
   const { text } = plugin.i18n;
   /**

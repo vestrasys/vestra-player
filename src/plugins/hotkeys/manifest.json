@@ -1,15 +1,8 @@
 {
   "id": "vestra.hotkeys",
-  "version": "0.1.12",
+  "version": "0.1.13",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "ui.settings",
-    "ui.osd",
-    "ui.dialog",
-    "bindings.manage"
-  ],
   "name": "Shortcut Settings",
   "author": "Vestra Player",
   "punchline": "View and rebind keyboard shortcuts and mouse actions",

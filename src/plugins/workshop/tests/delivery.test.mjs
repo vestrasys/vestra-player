@@ -90,7 +90,7 @@ test("install_plugin asks the user first; there is no undo, and a click on 安�
   await ai.ask("安装");
   assert.deepEqual(ai.host.confirmTexts.at(-1), {
     message: "安装 AI 生成的插件「演示」？",
-    detail: "local.demo 0.1.0\n能力：commands、ui.window",
+    detail: "local.demo 0.1.0",
     confirm: "安装",
     cancel: ai.host.confirmTexts.at(-1).cancel,
   });
@@ -132,7 +132,7 @@ function keepsDisabled(ai, after = (entry) => entry) {
     const before = host.packages.find((each) => each.id === manifest.id);
     host.packageCalls.push({ method: "install", id: manifest.id, source: p.source, replace: p.replace === true });
     const state = before?.state === "disabled" ? "disabled" : "running";
-    const next = after({ id: manifest.id, version: manifest.version, origin: "installed", state, error: null, capabilities: [...manifest.capabilities], directory: `/test-host/packages/${manifest.id}`, builtin: false, source: p.source, dataDirectory: null });
+    const next = after({ id: manifest.id, version: manifest.version, origin: "installed", state, error: null, directory: `/test-host/packages/${manifest.id}`, builtin: false, source: p.source, dataDirectory: null });
     host.setPackages([...host.packages.filter((each) => each.id !== manifest.id), next]);
     return { operationId: String(p.requestId), status: "committed" };
   });

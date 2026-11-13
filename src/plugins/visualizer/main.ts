@@ -62,6 +62,8 @@ function size(bytes: number) {
  * (README, known behaviour).
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   // Headless hosts refuse the display; that never fails the action itself.
   const osd = (text: Notice) => void plugin.osd.show(text).catch(() => {});

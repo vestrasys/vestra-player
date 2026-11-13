@@ -165,6 +165,8 @@ const pause = (ms: number) => new Promise<void>((done) => void setTimeout(done, 
  * Picture… is in the menu.
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const store = settingsStore(plugin);
   const { advanced: savedAdvanced, ...saved } = parse(store.value);

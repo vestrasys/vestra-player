@@ -10,7 +10,7 @@ export interface ScanList {
     readonly about: string;
     /** API members, `Interface.member` (`Clipboard.readText`, `Scope.video.filter`). */
     readonly members: readonly string[];
-    /** Methods of the player's protocol, as its capability table names them (`packages.*`). */
+    /** Methods of the player's protocol, by name or prefix (`packages.*`). */
     readonly requests: readonly string[];
 }
 /** @internal `capability-scan.json`. */

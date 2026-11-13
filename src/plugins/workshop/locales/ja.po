@@ -46,7 +46,7 @@ msgstr "ファイル検索"
 msgid "Search"
 msgstr "テキスト検索"
 
-#: ai.slint:175 main.ts:546 settings.slint:206
+#: ai.slint:175 main.ts:547 settings.slint:206
 #, x-machine
 msgid "Delete"
 msgstr "削除"
@@ -86,7 +86,7 @@ msgstr "チェック"
 msgid "Pack"
 msgstr "パッケージ化"
 
-#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:205
+#: ai.slint:183 ai.slint:403 ai.slint:733 delivery.ts:204
 #, x-machine
 msgid "Install"
 msgstr "インストール"
@@ -658,50 +658,37 @@ msgstr "Vestra は「{}」を実行できません"
 msgid "There is no command “{}”"
 msgstr "コマンド「{}」はありません"
 
-#: askvestra/status.ts:140 labels.slint:6 main.ts:637
+#: askvestra/status.ts:140 labels.slint:6 main.ts:638
 #, x-machine
 msgid "Custom · OpenAI format"
 msgstr "カスタム · OpenAI 形式"
 
-#: askvestra/status.ts:140 labels.slint:7 main.ts:639
+#: askvestra/status.ts:140 labels.slint:7 main.ts:640
 #, x-machine
 msgid "Custom · Anthropic format"
 msgstr "カスタム · Anthropic 形式"
 
-#: delivery.ts:203
+#: delivery.ts:202
 #, x-machine
 msgid "Install the AI-generated plugin “{}”?"
 msgstr "AI が生成したプラグイン「{}」をインストールしますか？"
 
-#: delivery.ts:204
+#: delivery.ts:203
 #, x-machine
-msgid ""
-"{1} {2}\n"
-"Capabilities: {3}"
-msgstr ""
-"{1} {2}\n"
-"機能：{3}"
+msgid "{1} {2}"
+msgstr "{1} {2}"
 
-#: delivery.ts:204
-#, x-machine
-msgid ""
-"{1} {2}\n"
-"Capabilities: none"
-msgstr ""
-"{1} {2}\n"
-"機能：なし"
-
-#: delivery.ts:234
+#: delivery.ts:233
 #, x-machine
 msgid "Replace the installed {}?"
 msgstr "インストール済みの {} を置き換えますか？"
 
-#: delivery.ts:236
+#: delivery.ts:235
 #, x-machine
 msgid "It was installed from elsewhere (not made by Vestra Player AI). After the replacement the new plugin starts with a new, empty data folder; the original plugin's data is kept and is used again when you reinstall it from its original source."
 msgstr "このプラグインは別の場所からインストールされています（Vestra Player AI で作成したものではありません）。置き換えると、新しいプラグインは新しい空のデータフォルダで起動します。元のプラグインのデータは保持され、元の提供元から再インストールしたときに再び使用されます。"
 
-#: delivery.ts:237
+#: delivery.ts:236
 #, x-machine
 msgid "Replace"
 msgstr "置き換える"
@@ -711,52 +698,52 @@ msgstr "置き換える"
 msgid "The provider you chose before, “{}”, is no longer offered; use another provider or “Custom · OpenAI/Anthropic format”."
 msgstr "以前に選択したプロバイダ「{}」は提供が終了しました。別のプロバイダか「カスタム · OpenAI/Anthropic 形式」を使用してください。"
 
-#: main.ts:542
+#: main.ts:543
 #, x-machine
 msgid "Delete the conversation “{}”?"
 msgstr "会話「{}」を削除しますか？"
 
-#: main.ts:542
+#: main.ts:543
 #, x-machine
 msgid "Delete this conversation?"
 msgstr "この会話を削除しますか？"
 
-#: main.ts:543
+#: main.ts:544
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept. Plugins installed from it stay installed in the player ({1}); remove them in the plugin manager if you no longer want them."
 msgstr "メッセージと、この会話で作ったプラグインプロジェクト（ソースフォルダーとパッケージ済みの .vxp ファイル）が削除されます。書き出したファイルは残ります。この会話からインストールしたプラグインはプレーヤーに残ります（{1}）。不要ならプラグインマネージャーで削除してください。"
 
-#: main.ts:543
+#: main.ts:544
 #, x-machine
 msgid "Its messages and the plugin projects made in it (source folders and packed .vxp files) are deleted; files you exported are kept."
 msgstr "メッセージと、この会話で作ったプラグインプロジェクト（ソースフォルダーとパッケージ済みの .vxp ファイル）が削除されます。書き出したファイルは残ります。"
 
-#: main.ts:605
+#: main.ts:606
 #, x-machine
 msgid "Export Plugin Package"
 msgstr "プラグインパッケージを書き出す"
 
-#: main.ts:620
+#: main.ts:621
 #, x-machine
 msgid "Export Source (Ready to Use as a GitHub Repository)"
 msgstr "ソースを書き出す（そのまま GitHub リポジトリとして使用可能）"
 
-#: main.ts:641 manifest.json
+#: main.ts:642 manifest.json
 #, x-machine
 msgid "Vestra Player AI"
 msgstr "Vestra Player AI"
 
-#: main.ts:649
+#: main.ts:650
 #, x-machine
 msgid "{} (no longer offered)"
 msgstr "{}（提供終了）"
 
-#: main.ts:879
+#: main.ts:880
 #, x-machine
 msgid "Plugins"
 msgstr "プラグイン"
 
-#: main.ts:880
+#: main.ts:881
 #, x-machine
 msgid "Vestra Player AI…"
 msgstr "Vestra Player AI…"
@@ -1046,3 +1033,19 @@ msgstr "GitHub のユーザー名（プラグイン ID の接頭辞）"
 #, x-machine
 msgid "The key is kept only in the system keychain (macOS) or Credential Manager (Windows), never in a file, log or conversation record."
 msgstr "キーはシステムのキーチェーン（macOS）または資格情報マネージャー（Windows）にのみ保存され、ファイル、ログ、会話の記録には書き込まれません。"
+
+#, x-machine
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: {3}"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "機能：{3}"
+
+#, x-machine
+#~ msgid ""
+#~ "{1} {2}\n"
+#~ "Capabilities: none"
+#~ msgstr ""
+#~ "{1} {2}\n"
+#~ "機能：なし"

@@ -158,6 +158,8 @@ async function pool<T>(items: T[], limit: number, work: (item: T) => Promise<voi
 }
 
 export default async function activate(plugin: Plugin, options: Partial<Options> = {}) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const random = options.random ?? Math.random;
   const { text } = plugin.i18n;
   const queue = new Queue(plugin.i18n);

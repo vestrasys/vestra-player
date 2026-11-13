@@ -5,7 +5,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs/promises";
 import path from "node:path";
 import test from "node:test";
-import { Toolchain, checkOwner, nodeOption, parseTap, parseTsc, parseUndeclared } from "../toolchain.ts";
+import { Toolchain, checkOwner, nodeOption, parseTap, parseTsc } from "../toolchain.ts";
 import { runTool } from "../toolhost.ts";
 import { dataDirectory } from "./fixture.mjs";
 import { unzip } from "./unzip.mjs";
@@ -91,9 +91,12 @@ test("scaffold → typecheck → test → check → pack: the template passes ev
   const project = path.join(session.work, "octocat.demo");
   for (const file of ["manifest.json", "main.ts", "ui/main.slint", "tests/main.test.ts", "README.md", "CHANGELOG.md", "package.json", "tsconfig.json"])
     await fs.access(path.join(project, file));
-  assert.equal(JSON.parse(await fs.readFile(path.join(project, "manifest.json"), "utf8")).id, "octocat.demo");
-  // The SDK's editor plugin is listed; the type check below cannot load it and passes all the same.
-  assert.deepEqual(JSON.parse(await fs.readFile(path.join(project, "tsconfig.json"), "utf8")).compilerOptions.plugins, [{ name: "@vestra-player/sdk/ts-plugin" }]);
+  const manifest = JSON.parse(await fs.readFile(path.join(project, "manifest.json"), "utf8"));
+  assert.equal(manifest.id, "octocat.demo");
+  // SDK 1.9.0: no capabilities in the manifest (player 0.9.0 refuses the field; an older one requires it) and no editor plugin in tsconfig.json.
+  assert.equal("capabilities" in manifest, false);
+  assert.equal(manifest.minPlayerVersion, "0.9.0");
+  assert.equal(JSON.parse(await fs.readFile(path.join(project, "tsconfig.json"), "utf8")).compilerOptions.plugins, undefined);
   // The SDK copy where the project resolves it, without the CLI.
   await fs.access(path.join(data, "node_modules/@vestra-player/sdk/dist/plugin/testing.js"));
   await assert.rejects(fs.access(path.join(data, "node_modules/@vestra-player/sdk/bin")));
@@ -310,8 +313,8 @@ test("the source export is the user's own repository: README, tests, CI, LICENSE
   assert.equal(pkg.scripts.test, "vestra-plugin test");
   assert.match(files.get("demo/.github/workflows/ci.yml").toString(), /npx vestra-plugin check[\s\S]*npx vestra-plugin test[\s\S]*npx vestra-plugin pack/);
   assert.match(files.get("demo/LICENSE").toString(), /TODO: choose a license/);
-  // The editor plugin, with the TypeScript that npm install brings along with the SDK.
-  assert.deepEqual(JSON.parse(files.get("demo/tsconfig.json").toString()).compilerOptions.plugins, [{ name: "@vestra-player/sdk/ts-plugin" }]);
+  // No editor plugin (SDK 1.9.0); the editor uses the TypeScript that npm install brings along with the SDK.
+  assert.equal(JSON.parse(files.get("demo/tsconfig.json").toString()).compilerOptions.plugins, undefined);
   assert.deepEqual(JSON.parse(files.get("demo/.vscode/settings.json").toString()), {
     "typescript.tsdk": "node_modules/typescript/lib",
     "typescript.enablePromptUseWorkspaceTsdk": true,
@@ -329,46 +332,22 @@ test("parsers: tsc lines and the TAP report", () => {
   assert.deepEqual(parseTap(tap, "/p"), { passed: 3, failed: 1, failures: [{ name: "adds", error: "boom", location: "tests/a.test.ts:2:1" }] });
 });
 
-/** The vendored SDK runs the capability check (1.5.26+). */
-function checksCapabilities(version) {
-  const [major, minor, patch] = version.split(".").map(Number);
-  return major > 1 || (major === 1 && (minor > 5 || (minor === 5 && patch >= 26)));
-}
-
-test("an SDK call whose capability the manifest lacks: typecheck and check say which, where, and what to add", async (t) => {
+test("SDK 1.9.0: an SDK call needs no declaration; a manifest that still lists capabilities fails with what to write instead", async () => {
   const { session, toolchain } = await setup();
-  if (!checksCapabilities(toolchain.sdkVersion)) return t.skip(`the vendored SDK ${toolchain.sdkVersion} predates the capability check (1.5.26)`);
   await toolchain.scaffold(session, { name: "demo" }, "");
-  const main = path.join(session.work, "local.demo", "main.ts");
+  const project = path.join(session.work, "local.demo");
+  const main = path.join(project, "main.ts");
   await fs.writeFile(main, (await fs.readFile(main, "utf8")).replace("run: () => mainWindow.show(),", "run: () => { mainWindow.show(); void plugin.player.seek(0); },"));
+  // Before 1.9.0 both failed here ("1 SDK use(s) need a capability manifest.json does not declare", playback.control).
+  for (const run of [await toolchain.typecheck(session, "local.demo"), await toolchain.check(session, "local.demo", "")]) assert.equal(run.ok, true, run.text);
+
+  const file = path.join(project, "manifest.json");
+  const manifest = JSON.parse(await fs.readFile(file, "utf8"));
+  await fs.writeFile(file, `${JSON.stringify({ ...manifest, capabilities: ["commands", "ui.window", "playback.control"] }, null, 2)}\n`);
   for (const run of [await toolchain.typecheck(session, "local.demo"), await toolchain.check(session, "local.demo", "")]) {
     assert.equal(run.ok, false, run.text);
-    assert.match(run.text.split("\n")[0], /1 SDK use\(s\) need a capability manifest\.json does not declare/);
     const report = JSON.parse(run.text.slice(run.text.indexOf("\n") + 1));
-    assert.equal(report.errorCount, 0);
-    assert.deepEqual(
-      report.undeclared.map((u) => [u.file, u.capability]),
-      [["main.ts", "playback.control"]],
-    );
-    assert.match(report.problems.join("\n"), /add "playback\.control" to manifest\.json/);
+    assert.equal(report.undeclared, undefined);
+    assert.match(report.problems.join("\n"), /"capabilities", which SDK 1\.9\.0 \(player 0\.9\.0\) removed: delete the field/);
   }
-});
-
-test("parsers: the CLI's undeclared-capability lines (SDK 1.5.26)", () => {
-  const output = [
-    'main.ts:7:17: Player.seek needs the capability "playback.control", which manifest.json does not declare (request player.seek)',
-    'main.ts:9:3: Windows.create needs the capability "ui.window" (required by "ui.dialog"), which manifest.json does not declare (request ui.window.create)',
-    '✖ demo: 2 uses of undeclared capabilities; add "playback.control", "ui.window" to manifest.json "capabilities" (or stop using those members)',
-    "main.ts(3,5): error TS2304: Cannot find name 'x'.",
-  ].join("\n");
-  assert.deepEqual(parseUndeclared(output), [
-    { file: "main.ts", line: 7, column: 17, capability: "playback.control", message: 'Player.seek needs the capability "playback.control", which manifest.json does not declare' },
-    {
-      file: "main.ts",
-      line: 9,
-      column: 3,
-      capability: "ui.window",
-      message: 'Windows.create needs the capability "ui.window" (required by "ui.dialog"), which manifest.json does not declare',
-    },
-  ]);
 });

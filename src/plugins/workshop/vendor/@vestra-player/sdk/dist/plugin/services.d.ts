@@ -73,8 +73,8 @@ export declare function system(scope: ScopeImpl): System;
  * `invalid`. The store itself can still refuse (`unsupported` without a
  * system store, `unavailable` when it cannot be reached, `failed` when the
  * user denies access): only
- * those codes get the "could not be saved" message, anything else (a
- * missing `secrets` capability) is a bug and is thrown on.
+ * those codes get the "could not be saved" message, anything else (an
+ * invalid name) is a bug and is thrown on.
  * ```ts
  * import type { Plugin, PluginError } from "@vestra-player/sdk";
  * declare const plugin: Plugin;
@@ -114,12 +114,12 @@ export declare const SECRET_LIMITS: Readonly<{
 export declare const secrets: (scope: ScopeImpl) => Secrets;
 export declare const rendering: (scope: ScopeImpl) => Rendering;
 /**
- * `plugin.video.upscaling`: both requests need `video.upscaling`; the player
+ * `plugin.video.upscaling`: the player
  * answers once its GPU check ran (the first call starts it).
  */
 export declare const videoUpscaling: (scope: ScopeImpl) => VideoUpscaling;
 /**
- * `plugin.video.motion(engine)`: both requests need `video.motion` and
+ * `plugin.video.motion(engine)`: both requests
  * name the engine; the event names it too and leaves out each plugin's own
  * `mode`, which the SDK keeps from the answers per engine (only this
  * plugin's `set` changes it).

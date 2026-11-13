@@ -1,4 +1,4 @@
-/** File drops (`plugin.drops`, `Panel.onDrop`; capability `ui.drop`). */
+/** File drops (`plugin.drops`, `Panel.onDrop`). */
 import { failure } from "./errors.js";
 const modifiers = (raw) => Object.freeze({
     alt: raw?.alt === true,

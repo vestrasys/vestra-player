@@ -198,13 +198,12 @@ export class Delivering {
       const name = String(manifest.name ?? id);
       const version = String(manifest.version);
       if (ask) {
-        const capabilities: string[] = manifest.capabilities ?? [];
         const answer = await this.plugin.dialogs.confirm({
           message: "Install the AI-generated plugin “{}”?",
-          detail: capabilities.length ? "{1} {2}\nCapabilities: {3}" : "{1} {2}\nCapabilities: none",
+          detail: "{1} {2}",
           confirm: "Install",
-          // {0} (the message's {}) = name, {1} = id, {2} = version, {3} = capabilities.
-          args: [name, id, version, this.plugin.i18n.list(capabilities)],
+          // {0} (the message's {}) = name, {1} = id, {2} = version.
+          args: [name, id, version],
         });
         if (!answer.confirmed) {
           this.say("install-cancelled");

@@ -1,18 +1,8 @@
 {
   "id": "vestra.audio",
-  "version": "1.5.11",
+  "version": "1.5.12",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "playback.read",
-    "events",
-    "processing.audio",
-    "ui.mount",
-    "ui.osd",
-    "ui.dialog",
-    "playback.control"
-  ],
   "name": "Audio",
   "author": "Vestra Player",
   "punchline": "Equalizer, audio sync, channels, audio tracks and output device",
