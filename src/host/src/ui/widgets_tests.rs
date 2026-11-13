@@ -912,6 +912,19 @@ fn the_lead_strip_sizes_to_its_text() {
     // Two lines at most.
     set_strip(&w, strip_value("note", &long.repeat(4), 0., true));
     assert_eq!(number(&w, "h"), 48.);
+    // Every end state wraps, the longest text one may have (160 characters,
+    // SDK 1.8.0) too: done, failed and stopped as a note does.
+    let longest = "Stopped after step 2 of 15. Reset: Picture and Vestra Player: Mute ran; Export: Export Last 30 Seconds, Window: Always on Top and Playback: Speed 1.25× did not.";
+    assert_eq!(longest.chars().count(), 160);
+    for kind in ["done", "failed", "note", "stopped"] {
+        set_strip(&w, strip_value(kind, longest, 1., true));
+        assert_eq!((number(&w, "h"), number(&w, "w")), (48., 520.), "{kind}");
+        set_strip(&w, strip_value(kind, "Stopped", 0., true));
+        assert_eq!((number(&w, "h"), number(&w, "w")), (32., 168.), "{kind}");
+    }
+    // A working or running text never wraps.
+    set_strip(&w, strip_value("working", longest, 0., true));
+    assert_eq!((number(&w, "h"), number(&w, "w")), (32., 420.));
     set_strip(
         &w,
         strip_value("done", "Done · Vestra Player: Mute", 0., true),
@@ -943,6 +956,12 @@ fn the_lead_strip_reports_presses_and_takes_none_once_gone() {
         strip_value("done", "Done · Vestra Player: Mute", 0., true),
     );
     let right = number(&w, "right") as f32;
+    click(&w, right - 20., 24.);
+    assert_eq!(string(&w, "last"), "dismiss");
+    // Stopped is an end state: no Stop, a press dismisses it.
+    set_strip(&w, strip_value("stopped", "Stopped", 0., true));
+    let right = number(&w, "right") as f32;
+    w.set_property("last", Value::String("".into())).unwrap();
     click(&w, right - 20., 24.);
     assert_eq!(string(&w, "last"), "dismiss");
     w.set_property("last", Value::String("".into())).unwrap();
@@ -1066,9 +1085,27 @@ fn render_lead_strip_states() {
         ),
         (
             "r09-stopped",
-            "note",
+            "stopped",
             pick("Stopped: nothing was run", "已停止：没有运行任何命令"),
             0.,
+        ),
+        (
+            "r11-stopped-two-lines",
+            "stopped",
+            pick(
+                "Stopped after step 2 of 5. Reset: Picture and Vestra Player: Mute ran; Export: Export Last 30 Seconds, Window: Always on Top and Playback: Speed 1.5× did not.",
+                "已在第 2 步（共 5 步）后停止。已运行“重置: 画面”和“Vestra Player: 静音”；“导出: 导出最后 30 秒”“窗口: 置顶”和“播放: 1.5 倍速”没有运行。",
+            ),
+            0.,
+        ),
+        (
+            "r12-failed-two-lines",
+            "failed",
+            pick(
+                "Step 3 of 5 failed: Export: Export Last 30 Seconds could not write to the folder D:\\Clips. Reset: Picture and Vestra Player: Mute ran before it.",
+                "第 3 步（共 5 步）失败：“导出: 导出最后 30 秒”无法写入文件夹 D:\\Clips。此前已运行“重置: 画面”和“Vestra Player: 静音”。",
+            ),
+            1.,
         ),
         (
             "r10-sentence",
