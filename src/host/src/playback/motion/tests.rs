@@ -588,6 +588,136 @@ fn upscaling_and_a_stopped_plugin_take_the_filter_out() {
     assert_eq!(effects.held.last(), Some(&false));
 }
 
+/// The run's first AI Upscaling request waits for the upscaler's check.
+/// Once the check answered, the converter leaves (copy-back released)
+/// before the answer, as for a later request; a request that will be
+/// refused (no NVIDIA GPU), or one a waiting `set(false)` cancelled,
+/// leaves it in the chain. Review follow-up 2026-11-12.
+#[test]
+fn the_first_upscaling_request_takes_the_converter_out_before_its_answer() {
+    use crate::platform::{UpscalerGpu, UpscalerProbe, UpscalerRefusal};
+    use crate::playback::upscaling::Upscaling;
+    fn rtx() -> UpscalerProbe {
+        Ok(vec![UpscalerGpu {
+            id: 0x4070,
+            name: "NVIDIA GeForce RTX 4070 Laptop GPU".into(),
+        }])
+    }
+    fn no_nvidia() -> UpscalerProbe {
+        Err(UpscalerRefusal {
+            code: "no-gpu",
+            message: "no NVIDIA GPU".into(),
+        })
+    }
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    play(&mpv, 30);
+    // GPU rendering still starting: upscaling waits for it (not refused),
+    // motion smoothing's Double does not need it.
+    let render = Render::new(&decide(
+        &RenderFacts {
+            gpu_backend: true,
+            ..RenderFacts::default()
+        },
+        Preference::Gpu,
+    ));
+    let in_chain = |mpv: &Mpv| labels(mpv).iter().any(|l| l == LABEL);
+    let on = command(
+        1,
+        "video.upscaling.set",
+        json!({"enabled":true,"rendering":Value::Null}),
+    );
+    let off = command(
+        1,
+        "video.upscaling.set",
+        json!({"enabled":false,"rendering":Value::Null}),
+    );
+    // The worker's order (`backend.rs`): take the check, hand over, answer.
+    // Returns the answers to `set`, and whether the converter was in the
+    // chain when they were sent.
+    let run = |upscaling: &mut Upscaling,
+               motion: &mut Motion,
+               effects: &mut Recorded,
+               commands: &[&Command]|
+     -> Vec<(Result<Value, RpcError>, bool)> {
+        let (events, received) = mpsc::channel();
+        assert!(!upscaling.would_accept(&mpv, &render), "before the check");
+        for command in commands {
+            assert!(upscaling.command(&mpv, &render, command, &events));
+        }
+        let mut answers = Vec::new();
+        let deadline = Instant::now() + Duration::from_secs(10);
+        while answers.len() < commands.len() {
+            assert!(Instant::now() < deadline, "no answer");
+            upscaling.take_check();
+            motion.hand_over(upscaling, &mpv, &render, effects);
+            let was_in = in_chain(&mpv);
+            upscaling.poll(&mpv, &render, &events, Vec::new);
+            while let Ok(event) = received.try_recv() {
+                if let Event::Reply(_, result) = event {
+                    answers.push((result, was_in));
+                }
+            }
+            std::thread::sleep(Duration::from_millis(5));
+        }
+        answers
+    };
+    let start = |effects: &mut Recorded| {
+        let mut motion = with_stand_in();
+        motion.probe = Some(amd());
+        motion.owners.insert(1, Mode::Double);
+        motion.update(&mpv, &render, effects, Instant::now());
+        assert!(in_chain(&mpv));
+        assert_eq!(effects.held, [true]);
+        motion
+    };
+
+    // Accepted: out of the chain and copy-back released before the answer.
+    let mut effects = Recorded::default();
+    let mut motion = start(&mut effects);
+    let mut upscaling = Upscaling::with_probe(rtx);
+    let answers = run(&mut upscaling, &mut motion, &mut effects, &[&on]);
+    let (state, was_in) = &answers[0];
+    assert_eq!(state.as_ref().unwrap()["enabled"], true);
+    assert!(!was_in, "the converter left before the answer");
+    assert_eq!(effects.held, [true, false]);
+    motion.note_upscaling(upscaling.asked());
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(!in_chain(&mpv));
+    // Off again: the converter comes back.
+    motion.note_upscaling(false);
+    motion.update(&mpv, &render, &mut effects, Instant::now());
+    assert!(in_chain(&mpv));
+    mpv.command(&["vf", "remove", &format!("@{LABEL}")])
+        .unwrap();
+
+    // Refused: the converter stays.
+    let mut effects = Recorded::default();
+    let mut motion = start(&mut effects);
+    let mut upscaling = Upscaling::with_probe(no_nvidia);
+    let answers = run(&mut upscaling, &mut motion, &mut effects, &[&on]);
+    let (error, was_in) = &answers[0];
+    assert_eq!(error.as_ref().unwrap_err().code, "unsupported");
+    assert!(was_in);
+    assert!(in_chain(&mpv));
+    assert_eq!(effects.held, [true]);
+    mpv.command(&["vf", "remove", &format!("@{LABEL}")])
+        .unwrap();
+
+    // Cancelled by a set(false) that waited too: the converter stays.
+    let mut effects = Recorded::default();
+    let mut motion = start(&mut effects);
+    let mut upscaling = Upscaling::with_probe(rtx);
+    let answers = run(&mut upscaling, &mut motion, &mut effects, &[&on, &off]);
+    assert!(
+        answers
+            .iter()
+            .all(|(state, was_in)| { *was_in && state.as_ref().unwrap()["enabled"] == false })
+    );
+    assert!(in_chain(&mpv));
+    assert_eq!(effects.held, [true]);
+}
+
 /// The filter waits for frames in memory: with a hardware decoding mode
 /// that is not copy-back, the hold is asked for and the filter stays out.
 #[test]

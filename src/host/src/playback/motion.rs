@@ -556,6 +556,24 @@ impl Motion {
         self.doubling = doubling;
     }
 
+    /// Every worker iteration, after AI upscaling took its system's check
+    /// (`Upscaling::take_check`) and before it answers the requests that
+    /// waited for it (`Upscaling::poll`): a waiting `set(true)` that will
+    /// be accepted makes the converter step aside first
+    /// ([`Motion::yield_to_upscaling`]), as a request after the check does.
+    /// One that will be refused (no NVIDIA GPU) leaves it in the chain.
+    pub fn hand_over(
+        &mut self,
+        upscaling: &crate::playback::upscaling::Upscaling,
+        mpv: &Mpv,
+        render: &Render,
+        effects: &mut impl Effects,
+    ) {
+        if upscaling.accepts_waiting(mpv, render) {
+            self.yield_to_upscaling(mpv, render, effects);
+        }
+    }
+
     /// AI upscaling is about to be turned on: the converter leaves the chain
     /// and releases copy-back now, before upscaling answers, so its state
     /// does not name a copy-back decoding that is about to end.

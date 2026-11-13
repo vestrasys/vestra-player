@@ -404,6 +404,22 @@ impl Backend {
                         let _ = events.send(Event::PluginMessage(owner, event, data));
                     }
                     jobs.poll();
+                    // The run's first AI upscaling request waits for the
+                    // system's check: once it answered, a request it will
+                    // accept has the converter leave (copy-back released)
+                    // before the answer, as below for a later request.
+                    upscaling.take_check();
+                    motion.hand_over(
+                        &upscaling,
+                        &mpv,
+                        &out_render,
+                        &mut MotionEffects {
+                            mpv: &mpv,
+                            processing: &mut processing,
+                            options: &mut render_options,
+                            render: &out_render,
+                        },
+                    );
                     upscaling.poll(&mpv, &out_render, &events, || processing.copy_back_owners());
                     motion.note_upscaling(upscaling.asked());
                     motion.note_doubling(processing.doubles_frames());
