@@ -8,7 +8,7 @@
 //! Not risky: it changes only how the picture moves while the plugin runs,
 //! touches no data, and a stopped plugin's request is revoked (as
 //! `video.upscaling`). The GPU's power use is what the user turns it on for.
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Capability, Handled, Info, Recorded};
 use crate::host::{Host, Reply, RpcError};
 use crate::playback::backend::Command;
 use serde_json::{Value, json};
@@ -16,21 +16,14 @@ use serde_json::{Value, json};
 pub struct VideoMotion;
 static INFO: Info = Info {
     name: "video.motion",
-    label: "Smooth motion with the GPU's frame-rate converter",
-    risky: false,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("video.motion.state"),
-    Method::this("video.motion.set"),
-];
+static METHODS: &[&str] = &["video.motion.state", "video.motion.set"];
 impl Capability for VideoMotion {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {

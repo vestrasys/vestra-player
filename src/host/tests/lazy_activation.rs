@@ -13,6 +13,8 @@ use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
+#[path = "explicit/mod.rs"]
+mod explicit;
 
 const ID: &str = "vestra.fixture-lazy";
 
@@ -52,18 +54,18 @@ fn fixture(root: &Path) -> serde_json::Value {
     )
 }
 
-/// A built-in package `id` with `capabilities` and `main.js`; its
-/// `builtin.json` entry.
+/// A built-in package `id` with `main.js` (and the calls `capabilities`
+/// stand for, `explicit`); its `builtin.json` entry.
 fn package(root: &Path, id: &str, capabilities: &[&str], main: String) -> serde_json::Value {
     let files = [
         (
             "manifest.json",
             serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-                "entry":"main.js","capabilities":capabilities})
+                "entry":"main.js"})
             .to_string(),
         ),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
-        ("main.js", main),
+        ("main.js", explicit::main(capabilities, &main)),
     ];
     let directory = root.join(id);
     std::fs::create_dir_all(&directory).unwrap();
@@ -644,7 +646,7 @@ fn third_party_first_runs_start_a_few_at_a_time() {
 /// (`installed`, the rest left empty). `n` makes its instance GUID.
 fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
     let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":["source.resolve"]});
+        "entry":"main.js"});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),

@@ -359,6 +359,11 @@ pub(crate) struct Host {
     pub(crate) confirm_open: bool,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
     pub(crate) mounts: BTreeMap<u64, Mount>,
+    /// The plugins (manifest ids) that have mounted a panel in this run,
+    /// a replayed tab's placeholder included: `bindings.list` lists their
+    /// `focus: "panel"` commands for the rest of the run
+    /// (`Host::note_panel_plugins`).
+    pub(crate) panel_plugins: std::collections::BTreeSet<String>,
     pub(crate) mount_queue: std::collections::VecDeque<MountChange>,
     pub(crate) preparing: Option<(Instant, MountChange)>,
     /// Shell preparations still to run one change each, after a batch of

@@ -1,5 +1,5 @@
 //! `ui.osd`: messages on the video and the information panel.
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Capability, Handled, Info, Recorded};
 use crate::{
     host::{Host, OsdActions, Reply, RpcError},
     i18n,
@@ -21,18 +21,14 @@ pub const OSD_ACTION_CHARS: usize = 40;
 pub struct UiOsd;
 static INFO: Info = Info {
     name: "ui.osd",
-    label: "Show messages on the video",
-    risky: false,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[Method::this("osd.show"), Method::this("osd.panel")];
+static METHODS: &[&str] = &["osd.show", "osd.panel"];
 impl Capability for UiOsd {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {

@@ -52,7 +52,6 @@ async function run(
   source: string,
   reply: (method: string) => object = () => ({ result: { revision: 1 } }),
   runnerPath = runner,
-  capabilities = ["commands"],
 ) {
   const directory = mkdtempSync(join(tmpdir(), "runner-"));
   writeFileSync(
@@ -60,7 +59,6 @@ async function run(
     JSON.stringify({
       id: "runner.test",
       entry: "main.mjs",
-      capabilities,
     }),
   );
   writeFileSync(join(directory, "main.mjs"), source);
@@ -136,9 +134,7 @@ test("a v2 plugin is not ready until its registrations succeeded", async () => {
 });
 
 test("packages: install follows the operation to its end", async () => {
-  const { host, plugin, stop } = await startPlugin(() => {}, {
-    capabilities: ["plugins.manage"],
-  });
+  const { host, plugin, stop } = await startPlugin(() => {});
   let operationPolls = 0;
   host.handle("packages.validate", () => ({
     token: "t",
@@ -149,7 +145,6 @@ test("packages: install follows the operation to its end", async () => {
       version: "1.0.0",
       apiVersion: "vestra/1",
       entry: "main.js",
-      capabilities: [],
     },
     checks: ["slint"],
     trustedExecution: true,
@@ -207,7 +202,6 @@ test("a panel refused because another plugin holds its slot does not fail activa
           },
         }
       : { result: { revision: 1 } };
-  const capabilities = ["commands", "ui.mount"];
   const occupied = await run(
     source,
     refuse({
@@ -216,13 +210,12 @@ test("a panel refused because another plugin holds its slot does not fail activa
       owner: "vestra.playlist",
     }),
     runner,
-    capabilities,
   );
   assert.equal(occupied.event, "runtime.ready");
   assert.ok(occupied.methods.includes("ui.mount"));
   assert.ok(occupied.methods.includes("commands.register"));
   // Any other refusal of a start-up mount still fails activation.
-  const other = await run(source, refuse({}), runner, capabilities);
+  const other = await run(source, refuse({}), runner);
   assert.equal(other.event, "runtime.failed");
 });
 
@@ -241,17 +234,15 @@ test("a sequence another plugin provides does not fail activation", async () => 
           },
         }
       : { result: { revision: 1 } };
-  const capabilities = ["commands", "playback.control"];
   const taken = await run(
     source,
     refuse({ reason: "sequence-taken", owner: "vestra.playlist" }),
     runner,
-    capabilities,
   );
   assert.equal(taken.event, "runtime.ready");
   assert.ok(taken.methods.includes("sequence.set"));
   assert.ok(taken.methods.includes("commands.register"));
-  const other = await run(source, refuse({}), runner, capabilities);
+  const other = await run(source, refuse({}), runner);
   assert.equal(other.event, "runtime.failed");
 });
 
@@ -271,7 +262,6 @@ test("a file type or site another plugin resolves does not fail activation", asy
           },
         }
       : { result: { revision: 1 } };
-  const capabilities = ["commands", "source.resolve"];
   const taken = await run(
     source,
     refuse({
@@ -280,12 +270,11 @@ test("a file type or site another plugin resolves does not fail activation", asy
       target: "文件类型 .nes",
     }),
     runner,
-    capabilities,
   );
   assert.equal(taken.event, "runtime.ready");
   assert.ok(taken.methods.includes("sourceResolvers.register"));
   assert.ok(taken.methods.includes("commands.register"));
-  const other = await run(source, refuse({}), runner, capabilities);
+  const other = await run(source, refuse({}), runner);
   assert.equal(other.event, "runtime.failed");
 });
 
@@ -295,7 +284,7 @@ test("a plugin that logs to a closed stderr keeps running", async () => {
   const directory = mkdtempSync(join(tmpdir(), "runner-"));
   writeFileSync(
     join(directory, "manifest.json"),
-    JSON.stringify({ id: "runner.test", entry: "main.mjs", capabilities: [] }),
+    JSON.stringify({ id: "runner.test", entry: "main.mjs" }),
   );
   writeFileSync(
     join(directory, "main.mjs"),
@@ -332,7 +321,6 @@ test("a request longer than the player's 1 MiB line is refused with limit, not s
     }`,
     () => ({ result: null }),
     runner,
-    ["ui.osd"],
   );
   assert.deepEqual(result, {
     event: "runtime.ready",

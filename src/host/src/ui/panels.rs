@@ -110,7 +110,7 @@ pub fn panel_source(spec: &CompileSpec, reserve: Option<&str>) -> Result<String>
             "out property <float> {RESERVE}: {reserved} / 1px; \
              out property <bool> {PLACED}: BarButtonsHost.placed; \
              out property <length> {ROOM}: max(0px, root.width - {reserved} - 4px); \
-             changed {ROOM} => {{ BarButtonsHost.room = self.{ROOM}; }} "
+             changed {ROOM} => {{ BarButtonsHost.room = self.{ROOM}; }}              {BAR_CHECK} "
         );
     }
     source.push_str(&format!(
@@ -119,6 +119,16 @@ pub fn panel_source(spec: &CompileSpec, reserve: Option<&str>) -> Result<String>
     ));
     Ok(source)
 }
+
+/// A bottom bar laid out as the shell lays it out (`composition`: the
+/// slot is as high as the bar's own height constraints want), never
+/// created (`if false`): a bar whose height constraints depend on its own
+/// height is a binding loop the compiler reports here, so its mount fails
+/// with `ui-prepare` as it did when the bar was compiled into the shell.
+/// In the shell the same bar sits in a container, where the compiler
+/// cannot see the loop: Slint would end the player with "Recursion
+/// detected" at run time.
+const BAR_CHECK: &str = "if false: Rectangle {     vestra-bar-check-keys := Rectangle {     height: min(vestra-bar-check.max-height, max(vestra-bar-check.min-height, vestra-bar-check.preferred-height));     vestra-bar-check := PanelView { x: 0px; y: 0px; width: parent.width; height: parent.height; } } }";
 
 /// The bottom bar's own compilation reports the width it keeps for its own
 /// controls and whether it places the deprecated `BarButtons` ([`RESERVE`],
@@ -208,6 +218,13 @@ impl Compiled {
                             .collect(),
                         definition,
                     });
+                }
+                // The check of `BAR_CHECK` failed: say what it means.
+                Err(error) if bar && format!("{error:#}").contains("vestra-bar-check") => {
+                    last = Some(error.context(
+                        "the bottom bar's height constraints depend on its own height (a binding loop \
+                         with the bar's place, which is as high as the bar wants)",
+                    ));
                 }
                 Err(error) => last = Some(error),
             }
@@ -1363,5 +1380,61 @@ pub(crate) mod tests {
             text.contains("ComponentContainer") || text.contains("component-factory"),
             "{text}"
         );
+    }
+
+    /// A bottom bar whose height constraints depend on its own height is
+    /// refused when it is compiled (its mount fails with `ui-prepare`, as
+    /// before per-panel compilation), instead of ending the player with
+    /// Slint's "Recursion detected" once the shell lays it out. A bar with
+    /// fixed constraints, or none, still compiles and shows.
+    #[test]
+    fn a_bar_whose_height_constraints_follow_its_height_is_refused() {
+        headless();
+        let dir = tempfile::tempdir().unwrap();
+        let bar = |name: &str, body: &str| {
+            let text = format!(
+                "export global Bridge {{ in property <bool> tabbed; }}\n\
+                 export component Bar inherits Rectangle {{ {body} }}\n"
+            );
+            spec(31, write(dir.path(), name, &text), "Bar", Slot::Bottom)
+        };
+        for (name, body) in [
+            ("preferred.slint", "preferred-height: self.height;"),
+            ("min.slint", "min-height: self.height;"),
+            ("max.slint", "max-height: self.height + 1px;"),
+            (
+                "layout.slint",
+                "VerticalLayout { Rectangle { min-height: root.height / 2; } }",
+            ),
+        ] {
+            let looping = bar(name, body);
+            let error = Panels::default().precompile(&looping).unwrap_err();
+            let text = format!("{error:#}");
+            assert!(
+                text.contains("the bottom bar's height constraints depend on its own height")
+                    && text.contains("binding loop"),
+                "{name}: {text}"
+            );
+            // Shown anyway (a path that did not compile it first): refused,
+            // the shell lays out without it and the player goes on.
+            let mut composed = Composed::new(&[]);
+            composed.panels.insert(looping);
+            assert!(composed.show(Slot::Bottom, Some(31)).is_err(), "{name}");
+            assert_eq!(composed.panels.shown(1, Slot::Bottom), None, "{name}");
+            composed.settle();
+        }
+        for (name, body) in [
+            ("fixed.slint", "preferred-height: 40px;"),
+            ("none.slint", ""),
+            (
+                "width.slint",
+                "VerticalLayout { Rectangle { min-height: 30px; min-width: root.width / 4; } }",
+            ),
+        ] {
+            let fine = bar(name, body);
+            assert!(Panels::default().precompile(&fine).is_ok(), "{name}");
+            let composed = Composed::new(&[fine]);
+            assert_eq!(composed.panels.shown(1, Slot::Bottom), Some(31), "{name}");
+        }
     }
 }

@@ -404,6 +404,7 @@ impl Host {
                 .map(panel_plugin);
         }
         self.mounts = next;
+        self.note_panel_plugins();
         for (state, plan) in self.columns.iter_mut().zip(&plans) {
             state.tabs = plan.order.clone();
             state.tabbed = plan.tabbed;

@@ -1,23 +1,23 @@
 //! Requests any plugin may make, without a manifest capability.
-use super::{Handled, Method, plugin};
+use super::{Handled, plugin};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
-pub static METHODS: &[Method] = &[
-    Method::free("packages.list"),
-    Method::free("window.state"),
-    Method::free("system.reveal"),
-    Method::free("system.openPath"),
-    Method::free("system.openUrl"),
-    Method::free("app.system"),
-    Method::free("ui.markdownScan"),
+pub static METHODS: &[&str] = &[
+    "packages.list",
+    "window.state",
+    "system.reveal",
+    "system.openPath",
+    "system.openUrl",
+    "app.system",
+    "ui.markdownScan",
     // SDK 1.5.25, player 0.5.5: no capability, like `plugin.storage.json`.
-    Method::free("storage.session.get"),
-    Method::free("storage.session.set"),
-    Method::free("storage.session.delete"),
-    Method::free("storage.session.keys"),
+    "storage.session.get",
+    "storage.session.set",
+    "storage.session.delete",
+    "storage.session.keys",
     // SDK 1.5.35, player 0.5.13: reading the rendering state (host/rendering.rs).
-    Method::free("rendering.state"),
+    "rendering.state",
 ];
 
 pub fn handle(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {

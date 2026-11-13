@@ -1,6 +1,6 @@
 //! `playback.control`: opening media and controlling playback (the playback
 //! worker), Previous/Next, step seek and keeping the computer awake.
-use super::{Capability, Handled, Info, Method, Needs, Recorded, Residency, forward};
+use super::{Capability, Handled, Info, Recorded, forward};
 use crate::{
     core_actions,
     host::{Host, Reply, RpcError, string},
@@ -11,41 +11,30 @@ use serde_json::{Value, json};
 pub struct PlaybackControl;
 static INFO: Info = Info {
     name: "playback.control",
-    label: "Open media, control playback, keep the computer awake",
-    risky: false,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("playback.set"),
-    Method::this("source.submit"),
+static METHODS: &[&str] = &[
+    "playback.set",
+    "source.submit",
     // The outcome of this plugin's own source operation (operation books
     // are per plugin): a control that went `pending` (an open a resolver
-    // handles) is followed up with `playback.control`.
-    Method {
-        name: "source.operation",
-        needs: Needs::IfDeclared {
-            declared: "playback.control",
-            then: "playback.control",
-            otherwise: "playback.read",
-        },
-    },
-    Method::this("audio.addTrack"),
-    Method::this("audio.selectTrack"),
-    Method::this("player.setLoop"),
-    Method::this("player.setAudioDevice"),
-    Method::this("player.step"),
-    Method::this("player.setStepSeek"),
-    Method::this("power.preventSleep"),
-    Method::this("sequence.set"),
-    Method::this("sequence.step"),
+    // handles) is followed up here.
+    "source.operation",
+    "audio.addTrack",
+    "audio.selectTrack",
+    "player.setLoop",
+    "player.setAudioDevice",
+    "player.step",
+    "player.setStepSeek",
+    "power.preventSleep",
+    "sequence.set",
+    "sequence.step",
 ];
 impl Capability for PlaybackControl {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// What it holds in the playback worker is answered there (`owner.resources`).

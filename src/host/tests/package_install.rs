@@ -16,6 +16,8 @@ use serde_json::{Value, json};
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::Command;
+#[path = "explicit/mod.rs"]
+mod explicit;
 
 const INSTALLER: &str = "vestra.fixture-installer";
 
@@ -35,8 +37,8 @@ fn digest(files: &[(&str, String)]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// Package `id` `version` with `capabilities` and `main` written to
-/// `directory`; its manifest and digest.
+/// Package `id` `version` with `main` (and the calls `capabilities`
+/// stand for, `explicit`) written to `directory`; its manifest and digest.
 fn package(
     directory: &Path,
     id: &str,
@@ -45,11 +47,11 @@ fn package(
     main: String,
 ) -> (Value, String) {
     let manifest = json!({"id":id,"version":version,"apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":capabilities});
+        "entry":"main.js"});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
-        ("main.js", main),
+        ("main.js", explicit::main(capabilities, &main)),
     ];
     std::fs::create_dir_all(directory).unwrap();
     for (name, text) in &files {

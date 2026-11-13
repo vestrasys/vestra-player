@@ -167,7 +167,7 @@ mod tests {
     fn manifest() -> Vec<u8> {
         serde_json::to_vec(
             &serde_json::json!({"id":"someone.demo","apiVersion":crate::process::API,
-            "version":"1.0.0","entry":"main.js","capabilities":[]}),
+            "version":"1.0.0","entry":"main.js"}),
         )
         .unwrap()
     }

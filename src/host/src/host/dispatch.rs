@@ -144,7 +144,7 @@ impl Host {
         }
     }
     /// One request of a plugin's: its route (`capabilities::lookup`), the
-    /// permission check, text resolution, then the capability's `handle`.
+    /// built-in-only check, text resolution, then the area's `handle`.
     pub(crate) fn dispatch(
         &mut self,
         reply: &Reply,
@@ -157,17 +157,11 @@ impl Host {
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
         let route = capabilities::lookup(method)
             .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
-        let capability = route.needs(params, |name| plugin.allows(name));
-        if capability.is_some_and(|capability| !plugin.allows(capability)) {
-            return Err(RpcError::new(
-                "capability",
-                "capability must be declared in manifest",
-            ));
-        }
-        // Built-in-only capabilities (`commands.run`, `palette.lead`): by
-        // provenance, whatever the manifest declares.
-        if capability.is_some_and(capabilities::builtin_only) {
-            capabilities::builtin_only_check(capability, self.is_builtin(reply.owner))?;
+        // Built-in-only areas (`commands.run`, `palette.lead`): by
+        // provenance. Every other request is open to every plugin (a
+        // manifest declares nothing since player 0.9.0).
+        if route.builtin_only() {
+            route.check_caller(self.is_builtin(reply.owner))?;
         }
         // Text values (i18n.md §7) in property values, timeline titles,
         // subtitle track titles and resolver failures become the strings

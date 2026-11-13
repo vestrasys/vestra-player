@@ -4,7 +4,7 @@
 //! query and a one-time ticket for `commands.run` (capabilities/
 //! commands_run.rs). Recorded, so the row stays while its plugin is in
 //! standby and the event wakes it (doc/architecture/palette-lead.md).
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Call, Capability, Handled, Info, Recorded};
 use crate::{
     commands::{BUTTON_ICONS, ButtonIcon},
     host::{Host, Origin, Reply, RpcError, string},
@@ -15,16 +15,12 @@ use serde_json::{Value, json};
 pub struct PaletteLead;
 static INFO: Info = Info {
     name: "palette.lead",
-    label: "Add the first row of the command palette",
-    risky: false,
-    requires: &[],
-    residency: Residency::Recordable,
     builtin_only: true,
 };
-static METHODS: &[Method] = &[
-    Method::this("palette.lead.set"),
-    Method::this("palette.lead.clear"),
-    Method::this("palette.lead.done"),
+static METHODS: &[&str] = &[
+    "palette.lead.set",
+    "palette.lead.clear",
+    "palette.lead.done",
 ];
 
 /// The event the holder gets when the user activates the row (a trigger:
@@ -363,7 +359,7 @@ impl Capability for PaletteLead {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// The row as its holder set it: shown without its process.
@@ -555,12 +551,12 @@ mod tests {
     }
 
     #[test]
-    fn its_capability_is_built_in_only_and_recordable() {
-        assert!(INFO.builtin_only && !INFO.risky);
-        assert_eq!(INFO.residency, Residency::Recordable);
-        assert!(super::super::builtin_only("palette.lead"));
-        assert!(super::super::builtin_only("commands.run"));
-        assert!(!super::super::builtin_only("commands"));
+    fn its_capability_is_built_in_only() {
+        assert!(INFO.builtin_only);
+        let only = |method: &str| super::super::lookup(method).unwrap().builtin_only();
+        assert!(only("palette.lead.set"));
+        assert!(only("commands.run"));
+        assert!(!only("commands.register"));
     }
 }
 

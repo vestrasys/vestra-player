@@ -1321,16 +1321,6 @@ impl Host {
     pub(crate) fn builtin_first_run_queued(&self) -> bool {
         self.supervisor.first_runs_queued().1
     }
-    /// Installed (or built-in) plugin `id` declares `ui.mount` (an unreadable
-    /// one counts as not).
-    pub(crate) fn declares_ui_mount(&self, id: &str) -> bool {
-        self.packages
-            .store
-            .record(id)
-            .and_then(|record| self.packages.runs_from(id, record))
-            .and_then(Result::ok)
-            .is_some_and(|(_, manifest)| manifest.capabilities.iter().any(|c| c == "ui.mount"))
-    }
     fn operation_pending(&self, id: &str) -> bool {
         self.packages.operations.values().any(|op| {
             op.package == id
@@ -1394,7 +1384,6 @@ impl Host {
                 id.clone(),
                 json!({"id":id,"version":plugin.manifest.version,
                 "origin":origin,"state":state,"error":error,"process":process,
-                "capabilities":plugin.manifest.capabilities,
                 "directory":plugin.directory,
                 "builtin":instance.as_ref().is_some_and(|i| i.builtin),
                 "source":instance.map(|i| i.source),
@@ -1462,7 +1451,7 @@ impl Host {
             let entry = match package {
                 Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
                     "origin":"installed","state":state,"error":error,"process":process,
-                    "capabilities":manifest.capabilities,"directory":directory,
+                    "directory":directory,
                     "builtin":builtin,"source":source,
                     "dataDirectory":data,"warnings":warnings,
                     "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
@@ -1484,7 +1473,7 @@ impl Host {
                     let state = if state == "disabled" { state } else { "failed" };
                     json!({"id":id,"version":version,
                         "origin":"installed","state":state,"error":failure,
-                        "capabilities":[],"directory":directory.unwrap_or_default(),
+                        "directory":directory.unwrap_or_default(),
                         "builtin":builtin,"source":source,
                         "dataDirectory":data,"warnings":[],
                         "display":{"name":null,"punchline":null,"description":null,"tags":[]}})
@@ -1506,7 +1495,7 @@ impl Host {
                 record.id.clone(),
                 json!({"id":record.id,"version":null,
                     "origin":"installed","state":"failed","error":error,
-                    "capabilities":[],"directory":"",
+                    "directory":"",
                     "builtin":false,"source":null,
                     "dataDirectory":null,"warnings":[],
                     "display":{"name":null,"punchline":null,"description":null,"tags":[]}}),
@@ -1526,7 +1515,7 @@ impl Host {
                 id.clone(),
                 json!({"id":id,"version":manifest.version,
                 "origin":"development","state":state,"error":error,
-                "capabilities":manifest.capabilities,"directory":directory,
+                "directory":directory,
                 "builtin":false,"source":null,"dataDirectory":data,"warnings":[],
                 "display":display(manifest, crate::i18n::load(directory).as_deref())}),
             );
@@ -2910,7 +2899,7 @@ mod tests {
         std::fs::write(
             dir.join("manifest.json"),
             serde_json::to_vec(&json!({"id":id,
-            "apiVersion":process::API,"version":version,"entry":"main.js","capabilities":[]}))
+            "apiVersion":process::API,"version":version,"entry":"main.js"}))
             .unwrap(),
         )
         .unwrap();
@@ -3271,7 +3260,7 @@ mod tests {
         std::fs::write(
             dir.join("manifest.json"),
             serde_json::to_vec(&json!({"id":id,"apiVersion":process::API,
-                "version":version,"entry":"main.js","capabilities":[]}))
+                "version":version,"entry":"main.js"}))
             .unwrap(),
         )
         .unwrap();

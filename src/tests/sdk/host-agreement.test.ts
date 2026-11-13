@@ -4,7 +4,8 @@
 // upgrade the dependency here (agentic-workflow/agentic-workflow.md §1.6).
 //
 // Contract data (what decides whether the player accepts a request, or how a
-// plugin or TestHost behaves: capabilities, apiVersion, limits, error codes,
+// plugin or TestHost behaves: apiVersion, the manifest's fields and the
+// refusal of a removed one, the built-in-only requests, limits, error codes,
 // wire shapes, menu ids, wake events, the player's own menu paths, the Slint
 // library's types) fails a `test`. Product data (a snapshot of how the
 // player looks now: the rest of the built-in command and submenu tables, the
@@ -33,11 +34,8 @@ import {
   BINDING_INPUTS,
   BUILTIN_COMMANDS,
   BUILTIN_SUBMENUS,
-  CAPABILITIES,
-  CAPABILITY_INFO,
   Catalog,
   COMMAND_LIMITS,
-  HOST_CAPABILITIES,
   HOST_ZH_HANS,
   IMAGE_LIMITS,
   LOCALES,
@@ -66,7 +64,6 @@ import {
   VIDEO_PROCESSING_LIMITS,
 } from "@vestra-player/sdk/runtime";
 import { startPlugin, TestHost } from "@vestra-player/sdk/testing";
-import { CAPABILITIES as STORE_CAPABILITIES } from "../../plugins/store/labels.ts";
 import { runNode } from "./children.ts";
 
 const host = (file: string) =>
@@ -298,19 +295,78 @@ test("TestHost answers processing changes like the player", async () => {
   }
 });
 
-test("capabilities and apiVersion match the player's manifest rules (host/capabilities.json)", () => {
-  const json = capabilityJson();
-  assert.deepEqual(
-    json.capabilities.map((c) => c.name),
-    [...CAPABILITIES],
-  );
-  assert.equal(json.apiVersion, API_VERSION);
+// Player 0.9.0 (SDK 1.9.0): manifests declare nothing, so the player's
+// capability table (host/capabilities.json) and the SDK's copy of it are
+// gone; apiVersion is the runner's constant.
+test("apiVersion is the player's (host/src/process/mod.rs API)", () => {
+  const api = /pub const API: &str = "([^"]+)";/.exec(
+    host("src/process/mod.rs"),
+  )?.[1];
+  assert.ok(api, "API in process/mod.rs");
+  assert.equal(api, API_VERSION);
 });
 
-test("the installed SDK's copy of host/capabilities.json is current (SDK npm run capabilities:sync)", () => {
-  // CAPABILITY_INFO, vestra-plugin check and the SDK's TypeScript plugin
-  // are built from this copy: a capability change here needs an SDK release.
-  assert.deepEqual(HOST_CAPABILITIES, capabilityJson());
+test("a manifest with capabilities is refused with the SDK's words (packages/manifest.rs CAPABILITIES_REMOVED; SDK 1.9.0)", () => {
+  const rust = /pub const CAPABILITIES_REMOVED: &str = r#"([^]*?)"#;/.exec(
+    host("src/packages/manifest.rs"),
+  )?.[1];
+  assert.ok(rust, "CAPABILITIES_REMOVED in packages/manifest.rs");
+  // The SDK keeps it in src/manifest.ts (not exported from ./runtime).
+  const sdk =
+    /export const CAPABILITIES_REMOVED = ('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*");/.exec(
+      sdkFile("manifest.js"),
+    )?.[1];
+  assert.ok(sdk, "CAPABILITIES_REMOVED in the SDK's dist/manifest.js");
+  assert.equal(rust, (0, eval)(sdk) as string);
+  assert.ok(!MANIFEST_FIELDS.includes("capabilities"));
+});
+
+test("the built-in-only requests are TestHost's (capabilities/commands_run.rs, palette_lead.rs: code capability)", async () => {
+  // The player: the areas marked builtin_only, and their methods.
+  const only = (file: string) => {
+    const rust = host(`src/capabilities/${file}`);
+    assert.match(rust, /builtin_only: true/, file);
+    const methods = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(rust)?.[1];
+    assert.ok(methods, `METHODS in ${file}`);
+    return [...methods.matchAll(/"([^"]+)"/g)].map((m) => m[1]!);
+  };
+  assert.deepEqual(
+    [...only("commands_run.rs"), ...only("palette_lead.rs")],
+    [
+      "commands.list",
+      "commands.run",
+      "palette.lead.set",
+      "palette.lead.clear",
+      "palette.lead.done",
+    ],
+  );
+  const root = new URL("../../host/src/capabilities/", import.meta.url);
+  const marked = readdirSync(root)
+    .filter((name) => name.endsWith(".rs"))
+    .filter((name) =>
+      /builtin_only: true/.test(readFileSync(new URL(name, root), "utf8")),
+    )
+    .sort();
+  assert.deepEqual(marked, ["commands_run.rs", "palette_lead.rs"]);
+  assert.match(
+    host("src/capabilities/mod.rs"),
+    /"capability",\s*"this capability is for built-in plugins only"/,
+  );
+  // TestHost: the same requests fail `capability` for a plugin that is
+  // not built-in, whatever else it does.
+  const { plugin, stop } = await startPlugin(() => {});
+  try {
+    await assert.rejects(
+      plugin.palette.lead({ title: "Ask", icon: "ai" }).ready,
+      { code: "capability" },
+    );
+    await assert.rejects(
+      (plugin.commands as unknown as { list(): Promise<unknown> }).list(),
+      { code: "capability" },
+    );
+  } finally {
+    await stop();
+  }
 });
 
 test("every file of the Slint library is in sync-sdk-slint.mjs's SLINT_FILES", () => {
@@ -787,8 +843,8 @@ advisory(
 
 // ------------------------------------------- tables of the SDK's Reference
 //
-// The SDK's documentation site generates its Reference pages (capabilities,
-// limits, commands, theme) from the constants below; each test names the
+// The SDK's documentation site generates its Reference pages (limits,
+// commands, theme) from the constants below; each test names the
 // drift it finds. Rust is read as text, so a test also fails when the code it
 // reads changes shape: adjust the reader then.
 
@@ -846,446 +902,6 @@ function matching(text: string, open: number): number {
   }
   throw new Error("unbalanced brackets");
 }
-
-/** A method's capability in host/capabilities.json (see its `about`). */
-type Needs =
-  | null
-  | string
-  | {
-      param: string;
-      cases: Record<string, string | null>;
-      otherwise: string | null;
-    }
-  | { ifDeclared: string; then: string; otherwise: string };
-interface CapabilityJson {
-  name: string;
-  label: string;
-  risky: boolean;
-  requires: string[];
-  residency: string;
-  /** Player 0.7.x: only built-in plugins may use it (by provenance). */
-  builtinOnly: boolean;
-  methods: { name: string; needs: Needs }[];
-}
-
-/**
- * The player's capabilities as host/src/capabilities/ generates them into
- * host/capabilities.json (a host test keeps the file current).
- */
-function capabilityJson() {
-  return JSON.parse(host("capabilities.json")) as {
-    apiVersion: string;
-    capabilities: CapabilityJson[];
-    uncapable: { name: string; needs: Needs }[];
-  };
-}
-
-/**
- * The capability the player asks for a request from a plugin that declared
- * `declared` (`null`: none; `undefined`: the player does not know the
- * method), read from host/capabilities.json: an exact method name first,
- * then a `prefix.*` entry.
- */
-function dispatchCapabilities() {
-  const json = capabilityJson();
-  const methods = [
-    ...json.capabilities.flatMap((c) => c.methods),
-    ...json.uncapable,
-  ];
-  const evaluate = (
-    needs: Needs,
-    params: Record<string, string>,
-    declared: ReadonlySet<string>,
-  ): string | null => {
-    if (needs === null || typeof needs === "string") return needs;
-    if ("param" in needs) {
-      const value = params[needs.param];
-      return value !== undefined && Object.hasOwn(needs.cases, value)
-        ? needs.cases[value]!
-        : needs.otherwise;
-    }
-    return declared.has(needs.ifDeclared) ? needs.then : needs.otherwise;
-  };
-  const capability = (
-    method: string,
-    params: Record<string, string> = {},
-    declared: ReadonlySet<string> = new Set(),
-  ) => {
-    const entry =
-      methods.find((m) => m.name === method) ??
-      methods.find(
-        (m) => m.name.endsWith(".*") && method.startsWith(m.name.slice(0, -1)),
-      );
-    return entry ? evaluate(entry.needs, params, declared) : undefined;
-  };
-  return {
-    capability,
-    methods: methods.map((m) => m.name).filter((name) => !name.endsWith("*")),
-  };
-}
-
-test("capabilities.json's wording and requirements are CAPABILITY_INFO's", () => {
-  const json = capabilityJson();
-  assert.deepEqual(
-    json.capabilities.map((c) => c.name),
-    Object.keys(CAPABILITY_INFO),
-    "capabilities.json lists other capabilities, or in another order, than CAPABILITY_INFO",
-  );
-  for (const c of json.capabilities) {
-    const info = CAPABILITY_INFO[c.name]!;
-    assert.deepEqual(
-      {
-        label: c.label,
-        risky: c.risky,
-        requires: c.requires,
-        builtinOnly: c.builtinOnly,
-      },
-      {
-        label: info.label,
-        risky: info.risky,
-        requires: [...info.requires],
-        // SDK 1.7.9: `builtinOnly` (absent before: false).
-        builtinOnly: (info as { builtinOnly?: boolean }).builtinOnly ?? false,
-      },
-      `${c.name}: capabilities.json vs CAPABILITY_INFO`,
-    );
-  }
-});
-
-// Both are this repository's files, so the store is checked against the
-// player directly (CAPABILITY_INFO is compared with capabilities.json above).
-test("the store's capability wording is capabilities.json's (plugins/store/labels.ts)", () => {
-  const store: Record<string, { text: string; risky?: boolean }> =
-    STORE_CAPABILITIES;
-  const json = capabilityJson();
-  assert.deepEqual(
-    Object.keys(store).sort(),
-    json.capabilities.map((c) => c.name).sort(),
-    "the store labels another set of capabilities than capabilities.json",
-  );
-  for (const c of json.capabilities) {
-    assert.equal(
-      store[c.name]!.text,
-      c.label,
-      `${c.name}: store text vs capabilities.json label`,
-    );
-    assert.equal(
-      store[c.name]!.risky === true,
-      c.risky,
-      `${c.name}: store risky vs capabilities.json risky`,
-    );
-  }
-});
-
-/**
- * The requests each member in CAPABILITY_INFO.apis sends, read from the
- * SDK's source (`runtime.host.*` calls in src/plugin/*.ts, wire.ts). `event:x`
- * is `events.subscribe` of event `x`; `method:video` is a processing request
- * for that stage; a trailing `?` marks a best-effort call whose failure the
- * member ignores.
- */
-const CONTROL = ["source.submit", "source.operation", "source.state?"];
-const LAYOUT = ["event:window.state", "layout.state"];
-const MEMBER_REQUESTS: Record<string, readonly string[]> = {
-  "Player.openStream": [
-    "producer.prepare",
-    "producer.state",
-    "producer.ack",
-    "producer.ackInput",
-    "producer.release",
-    "source.submit",
-  ],
-  "Player.state": ["source.state"],
-  "Player.refresh": ["source.state"],
-  "Player.stats": ["playback.stats"],
-  "Player.chapters": ["player.chapters"],
-  "Player.audioDevices": ["player.audioDevices"],
-  "Timeline.marks": ["timeline.marks"],
-  "Timeline.ranges": ["timeline.marks"],
-  "Player.open": CONTROL,
-  "Player.setPaused": CONTROL,
-  "Player.seek": CONTROL,
-  "Player.setRate": CONTROL,
-  "Player.restart": CONTROL,
-  "Player.close": CONTROL,
-  "Player.scrub": CONTROL,
-  "Player.setOutput": ["playback.set", "source.state?"],
-  "Player.provideSequence": ["sequence.set"],
-  "Player.next": ["sequence.step"],
-  "Player.previous": ["sequence.step"],
-  "Player.addAudioTrack": ["audio.addTrack"],
-  "Player.selectAudioTrack": ["audio.selectTrack"],
-  "Player.step": ["player.step"],
-  "Player.setStepSeek": ["player.setStepSeek"],
-  "Player.setLoop": ["player.setLoop"],
-  "Player.setAudioDevice": ["player.setAudioDevice"],
-  "Power.preventSleep": ["power.preventSleep"],
-  "Resolvers.add": [
-    "sourceResolvers.register",
-    "sourceResolvers.respond",
-    "sourceResolvers.unregister",
-  ],
-  "Player.onChange": ["event:source.state"],
-  "Subtitles.onChange": [
-    "event:source.state",
-    "event:playback.backend",
-    "subtitles.state",
-  ],
-  "MainWindow.onChange": ["event:window.state"],
-  "PanelSlot.onChange": LAYOUT,
-  "Panel.onChange": LAYOUT,
-  "BackdropSlot.onChange": LAYOUT,
-  "Commands.add": [
-    "commands.register",
-    "commands.update",
-    "commands.unregister",
-  ],
-  // SDK 1.6.7, player 0.7.6: the labels of the plugin's own commands.
-  "Commands.keys": ["commands.keys", "event:commands.keys"],
-  // SDK 1.7.9, player 0.7.x: built-in only (Ask Vestra).
-  "Commands.list": ["commands.list"],
-  "Commands.run": ["commands.run"],
-  "Palette.lead": [
-    "palette.lead.set",
-    "palette.lead.clear",
-    "palette.lead.done",
-  ],
-  "Host.run": ["host.run", "source.state?"],
-  "Windows.create": ["ui.open", "ui.set", "ui.show", "ui.close"],
-  "Panels.mount": [
-    "ui.mount",
-    "ui.setMount",
-    "ui.interaction",
-    "ui.menu",
-    "ui.unmount",
-  ],
-  "Panels.bottom": ["layout.state", "layout.set"],
-  "Panels.sidebar": ["layout.state", "layout.set"],
-  "Panels.backdrop": ["layout.state"],
-  "Dialogs.confirm": ["dialogs.confirm"],
-  "Dialogs.openFile": ["dialogs.open"],
-  "Dialogs.openFiles": ["dialogs.open"],
-  "Dialogs.openDirectory": ["dialogs.open"],
-  "Dialogs.saveFile": ["dialogs.open"],
-  "Packages.validate": [
-    "packages.validate",
-    "packages.install",
-    "packages.cancel",
-  ],
-  "Packages.validateArchive": [
-    "packages.validateArchive",
-    "packages.install",
-    "packages.cancel",
-  ],
-  "Packages.setEnabled": ["packages.setEnabled"],
-  // SDK 1.5.19, player 0.5.1 (STORE-RELOAD-BUILTIN).
-  "Packages.reload": ["packages.reload"],
-  "Packages.uninstall": ["packages.uninstall", "packages.cancel"],
-  "Plugin.video.filter": [
-    "processing.state",
-    "processing.replace:video",
-    "processing.operation:video",
-  ],
-  "Plugin.video.view": ["video.view.set", "video.view.release"],
-  "Plugin.video.render": ["video.render.set", "video.render.release"],
-  "Plugin.video.shaders": ["video.shaders.set"],
-  "Plugin.audio.filter": [
-    "processing.state",
-    "processing.replace:audio",
-    "processing.operation:audio",
-  ],
-  "Subtitles.state": ["subtitles.state"],
-  "Subtitles.refresh": ["subtitles.state"],
-  "Subtitles.select": ["subtitles.select", "subtitles.operation"],
-  "Subtitles.load": [
-    "subtitles.upload.begin",
-    "subtitles.upload.append",
-    "subtitles.upload.discard",
-    "subtitles.commit",
-    "subtitles.operation",
-  ],
-  "Subtitles.remove": ["subtitles.remove", "subtitles.operation"],
-  "Subtitles.setStyle": ["subtitles.style"],
-  "MediaCapture.capture": [
-    "snapshot.capture",
-    "snapshot.state",
-    "snapshot.release",
-    "processing.state?",
-    "subtitles.state?",
-  ],
-  "Snapshot.export": [
-    "jobs.start",
-    "jobs.state",
-    "jobs.cancel",
-    "jobs.operation",
-  ],
-  // An export of remembered files' parts: jobs.start with parts (the
-  // player also checks media.sources for it, capabilities/media_control.rs).
-  "MediaCapture.export": [
-    "jobs.start",
-    "jobs.state",
-    "jobs.cancel",
-    "jobs.operation",
-  ],
-  "MediaCapture.exportCheck": ["jobs.check"],
-  "MediaSources.remember": ["media.sources.remember"],
-  "MediaSources.get": ["media.sources.get"],
-  "MediaSources.locate": ["media.sources.locate"],
-  "MediaSources.forget": ["media.sources.forget"],
-  "MediaSources.list": ["media.sources.list"],
-  // Replaces what is playing, so it needs playback.control as well as
-  // media.sources (capabilities/media_sources.rs); followed as player.open
-  // is (source.operation then needs playback.control; the refresh after it
-  // is best-effort).
-  "MediaSources.open": [
-    "media.sources.open",
-    "source.operation?",
-    "source.state?",
-  ],
-  "Osd.show": ["osd.show"],
-  "Osd.panel": ["osd.panel"],
-  "Clipboard.readText": ["clipboard.readText"],
-  "Clipboard.writeText": ["clipboard.writeText"],
-  "Clipboard.writeImage": ["clipboard.writeImage"],
-  "MainWindow.setVideoArea": ["window.setVideoArea"],
-  "MainWindow.setAlwaysOnTop": ["window.setAlwaysOnTop"],
-  "MainWindow.setCursorAutoHide": ["window.setCursorAutoHide"],
-  "MainWindow.setPictureInPicture": ["window.setPictureInPicture"],
-  "Bindings.list": ["bindings.list"],
-  "Bindings.set": ["bindings.set"],
-  "Bindings.reset": ["bindings.reset"],
-  "Bindings.onChange": ["event:bindings.changed"],
-  "Timeline.layer": ["timeline.set", "timeline.setRanges"],
-  "Drops.provide": ["drops.provide", "drops.withdraw"],
-  "Panel.onDrop": ["drops.listen"],
-  "Settings.page": ["settings.register", "settings.set", "settings.unregister"],
-  "Settings.show": ["settings.show"],
-  "Appearance.set": ["appearance.set"],
-  "Appearance.setLanguage": ["appearance.setLanguage"],
-  "Secrets.get": ["secrets.get"],
-  "Secrets.set": ["secrets.set"],
-  "Secrets.delete": ["secrets.delete"],
-  "Rendering.setPreference": ["rendering.setPreference"],
-  "Rendering.restartPlayer": ["rendering.restart"],
-  "VideoUpscaling.state": ["video.upscaling.state"],
-  "VideoUpscaling.set": ["video.upscaling.set"],
-  "VideoUpscaling.onChange": ["event:video.upscaling.changed"],
-  "VideoMotion.state": ["video.motion.state"],
-  "VideoMotion.set": ["video.motion.set"],
-  "VideoMotion.onChange": ["event:video.motion.changed"],
-  // The mpv pass-through (SDK 1.8.0).
-  "Mpv.command": ["mpv.command"],
-  "Mpv.get": ["mpv.get"],
-  "Mpv.set": ["mpv.set"],
-  "Mpv.observe": ["mpv.observe", "mpv.unobserve"],
-  // SDK 1.7.0: plugin.wire.commands.register (register, then update and
-  // unregister through the WireCommand it returns).
-  "WireCommands.register": [
-    "commands.register",
-    "commands.update",
-    "commands.unregister",
-  ],
-};
-
-/**
- * KNOWN_UNREACHED: requests the player guards that no SDK member sends on
- * purpose (`producer.declareInput`: kept for a future keyboard input of
- * generated streams, doc/architecture/README.md §3).
- */
-const KNOWN_UNREACHED = new Set(["producer.declareInput"]);
-
-test("CAPABILITY_INFO.apis need the capabilities the player checks per request (host/capabilities.json)", () => {
-  const { capability: capabilityOf, methods } = dispatchCapabilities();
-  const request = (
-    call: string,
-  ): { method: string; params: Record<string, string> } => {
-    const [name, qualifier] = call.replace(/\?$/, "").split(":") as [
-      string,
-      string?,
-    ];
-    return name === "event"
-      ? { method: "events.subscribe", params: { event: qualifier! } }
-      : { method: name, params: qualifier ? { stage: qualifier } : {} };
-  };
-  const sdk = readdirSync(
-    new URL("../../node_modules/@vestra-player/sdk/dist/", import.meta.url),
-    { recursive: true },
-  )
-    .map(String)
-    .filter((file) => file.endsWith(".js") && !file.endsWith("testing.js"))
-    .map(sdkFile)
-    .join("\n");
-  const listed = new Map<string, string[]>();
-  for (const [name, info] of Object.entries(CAPABILITY_INFO))
-    for (const member of info.apis)
-      listed.set(member, [...(listed.get(member) ?? []), name]);
-  for (const member of listed.keys())
-    assert.ok(
-      MEMBER_REQUESTS[member],
-      `CAPABILITY_INFO lists ${member}: add the requests it sends to MEMBER_REQUESTS`,
-    );
-  for (const member of Object.keys(MEMBER_REQUESTS))
-    assert.ok(
-      listed.has(member),
-      `MEMBER_REQUESTS has ${member}, which CAPABILITY_INFO no longer lists`,
-    );
-  for (const [member, names] of listed) {
-    const declared = new Set(
-      names.flatMap((name) => [name, ...CAPABILITY_INFO[name]!.requires]),
-    );
-    const needed = new Set<string>();
-    for (const call of MEMBER_REQUESTS[member]!) {
-      const { method, params } = request(call);
-      assert.ok(
-        sdk.includes(`"${method}"`),
-        `${member}: the installed SDK never sends ${method}; correct MEMBER_REQUESTS`,
-      );
-      const capability = capabilityOf(method, params, declared);
-      assert.notEqual(
-        capability,
-        undefined,
-        `${member}: the player does not know the request ${method}`,
-      );
-      if (!capability) continue;
-      needed.add(capability);
-      if (call.endsWith("?") || declared.has(capability)) continue;
-      assert.fail(
-        `${member} sends ${call}, for which the player checks ${capability}, but CAPABILITY_INFO lists ${member} under ${names.join(", ")} (with requires: ${[...declared].join(", ")})`,
-      );
-    }
-    for (const name of names)
-      assert.ok(
-        needed.has(name),
-        `CAPABILITY_INFO lists ${member} under ${name}, but the player checks ${name} for none of its requests (${MEMBER_REQUESTS[member]!.join(", ")})`,
-      );
-  }
-  // Every request the player names in the dispatch, if it needs a capability,
-  // is sent by some listed member.
-  const reached = new Set(
-    Object.values(MEMBER_REQUESTS)
-      .flat()
-      .map((call) => request(call).method),
-  );
-  reached.add("events.unsubscribe"); // a listener's dispose()
-  for (const method of new Set(methods)) {
-    const capability = capabilityOf(method, {
-      event: "source.state",
-      stage: "video",
-    });
-    if (!capability) continue;
-    if (KNOWN_UNREACHED.has(method)) {
-      assert.ok(
-        !reached.has(method),
-        `KNOWN_UNREACHED: ${method} is reached now; remove the entry`,
-      );
-      continue;
-    }
-    assert.ok(
-      reached.has(method),
-      `the player checks ${capability} for ${method}, but no member in CAPABILITY_INFO.apis sends it`,
-    );
-  }
-});
 
 test("OSD_LIMITS, SECRET_LIMITS, TIMELINE_LIMITS and MESSAGE_LIMIT are the player's (capabilities/ui_osd.rs, system.rs, secret_index.rs, timeline.rs, process/mod.rs)", () => {
   const constant = (file: string, name: string) => {
@@ -2208,12 +1824,9 @@ test("TestHost refuses a menu text with the player's message (commands.rs text; 
     )?.[1];
   assert.ok(prefix, "CommandError::Invalid's Display in commands.rs");
   await assert.rejects(
-    startPlugin(
-      (plugin) => {
-        plugin.commands.add({ id: "a", path: ["Tools ", "A"], run() {} });
-      },
-      { capabilities: ["commands"] },
-    ),
+    startPlugin((plugin) => {
+      plugin.commands.add({ id: "a", path: ["Tools ", "A"], run() {} });
+    }, {}),
     {
       code: "invalid",
       message: `${prefix}path segment requires 1..=${COMMAND_LIMITS.segmentBytes} bytes, ${rule}`,
@@ -2229,12 +1842,9 @@ test("TestHost refuses a plugin item on or under each of the player's own menu i
   assert.ok(paths.some((path) => path.join() === "Quit"));
   for (const taken of [...paths, ...paths.map((path) => [...path, "Item"])])
     await assert.rejects(
-      startPlugin(
-        (plugin) => {
-          plugin.commands.add({ id: "a", path: [...taken], run() {} });
-        },
-        { capabilities: ["commands"] },
-      ),
+      startPlugin((plugin) => {
+        plugin.commands.add({ id: "a", path: [...taken], run() {} });
+      }, {}),
       { code: "conflict" },
       `a plugin item at ${taken.join(" ▸ ")}`,
     );
@@ -2329,7 +1939,6 @@ test("palette.lead's status states are the player's (palette_lead.rs StatusState
       });
     },
     {
-      capabilities: ["palette.lead"],
       host: fake,
       builtin: true,
       id: "vestra.agreement",
@@ -2419,7 +2028,6 @@ test("TestHost asks for a commands.run plan as the player does (commands_run.rs 
         )(`vestra.agreement/${id}`, options);
     },
     {
-      capabilities: ["commands", "commands.run", "palette.lead"],
       host: fake,
       builtin: true,
       id: "vestra.agreement",

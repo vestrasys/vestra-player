@@ -464,6 +464,7 @@ fn player() -> Result<()> {
         confirm_open: false,
         shell: None,
         mounts: BTreeMap::new(),
+        panel_plugins: Default::default(),
         mount_queue: std::collections::VecDeque::new(),
         preparing: None,
         mount_singly: 0,

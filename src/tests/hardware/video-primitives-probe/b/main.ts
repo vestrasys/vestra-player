@@ -31,7 +31,9 @@ const BLUR: VideoNode = {
   planes: [{ mode: "square", matrix: Array(25).fill(1), rdiv: 0, bias: 0 }],
 };
 
-export default function activate(plugin: Plugin) {
+export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const name = plugin.id.endsWith("-b") ? "B" : "A";
   const menu = `Primitives Probe ${name}`;
   const here = import.meta.dirname;

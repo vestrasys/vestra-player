@@ -277,12 +277,7 @@ fn same_directory(a: &Metadata, b: &Metadata) -> bool {
 }
 
 fn validate_manifest(manifest: &PackageManifest, directory: &Path) -> Result<()> {
-    crate::packages::manifest::check(manifest, directory, true)?;
-    ensure!(
-        manifest.capabilities.len() <= crate::capabilities::count(),
-        "candidate capabilities must be unique and bounded"
-    );
-    Ok(())
+    crate::packages::manifest::check(manifest, directory, true)
 }
 
 #[cfg(test)]
@@ -296,7 +291,7 @@ mod tests {
                 id: "counter".into(),
                 api_version: crate::process::API.into(),
                 entry: "main.js".into(),
-                capabilities: vec![],
+                removed_capabilities: Default::default(),
                 version: Some("1.0.0".into()),
                 ..Default::default()
             })
@@ -459,14 +454,20 @@ mod tests {
     }
 
     #[test]
-    fn contract_duplicate_or_unbounded_capabilities_are_rejected() {
+    fn contract_a_manifest_with_capabilities_is_rejected() {
         let root = fixture();
         let path = root.path().join("manifest.json");
-        let mut manifest: PackageManifest =
+        let mut manifest: serde_json::Value =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        manifest.capabilities = vec!["commands".into(), "commands".into()];
+        manifest["capabilities"] = serde_json::json!(["commands"]);
         fs::write(path, serde_json::to_vec(&manifest).unwrap()).unwrap();
-        assert!(Candidate::capture(root.path()).is_err());
+        let Err(error) = Candidate::capture(root.path()) else {
+            panic!("a manifest with capabilities was accepted");
+        };
+        assert!(
+            format!("{error:#}").contains(crate::packages::manifest::CAPABILITIES_REMOVED),
+            "{error:#}"
+        );
     }
 
     #[test]

@@ -14,7 +14,7 @@
 //! network, caches). The rules keep the channel off other boundaries
 //! (programs, scripts, files, the clipboard, input) and off the player's
 //! own state; they are no sandbox.
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Capability, Handled, Info, Recorded};
 use crate::{
     host::{Host, Reply, RpcError},
     playback::{backend::Command, mpv_rules},
@@ -24,18 +24,14 @@ use serde_json::Value;
 pub struct Mpv;
 static INFO: Info = Info {
     name: "mpv",
-    label: "Control the playback engine (mpv) directly: send its commands and change its options",
-    risky: true,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("mpv.command"),
-    Method::this("mpv.get"),
-    Method::this("mpv.set"),
-    Method::this("mpv.observe"),
-    Method::this("mpv.unobserve"),
+static METHODS: &[&str] = &[
+    "mpv.command",
+    "mpv.get",
+    "mpv.set",
+    "mpv.observe",
+    "mpv.unobserve",
 ];
 
 /// The refusal of a request, before anything reaches mpv: `invalid` for
@@ -67,7 +63,7 @@ impl Capability for Mpv {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// What it holds is in the playback worker (`owner.resources`).
@@ -110,19 +106,15 @@ mod tests {
     }
 
     #[test]
-    fn it_is_one_risky_capability_open_to_every_plugin() {
-        assert!(INFO.risky && !INFO.builtin_only && INFO.requires.is_empty());
-        assert_eq!(INFO.residency, Residency::Live);
-        assert!(super::super::known("mpv"));
-        // Every method of the group needs it, whatever the parameters, and
-        // no other capability gives it.
+    fn its_methods_are_open_to_every_plugin() {
+        assert!(!INFO.builtin_only);
+        // Every method of the group goes here, whatever the parameters.
         for method in METHODS {
-            let needs = super::super::required(method.name, &json!({}), |_| false).unwrap();
-            assert_eq!(needs, Some("mpv"), "{}", method.name);
+            let route = super::super::lookup(method).unwrap();
+            assert!(route.check_caller(false).is_ok(), "{method}");
         }
         // No prefix: a name beside them is no method.
-        let unknown = super::super::required("mpv.other", &json!({}), |_| true).unwrap_err();
-        assert_eq!(unknown.code, "unsupported");
+        assert!(super::super::lookup("mpv.other").is_none());
     }
 
     #[test]

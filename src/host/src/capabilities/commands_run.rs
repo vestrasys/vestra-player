@@ -15,7 +15,7 @@
 //! (Ask Vestra UX step 4, H4) trusts plugins that are not built in, per
 //! caller, in the host's `ui-state.json`: their ordinary commands no longer
 //! ask that caller; their destructive ones still do.
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Capability, Handled, Info, Recorded};
 use crate::{
     bindings,
     host::{Event, Host, Reply, RpcError, palette::PALETTE, review_sheet, string},
@@ -28,13 +28,9 @@ use std::collections::{BTreeMap, VecDeque};
 pub struct CommandsRun;
 static INFO: Info = Info {
     name: "commands.run",
-    label: "Run any player or plugin command",
-    risky: true,
-    requires: &[],
-    residency: Residency::None,
     builtin_only: true,
 };
-static METHODS: &[Method] = &[Method::this("commands.list"), Method::this("commands.run")];
+static METHODS: &[&str] = &["commands.list", "commands.run"];
 
 /// A ticket ends this long after it was minted or last ran a command.
 pub const TICKET_IDLE_MS: u64 = 120_000;
@@ -897,7 +893,7 @@ impl Capability for CommandsRun {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// Nothing outlives its process: tickets end with it.

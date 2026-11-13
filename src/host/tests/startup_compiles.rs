@@ -23,6 +23,8 @@
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+#[path = "explicit/mod.rs"]
+mod explicit;
 use std::time::Duration;
 
 /// `package_stage::read_tree`'s digest over a fixture (tests/lazy_activation.rs).
@@ -61,35 +63,38 @@ enum ThirdParty {
 fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
     let (capabilities, listen) = match kind {
         ThirdParty::Resident => (
-            serde_json::json!(["ui.mount", "events", "playback.read"]),
+            ["ui.mount", "events", "playback.read"].as_slice(),
             "plugin.player.onChange(() => {});\n",
         ),
         // Its first run (the warm-up) records it resident; from the next
         // start on it exits as soon as its panel is in the shell (each run
         // mounts it, then crashes: the crash loop).
         ThirdParty::Crashing => (
-            serde_json::json!(["ui.mount", "events", "playback.read"]),
+            ["ui.mount", "events", "playback.read"].as_slice(),
             "plugin.player.onChange(() => {});\n\
              const mark = join(plugin.dataDirectory, \"ran\");\n\
              crash = existsSync(mark);\n\
              if (!crash) { mkdirSync(plugin.dataDirectory, { recursive: true }); \
              writeFileSync(mark, \"1\"); }\n",
         ),
-        _ => (serde_json::json!(["ui.mount"]), ""),
+        _ => (["ui.mount"].as_slice(), ""),
     };
     let manifest = serde_json::json!({"id":THIRD_PARTY,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":capabilities});
+        "entry":"main.js"});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
         (
             "main.js",
-            format!(
-                "import {{ existsSync, mkdirSync, writeFileSync }} from \"node:fs\";\n\
+            explicit::main(
+                capabilities,
+                &format!(
+                    "import {{ existsSync, mkdirSync, writeFileSync }} from \"node:fs\";\n\
                  import {{ join }} from \"node:path\";\n\
                  export default function activate(plugin) {{\nlet crash = false;\n{listen}\
                  const panel = plugin.panels.mount(\"sidebar\", \"ui/list.slint\", {{ title: \"Fixture\" }});\n\
                  if (crash) panel.ready.then(() => setTimeout(() => process.exit(7), 20));\n}}\n"
+                ),
             ),
         ),
         (

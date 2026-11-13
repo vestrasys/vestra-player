@@ -92,15 +92,6 @@ fn validate(request: Request, cancel: &Cancel) -> Result<Candidate, RpcError> {
         }
     };
     crate::packages::package_manager::check_reserved(&candidate.manifest().id, None)?;
-    // What validates here installs as a third-party plugin (a built-in id
-    // is refused above): built-in-only capabilities are refused too.
-    if let Some(name) = crate::capabilities::first_builtin_only(&candidate.manifest().capabilities)
-    {
-        return Err(RpcError::new(
-            "capability",
-            format!("{name}: this capability is for built-in plugins only"),
-        ));
-    }
     if request
         .digest
         .is_some_and(|v| v.as_str() != Some(candidate.digest()))
@@ -543,7 +534,7 @@ mod tests {
         std::fs::write(
             dir.path().join("manifest.json"),
             serde_json::json!({"apiVersion":crate::process::API,"id":id,
-                "version":"1.0.0","entry":"main.js","capabilities":[]})
+                "version":"1.0.0","entry":"main.js"})
             .to_string(),
         )
         .unwrap();

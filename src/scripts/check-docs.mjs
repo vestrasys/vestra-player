@@ -7,8 +7,6 @@
  * 1. `doc/plugins/` holds only `README.md` (a page of links to the site).
  * 2. No Markdown table in `doc/` re-copies one of the site's Reference
  *    tables. Heuristics, per table (consecutive lines starting with `|`):
- *    - capabilities: 8 or more rows whose first cell is one manifest
- *      capability name (the SDK's `CAPABILITIES`);
  *    - limits: 3 or more rows naming a limit constant of the SDK
  *      (`COMMAND_LIMITS.perPlugin`, `OSD_LIMITS`, `MESSAGE_LIMIT`, ...), or
  *      3 or more rows whose second cell starts with the value of one (8 or
@@ -24,7 +22,14 @@
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
+import { createRequire } from "node:module";
 import * as runtime from "@vestra-player/sdk/runtime";
+
+// Every member of the plugin API, `Interface.member`: the capability scan
+// lists each one once, under a category or under `none`.
+const scan = createRequire(import.meta.url)(
+  "@vestra-player/sdk/capability-scan.json",
+);
 
 const repo = resolve(import.meta.dirname, "../..");
 const doc = join(repo, "doc");
@@ -37,7 +42,6 @@ for (const name of plugins)
       `doc/plugins/${name}: doc/plugins holds only README.md; author documentation belongs on the SDK site`,
     );
 
-const capabilities = new Set(runtime.CAPABILITIES);
 const limitObjects = Object.entries(runtime).filter(
   ([name, value]) =>
     name.endsWith("_LIMITS") && value && typeof value === "object",
@@ -61,7 +65,9 @@ const leading = (cell) => {
     : NaN;
 };
 const apis = new Set(
-  Object.values(runtime.CAPABILITY_INFO).flatMap((info) => info.apis),
+  [...Object.values(scan.categories), scan.none].flatMap(
+    (list) => list.members,
+  ),
 );
 const interfaces = new Set([...apis].map((api) => api.split(".")[0]));
 
@@ -89,10 +95,6 @@ function check(file, text) {
     const [header = [], , ...body] = table;
     const at = `${relative(repo, file)}:${start + 1}`;
     const count = (test) => body.filter(test).length;
-    if (count((row) => capabilities.has(bare(row[0] ?? ""))) >= 8)
-      problems.push(
-        `${at}: a capability table; link the SDK site's Reference: Capabilities instead`,
-      );
     const namesLimit = (row) =>
       row.some((cell) =>
         [...cell.matchAll(/\b[A-Z_]+_LIMITS?\b/g)].some(([w]) =>

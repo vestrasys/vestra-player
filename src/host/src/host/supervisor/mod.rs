@@ -799,9 +799,7 @@ impl Host {
                 .map(|root| process::DataKey::Instance(key.guid.clone()).directory(&root)),
         };
         for call in &recording.calls {
-            if let Err(error) =
-                capabilities::replay(self, owner, &origin, &manifest.capabilities, call)
-            {
+            if let Err(error) = capabilities::replay(self, owner, &origin, call) {
                 self.forget_entries(owner);
                 bail!("{}: {}: {}", call.method, error.code, error.message);
             }

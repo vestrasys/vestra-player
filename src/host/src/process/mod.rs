@@ -332,13 +332,6 @@ impl Plugin {
         if !crate::packages::manifest::valid_id(&manifest.id) {
             bail!("invalid plugin id");
         }
-        if manifest
-            .capabilities
-            .iter()
-            .any(|c| !crate::capabilities::known(c))
-        {
-            bail!("unknown required capability");
-        }
         package_file(&directory, &manifest.entry)?;
         let paths = crate::process::runtime_paths::get();
         // Per installed instance or development id (see `DataKey`).
@@ -459,9 +452,6 @@ impl Plugin {
     /// `plugin.dataDirectory`, when the player could create it.
     pub fn data_directory(&self) -> Option<&Path> {
         self.data_directory.as_deref()
-    }
-    pub fn allows(&self, capability: &str) -> bool {
-        self.manifest.capabilities.iter().any(|c| c == capability)
     }
     /// A string this plugin declared (menu title, page or tab title), in the
     /// interface language.
@@ -786,7 +776,7 @@ mod stop_tests {
         std::fs::write(
             directory.join("manifest.json"),
             json!({"id":"test.chatty","version":"1.0.0","apiVersion":API,
-                "entry":"main.js","capabilities":["ui.osd"]})
+                "entry":"main.js"})
             .to_string(),
         )
         .unwrap();
@@ -878,7 +868,7 @@ mod stop_tests {
         std::fs::write(
             directory.join("manifest.json"),
             json!({"id":"test.crashing","version":"1.0.0","apiVersion":API,
-                "entry":"main.js","capabilities":[]})
+                "entry":"main.js"})
             .to_string(),
         )
         .unwrap();

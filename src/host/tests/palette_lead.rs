@@ -21,6 +21,8 @@
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::process::Command;
+#[path = "explicit/mod.rs"]
+mod explicit;
 
 const ID: &str = "vestra.fixture-lead";
 const THIRD: &str = "zysilm.fixture-third";
@@ -41,18 +43,18 @@ fn digest(files: &[(&str, String)]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// A package `id` with `capabilities` and `main.js` in `root`; its
-/// `builtin.json` entry.
+/// A package `id` with `main.js` (and the calls `capabilities` stand
+/// for, `explicit`) in `root`; its `builtin.json` entry.
 fn package(root: &Path, id: &str, capabilities: &[&str], main: String) -> serde_json::Value {
     let files = [
         (
             "manifest.json",
             serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-                "entry":"main.js","capabilities":capabilities})
+                "entry":"main.js"})
             .to_string(),
         ),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
-        ("main.js", main),
+        ("main.js", explicit::main(capabilities, &main)),
     ];
     let directory = root.join(id);
     std::fs::create_dir_all(&directory).unwrap();

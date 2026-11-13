@@ -43,11 +43,11 @@ function scratch(prefix: string) {
 }
 
 /** A plugin package in a temporary directory. */
-function fixture(id: string, source: string, capabilities = ["commands"]) {
+function fixture(id: string, source: string) {
   const directory = scratch("shared-plugin-");
   writeFileSync(
     join(directory, "manifest.json"),
-    JSON.stringify({ id, entry: "main.mjs", capabilities }),
+    JSON.stringify({ id, entry: "main.mjs" }),
   );
   writeFileSync(join(directory, "main.mjs"), source);
   return directory;
@@ -184,16 +184,8 @@ test("the shared runner greets the host and runs two plugins, each on its own ge
   const hello = await host.control("runner.hello");
   assert.equal(hello.data?.pid, host.child.pid);
   assert.equal(hello.data?.node, process.versions.node);
-  host.start(
-    1,
-    "test.one",
-    fixture("test.one", commandPlugin("One"), ["commands", "ui.osd"]),
-  );
-  host.start(
-    2,
-    "test.two",
-    fixture("test.two", commandPlugin("Two"), ["commands", "ui.osd"]),
-  );
+  host.start(1, "test.one", fixture("test.one", commandPlugin("One")));
+  host.start(2, "test.two", fixture("test.two", commandPlugin("Two")));
   await host.event(1, "runtime.ready");
   await host.wait(() => held[0], "plugin 2's first request");
   // A reply for a generation that is not running, or for an id the plugin
@@ -266,16 +258,8 @@ test("stopping one plugin runs its cleanup and keeps the other answering", async
       plugin.onDispose(() => console.error("${name} disposed"));
       plugin.commands.add({ id: "a", path: ["Tools", "${name}"], run() { plugin.osd.show("${name}"); } });
     }`;
-  host.start(
-    4,
-    "test.first",
-    fixture("test.first", cleanup("first"), ["commands", "ui.osd"]),
-  );
-  host.start(
-    5,
-    "test.second",
-    fixture("test.second", cleanup("second"), ["commands", "ui.osd"]),
-  );
+  host.start(4, "test.first", fixture("test.first", cleanup("first")));
+  host.start(5, "test.second", fixture("test.second", cleanup("second")));
   await host.event(4, "runtime.ready");
   await host.event(5, "runtime.ready");
   host.send({ g: 4, event: "runtime.stop" });
@@ -305,7 +289,6 @@ test("a cleanup that never settles is abandoned after the stop deadline", async 
     fixture(
       "test.stuck",
       "export default async function activate(plugin) { plugin.onDispose(() => new Promise(() => {})); }",
-      [],
     ),
   );
   await host.event(1, "runtime.ready");
@@ -336,7 +319,6 @@ test("logs carry the plugin's id, stdout writes go to stderr, oversize requests 
         const code = await plugin.osd.show("x".repeat(1024 * 1024)).then(() => "sent", (e) => e.code);
         await plugin.osd.show(code);
       }`,
-      ["ui.osd"],
     ),
   );
   await host.event(1, "runtime.ready");
@@ -378,14 +360,9 @@ test("an uncaught exception in a plugin's own callback stops that plugin only", 
         // Left behind by the first fault: logged, not reported again.
         setTimeout(() => { throw new Error('later'); }, 150);
       }`,
-      [],
     ),
   );
-  host.start(
-    2,
-    "test.calm",
-    fixture("test.calm", commandPlugin("Calm"), ["commands", "ui.osd"]),
-  );
+  host.start(2, "test.calm", fixture("test.calm", commandPlugin("Calm")));
   await host.event(1, "runtime.ready");
   await host.event(2, "runtime.ready");
   const fault = await host.control("runner.fault", 1);
@@ -417,7 +394,6 @@ test("an uncaught exception no plugin owns ends the shared runner", async () => 
     fixture(
       "test.global",
       "export default async function activate() { process.stdin.on('data', () => { throw new Error('orphan'); }); }",
-      [],
     ),
   );
   await host.event(1, "runtime.ready");
@@ -557,7 +533,7 @@ const cleanupRequests = `export default async function activate(plugin) {
 }`;
 
 test("requests sent during cleanup are refused, not written: own runner", async () => {
-  const directory = fixture("test.cleanup", cleanupRequests, ["ui.osd"]);
+  const directory = fixture("test.cleanup", cleanupRequests);
   const host = new Host([join(runtime, "runner.ts"), directory], () => ({
     result: null,
   }));
@@ -573,11 +549,7 @@ test("requests sent during cleanup are refused, not written: own runner", async 
 
 test("requests sent during cleanup are refused, not written: shared runner", async () => {
   const host = shared(() => ({ result: null }));
-  host.start(
-    1,
-    "test.cleanup",
-    fixture("test.cleanup", cleanupRequests, ["ui.osd"]),
-  );
+  host.start(1, "test.cleanup", fixture("test.cleanup", cleanupRequests));
   await host.event(1, "runtime.ready");
   const written = host.of(1).length;
   host.send({ g: 1, event: "runtime.stop" });
@@ -603,7 +575,7 @@ const reasonPlugin = (name: string) =>
 const own = (name: string) =>
   new Host([
     join(runtime, "runner.ts"),
-    fixture(`test.${name}`, reasonPlugin(name), []),
+    fixture(`test.${name}`, reasonPlugin(name)),
   ]);
 
 test("own runner: runtime.stop's reason reaches the cleanups", async () => {
@@ -651,7 +623,6 @@ test("shared runner: each stop carries its reason, a closed stdin is host-lost",
               "setTimeout(() => { throw new Error('boom'); }, 50); plugin.onDispose",
             )
           : reasonPlugin(name),
-        [],
       ),
     );
   for (const g of [1, 2, 3, 4]) await host.event(g, "runtime.ready");
@@ -676,7 +647,7 @@ test("shared runner: each stop carries its reason, a closed stdin is host-lost",
   assert.doesNotMatch(host.stderr, /host-lost/);
 
   const lost = shared();
-  lost.start(1, "test.lost", fixture("test.lost", reasonPlugin("lost"), []));
+  lost.start(1, "test.lost", fixture("test.lost", reasonPlugin("lost")));
   await lost.event(1, "runtime.ready");
   lost.child.stdin.end();
   assert.equal(await lost.exited, 0);

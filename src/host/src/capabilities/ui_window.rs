@@ -1,5 +1,5 @@
 //! `ui.window`: a plugin's own Slint windows (ui/view.rs).
-use super::{Capability, Handled, Info, Method, Recorded, Residency, plugin};
+use super::{Capability, Handled, Info, Recorded, plugin};
 use crate::{
     host::{Host, Reply, RpcError, string},
     platform, process,
@@ -15,23 +15,14 @@ use std::collections::BTreeMap;
 pub struct UiWindow;
 static INFO: Info = Info {
     name: "ui.window",
-    label: "Open tool windows",
-    risky: false,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("ui.open"),
-    Method::this("ui.set"),
-    Method::this("ui.show"),
-    Method::this("ui.close"),
-];
+static METHODS: &[&str] = &["ui.open", "ui.set", "ui.show", "ui.close"];
 impl Capability for UiWindow {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {

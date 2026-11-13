@@ -1,22 +1,20 @@
-//! The manifest capabilities, one module each.
+//! The plugin API's request handlers, one module per area.
 //!
-//! A capability module owns its manifest name, its wording for the store and
-//! the SDK (`label`, `risky`), the capabilities it implies (`requires`), a
-//! residency hint, the RPC methods it serves and their handling. Nothing
-//! else lists capabilities: the manifest check (`known`), the per-request
-//! permission check (`required`) and the dispatch (`lookup`) are built from
-//! [`ALL`], and the committed `src/host/capabilities.json` is generated from
-//! it (`tests::json_is_current`), for the SDK's `CAPABILITY_INFO`, the
-//! store's labels and src/tests/sdk/host-agreement.test.ts.
-//!
-//! Adding a capability: a new module implementing [`Capability`], one line in
-//! [`ALL`] (the order is the manifest order the SDK repeats), then
-//! `VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities` to rewrite the JSON.
+//! An area module owns the RPC methods it serves and their handling, and
+//! what a plugin holds through them for standby (`record`, `rekey`,
+//! `revoke`, `prune`, `replay`). The modules keep the names of the
+//! manifest capabilities they once were (`commands`, `ui.mount`, ...);
+//! since player 0.9.0 (SDK 1.9.0) a manifest declares nothing, and every
+//! plugin may make every request (doc/plugins/README.md). The one refusal
+//! left is by provenance: the built-in-only areas (`commands.run`,
+//! `palette.lead`) answer only built-in plugins (`Route::check_caller`).
+//! [`ALL`] and `uncapable.rs` are the only lists: the dispatch (`lookup`)
+//! is built from them.
 use crate::{
     host::{Host, Origin, Reply, RpcError},
     playback::backend::Command,
 };
-use serde_json::{Map, Value, json};
+use serde_json::Value;
 use std::{collections::HashMap, sync::OnceLock};
 
 mod bindings_manage;
@@ -32,7 +30,6 @@ pub(crate) mod palette_lead;
 mod playback_control;
 mod playback_read;
 mod plugins_manage;
-mod processing_audio;
 mod processing_video;
 mod producer_av;
 mod rendering_manage;
@@ -65,95 +62,15 @@ pub(crate) use media_sources::locate_dialog;
 pub(crate) use mpv::check as mpv_check;
 pub(crate) use palette_lead::{EVENT as LEAD_EVENT, Lead, LeadStatus, StatusState};
 
-/// What a capability is, as the manifest, the store and the SDK name it.
-// Read by the JSON generator (`json`, a test) and the lazy activation to come.
-#[cfg_attr(not(test), allow(dead_code))]
+/// What an area is.
 pub struct Info {
-    /// Exactly the manifest string: "commands", "ui.mount", ...
+    /// Its name, the manifest capability it once was: "commands", "ui.mount", ...
     pub name: &'static str,
-    /// The store's and the SDK's wording (`CAPABILITY_INFO.label`, store `labels.ts`).
-    pub label: &'static str,
-    /// Drawn amber in the store.
-    pub risky: bool,
-    /// Capabilities its SDK members also need (`CAPABILITY_INFO.requires`).
-    pub requires: &'static [&'static str],
-    /// Whether what a plugin holds through it keeps the plugin running
-    /// (doc/architecture/supervisor.md §2, "something live").
-    /// A hint for the JSON; what decides is the capability's `record`.
-    pub residency: Residency,
-    /// Only built-in plugins may use it (`CAPABILITY_INFO.builtinOnly`):
-    /// `Host::dispatch` and `replay` refuse it to any other plugin with
-    /// `capability`, built-in by provenance (`Host::is_builtin`), never by
-    /// a manifest field or a load mode; `packages.validate` refuses a
-    /// package that declares it.
+    /// Only built-in plugins may use it: `Host::dispatch` and `replay`
+    /// refuse its methods to any other plugin with `capability`, built-in
+    /// by provenance (`Host::is_builtin`), never by a manifest field or a
+    /// load mode.
     pub builtin_only: bool,
-}
-
-/// The residency hint of a capability.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Residency {
-    /// Its requests leave nothing behind for the plugin.
-    None,
-    /// It registers entries the player can show and trigger without the
-    /// plugin's process (menu commands, settings pages, resolvers, drop
-    /// targets): recorded and replayed.
-    Recordable,
-    /// It holds something only the plugin's process can serve (a panel,
-    /// a window, a listener, a filter chain, a stream, a lease).
-    Live,
-}
-impl Residency {
-    #[cfg_attr(not(test), allow(dead_code))]
-    fn name(self) -> &'static str {
-        match self {
-            Self::None => "none",
-            Self::Recordable => "recordable",
-            Self::Live => "live",
-        }
-    }
-}
-
-/// The capability a method asks for.
-pub enum Needs {
-    /// The capability that owns the method.
-    This,
-    /// None: any plugin may call it.
-    Nothing,
-    /// Chosen by a string parameter: the capability of the first matching
-    /// case, `otherwise` when none matches (`None`: no capability).
-    Param {
-        key: &'static str,
-        cases: &'static [(&'static str, Option<&'static str>)],
-        otherwise: Option<&'static str>,
-    },
-    /// `then` when the plugin declared `declared`, `otherwise` if not.
-    IfDeclared {
-        declared: &'static str,
-        then: &'static str,
-        otherwise: &'static str,
-    },
-}
-
-/// An RPC method a capability serves. A name ending in `.*` covers every
-/// method with that prefix that no exact name covers (the prefix's handler
-/// refuses the ones it does not know).
-pub struct Method {
-    pub name: &'static str,
-    pub needs: Needs,
-}
-impl Method {
-    pub const fn this(name: &'static str) -> Self {
-        Self {
-            name,
-            needs: Needs::This,
-        }
-    }
-    pub const fn free(name: &'static str) -> Self {
-        Self {
-            name,
-            needs: Needs::Nothing,
-        }
-    }
 }
 
 pub type Handled = std::result::Result<Option<Value>, RpcError>;
@@ -186,12 +103,12 @@ pub enum Recorded {
     Live(&'static str),
 }
 
-/// A manifest capability: its metadata, its methods and their handling.
+/// An area of the API: its methods and their handling.
 pub trait Capability: Sync {
     fn info(&self) -> &'static Info;
     /// The RPC methods it owns; a method has exactly one owner (`tests`).
-    fn methods(&self) -> &'static [Method];
-    /// Serves one of `methods()`, after the permission check and the text
+    fn methods(&self) -> &'static [&'static str];
+    /// Serves one of `methods()`, after the built-in check and the text
     /// resolution of `Host::dispatch`. `Ok(None)`: answered later.
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled;
     /// What `owner` holds through this capability: calls that recreate its
@@ -272,65 +189,20 @@ pub fn recordable(host: &Host, owner: u64, backend: &Value) -> Vec<Call> {
     calls
 }
 
-/// Replays a recorded call: its capability, which the package must declare.
-pub fn replay(
-    host: &mut Host,
-    owner: u64,
-    origin: &Origin,
-    declared: &[String],
-    call: &Call,
-) -> Handled {
+/// Replays a recorded call in its area. A recording of a package that is
+/// not built-in (the same id loaded for development or from another
+/// directory) replays nothing built-in-only.
+pub fn replay(host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Handled {
     let route = lookup(&call.method);
     let capability = route
         .and_then(|route| route.owner)
         .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
-    // What the request asks for, as for a live one (`packages.changed`
-    // needs no capability, `bindings.changed` needs `bindings.manage`).
-    let allows = |name: &str| declared.iter().any(|c| c == name);
-    let needs = route.and_then(|route| route.needs(&call.params, allows));
-    if needs.is_some_and(|needed| !allows(needed)) {
-        return Err(RpcError::new(
-            "capability",
-            "capability must be declared in manifest",
-        ));
-    }
-    // A recording of a package that is not built-in (the same id loaded for
-    // development or from another directory) replays nothing built-in-only.
     let builtin = host.is_builtin_package(origin);
-    builtin_only_check(needs, builtin)?;
+    route.map_or(Ok(()), |route| route.check_caller(builtin))?;
     capability.replay(host, owner, origin, call)
 }
 
-/// The refusal of a built-in-only capability (`Info::builtin_only`) to a
-/// plugin that is not built-in: `needs` is the capability a request needs,
-/// `builtin` whether its plugin is built-in by provenance.
-pub fn builtin_only_check(needs: Option<&str>, builtin: bool) -> std::result::Result<(), RpcError> {
-    if !builtin && needs.is_some_and(builtin_only) {
-        return Err(RpcError::new(
-            "capability",
-            "this capability is for built-in plugins only",
-        ));
-    }
-    Ok(())
-}
-
-/// Whether the capability `name` is for built-in plugins only.
-pub fn builtin_only(name: &str) -> bool {
-    ALL.iter()
-        .any(|c| c.info().name == name && c.info().builtin_only)
-}
-
-/// The first built-in-only capability a manifest declares: what a package
-/// that is not built-in may not declare (`packages.validate`).
-pub fn first_builtin_only(declared: &[String]) -> Option<&str> {
-    declared
-        .iter()
-        .map(String::as_str)
-        .find(|name| builtin_only(name))
-}
-
-/// Every manifest capability, in the manifest order the SDK's
-/// `CAPABILITIES` repeats.
+/// Every area.
 pub static ALL: &[&dyn Capability] = &[
     &producer_av::ProducerAv,
     &playback_read::PlaybackRead,
@@ -343,7 +215,6 @@ pub static ALL: &[&dyn Capability] = &[
     &ui_dialog::UiDialog,
     &plugins_manage::PluginsManage,
     &processing_video::ProcessingVideo,
-    &processing_audio::ProcessingAudio,
     &subtitles_read::SubtitlesRead,
     &subtitles_control::SubtitlesControl,
     &media_read::MediaRead,
@@ -364,51 +235,30 @@ pub static ALL: &[&dyn Capability] = &[
     // Built-in only (Ask Vestra, doc/architecture/palette-lead.md).
     &commands_run::CommandsRun,
     &palette_lead::PaletteLead,
-    // The mpv pass-through (SDK 1.8.0): last, so the manifest order of the
-    // capabilities before it is unchanged.
+    // The mpv pass-through (SDK 1.8.0).
     &mpv::Mpv,
 ];
 
-/// Whether `name` is a manifest capability.
-pub fn known(name: &str) -> bool {
-    ALL.iter().any(|c| c.info().name == name)
-}
-
-/// How many manifest capabilities there are.
-pub fn count() -> usize {
-    ALL.len()
-}
-
-/// Where a method goes: its owner (`None`: `uncapable`) and its entry.
+/// Where a method goes: its owner (`None`: `uncapable`).
 #[derive(Clone, Copy)]
 pub struct Route {
     owner: Option<&'static dyn Capability>,
-    method: &'static Method,
 }
 impl Route {
-    /// The capability the request needs (`None`: none); `allows` tells
-    /// which capabilities the plugin declared.
-    pub fn needs(&self, params: &Value, allows: impl Fn(&str) -> bool) -> Option<&'static str> {
-        match &self.method.needs {
-            Needs::This => self.owner.map(|c| c.info().name),
-            Needs::Nothing => None,
-            Needs::Param {
-                key,
-                cases,
-                otherwise,
-            } => {
-                let value = params[*key].as_str();
-                cases
-                    .iter()
-                    .find(|(case, _)| value == Some(*case))
-                    .map_or(*otherwise, |(_, needs)| *needs)
-            }
-            Needs::IfDeclared {
-                declared,
-                then,
-                otherwise,
-            } => Some(if allows(declared) { then } else { otherwise }),
+    /// Only built-in plugins may call it (`Info::builtin_only` of its area).
+    pub fn builtin_only(&self) -> bool {
+        self.owner.is_some_and(|c| c.info().builtin_only)
+    }
+    /// The refusal of a built-in-only method to a plugin that is not
+    /// built-in (`builtin`: by provenance).
+    pub fn check_caller(&self, builtin: bool) -> std::result::Result<(), RpcError> {
+        if self.builtin_only() && !builtin {
+            return Err(RpcError::new(
+                "capability",
+                "this capability is for built-in plugins only",
+            ));
         }
+        Ok(())
     }
     pub fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match self.owner {
@@ -426,16 +276,16 @@ fn routes() -> &'static Routes {
     ROUTES.get_or_init(|| {
         let owned = ALL
             .iter()
-            .flat_map(|c| c.methods().iter().map(move |m| (Some(*c), m)))
-            .chain(uncapable::METHODS.iter().map(|m| (None, m)));
+            .flat_map(|c| c.methods().iter().map(move |m| (Some(*c), *m)))
+            .chain(uncapable::METHODS.iter().map(|m| (None, *m)));
         let mut exact = HashMap::new();
         let mut prefixes = Vec::new();
-        for (owner, method) in owned {
-            let route = Route { owner, method };
-            match method.name.strip_suffix('*') {
+        for (owner, name) in owned {
+            let route = Route { owner };
+            match name.strip_suffix('*') {
                 Some(prefix) => prefixes.push((prefix, route)),
                 None => {
-                    exact.insert(method.name, route);
+                    exact.insert(name, route);
                 }
             }
         }
@@ -452,20 +302,6 @@ pub fn lookup(method: &str) -> Option<Route> {
             .find(|(prefix, _)| method.starts_with(prefix))
             .map(|(_, route)| *route)
     })
-}
-
-/// The manifest capability a request needs (`None`: none); `allows` tells
-/// which capabilities the plugin declared. Unknown methods fail
-/// `unsupported`. (`Host::dispatch` uses the route itself.)
-#[cfg_attr(not(test), allow(dead_code))]
-pub fn required(
-    method: &str,
-    params: &Value,
-    allows: impl Fn(&str) -> bool,
-) -> std::result::Result<Option<&'static str>, RpcError> {
-    lookup(method)
-        .map(|route| route.needs(params, allows))
-        .ok_or_else(|| RpcError::new("unsupported", "unknown method"))
 }
 
 /// Hands a request to the playback worker; a stopped worker is `backend`.
@@ -507,93 +343,17 @@ fn plugin<'a>(host: &'a Host, reply: &Reply) -> std::result::Result<&'a crate::P
         .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
-fn needs_json(needs: &Needs, owner: Option<&Info>) -> Value {
-    let name = |n: Option<&str>| n.map_or(Value::Null, |n| n.into());
-    match needs {
-        Needs::This => name(owner.map(|o| o.name)),
-        Needs::Nothing => Value::Null,
-        Needs::Param {
-            key,
-            cases,
-            otherwise,
-        } => json!({
-            "param": key,
-            "cases": cases.iter().map(|(case, needs)| ((*case).to_owned(), name(*needs))).collect::<Map<_, _>>(),
-            "otherwise": name(*otherwise),
-        }),
-        Needs::IfDeclared {
-            declared,
-            then,
-            otherwise,
-        } => json!({"ifDeclared": declared, "then": then, "otherwise": otherwise}),
-    }
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
-fn methods_json(methods: &[Method], owner: Option<&Info>) -> Value {
-    methods
-        .iter()
-        .map(|m| json!({"name": m.name, "needs": needs_json(&m.needs, owner)}))
-        .collect()
-}
-
-/// `src/host/capabilities.json`: [`ALL`] as data.
-#[cfg_attr(not(test), allow(dead_code))]
-pub fn json() -> Value {
-    json!({
-        "about": "Generated from src/host/src/capabilities/ (VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities); do not edit. \
-            A method's needs: null (none), a capability name, \
-            {param, cases, otherwise} (by a string parameter) or {ifDeclared, then, otherwise}. \
-            A method name ending in .* covers the prefix's other methods.",
-        "apiVersion": crate::process::API,
-        "capabilities": ALL.iter().map(|c| {
-            let info = c.info();
-            json!({
-                "name": info.name,
-                "label": info.label,
-                "risky": info.risky,
-                "requires": info.requires,
-                "residency": info.residency.name(),
-                "builtinOnly": info.builtin_only,
-                "methods": methods_json(c.methods(), Some(info)),
-            })
-        }).collect::<Vec<_>>(),
-        "uncapable": methods_json(uncapable::METHODS, None),
-    })
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::collections::BTreeSet;
 
-    #[test]
-    fn json_is_current() {
-        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/capabilities.json");
-        let generated = serde_json::to_string_pretty(&json()).unwrap() + "\n";
-        if std::env::var("VESTRA_UPDATE_CAPABILITIES").as_deref() == Ok("1") {
-            std::fs::write(path, &generated).unwrap();
-            return;
-        }
-        let committed = std::fs::read_to_string(path)
-            .unwrap_or_default()
-            .replace("\r\n", "\n");
-        if committed != generated {
-            let first = committed
-                .lines()
-                .zip(generated.lines())
-                .position(|(a, b)| a != b)
-                .unwrap_or(committed.lines().count().min(generated.lines().count()));
-            panic!(
-                "src/host/capabilities.json is not what src/host/src/capabilities/ generates \
-                 (first difference at line {}: committed {:?}, generated {:?}); \
-                 rerun with VESTRA_UPDATE_CAPABILITIES=1 and commit the file",
-                first + 1,
-                committed.lines().nth(first),
-                generated.lines().nth(first),
-            );
-        }
+    /// The area a method goes to (`None`: `uncapable`), or `Err` for
+    /// no method.
+    fn area(method: &str) -> Result<Option<&'static str>, ()> {
+        lookup(method)
+            .map(|route| route.owner.map(|c| c.info().name))
+            .ok_or(())
     }
 
     #[test]
@@ -604,56 +364,18 @@ mod tests {
             .flat_map(|c| c.methods())
             .chain(uncapable::METHODS);
         for method in all {
-            assert!(seen.insert(method.name), "{} has two owners", method.name);
+            assert!(seen.insert(*method), "{method} has two owners");
         }
         let mut names = BTreeSet::new();
         for capability in ALL {
             let info = capability.info();
             assert!(names.insert(info.name), "{} listed twice", info.name);
         }
-        for capability in ALL {
-            for required in capability.info().requires {
-                assert!(
-                    known(required),
-                    "{} requires unknown {required}",
-                    capability.info().name
-                );
-            }
-        }
-    }
-
-    #[test]
-    fn every_capability_a_method_names_exists_and_uncapable_needs_nothing() {
-        let named = |needs: &Needs| -> Vec<&'static str> {
-            match needs {
-                Needs::This | Needs::Nothing => Vec::new(),
-                Needs::Param {
-                    cases, otherwise, ..
-                } => cases
-                    .iter()
-                    .filter_map(|(_, n)| *n)
-                    .chain(*otherwise)
-                    .collect(),
-                Needs::IfDeclared {
-                    declared,
-                    then,
-                    otherwise,
-                } => vec![declared, then, otherwise],
-            }
-        };
-        for method in ALL.iter().flat_map(|c| c.methods()) {
-            for name in named(&method.needs) {
-                assert!(known(name), "{} names unknown {name}", method.name);
-            }
-        }
-        for method in uncapable::METHODS {
-            assert!(matches!(method.needs, Needs::Nothing), "{}", method.name);
-        }
     }
 
     /// `commands.run` and `palette.lead` are refused to a plugin that is not
-    /// built-in, live (`Host::dispatch`) and replayed (`replay`), whatever it
-    /// declared; every other capability is unaffected.
+    /// built-in, live (`Host::dispatch`) and replayed (`replay`); every
+    /// other area is open to every plugin.
     #[test]
     fn built_in_only_capabilities_are_refused_to_other_plugins() {
         let only: Vec<_> = ALL
@@ -670,155 +392,78 @@ mod tests {
             "palette.lead.clear",
             "palette.lead.done",
         ] {
-            let needs = required(method, &json!({}), |_| true).unwrap();
-            assert!(needs.is_some_and(builtin_only), "{method}");
-            let refused = builtin_only_check(needs, false).unwrap_err();
+            let route = lookup(method).unwrap();
+            assert!(route.builtin_only(), "{method}");
+            let refused = route.check_caller(false).unwrap_err();
             assert_eq!(refused.code, "capability", "{method}");
             assert_eq!(
                 refused.message,
                 "this capability is for built-in plugins only"
             );
-            assert!(builtin_only_check(needs, true).is_ok(), "{method}");
+            assert!(route.check_caller(true).is_ok(), "{method}");
         }
-        // The `commands` capability's own methods stay open to everyone.
+        // The `commands` area's own methods stay open to everyone, as does
+        // every other method.
         for method in ["commands.register", "commands.keys", "host.run"] {
-            let needs = required(method, &json!({}), |_| true).unwrap();
-            assert!(builtin_only_check(needs, false).is_ok(), "{method}");
-        }
-        assert!(builtin_only_check(None, false).is_ok());
-        let declared = |names: &[&str]| names.iter().map(|n| (*n).to_owned()).collect::<Vec<_>>();
-        assert_eq!(
-            first_builtin_only(&declared(&["commands", "palette.lead"])),
-            Some("palette.lead")
-        );
-        assert_eq!(first_builtin_only(&declared(&["commands", "events"])), None);
-        // Exported for the SDK.
-        let exported = json();
-        let flag = |name: &str| {
-            exported["capabilities"]
-                .as_array()
-                .unwrap()
-                .iter()
-                .find(|c| c["name"] == name)
-                .unwrap()["builtinOnly"]
-                .clone()
-        };
-        assert_eq!(flag("commands.run"), true);
-        assert_eq!(flag("palette.lead"), true);
-        assert_eq!(flag("commands"), false);
-    }
-
-    #[test]
-    fn opening_a_remembered_file_needs_media_sources_and_playback_control() {
-        // What `Host::dispatch` lets through: the needed capability declared.
-        let allowed = |method: &str, declared: &[&str]| {
-            let allows = |name: &str| declared.contains(&name);
-            required(method, &json!({}), allows)
-                .unwrap()
-                .is_none_or(allows)
-        };
-        let both = ["media.sources", "playback.control"];
-        assert!(allowed("media.sources.open", &both));
-        assert!(!allowed("media.sources.open", &["media.sources"]));
-        assert!(!allowed("media.sources.open", &["playback.control"]));
-        assert!(!allowed("media.sources.open", &[]));
-        // The other members need `media.sources` alone.
-        for method in [
-            "media.sources.remember",
-            "media.sources.get",
-            "media.sources.locate",
-            "media.sources.forget",
-            "media.sources.list",
-        ] {
-            assert!(allowed(method, &["media.sources"]), "{method}");
-            assert!(!allowed(method, &["playback.control"]), "{method}");
-        }
-    }
-
-    #[test]
-    fn a_plugin_follows_up_its_own_source_operation_with_playback_control() {
-        let query = |declared: &[&str]| {
-            required("source.operation", &json!({"operationId": 1}), |name| {
-                declared.contains(&name)
-            })
-            .unwrap()
-        };
-        assert_eq!(query(&["playback.control"]), Some("playback.control"));
-        assert_eq!(query(&["playback.read"]), Some("playback.read"));
-        assert_eq!(
-            query(&["playback.read", "playback.control"]),
-            Some("playback.control")
-        );
-        // Neither declared: the check asks for playback.read, which fails.
-        assert_eq!(query(&[]), Some("playback.read"));
-        let state = required("source.state", &json!({}), |_| true).unwrap();
-        assert_eq!(state, Some("playback.read"));
-        let unknown = required("source.nothing", &json!({}), |_| true).unwrap_err();
-        assert_eq!(unknown.code, "unsupported");
-    }
-
-    #[test]
-    fn parameters_and_prefixes_choose_the_capability() {
-        let needs = |method: &str, params: Value| required(method, &params, |_| false).unwrap();
-        let event = |name: &str| needs("events.subscribe", json!({"event": name}));
-        assert_eq!(event("packages.changed"), None);
-        assert_eq!(event("bindings.changed"), Some("bindings.manage"));
-        // A plugin's own key labels need only `commands`.
-        assert_eq!(event("commands.keys"), Some("commands"));
-        assert_eq!(needs("commands.keys", json!({})), Some("commands"));
-        assert_eq!(event("source.state"), Some("events"));
-        assert_eq!(needs("events.unsubscribe", json!({})), Some("events"));
-        let stage = |stage: Value| needs("processing.replace", json!({"stage": stage}));
-        assert_eq!(stage("video".into()), Some("processing.video"));
-        assert_eq!(stage("audio".into()), Some("processing.audio"));
-        assert_eq!(stage(Value::Null), Some("processing.audio"));
-        // An exact name before its prefix; the prefix covers the rest.
-        assert_eq!(needs("packages.list", json!({})), None);
-        assert_eq!(needs("packages.install", json!({})), Some("plugins.manage"));
-        assert_eq!(
-            needs("packages.anything", json!({})),
-            Some("plugins.manage")
-        );
-        assert_eq!(needs("snapshot.state", json!({})), Some("media.read"));
-        assert_eq!(needs("snapshot.capture", json!({})), Some("media.control"));
-        // An export of parts is an export (media.sources checked as well,
-        // capabilities/media_control.rs); the check too.
-        assert_eq!(
-            needs("jobs.start", json!({"parts": []})),
-            Some("media.control")
-        );
-        assert_eq!(needs("jobs.check", json!({})), Some("media.control"));
-        assert_eq!(
-            needs("media.sources.remember", json!({})),
-            Some("media.sources")
-        );
-        // The host's own source messages are no plugin method.
-        for internal in ["owner.sourceLocated", "owner.sourcesRevoked"] {
-            assert_eq!(
-                required(internal, &json!({}), |_| true).unwrap_err().code,
-                "unsupported"
+            assert!(
+                lookup(method).unwrap().check_caller(false).is_ok(),
+                "{method}"
             );
         }
-        assert_eq!(needs("subtitles.state", json!({})), Some("subtitles.read"));
-        assert_eq!(
-            needs("subtitles.select", json!({})),
-            Some("subtitles.control")
-        );
-        assert_eq!(needs("settings.anything", json!({})), Some("ui.settings"));
-        assert_eq!(needs("window.state", json!({})), None);
-        assert_eq!(needs("storage.session.get", json!({})), None);
+        for capability in ALL.iter().filter(|c| !c.info().builtin_only) {
+            for method in capability.methods() {
+                let route = lookup(method.trim_end_matches('*')).unwrap();
+                assert!(route.check_caller(false).is_ok(), "{method}");
+            }
+        }
+        for method in uncapable::METHODS {
+            assert!(
+                lookup(method).unwrap().check_caller(false).is_ok(),
+                "{method}"
+            );
+        }
+    }
+
+    #[test]
+    fn an_unknown_source_method_is_no_method() {
+        assert_eq!(area("source.operation"), Ok(Some("playback.control")));
+        assert_eq!(area("source.state"), Ok(Some("playback.read")));
+        assert_eq!(area("source.nothing"), Err(()));
+    }
+
+    #[test]
+    fn exact_names_come_before_prefixes() {
+        assert_eq!(area("events.subscribe"), Ok(Some("events")));
+        assert_eq!(area("events.unsubscribe"), Ok(Some("events")));
+        assert_eq!(area("processing.replace"), Ok(Some("processing.video")));
+        // An exact name before its prefix; the prefix covers the rest.
+        assert_eq!(area("packages.list"), Ok(None));
+        assert_eq!(area("packages.install"), Ok(Some("plugins.manage")));
+        assert_eq!(area("packages.anything"), Ok(Some("plugins.manage")));
+        assert_eq!(area("snapshot.state"), Ok(Some("media.read")));
+        assert_eq!(area("snapshot.capture"), Ok(Some("media.control")));
+        assert_eq!(area("jobs.start"), Ok(Some("media.control")));
+        assert_eq!(area("jobs.check"), Ok(Some("media.control")));
+        assert_eq!(area("media.sources.open"), Ok(Some("media.sources")));
+        assert_eq!(area("media.sources.remember"), Ok(Some("media.sources")));
+        // The host's own source messages are no plugin method.
+        for internal in ["owner.sourceLocated", "owner.sourcesRevoked"] {
+            assert_eq!(area(internal), Err(()), "{internal}");
+        }
+        assert_eq!(area("subtitles.state"), Ok(Some("subtitles.read")));
+        assert_eq!(area("subtitles.select"), Ok(Some("subtitles.control")));
+        assert_eq!(area("settings.anything"), Ok(Some("ui.settings")));
+        assert_eq!(area("window.state"), Ok(None));
+        assert_eq!(area("storage.session.get"), Ok(None));
         // Names without a prefix entry are not covered by a neighbour's.
         for unknown in [
             "bindings.other",
             "system.other",
             "storage.session.other",
             "ui.other",
+            "mpv.other",
         ] {
-            assert_eq!(
-                required(unknown, &json!({}), |_| true).unwrap_err().code,
-                "unsupported",
-                "{unknown}"
-            );
+            assert_eq!(area(unknown), Err(()), "{unknown}");
         }
     }
 }

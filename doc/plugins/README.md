@@ -8,7 +8,7 @@ Everything a plugin author needs is on the SDK's documentation site, [vestrasys.
 | Do one task (translate, test, publish, ...) | [Guides](https://vestrasys.github.io/vestra-player-sdk/documents/Guides.html) |
 | Follow the interface and menu rules | [Design rules](https://vestrasys.github.io/vestra-player-sdk/documents/Design_rules.html) |
 | Read complete example plugins | [Examples](https://vestrasys.github.io/vestra-player-sdk/documents/Examples.html) |
-| Look up capabilities, limits, menu keys, bindings, platforms, theme, the CLI | [Reference](https://vestrasys.github.io/vestra-player-sdk/documents/Reference.html) |
+| Look up limits, menu keys, bindings, platforms, theme, the CLI | [Reference](https://vestrasys.github.io/vestra-player-sdk/documents/Reference.html) |
 | Look up one interface or member | [API](https://vestrasys.github.io/vestra-player-sdk/modules/_vestra-player_sdk.html) |
 
 In this repository:
