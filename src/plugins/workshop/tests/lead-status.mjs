@@ -7,7 +7,7 @@
 // player's way, so a plugin call it accepts may still be refused by the
 // player; this checks the player's rule.
 import assert from "node:assert/strict";
-import { STATUS_CHARS } from "../askvestra/status.ts";
+import { END_STATUS_CHARS, STATUS_CHARS } from "../askvestra/status.ts";
 
 /** A text of the lead row (wire form: a string or { $vestraText, args }) as the palette shows it. */
 export const shown = (host, value) => {
@@ -35,7 +35,8 @@ export function guard(test) {
         if (!params.status) continue;
         const text = shown(host, params.status.text);
         const length = [...text].length;
-        assert.ok(length >= 1 && length <= STATUS_CHARS && !/[\0\n\r]/.test(text), `status.text the player refuses (${length} characters): ${text}`);
+        const max = params.status.state && params.status.state !== "working" ? END_STATUS_CHARS : STATUS_CHARS;
+        assert.ok(length >= 1 && length <= max && !/[\0\n\r]/.test(text), `status.text the player refuses (${length} characters): ${text}`);
       }
   });
 }

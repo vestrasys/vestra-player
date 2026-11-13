@@ -200,12 +200,12 @@ test("Don't Run on the sheet runs nothing, not even the steps that do not ask, a
   ]);
   host.dialogAnswers.push(CONTINUE, DONT_RUN); // consent, then Don't Run on the sheet
   await host.runPaletteLead("louder and clear the playlist and mute");
-  await ai.until(() => ai.end() === "note: Stopped: nothing was run", "declined");
+  await ai.until(() => ai.end() === "stopped: Stopped: nothing was run", "declined");
   assert.deepEqual(runs.asks, [["host/volume-up", "vestra.playlist/playlist.clear", "host/mute"]]);
   assert.deepEqual(runs, [{ id: "host/volume-up", declined: true }], "the sheet came before the first step; nothing ran");
   await new Promise((resolve) => setTimeout(resolve, 400)); // longer than a step's gap: no later step is tried
   assert.equal(runs.length, 1);
-  assert.deepEqual(ends(host), ["note: Stopped: nothing was run"]);
+  assert.deepEqual(ends(host), ["stopped: Stopped: nothing was run"]);
   assert.match(ai.system(), /^vestra\.playlist\/playlist\.clear \| Playlist: Clear \|.*\| asks the user first$/m);
 });
 
@@ -225,7 +225,7 @@ test("a step the player no longer holds in the plan asks again; Don't Run then s
   const runs = table(host, rows, (p) => p.id === "host/volume-up" && runs.forget());
   host.dialogAnswers.push(CONTINUE, CONTINUE, DONT_RUN); // consent, Run on the sheet, Don't Run when step 2 asks again
   await host.runPaletteLead("louder and clear the playlist and mute");
-  await ai.until(() => ai.end() === "note: Stopped: Playlist: Clear was not run", "declined");
+  await ai.until(() => ai.end() === "stopped: Stopped: Playlist: Clear was not run", "declined");
   assert.deepEqual(runs.asks, [["host/volume-up", "vestra.playlist/playlist.clear", "host/mute"], ["vestra.playlist/playlist.clear"]]);
   assert.deepEqual(
     runs.map((run) => [run.id, !!run.declined]),
@@ -281,7 +281,7 @@ test("Don't Run when the first step is the one that asks: nothing was run", asyn
   ]);
   host.dialogAnswers.push(CONTINUE, DONT_RUN);
   await host.runPaletteLead("clear the playlist and mute");
-  await ai.until(() => ai.end() === "note: Stopped: nothing was run", "declined");
+  await ai.until(() => ai.end() === "stopped: Stopped: nothing was run", "declined");
   assert.deepEqual(runs, [{ id: "vestra.playlist/playlist.clear", declined: true }]);
   assert.deepEqual(runs.asks, [["vestra.playlist/playlist.clear", "host/mute"]]);
   assert.deepEqual(host.sent("osd.show"), []);

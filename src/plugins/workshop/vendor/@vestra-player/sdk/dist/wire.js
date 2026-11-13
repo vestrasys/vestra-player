@@ -222,6 +222,17 @@ export function createWire(transport) {
             openPath: (path) => transport.request("system.openPath", { path }),
             openUrl: (url) => transport.request("system.openUrl", { url }),
         },
+        /**
+         * The mpv pass-through (`mpv`): commands and properties as mpv names
+         * them. The observed values arrive as `mpv.property` events.
+         */
+        mpv: {
+            command: (args) => transport.request("mpv.command", { args }),
+            get: (name) => transport.request("mpv.get", { name }),
+            set: (name, value) => transport.request("mpv.set", { name, value }),
+            observeProperty: (name) => transport.request("mpv.observe", { name }),
+            unobserveProperty: (name) => transport.request("mpv.unobserve", { name }),
+        },
         /** The system's secret store, per plugin (`secrets`). */
         secrets: {
             get: (name) => transport.request("secrets.get", { name }),

@@ -23,6 +23,7 @@ import { mainWindow } from "./window.js";
 import { bindingsApi } from "./bindings.js";
 import { trackedState } from "./state.js";
 import { wire } from "./wire-facade.js";
+import { mpv } from "./mpv.js";
 import { clipboard, host, power, rendering, secrets, storage, system, tools, videoMotion, videoUpscaling, } from "./services.js";
 /**
  * The SDK's state copies that a player event keeps current, by event: a
@@ -96,6 +97,7 @@ export class ScopeImpl {
     storage = storage(this);
     system = system(this);
     secrets = secrets(this);
+    mpv = mpv(this);
     rendering = rendering(this);
     window = mainWindow(this);
     bindings = bindingsApi(this);

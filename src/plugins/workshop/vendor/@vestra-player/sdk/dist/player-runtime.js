@@ -15,7 +15,8 @@ export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS
 export { BINDING_INPUTS } from "./plugin/bindings.js";
 export { MEDIA_SOURCE_LIMITS } from "./plugin/media.js";
 export { REQUEST_LIMITS, UNQUEUED_METHODS } from "./request-queue.js";
-export { COMMAND_RUN_LIMITS } from "./commands.js";
+export { COMMAND_RUN_LIMITS, PALETTE_LEAD_LIMITS, PALETTE_LEAD_STATES, } from "./commands.js";
+export { MPV_LIMITS, MPV_RULES } from "./mpv.js";
 export { OSD_LIMITS } from "./plugin/osd.js";
 export { TIMELINE_LIMITS } from "./plugin/timeline.js";
 export { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./plugin/services.js";
