@@ -10,7 +10,7 @@ import fs from "node:fs";
 import path from "node:path";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { PALETTE_LEAD_LIMITS } from "@vestra-player/sdk/runtime";
+import { TestHost, startPlugin } from "@vestra-player/sdk/testing";
 import { STEP_GAP_MS } from "../askvestra/ask.ts";
 import { END_STATUS_CHARS, LOCALES, STATUS_CHARS, WORDS, fit } from "../askvestra/status.ts";
 import { server, startAi } from "./fixture.mjs";
@@ -48,12 +48,12 @@ test.afterEach(() => {
       if (!status) continue;
       const end = !!status.state && status.state !== "working";
       const text = shown(host, status.text);
-      const max = end ? PALETTE_LEAD_LIMITS.statusEndText : PALETTE_LEAD_LIMITS.statusText;
+      const max = end ? END_STATUS_CHARS : STATUS_CHARS;
       assert.ok(chars(text) >= 1 && chars(text) <= max && !/[\0\n\r]/.test(text), `status.text the player refuses (${chars(text)} characters, ${status.state ?? "working"}): ${text}`);
       if (status.strip === undefined) continue;
       assert.ok(!end, `status.strip with the end state ${status.state}`);
       const strip = shown(host, status.strip);
-      assert.ok(chars(strip) >= 1 && chars(strip) <= PALETTE_LEAD_LIMITS.statusStrip && !/[\0\n\r]/.test(strip), `status.strip the player refuses: ${strip}`);
+      assert.ok(chars(strip) >= 1 && chars(strip) <= STATUS_CHARS && !/[\0\n\r]/.test(strip), `status.strip the player refuses: ${strip}`);
     }
 });
 
@@ -70,11 +70,33 @@ async function ready(reply, options = {}) {
 
 // ---- the limits and the table
 
-test("the limits are the player's: 80 for a working text and the strip, 160 for an end state", () => {
-  assert.equal(STATUS_CHARS, PALETTE_LEAD_LIMITS.statusText);
-  assert.equal(STATUS_CHARS, PALETTE_LEAD_LIMITS.statusStrip);
-  assert.equal(END_STATUS_CHARS, PALETTE_LEAD_LIMITS.statusEndText);
+test("the limits are the player's (the TestHost's): 80 for a working text and the strip, 160 for an end state", async (t) => {
+  assert.equal(STATUS_CHARS, 80);
   assert.equal(END_STATUS_CHARS, 160);
+  // A built-in plugin of its own that holds the lead row and sets what the test gives it.
+  const host = new TestHost();
+  let plugin;
+  const started = await startPlugin((given) => void (plugin = given), { directory: new URL("..", import.meta.url), host, builtin: true });
+  t.after(() => started.stop());
+  const row = { title: "Ask Vestra", icon: "ai" };
+  const lead = plugin.palette.lead(row);
+  await lead.ready;
+  const set = (status) => lead.update({ ...row, status });
+  const x = (length) => "x".repeat(length);
+  const refusedWith = (limit) => (error) => error.code === "invalid" && error.message.includes(`must be 1–${limit} characters on one line`);
+  // A working text: 80 is accepted, 81 refused.
+  await set({ text: x(STATUS_CHARS) });
+  await assert.rejects(set({ text: x(STATUS_CHARS + 1) }), refusedWith(80));
+  // The strip's text: 80 is accepted, 81 refused.
+  await set({ text: "Working", strip: x(STATUS_CHARS) });
+  await assert.rejects(set({ text: "Working", strip: x(STATUS_CHARS + 1) }), refusedWith(80));
+  // Every end state: 160 is accepted, 161 refused; `strip` is refused with one.
+  for (const state of ["done", "failed", "note", "stopped"]) {
+    await set({ text: x(END_STATUS_CHARS), state });
+    assert.equal(host.paletteLead.status.state, state);
+    await assert.rejects(set({ text: x(END_STATUS_CHARS + 1), state }), refusedWith(160), state);
+    await assert.rejects(set({ text: "Ended", strip: "Ended", state }), (error) => error.code === "invalid", state);
+  }
 });
 
 const locales = path.join(path.dirname(fileURLToPath(import.meta.url)), "..", "locales");
