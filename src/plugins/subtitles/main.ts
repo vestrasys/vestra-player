@@ -652,6 +652,20 @@ export default async function activate(plugin: Plugin) {
     return { ...BASE_FIELDS, ...style, secondaryPosition } as FullStyle;
   };
   /**
+   * One style write. A refused style (`backend`: the player would not take one of its values) is
+   * no subtitle failing to load: it reads as a failed operation, with the player's words in the log.
+   */
+  async function writeStyle(style: SubtitleStyle | null, pinned: SubtitlesState) {
+    try {
+      await subtitles.setStyle(style, { ifCurrent: pinned });
+    } catch (e) {
+      const error = e as { code?: string; message?: string };
+      if (error?.code !== "backend") throw e;
+      console.error(`[subtitles] style refused: ${error.message ?? String(e)}`);
+      throw new Failure("failed");
+    }
+  }
+  /**
    * Edits merge for 100 ms and apply only to the track selected when the edit
    * began. Returns the edited style, or null (with the reason in `status`). `remember: false`
    * (the secondary position, which lives in settings.json) leaves style.json alone.
@@ -670,13 +684,19 @@ export default async function activate(plugin: Plugin) {
       restorePending = false;
     }
     editing ??= s;
-    const requested = { ...desired }, pinned = editing;
+    const edit = desired, requested = { ...desired }, pinned = editing;
     clearTimeout(styleTimer);
     styleTimer = setTimeout(() => {
       stopStyleTimer();
       void run(message("applyingStyle"), async (ticket) => {
         guard(ticket, pinned.sourceId);
-        await subtitles.setStyle(requested, { ifCurrent: pinned });
+        try {
+          await writeStyle(requested, pinned);
+        } catch (e) {
+          // Any failure: show the player's style again, so that a later edit or the position does not resend this one.
+          if (desired === edit) desired = undefined;
+          throw e;
+        }
         guard(ticket, pinned.sourceId);
         status = syncHint ?? message(confirmed("styleUpdated", subtitles.state?.styleConfirmation));
         syncHint = null;
@@ -708,12 +728,21 @@ export default async function activate(plugin: Plugin) {
     if (busy) return;
     stopStyleTimer();
     return run(message("resetting"), async (ticket) => {
-      const s = await subtitles.refresh();
-      await subtitles.setStyle(null, { ifCurrent: s });
-      guard(ticket, s.sourceId);
+      // Before the refresh and the write: their new state runs the watchers, which must neither
+      // resend the edited style (`desired`) or the remembered one (restoreStyle), nor bring the
+      // secondary position back at once (syncPosition).
       desired = undefined;
-      saveStyleFile({ style: null, shadowLast: DEFAULT_SHADOW, boxOpacity: DEFAULT_BOX });
       restorePending = false;
+      resetting = true;
+      let s: SubtitlesState;
+      try {
+        s = await subtitles.refresh();
+        await writeStyle(null, s);
+      } finally {
+        resetting = false;
+      }
+      guard(ticket, s.sourceId);
+      saveStyleFile({ style: null, shadowLast: DEFAULT_SHADOW, boxOpacity: DEFAULT_BOX });
       positionApplied = ""; // the position is not a style default: it comes back with the next secondary
       status = message("styleReset");
     });
@@ -1168,8 +1197,10 @@ export default async function activate(plugin: Plugin) {
   // it is applied once a secondary subtitle is shown on a stylable primary.
   const shownPosition = (s: SubtitlesState) => s.style?.secondaryPosition ?? "top";
   let positionApplied = "";
+  /** Reset All is writing: the position waits for the next secondary, as after it. */
+  let resetting = false;
   function syncPosition(s = subtitles.state) {
-    if (!s?.secondary || styleTimer || shownPosition(s) === secondaryPosition || styleBlocked(s)) return;
+    if (resetting || !s?.secondary || styleTimer || shownPosition(s) === secondaryPosition || styleBlocked(s)) return;
     const key = `${s.sourceId}|${s.selected?.id}|${secondaryPosition}`;
     if (positionApplied === key) return; // once: another plugin's style layer is not fought over
     positionApplied = key;

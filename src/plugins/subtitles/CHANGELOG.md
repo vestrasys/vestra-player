@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.12
+
+- **Reset** at the bottom of the Subtitles panel no longer sends the style it resets a moment later. With a secondary subtitle shown at Above Main Subtitle, the reset's new state ran the position check while the edited style (or the remembered one restored at start) was still pending, so that style was applied again right after the reset. Reset now drops the pending style before it writes, and the position comes back with the next secondary subtitle, as the code already meant. The status line reads "Default style restored.".
+- A style the player refuses (code `backend`) reads "The subtitle operation failed." instead of "The player cannot load this subtitle.", which stays for subtitle files that do not load. The player's own words go to the plugin log. The refused style is no longer kept as the pending one, so a later edit or the secondary position does not send it again. (Players 0.8.0 to 0.8.2 refuse a Subtitle Position other than 95%, 90% or 85%: mpv takes `sub-margin-y` in whole pixels. That needs a host fix.)
+- Subtitles Off reads "Subtitles hidden", as before; a test now covers it after a refused style.
+- Who must change: nobody.
+
 ## 0.4.11
 
 - Menu sweep (menu redesign §4): the Subtitle Track ▸ items use the separator group `domain` (was `subtitle-track`), so Audio Track ▸, Subtitle Track ▸ and Snapshot ▸ sit in one group without separators between them; paths, orders, ids and keys are unchanged. Who must change: nobody.
