@@ -297,6 +297,10 @@ export const HOST = [
   "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust.",
   "Repository: {} ({}). This repository is not reviewed by Vestra Player; its plugins may read your files or use the network. Only install plugins from authors you trust. This is a test repository on this machine, without encryption.",
   "It will be able to:\n{}",
+  // Every plugin, from any source (the unofficial repository's own text says it already).
+  "Plugins may read your files or use the network.",
+  // Nothing to list: no scanned category, or no risky capability declared.
+  "It uses none of the player's sensitive features.",
   "Unknown",
   // The permission list: one line each, at most 20.
   "· {}",
