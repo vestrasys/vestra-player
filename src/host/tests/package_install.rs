@@ -62,11 +62,10 @@ fn package(
 /// live goes to standby at its first ready. These fixtures listen to the
 /// player's state (resident: never in standby, supervisor.md §2), so they keep running
 /// as they did before on-demand start became the default.
-const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
-
+///
 /// A third-party plugin that logs each start with its version and the
 /// session value `mark` it finds (then sets it), and each stop. `broken`
-/// fails its activation. Resident (`RESIDENT_CAPABILITIES`).
+/// fails its activation. Resident (it listens to the player).
 fn target_main(id: &str, version: &str, broken: bool) -> String {
     let fail = if broken {
         "throw new Error(\"broken\");"
@@ -90,7 +89,7 @@ fn target(directory: &Path, id: &str, version: &str, broken: bool) {
         directory,
         id,
         version,
-        &RESIDENT_CAPABILITIES,
+        &[],
         target_main(id, version, broken),
     );
 }
@@ -104,7 +103,7 @@ fn stored(store: &Path, id: &str, version: &str) -> Value {
         &staging,
         id,
         version,
-        &RESIDENT_CAPABILITIES,
+        &[],
         target_main(id, version, false),
     );
     let directory = store.join("packages").join(&digest);
@@ -143,7 +142,7 @@ fn installer(root: &Path, steps: &[Step]) -> PathBuf {
         &plugins.join(INSTALLER),
         INSTALLER,
         "1.0.0",
-        &["plugins.manage", "events", "playback.read"],
+        &["plugins"],
         format!(
             "const write = process.stdout.write.bind(process.stdout);\n\
              let enabled = null;\n\

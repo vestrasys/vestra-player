@@ -106,21 +106,10 @@ impl Root {
         let entry = builtin(&self.path().join("plugins"), id, capabilities, main);
         self.entries.push(entry);
     }
-    /// `builtin` for a `main` that listens to the player (`RESIDENT`): with
-    /// the capabilities that needs.
-    fn builtin_resident(&mut self, id: &str, capabilities: &[&str], main: &str) {
-        let mut capabilities = capabilities.to_vec();
-        capabilities.extend(RESIDENT_CAPABILITIES);
-        self.builtin(id, &capabilities, main);
-    }
     /// Installs third-party `id` as instance `n` (its data directory is
     /// `data/<guid>`).
     fn install(&mut self, n: usize, id: &str, main: &str) -> PathBuf {
         self.install_with(n, id, &[], main)
-    }
-    /// `install` for a `main` that listens to the player (`RESIDENT`).
-    fn install_resident(&mut self, n: usize, id: &str, main: &str) -> PathBuf {
-        self.install_with(n, id, &RESIDENT_CAPABILITIES, main)
     }
     /// `install` with these manifest capabilities.
     fn install_with(&mut self, n: usize, id: &str, capabilities: &[&str], main: &str) -> PathBuf {
@@ -188,8 +177,6 @@ impl Root {
 /// a resident plugin never stands by (supervisor.md §2). Inside
 /// `activate(plugin)`.
 const RESIDENT: &str = "plugin.player.onChange(() => {});\n";
-/// What `RESIDENT` needs in the manifest.
-const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 
 /// The position of `text` in `log`, or a panic with the log.
 fn at(log: &str, text: &str) -> usize {
@@ -209,7 +196,7 @@ fn held_commands_reach_a_woken_plugin_in_order_at_its_ready() {
     let mut root = Root::new();
     root.builtin(
         TWO,
-        &["commands"],
+        &[],
         &format!(
             "export default function activate(plugin) {{\n\
              console.error(`{TWO} start`);\n\
@@ -320,7 +307,7 @@ fn fixture(id: &str, version: &str, cleanup: Cleanup, delay_ms: u32, extra: &str
 
 /// `fixture` with a quick cleanup and no delay, resident (`RESIDENT`, so
 /// that it stays running under on-demand start; installed with
-/// `install_resident`).
+/// `install`).
 fn tracked(id: &str, version: &str) -> String {
     fixture(id, version, Cleanup::Quick, 0, RESIDENT)
 }
@@ -343,16 +330,16 @@ const MANAGER: &str = "vestra.fixture-manager";
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_reason() {
     let mut root = Root::new();
-    root.install_resident(1, RELOAD, &tracked(RELOAD, "1.0.0"));
-    root.install_resident(2, UPGRADE, &tracked(UPGRADE, "1.0.0"));
-    root.install_resident(3, TOGGLE, &tracked(TOGGLE, "1.0.0"));
-    let gone_data = root.install_resident(4, GONE, &tracked(GONE, "1.0.0"));
+    root.install(1, RELOAD, &tracked(RELOAD, "1.0.0"));
+    root.install(2, UPGRADE, &tracked(UPGRADE, "1.0.0"));
+    root.install(3, TOGGLE, &tracked(TOGGLE, "1.0.0"));
+    let gone_data = root.install(4, GONE, &tracked(GONE, "1.0.0"));
     let candidate = root.path().join("candidates").join(UPGRADE);
     package(
         &candidate,
         UPGRADE,
         "2.0.0",
-        &RESIDENT_CAPABILITIES,
+        &[],
         &tracked(UPGRADE, "2.0.0"),
     );
     let candidate = serde_json::to_string(&candidate.to_string_lossy()).unwrap();
@@ -361,9 +348,9 @@ fn own_process_restarts_wait_for_the_old_process_and_session_values_follow_the_r
         &[],
         "export default function activate() {}\n",
     );
-    root.builtin_resident(
+    root.builtin(
         MANAGER,
-        &["plugins.manage"],
+        &["plugins"],
         &format!(
             "const log = (text) => console.error(`{MANAGER} ${{text}}`);\n\
              const code = (promise) => promise.then(() => \"ok\", (e) => e.code);\n\
@@ -455,13 +442,13 @@ fn a_parked_plugin_is_listed_running_idle_and_its_park_announces_nothing() {
     let mut root = Root::new();
     root.builtin(
         IDLE,
-        &["commands"],
+        &[],
         "export default function activate(plugin) {\n\
          plugin.commands.add({ id: \"hello\", path: [\"Tools\", \"Hello\"], run: () => {} });\n}\n",
     );
     root.builtin(
         WATCH,
-        &["events", "playback.read", "plugins.manage"],
+        &["plugins"],
         &format!(
             "const shown = (list) => {{ const p = list.find((p) => p.id === \"{IDLE}\"); return `${{p?.state}} ${{p?.process}}`; }};\n\
              export default function activate(plugin) {{\n\
@@ -748,7 +735,7 @@ fn b2b_disable_then_enable_waits_for_the_old_process() {
     // before), and 6 s between toggles: a disable now gives the endless
     // cleanup 5 s (the stop grace, was 300 ms) before it is killed, and a
     // toggle while the last one's enable still waits would merge with it.
-    root.install_resident(
+    root.install(
         1,
         TWICE,
         &format!(
@@ -758,9 +745,9 @@ fn b2b_disable_then_enable_waits_for_the_old_process() {
              plugin.onDispose(() => new Promise(() => {{}}));\n}}\n"
         ),
     );
-    root.builtin_resident(
+    root.builtin(
         MANAGER,
-        &["plugins.manage"],
+        &["plugins"],
         &format!(
             "const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              export default function activate(plugin) {{\n\
@@ -830,7 +817,7 @@ fn b2b_uninstall_then_reinstall_waits_for_the_old_process() {
     // Resident (it stays running, as with on-demand start off
     // before); each uninstall now gives the endless cleanup 5 s
     // (the stop grace, was 300 ms) before the kill, so the run is longer.
-    root.install_resident(1, AGAIN, &main);
+    root.install(1, AGAIN, &main);
     // A digest of its own each time: the uninstalled one's directory may
     // still be being removed by the library thread (an install of the same
     // digest would be `busy` then).
@@ -841,16 +828,16 @@ fn b2b_uninstall_then_reinstall_waits_for_the_old_process() {
                 &candidate,
                 AGAIN,
                 "1.0.0",
-                &RESIDENT_CAPABILITIES,
+                &[],
                 &format!("{main}// {n}\n"),
             );
             js_path(&candidate)
         })
         .collect::<Vec<_>>()
         .join(", ");
-    root.builtin_resident(
+    root.builtin(
         MANAGER,
-        &["plugins.manage"],
+        &["plugins"],
         &format!(
             "const sleep = (ms) => new Promise((done) => setTimeout(done, ms));\n\
              const log = (text) => console.error(`{MANAGER} ${{text}}`);\n\
@@ -931,12 +918,12 @@ const BUSY_TEXT: &str = "busy: the package is being installed or reloaded";
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace() {
     let mut root = Root::new();
-    root.builtin_resident(
+    root.builtin(
         ENDLESS,
         &[],
         &fixture(ENDLESS, "1.0.0", Cleanup::Endless, 0, RESIDENT),
     );
-    root.install_resident(
+    root.install(
         1,
         ENDLESS_UP,
         &fixture(ENDLESS_UP, "1.0.0", Cleanup::Endless, 0, RESIDENT),
@@ -947,13 +934,13 @@ fn an_endless_cleanup_holds_a_reload_or_an_upgrade_only_for_its_grace() {
         &candidate,
         ENDLESS_UP,
         "2.0.0",
-        &RESIDENT_CAPABILITIES,
+        &[],
         &fixture(ENDLESS_UP, "2.0.0", Cleanup::Quick, 3000, RESIDENT),
     );
     let candidate = js_path(&candidate);
-    root.builtin_resident(
+    root.builtin(
         MANAGER,
-        &["plugins.manage"],
+        &["plugins"],
         &format!(
             "const log = (text) => console.error(`{MANAGER} ${{text}}`);\n\
              const code = (promise) => promise.then(() => \"ok\", (e) => `${{e.code}}: ${{e.message}}`);\n\
@@ -1040,7 +1027,7 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
     root.install_with(
         1,
         WAKE,
-        &["commands"],
+        &[],
         &fixture(
             WAKE,
             "1.0.0",
@@ -1064,7 +1051,7 @@ fn standby_holds_wake_enable_and_uninstall_until_the_parked_process_is_gone() {
     );
     root.builtin(
         MANAGER,
-        &["events", "playback.read", "plugins.manage"],
+        &["plugins"],
         &format!(
             "const log = (text) => console.error(`{MANAGER} ${{text}}`);\n\
              const code = (promise) => promise.then(() => \"ok\", (e) => e.code);\n\
@@ -1170,7 +1157,7 @@ fn quit_stops_own_processes_side_by_side_within_one_second() {
             let id = format!("aa.fixture-quit-{n}");
             // Resident, so they run at the quit as they did with
             // on-demand start off (a lazy one is in standby by then).
-            root.install_resident(
+            root.install(
                 n + 1,
                 &id,
                 &fixture(&id, "1.0.0", Cleanup::Endless, 0, RESIDENT),
@@ -1232,7 +1219,7 @@ fn packages_list_shows_starting_failed_and_disabled() {
     // stay running, so the slow one lists `running running` once ready, as
     // with on-demand start off before (a lazy one would list `running idle`
     // in standby).
-    root.install_resident(
+    root.install(
         1,
         SLOW,
         &fixture(SLOW, "1.0.0", Cleanup::Quick, 5000, RESIDENT),
@@ -1242,11 +1229,11 @@ fn packages_list_shows_starting_failed_and_disabled() {
         BROKEN,
         "export default function activate() { throw new Error(\"boom\"); }\n",
     );
-    root.install_resident(3, OFF, &tracked(OFF, "1.0.0"));
+    root.install(3, OFF, &tracked(OFF, "1.0.0"));
     root.catalog["disabled"] = json!([OFF]);
-    root.builtin_resident(
+    root.builtin(
         MANAGER,
-        &["plugins.manage"],
+        &["plugins"],
         &format!(
             "const show = async (when) => {{\n\
              for (const e of (await plugin.packages.list()).filter((e) => e.id.startsWith(\"aa.\")))\n\

@@ -1,25 +1,22 @@
 //! `bindings.manage`: reading and changing every shortcut
-//! (binding_manager.rs). `events.subscribe` of `bindings.changed` asks for
-//! it too (events.rs).
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+//! (binding_manager.rs); capability `player`. The `bindings.changed` event
+//! is open to every plugin (events.rs).
+use super::{Group, Handled, Info, Method, PLAYER, Recorded, Residency};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct BindingsManage;
 static INFO: Info = Info {
     name: "bindings.manage",
-    label: "Change all shortcuts",
-    risky: true,
-    requires: &[],
+    summary: "Read and change all shortcuts",
     residency: Residency::None,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("bindings.list"),
-    Method::this("bindings.set"),
-    Method::this("bindings.reset"),
+    Method::needs("bindings.list", PLAYER),
+    Method::needs("bindings.set", PLAYER),
+    Method::needs("bindings.reset", PLAYER),
 ];
-impl Capability for BindingsManage {
+impl Group for BindingsManage {
     fn info(&self) -> &'static Info {
         &INFO
     }

@@ -160,7 +160,7 @@ impl Host {
         }
     }
     /// One request of a plugin's: its route (`capabilities::lookup`), the
-    /// permission check, text resolution, then the capability's `handle`.
+    /// permission check, text resolution, then its group's `handle`.
     pub(crate) fn dispatch(
         &mut self,
         reply: &Reply,
@@ -173,17 +173,12 @@ impl Host {
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
         let route = capabilities::lookup(method)
             .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
-        let capability = route.needs(params, |name| plugin.allows(name));
-        if capability.is_some_and(|capability| !plugin.allows(capability)) {
-            return Err(RpcError::new(
-                "capability",
-                "capability must be declared in manifest",
-            ));
-        }
-        // Built-in-only capabilities (`commands.run`, `palette.lead`): by
-        // provenance, whatever the manifest declares.
-        if capability.is_some_and(capabilities::builtin_only) {
-            capabilities::builtin_only_check(capability, self.is_builtin(reply.owner))?;
+        // The same for every plugin, built-in or not: the capability the
+        // method needs, if any, is declared.
+        if let Some(needed) = route.needs()
+            && !plugin.allows(needed)
+        {
+            return Err(capabilities::undeclared(needed));
         }
         // Text values (i18n.md §7) in property values, timeline titles,
         // subtitle track titles and resolver failures become the strings

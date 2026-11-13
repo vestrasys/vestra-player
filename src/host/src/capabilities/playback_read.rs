@@ -1,27 +1,24 @@
 //! `playback.read`: what is playing, the position, chapters, devices, stats
 //! and timeline marks; the playback worker answers most of it.
-use super::{Capability, Handled, Info, Method, Recorded, Residency, forward};
+use super::{Group, Handled, Info, Method, Recorded, Residency, forward};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct PlaybackRead;
 static INFO: Info = Info {
     name: "playback.read",
-    label: "Read what is playing and the position",
-    risky: false,
-    requires: &[],
+    summary: "Read what is playing and the position",
     residency: Residency::None,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("source.state"),
-    Method::this("processing.state"),
-    Method::this("playback.stats"),
-    Method::this("player.chapters"),
-    Method::this("player.audioDevices"),
-    Method::this("timeline.marks"),
+    Method::free("source.state"),
+    Method::free("processing.state"),
+    Method::free("playback.stats"),
+    Method::free("player.chapters"),
+    Method::free("player.audioDevices"),
+    Method::free("timeline.marks"),
 ];
-impl Capability for PlaybackRead {
+impl Group for PlaybackRead {
     fn info(&self) -> &'static Info {
         &INFO
     }

@@ -1,6 +1,6 @@
 //! `ui.drop`: files dropped on the player (drops.rs). Drop targets are
 //! recordable; a panel's `drops.listen` lives with its mount.
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Call, Group, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply};
 use crate::host::{Origin, RpcError, string};
 use crate::ui::drops::{Provider, parse_extensions};
@@ -9,18 +9,15 @@ use serde_json::Value;
 pub struct UiDrop;
 static INFO: Info = Info {
     name: "ui.drop",
-    label: "Receive files dropped on the player",
-    risky: false,
-    requires: &[],
+    summary: "Receive files dropped on the player",
     residency: Residency::Recordable,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("drops.provide"),
-    Method::this("drops.withdraw"),
-    Method::this("drops.listen"),
+    Method::free("drops.provide"),
+    Method::free("drops.withdraw"),
+    Method::free("drops.listen"),
 ];
-impl Capability for UiDrop {
+impl Group for UiDrop {
     fn info(&self) -> &'static Info {
         &INFO
     }

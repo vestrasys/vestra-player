@@ -46,8 +46,6 @@ fn builtin_with(
     tamper: bool,
     capabilities: &[&str],
 ) -> serde_json::Value {
-    let mut capabilities = capabilities.to_vec();
-    capabilities.extend(["events", "playback.read"]);
     let files = [
         (
             "manifest.json",
@@ -288,7 +286,7 @@ fn reloader(root: &Path, target: &str, ms: u32) -> serde_json::Value {
              .catch((e) => console.error(`reload failed ${{e.code}}`)), {ms});"
         ),
         false,
-        &["plugins.manage"],
+        &["plugins"],
     )
 }
 
@@ -399,7 +397,7 @@ fn log_stop(id: &str) -> String {
 
 /// `main` made resident (it listens to the player's state at the start of
 /// `activate(plugin)`), so the plugin keeps running as it did before
-/// on-demand start became the default; with the capabilities that needs.
+/// on-demand start became the default.
 fn resident(main: &str) -> String {
     main.replacen(
         "activate(plugin) {\n",
@@ -407,14 +405,12 @@ fn resident(main: &str) -> String {
         1,
     )
 }
-/// The capabilities `resident` needs.
-const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 
 /// An installed (third-party) plugin `id` in the package store: its own
 /// process, never the shared runner; resident (`resident`).
 fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
     let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":RESIDENT_CAPABILITIES});
+        "entry":"main.js","capabilities":[]});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
@@ -438,7 +434,7 @@ fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, ma
 fn candidate(directory: &Path, id: &str, version: &str, main: String) -> String {
     std::fs::create_dir_all(directory).unwrap();
     let manifest = serde_json::json!({"id":id,"version":version,"apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":RESIDENT_CAPABILITIES});
+        "entry":"main.js","capabilities":[]});
     std::fs::write(directory.join("manifest.json"), manifest.to_string()).unwrap();
     std::fs::write(directory.join("package.json"), r#"{"type":"module"}"#).unwrap();
     std::fs::write(directory.join("main.js"), resident(&main)).unwrap();
@@ -540,7 +536,7 @@ fn every_stop_tells_the_plugin_why() {
                  }}, 3000);"
             ),
             false,
-            &["plugins.manage"],
+            &["plugins"],
         ),
     ];
     // The plugins are resident, so they keep running.

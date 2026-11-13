@@ -238,13 +238,7 @@ pub fn check(manifest: &Manifest, directory: &Path, package: bool) -> Result<()>
     if manifest.api_version != crate::process::API {
         bail!("unsupported apiVersion: {}", manifest.api_version);
     }
-    ensure!(
-        manifest
-            .capabilities
-            .iter()
-            .all(|c| crate::capabilities::known(c)),
-        "unknown required capability"
-    );
+    crate::capabilities::check_declared(&manifest.capabilities).map_err(anyhow::Error::msg)?;
     ensure!(
         manifest
             .capabilities
@@ -364,6 +358,33 @@ mod tests {
     fn ok(extra: serde_json::Value) -> bool {
         let (root, manifest) = package(extra);
         check(&manifest, root.path(), true).is_ok()
+    }
+
+    /// The capability list is closed: a retired or unknown name refuses the
+    /// whole manifest, with what to write instead (`capabilities::check_declared`).
+    #[test]
+    fn only_the_eight_capabilities_may_be_declared() {
+        assert!(ok(
+            json!({"capabilities":["player","plugins","clipboard","credentials"]})
+        ));
+        assert!(ok(json!({"capabilities":["camera"]})));
+        let refused = |capabilities: serde_json::Value| {
+            let (root, manifest) = package(json!({ "capabilities": capabilities }));
+            check(&manifest, root.path(), true).unwrap_err().to_string()
+        };
+        assert_eq!(
+            refused(json!(["clipboard", "bindings.manage"])),
+            "capability \"bindings.manage\" was retired: declare \"player\" instead"
+        );
+        assert_eq!(
+            refused(json!(["commands"])),
+            "capability \"commands\" was retired: what it allowed needs no capability now, remove it"
+        );
+        assert!(refused(json!(["telepathy"])).starts_with("unknown capability \"telepathy\""));
+        assert_eq!(
+            refused(json!(["clipboard", "clipboard"])),
+            "capabilities must be unique"
+        );
     }
 
     #[test]

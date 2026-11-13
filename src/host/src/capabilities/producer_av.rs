@@ -1,26 +1,23 @@
 //! `producer.av`: streams a plugin generates itself (producer.rs).
-use super::{Capability, Handled, Info, Method, Recorded, Residency, forward};
+use super::{Group, Handled, Info, Method, Recorded, Residency, forward};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct ProducerAv;
 static INFO: Info = Info {
     name: "producer.av",
-    label: "Provide audio and video it generates itself",
-    risky: false,
-    requires: &["playback.control"],
+    summary: "Provide audio and video it generates itself",
     residency: Residency::Live,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("producer.prepare"),
-    Method::this("producer.state"),
-    Method::this("producer.release"),
-    Method::this("producer.ack"),
-    Method::this("producer.declareInput"),
-    Method::this("producer.ackInput"),
+    Method::free("producer.prepare"),
+    Method::free("producer.state"),
+    Method::free("producer.release"),
+    Method::free("producer.ack"),
+    Method::free("producer.declareInput"),
+    Method::free("producer.ackInput"),
 ];
-impl Capability for ProducerAv {
+impl Group for ProducerAv {
     fn info(&self) -> &'static Info {
         &INFO
     }

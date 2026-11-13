@@ -1,7 +1,7 @@
 //! Requests that reach the operating system on the plugin's behalf:
 //! `system.reveal` / `openPath` / `openUrl` (show files, open them with the
 //! default application, open links in the browser), `secrets.get` / `set` /
-//! `delete` (the system's secret store, capability `secrets`) and
+//! `delete` (the system's secret store, capability `credentials`) and
 //! `app.system` (system facts, displays and the renderer for
 //! `plugin.app.system()`).
 //!

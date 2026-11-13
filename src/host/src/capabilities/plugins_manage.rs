@@ -1,21 +1,19 @@
 //! `plugins.manage`: installing, enabling, reloading and uninstalling other
 //! plugins; the RPC face of package_manager.rs, which refuses the methods it
-//! does not know. `packages.list` needs no capability (uncapable.rs).
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+//! does not know; capability `plugins`. `packages.list` needs none
+//! (general.rs).
+use super::{Group, Handled, Info, Method, PLUGINS, Recorded, Residency};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct PluginsManage;
 static INFO: Info = Info {
     name: "plugins.manage",
-    label: "Install, uninstall and disable other plugins",
-    risky: true,
-    requires: &[],
+    summary: "Install, uninstall and disable other plugins",
     residency: Residency::None,
-    builtin_only: false,
 };
-static METHODS: &[Method] = &[Method::this("packages.*")];
-impl Capability for PluginsManage {
+static METHODS: &[Method] = &[Method::needs("packages.*", PLUGINS)];
+impl Group for PluginsManage {
     fn info(&self) -> &'static Info {
         &INFO
     }

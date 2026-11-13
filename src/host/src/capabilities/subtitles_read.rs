@@ -1,19 +1,16 @@
 //! `subtitles.read`: the subtitle tracks and their state.
-use super::{Capability, Handled, Info, Method, Recorded, Residency, forward_media};
+use super::{Group, Handled, Info, Method, Recorded, Residency, forward_media};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct SubtitlesRead;
 static INFO: Info = Info {
     name: "subtitles.read",
-    label: "Read subtitles",
-    risky: false,
-    requires: &[],
+    summary: "Read subtitles",
     residency: Residency::None,
-    builtin_only: false,
 };
-static METHODS: &[Method] = &[Method::this("subtitles.state")];
-impl Capability for SubtitlesRead {
+static METHODS: &[Method] = &[Method::free("subtitles.state")];
+impl Group for SubtitlesRead {
     fn info(&self) -> &'static Info {
         &INFO
     }

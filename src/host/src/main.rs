@@ -567,6 +567,7 @@ fn player() -> Result<()> {
         bindings_sent: 0,
         bindings_list_sent: Value::Null,
         bindings_seen: [0; 2],
+        bindings_panels: Default::default(),
         packages_sent: Value::Null,
         packages_seen: None,
         notified_at: 0,

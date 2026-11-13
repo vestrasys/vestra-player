@@ -1,25 +1,22 @@
 //! `rendering.manage`: choosing GPU or software rendering for the next start
 //! and restarting the player (host/rendering.rs; doc/architecture/README.md
-//! §4.3). Reading the state, `rendering.state`, needs no
-//! capability (uncapable.rs).
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+//! §4.3); capability `player`. Reading the state, `rendering.state`, needs
+//! none (general.rs).
+use super::{Group, Handled, Info, Method, PLAYER, Recorded, Residency};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct RenderingManage;
 static INFO: Info = Info {
     name: "rendering.manage",
-    label: "Choose GPU or software rendering and restart the player",
-    risky: true,
-    requires: &[],
+    summary: "Choose GPU or software rendering and restart the player",
     residency: Residency::None,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("rendering.setPreference"),
-    Method::this("rendering.restart"),
+    Method::needs("rendering.setPreference", PLAYER),
+    Method::needs("rendering.restart", PLAYER),
 ];
-impl Capability for RenderingManage {
+impl Group for RenderingManage {
     fn info(&self) -> &'static Info {
         &INFO
     }

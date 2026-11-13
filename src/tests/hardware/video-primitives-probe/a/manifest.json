@@ -5,14 +5,5 @@
   "apiVersion": "vestra/1",
   "minPlayerVersion": "0.5.20",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "ui.osd",
-    "playback.read",
-    "events",
-    "processing.video",
-    "media.read",
-    "media.control",
-    "subtitles.read"
-  ]
+  "capabilities": []
 }

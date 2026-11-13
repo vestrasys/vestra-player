@@ -464,7 +464,7 @@ mod tests {
         let path = root.path().join("manifest.json");
         let mut manifest: PackageManifest =
             serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
-        manifest.capabilities = vec!["commands".into(), "commands".into()];
+        manifest.capabilities = vec!["clipboard".into(), "clipboard".into()];
         fs::write(path, serde_json::to_vec(&manifest).unwrap()).unwrap();
         assert!(Candidate::capture(root.path()).is_err());
     }

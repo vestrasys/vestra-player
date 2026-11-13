@@ -5,10 +5,10 @@
 //! worker answers; the host adds its rendering state, for the advice in a
 //! `rendering` reason.
 //!
-//! Not risky: it changes only how the picture moves while the plugin runs,
-//! touches no data, and a stopped plugin's request is revoked (as
+//! No capability: it changes only how the picture moves while the plugin
+//! runs, touches no data, and a stopped plugin's request is revoked (as
 //! `video.upscaling`). The GPU's power use is what the user turns it on for.
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Group, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply, RpcError};
 use crate::playback::backend::Command;
 use serde_json::{Value, json};
@@ -16,17 +16,14 @@ use serde_json::{Value, json};
 pub struct VideoMotion;
 static INFO: Info = Info {
     name: "video.motion",
-    label: "Smooth motion with the GPU's frame-rate converter",
-    risky: false,
-    requires: &[],
+    summary: "Smooth motion with the GPU's frame-rate converter",
     residency: Residency::Live,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("video.motion.state"),
-    Method::this("video.motion.set"),
+    Method::free("video.motion.state"),
+    Method::free("video.motion.set"),
 ];
-impl Capability for VideoMotion {
+impl Group for VideoMotion {
     fn info(&self) -> &'static Info {
         &INFO
     }

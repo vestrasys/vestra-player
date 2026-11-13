@@ -1,22 +1,20 @@
-//! `ui.theme`: the player's palette and interface language (theme.rs).
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+//! `ui.theme`: the player's palette and interface language (theme.rs);
+//! capability `player`.
+use super::{Group, Handled, Info, Method, PLAYER, Recorded, Residency};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct UiTheme;
 static INFO: Info = Info {
     name: "ui.theme",
-    label: "Change the player's palette",
-    risky: false,
-    requires: &[],
+    summary: "Change the player's palette and interface language",
     residency: Residency::None,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("appearance.set"),
-    Method::this("appearance.setLanguage"),
+    Method::needs("appearance.set", PLAYER),
+    Method::needs("appearance.setLanguage", PLAYER),
 ];
-impl Capability for UiTheme {
+impl Group for UiTheme {
     fn info(&self) -> &'static Info {
         &INFO
     }

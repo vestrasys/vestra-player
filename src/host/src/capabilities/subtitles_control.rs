@@ -1,21 +1,18 @@
 //! `subtitles.control`: loading, selecting, removing and styling subtitles
 //! (subtitle_backend.rs, in the playback worker, which refuses the methods
 //! it does not know).
-use super::{Capability, Handled, Info, Method, Recorded, Residency, forward_media};
+use super::{Group, Handled, Info, Method, Recorded, Residency, forward_media};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct SubtitlesControl;
 static INFO: Info = Info {
     name: "subtitles.control",
-    label: "Load and change subtitles",
-    risky: false,
-    requires: &[],
+    summary: "Load and change subtitles",
     residency: Residency::Live,
-    builtin_only: false,
 };
-static METHODS: &[Method] = &[Method::this("subtitles.*")];
-impl Capability for SubtitlesControl {
+static METHODS: &[Method] = &[Method::free("subtitles.*")];
+impl Group for SubtitlesControl {
     fn info(&self) -> &'static Info {
         &INFO
     }

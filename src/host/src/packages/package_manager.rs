@@ -1254,8 +1254,8 @@ impl Host {
         )
     }
     /// The package `origin` is a built-in plugin's (also for a plugin in
-    /// standby, which has no process: its replayed sidebar tab, the
-    /// built-in-only check of a replay): its directory and its data
+    /// standby, which has no process: its replayed sidebar tab): its
+    /// directory and its data
     /// directory are the built-in instance's.
     pub(crate) fn is_builtin_package(&self, origin: &crate::host::Origin) -> bool {
         let installed = self.packages.store.get(&origin.id);
@@ -1323,11 +1323,11 @@ impl Host {
     }
     /// At start-up, a plugin may still ask to mount a panel before the
     /// built-ins can finish starting: a built-in is not loaded yet or waits
-    /// for its first run, or a running plugin that declares `ui.mount` is
-    /// still activating and has asked for none yet (built-in or not; one
-    /// that asked waits for the compile before its activation ends, so it
-    /// is not waited for). Until then the shell waits, so that it compiles
-    /// once for all of them (`prepare_mount_tick`). Plugins that start only
+    /// for its first run, or a running plugin is still activating and has
+    /// asked for none yet (built-in or not, and any plugin: a manifest does
+    /// not say which ones mount panels; one that asked waits for the compile
+    /// before its activation ends, so it is not waited for). Until then the
+    /// shell waits, so that it compiles once for all of them (`prepare_mount_tick`). Plugins that start only
     /// after the built-ins (third-party ones waiting for a place) cannot be
     /// waited for: their panels compile once more, before a file given at
     /// launch opens (`startup_panels`). What it waits for, for the log;
@@ -1342,9 +1342,9 @@ impl Host {
         let now = self.now_ms();
         let owners = self
             .plugins
-            .iter()
-            .filter(|(owner, plugin)| plugin.allows("ui.mount") && !self.mount_asked(**owner))
-            .map(|(owner, _)| *owner)
+            .keys()
+            .copied()
+            .filter(|owner| !self.mount_asked(*owner))
             .collect::<Vec<_>>();
         let mut waiting = Vec::new();
         for owner in owners {
@@ -1356,16 +1356,6 @@ impl Host {
             }
         }
         (!waiting.is_empty()).then(|| waiting.join(", "))
-    }
-    /// Installed (or built-in) plugin `id` declares `ui.mount` (an unreadable
-    /// one counts as not).
-    pub(crate) fn declares_ui_mount(&self, id: &str) -> bool {
-        self.packages
-            .store
-            .record(id)
-            .and_then(|record| self.packages.runs_from(id, record))
-            .and_then(Result::ok)
-            .is_some_and(|(_, manifest)| manifest.capabilities.iter().any(|c| c == "ui.mount"))
     }
     /// Plugin `owner` (its process) asked for a panel: mounted (panels are
     /// keyed by `panel_key`, not by plugin), queued, being prepared or held
@@ -2882,7 +2872,7 @@ mod tests {
 
     /// Built-in by provenance only: a development load of a built-in's id
     /// (even of the installation's own directory) runs under a development
-    /// key and is not built-in (built-in-only capabilities, the shader rank).
+    /// key and is not built-in (the panel slots' order, the shader rank).
     #[test]
     fn a_development_load_of_a_built_in_is_not_built_in() {
         let directory = std::path::Path::new("/app/plugins/vestra.workshop");

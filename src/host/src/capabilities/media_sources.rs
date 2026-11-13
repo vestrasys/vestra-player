@@ -4,7 +4,7 @@
 //! something to the plugin that got it; `media.sources.locate` comes back
 //! here for the file dialog (`Event::SourceLocate`). Exports of their parts
 //! are `jobs.start` / `jobs.check` with `parts` (`media_control.rs`).
-use super::{Capability, Handled, Info, Method, Needs, Recorded, Residency, forward_media, plugin};
+use super::{Group, Handled, Info, Method, Recorded, Residency, forward_media, plugin};
 use crate::{
     host::{Event, Host, Reply, RpcError},
     i18n,
@@ -14,28 +14,10 @@ use serde_json::{Value, json};
 pub struct MediaSources;
 static INFO: Info = Info {
     name: "media.sources",
-    label: "Remember videos you add and export from them later",
-    risky: false,
-    // Its own members need nothing else; an export of the references'
-    // parts is `jobs.start`, which needs `media.control` as any export.
-    requires: &[],
+    summary: "Remember videos you add and export from them later",
     residency: Residency::None,
-    builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    // Opening replaces what is playing, as `player.open` does, so it needs
-    // `playback.control` as well: declared, `media.sources` is checked; not
-    // declared, the check asks for `playback.control`, which fails.
-    Method {
-        name: "media.sources.open",
-        needs: Needs::IfDeclared {
-            declared: "playback.control",
-            then: "media.sources",
-            otherwise: "playback.control",
-        },
-    },
-    Method::this("media.sources.*"),
-];
+static METHODS: &[Method] = &[Method::free("media.sources.*")];
 /// The methods the prefix covers.
 const SOURCES: &[&str] = &[
     "media.sources.remember",
@@ -45,7 +27,7 @@ const SOURCES: &[&str] = &[
     "media.sources.list",
     "media.sources.open",
 ];
-impl Capability for MediaSources {
+impl Group for MediaSources {
     fn info(&self) -> &'static Info {
         &INFO
     }

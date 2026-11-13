@@ -1,6 +1,6 @@
 //! `ui.mount`: panels in the bottom bar, the sidebar and the backdrop, their
 //! menus and interaction locks, and the layout of those slots.
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency, plugin};
+use super::{Call, Group, Handled, Info, Method, Recorded, Residency, plugin};
 use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
@@ -20,22 +20,19 @@ use std::collections::BTreeMap;
 pub struct UiMount;
 static INFO: Info = Info {
     name: "ui.mount",
-    label: "Show panels in the bottom bar, the sidebar or behind the video",
-    risky: false,
-    requires: &[],
+    summary: "Show panels in the bottom bar, the sidebar or behind the video",
     residency: Residency::Live,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("ui.mount"),
-    Method::this("ui.setMount"),
-    Method::this("ui.unmount"),
-    Method::this("ui.interaction"),
-    Method::this("ui.menu"),
-    Method::this("layout.state"),
-    Method::this("layout.set"),
+    Method::free("ui.mount"),
+    Method::free("ui.setMount"),
+    Method::free("ui.unmount"),
+    Method::free("ui.interaction"),
+    Method::free("ui.menu"),
+    Method::free("layout.state"),
+    Method::free("layout.set"),
 ];
-impl Capability for UiMount {
+impl Group for UiMount {
     fn info(&self) -> &'static Info {
         &INFO
     }

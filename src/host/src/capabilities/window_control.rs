@@ -1,26 +1,22 @@
 //! `window.control`: the main window's video area, always-on-top, cursor
-//! hiding and picture-in-picture. `window.state` needs no capability
-//! (uncapable.rs).
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+//! hiding and picture-in-picture. `window.state` is in general.rs.
+use super::{Group, Handled, Info, Method, Recorded, Residency};
 use crate::host::{Host, Reply, RpcError, string};
 use serde_json::Value;
 
 pub struct WindowControl;
 static INFO: Info = Info {
     name: "window.control",
-    label: "Adjust the main window (size, on top, picture-in-picture)",
-    risky: false,
-    requires: &[],
+    summary: "Adjust the main window (size, on top, picture-in-picture)",
     residency: Residency::Live,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("window.setVideoArea"),
-    Method::this("window.setAlwaysOnTop"),
-    Method::this("window.setCursorAutoHide"),
-    Method::this("window.setPictureInPicture"),
+    Method::free("window.setVideoArea"),
+    Method::free("window.setAlwaysOnTop"),
+    Method::free("window.setCursorAutoHide"),
+    Method::free("window.setPictureInPicture"),
 ];
-impl Capability for WindowControl {
+impl Group for WindowControl {
     fn info(&self) -> &'static Info {
         &INFO
     }

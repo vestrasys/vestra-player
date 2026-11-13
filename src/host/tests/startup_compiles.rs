@@ -58,26 +58,22 @@ enum ThirdParty {
 /// A third-party plugin with a sidebar tab, installed in the library under
 /// `store` (its record in `catalog.json`).
 fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
-    let (capabilities, listen) = match kind {
-        ThirdParty::Resident => (
-            serde_json::json!(["ui.mount", "events", "playback.read"]),
-            "plugin.player.onChange(() => {});\n",
-        ),
+    let listen = match kind {
+        ThirdParty::Resident => "plugin.player.onChange(() => {});\n",
         // Its first run (the warm-up) records it resident; from the next
         // start on it exits as soon as its panel is in the shell (each run
         // mounts it, then crashes: the crash loop).
-        ThirdParty::Crashing => (
-            serde_json::json!(["ui.mount", "events", "playback.read"]),
+        ThirdParty::Crashing => {
             "plugin.player.onChange(() => {});\n\
              const mark = join(plugin.dataDirectory, \"ran\");\n\
              crash = existsSync(mark);\n\
              if (!crash) { mkdirSync(plugin.dataDirectory, { recursive: true }); \
-             writeFileSync(mark, \"1\"); }\n",
-        ),
-        _ => (serde_json::json!(["ui.mount"]), ""),
+             writeFileSync(mark, \"1\"); }\n"
+        }
+        _ => "",
     };
     let manifest = serde_json::json!({"id":THIRD_PARTY,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":capabilities});
+        "entry":"main.js","capabilities":[]});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),

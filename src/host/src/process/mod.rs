@@ -332,13 +332,8 @@ impl Plugin {
         if !crate::packages::manifest::valid_id(&manifest.id) {
             bail!("invalid plugin id");
         }
-        if manifest
-            .capabilities
-            .iter()
-            .any(|c| !crate::capabilities::known(c))
-        {
-            bail!("unknown required capability");
-        }
+        crate::capabilities::check_declared(&manifest.capabilities)
+            .map_err(anyhow::Error::msg)?;
         package_file(&directory, &manifest.entry)?;
         let paths = crate::process::runtime_paths::get();
         // Per installed instance or development id (see `DataKey`).
@@ -786,7 +781,7 @@ mod stop_tests {
         std::fs::write(
             directory.join("manifest.json"),
             json!({"id":"test.chatty","version":"1.0.0","apiVersion":API,
-                "entry":"main.js","capabilities":["ui.osd"]})
+                "entry":"main.js","capabilities":[]})
             .to_string(),
         )
         .unwrap();

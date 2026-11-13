@@ -753,7 +753,7 @@ impl Host {
         self.backend.render.presentation.counts().1
     }
     /// Before a plugin shader list of `files` files goes to the worker
-    /// (`capabilities::processing_video`): refused while this run keeps
+    /// (`capabilities::processing`): refused while this run keeps
     /// plugin shaders off; otherwise followed (GPU rendering only: under
     /// software rendering the worker refuses non-empty lists). The
     /// request's number, which goes to the worker as `guardSeq`.

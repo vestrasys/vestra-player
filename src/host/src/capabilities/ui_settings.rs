@@ -1,6 +1,6 @@
 //! `ui.settings`: pages in the Options window (settings_window.rs, which
 //! refuses the methods it does not know).
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Call, Group, Handled, Info, Method, Recorded, Residency};
 use crate::host::Origin;
 use crate::host::{Host, Reply};
 use serde_json::Value;
@@ -8,14 +8,11 @@ use serde_json::Value;
 pub struct UiSettings;
 static INFO: Info = Info {
     name: "ui.settings",
-    label: "Add pages to the Options window",
-    risky: false,
-    requires: &[],
+    summary: "Add pages to the Options window",
     residency: Residency::Recordable,
-    builtin_only: false,
 };
-static METHODS: &[Method] = &[Method::this("settings.*")];
-impl Capability for UiSettings {
+static METHODS: &[Method] = &[Method::free("settings.*")];
+impl Group for UiSettings {
     fn info(&self) -> &'static Info {
         &INFO
     }

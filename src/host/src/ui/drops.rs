@@ -1,4 +1,4 @@
-//! File drops (R-U2, capability `ui.drop`). winit 0.30 reports one
+//! File drops (R-U2, capabilities/ui_drop.rs). winit 0.30 reports one
 //! `DroppedFile` per path without position or modifiers; the paths of one
 //! drop arrive back to back, so a group closes after 30 ms without another.
 //! On closing, the platform gives the pointer and modifier keys (AppKit on

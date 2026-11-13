@@ -52,15 +52,17 @@ fn command_row(info: &bindings::Info, declaration: &crate::commands::Declaration
 /// entries for commands nothing declares (`orphans`).
 ///
 /// A `focus: "panel"` command fires only while its plugin's panel has the
-/// keys, so one of a plugin whose manifest declares no `ui.mount` (no panel
-/// in the bottom bar, the sidebar, the adjust column or behind the video)
-/// can never fire from a key: it is left out, so the Keyboard Shortcuts
-/// page offers no dead key for it. It stays registered and runnable
-/// (`commands.run`, the plugin's own controls), and a user binding stored
-/// for it stays in the overlay (it is declared, so no orphan either): it is
-/// listed again once a version of the plugin declares a panel. Decided by
-/// the manifest, not by a panel mounted now, so the list does not change as
-/// panels come and go (or as the plugin parks).
+/// keys, so one of a plugin that has no panel (in the bottom bar, the
+/// sidebar, the adjust column or behind the video) cannot fire from a key:
+/// it is left out, so the Keyboard Shortcuts page offers no dead key for
+/// it. It stays registered and runnable (`commands.run`, the plugin's own
+/// controls), and a user binding stored for it stays in the overlay (it is
+/// declared, so no orphan either): it is listed again once the plugin has a
+/// panel. Decided by the panels the host holds (`Host::panel_plugins`): a
+/// manifest does not say whether its plugin mounts one. A parked plugin's
+/// tab is still its panel, so the list does not change as a plugin parks
+/// and wakes; it does when a plugin's last panel goes or its first comes
+/// (`notify_tick` announces it).
 fn list<'a>(
     table: &bindings::Table,
     declaration: impl Fn(&bindings::Info) -> Option<&'a crate::commands::Declaration>,
@@ -140,17 +142,20 @@ impl Host {
     }
     fn bindings_list(&self) -> Value {
         let table = &self.input.borrow().table;
-        // Read once per plugin: each reading copies its manifest.
-        let mut panels = std::collections::HashMap::new();
+        let panels = self.panel_plugins();
         list(
             table,
             |info| Some(&self.commands.get(info.owner, &info.id)?.declaration),
-            |manifest| {
-                *panels
-                    .entry(manifest.to_owned())
-                    .or_insert_with(|| self.declares_ui_mount(manifest))
-            },
+            |manifest| panels.contains(manifest),
         )
+    }
+    /// The plugins (manifest ids) that have a panel: mounted in any slot,
+    /// or a tab kept for a plugin in standby.
+    fn panel_plugins(&self) -> std::collections::BTreeSet<String> {
+        self.mounts
+            .values()
+            .map(|mount| mount.manifest.clone())
+            .collect()
     }
     /// `bindings.changed` (declarations or overlay) and `packages.changed`
     /// (the plugin list) to the plugins that subscribed; at most every 200 ms.
@@ -167,8 +172,13 @@ impl Host {
                 [table.listed_revision(), self.commands.listed_revision()],
             )
         };
-        if revision != self.bindings_sent {
+        // Which plugins have a panel decides which panel commands the list
+        // shows (`list`): a change there is a change of its sources too.
+        let panels = self.panel_plugins();
+        let panels_moved = panels != self.bindings_panels;
+        if revision != self.bindings_sent || panels_moved {
             self.bindings_sent = revision;
+            self.bindings_panels = panels;
             // Only a change of the list: a table rebuilt to the same list
             // (a plugin parked or woken under a new owner, lazy activation
             // §6.9) is not one, so it wakes no parked listener.
@@ -179,7 +189,9 @@ impl Host {
                 // changed (supervisor.md): during a wake storm every
                 // woken plugin's commands move to its new owner, and the
                 // list took 3–6 ms to build each time.
-                let moved = key != self.bindings_seen || self.bindings_list_sent.is_null();
+                let moved = key != self.bindings_seen
+                    || panels_moved
+                    || self.bindings_list_sent.is_null();
                 if moved || cfg!(debug_assertions) {
                     let list = in_order(self.bindings_list());
                     let same = list == self.bindings_list_sent;

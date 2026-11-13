@@ -38,7 +38,7 @@ fn fixture(root: &Path) -> serde_json::Value {
     package(
         root,
         ID,
-        &["commands"],
+        &[],
         format!(
             "export default async function activate(plugin) {{\n\
              const n = ((await plugin.storage.session.get(\"starts\")) ?? 0) + 1;\n\
@@ -230,7 +230,7 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
                 package(
                     plugins,
                     MIRROR,
-                    &["commands", "events", "playback.read"],
+                    &[],
                     format!(
                         "export default async function activate(plugin) {{\n\
                          console.error(`{MIRROR} start`);\n\
@@ -241,7 +241,7 @@ fn mirror_subscriptions_park_and_wake_a_listener_keeps_a_plugin_resident() {
                 package(
                     plugins,
                     LISTENER,
-                    &["commands", "events", "playback.read"],
+                    &[],
                     format!(
                         "export default async function activate(plugin) {{\n\
                          console.error(`{LISTENER} start`);\n\
@@ -319,7 +319,7 @@ fn a_plugin_that_takes_up_a_live_resource_after_its_first_run_starts_at_the_next
         vec![package(
             plugins,
             TAKES_UP,
-            &["commands", "processing.video", "playback.read", "events"],
+            &[],
             format!(
                 "export default async function activate(plugin) {{\n\
                  const store = plugin.storage.json(\"choice\", {{ defaults: {{ on: false }}, debounceMs: 0 }});\n\
@@ -402,7 +402,7 @@ fn a_first_run_that_takes_up_a_resource_while_its_class_is_asked_is_not_parked()
         vec![package(
             plugins,
             SETS_AFTER_READY,
-            &["commands", "processing.video"],
+            &[],
             format!(
                 "export default async function activate(plugin) {{\n\
                  plugin.commands.add({{ id: \"noop\", path: [\"Tools\", \"Noop\"], run: () => {{}} }});\n\
@@ -483,7 +483,7 @@ fn a_first_run_that_restores_its_effect_after_its_ready_starts_at_the_next_launc
             vec![package(
                 plugins,
                 id,
-                &["commands", "processing.video"],
+                &[],
                 format!(
                     "export default async function activate(plugin) {{\n\
                      plugin.commands.add({{ id: \"noop\", path: [\"Tools\", \"Noop\"], run: () => {{}} }});\n\
@@ -548,7 +548,7 @@ fn b3_built_in_first_runs_start_at_once() {
                 package(
                     plugins,
                     id,
-                    &["commands"],
+                    &[],
                     format!(
                         "export default function activate(plugin) {{\n\
                          plugin.commands.add({{ id: \"go\", path: [\"Tools\", \"{id}\"], run: () => {{}} }});\n}}\n"
@@ -644,7 +644,7 @@ fn third_party_first_runs_start_a_few_at_a_time() {
 /// (`installed`, the rest left empty). `n` makes its instance GUID.
 fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
     let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":["source.resolve"]});
+        "entry":"main.js","capabilities":[]});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
@@ -743,7 +743,7 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
             package(
                 plugins,
                 WHEN,
-                &["commands"],
+                &[],
                 format!(
                     "export default function activate(plugin) {{\n\
                      console.error(`{WHEN} start`);\n\
@@ -755,7 +755,7 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
             package(
                 plugins,
                 OPENER,
-                &["events", "playback.read", "playback.control"],
+                &[],
                 format!(
                     "export default function activate(plugin) {{\n\
                      plugin.player.onChange(() => {{}});\n\
@@ -835,7 +835,7 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
             package(
                 plugins,
                 PACKAGES,
-                &["commands"],
+                &[],
                 format!(
                     "export default function activate(plugin) {{\n\
                      console.error(`{PACKAGES} start`);\n\
@@ -846,7 +846,7 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
             package(
                 plugins,
                 CHANGER,
-                &["events", "playback.read", "plugins.manage"],
+                &["plugins"],
                 format!(
                     "export default function activate(plugin) {{\n\
                      plugin.player.onChange(() => {{}});\n\

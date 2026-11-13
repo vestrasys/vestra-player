@@ -1,6 +1,6 @@
 //! `playback.control`: opening media and controlling playback (the playback
 //! worker), Previous/Next, step seek and keeping the computer awake.
-use super::{Capability, Handled, Info, Method, Needs, Recorded, Residency, forward};
+use super::{Group, Handled, Info, Method, Recorded, Residency, forward};
 use crate::{
     core_actions,
     host::{Host, Reply, RpcError, string},
@@ -11,37 +11,26 @@ use serde_json::{Value, json};
 pub struct PlaybackControl;
 static INFO: Info = Info {
     name: "playback.control",
-    label: "Open media, control playback, keep the computer awake",
-    risky: false,
-    requires: &[],
+    summary: "Open media, control playback, keep the computer awake",
     residency: Residency::Live,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("playback.set"),
-    Method::this("source.submit"),
+    Method::free("playback.set"),
+    Method::free("source.submit"),
     // The outcome of this plugin's own source operation (operation books
-    // are per plugin): a control that went `pending` (an open a resolver
-    // handles) is followed up with `playback.control`.
-    Method {
-        name: "source.operation",
-        needs: Needs::IfDeclared {
-            declared: "playback.control",
-            then: "playback.control",
-            otherwise: "playback.read",
-        },
-    },
-    Method::this("audio.addTrack"),
-    Method::this("audio.selectTrack"),
-    Method::this("player.setLoop"),
-    Method::this("player.setAudioDevice"),
-    Method::this("player.step"),
-    Method::this("player.setStepSeek"),
-    Method::this("power.preventSleep"),
-    Method::this("sequence.set"),
-    Method::this("sequence.step"),
+    // are per plugin).
+    Method::free("source.operation"),
+    Method::free("audio.addTrack"),
+    Method::free("audio.selectTrack"),
+    Method::free("player.setLoop"),
+    Method::free("player.setAudioDevice"),
+    Method::free("player.step"),
+    Method::free("player.setStepSeek"),
+    Method::free("power.preventSleep"),
+    Method::free("sequence.set"),
+    Method::free("sequence.step"),
 ];
-impl Capability for PlaybackControl {
+impl Group for PlaybackControl {
     fn info(&self) -> &'static Info {
         &INFO
     }

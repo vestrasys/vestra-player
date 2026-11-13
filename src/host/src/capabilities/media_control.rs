@@ -1,22 +1,19 @@
 //! `media.control`: taking snapshots and running export jobs (media_jobs.rs,
 //! in the playback worker, which refuses the methods it does not know). An
 //! export's input is a snapshot or the parts of remembered files
-//! (`media.sources`, also required for those).
-use super::{Capability, Handled, Info, Method, Recorded, Residency, forward_media};
-use crate::host::{Host, Reply, RpcError};
+//! (media_sources.rs).
+use super::{Group, Handled, Info, Method, Recorded, Residency, forward_media};
+use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct MediaControl;
 static INFO: Info = Info {
     name: "media.control",
-    label: "Take snapshots and export clips",
-    risky: false,
-    requires: &["media.read"],
+    summary: "Take snapshots and export clips",
     residency: Residency::Live,
-    builtin_only: false,
 };
-static METHODS: &[Method] = &[Method::this("snapshot.*"), Method::this("jobs.*")];
-impl Capability for MediaControl {
+static METHODS: &[Method] = &[Method::free("snapshot.*"), Method::free("jobs.*")];
+impl Group for MediaControl {
     fn info(&self) -> &'static Info {
         &INFO
     }
@@ -30,21 +27,10 @@ impl Capability for MediaControl {
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         // An export of remembered files' parts (`jobs.start { parts }`) and
         // its check (`jobs.check { parts }`) read the plugin's source
-        // references: they need `media.sources` too. A snapshot's check
-        // (`jobs.check { snapshotId }`) needs only `media.control`, but it
-        // carries the store key as well (below).
-        let parts = !params["parts"].is_null();
-        if matches!(method, "jobs.check" | "jobs.start")
-            && parts
-            && !super::plugin(host, reply)?.allows("media.sources")
-        {
-            return Err(RpcError::new(
-                "capability",
-                "capability must be declared in manifest: media.sources (an export of parts)",
-            ));
-        }
-        // Every check carries the store key: a snapshot's check counts in the
+        // references, under its store key. Every check carries the key: a
+        // snapshot's check (`jobs.check { snapshotId }`) counts in the
         // plugin's share of the request threads as its parts checks do.
+        let parts = !params["parts"].is_null();
         if method == "jobs.check" || (method == "jobs.start" && parts) {
             return super::media_sources::forward_with_store(host, reply, method, params);
         }

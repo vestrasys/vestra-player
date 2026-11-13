@@ -1,5 +1,5 @@
 //! `rendering.state`, `rendering.setPreference` and `rendering.restart`
-//! (capability `rendering.manage`, SDK 1.5.35, doc/architecture/README.md
+//! (the two setters need `player`; SDK 1.5.35, doc/architecture/README.md
 //! §4.3): the mode now and why, the saved preference
 //! and what the next start would choose with it, and a restart that
 //! continues the current file. The preference is saved at once and applies

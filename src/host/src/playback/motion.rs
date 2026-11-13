@@ -1,4 +1,4 @@
-//! Motion smoothing (`video.motion.state`, `video.motion.set`; capability
+//! Motion smoothing (`video.motion.state`, `video.motion.set`; group
 //! `video.motion`, SDK 1.7.19; doc/architecture/README.md §4.4a), on the
 //! control worker: the video's frame rate doubled by a GPU vendor's frame-rate
 //! converter, real in-between frames rather than blends. Vendor-aware:

@@ -567,6 +567,9 @@ pub(crate) struct Host {
     /// the table's and the command registry's listed revisions. It is
     /// built again only once they moved (`notify_tick`).
     pub(crate) bindings_seen: [u64; 2],
+    /// The plugins that had a panel at the last `notify_tick`
+    /// (`Host::panel_plugins`): the third source of that list.
+    pub(crate) bindings_panels: std::collections::BTreeSet<String>,
     pub(crate) packages_sent: Value,
     /// The sources of the `packages.list` behind `packages_sent`: the list
     /// is built again only once they moved (`packages_key`).

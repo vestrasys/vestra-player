@@ -847,84 +847,47 @@ function matching(text: string, open: number): number {
   throw new Error("unbalanced brackets");
 }
 
-/** A method's capability in host/capabilities.json (see its `about`). */
-type Needs =
-  | null
-  | string
-  | {
-      param: string;
-      cases: Record<string, string | null>;
-      otherwise: string | null;
-    }
-  | { ifDeclared: string; then: string; otherwise: string };
-interface CapabilityJson {
-  name: string;
-  label: string;
-  risky: boolean;
-  requires: string[];
-  residency: string;
-  /** Player 0.7.x: only built-in plugins may use it (by provenance). */
-  builtinOnly: boolean;
-  methods: { name: string; needs: Needs }[];
-}
-
 /**
- * The player's capabilities as host/src/capabilities/ generates them into
- * host/capabilities.json (a host test keeps the file current).
+ * The player's capabilities and method groups as host/src/capabilities/
+ * generates them into host/capabilities.json (a host test keeps the file
+ * current; its `about` describes the fields).
  */
 function capabilityJson() {
   return JSON.parse(host("capabilities.json")) as {
     apiVersion: string;
-    capabilities: CapabilityJson[];
-    uncapable: { name: string; needs: Needs }[];
+    /** The closed list a manifest may declare. */
+    capabilities: { name: string; label: string; reserved: boolean }[];
+    /** Names a manifest may no longer declare, and what to declare instead. */
+    retired: { name: string; replacedBy: string | null }[];
+    /** Every protocol method, by the group that serves it. */
+    groups: {
+      name: string;
+      summary: string;
+      residency: string;
+      methods: { name: string; needs: string | null }[];
+    }[];
   };
 }
 
 /**
- * The capability the player asks for a request from a plugin that declared
- * `declared` (`null`: none; `undefined`: the player does not know the
- * method), read from host/capabilities.json: an exact method name first,
- * then a `prefix.*` entry.
+ * The capability the player asks for a request (`null`: none; `undefined`:
+ * the player does not know the method), read from host/capabilities.json:
+ * an exact method name first, then a `prefix.*` entry.
  */
 function dispatchCapabilities() {
-  const json = capabilityJson();
-  const methods = [
-    ...json.capabilities.flatMap((c) => c.methods),
-    ...json.uncapable,
-  ];
-  const evaluate = (
-    needs: Needs,
-    params: Record<string, string>,
-    declared: ReadonlySet<string>,
-  ): string | null => {
-    if (needs === null || typeof needs === "string") return needs;
-    if ("param" in needs) {
-      const value = params[needs.param];
-      return value !== undefined && Object.hasOwn(needs.cases, value)
-        ? needs.cases[value]!
-        : needs.otherwise;
-    }
-    return declared.has(needs.ifDeclared) ? needs.then : needs.otherwise;
-  };
-  const capability = (
-    method: string,
-    params: Record<string, string> = {},
-    declared: ReadonlySet<string> = new Set(),
-  ) => {
+  const methods = capabilityJson().groups.flatMap((group) => group.methods);
+  const capability = (method: string) => {
     const entry =
       methods.find((m) => m.name === method) ??
       methods.find(
         (m) => m.name.endsWith(".*") && method.startsWith(m.name.slice(0, -1)),
       );
-    return entry ? evaluate(entry.needs, params, declared) : undefined;
+    return entry ? entry.needs : undefined;
   };
-  return {
-    capability,
-    methods: methods.map((m) => m.name).filter((name) => !name.endsWith("*")),
-  };
+  return { capability, methods };
 }
 
-test("capabilities.json's wording and requirements are CAPABILITY_INFO's", () => {
+test("capabilities.json's wording and reserved names are CAPABILITY_INFO's", () => {
   const json = capabilityJson();
   assert.deepEqual(
     json.capabilities.map((c) => c.name),
@@ -932,57 +895,91 @@ test("capabilities.json's wording and requirements are CAPABILITY_INFO's", () =>
     "capabilities.json lists other capabilities, or in another order, than CAPABILITY_INFO",
   );
   for (const c of json.capabilities) {
-    const info = CAPABILITY_INFO[c.name]!;
+    // Typed loosely: an SDK before 1.8.0 has no `reserved`.
+    const info = CAPABILITY_INFO[c.name] as unknown as {
+      label: string;
+      reserved?: boolean;
+      apis: readonly string[];
+    };
     assert.deepEqual(
-      {
-        label: c.label,
-        risky: c.risky,
-        requires: c.requires,
-        builtinOnly: c.builtinOnly,
-      },
-      {
-        label: info.label,
-        risky: info.risky,
-        requires: [...info.requires],
-        // SDK 1.7.9: `builtinOnly` (absent before: false).
-        builtinOnly: (info as { builtinOnly?: boolean }).builtinOnly ?? false,
-      },
+      { label: c.label, reserved: c.reserved },
+      { label: info.label, reserved: info.reserved },
       `${c.name}: capabilities.json vs CAPABILITY_INFO`,
     );
+    // A reserved capability gates nothing, in the player and in the SDK.
+    if (c.reserved)
+      assert.deepEqual(
+        [...info.apis],
+        [],
+        `${c.name} is reserved: CAPABILITY_INFO lists no member under it`,
+      );
   }
+});
+
+test("the capability list is closed: four active, four reserved, every retired name refused (host/capabilities.json)", () => {
+  const json = capabilityJson();
+  assert.deepEqual(
+    json.capabilities.map((c) => [c.name, c.reserved]),
+    [
+      ["player", false],
+      ["plugins", false],
+      ["clipboard", false],
+      ["credentials", false],
+      ["camera", true],
+      ["microphone", true],
+      ["screen", true],
+      ["notifications", true],
+    ],
+  );
+  const names = new Set(json.capabilities.map((c) => c.name));
+  const active = new Set(
+    json.capabilities.filter((c) => !c.reserved).map((c) => c.name),
+  );
+  for (const { name, replacedBy } of json.retired) {
+    assert.ok(!names.has(name), `${name} is retired and still a capability`);
+    assert.ok(
+      replacedBy === null || active.has(replacedBy),
+      `${name} is replaced by ${replacedBy}, which is no active capability`,
+    );
+  }
+  // What a method needs is one active capability or nothing.
+  const needed = new Set<string>();
+  for (const method of dispatchCapabilities().methods)
+    if (method.needs !== null) {
+      assert.ok(
+        active.has(method.needs),
+        `${method.name} needs ${method.needs}, which is no active capability`,
+      );
+      needed.add(method.needs);
+    }
+  assert.deepEqual([...needed].sort(), [...active].sort());
 });
 
 // Both are this repository's files, so the store is checked against the
 // player directly (CAPABILITY_INFO is compared with capabilities.json above).
 test("the store's capability wording is capabilities.json's (plugins/store/labels.ts)", () => {
-  const store: Record<string, { text: string; risky?: boolean }> =
-    STORE_CAPABILITIES;
+  const store: Record<string, { text: string }> = STORE_CAPABILITIES;
   const json = capabilityJson();
   assert.deepEqual(
     Object.keys(store).sort(),
     json.capabilities.map((c) => c.name).sort(),
     "the store labels another set of capabilities than capabilities.json",
   );
-  for (const c of json.capabilities) {
+  for (const c of json.capabilities)
     assert.equal(
       store[c.name]!.text,
       c.label,
       `${c.name}: store text vs capabilities.json label`,
     );
-    assert.equal(
-      store[c.name]!.risky === true,
-      c.risky,
-      `${c.name}: store risky vs capabilities.json risky`,
-    );
-  }
 });
 
 /**
- * The requests each member in CAPABILITY_INFO.apis sends, read from the
- * SDK's source (`runtime.host.*` calls in src/plugin/*.ts, wire.ts). `event:x`
- * is `events.subscribe` of event `x`; `method:video` is a processing request
- * for that stage; a trailing `?` marks a best-effort call whose failure the
- * member ignores.
+ * The requests each public member sends, read from the SDK's source
+ * (`runtime.host.*` calls in src/plugin/*.ts, wire.ts), for the members
+ * CAPABILITY_INFO.apis lists and the ones that need no capability alike.
+ * `event:x` is `events.subscribe` of event `x`; `method:video` is a
+ * processing request for that stage; a trailing `?` marks a best-effort
+ * call whose failure the member ignores.
  */
 const CONTROL = ["source.submit", "source.operation", "source.state?"];
 const LAYOUT = ["event:window.state", "layout.state"];
@@ -1042,7 +1039,8 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   ],
   // SDK 1.6.7, player 0.7.6: the labels of the plugin's own commands.
   "Commands.keys": ["commands.keys", "event:commands.keys"],
-  // SDK 1.7.9, player 0.7.x: built-in only (Ask Vestra).
+  // SDK 1.7.9: the palette's command table and running one of its
+  // commands (`plugins`: a command may be another plugin's).
   "Commands.list": ["commands.list"],
   "Commands.run": ["commands.run"],
   "Palette.lead": [
@@ -1119,8 +1117,7 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
     "jobs.cancel",
     "jobs.operation",
   ],
-  // An export of remembered files' parts: jobs.start with parts (the
-  // player also checks media.sources for it, capabilities/media_control.rs).
+  // An export of remembered files' parts: jobs.start with parts.
   "MediaCapture.export": [
     "jobs.start",
     "jobs.state",
@@ -1133,10 +1130,8 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "MediaSources.locate": ["media.sources.locate"],
   "MediaSources.forget": ["media.sources.forget"],
   "MediaSources.list": ["media.sources.list"],
-  // Replaces what is playing, so it needs playback.control as well as
-  // media.sources (capabilities/media_sources.rs); followed as player.open
-  // is (source.operation then needs playback.control; the refresh after it
-  // is best-effort).
+  // Replaces what is playing; followed as player.open is (the refresh
+  // after it is best-effort).
   "MediaSources.open": [
     "media.sources.open",
     "source.operation?",
@@ -1182,25 +1177,12 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   ],
 };
 
-/**
- * KNOWN_UNREACHED: requests the player guards that no SDK member sends on
- * purpose (`producer.declareInput`: kept for a future keyboard input of
- * generated streams, doc/architecture/README.md §3).
- */
-const KNOWN_UNREACHED = new Set(["producer.declareInput"]);
-
-test("CAPABILITY_INFO.apis need the capabilities the player checks per request (host/capabilities.json)", () => {
+test("CAPABILITY_INFO.apis are the members whose requests the player checks a capability for (host/capabilities.json)", () => {
   const { capability: capabilityOf, methods } = dispatchCapabilities();
-  const request = (
-    call: string,
-  ): { method: string; params: Record<string, string> } => {
-    const [name, qualifier] = call.replace(/\?$/, "").split(":") as [
-      string,
-      string?,
-    ];
-    return name === "event"
-      ? { method: "events.subscribe", params: { event: qualifier! } }
-      : { method: name, params: qualifier ? { stage: qualifier } : {} };
+  /** The protocol method of a MEMBER_REQUESTS entry. */
+  const request = (call: string): string => {
+    const name = call.replace(/\?$/, "").split(":")[0]!;
+    return name === "event" ? "events.subscribe" : name;
   };
   const sdk = readdirSync(
     new URL("../../node_modules/@vestra-player/sdk/dist/", import.meta.url),
@@ -1219,65 +1201,41 @@ test("CAPABILITY_INFO.apis need the capabilities the player checks per request (
       MEMBER_REQUESTS[member],
       `CAPABILITY_INFO lists ${member}: add the requests it sends to MEMBER_REQUESTS`,
     );
-  for (const member of Object.keys(MEMBER_REQUESTS))
-    assert.ok(
-      listed.has(member),
-      `MEMBER_REQUESTS has ${member}, which CAPABILITY_INFO no longer lists`,
-    );
-  for (const [member, names] of listed) {
-    const declared = new Set(
-      names.flatMap((name) => [name, ...CAPABILITY_INFO[name]!.requires]),
-    );
+  // A member is listed under exactly the capabilities the player checks for
+  // its requests: most members under none.
+  for (const [member, calls] of Object.entries(MEMBER_REQUESTS)) {
     const needed = new Set<string>();
-    for (const call of MEMBER_REQUESTS[member]!) {
-      const { method, params } = request(call);
+    for (const call of calls) {
+      const method = request(call);
       assert.ok(
         sdk.includes(`"${method}"`),
         `${member}: the installed SDK never sends ${method}; correct MEMBER_REQUESTS`,
       );
-      const capability = capabilityOf(method, params, declared);
+      const capability = capabilityOf(method);
       assert.notEqual(
         capability,
         undefined,
         `${member}: the player does not know the request ${method}`,
       );
-      if (!capability) continue;
-      needed.add(capability);
-      if (call.endsWith("?") || declared.has(capability)) continue;
-      assert.fail(
-        `${member} sends ${call}, for which the player checks ${capability}, but CAPABILITY_INFO lists ${member} under ${names.join(", ")} (with requires: ${[...declared].join(", ")})`,
-      );
+      if (capability && !call.endsWith("?")) needed.add(capability);
     }
-    for (const name of names)
-      assert.ok(
-        needed.has(name),
-        `CAPABILITY_INFO lists ${member} under ${name}, but the player checks ${name} for none of its requests (${MEMBER_REQUESTS[member]!.join(", ")})`,
-      );
+    assert.deepEqual(
+      [...(listed.get(member) ?? [])].sort(),
+      [...needed].sort(),
+      `${member} sends ${calls.join(", ")}: the capabilities CAPABILITY_INFO lists it under vs the ones the player checks`,
+    );
   }
-  // Every request the player names in the dispatch, if it needs a capability,
-  // is sent by some listed member.
-  const reached = new Set(
-    Object.values(MEMBER_REQUESTS)
-      .flat()
-      .map((call) => request(call).method),
-  );
-  reached.add("events.unsubscribe"); // a listener's dispose()
-  for (const method of new Set(methods)) {
-    const capability = capabilityOf(method, {
-      event: "source.state",
-      stage: "video",
-    });
-    if (!capability) continue;
-    if (KNOWN_UNREACHED.has(method)) {
-      assert.ok(
-        !reached.has(method),
-        `KNOWN_UNREACHED: ${method} is reached now; remove the entry`,
-      );
-      continue;
-    }
+  // Every request the player checks a capability for is sent by some member
+  // (a prefix entry: by a request under the prefix).
+  const reached = Object.values(MEMBER_REQUESTS).flat().map(request);
+  for (const method of methods) {
+    if (method.needs === null) continue;
+    const prefix = method.name.endsWith(".*") ? method.name.slice(0, -1) : null;
     assert.ok(
-      reached.has(method),
-      `the player checks ${capability} for ${method}, but no member in CAPABILITY_INFO.apis sends it`,
+      reached.some((sent) =>
+        prefix ? sent.startsWith(prefix) : sent === method.name,
+      ),
+      `the player checks ${method.needs} for ${method.name}, but no member in MEMBER_REQUESTS sends it`,
     );
   }
 });
@@ -2207,7 +2165,7 @@ test("TestHost refuses a menu text with the player's message (commands.rs text; 
       (plugin) => {
         plugin.commands.add({ id: "a", path: ["Tools ", "A"], run() {} });
       },
-      { capabilities: ["commands"] },
+      { capabilities: [] },
     ),
     {
       code: "invalid",
@@ -2228,7 +2186,7 @@ test("TestHost refuses a plugin item on or under each of the player's own menu i
         (plugin) => {
           plugin.commands.add({ id: "a", path: [...taken], run() {} });
         },
-        { capabilities: ["commands"] },
+        { capabilities: [] },
       ),
       { code: "conflict" },
       `a plugin item at ${taken.join(" ▸ ")}`,
@@ -2324,7 +2282,7 @@ test("palette.lead's status states are the player's (palette_lead.rs StatusState
       });
     },
     {
-      capabilities: ["palette.lead"],
+      capabilities: [],
       host: fake,
       builtin: true,
       id: "vestra.agreement",
@@ -2414,7 +2372,7 @@ test("TestHost asks for a commands.run plan as the player does (commands_run.rs 
         )(`vestra.agreement/${id}`, options);
     },
     {
-      capabilities: ["commands", "commands.run", "palette.lead"],
+      capabilities: ["plugins"],
       host: fake,
       builtin: true,
       id: "vestra.agreement",

@@ -5,5 +5,5 @@
   "apiVersion": "vestra/1",
   "minPlayerVersion": "0.5.16",
   "entry": "main.ts",
-  "capabilities": ["commands", "ui.osd", "video.upscaling"]
+  "capabilities": []
 }
