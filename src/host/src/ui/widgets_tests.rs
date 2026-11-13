@@ -2266,3 +2266,34 @@ export component W inherits Window {
     click(&w, number(&w, "kx") as f32, number(&w, "ky") as f32);
     assert_eq!(get(&w, "clicks"), Value::Number(1.));
 }
+
+/// SDK 1.8.0: an end state's text may be 160 characters. Every end state
+/// wraps it to the strip's two lines at its widest; a working or running
+/// text stays on one line.
+#[test]
+fn the_lead_strip_wraps_the_longest_end_state_text_to_two_lines() {
+    let w = build(STRIP, 600., 120.);
+    let longest = "Stopped after step 2 of 15. Reset: Picture and Vestra Player: Mute ran; Export: Export Last 30 Seconds, Window: Always on Top and Playback: Speed 1.25× did not.";
+    assert_eq!(longest.chars().count(), 160);
+    for kind in ["done", "failed", "note", "stopped"] {
+        set_strip(&w, strip_value(kind, longest, 1., true));
+        assert_eq!((number(&w, "h"), number(&w, "w")), (48., 520.), "{kind}");
+        set_strip(&w, strip_value(kind, "Stopped", 0., true));
+        assert_eq!((number(&w, "h"), number(&w, "w")), (32., 168.), "{kind}");
+    }
+    for kind in ["working", "running"] {
+        set_strip(&w, strip_value(kind, longest, 0., true));
+        assert_eq!((number(&w, "h"), number(&w, "w")), (32., 420.), "{kind}");
+    }
+}
+
+/// SDK 1.8.0: stopped is an end state. It has no Stop button and a press
+/// dismisses it.
+#[test]
+fn a_stopped_lead_strip_is_dismissed_by_a_press() {
+    let w = build(STRIP, 600., 120.);
+    set_strip(&w, strip_value("stopped", "Stopped", 0., true));
+    let right = number(&w, "right") as f32;
+    click(&w, right - 20., 24.);
+    assert_eq!(string(&w, "last"), "dismiss");
+}

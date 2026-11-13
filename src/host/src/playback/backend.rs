@@ -396,6 +396,10 @@ impl Backend {
                 let mut motion = crate::playback::motion::Motion::default();
                 // Out of the chain while a new source opens (`motion.rs`).
                 motion.follow_gate(publish_gate.clone());
+                // The mpv pass-through (`mpv_passthrough.rs`): the filter
+                // labels and observers of plugins. Empty, and not looked
+                // at below, until a plugin with `mpv` uses it.
+                let mut passthrough = crate::playback::mpv_passthrough::Passthrough::default();
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;
@@ -540,6 +544,13 @@ impl Backend {
                                 if motion.holds(owner) {
                                     live.push("motion smoothing");
                                 }
+                                // A labelled mpv filter or an observer
+                                // (`mpv_passthrough.rs`): last, the lists of
+                                // the plugins without one are as before.
+                                let passes = passthrough.holds(owner);
+                                if passes {
+                                    live.push(crate::playback::mpv_passthrough::HELD);
+                                }
                                 // Of `live`, what the plugin's next activation
                                 // takes up again from its settings (the rest
                                 // is work in flight: a resolution, a job, a
@@ -565,6 +576,9 @@ impl Backend {
                                 }
                                 if motion.holds(owner) {
                                     held.push("motion smoothing");
+                                }
+                                if passes {
+                                    held.push(crate::playback::mpv_passthrough::HELD);
                                 }
                                 let answer = json!({"live":live,"held":held,
                                     "resolvers":sources.resolvers_of(owner)});
@@ -608,6 +622,11 @@ impl Backend {
                             _ => (),
                         }
                         if matches!(command.method.as_str(), "owner.disabled" | "owner.parked") {
+                            // Its labelled mpv filters leave the chains and
+                            // its observers go (`mpv_passthrough.rs`; its
+                            // property writes stay). Nothing for a plugin
+                            // that holds neither.
+                            passthrough.stopped(&mpv, command.reply.owner);
                             jobs.disable(command.reply.owner);
                             if command.method == "owner.parked" {
                                 sources.park(command.reply.owner);
@@ -680,6 +699,27 @@ impl Backend {
                                 );
                                 subtitles.register(command.reply.owner, id.into());
                                 jobs.register(command.reply.owner);
+                            }
+                            continue;
+                        }
+                        // The mpv pass-through (`mpv_passthrough.rs`): an
+                        // observer's first value follows its answer.
+                        if command.method.starts_with("mpv.") {
+                            let owner = command.reply.owner;
+                            let (result, first) = passthrough.request(
+                                &mpv,
+                                owner,
+                                &command.method,
+                                &command.params,
+                                Instant::now(),
+                            );
+                            let _ = events.send(Event::Reply(command.reply, result));
+                            if let Some(data) = first {
+                                let _ = events.send(Event::PluginMessage(
+                                    owner,
+                                    crate::playback::mpv_passthrough::EVENT.into(),
+                                    data,
+                                ));
                             }
                             continue;
                         }
@@ -1008,6 +1048,15 @@ impl Backend {
                             }
                             continue;
                         }
+                        // A property a plugin observes (`mpv_passthrough.rs`):
+                        // pushed below. Asked only while one is observed;
+                        // the worker's own two observations ended above.
+                        if passthrough.watching()
+                            && let rsmpv::Event::PropertyChange { userdata, data, .. } = &event
+                            && passthrough.changed(*userdata, data)
+                        {
+                            continue;
+                        }
                         let accepted = sources.event(&event);
                         processing.note_source(sources.generation(), sources.phase());
                         subtitles.note_source(sources.generation(), sources.phase());
@@ -1185,6 +1234,19 @@ impl Backend {
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
                     }
+                    // What plugins observe of mpv (`mpv_passthrough.rs`):
+                    // each property's newest value, at most every 100 ms,
+                    // to its observers only. The clock is read only while
+                    // a value waits.
+                    if passthrough.waiting() {
+                        for (owner, data) in passthrough.due(Instant::now()) {
+                            let _ = events.send(Event::PluginMessage(
+                                owner,
+                                crate::playback::mpv_passthrough::EVENT.into(),
+                                data,
+                            ));
+                        }
+                    }
                     // While something ends without an event (`polling`), look
                     // again after `POLL`, as before 0.5.15, with a sleep: on
                     // Windows a condvar's timeout (`Wake::wait`) is rounded up
@@ -1215,6 +1277,10 @@ impl Backend {
                             timeout = timeout.min(due);
                         }
                         if let Some(due) = processing.due_in(&mpv, now) {
+                            timeout = timeout.min(due);
+                        }
+                        // An observed value waiting for its interval.
+                        if let Some(due) = passthrough.due_in(now) {
                             timeout = timeout.min(due);
                         }
                         worker_wake.wait(timeout);

@@ -295,7 +295,7 @@ in a 640×360 window (`h5-long-detail-small`).
 
 | Method / event | Params | Notes |
 | --- | --- | --- |
-| `palette.lead.set` | `{ title (1–40), icon, placeholder? (≤60), empty? (≤80), note? (≤40), status?: { text (1–80), note? (≤40), state? } \| null }` | Texts are strings (translated with the plugin's catalog) or text values; `icon` is a name of the icon set (`BUTTON_ICONS`) or a `plugin.ui.image`. One holder: another plugin's `set` fails `conflict` with `reason: "lead-taken"` (the slot refusals' form; PROPOSAL said `taken`). Recorded and replayed, less an end-state `status` (§3.1). |
+| `palette.lead.set` | `{ title (1–40), icon, placeholder? (≤60), empty? (≤80), note? (≤40), status?: { text (1–80; an end state's 1–160), note? (≤40), state?, strip? (1–80, working only) } | null }`\| null }` | Texts are strings (translated with the plugin's catalog) or text values; `icon` is a name of the icon set (`BUTTON_ICONS`) or a `plugin.ui.image`. One holder: another plugin's `set` fails `conflict` with `reason: "lead-taken"` (the slot refusals' form; PROPOSAL said `taken`). Recorded and replayed, less an end-state `status` (§3.1). |
 | `palette.lead.clear` | `{}` | The row and its placeholder go. |
 | `palette.lead.done` | `{ ticket }` | Ends the ticket. |
 | event `palette.lead` | `{ query, keep, ticket, status }` | Sent to the holder on Enter, Shift+Enter (`keep`) or a click on the row; `status` when the row showed its status. A trigger (`TRIGGERS` in `host/supervisor/mod.rs`): it wakes a parked holder. |
@@ -335,15 +335,41 @@ Design: `C:\vestra\design\ask-vestra-ux\PROPOSAL.md` §4.2 (user rulings of 2026
 H1, H2, H6; SDK 1.7.15 `PaletteLeadStatus.state`). `capabilities/palette_lead.rs` (`LeadStatus`,
 `StatusState`), `host/lead_strip.rs`, `ui/lead-strip.slint`, `ui/host.slint`.
 
-`status.state` is `"working"` (absent or null: the default), `"done"`, `"failed"` or `"note"`; any
-other value fails `invalid` ("status.state is one of working, done, failed, note"), as the SDK's
+`status.state` is `"working"` (absent or null: the default), `"done"`, `"failed"`, `"note"` or
+`"stopped"` (SDK 1.8.0: the user stopped the work; before it Ask Vestra sent a `note`, which read
+like an answer); any
+other value fails `invalid` ("status.state is one of working, done, failed, note, stopped"), as the SDK's
 TestHost does. A working status is the row's status (above) and the strip's text. An end state
-(done, failed, note) is shown **once** in the strip and never on the row: `set` takes it off the
+(done, failed, note, stopped) is shown **once** in the strip and never on the row: `set` takes it off the
 row and out of the recorded call (`Lead::sent`), so a parked or restarted holder is never shown it
 again, and the row goes back to its usual form at once. The same end status sent again by the next
 `set` (an update of other fields: the SDK's `update` sends them all) is not shown again
 (`Lead::ended`); a new request (a new ticket) forgets it, so the same failure twice in a row shows
 twice. The holder needs no timer and may call `palette.lead.done` right away.
+
+**The texts' lengths and the strip's own text (SDK 1.8.0).** `TITLE_CHARS` … `STATUS_STRIP_CHARS`
+in `capabilities/palette_lead.rs` are the SDK's `PALETTE_LEAD_LIMITS`
+(`tests/sdk/lead-status-agreement.test.ts`); each text is counted as shown and is one line as
+sent.
+
+- `status.text` of a working status: 1–80 characters, one line of the row and of the strip.
+- `status.text` of an end state: 1–160 characters. It shows in the strip alone, which wraps it
+  to at most two lines and elides what does not fit (before 1.8.0 an end state's text was
+  limited to 80 like a working one, although the strip already wrapped it).
+- `status.strip`: optional, 1–80 characters, for a working status only (`LeadRow::strip`). The
+  strip shows it in place of `text` (`LeadRow::working_strip`); the palette's row always shows
+  `text`. So the row can read "Vestra is working · Planning…" and the strip "Planning…". With an
+  end state it fails `invalid` ("status.strip is for a working status"): an end state's `text`
+  is already the strip's. A null `strip` is none. It is part of the status: it goes with it
+  when the holder is parked, from the row and from the recorded call.
+
+`palette_lead::parse` checks in the order it had before 1.8.0, so a request with several faults
+is answered as it was: unknown fields, `title`, the icon, then the status (its fields' names,
+`text`, `note`, `state`), then `placeholder`, `empty`, `note`. The additions sit inside the
+status: the longer limit applies to `text` when `state` names an end state (a state that is
+refused keeps the 80), and `strip` is checked after `state`, first that the status is a working
+one, then its length ("status.strip must be 1–80 characters on one line").
+
 
 The strip is where the palette was: centred, y 16 (below the fullscreen title strip while it is
 out), above the video, the OSD and the title strip, below the menu layer; the palette's plate
@@ -353,9 +379,9 @@ two lines, 48px), 168–420px wide (an end state up to 520px), at most the windo
 
 | Source | Icon | Line (2px `accent-fill`, 8px in from each side) | Stop | Time |
 | --- | --- | --- | --- | --- |
-| An end state: done / failed / note | `menu-check` accent / `failed` danger / `ai` accent | full / full `danger` / none | no | 2 s / 6 s / 4 s + 50 ms a character, at most 10 s; held while the active pointer is on it (the OSD's hold, at most 30 s); then a 300 ms fade |
+| An end state: done / failed / note / stopped | `menu-check` accent / `failed` danger / `ai` accent / `ai` dimmed (`text-dim`) | full / full `danger` / none / none | no | 2 s / 6 s / 4 s + 50 ms a character, at most 10 s / 2 s (`STOPPED_MS`: the user pressed Stop, it only confirms that); held while the active pointer is on it (the OSD's hold, at most 30 s); then a 300 ms fade |
 | The step `commands.run` last ran for the holder with a live ticket | `ai` accent | filled to step/of, 150 ms per change | yes | until the ticket ends (done, a new request, 120 s idle, the holder stops or parks), an end state or `status: null` |
-| The holder's working status | `ai` accent | a 36% segment sweeps left to right, 1.4 s a pass, easing in and out, its ends fading into the plate | yes | while it is set |
+| The holder's working status (its `strip` text, else its `text`) | `ai` accent | a 36% segment sweeps left to right, 1.4 s a pass, easing in and out, its ends fading into the plate | yes | while it is set |
 
 From the first step on, a working text the holder sends changes only the palette's status row,
 not the strip. A working status that arrives while an end state shows, with no step, replaces it

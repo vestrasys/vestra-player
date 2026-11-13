@@ -1173,6 +1173,11 @@ const MEMBER_REQUESTS: Record<string, readonly string[]> = {
   "VideoMotion.state": ["video.motion.state"],
   "VideoMotion.set": ["video.motion.set"],
   "VideoMotion.onChange": ["event:video.motion.changed"],
+  // The mpv pass-through (SDK 1.8.0).
+  "Mpv.command": ["mpv.command"],
+  "Mpv.get": ["mpv.get"],
+  "Mpv.set": ["mpv.set"],
+  "Mpv.observe": ["mpv.observe", "mpv.unobserve"],
   // SDK 1.7.0: plugin.wire.commands.register (register, then update and
   // unregister through the WireCommand it returns).
   "WireCommands.register": [
@@ -2333,7 +2338,7 @@ test("palette.lead's status states are the player's (palette_lead.rs StatusState
   await lead!.ready;
   for (const state of player) await lead!.update(options(state));
   await assert.rejects(
-    lead!.update(options("stopped")),
+    lead!.update(options("halted")),
     (error: { code?: string; message?: string }) =>
       error.code === "invalid" &&
       error.message === `status.state is one of ${player.join(", ")}`,

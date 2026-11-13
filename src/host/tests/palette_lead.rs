@@ -171,7 +171,7 @@ export default async function activate(plugin) {{
       wipe: row("{ID}/wipe")?.dangerous, quit: row("host/quit")?.dangerous,
       keys: Array.isArray(row("host/play-pause")?.keys) }}));
     log("FIX bad state", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
-      status: {{ text: "x", state: "stopped" }} }})));
+      status: {{ text: "x", state: "halted" }} }})));
     log("FIX end", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
       status: {{ text: "Done · Hello", state: "done" }} }})));
     log("FIX end again", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
