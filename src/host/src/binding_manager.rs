@@ -189,9 +189,8 @@ impl Host {
                 // changed (supervisor.md): during a wake storm every
                 // woken plugin's commands move to its new owner, and the
                 // list took 3–6 ms to build each time.
-                let moved = key != self.bindings_seen
-                    || panels_moved
-                    || self.bindings_list_sent.is_null();
+                let moved =
+                    key != self.bindings_seen || panels_moved || self.bindings_list_sent.is_null();
                 if moved || cfg!(debug_assertions) {
                     let list = in_order(self.bindings_list());
                     let same = list == self.bindings_list_sent;

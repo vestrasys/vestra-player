@@ -99,13 +99,7 @@ fn stored(store: &Path, id: &str, version: &str) -> Value {
     let staging = store
         .join("packages")
         .join(format!("staging-{id}-{version}"));
-    let (manifest, digest) = package(
-        &staging,
-        id,
-        version,
-        &[],
-        target_main(id, version, false),
-    );
+    let (manifest, digest) = package(&staging, id, version, &[], target_main(id, version, false));
     let directory = store.join("packages").join(&digest);
     std::fs::rename(&staging, &directory).unwrap();
     json!({"digest":digest,"manifest":manifest,"directory":directory})

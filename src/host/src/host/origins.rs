@@ -28,7 +28,7 @@
 //!   back to the plugin's own shown window, and with neither to the focus
 //!   test (`platform::tool_window_focused`), as before.
 //! - Keyed by owner generation: a parked plugin's entry moves to its woken
-//!   generation (`Capability::rekey` of `ui.dialog`) and goes when it stops.
+//!   generation (`Group::rekey` of `ui.dialog`) and goes when it stops.
 use slint::ComponentHandle;
 use std::collections::BTreeMap;
 

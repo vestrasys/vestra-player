@@ -722,9 +722,15 @@ mod tests {
             check_declared(&names.iter().map(|n| (*n).to_owned()).collect::<Vec<_>>())
         };
         assert_eq!(check(&[]), Ok(()));
-        assert_eq!(check(&["player", "plugins", "clipboard", "credentials"]), Ok(()));
+        assert_eq!(
+            check(&["player", "plugins", "clipboard", "credentials"]),
+            Ok(())
+        );
         // Reserved names are known: declaring one is allowed and grants nothing.
-        assert_eq!(check(&["camera", "microphone", "screen", "notifications"]), Ok(()));
+        assert_eq!(
+            check(&["camera", "microphone", "screen", "notifications"]),
+            Ok(())
+        );
         assert_eq!(
             check(&["clipboard", "secrets"]).unwrap_err(),
             "capability \"secrets\" was retired: declare \"credentials\" instead"
@@ -834,7 +840,11 @@ mod tests {
             "storage.session.other",
             "ui.other",
         ] {
-            assert_eq!(required(unknown).unwrap_err().code, "unsupported", "{unknown}");
+            assert_eq!(
+                required(unknown).unwrap_err().code,
+                "unsupported",
+                "{unknown}"
+            );
         }
     }
 }

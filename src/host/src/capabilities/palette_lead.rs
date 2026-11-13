@@ -1,10 +1,14 @@
-//! `palette.lead` (built-in only): the command palette's first row, which
-//! receives what is typed. One plugin holds it at a time; Enter, Shift+Enter
-//! or a click on it sends that plugin the `palette.lead` event with the
-//! query and a one-time ticket for `commands.run` (capabilities/
-//! commands_run.rs). Recorded, so the row stays while its plugin is in
-//! standby and the event wakes it (doc/architecture/palette-lead.md).
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency};
+//! `palette.lead`: the command palette's first row, which receives what is
+//! typed. No capability: the row is one slot and the host arbitrates it. One
+//! plugin holds it at a time, the first to set it (`set` refuses another
+//! with `conflict`, reason `lead-taken`), except that a built-in takes it
+//! from a holder that is not built in; the slot is free again when the
+//! holder clears it or stops for good. Enter, Shift+Enter or a click on it
+//! sends the holder the `palette.lead` event with the query and a one-time
+//! ticket for `commands.run` (capabilities/commands_run.rs). Recorded, so
+//! the row stays while its plugin is in standby and the event wakes it
+//! (doc/architecture/palette-lead.md).
+use super::{Call, Group, Handled, Info, Method, Recorded, Residency};
 use crate::{
     commands::{BUTTON_ICONS, ButtonIcon},
     host::{Host, Origin, Reply, RpcError, string},
@@ -15,16 +19,13 @@ use serde_json::{Value, json};
 pub struct PaletteLead;
 static INFO: Info = Info {
     name: "palette.lead",
-    label: "Add the first row of the command palette",
-    risky: false,
-    requires: &[],
+    summary: "Add the first row of the command palette",
     residency: Residency::Recordable,
-    builtin_only: true,
 };
 static METHODS: &[Method] = &[
-    Method::this("palette.lead.set"),
-    Method::this("palette.lead.clear"),
-    Method::this("palette.lead.done"),
+    Method::free("palette.lead.set"),
+    Method::free("palette.lead.clear"),
+    Method::free("palette.lead.done"),
 ];
 
 /// The event the holder gets when the user activates the row (a trigger:
@@ -219,10 +220,23 @@ pub fn parse(
     })
 }
 
-/// Sets `owner`'s lead from `params`, refused while another plugin holds it.
+/// Sets `owner`'s lead from `params` (`origin`: its package). The slot's
+/// one rule: the first plugin to set it holds it and another's `set` is
+/// refused, except that the player's own plugins come first, as they do for
+/// panel slots: a built-in's `set` takes the row from a holder that is not
+/// built in (by provenance, never by the manifest). So which of the two
+/// started first does not matter, and no plugin can keep the row from the
+/// player's own. The holder that lost it is not told: its next `set` is
+/// refused, it gets no more tickets, and a ticket it still has runs out.
 fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(), RpcError> {
+    let takes = host.lead.as_ref().is_some_and(|lead| {
+        lead.owner != owner
+            && host.is_builtin_package(origin)
+            && !super::commands_run::builtin_owner(host, lead.owner)
+    });
     if let Some(lead) = &host.lead
         && lead.owner != owner
+        && !takes
     {
         let holder = host
             .plugins
@@ -241,6 +255,13 @@ fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(
         ));
     }
     let mut row = parse(&origin.texts(), &origin.image_roots(), params)?;
+    if takes && let Some(lost) = host.lead.take() {
+        diag!(
+            "palette lead: {} takes the row from {}",
+            origin.id,
+            host.plugin_id(lost.owner)
+        );
+    }
     let appeared = host.lead.is_none();
     // An end state goes to the strip once and is neither kept on the row
     // nor recorded: the row goes back to its usual form.
@@ -273,7 +294,7 @@ fn clear(host: &mut Host, owner: u64) {
     }
 }
 
-impl Capability for PaletteLead {
+impl Group for PaletteLead {
     fn info(&self) -> &'static Info {
         &INFO
     }
@@ -469,11 +490,7 @@ mod tests {
     }
 
     #[test]
-    fn its_capability_is_built_in_only_and_recordable() {
-        assert!(INFO.builtin_only && !INFO.risky);
+    fn it_is_recordable() {
         assert_eq!(INFO.residency, Residency::Recordable);
-        assert!(super::super::builtin_only("palette.lead"));
-        assert!(super::super::builtin_only("commands.run"));
-        assert!(!super::super::builtin_only("commands"));
     }
 }

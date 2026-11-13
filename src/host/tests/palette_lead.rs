@@ -4,7 +4,9 @@
 //! activated (`VESTRA_TEST_EXECUTE=lead:<query>@<ms>`, as Enter would), runs
 //! its own command with it (the OSD line names it), a destructive one after
 //! the host's confirmation, and hits the ticket's limits; a development load
-//! (not built-in) is refused both capabilities. A second run parks the
+//! (a third-party plugin that declares `plugins`) may set the row first and
+//! loses it to the built-in, then finds it taken, lists the commands and
+//! runs none without a ticket. A second run parks the
 //! holder, wakes it with the row (its ticket moves to the woken run) and
 //! answers Don't Run. A query starting with "plan" runs a plan (`then`):
 //! asked once before its first step, or declined and nothing runs. A query
@@ -184,9 +186,12 @@ export default async function activate(plugin) {{
     )
 }
 
-/// The development load: not built-in, whatever it declares. Its commands
-/// are a plugin's that is not built in: `export` (plain) and `purge`
-/// (destructive).
+/// The development load: not built-in. Its commands are a plugin's that is
+/// not built in: `export` (plain) and `purge` (destructive). It asks for
+/// the row at once (it may start before the built-in fixture's first run,
+/// and then holds the row until the built-in sets it) and again 1.5 s
+/// later, when the built-in holds it; it lists the commands and tries to
+/// run one without a ticket.
 fn third() -> String {
     format!(
         r#"{WIRE}
@@ -199,8 +204,11 @@ export default async function activate(plugin) {{
       declaration: {{ title: id, path: ["Tools", id], destructive }},
       state: {{ enabled: true, busy: false }} }})));
   }}
+  log("THIRD early", said(await call("palette.lead.set", {{ title: "Mine", icon: "ai" }})));
+  await new Promise((done) => setTimeout(done, 1500));
   log("THIRD set", said(await call("palette.lead.set", {{ title: "Mine", icon: "ai" }})));
-  log("THIRD list", said(await call("commands.list", {{}})));
+  log("THIRD list", typeof (await call("commands.list", {{}})).result?.revision);
+  log("THIRD run", said(await call("commands.run", {{ id: "{THIRD}/export" }})));
 }}
 "#
     )
@@ -220,24 +228,14 @@ fn run(seconds: u32, env: &[(&str, &str)]) -> String {
     let root = tempfile::tempdir().unwrap();
     let plugins = root.path().join("plugins");
     std::fs::create_dir(&plugins).unwrap();
-    let entry = package(
-        &plugins,
-        ID,
-        &["commands", "commands.run", "palette.lead"],
-        fixture(),
-    );
+    let entry = package(&plugins, ID, &["plugins"], fixture());
     std::fs::write(
         plugins.join("builtin.json"),
         serde_json::json!({"schema":3,"plugins":[entry]}).to_string(),
     )
     .unwrap();
     let development = root.path().join("dev");
-    package(
-        &development,
-        THIRD,
-        &["commands", "commands.run", "palette.lead"],
-        third(),
-    );
+    package(&development, THIRD, &["plugins"], third());
     let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
     command
         .args([
@@ -335,16 +333,21 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
     assert_eq!(log.matches("lead strip: done").count(), 1, "{log}");
     expect("FIX done null");
     expect("FIX after done error ticket");
-    // Not built-in: refused both, by provenance.
+    // Not built-in, the same rules: the row is the first holder's (and a
+    // built-in takes it from a plugin that is not: whichever started first,
+    // the built-in fixture holds it), the command table is open with
+    // `plugins`, a run needs the lead's ticket.
     let third = lines(&log, "THIRD ");
-    assert!(
-        third.contains("THIRD set error capability"),
-        "{third}\n{log}"
-    );
-    assert!(
-        third.contains("THIRD list error capability"),
-        "{third}\n{log}"
-    );
+    if third.contains("THIRD early null") {
+        assert!(
+            log.contains(&format!("palette lead: {ID} takes the row from {THIRD}")),
+            "{log}"
+        );
+    }
+    assert!(!log.contains("FIX set error"), "{log}");
+    assert!(third.contains("THIRD set error conflict"), "{third}\n{log}");
+    assert!(third.contains("THIRD list number"), "{third}\n{log}");
+    assert!(third.contains("THIRD run error ticket"), "{third}\n{log}");
 }
 
 /// The same end state for two requests in a row shows both times: a new

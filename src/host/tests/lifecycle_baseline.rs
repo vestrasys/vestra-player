@@ -824,13 +824,7 @@ fn b2b_uninstall_then_reinstall_waits_for_the_old_process() {
     let candidates = (0..3)
         .map(|n| {
             let candidate = root.path().join("candidates").join(format!("{AGAIN}-{n}"));
-            package(
-                &candidate,
-                AGAIN,
-                "1.0.0",
-                &[],
-                &format!("{main}// {n}\n"),
-            );
+            package(&candidate, AGAIN, "1.0.0", &[], &format!("{main}// {n}\n"));
             js_path(&candidate)
         })
         .collect::<Vec<_>>()

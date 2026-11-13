@@ -1,508 +1,433 @@
 {
-  "about": "Generated from src/host/src/capabilities/ (VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities); do not edit. A method's needs: null (none), a capability name, {param, cases, otherwise} (by a string parameter) or {ifDeclared, then, otherwise}. A method name ending in .* covers the prefix's other methods.",
+  "about": "Generated from src/host/src/capabilities/ (VESTRA_UPDATE_CAPABILITIES=1 cargo test capabilities); do not edit. capabilities: the closed list a manifest may declare; a reserved one is known and no method needs it yet. retired: names a manifest may no longer declare (the player refuses it), with the capability to declare instead (null: none). groups: every protocol method by the group that serves it; a method's needs is null (any plugin) or one capability name. A method name ending in .* covers the prefix's other methods.",
   "apiVersion": "vestra/1",
   "capabilities": [
     {
-      "builtinOnly": false,
-      "label": "Provide audio and video it generates itself",
+      "label": "Change your player settings (shortcuts, theme, language, rendering) and restart the player",
+      "name": "player",
+      "reserved": false
+    },
+    {
+      "label": "Install, uninstall and disable other plugins, and run any command, including theirs",
+      "name": "plugins",
+      "reserved": false
+    },
+    {
+      "label": "Read and write the clipboard",
+      "name": "clipboard",
+      "reserved": false
+    },
+    {
+      "label": "Keep sign-in details in the system keychain",
+      "name": "credentials",
+      "reserved": false
+    },
+    {
+      "label": "Use the camera",
+      "name": "camera",
+      "reserved": true
+    },
+    {
+      "label": "Use the microphone",
+      "name": "microphone",
+      "reserved": true
+    },
+    {
+      "label": "Record the screen",
+      "name": "screen",
+      "reserved": true
+    },
+    {
+      "label": "Send system notifications",
+      "name": "notifications",
+      "reserved": true
+    }
+  ],
+  "groups": [
+    {
       "methods": [
         {
           "name": "producer.prepare",
-          "needs": "producer.av"
+          "needs": null
         },
         {
           "name": "producer.state",
-          "needs": "producer.av"
+          "needs": null
         },
         {
           "name": "producer.release",
-          "needs": "producer.av"
+          "needs": null
         },
         {
           "name": "producer.ack",
-          "needs": "producer.av"
+          "needs": null
         },
         {
           "name": "producer.declareInput",
-          "needs": "producer.av"
+          "needs": null
         },
         {
           "name": "producer.ackInput",
-          "needs": "producer.av"
+          "needs": null
         }
       ],
       "name": "producer.av",
-      "requires": [
-        "playback.control"
-      ],
       "residency": "live",
-      "risky": false
+      "summary": "Provide audio and video it generates itself"
     },
     {
-      "builtinOnly": false,
-      "label": "Read what is playing and the position",
       "methods": [
         {
           "name": "source.state",
-          "needs": "playback.read"
+          "needs": null
         },
         {
           "name": "processing.state",
-          "needs": "playback.read"
+          "needs": null
         },
         {
           "name": "playback.stats",
-          "needs": "playback.read"
+          "needs": null
         },
         {
           "name": "player.chapters",
-          "needs": "playback.read"
+          "needs": null
         },
         {
           "name": "player.audioDevices",
-          "needs": "playback.read"
+          "needs": null
         },
         {
           "name": "timeline.marks",
-          "needs": "playback.read"
+          "needs": null
         }
       ],
       "name": "playback.read",
-      "requires": [],
       "residency": "none",
-      "risky": false
+      "summary": "Read what is playing and the position"
     },
     {
-      "builtinOnly": false,
-      "label": "Open media, control playback, keep the computer awake",
       "methods": [
         {
           "name": "playback.set",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "source.submit",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "source.operation",
-          "needs": {
-            "ifDeclared": "playback.control",
-            "otherwise": "playback.read",
-            "then": "playback.control"
-          }
+          "needs": null
         },
         {
           "name": "audio.addTrack",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "audio.selectTrack",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "player.setLoop",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "player.setAudioDevice",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "player.step",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "player.setStepSeek",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "power.preventSleep",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "sequence.set",
-          "needs": "playback.control"
+          "needs": null
         },
         {
           "name": "sequence.step",
-          "needs": "playback.control"
+          "needs": null
         }
       ],
       "name": "playback.control",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Open media, control playback, keep the computer awake"
     },
     {
-      "builtinOnly": false,
-      "label": "Resolve online video addresses",
       "methods": [
         {
           "name": "sourceResolvers.register",
-          "needs": "source.resolve"
+          "needs": null
         },
         {
           "name": "sourceResolvers.unregister",
-          "needs": "source.resolve"
+          "needs": null
         },
         {
           "name": "sourceResolvers.respond",
-          "needs": "source.resolve"
+          "needs": null
         },
         {
           "name": "sourceResolvers.*",
-          "needs": "source.resolve"
+          "needs": null
         }
       ],
       "name": "source.resolve",
-      "requires": [],
       "residency": "recordable",
-      "risky": false
+      "summary": "Resolve online video addresses"
     },
     {
-      "builtinOnly": false,
-      "label": "Receive playback changes as they happen",
       "methods": [
         {
           "name": "events.subscribe",
-          "needs": {
-            "cases": {
-              "bindings.changed": "bindings.manage",
-              "commands.keys": "commands",
-              "packages.changed": null,
-              "video.motion.changed": "video.motion",
-              "video.upscaling.changed": "video.upscaling"
-            },
-            "otherwise": "events",
-            "param": "event"
-          }
+          "needs": null
         },
         {
           "name": "events.unsubscribe",
-          "needs": {
-            "cases": {
-              "bindings.changed": "bindings.manage",
-              "commands.keys": "commands",
-              "packages.changed": null,
-              "video.motion.changed": "video.motion",
-              "video.upscaling.changed": "video.upscaling"
-            },
-            "otherwise": "events",
-            "param": "event"
-          }
+          "needs": null
         }
       ],
       "name": "events",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Receive playback changes as they happen"
     },
     {
-      "builtinOnly": false,
-      "label": "Add menu commands and shortcuts",
       "methods": [
         {
           "name": "commands.register",
-          "needs": "commands"
+          "needs": null
         },
         {
           "name": "commands.update",
-          "needs": "commands"
+          "needs": null
         },
         {
           "name": "commands.unregister",
-          "needs": "commands"
+          "needs": null
         },
         {
           "name": "host.run",
-          "needs": "commands"
+          "needs": null
         },
         {
           "name": "commands.keys",
-          "needs": "commands"
+          "needs": null
         }
       ],
       "name": "commands",
-      "requires": [],
       "residency": "recordable",
-      "risky": false
+      "summary": "Add menu commands and shortcuts"
     },
     {
-      "builtinOnly": false,
-      "label": "Open tool windows",
       "methods": [
         {
           "name": "ui.open",
-          "needs": "ui.window"
+          "needs": null
         },
         {
           "name": "ui.set",
-          "needs": "ui.window"
+          "needs": null
         },
         {
           "name": "ui.show",
-          "needs": "ui.window"
+          "needs": null
         },
         {
           "name": "ui.close",
-          "needs": "ui.window"
+          "needs": null
         }
       ],
       "name": "ui.window",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Open tool windows"
     },
     {
-      "builtinOnly": false,
-      "label": "Show panels in the bottom bar, the sidebar or behind the video",
       "methods": [
         {
           "name": "ui.mount",
-          "needs": "ui.mount"
+          "needs": null
         },
         {
           "name": "ui.setMount",
-          "needs": "ui.mount"
+          "needs": null
         },
         {
           "name": "ui.unmount",
-          "needs": "ui.mount"
+          "needs": null
         },
         {
           "name": "ui.interaction",
-          "needs": "ui.mount"
+          "needs": null
         },
         {
           "name": "ui.menu",
-          "needs": "ui.mount"
+          "needs": null
         },
         {
           "name": "layout.state",
-          "needs": "ui.mount"
+          "needs": null
         },
         {
           "name": "layout.set",
-          "needs": "ui.mount"
+          "needs": null
         }
       ],
       "name": "ui.mount",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Show panels in the bottom bar, the sidebar or behind the video"
     },
     {
-      "builtinOnly": false,
-      "label": "Show file pickers and confirmations",
       "methods": [
         {
           "name": "dialogs.open",
-          "needs": "ui.dialog"
+          "needs": null
         },
         {
           "name": "dialogs.confirm",
-          "needs": "ui.dialog"
+          "needs": null
         }
       ],
       "name": "ui.dialog",
-      "requires": [],
       "residency": "none",
-      "risky": false
+      "summary": "Show file pickers and confirmations"
     },
     {
-      "builtinOnly": false,
-      "label": "Install, uninstall and disable other plugins",
       "methods": [
         {
           "name": "packages.*",
-          "needs": "plugins.manage"
+          "needs": "plugins"
         }
       ],
       "name": "plugins.manage",
-      "requires": [],
       "residency": "none",
-      "risky": true
+      "summary": "Install, uninstall and disable other plugins"
     },
     {
-      "builtinOnly": false,
-      "label": "Process the picture (filters, shaders)",
       "methods": [
         {
           "name": "processing.replace",
-          "needs": {
-            "cases": {
-              "video": "processing.video"
-            },
-            "otherwise": "processing.audio",
-            "param": "stage"
-          }
+          "needs": null
         },
         {
           "name": "processing.operation",
-          "needs": {
-            "cases": {
-              "video": "processing.video"
-            },
-            "otherwise": "processing.audio",
-            "param": "stage"
-          }
+          "needs": null
         },
         {
           "name": "video.view.set",
-          "needs": "processing.video"
+          "needs": null
         },
         {
           "name": "video.view.release",
-          "needs": "processing.video"
+          "needs": null
         },
         {
           "name": "video.render.set",
-          "needs": "processing.video"
+          "needs": null
         },
         {
           "name": "video.render.release",
-          "needs": "processing.video"
+          "needs": null
         },
         {
           "name": "video.shaders.set",
-          "needs": "processing.video"
+          "needs": null
         }
       ],
-      "name": "processing.video",
-      "requires": [
-        "playback.read"
-      ],
+      "name": "processing",
       "residency": "live",
-      "risky": false
+      "summary": "Process the picture and the sound (filters, shaders)"
     },
     {
-      "builtinOnly": false,
-      "label": "Process the sound",
-      "methods": [],
-      "name": "processing.audio",
-      "requires": [
-        "playback.read",
-        "events"
-      ],
-      "residency": "live",
-      "risky": false
-    },
-    {
-      "builtinOnly": false,
-      "label": "Read subtitles",
       "methods": [
         {
           "name": "subtitles.state",
-          "needs": "subtitles.read"
+          "needs": null
         }
       ],
       "name": "subtitles.read",
-      "requires": [],
       "residency": "none",
-      "risky": false
+      "summary": "Read subtitles"
     },
     {
-      "builtinOnly": false,
-      "label": "Load and change subtitles",
       "methods": [
         {
           "name": "subtitles.*",
-          "needs": "subtitles.control"
+          "needs": null
         }
       ],
       "name": "subtitles.control",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Load and change subtitles"
     },
     {
-      "builtinOnly": false,
-      "label": "Take snapshots and export clips",
       "methods": [
         {
           "name": "snapshot.state",
-          "needs": "media.read"
+          "needs": null
         },
         {
           "name": "jobs.state",
-          "needs": "media.read"
+          "needs": null
         },
         {
           "name": "jobs.operation",
-          "needs": "media.read"
+          "needs": null
         }
       ],
       "name": "media.read",
-      "requires": [
-        "media.control"
-      ],
       "residency": "none",
-      "risky": false
+      "summary": "Take snapshots and export clips"
     },
     {
-      "builtinOnly": false,
-      "label": "Take snapshots and export clips",
       "methods": [
         {
           "name": "snapshot.*",
-          "needs": "media.control"
+          "needs": null
         },
         {
           "name": "jobs.*",
-          "needs": "media.control"
+          "needs": null
         }
       ],
       "name": "media.control",
-      "requires": [
-        "media.read"
-      ],
       "residency": "live",
-      "risky": false
+      "summary": "Take snapshots and export clips"
     },
     {
-      "builtinOnly": false,
-      "label": "Remember videos you add and export from them later",
       "methods": [
         {
-          "name": "media.sources.open",
-          "needs": {
-            "ifDeclared": "playback.control",
-            "otherwise": "playback.control",
-            "then": "media.sources"
-          }
-        },
-        {
           "name": "media.sources.*",
-          "needs": "media.sources"
+          "needs": null
         }
       ],
       "name": "media.sources",
-      "requires": [],
       "residency": "none",
-      "risky": false
+      "summary": "Remember videos you add and export from them later"
     },
     {
-      "builtinOnly": false,
-      "label": "Show messages on the video",
       "methods": [
         {
           "name": "osd.show",
-          "needs": "ui.osd"
+          "needs": null
         },
         {
           "name": "osd.panel",
-          "needs": "ui.osd"
+          "needs": null
         }
       ],
       "name": "ui.osd",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Show messages on the video"
     },
     {
-      "builtinOnly": false,
-      "label": "Read and write the clipboard",
       "methods": [
         {
           "name": "clipboard.readText",
@@ -518,295 +443,385 @@
         }
       ],
       "name": "clipboard",
-      "requires": [],
       "residency": "none",
-      "risky": true
+      "summary": "Read and write the clipboard"
     },
     {
-      "builtinOnly": false,
-      "label": "Adjust the main window (size, on top, picture-in-picture)",
       "methods": [
         {
           "name": "window.setVideoArea",
-          "needs": "window.control"
+          "needs": null
         },
         {
           "name": "window.setAlwaysOnTop",
-          "needs": "window.control"
+          "needs": null
         },
         {
           "name": "window.setCursorAutoHide",
-          "needs": "window.control"
+          "needs": null
         },
         {
           "name": "window.setPictureInPicture",
-          "needs": "window.control"
+          "needs": null
         }
       ],
       "name": "window.control",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Adjust the main window (size, on top, picture-in-picture)"
     },
     {
-      "builtinOnly": false,
-      "label": "Change all shortcuts",
       "methods": [
         {
           "name": "bindings.list",
-          "needs": "bindings.manage"
+          "needs": "player"
         },
         {
           "name": "bindings.set",
-          "needs": "bindings.manage"
+          "needs": "player"
         },
         {
           "name": "bindings.reset",
-          "needs": "bindings.manage"
+          "needs": "player"
         }
       ],
       "name": "bindings.manage",
-      "requires": [],
       "residency": "none",
-      "risky": true
+      "summary": "Read and change all shortcuts"
     },
     {
-      "builtinOnly": false,
-      "label": "Show marks on the progress bar",
       "methods": [
         {
           "name": "timeline.set",
-          "needs": "timeline.marks"
+          "needs": null
         },
         {
           "name": "timeline.setRanges",
-          "needs": "timeline.marks"
+          "needs": null
         }
       ],
       "name": "timeline.marks",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Show marks on the progress bar"
     },
     {
-      "builtinOnly": false,
-      "label": "Receive files dropped on the player",
       "methods": [
         {
           "name": "drops.provide",
-          "needs": "ui.drop"
+          "needs": null
         },
         {
           "name": "drops.withdraw",
-          "needs": "ui.drop"
+          "needs": null
         },
         {
           "name": "drops.listen",
-          "needs": "ui.drop"
+          "needs": null
         }
       ],
       "name": "ui.drop",
-      "requires": [],
       "residency": "recordable",
-      "risky": false
+      "summary": "Receive files dropped on the player"
     },
     {
-      "builtinOnly": false,
-      "label": "Add pages to the Options window",
       "methods": [
         {
           "name": "settings.*",
-          "needs": "ui.settings"
+          "needs": null
         }
       ],
       "name": "ui.settings",
-      "requires": [],
       "residency": "recordable",
-      "risky": false
+      "summary": "Add pages to the Options window"
     },
     {
-      "builtinOnly": false,
-      "label": "Change the player's palette",
       "methods": [
         {
           "name": "appearance.set",
-          "needs": "ui.theme"
+          "needs": "player"
         },
         {
           "name": "appearance.setLanguage",
-          "needs": "ui.theme"
+          "needs": "player"
         }
       ],
       "name": "ui.theme",
-      "requires": [],
       "residency": "none",
-      "risky": false
+      "summary": "Change the player's palette and interface language"
     },
     {
-      "builtinOnly": false,
-      "label": "Store sign-in details in the system keychain",
       "methods": [
         {
           "name": "secrets.get",
-          "needs": "secrets"
+          "needs": "credentials"
         },
         {
           "name": "secrets.set",
-          "needs": "secrets"
+          "needs": "credentials"
         },
         {
           "name": "secrets.delete",
-          "needs": "secrets"
+          "needs": "credentials"
         }
       ],
       "name": "secrets",
-      "requires": [],
       "residency": "none",
-      "risky": true
+      "summary": "Store sign-in details in the system keychain"
     },
     {
-      "builtinOnly": false,
-      "label": "Choose GPU or software rendering and restart the player",
       "methods": [
         {
           "name": "rendering.setPreference",
-          "needs": "rendering.manage"
+          "needs": "player"
         },
         {
           "name": "rendering.restart",
-          "needs": "rendering.manage"
+          "needs": "player"
         }
       ],
       "name": "rendering.manage",
-      "requires": [],
       "residency": "none",
-      "risky": true
+      "summary": "Choose GPU or software rendering and restart the player"
     },
     {
-      "builtinOnly": false,
-      "label": "Upscale the video with the GPU's video upscaler",
       "methods": [
         {
           "name": "video.upscaling.state",
-          "needs": "video.upscaling"
+          "needs": null
         },
         {
           "name": "video.upscaling.set",
-          "needs": "video.upscaling"
+          "needs": null
         }
       ],
       "name": "video.upscaling",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Upscale the video with the GPU's video upscaler"
     },
     {
-      "builtinOnly": false,
-      "label": "Smooth motion with the GPU's frame-rate converter",
       "methods": [
         {
           "name": "video.motion.state",
-          "needs": "video.motion"
+          "needs": null
         },
         {
           "name": "video.motion.set",
-          "needs": "video.motion"
+          "needs": null
         }
       ],
       "name": "video.motion",
-      "requires": [],
       "residency": "live",
-      "risky": false
+      "summary": "Smooth motion with the GPU's frame-rate converter"
     },
     {
-      "builtinOnly": true,
-      "label": "Run any player or plugin command",
       "methods": [
         {
           "name": "commands.list",
-          "needs": "commands.run"
+          "needs": "plugins"
         },
         {
           "name": "commands.run",
-          "needs": "commands.run"
+          "needs": "plugins"
         }
       ],
       "name": "commands.run",
-      "requires": [],
       "residency": "none",
-      "risky": true
+      "summary": "Run any player or plugin command"
     },
     {
-      "builtinOnly": true,
-      "label": "Add the first row of the command palette",
       "methods": [
         {
           "name": "palette.lead.set",
-          "needs": "palette.lead"
+          "needs": null
         },
         {
           "name": "palette.lead.clear",
-          "needs": "palette.lead"
+          "needs": null
         },
         {
           "name": "palette.lead.done",
-          "needs": "palette.lead"
+          "needs": null
         }
       ],
       "name": "palette.lead",
-      "requires": [],
       "residency": "recordable",
-      "risky": false
+      "summary": "Add the first row of the command palette"
+    },
+    {
+      "methods": [
+        {
+          "name": "packages.list",
+          "needs": null
+        },
+        {
+          "name": "window.state",
+          "needs": null
+        },
+        {
+          "name": "system.reveal",
+          "needs": null
+        },
+        {
+          "name": "system.openPath",
+          "needs": null
+        },
+        {
+          "name": "system.openUrl",
+          "needs": null
+        },
+        {
+          "name": "app.system",
+          "needs": null
+        },
+        {
+          "name": "ui.markdownScan",
+          "needs": null
+        },
+        {
+          "name": "storage.session.get",
+          "needs": null
+        },
+        {
+          "name": "storage.session.set",
+          "needs": null
+        },
+        {
+          "name": "storage.session.delete",
+          "needs": null
+        },
+        {
+          "name": "storage.session.keys",
+          "needs": null
+        },
+        {
+          "name": "rendering.state",
+          "needs": null
+        }
+      ],
+      "name": "general",
+      "residency": "none",
+      "summary": "Read the plugin list, the window and rendering state; open files and links with the system; keep values for this run"
     }
   ],
-  "uncapable": [
+  "retired": [
     {
-      "name": "packages.list",
-      "needs": null
+      "name": "producer.av",
+      "replacedBy": null
     },
     {
-      "name": "window.state",
-      "needs": null
+      "name": "playback.read",
+      "replacedBy": null
     },
     {
-      "name": "system.reveal",
-      "needs": null
+      "name": "playback.control",
+      "replacedBy": null
     },
     {
-      "name": "system.openPath",
-      "needs": null
+      "name": "source.resolve",
+      "replacedBy": null
     },
     {
-      "name": "system.openUrl",
-      "needs": null
+      "name": "events",
+      "replacedBy": null
     },
     {
-      "name": "app.system",
-      "needs": null
+      "name": "commands",
+      "replacedBy": null
     },
     {
-      "name": "ui.markdownScan",
-      "needs": null
+      "name": "ui.window",
+      "replacedBy": null
     },
     {
-      "name": "storage.session.get",
-      "needs": null
+      "name": "ui.mount",
+      "replacedBy": null
     },
     {
-      "name": "storage.session.set",
-      "needs": null
+      "name": "ui.dialog",
+      "replacedBy": null
     },
     {
-      "name": "storage.session.delete",
-      "needs": null
+      "name": "plugins.manage",
+      "replacedBy": "plugins"
     },
     {
-      "name": "storage.session.keys",
-      "needs": null
+      "name": "processing.video",
+      "replacedBy": null
     },
     {
-      "name": "rendering.state",
-      "needs": null
+      "name": "processing.audio",
+      "replacedBy": null
+    },
+    {
+      "name": "subtitles.read",
+      "replacedBy": null
+    },
+    {
+      "name": "subtitles.control",
+      "replacedBy": null
+    },
+    {
+      "name": "media.read",
+      "replacedBy": null
+    },
+    {
+      "name": "media.control",
+      "replacedBy": null
+    },
+    {
+      "name": "media.sources",
+      "replacedBy": null
+    },
+    {
+      "name": "ui.osd",
+      "replacedBy": null
+    },
+    {
+      "name": "window.control",
+      "replacedBy": null
+    },
+    {
+      "name": "bindings.manage",
+      "replacedBy": "player"
+    },
+    {
+      "name": "timeline.marks",
+      "replacedBy": null
+    },
+    {
+      "name": "ui.drop",
+      "replacedBy": null
+    },
+    {
+      "name": "ui.settings",
+      "replacedBy": null
+    },
+    {
+      "name": "ui.theme",
+      "replacedBy": "player"
+    },
+    {
+      "name": "secrets",
+      "replacedBy": "credentials"
+    },
+    {
+      "name": "rendering.manage",
+      "replacedBy": "player"
+    },
+    {
+      "name": "video.upscaling",
+      "replacedBy": null
+    },
+    {
+      "name": "video.motion",
+      "replacedBy": null
+    },
+    {
+      "name": "commands.run",
+      "replacedBy": "plugins"
+    },
+    {
+      "name": "palette.lead",
+      "replacedBy": null
     }
   ]
 }

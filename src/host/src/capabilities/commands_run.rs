@@ -1,4 +1,4 @@
-//! `commands.run` (built-in only, risky): the palette's command table
+//! `commands.run` (capability `plugins`, for any plugin): the palette's command table
 //! (`commands.list`) and running one of its commands the way the palette
 //! runs it (`commands.run`), with a one-time ticket the palette minted for
 //! a user's action (`palette.lead`, capabilities/palette_lead.rs).
@@ -15,7 +15,7 @@
 //! (Ask Vestra UX step 4, H4) trusts plugins that are not built in, per
 //! caller, in the host's `ui-state.json`: their ordinary commands no longer
 //! ask that caller; their destructive ones still do.
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Group, Handled, Info, Method, PLUGINS, Recorded, Residency};
 use crate::{
     bindings,
     host::{Event, Host, Reply, RpcError, palette::PALETTE, review_sheet, string},
@@ -28,13 +28,13 @@ use std::collections::{BTreeMap, VecDeque};
 pub struct CommandsRun;
 static INFO: Info = Info {
     name: "commands.run",
-    label: "Run any player or plugin command",
-    risky: true,
-    requires: &[],
+    summary: "Run any player or plugin command",
     residency: Residency::None,
-    builtin_only: true,
 };
-static METHODS: &[Method] = &[Method::this("commands.list"), Method::this("commands.run")];
+static METHODS: &[Method] = &[
+    Method::needs("commands.list", PLUGINS),
+    Method::needs("commands.run", PLUGINS),
+];
 
 /// A ticket ends this long after it was minted or last ran a command.
 pub const TICKET_IDLE_MS: u64 = 120_000;
@@ -373,7 +373,7 @@ fn in_destructive_menu(path: &[String]) -> bool {
 
 /// Whether the commands of `owner` are a built-in's: the player's own, a
 /// running built-in, or a built-in in standby (its recorded commands).
-fn builtin_owner(host: &Host, owner: u64) -> bool {
+pub(super) fn builtin_owner(host: &Host, owner: u64) -> bool {
     owner == bindings::HOST
         || host.is_builtin(owner)
         || host
@@ -893,7 +893,7 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool)
     host.respond(reply, result);
 }
 
-impl Capability for CommandsRun {
+impl Group for CommandsRun {
     fn info(&self) -> &'static Info {
         &INFO
     }

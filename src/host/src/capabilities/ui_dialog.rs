@@ -3,7 +3,7 @@
 //! focus decides: `platform::tool_window_focused`): a tool window's as a
 //! system dialog owned by it, the main window's on the sheet drawn in the
 //! player (`host/review_sheet.rs`, Ask Vestra UX H5).
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Group, Handled, Info, Method, Recorded, Residency};
 use crate::{
     host::{
         Event, Host, Reply, RpcError,
@@ -19,17 +19,14 @@ use slint::ComponentHandle;
 pub struct UiDialog;
 static INFO: Info = Info {
     name: "ui.dialog",
-    label: "Show file pickers and confirmations",
-    risky: false,
-    requires: &[],
+    summary: "Show file pickers and confirmations",
     residency: Residency::None,
-    builtin_only: false,
 };
 static METHODS: &[Method] = &[
-    Method::this("dialogs.open"),
-    Method::this("dialogs.confirm"),
+    Method::free("dialogs.open"),
+    Method::free("dialogs.confirm"),
 ];
-impl Capability for UiDialog {
+impl Group for UiDialog {
     fn info(&self) -> &'static Info {
         &INFO
     }

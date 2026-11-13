@@ -332,8 +332,7 @@ impl Plugin {
         if !crate::packages::manifest::valid_id(&manifest.id) {
             bail!("invalid plugin id");
         }
-        crate::capabilities::check_declared(&manifest.capabilities)
-            .map_err(anyhow::Error::msg)?;
+        crate::capabilities::check_declared(&manifest.capabilities).map_err(anyhow::Error::msg)?;
         package_file(&directory, &manifest.entry)?;
         let paths = crate::process::runtime_paths::get();
         // Per installed instance or development id (see `DataKey`).

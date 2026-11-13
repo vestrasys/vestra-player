@@ -1,4 +1,4 @@
-# Palette lead, `commands.run` and built-in-only capabilities (maintainers)
+# Palette lead and `commands.run` (maintainers)
 
 Host side of Ask Vestra (design: `C:\vestra\design\ask-astra\PROPOSAL.md`, user decisions of
 2026-11-11). Ask Vestra itself is the built-in Vestra Player AI plugin's (`src/plugins/workshop`);
@@ -6,38 +6,39 @@ the host adds three general pieces that plugin is built from. Names are by what 
 Ask Vestra, so a calculator, a library search or a jump-to-time row can use them later (PROPOSAL
 §10).
 
-## 1. Built-in-only capabilities
+## 1. Who may use them (SDK 1.8.0)
 
-`Info::builtin_only` (`capabilities/mod.rs`, exported as `builtinOnly` in
-`src/host/capabilities.json` and the SDK's `CAPABILITY_INFO`) marks a capability only built-in
-plugins may use. Built-in means **by provenance**: `Host::is_builtin` (listed in `builtin.json`,
-running from that directory, recorded built-in in the store). A manifest field or a load mode never
-makes a plugin built-in, so a development load of a built-in's id is refused too (PROPOSAL Q10 A).
+Any plugin, built-in or not (user ruling 2026-11-13: no built-in-only flag; README §2.1). Until
+SDK 1.8.0 both were built-in-only capabilities, `commands.run` and `palette.lead`; those names are
+retired and a manifest that declares one is refused.
 
-Where it is checked:
+- `commands.list` and `commands.run` need the capability `plugins`: running a command acts
+  through whichever plugin owns it, so it is disclosed together with managing plugins. The
+  boundary is still the player's (§2): a ticket only the palette lead mints, rates, the approval
+  sheet, a line naming each run.
+- `palette.lead.*` needs no capability: the row is the plugin's own entry in the palette. It is
+  one slot, and the host arbitrates it with one rule. **The first plugin to set it holds it,
+  and a built-in takes it from a holder that is not built in.** `palette.lead.set` of any other
+  plugin is refused `conflict` with reason `lead-taken` and the holder's id (`palette_lead::set`;
+  like a taken panel slot, it does not fail activation). The slot is free again when the holder
+  calls `palette.lead.clear` or stops for good (disabled, uninstalled, ended without standby:
+  `Group::revoke`); a holder in standby keeps it, recorded. The player's own plugins come first,
+  as they do for panel slots, and here by precedence instead of start order: a third-party
+  plugin can start before a built-in's first run (first runs are queued), so "first" alone would
+  let it keep the row from the player's own. The plugin that lost the row is not told: its next
+  `set` is refused, no ticket is minted for it any more, and one it still holds runs out (its
+  runs are then named on the OSD, §2). Among third-party plugins the first to set it keeps it.
+  There is no setting and no hand-over: a user who wants a third-party row disables the built-in
+  that holds it.
 
-```mermaid
-flowchart TB
-    R["request from a plugin"] --> D["Host::dispatch: route, declared check"]
-    D --> B{"needed capability builtin_only?"}
-    B -- "no" --> H["capability handle"]
-    B -- "yes, Host::is_builtin" --> H
-    B -- "yes, not built-in" --> E["error capability: for built-in plugins only"]
-    P["recorded call at start-up"] --> RP["capabilities::replay: declared check"]
-    RP --> RB{"builtin_only and not is_builtin_package(origin)?"}
-    RB -- "yes" --> E
-    RB -- "no" --> CR["capability replay"]
-    V["packages.validate / validateArchive"] --> VB{"manifest declares a builtin_only capability?"}
-    VB -- "yes" --> E
-```
+"Built-in" still means something to `commands.run`, by provenance (`Host::is_builtin`: listed in
+`builtin.json`, running from that directory, recorded built-in in the store; never a manifest
+field or a load mode): a command of a plugin that is not built in asks the user first (§2.2).
+That is about the command's owner, not about the caller.
 
-`packages.validate` (`package_validate.rs`) validates only third-party packages (built-in ids are
-refused before), so a store or file install of a package declaring one fails there with
-`capability`. `vestra-plugin check` gets the same rule from the SDK's `CAPABILITY_INFO`.
+## 2. `commands.run` (capability `plugins`, residency none)
 
-## 2. `commands.run` (risky, built-in only, residency none)
-
-`capabilities/commands_run.rs`. Store label "Run any player or plugin command".
+`capabilities/commands_run.rs`.
 
 | Method | Params | Result | Errors |
 | --- | --- | --- | --- |
@@ -104,8 +105,8 @@ refused before), so a store or file install of a package declaring one fails the
   <answer>[, remember])` goes to stderr.
 - **Where the run is named**: when the caller holds the palette lead (its ticket is the lead's),
   the step goes to the status strip (§3.1): "i/n · <command label>" with `step`/`of`, the label
-  alone without, the line filled to i/n (full for a lone command). Any other caller (none yet: both
-  capabilities are built-in only and only the lead mints tickets) gets the OSD line
+  alone without, the line filled to i/n (full for a lone command). Any other caller (none can run today:
+  only the lead mints tickets) gets the OSD line
   "<plugin> · <command label>" (or "<plugin> · i/n · <label>"). Either way the line shows before
   the command runs, and `commands.run: <id> ran <global> (strip: …)` (or `(osd: …)`) goes to
   stderr and `commands.run: <id> ran <global>` (with ` (step i/n)`) to the host log: ids only,
@@ -288,7 +289,7 @@ destructive one with its checkbox unchecked and checked (`h5-destructive-checkbo
 `h5-destructive-checked`); both palettes, 2×; and, English only, a 2000-character install detail
 in a 640×360 window (`h5-long-detail-small`).
 
-## 3. `palette.lead` (built-in only, residency recordable)
+## 3. `palette.lead` (no capability, residency recordable)
 
 `capabilities/palette_lead.rs`, `host/palette.rs`, `ui/command_palette.rs`,
 `ui/command-palette.slint`. Store label "Add the first row of the command palette".
@@ -383,10 +384,12 @@ Offline renders: `widgets_tests::render_lead_strip_states` (ignored; `VESTRA_STR
 palettes, as the spec's `proposed/detail-*.png` do.
 
 
-Why both stay built-in only for now (PROPOSAL §10): one lead slot, the palette's most valuable
-row, and a third-party lead would see every query; running any plugin's command is a wider
-boundary than any other capability, and plugin processes are not sandboxed, so the boundary is the
-player's (tickets, rates, confirmation, the line naming each run). Opening either needs the user's ruling.
+Both were built-in only until SDK 1.8.0 (PROPOSAL §10: one lead slot, and a third-party lead sees
+every query typed while it holds the row; running any plugin's command is the widest boundary).
+The user opened both on 2026-11-13 (a third-party voice or LLM assistant needs them): the lead
+by the first-holder rule of §1, `commands.run` under `plugins`. Plugin processes are not
+sandboxed, so the boundary stays the player's: tickets, rates, confirmation, the line naming each
+run.
 
 ## 4. Tests
 
@@ -394,8 +397,8 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
   ask first, trusted plugins, what "Don't ask again" offers, `step`/`of`, `then`, plan approvals,
   the sheet's reasons), `host/review_sheet.rs` (the guard, the question, the sheet's value, the
   checkbox's text; a confirmation's value and its checkbox answered with either button), `ui/ui_state.rs` (`trustedPlugins`: per caller, bounded, uninstall, reset, lenient
-  reading, round trip), `capabilities/palette_lead.rs` (parameters, the capability's flags),
-  `capabilities/mod.rs` (built-in-only refusal for live requests and replays, the JSON field),
+  reading, round trip), `capabilities/palette_lead.rs` (parameters, its residency),
+  `capabilities/mod.rs` (`commands.list` / `commands.run` need `plugins`, `palette.lead.*` nothing),
   `capabilities/palette_lead.rs` (`status.state`), `host/lead_strip.rs` (what the strip shows, end
   states' times, the shell value), `ui/command_palette.rs` (`names`, `aim`, `lead_shows_status`, no
   change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,
