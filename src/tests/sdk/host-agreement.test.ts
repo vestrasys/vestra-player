@@ -2291,10 +2291,112 @@ test("palette.lead's status states are the player's (palette_lead.rs StatusState
   await lead!.ready;
   for (const state of player) await lead!.update(options(state));
   await assert.rejects(
-    lead!.update(options("stopped")),
+    lead!.update(options("halted")),
     (error: { code?: string; message?: string }) =>
       error.code === "invalid" &&
       error.message === `status.state is one of ${player.join(", ")}`,
+  );
+  await stop();
+});
+
+test("PALETTE_LEAD_LIMITS and PALETTE_LEAD_STATES are the player's, and TestHost refuses a status as the player does (palette_lead.rs; SDK 1.8.0)", async (t) => {
+  // Typed loosely: an SDK before 1.8.0 has neither.
+  const runtime = (await import("@vestra-player/sdk/runtime")) as unknown as {
+    PALETTE_LEAD_LIMITS?: Record<string, number>;
+    PALETTE_LEAD_STATES?: readonly string[];
+  };
+  if (!runtime.PALETTE_LEAD_LIMITS || !runtime.PALETTE_LEAD_STATES)
+    return t.skip("the installed SDK is older than 1.8.0");
+  const rust = host("src/capabilities/palette_lead.rs");
+  const constant = (name: string) =>
+    Number(
+      found(
+        new RegExp(`pub const ${name}: usize = (\\d+);`).exec(rust)?.[1],
+        `${name} in capabilities/palette_lead.rs`,
+      ),
+    );
+  assert.deepEqual(
+    { ...runtime.PALETTE_LEAD_LIMITS },
+    {
+      title: constant("TITLE_CHARS"),
+      placeholder: constant("PLACEHOLDER_CHARS"),
+      empty: constant("EMPTY_CHARS"),
+      note: constant("NOTE_CHARS"),
+      statusText: constant("STATUS_TEXT_CHARS"),
+      statusEndText: constant("STATUS_END_TEXT_CHARS"),
+      statusNote: constant("STATUS_NOTE_CHARS"),
+      statusStrip: constant("STATUS_STRIP_CHARS"),
+    },
+    "PALETTE_LEAD_LIMITS differ from the player's *_CHARS constants",
+  );
+  const names = found(
+    /pub const NAMES: \[&'static str; \d+\] = \[([^\]]*)\];/.exec(rust)?.[1],
+    "StatusState::NAMES in capabilities/palette_lead.rs",
+  );
+  assert.deepEqual(
+    [...runtime.PALETTE_LEAD_STATES],
+    [...names.matchAll(/"([^"]+)"/g)].map((m) => m[1]!),
+  );
+  // The player's messages, as its source words them.
+  const forWorking = "status.strip is for a working status";
+  assert.ok(rust.includes(`"${forWorking}"`), forWorking);
+  assert.ok(
+    rust.includes('"{key} must be {min}–{max} characters on one line"'),
+    "the length message in capabilities/palette_lead.rs",
+  );
+  const limits = runtime.PALETTE_LEAD_LIMITS;
+  const fake = new TestHost();
+  let lead:
+    | { ready: Promise<unknown>; update(options: unknown): Promise<unknown> }
+    | undefined;
+  const { stop } = await startPlugin(
+    (plugin) => {
+      lead = plugin.palette.lead({ title: "Ask", icon: "ai" });
+    },
+    { capabilities: [], host: fake, id: "vestra.agreement" },
+  );
+  await lead!.ready;
+  const set = (status: object, more: object = {}) =>
+    lead!.update({ title: "Ask", icon: "ai", ...more, status });
+  const refused =
+    (message: string) => (error: { code?: string; message?: string }) =>
+      error.code === "invalid" && error.message === message;
+  const tooLong = (name: string, max: number) =>
+    refused(`${name} must be 1–${max} characters on one line`);
+  // A working text is one line (80); an end state's may be twice that.
+  await set({ text: "x".repeat(limits.statusText!) });
+  await assert.rejects(
+    set({ text: "x".repeat(limits.statusText! + 1) }),
+    tooLong("status.text", limits.statusText!),
+  );
+  for (const state of runtime.PALETTE_LEAD_STATES.filter(
+    (name) => name !== "working",
+  )) {
+    await set({ text: "x".repeat(limits.statusEndText!), state });
+    await assert.rejects(
+      set({ text: "x".repeat(limits.statusEndText! + 1), state }),
+      tooLong("status.text", limits.statusEndText!),
+    );
+    // The strip's own text is for a working status; named before a length.
+    await assert.rejects(
+      set({ text: "x".repeat(999), state, strip: "s" }),
+      refused(forWorking),
+    );
+  }
+  await set({ text: "Vestra is working · Planning…", strip: "Planning…" });
+  await assert.rejects(
+    set({ text: "t", strip: "s".repeat(limits.statusStrip! + 1) }),
+    tooLong("status.strip", limits.statusStrip!),
+  );
+  // The order: the state, then the lengths (the title first). The icon,
+  // last in the player, is checked by the SDK before it sends.
+  await assert.rejects(
+    set({ text: "x".repeat(999), state: "halted" }, { title: "" }),
+    refused(`status.state is one of ${runtime.PALETTE_LEAD_STATES.join(", ")}`),
+  );
+  await assert.rejects(
+    set({ text: "x".repeat(999) }, { title: "" }),
+    tooLong("title", limits.title!),
   );
   await stop();
 });

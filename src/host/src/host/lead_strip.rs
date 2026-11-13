@@ -5,14 +5,17 @@
 //!
 //! What it shows, first match wins:
 //!
-//! 1. an end state the holder set (`status.state` done, failed or note):
-//!    once, for its time ([`end_ms`]), longer while the pointer is on it
-//!    (the OSD's hold, `osd_hold`); never kept on the row or replayed;
+//! 1. an end state the holder set (`status.state` done, failed, note or
+//!    stopped): once, for its time ([`end_ms`]), longer while the pointer
+//!    is on it (the OSD's hold, `osd_hold`), on up to two lines; never kept
+//!    on the row or replayed;
 //! 2. the step `commands.run` last ran for the lead's holder with its live
 //!    ticket ("2/3 · Vestra Player: Mute", the line filled to 2/3): from the
 //!    first step on, the holder's working text only changes the palette's
 //!    status row, until an end state, `status: null` or the ticket's end;
-//! 3. the holder's working status (the line sweeps; Stop).
+//! 3. the holder's working status (the line sweeps; Stop): its `strip`
+//!    text when it gave one, else its `text` (the palette's row always
+//!    shows `text`).
 //!
 //! It yields to an open menu or palette (the palette's first row shows the
 //! working status then) and comes back when it closes. Stop sends the
@@ -31,6 +34,9 @@ pub(crate) const FAILED_MS: u64 = 6000;
 pub(crate) const NOTE_MS: u64 = 4000;
 pub(crate) const NOTE_CHAR_MS: u64 = 50;
 pub(crate) const NOTE_MAX_MS: u64 = 10_000;
+/// How long a stopped status shows: the user stopped the work themselves,
+/// so it only confirms the press.
+pub(crate) const STOPPED_MS: u64 = 2000;
 /// How long a reading of the system's animation setting is kept.
 const ANIMATIONS_READ_MS: u64 = 1000;
 
@@ -43,6 +49,7 @@ pub(crate) fn end_ms(state: StatusState, text: &str) -> u64 {
         StatusState::Note => {
             (NOTE_MS + NOTE_CHAR_MS * text.chars().count() as u64).min(NOTE_MAX_MS)
         }
+        StatusState::Stopped => STOPPED_MS,
     }
 }
 
@@ -57,6 +64,8 @@ pub(crate) enum Kind {
     Done,
     Failed,
     Note,
+    /// The user stopped the work: plain, the icon dimmed, no line.
+    Stopped,
 }
 
 impl Kind {
@@ -67,11 +76,12 @@ impl Kind {
             Self::Done => "done",
             Self::Failed => "failed",
             Self::Note => "note",
+            Self::Stopped => "stopped",
         }
     }
     /// An end state: no Stop; a click dismisses; up to two lines.
     fn ended(self) -> bool {
-        matches!(self, Self::Done | Self::Failed | Self::Note)
+        matches!(self, Self::Done | Self::Failed | Self::Note | Self::Stopped)
     }
 }
 
@@ -150,6 +160,7 @@ pub(crate) fn project(
         let (kind, progress) = match ended.state {
             StatusState::Done => (Kind::Done, 1.),
             StatusState::Failed => (Kind::Failed, 1.),
+            StatusState::Stopped => (Kind::Stopped, 0.),
             _ => (Kind::Note, 0.),
         };
         Some((kind, ended.text.clone(), progress))
@@ -174,24 +185,19 @@ pub(crate) fn project(
 }
 
 impl Host {
-    /// The holder's working status text, if it has one.
+    /// The holder's working status as the strip shows it, if it has one.
     fn lead_working(&self) -> Option<&str> {
         self.lead
             .as_ref()
             .and_then(|lead| lead.row.status.as_ref())
             .filter(|status| status.state == StatusState::Working)
-            .map(|status| status.text.as_str())
+            .map(LeadStatus::strip_text)
     }
     /// The holder set an end state (`palette.lead.set`): the strip shows it
     /// once, in place of any step.
     pub(crate) fn lead_ended(&mut self, status: &LeadStatus) {
         // The state only: the text may quote the user's request.
-        let state = match status.state {
-            StatusState::Done => "done",
-            StatusState::Failed => "failed",
-            _ => "note",
-        };
-        diag!("lead strip: {state}");
+        diag!("lead strip: {}", status.state.name());
         let now = self.now_ms();
         self.lead_strip.step = None;
         self.lead_strip.ended = Some(Ended {
@@ -385,6 +391,19 @@ mod tests {
             || true,
         );
         assert_eq!((note.kind, note.progress), (Kind::Note, 0.));
+        // Stopped by the user (SDK 1.8.0): its own kind, no line.
+        let stopped = project(
+            Some("Planning…"),
+            Some(&step("1/2 · Mute", 0.5)),
+            Some(&ended("Stopped: nothing was run", StatusState::Stopped)),
+            false,
+            &none,
+            || true,
+        );
+        assert_eq!(
+            (stopped.kind, stopped.progress, stopped.text.as_str()),
+            (Kind::Stopped, 0., "Stopped: nothing was run")
+        );
     }
 
     #[test]
@@ -454,6 +473,9 @@ mod tests {
         // Characters, not bytes; at most 10 s.
         assert_eq!(end_ms(StatusState::Note, &"问".repeat(40)), 6000);
         assert_eq!(end_ms(StatusState::Note, &"a".repeat(200)), 10_000);
+        // Stopped: the user did it, 2 s whatever its length.
+        assert_eq!(end_ms(StatusState::Stopped, "Stopped"), 2000);
+        assert_eq!(end_ms(StatusState::Stopped, &"a".repeat(160)), 2000);
     }
 
     #[test]
@@ -464,6 +486,7 @@ mod tests {
             (Kind::Done, false),
             (Kind::Failed, false),
             (Kind::Note, false),
+            (Kind::Stopped, false),
         ] {
             let shown = Shown {
                 visible: true,

@@ -173,7 +173,17 @@ export default async function activate(plugin) {{
       wipe: row("{ID}/wipe")?.dangerous, quit: row("host/quit")?.dangerous,
       keys: Array.isArray(row("host/play-pause")?.keys) }}));
     log("FIX bad state", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
-      status: {{ text: "x", state: "stopped" }} }})));
+      status: {{ text: "x", state: "halted" }} }})));
+    // SDK 1.8.0: the strip's own text is for a working status; a working
+    // text is one line (80), an end state's may be twice that.
+    log("FIX strip end", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "x", state: "stopped", strip: "y" }} }})));
+    log("FIX long working", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "x".repeat(81) }} }})));
+    log("FIX long ended", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "x".repeat(161), state: "stopped" }} }})));
+    log("FIX strip", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
+      status: {{ text: "Fixture is working · Planning…", strip: "Planning…" }} }})));
     log("FIX end", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
       status: {{ text: "Done · Hello", state: "done" }} }})));
     log("FIX end again", said(await call("palette.lead.set", {{ title: "Ask Fixture", icon: "ai",
@@ -326,7 +336,13 @@ fn a_built_in_lead_gets_the_query_and_runs_commands_with_its_ticket() {
     );
     // The status state (SDK 1.7.15): an unknown one is refused; an end state
     // goes to the strip once.
-    expect("FIX bad state error invalid");
+    expect(
+        "FIX bad state error invalid (status.state is one of working, done, failed, note, stopped)",
+    );
+    expect("FIX strip end error invalid (status.strip is for a working status)");
+    expect("FIX long working error invalid (status.text must be 1–80 characters on one line)");
+    expect("FIX long ended error invalid (status.text must be 1–160 characters on one line)");
+    expect("FIX strip null");
     expect("FIX end null");
     expect("FIX end again null");
     // Once: the second set repeats the same end status (an update).
