@@ -397,14 +397,17 @@ impl Host {
                 .values()
                 .find(|m| m.spec.slot == composition::Slot::Bottom)
                 .map(|m| m.plugin);
-            // The panel keys' plugins: their commands take the panel's keys.
-            input.sidebar = self.policy.sidebar_active().map(panel_plugin);
-            input.adjust = self
-                .policy
-                .active(window_state::Slot::Adjust)
-                .map(panel_plugin);
         }
         self.mounts = next;
+        {
+            // The panel keys' plugins: their commands take the panel's keys
+            // (none while a column waits for its remembered tab).
+            let sidebar = self.current_tab(Column::Sidebar).map(panel_plugin);
+            let adjust = self.current_tab(Column::Adjust).map(panel_plugin);
+            let mut input = self.input.borrow_mut();
+            input.sidebar = sidebar;
+            input.adjust = adjust;
+        }
         self.note_panel_plugins();
         for (state, plan) in self.columns.iter_mut().zip(&plans) {
             state.tabs = plan.order.clone();
@@ -464,24 +467,36 @@ impl Host {
     /// for every start-up mount. Once start-up settled (`startup_panels`)
     /// the current tab shows, whatever it is (the remembered plugin may be
     /// gone).
-    fn awaits_remembered(
+    pub(super) fn awaits_remembered(
         &self,
         column: Column,
         active: Option<u64>,
         mounts: &BTreeMap<u64, Mount>,
     ) -> bool {
-        if self.startup_panels {
-            return false;
-        }
-        let Some(remembered) = self.column_memory(column).active else {
-            return false;
-        };
-        active
-            .and_then(|active| mounts.get(&active))
-            .is_none_or(|mount| mount.manifest != remembered)
-            && !mounts
+        crate::ui::sidebar_tabs::awaits_remembered(
+            self.startup_panels,
+            self.column_memory(column).active.as_deref(),
+            active
+                .and_then(|active| mounts.get(&active))
+                .map(|mount| mount.manifest.as_str()),
+            mounts
                 .values()
-                .any(|mount| mount.spec.slot == column.slot() && mount.manifest == remembered)
+                .filter(|mount| mount.spec.slot == column.slot())
+                .map(|mount| mount.manifest.as_str()),
+        )
+    }
+    /// A column's current tab as far as the host acts on it (its panel
+    /// shown, its plugin woken or kept running, the panel keys): the
+    /// policy's, except while the column waits for its remembered tab at
+    /// start-up (`awaits_remembered`). Meanwhile no other tab is current,
+    /// neither a placeholder replayed from a recording (it would be woken)
+    /// nor a running plugin's (it would be kept running); the tab strip
+    /// still marks the policy's.
+    pub(crate) fn current_tab(&self, column: Column) -> Option<u64> {
+        let active = self.policy.active(policy_column(column));
+        (!self.awaits_remembered(column, active, &self.mounts))
+            .then_some(active)
+            .flatten()
     }
     /// One line per compile of a panel's file (tests/startup_compiles.rs
     /// counts them): a compile blocks the UI thread. `took`: `None` when it
@@ -634,9 +649,13 @@ impl Host {
             if shown || loaded {
                 self.panels.evict(slot);
             }
+            // The floating sidebar shows its current tab whatever it showed,
+            // but none while the column waits for its remembered tab.
+            let floating_key =
+                active.filter(|_| !self.awaits_remembered(column, active, &self.mounts));
             if column == Column::Sidebar
                 && let Some((window, floating)) = &floating
-                && self.show_panel(window, *floating, slot, active)
+                && self.show_panel(window, *floating, slot, floating_key)
             {
                 view::settle_layout(window.window());
                 self.panels.evict(slot);

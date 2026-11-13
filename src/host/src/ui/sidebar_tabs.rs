@@ -147,6 +147,25 @@ pub fn next_active(
     }
 }
 
+/// During start-up (`settled`: not any more), whether a column waits for
+/// its remembered current tab (`remembered`, a plugin id): the policy's
+/// current tab (`active`, its plugin id; `None`: none, or not mounted) is
+/// another, and no tab of that plugin is among the column's mounted ones
+/// (`column`, their plugin ids) yet. Plugins start one after another, and
+/// a placeholder replayed from a recording mounts at once: while the
+/// column waits, no other tab is shown or woken (`Host::current_tab`).
+pub fn awaits_remembered<'a>(
+    settled: bool,
+    remembered: Option<&str>,
+    active: Option<&str>,
+    mut column: impl Iterator<Item = &'a str>,
+) -> bool {
+    let Some(remembered) = remembered.filter(|_| !settled) else {
+        return false;
+    };
+    active != Some(remembered) && !column.any(|manifest| manifest == remembered)
+}
+
 /// Whether a panel is something live (supervisor.md §2): the bottom bar and
 /// the backdrop are, and make their plugin Resident. A tab of a column (the
 /// sidebar, the adjust column) never is (user ruling 2026-11-03): its
@@ -325,6 +344,74 @@ mod tests {
         assert_eq!(shown, 1);
         assert!(live(Slot::Bottom) && live(Slot::Backdrop));
         assert!(!shown_tab(Slot::Bottom, 1, active));
+    }
+
+    /// V2 finding (SDK 1.9.0): at start-up a placeholder replayed from a
+    /// recording mounts before the remembered tab's plugin has started, and
+    /// became current and woken. Until the remembered tab mounts (or start-up
+    /// settles) the column waits: no other tab, placeholder or running, is
+    /// current for the host.
+    #[test]
+    fn a_column_waits_for_its_remembered_tab_until_start_up_settles() {
+        let waits = |settled, remembered, active, column: &[&str]| {
+            awaits_remembered(settled, remembered, active, column.iter().copied())
+        };
+        let remembered = Some("vestra.playlist");
+        // The replayed placeholder mounted first and is the policy's current tab.
+        assert!(waits(
+            false,
+            remembered,
+            Some("zysilm.clipexport"),
+            &["zysilm.clipexport"]
+        ));
+        // Two placeholders, or a running plugin's tab: still waiting.
+        assert!(waits(
+            false,
+            remembered,
+            Some("zysilm.clipexport"),
+            &["zysilm.clipexport", "zysilm.vestratube"]
+        ));
+        assert!(waits(false, remembered, None, &[]));
+        // The remembered tab mounted: current or not, the wait is over.
+        assert!(!waits(
+            false,
+            remembered,
+            Some("vestra.playlist"),
+            &["zysilm.clipexport", "vestra.playlist"]
+        ));
+        assert!(!waits(
+            false,
+            remembered,
+            Some("zysilm.clipexport"),
+            &["zysilm.clipexport", "vestra.playlist"]
+        ));
+        // Start-up settled (the remembered plugin may be gone): no wait.
+        assert!(!waits(
+            true,
+            remembered,
+            Some("zysilm.clipexport"),
+            &["zysilm.clipexport"]
+        ));
+        // Nothing remembered (a first start): no wait.
+        assert!(!waits(
+            false,
+            None,
+            Some("zysilm.clipexport"),
+            &["zysilm.clipexport"]
+        ));
+        // The same rule in the adjust column.
+        assert!(waits(
+            false,
+            Some("vestra.video"),
+            Some("aa.wheels"),
+            &["aa.wheels"]
+        ));
+        assert!(!waits(
+            false,
+            Some("vestra.video"),
+            Some("aa.wheels"),
+            &["aa.wheels", "vestra.video"]
+        ));
     }
 
     #[test]

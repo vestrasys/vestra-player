@@ -602,6 +602,67 @@ fn startup_compiles_each_shown_panel_once_and_an_open_compiles_nothing() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
+/// V2 finding (SDK 1.9.0): a third-party sidebar tab replayed as a
+/// placeholder at start-up mounts before the playlist's plugin has started;
+/// it became the current tab, so its plugin was woken while the playlist
+/// (the remembered current tab) was still on its way. Until the remembered
+/// tab mounts no other tab is current: the placeholder is not woken, and the
+/// playlist is the current tab once start-up settled.
+#[test]
+#[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
+fn a_replayed_placeholder_tab_is_not_woken_while_the_remembered_tab_starts() {
+    let plugins = builtins();
+    // A debug build starts the fixture's first run late (behind the
+    // built-ins' first runs, about seven times slower).
+    let (warm_up, seconds) = if cfg!(debug_assertions) {
+        (45, 30)
+    } else {
+        (10, 15)
+    };
+    let profile = Profile::new(&plugins, false, ThirdParty::Parked);
+    // The first run records its plugins (the fixture's tab: a placeholder
+    // at the next start). A slow debug start may end before the fixture's
+    // first run (it waits behind the built-ins): once more then.
+    let recorded = |log: &str| {
+        log.contains(&format!("lazy: {THIRD_PARTY} recorded at quit"))
+            || log.contains(&format!("lazy: {THIRD_PARTY} parked"))
+    };
+    let mut warm = profile.run(warm_up, None, None);
+    for _ in 0..2 {
+        if recorded(&warm) {
+            break;
+        }
+        warm = profile.run(warm_up, None, None);
+    }
+    assert!(recorded(&warm), "the fixture was never recorded\n{warm}");
+    // The sidebar left open on the playlist.
+    let path = profile.dir.path().join("ui-state.json");
+    let mut state: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    state["sidebarSlot"]["visible"] = true.into();
+    state["sidebarSlot"]["active"] = "vestra.playlist".into();
+    std::fs::write(&path, state.to_string()).unwrap();
+    let log = profile.run(seconds, None, None);
+    assert!(
+        log.contains(&format!("lazy: {THIRD_PARTY} replayed")),
+        "the fixture was not replayed as a placeholder\n{log}"
+    );
+    assert!(
+        log.contains("lazy: start-up settled"),
+        "start-up never settled\n{log}"
+    );
+    assert!(
+        !log.contains(&format!("tab of {THIRD_PARTY} shown, waking it")),
+        "the placeholder tab was woken at start-up\n{log}"
+    );
+    let state: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(
+        state["sidebarSlot"]["active"], "vestra.playlist",
+        "the playlist is no longer the current tab"
+    );
+}
+
 /// The adjust column's four built-in tabs (Picture, Audio, Subtitles,
 /// Playback), in their order, and the command that shows each.
 const ADJUST_TABS: [(&str, &str); 4] = [

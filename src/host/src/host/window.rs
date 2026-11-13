@@ -594,9 +594,12 @@ impl Host {
         let p = column.prefix();
         let tabs = self.policy.panels(policy_column(column));
         let active = self.policy.active(policy_column(column));
+        // What the host acts on: none while the column waits for its
+        // remembered tab at start-up (`current_tab`).
+        let current = self.current_tab(column);
         match column {
-            Column::Sidebar => self.input.borrow_mut().sidebar = active.map(panel_plugin),
-            Column::Adjust => self.input.borrow_mut().adjust = active.map(panel_plugin),
+            Column::Sidebar => self.input.borrow_mut().sidebar = current.map(panel_plugin),
+            Column::Adjust => self.input.borrow_mut().adjust = current.map(panel_plugin),
         }
         // Each window indexes its own tab order; a tab it does not have yet
         // (or any more) leaves it as it is until it is rebuilt.
@@ -627,13 +630,13 @@ impl Host {
             self.tab_keys(shell, column);
         }
         let state = &mut self.columns[index];
-        if state.active != active {
+        if state.active != current {
             let canvas = matches!(shell.get_property("canvas-focused"), Ok(SValue::Bool(true)));
             let more = tabs.len() > 1 || column.always_tabbed();
             if state.active.is_some() && !state.tab_clicked && !canvas && more {
                 let _ = shell.invoke("focus-video", &[]);
             }
-            state.active = active;
+            state.active = current;
         }
         state.tab_clicked = false;
         // The adjust column's current tab is shown, and needs its panel and
@@ -646,7 +649,7 @@ impl Host {
             self.columns[index].woken = None;
             return;
         }
-        self.tab_demand(column, active);
+        self.tab_demand(column, current);
     }
     /// The keys under a column's tabs (the adjust column, menu redesign
     /// §3.3): each tab's command that opens it (`sidebar_tabs::tab_command`)

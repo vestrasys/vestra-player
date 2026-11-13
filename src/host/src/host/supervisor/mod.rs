@@ -1139,11 +1139,14 @@ impl Host {
                         .policy
                         .column_state(column)
                         .is_some_and(|(preferred, _)| preferred);
-                open && crate::ui::sidebar_tabs::shown_tab(
-                    m.spec.slot,
-                    m.spec.owner,
-                    self.policy.active(column),
-                )
+                // None while the column waits for its remembered tab.
+                open && crate::ui::sidebar_tabs::Column::of(m.spec.slot).is_some_and(|tabs| {
+                    crate::ui::sidebar_tabs::shown_tab(
+                        m.spec.slot,
+                        m.spec.owner,
+                        self.current_tab(tabs),
+                    )
+                })
             })
         }) {
             busy.insert(Busy::ShownTab);
