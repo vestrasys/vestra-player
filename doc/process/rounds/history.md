@@ -236,7 +236,7 @@ Input: an independent review of capabilities, TestHost and the API surface (Fabl
 - **TestHost stays as it is, not frozen** (the Workshop's AI loop tests generated plugins with it and cannot start a real player). It is a model of the host's plugin-facing rules (about 11k lines against about 150k of host), not a rewrite of the host. No generated-data improvement for now.
 - **Node-doable members** (`storage.json`, `tools`, `ui.remoteImage`, `i18n.resolve`): kept; no top-down slimming.
 - **Version: this ships as SDK 1.8.0** (supersedes "patch versions only" of 11-08 for this change).
-- **Open, not decided:** workflow edits proposed to the user (§1.6 necessity rule: what Node plus existing members can do is not a host method; "merge ≠ SDK release"; VestraBili mentions); an internal layer for built-in-only API members (about 80 of the 107 single-user members); `media.sources` left as is; deleting the review's list of unused members.
+- **Settled later the same day (user):** workflow edits approved and made (§1.6 necessity rule before the generality rule; VestraBili removed from the plugin lists; "merge ≠ SDK release" was already the §1.6 release-cadence paragraph). **No internal API layer** for built-in-only members: one public API stays. **`media.sources` stays as it is.** **No members are deleted** (the review's unused list is kept).
 
 #### Loop log (newest first)
 
