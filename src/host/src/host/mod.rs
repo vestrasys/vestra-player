@@ -135,7 +135,6 @@ pub(crate) struct Mount {
     /// The bottom bar's preference; a sidebar panel's come from the slot
     /// (`ui_state::SidebarSlot`, then the policy).
     pub(crate) visible: bool,
-    pub(crate) detached: bool,
     /// The floating window's title and the sidebar tab's label: the mount's
     /// `title`, else the plugin's name.
     pub(crate) title: String,
@@ -161,10 +160,8 @@ pub(crate) struct ColumnState {
     /// Its panels in the current shell, in its tab order (its
     /// `<column>-active` indexes this; the policy may already have dropped one).
     pub(crate) tabs: Vec<u64>,
-    /// The current shell draws its tab strip.
+    /// The column draws its tab strip.
     pub(crate) tabbed: bool,
-    /// The tab whose compile failed: not tried again until another is current.
-    pub(crate) refresh_failed: Option<u64>,
     /// The placeholder tab whose plugin was woken for being shown.
     pub(crate) woken: Option<u64>,
     /// G-01: its fullscreen overlay was popped out at the last tick (the
@@ -172,10 +169,6 @@ pub(crate) struct ColumnState {
     pub(crate) popped: bool,
     /// It was on screen at the last tick (the adjust column).
     pub(crate) shown: bool,
-    /// The user has wanted it shown in this run (the adjust column): its
-    /// panels are compiled only from then on (menu redesign, open question
-    /// 1: on demand), and stay compiled when it closes.
-    pub(crate) opened: bool,
     /// What the keys under its tabs were last computed from: the binding
     /// table's and the command registry's revisions, the shell generation
     /// and the tabs (the adjust column).
@@ -186,8 +179,6 @@ pub(crate) struct Floating {
     pub(crate) instance: slint_interpreter::ComponentInstance,
     /// The sidebar's panels when it opened, in tab order.
     pub(crate) owners: Vec<u64>,
-    /// The ones compiled into it (the shell's compiled sidebar panels).
-    pub(crate) compiled: Vec<u64>,
     pub(crate) generation: u64,
     /// Its native window, for the pointer at a file drop.
     pub(crate) native: Option<platform::HostWindowId>,
@@ -279,9 +270,7 @@ pub(crate) fn osd_hide_reason(
     }
 }
 
-/// What the OSD message shows, as the host last wrote it to the shell. A
-/// new shell instance (a rebuild for a mount change) gets it written again,
-/// so a message on screen stays with its buttons and its remaining time.
+/// What the OSD message shows, as the host last wrote it to the shell.
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct OsdShown {
     pub(crate) text: String,
@@ -314,8 +303,6 @@ pub(crate) fn debug_osd() -> bool {
 pub(crate) enum OsdEvent<'a> {
     Show(&'a str),
     Hide(&'a str),
-    /// Written again into a rebuilt shell.
-    Kept,
 }
 
 /// The `VESTRA_DEBUG_OSD` line of `event` for a message from `from` (a
@@ -329,7 +316,6 @@ pub(crate) fn osd_line(event: &OsdEvent<'_>, from: &str, actions: usize) -> Stri
     match event {
         OsdEvent::Show(text) => format!("osd: show from {from}, {buttons}: {text:?}"),
         OsdEvent::Hide(reason) => format!("osd: hide ({reason}) from {from}, {buttons}"),
-        OsdEvent::Kept => format!("osd: kept across a shell rebuild, from {from}, {buttons}"),
     }
 }
 /// The action buttons of the message on screen: the plugin that showed it
@@ -337,26 +323,6 @@ pub(crate) fn osd_line(event: &OsdEvent<'_>, from: &str, actions: usize) -> Stri
 pub(crate) struct OsdActions {
     pub(crate) owner: u64,
     pub(crate) commands: Vec<String>,
-}
-/// At start-up, how long the first compile of the shell waits at most for
-/// the plugins that may still mount a panel (`prepare_mount_tick`), so that
-/// it compiles once for all of them. The trade-off: until then the window
-/// shows the shell without any panel, so one slow plugin (a built-in or a
-/// third-party one still activating that has not asked yet) can keep the
-/// built-ins' panels (the bar, the playlist) away for up to this long; a
-/// panel that asks later compiles the shell once more. Usually the gate
-/// opens within a few hundred milliseconds of the built-ins' mounts.
-pub(crate) const STARTUP_MOUNT_LIMIT: Duration = Duration::from_secs(5);
-/// [`STARTUP_MOUNT_LIMIT`], or `VESTRA_TEST_MOUNT_LIMIT_MS` (tests on a
-/// loaded machine: tests/startup_compiles.rs).
-pub(crate) fn startup_mount_limit() -> Duration {
-    static LIMIT: std::sync::OnceLock<Duration> = std::sync::OnceLock::new();
-    *LIMIT.get_or_init(|| {
-        std::env::var("VESTRA_TEST_MOUNT_LIMIT_MS")
-            .ok()
-            .and_then(|ms| ms.parse().ok())
-            .map_or(STARTUP_MOUNT_LIMIT, Duration::from_millis)
-    })
 }
 pub(crate) struct MountChange {
     pub(crate) reply: Reply,
@@ -405,8 +371,7 @@ pub(crate) struct Host {
     /// video texture (`vestra-video-texture`), `None` without one.
     pub(crate) video_texture: RefCell<Option<vestra_video_texture::Feed>>,
     /// The main shell the window's rendering notifier shows new video
-    /// textures on (`attach_gpu`): it outlives a shell, since a new
-    /// composition replaces the tree in the same window (`retarget_shell`).
+    /// textures on (`attach_gpu`).
     pub(crate) video_target: Rc<RefCell<slint::Weak<slint_interpreter::ComponentInstance>>>,
     /// The main window has neither a rendering notifier nor the pacing hook's
     /// draw count (Slint's software renderer): its one winit event hook
@@ -445,28 +410,21 @@ pub(crate) struct Host {
     /// The columns of tabs (by `sidebar_tabs::Column::index`): the sidebar
     /// and the adjust column.
     pub(crate) columns: [ColumnState; 2],
-    /// What the current shell was compiled with: its specs (the columns'
-    /// compiled panels among them).
-    pub(crate) shell_specs: Vec<composition::CompileSpec>,
-    /// The column tabs compiled into the current shell: owner → the owner
-    /// its branch was compiled under (different after a parked plugin woke
-    /// under a new owner, until its new mount compiles it).
-    pub(crate) shell_compiled: BTreeMap<u64, u64>,
-    /// Panels kept while their plugin restarts after a crash, and the keys
-    /// their branches were compiled under (`panel_restart.rs`).
+    /// The mounted panels that can be drawn, each compiled on its own when
+    /// first shown and embedded in its slot's container (`ui/panels.rs`).
+    pub(crate) panels: crate::ui::panels::Panels,
+    /// The panels of the mount batch being applied whose file was compiled
+    /// for it (for the log line of a panel kept over its plugin's restart).
+    pub(crate) compiled_now: std::collections::BTreeSet<u64>,
+    /// Panels kept while their plugin restarts after a crash
+    /// (`panel_restart.rs`).
     pub(crate) restarts: panel_restart::Restarts,
-    /// A current tab needs its panel compiled (`prepare_mount_tick`).
-    pub(crate) shell_refresh: bool,
-    /// The start-up mounts were compiled into the shell (or there were
-    /// none): until then mounts wait for start-up to settle and files
-    /// given at launch wait for them (`prepare_mount_tick`).
-    pub(crate) startup_mounted: bool,
-    /// Every start-up panel is in the shell: start-up settled with no
-    /// mount left to prepare (`open_files_tick`; a file given at launch
-    /// opens only then, so no compile lands on early playback).
+    /// The plugins' start-up panels are in place: start-up settled with no
+    /// mount left to apply (`open_files_tick`; a file given at launch opens
+    /// only then, so no panel's compile lands on early playback).
     pub(crate) startup_panels: bool,
-    /// Column panels whose compile failed when their tab joined the compiled
-    /// set (reported to their plugin): left out until they mount again.
+    /// Panels whose file did not compile when they were first shown
+    /// (reported to their plugin): left out until they mount again.
     pub(crate) tabs_failed: std::collections::BTreeSet<u64>,
     /// The bottom bar was shown at the last tick.
     pub(crate) bottom_shown: bool,
@@ -481,7 +439,7 @@ pub(crate) struct Host {
     pub(crate) osd_shown_at: u64,
     /// When the hidden message's button titles are cleared (`OSD_CLEAR_MS`).
     pub(crate) osd_clear_at: Option<u64>,
-    /// What the OSD shows (written again into a rebuilt shell).
+    /// What the OSD shows.
     pub(crate) osd_shown: OsdShown,
     /// The plugin that showed the message on screen; `None`: the player.
     pub(crate) osd_from: Option<u64>,

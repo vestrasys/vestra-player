@@ -63,9 +63,12 @@ impl Host {
         }
         self.open_files_tick();
     }
-    /// Files wait until the plugins started and the shell compiled with
-    /// their start-up panels (`startup_panels`): a compile blocks the UI
-    /// thread, and one landing just after playback began stalled it.
+    /// Files wait until the plugins started at launch have activated and
+    /// their panels are in place (`startup_panels`): each panel shown at
+    /// once (the bar, the backdrop, a column's current tab) compiles on the
+    /// UI thread when it is mounted, and one landing just after playback
+    /// began stalled it. Plugins whose start waits behind the built-ins are
+    /// not waited for: a panel of theirs costs its own compile only.
     pub(super) fn open_files_tick(&mut self) {
         if !self.startup_panels && self.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
             // A start that never settles (a plugin retried after a crash)
@@ -73,11 +76,9 @@ impl Host {
             self.startup_panels = true;
         }
         if !self.startup_panels {
-            self.startup_panels = self.startup_mounted
-                && self.mount_queue.is_empty()
+            self.startup_panels = self.mount_queue.is_empty()
                 && self.preparing.is_none()
                 && self.held_mounts.is_empty()
-                && !self.start_under_way()
                 && self.startup_has_settled();
         }
         let settled =

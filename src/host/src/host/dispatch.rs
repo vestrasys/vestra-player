@@ -26,22 +26,6 @@ impl Host {
             }
         }
     }
-    /// The start-up compile of the shell (`prepare_mount_tick`): the held
-    /// mounts and unmounts are answered now, to join it. The built-ins'
-    /// mounts are queued by then (their activation waits for this
-    /// compile), so a slot a built-in claims is still refused to the
-    /// others (`slot_claims::occupant` counts queued mounts); the other
-    /// held requests keep waiting for the built-ins.
-    pub(crate) fn release_held_panel_requests(&mut self) {
-        let released = self
-            .held_mounts
-            .release_where(|(_, method, _)| matches!(method.as_str(), "ui.mount" | "ui.unmount"));
-        for (reply, method, params) in released {
-            if self.plugins.contains_key(&reply.owner) {
-                self.answer(reply, &method, &params);
-            }
-        }
-    }
     /// The manifest id of a running plugin (its owner number otherwise).
     pub(crate) fn plugin_id(&self, owner: u64) -> String {
         self.plugins

@@ -80,8 +80,6 @@ pub trait GpuBackend {
         failed: impl FnOnce(String) + 'static,
         drawn: impl FnMut(platform::GpuDraw) + 'static,
     ) -> Result<(), String>;
-    /// A new shell took the attached window's place (same native window).
-    fn retarget<T: slint::ComponentHandle + 'static>(&self, component: &T);
     /// `VESTRA_FRAME_LOG`: the renderer's own numbers (Windows: the `gpu:`
     /// segment); nothing by default.
     fn log_text(&self) -> String {

@@ -1,8 +1,11 @@
-//! Slint composition of the shell's slots, using the public interpreter API.
-//! Host-internal: the public contract is the SDK window/panel API.
+//! Slint composition of the shell's slots: the shell and the sidebar's
+//! floating window, generated once, with a container per slot; the panels
+//! are compiled each on their own and shown in the containers
+//! (`ui/panels.rs`). Host-internal: the public contract is the SDK
+//! window/panel API.
 #![forbid(unsafe_code)]
 
-use std::{collections::BTreeSet, path::PathBuf, sync::mpsc};
+use std::{path::PathBuf, sync::mpsc};
 
 use anyhow::{Context, Result, bail};
 use serde_json::Value as Json;
@@ -22,6 +25,8 @@ pub enum Slot {
 }
 
 impl Slot {
+    /// Every slot, in the shell's order of its places.
+    pub const ALL: [Self; 4] = [Self::Bottom, Self::Sidebar, Self::Backdrop, Self::Adjust];
     /// The shell property showing this slot; the backdrop follows `no-video`.
     pub fn visible_property(self) -> Option<&'static str> {
         match self {
@@ -42,9 +47,7 @@ impl Slot {
     }
     /// The slot of a wire name (`ui.mount`'s `slot`).
     pub fn parse(name: &str) -> Option<Self> {
-        [Self::Bottom, Self::Sidebar, Self::Backdrop, Self::Adjust]
-            .into_iter()
-            .find(|slot| slot.name() == name)
+        Self::ALL.into_iter().find(|slot| slot.name() == name)
     }
     /// What the user calls it, in host messages.
     pub fn label(self) -> String {
@@ -62,9 +65,11 @@ impl Slot {
     }
 }
 
-/// One independent package per owner. The bottom bar and the backdrop hold
-/// one component each; the sidebar holds one or more, as tabs in the order of
-/// the specs. Components inherit a native visual element, not Window.
+/// One panel: a component of a plugin's Slint file and its bridge global,
+/// for a slot. `owner` is the panel's key (`host::panel_key`). The bottom
+/// bar and the backdrop hold one panel each; the sidebar and the adjust
+/// column any number, as tabs. Components inherit a native visual element,
+/// not Window.
 #[derive(Clone, Debug, PartialEq)]
 pub struct CompileSpec {
     pub owner: u64,
@@ -72,43 +77,6 @@ pub struct CompileSpec {
     pub component: String,
     pub global: Option<String>,
     pub slot: Slot,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Primitive {
-    Bool(bool),
-    Number(f64),
-    String(String),
-}
-
-impl Primitive {
-    fn from_value(value: &Value) -> Result<Self, String> {
-        match value {
-            Value::Bool(value) => Ok(Self::Bool(*value)),
-            Value::Number(value) if value.is_finite() => Ok(Self::Number(*value)),
-            Value::String(value) => Ok(Self::String(value.to_string())),
-            _ => {
-                Err("composition callback requires finite number, bool or string arguments".into())
-            }
-        }
-    }
-
-    fn into_value(self) -> Result<Value> {
-        Ok(match self {
-            Self::Bool(value) => Value::Bool(value),
-            Self::Number(value) if value.is_finite() => Value::Number(value),
-            Self::Number(_) => bail!("non-finite composition property"),
-            Self::String(value) => Value::String(value.into()),
-        })
-    }
-}
-
-#[derive(Clone, Debug)]
-pub struct CallbackEvent {
-    pub owner: u64,
-    pub callback: String,
-    /// Unsupported arguments are reported explicitly, never silently nullified.
-    pub args: Result<Vec<Primitive>, String>,
 }
 
 pub(crate) fn identifier(name: &str) -> Result<()> {
@@ -119,10 +87,6 @@ pub(crate) fn identifier(name: &str) -> Result<()> {
         bail!("invalid Slint exported identifier: {name}");
     }
     Ok(())
-}
-
-pub fn global_alias(owner: u64) -> String {
-    format!("Owner{owner}Bridge")
 }
 
 /// Slint handler body that forwards a key event to the host binding table.
@@ -156,61 +120,76 @@ pub(crate) fn import_path(file: &std::path::Path) -> Result<String> {
     Ok(path.replace('\\', "\\\\").replace('"', "\\\""))
 }
 
-fn import_spec(source: &mut String, spec: &CompileSpec, path: &str) -> Result<()> {
-    identifier(&spec.component)?;
-    source.push_str(&format!(
-        "import {{ {} as Owner{}View }} from \"{}\";\n",
-        spec.component, spec.owner, path
-    ));
-    if let Some(global) = &spec.global {
-        identifier(global)?;
-        let alias = global_alias(spec.owner);
-        source.push_str(&format!(
-            "import {{ {global} as {alias} }} from \"{path}\";\nexport {{ {alias} }}\n"
-        ));
-    }
-    Ok(())
+/// The shell property (and the floating window's, for the sidebar) with
+/// the restart line of the panel a slot shows (`""`: live).
+pub fn restarting_property(slot: Slot) -> String {
+    format!("{}-restarting", slot.name())
 }
 
-/// A panel's restart line (`panel_restart.rs`): while its plugin restarts
-/// after a crash, the host dims the panel's last content and draws one
-/// line over it, taking the pointer (`ui/panel-restarting.slint`); a click
-/// on it gives it the keys, which `owner<key>-restarting-focused` reports.
-/// `when`: a further condition (its tab is the shown one).
-fn restarting_overlay(owner: u64, when: &str) -> String {
+/// Whether the restart line of the panel a slot shows has the keys (a
+/// click on it gave them).
+pub fn restarting_focus_property(slot: Slot) -> String {
+    format!("{}-restarting-focused", slot.name())
+}
+
+/// A slot's restart line (`host/panel_restart.rs`): while the plugin of
+/// the panel it shows restarts after a crash, the host dims the panel's
+/// last content and draws one line over it, taking the pointer
+/// (`ui/panel-restarting.slint`); a click on it gives it the keys, which
+/// `<slot>-restarting-focused` reports. One per place of the slot: the
+/// host writes the line of the panel shown there.
+fn restarting_overlay(slot: Slot) -> String {
+    let p = slot.name();
     format!(
-        "if {when}root.owner{owner}-restarting != \"\": PanelRestarting {{ x: 0px; y: 0px; \
-         width: parent.width; height: parent.height; text: root.owner{owner}-restarting; \
-         changed holds-keys => {{ root.owner{owner}-restarting-focused = self.holds-keys; }} }}"
+        "if root.{p}-restarting != \"\": PanelRestarting {{ x: 0px; y: 0px; \
+         width: parent.width; height: parent.height; text: root.{p}-restarting; \
+         changed holds-keys => {{ root.{p}-restarting-focused = self.holds-keys; }} }}"
     )
 }
 
-/// The restart line's properties of each panel in `specs`: its text (`""`:
-/// live) and whether it has the keys.
-fn restarting_properties(specs: &[CompileSpec]) -> String {
-    specs
+/// The restart line's properties of `slots`: its text and whether it has
+/// the keys.
+fn restarting_properties(slots: &[Slot]) -> String {
+    slots
         .iter()
-        .map(|spec| {
+        .map(|slot| {
             format!(
-                "\n    in property <string> owner{0}-restarting;\
-                 \n    in-out property <bool> owner{0}-restarting-focused;",
-                spec.owner
+                "\n    in property <string> {0}-restarting;\
+                 \n    in-out property <bool> {0}-restarting-focused;",
+                slot.name()
             )
         })
         .collect()
 }
 
-/// The import of the restart line's component, when there are panels.
-const RESTARTING_IMPORT: &str = "import { PanelRestarting } from \"panel-restarting.slint\";\n";
+/// The container of a slot's panel (`ui/panels.rs`): the host sets
+/// `<slot>-factory` to the shown panel's factory. Placed (x, y), so its
+/// panel's size constraints stay out of the layouts around it: they would
+/// depend on the size the container gives the panel, and Slint reads them
+/// while creating the panel inside that layout ("Recursion detected": the
+/// visualizer's backdrop, whose scenes take its size).
+fn container(slot: Slot) -> String {
+    format!(
+        "ComponentContainer {{ x: 0px; y: 0px; width: parent.width; height: parent.height; component-factory: root.{}-factory; }}",
+        slot.name()
+    )
+}
 
-/// The shell's slot properties and the tab properties of its columns (also
-/// in a shell without tabs, so the host binds them alike).
+/// The shell's slot properties: each slot's container factory, the tab
+/// properties of its columns, and the bottom bar's (`bottom-mounted`: a
+/// bar is mounted, else the player's strip has a band of its own;
+/// `bottom-reserve`: the width the bar keeps for its own controls, px).
 const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
-    in property <bool> sidebar-visible: true;\n\
+    in property <bool> bottom-mounted: false;\n\
+    in property <float> bottom-reserve: 0;\n\
+    in property <component-factory> bottom-factory;\n\
+    in property <component-factory> backdrop-factory;\n\
+    in property <bool> sidebar-visible: false;\n\
     in property <bool> sidebar-overlay: false;\n\
     in property <bool> sidebar-popped: false;\n\
+    in property <bool> sidebar-tabbed: false;\n\
+    in property <component-factory> sidebar-factory;\n\
     in-out property <int> sidebar-active: 0;\n\
-    in property <int> sidebar-shown: -1;\n\
     in property <[string]> sidebar-titles;\n\
     callback sidebar-tab(int);\n\
     callback sidebar-overflow(float, float);\n\
@@ -218,8 +197,8 @@ const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
     in property <bool> adjust-visible: false;\n\
     in property <bool> adjust-overlay: false;\n\
     in property <bool> adjust-popped: false;\n\
+    in property <component-factory> adjust-factory;\n\
     in-out property <int> adjust-active: 0;\n\
-    in property <int> adjust-shown: -1;\n\
     in property <[string]> adjust-titles;\n\
     in property <[string]> adjust-keys;\n\
     callback adjust-tab(int);\n\
@@ -230,105 +209,39 @@ const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
 pub const TAB_STRIP_HEIGHT: f64 = 31.0;
 
 /// What fills a column of tabs (docked, overlay, the sidebar's floating
-/// window): the one panel as before (the sidebar with one tab), or the tab
-/// strip over one branch per compiled panel (sidebar-tabs.md: the front
-/// tabs, not every tab), the one whose owner is `<column>-shown` drawn, so
-/// switching between compiled tabs only changes a property. A tab without a
-/// compiled panel (a placeholder) shows nothing until the host compiles it.
-/// A click on a tab gives the keys to `keys` (the column's FocusScope): the
-/// panel that had them is gone. The adjust column's strip has the keys
-/// under its titles and no detach button; `background`: the panels' ground.
-fn column_content(
-    column: Column,
-    tabs: &[&CompileSpec],
-    tabbed: bool,
-    keys: &str,
-    detached: &str,
-    background: &str,
-) -> String {
-    match tabs {
-        [] if !tabbed => return String::new(),
-        [spec] if !tabbed => {
-            return format!(
-                "Owner{}View {{ width: parent.width; height: parent.height; }} {}",
-                spec.owner,
-                restarting_overlay(spec.owner, "")
-            );
-        }
-        _ => {}
-    }
+/// window): the tab strip (the sidebar: while it has two or more tabs,
+/// `sidebar-tabbed`; the adjust column: always) over the container of the
+/// current tab's panel, so switching between tabs is a property change. A
+/// tab without a panel (a placeholder, one that does not compile) shows
+/// nothing. A click on a tab gives the keys to `keys` (the column's
+/// FocusScope): the panel that had them is gone. The adjust column's strip
+/// has the keys under its titles and no detach button; `background`: the
+/// panels' ground under the strip.
+fn column_content(column: Column, keys: &str, detached: &str, background: &str) -> String {
     let p = column.prefix();
-    let views = tabs
-        .iter()
-        .map(|spec| {
-            format!(
-                "if root.{p}-shown == {0}: Owner{0}View {{ width: parent.width; height: parent.height; }} {1}",
-                spec.owner,
-                restarting_overlay(
-                    spec.owner,
-                    &format!("root.{p}-shown == {} && ", spec.owner),
-                )
-            )
-        })
-        .collect::<Vec<_>>()
-        .join(" ");
-    let strip = match column {
-        Column::Sidebar => format!("detached: {detached}; detach => {{ root.sidebar-detach(); }}"),
-        Column::Adjust => "keys: root.adjust-keys; detachable: false;".to_owned(),
+    let (tabbed, strip) = match column {
+        Column::Sidebar => (
+            "root.sidebar-tabbed",
+            format!("detached: {detached}; detach => {{ root.sidebar-detach(); }}"),
+        ),
+        Column::Adjust => (
+            "true",
+            "keys: root.adjust-keys; detachable: false;".to_owned(),
+        ),
     };
+    let (container, restarting) = (container(column.slot()), restarting_overlay(column.slot()));
     // Placed by hand, not in a layout: a layout here would pass its size
-    // constraints up to the window (it shrank to its minimum height).
+    // constraints up to the window (it shrank to its minimum height). One
+    // panel without a strip fills the column unclipped, as it always did.
     format!(
-        "SidebarTabs {{ x: 0px; y: 0px; width: parent.width; height: {TAB_STRIP_HEIGHT}px; \
+        "if {tabbed}: SidebarTabs {{ x: 0px; y: 0px; width: parent.width; height: {TAB_STRIP_HEIGHT}px; \
          titles: root.{p}-titles; active: root.{p}-active; {strip} \
          tab(index) => {{ root.{p}-active = index; {keys}.focus(); root.{p}-tab(index); }} \
          overflow(x, y) => {{ root.{p}-overflow(x, y); }} }} \
-         Rectangle {{ x: 0px; y: {TAB_STRIP_HEIGHT}px; width: parent.width; \
-         height: parent.height - {TAB_STRIP_HEIGHT}px; background: {background}; clip: true; {views} }}"
+         Rectangle {{ x: 0px; y: {tabbed} ? {TAB_STRIP_HEIGHT}px : 0px; width: parent.width; \
+         height: parent.height - self.y; background: {tabbed} ? {background} : transparent; \
+         clip: {tabbed}; {container} {restarting} }}"
     )
-}
-
-/// [`column_content`] for the sidebar.
-fn sidebar_content(tabs: &[&CompileSpec], tabbed: bool, keys: &str, detached: &str) -> String {
-    column_content(
-        Column::Sidebar,
-        tabs,
-        tabbed,
-        keys,
-        detached,
-        "Theme.bg-list",
-    )
-}
-
-/// Whether the columns of these compiled panels draw their tab strips (by
-/// `Column::index`): the sidebar with two or more tabs, the adjust column
-/// with any.
-fn default_tabbed(specs: &[CompileSpec]) -> [bool; 2] {
-    let count = |slot| specs.iter().filter(|spec| spec.slot == slot).count();
-    [count(Slot::Sidebar) > 1, count(Slot::Adjust) > 0]
-}
-
-/// Generated source is ordinary Slint, not a layout protocol. Imports use
-/// canonical files; package containment is the package loader's responsibility.
-/// Aliases prevent exported-name collisions, but are not a sandbox. Slint globals
-/// imported from the same underlying file remain shared, so independent owners
-/// must not import a shared stateful global (including through dependencies).
-pub fn shell_source(specs: &[CompileSpec]) -> Result<String> {
-    shell_source_columns(specs, default_tabbed(specs))
-}
-
-/// [`shell_source`] with the sidebar's tab strip drawn when `tabbed`, also
-/// over one compiled panel (the other tabs are placeholders).
-pub fn shell_source_tabbed(specs: &[CompileSpec], tabbed: bool) -> Result<String> {
-    let [_, adjust] = default_tabbed(specs);
-    shell_source_columns(specs, [tabbed, adjust])
-}
-
-/// [`shell_source`] with each column (by `Column::index`) drawn with its
-/// tab strip when `tabbed`, also with no compiled panel (every tab a
-/// placeholder).
-pub fn shell_source_columns(specs: &[CompileSpec], tabbed: [bool; 2]) -> Result<String> {
-    shell_source_with(specs, tabbed, bar_reports_min(specs))
 }
 
 /// The property a bottom bar reports the least width of its own controls
@@ -341,245 +254,102 @@ pub const BAR_MIN_WIDTH: &str = "content-min-width";
 /// its own controls only after every plugin button is in `»`, and the
 /// strip's overflow follows the window's width monotonically. A bar that
 /// reports only [`BAR_MIN_WIDTH`] keeps the 3a behaviour (the room beyond
-/// its least width).
+/// its least width). The bar's own compilation reads whichever it has
+/// (`ui/panels.rs`, `RESERVE`), and the host copies the number to the
+/// shell's `bottom-reserve`.
 pub const BAR_FULL_WIDTH: &str = "content-full-width";
-
-/// The mounted bottom bar's width property the strip's room is measured
-/// beyond: [`BAR_FULL_WIDTH`] when its component has that public `length`
-/// property, else [`BAR_MIN_WIDTH`], else none (the whole bar); its own or
-/// one it inherits from a base component in another file. The Slint compiler answers, not a text scan:
-/// `ComponentDefinition::properties()` lists only the properties a
-/// component declares itself (Slint 1.18.1 lowers `public_properties` from
-/// the root element's own declarations), so an inherited one would be
-/// missed. Instead a probe component that reads the property from an
-/// instance of the bar into a `length` property is compiled: it compiles
-/// exactly when the property exists, is readable from outside and is a
-/// length. A bar that does not compile has no property here; the shell's
-/// compile then reports its real error.
-///
-/// The answer is kept for the bar's run: its owner generation, file and
-/// component. Owner generations are never reused (`Supervisor::alloc_pid`),
-/// and the files of a plugin change only between runs: an install, update
-/// or reload restarts it (`JobKind::Restart`), a woken plugin is a new
-/// run too. So the shell's later compiles in the same run (a tab switch, a
-/// mount elsewhere) do not repeat the probe, and a changed file anywhere in
-/// the bar's import closure is probed again at its next run. A
-/// modification time would miss a base component or an import in another
-/// file; hashing the closure would need the import resolution the compiler
-/// already does.
-fn bar_reports_min(specs: &[CompileSpec]) -> Option<&'static str> {
-    let spec = specs.iter().find(|spec| spec.slot == Slot::Bottom)?;
-    [BAR_FULL_WIDTH, BAR_MIN_WIDTH]
-        .into_iter()
-        .find(|property| declares_length(spec.owner, &spec.file, &spec.component, property))
-}
-
-/// [`bar_reports_min`] for any run (`owner`), file, component and `length`
-/// property. One bottom bar is mounted at a time, so only its answers are
-/// kept (both properties).
-fn declares_length(owner: u64, file: &std::path::Path, component: &str, property: &str) -> bool {
-    type Key = (u64, PathBuf, String, String);
-    thread_local! {
-        static LAST: std::cell::RefCell<Vec<(Key, bool)>> = const { std::cell::RefCell::new(Vec::new()) };
-    }
-    let key = (
-        owner,
-        file.to_path_buf(),
-        component.to_owned(),
-        property.to_owned(),
-    );
-    if let Some(known) = LAST.with(|last| {
-        last.borrow()
-            .iter()
-            .find(|(seen, _)| *seen == key)
-            .map(|(_, found)| *found)
-    }) {
-        return known;
-    }
-    let found = probe_length(file, component, property);
-    LAST.with(|last| {
-        let mut last = last.borrow_mut();
-        // Another bar or another run: its answers go.
-        last.retain(|(seen, _)| seen.0 == key.0 && seen.1 == key.1 && seen.2 == key.2);
-        last.push((key, found));
-    });
-    found
-}
-
-/// The probe of [`bar_reports_min`], uncached.
-fn probe_length(file: &std::path::Path, component: &str, property: &str) -> bool {
-    (|| {
-        identifier(component).ok()?;
-        identifier(property).ok()?;
-        let path = import_path(file).ok()?;
-        let probe = format!(
-            "import {{ {component} as ProbedBar }} from \"{path}\";\n\
-             export component VestraProbe {{ bar := ProbedBar {{}} \
-             out property <length> probed: bar.{property}; }}\n"
-        );
-        let base = file.with_file_name("vestra-property-probe.slint");
-        let result = pollster::block_on(crate::ui::view::compiler().build_from_source(probe, base));
-        let failed = result
-            .diagnostics()
-            .any(|d| d.level() == slint_interpreter::DiagnosticLevel::Error);
-        Some(!failed && result.component("VestraProbe").is_some())
-    })()
-    .unwrap_or(false)
-}
 
 /// The player's bottom-bar strip (bar-strip.slint) at the right end of its
 /// parent, its cells on the parent's bottom edge; `min`: what the bar
 /// keeps for its own controls.
 fn bar_strip(min: &str) -> String {
     format!(
-        "bar-strip := HostBarStrip {{ x: parent.width - self.width - 4px; y: parent.height - self.height; \
+        "HostBarStrip {{ x: parent.width - self.width - 4px; y: parent.height - self.height; \
          room: max(0px, parent.width - {min} - 4px); more(x, y) => {{ root.bar-more(x, y); }} }}"
     )
 }
 
-/// [`shell_source_tabbed`]; `bar_room`: the bar's property the strip's room
-/// is measured beyond ([`BAR_FULL_WIDTH`], else [`BAR_MIN_WIDTH`]), `None`:
-/// the whole bar.
-fn shell_source_with(
-    specs: &[CompileSpec],
-    tabbed: [bool; 2],
-    bar_room: Option<&str>,
-) -> Result<String> {
-    let mut owners = BTreeSet::new();
-    let mut slots = BTreeSet::new();
-    let mut files = BTreeSet::new();
-    let mut source = String::new();
-    for spec in specs {
-        if !owners.insert(spec.owner) || (!spec.slot.tabbed() && !slots.insert(spec.slot)) {
-            bail!("this shell requires unique owners and at most one bottom bar and one backdrop");
-        }
-        if !files.insert(dunce::canonicalize(&spec.file).context("composition file unavailable")?) {
-            bail!("independent composition owners require distinct Slint files");
-        }
-        let path = import_path(&spec.file)?;
-        import_spec(&mut source, spec, &path)?;
-    }
-    if !specs.is_empty() {
-        source.push_str(RESTARTING_IMPORT);
-    }
+/// The shell: ordinary Slint, generated once. It names no panel: every
+/// slot is a container the host fills (`ui/panels.rs`), so the same
+/// source serves whatever is mounted, and a mount change never compiles
+/// it again.
+pub fn shell_source() -> Result<String> {
+    let mut source = String::from(
+        "import { PanelRestarting } from \"panel-restarting.slint\";\n\
+         import { SidebarTabs } from \"sidebar-tabs.slint\";\n",
+    );
     let mut shell = include_str!("../../ui/host.slint").to_owned();
     // FS-BAR-1: the bottom bar's laid-out height, also while it is hidden
     // (the host's fullscreen band); 0 without a bottom bar.
-    let has_bottom = specs.iter().any(|spec| spec.slot == Slot::Bottom);
     let properties = format!(
-        "{SHELL_PROPERTIES}{}\n    out property <float> bottom-band-height: {};",
-        restarting_properties(specs),
-        if has_bottom {
-            "bottom-keys.height / 1px"
-        } else {
-            "0"
-        }
+        "{SHELL_PROPERTIES}{}\n    out property <float> bottom-band-height: root.bottom-mounted ? bottom-keys.height / 1px : 0;",
+        restarting_properties(&Slot::ALL),
     );
     replace_marker(&mut shell, "// VESTRA-MOUNT-PROPERTIES", &properties)?;
-    let tabs = specs
-        .iter()
-        .filter(|spec| spec.slot == Slot::Sidebar)
-        .collect::<Vec<_>>();
-    let adjust_tabs = specs
-        .iter()
-        .filter(|spec| spec.slot == Slot::Adjust)
-        .collect::<Vec<_>>();
-    // With tabs (two or more, compiled or not) the column and its strip
-    // exist even while no panel is compiled (every front tab a placeholder).
-    let tabbed_adjust = tabbed[1] || !adjust_tabs.is_empty();
-    let tabbed = tabbed[0] || tabs.len() > 1;
-    if tabbed || tabbed_adjust {
-        source.push_str("import { SidebarTabs } from \"sidebar-tabs.slint\";\n");
-    }
-    let adjust = adjust_column(&adjust_tabs, tabbed_adjust);
+    let adjust = adjust_column();
     replace_marker(&mut shell, "// VESTRA-MOUNT-ADJUST", &adjust.docked)?;
-    let column = tabbed || !tabs.is_empty();
-    let sidebar = if !column {
-        String::new()
-    } else {
-        format!(
-            "if root.sidebar-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
-             TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
-             moved => {{ if self.pressed {{ root.sidebar-width = clamp(root.width / 1px - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 317, max(317, root.width / 1px - 321)); }} }} \
-             pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.sidebar-resized(root.sidebar-actual); }} }} }} }}\n\
-             if root.sidebar-visible: sidebar-keys := FocusScope {{ width: root.sidebar-actual * 1px; horizontal-stretch: 0; {} {} }}",
-            key_forward("panel:sidebar"),
-            sidebar_content(&tabs, tabbed, "sidebar-keys", "false")
-        )
-    };
+    let sidebar = format!(
+        "if root.sidebar-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
+         TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
+         moved => {{ if self.pressed {{ root.sidebar-width = clamp(root.width / 1px - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 317, max(317, root.width / 1px - 321)); }} }} \
+         pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.sidebar-resized(root.sidebar-actual); }} }} }} }}\n\
+         if root.sidebar-visible: sidebar-keys := FocusScope {{ width: root.sidebar-actual * 1px; horizontal-stretch: 0; {} {} }}",
+        key_forward("panel:sidebar"),
+        column_content(Column::Sidebar, "sidebar-keys", "false", "Theme.bg-list")
+    );
     replace_marker(&mut shell, "// VESTRA-MOUNT-SIDEBAR", &sidebar)?;
     // G-01: in fullscreen the attached sidebar is an overlay over the right
     // of the video, full height; it slides out when popped and back when
     // collapsed. Its hover area reports to the host (the G-04 mechanism).
-    let overlay = if !column {
-        String::new()
-    } else {
-        format!(
-            "if root.sidebar-overlay: Rectangle {{ x: root.width; y: 0px; \
-             width: root.sidebar-pop-width * 1px; height: root.height; \
-             states [ popped when root.sidebar-popped: {{ x: root.width - self.width; \
-             in {{ animate x {{ duration: 150ms; easing: ease-out; }} }} \
-             out {{ animate x {{ duration: 150ms; easing: ease-in; }} }} }} ] \
-             TouchArea {{ changed has-hover => {{ root.sidebar-hover = self.has-hover; }} \
-             changed mouse-x => {{ root.window-input(\"activity\"); }} \
-             changed mouse-y => {{ root.window-input(\"activity\"); }} \
-             overlay-keys := FocusScope {{ {} {} }} }} }}",
-            key_forward("panel:sidebar"),
-            sidebar_content(&tabs, tabbed, "overlay-keys", "false")
-        )
-    };
+    let overlay = format!(
+        "if root.sidebar-overlay: Rectangle {{ x: root.width; y: 0px; \
+         width: root.sidebar-pop-width * 1px; height: root.height; \
+         states [ popped when root.sidebar-popped: {{ x: root.width - self.width; \
+         in {{ animate x {{ duration: 150ms; easing: ease-out; }} }} \
+         out {{ animate x {{ duration: 150ms; easing: ease-in; }} }} }} ] \
+         TouchArea {{ changed has-hover => {{ root.sidebar-hover = self.has-hover; }} \
+         changed mouse-x => {{ root.window-input(\"activity\"); }} \
+         changed mouse-y => {{ root.window-input(\"activity\"); }} \
+         overlay-keys := FocusScope {{ {} {} }} }} }}",
+        key_forward("panel:sidebar"),
+        column_content(Column::Sidebar, "overlay-keys", "false", "Theme.bg-list")
+    );
     // The adjust column's overlay (fullscreen, narrow window) beside the
     // sidebar's: they never overlap, the sidebar outermost.
     let overlay = format!("{overlay}\n{}", adjust.overlay);
     replace_marker(&mut shell, "// VESTRA-MOUNT-OVERLAY", &overlay)?;
-    let bottom = specs
-        .iter()
-        .find(|spec| spec.slot == Slot::Bottom)
-        .map(|spec| {
-            format!(
-                "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible ? 0px : bottom-keys.height; vertical-stretch: 0; \
-                 bottom-keys := FocusScope {{ visible: root.bottom-visible; x: 0px; \
-                 width: parent.width - (root.host-fullscreen ? root.columns-popped-width * 1px : 0px); \
-                 height: min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); \
-                 y: root.host-fullscreen ? -self.height : 0px; {} \
-                 TouchArea {{ changed has-hover => {{ root.bottom-hover = self.has-hover; }} \
-                 changed mouse-x => {{ root.window-input(\"activity\"); }} \
-                 changed mouse-y => {{ root.window-input(\"activity\"); }} \
-                 bottom-content := Owner{}View {{ width: parent.width; height: parent.height; }} {} {} }} }} }}",
-                key_forward("panel:bottom"),
-                spec.owner,
-                restarting_overlay(spec.owner, ""),
-                bar_strip(
-                    &bar_room.map_or_else(|| "0px".to_owned(), |p| format!("bottom-content.{p}"))
-                )
-            )
-        })
-        // Step 3a: without a bottom bar the player's strip still shows, in a
-        // band of the bar's colour (hidden in fullscreen).
-        .unwrap_or_else(|| {
-            format!(
-                "Rectangle {{ height: root.host-fullscreen ? 0px : 40px; vertical-stretch: 0; \
-                 visible: !root.host-fullscreen; background: Theme.bg-bar; \
-                 Rectangle {{ x: 0px; y: 0px; width: parent.width; height: 1px; background: Theme.line; }} \
-                 {} }}",
-                bar_strip("0px")
-            )
-        });
+    // The bar's place always exists (its container is empty, and 0 high,
+    // without a bar), so a bar keeps its instance while it is hidden.
+    // Step 3a: without a bottom bar the player's strip still shows, in a
+    // band of the bar's colour (hidden in fullscreen).
+    let bottom = format!(
+        "Rectangle {{ height: root.host-fullscreen || !root.bottom-visible || !root.bottom-mounted ? 0px : bottom-keys.height; vertical-stretch: 0; \
+         bottom-keys := FocusScope {{ visible: root.bottom-visible && root.bottom-mounted; x: 0px; \
+         width: parent.width - (root.host-fullscreen ? root.columns-popped-width * 1px : 0px); \
+         height: min(bottom-content.max-height, max(bottom-content.min-height, bottom-content.preferred-height)); \
+         y: root.host-fullscreen ? -self.height : 0px; {keys} \
+         TouchArea {{ changed has-hover => {{ root.bottom-hover = self.has-hover; }} \
+         changed mouse-x => {{ root.window-input(\"activity\"); }} \
+         changed mouse-y => {{ root.window-input(\"activity\"); }} \
+         bottom-content := ComponentContainer {{ x: 0px; y: 0px; width: parent.width; height: parent.height; component-factory: root.bottom-factory; }} \
+         {restarting} if root.bottom-mounted: {strip} }} }} }}\n\
+         if !root.bottom-mounted: Rectangle {{ height: root.host-fullscreen ? 0px : 40px; vertical-stretch: 0; \
+         visible: !root.host-fullscreen; background: Theme.bg-bar; \
+         Rectangle {{ x: 0px; y: 0px; width: parent.width; height: 1px; background: Theme.line; }} \
+         {band} }}",
+        keys = key_forward("panel:bottom"),
+        restarting = restarting_overlay(Slot::Bottom),
+        strip = bar_strip("root.bottom-reserve * 1px"),
+        band = bar_strip("0px"),
+    );
     replace_marker(&mut shell, "// VESTRA-MOUNT-BOTTOM", &bottom)?;
     // Under the video input layer, the OSD and the information blocks; it
     // never receives the pointer (the TouchArea above covers it) or focus.
-    let backdrop = specs
-        .iter()
-        .find(|spec| spec.slot == Slot::Backdrop)
-        .map(|spec| {
-            format!(
-                "Rectangle {{ visible: root.no-video; \
-                 Owner{}View {{ width: parent.width; height: parent.height; }} {} }}",
-                spec.owner,
-                restarting_overlay(spec.owner, "")
-            )
-        })
-        .unwrap_or_default();
+    let backdrop = format!(
+        "Rectangle {{ visible: root.no-video; {} {} }}",
+        container(Slot::Backdrop),
+        restarting_overlay(Slot::Backdrop)
+    );
     replace_marker(&mut shell, "// VESTRA-MOUNT-BACKDROP", &backdrop)?;
     source.push_str(&shell);
     Ok(source)
@@ -597,16 +367,9 @@ struct AdjustColumn {
     overlay: String,
 }
 
-/// [`AdjustColumn`] for the adjust panels `tabs` (the compiled ones); the
-/// column exists while `tabbed` (it has tabs, compiled or not). It always
-/// draws its strip: text tabs with the keys under them, no detach.
-fn adjust_column(tabs: &[&CompileSpec], tabbed: bool) -> AdjustColumn {
-    if !tabbed {
-        return AdjustColumn {
-            docked: String::new(),
-            overlay: String::new(),
-        };
-    }
+/// [`AdjustColumn`]: it always draws its strip (text tabs with the keys
+/// under them, no detach) over its container.
+fn adjust_column() -> AdjustColumn {
     let keys = key_forward("panel:adjust");
     // The splitter's right edge: the window's, less a docked sidebar.
     let docked = format!(
@@ -615,14 +378,7 @@ fn adjust_column(tabs: &[&CompileSpec], tabbed: bool) -> AdjustColumn {
          moved => {{ if self.pressed {{ root.adjust-width = clamp(root.width / 1px - (root.sidebar-visible ? root.sidebar-actual + 3 : 0) - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 280, max(280, root.width / 1px * 0.5)); }} }} \
          pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.adjust-resized(root.adjust-actual); }} }} }} }}\n\
          if root.adjust-visible: adjust-keys := FocusScope {{ width: root.adjust-actual * 1px; horizontal-stretch: 0; {keys} {} }}",
-        column_content(
-            Column::Adjust,
-            tabs,
-            true,
-            "adjust-keys",
-            "false",
-            "Theme.bg-list"
-        )
+        column_content(Column::Adjust, "adjust-keys", "false", "Theme.bg-list")
     );
     let overlay = format!(
         "if root.adjust-overlay: Rectangle {{ \
@@ -646,8 +402,6 @@ fn adjust_column(tabs: &[&CompileSpec], tabbed: bool) -> AdjustColumn {
          {} }} }} }}",
         column_content(
             Column::Adjust,
-            tabs,
-            true,
             "adjust-overlay-keys",
             "false",
             "root.host-fullscreen ? Theme.bg-list : transparent"
@@ -656,40 +410,23 @@ fn adjust_column(tabs: &[&CompileSpec], tabbed: bool) -> AdjustColumn {
     AdjustColumn { docked, overlay }
 }
 
-/// The detached sidebar (C14): the same components and bridge globals in a
-/// window of its own, with the shell's key forwarding, menu layer and (two
-/// or more panels) tab strip. `title` is the first window title; the host
-/// sets `panel-title` to the current tab's.
-pub fn floating_source(specs: &[CompileSpec], title: &str) -> Result<String> {
-    floating_source_tabbed(specs, title, specs.len() > 1)
-}
-
-/// [`floating_source`] with the tab strip drawn when `tabbed`.
-pub fn floating_source_tabbed(specs: &[CompileSpec], title: &str, tabbed: bool) -> Result<String> {
-    let mut source = String::new();
-    for spec in specs {
-        let path = import_path(&spec.file)?;
-        import_spec(&mut source, spec, &path)?;
-    }
-    if !specs.is_empty() {
-        source.push_str(RESTARTING_IMPORT);
-    }
-    let tabbed = tabbed || specs.len() > 1;
-    if tabbed {
-        source.push_str("import { SidebarTabs } from \"sidebar-tabs.slint\";\n");
-    }
-    let tabs = specs.iter().collect::<Vec<_>>();
-    let content = sidebar_content(&tabs, tabbed, "panel-keys", "true");
-    let title = serde_json::to_string(title)?;
-    source.push_str(&format!(
-        r#"import {{ MenuView, MenuLevel }} from "menu-view.slint";
+/// The detached sidebar (C14): a window of its own with the sidebar's
+/// container, the shell's key forwarding, menu layer and (two or more
+/// tabs, `sidebar-tabbed`) tab strip. The host sets `panel-title` to the
+/// current tab's title.
+pub fn floating_source() -> Result<String> {
+    let content = column_content(Column::Sidebar, "panel-keys", "true", "Theme.bg-list");
+    Ok(format!(
+        r#"import {{ PanelRestarting }} from "panel-restarting.slint";
+import {{ SidebarTabs }} from "sidebar-tabs.slint";
+import {{ MenuView, MenuLevel }} from "menu-view.slint";
 import {{ Theme }} from "@vestra/theme.slint";
 export {{ VestraPalette }} from "palette.slint";
 export {{ MenuChrome }} from "menu-view.slint";
 export {{ BarButtonsHost }} from "@vestra/bar-buttons.slint";
 export {{ VestraFocus }} from "@vestra/focus.slint";
 export component FloatingPanel inherits Window {{
-    in property <string> panel-title: {title};
+    in property <string> panel-title;
     title: root.panel-title;
     min-width: 300px; min-height: 250px;
     preferred-width: 300px; preferred-height: 408px;
@@ -707,7 +444,8 @@ export component FloatingPanel inherits Window {{
     callback menu-dismiss();
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
     in-out property <int> sidebar-active: 0;
-    in property <int> sidebar-shown: -1;
+    in property <bool> sidebar-tabbed: false;
+    in property <component-factory> sidebar-factory;
     {restarting}
     in property <[string]> sidebar-titles;
     callback sidebar-tab(int);
@@ -737,9 +475,8 @@ export component FloatingPanel inherits Window {{
 }}
 "#,
         keys = key_forward("panel:sidebar"),
-        restarting = restarting_properties(specs),
-    ));
-    Ok(source)
+        restarting = restarting_properties(&[Slot::Sidebar]),
+    ))
 }
 
 /// R-U3: whether the video area has no video frame to show. Empty: none;
@@ -772,11 +509,31 @@ fn replace_marker(source: &mut String, marker: &str, replacement: &str) -> Resul
     Ok(())
 }
 
+/// Compile source the player generates (the Options window, which imports
+/// plugins' settings pages) and take `component`, with the ordinary
+/// compiler.
 pub(crate) fn build(source: String, component: &str) -> Result<ComponentDefinition> {
+    build_with(source, component, false)
+}
+
+/// [`build`] for the shell and the floating window, which import no
+/// plugin file: Slint's experimental features (`ComponentContainer`,
+/// `component-factory`) are enabled for them and only for them, on the
+/// compiler configuration (no environment variable). A plugin's panel is
+/// compiled on its own without them ([`build_panel`]).
+pub(crate) fn build_shell(source: String, component: &str) -> Result<ComponentDefinition> {
+    build_with(source, component, true)
+}
+
+fn build_with(source: String, component: &str, experimental: bool) -> Result<ComponentDefinition> {
     let base = crate::ui::view::ui_dir().join("host.slint");
     // The player's own source (shell, options window): its catalog.
     let source = crate::ui::view::translate(source, &base);
-    let result = pollster::block_on(crate::ui::view::compiler().build_from_source(source, base));
+    let mut compiler = crate::ui::view::compiler();
+    compiler
+        .compiler_configuration(i_slint_core::InternalToken)
+        .enable_experimental = experimental;
+    let result = pollster::block_on(compiler.build_from_source(source, base));
     if result
         .diagnostics()
         .any(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
@@ -794,65 +551,77 @@ pub(crate) fn build(source: String, component: &str) -> Result<ComponentDefiniti
     })
 }
 
-fn compile_definition(specs: &[CompileSpec]) -> Result<ComponentDefinition> {
-    compile_definition_tabbed(specs, default_tabbed(specs))
-}
-
-fn compile_definition_tabbed(
-    specs: &[CompileSpec],
-    tabbed: [bool; 2],
-) -> Result<ComponentDefinition> {
-    build(shell_source_columns(specs, tabbed)?, "HostWindow")
-}
-
-/// Call on the UI thread. Returns an unshown instance, letting the caller keep
-/// its old shell on any compilation/binding failure. This does not run the event
-/// loop or transfer backend ownership. Global callbacks must be void-returning;
-/// return-valued callbacks are outside this finite asynchronous bridge.
-pub fn compile(
-    specs: &[CompileSpec],
-    events: mpsc::Sender<CallbackEvent>,
-) -> Result<ComponentInstance> {
-    let definition = compile_definition(specs)?;
-    let instance = definition.create()?;
-    for spec in specs.iter().filter(|spec| spec.global.is_some()) {
-        crate::ui::ui_values::own_default_models(&instance, Some(&global_alias(spec.owner)))?;
+/// Compile one panel's own source (`panels::panel_source`: a wrapper that
+/// imports the plugin's file) with the ordinary compiler, experimental
+/// features off, and take its component and every file the compile read.
+pub(crate) fn build_panel(source: String) -> Result<(ComponentDefinition, Vec<PathBuf>)> {
+    let base = crate::ui::view::ui_dir().join("vestra-panel.slint");
+    let result = pollster::block_on(crate::ui::view::compiler().build_from_source(source, base));
+    if result
+        .diagnostics()
+        .any(|d| d.level() == slint_interpreter::DiagnosticLevel::Error)
+    {
+        bail!(
+            "composition compilation: {:?}",
+            result.diagnostics().collect::<Vec<_>>()
+        );
     }
-    for spec in specs.iter().filter(|spec| spec.global.is_some()) {
-        let alias = global_alias(spec.owner);
-        let callbacks = definition
-            .global_callbacks(&alias)
-            .with_context(|| format!("composition global unavailable: {alias}"))?;
-        for callback in callbacks {
-            let sender = events.clone();
-            let owner = spec.owner;
-            let name = callback.clone();
-            instance.set_global_callback(&alias, &callback, move |args| {
-                let _ = sender.send(CallbackEvent {
-                    owner,
-                    callback: name.clone(),
-                    args: args.iter().map(Primitive::from_value).collect(),
-                });
-                Value::Void
-            })?;
+    let paths = result.watch_paths(i_slint_core::InternalToken).to_vec();
+    let definition = result
+        .component(crate::ui::panels::COMPONENT)
+        .ok_or_else(|| {
+            anyhow::anyhow!(
+                "composition compilation: {:?}",
+                result.diagnostics().collect::<Vec<_>>()
+            )
+        })?;
+    Ok((definition, paths))
+}
+
+thread_local! {
+    /// The compiled shell and floating window: their source never changes
+    /// in a run, so each compiles once (the floating window when it first
+    /// opens).
+    static SHELL: std::cell::RefCell<Option<ComponentDefinition>> = const { std::cell::RefCell::new(None) };
+    static FLOATING: std::cell::RefCell<Option<ComponentDefinition>> = const { std::cell::RefCell::new(None) };
+}
+
+fn shell_definition() -> Result<ComponentDefinition> {
+    if let Some(definition) = SHELL.with(|shell| shell.borrow().clone()) {
+        return Ok(definition);
+    }
+    let definition = build_shell(shell_source()?, "HostWindow")?;
+    SHELL.with(|shell| *shell.borrow_mut() = Some(definition.clone()));
+    Ok(definition)
+}
+
+/// Call on the UI thread. A new, unshown shell; into `window` when given:
+/// the new shell's component tree replaces the shown one inside the same
+/// native window instead of opening a new one (`view::replace_shell`: no
+/// hide/show, no move, no resize; maximized and fullscreen stay). Slint
+/// attaches the new tree to the window as it creates it, so a caller that
+/// fails afterwards puts the old tree back with
+/// [`crate::ui::view::ShownTree::restore`]. The shell holds no panel: the
+/// host shows them in its containers (`ui/panels.rs`).
+pub fn shell_in(window: Option<&slint::Window>) -> Result<ComponentInstance> {
+    let definition = shell_definition()?;
+    Ok(match window {
+        Some(window) => definition.create_with_existing_window(window)?,
+        None => definition.create()?,
+    })
+}
+
+/// The floating panel window; not shown.
+pub fn floating() -> Result<ComponentInstance> {
+    let definition = match FLOATING.with(|floating| floating.borrow().clone()) {
+        Some(definition) => definition,
+        None => {
+            let definition = build_shell(floating_source()?, "FloatingPanel")?;
+            FLOATING.with(|floating| *floating.borrow_mut() = Some(definition.clone()));
+            definition
         }
-    }
-    Ok(instance)
-}
-
-/// Caller routes only to a current owner's own CompileSpec. Use interpreter
-/// set_property("video-frame", Value::Image(...)) for the host-owned video frame.
-pub fn set_global(
-    instance: &ComponentInstance,
-    spec: &CompileSpec,
-    property: &str,
-    value: Primitive,
-) -> Result<()> {
-    if spec.global.is_none() {
-        bail!("composition contribution has no exported bridge global");
-    }
-    instance.set_global_property(&global_alias(spec.owner), property, value.into_value()?)?;
-    Ok(())
+    };
+    Ok(definition.create()?)
 }
 
 #[derive(Clone, Debug)]
@@ -877,7 +646,10 @@ pub(crate) fn json_args(args: &[Value]) -> Result<Vec<Json>, String> {
     }
 }
 
-fn deliver_json(sender: &mpsc::SyncSender<JsonCallback>, event: JsonCallback) -> bool {
+/// Deliver a panel's bridge callback: bounded and nonblocking. A full
+/// queue explicitly rejects the callback; it never waits for host policy
+/// or backend work on the UI thread.
+pub(crate) fn deliver_json(sender: &mpsc::SyncSender<JsonCallback>, event: JsonCallback) -> bool {
     match sender.try_send(event) {
         Ok(()) => true,
         Err(mpsc::TrySendError::Full(event)) => {
@@ -899,137 +671,6 @@ fn deliver_json(sender: &mpsc::SyncSender<JsonCallback>, event: JsonCallback) ->
     }
 }
 
-/// Like compile(), but bridges bounded JSON structs/models and uses a bounded
-/// nonblocking sender. Full queues explicitly reject callbacks; they never wait
-/// for host policy or backend work on the UI thread. The caller keeps the old
-/// shell until this complete candidate (including callback bindings) succeeds.
-pub fn compile_json(
-    specs: &[CompileSpec],
-    events: mpsc::SyncSender<JsonCallback>,
-    shell_generation: u64,
-) -> Result<ComponentInstance> {
-    compile_json_in(specs, default_tabbed(specs), events, shell_generation, None)
-}
-
-/// [`compile_json`] into `window` (the main window's), when given: the new
-/// shell's component tree replaces the shown one inside the same native
-/// window instead of opening a new window, the way browsers and IDEs swap
-/// content (no hide/show, no move, no resize; maximized and fullscreen stay).
-///
-/// Slint attaches the new tree to the window as it creates it (its
-/// `init` code then sets the initial focus), so the window shows the new
-/// tree from its next draw on: the caller finishes setting it up before
-/// returning to the event loop, calls `show()` on it (which only moves the
-/// window's strong reference to it; the native window is already visible),
-/// and must not `hide()` the old shell, which shares the window. A caller
-/// that fails after this returned puts the old tree back with
-/// [`crate::ui::view::ShownTree::restore`]. `tabbed`: each column (by
-/// `Column::index`) draws its tab strip (the sidebar with two or more tabs,
-/// the adjust column with any, of which only `specs`' are compiled).
-pub fn compile_json_in(
-    specs: &[CompileSpec],
-    tabbed: [bool; 2],
-    events: mpsc::SyncSender<JsonCallback>,
-    shell_generation: u64,
-    window: Option<&slint::Window>,
-) -> Result<ComponentInstance> {
-    let definition = compile_definition_tabbed(specs, tabbed)?;
-    let instance = match window {
-        Some(window) => definition.create_with_existing_window(window)?,
-        None => definition.create()?,
-    };
-    for spec in specs.iter().filter(|spec| spec.global.is_some()) {
-        let alias = global_alias(spec.owner);
-        let callbacks = definition
-            .global_callbacks(&alias)
-            .with_context(|| format!("composition global unavailable: {alias}"))?;
-        for callback in callbacks {
-            let sender = events.clone();
-            let owner = spec.owner;
-            let name = callback.clone();
-            instance.set_global_callback(&alias, &callback, move |args| {
-                deliver_json(
-                    &sender,
-                    JsonCallback {
-                        shell_generation,
-                        owner,
-                        callback: name.clone(),
-                        args: json_args(args),
-                    },
-                );
-                Value::Void
-            })?;
-        }
-    }
-    Ok(instance)
-}
-
-/// Compile and bind the floating panel window; not shown. Bridge callbacks
-/// arrive tagged with `generation`, like a shell generation.
-pub fn compile_floating(
-    specs: &[CompileSpec],
-    title: &str,
-    tabbed: bool,
-    events: mpsc::SyncSender<JsonCallback>,
-    generation: u64,
-) -> Result<ComponentInstance> {
-    let definition = build(
-        floating_source_tabbed(specs, title, tabbed)?,
-        "FloatingPanel",
-    )?;
-    let instance = definition.create()?;
-    for spec in specs {
-        let alias = global_alias(spec.owner);
-        crate::ui::ui_values::own_default_models(&instance, Some(&alias))?;
-        let callbacks = definition
-            .global_callbacks(&alias)
-            .with_context(|| format!("composition global unavailable: {alias}"))?;
-        for callback in callbacks {
-            let sender = events.clone();
-            let owner = spec.owner;
-            let name = callback.clone();
-            instance.set_global_callback(&alias, &callback, move |args| {
-                deliver_json(
-                    &sender,
-                    JsonCallback {
-                        shell_generation: generation,
-                        owner,
-                        callback: name.clone(),
-                        args: json_args(args),
-                    },
-                );
-                Value::Void
-            })?;
-        }
-    }
-    Ok(instance)
-}
-
-/// The host-owned `tabbed` property: `true` while the host draws its tab
-/// strip above the panel (the sidebar holds two or more), so a panel with a
-/// tab strip of its own hides it. Set only on globals that declare it.
-pub fn set_tabbed(instance: &ComponentInstance, spec: &CompileSpec, tabbed: bool) -> Result<()> {
-    let alias = global_alias(spec.owner);
-    if spec.global.is_some() && instance.get_global_property(&alias, "tabbed").is_ok() {
-        instance.set_global_property(&alias, "tabbed", Value::Bool(tabbed))?;
-    }
-    Ok(())
-}
-
-pub fn set_json_global(
-    instance: &ComponentInstance,
-    spec: &CompileSpec,
-    property: &str,
-    value: &Json,
-) -> Result<()> {
-    set_global_value(
-        instance,
-        spec,
-        property,
-        crate::ui::ui_values::from_json(value)?,
-    )
-}
-
 /// Write a converted value to a global by alias, keeping equal live values.
 pub fn set_alias_value(
     instance: &ComponentInstance,
@@ -1048,142 +689,149 @@ pub fn set_alias_value(
     Ok(())
 }
 
-/// Write an already converted value (JSON or a runtime image) to the owner's global.
-pub fn set_global_value(
-    instance: &ComponentInstance,
-    spec: &CompileSpec,
-    property: &str,
-    value: Value,
-) -> Result<()> {
-    if spec.global.is_none() {
-        bail!("composition contribution has no exported bridge global");
-    }
-    let alias = global_alias(spec.owner);
-    let current = instance.get_global_property(&alias, property)?;
-    if !crate::ui::ui_values::reconcile_in(
-        slint::ComponentHandle::window(instance),
-        &current,
-        &value,
-    )? {
-        crate::ui::ui_values::set(instance, Some(&alias), property, value)?;
-    }
-    Ok(())
-}
-
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use crate::ui::panels::tests::Composed;
+    use slint::ComponentHandle as _;
 
-    /// Step 3a: a bar's `content-min-width` is read only where its file
-    /// declares it (comments do not count), and a shell without a bottom
-    /// bar holds the player's strip in a band of its own.
-    #[test]
-    fn the_bar_minimum_is_read_where_declared_and_the_band_holds_the_strip() {
-        let fixtures = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        let has =
-            |file: &std::path::Path, component: &str| probe_length(file, component, BAR_MIN_WIDTH);
-        // Declared on the component, or inherited from a base component in
-        // another file (the interpreter's view, not the text).
-        assert!(has(&fixtures.join("min-bar.slint"), "MinBar"));
-        assert!(has(&fixtures.join("min-derived.slint"), "DerivedBar"));
-        assert!(!has(&fixtures.join("strip-bar.slint"), "StripBar"));
-        let dir = tempfile::tempdir().unwrap();
-        let write = |name: &str, text: &str| {
-            let path = dir.path().join(name);
-            std::fs::write(&path, text).unwrap();
-            path
-        };
-        // Only in a comment, on another component of the file, of another
-        // type, a private property, or a file that does not compile: no.
-        let comment = write(
-            "comment.slint",
-            "// out property <length> content-min-width: 3px;\nexport component B inherits Rectangle {}\n",
-        );
-        assert!(!has(&comment, "B"));
-        let other = write(
-            "other.slint",
-            "component Part inherits Rectangle { out property <length> content-min-width: 3px; }\n\
-             export component B inherits Rectangle { Part {} }\n",
-        );
-        assert!(!has(&other, "B"));
-        let typed = write(
-            "typed.slint",
-            "export component B inherits Rectangle { out property <int> content-min-width: 3; }\n",
-        );
-        assert!(!has(&typed, "B"));
-        let private = write(
-            "private.slint",
-            "export component B inherits Rectangle { property <length> content-min-width: 3px; }\n",
-        );
-        assert!(!has(&private, "B"));
-        let broken = write(
-            "broken.slint",
-            "export component B inherits Rectangle { nonsense: 3px; }\n",
-        );
-        assert!(!has(&broken, "B"));
-        // The shell reads it from the inherited declaration too.
-        let derived = shell_source(&[CompileSpec {
-            owner: 2,
-            file: fixtures.join("min-derived.slint"),
-            component: "DerivedBar".into(),
-            global: Some("DerivedBridge".into()),
-            slot: Slot::Bottom,
-        }])
-        .unwrap();
-        assert!(derived.contains("bottom-content.content-min-width"));
-        build(derived, "HostWindow").unwrap();
+    /// A headless Slint platform on this test thread (each test runs on a
+    /// thread of its own): windows are software windows nobody shows.
+    pub(crate) fn headless() {
+        struct Headless;
+        impl slint::platform::Platform for Headless {
+            fn create_window_adapter(
+                &self,
+            ) -> std::result::Result<
+                std::rc::Rc<dyn slint::platform::WindowAdapter>,
+                slint::PlatformError,
+            > {
+                Ok(
+                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
+                        Default::default(),
+                    ),
+                )
+            }
+        }
+        thread_local! {
+            static PLATFORM: () = { let _ = slint::platform::set_platform(Box::new(Headless)); };
+        }
+        PLATFORM.with(|_| {});
     }
 
-    /// The probe's answer lasts one run of the bar (its owner generation):
-    /// a base component in another file that changes (an update, a reload:
-    /// a new run) is probed again, though the bar's own file did not change.
+    fn fixture(name: &str) -> PathBuf {
+        PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("tests/fixtures/mount")
+            .join(name)
+    }
+
+    fn spec(owner: u64, file: &str, component: &str, slot: Slot) -> CompileSpec {
+        CompileSpec {
+            owner,
+            file: fixture(file),
+            component: component.into(),
+            global: Some("Bridge".into()),
+            slot,
+        }
+    }
+
+    /// The shell names no panel: every slot is a container the host fills,
+    /// in the docked column and in its fullscreen overlay alike; what the
+    /// shell drew around its panels stays where it was.
     #[test]
-    fn the_bar_minimum_is_probed_again_for_each_run_of_the_bar() {
-        let dir = tempfile::tempdir().unwrap();
-        let base = dir.path().join("base.slint");
-        let bar = dir.path().join("bar.slint");
-        std::fs::write(
-            &base,
-            "export component Base inherits Rectangle { out property <length> content-min-width: 9px; }\n",
-        )
-        .unwrap();
-        std::fs::write(
-            &bar,
-            "import { Base } from \"base.slint\";\nexport component Bar inherits Base {}\n",
-        )
-        .unwrap();
-        assert!(declares_length(41, &bar, "Bar", BAR_MIN_WIDTH));
-        // The next version's base drops the property; bar.slint is untouched.
-        std::fs::write(&base, "export component Base inherits Rectangle {}\n").unwrap();
+    fn the_shell_holds_every_slot_in_a_container_and_names_no_panel() {
+        let source = shell_source().unwrap();
+        for preserved in [
+            "video-frame",
+            "menu-levels",
+            "menu-invoke",
+            "key-input",
+            "if root.menu-open: Rectangle",
+            "export component HostWindow",
+        ] {
+            assert!(source.contains(preserved), "missing {preserved}");
+        }
+        for removed in [
+            "diagnostic",
+            "Commands",
+            "Arial Unicode",
+            "padding: root.host-fullscreen ? 0px : 8px",
+            "Owner",
+            "sidebar-shown",
+            "adjust-shown",
+        ] {
+            assert!(!source.contains(removed), "still has {removed}");
+        }
+        let containers = |slot: &str| {
+            source
+                .matches(&format!("component-factory: root.{slot}-factory;"))
+                .count()
+        };
+        assert_eq!(containers("bottom"), 1);
+        assert_eq!(containers("backdrop"), 1);
+        assert_eq!(containers("sidebar"), 2, "docked and overlay");
+        assert_eq!(containers("adjust"), 2, "docked and overlay");
+        // One restart line per place, over the panel it shows.
+        for slot in Slot::ALL {
+            let p = slot.name();
+            assert!(source.contains(&format!("in property <string> {p}-restarting;")));
+            assert!(source.contains(&format!("in-out property <bool> {p}-restarting-focused;")));
+        }
+        assert!(source.contains("root.no-video"));
+        assert!(source.contains("key-input(\"panel:sidebar\""));
+        assert!(source.contains("visible: root.bottom-visible && root.bottom-mounted"));
+        assert!(!source.contains("// VESTRA-"));
+        // G-04: the bar reports hover; FS-BAR-1: the bar's laid-out height
+        // is exported for the band (0 without a bar).
+        assert!(source.contains("root.bottom-hover = self.has-hover"));
+        assert!(source.contains(
+            "out property <float> bottom-band-height: root.bottom-mounted ? bottom-keys.height / 1px : 0;"
+        ));
+        // Step 3a: the strip is at the bar's right end, beyond the width the
+        // bar keeps (`bottom-reserve`), or in a band of its own without one.
+        assert_eq!(source.matches("HostBarStrip {").count(), 2);
+        assert!(source.contains("room: max(0px, parent.width - root.bottom-reserve * 1px - 4px)"));
+        assert!(source.contains("if !root.bottom-mounted: Rectangle"));
+        assert!(source.contains("background: Theme.bg-bar"));
+        // G-01: the fullscreen sidebar overlay is a second place above the
+        // video and the docked layout.
+        assert!(source.contains("root.sidebar-hover = self.has-hover"));
+        let overlay = source.find("if root.sidebar-overlay:").unwrap();
         assert!(
-            declares_length(41, &bar, "Bar", BAR_MIN_WIDTH),
-            "the same run keeps its answer"
+            overlay
+                > source
+                    .find("if root.sidebar-visible: sidebar-keys := FocusScope")
+                    .unwrap()
         );
+        assert!(overlay < source.find("if root.menu-open: Rectangle").unwrap());
+        // The fullscreen title strip: above the video and the sidebar
+        // overlay, below the menu layer; one instance, not an `if`.
+        let strip = source.find("title-strip := TitleStrip {").unwrap();
+        assert!(overlay < strip && strip < source.find("if root.menu-open: Rectangle").unwrap());
+        // Reference §6.3: bottom-bar content may draw above its slot
+        // (negative y) over the video; nothing between it and the window
+        // clips it.
+        let bottom = &source[..source.find("bottom-content := ComponentContainer").unwrap()];
+        let wrapper = &bottom[bottom.rfind("Rectangle {").unwrap()..];
         assert!(
-            !declares_length(42, &bar, "Bar", BAR_MIN_WIDTH),
-            "the next run (new owner generation) probes again"
+            !wrapper.contains("clip"),
+            "bottom bar wrapper clips: {wrapper}"
         );
-        std::fs::write(
-            &base,
-            "export component Base inherits Rectangle { out property <length> content-min-width: 9px; }\n",
-        )
-        .unwrap();
-        assert!(declares_length(43, &bar, "Bar", BAR_MIN_WIDTH));
-        let empty = shell_source(&[]).unwrap();
-        assert_eq!(empty.matches("HostBarStrip {").count(), 1, "{empty}");
-        assert!(empty.contains("background: Theme.bg-bar"));
-        let old = shell_source(&[CompileSpec {
-            owner: 1,
-            file: PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-                .join("tests/fixtures/mount/strip-bar.slint"),
-            component: "StripBar".into(),
-            global: Some("StripBridge".into()),
-            slot: Slot::Bottom,
-        }])
-        .unwrap();
-        assert_eq!(old.matches("HostBarStrip {").count(), 1);
-        assert!(!old.contains("content-min-width"));
-        assert!(old.contains("room: max(0px, parent.width - 0px - 4px)"));
+        // The backdrop sits before the video input layer, so it is drawn
+        // under it.
+        assert!(
+            source
+                .find("component-factory: root.backdrop-factory")
+                .unwrap()
+                < source.find("mouse := TouchArea").unwrap()
+        );
+        // No `clip` property in the shell's own file (the video's
+        // `source-clip-*` crops its picture only).
+        assert!(
+            !include_str!("../../ui/host.slint")
+                .split(|c: char| !(c.is_alphanumeric() || c == '-'))
+                .any(|word| word == "clip")
+        );
     }
 
     #[test]
@@ -1217,132 +865,16 @@ mod tests {
         assert!(replace_marker(&mut duplicate, "// SLOT", "injected").is_err());
     }
 
+    /// The shell and the floating window compile (experimental containers
+    /// enabled for them), with the strip's global, the tab properties and
+    /// callbacks the host binds, and no per-panel property; the compiler a
+    /// plugin's file gets refuses the shell's containers.
     #[test]
-    fn generated_shell_preserves_shared_menu_video_and_two_owner_globals() {
-        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        let specs = [
-            CompileSpec {
-                owner: 10,
-                file: base.join("bar.slint"),
-                component: "SourceBar".into(),
-                global: Some("Bridge".into()),
-                slot: Slot::Bottom,
-            },
-            CompileSpec {
-                owner: 20,
-                file: base.join("sidebar.slint"),
-                component: "RowsSidebar".into(),
-                global: Some("Bridge".into()),
-                slot: Slot::Sidebar,
-            },
-        ];
-        let source = shell_source(&specs).unwrap();
-        for preserved in [
-            "video-frame",
-            "menu-levels",
-            "menu-invoke",
-            "key-input",
-            "if root.menu-open: Rectangle",
-            "export component HostWindow",
-        ] {
-            assert!(source.contains(preserved), "missing {preserved}");
-        }
-        for removed in [
-            "diagnostic",
-            "Commands",
-            "Arial Unicode",
-            "padding: root.host-fullscreen ? 0px : 8px",
-        ] {
-            assert!(!source.contains(removed), "still has {removed}");
-        }
-        assert!(source.contains("Bridge as Owner10Bridge"));
-        assert!(source.contains("Bridge as Owner20Bridge"));
-        assert!(source.contains("Owner20View { width: parent.width; height: parent.height; }"));
-        assert!(source.contains("root.no-video"));
-        assert!(source.contains("key-input(\"panel:sidebar\""));
-        assert!(source.contains("bottom-content := Owner10View"));
-        assert!(source.contains("visible: root.bottom-visible"));
-        assert!(!source.contains("// VESTRA-"));
-        // G-04: the bar reports hover; G-01: the fullscreen sidebar overlay is
-        // a second instance above the video and the docked layout.
-        assert!(source.contains("root.bottom-hover = self.has-hover"));
-        // FS-BAR-1: the bar's laid-out height is exported for the band.
-        assert!(
-            source.contains("out property <float> bottom-band-height: bottom-keys.height / 1px;")
-        );
-        assert!(source.contains("root.sidebar-hover = self.has-hover"));
-        let overlay = source.find("if root.sidebar-overlay:").unwrap();
-        assert!(
-            overlay
-                > source
-                    .find("if root.sidebar-visible: sidebar-keys := FocusScope")
-                    .unwrap()
-        );
-        assert!(overlay < source.find("if root.menu-open: Rectangle").unwrap());
-        // The fullscreen title strip: above the video and the sidebar
-        // overlay, below the menu layer; one instance, not an `if`.
-        let strip = source.find("title-strip := TitleStrip {").unwrap();
-        assert!(overlay < strip && strip < source.find("if root.menu-open: Rectangle").unwrap());
-        assert_eq!(source.matches("Owner20View {").count(), 2);
-        // Reference §6.3: bottom-bar content may draw above its slot (negative
-        // y) over the video; nothing between it and the window clips it.
-        let bottom = &source[..source.find("bottom-content := Owner10View").unwrap()];
-        let wrapper = &bottom[bottom.rfind("Rectangle {").unwrap()..];
-        assert!(
-            !wrapper.contains("clip"),
-            "bottom bar wrapper clips: {wrapper}"
-        );
-        // No `clip` property (the video's `source-clip-*` crops its picture
-        // only).
-        assert!(
-            !include_str!("../../ui/host.slint")
-                .split(|c: char| !(c.is_alphanumeric() || c == '-'))
-                .any(|word| word == "clip")
-        );
-    }
-
-    #[test]
-    fn actual_compiler_accepts_shell_imports_models_and_both_mounts_without_a_window() {
-        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        let specs = [
-            CompileSpec {
-                owner: 10,
-                file: base.join("bar.slint"),
-                component: "SourceBar".into(),
-                global: Some("Bridge".into()),
-                slot: Slot::Bottom,
-            },
-            CompileSpec {
-                owner: 20,
-                file: base.join("sidebar.slint"),
-                component: "RowsSidebar".into(),
-                global: Some("Bridge".into()),
-                slot: Slot::Sidebar,
-            },
-        ];
-        // ComponentDefinition only: no create(), Window, event loop or GUI.
-        compile_definition(&[]).unwrap();
-        compile_definition(&specs).unwrap();
-        let mut with_backdrop = specs.to_vec();
-        with_backdrop.push(CompileSpec {
-            owner: 30,
-            file: base.join("backdrop.slint"),
-            component: "Backdrop".into(),
-            global: Some("Bridge".into()),
-            slot: Slot::Backdrop,
-        });
-        let definition = compile_definition(&with_backdrop).unwrap();
-        // The backdrop sits before the video input layer, so it is drawn under it.
-        let source = shell_source(&with_backdrop).unwrap();
-        assert!(source.find("Owner30View").unwrap() < source.find("mouse := TouchArea").unwrap());
-        assert!(definition.global_properties("Owner30Bridge").is_some());
-        let floating = build(
-            floating_source(&specs[1..], "播放列表").unwrap(),
-            "FloatingPanel",
-        )
-        .unwrap();
-        // Player 0.5.10: both windows export the bar buttons' global (bar_buttons.rs).
-        for window in [&definition, &floating] {
+    fn the_shell_and_the_floating_window_compile_with_their_containers() {
+        let shell = build_shell(shell_source().unwrap(), "HostWindow").unwrap();
+        let floating = build_shell(floating_source().unwrap(), "FloatingPanel").unwrap();
+        // Player 0.5.10: both windows export the bar buttons' global.
+        for window in [&shell, &floating] {
             let names: Vec<_> = window
                 .global_properties(crate::ui::bar_buttons::GLOBAL)
                 .expect("BarButtonsHost exported")
@@ -1351,7 +883,41 @@ mod tests {
             for name in ["buttons", "toggle", "placed"] {
                 assert!(names.iter().any(|n| n == name), "{name}");
             }
+            for property in [
+                "sidebar-active",
+                "sidebar-titles",
+                "sidebar-tabbed",
+                "sidebar-factory",
+                "sidebar-restarting",
+            ] {
+                assert!(
+                    window.properties().any(|(name, _)| name == property),
+                    "{property}"
+                );
+            }
+            for callback in ["sidebar-tab", "sidebar-overflow", "sidebar-detach"] {
+                assert!(
+                    window.callbacks().any(|name| name == callback),
+                    "{callback}"
+                );
+            }
+            // No close button in the sidebar (user ruling 2026-11-07).
+            assert!(!window.callbacks().any(|name| name == "sidebar-close"));
         }
+        for property in [
+            "bottom-factory",
+            "backdrop-factory",
+            "adjust-factory",
+            "bottom-mounted",
+            "bottom-reserve",
+        ] {
+            assert!(
+                shell.properties().any(|(name, _)| name == property),
+                "{property}"
+            );
+        }
+        assert!(floating.properties().any(|(name, _)| name == "panel-title"));
+        assert!(build(shell_source().unwrap(), "HostWindow").is_err());
     }
 
     #[test]
@@ -1376,138 +942,35 @@ mod tests {
         assert!(!deliver_json(&sender, event()));
     }
 
-    fn tab_specs() -> Vec<CompileSpec> {
-        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        vec![
-            CompileSpec {
-                owner: 10,
-                file: base.join("bar.slint"),
-                component: "SourceBar".into(),
-                global: Some("Bridge".into()),
-                slot: Slot::Bottom,
-            },
-            CompileSpec {
-                owner: 20,
-                file: base.join("sidebar.slint"),
-                component: "RowsSidebar".into(),
-                global: Some("Bridge".into()),
-                slot: Slot::Sidebar,
-            },
-            CompileSpec {
-                owner: 30,
-                file: base.join("tab.slint"),
-                component: "NoteTab".into(),
-                global: Some("Bridge".into()),
-                slot: Slot::Sidebar,
-            },
-        ]
-    }
-
+    /// The sidebar draws its strip from two tabs on (`sidebar-tabbed`), in
+    /// the docked column and the fullscreen overlay alike, and one panel
+    /// fills the column unclipped. The panel key scopes keep Slint's
+    /// click-to-focus, so `focus: "panel"` bindings work as before 0.7.6;
+    /// only the window's outermost `keys` (host.slint) opts out.
     #[test]
-    fn one_sidebar_panel_has_no_tab_strip_and_two_have_one_branch_each() {
-        let specs = tab_specs();
-        // One panel: the column is the panel itself, as before tabs.
-        let single = shell_source(&specs[..2]).unwrap();
-        assert!(!single.contains("SidebarTabs") && !single.contains("sidebar-shown =="));
-        assert!(single.contains(
+    fn the_sidebar_strip_shows_from_two_tabs_on() {
+        let source = shell_source().unwrap();
+        assert_eq!(
+            source
+                .matches("if root.sidebar-tabbed: SidebarTabs {")
+                .count(),
+            2
+        );
+        assert!(source.contains(
             "sidebar-keys := FocusScope { width: root.sidebar-actual * 1px; horizontal-stretch: 0; key-pressed"
         ));
-        // The panel key scopes (docked, overlay, bottom bar, detached) keep
-        // Slint's click-to-focus, so `focus: "panel"` bindings work as
-        // before 0.7.6; only the window's outermost `keys` (host.slint)
-        // opts out.
-        assert_eq!(single.matches("focus-on-click").count(), 1);
-        assert!(
-            !floating_source(&specs[1..2], "List")
-                .unwrap()
-                .contains("focus-on-click")
-        );
-        // Two: the strip and one `if` per compiled tab, keyed by its owner
-        // (`sidebar-shown`), in the docked column and the fullscreen overlay alike.
-        let tabbed = shell_source(&specs).unwrap();
-        assert_eq!(tabbed.matches("SidebarTabs {").count(), 2);
+        assert!(source.contains("clip: root.sidebar-tabbed;"));
+        assert!(source.contains("sidebar-keys.focus()") && source.contains("overlay-keys.focus()"));
+        assert_eq!(source.matches("focus-on-click").count(), 1);
+        let floating = floating_source().unwrap();
+        assert!(!floating.contains("focus-on-click"));
         assert_eq!(
-            tabbed
-                .matches("if root.sidebar-shown == 20: Owner20View")
-                .count(),
-            2
-        );
-        assert_eq!(
-            tabbed
-                .matches("if root.sidebar-shown == 30: Owner30View")
-                .count(),
-            2
-        );
-        assert!(tabbed.contains("sidebar-keys.focus()") && tabbed.contains("overlay-keys.focus()"));
-        // sidebar-tabs.md: one compiled panel among several tabs still has
-        // the strip; none compiled (every front tab a placeholder) keeps the
-        // column and the strip.
-        let one = shell_source_tabbed(&specs[..2], true).unwrap();
-        assert_eq!(one.matches("SidebarTabs {").count(), 2);
-        assert_eq!(
-            one.matches("if root.sidebar-shown == 20: Owner20View")
-                .count(),
-            2
-        );
-        let none = shell_source_tabbed(&specs[..1], true).unwrap();
-        assert_eq!(none.matches("SidebarTabs {").count(), 2);
-        assert!(none.contains("sidebar-keys := FocusScope"));
-        assert!(
-            !shell_source_tabbed(&specs[..1], false)
-                .unwrap()
-                .contains("sidebar-keys")
-        );
-        build(one, "HostWindow").unwrap();
-        build(none, "HostWindow").unwrap();
-        // Bottom bar and backdrop stay one each.
-        let mut two_bars = specs.clone();
-        two_bars[2].slot = Slot::Bottom;
-        assert!(shell_source(&two_bars).is_err());
-    }
-
-    #[test]
-    fn tabbed_shell_and_floating_window_compile_and_switch_by_property() {
-        let specs = tab_specs();
-        let definition = compile_definition(&specs).unwrap();
-        for property in ["sidebar-active", "sidebar-titles"] {
-            assert!(definition.properties().any(|(name, _)| name == property));
-        }
-        for callback in ["sidebar-tab", "sidebar-overflow", "sidebar-detach"] {
-            assert!(definition.callbacks().any(|name| name == callback));
-        }
-        // No close button in the sidebar (user ruling 2026-11-07).
-        assert!(!definition.callbacks().any(|name| name == "sidebar-close"));
-        assert!(definition.global_properties("Owner30Bridge").is_some());
-        let floating = build(
-            floating_source(&specs[1..], "播放列表").unwrap(),
-            "FloatingPanel",
-        )
-        .unwrap();
-        assert!(floating.global_properties("Owner20Bridge").is_some());
-        assert!(floating.global_properties("Owner30Bridge").is_some());
-        assert!(floating.properties().any(|(name, _)| name == "panel-title"));
-        assert!(
             floating
-                .properties()
-                .any(|(name, _)| name == "sidebar-shown")
+                .matches("if root.sidebar-tabbed: SidebarTabs {")
+                .count(),
+            1
         );
-        // The floating window with one compiled panel among several tabs.
-        build(
-            floating_source_tabbed(&specs[1..2], "播放列表", true).unwrap(),
-            "FloatingPanel",
-        )
-        .unwrap();
-    }
-
-    fn adjust_spec(owner: u64) -> CompileSpec {
-        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        CompileSpec {
-            owner,
-            file: base.join("adjust.slint"),
-            component: "LevelPanel".into(),
-            global: Some("AdjustBridge".into()),
-            slot: Slot::Adjust,
-        }
+        assert!(floating.contains("panel-keys.focus()"));
     }
 
     /// Menu redesign step 3b: `[video][adjust][sidebar]`. The adjust column
@@ -1517,10 +980,7 @@ mod tests {
     /// with the keys under the titles and no detach button.
     #[test]
     fn the_adjust_column_sits_between_the_video_and_the_sidebar() {
-        let mut specs = tab_specs();
-        specs.push(adjust_spec(40));
-        let source = shell_source(&specs).unwrap();
-        // Both columns: the adjust column docked before the sidebar.
+        let source = shell_source().unwrap();
         let adjust = source
             .find("if root.adjust-visible: adjust-keys := FocusScope")
             .unwrap();
@@ -1528,27 +988,17 @@ mod tests {
             .find("if root.sidebar-visible: sidebar-keys := FocusScope")
             .unwrap();
         assert!(adjust < sidebar);
-        assert!(source.find("bottom-content := Owner10View").unwrap() < adjust);
-        // The docked column, the narrow window's overlay and the sidebar
-        // all keep Slint's click-to-focus (`focus: "panel"` bindings);
-        // only the window's outermost `keys` (host.slint) opts out.
-        assert_eq!(source.matches("focus-on-click").count(), 1);
-        // One branch docked, one in the overlay, keyed by its owner.
-        assert_eq!(
-            source
-                .matches("if root.adjust-shown == 40: Owner40View")
-                .count(),
-            2
-        );
+        assert!(source.find("bottom-content := ComponentContainer").unwrap() < adjust);
         assert!(source.contains("key-input(\"panel:adjust\""));
         // GUI check of 3b: a panel wider than its column is clipped to it
         // (docked and in the overlay), never drawn over the sidebar.
         assert_eq!(
             source
-                .matches("clip: true; if root.adjust-shown == 40")
+                .matches("clip: true; ComponentContainer { x: 0px; y: 0px; width: parent.width; height: parent.height; component-factory: root.adjust-factory; }")
                 .count(),
             2
         );
+        assert_eq!(source.matches("if true: SidebarTabs {").count(), 2);
         assert!(source.contains("keys: root.adjust-keys; detachable: false;"));
         assert!(!source.contains("root.adjust-detach"));
         // The overlay comes after the sidebar's (G-01), before the title
@@ -1565,7 +1015,7 @@ mod tests {
         let strip = &strip[..strip.find("enabled:").unwrap()];
         assert!(strip.contains("width: root.width - root.columns-popped-width * 1px;"));
         assert_eq!(strip.matches("animate width { duration: 150ms;").count(), 2);
-        let definition = build(source, "HostWindow").unwrap();
+        let definition = build_shell(source, "HostWindow").unwrap();
         for callback in [
             "adjust-tab",
             "adjust-overflow",
@@ -1588,26 +1038,6 @@ mod tests {
                 "{property}"
             );
         }
-        assert!(definition.global_properties("Owner40Bridge").is_some());
-        // The adjust column alone: one tab still draws the strip.
-        let alone = shell_source(&[specs[0].clone(), adjust_spec(40)]).unwrap();
-        assert_eq!(alone.matches("SidebarTabs {").count(), 2);
-        assert!(!alone.contains("sidebar-keys"));
-        build(alone, "HostWindow").unwrap();
-        // Every adjust tab a placeholder (none compiled yet, the column not
-        // opened): the column and its strip exist, with no branch.
-        let placeholders = shell_source_columns(&specs[..1], [false, true]).unwrap();
-        assert!(placeholders.contains("adjust-keys := FocusScope"));
-        assert!(!placeholders.contains("adjust-shown =="));
-        build(placeholders, "HostWindow").unwrap();
-        // No adjust tab at all: no column.
-        assert!(
-            !shell_source(&specs[..2])
-                .unwrap()
-                .contains("adjust-keys := FocusScope")
-        );
-        // The bare shell keeps the adjust properties, so the host binds them alike.
-        build(shell_source(&[]).unwrap(), "HostWindow").unwrap();
         assert_eq!(Slot::parse("adjust"), Some(Slot::Adjust));
         assert_eq!(Slot::parse("top"), None);
         assert!(Slot::Adjust.tabbed() && !Slot::Bottom.tabbed());
@@ -1616,32 +1046,20 @@ mod tests {
     /// The adjust column's place in the shell: docked at 317 between a
     /// video of the rest and the sidebar; in a narrow window over the
     /// video's right side, 300 wide; in fullscreen slid out left of the
-    /// sidebar's overlay (headless, laid out by Slint).
+    /// sidebar's overlay (headless, laid out by Slint), with panels in the
+    /// containers.
     #[test]
     fn the_adjust_column_lays_out_docked_over_the_video_and_in_fullscreen() {
-        use slint::ComponentHandle as _;
-        struct Headless;
-        impl slint::platform::Platform for Headless {
-            fn create_window_adapter(
-                &self,
-            ) -> std::result::Result<
-                std::rc::Rc<dyn slint::platform::WindowAdapter>,
-                slint::PlatformError,
-            > {
-                Ok(
-                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
-                        Default::default(),
-                    ),
-                )
-            }
-        }
-        thread_local! {
-            static PLATFORM: () = { let _ = slint::platform::set_platform(Box::new(Headless)); };
-        }
-        PLATFORM.with(|_| {});
-        let mut specs = tab_specs();
-        specs.push(adjust_spec(40));
-        let instance = compile_definition(&specs).unwrap().create().unwrap();
+        headless();
+        let composed = Composed::new(&[
+            spec(10, "bar.slint", "SourceBar", Slot::Bottom),
+            spec(20, "sidebar.slint", "RowsSidebar", Slot::Sidebar),
+            CompileSpec {
+                global: Some("AdjustBridge".into()),
+                ..spec(40, "adjust.slint", "LevelPanel", Slot::Adjust)
+            },
+        ]);
+        let instance = &composed.shell;
         let number = |name: &str| match instance.get_property(name).unwrap() {
             Value::Number(n) => n,
             other => panic!("{name}: {other:?}"),
@@ -1652,7 +1070,7 @@ mod tests {
             .set_size(slint::LogicalSize::new(1400., 800.));
         set("sidebar-visible", true);
         set("adjust-visible", true);
-        crate::ui::view::settle_layout(instance.window());
+        composed.settle();
         // 1400 - 317 - 3 - 317 - 3 = 760 of video.
         assert_eq!(number("adjust-actual"), 317.);
         assert_eq!(number("video-width"), 760.);
@@ -1660,7 +1078,7 @@ mod tests {
         set("adjust-visible", false);
         set("adjust-overlay", true);
         set("adjust-popped", true);
-        crate::ui::view::settle_layout(instance.window());
+        composed.settle();
         assert_eq!(number("video-width"), 1080.);
         // Half the window at most, 280 at least.
         instance
@@ -1679,139 +1097,112 @@ mod tests {
         set("sidebar-overlay", true);
         set("sidebar-popped", true);
         set("sidebar-visible", false);
-        crate::ui::view::settle_layout(instance.window());
+        composed.settle();
         assert_eq!(number("adjust-pop-width"), 317.);
         assert_eq!(number("columns-popped-width"), 317. + 317.);
         let pop = crate::ui::window_state::adjust_overlay_width(1400., 317., 317.);
         assert_eq!(number("adjust-pop-width"), pop);
     }
 
-    /// Menu redesign, open question 1: what the adjust column's first
-    /// opening costs (its panels compile on demand). The shell holds the
-    /// real playback bar, visualizer backdrop and playlist sidebar; the
-    /// adjust panels are the four built-in ones of step 4 (Picture, Audio,
-    /// Subtitles, Playback), as their plugins mount them.
-    /// Release build, headless: `cargo test --release --locked -- --ignored
-    /// the_adjust_columns_first_opening_cost --nocapture`.
+    /// What the per-panel compile costs on the UI thread: the shell alone,
+    /// the start-up panels (the real playback bar, visualizer backdrop and
+    /// playlist sidebar) and each of the four built-in adjust panels
+    /// (Picture, Audio, Subtitles, Playback) as it is first shown, then a
+    /// switch back to each. Release build, headless: `cargo test --release
+    /// -- --ignored per_panel_compile_cost --nocapture --test-threads 1`.
     #[test]
     #[ignore = "measurement"]
     #[allow(clippy::disallowed_macros)] // the numbers for the terminal
-    fn the_adjust_columns_first_opening_cost() {
-        use slint::ComponentHandle as _;
-        struct Headless;
-        impl slint::platform::Platform for Headless {
-            fn create_window_adapter(
-                &self,
-            ) -> std::result::Result<
-                std::rc::Rc<dyn slint::platform::WindowAdapter>,
-                slint::PlatformError,
-            > {
-                Ok(
-                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
-                        Default::default(),
-                    ),
-                )
-            }
-        }
-        let _ = slint::platform::set_platform(Box::new(Headless));
+    fn per_panel_compile_cost() {
+        headless();
         let plugins = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
-        let spec = |owner, file: PathBuf, component: &str, global: &str, slot| CompileSpec {
+        let spec = |owner, file: &str, component: &str, global: &str, slot| CompileSpec {
             owner,
-            file,
+            file: plugins.join(file),
             component: component.into(),
             global: Some(global.into()),
             slot,
         };
-        let base = vec![
+        let base = [
             spec(
                 1,
-                plugins.join("playback/ui/bar.slint"),
+                "playback/ui/bar.slint",
                 "PlaybackBar",
                 "PlaybackBridge",
                 Slot::Bottom,
             ),
             spec(
                 2,
-                plugins.join("visualizer/ui/backdrop.slint"),
+                "visualizer/ui/backdrop.slint",
                 "Backdrop",
                 "Art",
                 Slot::Backdrop,
             ),
             spec(
                 3,
-                plugins.join("playlist/ui/sidebar.slint"),
+                "playlist/ui/sidebar.slint",
                 "PlaylistSidebar",
                 "PlaylistBridge",
                 Slot::Sidebar,
             ),
         ];
-        // The four built-in adjust panels (menu redesign step 4), as their
-        // plugins mount them.
         let adjust = [
             spec(
                 10,
-                plugins.join("video/picture.slint"),
+                "video/picture.slint",
                 "Picture",
                 "PictureBridge",
                 Slot::Adjust,
             ),
             spec(
                 11,
-                plugins.join("audio/ui/workbench.slint"),
+                "audio/ui/workbench.slint",
                 "Audio",
                 "AudioBridge",
                 Slot::Adjust,
             ),
             spec(
                 12,
-                plugins.join("subtitles/ui/panel.slint"),
+                "subtitles/ui/panel.slint",
                 "SubtitlesPanel",
                 "SubtitlesBridge",
                 Slot::Adjust,
             ),
             spec(
                 13,
-                plugins.join("playback/ui/panel.slint"),
+                "playback/ui/panel.slint",
                 "PlaybackPanel",
                 "PlaybackPanelBridge",
                 Slot::Adjust,
             ),
         ];
-        let median = |mut runs: Vec<f64>| {
-            runs.sort_by(f64::total_cmp);
-            runs[runs.len() / 2]
-        };
-        let time = |specs: &[CompileSpec], tabbed: [bool; 2]| {
-            let mut compile = Vec::new();
-            let mut whole = Vec::new();
-            for _ in 0..7 {
-                let started = std::time::Instant::now();
-                let definition = compile_definition_tabbed(specs, tabbed).unwrap();
-                compile.push(started.elapsed().as_secs_f64() * 1000.);
-                let instance = definition.create().unwrap();
-                instance
-                    .window()
-                    .set_size(slint::LogicalSize::new(1400., 800.));
-                instance
-                    .set_property("adjust-visible", Value::Bool(true))
-                    .unwrap();
-                crate::ui::view::settle_layout(instance.window());
-                whole.push(started.elapsed().as_secs_f64() * 1000.);
-            }
-            (median(compile), median(whole))
-        };
-        let (closed, closed_whole) = time(&base, [false, true]);
-        println!(
-            "adjust column closed (placeholders): compile {closed:.0} ms, whole {closed_whole:.0} ms"
-        );
-        for count in 1..=adjust.len() {
-            let mut specs = base.clone();
-            specs.extend(adjust[..count].iter().cloned());
-            let (compile, whole) = time(&specs, [false, true]);
-            println!(
-                "{count} adjust panel(s): compile {compile:.0} ms, whole {whole:.0} ms (+{:.0} ms over closed)",
-                whole - closed_whole
-            );
+        let ms = |started: std::time::Instant| started.elapsed().as_secs_f64() * 1000.;
+        let started = std::time::Instant::now();
+        let shell = shell_in(None).unwrap();
+        shell
+            .window()
+            .set_size(slint::LogicalSize::new(1400., 800.));
+        crate::ui::view::settle_layout(shell.window());
+        println!("shell (compiled once a run): {:.0} ms", ms(started));
+        let started = std::time::Instant::now();
+        let mut composed = Composed::in_shell(shell, &base);
+        println!("bar, backdrop, playlist: {:.0} ms", ms(started));
+        for spec in &adjust {
+            composed.panels.insert(spec.clone());
+        }
+        composed
+            .shell
+            .set_property("adjust-visible", Value::Bool(true))
+            .unwrap();
+        for spec in &adjust {
+            let started = std::time::Instant::now();
+            composed.show(Slot::Adjust, Some(spec.owner)).unwrap();
+            println!("first show of {}: {:.0} ms", spec.component, ms(started));
+        }
+        for spec in &adjust {
+            let started = std::time::Instant::now();
+            composed.show(Slot::Adjust, Some(spec.owner)).unwrap();
+            println!("switch back to {}: {:.2} ms", spec.component, ms(started));
         }
     }
 
@@ -1822,35 +1213,9 @@ mod tests {
     /// VestraTube's 200 rows on the Radeon 780M laptop).
     #[test]
     fn a_new_video_picture_leaves_the_window_layout_alone() {
-        use slint::ComponentHandle as _;
-        struct Headless;
-        impl slint::platform::Platform for Headless {
-            fn create_window_adapter(
-                &self,
-            ) -> std::result::Result<
-                std::rc::Rc<dyn slint::platform::WindowAdapter>,
-                slint::PlatformError,
-            > {
-                Ok(
-                    slint::platform::software_renderer::MinimalSoftwareWindow::new(
-                        Default::default(),
-                    ),
-                )
-            }
-        }
-        thread_local! {
-            static PLATFORM: () = slint::platform::set_platform(Box::new(Headless)).unwrap();
-        }
-        PLATFORM.with(|_| {});
-        let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-        let specs = [CompileSpec {
-            owner: 20,
-            file: base.join("sidebar.slint"),
-            component: "RowsSidebar".into(),
-            global: Some("Bridge".into()),
-            slot: Slot::Sidebar,
-        }];
-        let instance = compile_definition(&specs).unwrap().create().unwrap();
+        headless();
+        let composed = Composed::new(&[spec(20, "sidebar.slint", "RowsSidebar", Slot::Sidebar)]);
+        let instance = &composed.shell;
         instance
             .window()
             .set_size(slint::LogicalSize::new(1000., 600.));

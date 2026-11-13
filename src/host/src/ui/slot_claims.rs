@@ -55,12 +55,6 @@ pub fn refusal(slot: Slot, holder: &str) -> String {
 
 /// Mount and sequence requests of non-built-in plugins, held while built-in plugins start.
 /// One owner's requests stay in order: once one is held, its later ones are too.
-/// The one exception is [`Gate::release_where`] (the start-up compile of the
-/// shell takes the held mounts and unmounts): those leave ahead of the same
-/// owner's earlier held requests of other kinds (`sequence.set`, source
-/// resolvers), which keep waiting for the built-ins so that a built-in still
-/// claims those first. A panel request and a sequence or resolver request
-/// never depend on each other's order.
 pub struct Gate<T> {
     held: VecDeque<(u64, T)>,
 }
@@ -94,16 +88,6 @@ impl<T> Gate<T> {
             return Vec::new();
         }
         self.held.drain(..).map(|(_, request)| request).collect()
-    }
-
-    /// The requests `pick` chooses, oldest first, at once; the others stay,
-    /// in their order, even an owner's earlier ones (see [`Gate`]).
-    pub fn release_where(&mut self, mut pick: impl FnMut(&T) -> bool) -> Vec<T> {
-        let (picked, kept) = std::mem::take(&mut self.held)
-            .into_iter()
-            .partition(|(_, request)| pick(request));
-        self.held = kept;
-        picked.into_iter().map(|(_, request)| request).collect()
     }
 
     /// A request of `owner`'s waits here.
@@ -200,23 +184,6 @@ mod tests {
         assert!(gate.is_empty());
         assert!(!gate.holds(2, false, false));
         assert!(gate.release(false).is_empty());
-    }
-
-    /// The start-up compile takes the held mounts (`release_held_panel_requests`):
-    /// they leave in order, the other requests keep waiting in theirs.
-    #[test]
-    fn held_mounts_can_leave_before_the_other_requests() {
-        let mut gate = Gate::default();
-        gate.hold(2, "sequence 2");
-        gate.hold(2, "mount 2");
-        gate.hold(3, "mount 3");
-        gate.hold(3, "resolver 3");
-        assert_eq!(
-            gate.release_where(|r| r.starts_with("mount")),
-            ["mount 2", "mount 3"]
-        );
-        assert!(gate.holds(2, false, false));
-        assert_eq!(gate.release(false), ["sequence 2", "resolver 3"]);
     }
 
     #[test]

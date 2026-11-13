@@ -213,6 +213,10 @@ impl Host {
             .chain(self.settings.window())
             .map(ComponentHandle::clone_strong)
             .collect();
+        // Each panel has its palette of its own (`ui/panels.rs`): its
+        // instances now, and the ones it makes later.
+        self.panels.set_theme(&theme);
+        instances.extend(self.panels.instances());
         self.theme_pending = false;
         for instance in instances.drain(..) {
             if let Err(error) = apply(&instance, &theme).and_then(|()| apply_fonts(&instance)) {

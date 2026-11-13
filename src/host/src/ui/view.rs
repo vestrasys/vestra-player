@@ -1760,6 +1760,18 @@ export component W inherits Window {
         );
     }
 
+    use crate::ui::panels::{BRIDGE, tests::Composed};
+
+    /// `source` (the shell's, maybe with probes) built and created, with
+    /// `specs`' panels shown in its containers (`ui/panels.rs`).
+    fn composed_from(source: String, specs: &[crate::ui::composition::CompileSpec]) -> Composed {
+        let shell = crate::ui::composition::build_shell(source, "HostWindow")
+            .unwrap()
+            .create()
+            .unwrap();
+        Composed::in_shell(shell, specs)
+    }
+
     /// The shell with a bottom bar and a sidebar.
     fn bar_and_sidebar() -> [crate::ui::composition::CompileSpec; 2] {
         use crate::ui::composition::{CompileSpec, Slot};
@@ -1794,12 +1806,15 @@ export component W inherits Window {
         use std::cell::RefCell;
         use std::rc::Rc;
         headless();
-        let specs = bar_and_sidebar();
-        let (sender, receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
+        let composed = Composed::new(&bar_and_sidebar());
+        let (shell, receiver) = (&composed.shell, &composed.events);
         shell.set_property("bottom-visible", true.into()).unwrap();
         shell.set_property("sidebar-visible", false.into()).unwrap();
-        crate::ui::composition::set_global_value(&shell, &specs[0], "can-pause", true.into())
+        composed
+            .panels
+            .panel(10)
+            .unwrap()
+            .write("can-pause", true.into())
             .unwrap();
         let mouse: Rc<RefCell<Vec<String>>> = Rc::default();
         let sink = mouse.clone();
@@ -1868,11 +1883,11 @@ export component W inherits Window {
                     .map(|event| (event.owner, event.callback))
                     .collect::<Vec<_>>()
             };
-        assert_eq!(actions(&receiver), [], "no bar action");
+        assert_eq!(actions(receiver), [], "no bar action");
         click(video, PointerEventButton::Left);
         assert_eq!(presses.get(), 1, "a left press on the video");
         click(bar_button, PointerEventButton::Left);
-        assert_eq!(actions(&receiver), [(10, "set-paused".to_owned())]);
+        assert_eq!(actions(receiver), [(10, "set-paused".to_owned())]);
         assert_eq!(presses.get(), 1, "the bar is not the video");
         shell.hide().unwrap();
     }
@@ -1883,11 +1898,8 @@ export component W inherits Window {
     #[test]
     fn geometry_is_current_after_a_condition_changes() {
         headless();
-        let source = crate::ui::composition::shell_source(&bar_and_sidebar()).unwrap();
-        let shell = crate::ui::composition::build(source, "HostWindow")
-            .unwrap()
-            .create()
-            .unwrap();
+        let composed = Composed::new(&bar_and_sidebar());
+        let shell = &composed.shell;
         shell
             .window()
             .set_size(slint::LogicalSize::new(1470., 956.));
@@ -1920,17 +1932,15 @@ export component W inherits Window {
     #[test]
     fn popped_sidebar_narrows_the_fullscreen_bar_from_the_left_edge() {
         headless();
-        let source = crate::ui::composition::shell_source(&bar_and_sidebar()).unwrap();
+        let source = crate::ui::composition::shell_source().unwrap();
         let marker = "    callback focus-video();\n";
         assert!(source.contains(marker));
         let probes = "    callback focus-video();\n\
             out property <length> t-bar-x: bottom-keys.absolute-position.x;\n\
             out property <length> t-bar-w: bottom-keys.width;\n";
         let source = source.replacen(marker, probes, 1);
-        let shell = crate::ui::composition::build(source, "HostWindow")
-            .unwrap()
-            .create()
-            .unwrap();
+        let composed = composed_from(source, &bar_and_sidebar());
+        let shell = &composed.shell;
         shell
             .window()
             .set_size(slint::LogicalSize::new(1470., 956.));
@@ -1975,25 +1985,34 @@ export component W inherits Window {
     }
 
     /// `source` with a probe of `item`'s focus as `t-focused`, built as
-    /// `component`, shown at 1470×956, `VestraFocus` bound.
-    fn focus_window(source: String, item: &str, component: &str) -> ComponentInstance {
+    /// `component` with `specs`' panels, shown at 1470×956, `VestraFocus`
+    /// bound.
+    fn focus_window(
+        source: String,
+        item: &str,
+        component: &str,
+        specs: &[crate::ui::composition::CompileSpec],
+    ) -> Composed {
         let marker = "    callback focus-video();\n";
         assert_eq!(source.matches(marker).count(), 1);
         let probe = format!("{marker}    out property <bool> t-focused: {item}.has-focus;\n");
-        let window = crate::ui::composition::build(source.replacen(marker, &probe, 1), component)
-            .unwrap()
-            .create()
-            .unwrap();
+        let window =
+            crate::ui::composition::build_shell(source.replacen(marker, &probe, 1), component)
+                .unwrap()
+                .create()
+                .unwrap();
+        let composed = Composed::in_shell(window, specs);
+        let window = &composed.shell;
         window
             .window()
             .set_size(slint::LogicalSize::new(1470., 956.));
         window.show().unwrap();
-        bind_focus(&window).unwrap();
+        bind_focus(window).unwrap();
         settle_layout(window.window());
         window
             .window()
             .dispatch_event(slint::platform::WindowEvent::WindowActiveChanged(true));
-        window
+        composed
     }
 
     fn click_at(window: &ComponentInstance, x: f32, y: f32) {
@@ -2040,25 +2059,26 @@ export component W inherits Window {
     fn panels_give_the_keys_back_to_the_video() {
         use slint::platform::Key;
         headless();
-        let source = crate::ui::composition::shell_source(&focus_list()).unwrap();
-        let shell = focus_window(source, "canvas", "HostWindow");
-        assert!(focused(&shell), "the video has the keys at start");
+        let source = crate::ui::composition::shell_source().unwrap();
+        let composed = focus_window(source, "canvas", "HostWindow", &focus_list());
+        let shell = &composed.shell;
+        assert!(focused(shell), "the video has the keys at start");
         // The docked sidebar: 317px at the right edge; its list the top
         // 100px, the rest of the panel empty.
-        click_at(&shell, 1300., 600.);
-        assert!(!focused(&shell), "the panel's key scope took them");
-        click_at(&shell, 500., 400.);
-        assert!(focused(&shell), "a click on the video");
-        click_at(&shell, 1300., 50.);
-        assert!(!focused(&shell), "the list took the keys");
-        press(&shell, Key::DownArrow);
-        assert!(!focused(&shell), "the list keeps them");
-        press(&shell, Key::Return);
-        assert!(focused(&shell), "Enter played the row and released");
-        click_at(&shell, 1300., 50.);
-        assert!(!focused(&shell));
-        press(&shell, Key::Escape);
-        assert!(focused(&shell), "Esc released");
+        click_at(shell, 1300., 600.);
+        assert!(!focused(shell), "the panel's key scope took them");
+        click_at(shell, 500., 400.);
+        assert!(focused(shell), "a click on the video");
+        click_at(shell, 1300., 50.);
+        assert!(!focused(shell), "the list took the keys");
+        press(shell, Key::DownArrow);
+        assert!(!focused(shell), "the list keeps them");
+        press(shell, Key::Return);
+        assert!(focused(shell), "Enter played the row and released");
+        click_at(shell, 1300., 50.);
+        assert!(!focused(shell));
+        press(shell, Key::Escape);
+        assert!(focused(shell), "Esc released");
         shell.hide().unwrap();
     }
 
@@ -2066,7 +2086,7 @@ export component W inherits Window {
     /// (`panel-restarting.slint`) never takes the keys by itself. The keys
     /// on another panel's control stay there while the line comes and goes;
     /// only a click on the line gives them to it, which the shell reports
-    /// (`owner<key>-restarting-focused`, for `panel_back`).
+    /// (`<slot>-restarting-focused`, for `panel_back`).
     #[test]
     fn a_restart_line_takes_the_keys_only_when_clicked() {
         use crate::ui::composition::{CompileSpec, Slot};
@@ -2081,40 +2101,37 @@ export component W inherits Window {
             global: Some("MinBridge".into()),
             slot: Slot::Bottom,
         };
-        let source = crate::ui::composition::shell_source(&[list, bar]).unwrap();
-        let shell = focus_window(source, "canvas", "HostWindow");
+        let source = crate::ui::composition::shell_source().unwrap();
+        let composed = focus_window(source, "canvas", "HostWindow", &[list, bar]);
+        let shell = &composed.shell;
         let line = |text: &str| {
             shell
-                .set_property("owner24-restarting", Value::String(text.into()))
+                .set_property("bottom-restarting", Value::String(text.into()))
                 .unwrap();
             settle_layout(shell.window());
             slint::platform::update_timers_and_animations();
         };
         let line_focused =
-            || shell.get_property("owner24-restarting-focused").unwrap() == Value::Bool(true);
-        let played = || {
-            shell
-                .get_global_property(&crate::ui::composition::global_alias(20), "played")
-                .unwrap()
-        };
+            || shell.get_property("bottom-restarting-focused").unwrap() == Value::Bool(true);
+        let played = || composed.bridge(20, "played");
         // The sidebar's list has the keys; the bottom bar's plugin restarts.
-        click_at(&shell, 1300., 50.);
-        assert!(!focused(&shell), "the list has the keys");
+        click_at(shell, 1300., 50.);
+        assert!(!focused(shell), "the list has the keys");
         line("Bar is restarting…");
         assert!(!line_focused(), "the line took no keys");
-        press(&shell, Key::Return);
+        press(shell, Key::Return);
         assert_eq!(played(), Value::Number(1.), "the list still had them");
-        assert!(focused(&shell), "and gave them back to the video");
+        assert!(focused(shell), "and gave them back to the video");
         // On the video, they stay there too, and when the line goes.
         line("");
         line("Bar is restarting…");
-        assert!(focused(&shell) && !line_focused());
+        assert!(focused(shell) && !line_focused());
         // A click on the line (the bar, 62px at the bottom) gives it the keys;
         // a key goes past it to the player, never to the bar's controls.
-        click_at(&shell, 200., 956. - 30.);
+        click_at(shell, 200., 956. - 30.);
         assert!(line_focused(), "the click gave the line the keys");
-        assert!(!focused(&shell));
-        press(&shell, Key::Return);
+        assert!(!focused(shell));
+        press(shell, Key::Return);
         assert_eq!(played(), Value::Number(1.));
         line("");
         shell.hide().unwrap();
@@ -2127,12 +2144,13 @@ export component W inherits Window {
     fn a_detached_panel_gives_the_keys_to_its_window() {
         use slint::platform::Key;
         headless();
-        let source = crate::ui::composition::floating_source(&focus_list(), "List").unwrap();
-        let window = focus_window(source, "panel-keys", "FloatingPanel");
-        click_at(&window, 150., 50.);
-        assert!(!focused(&window), "the list has the keys");
-        press(&window, Key::Return);
-        assert!(focused(&window), "the window's key scope has them");
+        let source = crate::ui::composition::floating_source().unwrap();
+        let composed = focus_window(source, "panel-keys", "FloatingPanel", &focus_list());
+        let window = &composed.shell;
+        click_at(window, 150., 50.);
+        assert!(!focused(window), "the list has the keys");
+        press(window, Key::Return);
+        assert!(focused(window), "the window's key scope has them");
         window.hide().unwrap();
     }
 
@@ -2146,10 +2164,14 @@ export component W inherits Window {
         use slint::platform::Key;
         use std::{cell::RefCell, rc::Rc};
         headless();
-        let source =
-            crate::ui::composition::shell_source(&sidebar_fixture("row-list.slint", "RowList"))
-                .unwrap();
-        let shell = focus_window(source, "canvas", "HostWindow");
+        let source = crate::ui::composition::shell_source().unwrap();
+        let composed = focus_window(
+            source,
+            "canvas",
+            "HostWindow",
+            &sidebar_fixture("row-list.slint", "RowList"),
+        );
+        let shell = &composed.shell;
         // The scopes `key-input` was asked for, in order; the panel scope
         // binds Delete (as panel-menu's Remove with `focus: "panel"`).
         let scopes = Rc::new(RefCell::new(Vec::<String>::new()));
@@ -2171,35 +2193,24 @@ export component W inherits Window {
             .unwrap();
         let delete_scopes = || {
             scopes.borrow_mut().clear();
-            press(&shell, Key::Delete);
+            press(shell, Key::Delete);
             std::mem::take(&mut *scopes.borrow_mut())
         };
-        let selected = |shell: &ComponentInstance| {
-            shell
-                .get_global_property(&crate::ui::composition::global_alias(20), "selected")
-                .unwrap()
-        };
+        let selected = || composed.bridge(20, "selected");
         // The docked sidebar: 317px at the right edge; three 40px rows at
         // its top, the rest of it empty.
-        click_at(&shell, 1300., 20.);
-        assert_eq!(
-            selected(&shell),
-            Value::Number(0.),
-            "the row took the press"
-        );
-        assert!(
-            focused(&shell),
-            "a row click leaves the keys with the video"
-        );
+        click_at(shell, 1300., 20.);
+        assert_eq!(selected(), Value::Number(0.), "the row took the press");
+        assert!(focused(shell), "a row click leaves the keys with the video");
         assert_eq!(delete_scopes(), [""], "only the player's own keys");
-        click_at(&shell, 1300., 600.);
-        assert!(!focused(&shell), "the panel's key scope took the keys");
+        click_at(shell, 1300., 600.);
+        assert!(!focused(shell), "the panel's key scope took the keys");
         assert_eq!(delete_scopes(), ["panel:sidebar"], "the panel's binding");
-        click_at(&shell, 1300., 60.);
-        assert_eq!(selected(&shell), Value::Number(1.));
+        click_at(shell, 1300., 60.);
+        assert_eq!(selected(), Value::Number(1.));
         assert_eq!(delete_scopes(), ["panel:sidebar"], "a row click keeps them");
-        click_at(&shell, 500., 400.);
-        assert!(focused(&shell), "a click on the video takes them back");
+        click_at(shell, 500., 400.);
+        assert!(focused(shell), "a click on the video takes them back");
         assert_eq!(delete_scopes(), [""]);
         shell.hide().unwrap();
     }
@@ -2208,8 +2219,8 @@ export component W inherits Window {
     #[test]
     fn osd_font_follows_the_video_area_height() {
         headless();
-        let source = crate::ui::composition::shell_source(&[]).unwrap();
-        let shell = crate::ui::composition::build(source, "HostWindow")
+        let source = crate::ui::composition::shell_source().unwrap();
+        let shell = crate::ui::composition::build_shell(source, "HostWindow")
             .unwrap()
             .create()
             .unwrap();
@@ -2241,8 +2252,8 @@ export component W inherits Window {
     fn the_video_clip_follows_picture_clip() {
         use crate::playback::render_target::picture_clip;
         headless();
-        let source = crate::ui::composition::shell_source(&[]).unwrap();
-        let shell = crate::ui::composition::build(source, "HostWindow")
+        let source = crate::ui::composition::shell_source().unwrap();
+        let shell = crate::ui::composition::build_shell(source, "HostWindow")
             .unwrap()
             .create()
             .unwrap();
@@ -2292,8 +2303,8 @@ export component W inherits Window {
     #[test]
     fn osd_text_leaves_room_for_its_actions() {
         headless();
-        let source = crate::ui::composition::shell_source(&[]).unwrap();
-        let shell = crate::ui::composition::build(source, "HostWindow")
+        let source = crate::ui::composition::shell_source().unwrap();
+        let shell = crate::ui::composition::build_shell(source, "HostWindow")
             .unwrap()
             .create()
             .unwrap();
@@ -2350,60 +2361,12 @@ export component W inherits Window {
         }
     }
 
-    /// A shell rebuilt for a mount change starts with the OSD hidden; the
-    /// host writes its OSD state into it again (`Host::write_osd` after
-    /// `compile_shell`), and the new instance shows the same message with
-    /// the same buttons (GUI finding 2026-11-08).
-    #[test]
-    fn a_rebuilt_shell_shows_the_osd_state_written_into_it() {
-        headless();
-        let build = || {
-            let source = crate::ui::composition::shell_source(&[]).unwrap();
-            let shell = crate::ui::composition::build(source, "HostWindow")
-                .unwrap()
-                .create()
-                .unwrap();
-            shell.window().set_size(slint::LogicalSize::new(780., 649.));
-            shell
-        };
-        let state = crate::host::OsdShown {
-            text: "Clip exported as a.mp4".into(),
-            titles: ["Show in Folder".into(), "Show in Tab".into()],
-            visible: true,
-        };
-        let read = |shell: &slint_interpreter::ComponentInstance| {
-            settle_layout(shell.window());
-            let get = |name: &str| shell.get_property(name).unwrap();
-            (
-                get("osd-text"),
-                get("osd-action-1"),
-                get("osd-action-2"),
-                get("osd-visible"),
-                get("osd-right"),
-            )
-        };
-        let old = build();
-        for (name, value) in state.values() {
-            old.set_property(name, value).unwrap();
-        }
-        let fresh = build();
-        assert_eq!(
-            fresh.get_property("osd-visible").unwrap(),
-            slint_interpreter::Value::Bool(false),
-            "a new instance starts hidden"
-        );
-        for (name, value) in state.values() {
-            fresh.set_property(name, value).unwrap();
-        }
-        assert_eq!(read(&fresh), read(&old));
-        assert_eq!(read(&fresh).3, slint_interpreter::Value::Bool(true));
-    }
-
     /// Sidebar tabs: the docked column is as wide as with one panel, the
-    /// tab strip takes the top 31px, and switching tabs (a property) keeps
-    /// the layout; the host-owned `tabbed` reaches a global declaring it.
+    /// tab strip takes the top 31px, and switching tabs (each panel's
+    /// container content) keeps the layout and each tab's instance; the
+    /// host-owned `tabbed` reaches a bridge declaring it.
     #[test]
-    fn sidebar_tabs_switch_by_property_without_changing_the_layout() {
+    fn sidebar_tabs_switch_without_changing_the_layout() {
         headless();
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
         let mut specs = bar_and_sidebar().to_vec();
@@ -2414,64 +2377,63 @@ export component W inherits Window {
             global: Some("Bridge".into()),
             slot: crate::ui::composition::Slot::Sidebar,
         });
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
-        crate::ui::composition::set_tabbed(&shell, &specs[2], true).unwrap();
-        // The fixture without the property is left alone.
-        crate::ui::composition::set_tabbed(&shell, &specs[1], true).unwrap();
-        assert_eq!(
-            shell
-                .get_global_property("Owner30Bridge", "tabbed")
-                .unwrap(),
-            slint_interpreter::Value::Bool(true)
-        );
-        shell
+        let mut composed = Composed::new(&specs);
+        for key in [20, 30] {
+            // The fixture without the property is left alone.
+            composed.panels.panel(key).unwrap().set_tabbed(true);
+        }
+        composed
+            .shell
             .set_property(
                 "sidebar-titles",
                 crate::ui::ui_values::from_json(&serde_json::json!(["播放列表", "Example list"]))
                     .unwrap(),
             )
             .unwrap();
-        shell
+        composed
+            .shell
             .window()
             .set_size(slint::LogicalSize::new(1470., 956.));
-        shell.show().unwrap();
-        let read = |name: &str| match shell.get_property(name).unwrap() {
-            slint_interpreter::Value::Number(n) => n,
-            other => panic!("{name}: {other:?}"),
-        };
-        for (active, owner) in [(0., 20.), (1., 30.), (0., 20.)] {
-            shell.set_property("sidebar-active", active.into()).unwrap();
-            shell.set_property("sidebar-shown", owner.into()).unwrap();
-            settle_layout(shell.window());
-            assert_eq!(read("video-width"), 1470. - 320., "tab {active}");
+        composed.shell.show().unwrap();
+        for (active, owner) in [(0., 20), (1., 30), (0., 20)] {
+            composed
+                .shell
+                .set_property("sidebar-active", active.into())
+                .unwrap();
+            composed
+                .show(crate::ui::composition::Slot::Sidebar, Some(owner))
+                .unwrap();
+            let width = match composed.shell.get_property("video-width").unwrap() {
+                slint_interpreter::Value::Number(n) => n,
+                other => panic!("{other:?}"),
+            };
+            assert_eq!(width, 1470. - 320., "tab {active}");
         }
-        shell.hide().unwrap();
+        assert_eq!(
+            composed.bridge(30, "tabbed"),
+            slint_interpreter::Value::Bool(true)
+        );
+        assert_eq!(composed.panels.panel(20).unwrap().created.get(), 1);
+        composed.shell.hide().unwrap();
     }
 
-    /// sidebar-tabs.md: twenty sidebar tabs, four panels compiled (the
-    /// front tabs and the current one, `sidebar_tabs::compiled`); a switch
-    /// between compiled tabs is a property change, a placeholder shows no
-    /// panel, and the strip moves the current tab into its last place with
-    /// the `»` button beside it.
+    /// sidebar-tabs.md: twenty sidebar tabs; only the tabs shown compile
+    /// (`ui/panels.rs`), a switch to one shown before compiles nothing, and
+    /// the strip moves the current tab into its last place with the `»`
+    /// button beside it.
     #[test]
-    fn twenty_tabs_compile_four_panels_and_the_strip_overflows() {
+    fn twenty_tabs_compile_only_the_shown_panels() {
         use crate::ui::composition::{CompileSpec, Slot};
-        use crate::ui::sidebar_tabs;
         headless();
         let dir = tempfile::tempdir().unwrap();
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
         let order = (1..=20).map(|n| 100 + n).collect::<Vec<u64>>();
-        let active = Some(117);
-        let compiled =
-            sidebar_tabs::compiled(&order, active, |_| false, |_| false, &Default::default());
-        assert_eq!(compiled, [101, 102, 103, 117]);
-        let mut specs = vec![bar_and_sidebar()[0].clone()];
-        for owner in &compiled {
+        let mut composed = Composed::new(&[bar_and_sidebar()[0].clone()]);
+        for owner in &order {
             // Each owner its own file (independent packages).
             let file = dir.path().join(format!("tab{owner}.slint"));
             std::fs::copy(base.join("tab.slint"), &file).unwrap();
-            specs.push(CompileSpec {
+            composed.panels.insert(CompileSpec {
                 owner: *owner,
                 file,
                 component: "NoteTab".into(),
@@ -2479,31 +2441,33 @@ export component W inherits Window {
                 slot: Slot::Sidebar,
             });
         }
-        let source = crate::ui::composition::shell_source_tabbed(&specs, true).unwrap();
-        // Two columns (docked and fullscreen overlay), four branches each.
-        assert_eq!(source.matches(": Owner1").count(), 2 * compiled.len());
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json_in(&specs, [true, false], sender, 1, None)
-            .unwrap();
         let titles = order
             .iter()
             .map(|owner| format!("Tab {owner}"))
             .collect::<Vec<_>>();
+        let shell = composed.shell.clone_strong();
         shell
             .set_property(
                 "sidebar-titles",
                 crate::ui::ui_values::from_json(&serde_json::json!(titles)).unwrap(),
             )
             .unwrap();
+        shell.set_property("sidebar-tabbed", true.into()).unwrap();
+        shell.set_property("sidebar-visible", true.into()).unwrap();
         shell
             .window()
             .set_size(slint::LogicalSize::new(1470., 956.));
         shell.show().unwrap();
-        for (index, owner) in [(16., 117.), (0., 101.), (19., -1.)] {
+        for (index, owner) in [(16., 117), (0., 101), (19., 120), (16., 117)] {
             shell.set_property("sidebar-active", index.into()).unwrap();
-            shell.set_property("sidebar-shown", owner.into()).unwrap();
-            settle_layout(shell.window());
+            composed.show(Slot::Sidebar, Some(owner)).unwrap();
         }
+        let loaded = order
+            .iter()
+            .filter(|owner| composed.panels.panel(**owner).unwrap().loaded())
+            .count();
+        assert_eq!(loaded, 3);
+        assert_eq!(composed.panels.panel(117).unwrap().created.get(), 1);
         shell.hide().unwrap();
     }
 
@@ -2564,8 +2528,8 @@ export component T inherits Window {
         window.set_property("active", 7.0.into()).unwrap();
         assert_eq!(number("shown"), 1.);
         assert_eq!(number("last"), 7.);
-        // A wide one: four places at most, the panels the host compiles
-        // (`sidebar_tabs::front`): the first three and the current tab.
+        // A wide one: four places at most: the first three and the
+        // current tab.
         window.set_property("strip-width", 600.0.into()).unwrap();
         assert_eq!(number("shown"), 4.);
         assert_eq!(number("last"), 7.);
@@ -2663,15 +2627,10 @@ export component T inherits Window {
     }
 
     /// The main window as the defect saw it: 1.75 scale, maximized, at a
-    /// position, showing a shell without panels; the native calls so far
-    /// are dropped.
-    fn recorded_main_window() -> (
-        ComponentInstance,
-        std::sync::mpsc::SyncSender<crate::ui::composition::JsonCallback>,
-    ) {
+    /// position, showing a shell; the native calls so far are dropped.
+    fn recorded_main_window() -> ComponentInstance {
         slint::platform::set_platform(Box::new(Recording)).unwrap();
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let old = crate::ui::composition::compile_json(&[], sender.clone(), 1).unwrap();
+        let old = crate::ui::composition::shell_in(None).unwrap();
         let window = old.window();
         window.dispatch_event(slint::platform::WindowEvent::ScaleFactorChanged {
             scale_factor: 1.75,
@@ -2681,7 +2640,7 @@ export component T inherits Window {
         old.show().unwrap();
         window.set_maximized(true);
         native_calls();
-        (old, sender)
+        old
     }
 
     /// The recording platform for this thread's windows (other modules'
@@ -2700,24 +2659,19 @@ export component T inherits Window {
         }
     }
 
-    /// A new composition (here: a bar and a sidebar panel mounted) replaces
-    /// the tree inside the same native window: no new window, nothing
+    /// A new tree (here: a shell with its sidebar shown) replaces the
+    /// shown one inside the same native window (`replace_shell`, as the
+    /// Options window rebuilds): no new window, nothing
     /// hidden, moved or resized; size, position, scale and maximized state
     /// stay, and the new tree is laid out at the window's size.
     #[test]
     fn shell_swap_keeps_the_native_window() {
-        let (old, sender) = recorded_main_window();
+        let old = recorded_main_window();
         let logical = 2572. / 1.75;
         assert!((video_width(&old) - logical).abs() < 1.);
         let old_tree = ShownTree::of(old.window()).unwrap();
         let new = replace_shell(Some(&old), focus_video, |window| {
-            let shell = crate::ui::composition::compile_json_in(
-                &bar_and_sidebar(),
-                [false; 2],
-                sender.clone(),
-                2,
-                window,
-            )?;
+            let shell = crate::ui::composition::shell_in(window)?;
             shell.set_property("sidebar-visible", true.into())?;
             Ok(shell)
         })
@@ -2737,11 +2691,11 @@ export component T inherits Window {
         assert_eq!(window.position(), slint::PhysicalPosition::new(120, 64));
         // The sidebar (317px) and its 3px splitter.
         assert!((video_width(&new) - (logical - 320.)).abs() < 1.);
-        // In fullscreen, the panels unmounted again.
+        // In fullscreen, a tree without the sidebar.
         new.window().set_fullscreen(true);
         native_calls();
         let last = replace_shell(Some(&new), focus_video, |window| {
-            crate::ui::composition::compile_json_in(&[], [false; 2], sender.clone(), 3, window)
+            crate::ui::composition::shell_in(window)
         })
         .unwrap();
         drop(new);
@@ -2768,18 +2722,12 @@ export component T inherits Window {
     /// (compilation) leaves it untouched.
     #[test]
     fn shell_swap_failure_shows_the_old_tree_again() {
-        let (old, sender) = recorded_main_window();
+        let old = recorded_main_window();
         let old_tree = ShownTree::of(old.window()).unwrap();
         let width = video_width(&old);
         assert!(canvas_focused(&old));
         let failed = replace_shell(Some(&old), focus_video, |window| {
-            let _shell = crate::ui::composition::compile_json_in(
-                &bar_and_sidebar(),
-                [false; 2],
-                sender.clone(),
-                2,
-                window,
-            )?;
+            let _shell = crate::ui::composition::shell_in(window)?;
             anyhow::bail!("binding failed")
         });
         assert!(failed.is_err());
@@ -2800,15 +2748,15 @@ export component T inherits Window {
         old.hide().unwrap();
     }
 
-    /// A shell built in a window of its own (`compile_json` instead of
-    /// `compile_json_in` with the main window) is refused, and the main
+    /// A shell built in a window of its own (`shell_in(None)` instead of
+    /// `shell_in` with the main window) is refused, and the main
     /// window keeps its tree: the swap never opens a second window.
     #[test]
     fn shell_swap_refuses_a_shell_built_in_another_window() {
-        let (old, sender) = recorded_main_window();
+        let old = recorded_main_window();
         let old_tree = ShownTree::of(old.window()).unwrap();
         let failed = replace_shell(Some(&old), focus_video, |_| {
-            crate::ui::composition::compile_json(&bar_and_sidebar(), sender.clone(), 2)
+            crate::ui::composition::shell_in(None)
         });
         let error = failed.err().unwrap().to_string();
         assert!(
@@ -2819,20 +2767,6 @@ export component T inherits Window {
         // The stray window was created but never shown.
         assert_eq!(native_calls(), ["new window"]);
         old.hide().unwrap();
-    }
-
-    /// `prepare_mount_tick` (which needs a whole `Host`) swaps through
-    /// `replace_shell` and builds in the window it is given; a change back
-    /// to building a new window fails here.
-    #[test]
-    fn prepare_mount_tick_builds_in_the_main_window() {
-        let mounts = include_str!("../host/mounts.rs");
-        assert!(
-            mounts.contains("view::replace_shell(self.shell.as_ref(), view::focus_video, build)")
-        );
-        assert!(mounts.contains("composition::compile_json_in("));
-        assert!(!mounts.contains("composition::compile_json("));
-        assert!(!mounts.contains(".hide()"));
     }
 
     /// A window waits for its native window (none on the headless
@@ -2978,7 +2912,6 @@ export component T inherits Window {
     /// that deprecates something they use shows up here.
     #[test]
     fn host_generated_sources_compile_without_warnings() {
-        let specs = bar_and_sidebar();
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
         let page = crate::ui::settings_window::Page {
             owner: 1,
@@ -2993,37 +2926,34 @@ export component T inherits Window {
             global: "Bridge".into(),
             properties: Default::default(),
         };
-        let mut tabs = specs.to_vec();
-        tabs.push(crate::ui::composition::CompileSpec {
-            owner: 30,
-            file: base.join("tab.slint"),
-            component: "NoteTab".into(),
-            global: Some("Bridge".into()),
-            slot: crate::ui::composition::Slot::Sidebar,
-        });
-        for source in [
-            crate::ui::composition::shell_source(&specs).unwrap(),
-            crate::ui::composition::shell_source(&tabs).unwrap(),
-            crate::ui::composition::floating_source(&tabs[1..], "列表").unwrap(),
-            crate::ui::composition::shell_source(&[]).unwrap(),
-            crate::ui::composition::floating_source(&specs[1..], "列表").unwrap(),
-            crate::ui::settings_window::source(&[&page]).unwrap(),
+        for (source, experimental) in [
+            (crate::ui::composition::shell_source().unwrap(), true),
+            (crate::ui::composition::floating_source().unwrap(), true),
+            (crate::ui::settings_window::source(&[&page]).unwrap(), false),
         ] {
-            let result = pollster::block_on(
-                compiler().build_from_source(source, ui_dir().join("host.slint")),
-            );
+            let mut compiler = compiler();
+            // The player's own windows: its containers (`composition::build_shell`).
+            compiler
+                .compiler_configuration(i_slint_core::InternalToken)
+                .enable_experimental = experimental;
+            let result =
+                pollster::block_on(compiler.build_from_source(source, ui_dir().join("host.slint")));
             // Known since Slint 1.16 (not new in 1.18): `sidebar-actual`
-            // reads the window width that the sidebar's fixed width feeds.
-            // Slint names the loop from any of its members (0.5.24's video
-            // image change moved its first one), so match the members.
+            // (and, since step 3b, `adjust-actual`) reads the window width
+            // that the column's fixed width feeds. The shell has always had
+            // the adjust column's loop with an adjust panel mounted; it
+            // always has the column now. Slint names the loop from any of
+            // its members (0.5.24's video image change moved its first one),
+            // so match the members.
             let diagnostics: Vec<_> = result
                 .diagnostics()
                 .map(|d| d.to_string())
                 .filter(|d| {
                     !(d.contains("part of a binding loop (")
-                        && d.contains(
+                        && (d.contains(
                             "root.layoutinfo-h -> root.sidebar-actual -> sidebar-keys.width",
-                        ))
+                        ) || d
+                            .contains("root.adjust-actual -> adjust-keys.width -> layoutinfo-h")))
                 })
                 .collect();
             assert!(diagnostics.is_empty(), "{diagnostics:#?}");
@@ -3121,10 +3051,11 @@ export component W inherits Window {
         assert!(failures.is_empty(), "{}", failures.join("\n"));
     }
 
-    /// Player 0.5.10: a bottom bar placing `BarButtons` shares the shell's
-    /// `BarButtonsHost` (the bar imports the same library file): the strip
-    /// reports itself placed and shows the cells that fit in its room, the
-    /// sidebar toggle longest and the plugins' lowest order first gone.
+    /// Player 0.5.10: a bottom bar placing `BarButtons` draws from its own
+    /// `BarButtonsHost` (compiled on its own, `ui/panels.rs`), which the
+    /// host fills as the shell's; the shell's strip learns it is placed, and
+    /// the bar's shows the cells that fit in its room, the sidebar toggle
+    /// longest and the plugins' lowest order first gone.
     #[test]
     fn bar_buttons_share_the_shell_global_and_drop_the_lowest_order_first() {
         use crate::commands::ButtonIcon;
@@ -3139,18 +3070,27 @@ export component W inherits Window {
             global: Some("StripBridge".into()),
             slot: crate::ui::composition::Slot::Bottom,
         }];
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json(&specs, sender.clone(), 1).unwrap();
+        let composed = Composed::new(&specs);
+        let shell = &composed.shell;
         assert_eq!(
             shell.get_global_property(GLOBAL, "placed").unwrap(),
             Value::Bool(true)
         );
         // A bar without the strip: the player logs the hidden buttons.
-        let plain = crate::ui::composition::compile_json(&bar_and_sidebar(), sender, 2).unwrap();
+        let plain = Composed::new(&bar_and_sidebar());
         assert_eq!(
-            plain.get_global_property(GLOBAL, "placed").unwrap(),
+            plain.shell.get_global_property(GLOBAL, "placed").unwrap(),
             Value::Bool(false)
         );
+        let globals = composed.strip_globals();
+        assert_eq!(globals.len(), 2, "the shell's and the bar's");
+        let fill = |name: &str, value: Value| {
+            for global in &globals {
+                global
+                    .set_global_property(GLOBAL, name, value.clone())
+                    .unwrap();
+            }
+        };
         let item = |id: &str, icon: &str| Item {
             owner: 3,
             id: id.into(),
@@ -3166,31 +3106,22 @@ export component W inherits Window {
             cell(Some(&item("ai", "ai")), None),
             cell(Some(&item("store", "store")), None),
         ];
-        shell
-            .set_global_property(
-                GLOBAL,
-                "buttons",
-                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
-            )
-            .unwrap();
-        shell
-            .set_global_property(
-                GLOBAL,
-                "toggle",
-                cell(Some(&item("sidebar", "playlist")), None),
-            )
-            .unwrap();
+        fill(
+            "buttons",
+            Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+        );
+        fill("toggle", cell(Some(&item("sidebar", "playlist")), None));
         shell.window().set_size(slint::LogicalSize::new(800., 600.));
         shell.show().unwrap();
+        let bar = composed.instance(10);
         // The strip's width and the plugin buttons it shows (by id; "toggle"
         // when the sidebar toggle shows too) at this room.
         let strip = |room: f64, toggle: bool| {
-            shell
-                .set_global_property("Owner10Bridge", "room", Value::Number(room))
+            bar.set_global_property(BRIDGE, "room", Value::Number(room))
                 .unwrap();
             settle_layout(shell.window());
             slint::platform::update_timers_and_animations();
-            let number = |name| match shell.get_global_property("Owner10Bridge", name).unwrap() {
+            let number = |name| match bar.get_global_property(BRIDGE, name).unwrap() {
                 Value::Number(n) => n,
                 other => panic!("{other:?}"),
             };
@@ -3212,22 +3143,14 @@ export component W inherits Window {
         assert_eq!(strip(41., true), (41., vec!["toggle"]));
         assert_eq!(strip(40., true), (0., vec![]));
         // Without a toggle the buttons take the room, the lowest order going first.
-        shell
-            .set_global_property(GLOBAL, "toggle", cell(None, None))
-            .unwrap();
+        fill("toggle", cell(None, None));
         assert_eq!(strip(1000., false), (82., vec!["ai", "store"]));
         assert_eq!(strip(60., false), (41., vec!["store"]));
         assert_eq!(strip(0., false), (0., vec![]));
         // Step 3a: while the bar places the deprecated strip, the player's
         // own strip (HostBarStrip) stays hidden and takes no width, even
         // with its palette cell filled: no second strip.
-        shell
-            .set_global_property(
-                GLOBAL,
-                "palette",
-                cell(Some(&item("palette", "search")), None),
-            )
-            .unwrap();
+        fill("palette", cell(Some(&item("palette", "search")), None));
         settle_layout(shell.window());
         slint::platform::update_timers_and_animations();
         assert_eq!(
@@ -3256,13 +3179,17 @@ export component W inherits Window {
             global: Some("MinBridge".into()),
             slot: crate::ui::composition::Slot::Bottom,
         }];
-        let source = crate::ui::composition::shell_source(&specs).unwrap();
-        assert!(
-            source.contains("bottom-content.content-min-width"),
-            "{source}"
-        );
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
+        let composed = Composed::new(&specs);
+        let shell = &composed.shell;
+        let bar = composed.instance(11);
+        let globals = composed.strip_globals();
+        let fill = |name: &str, value: Value| {
+            for global in &globals {
+                global
+                    .set_global_property(GLOBAL, name, value.clone())
+                    .unwrap();
+            }
+        };
         let item = |id: &str, icon: &str| Item {
             owner: 3,
             id: id.into(),
@@ -3277,20 +3204,15 @@ export component W inherits Window {
         let cells = ["a", "b", "c", "d", "e"]
             .map(|id| cell(Some(&item(id, "ai")), None))
             .to_vec();
-        shell
-            .set_global_property(
-                GLOBAL,
-                "buttons",
-                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
-            )
-            .unwrap();
+        fill(
+            "buttons",
+            Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+        );
         for (name, id, icon) in [
             ("toggle", "sidebar", "playlist"),
             ("palette", "palette", "search"),
         ] {
-            shell
-                .set_global_property(GLOBAL, name, cell(Some(&item(id, icon)), None))
-                .unwrap();
+            fill(name, cell(Some(&item(id, icon)), None));
         }
         shell.window().set_size(slint::LogicalSize::new(800., 600.));
         shell.show().unwrap();
@@ -3300,25 +3222,26 @@ export component W inherits Window {
         );
         // (plugin cells shown, `»` shown, strip width, the width the bar reads)
         let strip = |least: f64, overflow: f64| {
-            shell
-                .set_global_property("Owner11Bridge", "least", Value::Number(least))
+            bar.set_global_property(BRIDGE, "least", Value::Number(least))
                 .unwrap();
-            shell
-                .set_global_property(GLOBAL, "overflow", Value::Number(overflow))
-                .unwrap();
+            fill("overflow", Value::Number(overflow));
             for _ in 0..3 {
                 settle_layout(shell.window());
                 slint::platform::update_timers_and_animations();
+                composed.mirror_bar();
             }
-            let number = |global: &str, name| match shell.get_global_property(global, name).unwrap()
+            let number = |window: &ComponentInstance, global: &str, name| match window
+                .get_global_property(global, name)
+                .unwrap()
             {
                 Value::Number(n) => n,
                 other => panic!("{other:?}"),
             };
             let more = shell.get_global_property(GLOBAL, "more").unwrap() == Value::Bool(true);
-            let width = number(GLOBAL, "width");
-            assert_eq!(number("Owner11Bridge", "strip"), width, "the bar reads it");
-            (number(GLOBAL, "shown") as usize, more, width)
+            let width = number(shell, GLOBAL, "width");
+            assert_eq!(number(&bar, BRIDGE, "strip"), width, "the bar reads it");
+            assert_eq!(number(&bar, GLOBAL, "width"), width, "from its own global");
+            (number(shell, GLOBAL, "shown") as usize, more, width)
         };
         // 800 - 300 - 4 = 496px: 12 cells, all five fit beside the two fixed.
         assert_eq!(strip(300., 0.), (5, false, 7. * 41.));
@@ -3369,10 +3292,17 @@ export component W inherits Window {
             global: Some("FullBridge".into()),
             slot: crate::ui::composition::Slot::Bottom,
         }];
-        let source = crate::ui::composition::shell_source(&specs).unwrap();
-        assert!(source.contains("bottom-content.content-full-width"));
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json(&specs, sender, 1).unwrap();
+        let composed = Composed::new(&specs);
+        let shell = &composed.shell;
+        let bar = composed.instance(12);
+        let globals = composed.strip_globals();
+        let fill = |name: &str, value: Value| {
+            for global in &globals {
+                global
+                    .set_global_property(GLOBAL, name, value.clone())
+                    .unwrap();
+            }
+        };
         let item = |id: &str, icon: &str| Item {
             owner: 3,
             id: id.into(),
@@ -3389,20 +3319,15 @@ export component W inherits Window {
             cell(Some(&item("ai", "ai")), None),
             cell(Some(&item("store", "store")), None),
         ];
-        shell
-            .set_global_property(
-                GLOBAL,
-                "buttons",
-                Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
-            )
-            .unwrap();
+        fill(
+            "buttons",
+            Value::Model(slint::ModelRc::new(slint::VecModel::from(cells))),
+        );
         for (name, id, icon) in [
             ("toggle", "sidebar", "playlist"),
             ("palette", "palette", "search"),
         ] {
-            shell
-                .set_global_property(GLOBAL, name, cell(Some(&item(id, icon)), None))
-                .unwrap();
+            fill(name, cell(Some(&item(id, icon)), None));
         }
         shell
             .window()
@@ -3410,8 +3335,7 @@ export component W inherits Window {
         shell.show().unwrap();
         // (window width, plugin buttons in the strip, the bar's controls)
         let sweep = |full: bool| {
-            shell
-                .set_global_property("Owner12Bridge", "full", Value::Bool(full))
+            bar.set_global_property(BRIDGE, "full", Value::Bool(full))
                 .unwrap();
             (320..=1100)
                 .rev()
@@ -3423,17 +3347,19 @@ export component W inherits Window {
                     for _ in 0..4 {
                         settle_layout(shell.window());
                         slint::platform::update_timers_and_animations();
+                        composed.mirror_bar();
                     }
-                    let number =
-                        |global: &str, name| match shell.get_global_property(global, name).unwrap()
-                        {
-                            Value::Number(n) => n as usize,
-                            other => panic!("{other:?}"),
-                        };
+                    let number = |window: &ComponentInstance, global: &str, name| match window
+                        .get_global_property(global, name)
+                        .unwrap()
+                    {
+                        Value::Number(n) => n as usize,
+                        other => panic!("{other:?}"),
+                    };
                     (
                         width,
-                        number(GLOBAL, "shown"),
-                        number("Owner12Bridge", "controls"),
+                        number(shell, GLOBAL, "shown"),
+                        number(&bar, BRIDGE, "controls"),
                     )
                 })
                 .collect::<Vec<_>>()
@@ -3483,8 +3409,7 @@ export component W inherits Window {
         use crate::ui::bar_buttons::{GLOBAL, Item, cell};
         use slint_interpreter::Value;
         headless();
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json(&[], sender, 1).unwrap();
+        let shell = crate::ui::composition::shell_in(None).unwrap();
         let item = |id: &str, icon: &str| Item {
             owner: 0,
             id: id.into(),
@@ -4220,8 +4145,8 @@ export component MenuWindow inherits Window {
             }
         }
         let roots = registry.snapshot().roots.clone();
-        let (sender, _receiver) = std::sync::mpsc::sync_channel(8);
-        let shell = crate::ui::composition::compile_json(&bar_and_sidebar(), sender, 1).unwrap();
+        let composed = Composed::new(&bar_and_sidebar());
+        let shell = &composed.shell;
         let (w, h) = (1280u32, 720u32);
         shell.window().set_size(slint::PhysicalSize::new(w, h));
         shell.set_property("menu-open", true.into()).unwrap();
@@ -4291,12 +4216,12 @@ export component MenuWindow inherits Window {
                 let start = Instant::now();
                 if round == 0 {
                     crate::host::set_menu_model(
-                        &shell,
+                        shell,
                         crate::ui::ui_values::from_json(&value).unwrap(),
                     )
                     .unwrap();
                 } else {
-                    crate::host::apply_menu_levels(&shell, &mut shown, &value).unwrap();
+                    crate::host::apply_menu_levels(shell, &mut shown, &value).unwrap();
                 }
                 write[round][i % 5].push(ms(start));
                 draw();

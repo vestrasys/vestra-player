@@ -380,22 +380,6 @@ fn sources() -> Vec<(String, String)> {
         })
         .collect();
     let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/mount");
-    let specs = [
-        crate::ui::composition::CompileSpec {
-            owner: 10,
-            file: base.join("bar.slint"),
-            component: "SourceBar".into(),
-            global: Some("Bridge".into()),
-            slot: crate::ui::composition::Slot::Bottom,
-        },
-        crate::ui::composition::CompileSpec {
-            owner: 20,
-            file: base.join("sidebar.slint"),
-            component: "RowsSidebar".into(),
-            global: Some("Bridge".into()),
-            slot: crate::ui::composition::Slot::Sidebar,
-        },
-    ];
     let page = crate::ui::settings_window::Page {
         owner: 1,
         manifest: "a.plugin".into(),
@@ -411,11 +395,11 @@ fn sources() -> Vec<(String, String)> {
     };
     sources.push((
         "generated:shell".into(),
-        crate::ui::composition::shell_source(&specs).unwrap(),
+        crate::ui::composition::shell_source().unwrap(),
     ));
     sources.push((
         "generated:floating".into(),
-        crate::ui::composition::floating_source(&specs[1..], "列表").unwrap(),
+        crate::ui::composition::floating_source().unwrap(),
     ));
     sources.push((
         "generated:options".into(),

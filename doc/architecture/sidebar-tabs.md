@@ -4,6 +4,8 @@
 
 Since 2026-11-07 (menu redesign step 3b) the same rules run per column: the adjust column has its own tabs, front set and current tab ([adjust-column.md](adjust-column.md)); the code below is parameterised by `sidebar_tabs::Column`.
 
+Since player 0.9.0 the compile rules here (front tabs, a shell compile to promote a tab, `sidebar_tabs::compiled`) are superseded by per-panel compilation ([panel-slots.md](panel-slots.md#per-panel-compilation), option C below): each tab compiles on its own when it is first shown, at most 4 per column stay loaded, a switch to a tab shown before is about 1 ms and keeps its state, and no mount or switch compiles the shell. The strip, order, placeholder, standby and wake rules stay.
+
 ## Problem
 
 The user wants any number of plugins to be able to add a sidebar panel, with VS Code-style overflow: the strip shows the tabs that fit (about 3 at the normal width) and a `»` menu lists all of them. Memory must stay bounded.

@@ -614,7 +614,6 @@ mod no_gpu {
         ) -> Result<(), String> {
             Err("GPU rendering is not available".into())
         }
-        fn retarget<T: slint::ComponentHandle + 'static>(&self, _component: &T) {}
     }
 }
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
