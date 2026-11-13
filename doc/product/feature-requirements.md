@@ -66,7 +66,7 @@ The core API summary for the whole document is in [Appendix A](#appendix-a-core-
 | C17 | Restore the list after restart | `playlist` |
 | C18 | Open / save M3U, M3U8, PLS lists | `playlist` |
 | C21 | Search the list | `playlist` |
-| C23 | Show in Finder | `playlist` |
+| C23 | Show in Folder | `playlist` |
 | D02 | Cycle subtitle tracks | `subtitles` |
 | D05 | Enter a sync value manually | `subtitles` |
 | D06 | Font size shortcuts | `subtitles` |
@@ -605,7 +605,7 @@ The hand-over of the basic actions itself (the core registering the 14 actions a
 
 ### Scope
 
-playlist is the sidebar playlist and the playback sequence provider (`player.provideSequence`). It already has: adding several files, adding links, multi-select, drag to reorder, move to top / up / down / bottom, sort by name / path / reversed, loop, shuffle, ffprobe durations, and the list context menu. This round completes it with the everyday features of a full playlist: adding entries from folders, list files and drag and drop; more sort orders, remove unselected / invalid items; search, show in Finder; restore the list after restart; "add same-folder / similar files when opening a file"; fast advance to the next item (B26, the former "gapless playback", downgraded by ruling R-P5). The list is still a single list (no multiple tabs).
+playlist is the sidebar playlist and the playback sequence provider (`player.provideSequence`). It already has: adding several files, adding links, multi-select, drag to reorder, move to top / up / down / bottom, sort by name / path / reversed, loop, shuffle, ffprobe durations, and the list context menu. This round completes it with the everyday features of a full playlist: adding entries from folders, list files and drag and drop; more sort orders, remove unselected / invalid items; search, show in folder; restore the list after restart; "add same-folder / similar files when opening a file"; fast advance to the next item (B26, the former "gapless playback", downgraded by ruling R-P5). The list is still a single list (no multiple tabs).
 
 Boundaries: playlist cooperates only through the core. It does not call history or playback commands and does not read their data. For sources opened by other plugins, playlist can only see `player.state` (path, `sourceId`, phase). So "add same-folder files when opening a file" is done by playlist itself by watching source changes (A13), and history and other plugins do not need to know that playlist exists. The only new core API needed is the window drop event (A15); preloading the next source (the original B26 plan) was rejected by ruling R-P5. Folder scanning and list file parsing are done by the plugin with Node; ffprobe, Finder and the settings file use SDK general capabilities (`plugin.tools`, `plugin.system`, `plugin.storage`, migrated in round 2).
 
@@ -623,7 +623,7 @@ Boundaries: playlist cooperates only through the core. It does not call history 
 | C17 | Restore the list after restart | ✗ | No (`plugin.dataDirectory`) |
 | C18 | Open / save M3U, M3U8, PLS | ✗ | No |
 | C21 | Search the list | ✗ | No |
-| C23 | Show in Finder | ✗ | No |
+| C23 | Show in Folder | ✗ | No |
 
 ### Menus and shortcuts
 
@@ -656,7 +656,7 @@ Boundaries: playlist cooperates only through the core. It does not call history 
 | **Remove Unselected** | Ctrl+Delete | Context menu | C07 |
 | **Remove Invalid Items** | (no key; Ctrl+T stays Always on Top: Cycle Mode) | Context menu | C07 |
 | Remove All | **Alt+Delete** | Context menu | Existing command, key added |
-| **Show in Finder** | Ctrl+F | Context menu | C23 |
+| **Show in Folder** | Ctrl+F | Context menu | C23 |
 | Select All | Ctrl+A | Context menu | Existing |
 | **Search** | Ctrl+S | Context menu | C21 |
 | **Open List File…** | (no key; F3 stays Open File…) | Context menu | C18 |
@@ -674,7 +674,7 @@ Boundaries: playlist cooperates only through the core. It does not call history 
 2. **Remove Unselected is bound only to Ctrl+Delete** (forward delete), not Ctrl+Backspace: the latter equals ⌘⌫, which is "Move to Trash" in Finder, and users could easily think it deletes files from disk. ⌘⌫ is not bound in the list.
 3. The list context menu is single-level with at most 32 items (reference §6.3). Following the table above, the context menu has 13 commands + 6 separators = 19 items, and the sort items are in the SORT popup menu (12 items); both are within the limit.
 
-List context menu order: Play | Add Files…, Add Folder…, Add Link… | Remove Selected, Remove Unselected, Remove Invalid Items, Remove All | Show in Finder | Select All, Search | Open List File…, Save List… | Close List. ADD popup menu: Add Files…, Add Folder…, Add Link….
+List context menu order: Play | Add Files…, Add Folder…, Add Link… | Remove Selected, Remove Unselected, Remove Invalid Items, Remove All | Show in Folder | Select All, Search | Open List File…, Save List… | Close List. ADD popup menu: Add Files…, Add Folder…, Add Link….
 
 ### A03 Open folder
 
@@ -992,11 +992,11 @@ Host rules: on release over the video area, `paths` are grouped by extension (ke
 
 **Notes**: for the look of the search box, see the bottom bar in [UI spec](ui-spec.md) §5.2 (about 24 high, #282828).
 
-### C23 Show in Finder
+### C23 Show in Folder
 
-**Requirement**: open the folder of the selected file in the system file manager (Finder on macOS, File Explorer on Windows) and select the file. The menu title stays "Show in Finder" (the same on every system).
+**Requirement**: open the folder of the selected file in the system file manager (Finder on macOS, File Explorer on Windows) and select the file. The menu title is "Show in Folder", the same on every system.
 
-**Entry point**: list context menu "Show in Finder", Ctrl+F with list focus.
+**Entry point**: list context menu "Show in Folder", Ctrl+F with list focus.
 
 **Behavior details**:
 

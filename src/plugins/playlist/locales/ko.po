@@ -343,8 +343,8 @@ msgstr "유효하지 않은 항목 제거"
 
 #: main.ts:602
 #, x-machine
-msgid "Show in Finder"
-msgstr "Finder에서 보기"
+msgid "Show in Folder"
+msgstr "폴더에서 보기"
 
 #: main.ts:602
 #, x-machine

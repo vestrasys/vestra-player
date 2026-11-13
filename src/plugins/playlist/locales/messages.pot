@@ -273,7 +273,7 @@ msgid "Remove Invalid Items"
 msgstr ""
 
 #: main.ts:602
-msgid "Show in Finder"
+msgid "Show in Folder"
 msgstr ""
 
 #: main.ts:602

@@ -76,7 +76,7 @@ type ListTitle =
   | "Remove Unselected"
   | "Remove Invalid Items"
   | "Remove All"
-  | "Show in Finder"
+  | "Show in Folder"
   | "Move to Top"
   | "Move Up"
   | "Move Down"
@@ -776,7 +776,7 @@ export default async function activate(plugin: Plugin, options: Partial<Options>
   });
   const removeAll = listCommand("clear", "Remove All", hasRows, clearAll, ["Alt+Delete"], DESTRUCTIVE);
   const hasLocal = () => queue.marked().some((row) => row.kind === "file");
-  const revealCommand = listCommand("reveal", "Show in Finder", hasLocal, revealSelected, ["Ctrl+F"], {
+  const revealCommand = listCommand("reveal", "Show in Folder", hasLocal, revealSelected, ["Ctrl+F"], {
     reason: () => (hasLocal() ? null : queue.selection.size ? "Links have no local location" : "Nothing to act on"),
   });
   const moveReason = (where: Placement) => (): Reason | null =>

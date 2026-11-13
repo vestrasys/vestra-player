@@ -345,8 +345,8 @@ msgstr "Supprimer les éléments invalides"
 
 #: main.ts:602
 #, x-machine
-msgid "Show in Finder"
-msgstr "Afficher dans le Finder"
+msgid "Show in Folder"
+msgstr "Afficher dans le dossier"
 
 #: main.ts:602
 #, x-machine

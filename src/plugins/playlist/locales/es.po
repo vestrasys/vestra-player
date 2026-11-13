@@ -343,8 +343,8 @@ msgstr "Quitar elementos no válidos"
 
 #: main.ts:602
 #, x-machine
-msgid "Show in Finder"
-msgstr "Mostrar en el Finder"
+msgid "Show in Folder"
+msgstr "Mostrar en la carpeta"
 
 #: main.ts:602
 #, x-machine
