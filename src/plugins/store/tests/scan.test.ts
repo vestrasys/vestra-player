@@ -14,7 +14,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 import { parseIndex } from "../index-format.ts";
-import { categories, CATEGORIES, CAPABILITIES, riskyOnly } from "../labels.ts";
+import { addedBy, categories, CATEGORIES, CAPABILITIES, riskyOnly } from "../labels.ts";
 import { msg } from "../text.ts";
 import { banners, BUILTIN, choose, FakeNet, info, OFFICIAL, openStore, publish, signWith, start, THIRD, until, vxp, yes, type PluginSpec } from "./helpers.ts";
 
@@ -276,6 +276,113 @@ test("update, only the new version scanned: the declared capabilities are compar
     assert.equal(bullets(confirm.detail)[0], "· 读写剪贴板");
     assert.match(String(confirm.detail), /^新增：\n/);
     assert.match(String(confirm.detail), /\n\n当前 0\.2\.0。$/);
+  } finally {
+    await stop();
+  }
+});
+
+test("addedBy, one version scanned and the other not: nothing the user may not have been told is left out", () => {
+  const words = (lines: readonly { text: string; args: readonly unknown[] }[]) => lines.map((line) => [line.text, ...line.args].join(" "));
+  // Installed scanned (nothing found, so its install named nothing), the new one not scanned and declaring the same.
+  assert.deepEqual(
+    words(
+      addedBy(
+        [{ version: "1.0.0", scan: { uses: [] } }],
+        { version: "1.0.0", capabilities: ["commands", "clipboard", "secrets"] },
+        { capabilities: ["commands", "clipboard", "secrets"], scan: null },
+      ),
+    ),
+    [CAPABILITIES.clipboard.text, CAPABILITIES.secrets.text],
+    "every risky capability the new version declares",
+  );
+  // The same, with capabilities declared anew: named too, risky or not, each once.
+  assert.deepEqual(
+    words(
+      addedBy(
+        [{ version: "1.0.0", scan: { uses: ["clipboard"] } }],
+        { version: "1.0.0", capabilities: ["commands", "clipboard"] },
+        { capabilities: ["commands", "clipboard", "ui.window", "mpv"], scan: null },
+      ),
+    ),
+    [CAPABILITIES.clipboard.text, CAPABILITIES.mpv.text, CAPABILITIES["ui.window"].text],
+  );
+  // Installed not scanned, declaring a capability that was never drawn as risky; the new one's scan finds the category.
+  assert.deepEqual(
+    words(
+      addedBy(
+        [{ version: "1.0.0", scan: null }],
+        { version: "1.0.0", capabilities: ["commands", "ui.theme"] },
+        { capabilities: ["commands", "ui.theme"], scan: { uses: ["player"] } },
+      ),
+    ),
+    [CATEGORIES.player],
+    "every category the new version uses",
+  );
+  // The same, with a capability declared anew: after the categories; the clipboard's words once.
+  assert.deepEqual(
+    words(
+      addedBy(
+        [{ version: "1.0.0", scan: null }],
+        { version: "1.0.0", capabilities: ["commands"] },
+        { capabilities: ["commands", "clipboard", "ui.window"], scan: { uses: ["player", "clipboard"] } },
+      ),
+    ),
+    [CATEGORIES.player, CATEGORIES.clipboard, CAPABILITIES["ui.window"].text],
+  );
+  // The installed version is not in the index (delisted version): as not scanned.
+  assert.deepEqual(
+    words(addedBy([], { version: "0.9.0", capabilities: ["commands"] }, { capabilities: ["commands"], scan: { uses: ["plugins"] } })),
+    [CATEGORIES.plugins],
+  );
+  // Neither scanned, nothing declared anew; a scan that found nothing: nothing to say.
+  assert.deepEqual(addedBy([{ version: "1.0.0", scan: null }], { version: "1.0.0", capabilities: ["clipboard"] }, { capabilities: ["clipboard"], scan: null }), []);
+  assert.deepEqual(addedBy([{ version: "1.0.0", scan: null }], { version: "1.0.0", capabilities: ["clipboard"] }, { capabilities: ["clipboard"], scan: { uses: [] } }), []);
+});
+
+test("update from a scanned version to one without a scan: its declared risky capabilities are named, in the notice and the confirmation", async () => {
+  const net = new FakeNet();
+  const same: PluginSpec = {
+    ...UPDATE,
+    versions: [
+      { version: "0.3.0", capabilities: ["commands", "clipboard", "secrets"] },
+      { version: "0.2.0", capabilities: ["commands", "clipboard", "secrets"] },
+    ],
+  };
+  // 0.2.0 was installed with a scan that found nothing in use; 0.3.0 has no scan.
+  publishScanned(net, OFFICIAL, [same], { "zysilm.youtube 0.2.0": [] });
+  const installed = info("zysilm.youtube", { version: "0.2.0", capabilities: ["commands", "clipboard", "secrets"], source: { kind: "repository", url: OFFICIAL } });
+  const { host, stop } = await ready(net, [BUILTIN, installed]);
+  try {
+    await choose(host, "YouTube");
+    const shown = notice(host);
+    const confirm = await confirmation(host, "YouTube", "update");
+    assert.equal(confirm.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
+    assert.equal(confirm.detail, "新增：\n· 读写剪贴板\n· 在系统钥匙串保存登录信息\n\n当前 0.2.0。");
+    assert.equal(shown.length, 1);
+    for (const line of bullets(confirm.detail)) assert.ok(shown[0]!.includes(line.slice(2)), line);
+  } finally {
+    await stop();
+  }
+});
+
+test("update from a version without a scan to a scanned one: its categories are named, in the notice and the confirmation", async () => {
+  const net = new FakeNet();
+  const themed: PluginSpec = {
+    ...UPDATE,
+    versions: [
+      { version: "0.3.0", capabilities: ["commands", "ui.theme"] },
+      { version: "0.2.0", capabilities: ["commands", "ui.theme"] },
+    ],
+  };
+  publishScanned(net, OFFICIAL, [themed], { "zysilm.youtube 0.3.0": ["player"] });
+  const installed = info("zysilm.youtube", { version: "0.2.0", capabilities: ["commands", "ui.theme"], source: { kind: "repository", url: OFFICIAL } });
+  const { host, stop } = await ready(net, [BUILTIN, installed]);
+  try {
+    await choose(host, "YouTube");
+    assert.deepEqual(notice(host), [`新版本需要新的权限：${PLAYER}`]);
+    const confirm = await confirmation(host, "YouTube", "update");
+    assert.equal(confirm.message, "更新「YouTube」到 0.3.0？新版本需要更多权限");
+    assert.equal(confirm.detail, `新增：\n· ${PLAYER}\n\n当前 0.2.0。`);
   } finally {
     await stop();
   }

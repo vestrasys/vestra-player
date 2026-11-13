@@ -84,9 +84,21 @@ export function categories(uses: readonly string[]): Msg[] {
 
 /**
  * What a newer version adds to the installed one, in plain words (empty:
- * nothing): by the scanned categories when the index has them for both the
- * installed version and the new one, else by the declared capabilities. The
- * update confirmation and the window's notice both go by this.
+ * nothing). The update confirmation and the window's notice both go by this.
+ *
+ * - Both versions scanned: the categories the new one adds.
+ * - Neither scanned: the capabilities the new one declares anew.
+ * - Only one of them scanned: the two cannot be compared, so nothing the
+ *   user may not have been told is left out. The capabilities declared anew
+ *   are named as always, and with them
+ *   - installed scanned, new one not: every risky capability the new one
+ *     declares (the installed one was shown by its scan, which may have
+ *     found none of them in use);
+ *   - installed not scanned, new one scanned: every category the new one
+ *     uses (a category may be reached through a capability that was never
+ *     drawn as risky). This asks once per plugin, on the first update after
+ *     its repository starts scanning; from then on both are scanned.
+ *   A line is said once (a category and a capability may share their words).
  */
 export function addedBy(
   versions: readonly { version: string; scan: { uses: string[] } | null }[],
@@ -95,7 +107,13 @@ export function addedBy(
 ): Msg[] {
   const before = versions.find((v) => v.version === installed.version)?.scan ?? null;
   if (before && next.scan) return categories(next.scan.uses.filter((word) => !before.uses.includes(word)));
-  return permissions(next.capabilities.filter((c) => !installed.capabilities.includes(c))).map((line) => line.text);
+  const anew = next.capabilities.filter((c) => !installed.capabilities.includes(c));
+  if (before) return permissions([...riskyOnly(next.capabilities), ...anew]).map((line) => line.text);
+  const declared = permissions(anew).map((line) => line.text);
+  if (!next.scan) return declared;
+  const scanned = categories(next.scan.uses);
+  const said = new Set(scanned.map((line) => JSON.stringify(line)));
+  return [...scanned, ...declared.filter((line) => !said.has(JSON.stringify(line)))];
 }
 
 /** `lines` as a bullet list for a confirmation, at most 20 lines. */
