@@ -21,6 +21,7 @@ type Rules = {
   filterCommands: Record<string, readonly string[]>;
   filterMessages: readonly string[];
   reservedLabel: string;
+  prefixes: readonly string[];
   reservedLabels: readonly string[];
 };
 
@@ -64,6 +65,7 @@ test("MPV_RULES are the player's (host/mpv-rules.json)", (t) => {
       ]),
     ),
     filterMessages: [...sdk.filterMessages],
+    prefixes: [...(sdk.prefixes ?? [])],
     reservedLabel: sdk.reservedLabel,
     reservedLabels: [...(sdk.reservedLabels ?? [])],
   };

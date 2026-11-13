@@ -351,6 +351,25 @@ pub static FILTER_OPERATIONS: &[&str] = &["add", "pre", "toggle", "remove"];
 pub static FILTER_MESSAGES: &[(&str, &str)] = &[("vf-command", "vf"), ("af-command", "af")];
 /// The start of the player's own filter labels (`@vestra-owned`,
 /// `@vestra-orientation`, ...): no plugin's.
+/// mpv's command prefixes (its input/cmd.c `cmd_flags`, v0.41.0, the whole
+/// list). The node array form takes them too: mpv consumes every leading
+/// prefix word before it reads the command's name, so `["no-osd", "quit"]`
+/// would run `quit` past every table here, and `expand-properties` would
+/// turn property expansion on. No command starts with one.
+pub static PREFIXES: &[&str] = &[
+    "no-osd",
+    "osd-bar",
+    "osd-msg",
+    "osd-msg-bar",
+    "osd-auto",
+    "expand-properties",
+    "raw",
+    "repeatable",
+    "nonrepeatable",
+    "nonscalable",
+    "async",
+    "sync",
+];
 pub const RESERVED_LABEL: &str = "vestra-";
 /// Labels with a meaning of mpv's own, no plugin's either: `all` addresses
 /// every filter of a chain in `vf-command` / `af-command`, the player's
@@ -387,7 +406,11 @@ pub fn command_problem(args: &Value) -> Option<String> {
             "a command is an array of 1–{ARGS_MAX} elements, its name first"
         ));
     };
-    if !args[0].as_str().is_some_and(is_name) {
+    // A name, and no prefix word of mpv's: it would take the next element
+    // for the command. Looked up as the tables are (`_` for `-`): mpv does
+    // not read `no_osd` as a prefix, but nothing by that name is a command
+    // either.
+    if !args[0].as_str().is_some_and(is_name) || PREFIXES.contains(&command_key(args).as_str()) {
         return Some(
             "a command's first element is its name (no prefixes such as no-osd or async)".into(),
         );
@@ -587,6 +610,7 @@ pub fn json() -> Value {
             "filterMessages": FILTER_MESSAGES.iter().map(|(command, _)| *command).collect::<Vec<_>>(),
             "reservedLabel": RESERVED_LABEL,
             "reservedLabels": RESERVED_LABELS,
+            "prefixes": PREFIXES,
         },
     })
 }
@@ -1131,5 +1155,68 @@ mod tests {
         ] {
             assert_eq!(write(free), None, "{free}");
         }
+    }
+
+    /// mpv's node array form consumes leading prefix words before the
+    /// command's name (input/cmd.c `cmd_node_array`), so one in the name's
+    /// place is no command: `invalid`, whatever follows it.
+    #[test]
+    fn a_prefix_word_is_no_commands_name() {
+        let message = "a command's first element is its name (no prefixes such as no-osd or async)";
+        assert_eq!(
+            PREFIXES,
+            [
+                "no-osd",
+                "osd-bar",
+                "osd-msg",
+                "osd-msg-bar",
+                "osd-auto",
+                "expand-properties",
+                "raw",
+                "repeatable",
+                "nonrepeatable",
+                "nonscalable",
+                "async",
+                "sync"
+            ]
+        );
+        for prefix in PREFIXES {
+            for rest in [
+                json!([prefix]),
+                json!([prefix, "quit"]),
+                json!([prefix, "set", "pause", "no"]),
+                json!([prefix, "frame-drop-count"]),
+                json!([prefix, "async", "run", "calc.exe"]),
+            ] {
+                assert_eq!(command_problem(&rest).as_deref(), Some(message), "{rest}");
+            }
+            // Under the `_` spelling too (mpv itself takes that for an
+            // unknown command).
+            let spelled = prefix.replace('-', "_");
+            assert_eq!(
+                command_problem(&json!([spelled, "quit"])).as_deref(),
+                Some(message),
+                "{spelled}"
+            );
+            // No table names one, so none is ever a refused or free command.
+            assert!(COMMANDS.iter().all(|(command, _)| command != prefix));
+            assert!(!WRITERS.contains(prefix) && !FILTER_STAGES.contains(prefix));
+        }
+        // The reviewer's five.
+        for probe in [
+            json!(["no-osd", "set", "pause", "no"]),
+            json!(["async", "cycle", "pause"]),
+            json!(["osd-auto", "raw", "playlist-clear"]),
+            json!(["expand-properties", "set", "title", "${pause}"]),
+            json!(["no-osd", "quit"]),
+        ] {
+            assert_eq!(command_problem(&probe).as_deref(), Some(message), "{probe}");
+        }
+        // A prefix word later in the array is an argument like any other,
+        // and a command that only starts like one is a command.
+        assert_eq!(command_problem(&json!(["set", "brightness", "raw"])), None);
+        assert_eq!(command_problem(&json!(["print-text", "async"])), None);
+        assert_eq!(command_problem(&json!(["rawr"])), None);
+        assert_eq!(command_problem(&json!(["sync-playback"])), None);
     }
 }

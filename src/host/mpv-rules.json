@@ -106,6 +106,20 @@
       "vf-command",
       "af-command"
     ],
+    "prefixes": [
+      "no-osd",
+      "osd-bar",
+      "osd-msg",
+      "osd-msg-bar",
+      "osd-auto",
+      "expand-properties",
+      "raw",
+      "repeatable",
+      "nonrepeatable",
+      "nonscalable",
+      "async",
+      "sync"
+    ],
     "properties": {
       "ab-loop-a": "managed",
       "ab-loop-b": "managed",

@@ -632,3 +632,48 @@ fn the_label_all_and_underscore_names_reach_no_filter_of_the_players() {
     pass.stopped(&mpv, 1);
     assert_eq!(chain(&mpv, "vf").unwrap(), before);
 }
+
+/// mpv's node array form takes its command prefixes (`no-osd`, `async`,
+/// `expand-properties`, ...) before the command's name; a request that
+/// starts with one never reaches mpv.
+#[test]
+fn a_command_that_starts_with_a_prefix_word_never_reaches_mpv() {
+    let _one = one_mpv_at_a_time();
+    let mpv = mpv();
+    let mut pass = two_plugins();
+    mpv.set_property("pause", true).unwrap();
+    let title = mpv.get_property::<String>("title").unwrap();
+    for args in [
+        json!(["no-osd", "set", "pause", "no"]),
+        json!(["async", "cycle", "pause"]),
+        json!(["osd-auto", "raw", "playlist-clear"]),
+        json!(["expand-properties", "set", "title", "${pause}"]),
+        json!(["no-osd", "quit"]),
+        json!(["raw", "run", "no-such-program"]),
+        json!(["async", "load-script", "no-such-script.lua"]),
+    ] {
+        let error = command(&mut pass, &mpv, 1, args.clone()).unwrap_err();
+        assert_eq!(
+            (error.code.as_str(), error.message.as_str()),
+            (
+                "invalid",
+                "a command's first element is its name (no prefixes such as no-osd or async)"
+            ),
+            "{args}"
+        );
+    }
+    assert!(mpv.get_property::<bool>("pause").unwrap());
+    assert_eq!(mpv.get_property::<String>("title").unwrap(), title);
+    // Why: libmpv itself takes every word of the list as a prefix in this
+    // form and runs what follows (0.41: all of `PREFIXES`).
+    let node =
+        |args: &[&str]| Node::Array(args.iter().map(|arg| Node::String((*arg).into())).collect());
+    for prefix in mpv_rules::PREFIXES {
+        mpv.set_property("contrast", 0_i64).unwrap();
+        mpv.command_node(&node(&[prefix, "set", "contrast", "5"]))
+            .unwrap_or_else(|error| panic!("{prefix} is no prefix of this libmpv: {error}"));
+        assert_eq!(mpv.get_property::<i64>("contrast").unwrap(), 5, "{prefix}");
+    }
+    // Without the prefix the same command is the plugin's to send.
+    command(&mut pass, &mpv, 1, json!(["set", "contrast", "0"])).unwrap();
+}

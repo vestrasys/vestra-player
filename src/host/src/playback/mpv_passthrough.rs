@@ -6,7 +6,10 @@
 //! what needs mpv and the other plugins:
 //!
 //! - **Commands** go to mpv as a node array (`mpv_command_node`), never
-//!   through its string parser: no prefixes, no property expansion.
+//!   through its string parser: no splitting, no property expansion. mpv
+//!   takes its command prefixes in this form too (`no-osd`, `async`,
+//!   `expand-properties`, ...): the capability refuses a command that
+//!   starts with one (`mpv_rules::PREFIXES`).
 //! - **Filters.** A plugin adds, replaces, toggles or removes only filters
 //!   with its own label (`vf`/`af` `add`, `pre`, `toggle`, `remove` of
 //!   `@label…`). A label belongs, per stage, to the plugin that first put
