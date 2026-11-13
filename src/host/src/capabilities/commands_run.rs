@@ -97,6 +97,8 @@ pub struct ConfirmedRun {
     /// whose steps ask only because they are not built in; empty when the
     /// sheet offers no checkbox.
     pub remember: Vec<String>,
+    /// Their shown names, in the same order (the checkbox's text).
+    pub names: Vec<String>,
 }
 
 impl CommandRuns {
@@ -237,8 +239,22 @@ impl CommandRuns {
     /// source, or the user asked again before plugin commands.
     pub fn forget_remembered(&mut self, id: Option<&str>) {
         for run in &mut self.confirming {
-            run.remember.retain(|kept| id.is_some_and(|id| kept != id));
+            let (remember, names) = std::mem::take(&mut run.remember)
+                .into_iter()
+                .zip(std::mem::take(&mut run.names))
+                .filter(|(kept, _)| id.is_some_and(|id| kept != id))
+                .unzip();
+            run.remember = remember;
+            run.names = names;
         }
+    }
+    /// The shown names of the plugins the waiting run answering `reply`
+    /// would trust ("Don't ask again"), if it still waits.
+    pub fn offered(&self, reply: &Reply) -> Option<&[String]> {
+        self.confirming
+            .iter()
+            .find(|run| run.reply.owner == reply.owner && run.reply.id == reply.id)
+            .map(|run| run.names.as_slice())
     }
     /// Whether the run answering `reply` still waits for the user (its
     /// caller did not stop).
@@ -466,6 +482,7 @@ fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
 pub(crate) fn ask_again(host: &mut Host) {
     // A sheet open now does not trust anything either.
     host.command_runs.forget_remembered(None);
+    host.review_offer_changed();
     if host.ui_state.state.clear_trust() {
         // Written now, not a second later: a crash right after must not
         // bring the trust back.
@@ -480,6 +497,8 @@ pub(crate) fn ask_again(host: &mut Host) {
 pub(crate) fn forget_trust(host: &mut Host, id: &str) {
     // Nor does a sheet opened before (it would trust the new source).
     host.command_runs.forget_remembered(Some(id));
+    // Its checkbox no longer names it (and goes when it named only it).
+    host.review_offer_changed();
     if host.ui_state.state.forget_trust(id) {
         host.ui_state.flush();
     }
@@ -752,6 +771,7 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         step,
         then,
         remember,
+        names,
     });
     Ok(None)
 }
@@ -1205,6 +1225,7 @@ mod tests {
             step: None,
             then: None,
             remember: Vec::new(),
+            names: Vec::new(),
         });
     }
 
@@ -1235,12 +1256,18 @@ mod tests {
         let ticket = runs.mint(1, "x", 0);
         waiting_run(&mut runs, 1, &ticket);
         runs.confirming[0].remember = vec!["a.b".into(), "c.d".into()];
+        runs.confirming[0].names = vec!["A B".into(), "C D".into()];
+        let reply = runs.confirming[0].reply.clone();
         runs.forget_remembered(Some("a.b"));
         assert_eq!(runs.confirming[0].remember, ["c.d"]);
+        // The names follow: the sheet's checkbox names only what is left.
+        assert_eq!(runs.offered(&reply), Some(&["C D".to_owned()][..]));
         runs.forget_remembered(Some("x.y"));
         assert_eq!(runs.confirming[0].remember, ["c.d"]);
         runs.forget_remembered(None);
         assert!(runs.confirming[0].remember.is_empty());
+        assert_eq!(runs.offered(&reply), Some(&[][..]));
+        assert_eq!(runs.offered(&Reply { owner: 1, id: 9 }), None);
     }
 
     /// Review fix 1: a call that would ask while a sheet waits fails `busy`

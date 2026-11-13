@@ -38,11 +38,18 @@ use std::path::{Path, PathBuf};
 
 /// (file under `src/`, or `generated:<name>`; the found line's text, trimmed,
 /// or a part of it that names it in that file; why).
-const ALLOWED: &[(&str, &str, &str)] = &[(
-    "plugins/video/ui/shaders.slint",
-    "for name[index] in root.model: Rectangle {",
-    "video shaders: the built-in video plugin is left unchanged for now (user ruling 2026-10-31)",
-)];
+const ALLOWED: &[(&str, &str, &str)] = &[
+    (
+        "plugins/video/ui/shaders.slint",
+        "for name[index] in root.model: Rectangle {",
+        "video shaders: the built-in video plugin is left unchanged for now (user ruling 2026-10-31)",
+    ),
+    (
+        "host/ui/review-sheet.slint",
+        "for step[i] in root.sheet.steps: Rectangle {",
+        "the approval sheet's steps: a fixed set of 8 slots (review_sheet::SLOTS, the no-churn rule); the ScrollView only keeps them in a very small window",
+    ),
+];
 
 /// A `for` inside a scrolling element, or a local component holding one
 /// placed in a scrolling element: its line, the line's text and the

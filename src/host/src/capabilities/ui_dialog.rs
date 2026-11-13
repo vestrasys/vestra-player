@@ -5,7 +5,11 @@
 //! player (`host/review_sheet.rs`, Ask Vestra UX H5).
 use super::{Capability, Handled, Info, Method, Recorded, Residency};
 use crate::{
-    host::{Event, Host, Reply, RpcError, origins::Route, string},
+    host::{
+        Event, Host, Reply, RpcError,
+        origins::{Origin, Route},
+        string,
+    },
     i18n, platform,
     ui::{confirm, view},
 };
@@ -111,21 +115,22 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     };
     let place = match route {
         Route::Sheet => {
-            // The main window's: drawn in the player, with the request box
-            // while the caller holds the lead with a live request. The main
-            // window comes forward (with the focus while the player is in
-            // the foreground, asking for attention otherwise); a tool window
-            // over the sheet's place stays above it (owned windows, the
-            // floating level on macOS): the sheet is only for requests made
-            // in the main window, where the user is looking.
-            if let Some(shell) = &host.shell {
-                view::show_again(shell, platform::app_in_foreground());
-            }
+            // The main window's: drawn in the player. The main window comes
+            // forward when the sheet first shows (`Host::present_review`:
+            // with the focus while the player is in the foreground, asking
+            // for attention otherwise); a tool window over the sheet's place
+            // stays above it (owned windows, the floating level on macOS):
+            // the sheet is only for requests made in the main window, where
+            // the user is looking. The request box only for a request typed
+            // in the palette's first row: the caller holds the lead, the
+            // user last acted for it there (not in its panel, say, while an
+            // older request's ticket is still live) and that request is live.
             let now = host.now_ms();
             let request = host
                 .lead
                 .as_ref()
                 .filter(|lead| lead.owner == reply.owner)
+                .filter(|_| host.origins.get(reply.owner) == Some(&Origin::Lead))
                 .and_then(|_| host.command_runs.live_request(reply.owner, now));
             host.open_confirm(reply.clone(), options, request);
             return Ok(());

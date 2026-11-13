@@ -107,6 +107,24 @@ pub struct Lead {
     pub ended: Option<LeadStatus>,
 }
 
+impl Lead {
+    /// Its holder is parked (or restarts): the row stays, recorded, but a
+    /// working status goes from the row, from the status strip (which would
+    /// sweep with nothing working: the holder's tickets end with its
+    /// process, `CommandRuns::revoke`) and from the recorded call, so the
+    /// woken holder starts without it. Whether a status went.
+    pub fn park(&mut self) -> bool {
+        self.recorded = true;
+        if self.row.status.take().is_none() {
+            return false;
+        }
+        if let Some(object) = self.sent.as_object_mut() {
+            object.remove("status");
+        }
+        true
+    }
+}
+
 /// A text field of `palette.lead.set`: a string (source text, translated
 /// with the plugin's catalog) or a text value, `min..=max` characters as
 /// shown.
@@ -278,8 +296,12 @@ impl Capability for PaletteLead {
     }
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if keep_recorded {
-            if let Some(lead) = host.lead.as_mut().filter(|lead| lead.owner == owner) {
-                lead.recorded = true;
+            let Some(lead) = host.lead.as_mut().filter(|lead| lead.owner == owner) else {
+                return;
+            };
+            if lead.park() {
+                // Off the palette's row and the strip at once.
+                host.lead_changed(false);
             }
         } else {
             clear(host, owner);
@@ -419,6 +441,31 @@ mod tests {
             assert_eq!(state(json!({"text":"t","state":name})), expected);
             assert_eq!(expected.ended(), *name != "working");
         }
+    }
+
+    /// T5 (step 2 review follow-up): a holder parked while its status says
+    /// it works keeps its row but not the status: the strip stops sweeping,
+    /// the row is the plain row again, and the recorded call (replayed when
+    /// it wakes) has no status.
+    #[test]
+    fn a_parked_holder_keeps_its_row_without_a_working_status() {
+        let sent = json!({"title":"Ask Vestra","icon":"ai",
+            "status":{"text":"Planning…","note":"Enter stops"}});
+        let mut lead = Lead {
+            owner: 3,
+            row: parse(&english(), &[], &sent).unwrap(),
+            sent,
+            recorded: false,
+            ended: None,
+        };
+        assert!(lead.park());
+        assert!(lead.recorded);
+        assert_eq!(lead.row.status, None);
+        assert_eq!(lead.row.title, "Ask Vestra");
+        assert_eq!(lead.sent, json!({"title":"Ask Vestra","icon":"ai"}));
+        // Nothing to take the second time; a row without a status is kept.
+        assert!(!lead.park());
+        assert_eq!(lead.sent, json!({"title":"Ask Vestra","icon":"ai"}));
     }
 
     #[test]

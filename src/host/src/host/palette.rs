@@ -357,7 +357,7 @@ impl Host {
         // window's: the holder's confirmations for this request (Ask
         // Vestra's consent, the commands it runs) go to its sheet, with the
         // request box, even after the holder's own window was shown.
-        self.act(owner, origins::Origin::Main);
+        self.act(owner, origins::Origin::Lead);
         let now = self.now_ms();
         let ticket = self.command_runs.mint(owner, &query, now);
         // A new request: its end state shows even when it is the same as

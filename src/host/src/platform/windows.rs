@@ -681,6 +681,12 @@ pub fn double_click_seconds() -> f64 {
     f64::from(vestra_win32::double_click_ms()) / 1000.
 }
 
+/// Whether the user lets the interface animate: "Animation effects" (Show
+/// animations in Windows) is on.
+pub fn system_animations() -> bool {
+    vestra_win32::client_area_animation()
+}
+
 pub fn screen_for(id: HostWindowId) -> Result<ScreenFacts> {
     let window = window(id)?;
     let monitor = window
