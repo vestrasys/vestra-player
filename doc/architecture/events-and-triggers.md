@@ -796,7 +796,7 @@ No measurement was made for this document. Each of the following appears in the 
 | E8 | Today's state broadcast to the built-ins is more than a hundred messages a second | Arithmetic (11 listeners × 10 Hz) | Preparation (P2), B5 |
 | E9 | Every "afterwards" cell of the table in §7 | A static reading of the sources | Preparation (P2); A7; B5 |
 | E10 | A resume that comes 0.1–0.2 s late shows as "from 0, then a jump" | The taxonomy's judgement | B5 (GUI check) |
-| E11 | The host can obtain the last position when a source ends | Not verified in the code | A1 |
+| E11 | The host can obtain the last position when a source ends | **Settled in A1**: yes, without a change to the playback thread. The UI thread derives the three events from consecutive `source.state` broadcasts (`src/host/src/source_events.rs`) and gives `source.ended` the last broadcast of that source: exact at a natural end and a failure (the broadcast that reports it) and while paused; when a playing source is replaced or closed, at most one broadcast interval (100 ms of playback) old | A1 |
 | E12 | The playback thread sees every event that re-anchors the position model except a buffering stall | A reading of the taxonomy, not checked item by item | A2 |
 | E13 | When the last stream stops, the host can re-classify the run without a change to the supervisor core (M2) | Not checked | A4 |
 | E14 | A plugin upgrade while a user-set condition is pending is rare | A judgement from how updates are installed (4.2) | – |

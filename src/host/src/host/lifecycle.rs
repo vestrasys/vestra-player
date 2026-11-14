@@ -478,7 +478,8 @@ impl Host {
             capabilities::refresh_conditions(self);
         }
         let wake = capabilities::WAKE_EVENTS.contains(&event);
-        if wake {
+        // A source event reports one change, not a state to compare.
+        if wake && !capabilities::SOURCE_EVENTS.contains(&event) {
             // What a plugin parked at start-up is compared with (`wake_missed`).
             self.note_announced(event, &data);
         }
@@ -494,7 +495,7 @@ impl Host {
             // ready: a newer one waits behind it, never before (§6.9; the
             // core holds it while its start is waking).
             if wake && self.supervisor.waking(Pid(*owner)).is_some() {
-                let trigger = Trigger::event(event, json!({"event":event,"data":data}));
+                let trigger = capabilities::wake_trigger(event, &data);
                 self.supervisor.wake(Pid(*owner), &trigger);
                 continue;
             }

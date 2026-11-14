@@ -1333,3 +1333,185 @@ fn recorded_marks(registry: &serde_json::Value, expected: bool) -> Vec<String> {
     }
     out
 }
+
+const OPENED: &str = "vestra.fixture-opened";
+const READIED: &str = "vestra.fixture-readied";
+const ENDED: &str = "vestra.fixture-ended";
+const ALL: &str = "vestra.fixture-source-events";
+const PLAYER: &str = "vestra.fixture-player";
+
+/// The discrete source events (events-and-triggers.md §4.6) wake a plugin in
+/// standby: three listeners, of `source.opening`, `source.ready` and
+/// `source.ended` alone, are parked (a listener of one keeps nothing
+/// running) and each is woken by its event; a fourth hears all of them in
+/// the order `opening` → `ready` → `ended` through an open, a replacement,
+/// a failure, a stop and a natural end, with the ended source's last
+/// position; at the quit, the running listener gets `ended` with `quit`.
+/// The source ids count from 1 in each run: a, b, the bad file, d, e, f.
+#[test]
+#[ignore = "needs Node 26, libmpv, ffmpeg and the SDK with the source events: run with --include-ignored (ci:local)"]
+fn source_events_wake_their_listeners_in_order() {
+    let media = tempfile::tempdir().unwrap();
+    let ffmpeg = std::env::var("VESTRA_FFMPEG").unwrap_or_else(|_| "ffmpeg".into());
+    let tone = |name: &str, seconds: u32| {
+        let path = media.path().join(name);
+        let made = Command::new(&ffmpeg)
+            .args(["-v", "error", "-f", "lavfi", "-i"])
+            .arg(format!("sine=duration={seconds}"))
+            .arg("-y")
+            .arg(&path)
+            .status()
+            .unwrap();
+        assert!(made.success());
+        serde_json::to_string(&path.to_string_lossy()).unwrap()
+    };
+    let (long, other, short) = (tone("a.wav", 30), tone("b.wav", 30), tone("e.wav", 1));
+    let bad = media.path().join("bad.wav");
+    std::fs::write(&bad, "this is not a sound").unwrap();
+    let bad = serde_json::to_string(&bad.to_string_lossy()).unwrap();
+    let one = |id: &str, event: &str| {
+        format!(
+            "export default function activate(plugin) {{\n\
+             console.error(`{id} start`);\n\
+             plugin.player.on(\"{event}\", ({{ state, reason }}) =>\n\
+             console.error(`{id} heard {event} ${{state.sourceId}} ${{reason ?? \"\"}}`));\n}}\n"
+        )
+    };
+    let root = root_with(|plugins| {
+        vec![
+            package(plugins, OPENED, &[], one(OPENED, "source.opening")),
+            package(plugins, READIED, &[], one(READIED, "source.ready")),
+            package(plugins, ENDED, &[], one(ENDED, "source.ended")),
+            // Kept running by a state listener, so that it runs at the quit
+            // and hears each event as it is sent.
+            package(
+                plugins,
+                ALL,
+                &["events"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     plugin.player.onChange(() => {{}});\n\
+                     const log = (name, data) => console.error(`{ALL} event ${{name}} ${{data.state.sourceId}} ${{data.reason ?? \"\"}} ${{data.state.position ?? \"\"}}`);\n\
+                     for (const name of [\"source.opening\", \"source.ready\", \"source.ended\"])\n\
+                     plugin.player.on(name, (data) => log(name, data));\n}}\n"
+                ),
+            ),
+            // Opens, replaces, fails, stops and ends; its listener keeps it
+            // running, so its timers hold.
+            package(
+                plugins,
+                PLAYER,
+                &["events", "playback.read", "playback.control"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     plugin.player.onChange(() => {{}});\n\
+                     const step = (at, name, act) => setTimeout(() => act().then(\n\
+                     () => console.error(`{PLAYER} ${{name}}`),\n\
+                     (error) => console.error(`{PLAYER} ${{name}} failed ${{error}}`)), at);\n\
+                     step(3500, \"open a\", () => plugin.player.open({long}));\n\
+                     step(6000, \"open b\", () => plugin.player.open({other}));\n\
+                     step(8500, \"open bad\", () => plugin.player.open({bad}).then((m) => m.ready()).catch(() => {{}}));\n\
+                     step(11000, \"open d\", () => plugin.player.open({long}));\n\
+                     step(13500, \"close\", () => plugin.player.close());\n\
+                     step(16000, \"open e\", () => plugin.player.open({short}));\n\
+                     step(21000, \"open f\", () => plugin.player.open({long}));\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
+    let log = run(root.path(), 24, &lazy);
+    // The single-event listeners: parked, then woken by their event.
+    for (id, event) in [
+        (OPENED, "source.opening"),
+        (READIED, "source.ready"),
+        (ENDED, "source.ended"),
+    ] {
+        let parked = log
+            .find(&format!("lazy: {id} parked (1 recorded calls)"))
+            .unwrap_or_else(|| panic!("{id} parked: {log}"));
+        let woken = log
+            .find(&format!("lazy: {id} woken by {event}"))
+            .unwrap_or_else(|| panic!("{id} woken by {event}: {log}"));
+        assert!(parked < woken, "{log}");
+        assert!(
+            log[woken..].contains(&format!("{id} heard {event}")),
+            "{log}"
+        );
+        // Parked again after it, and woken again later: by each event.
+        assert!(
+            count(&log, &format!("lazy: {id} woken by {event}")) >= 2,
+            "{id} woken more than once: {log}"
+        );
+    }
+    let subscribed =
+        serde_json::json!([{"method":"events.subscribe","params":{"event":"source.ready"}}]);
+    assert!(
+        recordings(root.path())
+            .iter()
+            .any(|r| r["calls"] == subscribed),
+        "the subscription is recorded"
+    );
+    // The listener of all three: their order through each case (ids
+    // count from 1 per run: a, b, bad, d, e, f).
+    let heard = log
+        .lines()
+        .filter_map(|line| line.split(&format!("{ALL} event ")).nth(1))
+        .map(|rest| rest.trim_end().to_owned())
+        .collect::<Vec<_>>();
+    let names = heard
+        .iter()
+        .map(|line| {
+            let mut words = line.split(' ');
+            let name = words.next().unwrap().trim_start_matches("source.");
+            let id = words.next().unwrap();
+            let reason = words.next().unwrap_or("");
+            format!("{name} {id} {reason}").trim_end().to_owned()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        names,
+        [
+            "opening 1",
+            "ready 1",
+            "ended 1 replaced",
+            "opening 2",
+            "ready 2",
+            "ended 2 replaced",
+            "opening 3",
+            "ended 3 error",
+            "opening 4",
+            "ready 4",
+            "ended 4 stopped",
+            "opening 5",
+            "ready 5",
+            "ended 5 natural",
+            "opening 6",
+            "ready 6",
+            "ended 6 quit",
+        ],
+        "{log}"
+    );
+    // `ended` carries the ended source's last position: the stop's is
+    // well into the file.
+    let position = |prefix: &str| -> f64 {
+        heard
+            .iter()
+            .find(|line| line.starts_with(prefix))
+            .and_then(|line| line.rsplit(' ').next())
+            .and_then(|p| p.parse().ok())
+            .unwrap_or_else(|| panic!("{prefix}: {heard:?}"))
+    };
+    assert!(position("source.ended 4 stopped") > 1.5, "{heard:?}");
+    // The natural end's is the position the end was seen at (the state
+    // that says `ended`): for this one-second tone mpv reported about 0.6 s
+    // there (measured 0.596), as the state stream shows it today.
+    assert!(position("source.ended 5 natural") > 0.3, "{heard:?}");
+    assert!(position("source.ended 1 replaced") > 1.5, "{heard:?}");
+    // The parked listener of `ended` is neither woken for the quit nor
+    // told later (§6, M5).
+    assert!(
+        !log.contains(&format!("{ENDED} heard source.ended 6 quit")),
+        "{log}"
+    );
+}

@@ -27,6 +27,7 @@ pub mod playback;
 mod power;
 mod process;
 mod session_storage;
+mod source_events;
 mod supervisor;
 mod system;
 mod timeline;

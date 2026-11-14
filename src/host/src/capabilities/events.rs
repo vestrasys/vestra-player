@@ -21,6 +21,9 @@ const EVENTS: &[&str] = &[
     "resolvers.fileTypes",
     "video.upscaling.changed",
     "video.motion.changed",
+    "source.opening",
+    "source.ready",
+    "source.ended",
 ];
 /// Events a parked plugin is woken for (lazy activation §6.9): they follow
 /// a user's or a plugin's deliberate change (an install, a key edit, the
@@ -29,6 +32,8 @@ const EVENTS: &[&str] = &[
 /// the event. `source.state` (every 100 ms while playing), `window.state`
 /// (every resize step, menu and focus change), `playback.backend` (every
 /// mpv event) and `timeline.changed` (every source and mark) keep it.
+/// The discrete source events wake too (events-and-triggers.md §4.6): each
+/// is sent once per thing that happened to a source.
 pub(crate) const WAKE_EVENTS: &[&str] = &[
     "packages.changed",
     "bindings.changed",
@@ -37,7 +42,32 @@ pub(crate) const WAKE_EVENTS: &[&str] = &[
     "commands.keys",
     "appearance.changed",
     "resolvers.fileTypes",
+    "source.opening",
+    "source.ready",
+    "source.ended",
 ];
+/// The wake events that report one change of one source
+/// (`crate::source_events`), not a state: the backlog merges them per
+/// source (`wake_trigger`), and the start-up mute holds them for its end
+/// instead of comparing states (`OnDemand::announced` is for the others).
+pub(crate) const SOURCE_EVENTS: &[&str] = &[
+    crate::source_events::OPENING,
+    crate::source_events::READY,
+    crate::source_events::ENDED,
+];
+
+/// The backlog trigger for wake event `event` with `data`: merged with a
+/// held one of the same key (newest wins). The key is the event's name;
+/// for a source event its name and source id, so two sources in a row
+/// keep one each (design §4.9).
+pub(crate) fn wake_trigger(event: &str, data: &Value) -> crate::supervisor::Trigger<Value> {
+    let message = json!({"event":event,"data":data});
+    if SOURCE_EVENTS.contains(&event) {
+        let key = format!("{event} {}", crate::source_events::source_id(data));
+        return crate::supervisor::Trigger::event(key, message);
+    }
+    crate::supervisor::Trigger::event(event, message)
+}
 /// The longest reason kept (the SDK's description of a listener), and how
 /// many per event.
 const WHY_LIMIT: usize = 300;
@@ -159,5 +189,43 @@ impl Capability for Events {
             plugin.listeners.remove(event);
         }
         Ok(Some(Value::Null))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::supervisor::TriggerKind;
+
+    fn ready(id: u64) -> Value {
+        json!({"state":{"stamp":{"generation":id},"phase":"ready"}})
+    }
+
+    /// Design §4.9: a per-source event merges by its name and source id,
+    /// so two sources in a row keep one each; other wake events by name.
+    #[test]
+    fn source_events_merge_per_source_in_the_backlog() {
+        let key = |trigger: &crate::supervisor::Trigger<Value>| match &trigger.kind {
+            TriggerKind::Event(key) => key.clone(),
+            other => panic!("{other:?}"),
+        };
+        assert_eq!(
+            key(&wake_trigger("source.ready", &ready(3))),
+            "source.ready 3"
+        );
+        assert_eq!(
+            key(&wake_trigger("packages.changed", &json!([]))),
+            "packages.changed"
+        );
+        // The message is the event as the plugin receives it.
+        let trigger = wake_trigger("source.ended", &ready(2));
+        assert_eq!(trigger.payload["event"], "source.ended");
+        assert_eq!(trigger.payload["data"], ready(2));
+        for event in SOURCE_EVENTS {
+            assert!(
+                WAKE_EVENTS.contains(event) && EVENTS.contains(event),
+                "{event}"
+            );
+        }
     }
 }

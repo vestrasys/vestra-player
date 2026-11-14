@@ -56,7 +56,7 @@ pub(crate) use commands_run::{
     ask_again as ask_again_before_plugin_commands, forget_trust as forget_command_trust,
     shown_name,
 };
-pub(crate) use events::WAKE_EVENTS;
+pub(crate) use events::{SOURCE_EVENTS, WAKE_EVENTS, wake_trigger};
 pub(crate) use media_sources::locate_dialog;
 #[cfg(test)]
 pub(crate) use mpv::check as mpv_check;

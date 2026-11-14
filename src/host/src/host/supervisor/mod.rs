@@ -212,6 +212,12 @@ pub(crate) struct OnDemand {
     pub seen: BTreeMap<u64, BTreeMap<String, Option<u64>>>,
     /// The mute of start-up ended and `wake_missed` ran (once per run).
     pub caught_up: bool,
+    /// Source events (`capabilities::SOURCE_EVENTS`) the start-up mute kept
+    /// from plugins in standby that listen to them, in order, one per event
+    /// name and source (`wake_trigger`'s key): delivered when the mute ends
+    /// (`wake_missed`). A file opened at launch opens during the mute; a
+    /// change is not a state the plugin can read again later.
+    pub muted_sources: BTreeMap<u64, Vec<(String, Value)>>,
     /// Start-up settled (latched once per run; the core's `settled`).
     settled: bool,
     next_check: u64,
@@ -681,9 +687,31 @@ impl Host {
         }
         let now = self.now_ms();
         self.supervisor.set_now(now);
-        let trigger = Trigger::event(event, json!({"event":event,"data":data}));
-        if self.supervisor.wake(Pid(owner), &trigger) == Delivery::Started {
+        let trigger = capabilities::wake_trigger(event, data);
+        let delivery = self.supervisor.wake(Pid(owner), &trigger);
+        if delivery == Delivery::Started {
             self.wake_started(owner);
+        }
+        if delivery == Delivery::Dropped
+            && !self.on_demand.caught_up
+            && self.supervisor.events_muted()
+            && capabilities::SOURCE_EVENTS.contains(&event)
+        {
+            self.mute_source_event(owner, event, data);
+        }
+    }
+    /// The start-up mute dropped source event `event` for `owner` in
+    /// standby: kept for the mute's end (`OnDemand::muted_sources`), the
+    /// newest of each event name and source.
+    fn mute_source_event(&mut self, owner: u64, event: &str, data: &Value) {
+        let id = crate::source_events::source_id(data);
+        let max = self.supervisor.tunables().backlog_max;
+        let held = self.on_demand.muted_sources.entry(owner).or_default();
+        held.retain(|(name, old)| name != event || crate::source_events::source_id(old) != id);
+        held.push((event.to_owned(), data.clone()));
+        // The backlog's bound: the oldest go first.
+        if held.len() > max {
+            held.drain(..held.len() - max);
         }
     }
     /// `event`, a wake event, was announced with `data`: its state now
@@ -782,6 +810,23 @@ impl Host {
                 state
             };
             self.wake_listener(owner, &event, &data);
+        }
+        // The source events the mute kept, in their order, to each plugin
+        // still in standby and still listening (one started meanwhile
+        // started after them and reads the state, as every start does).
+        let muted = std::mem::take(&mut self.on_demand.muted_sources);
+        for (owner, events) in muted {
+            for (event, data) in events {
+                let listens = self.on_demand.held.contains_key(&owner)
+                    && self
+                        .on_demand
+                        .wakes
+                        .get(&owner)
+                        .is_some_and(|events| events.contains(&event));
+                if listens {
+                    self.wake_listener(owner, &event, &data);
+                }
+            }
         }
     }
     /// The manifest id of a plugin in standby.
