@@ -125,9 +125,7 @@ impl Host {
             let data = notification.data(&self.last_source);
             let message = json!({"event":triggers::EVENT,"data":data});
             match self.fire(&notification.plugin, key, message) {
-                Ok(()) => self
-                    .triggers
-                    .delivered(&notification.plugin, &notification.trigger),
+                Ok(()) => self.triggers.delivered(&notification.plugin, &data),
                 Err(why) => self.triggers.undelivered(&notification.plugin, &data, why),
             }
         }
@@ -206,8 +204,9 @@ impl Host {
         for (plugin, held) in muted {
             for (key, message) in held {
                 let data = message["data"].clone();
-                if let Err(why) = self.fire(&plugin, key, message) {
-                    self.triggers.undelivered(&plugin, &data, why);
+                match self.fire(&plugin, key, message) {
+                    Ok(()) => self.triggers.delivered(&plugin, &data),
+                    Err(why) => self.triggers.undelivered(&plugin, &data, why),
                 }
             }
         }

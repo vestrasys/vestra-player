@@ -171,6 +171,11 @@ struct Kept {
     /// Its last notification could not be delivered and that was logged:
     /// not again until one is (`delivered`).
     untold: bool,
+    /// What the plugin knows of it: the state before the last evaluation's
+    /// batch of notifications, moved on by each one of the batch delivered
+    /// since (`delivered`); where `entered` goes back to when one is lost
+    /// (`undelivered`).
+    heard: Option<Option<usize>>,
 }
 
 #[derive(Debug, Default)]
@@ -330,6 +335,9 @@ impl Triggers {
                 last_position: None,
                 retry: false,
                 untold: false,
+                // Carried: the plugin heard that range's `enter` (a lost one
+                // would have un-latched it); new: nothing of it yet.
+                heard: entered,
             },
         );
         self.save(plugin);
@@ -432,10 +440,53 @@ impl Triggers {
     /// diagnostic line; and, when it is still the condition that fired it
     /// (the same `seq`), "entered" goes back to what the plugin last heard,
     /// so the next evaluation fires it again instead of the latch keeping
-    /// it quiet until the condition turns the other way and back: a lost
-    /// `enter` un-latches it, a lost `leave` latches it again. The next
+    /// it quiet until the condition turns the other way and back. The next
     /// `triggers.declare` of the plugin evaluates it too (`redeliver`).
     pub fn undelivered(&mut self, plugin: &str, data: &Value, why: &str) {
+        let (Ok(id), Some(seq), Some(edge)) = (
+            TriggerId::parse(&data["trigger"]),
+            data["seq"].as_u64(),
+            data["edge"].as_str(),
+        ) else {
+            return;
+        };
+        let Some(kept) = self
+            .plugins
+            .get_mut(plugin)
+            .and_then(|p| p.kept.get_mut(&id))
+        else {
+            return;
+        };
+        // One line per trigger until a delivery succeeds (`delivered`): a
+        // plugin that cannot take any (a failed unit) is evaluated at every
+        // change of what its conditions read.
+        if !kept.untold {
+            kept.untold = true;
+            self.told.push(format!(
+                "triggers: {plugin} trigger {} {edge} not delivered ({why}): it fires again at its next evaluation",
+                id.label()
+            ));
+        }
+        if kept.seq != seq {
+            return;
+        }
+        // Back to what the plugin last heard (`heard`: its last delivered
+        // notification of this condition). Within one evaluation's batch
+        // the notifications may fare differently (the first wakes the
+        // plugin and is held, a later one finds the backlog full), so each
+        // outcome counts: a lost one puts "entered" back to what the plugin
+        // knows, a delivered one after it moves both on (`delivered`). So
+        // [leave 0, enter 1, leave 1] all lost leaves it entered in 0, as
+        // the plugin knows, and [enter 0, leave 0] both lost not entered;
+        // the next evaluation sends what the plugin missed, from there.
+        kept.entered = kept.heard;
+        kept.retry = true;
+    }
+    /// The Host delivered `plugin`'s notification `data` (sent, held for
+    /// its ready, or a wake): the plugin knows it (`heard`); after a lost
+    /// one of the same batch "entered" follows it too (`undelivered`). Its
+    /// next failure is logged again.
+    pub fn delivered(&mut self, plugin: &str, data: &Value) {
         let (Ok(id), Some(seq), Some(edge)) = (
             TriggerId::parse(&data["trigger"]),
             data["seq"].as_u64(),
@@ -451,41 +502,13 @@ impl Triggers {
         else {
             return;
         };
-        // One line per trigger until a delivery succeeds (delivered): a
-        // plugin that cannot take any (a failed unit) is evaluated at every
-        // change of what its conditions read.
-        if !kept.untold {
-            kept.untold = true;
-            self.told.push(format!(
-                "triggers: {plugin} trigger {} {edge} not delivered ({why}): it fires again at its next evaluation",
-                id.label()
-            ));
-        }
+        kept.untold = false;
         if kept.seq != seq {
             return;
         }
-        // Back to what the plugin last heard: a lost enter of this range
-        // un-latches it; a lost leave of a range latches it in that range
-        // again, also when the evaluation went on into another range (a
-        // move from one range to the next, both lost: the plugin still
-        // knows the first, and the next evaluation leaves it, then enters
-        // the second).
-        match edge {
-            "enter" if kept.entered == Some(range) => kept.entered = None,
-            "leave" if kept.entered != Some(range) => kept.entered = Some(range),
-            _ => return,
-        }
-        kept.retry = true;
-    }
-    /// A notification of `trigger` reached `plugin` (sent, held for its
-    /// ready, or a wake): its next failure is logged again.
-    pub fn delivered(&mut self, plugin: &str, trigger: &TriggerId) {
-        if let Some(kept) = self
-            .plugins
-            .get_mut(plugin)
-            .and_then(|p| p.kept.get_mut(trigger))
-        {
-            kept.untold = false;
+        kept.heard = if edge == "enter" { Some(range) } else { None };
+        if kept.retry {
+            kept.entered = kept.heard;
         }
     }
 
@@ -545,6 +568,7 @@ impl Triggers {
                     last_position: None,
                     retry: false,
                     untold: false,
+                    heard: None,
                 },
             );
         }
@@ -592,6 +616,7 @@ impl Triggers {
         };
         for kept in entry.kept.values_mut() {
             kept.entered = None;
+            kept.heard = None;
             kept.last_position = None;
         }
         let ids: Vec<_> = entry.kept.keys().cloned().collect();
@@ -839,6 +864,9 @@ fn evaluate_kept(
     out: &mut Vec<Notification>,
 ) {
     kept.retry = false;
+    // What the plugin knows when this batch begins: the state before it
+    // (an earlier batch's losses were put back already, `undelivered`).
+    kept.heard = kept.entered;
     let list = kept.condition.position().cloned();
     let bound_here = kept.bound.is_some() && kept.bound == Some(moment.source);
     let mut push = |kept: &mut Kept, truth: Truth, position: Option<f64>| {

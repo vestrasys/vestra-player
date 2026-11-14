@@ -749,6 +749,7 @@ fn undelivered_is_logged_once_and_a_lost_move_leaves_the_first_range() {
     t.set(P, 5, TriggerId::Unnamed(0), &when, NOW).unwrap();
     let out = t.position(1, 10., true, NOW);
     assert_eq!(edges(&out), [("enter", Some(0))]);
+    t.delivered(P, &out[0].data(&json!({})));
     // The move into the second range: neither notification arrives.
     let out = t.position(1, 20., true, NOW);
     assert_eq!(edges(&out), [("leave", Some(0)), ("enter", Some(1))]);
@@ -767,8 +768,100 @@ fn undelivered_is_logged_once_and_a_lost_move_leaves_the_first_range() {
         t.diagnostics().is_empty(),
         "not again until one is delivered"
     );
-    t.delivered(P, &TriggerId::Unnamed(0));
-    let out = t.redeliver(P, NOW);
+    // Both arrive this time: logged again at the next loss.
+    for n in &out {
+        t.delivered(P, &n.data(&json!({})));
+    }
+    let out = t.position(1, 30., true, NOW);
+    assert_eq!(edges(&out), [("leave", Some(1))]);
     t.undelivered(P, &out[0].data(&json!({})), "test");
     assert_eq!(t.diagnostics().len(), 1);
+}
+
+/// Review of N3: within one evaluation's batch what the plugin knows is
+/// what was delivered. Continuous playback through short ranges emits
+/// several edges at once; when all are lost the plugin still knows the
+/// state before the batch, and the next evaluation starts from there.
+#[test]
+fn a_lost_batch_goes_back_to_what_the_plugin_last_heard() {
+    let lose = |t: &mut Triggers, out: &[Notification]| {
+        for n in out {
+            t.undelivered(P, &n.data(&json!({})), "test");
+        }
+    };
+    let deliver = |t: &mut Triggers, out: &[Notification]| {
+        for n in out {
+            t.delivered(P, &n.data(&json!({})));
+        }
+    };
+    let ranges = json!({"position":{"ranges":[[10, 20], [20, 20.01], [30, 40], [40, 40.01]]}});
+    let start = |at: f64| {
+        let mut t = registry();
+        t.set_facts(ready(false, false), 1, Some(at), NOW);
+        let (_, out) = t.set(P, 5, TriggerId::Unnamed(0), &ranges, NOW).unwrap();
+        (t, out)
+    };
+    // Three edges [leave 0, enter 1, leave 1], all lost: still in 0 as the
+    // plugin knows; the next evaluation leaves 0.
+    let (mut t, out) = start(15.);
+    assert_eq!(edges(&out), [("enter", Some(0))]);
+    deliver(&mut t, &out);
+    let out = t.position(1, 25., true, NOW);
+    assert_eq!(
+        edges(&out),
+        [("leave", Some(0)), ("enter", Some(1)), ("leave", Some(1))]
+    );
+    lose(&mut t, &out);
+    assert_eq!(edges(&t.redeliver(P, NOW)), [("leave", Some(0))]);
+    // Four edges [leave 0, enter 1, leave 1, enter 2], all lost: the next
+    // evaluation leaves 0 and enters 2 (never a leave of 1 unentered).
+    let (mut t, out) = start(15.);
+    deliver(&mut t, &out);
+    let out = t.position(1, 30., true, NOW);
+    assert_eq!(
+        edges(&out),
+        [
+            ("leave", Some(0)),
+            ("enter", Some(1)),
+            ("leave", Some(1)),
+            ("enter", Some(2))
+        ]
+    );
+    lose(&mut t, &out);
+    assert_eq!(
+        edges(&t.redeliver(P, NOW)),
+        [("leave", Some(0)), ("enter", Some(2))]
+    );
+    // [enter 3, leave 3] both lost (a range passed between two checks)
+    // after a delivered leave of 2: nothing is latched.
+    let (mut t, out) = start(35.);
+    deliver(&mut t, &out);
+    let out = t.position(1, 41., true, NOW);
+    assert_eq!(
+        edges(&out),
+        [("leave", Some(2)), ("enter", Some(3)), ("leave", Some(3))]
+    );
+    deliver(&mut t, &out[..1]);
+    lose(&mut t, &out[1..]);
+    // The leave of 2 arrived, the pass through 3 did not: not entered.
+    assert!(t.redeliver(P, NOW).is_empty());
+    assert!(t.position(1, 42., true, NOW).is_empty());
+}
+
+/// Review item 2: one batch may fare differently (the first wakes the plugin
+/// and is held, a later one finds its backlog full). A lost leave of 0 and
+/// a delivered enter of 1: the plugin knows 1, so 1 is not entered again.
+#[test]
+fn a_batch_partly_delivered_follows_what_arrived() {
+    let mut t = registry();
+    t.set_facts(ready(false, false), 1, Some(15.), NOW);
+    let when = json!({"position":{"ranges":[[10, 20], [20, 30]]}});
+    let (_, out) = t.set(P, 5, TriggerId::Unnamed(0), &when, NOW).unwrap();
+    t.delivered(P, &out[0].data(&json!({})));
+    let out = t.position(1, 20., true, NOW);
+    assert_eq!(edges(&out), [("leave", Some(0)), ("enter", Some(1))]);
+    t.undelivered(P, &out[0].data(&json!({})), "test");
+    t.delivered(P, &out[1].data(&json!({})));
+    assert!(t.redeliver(P, NOW).is_empty());
+    assert_eq!(edges(&t.position(1, 30., true, NOW)), [("leave", Some(1))]);
 }
