@@ -23,17 +23,28 @@ impl Capability for WindowControl {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
+    /// Always-on-top and the cursor setting are plain values the host keeps
+    /// through standby by the installed instance (events-and-triggers.md
+    /// §4.8): they hold nothing that keeps the plugin running.
+    /// Picture-in-picture and a video area being applied still do.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.on_top.holds(owner)
-            || host.cursor_playing.holds(owner)
-            || host.pip.holds(owner)
-            || host.area_replies.iter().any(|a| a.reply.owner == owner)
-        {
+        if host.pip.holds(owner) || host.area_replies.iter().any(|a| a.reply.owner == owner) {
             return Recorded::Live("a window setting");
         }
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
+    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
+        host.on_top.rekey(from, to);
+        host.cursor_playing.rekey(from, to);
+    }
+    /// A held owner's standby ends for good: its kept settings go (the
+    /// window follows at its next tick, `Host::apply_on_top`).
+    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
+        if !keep_recorded {
+            host.on_top.remove(owner);
+            host.cursor_playing.remove(owner);
+        }
+    }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "window.setVideoArea" => {

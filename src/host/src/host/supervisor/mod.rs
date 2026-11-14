@@ -619,7 +619,7 @@ impl Host {
     /// interactive trigger first), else when one frees; and only once the
     /// process it was parked from is gone (one instance per data directory; the
     /// core's job starts it then, or fails after 20 s).
-    fn wake_started(&mut self, owner: u64) {
+    pub(crate) fn wake_started(&mut self, owner: u64) {
         let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
             return;
         };
@@ -828,6 +828,9 @@ impl Host {
                 }
             }
         }
+        // Trigger conditions: evaluated once, and what the mute kept
+        // delivered (events-and-triggers.md §4.9, T13).
+        self.triggers_caught_up();
     }
     /// The manifest id of a plugin in standby.
     pub(crate) fn held_id(&self, owner: u64) -> Option<&str> {
@@ -1772,6 +1775,8 @@ impl Host {
         self.probe_tick(now);
         self.probe_late_tick(now);
         self.memory_tick(now);
+        // Trigger conditions on the clock (crate::triggers).
+        self.triggers_tick();
         if now < self.on_demand.next_check {
             return;
         }

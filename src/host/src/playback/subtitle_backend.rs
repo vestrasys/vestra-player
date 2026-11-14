@@ -593,6 +593,19 @@ impl Subtitles {
             }
         }
     }
+    /// The primary track's id in the SDK's form (`SubtitleTrack.id`:
+    /// `embedded:<id>`, `external:<owner>:<resource>:<revision>`): the
+    /// `subtitleTrack` condition's fact.
+    pub fn primary_track(&self) -> Option<String> {
+        self.registry.selected().map(|track| match track {
+            Track::Embedded(id) => format!("embedded:{id}"),
+            Track::External {
+                owner,
+                resource_id,
+                content_revision,
+            } => format!("external:{owner}:{resource_id}:{content_revision}"),
+        })
+    }
     /// `owner` set a subtitle style: what its next activation sets again
     /// (lazy activation's `held`; a track or a file is the current media's).
     pub fn holds_style(&self, owner: u64) -> bool {

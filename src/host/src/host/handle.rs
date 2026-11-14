@@ -302,6 +302,8 @@ impl Host {
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
             Event::BarMore(generation, x, y) => self.bar_more(generation, x, y),
             Event::OwnerResources(owner, answer) => self.resources_answer(owner, &answer),
+            Event::Position(report) => self.triggers_position(report),
+            Event::SubtitleTrack(track) => self.triggers_subtitle(track),
             Event::PipReturn(generation) => {
                 if generation == self.shell_generation {
                     self.pip.restore();

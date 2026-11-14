@@ -950,6 +950,11 @@ impl Host {
             }
         }
         self.supervisor.add_unit(spec);
+        // Its kept trigger conditions (crate::triggers): evaluated when the
+        // start-up mute ends.
+        if !disabled {
+            self.triggers_load(id);
+        }
         self.supervisor_run();
         self.packages.replays.remove(id);
     }
@@ -1138,6 +1143,10 @@ impl Host {
     /// The directory recordings are kept in.
     pub(crate) fn activation_dir(&self) -> PathBuf {
         self.packages.store.activation_dir()
+    }
+    /// The directory kept trigger conditions are in (`crate::triggers`).
+    pub(crate) fn triggers_dir(&self) -> PathBuf {
+        self.packages.store.triggers_dir()
     }
     /// An installed (not development) plugin `owner` runs as installed:
     /// its recording key.
@@ -1586,6 +1595,8 @@ impl Host {
             if let Some(stopped) = stopped {
                 self.session_storage.clear(&stopped);
             }
+            // And its trigger conditions (events-and-triggers.md §4.10).
+            self.triggers_clear(id);
             return Ok(());
         }
         if running.is_some() || self.parked_id(id).is_some() {
@@ -1738,8 +1749,10 @@ impl Host {
             .flatten();
         let receipt =
             json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
-        // Its recording goes at the request, not when the stop lands.
+        // Its recording goes at the request, not when the stop lands; so do
+        // its trigger conditions (events-and-triggers.md §4.10).
         self.drop_recording(&id);
+        self.triggers_clear(&id);
         // The supervisor stops it (`Stop{Uninstall, then: Removed}`); its
         // data directory, resolved now, is deleted once no process of it
         // may write it (`RemoveData`): one running, parked just now, or
@@ -2049,6 +2062,10 @@ impl Host {
                 // `packages.setEnabled(false)`.
                 if was_enabled && let Some(key) = &op.old_key {
                     self.session_storage.clear(key);
+                }
+                if was_enabled {
+                    let id = op.package.clone();
+                    self.triggers_clear(&id);
                 }
                 return Ok(());
             }
