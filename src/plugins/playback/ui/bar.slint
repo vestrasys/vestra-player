@@ -39,10 +39,11 @@ export global PlaybackBridge {
     // B22: marks sorted by time (4096 at most), and the A-B loop, as fractions of the duration.
     in-out property <[SeekMark]> marks;
     // B22: each kind's ticks as SVG path commands, `M<x> 0V1` per tick with x
-    // the whole physical px column on the line (0…tick-span): one Path per kind.
-    in-out property <string> chapter-ticks;
-    in-out property <string> bookmark-ticks;
-    in-out property <string> marker-ticks;
+    // the whole physical px column on the line (0…tick-span), in time order, as
+    // the commands of Paths of at most 50 ticks each.
+    in-out property <[string]> chapter-ticks;
+    in-out property <[string]> bookmark-ticks;
+    in-out property <[string]> marker-ticks;
     // The line's span in physical px the plugin built the ticks for (0: none
     // yet); it answers `span-changed`.
     in-out property <float> tick-span;
@@ -191,8 +192,10 @@ component BarButton inherits Rectangle {
 // line with 1×8 ends. Marks take no input: a click seeks as before.
 // Timeline ranges (0.2.17): semi-transparent 6px bands where the ticks are
 // (region Theme.text-dim, selection Theme.accent), RangeBand below.
-// The marks are one Path per kind (a 1 physical px stroke from the plugin's
-// commands), never an element per mark. Each tick fills one whole physical
+// The marks are Paths of at most 50 ticks per kind (a 1 physical px stroke
+// from the plugin's commands), never an element per mark: the software
+// renderer's cost for one Path grows with the square of its ticks (3700 in one
+// Path: 390 ms a frame at 3840 px; in Paths of 50: 12 ms). Each tick fills one whole physical
 // pixel column and whole pixels top to bottom at any scale factor (125%,
 // 150%…), as the snapped 1px Rectangles before 0.2.6 did. Slint fits the
 // viewbox into the element less the stroke width and offsets it by half the
@@ -386,31 +389,31 @@ component SeekBar inherits Rectangle {
         background: Theme.playing;
     }
     // Chapters under markers under bookmarks (the user's own on top).
-    MarkTicks {
+    for chunk in PlaybackBridge.chapter-ticks: MarkTicks {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
         inset-x: root.lead;
         inset-y: root.line-top;
         columns: root.columns;
-        commands: PlaybackBridge.chapter-ticks;
+        commands: chunk;
         stroke: Theme.text-dim;
     }
-    MarkTicks {
+    for chunk in PlaybackBridge.marker-ticks: MarkTicks {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
         inset-x: root.lead;
         inset-y: root.line-top;
         columns: root.columns;
-        commands: PlaybackBridge.marker-ticks;
+        commands: chunk;
         stroke: Theme.playing;
     }
-    MarkTicks {
+    for chunk in PlaybackBridge.bookmark-ticks: MarkTicks {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
         inset-x: root.lead;
         inset-y: root.line-top;
         columns: root.columns;
-        commands: PlaybackBridge.bookmark-ticks;
+        commands: chunk;
         stroke: Theme.accent;
     }
     if PlaybackBridge.has-loop: Rectangle {
