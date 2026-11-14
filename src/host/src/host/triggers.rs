@@ -7,7 +7,7 @@
 use super::*;
 use crate::conditions::Facts;
 use crate::playback::position_model::Report;
-use crate::supervisor::{Delivery, Trigger};
+use crate::supervisor::{Delivery, Pid, Trigger};
 use crate::triggers::{self, Notification, Package};
 
 /// Unix milliseconds now (the `time` atom's clock).
@@ -32,8 +32,9 @@ pub(crate) struct TriggerState {
 }
 
 impl Host {
-    /// The facts conditions read, now.
-    fn trigger_facts(&self) -> Facts {
+    /// The facts conditions read, now: a trigger's and a command's state
+    /// (`capabilities::refresh_conditions`) read the same.
+    pub(crate) fn condition_facts(&self) -> Facts {
         let language = self.language_preference();
         let mut facts = Facts::new(
             &self.last_source,
@@ -57,7 +58,7 @@ impl Host {
     /// is kept: before a condition is given (`triggers.set`), so a range
     /// list binds to the current source and T3 reads the state now.
     pub(crate) fn triggers_facts_now(&mut self) {
-        let facts = self.trigger_facts();
+        let facts = self.condition_facts();
         let source = self.last_source["stamp"]["generation"]
             .as_u64()
             .unwrap_or(0);
@@ -65,9 +66,11 @@ impl Host {
         let out = self.triggers.set_facts(facts, source, position, wall_ms());
         self.deliver_fired(out);
     }
-    /// The playback worker's primary subtitle track changed.
+    /// The playback worker's primary subtitle track changed: commands whose
+    /// state reads it (`when.subtitleTrack`) follow it, as do triggers.
     pub(crate) fn triggers_subtitle(&mut self, track: Option<String>) {
         self.trigger_state.subtitle = track;
+        capabilities::refresh_conditions(self);
         self.triggers_facts();
     }
     /// The position model reported (`Event::Position`).
@@ -110,43 +113,60 @@ impl Host {
             params: json!({"source":source,"boundaries":boundaries,"after":self.trigger_state.serial}),
         });
     }
-    /// Delivers `out` (design §4.9), then hands over the boundaries.
+    /// Delivers `out` (design §4.9), then hands over the boundaries. A
+    /// notification that cannot be delivered (no process to take it, its
+    /// plugin disabled or failed, its backlog or the start lane full) is
+    /// not lost silently behind "entered": the registry is told
+    /// (`Triggers::undelivered`), writes a diagnostic line and un-latches
+    /// it, so its next evaluation fires it again.
     pub(crate) fn deliver_fired(&mut self, out: Vec<Notification>) {
         for notification in out {
             let key = notification.merge_key();
-            let message = json!({"event":triggers::EVENT,
-                "data":notification.data(&self.last_source)});
-            self.fire(&notification.plugin, key, message);
+            let data = notification.data(&self.last_source);
+            let message = json!({"event":triggers::EVENT,"data":data});
+            if let Err(why) = self.fire(&notification.plugin, key, message) {
+                self.triggers.undelivered(&notification.plugin, &data, why);
+            }
         }
         self.sync_trigger_watch();
     }
     /// One notification for `plugin`: to its process when it runs (the SDK
-    /// holds one that comes before `activate()` declared its triggers);
-    /// held for its ready while it starts; a wake in standby; kept over the
-    /// start-up mute; dropped for a plugin that is disabled or failed.
-    fn fire(&mut self, plugin: &str, key: String, message: Value) {
-        let pid = self
-            .supervisor
-            .process_of(plugin)
-            .or_else(|| self.supervisor.holder_of(plugin));
-        let Some(pid) = pid else {
-            return;
-        };
-        if self.plugins.contains_key(&pid.0) && self.supervisor.waking(pid).is_none() {
-            let failed = self
-                .plugins
-                .get_mut(&pid.0)
-                .and_then(|p| p.send(message).err());
-            if let Some(error) = failed {
-                self.transport_failed(pid.0, &error);
-            }
-            return;
-        }
+    /// holds one that comes before `activate()` declared its triggers; as a
+    /// wake trigger to a running unit it counts as use and cancels a
+    /// standby on its way, `Supervisor::delivering`); held for its ready
+    /// while it starts, or for the next start while its process stops for
+    /// standby; a wake in standby; kept over the start-up mute. `Err`: it
+    /// could not be delivered, and why.
+    fn fire(&mut self, plugin: &str, key: String, message: Value) -> Result<(), &'static str> {
         let now = self.now_ms();
         self.supervisor.set_now(now);
+        let running = self.supervisor.process_of(plugin);
+        if let Some(pid) = running
+            && self.plugins.contains_key(&pid.0)
+            && self.supervisor.waking(pid).is_none()
+        {
+            self.supervisor.delivering(pid);
+            self.fire_to(pid, message);
+            return Ok(());
+        }
+        let pid = running
+            .or_else(|| self.supervisor.holder_of(plugin))
+            .ok_or("it has no process to take it")?;
         let trigger = Trigger::event(key.clone(), message.clone());
         match self.supervisor.wake(pid, &trigger) {
-            Delivery::Started => self.wake_started(pid.0),
+            Delivery::Started => {
+                self.wake_started(pid.0);
+                Ok(())
+            }
+            Delivery::Held => Ok(()),
+            Delivery::Now if self.plugins.contains_key(&pid.0) => {
+                self.fire_to(pid, message);
+                Ok(())
+            }
+            Delivery::Forward(to) if self.plugins.contains_key(&to.0) => {
+                self.fire_to(to, message);
+                Ok(())
+            }
             Delivery::Dropped if !self.on_demand.caught_up && self.supervisor.events_muted() => {
                 let held = self
                     .trigger_state
@@ -155,8 +175,23 @@ impl Host {
                     .or_default();
                 held.retain(|(other, _)| *other != key);
                 held.push((key, message));
+                Ok(())
             }
-            _ => {}
+            Delivery::Refused => Err("its backlog or the start lane is full"),
+            Delivery::Now | Delivery::Forward(_) | Delivery::Dropped => {
+                Err("its plugin is disabled, failed or stopping")
+            }
+        }
+    }
+    /// Sends `message` to running `pid`. A full queue stops the run as a
+    /// fault, which evaluates its conditions again (T13).
+    fn fire_to(&mut self, pid: Pid, message: Value) {
+        let failed = self
+            .plugins
+            .get_mut(&pid.0)
+            .and_then(|p| p.send(message).err());
+        if let Some(error) = failed {
+            self.transport_failed(pid.0, &error);
         }
     }
     /// The start-up mute ended (`wake_missed`): what is kept is evaluated
@@ -165,7 +200,10 @@ impl Host {
         let muted = std::mem::take(&mut self.trigger_state.muted);
         for (plugin, held) in muted {
             for (key, message) in held {
-                self.fire(&plugin, key, message);
+                let data = message["data"].clone();
+                if let Err(why) = self.fire(&plugin, key, message) {
+                    self.triggers.undelivered(&plugin, &data, why);
+                }
             }
         }
         if !self.triggers.is_empty() {
@@ -187,28 +225,37 @@ impl Host {
     pub(crate) fn triggers_plugin(&mut self, owner: u64) -> Option<String> {
         let plugin = self.plugins.get(&owner)?;
         let id = plugin.manifest.id.clone();
-        let instance = self
-            .checkpoint_key_of(owner)
-            .map(|key| key.guid)
-            .filter(|_| !self.development.contains_key(&id));
-        if instance.is_some() {
-            self.triggers.load(&id, instance);
+        // The installed instance (as `triggers_load`), not the recording's
+        // key: a run without one (a built-in listed without a digest) still
+        // keeps its conditions in its instance's file.
+        if !self.development.contains_key(&id) {
+            self.triggers_load(&id);
         }
         Some(id)
     }
     /// A process of plugin `owner` was spawned: conditions given by another
-    /// version of it lose their unnamed triggers (§4.2).
+    /// version of it lose their unnamed triggers (§4.2). An installed run
+    /// whose version cannot be told (no recording key: a built-in listed
+    /// without a digest, a run not from the record's current package) is
+    /// not judged another version: its conditions stay as they are, and
+    /// the version they were given by is not overwritten.
     pub(crate) fn triggers_spawned(&mut self, owner: u64) {
         let Some(plugin) = self.plugins.get(&owner) else {
             return;
         };
         let id = plugin.manifest.id.clone();
+        let development = self.development.contains_key(&id);
         let package = self.checkpoint_key_of(owner).map(|key| Package {
             digest: key.digest,
             version: key.version,
         });
         self.triggers_load(&id);
+        if package.is_none() && !development {
+            return;
+        }
         self.triggers.spawned(&id, package);
+        // Conditions removed: the position model's boundaries follow.
+        self.sync_trigger_watch();
     }
     /// Run `owner` of plugin `id` stops for `reason`: after a fault,
     /// "entered" is forgotten and what holds enters again (T13); a

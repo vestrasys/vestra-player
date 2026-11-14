@@ -30,7 +30,10 @@
 //! list is one node however long it is; at most one per condition. The
 //! position and time atoms are for triggers only: a command's state
 //! refuses them (they need a source binding and a clock the command
-//! registry does not have).
+//! registry does not have). Every other atom works in a command's state
+//! too, `subtitleTrack` included: the command registry gets the same facts
+//! as the triggers (`Host::condition_facts`) and follows the subtitle
+//! track's changes.
 use serde_json::Value;
 use std::sync::Arc;
 
@@ -214,6 +217,7 @@ pub struct Facts {
     pub audio_device: Option<String>,
     /// An A-B loop is set.
     pub looping: bool,
+    /// The main window is maximized; never while fullscreen.
     pub maximized: bool,
     pub pip: bool,
     /// The primary subtitle track's id (`SubtitleTrack.id`), from the
@@ -261,7 +265,9 @@ impl Facts {
             audio_track,
             audio_device: source["audioOutput"]["active"].as_str().map(str::to_owned),
             looping: !source["loop"].is_null(),
-            maximized: flag(&window["maximized"]),
+            // As `WindowState.maximized` (`host/state.rs`): never while
+            // fullscreen, whatever the window under it is.
+            maximized: flag(&window["maximized"]) && !flag(&window["fullscreen"]),
             pip: flag(&window["pictureInPicture"]["active"]),
             subtitle_track: None,
         }

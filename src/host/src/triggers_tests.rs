@@ -529,3 +529,92 @@ fn a_stale_state_position_behind_a_report_is_no_leave() {
     // A new source forgets the report.
     assert!(t.set_facts(changed, 2, Some(38.4), NOW).is_empty());
 }
+
+/// A notification the Host could not deliver (its backlog full, its plugin
+/// without a process) is not lost behind "entered": `undelivered`
+/// un-latches it with a diagnostic line, so the next evaluation fires it
+/// again, and the next `triggers.declare` of the plugin evaluates it
+/// (`redeliver`). A lost `leave` latches it again the same way.
+#[test]
+fn an_undelivered_notification_fires_again_at_the_next_evaluation() {
+    let mut t = registry();
+    t.set(P, 5, TriggerId::Unnamed(0), &playing_fullscreen(), NOW)
+        .unwrap();
+    let out = t.set_facts(ready(false, true), 1, Some(0.), NOW);
+    assert_eq!(edges(&out), [("enter", None)]);
+    let data = out[0].data(&json!({}));
+    t.undelivered(P, &data, "its backlog or the start lane is full");
+    let told = t.diagnostics().join("\n");
+    assert!(told.contains("#0 enter not delivered"), "{told}");
+    assert!(!t.kept(P)[0].3, "un-latched");
+    // The next evaluation (another fact of the group changed) enters again.
+    let mut muted = ready(false, true);
+    muted.muted = true;
+    assert_eq!(
+        edges(&t.set_facts(muted.clone(), 1, Some(1.), NOW)),
+        [("enter", None)]
+    );
+    assert!(
+        t.redeliver(P, NOW).is_empty(),
+        "delivered: nothing to retry"
+    );
+    // Lost again: the next declaration evaluates it with nothing changed.
+    let out = t.set_facts(ready(true, true), 1, Some(1.), NOW);
+    assert_eq!(edges(&out), [("leave", None)]);
+    let out = t.set_facts(ready(false, true), 1, Some(1.), NOW);
+    assert_eq!(edges(&out), [("enter", None)]);
+    t.undelivered(P, &out[0].data(&json!({})), "it has no process to take it");
+    t.declare(P, 6, &[], 1);
+    assert_eq!(edges(&t.redeliver(P, NOW)), [("enter", None)]);
+    assert!(t.redeliver(P, NOW).is_empty());
+    // A lost leave: latched again, so the next evaluation leaves again.
+    let out = t.set_facts(ready(true, true), 1, Some(1.), NOW);
+    assert_eq!(edges(&out), [("leave", None)]);
+    t.undelivered(
+        P,
+        &out[0].data(&json!({})),
+        "its plugin is disabled, failed or stopping",
+    );
+    assert!(t.kept(P)[0].3, "latched again");
+    let mut paused_muted = ready(true, true);
+    paused_muted.muted = true;
+    assert_eq!(
+        edges(&t.set_facts(paused_muted, 1, Some(1.), NOW)),
+        [("leave", None)]
+    );
+}
+
+/// An undelivered notification of a condition replaced since (another
+/// `seq`) changes nothing; a range list's lost `enter` un-latches that
+/// range only.
+#[test]
+fn an_undelivered_notification_of_a_replaced_condition_changes_nothing() {
+    let mut t = registry();
+    t.set_facts(ready(false, true), 1, Some(0.), NOW);
+    let (_, out) = t
+        .set(P, 5, TriggerId::Unnamed(0), &playing_fullscreen(), NOW)
+        .unwrap();
+    let stale = out[0].data(&json!({}));
+    t.set(
+        P,
+        5,
+        TriggerId::Unnamed(0),
+        &json!({"fullscreen":true}),
+        NOW,
+    )
+    .unwrap();
+    assert!(t.kept(P)[0].3);
+    t.undelivered(P, &stale, "its backlog or the start lane is full");
+    assert!(t.kept(P)[0].3, "the new condition's latch stays");
+    // A range list.
+    let when = json!({"position":{"ranges":[[0, 5],[10, 20]]}});
+    t.set_facts(ready(false, false), 1, Some(12.), NOW);
+    let (_, out) = t.set(P, 5, named("r"), &when, NOW).unwrap();
+    assert_eq!(edges(&out), [("enter", Some(1))]);
+    t.undelivered(
+        P,
+        &out[0].data(&json!({})),
+        "its backlog or the start lane is full",
+    );
+    assert_eq!(edges(&t.position(1, 13., false, NOW)), [("enter", Some(1))]);
+}

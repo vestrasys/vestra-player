@@ -822,6 +822,110 @@ fn a_when_command_is_parked_and_its_state_follows_playback() {
     assert!(!second.contains(&format!("] {WHEN} start")), "{second}");
 }
 
+const SUBTITLED: &str = "vestra.fixture-subtitled";
+
+/// A command whose state is `plugin.when.subtitleTrack(id)` follows the
+/// primary subtitle track while its plugin is parked (events-and-triggers.md
+/// §4.3: the command registry gets the same facts as the triggers): disabled
+/// before the track is selected, enabled once it is, when its use wakes it.
+/// A resident fixture opens a generated file with one embedded subtitle
+/// track and selects it (ffmpeg on `PATH` or `VESTRA_FFMPEG`).
+#[test]
+#[ignore = "needs Node 26, libmpv, ffmpeg and the SDK of player 0.10.0: run with --include-ignored (ci:local)"]
+fn a_subtitle_track_command_follows_the_selected_track_while_parked() {
+    let media = tempfile::tempdir().unwrap();
+    let srt = media.path().join("cues.srt");
+    std::fs::write(&srt, "1\n00:00:00,000 --> 00:00:19,000\nHello\n").unwrap();
+    let file = media.path().join("subtitled.mkv");
+    let ffmpeg = std::env::var("VESTRA_FFMPEG").unwrap_or_else(|_| "ffmpeg".into());
+    let made = Command::new(ffmpeg)
+        .args(["-v", "error", "-f", "lavfi", "-i", "sine=duration=20", "-i"])
+        .arg(&srt)
+        .args([
+            "-map",
+            "0",
+            "-map",
+            "1",
+            "-c:a",
+            "pcm_s16le",
+            "-c:s",
+            "srt",
+            "-y",
+        ])
+        .arg(&file)
+        .status()
+        .unwrap();
+    assert!(made.success());
+    let path = serde_json::to_string(&file.to_string_lossy()).unwrap();
+    let root = root_with(|plugins| {
+        vec![
+            package(
+                plugins,
+                SUBTITLED,
+                &["commands"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     console.error(`{SUBTITLED} start`);\n\
+                     plugin.commands.add({{ id: \"export\", path: [\"Tools\", \"Export Cues\"],\n\
+                     enabled: plugin.when.subtitleTrack(\"embedded:1\"), reason: \"No subtitle\",\n\
+                     run: () => console.error(`{SUBTITLED} exported`) }});\n}}\n"
+                ),
+            ),
+            package(
+                plugins,
+                OPENER,
+                &["events", "playback.read", "playback.control"],
+                format!(
+                    "export default function activate(plugin) {{\n\
+                     plugin.player.onChange(() => {{}});\n\
+                     const select = async () => {{\n\
+                       for (let i = 0; i < 50; i++) {{\n\
+                         const state = await plugin.subtitles.refresh().catch(() => null);\n\
+                         const track = state?.tracks.find((t) => t.kind === \"embedded\");\n\
+                         if (track) {{\n\
+                           await plugin.subtitles.select(track);\n\
+                           console.error(`{OPENER} selected ${{track.id}}`);\n\
+                           return;\n\
+                         }}\n\
+                         await new Promise((done) => setTimeout(done, 100));\n\
+                       }}\n\
+                       console.error(`{OPENER} no subtitle track`);\n\
+                     }};\n\
+                     setTimeout(() => plugin.player.open({path}).then(select).catch(\n\
+                     (error) => console.error(`{OPENER} failed ${{error}}`)), 3500);\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let env = [
+        ("VESTRA_SHARED", "1"),
+        ("VESTRA_IDLE_MS", "500"),
+        (
+            "VESTRA_TEST_EXECUTE",
+            "vestra.fixture-subtitled/export@2500,vestra.fixture-subtitled/export@8500",
+        ),
+    ];
+    let log = run(root.path(), 11, &env);
+    let parked = log
+        .find(&format!("lazy: {SUBTITLED} parked (1 recorded calls)"))
+        .unwrap_or_else(|| panic!("{log}"));
+    // Parked, and disabled with its reason: the use wakes nothing.
+    let refused = log
+        .find("lazy: VESTRA_TEST_EXECUTE: command disabled: No subtitle")
+        .unwrap_or_else(|| panic!("{log}"));
+    assert!(parked < refused, "{log}");
+    let selected = log
+        .find(&format!("{OPENER} selected embedded:1"))
+        .unwrap_or_else(|| panic!("{log}"));
+    // Enabled once the track is the primary one, while parked: its use
+    // wakes it.
+    let woken = log
+        .find(&format!("lazy: {SUBTITLED} woken by commands.execute"))
+        .unwrap_or_else(|| panic!("enabled once the track is selected: {log}"));
+    assert!(refused < selected && selected < woken, "{log}");
+    assert!(log.contains(&format!("{SUBTITLED} exported")), "{log}");
+}
+
 const PACKAGES: &str = "vestra.fixture-packages";
 const CHANGER: &str = "vestra.fixture-changer";
 

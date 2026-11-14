@@ -165,6 +165,9 @@ struct Kept {
     /// The position at its last evaluation (T2: what continuous playback
     /// passed since).
     last_position: Option<f64>,
+    /// A notification of it could not be delivered and "entered" went
+    /// back (`undelivered`): the next `triggers.declare` evaluates it.
+    retry: bool,
 }
 
 #[derive(Debug, Default)]
@@ -290,6 +293,7 @@ impl Triggers {
                 entered: None,
                 given_by: owner,
                 last_position: None,
+                retry: false,
             },
         );
         self.save(plugin);
@@ -362,6 +366,69 @@ impl Triggers {
         self.told.extend(told);
         self.save(plugin);
     }
+    /// After `declare`: `plugin`'s conditions whose notification could not
+    /// be delivered (`undelivered`) are evaluated now that its triggers
+    /// are declared, so a flip lost while it had no process (a fault's
+    /// evaluation, T13) or while its backlog was full reaches it.
+    pub fn redeliver(&mut self, plugin: &str, now: f64) -> Vec<Notification> {
+        let Some(entry) = self.plugins.get(plugin) else {
+            return Vec::new();
+        };
+        let ids: Vec<TriggerId> = entry
+            .kept
+            .iter()
+            .filter(|(_, kept)| kept.retry)
+            .map(|(id, _)| id.clone())
+            .collect();
+        let mut out = Vec::new();
+        if ids.is_empty() {
+            return out;
+        }
+        self.moment.time = now;
+        for id in ids {
+            self.evaluate_one(plugin, &id, None, &mut out);
+        }
+        out
+    }
+    /// The Host could not deliver `plugin`'s notification `data` (the
+    /// `triggers.fired` data; `why`: no process to take it, the plugin
+    /// disabled or failed, its backlog or the start lane full). One
+    /// diagnostic line; and, when it is still the condition that fired it
+    /// (the same `seq`), "entered" goes back to what the plugin last heard,
+    /// so the next evaluation fires it again instead of the latch keeping
+    /// it quiet until the condition turns the other way and back: a lost
+    /// `enter` un-latches it, a lost `leave` latches it again. The next
+    /// `triggers.declare` of the plugin evaluates it too (`redeliver`).
+    pub fn undelivered(&mut self, plugin: &str, data: &Value, why: &str) {
+        let (Ok(id), Some(seq), Some(edge)) = (
+            TriggerId::parse(&data["trigger"]),
+            data["seq"].as_u64(),
+            data["edge"].as_str(),
+        ) else {
+            return;
+        };
+        self.told.push(format!(
+            "triggers: {plugin} trigger {} {edge} not delivered ({why}): it fires again at its next evaluation",
+            id.label()
+        ));
+        let range = data["range"]["index"].as_u64().map(|index| index as usize);
+        let Some(kept) = self
+            .plugins
+            .get_mut(plugin)
+            .and_then(|p| p.kept.get_mut(&id))
+        else {
+            return;
+        };
+        if kept.seq != seq {
+            return;
+        }
+        match edge {
+            "enter" if kept.entered == Some(range) => kept.entered = None,
+            "leave" if kept.entered.is_none() => kept.entered = Some(range),
+            _ => return,
+        }
+        kept.retry = true;
+    }
 
     // ---- what happens to the plugin ----------------------------------
 
@@ -417,6 +484,7 @@ impl Triggers {
                     entered: None,
                     given_by: 0,
                     last_position: None,
+                    retry: false,
                 },
             );
         }
@@ -710,6 +778,7 @@ fn evaluate_kept(
     passed: Option<f64>,
     out: &mut Vec<Notification>,
 ) {
+    kept.retry = false;
     let list = kept.condition.position().cloned();
     let bound_here = kept.bound.is_some() && kept.bound == Some(moment.source);
     let mut push = |kept: &mut Kept, truth: Truth, position: Option<f64>| {

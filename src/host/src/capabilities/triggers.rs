@@ -91,6 +91,11 @@ impl Capability for Triggers {
                     })?;
                 host.triggers
                     .declare(&plugin, reply.owner, &names, unnamed as u32);
+                // What could not be delivered before fires again now that
+                // its triggers are declared; the removed conditions'
+                // boundaries go from the position model (`deliver_fired`).
+                let out = host.triggers.redeliver(&plugin, crate::host::wall_ms());
+                host.deliver_fired(out);
                 Ok(Some(Value::Null))
             }
         }

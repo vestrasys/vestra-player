@@ -747,6 +747,11 @@ impl Sim {
         self.sup.set_now(self.now);
         self.sup.wake(pid, &t)
     }
+    /// A message sent to running `pid` outside `wake` (`delivering`).
+    pub fn delivering(&mut self, pid: Pid) {
+        self.sup.set_now(self.now);
+        self.sup.delivering(pid)
+    }
     pub fn kill(&mut self, u: UnitId) -> Vec<Act> {
         self.sup.kill(u);
         self.run()

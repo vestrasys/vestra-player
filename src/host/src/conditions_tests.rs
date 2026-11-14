@@ -27,6 +27,24 @@ fn the_new_atoms_read_the_wire_state_in_the_sdk_names() {
     assert!(full.looping && full.maximized && full.pip);
 }
 
+/// `maximized` reads as `WindowState.maximized` (and the test host's):
+/// never while fullscreen, also when the window under it is maximized.
+#[test]
+fn maximized_is_false_while_fullscreen() {
+    let facts = |fullscreen: bool| {
+        Facts::new(
+            &Value::Null,
+            &json!({"maximized":true,"fullscreen":fullscreen}),
+            "vestra",
+            "system",
+        )
+    };
+    assert!(facts(false).maximized);
+    assert!(!facts(true).maximized && facts(true).fullscreen);
+    let when = Condition::parse(&json!({"maximized":true})).unwrap();
+    assert!(when.holds(&facts(false)) && !when.holds(&facts(true)));
+}
+
 #[test]
 fn malformed_new_atoms_are_refused() {
     for bad in [
