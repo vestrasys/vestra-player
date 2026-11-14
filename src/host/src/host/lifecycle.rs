@@ -2,6 +2,16 @@
 //! and broadcasting.
 use super::*;
 
+/// What a plugin wrote that the host shows by itself (its timeline layer,
+/// its always-on-top and cursor settings) stays when its run stops: only at
+/// a standby (`park` for idle, the stop reason `idle`; events-and-triggers.md
+/// §4.8). A run that stops after a fault is not trusted, and is kept in
+/// standby without them; a disable, uninstall, reload, upgrade or quit
+/// removes them.
+pub(crate) fn keeps_shown_state(park: bool, reason: StopReason) -> bool {
+    park && reason == StopReason::Idle
+}
+
 /// The window policy's slot (the backdrop has no preference or auto-hide).
 /// What an initial UI request means for activation. A slot another plugin
 /// holds does not fail it: the plugin runs without its panel, with a warning
@@ -353,10 +363,15 @@ impl Host {
             self.policy.remove_owner(*key);
         }
         self.power.remove_owner(owner);
-        self.timeline.remove_owner(owner);
+        // Its timeline layer and window settings stay through a standby,
+        // held under `owner` until it wakes (`rekey`) or its standby ends
+        // (`revoke`); a stop after a fault, and every other stop, removes them.
+        if !keeps_shown_state(park, reason) {
+            self.timeline.remove_owner(owner);
+            self.on_top.remove(owner);
+            self.cursor_playing.remove(owner);
+        }
         self.images.release_owner(owner);
-        self.on_top.remove(owner);
-        self.cursor_playing.remove(owner);
         self.pip.remove_owner(owner);
         let step = self.step_seconds();
         if self.step_seek.remove(&owner).is_some() {
@@ -546,5 +561,26 @@ mod tests {
             activation_outcome(&Err(RpcError::new("conflict", "owner already mounted"))),
             Err("conflict: owner already mounted".into())
         );
+    }
+
+    /// Events-and-triggers.md §4.8: a layer and the window settings stay
+    /// through a standby only; a fault, a disable, an uninstall, a reload,
+    /// an upgrade and the quit remove them, parked (kept in standby after
+    /// the fault) or not.
+    #[test]
+    fn shown_state_stays_only_through_a_standby() {
+        assert!(keeps_shown_state(true, StopReason::Idle));
+        for reason in [
+            StopReason::Failed,
+            StopReason::Disable,
+            StopReason::Uninstall,
+            StopReason::Reload,
+            StopReason::Upgrade,
+            StopReason::Quit,
+        ] {
+            assert!(!keeps_shown_state(true, reason), "{reason:?} parked");
+            assert!(!keeps_shown_state(false, reason), "{reason:?}");
+        }
+        assert!(!keeps_shown_state(false, StopReason::Idle));
     }
 }
