@@ -38,6 +38,7 @@ mod source_resolve;
 mod subtitles_control;
 mod subtitles_read;
 mod timeline_marks;
+mod triggers;
 mod ui_dialog;
 mod ui_drop;
 pub(crate) mod ui_mount;
@@ -237,6 +238,8 @@ pub static ALL: &[&dyn Capability] = &[
     &palette_lead::PaletteLead,
     // The mpv pass-through (SDK 1.8.0).
     &mpv::Mpv,
+    // Triggers (SDK 1.10.0).
+    &triggers::Triggers,
 ];
 
 /// Where a method goes: its owner (`None`: `uncapable`).

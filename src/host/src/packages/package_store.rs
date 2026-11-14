@@ -1124,6 +1124,11 @@ impl Store {
     pub fn activation_dir(&self) -> PathBuf {
         self.root.join("activation")
     }
+    /// Where each instance's kept trigger conditions are
+    /// (`crate::triggers`).
+    pub fn triggers_dir(&self) -> PathBuf {
+        self.root.join("triggers")
+    }
 
     /// The library entries the catalog refers to: every installed current
     /// version and every pending target, and the packages of the records

@@ -400,6 +400,12 @@ impl Backend {
                 // labels and observers of plugins. Empty, and not looked
                 // at below, until a plugin with `mpv` uses it.
                 let mut passthrough = crate::playback::mpv_passthrough::Passthrough::default();
+                // The position model of trigger conditions
+                // (`position_model.rs`): idle, and not looked at below,
+                // until the UI thread hands it boundaries.
+                let mut position = Position::default();
+                // The primary subtitle track the UI thread last had.
+                let mut subtitle_sent: Option<Option<String>> = None;
                 loop {
                     if stopping.try_recv().is_ok() {
                         break;
@@ -517,6 +523,12 @@ impl Backend {
                         // holds here, its resolvers kept while it is parked,
                         // moved when it wakes, pruned at its ready.
                         match command.method.as_str() {
+                            // The boundaries trigger conditions wait for
+                            // (`host/triggers.rs`).
+                            "position.watch" => {
+                                position.watch(&mpv, &command.params);
+                                continue;
+                            }
                             "owner.resources" => {
                                 let owner = command.reply.owner;
                                 let mut live = sources.holds(owner);
@@ -926,6 +938,11 @@ impl Backend {
                         };
                         if command.method == "host.action" {
                             let action = command.params["action"].as_str().unwrap_or("").to_owned();
+                            // A core frame step moves the position while
+                            // paused: the position model anchors again.
+                            if action.starts_with("frame-") {
+                                position.model.jumped();
+                            }
                             crate::input_trace::mark(&format!(
                                 "playback worker: {action} received"
                             ));
@@ -946,6 +963,8 @@ impl Backend {
                             continue;
                         }
                         if command.method == "player.step" {
+                            // A frame step moves the position while paused.
+                            position.model.jumped();
                             let done = Completion::Step(command.reply);
                             let result = actions.step(&mut context, &command.params, done);
                             processing.note_source(sources.generation(), sources.phase());
@@ -1031,9 +1050,26 @@ impl Backend {
                         {
                             continue;
                         }
+                        // The position model's anchoring events: a seek
+                        // begins (and an A-B loop's or a file loop's wrap),
+                        // ends; the rate, buffering (`position_model.rs`).
+                        if position.watching() {
+                            match &event {
+                                rsmpv::Event::Seek => position.model.jumped(),
+                                rsmpv::Event::PlaybackRestart => position.due = true,
+                                _ => {}
+                            }
+                        }
+                        if let rsmpv::Event::PropertyChange { userdata, .. } = &event
+                            && matches!(*userdata, SPEED_OBSERVATION | CACHE_OBSERVATION)
+                        {
+                            position.due = true;
+                            continue;
+                        }
                         if let rsmpv::Event::PropertyChange { userdata, data, .. } = &event
                             && *userdata == PAUSE_OBSERVATION
                         {
+                            position.due = true;
                             // A paused preview step unpauses mpv for two
                             // frames (`Processing::stepping`): not the user's.
                             if let rsmpv::PropertyData::Flag(paused) = data
@@ -1238,6 +1274,24 @@ impl Backend {
                         warm_gpu(&mpv, &out_render, &mut gpu_warm, state);
                         let _ =
                             events.send(Event::Broadcast("source.state".into(), source_snapshot));
+                        // The primary subtitle track, when it changed (the
+                        // `subtitleTrack` condition; not in source.state).
+                        let track = subtitles.primary_track();
+                        if subtitle_sent.as_ref() != Some(&track) {
+                            subtitle_sent = Some(track.clone());
+                            let _ = events.send(Event::SubtitleTrack(track));
+                        }
+                        // The 100 ms read refreshes the position model's
+                        // anchor while it watches.
+                        if position.watching() {
+                            position.due = true;
+                        }
+                    }
+                    // The position model: a read after an anchoring
+                    // event, a push or at its deadline; a report to the
+                    // UI thread (`position_model.rs`).
+                    if position.watching() {
+                        position.tick(&mpv, &sources, &events);
                     }
                     // What plugins observe of mpv (`mpv_passthrough.rs`):
                     // each property's newest value, at most every 100 ms,
@@ -1286,6 +1340,10 @@ impl Backend {
                         }
                         // An observed value waiting for its interval.
                         if let Some(due) = passthrough.due_in(now) {
+                            timeout = timeout.min(due);
+                        }
+                        // The nearest position boundary a trigger waits for.
+                        if let Some(due) = position.due_in() {
                             timeout = timeout.min(due);
                         }
                         worker_wake.wait(timeout);
@@ -2134,6 +2192,109 @@ struct Stepping {
 /// `Event::PropertyChange` userdata of the observed `pause` property
 /// (`StatePush::paused`); `processing::HWDEC_OBSERVATION` is 1.
 pub const PAUSE_OBSERVATION: u64 = 2;
+/// The position model's observations of `speed` and `paused-for-cache`
+/// (`Position`), only while a trigger waits on the position.
+pub const SPEED_OBSERVATION: u64 = 3;
+pub const CACHE_OBSERVATION: u64 = 4;
+
+/// The playback thread's side of the position model
+/// (`position_model.rs`, events-and-triggers.md §4.4): the boundaries the
+/// UI thread hands over (`position.watch`), one read of the playback state
+/// after each anchoring event, at each 100 ms state push and at the
+/// model's deadline, and the reports. Without a watch it does nothing.
+#[derive(Default)]
+struct Position {
+    model: crate::playback::position_model::PositionModel,
+    /// A read is owed: an anchoring event, a push, a new watch.
+    due: bool,
+    /// `speed` and `paused-for-cache` are observed (while watching).
+    observing: bool,
+    /// The model's clock.
+    base: Option<Instant>,
+}
+impl Position {
+    fn watching(&self) -> bool {
+        self.model.watching()
+    }
+    fn now(&mut self) -> f64 {
+        self.base
+            .get_or_insert_with(Instant::now)
+            .elapsed()
+            .as_secs_f64()
+            * 1000.
+    }
+    /// `position.watch { source, boundaries, after }`.
+    fn watch(&mut self, mpv: &Mpv, params: &Value) {
+        let boundaries = params["boundaries"]
+            .as_array()
+            .map(|all| all.iter().filter_map(Value::as_f64).collect())
+            .unwrap_or_default();
+        if self.model.set_watch(
+            params["source"].as_u64().unwrap_or(0),
+            boundaries,
+            params["after"].as_u64().unwrap_or(0),
+        ) {
+            self.due = true;
+        }
+        let watching = self.model.watching();
+        if watching == self.observing {
+            return;
+        }
+        self.observing = watching;
+        if watching {
+            if let Err(error) = mpv
+                .observe_property(SPEED_OBSERVATION, "speed", rsmpv::Format::Double)
+                .and_then(|()| {
+                    mpv.observe_property(CACHE_OBSERVATION, "paused-for-cache", rsmpv::Format::Flag)
+                })
+            {
+                diag!("position model: observe: {error}");
+            }
+        } else {
+            let _ = mpv.unobserve_property(SPEED_OBSERVATION);
+            let _ = mpv.unobserve_property(CACHE_OBSERVATION);
+        }
+    }
+    /// A read when one is owed or the deadline came; a report goes to the
+    /// UI thread.
+    fn tick(
+        &mut self,
+        mpv: &Mpv,
+        sources: &crate::playback::source_backend::Sources,
+        events: &mpsc::Sender<Event>,
+    ) {
+        let now = self.now();
+        let deadline = self.model.deadline(now).is_some_and(|ms| ms < 1.);
+        if !(self.due || deadline) {
+            return;
+        }
+        self.due = false;
+        let flag = |name: &str| mpv.get_property::<bool>(name).unwrap_or(false);
+        let ready = sources.phase() == crate::playback::session::Phase::Ready;
+        let sample = crate::playback::position_model::Sample {
+            source: sources.generation(),
+            position: mpv
+                .get_property::<f64>("time-pos")
+                .ok()
+                .filter(|p| p.is_finite()),
+            rate: mpv.get_property::<f64>("speed").unwrap_or(1.),
+            running: ready && !flag("pause") && !flag("seeking") && !flag("paused-for-cache"),
+        };
+        if let Some(report) = self.model.sample(now, sample) {
+            let _ = events.send(Event::Position(report));
+        }
+    }
+    /// How long the thread may wait before the model's deadline.
+    fn due_in(&mut self) -> Option<Duration> {
+        if !self.watching() {
+            return None;
+        }
+        let now = self.now();
+        self.model
+            .deadline(now)
+            .map(|ms| Duration::from_secs_f64(ms.max(0.) / 1000.))
+    }
+}
 
 /// A `source.submit` that pauses or resumes the source.
 fn pause_control(method: &str, params: &Value) -> bool {

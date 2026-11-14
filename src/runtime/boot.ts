@@ -245,7 +245,10 @@ export function boot(options: BootOptions): Instance {
         options.app,
       );
       dispose = (reason) => instance.dispose({ reason });
-      await module.default(instance.plugin);
+      // Through the SDK (1.10.0): `plugin.trigger()` works in the
+      // synchronous part of `activate`, and the player is told which
+      // triggers it declared right after it.
+      await instance.activate(module.default);
       // `activated()` throws the first rejected start-up work; called again it
       // waits for the rest. What another plugin holds is not an activation failure.
       for (;;) {
