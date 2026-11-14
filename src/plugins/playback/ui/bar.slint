@@ -47,9 +47,10 @@ export global PlaybackBridge {
     // yet); it answers `span-changed`.
     in-out property <float> tick-span;
     // Timeline ranges (player 0.7.6): each style's filled rectangles
-    // `M<x0> 0H<x1>V1H<x0>Z` in the ticks' view box (0…tick-span): one Path per style.
-    in-out property <string> selection-ranges;
-    in-out property <string> region-ranges;
+    // `M<x0> 0H<x1>V1H<x0>Z` in the ticks' view box (0…tick-span), left to
+    // right, as the commands of Paths of at most 50 rectangles each.
+    in-out property <[string]> selection-ranges;
+    in-out property <[string]> region-ranges;
     in-out property <bool> has-loop;
     in-out property <float> loop-a;
     in-out property <float> loop-b;
@@ -225,11 +226,14 @@ component MarkTicks inherits Path {
     stroke-width: 1phx;
 }
 
-// Timeline ranges (player 0.7.6): one filled Path per style over the ticks'
-// 6px band, never an element per range. No stroke, so Slint fits the viewbox
-// into the whole element with no offset: the element `columns` physical px
-// wide over a viewbox `columns` wide (scale 1phx a unit), its left edge and
-// top on a physical pixel, so a rectangle x0…x1 fills whole columns and rows.
+// Timeline ranges (player 0.7.6): filled Paths over the ticks' 6px band, never
+// an element per range; each holds at most 50 rectangles, as the software
+// renderer's cost for one Path grows with the square of its rectangles (1920
+// in one Path: 145 ms a frame at 3840 px; in Paths of 50: 4.5 ms). No
+// stroke, so Slint fits the viewbox into the whole element with no offset:
+// the element `columns` physical px wide over a viewbox `columns` wide
+// (scale 1phx a unit), its left edge and top on a physical pixel, so a
+// rectangle x0…x1 fills whole columns and rows.
 component RangeBand inherits Path {
     in property <length> origin-x;
     in property <length> origin-y;
@@ -275,7 +279,7 @@ component SeekBar inherits Rectangle {
     init => { PlaybackBridge.span-changed(root.columns); }
     changed columns => { PlaybackBridge.span-changed(self.columns); }
     // Again when marks come for another span (a report the plugin never got).
-    private property <bool> stale-ticks: (PlaybackBridge.marks.length > 0 || PlaybackBridge.selection-ranges != "" || PlaybackBridge.region-ranges != "")
+    private property <bool> stale-ticks: (PlaybackBridge.marks.length > 0 || PlaybackBridge.selection-ranges.length > 0 || PlaybackBridge.region-ranges.length > 0)
         && PlaybackBridge.tick-span != root.columns;
     changed stale-ticks => { if self.stale-ticks { PlaybackBridge.span-changed(root.columns); } }
     height: 22px;
@@ -356,22 +360,22 @@ component SeekBar inherits Rectangle {
     }
     // Timeline ranges over the line and under the loop and the ticks:
     // regions dim, the selection (such as a clip to export) in the accent.
-    RangeBand {
+    for chunk in PlaybackBridge.region-ranges: RangeBand {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
         inset-x: root.lead;
         inset-y: root.line-top;
         columns: root.columns;
-        commands: PlaybackBridge.region-ranges;
+        commands: chunk;
         fill: Theme.text-dim.with-alpha(0.35);
     }
-    RangeBand {
+    for chunk in PlaybackBridge.selection-ranges: RangeBand {
         origin-x: root.absolute-position.x;
         origin-y: root.absolute-position.y;
         inset-x: root.lead;
         inset-y: root.line-top;
         columns: root.columns;
-        commands: PlaybackBridge.selection-ranges;
+        commands: chunk;
         fill: Theme.accent.with-alpha(0.45);
     }
     if PlaybackBridge.has-loop: Rectangle {

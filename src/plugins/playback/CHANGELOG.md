@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.20
+
+- **Seek-bar ranges stay cheap on the software renderer** (player A5, the per-plugin range limit going to 1000): the timeline ranges of a style were one Path, whose fill on Slint 1.18.1's software renderer (the default on Windows) costs about the square of its rectangles: 1000 rectangles on a 3840 px bar took 40–49 ms a frame and 1920 (a full 4K bar) 145–162 ms. Each style is now drawn as several Paths of at most 50 rectangles (`RANGES_PER_PATH`), consecutive runs left to right, with one RangeBand element per Path: 1000 rectangles take 2.3 ms and 1920 take 4.5 ms; both styles full (2 × 1920) 9.1 ms (scratch bench like `range_band_frame_time`, release build, this laptop; Paths of 100 gave 3.4, 6.8 and 13.6 ms, Paths of 25 only 5–10 % less than 50). The look is unchanged: the same rectangles, colours, place and order (regions under the selection); runs never share a column, so splitting adds no overlap. The bar properties `selection-ranges` and `region-ranges` become `[string]` (one Path's commands each, empty: none). Who must change: nobody (the properties are this plugin's own). Tests: the split for 0, 1, 100, 101, 1000 and 1920 rectangles per style (count, order, nothing lost or repeated); the existing range tests expect arrays instead of strings.
+
 ## 0.2.19
 
 - Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
