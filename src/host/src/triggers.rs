@@ -282,6 +282,30 @@ impl Triggers {
         self.seq += 1;
         let seq = self.seq;
         let groups = condition.groups();
+        // A replaced range list for the same source (T6) whose position is
+        // still in the very range it was entered with (the same start, end
+        // and lead; its place may move, a list grows as a scan goes on) is
+        // still entered: the replacement is no false-to-true edge, so no
+        // second `enter` for one range (T1). Anything else is entered anew
+        // by T3, without a `leave` for the old one.
+        let (entered, last_position) = entry
+            .kept
+            .get(&trigger)
+            .filter(|old| old.bound.is_some() && old.bound == bound)
+            .and_then(|old| {
+                let (Some(Some(was)), Some(before), Some(after)) =
+                    (old.entered, old.condition.position(), condition.position())
+                else {
+                    return None;
+                };
+                let truth = condition.eval(&self.facts, Some(&self.moment), bound);
+                let now = truth.range?;
+                (truth.holds
+                    && before.lead == after.lead
+                    && before.given.get(was) == after.given.get(now))
+                .then_some((Some(Some(now)), old.last_position))
+            })
+            .unwrap_or((None, None));
         entry.kept.insert(
             trigger.clone(),
             Kept {
@@ -290,9 +314,9 @@ impl Triggers {
                 groups,
                 seq,
                 bound,
-                entered: None,
+                entered,
                 given_by: owner,
-                last_position: None,
+                last_position,
                 retry: false,
             },
         );

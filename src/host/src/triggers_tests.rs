@@ -618,3 +618,85 @@ fn an_undelivered_notification_of_a_replaced_condition_changes_nothing() {
     );
     assert_eq!(edges(&t.position(1, 13., false, NOW)), [("enter", Some(1))]);
 }
+
+/// A7 at 2× (Silence Skipper woken for its first silence): the run before
+/// the wake had scanned two windows and gave a list of two ranges; the
+/// enter came at the lead boundary 38.15. The woken run gives the list of
+/// nine ranges it knows now (another condition, a new seq, T6) while the
+/// position, 38.52, is still in the same first range: no second enter (T1),
+/// and the seek out of it is one leave, of that range.
+#[test]
+fn a_replaced_list_still_in_the_same_range_is_not_entered_again() {
+    let mut t = registry();
+    let mut facts = ready(false, false);
+    facts.rate = 2.;
+    t.set_facts(facts.clone(), 1, Some(37.9), NOW);
+    let list = |ranges: Value| {
+        json!({"all":[{"all":[{"phase":["ready"]},{"paused":false}]},
+            {"position":{"ranges":ranges,"lead":2}}]})
+    };
+    let two = list(json!([[40.15, 43.87325], [110.150104, 112.850021]]));
+    let nine = list(json!([
+        [40.15, 43.87325],
+        [110.150104, 112.850021],
+        [185.15, 188.850021],
+        [215.15, 217.850042],
+        [235.15, 237.384687],
+        [255.15, 257.850021],
+        [275.14991699999996, 276.85006200000004],
+        [295.15, 298.850021],
+        [370.15, 372.850021]
+    ]));
+    let (first, _) = t.set(P, 18, TriggerId::Unnamed(0), &two, NOW).unwrap();
+    let out = t.position(1, 38.16, true, NOW);
+    assert_eq!(edges(&out), [("enter", Some(0))]);
+    // The woken run's source.state says 38.52; its list has seven more.
+    t.set_facts(facts.clone(), 1, Some(38.52), NOW);
+    let (second, out) = t.set(P, 20, TriggerId::Unnamed(0), &nine, NOW).unwrap();
+    assert!(second > first);
+    assert!(out.is_empty(), "{:?}", edges(&out));
+    // The seek lands at the range's end: one leave of the range entered.
+    assert_eq!(
+        edges(&t.position(1, 43.87325, false, NOW)),
+        [("leave", Some(0))]
+    );
+}
+
+/// The carry-over is only for the same range of the same source: a list
+/// whose range the position is in changed (another end), a range the
+/// position is in only in the new list, and a new source enter at once
+/// (T3, T6, T12).
+#[test]
+fn a_replaced_list_in_another_range_is_entered_at_once() {
+    let mut t = registry();
+    t.set_facts(ready(false, false), 1, Some(15.), NOW);
+    let list = |ranges: Value| json!({"position":{"ranges":ranges}});
+    t.set(P, 5, TriggerId::Unnamed(0), &list(json!([[10, 20]])), NOW)
+        .unwrap();
+    // Another end: another range.
+    let (_, out) = t
+        .set(P, 5, TriggerId::Unnamed(0), &list(json!([[10, 25]])), NOW)
+        .unwrap();
+    assert_eq!(edges(&out), [("enter", Some(0))]);
+    // Not entered before (a list it was outside of): entered now.
+    let mut u = registry();
+    u.set_facts(ready(false, false), 1, Some(15.), NOW);
+    u.set(P, 5, TriggerId::Unnamed(0), &list(json!([[30, 40]])), NOW)
+        .unwrap();
+    let (_, out) = u
+        .set(
+            P,
+            5,
+            TriggerId::Unnamed(0),
+            &list(json!([[10, 20], [30, 40]])),
+            NOW,
+        )
+        .unwrap();
+    assert_eq!(edges(&out), [("enter", Some(0))]);
+    // The same list given for a new source: bound there, entered there.
+    t.set_facts(ready(false, false), 2, Some(15.), NOW);
+    let (_, out) = t
+        .set(P, 5, TriggerId::Unnamed(0), &list(json!([[10, 25]])), NOW)
+        .unwrap();
+    assert_eq!(edges(&out), [("enter", Some(0))]);
+}
