@@ -12,7 +12,8 @@ import type { ResolvedStream, Stream, StreamOptions } from "./types.ts";
 export interface StreamSource {
     readonly runtime: {
         readonly host: Wire;
-        can(capability: string): boolean;
+        /** `plugin.player.read()` was called: the state is read after own actions. */
+        readonly reads: boolean;
     };
     /** The newest source state seen. */
     readonly raw: SourceState;

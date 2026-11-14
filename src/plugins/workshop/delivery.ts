@@ -6,7 +6,7 @@
 // reported to the user and the agent, and so is the plugin's real state: an
 // update of a plugin the user disabled keeps it disabled (player after
 // 0.6.3), which the workshop respects and never changes.
-import type { PackageCandidate, PackageChange, Plugin, PluginError, PluginInfo } from "@vestra-player/sdk";
+import type { PackageCandidate, PackageChange, Plugin, PluginError, PluginInfo, Text } from "@vestra-player/sdk";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { PLAYER_NEXT, playerCode, playerMessage, type SessionPaths, type ToolResult, type Toolchain } from "./toolchain.ts";
@@ -35,6 +35,39 @@ const STATE_TEXT: Record<string, string> = {
 const DISABLED_TEXT =
   "The plugin is installed but disabled: the user turned it off in the player, so the new version did not start. " +
   "Only the user can enable it, in the Plugin Store (Installed tab). Tell the user; do not try to enable it yourself or work around it: respect their choice.";
+
+/**
+ * The categories of the SDK's capability scan (`vestra-plugin scan`, its
+ * `uses`) in plain words, in the scan's order: the Plugin Store's words for
+ * its scan-based disclosure (store/labels.ts CATEGORIES), copied with their
+ * translations (plugins do not import each other).
+ */
+const CATEGORIES = {
+  player: "Change your player settings (shortcuts, theme, language, rendering) or control the playback engine directly",
+  plugins: "Install, uninstall, disable or reload other plugins, or run any command",
+  clipboard: "Read and write the clipboard",
+  credentials: "Store sign-in details in the system keychain",
+  camera: "Use the camera",
+  microphone: "Record from the microphone",
+  screen: "Capture the screen or other windows",
+  notifications: "Show system notifications",
+} as const;
+
+const isCategory = (word: string): word is keyof typeof CATEGORIES => Object.hasOwn(CATEGORIES, word);
+
+/**
+ * The install dialog's line of what the plugin uses, as the store words it
+ * ("It will be able to:" and a bullet per category, in the scan's order; a
+ * word this table does not know is named last). `uses` is not empty.
+ */
+function willBeAble(i18n: Plugin["i18n"], uses: readonly string[]): Text {
+  const lines = [
+    ...(Object.keys(CATEGORIES) as (keyof typeof CATEGORIES)[]).filter((word) => uses.includes(word)).map((word) => i18n.text(CATEGORIES[word])),
+    ...uses.filter((word) => !isCategory(word)).map((word) => i18n.text("Unknown permission: {}", [word])),
+  ];
+  const bullets = lines.map((line) => i18n.text("· {}", [line]));
+  return i18n.text("It will be able to:\n{}", [i18n.list(bullets, "lines")]);
+}
 
 const errorText = (error: unknown) => (error instanceof Error ? error.message : String(error));
 const code = (error: unknown) => (error as PluginError)?.code;
@@ -198,13 +231,18 @@ export class Delivering {
       const name = String(manifest.name ?? id);
       const version = String(manifest.version);
       if (ask) {
-        const capabilities: string[] = manifest.capabilities ?? [];
+        // What the code uses, by the Workshop's own scan (as the store shows
+        // its repositories' scans). Nothing found: nothing more to say. The
+        // scan failed: no line either, and the install goes on (the user
+        // still decides; the player's checks come after). It runs while the
+        // card is busy (its buttons disabled), so it needs no state of its own.
+        const uses = await this.toolchain.scan(session, id, signal);
         const answer = await this.plugin.dialogs.confirm({
           message: "Install the AI-generated plugin “{}”?",
-          detail: capabilities.length ? "{1} {2}\nCapabilities: {3}" : "{1} {2}\nCapabilities: none",
+          detail: uses?.length ? "{1} {2}\n\n{3}" : "{1} {2}",
           confirm: "Install",
-          // {0} (the message's {}) = name, {1} = id, {2} = version, {3} = capabilities.
-          args: [name, id, version, this.plugin.i18n.list(capabilities)],
+          // {0} (the message's {}) = name, {1} = id, {2} = version, {3} = what it uses.
+          args: [name, id, version, ...(uses?.length ? [willBeAble(this.plugin.i18n, uses)] : [])],
         });
         if (!answer.confirmed) {
           this.say("install-cancelled");

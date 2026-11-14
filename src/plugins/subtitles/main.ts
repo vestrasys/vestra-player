@@ -111,6 +111,8 @@ const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).digest(
 
 /** Subtitles: the Subtitles panel (adjust column), the Subtitle Settings window, the commands, serialized subtitle operations. */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { subtitles, osd } = plugin;
   const { text } = plugin.i18n;
   /**

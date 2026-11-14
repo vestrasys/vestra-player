@@ -1,6 +1,6 @@
 //! `source.resolve`: resolvers for online addresses and file types
 //! (source_resolvers.rs, in the playback worker).
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency, forward};
+use super::{Call, Capability, Handled, Info, Recorded, forward};
 use crate::host::Origin;
 use crate::host::{Host, Reply, RpcError};
 use crate::playback::backend::Command;
@@ -9,23 +9,19 @@ use serde_json::Value;
 pub struct SourceResolve;
 static INFO: Info = Info {
     name: "source.resolve",
-    label: "Resolve online video addresses",
-    risky: false,
-    requires: &[],
-    residency: Residency::Recordable,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("sourceResolvers.register"),
-    Method::this("sourceResolvers.unregister"),
-    Method::this("sourceResolvers.respond"),
-    Method::this("sourceResolvers.*"),
+static METHODS: &[&str] = &[
+    "sourceResolvers.register",
+    "sourceResolvers.unregister",
+    "sourceResolvers.respond",
+    "sourceResolvers.*",
 ];
 impl Capability for SourceResolve {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// Its resolvers, as the playback worker answered `owner.resources`.

@@ -1,20 +1,8 @@
 {
   "id": "vestra.video",
-  "version": "1.1.13",
+  "version": "1.1.14",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "playback.read",
-    "events",
-    "processing.video",
-    "ui.mount",
-    "ui.window",
-    "ui.dialog",
-    "ui.osd",
-    "rendering.manage",
-    "video.upscaling"
-  ],
   "name": "Picture Adjustments",
   "author": "Vestra Player",
   "punchline": "Color, image processing, aspect ratio, crop, rotation and HDR",

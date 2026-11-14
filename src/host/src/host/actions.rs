@@ -388,9 +388,8 @@ impl Host {
         self.osd_actions = actions.map(|(actions, _)| actions);
         self.osd_debug(&OsdEvent::Show(text));
     }
-    /// Write the whole OSD state into the shell: after every change, and
-    /// again into a rebuilt shell (`compile_shell`), which keeps a message
-    /// on screen with its buttons; its remaining time is the host's.
+    /// Write the whole OSD state into the shell, after every change; its
+    /// remaining time is the host's.
     pub(crate) fn write_osd(&self) {
         if let Some(shell) = &self.shell {
             for (name, value) in self.osd_shown.values() {
@@ -623,10 +622,6 @@ mod tests {
             osd_line(&OsdEvent::Hide("hold cap"), "vestra.capture", 1),
             "osd: hide (hold cap) from vestra.capture, 1 action"
         );
-        assert_eq!(
-            osd_line(&OsdEvent::Kept, "the player", 0),
-            "osd: kept across a shell rebuild, from the player, no actions"
-        );
         let shown = 1_000;
         assert_eq!(osd_hide_reason(5_000, shown, false, true, false), "time");
         assert_eq!(osd_hide_reason(5_000, shown, true, false, false), "time");
@@ -640,8 +635,8 @@ mod tests {
         );
     }
 
-    /// The state a rebuilt shell gets written again: the message, its two
-    /// button slots and whether it shows.
+    /// The OSD state the host writes: the message, its two button slots
+    /// and whether it shows.
     #[test]
     fn the_osd_state_is_the_four_shell_properties() {
         let shown = OsdShown {

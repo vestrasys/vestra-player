@@ -22,8 +22,8 @@ test("a .vxp dropped on the video area: the window opens, a side-load warning, i
   const { host, store, stop } = await start({ net });
   try {
     assert.deepEqual(host.dropProviders.map((p) => p.extensions), [["vxp"]]);
-    const a = packageFile("a.vxp", { id: "someone.a", version: "1.0.0", name: "A", capabilities: ["commands", "bindings.manage"] });
-    const b = packageFile("b.vxp", { id: "someone.b", version: "2.0.0", capabilities: [] });
+    const a = packageFile("a.vxp", { id: "someone.a", version: "1.0.0", name: "A" });
+    const b = packageFile("b.vxp", { id: "someone.b", version: "2.0.0" });
     host.dialogAnswers.push(yes, no);
     await host.drop([a, b]);
     await until(host, () => host.confirms.length === 2 && !store.busy, "two confirmations");
@@ -83,7 +83,7 @@ test("从文件安装…: cancel, an invalid file, a built-in id, replacing a re
 test("从链接安装…: https only, 64 MB at most, the permissions come from the package", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
-  net.route("https://example.org/x-1.0.0.vxp", { body: vxp({ id: "someone.x", version: "1.0.0", capabilities: ["secrets"] }) });
+  net.route("https://example.org/x-1.0.0.vxp", { body: vxp({ id: "someone.x", version: "1.0.0" }) });
   net.route("https://example.org/huge.vxp", { headers: { "content-length": String(65 * 1024 * 1024) }, body: "" });
   const { host, store, stop } = await start({ net });
   try {
@@ -161,7 +161,7 @@ for (const player of ["older player", "player 0.6.4"] as const) {
     const net = new FakeNet();
     publish(net, OFFICIAL, []);
     const url = "https://example.org/x-1.0.0.vxp";
-    net.route(url, { body: vxp({ id: "someone.x", version: "1.0.0", name: "X", capabilities: [] }) });
+    net.route(url, { body: vxp({ id: "someone.x", version: "1.0.0", name: "X" }) });
     const installed = info("someone.x", { version: "0.9.0", state: "disabled", source: { kind: "repository", url: OFFICIAL } });
     const { host, store, stop } = await start({ net, packages: [BUILTIN, installed] });
     host.installKeepsDisabled = newer;

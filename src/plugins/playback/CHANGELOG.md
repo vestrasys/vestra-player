@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.19
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.2.18
 
 - **Preview cache on Windows**: a rename over `index.json` or a sheet that another handle has open (a clean-up reading the index, the bar, a virus scanner) is refused with EPERM, EACCES or EBUSY until the handle closes. The write now tries 15 times with waits growing by 10 ms up to 100 ms, about 1 s in all. The steps follow graceful-fs's win32 rename; the ~1 s total and retrying over an existing, open target are this plugin's choice (Windows refuses to replace a file another handle has open; graceful-fs retries for up to 60 s and only while the target does not exist); 0.2.12 tried 5 times over 0.2 s and still lost to a busy reader now and then (the cache race test failed about 1 run in 50 under load). The sheet rename (`sheet-N.new.jpg` → `sheet-N.jpg`) was not retried at all; it now takes the same path, and a sheet that still cannot be renamed removes its `.new.jpg` and is written again at the next write, as before. A failed index write still removes its temporary file and keeps the old index. Who must change: nobody. Tests: the retry schedule's waits and a reader holding `index.json` for 0.5 s.

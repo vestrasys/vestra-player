@@ -33,7 +33,9 @@
  *   (c) api-surface   SDK: no line of test/fixtures/api-surface.txt is
  *                     removed (a changed signature is a removed line).
  *   (d) capabilities  player src/host/capabilities.json, SDK
- *                     src/host-capabilities.ts: every capability and every
+ *                     src/host-capabilities.ts (both removed in player
+ *                     0.9.0 / SDK 1.9.0; n/a when the base has none):
+ *                     every capability and every
  *                     capability-free method of the base is there unchanged
  *                     and in the same order; a new entry takes no existing
  *                     method, also not one an existing `prefix.*` entry
@@ -548,6 +550,8 @@ export function detectKind(repo, ref) {
         null
       : existsSync(join(repo, path));
   if (has("src/host/capabilities.json")) return "player";
+  // Player 0.9.0 removed the capability table: the host crate tells.
+  if (has("src/host/Cargo.toml")) return "player";
   if (has("src/host-capabilities.ts") || has("test/fixtures/api-surface.txt"))
     return "sdk";
   if (has("plugins/owners.toml") || has("registry")) return "plugins";

@@ -9,7 +9,7 @@
 //! runs, touches no data, and a stopped plugin's request is revoked (as a
 //! `processing.video` filter, which is not risky either). The GPU's power
 //! use is what the user turns it on for.
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Capability, Handled, Info, Recorded};
 use crate::host::{Host, Reply, RpcError};
 use crate::playback::backend::Command;
 use serde_json::{Value, json};
@@ -17,21 +17,14 @@ use serde_json::{Value, json};
 pub struct VideoUpscaling;
 static INFO: Info = Info {
     name: "video.upscaling",
-    label: "Upscale the video with the GPU's video upscaler",
-    risky: false,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("video.upscaling.state"),
-    Method::this("video.upscaling.set"),
-];
+static METHODS: &[&str] = &["video.upscaling.state", "video.upscaling.set"];
 impl Capability for VideoUpscaling {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {

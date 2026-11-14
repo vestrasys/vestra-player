@@ -13,6 +13,8 @@ use sha2::{Digest, Sha256};
 use std::io::Write;
 use std::path::Path;
 use std::process::Command;
+#[path = "explicit/mod.rs"]
+mod explicit;
 
 const ID: &str = "vestra.fixture-lazy";
 
@@ -52,18 +54,18 @@ fn fixture(root: &Path) -> serde_json::Value {
     )
 }
 
-/// A built-in package `id` with `capabilities` and `main.js`; its
-/// `builtin.json` entry.
+/// A built-in package `id` with `main.js` (and the calls `capabilities`
+/// stand for, `explicit`); its `builtin.json` entry.
 fn package(root: &Path, id: &str, capabilities: &[&str], main: String) -> serde_json::Value {
     let files = [
         (
             "manifest.json",
             serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-                "entry":"main.js","capabilities":capabilities})
+                "entry":"main.js"})
             .to_string(),
         ),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
-        ("main.js", main),
+        ("main.js", explicit::main(capabilities, &main)),
     ];
     let directory = root.join(id);
     std::fs::create_dir_all(&directory).unwrap();
@@ -644,7 +646,7 @@ fn third_party_first_runs_start_a_few_at_a_time() {
 /// (`installed`, the rest left empty). `n` makes its instance GUID.
 fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
     let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":["source.resolve"]});
+        "entry":"main.js"});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
@@ -908,6 +910,95 @@ fn a_packages_listener_is_parked_and_woken_by_a_package_change() {
         "{second}"
     );
     assert!(!second.contains(&format!("] {PACKAGES} start")), "{second}");
+}
+
+const BINDINGS: &str = "vestra.fixture-bindings";
+const LATE: &str = "vestra.fixture-late";
+
+/// Wake events are muted during start-up (nothing wakes), and a muted one
+/// is not dropped for a plugin parked before it (V2, SDK 1.9.0: the hotkeys
+/// page parked with 337 rows instead of 372): once the mute ends, a plugin
+/// parked in this run whose event's state is not the one it last had is
+/// woken once, and reads the current state. A plugin registering a command
+/// late in start-up (its activation takes 4 s) changes `bindings.list`
+/// after the listener parked (idle 500 ms). The next start, with the same
+/// plugins and commands, wakes nothing.
+#[test]
+#[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
+fn a_listener_parked_at_start_up_is_woken_once_for_a_muted_change() {
+    let root = root_with(|plugins| {
+        vec![
+            package(
+                plugins,
+                BINDINGS,
+                &["commands"],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     const late = async () => (await plugin.bindings.list()).commands\n\
+                     .filter((c) => c.plugin === \"{LATE}\").length;\n\
+                     console.error(`{BINDINGS} start sees ${{await late()}}`);\n\
+                     plugin.bindings.onChange(async () =>\n\
+                     console.error(`{BINDINGS} heard ${{await late()}}`));\n}}\n"
+                ),
+            ),
+            package(
+                plugins,
+                LATE,
+                &["commands"],
+                format!(
+                    "export default async function activate(plugin) {{\n\
+                     await new Promise((done) => setTimeout(done, 4000));\n\
+                     plugin.commands.add({{ id: \"late\", path: [\"Tools\", \"Late\"], run: () => {{}} }});\n\
+                     console.error(`{LATE} added`);\n}}\n"
+                ),
+            ),
+        ]
+    });
+    let lazy = [("VESTRA_SHARED", "1"), ("VESTRA_IDLE_MS", "500")];
+    let first = run(root.path(), 10, &lazy);
+    let at = |text: &str| {
+        first
+            .find(text)
+            .unwrap_or_else(|| panic!("{text}: {first}"))
+    };
+    // The set-up: the listener parked before the late command came, during
+    // start-up.
+    let parked = at(&format!("lazy: {BINDINGS} parked"));
+    let added = at(&format!("{LATE} added"));
+    let settled = at("lazy: start-up settled");
+    assert!(parked < added && added < settled, "{first}");
+    // Not woken while muted; once the mute ended, woken once for it.
+    let woken = at(&format!("lazy: {BINDINGS} woken by bindings.changed"));
+    assert!(settled < woken, "{first}");
+    assert_eq!(
+        count(&first, &format!("lazy: {BINDINGS} woken by")),
+        1,
+        "{first}"
+    );
+    assert!(
+        first.contains(&format!(
+            "lazy: {BINDINGS} parked before bindings.changed changed at start-up, waking it"
+        )),
+        "{first}"
+    );
+    // Its woken run sees the late command.
+    assert!(
+        first[woken..].contains(&format!("{BINDINGS} start sees 1"))
+            || first[woken..].contains(&format!("{BINDINGS} heard 1")),
+        "{first}"
+    );
+
+    // The next start: both replayed, the same commands; nothing is woken.
+    let second = run(root.path(), 4, &lazy);
+    for id in [BINDINGS, LATE] {
+        assert!(second.contains(&format!("lazy: {id} replayed")), "{second}");
+        assert!(!second.contains(&format!("lazy: {id} woken")), "{second}");
+        assert!(
+            !second.contains(&format!("lazy: {id} parked before")),
+            "{second}"
+        );
+    }
+    assert!(!second.contains(&format!("] {BINDINGS} start")), "{second}");
 }
 
 /// A test parks and wakes every built-in and diffs the registries: for

@@ -10,6 +10,8 @@ import { Resume } from "./resume.ts";
  * positions.json), written after each change and on deactivation.
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
+  await plugin.player.read(); // was "playback.read"
   const { player } = plugin;
   const recent = new Recent(plugin);
   const resume = new Resume(plugin, plugin.osd);

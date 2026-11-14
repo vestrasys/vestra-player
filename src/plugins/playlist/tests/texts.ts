@@ -8,7 +8,6 @@ import type { Texts } from "../notices.ts";
 export async function chineseTexts(): Promise<{ texts: Texts; host: TestHost; stop: () => Promise<void> }> {
   const { plugin, host, stop } = await startPlugin(() => {}, {
     directory: new URL("..", import.meta.url),
-    capabilities: [],
     locale: "zh-Hans",
   });
   return { texts: plugin.i18n, host, stop };

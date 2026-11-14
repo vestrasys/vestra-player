@@ -874,9 +874,6 @@ impl crate::playback::renderer::GpuBackend for GpuHandle {
     ) -> std::result::Result<(), String> {
         vestra_gpu_render::Handle::attach(self, component, show, failed, drawn)
     }
-    fn retarget<T: slint::ComponentHandle + 'static>(&self, component: &T) {
-        vestra_gpu_render::Handle::retarget(self, component);
-    }
 }
 
 /// Start drawing `mpv` at `size` pixels; frames are shown while `publish`.

@@ -52,15 +52,16 @@ fn command_row(info: &bindings::Info, declaration: &crate::commands::Declaration
 /// entries for commands nothing declares (`orphans`).
 ///
 /// A `focus: "panel"` command fires only while its plugin's panel has the
-/// keys, so one of a plugin whose manifest declares no `ui.mount` (no panel
-/// in the bottom bar, the sidebar, the adjust column or behind the video)
-/// can never fire from a key: it is left out, so the Keyboard Shortcuts
-/// page offers no dead key for it. It stays registered and runnable
-/// (`commands.run`, the plugin's own controls), and a user binding stored
-/// for it stays in the overlay (it is declared, so no orphan either): it is
-/// listed again once a version of the plugin declares a panel. Decided by
-/// the manifest, not by a panel mounted now, so the list does not change as
-/// panels come and go (or as the plugin parks).
+/// keys, so one of a plugin that has no panel (in the bottom bar, the
+/// sidebar, the adjust column or behind the video) can never fire from a
+/// key: it is left out, so the Keyboard Shortcuts page offers no dead key
+/// for it. It stays registered and runnable (`commands.run`, the plugin's
+/// own controls), and a user binding stored for it stays in the overlay (it
+/// is declared, so no orphan either). Decided by whether the plugin has
+/// mounted a panel in this run (`Host::panel_plugins`, a replayed tab's
+/// placeholder included; player 0.9.0, before: whether its manifest
+/// declared `ui.mount`), so the list does not change as panels come and
+/// go or as the plugin parks: it only grows, once per plugin.
 fn list<'a>(
     table: &bindings::Table,
     declaration: impl Fn(&bindings::Info) -> Option<&'a crate::commands::Declaration>,
@@ -140,17 +141,26 @@ impl Host {
     }
     fn bindings_list(&self) -> Value {
         let table = &self.input.borrow().table;
-        // Read once per plugin: each reading copies its manifest.
-        let mut panels = std::collections::HashMap::new();
         list(
             table,
             |info| Some(&self.commands.get(info.owner, &info.id)?.declaration),
-            |manifest| {
-                *panels
-                    .entry(manifest.to_owned())
-                    .or_insert_with(|| self.declares_ui_mount(manifest))
-            },
+            |manifest| self.panel_plugins.contains(manifest),
         )
+    }
+    /// After the mounted panels changed: a plugin with a panel for the first
+    /// time in this run has its panel commands listed from now on
+    /// (`bindings.list`), so the list's revision moves.
+    pub(crate) fn note_panel_plugins(&mut self) {
+        let mut grew = false;
+        for mount in self.mounts.values() {
+            if !self.panel_plugins.contains(&mount.manifest) {
+                self.panel_plugins.insert(mount.manifest.clone());
+                grew = true;
+            }
+        }
+        if grew {
+            self.input.borrow_mut().table.listed_elsewhere();
+        }
     }
     /// `bindings.changed` (declarations or overlay) and `packages.changed`
     /// (the plugin list) to the plugins that subscribed; at most every 200 ms.
@@ -268,6 +278,20 @@ impl Host {
     pub(crate) fn command_keys(&mut self, owner: u64) -> Value {
         let (manifest, keys) = self.keys_of(owner);
         if let Some(manifest) = manifest {
+            self.keys_sent.insert(manifest, keys.clone());
+        }
+        self.keys_data(keys)
+    }
+    /// `owner`'s key labels now (`keys_of`): the state of its
+    /// `commands.keys` (`Host::wake_missed`).
+    pub(crate) fn keys_state(&self, owner: u64) -> Value {
+        self.keys_of(owner).1
+    }
+    /// `owner` in standby is woken for its key labels `keys`
+    /// (`Host::wake_missed`): noted as what it has, as `push_command_keys`
+    /// notes a wake's; the event data.
+    pub(crate) fn keys_woken(&mut self, owner: u64, keys: Value) -> Value {
+        if let (Some(manifest), _) = self.keys_of(owner) {
             self.keys_sent.insert(manifest, keys.clone());
         }
         self.keys_data(keys)
@@ -391,7 +415,7 @@ impl Host {
     }
 }
 
-const KEYS_EVENT: &str = "commands.keys";
+pub(crate) const KEYS_EVENT: &str = "commands.keys";
 
 /// A plugin `push_command_keys` considers: running (`subscribed`: it
 /// subscribed to `commands.keys`; `waking`: its start for a wake event is

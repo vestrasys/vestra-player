@@ -946,28 +946,6 @@ impl<P: Clone> Supervisor<P> {
     pub fn job(&self, u: UnitId) -> Option<&Job> {
         self.units.get(&u).and_then(|unit| unit.job.as_ref())
     }
-    /// The ids of the units whose start is under way: a start installed
-    /// that waits for a place (`Inactive`) or is creating its process
-    /// (`Activating{Verify|Spawn}`). Not a restart after a crash (its
-    /// backoff may last seconds), nor one held for later (`not_before`).
-    pub fn starts_under_way(&self) -> impl Iterator<Item = &str> {
-        let now = self.now;
-        self.units.values().filter_map(move |unit| {
-            let job = unit.job.as_ref()?;
-            let starting = job.will_start()
-                && job.cause() != Some(Cause::AutoRestart)
-                && job.not_before.is_none_or(|at| at <= now)
-                && matches!(
-                    unit.state,
-                    UnitState::Inactive
-                        | UnitState::Activating {
-                            sub: ActivatingSub::Verify | ActivatingSub::Spawn,
-                            ..
-                        }
-                );
-            starting.then_some(unit.id.as_str())
-        })
-    }
     /// The result of a job of `u` that ended (the last 8 are kept).
     pub fn job_result(&self, u: UnitId, job: JobId) -> Option<&JobResult> {
         self.units.get(&u).and_then(|unit| {
@@ -1764,7 +1742,11 @@ impl<P: Clone> Supervisor<P> {
         (self.units.get(&u)?.pid() == Some(pid)).then_some(u)
     }
 
-    fn events_muted(&self) -> bool {
+    /// Wake events wake nothing now: start-up has not settled
+    /// (`set_muted`), or it settled less than `quiet_after_start` ago
+    /// (`settled`). The adapter wakes what a muted event would have woken
+    /// once this ends (the Host's `wake_missed`).
+    pub fn events_muted(&self) -> bool {
         self.muted || self.now < self.quiet_until
     }
 

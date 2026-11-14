@@ -1,8 +1,9 @@
 //! The mpv pass-through with the real host, headless (doc/architecture/
 //! README.md §4.9): a built-in fixture that declares `mpv` writes, reads
 //! and observes an mpv property, runs commands, adds its own labelled
-//! filter and meets the closed refusal rules; a development load without
-//! `mpv` is refused every method. The fixtures speak the wire directly
+//! filter and meets the closed refusal rules; a development load (not
+//! built-in, declaring nothing) uses the same methods (player 0.9.0;
+//! before, it was refused every method). The fixtures speak the wire directly
 //! (their own process, `VESTRA_SHARED=0`). Built-ins from a `builtin.json`
 //! schema 3 under `VESTRA_BUILTIN_PLUGINS`, the development runner, Node 26
 //! on `PATH` (or `VESTRA_NODE`) and libmpv. Ignored by default; `npm run
@@ -12,6 +13,8 @@
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::process::Command;
+#[path = "explicit/mod.rs"]
+mod explicit;
 
 const ID: &str = "vestra.fixture-mpv";
 const THIRD: &str = "zysilm.fixture-third";
@@ -32,18 +35,18 @@ fn digest(files: &[(&str, String)]) -> String {
     format!("{:x}", hasher.finalize())
 }
 
-/// A package `id` with `capabilities` and `main.js` in `root`; its
-/// `builtin.json` entry.
+/// A package `id` with `main.js` (and the calls `capabilities` stand
+/// for, `explicit`) in `root`; its `builtin.json` entry.
 fn package(root: &Path, id: &str, capabilities: &[&str], main: String) -> serde_json::Value {
     let files = [
         (
             "manifest.json",
             serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-                "entry":"main.js","capabilities":capabilities})
+                "entry":"main.js"})
             .to_string(),
         ),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
-        ("main.js", main),
+        ("main.js", explicit::main(capabilities, &main)),
     ];
     let directory = root.join(id);
     std::fs::create_dir_all(&directory).unwrap();
@@ -116,14 +119,17 @@ export default async function activate(plugin) {{
     )
 }
 
-/// The development load: no `mpv` in its manifest.
+/// The development load: a plugin that is not built-in, which needs no
+/// declaration for the pass-through either (player 0.9.0). It works on
+/// `contrast`, so that the fixture's `brightness` values stay its own now
+/// that its calls succeed.
 fn third() -> String {
     format!(
         r#"{WIRE}
 export default async function activate(plugin) {{
-  log("THIRD get", said(await call("mpv.get", {{ name: "brightness" }})));
-  log("THIRD command", said(await call("mpv.command", {{ args: ["add", "brightness", 1] }})));
-  log("THIRD observe", said(await call("mpv.observe", {{ name: "brightness" }})));
+  log("THIRD get", said(await call("mpv.get", {{ name: "contrast" }})));
+  log("THIRD command", said(await call("mpv.command", {{ args: ["add", "contrast", 1] }})));
+  log("THIRD observe", said(await call("mpv.observe", {{ name: "contrast" }})));
 }}
 "#
     )
@@ -205,13 +211,13 @@ fn a_plugin_with_the_mpv_capability_drives_mpv_within_the_rules() {
     expect(r#"FIX chain ["vestra-orientation","vestra-orientation-metadata","fix"]"#);
     // A filter and an observer keep it running: never in standby.
     assert!(!log.contains(&format!("lazy: {ID} parked")), "{log}");
-    // Without `mpv` in the manifest nothing of it is open.
-    for call in ["get", "command", "observe"] {
-        assert!(
-            log.contains(&format!(
-                "THIRD {call} error capability (capability must be declared in manifest)"
-            )),
-            "{call}\n{log}"
-        );
+    // Player 0.9.0: a plugin that is not built-in uses it without a
+    // declaration (before: each call failed `capability`).
+    for expected in [
+        r#"THIRD get {"value":0}"#,
+        r#"THIRD command {"result":null}"#,
+        "THIRD observe null",
+    ] {
+        assert!(log.contains(expected), "{expected}\n{log}");
     }
 }

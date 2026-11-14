@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.13
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.4.12
 
 - **Reset** at the bottom of the Subtitles panel no longer sends the style it resets a moment later. With a secondary subtitle shown at Above Main Subtitle, the reset's new state ran the position check while the edited style (or the remembered one restored at start) was still pending, so that style was applied again right after the reset. Reset now drops the pending style before it writes, and the position comes back with the next secondary subtitle, as the code already meant. The status line reads "Default style restored.".

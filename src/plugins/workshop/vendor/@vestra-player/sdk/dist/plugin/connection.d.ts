@@ -12,9 +12,14 @@ export type Why = () => string;
  * the palette, a resolver), not playback.
  */
 export declare const WAKE_EVENTS: readonly string[];
+/**
+ * What the runtime reads of the plugin's manifest: its id. Nothing in the
+ * manifest switches behaviour (1.9.0): event delivery and the start-up
+ * reads are the plugin's explicit calls (`plugin.player.subscribe()`,
+ * `plugin.player.read()`).
+ */
 export interface PluginManifest {
     id: string;
-    capabilities: string[];
 }
 /** How the plugin is run: the player's runner, or `TestHost`. */
 export interface RuntimeOptions {
@@ -63,6 +68,11 @@ export declare class Connection {
      * `REQUEST_LIMITS` in flight, the rest wait in order (`request-queue.ts`).
      */
     readonly requests: RequestQueue;
+    /**
+     * The player's state is read again after the plugin's own actions:
+     * `plugin.player.read()` was called.
+     */
+    reads: boolean;
     readonly views: Map<string, (callback: string, args: Json[]) => void>;
     readonly commands: Map<string, () => void>;
     /**
@@ -104,7 +114,14 @@ export declare class Connection {
      */
     readonly features: ReadonlySet<string>;
     constructor(transport: Transport, manifest: PluginManifest, directory: string, dataDirectory?: string, app?: unknown, options?: RuntimeOptions);
-    can(capability: string): boolean;
+    /** Event delivery is on (`plugin.player.subscribe()` was called). */
+    get delivering(): boolean;
+    /**
+     * Turn event delivery on (`plugin.player.subscribe()`): every later
+     * listener is subscribed, and so is what was added before and heard
+     * nothing. Idempotent.
+     */
+    deliver(): void;
     /** Read the state copy kept by `event` again, if one exists; never rejects. */
     reread(event: string): Promise<void>;
     /** Lazily created singletons shared by every scope of this plugin. */
@@ -133,17 +150,19 @@ export declare class Connection {
     callSite(): () => string | undefined;
     /**
      * Host events with one `events.subscribe` per name, however many listeners.
-     * Without the `events` capability the listener simply never fires.
+     * An event that needs delivery (`"events"`) is subscribed only once
+     * `plugin.player.subscribe()` was called; until then its listener simply
+     * never fires.
      * `mirror`: the SDK's own copy of the state (`plugin.player.state` and
      * the like), not a listener of the plugin's (see {@link EventGroup}).
      */
     on(event: string, listener: Listener, 
-    /** The capability the event needs; `null`: none. */
-    needs?: string | null, mirror?: boolean): Disposable;
+    /** `"events"`: it arrives after `plugin.player.subscribe()`; `null`: always. */
+    needs?: "events" | null, mirror?: boolean): Disposable;
     /**
      * Count `event` as listened to while held: a watcher of a service's
      * state, a binding that reads it. Nothing when nothing subscribed to it
-     * (no capability, or the service did not start).
+     * (no `plugin.player.subscribe()`, or the service did not start).
      */
     hold(event: string, why?: Why): Disposable;
     /**
@@ -154,7 +173,7 @@ export declare class Connection {
     listening(): Map<string, string[]>;
     /**
      * One request by its method name, as given (`plugin.wire.request`): nothing
-     * added, nothing checked here, the player checks the capability. Every other
+     * added, nothing checked here; the player checks the request. Every other
      * part of the SDK uses the typed clients (`host`); `scripts/check-layers.mjs`
      * keeps it so. It waits in the request queue like every other.
      */

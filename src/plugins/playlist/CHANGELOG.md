@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.8
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.2.7
 
 - The list command Show in Folder (`reveal`, Ctrl+F) is called "Show in Folder" on every system, as capture's snapshot notice says it, in all six languages (it was "Show in Finder", also on Windows). Id, key and behaviour are unchanged. Who must change: nobody.

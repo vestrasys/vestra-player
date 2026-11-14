@@ -254,8 +254,7 @@ impl Host {
             self.write_strip();
         }
     }
-    /// Write the whole strip into the shell: after a change, and again into
-    /// a rebuilt shell (`compile_shell`).
+    /// Write the whole strip into the shell, after a change.
     pub(crate) fn write_strip(&self) {
         let Some(shell) = &self.shell else {
             return;

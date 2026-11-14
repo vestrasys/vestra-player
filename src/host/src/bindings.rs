@@ -888,6 +888,14 @@ impl Table {
         self.revision
     }
 
+    /// What `bindings.list` shows changed outside the table (a plugin's
+    /// panel commands are listed from now on, `Host::note_panel_plugins`):
+    /// the revision and the listed revision move.
+    pub fn listed_elsewhere(&mut self) {
+        self.revision += 1;
+        self.listed += 1;
+    }
+
     /// What `bindings.list` shows of the table changed when this moved
     /// (`listed`).
     pub fn listed_revision(&self) -> u64 {
@@ -2285,6 +2293,18 @@ mod tests {
         );
         table.remove_owner(9);
         assert_eq!(table.resolve(&key("Space"), None).unwrap().id, "late");
+    }
+
+    /// A plugin's panel commands listed from now on (player 0.9.0,
+    /// `Host::note_panel_plugins`): both revisions move, so `bindings.list`
+    /// is built again and `bindings.changed` goes out.
+    #[test]
+    fn a_change_outside_the_table_moves_both_revisions() {
+        let mut table = Table::default();
+        let (revision, listed) = (table.revision(), table.listed_revision());
+        table.listed_elsewhere();
+        assert!(table.revision() > revision);
+        assert!(table.listed_revision() > listed);
     }
 
     /// `bindings.list`'s gate (supervisor.md): the listed revision

@@ -74,6 +74,7 @@ interface Saved {
  * Every text is English source text (locales/ has the translations).
  */
 export default async function activate(plugin: Plugin) {
+  await plugin.player.read(); // was "playback.read"
   const { player, osd } = plugin;
   const { text } = plugin.i18n;
   const { settings, save: store } = openSettings(plugin);

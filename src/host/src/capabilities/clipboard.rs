@@ -1,27 +1,23 @@
 //! `clipboard`: reading and writing the system clipboard (crate::clipboard).
-use super::{Capability, Handled, Info, Method, Recorded, Residency};
+use super::{Capability, Handled, Info, Recorded};
 use crate::host::{Host, Reply, RpcError};
 use serde_json::Value;
 
 pub struct Clipboard;
 static INFO: Info = Info {
     name: "clipboard",
-    label: "Read and write the clipboard",
-    risky: true,
-    requires: &[],
-    residency: Residency::None,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("clipboard.readText"),
-    Method::this("clipboard.writeText"),
-    Method::this("clipboard.writeImage"),
+static METHODS: &[&str] = &[
+    "clipboard.readText",
+    "clipboard.writeText",
+    "clipboard.writeImage",
 ];
 impl Capability for Clipboard {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {

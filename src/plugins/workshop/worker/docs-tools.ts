@@ -41,7 +41,7 @@ export function docsTools(): ToolDefinition[] {
       name: "docs",
       label: "docs",
       description:
-        "Read the Vestra plugin SDK documentation by path. Start at \"/\" (Overview, Guides, API); every answer lists the paths one level down with a one-line summary, so drill down from there. An API member path gives its signature, parameters, return value, errors, capability, player version and examples. At most 8 KB per answer; use page for the rest.",
+        "Read the Vestra plugin SDK documentation by path. Start at \"/\" (Overview, Guides, API); every answer lists the paths one level down with a one-line summary, so drill down from there. An API member path gives its signature, parameters, return value, errors, player version and examples. At most 8 KB per answer; use page for the rest.",
       promptSnippet: "Read the SDK documentation by path",
       parameters: docsSchema,
       async execute(_id: string, params: { path?: string; page?: number }) {

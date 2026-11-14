@@ -88,8 +88,18 @@ export class Connection {
      */
     requests;
     #events = new Map();
-    /** The missing `events` warning was given (once per plugin). */
+    /** The missing `subscribe()` warning was given (once per plugin). */
     #warnedEvents = false;
+    /**
+     * Event delivery is on: `plugin.player.subscribe()` was called
+     * ({@link Connection.deliver}).
+     */
+    #delivering = false;
+    /**
+     * The player's state is read again after the plugin's own actions:
+     * `plugin.player.read()` was called.
+     */
+    reads = false;
     views = new Map();
     commands = new Map();
     /**
@@ -169,8 +179,24 @@ export class Connection {
             this.commands.get(data.id)?.();
         });
     }
-    can(capability) {
-        return this.manifest.capabilities.includes(capability);
+    /** Event delivery is on (`plugin.player.subscribe()` was called). */
+    get delivering() {
+        return this.#delivering;
+    }
+    /**
+     * Turn event delivery on (`plugin.player.subscribe()`): every later
+     * listener is subscribed, and so is what was added before and heard
+     * nothing. Idempotent.
+     */
+    deliver() {
+        if (this.#delivering)
+            return;
+        this.#delivering = true;
+        for (const [event, group] of this.#events)
+            if (group.unheard) {
+                group.unheard = false;
+                this.#open(event, group);
+            }
     }
     /** Read the state copy kept by `event` again, if one exists; never rejects. */
     async reread(event) {
@@ -275,12 +301,14 @@ export class Connection {
     }
     /**
      * Host events with one `events.subscribe` per name, however many listeners.
-     * Without the `events` capability the listener simply never fires.
+     * An event that needs delivery (`"events"`) is subscribed only once
+     * `plugin.player.subscribe()` was called; until then its listener simply
+     * never fires.
      * `mirror`: the SDK's own copy of the state (`plugin.player.state` and
      * the like), not a listener of the plugin's (see {@link EventGroup}).
      */
     on(event, listener, 
-    /** The capability the event needs; `null`: none. */
+    /** `"events"`: it arrives after `plugin.player.subscribe()`; `null`: always. */
     needs = "events", mirror = false) {
         let entry = this.#events.get(event);
         const created = !entry;
@@ -302,34 +330,12 @@ export class Connection {
             group.active++;
             group.whys.set(token, listenerWhy(this.callSite()));
         }
-        if (created && needs === "events" && !this.can(needs))
+        if (created && needs === "events" && !this.#delivering)
             group.unheard = true;
         if (!mirror && group.unheard)
             this.#warnUnheard(event);
-        if (created && (needs === null || this.can(needs))) {
-            group.told = group.active > 0;
-            const whys = group.told ? allWhys(group) : undefined;
-            group.toldWhy = whys?.join("\n");
-            group.off = this.host.events.subscribe(event, (data) => {
-                // Split once: the state copies first, each on its own (one that
-                // throws stops neither the others nor the plugin's listeners),
-                // then the plugin's listeners in order.
-                const mirrors = [];
-                const others = [];
-                for (const each of group.listeners)
-                    (group.mirrors.has(each) ? mirrors : others).push(each);
-                for (const each of mirrors)
-                    try {
-                        each(data);
-                    }
-                    catch (error) {
-                        this.reportMirror(error);
-                    }
-                for (const each of others)
-                    each(data);
-            }, !group.told, whys);
-            this.starting(group.off, (error) => console.error(`[${this.manifest.id}] subscribe ${event}:`, error));
-        }
+        if (created && !group.unheard)
+            this.#open(event, group);
         else
             this.#tell(event, group);
         let listening = true;
@@ -353,10 +359,35 @@ export class Connection {
             },
         };
     }
+    /** Subscribe `group` to `event` at the player, as it stands now. */
+    #open(event, group) {
+        group.told = group.active > 0;
+        const whys = group.told ? allWhys(group) : undefined;
+        group.toldWhy = whys?.join("\n");
+        group.off = this.host.events.subscribe(event, (data) => {
+            // Split once: the state copies first, each on its own (one that
+            // throws stops neither the others nor the plugin's listeners),
+            // then the plugin's listeners in order.
+            const mirrors = [];
+            const others = [];
+            for (const each of group.listeners)
+                (group.mirrors.has(each) ? mirrors : others).push(each);
+            for (const each of mirrors)
+                try {
+                    each(data);
+                }
+                catch (error) {
+                    this.reportMirror(error);
+                }
+            for (const each of others)
+                each(data);
+        }, !group.told, whys);
+        this.starting(group.off, (error) => console.error(`[${this.manifest.id}] subscribe ${event}:`, error));
+    }
     /**
      * Count `event` as listened to while held: a watcher of a service's
      * state, a binding that reads it. Nothing when nothing subscribed to it
-     * (no capability, or the service did not start).
+     * (no `plugin.player.subscribe()`, or the service did not start).
      */
     hold(event, why) {
         const group = this.#events.get(event);
@@ -383,15 +414,16 @@ export class Connection {
     }
     /**
      * A development warning, once per plugin, no behaviour change: the plugin
-     * follows `event` (an `onChange`, a `bind` that reads the state) without the
-     * `events` capability, so changes made elsewhere (the user, the player,
-     * another plugin) never reach it; the state moves only after its own calls.
+     * follows `event` (a listener, an `onChange`, a `bind` that reads the
+     * state) before `plugin.player.subscribe()`, so changes made elsewhere
+     * (the user, the player, another plugin) never reach it; the state moves
+     * only after its own calls.
      */
     #warnUnheard(event) {
         if (this.#warnedEvents)
             return;
         this.#warnedEvents = true;
-        console.warn(`[${this.manifest.id}] follows ${event} (onChange, or a bind() that reads the state) without the "events" capability: changes made elsewhere will not reach it, only its own calls refresh the state. Declare "events" in manifest.json.`);
+        console.warn(`[${this.manifest.id}] follows ${event} (a listener, onChange, or a bind() that reads the state) before plugin.player.subscribe(): changes made elsewhere will not reach it, only its own calls refresh the state. Call plugin.player.subscribe() first in activate().`);
     }
     /**
      * Tell the player when `group` changes between mirror and listener, and
@@ -430,7 +462,7 @@ export class Connection {
     }
     /**
      * One request by its method name, as given (`plugin.wire.request`): nothing
-     * added, nothing checked here, the player checks the capability. Every other
+     * added, nothing checked here; the player checks the request. Every other
      * part of the SDK uses the typed clients (`host`); `scripts/check-layers.mjs`
      * keeps it so. It waits in the request queue like every other.
      */

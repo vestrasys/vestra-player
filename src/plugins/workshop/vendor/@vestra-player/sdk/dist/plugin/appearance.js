@@ -1,4 +1,4 @@
-/** The player's palette (`plugin.appearance`; `ui.theme` to change it). */
+/** The player's palette (`plugin.appearance`). */
 import { failure } from "./errors.js";
 import { windowOf } from "./window.js";
 import { LOCALES } from "../i18n.js";
@@ -9,7 +9,7 @@ const preference = (value) => value === "system" || LOCALES.includes(value)
 export const THEMES = ["vestra", "vestra-light"];
 /**
  * One per plugin: the value comes with the `window.state` read before
- * activation; with `events`, `appearance.changed` keeps it current once
+ * activation; after `plugin.player.subscribe()`, `appearance.changed` keeps it current once
  * the plugin uses it (or listens to that event with `player.on`).
  */
 class AppearanceService {

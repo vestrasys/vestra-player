@@ -1815,7 +1815,7 @@ pub(crate) mod tests {
     use super::*;
     fn candidate(version: &str) -> (tempfile::TempDir, Candidate) {
         let root = tempfile::tempdir().unwrap();
-        fs::write(root.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"counter","apiVersion":crate::process::API,"version":version,"entry":"main.js","capabilities":[]})).unwrap()).unwrap();
+        fs::write(root.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"counter","apiVersion":crate::process::API,"version":version,"entry":"main.js"})).unwrap()).unwrap();
         fs::write(
             root.path().join("main.js"),
             format!("export const version = '{version}';"),
@@ -2310,7 +2310,7 @@ pub(crate) mod tests {
         store.prepare("counter", 0, &counter, "one").unwrap();
         store.commit("counter", "one").unwrap();
         let other_dir = tempfile::tempdir().unwrap();
-        fs::write(other_dir.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"other","apiVersion":crate::process::API,"version":"1.0.0","entry":"main.js","capabilities":[]})).unwrap()).unwrap();
+        fs::write(other_dir.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"other","apiVersion":crate::process::API,"version":"1.0.0","entry":"main.js"})).unwrap()).unwrap();
         fs::write(other_dir.path().join("main.js"), "export default () => {}").unwrap();
         let other = store
             .stage(&Candidate::capture(other_dir.path()).unwrap())
@@ -2759,7 +2759,7 @@ pub(crate) mod tests {
     /// (`prepared` is what every install goes through).
     fn try_one_more(store: &mut Store) -> Result<Catalog> {
         let more = tempfile::tempdir().unwrap();
-        fs::write(more.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"one.more","apiVersion":crate::process::API,"version":"1.0.0","entry":"main.js","capabilities":[]})).unwrap()).unwrap();
+        fs::write(more.path().join("manifest.json"), serde_json::to_vec(&serde_json::json!({"id":"one.more","apiVersion":crate::process::API,"version":"1.0.0","entry":"main.js"})).unwrap()).unwrap();
         fs::write(more.path().join("main.js"), "export default () => {}").unwrap();
         let more = store
             .stage(&Candidate::capture(more.path()).unwrap())

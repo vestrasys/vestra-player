@@ -177,7 +177,7 @@ const reference = (ref) => {
         throw failure("invalid", "a binding ref names plugin and command");
     return { plugin: ref.plugin, command: ref.command };
 };
-/** `plugin.bindings` (`bindings.manage`): the table and the user overlay. */
+/** `plugin.bindings`: the table and the user overlay. */
 export const bindingsApi = (scope) => ({
     async list() {
         const table = await scope.runtime.host.bindings.list();
@@ -209,7 +209,7 @@ export const bindingsApi = (scope) => ({
         await scope.runtime.host.bindings.reset(ref === undefined ? undefined : reference(ref));
     },
     onChange(listener) {
-        const watch = scope.runtime.on("bindings.changed", () => scope.run(listener), "bindings.manage");
+        const watch = scope.runtime.on("bindings.changed", () => scope.run(listener), null);
         return scope.add({
             dispose: async () => {
                 scope.forget(watch);

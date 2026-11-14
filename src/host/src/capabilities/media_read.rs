@@ -1,27 +1,19 @@
 //! `media.read`: the state of snapshots and export jobs.
-use super::{Capability, Handled, Info, Method, Recorded, Residency, forward_media};
+use super::{Capability, Handled, Info, Recorded, forward_media};
 use crate::host::{Host, Reply};
 use serde_json::Value;
 
 pub struct MediaRead;
 static INFO: Info = Info {
     name: "media.read",
-    label: "Take snapshots and export clips",
-    risky: false,
-    requires: &["media.control"],
-    residency: Residency::None,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("snapshot.state"),
-    Method::this("jobs.state"),
-    Method::this("jobs.operation"),
-];
+static METHODS: &[&str] = &["snapshot.state", "jobs.state", "jobs.operation"];
 impl Capability for MediaRead {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {

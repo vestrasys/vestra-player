@@ -29,20 +29,19 @@ export const sha256 = (bytes: Uint8Array) => createHash("sha256").update(bytes).
 /** A fake .vxp: the player is simulated, so the "archive" is its manifest as JSON. */
 export function vxp(manifest: Partial<PackageManifest> & { id: string; version: string }): Buffer {
   return Buffer.from(
-    JSON.stringify({ apiVersion: "vestra/1", entry: "main.js", capabilities: [], ...manifest }),
+    JSON.stringify({ apiVersion: "vestra/1", entry: "main.js", ...manifest }),
   );
 }
 
 export type VersionSpec = {
   version: string;
+  /** The entry's legacy `capabilities` (signed indexes from before SDK 1.9.0 carry it); not given: none. */
   capabilities?: string[];
   minPlayerVersion?: string | null;
   apiVersion?: string;
   published?: string;
   /** Override what the server sends for the package (size and sha256 stay those of the real one). */
   body?: Buffer;
-  /** The package's own manifest declares these instead (a package that differs from its entry). */
-  packageCapabilities?: string[];
   /** The package's own manifest says this. */
   packageMinPlayerVersion?: string;
   name?: string;
@@ -117,11 +116,9 @@ export function buildIndex(
         sourceUrl: `https://github.com/example/${p.id}`,
         ...(p.translations ? { translations: p.translations } : {}),
         versions: p.versions.map((v) => {
-          const capabilities = v.capabilities ?? ["commands"];
           const body = vxp({
             id: p.id,
             version: v.version,
-            capabilities: v.packageCapabilities ?? capabilities,
             name: v.name ?? p.name ?? p.id,
             ...(v.packageMinPlayerVersion ? { minPlayerVersion: v.packageMinPlayerVersion } : {}),
           });
@@ -131,7 +128,7 @@ export function buildIndex(
             version: v.version,
             apiVersion: v.apiVersion ?? "vestra/1",
             minPlayerVersion: v.minPlayerVersion === undefined ? "0.2.0" : v.minPlayerVersion,
-            capabilities,
+            ...(v.capabilities ? { capabilities: v.capabilities } : {}),
             downloadUrl: url,
             sha256: sha256(body),
             size: body.length,
@@ -226,7 +223,6 @@ export const info = (id: string, patch: Partial<Info> = {}): Info => ({
   origin: "installed",
   state: "running",
   error: null,
-  capabilities: ["commands"],
   directory: `/packages/${id}`,
   builtin: false,
   source: { kind: "file" },

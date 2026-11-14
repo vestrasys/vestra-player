@@ -39,8 +39,8 @@ export declare const TIMELINE_LIMITS: Readonly<{
     readonly titleChars: 100;
 }>;
 /**
- * One per plugin: read before activation (with `playback.read`), then kept
- * current from `timeline.changed` (with `events`) once the plugin uses it
+ * One per plugin: read by `plugin.player.read()`, then kept
+ * current from `timeline.changed` (after `plugin.player.subscribe()`) once the plugin uses it
  * (or listens to that event with `player.on`).
  */
 export declare class TimelineService {
@@ -49,7 +49,6 @@ export declare class TimelineService {
     ranges: readonly TimelineRange[];
     layer: boolean;
     constructor(runtime: Runtime);
-    init(): Promise<void>;
     start(): void;
     accept(lists: WireTimeline): void;
     read(): Promise<void>;

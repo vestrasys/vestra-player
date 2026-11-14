@@ -11,7 +11,8 @@
 //! `BarButtons` gets that one instead (the player's hides itself).
 //!
 //! The player fills the strip's global (`BarButtonsHost`) in every window it
-//! composes and runs a click like a click on the command's menu item
+//! composes and in the bottom bar (compiled on its own, `ui/panels.rs`;
+//! the bar's reserved width and `placed` are copied to the shell) and runs a click like a click on the command's menu item
 //! (`execute_command`). One button per plugin, eight in the strip
 //! (`commands::Registry::buttons`); the rest, and the ones the width leaves
 //! out, are in the strip's `»` menu (the host menu layer, `MenuMode::Bar`).
@@ -82,7 +83,9 @@ pub struct Inputs {
     /// The adjust column's state (its toggle's dot).
     pub adjust: Option<(bool, bool)>,
     pub locale: &'static str,
-    pub windows: (u64, Option<u64>),
+    /// The shell's and the floating window's generations, and the bottom
+    /// bar's instance (its own `BarButtonsHost`, `ui/panels.rs`).
+    pub windows: (u64, Option<u64>, Option<u64>),
     /// The palette lead's title (`palette.lead`): the palette cell's icon
     /// and tip.
     pub lead: Option<String>,
@@ -104,6 +107,8 @@ pub struct Strip {
     /// Window generations that show `buttons`, `overflow`, `toggle`,
     /// `palette`, `adjust`.
     applied: BTreeSet<u64>,
+    /// The bottom bar's instance that shows them (`Panels::bar_instance`).
+    bar_applied: Option<u64>,
     /// Buttons not in the strip, logged once each (debug).
     logged: BTreeSet<(u64, String)>,
     /// The shell generation whose bar was seen placing `BarButtons` (debug).
@@ -462,6 +467,7 @@ impl Host {
             self.bar.palette = palette;
             self.bar.adjust = adjust;
             self.bar.applied.clear();
+            self.bar.bar_applied = None;
         }
         let mut windows = vec![(self.shell_generation, shell.clone_strong())];
         if let Some(floating) = &self.floating {
@@ -474,6 +480,18 @@ impl Host {
             if self.bar.applied.insert(*generation)
                 && let Err(error) = self.apply_bar(window, *generation)
             {
+                diag!("bar buttons: {error:#}");
+            }
+        }
+        // The bottom bar, compiled on its own (`ui/panels.rs`), has a
+        // `BarButtonsHost` of its own (a bar reads `width` and `fixed` from
+        // it; a deprecated `BarButtons` draws from it): filled as the
+        // windows' are, its clicks the shell's.
+        if let Some((serial, bar)) = self.panels.bar_instance(self.shell_generation)
+            && self.bar.bar_applied != Some(serial)
+        {
+            self.bar.bar_applied = Some(serial);
+            if let Err(error) = self.apply_bar(&bar, self.shell_generation) {
                 diag!("bar buttons: {error:#}");
             }
         }
@@ -494,6 +512,9 @@ impl Host {
             windows: (
                 self.shell_generation,
                 self.floating.as_ref().map(|floating| floating.generation),
+                self.panels
+                    .bar_instance(self.shell_generation)
+                    .map(|(serial, _)| serial),
             ),
             lead: self.lead.as_ref().map(|lead| lead.row.title.clone()),
         }
@@ -746,7 +767,7 @@ mod tests {
             slot: Some((true, false)),
             adjust: None,
             locale: "en",
-            windows: (2, None),
+            windows: (2, None, None),
             lead: None,
         };
         let mut strip = Strip::default();
@@ -771,7 +792,12 @@ mod tests {
                 ..inputs.clone()
             },
             Inputs {
-                windows: (2, Some(5)),
+                windows: (2, Some(5), None),
+                ..inputs.clone()
+            },
+            // A new bottom bar instance (its own strip global).
+            Inputs {
+                windows: (2, None, Some(9)),
                 ..inputs.clone()
             },
             // Step 3b: the adjust column opened (its toggle's dot).
@@ -789,7 +815,7 @@ mod tests {
             strip.inputs = Some(changed.clone());
             assert!(!strip.begin(&changed));
         }
-        assert_eq!(strip.rebuilds, 7);
+        assert_eq!(strip.rebuilds, 8);
     }
 
     #[test]

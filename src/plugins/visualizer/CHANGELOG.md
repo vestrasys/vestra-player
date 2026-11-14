@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.10
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.1.9
 
 - Menu sweep (menu redesign §4): Audio ▸ Show Album Cover for Audio Only, Settings ▸ Appearance ▸ Show Logo When Idle / Choose Logo Image… and Reset ▸ Idle Logo leave the right-click menu and are in the command palette only ("Audio: …", "Appearance: …", "Reset: Idle Logo"), with ids and checked states unchanged; the settings page is unchanged. Who must change: nobody.

@@ -256,7 +256,6 @@ fn command_after_loss(
     command.env_remove("VESTRA_TEST_PARK");
     command.env_remove("VESTRA_TEST_WAKE");
     command.env_remove("VESTRA_TEST_OFFSCREEN");
-    command.env_remove("VESTRA_TEST_MOUNT_LIMIT_MS");
     if off {
         // `VESTRA_RENDER=gpu` overrides the guard; the child must not.
         command.env("VESTRA_RENDER", "software");

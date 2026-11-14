@@ -64,7 +64,7 @@ test("a scaffolded plugin, packed by the toolchain, installs into a real headles
   await fs.mkdir(helper, { recursive: true });
   await fs.writeFile(
     path.join(helper, "manifest.json"),
-    JSON.stringify({ id: "test.installer", version: "0.1.0", apiVersion: "vestra/1", entry: "main.js", capabilities: ["plugins.manage"], name: "Installer" }),
+    JSON.stringify({ id: "test.installer", version: "0.1.0", apiVersion: "vestra/1", entry: "main.js", name: "Installer" }),
   );
   await fs.writeFile(path.join(helper, "main.js"), HELPER(packed.file, out, id));
   const env = {

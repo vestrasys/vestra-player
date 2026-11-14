@@ -5,7 +5,7 @@
 // src/host/src/playback/mpv_rules.rs; a host test keeps the file current).
 // With an SDK older than 1.8.0 the tests skip.
 import assert from "node:assert/strict";
-import { readFileSync } from "node:fs";
+import { readdirSync, readFileSync } from "node:fs";
 import test from "node:test";
 
 const host = (file: string) =>
@@ -82,43 +82,24 @@ test("MPV_RULES are the player's (host/mpv-rules.json)", (t) => {
     );
 });
 
-test("the mpv capability is one risky capability with the pass-through's five methods (host/capabilities.json)", () => {
-  const capabilities = (
-    JSON.parse(host("capabilities.json")) as {
-      capabilities: {
-        name: string;
-        risky: boolean;
-        builtinOnly: boolean;
-        requires: string[];
-        residency: string;
-        methods: { name: string; needs: unknown }[];
-      }[];
-    }
-  ).capabilities;
-  const mpv = capabilities.filter((c) =>
-    c.methods.some((m) => m.name.startsWith("mpv.")),
-  );
+test("the mpv group serves the pass-through's five methods, open to every plugin (capabilities/mpv.rs)", () => {
+  const rust = host("src/capabilities/mpv.rs");
+  const methods = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(rust)?.[1];
+  assert.ok(methods, "METHODS in capabilities/mpv.rs");
   assert.deepEqual(
-    mpv.map((c) => c.name),
-    ["mpv"],
+    [...methods.matchAll(/"([^"]+)"/g)].map((m) => m[1]),
+    ["command", "get", "set", "observe", "unobserve"].map(
+      (name) => `mpv.${name}`,
+    ),
   );
-  const [group] = mpv;
-  assert.deepEqual(
-    {
-      risky: group!.risky,
-      builtinOnly: group!.builtinOnly,
-      requires: group!.requires,
-      residency: group!.residency,
-    },
-    { risky: true, builtinOnly: false, requires: [], residency: "live" },
-  );
-  assert.deepEqual(
-    group!.methods,
-    ["command", "get", "set", "observe", "unobserve"].map((name) => ({
-      name: `mpv.${name}`,
-      needs: "mpv",
-    })),
-  );
-  // Added last: the capabilities before it keep their manifest order.
-  assert.equal(capabilities.at(-1)!.name, "mpv");
+  assert.match(rust, /name: "mpv",\s*builtin_only: false,/);
+  // No other area lists an mpv.* method.
+  const root = new URL("../../host/src/capabilities/", import.meta.url);
+  for (const file of readdirSync(root).filter((name) => name.endsWith(".rs"))) {
+    if (file === "mpv.rs") continue;
+    const list = /static METHODS: &\[&str\] = &\[([^\]]*)\]/.exec(
+      readFileSync(new URL(file, root), "utf8"),
+    )?.[1];
+    assert.doesNotMatch(list ?? "", /"mpv\./, file);
+  }
 });

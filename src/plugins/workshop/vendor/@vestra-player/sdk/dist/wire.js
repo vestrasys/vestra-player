@@ -26,7 +26,7 @@ export const API_VERSION = "vestra/1";
  *
  * Common codes: `stale` (the condition no longer holds; nothing was done),
  * `invalid` (bad argument), `missing` (unknown target), `capability`
- * (undeclared capability), `busy`, `conflict`, `unavailable`, `unsupported`
+ * (a built-in-only request from another plugin), `busy`, `conflict`, `unavailable`, `unsupported`
  * (refused, not executed), `backend` (load or parse failure), `failed`,
  * `timeout`, `aborted`, `limit` (a player limit such as the command count),
  * `disabled` (the plugin is stopping).
@@ -57,7 +57,6 @@ export const API_VERSION = "vestra/1";
  * A definite refusal, as opposed to a lost reply: the SDK does not retry
  * it, and the plugin sees an `Error` with `code`.
  *
- * @capability None.
  * @since 1.0.0
  * @category Testing
  */
@@ -110,25 +109,25 @@ export function createWire(transport) {
             devices: () => transport.request("player.audioDevices"),
             set: (id) => transport.request("player.setAudioDevice", { id }),
         },
-        /** The binding table: list, user overlay (`bindings.manage`). */
+        /** The binding table: list, user overlay. */
         bindings: {
             list: () => transport.request("bindings.list"),
             set: (plugin, command, inputs) => transport.request("bindings.set", { plugin, command, inputs }),
             reset: (ref) => transport.request("bindings.reset", ref ?? {}),
         },
-        /** File drops: providers by extension, panel listeners (`ui.drop`). */
+        /** File drops: providers by extension, panel listeners. */
         drops: {
             provide: (id, extensions) => transport.request("drops.provide", { id, extensions }),
             withdraw: (id) => transport.request("drops.withdraw", { id }),
             listen: (listen) => transport.request("drops.listen", { listen }),
         },
-        /** The palette (`ui.theme` to change it). */
+        /** The palette: read it, change it. */
         appearance: {
             set: (theme) => transport.request("appearance.set", { theme }),
             /** The interface language for the next start. */
             setLanguage: (language) => transport.request("appearance.setLanguage", { language }),
         },
-        /** Settings pages in the player's options window (`ui.settings`). */
+        /** Settings pages in the player's options window. */
         settings: {
             register: (options) => transport.request("settings.register", options),
             set: (id, property, write) => transport.request("settings.set", { id, property, ...write }),
@@ -253,8 +252,7 @@ export function createWire(transport) {
             system: () => transport.request("app.system"),
         },
         /**
-         * The rendering choice: `state` needs no capability, `setPreference` and
-         * `restart` need `rendering.manage`.
+         * The rendering choice: `state`, `setPreference` and `restart`.
          */
         rendering: {
             state: () => transport.request("rendering.state"),

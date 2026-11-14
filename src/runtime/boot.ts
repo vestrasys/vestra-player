@@ -32,7 +32,6 @@ export const MAX_LINE = 1024 * 1024;
 export interface Manifest {
   id: string;
   entry: string;
-  capabilities: string[];
 }
 
 /** `manifest.json` of the plugin directory (the host checked it already). */

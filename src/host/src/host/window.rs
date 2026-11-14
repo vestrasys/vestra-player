@@ -291,6 +291,9 @@ impl Host {
                 json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
             )
         })();
+        // The slots' containers show their panels (a column opened, a tab
+        // switched): before the video area is measured.
+        self.sync_panels();
         // The render size from the layout this tick leaves, after the bar,
         // the columns and fullscreen above changed it (read before them, a
         // toggled column reached the renderer a tick later).
@@ -542,12 +545,9 @@ impl Host {
         sidebar_tabs::order(column, &tabs, &self.column_memory(column).order)
     }
     /// What a column's current tab needs (sidebar-tabs.md): a placeholder's
-    /// plugin is woken once (its activation mounts the panel again); a
-    /// running plugin's panel that is not in the shell is compiled into it
-    /// (`prepare_mount_tick`), unless that just failed for this tab. The
-    /// adjust column's first opening compiles its front tabs this way (menu
-    /// redesign, open question 1: on demand; all of them at once, so a
-    /// first switch among them compiles nothing).
+    /// plugin is woken once (its activation mounts the panel again). A
+    /// running plugin's panel needs nothing here: it compiles on its own
+    /// when it is first shown (`sync_panels`).
     fn tab_demand(&mut self, column: Column, active: Option<u64>) {
         let index = column.index();
         let Some(owner) = active else {
@@ -566,56 +566,21 @@ impl Host {
         let plugin = mount.plugin;
         if !mount.recorded {
             self.tab_work(plugin);
+            self.columns[index].woken = None;
+        } else if self.columns[index].woken != Some(owner) {
+            self.columns[index].woken = Some(owner);
+            diag!(
+                "{}: tab of {} shown, waking it",
+                column.prefix(),
+                mount.manifest
+            );
+            self.panel_shown(plugin);
         }
-        let Some(mount) = self.mounts.get(&owner) else {
-            return;
-        };
-        let pending = self.mount_queue.iter().any(|c| c.key == owner)
-            || self.preparing.as_ref().is_some_and(|(_, c)| c.key == owner);
-        // Under its own key, or its kept branch after its plugin restarted.
-        let compiled = self.shell_branch(owner, true).is_some();
-        match sidebar_tabs::need(mount.recorded, compiled, pending) {
-            sidebar_tabs::Need::Wake => {
-                if self.columns[index].woken != Some(owner) {
-                    self.columns[index].woken = Some(owner);
-                    diag!(
-                        "{}: tab of {} shown, waking it",
-                        column.prefix(),
-                        mount.manifest
-                    );
-                    self.panel_shown(plugin);
-                }
-            }
-            sidebar_tabs::Need::Compile => {
-                self.columns[index].woken = None;
-                if self.columns[index].refresh_failed != Some(owner)
-                    && !self.tabs_failed.contains(&owner)
-                {
-                    self.shell_refresh = true;
-                }
-            }
-            sidebar_tabs::Need::Nothing => {
-                self.columns[index].woken = None;
-                if compiled {
-                    self.columns[index].refresh_failed = None;
-                }
-            }
-        }
-    }
-    /// The sidebar's compiled tabs, in tab order, by the owner each branch was
-    /// compiled under (`shell_compiled`; a woken plugin's tab keeps its old
-    /// branch until its new mount): the floating window compiles the same
-    /// ones, so a wake does not reopen it.
-    pub(crate) fn compiled_tabs(&self) -> Vec<u64> {
-        self.columns[Column::Sidebar.index()]
-            .tabs
-            .iter()
-            .filter_map(|owner| self.shell_compiled.get(owner).copied())
-            .collect()
     }
     /// The current tabs everywhere they matter: the panel keys' owners, the
     /// shell's and the floating window's `<column>-active` (and the floating
-    /// window's title), the keys under the adjust column's tabs. A tab that
+    /// window's title), the keys under the adjust column's tabs (the panels
+    /// themselves: `sync_panels`). A tab that
     /// changed without a click on the strip (a plugin, the current panel
     /// removed) hands the keys back to the video if they were in the column:
     /// the panel that had them is gone.
@@ -629,14 +594,16 @@ impl Host {
         let p = column.prefix();
         let tabs = self.policy.panels(policy_column(column));
         let active = self.policy.active(policy_column(column));
+        // What the host acts on: none while the column waits for its
+        // remembered tab at start-up (`current_tab`).
+        let current = self.current_tab(column);
         match column {
-            Column::Sidebar => self.input.borrow_mut().sidebar = active.map(panel_plugin),
-            Column::Adjust => self.input.borrow_mut().adjust = active.map(panel_plugin),
+            Column::Sidebar => self.input.borrow_mut().sidebar = current.map(panel_plugin),
+            Column::Adjust => self.input.borrow_mut().adjust = current.map(panel_plugin),
         }
         // Each window indexes its own tab order; a tab it does not have yet
         // (or any more) leaves it as it is until it is rebuilt.
         let active_name = format!("{p}-active");
-        let shown_name = format!("{p}-shown");
         let set_index = |window: &slint_interpreter::ComponentInstance, order: &[u64]| {
             let Some(index) = active.and_then(|owner| order.iter().position(|&o| o == owner))
             else {
@@ -647,26 +614,11 @@ impl Host {
                 let _ = window.set_property(&active_name, SValue::Number(index));
             }
         };
-        let set_shown = |window: &slint_interpreter::ComponentInstance, owner: i64| {
-            let owner = owner as f64;
-            if !matches!(window.get_property(&shown_name), Ok(SValue::Number(n)) if n == owner) {
-                let _ = window.set_property(&shown_name, SValue::Number(owner));
-            }
-        };
         set_index(shell, &self.columns[index].tabs);
-        set_shown(shell, sidebar_tabs::shown(active, &self.shell_compiled));
         if column == Column::Sidebar
             && let Some(floating) = &self.floating
         {
             set_index(&floating.instance, &floating.owners);
-            // Its branches are the shell's (`compiled_tabs`), by the same owners.
-            let shown = sidebar_tabs::shown(active, &self.shell_compiled);
-            let shown = if floating.compiled.iter().any(|&alias| alias as i64 == shown) {
-                shown
-            } else {
-                -1
-            };
-            set_shown(&floating.instance, shown);
             if let Some(mount) = active.and_then(|owner| self.mounts.get(&owner)) {
                 let title = SValue::String(mount.title.as_str().into());
                 if floating.instance.get_property("panel-title").ok().as_ref() != Some(&title) {
@@ -678,18 +630,17 @@ impl Host {
             self.tab_keys(shell, column);
         }
         let state = &mut self.columns[index];
-        if state.active != active {
+        if state.active != current {
             let canvas = matches!(shell.get_property("canvas-focused"), Ok(SValue::Bool(true)));
             let more = tabs.len() > 1 || column.always_tabbed();
             if state.active.is_some() && !state.tab_clicked && !canvas && more {
                 let _ = shell.invoke("focus-video", &[]);
             }
-            state.active = active;
+            state.active = current;
         }
         state.tab_clicked = false;
-        // The adjust column's current tab is shown, and needs its panel, its
-        // plugin and its compile, only while the column is wanted shown
-        // (opened once, its panels stay compiled).
+        // The adjust column's current tab is shown, and needs its panel and
+        // its plugin, only while the column is wanted shown.
         let wanted = self
             .policy
             .column_state(policy_column(column))
@@ -698,11 +649,7 @@ impl Host {
             self.columns[index].woken = None;
             return;
         }
-        if column == Column::Adjust && !self.columns[index].opened {
-            self.columns[index].opened = true;
-            diag!("adjust: first opened, its panels compile now");
-        }
-        self.tab_demand(column, active);
+        self.tab_demand(column, current);
     }
     /// The keys under a column's tabs (the adjust column, menu redesign
     /// §3.3): each tab's command that opens it (`sidebar_tabs::tab_command`)
@@ -798,11 +745,8 @@ impl Host {
     /// with other panels than the sidebar's now opens again.
     pub(crate) fn sync_floating(&mut self, want: bool) {
         let owners = self.policy.sidebar_panels();
-        let compiled = self.compiled_tabs();
         match (&self.floating, want) {
-            (Some(floating), true)
-                if floating.owners == owners && floating.compiled == compiled =>
-            {
+            (Some(floating), true) if floating.owners == owners => {
                 self.remember_floating();
             }
             (None, true) if !owners.is_empty() => {
@@ -833,18 +777,6 @@ impl Host {
                     .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))
             })
             .collect::<Result<Vec<_>>>()?;
-        let compiled = self.compiled_tabs();
-        // Each under the owner its shell branch was compiled under.
-        let mounts = tabs
-            .iter()
-            .filter_map(|m| {
-                let alias = *self.shell_compiled.get(&m.spec.owner)?;
-                let mut mount = m.clone();
-                mount.spec.owner = alias;
-                Some(mount)
-            })
-            .collect::<Vec<_>>();
-        let specs = mounts.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
         let active = self.policy.sidebar_active();
         let title = tabs
             .iter()
@@ -855,38 +787,15 @@ impl Host {
         let tabbed = tabs.len() > 1;
         self.next_shell_generation += 1;
         let generation = self.next_shell_generation;
-        let instance = composition::compile_floating(
-            &specs,
-            &title,
-            tabbed,
-            self.mount_events.clone(),
-            generation,
-        )?;
-        // A value a panel cannot take is reported, never a failure of the
-        // whole window (`report_value_failures`).
-        let mut failures = Vec::new();
-        for mount in &mounts {
-            for (name, value) in self.mount_values(mount) {
-                if let Err(error) =
-                    composition::set_global_value(&instance, &mount.spec, &name, value)
-                {
-                    failures.push((mount.spec.owner, format!("{name}: {error:#}")));
-                }
-            }
-            composition::set_tabbed(&instance, &mount.spec, tabbed)?;
-        }
-        self.report_value_failures(failures);
-        // A tab still waiting for its plugin's restart (`panel_restart.rs`).
-        for tab in &tabs {
-            if let (Some(line), Some(&alias)) = (
-                self.restarts.text_of(tab.spec.owner),
-                self.shell_compiled.get(&tab.spec.owner),
-            ) {
-                let property = super::panel_restart::restarting_property(alias);
-                instance.set_property(&property, SValue::String(line.into()))?;
-            }
-        }
+        // The window is compiled once a run; the current tab's panel is
+        // shown in its container (`ui/panels.rs`) before it opens.
+        let instance = composition::floating()?;
+        instance.set_property("panel-title", SValue::String(title.as_str().into()))?;
+        instance.set_property("sidebar-tabbed", tabbed.into())?;
         instance.set_property("sidebar-titles", self.tab_titles(owners)?)?;
+        if let Some(index) = active.and_then(|a| owners.iter().position(|&o| o == a)) {
+            instance.set_property("sidebar-active", SValue::Number(index as f64))?;
+        }
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);
         self.bind_keys(&instance, generation)?;
@@ -908,6 +817,9 @@ impl Host {
             frame.height.max(250.) as f32,
         ));
         self.theme_view(&instance);
+        if self.show_panel(&instance, generation, composition::Slot::Sidebar, active) {
+            view::settle_layout(instance.window());
+        }
         let before = platform::capture_windows().ok();
         self.placements.show_at(
             &instance,
@@ -918,10 +830,11 @@ impl Host {
         self.floating = Some(Floating {
             instance,
             owners: owners.to_vec(),
-            compiled,
             generation,
             native,
         });
+        // A tab still waiting for its plugin's restart (`panel_restart.rs`).
+        self.sync_restart_lines();
         Ok(())
     }
     pub(crate) fn remember_floating(&mut self) {

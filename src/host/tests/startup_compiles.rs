@@ -1,13 +1,14 @@
-//! Shell compiles at start-up, with the real built-ins and the windowed
+//! Panel compiles at start-up, with the real built-ins and the windowed
 //! host running offscreen (`VESTRA_TEST_OFFSCREEN=1`, `ui::offscreen`: no
-//! window on screen). A compile of the shell blocks the UI thread for a few
-//! hundred milliseconds, and a start with a file argument (a double-click in
-//! Explorer) used to play while the start-up mounts still arrived: whatever
-//! layout was remembered (the adjust column open or closed, a third-party
-//! sidebar tab), the shell compiles once with the start-up panels (once more
-//! for a third-party plugin that starts after the built-ins), all before the
-//! file opens, and opening a file compiles nothing (doc/architecture/
-//! README.md, adjust-column.md, sidebar-tabs.md).
+//! window on screen). The shell compiles once a run and names no panel;
+//! each panel compiles on its own when it is first shown (`ui/panels.rs`;
+//! the adjust column's front tabs all at its first opening), which blocks
+//! the UI thread for tens to a few hundred milliseconds, and a start with a file argument (a double-click in Explorer) used to play
+//! while the start-up panels still compiled: whatever layout was remembered
+//! (the adjust column open or closed, a third-party sidebar tab), each
+//! panel shown at start-up compiles once, before the file opens, a panel
+//! not shown compiles nothing, and opening a file compiles nothing
+//! (doc/architecture/README.md, adjust-column.md, sidebar-tabs.md).
 //!
 //! Each case runs a fresh profile twice: once to record the plugins' first
 //! runs (as any player started before), then the start that is counted; one
@@ -22,6 +23,8 @@
 use sha2::{Digest, Sha256};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+#[path = "explicit/mod.rs"]
+mod explicit;
 use std::time::Duration;
 
 /// `package_stage::read_tree`'s digest over a fixture (tests/lazy_activation.rs).
@@ -60,35 +63,38 @@ enum ThirdParty {
 fn install_sidebar_plugin(store: &Path, kind: ThirdParty) {
     let (capabilities, listen) = match kind {
         ThirdParty::Resident => (
-            serde_json::json!(["ui.mount", "events", "playback.read"]),
+            ["ui.mount", "events", "playback.read"].as_slice(),
             "plugin.player.onChange(() => {});\n",
         ),
         // Its first run (the warm-up) records it resident; from the next
         // start on it exits as soon as its panel is in the shell (each run
         // mounts it, then crashes: the crash loop).
         ThirdParty::Crashing => (
-            serde_json::json!(["ui.mount", "events", "playback.read"]),
+            ["ui.mount", "events", "playback.read"].as_slice(),
             "plugin.player.onChange(() => {});\n\
              const mark = join(plugin.dataDirectory, \"ran\");\n\
              crash = existsSync(mark);\n\
              if (!crash) { mkdirSync(plugin.dataDirectory, { recursive: true }); \
              writeFileSync(mark, \"1\"); }\n",
         ),
-        _ => (serde_json::json!(["ui.mount"]), ""),
+        _ => (["ui.mount"].as_slice(), ""),
     };
     let manifest = serde_json::json!({"id":THIRD_PARTY,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":capabilities});
+        "entry":"main.js"});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
         (
             "main.js",
-            format!(
-                "import {{ existsSync, mkdirSync, writeFileSync }} from \"node:fs\";\n\
+            explicit::main(
+                capabilities,
+                &format!(
+                    "import {{ existsSync, mkdirSync, writeFileSync }} from \"node:fs\";\n\
                  import {{ join }} from \"node:path\";\n\
                  export default function activate(plugin) {{\nlet crash = false;\n{listen}\
                  const panel = plugin.panels.mount(\"sidebar\", \"ui/list.slint\", {{ title: \"Fixture\" }});\n\
                  if (crash) panel.ready.then(() => setTimeout(() => process.exit(7), 20));\n}}\n"
+                ),
             ),
         ),
         (
@@ -259,12 +265,7 @@ impl Profile {
             .env("VESTRA_SHADER_CACHE", root.join("shader-cache"))
             .env("APPDATA", root.join("appdata"))
             .env("LOCALAPPDATA", root.join("local"))
-            .env("VESTRA_LANGUAGE", "en")
-            // The start-up gate waits for every mounting plugin: on a loaded
-            // machine a built-in can take longer than the player's 5 s to ask,
-            // which would fail the count, not the player. What is checked is
-            // the order (compiles before the open), not that window.
-            .env("VESTRA_TEST_MOUNT_LIMIT_MS", "60000");
+            .env("VESTRA_LANGUAGE", "en");
         for key in [
             "VESTRA_SHARED",
             "VESTRA_IDLE_MS",
@@ -335,7 +336,7 @@ impl Profile {
     }
 }
 
-/// A compile of the shell in the log (`apply_mounts`).
+/// A compile of a panel's file in the log (`Host::log_compile`).
 #[derive(Debug)]
 struct Compile {
     at_ms: u64,
@@ -346,7 +347,7 @@ struct Compile {
 fn compiles(log: &str) -> Vec<Compile> {
     log.lines()
         .filter_map(|line| {
-            let rest = line.split("shell: compile with ").nth(1)?;
+            let rest = line.split("panel: compile ").nth(1)?;
             let panels = rest.split('[').nth(1)?.split(']').next()?.to_owned();
             let took_ms = rest
                 .split("] in ")
@@ -417,22 +418,20 @@ fn report(name: &str, log: &str) -> (Vec<Compile>, Vec<u64>) {
 }
 
 /// The crash loop (user ruling 2026-11-10, `host/panel_restart.rs`): the
-/// plugin's tab compiles once, when it first mounts; while it crashes and
-/// is restarted (four times) its panel stays and each restart mounts the
-/// same panel again into the kept branch: no compile. Once it hits its
-/// start limit its panel goes: exactly one compile, without it.
+/// plugin's tab (in the background: the playlist is the current tab)
+/// compiles at most once; while it crashes and is restarted (four times)
+/// its panel stays and each restart mounts the same panel again: no
+/// compile. Once it hits its start limit its panel goes, compiling nothing.
 fn crash_loop_failures(name: &str, compiles: &[Compile], log: &str) -> Vec<String> {
     let mut failures = Vec::new();
     let fixture = format!("{THIRD_PARTY}:sidebar");
-    let Some(first) = compiles.iter().position(|c| c.panels.contains(&fixture)) else {
-        return vec![format!("{name}: its panel never compiled")];
-    };
-    let later = &compiles[first + 1..];
-    let with = later.iter().filter(|c| c.panels.contains(&fixture)).count();
-    let without = later.len() - with;
-    if with > 0 {
+    let with = compiles
+        .iter()
+        .filter(|c| c.panels.contains(&fixture))
+        .count();
+    if with > 1 {
         failures.push(format!(
-            "{name}: {with} compile(s) with its panel after the first (a restart compiled)"
+            "{name}: {with} compile(s) of its panel (a restart compiled)"
         ));
     }
     // It listens to the player (`player.onChange`): the host writes to it
@@ -446,21 +445,17 @@ fn crash_loop_failures(name: &str, compiles: &[Compile], log: &str) -> Vec<Strin
     let gave_up = log.contains(&format!("supervisor: {THIRD_PARTY} start limit hit"));
     if !gave_up {
         failures.push(format!("{name}: it never hit its start limit"));
-    } else if without != 1 {
-        failures.push(format!(
-            "{name}: {without} compile(s) after it gave up, not 1 (the removal)"
-        ));
     }
     let restarts = log
         .matches("restarts after a fault; its 1 panel(s) stay")
         .count();
     let reused = log
         .matches(&format!(
-            "shell: {THIRD_PARTY} mounted its sidebar panel again after its restart (kept branch, no compile)"
+            "shell: {THIRD_PARTY} mounted its sidebar panel again after its restart (no compile)"
         ))
         .count();
     let _ = writeln_stderr(&format!(
-        "   crash loop: {restarts} restart(s) kept the panel, {reused} re-mount(s) into the kept branch"
+        "   crash loop: {restarts} restart(s) kept the panel, {reused} re-mount(s) without a compile"
     ));
     if restarts < 4 || reused == 0 {
         failures.push(format!(
@@ -475,13 +470,12 @@ fn writeln_stderr(line: &str) -> std::io::Result<()> {
     writeln!(std::io::stderr(), "{line}")
 }
 
-/// Every remembered layout: one compile with the start-up panels (besides
-/// the window's first, empty shell, before any plugin runs; one more for a
-/// third-party plugin that starts after the built-ins), none once the file
-/// given at launch opened, nor when a second file opens in the same run.
+/// Every remembered layout: each panel shown at start-up compiles once,
+/// before the file given at launch opens; none compiles twice, none once
+/// the file opened, nor when a second file opens in the same run.
 #[test]
 #[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
-fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
+fn startup_compiles_each_shown_panel_once_and_an_open_compiles_nothing() {
     let work = tempfile::tempdir().unwrap();
     let plugins = builtins();
     let first = clip(work.path(), "first.mp4");
@@ -558,18 +552,21 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
             failures.extend(crash_loop_failures(&name, &compiles, &log));
             continue;
         }
-        // One compile with every start-up panel; a third-party plugin that
-        // keeps running starts only once the built-ins finished starting
-        // (their activation waits for their panels' compile), so its tab
-        // compiles once more. Either way before the file opens: nothing
-        // compiles once playback began, nor when a file opens later.
-        let allowed = if third_party == ThirdParty::Resident {
-            2
-        } else {
-            1
-        };
-        if compiles.len() > allowed {
-            failures.push(format!("{name}: {} start-up compiles", compiles.len()));
+        // Each shown panel once (its compiled file is kept for the run);
+        // a third-party tab in the background compiles nothing. All before
+        // the file opens: nothing compiles once playback began, nor when a
+        // file opens later.
+        let mut seen = std::collections::BTreeSet::new();
+        for compile in &compiles {
+            if !seen.insert(compile.panels.as_str()) {
+                failures.push(format!("{name}: {} compiled twice", compile.panels));
+            }
+        }
+        if compiles
+            .iter()
+            .any(|c| c.panels.contains(&format!("{THIRD_PARTY}:")))
+        {
+            failures.push(format!("{name}: the background third-party tab compiled"));
         }
         let after_open = compiles
             .iter()
@@ -584,10 +581,16 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
             .iter()
             .filter(|c| c.panels.contains(":adjust"))
             .count();
-        if adjust_open && adjust == 0 {
-            failures.push(format!(
-                "{name}: the remembered Picture tab was never compiled"
-            ));
+        // The column left open: its start-up showing is its first opening,
+        // which compiles all four built-in tabs (user ruling 2026-11-11).
+        if adjust_open {
+            for (id, _) in ADJUST_TABS {
+                if !seen.contains(format!("{id}:adjust").as_str()) {
+                    failures.push(format!(
+                        "{name}: the adjust tab of {id} was not compiled at the column's opening"
+                    ));
+                }
+            }
         }
         // The user's ruling: a closed adjust column costs no compile.
         if !adjust_open && adjust > 0 {
@@ -599,6 +602,67 @@ fn startup_compiles_the_shell_once_and_an_open_compiles_nothing() {
     assert!(failures.is_empty(), "{failures:#?}");
 }
 
+/// V2 finding (SDK 1.9.0): a third-party sidebar tab replayed as a
+/// placeholder at start-up mounts before the playlist's plugin has started;
+/// it became the current tab, so its plugin was woken while the playlist
+/// (the remembered current tab) was still on its way. Until the remembered
+/// tab mounts no other tab is current: the placeholder is not woken, and the
+/// playlist is the current tab once start-up settled.
+#[test]
+#[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
+fn a_replayed_placeholder_tab_is_not_woken_while_the_remembered_tab_starts() {
+    let plugins = builtins();
+    // A debug build starts the fixture's first run late (behind the
+    // built-ins' first runs, about seven times slower).
+    let (warm_up, seconds) = if cfg!(debug_assertions) {
+        (45, 30)
+    } else {
+        (10, 15)
+    };
+    let profile = Profile::new(&plugins, false, ThirdParty::Parked);
+    // The first run records its plugins (the fixture's tab: a placeholder
+    // at the next start). A slow debug start may end before the fixture's
+    // first run (it waits behind the built-ins): once more then.
+    let recorded = |log: &str| {
+        log.contains(&format!("lazy: {THIRD_PARTY} recorded at quit"))
+            || log.contains(&format!("lazy: {THIRD_PARTY} parked"))
+    };
+    let mut warm = profile.run(warm_up, None, None);
+    for _ in 0..2 {
+        if recorded(&warm) {
+            break;
+        }
+        warm = profile.run(warm_up, None, None);
+    }
+    assert!(recorded(&warm), "the fixture was never recorded\n{warm}");
+    // The sidebar left open on the playlist.
+    let path = profile.dir.path().join("ui-state.json");
+    let mut state: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    state["sidebarSlot"]["visible"] = true.into();
+    state["sidebarSlot"]["active"] = "vestra.playlist".into();
+    std::fs::write(&path, state.to_string()).unwrap();
+    let log = profile.run(seconds, None, None);
+    assert!(
+        log.contains(&format!("lazy: {THIRD_PARTY} replayed")),
+        "the fixture was not replayed as a placeholder\n{log}"
+    );
+    assert!(
+        log.contains("lazy: start-up settled"),
+        "start-up never settled\n{log}"
+    );
+    assert!(
+        !log.contains(&format!("tab of {THIRD_PARTY} shown, waking it")),
+        "the placeholder tab was woken at start-up\n{log}"
+    );
+    let state: serde_json::Value =
+        serde_json::from_str(&std::fs::read_to_string(&path).unwrap()).unwrap();
+    assert_eq!(
+        state["sidebarSlot"]["active"], "vestra.playlist",
+        "the playlist is no longer the current tab"
+    );
+}
+
 /// The adjust column's four built-in tabs (Picture, Audio, Subtitles,
 /// Playback), in their order, and the command that shows each.
 const ADJUST_TABS: [(&str, &str); 4] = [
@@ -608,14 +672,14 @@ const ADJUST_TABS: [(&str, &str); 4] = [
     ("vestra.playback", "panel"),
 ];
 
-/// The tab-switch flash (coordinator ruling 2026-11-11): a shell compile
-/// swaps the main window's tree, which stalls the UI thread and makes Slint
-/// configure the window's surface again (a visible flash, as a resize). So
-/// the adjust column's first opening compiles all its front tabs in one
-/// compile, and a first switch to each of them afterwards compiles nothing;
-/// while it is closed, nothing of it compiles. The column is opened and the
-/// tabs switched through their commands (`VESTRA_TEST_EXECUTE`), as the
-/// menus and keys do.
+/// The adjust column's first opening compiles all its front tabs at once
+/// (user ruling 2026-11-11, `Host::preload_front`), each on its own
+/// (`ui/panels.rs`), and a first switch to each of them afterwards compiles
+/// nothing (only an instance is created; a switch back hands over the kept
+/// one); while it is closed, nothing of it compiles. The window's tree is
+/// never swapped, so no compile reconfigures its surface (the tab-switch
+/// flash of 2026-11-11). The column is opened and the tabs switched through
+/// their commands (`VESTRA_TEST_EXECUTE`), as the menus and keys do.
 #[test]
 #[ignore = "needs Node 26, libmpv, ffmpeg and the staged built-ins: run with --include-ignored (ci:local)"]
 fn opening_the_adjust_column_compiles_its_tabs_once_and_switching_compiles_nothing() {
@@ -673,11 +737,17 @@ fn opening_the_adjust_column_compiles_its_tabs_once_and_switching_compiles_nothi
         .iter()
         .filter(|c| c.at_ms.saturating_sub(c.took_ms as u64) >= open)
         .collect::<Vec<_>>();
-    assert_eq!(after.len(), 1, "one compile at the opening: {after:#?}");
-    for (id, _) in ADJUST_TABS {
-        assert!(
-            after[0].panels.contains(&format!("{id}:adjust")),
-            "{id} in the opening's compile: {after:#?}"
-        );
-    }
+    // All four at the opening (Picture, the tab it shows, first), in the
+    // same tick before the first switch; the switches compile nothing.
+    let order = after.iter().map(|c| c.panels.as_str()).collect::<Vec<_>>();
+    let expected = ADJUST_TABS
+        .iter()
+        .map(|(id, _)| format!("{id}:adjust"))
+        .collect::<Vec<_>>();
+    assert_eq!(order, expected, "{after:#?}");
+    let first_switch = open + 3 * step;
+    assert!(
+        after.iter().all(|c| c.at_ms < first_switch),
+        "a compile at a switch: {after:#?}"
+    );
 }

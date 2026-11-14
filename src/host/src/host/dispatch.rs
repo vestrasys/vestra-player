@@ -26,22 +26,6 @@ impl Host {
             }
         }
     }
-    /// The start-up compile of the shell (`prepare_mount_tick`): the held
-    /// mounts and unmounts are answered now, to join it. The built-ins'
-    /// mounts are queued by then (their activation waits for this
-    /// compile), so a slot a built-in claims is still refused to the
-    /// others (`slot_claims::occupant` counts queued mounts); the other
-    /// held requests keep waiting for the built-ins.
-    pub(crate) fn release_held_panel_requests(&mut self) {
-        let released = self
-            .held_mounts
-            .release_where(|(_, method, _)| matches!(method.as_str(), "ui.mount" | "ui.unmount"));
-        for (reply, method, params) in released {
-            if self.plugins.contains_key(&reply.owner) {
-                self.answer(reply, &method, &params);
-            }
-        }
-    }
     /// The manifest id of a running plugin (its owner number otherwise).
     pub(crate) fn plugin_id(&self, owner: u64) -> String {
         self.plugins
@@ -160,7 +144,7 @@ impl Host {
         }
     }
     /// One request of a plugin's: its route (`capabilities::lookup`), the
-    /// permission check, text resolution, then the capability's `handle`.
+    /// built-in-only check, text resolution, then the area's `handle`.
     pub(crate) fn dispatch(
         &mut self,
         reply: &Reply,
@@ -173,17 +157,11 @@ impl Host {
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
         let route = capabilities::lookup(method)
             .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
-        let capability = route.needs(params, |name| plugin.allows(name));
-        if capability.is_some_and(|capability| !plugin.allows(capability)) {
-            return Err(RpcError::new(
-                "capability",
-                "capability must be declared in manifest",
-            ));
-        }
-        // Built-in-only capabilities (`commands.run`, `palette.lead`): by
-        // provenance, whatever the manifest declares.
-        if capability.is_some_and(capabilities::builtin_only) {
-            capabilities::builtin_only_check(capability, self.is_builtin(reply.owner))?;
+        // Built-in-only areas (`commands.run`, `palette.lead`): by
+        // provenance. Every other request is open to every plugin (a
+        // manifest declares nothing since player 0.9.0).
+        if route.builtin_only() {
+            route.check_caller(self.is_builtin(reply.owner))?;
         }
         // Text values (i18n.md §7) in property values, timeline titles,
         // subtitle track titles and resolver failures become the strings

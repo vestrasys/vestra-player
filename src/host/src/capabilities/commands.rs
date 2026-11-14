@@ -1,6 +1,6 @@
 //! `commands`: menu commands with keys and state (crate::commands, the
 //! binding table), and running the player's own actions (`host.run`).
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency, plugin};
+use super::{Call, Capability, Handled, Info, Recorded, plugin};
 use crate::{
     commands,
     conditions::{Conditions, Facts},
@@ -13,25 +13,21 @@ use serde_json::{Value, json};
 pub struct Commands;
 static INFO: Info = Info {
     name: "commands",
-    label: "Add menu commands and shortcuts",
-    risky: false,
-    requires: &[],
-    residency: Residency::Recordable,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("commands.register"),
-    Method::this("commands.update"),
-    Method::this("commands.unregister"),
-    Method::this("host.run"),
+static METHODS: &[&str] = &[
+    "commands.register",
+    "commands.update",
+    "commands.unregister",
+    "host.run",
     // Player 0.7.6: the key labels of the plugin's own commands.
-    Method::this("commands.keys"),
+    "commands.keys",
 ];
 impl Capability for Commands {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// Each command as its plugin registered it, with its last state (never

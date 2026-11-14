@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.8
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.1.7
 
 - Menu sweep (menu redesign §4): the whole Screen ▸ submenu (Picture-in-Picture, Mini Size, 0.5×–2×, Fit to Video Aspect Ratio, When Playback Starts ▸, Always on Top ▸) and Playback ▸ Hide Pointer While Playing leave the right-click menu and are in the command palette only, with their ids, keys, radio and checked states and the categories above; the settings page is unchanged. Who must change: nobody.

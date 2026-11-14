@@ -20,7 +20,7 @@ async function until(predicate: () => boolean) {
   assert.fail("timed out waiting for condition");
 }
 const entry = (id: string, state: "running" | "disabled" | "failed" = "running") => ({
-  id, version: "0.1.0", origin: "development" as const, state, error: null, capabilities: [], directory: `/plugins/${id}`,
+  id, version: "0.1.0", origin: "development" as const, state, error: null, directory: `/plugins/${id}`,
 });
 async function start(locale?: "zh-Hans") {
   const host = new TestHost();

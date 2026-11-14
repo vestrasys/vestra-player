@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.5.12
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 1.5.11
 
 - Audio Processing: Reset (`audio.reset`) is declared `destructive` (SDK 1.7.9): it puts the equalizer, Normalize and Crystalizer back to neutral at once and cannot be undone, so a built-in caller of `commands.run` (Ask Vestra) asks the user first. The palette, its key and the panel's Reset run it as before. No other command is marked: Audio Sync: Reset sets one value back to 0, and the presets, channel modes, toggles, tracks and devices are choices the user can make again. Who must change: nobody. Tests: `audio.reset` carries `destructive: true`, without a source and with tracks and devices, and no other command does.

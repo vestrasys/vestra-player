@@ -92,10 +92,10 @@ function replaceDetail(info: PluginInfo, name: string): Msg {
 }
 
 /**
- * What the plugin will be able to do: the categories the repository's scan
- * found in its code (`scan`, from the index). Without a scan (an index
- * from before it, a package from a file or a link): `null`, nothing is
- * said; the capabilities a package declares are not shown.
+ * What the plugin will be able to do: the categories the official
+ * repository's scan found in its code (`scan`, from its signed index).
+ * Without a scan (an index from before it): `null`, nothing is said; the
+ * capabilities a package declares are not shown.
  */
 function willBeAble(scan: { uses: string[] } | null): Msg | null {
   if (!scan) return null;
@@ -103,6 +103,14 @@ function willBeAble(scan: { uses: string[] } | null): Msg | null {
     ? msg("It will be able to:\n{}", categoryList(scan.uses))
     : msg("It uses none of the player's sensitive features.");
 }
+
+/**
+ * Said in place of what it will be able to do for every package not from
+ * the official repository (another repository, a file, a link; user ruling
+ * 2026-11-13): nothing checked its code. Another repository's own scan is
+ * its claim, so it is not shown.
+ */
+const UNCHECKED = msg("It is not from the official repository, so its permissions were not checked.");
 
 /** Said of every plugin, before what it will be able to do (an unofficial repository's own text says it already). */
 function withAccess(able: Msg | null): Arg {
@@ -133,29 +141,29 @@ export async function installFromRepository(store: Store, item: Item, version: I
         repo.label,
         repo.url,
       );
-  const perms = willBeAble(version.scan);
+  // Only the official repository's scan is shown; another repository's package gets the note instead.
+  const perms = repo.official ? willBeAble(version.scan) : null;
   let question: Question;
   if (replace) {
     question = {
       message: msg("Replace the installed “{}”?", name),
       detail: repo.official
         ? msg("{1}\n\nWill install {2} from the official repository.\n\n{3}", replaceDetail(info, name), version.version, withAccess(perms))
-        : perms
-          ? msg(
-              "{1}\n\nWill install {2} from the unofficial repository.\n\n{4}\n\n{3}",
-              replaceDetail(info, name),
-              version.version,
-              perms,
-              unofficial,
-            )
-          : msg("{1}\n\nWill install {2} from the unofficial repository.\n\n{3}", replaceDetail(info, name), version.version, unofficial),
+        : msg(
+            "{1}\n\nWill install {2} from the unofficial repository.\n\n{3}",
+            replaceDetail(info, name),
+            version.version,
+            joined([unofficial, UNCHECKED], "{}\n\n{}"),
+          ),
       confirm: "Replace",
       destructive: true,
     };
   } else if (sameSource && info.version && isVersion(info.version)) {
     const order = compareVersions(version.version, info.version);
-    // What the window's notice names too (labels.ts).
-    const lines = addedBy(entry.versions, info, version);
+    // What the window's notice names too (labels.ts); another repository's scans are not compared.
+    const lines = repo.official ? addedBy(entry.versions, info, version) : [];
+    // Another repository's update or reinstall: the sentence and the note, after the current version.
+    const note = repo.official ? null : withAccess(UNCHECKED);
     const added = lines.length ? bulletList(lines) : null;
     const current = info.version;
     if (order > 0)
@@ -171,7 +179,7 @@ export async function installFromRepository(store: Store, item: Item, version: I
           }
         : {
             message: msg("Update “{}” to {}?", name, version.version),
-            detail: msg("Current: {2}.", current),
+            detail: note ? msg("Current: {2}.\n\n{3}", current, note) : msg("Current: {2}.", current),
             confirm: "Update",
           };
     // Never older than the installed version from the same source (the Versions tab offers none): uninstall, then install a .vxp.
@@ -181,7 +189,9 @@ export async function installFromRepository(store: Store, item: Item, version: I
         message: msg("Install “{}” {} (reinstall)?", name, version.version),
         detail: added
           ? msg("Current: {2}.\n\nThis version needs more permissions:\n{3}", current, added)
-          : msg("Current: {2}.", current),
+          : note
+            ? msg("Current: {2}.\n\n{3}", current, note)
+            : msg("Current: {2}.", current),
         confirm: "Install",
       };
   } else
@@ -197,7 +207,7 @@ export async function installFromRepository(store: Store, item: Item, version: I
         }
       : {
           message: msg("Install “{}” {} from an unofficial repository?", name, version.version),
-          detail: perms ? msg("{2}\n\n{3}", unofficial, perms) : msg("{2}", unofficial),
+          detail: msg("{2}\n\n{3}", unofficial, UNCHECKED),
           confirm: "Install Anyway",
           destructive: true,
         };
@@ -242,10 +252,6 @@ function compare(candidate: PackageCandidate, id: string, version: IndexVersion)
     return msg("The plugin package does not match the repository's description (id); not installed");
   if (manifest.version !== version.version)
     return msg("The plugin package does not match the repository's description (version); not installed");
-  const declared = new Set(version.capabilities);
-  const actual = new Set(manifest.capabilities);
-  if (declared.size !== actual.size || [...actual].some((c) => !declared.has(c)))
-    return msg("The plugin package does not match the repository's description (permissions); not installed");
   return null;
 }
 
@@ -453,8 +459,8 @@ function sideloadQuestion(store: Store, candidate: PackageCandidate, from: { fil
   const manifest = candidate.manifest;
   const name = manifest.name ?? manifest.id;
   const info = installedOf(store, manifest.id);
-  // A package from a file or a link has no scan: only the sentence.
-  const perms = withAccess(null);
+  // A package from a file or a link has no scan: the sentence and the note.
+  const perms = withAccess(UNCHECKED);
   const warning =
     "file" in from
       ? msg(

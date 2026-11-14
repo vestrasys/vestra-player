@@ -1,18 +1,8 @@
 {
   "id": "vestra.marks",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "playback.read",
-    "playback.control",
-    "events",
-    "ui.window",
-    "ui.osd",
-    "ui.dialog",
-    "timeline.marks"
-  ],
   "name": "Chapters and Bookmarks",
   "author": "Vestra Player",
   "punchline": "Jump by chapter and bookmark",

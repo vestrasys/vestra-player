@@ -2,7 +2,6 @@ import { Runtime } from "./runtime.js";
 import { stopReason } from "./connection.js";
 import { failure } from "./errors.js";
 import { ScopeImpl } from "./scope.js";
-import { playerOf } from "./player.js";
 import { windowOf } from "./window.js";
 import { timelineOf } from "./timeline.js";
 export async function createPlugin(transport, manifest, directory, dataDirectory, 
@@ -11,20 +10,15 @@ app,
 /** `TestHost` sets `strictDeclarations`; the player's runner does not. */
 options) {
     const runtime = new Runtime(transport, manifest, directory, dataDirectory, app, options);
-    // Player, window and timeline state are synchronous for plugins: read them
-    // first. With `events` the copy of the player's state follows the events
-    // from the start, subscribed before the read, as before 1.7.0: a read in
-    // any later handler is current. Without `events` nothing can be
-    // subscribed, and the copy starts on its first use. Window and timeline
-    // subscribe on their first use.
-    const player = playerOf(runtime);
-    if (runtime.can("events"))
-        void player.start(false);
-    await Promise.all([
-        player.init(),
-        windowOf(runtime).init(),
-        timelineOf(runtime).init(),
-    ]);
+    // The window state is synchronous for plugins: read it first. The
+    // player's state and the timeline are the plugin's explicit calls, first
+    // in `activate`: `plugin.player.subscribe()` (event delivery, the copy
+    // of the player's state follows from then on) and
+    // `await plugin.player.read()` (state and timeline read once). Window and
+    // timeline subscribe on their first use. The timeline's copy exists from
+    // the start: it tells the connection how `read()` reads the lists.
+    timelineOf(runtime);
+    await windowOf(runtime).init();
     const root = new ScopeImpl(runtime);
     // A runaway of the update passes goes to the plugin's error handlers.
     runtime.passes.report = (error) => root.report(error);

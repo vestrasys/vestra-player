@@ -1,43 +1,14 @@
 //! `events`: the player's events pushed to a plugin as they happen.
-use super::{Call, Capability, Handled, Info, Method, Needs, Recorded, Residency};
+use super::{Call, Capability, Handled, Info, Recorded};
 use crate::host::{Host, Origin, Reply, RpcError, string};
 use serde_json::{Value, json};
 
 pub struct Events;
 static INFO: Info = Info {
     name: "events",
-    label: "Receive playback changes as they happen",
-    risky: false,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-/// Plugin and binding changes have their own (or no) capability.
-const BY_EVENT: Needs = Needs::Param {
-    key: "event",
-    cases: &[
-        ("packages.changed", None),
-        ("bindings.changed", Some("bindings.manage")),
-        // Player 0.7.6: the key labels of the plugin's own commands
-        // (`commands.keys`), with the capability that declares them.
-        ("commands.keys", Some("commands")),
-        // Player 0.5.25: the upscaler's state as it changes (playback/upscaling.rs).
-        ("video.upscaling.changed", Some("video.upscaling")),
-        // Player 0.8.1: motion smoothing's state as it changes (playback/motion.rs).
-        ("video.motion.changed", Some("video.motion")),
-    ],
-    otherwise: Some("events"),
-};
-static METHODS: &[Method] = &[
-    Method {
-        name: "events.subscribe",
-        needs: BY_EVENT,
-    },
-    Method {
-        name: "events.unsubscribe",
-        needs: BY_EVENT,
-    },
-];
+static METHODS: &[&str] = &["events.subscribe", "events.unsubscribe"];
 const EVENTS: &[&str] = &[
     "playback.backend",
     "source.state",
@@ -103,7 +74,7 @@ impl Capability for Events {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// A listener is a receiver the host pushes to (§3.2); a mirror is not:
@@ -147,6 +118,8 @@ impl Capability for Events {
             .map(|(event, _)| event.clone())
             .collect::<std::collections::BTreeSet<_>>();
         if !wakes.is_empty() {
+            // What it last had of each, while start-up mutes them.
+            host.note_parked_listener(owner, &wakes);
             host.on_demand.wakes.insert(owner, wakes);
         }
     }

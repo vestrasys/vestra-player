@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.
+
 ## 0.1.8
 
 - A-B Loop moved to the Playback panel (user ruling 2026-11-08): the A-B loop, its 18 commands (`ab.set-a` … `ab.toggle`, the six `ab.count.*`) and the Loop Count setting are now the Basic Playback plugin's (`vestra.playback` 0.2.18), which shows them in its Playback panel (Alt+4) and keeps the same local ids, titles, keys, categories and checked states. This plugin keeps chapters, bookmarks, the Chapter and Bookmark List… window (H), their commands and their seek-bar marks; the `A` marker a lone start point puts on the seek bar now comes from the playback plugin. Who must change: nobody, with the player release that carries the binding migration (keys a user rebound for `vestra.marks/ab.*` follow to `vestra.playback/ab.*`). The Loop Count saved in `marks.json` (`abCount`) is left in that file untouched; the playback plugin starts at Endless.

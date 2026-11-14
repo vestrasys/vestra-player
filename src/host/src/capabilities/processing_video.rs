@@ -1,19 +1,16 @@
 //! `processing.video`: the video filter chain, the video view, the render
-//! options and the shader channel. Also serves the requests the two filter
-//! chains share, which ask for `processing.video` or `processing.audio` by
-//! stage.
+//! options and the shader channel. Also serves the requests of the audio
+//! filter chain (`processing.replace` and `processing.operation` with
+//! `stage: "audio"`), which share their handling.
 //!
 //! Files a plugin names (a `lut3d` node's `.cube`, the shader channel's
 //! shaders, player 0.5.20) must be its own: they are resolved here, inside
 //! its package or data directory (`playback/plugin_files.rs`), and the
-//! playback worker gets the canonical paths. The shader channel has no
-//! capability of its own: like `video.render().shaders` (this capability
-//! since 1.0) it only changes how the picture is drawn while the plugin
+//! playback worker gets the canonical paths. The shader channel, like
+//! `video.render().shaders` (here since 1.0), only changes how the picture is drawn while the plugin
 //! runs, from files the plugin ships or made, and it is revoked when the
 //! plugin stops.
-use super::{
-    Capability, Handled, Info, Method, Needs, Recorded, Residency, forward, forward_media,
-};
+use super::{Capability, Handled, Info, Recorded, forward, forward_media};
 use crate::host::{Host, Reply, RpcError};
 use crate::playback::{plugin_files, video_shaders};
 use serde_json::{Value, json};
@@ -21,37 +18,22 @@ use serde_json::{Value, json};
 pub struct ProcessingVideo;
 static INFO: Info = Info {
     name: "processing.video",
-    label: "Process the picture (filters, shaders)",
-    risky: false,
-    requires: &["playback.read"],
-    residency: Residency::Live,
     builtin_only: false,
 };
-const BY_STAGE: Needs = Needs::Param {
-    key: "stage",
-    cases: &[("video", Some("processing.video"))],
-    otherwise: Some("processing.audio"),
-};
-static METHODS: &[Method] = &[
-    Method {
-        name: "processing.replace",
-        needs: BY_STAGE,
-    },
-    Method {
-        name: "processing.operation",
-        needs: BY_STAGE,
-    },
-    Method::this("video.view.set"),
-    Method::this("video.view.release"),
-    Method::this("video.render.set"),
-    Method::this("video.render.release"),
-    Method::this("video.shaders.set"),
+static METHODS: &[&str] = &[
+    "processing.replace",
+    "processing.operation",
+    "video.view.set",
+    "video.view.release",
+    "video.render.set",
+    "video.render.release",
+    "video.shaders.set",
 ];
 impl Capability for ProcessingVideo {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {

@@ -84,7 +84,6 @@ test("TestHost takes and refuses a status's text and strip as the player does (S
       lead = plugin.palette.lead({ title: "Ask", icon: "ai" });
     },
     {
-      capabilities: ["palette.lead"],
       host: fake,
       builtin: true,
       id: "vestra.agreement",

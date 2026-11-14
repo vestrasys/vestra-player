@@ -1,17 +1,8 @@
 {
   "id": "vestra.store",
-  "version": "0.2.18",
+  "version": "0.2.20",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "ui.window",
-    "ui.dialog",
-    "ui.osd",
-    "ui.drop",
-    "ui.settings",
-    "plugins.manage"
-  ],
   "name": "Plugin Store",
   "author": "Vestra Player",
   "punchline": "Browse, install and update plugins",

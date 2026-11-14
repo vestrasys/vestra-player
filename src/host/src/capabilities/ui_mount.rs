@@ -1,6 +1,6 @@
 //! `ui.mount`: panels in the bottom bar, the sidebar and the backdrop, their
 //! menus and interaction locks, and the layout of those slots.
-use super::{Call, Capability, Handled, Info, Method, Recorded, Residency, plugin};
+use super::{Call, Capability, Handled, Info, Recorded, plugin};
 use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
@@ -14,32 +14,27 @@ use crate::{
     ui::window_state,
 };
 use serde_json::{Value, json};
-use slint::ComponentHandle;
 use std::collections::BTreeMap;
 
 pub struct UiMount;
 static INFO: Info = Info {
     name: "ui.mount",
-    label: "Show panels in the bottom bar, the sidebar or behind the video",
-    risky: false,
-    requires: &[],
-    residency: Residency::Live,
     builtin_only: false,
 };
-static METHODS: &[Method] = &[
-    Method::this("ui.mount"),
-    Method::this("ui.setMount"),
-    Method::this("ui.unmount"),
-    Method::this("ui.interaction"),
-    Method::this("ui.menu"),
-    Method::this("layout.state"),
-    Method::this("layout.set"),
+static METHODS: &[&str] = &[
+    "ui.mount",
+    "ui.setMount",
+    "ui.unmount",
+    "ui.interaction",
+    "ui.menu",
+    "layout.state",
+    "layout.set",
 ];
 impl Capability for UiMount {
     fn info(&self) -> &'static Info {
         &INFO
     }
-    fn methods(&self) -> &'static [Method] {
+    fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
     /// A panel in the bottom bar or the backdrop keeps its plugin running
@@ -80,8 +75,8 @@ impl Capability for UiMount {
         )
     }
     /// A parked plugin woke as `to`: its tabs move with it (still
-    /// placeholders until its new mounts take them over). A branch compiled
-    /// under the old key stays drawn for the tab meanwhile (`shell_compiled`).
+    /// placeholders until its new mounts take them over). A tab's panel
+    /// stays drawn meanwhile (`rekey_panels`).
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
         rekey_panels(host, from, to);
     }
@@ -178,8 +173,9 @@ impl Capability for UiMount {
 /// The panels of run `from` move to run `to` (a parked plugin woke as
 /// `to`; a crashed plugin's kept panels go to its restart,
 /// `panel_restart.rs`): its tabs stay placeholders until its new mounts
-/// take them over, and a branch compiled under the old key stays drawn
-/// meanwhile (`shell_compiled`).
+/// take them over, and their panels stay drawn meanwhile under the new
+/// keys (`Panels::rekey`; their callbacks still name the old keys and are
+/// dropped).
 pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
     let keys = host
         .mounts
@@ -196,9 +192,7 @@ pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
         mount.plugin = to;
         host.mounts.insert(new, mount);
         host.policy.rekey(old, new);
-        if let Some(alias) = host.shell_compiled.remove(&old) {
-            host.shell_compiled.insert(new, alias);
-        }
+        host.panels.rekey(old, new);
         let swap = |key: &mut u64| {
             if *key == old {
                 *key = new;
@@ -524,7 +518,6 @@ fn new_mount(
         plugin: owner,
         properties,
         visible: true,
-        detached: false,
         // The tab label and the floating window's title, in
         // the interface language (this plugin's catalog).
         title: if !title.is_empty() {
@@ -552,32 +545,22 @@ fn set_mount(
     let mut prepared = host.take_prepared(reply);
     let key = panel_of(host, reply.owner, params)?
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
-    let mut spec = host
+    let slot = host
         .mounts
         .get(&key)
         .filter(|mount| !mount.recorded && !host.restarts.waiting(key))
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?
         .spec
-        .clone();
-    let view = mount_view(spec.slot);
-    let shell = host
-        .shell
-        .as_ref()
-        .map(ComponentHandle::clone_strong)
-        .ok_or_else(|| RpcError::new("unavailable", "native shell unavailable"))?;
-    // A tab beyond the front tabs is not in the shell (sidebar-tabs.md):
-    // its values are only stored, and written when it is compiled. A panel
-    // kept over its plugin's restart is written under the key its branch
-    // was compiled under (`panel_restart.rs`).
-    let branch = host.shell_branch(key, spec.slot.tabbed());
-    spec.owner = branch.unwrap_or(key);
-    let shell = branch.is_some().then_some(shell);
+        .slot;
+    let view = mount_view(slot);
+    if host.shell.is_none() {
+        return Err(RpcError::new("unavailable", "native shell unavailable"));
+    }
+    // The panel keeps the value for the instances it makes later (a tab
+    // never shown yet: only kept, and checked against the bridge when it
+    // is first compiled) and writes it to the ones it has (`ui/panels.rs`).
+    let panel = host.panels.panel(key);
     let property = string(params, "property")?;
-    let floating = host
-        .floating
-        .as_ref()
-        .filter(|f| branch.is_some_and(|branch| f.compiled.contains(&branch)))
-        .map(|f| f.instance.clone_strong());
     // A part of a whole value sent in parts: held until the last (P3).
     let parted = host.parts(reply.owner, view, property, params, prepared.as_deref())?;
     let (seq, value, rows) = match parted {
@@ -593,8 +576,7 @@ fn set_mount(
                     host,
                     reply.owner,
                     key,
-                    shell.as_ref(),
-                    floating.as_ref(),
+                    panel.as_deref(),
                     property,
                     ops,
                     prepared.take(),
@@ -623,12 +605,8 @@ fn set_mount(
         }
     };
     let converted = host.prop_value_with(reply.owner, view, property, &value, rows.as_ref())?;
-    if let Some(shell) = &shell {
-        composition::set_global_value(shell, &spec, property, converted)?;
-    }
-    if let Some(floating) = floating {
-        let converted = host.prop_value_with(reply.owner, view, property, &value, rows.as_ref())?;
-        composition::set_global_value(&floating, &spec, property, converted)?;
+    if let Some(panel) = &panel {
+        panel.write(property, converted)?;
     }
     if let Some(mount) = host.mounts.get_mut(&key) {
         mount.properties.insert(property.into(), value);
@@ -655,17 +633,15 @@ fn patched_mount(
     Ok(ui_patch::patched(stored, &ops))
 }
 
-/// A row patch of a panel's property, in place in the shell and the
-/// floating pop-out and in the stored properties. False: a live model
-/// cannot take it in place (nothing changed; the caller writes the patched
-/// whole value).
-#[allow(clippy::too_many_arguments)]
+/// A row patch of a panel's property, in place in the panel's value (the
+/// model its instances show) and in the stored properties. False: the
+/// model cannot take it in place (nothing changed; the caller writes the
+/// patched whole value).
 fn patch_mount(
     host: &mut Host,
     owner: u64,
     key: u64,
-    shell: Option<&slint_interpreter::ComponentInstance>,
-    floating: Option<&slint_interpreter::ComponentInstance>,
+    panel: Option<&crate::ui::panels::Panel>,
     property: &str,
     ops: &Value,
     prepared: Option<Box<crate::ui::ui_values::Prepared>>,
@@ -678,11 +654,8 @@ fn patch_mount(
         return Err(ui_patch::stale());
     };
     let ops = ui_patch::parse(ops, stored.len())?;
-    let alias = composition::global_alias(host.restarts.compiled_key(key));
-    let mut instances = shell.into_iter().collect::<Vec<_>>();
-    instances.extend(floating);
-    // Converted once (on the reader thread when large), written into each
-    // instance's model.
+    // Converted once (on the reader thread when large), written into the
+    // model the panel's instances share.
     let Some(rows) = host.patch_rows(
         owner,
         view,
@@ -694,10 +667,7 @@ fn patch_mount(
         return Ok(false);
     };
     let mut currents = Vec::new();
-    for instance in &instances {
-        let current = instance
-            .get_global_property(&alias, property)
-            .map_err(anyhow::Error::from)?;
+    if let Some(current) = panel.and_then(|panel| panel.current(property)) {
         if !ui_patch::applicable(&current, ops.before, &ops.shapes, &rows) {
             return Ok(false);
         }
@@ -934,7 +904,6 @@ mod tests {
                 plugin: owner,
                 properties: BTreeMap::new(),
                 visible: true,
-                detached: false,
                 title: "Tab".into(),
                 manifest: "a.b".into(),
                 builtin: false,

@@ -25,7 +25,7 @@ export class LayoutService {
             await this.read();
     }
     start() {
-        if (this.#started || !this.#runtime.can("ui.mount"))
+        if (this.#started)
             return;
         this.#started = true;
         // A mirror: panels listen through `watch`.

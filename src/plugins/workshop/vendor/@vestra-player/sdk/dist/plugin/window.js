@@ -15,7 +15,7 @@ const view = (facts) => Object.freeze({
 });
 /**
  * One per plugin: read before activation, then kept current from
- * `window.state` events (with `events`) and after this plugin's own changes.
+ * `window.state` events (after `plugin.player.subscribe()`) and after this plugin's own changes.
  */
 export class WindowService {
     #runtime;

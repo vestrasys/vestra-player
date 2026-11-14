@@ -478,6 +478,10 @@ impl Host {
             capabilities::refresh_conditions(self);
         }
         let wake = capabilities::WAKE_EVENTS.contains(&event);
+        if wake {
+            // What a plugin parked at start-up is compared with (`wake_missed`).
+            self.note_announced(event, &data);
+        }
         let now = self.now_ms();
         self.supervisor.set_now(now);
         let mut failed = Vec::new();

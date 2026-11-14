@@ -15,13 +15,26 @@ struct ColumnPlan {
     tabbed: bool,
 }
 
-/// One column's strip as a new shell starts with it.
-struct ColumnStrip {
-    titles: SValue,
-    /// The current tab's index in the strip.
-    active: usize,
-    /// The owner whose branch is drawn (`<column>-shown`), -1 for none.
-    shown: i64,
+/// A column's current tab for the host (`Host::current_in`, the start-up
+/// rule).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Current {
+    /// This tab (`None`: the column has none).
+    Tab(Option<u64>),
+    /// Start-up has not settled and the column's remembered tab has not
+    /// mounted yet: no tab is current.
+    Awaits,
+}
+impl Current {
+    pub(crate) fn tab(self) -> Option<u64> {
+        match self {
+            Current::Tab(tab) => tab,
+            Current::Awaits => None,
+        }
+    }
+    pub(crate) fn awaits(self) -> bool {
+        self == Current::Awaits
+    }
 }
 
 /// The wire name of a panel key's slot.
@@ -65,15 +78,6 @@ pub(crate) fn refuse_initial(properties: &mut BTreeMap<String, Value>) -> Vec<Rp
 impl Host {
     pub(crate) fn prepare_mount_tick(&mut self) {
         self.release_held_mounts();
-        // Start-up with nothing to mount: done once it settled.
-        if !self.startup_mounted
-            && self.preparing.is_none()
-            && self.mount_queue.is_empty()
-            && self.held_mounts.is_empty()
-            && self.startup_has_settled()
-        {
-            self.startup_mounted = true;
-        }
         if self.preparing.is_none() {
             if let Some(change) = self.mount_queue.pop_front() {
                 if !change.announced {
@@ -83,62 +87,23 @@ impl Host {
                     );
                 }
                 self.preparing = Some((Instant::now(), change));
-                return;
-            }
-            // A current tab's panel is not in the shell (a running plugin's
-            // tab beyond the front tabs, or the first opening of the adjust
-            // column, sidebar-tabs.md): the shell is compiled again with it.
-            if std::mem::take(&mut self.shell_refresh) && self.shell.is_some() {
-                let active = Column::ALL.map(|column| self.policy.active(policy_column(column)));
-                let started = Instant::now();
-                let result = self.apply_mounts(self.mounts.clone(), &[]);
-                if let Err(error) = &result {
-                    diag!("current tabs {active:?}: {}", error.message);
-                    // Only the tab that needed the compile is held back.
-                    let held =
-                        active.map(|a| a.filter(|&owner| self.shell_branch(owner, true).is_none()));
-                    for (state, held) in self.columns.iter_mut().zip(held) {
-                        if held.is_some() {
-                            state.refresh_failed = held;
-                        }
-                    }
-                }
-                self.log_prepared(0, started, result.is_ok());
             }
             return;
         }
+        // A short wait, so that mounts arriving together (the plugins'
+        // activations at start-up) are applied as one change. Nothing waits
+        // for plugins that have not asked yet: the shell never compiles
+        // again, and each panel compiles on its own when it is first shown
+        // (`ui/panels.rs`), so a late mount costs only its own panel.
         let waited = self.preparing.as_ref().unwrap().0.elapsed();
         if waited < Duration::from_millis(32) {
             return;
         }
-        // At start-up the mounts wait until every plugin that may mount a
-        // panel has asked (built-ins, replayed tabs and third-party plugins,
-        // whose mounts are held while the built-ins start; a plugin that
-        // asked waits for this compile to finish its activation): the shell
-        // compiles once, with whatever layout was remembered (the adjust
-        // column's shown tab included), before a file given at launch opens
-        // (`open_files_tick`). A plugin that never asks holds it up for
-        // `STARTUP_MOUNT_LIMIT` (5 s) at most: the built-ins' panels (the bar,
-        // the playlist) then wait that long too, the price of one compile.
-        if !self.startup_mounted {
-            if let Some(waiting) = self.startup_mount_expected() {
-                if waited < startup_mount_limit() {
-                    return;
-                }
-                diag!(
-                    "shell: start-up mounts still expected after {} ms (waiting for {waiting}); compiling with those in",
-                    startup_mount_limit().as_millis()
-                );
-            }
-            self.startup_mounted = true;
-            self.release_held_panel_requests();
-        }
         let (_, change) = self.preparing.take().unwrap();
         let started = Instant::now();
-        // Every change queued meanwhile joins this one: one compile of the
-        // shell instead of one per mount (start-up mounts arrive together).
-        // After a failed batch its changes go one at a time again, so that
-        // one bad component fails only its own mount.
+        // Every change queued meanwhile joins this one. After a failed
+        // batch its changes go one at a time again, so that one bad
+        // component fails only its own mount.
         let mut changes = vec![change];
         if self.mount_singly > 0 {
             self.mount_singly -= 1;
@@ -184,8 +149,8 @@ impl Host {
         let result = self.apply_mounts(next, &batch);
         self.log_prepared(changes.len(), started, result.is_ok());
         if result.is_err() && changes.len() > 1 {
-            // Again one at a time, from the next tick on (each still one
-            // compile per tick): the first, then the rest in their order.
+            // Again one at a time, from the next tick on: the first, then
+            // the rest in their order.
             self.mount_singly = changes.len();
             let mut changes = changes.into_iter();
             let first = changes.next().expect("more than one change");
@@ -202,8 +167,8 @@ impl Host {
         let elapsed = started.elapsed().as_secs_f64() * 1000.;
         for change in changes {
             let owner = change.reply.owner;
-            // A panel kept over its plugin's restart, mounted again (in
-            // its kept branch when the spec is the same) or removed: its
+            // A panel kept over its plugin's restart, mounted again (from
+            // its compiled file when that did not change) or removed: its
             // restart line goes (`panel_restart.rs`).
             if result.is_ok() && self.restarts.waiting(change.key) {
                 if let Some(mount) = &change.contribution {
@@ -211,10 +176,10 @@ impl Host {
                         "shell: {} mounted its {} panel again after its restart ({})",
                         mount.manifest,
                         mount.spec.slot.name(),
-                        if self.restarts.compiled_key(change.key) != change.key {
-                            "kept branch, no compile"
-                        } else {
+                        if self.compiled_now.contains(&change.key) {
                             "compiled"
+                        } else {
+                            "no compile"
                         }
                     );
                 }
@@ -241,23 +206,24 @@ impl Host {
                 "vestra shell: {} change(s), {} panel(s), {} compiled, prepared in {:.1} ms ({})",
                 changes,
                 self.mounts.len(),
-                self.shell_specs.len(),
+                self.panels.definitions(),
                 started.elapsed().as_secs_f64() * 1000.,
                 if ok { "ready" } else { "failed" }
             );
         }
     }
-    /// Make `next` the mounted panels (sidebar-tabs.md); `batch`: the owners
-    /// whose mount or unmount this applies (empty for a host-initiated
-    /// compile). The shell is compiled again only when what it compiles
-    /// changes: the bottom bar, the backdrop, each column's compiled tabs
-    /// (`sidebar_tabs::compiled`: the front tabs, per column) or whether a
-    /// column draws its tab strip. Otherwise only the strips' titles change,
-    /// and a batch owner's compiled panel gets its new values. A column
-    /// panel that joins the compiled set without a mount of its own in the
-    /// batch (a switch to its tab) and breaks the compile is left out and
-    /// reported to its plugin, so it never fails the other plugins' mounts.
-    /// The policy, the panel keys and the remembered state follow either way.
+    /// Make `next` the mounted panels (sidebar-tabs.md); `batch`: the panels
+    /// whose mount or unmount this applies. The shell is never compiled
+    /// again: each panel is compiled on its own, when it is first shown
+    /// (`ui/panels.rs`). A panel of the batch that shows at once (the
+    /// bottom bar, the backdrop, the tab that will be current in a column
+    /// that is wanted shown) is compiled here, before anything changes, so
+    /// one that does not compile fails its mount as before; a tab mounted
+    /// in the background compiles nothing (but an adjust tab joining the
+    /// front tabs of the column wanted shown: right after, `preload_front`),
+    /// and one that turns out not to compile when it is first shown is
+    /// reported to its plugin then (`show_panel`). The policy, the panel
+    /// keys and the remembered state follow.
     pub(crate) fn apply_mounts(
         &mut self,
         next: BTreeMap<u64, Mount>,
@@ -280,11 +246,10 @@ impl Host {
             .map(|(owner, _)| *owner)
             .collect::<Vec<_>>();
         // The tab that will be current in each column, so the first frame
-        // shows it and the shell compiles once: the policy's after the
-        // leaving tabs went (the next one takes over a removed current tab).
-        // A placeholder that would take over that way is passed over for a
-        // running plugin's tab, so that removing a tab never wakes a
-        // neighbour unasked.
+        // shows it: the policy's after the leaving tabs went (the next one
+        // takes over a removed current tab). A placeholder that would take
+        // over that way is passed over for a running plugin's tab, so that
+        // removing a tab never wakes a neighbour unasked.
         let mut planned = self.policy.clone();
         for owner in &leaving {
             planned.remove_owner(*owner);
@@ -335,179 +300,71 @@ impl Host {
             })
             .collect::<Result<Vec<_>, _>>()?;
         let tabbed = [plans[0].tabbed, plans[1].tabbed];
-        // An adjust column wanted shown (now, or remembered from the last
-        // run while its panels arrive) is open: compiled with this shell.
-        let adjust = Column::Adjust.index();
-        if !plans[adjust].order.is_empty()
-            && self
-                .policy
-                .column_state(window_state::Slot::Adjust)
-                .map_or(self.adjust_slot().visible, |(preferred, _)| preferred)
-        {
-            self.columns[adjust].opened = true;
+        // The batch's mounts (a placeholder replayed from a recording has
+        // no process and draws nothing).
+        let mounted = batch
+            .iter()
+            .filter_map(|key| next.get(key))
+            .filter(|mount| !mount.recorded)
+            .cloned()
+            .collect::<Vec<_>>();
+        // The ones that show at once compile first: a failure leaves
+        // everything as it was.
+        self.compiled_now.clear();
+        self.panels.clear_pending();
+        for mount in &mounted {
+            let shows = match Column::of(mount.spec.slot) {
+                None => true,
+                // The tab current for the host once `next` is mounted
+                // (`current_in`: none while the column waits for its
+                // remembered tab).
+                Some(column) => {
+                    self.column_wanted(column)
+                        && self
+                            .current_in(column, plans[column.index()].active, &next)
+                            .tab()
+                            == Some(mount.spec.owner)
+                }
+            };
+            if !shows {
+                continue;
+            }
+            let compiled = self.panels.precompile(&mount.spec);
+            if !matches!(compiled, Ok(None)) {
+                self.log_compile(mount, compiled.as_ref().ok().copied().flatten());
+            }
+            match compiled {
+                Ok(Some(_)) => {
+                    self.compiled_now.insert(mount.spec.owner);
+                }
+                Ok(None) => {}
+                Err(error) => return Err(RpcError::new("ui-prepare", error.to_string())),
+            }
         }
-        let mut recompiled = false;
-        let mut shown;
-        loop {
-            let failed = self.tabs_failed.clone();
-            let compiled_tabs = Column::ALL
-                .into_iter()
-                .zip(&plans)
-                // The adjust column's panels compile at its first opening,
-                // all its front tabs at once (as the sidebar's): a later
-                // first switch to one of them recompiles nothing (a shell
-                // swap stalls the UI thread and reconfigures the window's
-                // surface, a visible flash).
-                .filter(|(column, _)| self.compiles(*column))
-                .flat_map(|(_, plan)| {
-                    sidebar_tabs::compiled(
-                        &plan.order,
-                        plan.active,
-                        recorded,
-                        |owner| failed.contains(&owner),
-                        &self.shell_compiled,
-                    )
-                })
-                .collect::<Vec<_>>();
-            shown = next
-                .values()
-                .filter(|m| !m.spec.slot.tabbed())
-                .chain(compiled_tabs.iter().filter_map(|owner| next.get(owner)))
-                .cloned()
-                .collect::<Vec<_>>();
-            let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
-            // A panel kept over its plugin's restart and mounted again with
-            // the same file, component, global and slot is the branch the
-            // shell has under its old key (`panel_restart.rs`): no compile.
-            let compiled_as = shown
-                .iter()
-                .map(|m| self.compiled_spec(m))
-                .collect::<Vec<_>>();
-            if self.shell.is_some()
-                && panel_restart::canonical(compiled_as)
-                    == panel_restart::canonical(self.shell_specs.clone())
-                && tabbed == [self.columns[0].tabbed, self.columns[1].tabbed]
+        // From here on nothing fails. Each mount of the batch is a new
+        // panel with the values it was mounted with (the panel it replaces,
+        // a placeholder's kept one or one kept over its plugin's restart,
+        // goes with its instances); panels no longer mounted go.
+        let mut failures = Vec::new();
+        for mount in &mounted {
+            let panel = self.panels.insert(mount.spec.clone());
+            for (name, value) in self.mount_values(mount) {
+                if let Err(error) = panel.write(&name, value) {
+                    failures.push((mount.spec.owner, format!("{name}: {error:#}")));
+                }
+            }
+            if let Some(slot) = policy_slot(mount.spec.slot)
+                && self.mounts.contains_key(&mount.spec.owner)
+                && let Err(error) =
+                    self.policy
+                        .set_locks(slot, mount.spec.owner, window_state::Locks::default())
             {
-                break;
-            }
-            let compiled = compiled_tabs
-                .iter()
-                .map(|&owner| (owner, owner))
-                .collect::<BTreeMap<_, _>>();
-            let strips = [0, 1].map(|index| {
-                let plan = &plans[index];
-                ColumnStrip {
-                    titles: titles[index].clone(),
-                    active: plan
-                        .active
-                        .and_then(|a| plan.order.iter().position(|&o| o == a))
-                        .unwrap_or(0),
-                    shown: sidebar_tabs::shown(plan.active, &compiled),
-                }
-            });
-            let compiling = Instant::now();
-            let compiled_shell = self.compile_shell(&shown, tabbed, strips);
-            // One line per compile of the shell (tests/startup_compiles.rs
-            // counts them): a compile blocks the UI thread.
-            diag!(
-                "shell: compile with {} panel(s) [{}] in {:.1} ms at +{} ms ({})",
-                shown.len(),
-                shown
-                    .iter()
-                    .map(|m| format!("{}:{}", m.manifest, m.spec.slot.name()))
-                    .collect::<Vec<_>>()
-                    .join(", "),
-                compiling.elapsed().as_secs_f64() * 1000.,
-                self.now_ms(),
-                if compiled_shell.is_ok() {
-                    "ready"
-                } else {
-                    "failed"
-                }
-            );
-            match compiled_shell {
-                Ok(failures) => {
-                    self.report_value_failures(failures);
-                    self.shell_specs = specs;
-                    for (state, tabbed) in self.columns.iter_mut().zip(tabbed) {
-                        state.tabbed = tabbed;
-                    }
-                    self.shell_compiled = compiled;
-                    // Every panel is under its own key in the new shell.
-                    self.restarts.recompiled();
-                    recompiled = true;
-                    break;
-                }
-                Err(error) => {
-                    // Column panels this compile added without a mount of
-                    // their own in the batch: left out, once.
-                    let added = sidebar_tabs::blamed(&compiled_tabs, batch, &self.shell_compiled);
-                    if added.is_empty() || added.iter().any(|o| self.tabs_failed.contains(o)) {
-                        return Err(RpcError::new("ui-prepare", error.to_string()));
-                    }
-                    for owner in added {
-                        diag!("tab {owner}: its panel does not compile: {error:#}");
-                        self.tabs_failed.insert(owner);
-                        let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
-                        self.send(panel_plugin(owner), ui_error(&refusal));
-                    }
-                }
+                diag!("mount policy reset: {error}");
             }
         }
-        if recompiled {
-            for (id, mount) in &next {
-                let Some(slot) = policy_slot(mount.spec.slot) else {
-                    continue;
-                };
-                if let Err(error) = self
-                    .policy
-                    .set_locks(slot, *id, window_state::Locks::default())
-                {
-                    diag!("mount policy reset: {error}");
-                }
-            }
-        } else if let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) {
-            // The same shell: the strips' titles (a tab came or went), and
-            // the new values of a batch owner's compiled panel (an unmount
-            // and a mount of the same panel in one batch).
-            let error = |error: anyhow::Error| RpcError::new("ui-prepare", error.to_string());
-            for (column, titles) in Column::ALL.into_iter().zip(&titles) {
-                shell
-                    .set_property(&format!("{}-titles", column.prefix()), titles.clone())
-                    .map_err(|e| error(e.into()))?;
-            }
-            for mount in &shown {
-                if let Some(column) = Column::of(mount.spec.slot) {
-                    let spec = self.compiled_spec(mount);
-                    composition::set_tabbed(&shell, &spec, tabbed[column.index()])
-                        .map_err(error)?;
-                }
-            }
-            let rewritten = shown
-                .iter()
-                .filter(|m| batch.contains(&m.spec.owner))
-                .cloned()
-                .collect::<Vec<_>>();
-            let mut failures = Vec::new();
-            for mount in &rewritten {
-                let spec = self.compiled_spec(mount);
-                for (name, value) in self.mount_values(mount) {
-                    if let Err(error) = composition::set_global_value(&shell, &spec, &name, value) {
-                        failures.push((mount.spec.owner, format!("{name}: {error:#}")));
-                    }
-                }
-                if let Some(slot) = policy_slot(mount.spec.slot)
-                    && let Err(error) = self.policy.set_locks(
-                        slot,
-                        mount.spec.owner,
-                        window_state::Locks::default(),
-                    )
-                {
-                    diag!("mount policy reset: {error}");
-                }
-            }
-            self.report_value_failures(failures);
-        }
+        self.report_value_failures(failures);
+        self.panels.clear_pending();
+        self.panels.retain(|key| next.contains_key(&key));
         for old in &leaving {
             self.policy.remove_owner(*old);
             if !next.contains_key(old)
@@ -567,31 +424,306 @@ impl Host {
                 .values()
                 .find(|m| m.spec.slot == composition::Slot::Bottom)
                 .map(|m| m.plugin);
-            // The panel keys' plugins: their commands take the panel's keys.
-            input.sidebar = self.policy.sidebar_active().map(panel_plugin);
-            input.adjust = self
-                .policy
-                .active(window_state::Slot::Adjust)
-                .map(panel_plugin);
         }
         self.mounts = next;
-        for (state, plan) in self.columns.iter_mut().zip(plans) {
-            state.tabs = plan.order;
+        {
+            // The panel keys' plugins: their commands take the panel's keys
+            // (none while a column waits for its remembered tab).
+            let sidebar = self.current_tab(Column::Sidebar).map(panel_plugin);
+            let adjust = self.current_tab(Column::Adjust).map(panel_plugin);
+            let mut input = self.input.borrow_mut();
+            input.sidebar = sidebar;
+            input.adjust = adjust;
+        }
+        self.note_panel_plugins();
+        for (state, plan) in self.columns.iter_mut().zip(&plans) {
+            state.tabs = plan.order.clone();
+            state.tabbed = plan.tabbed;
         }
         for column in Column::ALL {
             self.remember_column(column, false);
         }
+        // The strips (a tab came or went) and the panels, in the same
+        // frame: each column's current tab, the bar and the backdrop.
+        for mount in self.mounts.values() {
+            if let Some(column) = Column::of(mount.spec.slot)
+                && let Some(panel) = self.panels.panel(mount.spec.owner)
+            {
+                panel.set_tabbed(tabbed[column.index()]);
+            }
+        }
+        if let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) {
+            let error = |error: anyhow::Error| RpcError::new("ui-prepare", error.to_string());
+            for ((column, titles), plan) in Column::ALL.into_iter().zip(&titles).zip(&plans) {
+                let p = column.prefix();
+                shell
+                    .set_property(&format!("{p}-titles"), titles.clone())
+                    .map_err(|e| error(e.into()))?;
+                if let Some(index) = plan
+                    .active
+                    .and_then(|a| plan.order.iter().position(|&o| o == a))
+                {
+                    shell
+                        .set_property(&format!("{p}-active"), SValue::Number(index as f64))
+                        .map_err(|e| error(e.into()))?;
+                }
+            }
+            shell
+                .set_property("sidebar-tabbed", tabbed[0].into())
+                .map_err(|e| error(e.into()))?;
+        }
+        self.sync_panels();
         Ok(
             json!({"status":"ready","shellGeneration":self.shell_generation,"prepareMs":started.elapsed().as_secs_f64()*1000.}),
         )
     }
-    /// Whether a column's panels are compiled into the shell: the sidebar's
-    /// always (its front tabs), the adjust column's (its front tabs, all at
-    /// once) once it was opened in this run (menu redesign, open question 1:
-    /// compiled on demand, so a player whose adjust column stays closed never
-    /// pays for its panels).
-    pub(crate) fn compiles(&self, column: Column) -> bool {
-        column != Column::Adjust || self.columns[column.index()].opened
+    /// Whether a column is wanted shown (also while it is hidden for the
+    /// moment: collapsed in fullscreen, detached): its current tab's panel
+    /// is compiled and instantiated only then. Before its first panel is
+    /// attached: as remembered from the last run.
+    pub(crate) fn column_wanted(&self, column: Column) -> bool {
+        self.policy.column_state(policy_column(column)).map_or_else(
+            || self.column_memory(column).visible,
+            |(preferred, _)| preferred,
+        )
+    }
+    /// The start-up rule for a column's current tab, its one source of
+    /// truth: while start-up has not settled (`startup_panels`), a column
+    /// whose remembered current tab (the last run's) has not mounted yet
+    /// has no current tab (`Current::Awaits`), instead of the tab that is
+    /// current meanwhile (plugins start one after another, and a
+    /// placeholder replayed from a recording mounts at once: a flash of
+    /// another tab, a compile for nothing, a wake for nothing). Otherwise
+    /// it is `active`, the policy's (once settled, whatever it is: the
+    /// remembered plugin may be gone). Of the column with the mounts
+    /// `mounts`: `next` while a mount change is planned, else the mounted
+    /// ones. Every consumer asks this, through `current` or `current_tab`:
+    /// what the column shows and compiles (`apply_mounts`, `sync_panels`),
+    /// the floating sidebar, the panel keys, the tab's wake and its
+    /// kept-running work (`sync_column`, `tab_demand`) and
+    /// `Busy::ShownTab`. The tab strip marks the policy's current tab all
+    /// the same (the user's choice, kept).
+    fn current_in(
+        &self,
+        column: Column,
+        active: Option<u64>,
+        mounts: &BTreeMap<u64, Mount>,
+    ) -> Current {
+        let awaits = crate::ui::sidebar_tabs::awaits_remembered(
+            self.startup_panels,
+            self.column_memory(column).active.as_deref(),
+            active
+                .and_then(|active| mounts.get(&active))
+                .map(|mount| mount.manifest.as_str()),
+            mounts
+                .values()
+                .filter(|mount| mount.spec.slot == column.slot())
+                .map(|mount| mount.manifest.as_str()),
+        );
+        if awaits {
+            Current::Awaits
+        } else {
+            Current::Tab(active)
+        }
+    }
+    /// A column's current tab for the host now (`current_in` over the
+    /// policy's current tab and the mounted panels).
+    pub(crate) fn current(&self, column: Column) -> Current {
+        self.current_in(
+            column,
+            self.policy.active(policy_column(column)),
+            &self.mounts,
+        )
+    }
+    /// The tab `current` names: none while the column waits for its
+    /// remembered tab (neither a placeholder, which would be woken, nor a
+    /// running plugin's, which would be kept running).
+    pub(crate) fn current_tab(&self, column: Column) -> Option<u64> {
+        self.current(column).tab()
+    }
+    /// One line per compile of a panel's file (tests/startup_compiles.rs
+    /// counts them): a compile blocks the UI thread. `took`: `None` when it
+    /// failed.
+    fn log_compile(&self, mount: &Mount, took: Option<f64>) {
+        diag!(
+            "panel: compile [{}:{}]{} at +{} ms ({})",
+            mount.manifest,
+            mount.spec.slot.name(),
+            took.map_or_else(String::new, |ms| format!(" in {ms:.1} ms")),
+            self.now_ms(),
+            if took.is_some() { "ready" } else { "failed" }
+        );
+    }
+    /// Show panel `key` (`None`, a placeholder or one that does not
+    /// compile: nothing) in the container of `slot` of `window`. A panel
+    /// first shown compiles now; one that does not compile is left out
+    /// until its plugin mounts it again and reported to its plugin
+    /// (`ui.error`), so it never fails another plugin's panel. Whether the
+    /// container's content changed.
+    pub(crate) fn show_panel(
+        &mut self,
+        window: &slint_interpreter::ComponentInstance,
+        generation: u64,
+        slot: composition::Slot,
+        key: Option<u64>,
+    ) -> bool {
+        use crate::ui::panels::Shown;
+        let key = key.filter(|key| self.panels.contains(*key) && !self.tabs_failed.contains(key));
+        let events = self.mount_events.clone();
+        match self.panels.show(window, generation, slot, key, &events) {
+            Ok(Shown::Same) => false,
+            Ok(Shown::Changed { compiled_ms }) => {
+                if let (Some(took), Some(mount)) =
+                    (compiled_ms, key.and_then(|key| self.mounts.get(&key)))
+                {
+                    self.log_compile(mount, Some(took));
+                }
+                true
+            }
+            Err(error) => {
+                let Some(key) = key else {
+                    diag!("panel container {}: {error:#}", slot.name());
+                    return false;
+                };
+                if let Some(mount) = self.mounts.get(&key) {
+                    self.log_compile(mount, None);
+                }
+                diag!("panel {key}: it does not compile: {error:#}");
+                self.tabs_failed.insert(key);
+                let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
+                self.send(panel_plugin(key), ui_error(&refusal));
+                matches!(
+                    self.panels.show(window, generation, slot, None, &events),
+                    Ok(Shown::Changed { .. })
+                )
+            }
+        }
+    }
+    /// Compile the front tabs of `column` (`sidebar_tabs::front`) that are
+    /// not loaded, without showing them; logged as any compile. One that
+    /// does not compile is left out and reported to its plugin, as at its
+    /// showing (`show_panel`). A placeholder tab (no panel in this run) is
+    /// skipped. Whether anything was compiled.
+    fn preload_front(&mut self, column: Column, active: Option<u64>) -> bool {
+        let front = crate::ui::sidebar_tabs::front(&self.columns[column.index()].tabs, active);
+        let mut loaded = false;
+        for key in front {
+            if self.tabs_failed.contains(&key) || !self.panels.contains(key) {
+                continue;
+            }
+            match self.panels.load(key) {
+                Ok(None) => {}
+                Ok(Some(took)) => {
+                    loaded = true;
+                    if let (Some(took), Some(mount)) = (took, self.mounts.get(&key)) {
+                        self.log_compile(mount, Some(took));
+                    }
+                }
+                Err(error) => {
+                    if let Some(mount) = self.mounts.get(&key) {
+                        self.log_compile(mount, None);
+                    }
+                    diag!("panel {key}: it does not compile: {error:#}");
+                    self.tabs_failed.insert(key);
+                    let refusal = RpcError::new("ui-prepare", format!("ui-prepare: {error:#}"));
+                    self.send(panel_plugin(key), ui_error(&refusal));
+                }
+            }
+        }
+        loaded
+    }
+    /// Every slot's container shows its panel (each tick, and at once after
+    /// a mount change): the bottom bar, the backdrop, and each column's
+    /// current tab while the column is wanted shown, in the shell and (the
+    /// sidebar) the floating window. Only what changed touches Slint; a
+    /// changed container gets its instance before the next frame, and
+    /// before the host reads geometry.
+    pub(crate) fn sync_panels(&mut self) {
+        let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
+            return;
+        };
+        use composition::Slot;
+        let started = Instant::now();
+        let generation = self.shell_generation;
+        // The palette a new instance gets.
+        self.panels.set_theme(self.theme());
+        let floating = self
+            .floating
+            .as_ref()
+            .map(|f| (f.instance.clone_strong(), f.generation));
+        match &floating {
+            Some((_, floating)) => self.panels.prune(&[generation, *floating]),
+            None => self.panels.prune(&[generation]),
+        }
+        let mut changed = false;
+        for slot in [Slot::Bottom, Slot::Backdrop] {
+            let key = self
+                .mounts
+                .values()
+                .find(|m| m.spec.slot == slot)
+                .map(|m| m.spec.owner);
+            changed |= self.show_panel(&shell, generation, slot, key);
+        }
+        let mounted = SValue::Bool(self.panels.shown(generation, Slot::Bottom).is_some());
+        if shell.get_property("bottom-mounted").ok().as_ref() != Some(&mounted) {
+            let _ = shell.set_property("bottom-mounted", mounted);
+            changed = true;
+        }
+        if changed {
+            view::settle_layout(shell.window());
+        }
+        self.mirror_bar(&shell);
+        for column in Column::ALL {
+            let slot = column.slot();
+            let active = self.policy.active(policy_column(column));
+            let current = self.current(column);
+            let wanted = self.column_wanted(column) && !current.awaits();
+            // Not wanted shown (or waiting for its remembered tab): what it
+            // showed stays (nothing compiles), unless that is no longer its
+            // current tab.
+            let key = active.filter(|&a| wanted || self.panels.shown(generation, slot) == Some(a));
+            let shown = self.show_panel(&shell, generation, slot, key);
+            changed |= shown;
+            // The adjust column wanted shown has all its front tabs compiled
+            // (user ruling 2026-11-11): its first opening compiles them at
+            // once, and a tab mounted into the front while it is open
+            // compiles at that mount, so a switch never compiles.
+            let loaded = column == Column::Adjust && wanted && self.preload_front(column, active);
+            if shown || loaded {
+                self.panels.evict(slot);
+            }
+            // The floating sidebar shows its current tab whatever it showed
+            // (none while the column waits for its remembered tab).
+            if column == Column::Sidebar
+                && let Some((window, floating)) = &floating
+                && self.show_panel(window, *floating, slot, current.tab())
+            {
+                view::settle_layout(window.window());
+                self.panels.evict(slot);
+            }
+        }
+        if changed {
+            view::settle_layout(shell.window());
+            // `VESTRA_FRAME_LOG`: what a container change cost on the UI
+            // thread (a compile, an instance, or the kept one embedded again).
+            if self.frame_log.is_some() {
+                diag!(
+                    "vestra panels: containers changed in {:.1} ms",
+                    started.elapsed().as_secs_f64() * 1000.
+                );
+            }
+        }
+        let refused = self.panels.take_refused();
+        if !refused.is_empty() {
+            self.report_value_failures(refused);
+        }
+        self.sync_restart_lines();
+    }
+    /// The bottom bar's reported width and `placed` to the shell's strip
+    /// (`panels::mirror_bar`): a change shows there one tick later at most.
+    fn mirror_bar(&self, shell: &slint_interpreter::ComponentInstance) {
+        let bar = self.panels.bar_instance(self.shell_generation);
+        crate::ui::panels::mirror_bar(shell, bar.as_ref().map(|(_, bar)| bar));
     }
     /// Values a new instance could not take (a property the panel does not
     /// declare, a value of the wrong type): logged and reported to their
@@ -602,158 +734,6 @@ impl Host {
             diag!("mount property {owner}/{message}");
             self.send(panel_plugin(owner), ui_error(&RpcError::new("ui", message)));
         }
-    }
-    /// Compile the shell with `shown` (every panel it draws: the bottom bar,
-    /// the backdrop, the columns' compiled tabs) inside the main window,
-    /// with their values, and make it current; `tabbed` and `strips`: each
-    /// column's strip (by `Column::index`). The values a panel could not
-    /// take are returned (owner, what), for `report_value_failures`: one bad
-    /// value never fails the compile.
-    fn compile_shell(
-        &mut self,
-        shown: &[Mount],
-        tabbed: [bool; 2],
-        strips: [ColumnStrip; 2],
-    ) -> Result<Vec<(u64, String)>> {
-        let failures = RefCell::new(Vec::new());
-        self.next_shell_generation += 1;
-        let candidate_generation = self.next_shell_generation;
-        let native_before = platform::capture_windows().ok();
-        let values: Vec<_> = shown.iter().map(|mount| self.mount_values(mount)).collect();
-        let states = Column::ALL.map(|column| {
-            let memory = self.column_memory(column);
-            self.policy
-                .column_state(policy_column(column))
-                .unwrap_or((memory.visible, memory.detached))
-        });
-        // The adjust column starts where the last tick put it (docked, over
-        // the video, popped out in fullscreen), so a recompile does not move
-        // it for a frame; a new one waits for the next tick.
-        let adjust_state = &self.columns[Column::Adjust.index()];
-        let adjust_docked = adjust_state.shown && !adjust_state.popped;
-        let adjust_popped = adjust_state.popped;
-        let adjust_overlay = self.window_facts["slots"]["adjust"]["overlay"] == true
-            && (self.window_facts["fullscreen"] == true || adjust_popped);
-        // The main window stays: the new shell's tree replaces the old one
-        // inside it (`view::replace_shell`), with no hide/show, move or resize.
-        let reuse = self.shell.is_some();
-        let build =
-            |window: Option<&slint::Window>| -> Result<slint_interpreter::ComponentInstance> {
-                let specs = shown.iter().map(|m| m.spec.clone()).collect::<Vec<_>>();
-                let shell = composition::compile_json_in(
-                    &specs,
-                    tabbed,
-                    self.mount_events.clone(),
-                    candidate_generation,
-                    window,
-                )?;
-                for (mount, values) in shown.iter().zip(values) {
-                    for (name, value) in values {
-                        if let Err(error) =
-                            composition::set_global_value(&shell, &mount.spec, &name, value)
-                        {
-                            failures
-                                .borrow_mut()
-                                .push((mount.spec.owner, format!("{name}: {error:#}")));
-                        }
-                    }
-                    let visible = match Column::of(mount.spec.slot) {
-                        Some(Column::Adjust) => {
-                            composition::set_tabbed(&shell, &mount.spec, tabbed[1])?;
-                            adjust_docked
-                        }
-                        Some(column) => {
-                            composition::set_tabbed(&shell, &mount.spec, tabbed[column.index()])?;
-                            let (visible, detached) = states[column.index()];
-                            visible && !detached
-                        }
-                        None => mount.visible && !mount.detached,
-                    };
-                    if let Some(property) = mount.spec.slot.visible_property() {
-                        shell.set_property(property, visible.into())?;
-                    }
-                    // Still waiting for its plugin's restart.
-                    if let Some(line) = self.restarts.text_of(mount.spec.owner) {
-                        shell.set_property(
-                            &panel_restart::restarting_property(mount.spec.owner),
-                            SValue::String(line.into()),
-                        )?;
-                    }
-                }
-                // A column of placeholders only (none compiled) has no spec
-                // here: it takes the last tick's place too.
-                shell.set_property("adjust-visible", adjust_docked.into())?;
-                shell.set_property("adjust-overlay", adjust_overlay.into())?;
-                shell.set_property("adjust-popped", adjust_popped.into())?;
-                for (column, strip) in Column::ALL.into_iter().zip(&strips) {
-                    let p = column.prefix();
-                    shell.set_property(&format!("{p}-titles"), strip.titles.clone())?;
-                    shell.set_property(
-                        &format!("{p}-active"),
-                        SValue::Number(strip.active as f64),
-                    )?;
-                    shell
-                        .set_property(&format!("{p}-shown"), SValue::Number(strip.shown as f64))?;
-                }
-                self.bind_shell(&shell, candidate_generation)?;
-                self.bind_tabs(&shell, candidate_generation)?;
-                if window.is_some() {
-                    // `replace_shell` shows it in the window, which keeps its
-                    // rendering notifier (`retarget_shell`).
-                    return Ok(shell);
-                }
-                let texture = self.attach_gpu(&shell);
-                shell.show()?;
-                // Only a shown candidate replaces the main window's texture.
-                self.video_texture.replace(texture);
-                platform::shown(&shell);
-                frame_pacing::follow(&shell);
-                Ok(shell)
-            };
-        let shell = view::replace_shell(self.shell.as_ref(), view::focus_video, build)?;
-        // The window's one event hook now reports for this shell (not
-        // set while building: a failed candidate leaves the old one).
-        self.bind_window_events(&shell, candidate_generation);
-        self.theme_view(&shell);
-        // Same native window (or, without an old shell, the new main one):
-        // tool windows created later stay owned by it.
-        platform::set_main_window(&shell);
-        // Emulator key capture stays: the window was neither hidden
-        // nor unfocused, and the new tree gives the video area the
-        // focus (its `init`); each key is still checked against the
-        // new shell's `canvas-focused`. A capture revoked here used
-        // to end at every plugin install or uninstall.
-        if reuse {
-            self.retarget_shell(&shell);
-        } else {
-            self.native_before = native_before.clone();
-            self.native_window = native_before
-                .as_ref()
-                .and_then(|before| platform::associate_new(before).ok());
-            self.video_target.replace(shell.as_weak());
-        }
-        // Not hidden: it shared the window. Dropping it frees its tree.
-        drop(self.shell.replace(shell));
-        // A message on screen stays, with its buttons; its remaining time
-        // and hold are the host's (`osd_until`), unchanged.
-        if self.osd_shown.visible {
-            self.osd_debug(&OsdEvent::Kept);
-        }
-        self.write_osd();
-        // And the status strip.
-        self.write_strip();
-        // And the plugins' information blocks (`osd.panel`), lost likewise.
-        self.show_info_panels();
-        if self.menu_generation == self.shell_generation {
-            self.menu_open = false;
-            self.menu_mode = MenuMode::Main;
-        }
-        // The keys under the adjust column's tabs go to the new shell.
-        for state in &mut self.columns {
-            state.keys_from = None;
-        }
-        self.shell_generation = candidate_generation;
-        Ok(failures.into_inner())
     }
 
     /// Initial properties `refuse_initial` left out: logged and reported
@@ -785,10 +765,10 @@ impl Host {
         values
     }
     pub(crate) fn mount_callbacks(&mut self) {
-        for mut event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
-            // A callback names the branch it came from: a panel kept over
-            // its plugin's restart has it under its old key.
-            event.owner = self.restarts.key_of_branch(event.owner);
+        for event in self.mount_input.try_iter().take(64).collect::<Vec<_>>() {
+            // A callback names the key its panel was mounted under: one
+            // whose plugin woke or restarted under another owner since is
+            // no longer mounted under it, and is dropped.
             if !self.window_generation_live(event.shell_generation)
                 || !self.mounts.contains_key(&event.owner)
             {

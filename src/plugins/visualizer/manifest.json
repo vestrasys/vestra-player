@@ -1,17 +1,8 @@
 {
   "id": "vestra.visualizer",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "playback.read",
-    "events",
-    "ui.mount",
-    "ui.dialog",
-    "ui.osd",
-    "ui.settings"
-  ],
   "name": "Album Cover and Idle Screen",
   "author": "Vestra Player",
   "punchline": "Shows the album cover for audio only and a logo when idle",

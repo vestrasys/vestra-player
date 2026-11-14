@@ -70,7 +70,8 @@ import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { HostError } from "../../wire.js";
 import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, BUILTIN_SUBMENUS, COMMAND_LIMITS, MENU_IDS, } from "../../commands.js";
-import { CAPABILITY_INFO, MESSAGE_LIMIT } from "../../capabilities.js";
+import { CAPABILITIES_REMOVED } from "../../manifest.js";
+import { MESSAGE_LIMIT } from "../../protocol.js";
 import { OSD_LIMITS } from "../osd.js";
 import { TIMELINE_LIMITS } from "../timeline.js";
 import { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "../services.js";
@@ -85,7 +86,7 @@ import { PATCH_FEATURE } from "../patch.js";
 import { LOCALES, LIST_SEPARATORS, loadPackageCatalog, TEXT_LIMITS, } from "../../i18n.js";
 import { Internals } from "./internals.js";
 import { on, emit, settle, close, keepsRunning, transportHandlers, tick, takenErrors, tellResidency, } from "./transport.js";
-import { bindingClaims, bindingKey, keysChanged, press, barButtons, commandsHandlers, builtinHandlers, runPaletteLead, pluginCapabilities, } from "./commands.js";
+import { bindingClaims, bindingKey, keysChanged, press, barButtons, commandsHandlers, builtinHandlers, runPaletteLead, } from "./commands.js";
 import { registerCoreActions, windowFacts, coreActionsHandlers, } from "./core-actions.js";
 import { translate, i18nHandlers } from "./i18n.js";
 import { mountOther, unmountOther, mounted, setTimelineRanges, setTimelineLayer, layoutHandlers, } from "./layout.js";
@@ -104,8 +105,6 @@ export { COMMAND_LIMITS, MENU_IDS };
 export { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS };
 /** The submenus of the player's built-in plugins, by key path. */
 export { BUILTIN_COMMANDS, BUILTIN_SUBMENUS };
-/** The manifest capabilities: what each opens and how the store shows it. */
-export { CAPABILITY_INFO };
 /** The longest message a plugin may send the player. */
 export { MESSAGE_LIMIT };
 /** The player's limits on the on-screen display. */
@@ -245,7 +244,6 @@ export { LOCALES };
  * {@link startPlugin}, drive it, `settle()`, and assert on what it
  * recorded.
  *
- * @capability None.
  * @see [Test a plugin](../../../docs/guides/testing.md)
  * @since 1.0.0
  * @category Testing
@@ -257,7 +255,7 @@ export class TestHost {
      * Wire-level; prefer {@link TestHost.sent} for one method.
      */
     calls = [];
-    /** The host events the plugin subscribed to (needs `events` etc.). */
+    /** The host events the plugin subscribed to. */
     subscriptions = new Set();
     /**
      * The subscribed events the plugin really listens to: an `onChange` and
@@ -362,7 +360,6 @@ export class TestHost {
      * await host.pressOsdAction(0); // runs the plugin's `reveal` command
      * ```
      *
-     * @capability None.
      * @since 1.6.9
      */
     async pressOsdAction(index) {
@@ -425,8 +422,6 @@ export class TestHost {
      * @param directory - The package directory (holding `locales/`).
      * @since 1.5.9
      *
-     * @capability None.
-     *
      * @example Load the translations after changing the language
      * The test switches the host to German before starting the plugin and
      * loads that catalog itself (`startPlugin` does the same). Texts are then
@@ -463,8 +458,6 @@ export class TestHost {
      * ```
      *
      * @since 1.5.9
-     *
-     * @capability None.
      */
     translate(text, args) {
         return translate(this, this.#inner, text, args);
@@ -483,11 +476,9 @@ export class TestHost {
      * @param language - `"system"` or a locale.
      * @since 1.5.9
      *
-     * @capability None.
-     *
      * @example Simulate the user choosing French for the next start
      * The plugin hears that the saved interface language changed. The host
-     * pushes `appearance.changed`, which a plugin with `events` sees in
+     * pushes `appearance.changed`, which a plugin sees (after `plugin.player.subscribe()`) in
      * `appearance.language` once it has read it and subscribed; this run's
      * language does not change.
      * ```ts
@@ -705,7 +696,6 @@ export class TestHost {
      * assert.equal(plugin.timeline.ranges[0]?.plugin, "community.clips");
      * ```
      *
-     * @capability None.
      * @since 1.6.9
      */
     setTimelineRanges(pluginId, ranges) {
@@ -721,8 +711,8 @@ export class TestHost {
      * @example Let another plugin publish chapters
      * The plugin under test sees two chapter marks another plugin put on the
      * timeline. `setTimelineLayer` stores that plugin's whole layer and pushes
-     * `timeline.changed`; once the plugin uses `plugin.timeline` (with
-     * `events`) the SDK keeps `marks` current from that event, and `settle()`
+     * `timeline.changed`; once the plugin uses `plugin.timeline` (after
+     * `plugin.player.subscribe()`) the SDK keeps `marks` current from that event, and `settle()`
      * lets it arrive.
      * ```ts
      * import assert from "node:assert/strict";
@@ -736,7 +726,6 @@ export class TestHost {
      * assert.equal(plugin.timeline.marks.length, 2);
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     setTimelineLayer(pluginId, marks) {
@@ -770,7 +759,6 @@ export class TestHost {
      * );
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     imagePath(value) {
@@ -816,7 +804,6 @@ export class TestHost {
      * });
      * ```
      *
-     * @capability None.
      * @throws Never: files nobody takes are ignored, as in the player.
      * @since 1.0.0
      */
@@ -829,17 +816,15 @@ export class TestHost {
      * Simulate another plugin switching the palette: updates
      * {@link TestHost.appearance} and pushes `appearance.changed`.
      *
-     * @capability None.
-     *
      * @example Simulate another plugin switching to the light palette
      * The plugin hears the palette change. The host updates `appearance` and
-     * pushes `appearance.changed` to a plugin that listens with `events`.
+     * pushes `appearance.changed` to a plugin that listens (after `plugin.player.subscribe()`).
      * ```ts
      * import assert from "node:assert/strict";
      * declare const host: TestHost;
      * // ---cut---
      * const themes: string[] = [];
-     * plugin.player.on("appearance.changed", ({ theme }) => themes.push(theme)); // subscribes (`events`)
+     * plugin.player.on("appearance.changed", ({ theme }) => themes.push(theme)); // subscribes
      * host.setAppearance("vestra-light");
      * await host.settle();
      * assert.deepEqual(themes, ["vestra-light"]);
@@ -883,7 +868,6 @@ export class TestHost {
      * assert.equal(page.props["step"], 10);
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     settingsPage(id) {
@@ -897,8 +881,6 @@ export class TestHost {
     /**
      * Simulate the backdrop's `effective` changing (`false`: a video frame
      * appeared; `true`: there is none again); pushed to the plugin.
-     *
-     * @capability None.
      *
      * @example Make a video picture replace the backdrop
      * The plugin's backdrop hears that a video frame now covers it. `false`
@@ -950,8 +932,6 @@ export class TestHost {
      * ```
      *
      * @since 1.5.2
-     *
-     * @capability None.
      */
     mountOther(slot, plugin, options = {}) {
         return mountOther(this, this.#inner, slot, plugin, options);
@@ -961,8 +941,6 @@ export class TestHost {
      * when its tab was current, the next tab (else the previous one) is.
      *
      * @since 1.5.2
-     *
-     * @capability None.
      *
      * @example Let the playlist's tab go away
      * The other plugin's sidebar tab disappears and the plugin's own tab
@@ -986,8 +964,6 @@ export class TestHost {
      * becomes the current tab. Pushed as a `window.state` change.
      *
      * @since 1.5.2
-     *
-     * @capability None.
      *
      * @example Click another plugin's sidebar tab
      * The user switches the sidebar to the playlist; the plugin's panel is in
@@ -1022,8 +998,6 @@ export class TestHost {
      * `video.view()` then fails with `conflict`), or, with `null`, releasing
      * it (values reset to the defaults).
      *
-     * @capability None.
-     *
      * @example Let another plugin own the display layer
      * The plugin's `video.view()` fails with `conflict` because another plugin
      * took the display layer first. `null` releases it again.
@@ -1055,8 +1029,6 @@ export class TestHost {
      * Simulate another plugin owning the render options (the plugin's
      * `video.render()` then fails with `conflict`), or, with `null`, releasing
      * them (values reset to the defaults).
-     *
-     * @capability None.
      *
      * @example Let another plugin own the render options
      * The plugin's render options report `conflict` while another plugin owns
@@ -1105,7 +1077,6 @@ export class TestHost {
      * assert.equal(render.status.state, "failed");
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     failVideoRender(code, message) {
@@ -1142,8 +1113,6 @@ export class TestHost {
      * shortcut that only sets the handle's status and reaches `onError`: the real
      * player never pushes it, it refuses the `set` request itself after
      * an abnormal end. To test that, set {@link TestHost.previousCrash}.
-     *
-     * @capability None.
      *
      * @example Make the plugin's shader fail to compile
      * The plugin's shader handle reports `failed`, as when mpv rejects a
@@ -1342,8 +1311,6 @@ export class TestHost {
      * plugin's file resolvers and of {@link TestHost.otherResolvers}, sorted,
      * each once.
      *
-     * @capability None.
-     *
      * @example Check the file types a resolver adds
      * The test checks the list the plugin will hear in
      * `resolvers.fileTypes`: the extensions of its own file resolvers and of
@@ -1384,7 +1351,7 @@ export class TestHost {
      * declare const host: TestHost;
      * // ---cut---
      * const heard: string[][] = [];
-     * // A listener of the event (`events`): each list the player sends.
+     * // A listener of the event: each list the player sends.
      * plugin.player.on("resolvers.fileTypes", ({ fileTypes }) => heard.push(fileTypes));
      * // Another plugin starts with a resolver for .ch8 files.
      * host.otherResolvers.push({ owner: "example.emulator", extensions: ["ch8"] });
@@ -1393,7 +1360,6 @@ export class TestHost {
      * assert.deepEqual(heard, [["ch8"]]);
      * ```
      *
-     * @capability None.
      * @since 1.5.8
      */
     updateFileTypes() {
@@ -1506,8 +1472,6 @@ export class TestHost {
      *
      * @param name - The property, as mpv names it.
      * @param value - Its new value.
-     *
-     * @capability None.
      *
      * @example The frame rate behind the filters changes
      * The plugin's listener hears the value the test gives the property.
@@ -1728,7 +1692,6 @@ export class TestHost {
      * assert.match(String(host.window("upscale").props.blocker), /Picture Adjustments/);
      * ```
      *
-     * @capability None.
      * @since 1.5.43
      */
     upscalingDecoding(cause, plugins = []) {
@@ -1739,8 +1702,6 @@ export class TestHost {
      * describes now (without `enabled`), as the player does when it changes; a
      * plugin listening with `plugin.video.upscaling.onChange` receives it.
      * Nothing reaches a plugin that does not listen.
-     *
-     * @capability None.
      *
      * @example Show the new factor in the plugin's window
      * The window resized: the test changes the area and the factor, sends
@@ -1815,8 +1776,6 @@ export class TestHost {
      * describes now (without `mode`), as the player does when it changes; a
      * plugin listening with `plugin.video.motion("amd").onChange` receives it.
      * Nothing reaches a plugin that does not listen.
-     *
-     * @capability None.
      *
      * @example The GPU fell behind
      * The player turned the converter off for this video; the plugin's
@@ -1958,9 +1917,9 @@ export class TestHost {
     // ------------------------------------------------------------ built-in only
     /**
      * The plugin is built into the player (`startPlugin`'s `builtin`). Only
-     * then does the host take the built-in-only capabilities
-     * (`commands.run`, `palette.lead`); otherwise their calls fail with
-     * `capability`, as in the player.
+     * then does the host answer the built-in-only requests
+     * (`commands.list`, `commands.run`, `palette.lead.*`); otherwise they
+     * fail with `capability`, as in the player.
      *
      * @since 1.7.9
      */
@@ -2016,7 +1975,6 @@ export class TestHost {
      * await stop();
      * ```
      *
-     * @capability None.
      * @throws `Error` without a code (rejects) The plugin has no lead row.
      * @since 1.7.9
      */
@@ -2046,7 +2004,6 @@ export class TestHost {
      * assert.deepEqual(host.coreRuns, ["play-pause"]);
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     coreAction(id) {
@@ -2127,7 +2084,6 @@ export class TestHost {
      * host.reset("system.openPath");
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     handle(method, handler) {
@@ -2135,8 +2091,6 @@ export class TestHost {
     }
     /**
      * Restore the default behaviour of a method replaced with {@link TestHost.handle}.
-     *
-     * @capability None.
      *
      * @example Restore the default answer after a simulated failure
      * The first write fails, the second succeeds. `reset` removes the handler
@@ -2163,13 +2117,11 @@ export class TestHost {
      * Deliver a host event to the plugin. Like the player, subscription-based
      * events (`source.state`, `playback.backend`, `window.state`,
      * `timeline.changed`, `appearance.changed`) are delivered only when the
-     * plugin subscribed (it declared `events` and listens). Most tests use the
+     * plugin subscribed (it called `plugin.player.subscribe()` and listens). Most tests use the
      * higher-level helpers (`setSource`, `setMainWindow`, ...) instead.
      *
      * @param event - The wire event name.
      * @param data - The event payload (wire-level shape).
-     *
-     * @capability None.
      *
      * @example Deliver a raw event the helpers do not cover
      * The test pushes a `window.state` event after changing `layout` by hand.
@@ -2219,7 +2171,6 @@ export class TestHost {
      * await host.settle();
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     setSource(patch) {
@@ -2254,7 +2205,6 @@ export class TestHost {
      * assert.equal(plugin.window.state.maximized, true);
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     setMainWindow(patch) {
@@ -2265,8 +2215,6 @@ export class TestHost {
      * popped-out columns (`false`): the attached sidebar and the adjust column,
      * those switched on, pop out or collapse (reference §6.3). No effect outside
      * fullscreen, or on a column switched off or floating.
-     *
-     * @capability None.
      *
      * @example Pop the sidebar out in fullscreen
      * The pointer reaches the right edge in fullscreen and the attached
@@ -2317,7 +2265,6 @@ export class TestHost {
      * assert.equal(plugin.player.isCurrent(before), false);
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     openElsewhere(source, phase = "ready") {
@@ -2351,7 +2298,6 @@ export class TestHost {
      * host.failStream(producer!.id, "producer transport closed");
      * ```
      *
-     * @capability None.
      * @since 1.5.7
      */
     failStream(producerId, message) {
@@ -2387,7 +2333,6 @@ export class TestHost {
      * await host.press("Delete", { panel: true }); // while the panel has focus
      * ```
      *
-     * @capability None.
      * @throws `command` (rejects) A `HostError`: the command that would run is
      *   busy (the player only logs this).
      * @throws `Error` (rejects) Nothing is bound to the key.
@@ -2440,7 +2385,6 @@ export class TestHost {
      * assert.equal(host.window("picture").props["brightness-down"], "⇧W");
      * ```
      *
-     * @capability None.
      * @throws `Error` `command` is neither a command of the plugin nor a
      *   core command.
      * @since 1.6.6
@@ -2493,7 +2437,7 @@ export class TestHost {
      * // ---cut---
      * host.candidates.set("/downloads/someone.demo-1.0.0.vxp", {
      *   id: "someone.demo", version: "1.0.0", apiVersion: "vestra/1",
-     *   entry: "main.js", capabilities: [],
+     *   entry: "main.js",
      * });
      * ```
      */
@@ -2515,7 +2459,6 @@ export class TestHost {
      * host.installKeepsDisabled = false; // every install runs
      * ```
      *
-     * @capability None.
      * @since 1.5.55
      */
     installKeepsDisabled = true;
@@ -2544,7 +2487,6 @@ export class TestHost {
      * assert.equal(host.markdown(rows[0]!.body)?.text, "**Hello**");
      * ```
      *
-     * @capability None.
      * @since 1.1.0
      */
     markdown(value) {
@@ -2562,8 +2504,6 @@ export class TestHost {
     /**
      * Replace the plugin list and push `packages.changed` (another plugin
      * started, stopped, was installed or removed).
-     *
-     * @capability None.
      *
      * @example Simulate another plugin starting
      * The plugin's store window hears that a plugin is running now. The list
@@ -2587,7 +2527,6 @@ export class TestHost {
      * asks this plugin's sequence provider. Rejects with `unavailable` when
      * there is no provider or its flag is false.
      *
-     * @capability None.
      * @throws `unavailable` (rejects) A `HostError`: there is no sequence
      *   provider, or its flag is false.
      *
@@ -2612,8 +2551,6 @@ export class TestHost {
     /**
      * The plugin's command with this local id. Throws when it is not
      * registered (never added, or disposed).
-     *
-     * @capability None.
      *
      * @example Read a command's state after a change
      * The test checks that Export becomes enabled once a file is ready. The
@@ -2683,7 +2620,6 @@ export class TestHost {
      * assert.equal(host.window("picture").props["brightness"], 0);
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     window(id) {
@@ -2713,7 +2649,6 @@ export class TestHost {
      * await host.settle();
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     mounted(slot) {
@@ -2733,7 +2668,6 @@ export class TestHost {
      * assert.deepEqual(host.sent("osd.show").at(-1), { text: "Saved" });
      * ```
      *
-     * @capability None.
      * @since 1.0.0
      */
     sent(method) {
@@ -2792,7 +2726,6 @@ export class TestHost {
      * assert.equal(importWindow.props["status-text"], expected);
      * ```
      *
-     * @capability None.
      * @throws Never.
      * @since 1.0.0
      */
@@ -2805,8 +2738,6 @@ export class TestHost {
      * throws: a directory that a closing file handle still holds (Windows:
      * `ENOTEMPTY`, `EBUSY`, `EPERM`) is retried for about 1.5 s, then left
      * for the system to clean, with a warning on the console.
-     *
-     * @capability None.
      *
      * @example Clean up a host that was never started
      * A test that made a host but failed before `startPlugin` removes the
@@ -2840,7 +2771,6 @@ export class TestHost {
      * and start it again on its next use. Filter chains, streams, jobs and the
      * like (which also keep a plugin running) are not listed.
      *
-     * @capability None.
      * @since 1.5.40
      *
      * @example Check that a plugin can be stopped while idle
@@ -2880,18 +2810,16 @@ export class TestHost {
  * registration started during activation (commands, panels, resolvers, ...),
  * then wait until the host is idle.
  *
- * The manifest id and capabilities come from `directory/manifest.json`
- * unless `capabilities` is given; then `id` (default `"test.plugin"`) and
- * `capabilities` are used and no manifest is read. The test host does not
- * apply the player's capability table to every request: the members that
- * check a capability on the plugin's side (`plugin.media.sources` and its
- * `open`, which also needs `playback.control`, `plugin.secrets`, timeline
- * marks, video shaders and views, among others) fail with `capability` as in
- * the player, but a call the player refuses for an undeclared capability can
- * succeed here. `vestra-plugin check` (and the TypeScript plugin) reports
- * those calls from the sources.
+ * The manifest id comes from `directory/manifest.json` unless `id` is
+ * given; then no manifest is read (and without `directory` none is read
+ * either: the id is `"test.plugin"`). Nothing in the manifest changes how
+ * the plugin runs: event delivery and the start-up reads are the plugin's
+ * own calls (`plugin.player.subscribe()`, `plugin.player.read()`), as in
+ * the player.
  *
- * Rejects when `manifest.json` cannot be read or parsed, when `activate`
+ * Rejects when `manifest.json` cannot be read or parsed, when it still has
+ * `capabilities` (removed in 1.9.0; the message says what to call
+ * instead), when `activate`
  * throws, or when a registration made during activation fails (for example
  * `limit`, `conflict`, `invalid`). Stricter than the player's runner for
  * commands: there the SDK logs a command declaration the player refuses during
@@ -2953,7 +2881,6 @@ export class TestHost {
  * player's runner does and returns the host to drive, the `plugin` object
  * to call directly, and `stop` to end it like the player.
  *
- * @capability None.
  * @see [Test a plugin](../../../docs/guides/testing.md)
  * @since 1.0.0
  * @category Testing
@@ -2965,16 +2892,15 @@ export async function startPlugin(activate, options = {}) {
     const directory = options.directory instanceof URL
         ? fileURLToPath(options.directory)
         : (options.directory ?? process.cwd());
-    let manifest = {
-        id: options.id ?? "test.plugin",
-        capabilities: options.capabilities ?? [],
-    };
-    if (options.directory && !options.capabilities) {
+    let manifest = { id: options.id ?? "test.plugin" };
+    if (options.directory && options.id === undefined) {
         const read = JSON.parse(readFileSync(join(directory, "manifest.json"), "utf8"));
-        manifest = { id: read.id, capabilities: read.capabilities };
+        // As `vestra-plugin check` and the player: the field is gone.
+        if (read && typeof read === "object" && "capabilities" in read)
+            throw new Error(CAPABILITIES_REMOVED);
+        manifest = { id: read.id };
     }
     host.manifestId = manifest.id;
-    pluginCapabilities.set(host, manifest.capabilities);
     if (options.builtin)
         host.builtin = true;
     host.loadCatalog(directory);

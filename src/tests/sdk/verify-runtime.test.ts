@@ -10,6 +10,7 @@ import { test } from "node:test";
 import * as tool from "../../scripts/verify-runtime.mjs";
 
 const {
+  compilePattern,
   differences,
   normaliseStep,
   normaliser,
@@ -315,6 +316,78 @@ test("a step may leave the shell's compiles out, or keep the first and last", ()
   assert.deepEqual(three, two);
   assert.deepEqual(ends([compile("a:sidebar")]), [
     "shell: first compile with 1 panel(s) [a:sidebar] in N ms at N ms (ready)",
+  ]);
+});
+
+test("per-panel compiles are a section of their own, reported apart from the result", () => {
+  // Player 0.9.0 (SDK 1.9.0 C1): each panel's file compiles on its own;
+  // they arrive in any order and are compared sorted, without times.
+  const panel = (what: string, ms: number) =>
+    `panel: compile [${what}] in ${ms}.5 ms at +${ms}00 ms (ready)`;
+  const withPanels = (build: Build, lines: string[]) => {
+    const base = raw(build);
+    return normaliseStep(
+      {
+        ...base,
+        stderr: [...base.stderr.split("\r\n"), ...lines]
+          .filter((line) => !line.startsWith("shell: compile "))
+          .join("\r\n"),
+      },
+      context(build),
+    );
+  };
+  const b = withPanels(B, [
+    panel("vestra.video:adjust", 222),
+    panel("vestra.b:bottom", 67),
+    panel("vestra.a:sidebar", 65),
+  ]);
+  assert.deepEqual(b.panels.compiles, [
+    "panel: compile [vestra.a:sidebar] in N ms at N ms (ready)",
+    "panel: compile [vestra.b:bottom] in N ms at N ms (ready)",
+    "panel: compile [vestra.video:adjust] in N ms at N ms (ready)",
+  ]);
+  // Not among the host's or a plugin's lines.
+  assert.ok(!b.host.log.some((line: string) => line.includes("compile")));
+  for (const step of Object.values(b.plugins) as { log: string[] }[])
+    assert.ok(!step.log.some((line) => line.includes("compile")));
+  // Same panels in another order and with other times: equal.
+  const again = withPanels(A, [
+    panel("vestra.a:sidebar", 90),
+    panel("vestra.video:adjust", 300),
+    panel("vestra.b:bottom", 80),
+  ]);
+  assert.deepEqual(differences(again, b), []);
+  // A player before it (one shell compile) against per-panel compiles: the
+  // compile pattern, apart from the result; nothing else differs.
+  const lines = differences(
+    { file: { open: normaliseStep(raw(A), context(A)) } },
+    { file: { open: b } },
+  );
+  const { compiles, rest } = compilePattern(lines);
+  assert.deepEqual(rest, []);
+  assert.deepEqual(compiles, [
+    "file › open › host › log: only in A: shell: compile with 2 panel(s) [vestra.a:sidebar, vestra.b:bottom] in N ms at N ms (ready)",
+    "file › open › panels › compiles: only in B: panel: compile [vestra.a:sidebar] in N ms at N ms (ready)",
+    "file › open › panels › compiles: only in B: panel: compile [vestra.b:bottom] in N ms at N ms (ready)",
+    "file › open › panels › compiles: only in B: panel: compile [vestra.video:adjust] in N ms at N ms (ready)",
+  ]);
+  // A baseline normalised before the section existed: still the pattern.
+  const { panels: _panels, ...old } = normaliseStep(raw(A), context(A));
+  const fromOld = compilePattern(
+    differences({ file: { open: old } }, { file: { open: b } }),
+  );
+  assert.equal(fromOld.compiles.length, 2);
+  assert.deepEqual(fromOld.rest, []);
+  // Any other difference still counts.
+  const title = compilePattern(
+    differences(
+      { idle: { first: b } },
+      { idle: { first: withPanels(B, []) } },
+    ).concat(["idle › first › plugins › vestra.store › log: only in B: x"]),
+  );
+  assert.equal(title.compiles.length, 3);
+  assert.deepEqual(title.rest, [
+    "idle › first › plugins › vestra.store › log: only in B: x",
   ]);
 });
 

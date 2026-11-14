@@ -5038,7 +5038,7 @@ dependencies = [
 
 [[package]]
 name = "vestra-host"
-version = "0.8.4"
+version = "0.9.0"
 dependencies = [
  "anyhow",
  "arboard",
@@ -5047,6 +5047,7 @@ dependencies = [
  "cpal",
  "dunce",
  "getrandom 0.3.4",
+ "i-slint-core",
  "image",
  "keyring",
  "objc2 0.6.5",

@@ -4,10 +4,14 @@
  * its scan found in the code (`scan: { uses: [...] }`). They are all the
  * store tells about what a plugin does with the player: the install
  * confirmation and the window's Permissions list show them in plain words,
- * and without a scan (an older index, a package from a file or a link) show
- * nothing; the capabilities a package declares are never shown. Every
- * install confirmation says that plugins may read files or use the network.
- * The update confirmation and the window's notice compare scans only.
+ * and without a scan (an older index) show nothing; the capabilities a
+ * package declares are never shown. Every install confirmation says that
+ * plugins may read files or use the network. The update confirmation and
+ * the window's notice compare scans only. Only the official repository's
+ * scan counts: a package from another repository, a file or a link gets a
+ * note that it is not from the official repository and its permissions were
+ * not checked, in its install and update confirmations alike (user ruling
+ * 2026-11-13), and another repository's scan is shown nowhere.
  */
 import assert from "node:assert/strict";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -22,6 +26,8 @@ import { banners, BUILTIN, choose, props, FakeNet, info, OFFICIAL, openStore, pu
 
 const SENTENCE = "插件可能读取你的文件或联网。";
 const NONE = "它不使用播放器的任何敏感功能。";
+/** Any package not from the official repository (user ruling 2026-11-13), in place of a scan. */
+const UNCHECKED = "它不是来自官方仓库，因此其权限未经检查。";
 const PLAYER = "修改你的播放器设置（快捷键、主题、语言、渲染方式），或直接控制播放引擎";
 const PLUGINS = "安装、卸载、停用或重新加载其它插件，或运行任意命令";
 
@@ -96,6 +102,19 @@ test("index: a version's scan.uses is read; absent or malformed is no scan, and 
     assert.equal(scanOf({ scan: bad }), null, JSON.stringify(bad));
 });
 
+test("a version's capabilities is legacy data (SDK 1.9.0): optional, accepted in any form, never read", () => {
+  const versionOf = (entry: Record<string, unknown>) =>
+    parseIndex(JSON.stringify({ schema: 1, plugins: [{ id: "a.one", versions: [entry] }] })).index.plugins[0]?.versions[0];
+  const { capabilities: _, ...without } = version({});
+  const entries: Record<string, unknown>[] = [without, version({}), version({ capabilities: "commands" }), version({ capabilities: [1] }), version({ capabilities: null })];
+  for (const entry of entries) {
+    const parsed = versionOf(entry);
+    assert.ok(parsed, JSON.stringify(entry.capabilities));
+    assert.equal(parsed.version, "1.0.0");
+    assert.ok(!("capabilities" in parsed), JSON.stringify(entry.capabilities));
+  }
+});
+
 test("labels: mpv is risky; the eight categories in the scan's order, an unknown word named last", () => {
   assert.deepEqual(CAPABILITIES.mpv, {
     text: "Control the playback engine (mpv) directly: send its commands and change its options",
@@ -110,12 +129,13 @@ test("labels: mpv is risky; the eight categories in the scan's order, an unknown
   assert.deepEqual(categories([]), []);
 });
 
-test("the categories, the mpv capability and the two sentences are translated in all six languages", () => {
+test("the categories, the mpv capability and the three sentences are translated in all six languages", () => {
   const texts = [
     ...Object.values(CATEGORIES),
     CAPABILITIES.mpv.text,
     "Plugins may read your files or use the network.",
     "It uses none of the player's sensitive features.",
+    "It is not from the official repository, so its permissions were not checked.",
   ];
   const pot = readFileSync(new URL("../locales/messages.pot", import.meta.url), "utf8");
   for (const text of texts) assert.ok(pot.includes(`msgid ${JSON.stringify(text)}\n`), `messages.pot: ${text}`);
@@ -194,7 +214,7 @@ test("official install without a scan: only the sentence; no list in the confirm
   }
 });
 
-test("unofficial install without a scan: the repository's warning alone", async () => {
+test("unofficial install without a scan: the repository's warning, then the note that its permissions were not checked", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   publish(net, THIRD, [{ id: "someone.viz", name: "Viz", versions: [{ version: "1.0.0", capabilities: ["commands", "secrets"] }] }]);
@@ -207,7 +227,12 @@ test("unofficial install without a scan: the repository's warning alone", async 
     const detail = String((await confirmation(host, "Viz", "install")).detail);
     assert.match(detail, /^仓库：/);
     assert.match(detail, /这个仓库未经 Vestra Player 审核/);
-    assert.ok(!detail.includes("\n"), "one paragraph: nothing after the warning");
+    const paragraphs = detail.split("\n\n");
+    assert.equal(paragraphs.length, 2, "two paragraphs: the warning, then the note");
+    assert.ok(!paragraphs[0]!.includes("\n"), "the warning is one paragraph");
+    assert.equal(paragraphs[1], UNCHECKED);
+    // The repository's warning says files and network: not a second time.
+    assert.equal(detail.split("读取你的文件").length, 2, "said once");
     assert.deepEqual(bullets(detail), []);
     assert.deepEqual(listed(host), []);
   } finally {
@@ -219,7 +244,7 @@ test("replacing a file install from an unofficial repository without a scan: no 
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   publish(net, THIRD, [{ id: "someone.viz", name: "Viz", versions: [{ version: "1.0.0", capabilities: ["commands", "secrets"] }] }]);
-  const { host, store, stop } = await start({ net, packages: [BUILTIN, info("someone.viz", { version: "0.9.0", capabilities: ["commands"] })] });
+  const { host, store, stop } = await start({ net, packages: [BUILTIN, info("someone.viz", { version: "0.9.0" })] });
   try {
     store.settings.save({ ...store.settings.value, repos: [THIRD] });
     store.repos.sync([THIRD]);
@@ -235,12 +260,14 @@ test("replacing a file install from an unofficial repository without a scan: no 
     assert.match(detail, /这个仓库未经 Vestra Player 审核/);
     assert.deepEqual(bullets(detail), []);
     assert.ok(!detail.endsWith("\n") && !detail.includes("\n\n\n"), detail);
+    assert.ok(detail.endsWith(`。\n\n${UNCHECKED}`), detail);
+    assert.equal(detail.split("读取你的文件").length, 2, "said once");
   } finally {
     await stop();
   }
 });
 
-test("unofficial install with a scan: the repository's own warning says files and network once; the categories follow", async () => {
+test("unofficial install with a scan: the repository's own scan is not shown; its warning says files and network once, the note follows", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   publishScanned(
@@ -261,7 +288,12 @@ test("unofficial install with a scan: the repository's own warning says files an
     assert.match(detail, /这个仓库未经 Vestra Player 审核/);
     // The repository's warning says it (the same words in Chinese): not a second time.
     assert.equal(detail.split("读取你的文件").length, 2, "said once");
-    assert.deepEqual(bullets(detail), ["· 在系统钥匙串保存登录信息", "· 未知权限：future"]);
+    // Its own scan is its claim: neither listed nor said to be empty; the note instead.
+    assert.deepEqual(bullets(detail), []);
+    assert.ok(!detail.includes("钥匙串") && !detail.includes("future") && !detail.includes(NONE), detail);
+    assert.ok(detail.endsWith(`。\n\n${UNCHECKED}`), detail);
+    assert.deepEqual(listed(host), [], "the window lists nothing either");
+    assert.equal(props(host)["scanned"], false, "no Permissions heading");
   } finally {
     await stop();
   }
@@ -276,7 +308,7 @@ const UPDATE: PluginSpec = {
     { version: "0.2.0", capabilities: ["commands"] },
   ],
 };
-const INSTALLED = info("zysilm.youtube", { version: "0.2.0", capabilities: ["commands"], source: { kind: "repository", url: OFFICIAL } });
+const INSTALLED = info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } });
 
 test("update, both versions scanned: a new category is named, by the window's notice and the confirmation alike", async () => {
   const net = new FakeNet();
@@ -388,7 +420,7 @@ test("update from a version without a scan to a scanned one: its categories are 
     ],
   };
   publishScanned(net, OFFICIAL, [themed], { "zysilm.youtube 0.3.0": ["player"] });
-  const installed = info("zysilm.youtube", { version: "0.2.0", capabilities: ["commands", "ui.theme"], source: { kind: "repository", url: OFFICIAL } });
+  const installed = info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: OFFICIAL } });
   const { host, stop } = await ready(net, [BUILTIN, installed]);
   try {
     await choose(host, "YouTube");
@@ -401,20 +433,20 @@ test("update from a version without a scan to a scanned one: its categories are 
   }
 });
 
-test("a package from a file: the sentence and no list, whatever it declares", async () => {
+test("a package from a file: the sentence, the note and no list, whatever it declares", async () => {
   const scratch = mkdtempSync(join(tmpdir(), "vestra-store-scan-"));
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   const { host, store, stop } = await start({ net });
   try {
     const risky = join(scratch, "a.vxp");
-    writeFileSync(risky, vxp({ id: "someone.a", version: "1.0.0", name: "A", capabilities: ["commands", "bindings.manage", "playback.read"] }));
+    writeFileSync(risky, vxp({ id: "someone.a", version: "1.0.0", name: "A" }));
     host.dialogAnswers.push(yes);
     await host.drop([risky]);
     await until(host, () => host.confirms.length === 1 && !store.busy, "confirmation");
     const detail = String(host.confirmTexts[0]!.detail);
     assert.match(detail, /^来自文件 a\.vxp，未经任何仓库审核，也不会自动更新/);
-    assert.ok(detail.endsWith(`\n\n${SENTENCE}`), detail);
+    assert.ok(detail.endsWith(`。\n\n${SENTENCE}\n\n${UNCHECKED}`), detail);
     assert.deepEqual(bullets(detail), []);
     // Installed from a file: no index entry, so the window lists nothing.
     await until(host, () => store.selected === "\nsomeone.a", "selected");
@@ -422,5 +454,133 @@ test("a package from a file: the sentence and no list, whatever it declares", as
   } finally {
     await stop();
     rmSync(scratch, { recursive: true, force: true });
+  }
+});
+
+/** The store with the unofficial repository THIRD added (its index already published). */
+async function withThird(net: FakeNet, packages = [BUILTIN]) {
+  const started = await start({ net, packages });
+  started.store.settings.save({ ...started.store.settings.value, repos: [THIRD] });
+  started.store.repos.sync([THIRD]);
+  await openStore(started.host);
+  await until(started.host, () => started.store.items.some((i) => i.repo?.url === THIRD && i.entry !== null), "rows");
+  return started;
+}
+
+test("unofficial update, both versions scanned with a new category: asks plainly with the sentence and the note; no notice, no list", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publishScanned(net, THIRD, [UPDATE], { "zysilm.youtube 0.3.0": ["player", "clipboard"], "zysilm.youtube 0.2.0": ["clipboard"] });
+  const installed = info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: THIRD } });
+  const { host, stop } = await withThird(net, [BUILTIN, installed]);
+  try {
+    await choose(host, "YouTube");
+    assert.deepEqual(notice(host), [], "the repository's scans are not compared");
+    assert.deepEqual(listed(host), []);
+    assert.equal(props(host)["scanned"], false);
+    const confirm = await confirmation(host, "YouTube", "update");
+    assert.equal(confirm.message, "更新「YouTube」到 0.3.0？");
+    assert.equal(confirm.detail, `当前 0.2.0。\n\n${SENTENCE}\n\n${UNCHECKED}`);
+    await until(host, () => installs(host).length === 1, "update");
+  } finally {
+    await stop();
+  }
+});
+
+test("unofficial update without scans: the same sentence and note", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publish(net, THIRD, [UPDATE]);
+  const installed = info("zysilm.youtube", { version: "0.2.0", source: { kind: "repository", url: THIRD } });
+  const { host, stop } = await withThird(net, [BUILTIN, installed]);
+  try {
+    const confirm = await confirmation(host, "YouTube", "update");
+    assert.equal(confirm.message, "更新「YouTube」到 0.3.0？");
+    assert.equal(confirm.detail, `当前 0.2.0。\n\n${SENTENCE}\n\n${UNCHECKED}`);
+  } finally {
+    await stop();
+  }
+});
+
+test("unofficial reinstall: the sentence and the note after the current version", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publishScanned(net, THIRD, [UPDATE], { "zysilm.youtube 0.3.0": ["player"] });
+  const installed = info("zysilm.youtube", { version: "0.3.0", source: { kind: "repository", url: THIRD } });
+  const { host, store, stop } = await withThird(net, [BUILTIN, installed]);
+  try {
+    const item = store.items.find((i) => i.id === "zysilm.youtube")!;
+    host.dialogAnswers.push(yes);
+    await installFromRepository(store, item, item.entry!.versions.find((v) => v.version === "0.3.0")!);
+    const confirm = host.confirmTexts.at(-1)!;
+    assert.equal(confirm.message, "安装「YouTube」0.3.0（重新安装）？");
+    assert.equal(confirm.detail, `当前 0.3.0。\n\n${SENTENCE}\n\n${UNCHECKED}`);
+  } finally {
+    await stop();
+  }
+});
+
+test("replacing an official install with an unofficial repository's scanned version: the warning and the note, no list", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  publishScanned(net, THIRD, [{ id: "someone.viz", name: "Viz", versions: [{ version: "1.0.0" }] }], { "someone.viz 1.0.0": ["credentials"] });
+  const installed = info("someone.viz", { version: "0.9.0", source: { kind: "repository", url: OFFICIAL } });
+  const { host, store, stop } = await withThird(net, [BUILTIN, installed]);
+  try {
+    const item = store.items.find((i) => i.repo?.url === THIRD && i.entry !== null)!;
+    host.dialogAnswers.push(yes);
+    await installFromRepository(store, item, item.entry!.versions[0]!);
+    const confirm = host.confirmTexts.at(-1)!;
+    assert.equal(confirm.message, "替换已安装的「Viz」？");
+    const detail = String(confirm.detail);
+    assert.match(detail, /将安装非官方仓库的 1\.0\.0。\n\n仓库：[^\n]*\n\n/);
+    assert.ok(detail.endsWith(`。\n\n${UNCHECKED}`), detail);
+    assert.deepEqual(bullets(detail), []);
+  } finally {
+    await stop();
+  }
+});
+
+test("a package from a link: the sentence and the note", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, []);
+  net.route("https://example.org/x-1.0.0.vxp", { body: vxp({ id: "someone.x", version: "1.0.0", name: "X" }) });
+  const { host, store, stop } = await start({ net });
+  try {
+    await host.command("open").run();
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("linkAccepted", "https://example.org/x-1.0.0.vxp");
+    await until(host, () => installs(host).length === 1 && !store.busy, "install");
+    const detail = String(host.confirmTexts.at(-1)!.detail);
+    assert.match(detail, /^来自链接 https:\/\/example\.org\/x-1\.0\.0\.vxp/);
+    assert.ok(detail.endsWith(`。\n\n${SENTENCE}\n\n${UNCHECKED}`), detail);
+    assert.deepEqual(bullets(detail), []);
+  } finally {
+    await stop();
+  }
+});
+
+test("official confirmations carry no note: install, replace and update", async () => {
+  const net = new FakeNet();
+  publishScanned(
+    net,
+    OFFICIAL,
+    [UPDATE, { id: "a.scanned", name: "Scanned", author: "zysilm", versions: [{ version: "1.0.0" }] }],
+    { "zysilm.youtube 0.3.0": ["player"], "a.scanned 1.0.0": [] },
+  );
+  // Installed from a file (info's default source): installing the official one replaces it.
+  const fromFile = info("a.scanned", { version: "0.9.0" });
+  const { host, store, stop } = await ready(net, [BUILTIN, INSTALLED, fromFile]);
+  try {
+    const update = await confirmation(host, "YouTube", "update");
+    assert.equal(update.detail, `新增：\n· ${PLAYER}\n\n当前 0.2.0。`);
+    const item = store.items.find((i) => i.id === "a.scanned" && i.entry !== null)!;
+    host.dialogAnswers.push(yes);
+    await installFromRepository(store, item, item.entry!.versions[0]!);
+    const replace = String(host.confirmTexts.at(-1)!.detail);
+    assert.ok(replace.endsWith(`将安装官方仓库的 1.0.0。\n\n${SENTENCE}\n\n${NONE}`), replace);
+    for (const confirm of host.confirmTexts) assert.ok(!String(confirm.detail).includes(UNCHECKED), String(confirm.detail));
+  } finally {
+    await stop();
   }
 });

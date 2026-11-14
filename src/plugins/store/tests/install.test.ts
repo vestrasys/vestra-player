@@ -113,18 +113,19 @@ for (const [what, served, text] of [
   });
 }
 
-test("a package that asks for more than its entry lists is not installed", async () => {
+test("an entry's legacy capabilities are never compared with the package (SDK 1.9.0): it installs", async () => {
   const net = new FakeNet();
-  publish(net, OFFICIAL, [
-    { ...YT, versions: [{ version: "0.2.0", capabilities: ["commands"], packageCapabilities: ["commands", "secrets"] }] },
-  ]);
-  const { host, stop } = await ready(net);
+  publish(net, OFFICIAL, [{ ...YT, versions: [{ version: "0.2.0", capabilities: ["commands", "secrets"] }] }]);
+  const { host, store, stop } = await ready(net);
   try {
     await choose(host, "YouTube");
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", "install");
-    await until(host, () => host.osd.includes("插件包与仓库描述不符（权限），未安装"));
-    assert.equal(installs(host).length, 0);
+    await until(host, () => installs(host).length === 1, "install");
+    await until(host, () => host.osd.includes("已安装 YouTube 0.2.0"), "osd");
+    await until(host, () => !store.busy);
+    assert.ok(!host.osd.some((line) => line.includes("插件包与仓库描述不符")), host.osd.join(" | "));
+    assert.doesNotMatch(String(host.confirmTexts.at(-1)!.detail), /· 在系统钥匙串保存登录信息/);
   } finally {
     await stop();
   }
@@ -291,7 +292,6 @@ test("update and uninstall from the same repository; no rollback and no older ve
   ]);
   const installed = info("zysilm.youtube", {
     version: "0.2.0",
-    capabilities: ["commands"],
     source: { kind: "repository", url: OFFICIAL },
   });
   const { host, store, stop } = await ready(net, [BUILTIN, installed]);
@@ -360,7 +360,6 @@ test("older player: updating a disabled plugin keeps it disabled (VS Code); a fa
   const installed = info("zysilm.youtube", {
     version: "0.2.0",
     state: "disabled",
-    capabilities: ["commands"],
     source: { kind: "repository", url: OFFICIAL },
   });
   const { host, store, stop } = await ready(net, [BUILTIN, installed]);
@@ -471,7 +470,6 @@ test("player 0.6.4 (keeps the disabled flag): updating a disabled plugin keeps i
   const installed = info("zysilm.youtube", {
     version: "0.2.0",
     state: "disabled",
-    capabilities: ["commands"],
     source: { kind: "repository", url: OFFICIAL },
   });
   const { host, store, stop } = await ready(net, [BUILTIN, installed]);

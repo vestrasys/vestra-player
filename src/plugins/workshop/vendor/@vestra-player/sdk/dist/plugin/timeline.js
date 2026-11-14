@@ -51,8 +51,8 @@ const viewRanges = (ranges) => Object.freeze(ranges.map((range) => Object.freeze
     plugin: range.plugin,
 })));
 /**
- * One per plugin: read before activation (with `playback.read`), then kept
- * current from `timeline.changed` (with `events`) once the plugin uses it
+ * One per plugin: read by `plugin.player.read()`, then kept
+ * current from `timeline.changed` (after `plugin.player.subscribe()`) once the plugin uses it
  * (or listens to that event with `player.on`).
  */
 export class TimelineService {
@@ -63,10 +63,8 @@ export class TimelineService {
     layer = false;
     constructor(runtime) {
         this.#runtime = runtime;
-    }
-    async init() {
-        if (this.#runtime.can("playback.read"))
-            await this.read();
+        // `plugin.player.read()` reads the lists through the connection.
+        runtime.rereads.set("timeline.changed", () => this.read());
     }
     start() {
         if (this.#started)
@@ -119,8 +117,6 @@ export function timeline(scope) {
         layer() {
             if (service().layer)
                 throw new Error("a plugin has one timeline layer; reuse it");
-            if (!scope.runtime.can("timeline.marks"))
-                throw failure("capability", "timeline.marks must be declared in manifest");
             service().layer = true;
             return new Layer(scope);
         },

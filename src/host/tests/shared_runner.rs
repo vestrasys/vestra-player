@@ -9,6 +9,8 @@
 use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::process::Command;
+#[path = "explicit/mod.rs"]
+mod explicit;
 
 /// `package_stage::read_tree`'s digest (also `stage-plugins.mjs`
 /// `packageDigest`), over a flat fixture.
@@ -52,19 +54,22 @@ fn builtin_with(
         (
             "manifest.json",
             serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-                "entry":"main.js","capabilities":capabilities})
+                "entry":"main.js"})
             .to_string(),
         ),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
         (
             "main.js",
-            format!(
-                "export default async function activate(plugin) {{\n\
+            explicit::main(
+                &capabilities,
+                &format!(
+                    "export default async function activate(plugin) {{\n\
                  plugin.player.onChange(() => {{}});\n\
                  const n = ((await plugin.storage.session.get(\"starts\")) ?? 0) + 1;\n\
                  await plugin.storage.session.set(\"starts\", n);\n\
                  console.error(`{id} start ${{n}} pid ${{process.pid}}`);\n\
                  {body}\n}}\n"
+                ),
             ),
         ),
     ];
@@ -414,11 +419,14 @@ const RESIDENT_CAPABILITIES: [&str; 2] = ["events", "playback.read"];
 /// process, never the shared runner; resident (`resident`).
 fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, main: String) {
     let manifest = serde_json::json!({"id":id,"version":"1.0.0","apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":RESIDENT_CAPABILITIES});
+        "entry":"main.js"});
     let files = [
         ("manifest.json", manifest.to_string()),
         ("package.json", r#"{"type":"module"}"#.to_owned()),
-        ("main.js", resident(&main)),
+        (
+            "main.js",
+            explicit::main(&RESIDENT_CAPABILITIES, &resident(&main)),
+        ),
     ];
     let directory = store.join("packages").join(digest(&files));
     std::fs::create_dir_all(&directory).unwrap();
@@ -438,10 +446,14 @@ fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, ma
 fn candidate(directory: &Path, id: &str, version: &str, main: String) -> String {
     std::fs::create_dir_all(directory).unwrap();
     let manifest = serde_json::json!({"id":id,"version":version,"apiVersion":"vestra/1",
-        "entry":"main.js","capabilities":RESIDENT_CAPABILITIES});
+        "entry":"main.js"});
     std::fs::write(directory.join("manifest.json"), manifest.to_string()).unwrap();
     std::fs::write(directory.join("package.json"), r#"{"type":"module"}"#).unwrap();
-    std::fs::write(directory.join("main.js"), resident(&main)).unwrap();
+    std::fs::write(
+        directory.join("main.js"),
+        explicit::main(&RESIDENT_CAPABILITIES, &resident(&main)),
+    )
+    .unwrap();
     serde_json::to_string(&directory.to_string_lossy()).unwrap()
 }
 

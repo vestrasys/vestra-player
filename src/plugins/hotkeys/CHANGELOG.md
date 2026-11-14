@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.13
+
+- Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. Nothing replaces them: none of its declarations changed how it ran (its command keys start on first use). Behaviour is unchanged. Who must change: nobody.
+
 ## 0.1.12
 
 - Menu sweep (menu redesign §4): Settings ▸ Keyboard Shortcuts…, Mouse… and Ignore Default Shortcuts leave the right-click menu and are in the command palette only ("Settings: …"), with ids, orders and the checked state unchanged; the options window's Keys and Mouse pages are unchanged. Who must change: nobody.

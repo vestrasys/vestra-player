@@ -464,6 +464,7 @@ fn player() -> Result<()> {
         confirm_open: false,
         shell: None,
         mounts: BTreeMap::new(),
+        panel_plugins: Default::default(),
         mount_queue: std::collections::VecDeque::new(),
         preparing: None,
         mount_singly: 0,
@@ -492,12 +493,10 @@ fn player() -> Result<()> {
         menu_open: false,
         title_strip: Default::default(),
         columns: Default::default(),
-        shell_specs: Vec::new(),
-        shell_compiled: BTreeMap::new(),
+        panels: Default::default(),
+        compiled_now: Default::default(),
         restarts: Default::default(),
-        shell_refresh: false,
         // Headless runs mount nothing.
-        startup_mounted: headless,
         startup_panels: headless,
         tabs_failed: Default::default(),
         bottom_shown: true,
@@ -733,7 +732,9 @@ fn player() -> Result<()> {
         // Windows: no window opens white (cloaked until its first draw).
         platform::cloak_until_drawn();
         let native_before = platform::capture_windows().ok();
-        let window = composition::compile_json(&[], host.mount_events.clone(), 1)?;
+        // Compiled once for the run: every slot is a container, and the
+        // panels compile on their own when first shown (`ui/panels.rs`).
+        let window = composition::shell_in(None)?;
         let position = host.ui_state.state.window.map(|frame| {
             window.window().set_size(slint::LogicalSize::new(
                 frame.width.max(320.) as f32,
@@ -790,6 +791,7 @@ fn player() -> Result<()> {
             .and_then(|before| platform::associate_new(before).ok());
         let host = Rc::new(RefCell::new(host));
         host.borrow().bind_shell(&window, 1)?;
+        host.borrow().bind_tabs(&window, 1)?;
         host.borrow().bind_window_events(&window, 1);
         host.borrow_mut().theme_view(&window);
         host.borrow_mut().shell = Some(window.clone_strong());

@@ -1,16 +1,8 @@
 {
   "id": "vestra.window",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
-  "capabilities": [
-    "commands",
-    "events",
-    "playback.read",
-    "ui.osd",
-    "ui.settings",
-    "window.control"
-  ],
   "name": "Main Window",
   "author": "Vestra Player",
   "punchline": "Window sizes by video scale, always on top, mini size and picture-in-picture",

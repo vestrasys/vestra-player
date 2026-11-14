@@ -1,6 +1,6 @@
 [package]
 name = "vestra-host"
-version = "0.8.4"
+version = "0.9.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
@@ -33,6 +33,12 @@ slint = { version = "=1.18.1", default-features = false, features = ["std", "bac
 # The other features are slint-interpreter 1.18.1's `default` without
 # `accessibility` (see `slint` above).
 slint-interpreter = { version = "=1.18.1", default-features = false, features = ["backend-default", "renderer-femtovg", "renderer-software", "compat-1-2", "system-tray", "internal"] }
+# Per-panel compilation (ui/panels.rs): only to name `i_slint_core::InternalToken`
+# (`Compiler::compiler_configuration`, which enables Slint's experimental
+# `ComponentContainer` for the shell's own source, never for plugin files;
+# `CompilationResult::watch_paths`) and `component_factory::FactoryContext`.
+# Same pin as slint-interpreter: recheck on every Slint upgrade.
+i-slint-core = { version = "=1.18.1", default-features = false }
 rfd = "0.17.2"
 base64 = "=0.22.1"
 sha2 = "=0.10.9"

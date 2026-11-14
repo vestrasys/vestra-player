@@ -20,6 +20,7 @@ export const LANGUAGE_PAGE_ID = "language";
  * them, and they stay when this plugin stops.
  */
 export default async function activate(plugin: Plugin) {
+  plugin.player.subscribe(); // was "events"
   const { appearance } = plugin;
   plugin.onError((error) => {
     // i18n-ignore: the player's (or the SDK's) own message

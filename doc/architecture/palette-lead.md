@@ -1,4 +1,4 @@
-# Palette lead, `commands.run` and built-in-only capabilities (maintainers)
+# Palette lead, `commands.run` and the built-in-only requests (maintainers)
 
 Host side of Ask Vestra (design: `C:\vestra\design\ask-astra\PROPOSAL.md`, user decisions of
 2026-11-11). Ask Vestra itself is the built-in Vestra Player AI plugin's (`src/plugins/workshop`);
@@ -6,11 +6,12 @@ the host adds three general pieces that plugin is built from. Names are by what 
 Ask Vestra, so a calculator, a library search or a jump-to-time row can use them later (PROPOSAL
 §10).
 
-## 1. Built-in-only capabilities
+## 1. Built-in-only requests
 
-`Info::builtin_only` (`capabilities/mod.rs`, exported as `builtinOnly` in
-`src/host/capabilities.json` and the SDK's `CAPABILITY_INFO`) marks a capability only built-in
-plugins may use. Built-in means **by provenance**: `Host::is_builtin` (listed in `builtin.json`,
+`Info::builtin_only` (`capabilities/mod.rs`) marks an area of the API (`commands_run.rs`:
+`commands.list`, `commands.run`; `palette_lead.rs`: `palette.lead.*`) that only built-in
+plugins may use. Since player 0.9.0 (SDK 1.9.0) manifests declare nothing, so this is the only
+refusal by who is asking; until then these were the two built-in-only manifest capabilities. Built-in means **by provenance**: `Host::is_builtin` (listed in `builtin.json`,
 running from that directory, recorded built-in in the store). A manifest field or a load mode never
 makes a plugin built-in, so a development load of a built-in's id is refused too (PROPOSAL Q10 A).
 
@@ -18,26 +19,24 @@ Where it is checked:
 
 ```mermaid
 flowchart TB
-    R["request from a plugin"] --> D["Host::dispatch: route, declared check"]
-    D --> B{"needed capability builtin_only?"}
-    B -- "no" --> H["capability handle"]
+    R["request from a plugin"] --> D["Host::dispatch: route"]
+    D --> B{"its area builtin_only?"}
+    B -- "no" --> H["area handle"]
     B -- "yes, Host::is_builtin" --> H
     B -- "yes, not built-in" --> E["error capability: for built-in plugins only"]
-    P["recorded call at start-up"] --> RP["capabilities::replay: declared check"]
+    P["recorded call at start-up"] --> RP["capabilities::replay"]
     RP --> RB{"builtin_only and not is_builtin_package(origin)?"}
     RB -- "yes" --> E
-    RB -- "no" --> CR["capability replay"]
-    V["packages.validate / validateArchive"] --> VB{"manifest declares a builtin_only capability?"}
-    VB -- "yes" --> E
+    RB -- "no" --> CR["area replay"]
 ```
 
-`packages.validate` (`package_validate.rs`) validates only third-party packages (built-in ids are
-refused before), so a store or file install of a package declaring one fails there with
-`capability`. `vestra-plugin check` gets the same rule from the SDK's `CAPABILITY_INFO`.
+Until player 0.9.0 `packages.validate` also refused a third-party package whose manifest declared
+one of the two capabilities; with the field gone there is nothing to refuse at install, and the
+requests themselves are refused as above. TestHost refuses them the same way (`TestHost.builtin`).
 
-## 2. `commands.run` (risky, built-in only, residency none)
+## 2. `commands.run` (built-in only)
 
-`capabilities/commands_run.rs`. Store label "Run any player or plugin command".
+`capabilities/commands_run.rs`. Holds nothing for standby; in the scan's `plugins` category.
 
 | Method | Params | Result | Errors |
 | --- | --- | --- | --- |
@@ -105,7 +104,7 @@ refused before), so a store or file install of a package declaring one fails the
 - **Where the run is named**: when the caller holds the palette lead (its ticket is the lead's),
   the step goes to the status strip (§3.1): "i/n · <command label>" with `step`/`of`, the label
   alone without, the line filled to i/n (full for a lone command). Any other caller (none yet: both
-  capabilities are built-in only and only the lead mints tickets) gets the OSD line
+  are built-in only and only the lead mints tickets) gets the OSD line
   "<plugin> · <command label>" (or "<plugin> · i/n · <label>"). Either way the line shows before
   the command runs, and `commands.run: <id> ran <global> (strip: …)` (or `(osd: …)`) goes to
   stderr and `commands.run: <id> ran <global>` (with ` (step i/n)`) to the host log: ids only,
@@ -411,7 +410,7 @@ palettes, as the spec's `proposed/detail-*.png` do.
 
 Why both stay built-in only for now (PROPOSAL §10): one lead slot, the palette's most valuable
 row, and a third-party lead would see every query; running any plugin's command is a wider
-boundary than any other capability, and plugin processes are not sandboxed, so the boundary is the
+boundary than any other request, and plugin processes are not sandboxed, so the boundary is the
 player's (tickets, rates, confirmation, the line naming each run). Opening either needs the user's ruling.
 
 ## 4. Tests
@@ -420,8 +419,8 @@ player's (tickets, rates, confirmation, the line naming each run). Opening eithe
   ask first, trusted plugins, what "Don't ask again" offers, `step`/`of`, `then`, plan approvals,
   the sheet's reasons), `host/review_sheet.rs` (the guard, the question, the sheet's value, the
   checkbox's text; a confirmation's value and its checkbox answered with either button), `ui/ui_state.rs` (`trustedPlugins`: per caller, bounded, uninstall, reset, lenient
-  reading, round trip), `capabilities/palette_lead.rs` (parameters, the capability's flags),
-  `capabilities/mod.rs` (built-in-only refusal for live requests and replays, the JSON field),
+  reading, round trip), `capabilities/palette_lead.rs` (parameters, built-in only),
+  `capabilities/mod.rs` (built-in-only refusal for live requests and replays),
   `capabilities/palette_lead.rs` (`status.state`), `host/lead_strip.rs` (what the strip shows, end
   states' times, the shell value), `ui/command_palette.rs` (`names`, `aim`, `lead_shows_status`, no
   change without a lead), `ui/widgets_tests.rs` (the strip's sizes, presses, fade and animation; the sheet's size, keys,

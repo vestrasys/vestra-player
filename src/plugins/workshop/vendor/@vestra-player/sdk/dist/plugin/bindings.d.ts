@@ -76,7 +76,7 @@ export declare const BINDING_INPUTS: Readonly<{
 /** Throws `invalid` unless `text` is a canonical binding; returns it unchanged. */
 export declare function canonical(text: string): string;
 export declare function checkBindings(bindings: readonly string[]): string[];
-/** `plugin.bindings` (`bindings.manage`): the table and the user overlay. */
+/** `plugin.bindings`: the table and the user overlay. */
 export declare const bindingsApi: (scope: ScopeImpl) => Bindings;
 /**
  * How the player's menus write a canonical binding (`bindings.rs`
