@@ -124,8 +124,11 @@ impl Host {
             let key = notification.merge_key();
             let data = notification.data(&self.last_source);
             let message = json!({"event":triggers::EVENT,"data":data});
-            if let Err(why) = self.fire(&notification.plugin, key, message) {
-                self.triggers.undelivered(&notification.plugin, &data, why);
+            match self.fire(&notification.plugin, key, message) {
+                Ok(()) => self
+                    .triggers
+                    .delivered(&notification.plugin, &notification.trigger),
+                Err(why) => self.triggers.undelivered(&notification.plugin, &data, why),
             }
         }
         self.sync_trigger_watch();
@@ -149,8 +152,10 @@ impl Host {
             self.fire_to(pid, message);
             return Ok(());
         }
+        // A start without its process yet holds it under the holder it
+        // replaces, as `wake` does (`Supervisor::trigger_pid`).
         let pid = running
-            .or_else(|| self.supervisor.holder_of(plugin))
+            .or_else(|| self.supervisor.trigger_pid(plugin))
             .ok_or("it has no process to take it")?;
         let trigger = Trigger::event(key.clone(), message.clone());
         match self.supervisor.wake(pid, &trigger) {

@@ -168,6 +168,9 @@ struct Kept {
     /// A notification of it could not be delivered and "entered" went
     /// back (`undelivered`): the next `triggers.declare` evaluates it.
     retry: bool,
+    /// Its last notification could not be delivered and that was logged:
+    /// not again until one is (`delivered`).
+    untold: bool,
 }
 
 #[derive(Debug, Default)]
@@ -279,16 +282,18 @@ impl Triggers {
                 message: format!("a plugin keeps at most {MAX_TRIGGERS} trigger conditions"),
             });
         }
-        self.seq += 1;
-        let seq = self.seq;
         let groups = condition.groups();
         // A replaced range list for the same source (T6) whose position is
         // still in the very range it was entered with (the same start, end
         // and lead; its place may move, a list grows as a scan goes on) is
         // still entered: the replacement is no false-to-true edge, so no
-        // second `enter` for one range (T1). Anything else is entered anew
-        // by T3, without a `leave` for the old one.
-        let (entered, last_position) = entry
+        // second `enter` for one range (T1). It keeps its sequence number
+        // too: the last notification under it is the `enter` of that very
+        // range, which may still be on its way (on the pipe, or in the
+        // backlog of a plugin woken for it) and must not be dropped by the
+        // SDK as older than the answer. Anything else is entered anew by
+        // T3, without a `leave` for the old one, under a new number.
+        let carried = entry
             .kept
             .get(&trigger)
             .filter(|old| old.bound.is_some() && old.bound == bound)
@@ -303,9 +308,15 @@ impl Triggers {
                 (truth.holds
                     && before.lead == after.lead
                     && before.given.get(was) == after.given.get(now))
-                .then_some((Some(Some(now)), old.last_position))
-            })
-            .unwrap_or((None, None));
+                .then_some((now, old.seq))
+            });
+        let (entered, seq) = match carried {
+            Some((range, seq)) => (Some(Some(range)), seq),
+            None => {
+                self.seq += 1;
+                (None, self.seq)
+            }
+        };
         entry.kept.insert(
             trigger.clone(),
             Kept {
@@ -316,8 +327,9 @@ impl Triggers {
                 bound,
                 entered,
                 given_by: owner,
-                last_position,
+                last_position: None,
                 retry: false,
+                untold: false,
             },
         );
         self.save(plugin);
@@ -431,10 +443,6 @@ impl Triggers {
         ) else {
             return;
         };
-        self.told.push(format!(
-            "triggers: {plugin} trigger {} {edge} not delivered ({why}): it fires again at its next evaluation",
-            id.label()
-        ));
         let range = data["range"]["index"].as_u64().map(|index| index as usize);
         let Some(kept) = self
             .plugins
@@ -443,15 +451,42 @@ impl Triggers {
         else {
             return;
         };
+        // One line per trigger until a delivery succeeds (delivered): a
+        // plugin that cannot take any (a failed unit) is evaluated at every
+        // change of what its conditions read.
+        if !kept.untold {
+            kept.untold = true;
+            self.told.push(format!(
+                "triggers: {plugin} trigger {} {edge} not delivered ({why}): it fires again at its next evaluation",
+                id.label()
+            ));
+        }
         if kept.seq != seq {
             return;
         }
+        // Back to what the plugin last heard: a lost enter of this range
+        // un-latches it; a lost leave of a range latches it in that range
+        // again, also when the evaluation went on into another range (a
+        // move from one range to the next, both lost: the plugin still
+        // knows the first, and the next evaluation leaves it, then enters
+        // the second).
         match edge {
             "enter" if kept.entered == Some(range) => kept.entered = None,
-            "leave" if kept.entered.is_none() => kept.entered = Some(range),
+            "leave" if kept.entered != Some(range) => kept.entered = Some(range),
             _ => return,
         }
         kept.retry = true;
+    }
+    /// A notification of `trigger` reached `plugin` (sent, held for its
+    /// ready, or a wake): its next failure is logged again.
+    pub fn delivered(&mut self, plugin: &str, trigger: &TriggerId) {
+        if let Some(kept) = self
+            .plugins
+            .get_mut(plugin)
+            .and_then(|p| p.kept.get_mut(trigger))
+        {
+            kept.untold = false;
+        }
     }
 
     // ---- what happens to the plugin ----------------------------------
@@ -509,6 +544,7 @@ impl Triggers {
                     given_by: 0,
                     last_position: None,
                     retry: false,
+                    untold: false,
                 },
             );
         }

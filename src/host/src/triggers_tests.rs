@@ -653,7 +653,8 @@ fn a_replaced_list_still_in_the_same_range_is_not_entered_again() {
     // The woken run's source.state says 38.52; its list has seven more.
     t.set_facts(facts.clone(), 1, Some(38.52), NOW);
     let (second, out) = t.set(P, 20, TriggerId::Unnamed(0), &nine, NOW).unwrap();
-    assert!(second > first);
+    // N1: still entered, under the same number (its enter may be on its way).
+    assert_eq!(second, first);
     assert!(out.is_empty(), "{:?}", edges(&out));
     // The seek lands at the range's end: one leave of the range entered.
     assert_eq!(
@@ -699,4 +700,75 @@ fn a_replaced_list_in_another_range_is_entered_at_once() {
         .set(P, 5, TriggerId::Unnamed(0), &list(json!([[10, 25]])), NOW)
         .unwrap();
     assert_eq!(edges(&out), [("enter", Some(0))]);
+}
+
+/// N1: a replacement that stays entered keeps its sequence number, so an
+/// `enter` under it still on its way (crossing the `firesOn` on the pipe,
+/// or in the backlog of a plugin woken for it) is not dropped by the SDK as
+/// older than the answer; any other replacement gets a new one.
+#[test]
+fn a_carried_replacement_keeps_its_sequence_number() {
+    let mut t = registry();
+    t.set_facts(ready(false, false), 1, Some(5.), NOW);
+    let list = |ranges: Value| json!({"position":{"ranges":ranges}});
+    let (first, _) = t
+        .set(P, 5, TriggerId::Unnamed(0), &list(json!([[10, 20]])), NOW)
+        .unwrap();
+    let out = t.position(1, 10., true, NOW);
+    assert_eq!(edges(&out), [("enter", Some(0))]);
+    assert_eq!(out[0].seq, first);
+    let (kept, out) = t
+        .set(
+            P,
+            6,
+            TriggerId::Unnamed(0),
+            &list(json!([[2, 3], [10, 20]])),
+            NOW,
+        )
+        .unwrap();
+    assert_eq!((kept, out.len()), (first, 0));
+    // Its later leave carries it too, with the range's new place.
+    let out = t.position(1, 20., true, NOW);
+    assert_eq!(edges(&out), [("leave", Some(1))]);
+    assert_eq!(out[0].seq, first);
+    // Not entered any more: a replacement is a new condition.
+    let (next, _) = t
+        .set(P, 6, TriggerId::Unnamed(0), &list(json!([[10, 30]])), NOW)
+        .unwrap();
+    assert!(next > first);
+}
+
+/// N2, N3: an undeliverable plugin is logged once per trigger until a
+/// delivery succeeds; a move from one range into the next whose leave and
+/// enter were both lost leaves the first range at the next evaluation.
+#[test]
+fn undelivered_is_logged_once_and_a_lost_move_leaves_the_first_range() {
+    let mut t = registry();
+    t.set_facts(ready(false, false), 1, Some(5.), NOW);
+    let when = json!({"position":{"ranges":[[10, 20], [20, 30]]}});
+    t.set(P, 5, TriggerId::Unnamed(0), &when, NOW).unwrap();
+    let out = t.position(1, 10., true, NOW);
+    assert_eq!(edges(&out), [("enter", Some(0))]);
+    // The move into the second range: neither notification arrives.
+    let out = t.position(1, 20., true, NOW);
+    assert_eq!(edges(&out), [("leave", Some(0)), ("enter", Some(1))]);
+    t.diagnostics();
+    for n in &out {
+        t.undelivered(P, &n.data(&json!({})), "test");
+    }
+    assert_eq!(t.diagnostics().len(), 1, "one line per trigger");
+    // The plugin still knows the first range: leave it, enter the second.
+    let out = t.redeliver(P, NOW);
+    assert_eq!(edges(&out), [("leave", Some(0)), ("enter", Some(1))]);
+    for n in &out {
+        t.undelivered(P, &n.data(&json!({})), "test");
+    }
+    assert!(
+        t.diagnostics().is_empty(),
+        "not again until one is delivered"
+    );
+    t.delivered(P, &TriggerId::Unnamed(0));
+    let out = t.redeliver(P, NOW);
+    t.undelivered(P, &out[0].data(&json!({})), "test");
+    assert_eq!(t.diagnostics().len(), 1);
 }
