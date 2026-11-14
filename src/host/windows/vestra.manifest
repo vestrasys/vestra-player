@@ -1,11 +1,21 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <!-- Embedded by build.rs (MSVC). Common Controls v6 gives the confirmation
      dialogs (rfd's TaskDialogIndirect) their custom button labels; without it
-     the executable would not start once rfd's common-controls-v6 is on. -->
+     the executable would not start once rfd's common-controls-v6 is on.
+     heapType SegmentHeap (Windows 10 2004 and later; earlier versions ignore
+     it) makes the process heap and every HeapCreate heap a segment heap:
+     Rust's System allocator, the UCRT's malloc (libmpv, FFmpeg) and the
+     system DLLs all allocate there. It keeps less freed memory committed
+     than the NT heap (0.9.0, offscreen: 20-30 MB less private memory). -->
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
   <dependency>
     <dependentAssembly>
       <assemblyIdentity type="win32" name="Microsoft.Windows.Common-Controls" version="6.0.0.0" processorArchitecture="*" publicKeyToken="6595b64144ccf1df" language="*"/>
     </dependentAssembly>
   </dependency>
+  <application xmlns="urn:schemas-microsoft-com:asm.v3">
+    <windowsSettings>
+      <heapType xmlns="http://schemas.microsoft.com/SMI/2020/WindowsSettings">SegmentHeap</heapType>
+    </windowsSettings>
+  </application>
 </assembly>
