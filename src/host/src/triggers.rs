@@ -37,6 +37,10 @@ pub const MAX_NAME: usize = 64;
 pub const EVENT: &str = "triggers.fired";
 /// The file format.
 const SCHEMA: u32 = 1;
+/// How far (media seconds at 1×; times the rate above it) a
+/// `source.state` position may lie behind the model's newest report and
+/// still be a stale one: a push is 100 ms, the UI tick 16 ms, with margin.
+const STALE_POSITION: f64 = 0.25;
 
 /// A trigger's identity within its plugin (§4.2).
 #[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -208,6 +212,8 @@ pub struct Triggers {
     moment: Moment,
     /// The clock at the last evaluation of the time conditions (`time`).
     time_checked: f64,
+    /// The newest position report of the position model: (source, position).
+    reported: Option<(u64, f64)>,
     /// Diagnostic lines for the Host's log, taken by `diagnostics`.
     told: Vec<String>,
 }
@@ -512,6 +518,24 @@ impl Triggers {
         if source != self.moment.source {
             changed |= groups::SOURCE;
         }
+        // The state's position is up to one push (100 ms of playback) old:
+        // just behind the newest report of the position model for this
+        // source it is stale, not a step back (a real step back, a seek, is
+        // the model's own jump report). Taken as it is, a source fact that
+        // changed in the same push would evaluate a range entered at the
+        // report as left, and the model's next report enter it again (T1).
+        let stale = |p: f64| {
+            self.reported.is_some_and(|(s, r)| {
+                s == source && p < r && r - p <= STALE_POSITION * facts.rate.max(1.)
+            })
+        };
+        let position = match position {
+            Some(p) if stale(p) => self.reported.map(|(_, r)| r),
+            other => other,
+        };
+        if source != self.moment.source {
+            self.reported = None;
+        }
         self.facts = facts;
         self.moment.source = source;
         self.moment.position = position;
@@ -537,6 +561,7 @@ impl Triggers {
             return Vec::new();
         }
         self.moment.position = Some(position);
+        self.reported = Some((source, position));
         self.moment.time = now;
         self.evaluate(groups::POSITION, continuous.then_some(position))
     }

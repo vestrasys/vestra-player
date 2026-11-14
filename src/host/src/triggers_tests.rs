@@ -487,3 +487,45 @@ fn notifications_carry_the_trigger_seq_edge_state_and_range() {
         "an unnamed trigger is its place"
     );
 }
+
+/// A6 at 2× (Silence Skipper, the first silence): the model reported the
+/// lead boundary 38.15 (enter); the next `source.state`, taken a push
+/// earlier, says 38.13 and changes another source fact. That stale position
+/// is no step back: no `leave`, and the model's next report enters nothing
+/// again (T1: one enter per real edge).
+#[test]
+fn a_stale_state_position_behind_a_report_is_no_leave() {
+    let mut t = registry();
+    let mut facts = ready(false, false);
+    facts.rate = 2.;
+    t.set_facts(facts.clone(), 1, Some(37.9), NOW);
+    let when = json!({"all":[{"phase":["ready"]},{"paused":false},
+        {"position":{"ranges":[[40.15, 43.87325]],"lead":2}}]});
+    t.set(P, 5, TriggerId::Unnamed(0), &when, NOW).unwrap();
+    assert_eq!(
+        edges(&t.position(1, 38.15, true, NOW)),
+        [("enter", Some(0))]
+    );
+    // Another source fact changes in a push read just before the report.
+    let mut changed = facts.clone();
+    changed.volume = 50.;
+    assert!(t.set_facts(changed.clone(), 1, Some(38.13), NOW).is_empty());
+    assert!(t.position(1, 38.52, true, NOW).is_empty());
+    // A real step back (a seek) is still a leave: far behind, or reported
+    // by the model as a jump.
+    changed.volume = 60.;
+    assert_eq!(
+        edges(&t.set_facts(changed.clone(), 1, Some(30.), NOW)),
+        [("leave", Some(0))]
+    );
+    assert_eq!(
+        edges(&t.position(1, 38.5, false, NOW)),
+        [("enter", Some(0))]
+    );
+    assert_eq!(
+        edges(&t.position(1, 38.0, false, NOW)),
+        [("leave", Some(0))]
+    );
+    // A new source forgets the report.
+    assert!(t.set_facts(changed, 2, Some(38.4), NOW).is_empty());
+}
