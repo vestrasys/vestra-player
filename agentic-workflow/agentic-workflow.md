@@ -268,6 +268,7 @@ The core must stay lean, so the maintainer **does not accept** API requests by d
    Whatever can be done as an optional extension is not done as a breaking change. When several requests point to the same capability, merge them into one design topic (§4.2 item 5).
 5. **Record the result**. The result of each request is written into this round's record: the request, the maintainer's alternative, the author's rebuttal, the ruling and its reasons. A rejected request can be raised again only with new evidence.
 6. **The coordinator handles only deadlocks**. When the maintainer still rejects after the author's rebuttal, and the author believes the alternative would leave a user-visible feature missing, the coordinator rules or escalates to the user (§7). The coordinator does not write proposals for either side.
+7. **Briefs do not pre-arrange API extensions**. When the coordinator assigns work, the brief never tells the maintainer to add an API for a plugin, or tells an author that an API will be added. An extension comes only from an author's request that has gone through this section (user ruling 2026-11-14).
 
 Negotiation does not block starting work: while waiting for the result, the author first does the parts that do not depend on the request (§3).
 
