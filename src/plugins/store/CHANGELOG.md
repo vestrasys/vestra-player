@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.21
+
+- Plugins the player lists without a directory (installed records it set aside at start: player 0.9.0 sets aside packages built before it, whose manifest still has `capabilities`) each show their own name. Formerly their display fields were cached by directory and version alone, both empty, so every such row showed the first one's name. Nothing is read from the working directory for them either.
+
 ## 0.2.20
 
 - A package not from the official repository (another repository, a file, a link) is no longer silent about its permissions: its install and update confirmations say **It is not from the official repository, so its permissions were not checked.** (user ruling 2026-11-13). A file or a link: after "Plugins may read your files or use the network.". Another repository: after its warning, which says files and network already; its update and reinstall confirmations: "Current: x." then both sentences. Formerly a file or a link said only the files-and-network sentence, and another repository's update only "Current: x.".

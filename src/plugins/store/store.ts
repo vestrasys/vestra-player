@@ -1567,16 +1567,22 @@ export class Store {
   #ownText(info: PluginInfo, changelog: boolean): string | null {
     const display = this.#display(info);
     const name = changelog ? display.changelog : display.readme;
-    return name ? readLimited(join(info.directory, name)) : null;
+    return name && info.directory ? readLimited(join(info.directory, name)) : null;
   }
 
-  /** Display fields of an installed plugin from its manifest (cached per directory). */
+  /**
+   * Display fields of an installed plugin from its manifest, cached per plugin, directory and version: rows the
+   * player lists without a directory (records it set aside at start, player 0.9.0) share none of theirs.
+   */
   #display(info: PluginInfo): Display {
-    const cached = this.#displays.get(`${info.directory}\n${info.version}`);
+    const key = `${info.id}\n${info.directory}\n${info.version}`;
+    const cached = this.#displays.get(key);
     if (cached) return cached;
     let manifest: Record<string, unknown> = {};
     try {
-      manifest = JSON.parse(readFileSync(join(info.directory, "manifest.json"), "utf8")) as Record<string, unknown>;
+      // No directory: nothing to read (a relative path would name the process's working directory).
+      if (info.directory)
+        manifest = JSON.parse(readFileSync(join(info.directory, "manifest.json"), "utf8")) as Record<string, unknown>;
     } catch {
       // Not readable: show the id.
     }
@@ -1605,7 +1611,7 @@ export class Store {
       readme: file(manifest.readme, "README.md"),
       changelog: file(manifest.changelog, "CHANGELOG.md"),
     };
-    this.#displays.set(`${info.directory}\n${info.version}`, display);
+    this.#displays.set(key, display);
     return display;
   }
 }
