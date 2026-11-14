@@ -70,7 +70,7 @@ std-widgets controls (`LineEdit`, `ComboBox`, `CheckBox`, the scroll bars of `Sc
 | --- | --- |
 | Default interface font | The system UI font of each platform (for Chinese: PingFang SC on macOS, Microsoft YaHei on Windows); the host does not set a font family; missing glyphs fall back per character in Slint (user ruling, 2026-10-22) |
 | Monospace font (`Theme.font-mono`) | Set by the host per platform: Menlo on macOS, Consolas on Windows, DejaVu Sans Mono on Linux |
-| Time, badges | 11px, tabular digits (`font-feature: tnum`) |
+| Time, badges | 11px; a time or counter whose digits must not shift while it changes uses `Theme.font-mono` (Slint 1.18 has no font-feature property, so tabular digits cannot be asked of the UI font) |
 | Font size steps | Only these steps: 9 (`font-xs`, very small labels), 11 (`font-body`, body text, lists, time), 12 (`font-tab`, tabs, menus), 13 (`font-title`, window titles, tab titles) |
 
 ### 2.3 Control sizes
