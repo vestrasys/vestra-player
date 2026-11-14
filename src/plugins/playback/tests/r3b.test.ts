@@ -1,8 +1,19 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import { startPlugin, TestHost, UI_VALUE_LIMITS } from "@vestra-player/sdk/testing";
-import { jsonBytes, MARK_TIP_BYTES, MAX_MARKS, sampled, seekMarks, seekRanges, SPAN_DEBOUNCE_MS, TICK_BYTES } from "../bar.ts";
+import {
+  jsonBytes,
+  MARK_TIP_BYTES,
+  MAX_MARKS,
+  RANGES_PER_PATH,
+  sampled,
+  seekMarks,
+  seekRanges,
+  SPAN_DEBOUNCE_MS,
+  TICK_BYTES,
+} from "../bar.ts";
 import activate from "../main.ts";
 import { eventually, until } from "./eventually.ts";
 
@@ -369,17 +380,17 @@ const range = (start: number, end: number, style: "selection" | "region", title:
 test("Ranges: one filled rectangle per run of physical columns, in the ticks' view box", () => {
   // 1000 s over 400 columns: 2.5 s a column.
   const shown = seekRanges([range(100, 200, "selection"), range(500, 750, "region")], 1000, 400);
-  assert.equal(shown.selectionRanges, "M40 0H80V1H40Z");
-  assert.equal(shown.regionRanges, "M200 0H300V1H200Z");
+  assert.deepEqual(shown.selectionRanges, ["M40 0H80V1H40Z"]);
+  assert.deepEqual(shown.regionRanges, ["M200 0H300V1H200Z"]);
   // Partial columns are covered (floor at the start, ceil at the end); a tiny range still gets a column.
-  assert.equal(seekRanges([range(101, 199, "selection")], 1000, 400).selectionRanges, "M40 0H80V1H40Z");
-  assert.equal(seekRanges([range(500, 500.1, "region")], 1000, 400).regionRanges, "M200 0H201V1H200Z");
+  assert.deepEqual(seekRanges([range(101, 199, "selection")], 1000, 400).selectionRanges, ["M40 0H80V1H40Z"]);
+  assert.deepEqual(seekRanges([range(500, 500.1, "region")], 1000, 400).regionRanges, ["M200 0H201V1H200Z"]);
   // A range at the very end stays inside the line; one past the duration is clamped.
-  assert.equal(seekRanges([range(999.9, 1000, "selection")], 1000, 400).selectionRanges, "M399 0H400V1H399Z");
-  assert.equal(seekRanges([range(900, 1200, "selection")], 1000, 400).selectionRanges, "M360 0H400V1H360Z");
+  assert.deepEqual(seekRanges([range(999.9, 1000, "selection")], 1000, 400).selectionRanges, ["M399 0H400V1H399Z"]);
+  assert.deepEqual(seekRanges([range(900, 1200, "selection")], 1000, 400).selectionRanges, ["M360 0H400V1H360Z"]);
 });
 
-test("Ranges: both styles have their own Path; overlapping or touching ranges of a style are one rectangle", () => {
+test("Ranges: both styles have their own Paths; overlapping or touching ranges of a style are one rectangle", () => {
   const shown = seekRanges(
     [
       range(300, 400, "selection"),
@@ -393,21 +404,58 @@ test("Ranges: both styles have their own Path; overlapping or touching ranges of
     100,
   );
   // Out of start order on input, still merged: 0–15 and 15–20 touch, 60–70 stands alone.
-  assert.equal(shown.regionRanges, "M0 0H20V1H0ZM60 0H70V1H60Z");
-  assert.equal(shown.selectionRanges, "M30 0H40V1H30Z");
+  assert.deepEqual(shown.regionRanges, ["M0 0H20V1H0ZM60 0H70V1H60Z"]);
+  assert.deepEqual(shown.selectionRanges, ["M30 0H40V1H30Z"]);
   // A style the bar does not know is not drawn.
   const unknown = {
     ...range(0, 500, "region"),
     style: "other",
   } as unknown as ReturnType<typeof range>;
   assert.deepEqual(seekRanges([unknown], 1000, 100), {
-    selectionRanges: "",
-    regionRanges: "",
+    selectionRanges: [],
+    regionRanges: [],
   });
 });
 
+test("Ranges: Paths of at most 50 rectangles each, in order, per style (the software renderer's cost per Path is quadratic)", () => {
+  assert.equal(RANGES_PER_PATH, 50);
+  const per = RANGES_PER_PATH;
+  // A power of two, so that `start / duration * span` is exact and each range stays one column.
+  const span = 4096;
+  const rect = (x: number) => `M${x} 0H${x + 1}V1H${x}Z`;
+  for (const count of [0, 1, 100, 101, 1000, 1920]) {
+    // `count` one-column selections at the even columns and as many regions at the odd ones,
+    // given last first and the styles interleaved: each style comes out sorted on its own.
+    const input = [];
+    for (let i = count - 1; i >= 0; i--)
+      input.push(range(2 * i, 2 * i + 1, "selection"), range(2 * i + 1, 2 * i + 2, "region"));
+    const shown = seekRanges(input, span, span);
+    for (const [paths, first] of [
+      [shown.selectionRanges, 0],
+      [shown.regionRanges, 1],
+    ] as const) {
+      // ceil(count / 50) Paths: all full but the last, none empty.
+      assert.equal(paths.length, Math.ceil(count / per), `${count} rectangles`);
+      paths.forEach((path, n) => {
+        const rects = path.match(/M\d+ 0H\d+V1H\d+Z/g) ?? [];
+        assert.equal(rects.join(""), path);
+        assert.equal(rects.length, n < paths.length - 1 ? per : count - per * n);
+      });
+      // Joined, the Paths are the one Path of before: every rectangle once, left to right.
+      assert.equal(paths.join(""), Array.from({ length: count }, (_, i) => rect(2 * i + first)).join(""));
+    }
+  }
+  // A run merged from several ranges is one rectangle, never cut between two Paths.
+  const merged = seekRanges(
+    Array.from({ length: 3 * per }, (_, i) => range(i, i + 1, "region")),
+    span,
+    span,
+  );
+  assert.deepEqual(merged, { selectionRanges: [], regionRanges: ["M0 0H150V1H0Z"] });
+});
+
 test("Ranges: none drawn without ranges, a known duration or the bar's span", () => {
-  const none = { selectionRanges: "", regionRanges: "" };
+  const none = { selectionRanges: [], regionRanges: [] };
   assert.deepEqual(seekRanges([], 1000, 400), none);
   assert.deepEqual(seekRanges([range(0, 10, "selection")], null, 400), none);
   assert.deepEqual(seekRanges([range(0, 10, "selection")], 0, 400), none);
@@ -418,45 +466,54 @@ test("Ranges: the bar follows everyone's ranges, and a new source clears them", 
   const host = withMedia(new TestHost(), "/movie.mkv", 200);
   const { stop } = await start(host);
   const bar = host.mounted("bottom");
-  assert.equal(bar.props["selection-ranges"], "");
-  assert.equal(bar.props["region-ranges"], "");
+  const is = (name: string, paths: string[]) => isDeepStrictEqual(bar.props[name], paths);
+  assert.deepEqual(bar.props["selection-ranges"], []);
+  assert.deepEqual(bar.props["region-ranges"], []);
   bar.emit("spanChanged", 400);
   await until(() => bar.props["tick-span"] === 400);
   // No marks at all: ranges alone are drawn.
   host.setTimelineRanges("vestra.capture", [{ start: 50, end: 100, style: "selection", title: "Clip" }]);
   host.setTimelineRanges("community.other", [{ start: 0, end: 20, style: "region" }]);
-  await until(() => bar.props["selection-ranges"] === "M100 0H200V1H100Z");
-  await until(() => bar.props["region-ranges"] === "M0 0H40V1H0Z");
+  await until(() => is("selection-ranges", ["M100 0H200V1H100Z"]));
+  await until(() => is("region-ranges", ["M0 0H40V1H0Z"]));
   // The publisher changes its ranges, then clears them.
   host.setTimelineRanges("vestra.capture", [{ start: 150, end: 200, style: "selection" }]);
-  await until(() => bar.props["selection-ranges"] === "M300 0H400V1H300Z");
+  await until(() => is("selection-ranges", ["M300 0H400V1H300Z"]));
   host.setTimelineRanges("vestra.capture", []);
-  await until(() => bar.props["selection-ranges"] === "");
-  assert.equal(bar.props["region-ranges"], "M0 0H40V1H0Z");
+  await until(() => is("selection-ranges", []));
+  assert.deepEqual(bar.props["region-ranges"], ["M0 0H40V1H0Z"]);
   // A resize rebuilds them for the new span.
   bar.emit("spanChanged", 200);
-  await until(() => bar.props["region-ranges"] === "M0 0H20V1H0Z");
+  await until(() => is("region-ranges", ["M0 0H20V1H0Z"]));
   // Another source clears every layer.
   host.setTimelineRanges("vestra.capture", [{ start: 50, end: 100, style: "selection" }]);
-  await until(() => bar.props["selection-ranges"] !== "");
+  await until(() => !is("selection-ranges", []));
   host.openElsewhere("/other.mkv");
   host.setSource({ duration: 50 });
-  await until(() => bar.props["selection-ranges"] === "" && bar.props["region-ranges"] === "");
+  await until(() => is("selection-ranges", []) && is("region-ranges", []));
   await stop();
 });
 
-test("Ranges: the bar draws them as one Path per style in Theme colours, between the line and the ticks", () => {
+test("Ranges: the bar draws each style's Paths (a RangeBand each) in Theme colours, between the line and the ticks", () => {
   const slint = readFileSync(new URL("../ui/bar.slint", import.meta.url), "utf8");
-  assert.doesNotMatch(slint, /for \w+ in PlaybackBridge\.\w+-ranges/);
-  assert.match(slint, /commands: PlaybackBridge\.region-ranges;\s+fill: Theme\.text-dim\.with-alpha\(0\.\d+\);/);
-  assert.match(slint, /commands: PlaybackBridge\.selection-ranges;\s+fill: Theme\.accent\.with-alpha\(0\.\d+\);/);
+  assert.match(slint, /in-out property <\[string\]> selection-ranges;/);
+  assert.match(slint, /in-out property <\[string\]> region-ranges;/);
+  // One RangeBand per Path, never per range: the same element, colour and place for all of a style's Paths.
+  assert.match(
+    slint,
+    /for chunk in PlaybackBridge\.region-ranges: RangeBand \{[^}]*commands: chunk;\s+fill: Theme\.text-dim\.with-alpha\(0\.35\);/,
+  );
+  assert.match(
+    slint,
+    /for chunk in PlaybackBridge\.selection-ranges: RangeBand \{[^}]*commands: chunk;\s+fill: Theme\.accent\.with-alpha\(0\.45\);/,
+  );
   const seekBar = slint.slice(slint.indexOf("component SeekBar"));
   const at = (text: string) => seekBar.indexOf(text);
   assert.ok(
-    at("background: PlaybackBridge.can-seek ? Theme.accent-fill") < at("commands: PlaybackBridge.region-ranges"),
+    at("background: PlaybackBridge.can-seek ? Theme.accent-fill") < at("in PlaybackBridge.region-ranges"),
   );
-  assert.ok(at("commands: PlaybackBridge.region-ranges") < at("commands: PlaybackBridge.selection-ranges"));
-  assert.ok(at("commands: PlaybackBridge.selection-ranges") < at("commands: PlaybackBridge.chapter-ticks"));
+  assert.ok(at("in PlaybackBridge.region-ranges") < at("in PlaybackBridge.selection-ranges"));
+  assert.ok(at("in PlaybackBridge.selection-ranges") < at("commands: PlaybackBridge.chapter-ticks"));
   // No stroke, so the view box fills the element: `columns` physical px over `columns` units, on whole pixels.
   const band = slint.slice(slint.indexOf("component RangeBand"), slint.indexOf("component SeekBar"));
   assert.doesNotMatch(band, /stroke(-width)?:/);
@@ -468,7 +525,10 @@ test("Ranges: the bar draws them as one Path per style in Theme colours, between
   ])
     assert.ok(band.includes(line), line);
   // A range alone (no marks) also asks for the span again when it was built for another one.
-  assert.match(slint, /stale-ticks: \(PlaybackBridge\.marks\.length > 0 \|\| PlaybackBridge\.selection-ranges != ""/);
+  assert.match(
+    slint,
+    /stale-ticks: \(PlaybackBridge\.marks\.length > 0 \|\| PlaybackBridge\.selection-ranges\.length > 0 \|\| PlaybackBridge\.region-ranges\.length > 0\)/,
+  );
 });
 
 // ------------------------------------------------------------------ A02

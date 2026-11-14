@@ -132,21 +132,37 @@ export function seekMarks(marks: readonly TimelineMark[], duration: number | nul
   };
 }
 
+/**
+ * At most this many rectangles in one Path. Slint 1.18's software renderer
+ * (the default on Windows) pays for a Path's fill about quadratically in its
+ * rectangles: on a 3840 px band, 1000 one-column rectangles took 40 ms a
+ * frame and 1920 took 145 ms in one Path (bench `range_band_frame_time`,
+ * player A5). Split, the cost is about linear: 1920 took 6.8 ms in Paths of
+ * 100, 4.5 ms in Paths of 50 and 4.0 ms in Paths of 25 (both styles full,
+ * 2 × 1920: 13.6, 9.1 and 8.3 ms). 50 is where halving again stops paying.
+ */
+export const RANGES_PER_PATH = 50;
+
 export interface SeekRanges {
-  /** One Path's commands per style: a filled rectangle `M<x0> 0H<x1>V1H<x0>Z` per run of physical px columns. */
-  selectionRanges: string;
-  regionRanges: string;
+  /**
+   * Each style's filled rectangles `M<x0> 0H<x1>V1H<x0>Z`, one per run of
+   * physical px columns, left to right, as the commands of consecutive Paths
+   * of at most `RANGES_PER_PATH` rectangles each (none: no Path).
+   */
+  selectionRanges: string[];
+  regionRanges: string[];
 }
 
-const NO_RANGES: SeekRanges = { selectionRanges: "", regionRanges: "" };
+const NO_RANGES: SeekRanges = { selectionRanges: [], regionRanges: [] };
 
 /**
- * `timeline.ranges` (player 0.7.6) as the seek line shows them: one filled
- * Path per style (no element per range), in the ticks' view box (`span`
- * physical px wide, 1 high). A range covers the columns `floor(start * span)`
- * up to `ceil(end * span)` (at least one, inside the line); the ranges of a
- * style that overlap or touch are drawn as one rectangle, so a column is
- * filled once whatever the overlap. Nothing without a known duration or
+ * `timeline.ranges` (player 0.7.6) as the seek line shows them: filled Paths
+ * per style (no element per range) of at most `RANGES_PER_PATH` rectangles,
+ * in the ticks' view box (`span` physical px wide, 1 high). A range covers
+ * the columns `floor(start * span)` up to `ceil(end * span)` (at least one,
+ * inside the line); the ranges of a style that overlap or touch are drawn as
+ * one rectangle, so a column is filled once whatever the overlap, and two
+ * Paths of a style never share a column. Nothing without a known duration or
  * before the bar reports its span (as the ticks).
  */
 export function seekRanges(ranges: readonly TimelineRange[], duration: number | null, span = 0): SeekRanges {
@@ -161,8 +177,20 @@ export function seekRanges(ranges: readonly TimelineRange[], duration: number | 
     if (last && x0 <= last[1]) last[1] = Math.max(last[1], x1);
     else style.push([x0, x1]);
   }
-  const path = (list: [number, number][]) => list.map(([x0, x1]) => `M${x0} 0H${x1}V1H${x0}Z`).join("");
-  return { selectionRanges: path(runs.selection!), regionRanges: path(runs.region!) };
+  return { selectionRanges: rangePaths(runs.selection!), regionRanges: rangePaths(runs.region!) };
+}
+
+/** The runs, in order, as the commands of Paths of at most `RANGES_PER_PATH` rectangles each. */
+function rangePaths(runs: readonly [number, number][]): string[] {
+  const paths: string[] = [];
+  for (let first = 0; first < runs.length; first += RANGES_PER_PATH)
+    paths.push(
+      runs
+        .slice(first, first + RANGES_PER_PATH)
+        .map(([x0, x1]) => `M${x0} 0H${x1}V1H${x0}Z`)
+        .join(""),
+    );
+  return paths;
 }
 
 /**
@@ -288,7 +316,7 @@ export function wireBar(
       bookmarkTicks: shown.bookmarkTicks,
       markerTicks: shown.markerTicks,
       tickSpan: shown.tickSpan,
-      // Timeline ranges (player 0.7.6), in the ticks' view box: one Path per style.
+      // Timeline ranges (player 0.7.6), in the ticks' view box: Paths of at most RANGES_PER_PATH rectangles per style.
       selectionRanges: spans.selectionRanges,
       regionRanges: spans.regionRanges,
       hasLoop: Boolean(state.loop && state.duration),
