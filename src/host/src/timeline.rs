@@ -10,9 +10,13 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 pub const MAX_MARKS: usize = 1000;
-/// Ranges in one layer: a seek line with more bands than this is
-/// unreadable, and the reader draws every one.
-pub const MAX_RANGES: usize = 100;
+/// Ranges in one list: a timeline layer's (`timeline.setRanges`), and the
+/// range list of a trigger's position condition when it comes (one number
+/// for both, SDK `TIMELINE_LIMITS.ranges`). The seek line draws them merged
+/// per physical pixel column (the playback plugin's `seekRanges`): at most
+/// half the line's width in rectangles, whatever this is. Drawing cost:
+/// `ui::widgets_tests::range_band_frame_time`.
+pub const MAX_RANGES: usize = 1000;
 pub const MAX_TITLE: usize = 100;
 /// `timeline.changed` is pushed at most this often.
 const PUSH_MS: u64 = 100;
@@ -94,7 +98,7 @@ pub fn parse(
         .collect()
 }
 
-/// Validate one `layer.setRanges` list: ≤ 100 ranges, known styles, titles
+/// Validate one `layer.setRanges` list: ≤ `MAX_RANGES` ranges, known styles, titles
 /// ≤ 100 characters, `0 ≤ start < end`, and `end` within the media while
 /// its duration is known.
 pub fn parse_ranges(
@@ -364,6 +368,22 @@ mod tests {
         timeline.clear();
         assert!(!timeline.holds(2));
         assert_eq!(timeline.due(500).unwrap()["ranges"], json!([]));
+    }
+
+    /// SDK 1.10.0 / player 0.10.0: 1000 ranges, as many as marks (it was 100).
+    #[test]
+    fn a_layer_holds_1000_ranges() {
+        let many: Vec<_> = (0..1001)
+            .map(|i| range(i as f64, i as f64 + 0.5, "region"))
+            .collect();
+        assert_eq!(
+            parse_ranges(&json!(many[..1000]), "a", None).unwrap().len(),
+            1000
+        );
+        assert_eq!(
+            parse_ranges(&json!(many), "a", None).unwrap_err(),
+            "a layer holds at most 1000 ranges"
+        );
     }
 
     #[test]
