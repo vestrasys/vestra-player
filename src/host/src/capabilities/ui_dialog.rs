@@ -1,4 +1,6 @@
-//! `ui.dialog`: native file pickers, and confirmations in the window where
+//! `ui.dialog`: native file pickers owned by the window where the user
+//! last acted for the caller, else by the main window
+//! (`origins::dialog_place`), and confirmations in the window where
 //! the user last acted for the caller (`host/origins.rs`; without one, the
 //! focus decides: `platform::tool_window_focused`): a tool window's as a
 //! system dialog owned by it, the main window's on the sheet drawn in the
@@ -198,14 +200,20 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     {
         return Err(RpcError::invalid("fileName must be a simple name"));
     }
-    host.ui_command(UiCommand::Dialog(DialogRequest {
-        reply: reply.clone(),
-        purpose: DialogPurpose::Open(json!({"kind":kind,"title":title,"fileName":name})),
-    }));
+    // Busy before it shows, as a confirmation: the interface then takes the
+    // player off the floating level first (`Host::apply_on_top`).
     host.core.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
     host.core
         .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    // Owned like a confirmation: the tool window the user acted in, else
+    // the main window (`origins::dialog_place`).
+    let place = host.dialog_place(reply.owner);
+    host.ui_command(UiCommand::Dialog(DialogRequest {
+        reply: reply.clone(),
+        purpose: DialogPurpose::Open(json!({"kind":kind,"title":title,"fileName":name})),
+        place,
+    }));
     Ok(())
 }
 
@@ -215,13 +223,27 @@ impl Host {
     /// awaiting its completion belongs to a worker, which sends the choice
     /// to the core (`Event::DialogDone`, `Event::SourceLocated`).
     pub(crate) fn dialog_command(&mut self, request: DialogRequest) {
-        let DialogRequest { reply, purpose } = request;
+        let DialogRequest {
+            reply,
+            purpose,
+            place,
+        } = request;
+        // Off the floating level before it shows (`dialog_busy` is set).
+        self.apply_on_top();
+        let owner = place
+            .as_ref()
+            .and_then(|place| self.place_window(reply.owner, place))
+            .or(self.shell.as_ref())
+            .map(ComponentHandle::clone_strong);
+        let owned = |dialog: rfd::AsyncFileDialog| {
+            platform::own_file_dialog(dialog, owner.as_ref().map(|owner| owner.window()))
+        };
         let events = self.core.events.clone();
         match purpose {
             DialogPurpose::Open(params) => {
                 let kind = params["kind"].as_str().unwrap_or_default();
                 let title = params["title"].as_str().unwrap_or_default();
-                let mut dialog = rfd::AsyncFileDialog::new().set_title(title);
+                let mut dialog = owned(rfd::AsyncFileDialog::new()).set_title(title);
                 if let Some(name) = params["fileName"].as_str() {
                     dialog = dialog.set_file_name(name);
                 }
@@ -252,7 +274,7 @@ impl Host {
             }
             DialogPurpose::Locate(fields) => {
                 let name = fields["name"].as_str().unwrap_or_default();
-                let mut dialog = rfd::AsyncFileDialog::new()
+                let mut dialog = owned(rfd::AsyncFileDialog::new())
                     .set_title(i18n::tr_args("Locate {}", &json!([name])));
                 if let Some(directory) = fields["directory"]
                     .as_str()
@@ -285,6 +307,8 @@ impl Host {
             options,
             place,
         } = request;
+        // Off the floating level while it is open, as a file dialog.
+        self.apply_on_top();
         let owner = place
             .as_ref()
             .and_then(|place| self.place_window(reply.owner, place))

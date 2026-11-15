@@ -260,9 +260,12 @@ pub(crate) enum DialogPurpose {
     Locate(Value),
 }
 
+/// A file dialog (`dialogs.open`, `media.sources.locate`) and the tool
+/// window that owns it (`None`: the main window; `origins::dialog_place`).
 pub(crate) struct DialogRequest {
     pub(crate) reply: Reply,
     pub(crate) purpose: DialogPurpose,
+    pub(crate) place: Option<origins::Place>,
 }
 
 /// `dialogs.confirm` as a system confirmation. Admission (headless,
@@ -763,10 +766,12 @@ mod tests {
             UiCommand::Dialog(DialogRequest {
                 reply: reply(10),
                 purpose: DialogPurpose::Open(json!({})),
+                place: None,
             }),
             UiCommand::Dialog(DialogRequest {
                 reply: reply(11),
                 purpose: DialogPurpose::Locate(json!({"name":"a.mkv"})),
+                place: Some(origins::Place::Floating),
             }),
             UiCommand::Confirm(ConfirmRequest {
                 reply: reply(12),

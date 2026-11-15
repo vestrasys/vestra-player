@@ -136,6 +136,19 @@ pub(crate) fn route(
     Route::Focus
 }
 
+/// The owner of a file dialog (`dialogs.open`, `media.sources.locate`) of a
+/// plugin whose confirmation would go `route`: the tool window a
+/// confirmation would be owned by; otherwise (`None`) the main window, so
+/// the dialog is never an unowned window under a fullscreen or on-top
+/// player. Unlike a confirmation, the focus does not decide: a file dialog
+/// has no sheet, and the main window is where the player is.
+pub(crate) fn dialog_place(route: Route) -> Option<Place> {
+    match route {
+        Route::Owned(place) => Some(place),
+        Route::Sheet | Route::Focus => None,
+    }
+}
+
 /// The origin of input in the window of `generation` (a menu, a key, a
 /// bottom-bar button, a panel's callback): the main window's
 /// (`shell`) or a detached column's (`floating`: the open floating
@@ -242,21 +255,26 @@ impl super::Host {
             },
         )
     }
-    /// A request was refused `busy`: the confirmation the user has to
-    /// answer first comes into view, so the wait is never somewhere the
-    /// user cannot see. A sheet: its main window (to the front while the
-    /// player is in the foreground, asking for attention otherwise). An
-    /// open system confirmation, whichever window owns it (an origin's or
-    /// the focus's): the dialog itself (`platform::show_open_confirm`; on
-    /// Windows its owner is disabled while it is open).
+    /// The owner of `owner`'s file dialog now ([`dialog_place`]).
+    pub(crate) fn dialog_place(&self, owner: u64) -> Option<Place> {
+        dialog_place(self.confirm_route(owner))
+    }
+    /// A request was refused `busy`: the confirmation or file dialog the
+    /// user has to answer first comes into view, so the wait is never
+    /// somewhere the user cannot see. A sheet: its main window (to the
+    /// front while the player is in the foreground, asking for attention
+    /// otherwise). An open system dialog, a confirmation or a file dialog,
+    /// whichever window owns it: the dialog itself
+    /// (`platform::show_open_dialog`; on Windows its owner is disabled
+    /// while it is open).
     pub(crate) fn show_waiting_confirmation(&self) {
         let foreground = crate::platform::app_in_foreground();
         if self.sheet_waiting() {
             if let Some(shell) = &self.shell {
                 crate::ui::view::show_again(shell, foreground);
             }
-        } else if self.core.dialog_busy && self.core.confirm_open {
-            crate::platform::show_open_confirm(foreground);
+        } else if self.core.dialog_busy {
+            crate::platform::show_open_dialog(foreground);
         }
     }
 }
@@ -670,5 +688,73 @@ mod tests {
             after(window, "\"ui.show\" =>", 10)
                 .contains("host.act(key.0, crate::host::origins::Origin::View(")
         );
+    }
+
+    /// The bug of 2026-11-15: VestraTube's Download in a fullscreen player
+    /// opened an unowned Save dialog under the player. A file dialog is
+    /// owned like a confirmation: the plugin's shown tool window the user
+    /// acted in (or its own window still shown), else the main window,
+    /// never nobody. Every origin, with its window shown or not, and with
+    /// or without a main window.
+    #[test]
+    fn a_file_dialog_is_owned_by_the_origin_window_else_the_main_window() {
+        const TUBE: u64 = 11;
+        let origins_of = [
+            None,
+            Some(Origin::Main),
+            Some(Origin::Lead),
+            Some(Origin::Floating),
+            Some(Origin::Options),
+            Some(view("link")),
+        ];
+        for origin in &origins_of {
+            for main in [true, false] {
+                for shown_window in [true, false] {
+                    for own in [&[][..], &["link".to_owned()][..]] {
+                        let mut origins = Origins::default();
+                        if let Some(origin) = origin {
+                            origins.acted(TUBE, origin.clone());
+                        }
+                        let shown = |p: &Place| shown_window && own_or_origin(p, own, origin);
+                        let owner = dialog_place(route(origins.get(TUBE), main, own, shown));
+                        let expected = match origin {
+                            Some(Origin::Main | Origin::Lead) if main => None,
+                            Some(Origin::Floating) if shown_window => Some(Place::Floating),
+                            Some(Origin::Options) if shown_window => Some(Place::Options),
+                            Some(Origin::View(id)) if shown_window && own.contains(id) => {
+                                Some(place(id))
+                            }
+                            _ if shown_window && !own.is_empty() => Some(place("link")),
+                            _ => None,
+                        };
+                        assert_eq!(
+                            owner, expected,
+                            "origin {origin:?}, main {main}, shown {shown_window}, own {own:?}"
+                        );
+                    }
+                }
+            }
+        }
+        // Each route: only a tool window's is kept.
+        assert_eq!(dialog_place(Route::Sheet), None);
+        assert_eq!(dialog_place(Route::Focus), None);
+        assert_eq!(
+            dialog_place(Route::Owned(Place::Floating)),
+            Some(Place::Floating)
+        );
+        assert_eq!(
+            dialog_place(Route::Owned(place("link"))),
+            Some(place("link"))
+        );
+    }
+
+    /// Whether `p` is a window that exists in the test above: the plugin's
+    /// own windows and the origin's window.
+    fn own_or_origin(p: &Place, own: &[String], origin: &Option<Origin>) -> bool {
+        match p {
+            Place::Floating => matches!(origin, Some(Origin::Floating)),
+            Place::Options => matches!(origin, Some(Origin::Options)),
+            Place::View(id) => own.contains(id),
+        }
     }
 }

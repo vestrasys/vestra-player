@@ -215,6 +215,9 @@ pub(crate) struct InputShared {
     /// The adjust column's current tab (`panel:adjust` keys).
     pub(crate) adjust: Option<u64>,
     pub(crate) blocked: bool,
+    /// A system dialog (file dialog or confirmation) is open (`dialog_busy`):
+    /// an input that comes while `blocked` brings it to the front.
+    pub(crate) dialog: bool,
     pub(crate) wheel: (f64, f64),
     /// The key press being dispatched, recorded by the window's winit hook.
     pub(crate) physical: Option<bindings::Physical>,
