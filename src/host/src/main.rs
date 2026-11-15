@@ -531,6 +531,7 @@ fn player() -> Result<()> {
         held_mounts: Default::default(),
         mounts: BTreeMap::new(),
         mount_queue: std::collections::VecDeque::new(),
+        settings: Default::default(),
         prepared: None,
         warnings: Default::default(),
         packages: package_manager::Manager::open()?,

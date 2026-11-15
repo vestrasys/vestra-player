@@ -409,6 +409,12 @@ pub(crate) struct Core {
     /// tab, a removal) that the interface has not taken into its batching
     /// window yet (`UiCommand::Mount`, `Core::mount_command`).
     pub(crate) mount_queue: std::collections::VecDeque<MountChange>,
+    /// The registry of settings pages (K7; plan step S2c(4)): pages,
+    /// registrations waiting for the `settings-check` thread, recorded
+    /// pages and their recordings. The open options window is the
+    /// interface's (`Host::settings`), told of changes as
+    /// `UiCommand::Settings`.
+    pub(crate) settings: settings_window::Settings,
     /// The large array of the request being answered, converted on its
     /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
     /// request id, rows.
@@ -641,8 +647,9 @@ pub(crate) struct Host {
     pub(crate) gpu_paced: bool,
     /// File drops (R-U2).
     pub(crate) drops: drops::Drops,
-    /// Settings pages and the options window (R-S1, R-H7).
-    pub(crate) settings: settings_window::Settings,
+    /// The options window (R-H7; K7): the pages it shows are the core's
+    /// (`Core::settings`).
+    pub(crate) settings: settings_window::Options,
     /// The category of the page the options window last showed.
     pub(crate) settings_category: Option<usize>,
     /// A view missed the palette: deliver again on the next tick.

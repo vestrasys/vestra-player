@@ -1177,7 +1177,11 @@ impl Host {
         if self.core.commands.busy(owner) {
             busy.insert(Busy::Command);
         }
-        if self.settings.busy(owner) {
+        if self
+            .core
+            .settings
+            .busy(owner, self.settings.window().is_some())
+        {
             busy.insert(Busy::Settings);
         }
         if self

@@ -358,7 +358,8 @@ impl Host {
     /// A report of the UI reaches the core (rule R3), delivered in place on
     /// this thread until plan step S3a. Plan step S2c(1): the window facts;
     /// S2c(3): the mount reports and the `ui.setMount` result
-    /// (host/mounts.rs). The other reports follow in later steps.
+    /// (host/mounts.rs); S2c(4): the `settings.set` and `settings.show`
+    /// results. The other reports follow in later steps.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         match report {
             UiReport::WindowFacts(facts) => {
@@ -389,7 +390,7 @@ impl Host {
                     self.broadcast("window.state", facts);
                 }
             }
-            _ => unreachable!("not reported before plan step S2c(4)"),
+            _ => unreachable!("not reported before plan step S2c(5)"),
         }
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the

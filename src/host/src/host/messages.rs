@@ -5,7 +5,9 @@
 //! [`UiReport::WindowFacts`], `Host::ui_report`; S2c(3): [`UiCommand::Mount`],
 //! [`UiCommand::SetMount`], [`UiReport::MountPreparing`],
 //! [`UiReport::MountApplied`] and the `ui.setMount` [`UiReport::Answered`],
-//! host/mounts.rs), S3a moves the core to its own thread.
+//! host/mounts.rs; S2c(4): [`UiCommand::Settings`] and the `settings.set` /
+//! `.show` [`UiReport::Answered`], ui/settings_window.rs), S3a moves the core
+//! to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
