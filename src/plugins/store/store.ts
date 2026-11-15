@@ -18,6 +18,7 @@ import {
   isBuiltinRow,
   isDevelopmentRow,
   isInstalledRow,
+  isStrandedRow,
   updateCount,
   type Display,
   type Item,
@@ -991,8 +992,8 @@ export class Store {
     const reload = a("reload", msg("Reload"), info.id !== this.plugin.id && info.state !== "starting");
     if (info.builtin) return { primary: null, menu: [reload, openData] };
     const [primary, ...rest] = this.#ordered(item, detail);
-    // A disabled plugin is not reloaded (the player refuses it: enable it instead).
-    const menu = info.state === "disabled" ? [...rest, openData] : [...rest, reload, openData];
+    // A disabled plugin is not reloaded (the player refuses it: enable it instead), nor one without a package.
+    const menu = info.state === "disabled" || isStrandedRow(item) ? [...rest, openData] : [...rest, reload, openData];
     return { primary: primary ?? null, menu };
   }
 
@@ -1011,11 +1012,13 @@ export class Store {
     const development = isDevelopmentRow(item);
     if (!development && this.#newer(item))
       list.push(a("update", detail ? msg("Update to {}", item.best?.version ?? "") : msg("Update")));
-    list.push(
-      info.state === "disabled"
-        ? a("enable", item.state === "revoked" && !development ? msg("Enable Anyway…") : msg("Enable"))
-        : a("disable", msg("Disable")),
-    );
+    // Nothing to switch off: only Uninstall… (and Update).
+    if (!isStrandedRow(item))
+      list.push(
+        info.state === "disabled"
+          ? a("enable", item.state === "revoked" && !development ? msg("Enable Anyway…") : msg("Enable"))
+          : a("disable", msg("Disable")),
+      );
     if (!development) list.push(a("uninstall", msg("Uninstall…")));
     return list;
   }
@@ -1061,7 +1064,7 @@ export class Store {
       return list;
     }
     const list = this.#ordered(item, true);
-    if (info.state === "failed")
+    if (info.state === "failed" && !isStrandedRow(item))
       list.push({ id: "reload", text: msg("Reload"), enabled: idle && info.id !== this.plugin.id });
     // A row with an update offers only Update: what its ⋯ menu would hold comes here instead, Reload
     // (a running plugin; a failed one has it above), then another repository's version (All).

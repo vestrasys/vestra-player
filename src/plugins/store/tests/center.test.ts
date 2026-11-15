@@ -534,6 +534,13 @@ test("plugins the player set aside at start (no directory, no version) keep thei
     await tab(host, INSTALLED);
     assert.deepEqual(rows(host).map((r) => r.name).sort(), ["AMD Motion", "Auto Frame", "z.clip"]);
     assert.equal(controls(host, "Auto Frame").mark, "失败");
+    // Nothing of it runs: no Disable, no Reload; Uninstall… (player 0.10.1 removes it completely) and Open Data Folder.
+    assert.deepEqual(
+      controls(host, "Auto Frame").menu.map((a) => a.id),
+      ["uninstall", "openData"],
+    );
+    await choose(host, "Auto Frame");
+    assert.deepEqual(ids(actions(host)), ["uninstall"]);
   } finally {
     await stop();
   }

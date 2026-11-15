@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.22
+
+- A plugin the player set aside at start (listed failed, without a package directory) no longer offers Disable or Reload, which the player refused with "no plugin"; its row and details offer Uninstall… (and Update or a reinstall from its repository). With player 0.10.1 that uninstall removes it completely, after which it can be installed again. The same holds for a failed row whose package could not be read this run (retried at the next start). Who must change: nobody.
+
 ## 0.2.21
 
 - Plugins the player lists without a directory (installed records it set aside at start: player 0.9.0 sets aside packages built before it, whose manifest still has `capabilities`) each show their own name. Formerly their display fields were cached by directory and version alone, both empty, so every such row showed the first one's name. Nothing is read from the working directory for them either.

@@ -258,3 +258,16 @@ export const isInstalledRow = (item: Item) =>
 export const isBuiltinRow = (item: Item) => item.installed?.builtin === true;
 
 export const updateCount = (items: readonly Item[]) => items.filter((item) => item.state === "update").length;
+
+/**
+ * A failed installed row without a package directory: a record the player set aside at start (player 0.9.0 sets
+ * aside packages built before it, whose manifest still has `capabilities`), or one whose library copy could not be
+ * read this run. Nothing of it can run now, so it offers no Disable and no Reload: only Uninstall… (which removes a
+ * set-aside record completely, player 0.10.1) and, from its repository, Update or a reinstall.
+ */
+export const isStrandedRow = (item: Item) =>
+  item.installed !== null &&
+  item.installed.origin === "installed" &&
+  !item.installed.builtin &&
+  item.installed.state === "failed" &&
+  !item.installed.directory;

@@ -7,4 +7,5 @@ pub(crate) mod package_manager;
 pub mod package_stage;
 pub mod package_store;
 pub(crate) mod package_validate;
+pub(crate) mod safe_remove;
 pub(crate) mod secret_index;
