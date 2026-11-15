@@ -89,7 +89,7 @@ fn reasons(why: &Value) -> Vec<String> {
 /// `owner`'s listeners of wake events as recorded calls (its other
 /// listeners left out).
 pub(super) fn wake_calls(host: &Host, owner: u64) -> Vec<Call> {
-    let Some(plugin) = host.plugins.get(&owner) else {
+    let Some(plugin) = host.core.plugins.get(&owner) else {
         return Vec::new();
     };
     plugin
@@ -111,7 +111,7 @@ impl Capability for Events {
     /// the SDK reads the state again when the plugin starts (§3.1). A
     /// listener of a wake event is recorded instead (§6.9).
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        let Some(plugin) = host.plugins.get(&owner) else {
+        let Some(plugin) = host.core.plugins.get(&owner) else {
             return Recorded::Nothing;
         };
         let listened = plugin
@@ -138,7 +138,7 @@ impl Capability for Events {
             host.on_demand.wakes.remove(&owner);
             return;
         }
-        let Some(plugin) = host.plugins.get(&owner) else {
+        let Some(plugin) = host.core.plugins.get(&owner) else {
             return;
         };
         let wakes = plugin
@@ -170,7 +170,7 @@ impl Capability for Events {
         if !EVENTS.contains(&event) {
             return Err(RpcError::new("unsupported", "unknown event"));
         }
-        let plugin = host.plugins.get_mut(&reply.owner).unwrap();
+        let plugin = host.core.plugins.get_mut(&reply.owner).unwrap();
         if method == "events.subscribe" {
             // Again for the same event replaces the mark: the SDK switches
             // between mirror and listener as listeners come and go.

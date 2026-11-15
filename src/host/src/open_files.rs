@@ -57,7 +57,7 @@ impl Host {
     /// Files to open (maybe none); `front`: another launch asked, so the
     /// main window comes to the front.
     pub(super) fn open_files(&mut self, files: Vec<PathBuf>, front: bool) {
-        self.opens.push(files);
+        self.core.opens.push(files);
         if front {
             self.bring_to_front();
         }
@@ -70,7 +70,7 @@ impl Host {
     /// began stalled it. Plugins whose start waits behind the built-ins are
     /// not waited for: a panel of theirs costs its own compile only.
     pub(super) fn open_files_tick(&mut self) {
-        if !self.startup_panels && self.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
+        if !self.startup_panels && self.core.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
             // A start that never settles (a plugin retried after a crash)
             // keeps no later file waiting.
             self.startup_panels = true;
@@ -78,27 +78,29 @@ impl Host {
         if !self.startup_panels {
             self.startup_panels = self.mount_queue.is_empty()
                 && self.preparing.is_none()
-                && self.held_mounts.is_empty()
+                && self.core.held_mounts.is_empty()
                 && self.startup_has_settled();
         }
-        let settled =
-            self.startup_panels && self.packages_started() && !self.builtin_first_run_queued() && {
-                let now = self.now_ms();
-                let owners = self.plugins.keys().copied().collect::<Vec<_>>();
+        let settled = self.startup_panels
+            && self.core.packages_started()
+            && !self.core.builtin_first_run_queued()
+            && {
+                let now = self.core.now_ms();
+                let owners = self.core.plugins.keys().copied().collect::<Vec<_>>();
                 !owners.into_iter().any(|owner| {
                     matches!(
-                        self.activation_status(owner, now),
+                        self.core.activation_status(owner, now),
                         Ok(activation::Status::Pending { .. })
                     )
                 })
             };
-        let Some(files) = self.opens.due(settled) else {
+        let Some(files) = self.core.opens.due(settled) else {
             return;
         };
         diag!(
             "open: {} file(s) handed over at +{} ms",
             files.len(),
-            self.now_ms()
+            self.core.now_ms()
         );
         let taken = self.drops.groups(&files);
         for path in &files {

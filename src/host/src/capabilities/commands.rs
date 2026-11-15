@@ -33,11 +33,11 @@ impl Capability for Commands {
     /// Each command as its plugin registered it, with its last state (never
     /// busy: a busy command keeps its plugin running, `Host::lazy_idle`).
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.commands.unsent(owner) {
+        if host.core.commands.unsent(owner) {
             return Recorded::Live("a command without its registration");
         }
         let calls = host
-            .commands
+            .core.commands
             .sent_of(owner)
             .into_iter()
             .map(|(id, revision, sent)| {
@@ -55,21 +55,21 @@ impl Capability for Commands {
         Recorded::Calls(calls)
     }
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        if let Err(error) = host.commands.rekey(from, to) {
+        if let Err(error) = host.core.commands.rekey(from, to) {
             diag!("lazy: commands of {from}: {error}");
         }
         host.input.borrow_mut().table.rekey(from, to);
     }
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if keep_recorded {
-            host.commands.mark_recorded(owner);
+            host.core.commands.mark_recorded(owner);
         } else {
-            let _ = host.commands.remove_owner(owner);
+            let _ = host.core.commands.remove_owner(owner);
             host.input.borrow_mut().table.remove_owner(owner);
         }
     }
     fn prune(&self, host: &mut Host, owner: u64) {
-        match host.commands.remove_recorded(owner) {
+        match host.core.commands.remove_recorded(owner) {
             Ok(gone) => {
                 let mut input = host.input.borrow_mut();
                 for id in gone {
@@ -107,7 +107,8 @@ impl Capability for Commands {
             "commands.keys" => Ok(Some(host.command_keys(reply.owner))),
             "commands.unregister" => {
                 let id = string(params, "id")?;
-                host.commands
+                host.core
+                    .commands
                     .remove(reply.owner, id)
                     .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
                 host.input.borrow_mut().table.remove(reply.owner, id);
@@ -135,14 +136,16 @@ fn register_or_update(
     } else {
         let (id, revision, state) = parsed(&origin, params)?;
         let conditions = conditions(params)?;
-        host.commands
+        host.core
+            .commands
             .update(reply.owner, id, revision, state)
             .map_err(|e| RpcError::new("command", e.to_string()))?;
         refresh_conditions(host);
-        host.commands
+        host.core
+            .commands
             .set_conditions(reply.owner, id, conditions)
             .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-        host.commands.note_sent(
+        host.core.commands.note_sent(
             reply.owner,
             id,
             None,
@@ -150,7 +153,7 @@ fn register_or_update(
             params["when"].clone(),
         );
     }
-    Ok(json!({"revision":host.commands.revision()}))
+    Ok(json!({"revision":host.core.commands.revision()}))
 }
 
 /// The id, revision and state of a register or update; the disabled reason
@@ -244,14 +247,16 @@ fn register(
     // Everything that can refuse the registration (bindings parsed and not
     // repeated, the id, path, conflict and limits) is checked by the
     // registry before it changes; what follows only records it.
-    host.commands
+    host.core
+        .commands
         .register(owner, &origin.id, id.into(), revision, declaration, state)
         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
     refresh_conditions(host);
-    host.commands
+    host.core
+        .commands
         .set_conditions(owner, id, conditions)
         .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-    host.commands.note_sent(
+    host.core.commands.note_sent(
         owner,
         id,
         Some(params["declaration"].clone()),
@@ -281,7 +286,7 @@ fn conditions(params: &Value) -> std::result::Result<Option<Conditions>, RpcErro
 /// evaluated.
 pub(crate) fn refresh_conditions(host: &mut Host) {
     let facts = host.condition_facts();
-    host.commands.set_facts(facts);
+    host.core.commands.set_facts(facts);
 }
 
 /// `declaration.button`: `{ icon, order }`, the icon a name of the icon

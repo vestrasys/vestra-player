@@ -37,14 +37,14 @@ impl Capability for SourceResolve {
     }
     /// The worker moves its resolvers and their waiting resolutions.
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        let _ = host.backend.commands.send(Command {
+        let _ = host.core.backend.commands.send(Command {
             reply: Reply { owner: from, id: 0 },
             method: "owner.rekey".into(),
             params: serde_json::json!({ "to": to }),
         });
     }
     fn prune(&self, host: &mut Host, owner: u64) {
-        let _ = host.backend.commands.send(Command {
+        let _ = host.core.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
             method: "owner.prune".into(),
             params: Value::Null,
@@ -54,7 +54,8 @@ impl Capability for SourceResolve {
         if call.method != "sourceResolvers.register" {
             return Err(RpcError::new("unsupported", "not a recorded method"));
         }
-        host.backend
+        host.core
+            .backend
             .commands
             .send(Command {
                 reply: Reply { owner, id: 0 },
@@ -68,7 +69,8 @@ impl Capability for SourceResolve {
         match method {
             "sourceResolvers.respond" => {
                 // The request it answers is no longer in flight.
-                host.resolution_answered(reply.owner, params["requestId"].as_u64());
+                host.core
+                    .resolution_answered(reply.owner, params["requestId"].as_u64());
                 forward(host, reply, method, params)
             }
             "sourceResolvers.register" | "sourceResolvers.unregister" => {

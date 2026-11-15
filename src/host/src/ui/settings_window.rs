@@ -556,6 +556,7 @@ impl Host {
         match method {
             "settings.register" => {
                 let origin = self
+                    .core
                     .plugins
                     .get(&owner)
                     .map(process::Plugin::origin)
@@ -578,7 +579,7 @@ impl Host {
                 let checked = source(&[&page])?;
                 self.settings.sent.insert(page.serial, sent_page(params));
                 if self.settings.checker.is_none() {
-                    self.settings.checker = spawn_checker(self.events.clone());
+                    self.settings.checker = spawn_checker(self.core.events.clone());
                 }
                 let queued =
                     self.settings.checker.as_ref().is_some_and(|checker| {
@@ -630,7 +631,7 @@ impl Host {
             "settings.set" => {
                 // A large array converted on the reader thread (P3): its
                 // whole value was taken out of `params`.
-                let mut prepared = self.take_prepared(reply);
+                let mut prepared = self.core.take_prepared(reply);
                 let id = params_page(params)?.to_owned();
                 let property = string(params, "property")?.to_owned();
                 let page = self
@@ -704,7 +705,7 @@ impl Host {
                 Ok(Some(Value::Null))
             }
             "settings.show" => {
-                if self.headless {
+                if self.core.headless {
                     return Err(RpcError::new("unavailable", "no user interface"));
                 }
                 if !params["id"].is_null() {
@@ -991,10 +992,10 @@ impl Host {
                 &alias,
                 owner,
                 page.view(),
-                self.events.clone(),
+                self.core.events.clone(),
             )?;
         }
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.set_callback("select", move |args| {
             if let Some(SValue::Number(index)) = args.first()
                 && *index >= 0.
@@ -1003,7 +1004,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.set_callback("close-window", move |_| {
             let _ = events.send(Event::Settings(generation, None));
             SValue::Void
@@ -1019,7 +1020,7 @@ impl Host {
         instance: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) {
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::Settings(generation, None));
             slint::CloseRequestResponse::KeepWindowShown
@@ -1131,7 +1132,7 @@ impl Host {
                 .get_or_insert_with(Default::default);
             if last.last_page != key {
                 last.last_page = key;
-                let now = self.now_ms();
+                let now = self.core.now_ms();
                 self.ui_state.touch(now);
             }
         }
@@ -1193,7 +1194,7 @@ impl Host {
             return;
         };
         let (reply, page, refused) = self.settings.checking.remove(index);
-        if !self.plugins.contains_key(&reply.owner) {
+        if !self.core.plugins.contains_key(&reply.owner) {
             self.settings.forget_gone();
             return;
         }

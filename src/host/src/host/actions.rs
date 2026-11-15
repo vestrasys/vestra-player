@@ -10,7 +10,7 @@ impl Host {
         owner: u64,
         id: &str,
     ) -> std::result::Result<(), RpcError> {
-        let execution = match self.commands.resolve_execution(owner, id) {
+        let execution = match self.core.commands.resolve_execution(owner, id) {
             Ok(execution) => execution,
             Err(error) => {
                 // A plugin held after a fault (supervisor.md §7): a click shows why,
@@ -18,7 +18,7 @@ impl Host {
                 if let commands::CommandError::Disabled {
                     reason: Some(reason),
                 } = &error
-                    && self.commands.held(owner)
+                    && self.core.commands.held(owner)
                 {
                     diag!("supervisor: {id} of a held plugin: \"{reason}\"");
                     self.show_osd(&reason.clone());
@@ -48,15 +48,16 @@ impl Host {
                     false,
                 )
                 .map_err(anyhow::Error::msg)?;
-            self.commands
+            self.core
+                .commands
                 .register(bindings::HOST, "host", id.into(), 1, declaration, state)
                 .map_err(|e| anyhow::anyhow!("{e}"))?;
         }
-        self.host_revision = 1;
-        for (id, declaration) in core_actions::declarations(self.step_seconds()) {
+        self.core.host_revision = 1;
+        for (id, declaration) in core_actions::declarations(self.core.step_seconds()) {
             self.register_core_action(id, declaration)?;
         }
-        self.core_action_states();
+        self.core.core_action_states();
         Ok(())
     }
     /// The host's own commands (owner 0): toggle, enter and leave
@@ -176,73 +177,33 @@ impl Host {
             )
             .map_err(anyhow::Error::msg)?;
         let state = core_actions::state(id, &core_actions::Facts::default(), false);
-        self.commands
+        self.core
+            .commands
             .register(
                 bindings::HOST,
                 "host",
                 id.into(),
-                self.host_revision.max(1),
+                self.core.host_revision.max(1),
                 declaration,
                 state,
             )
             .map_err(|e| anyhow::anyhow!("{e}"))
     }
-    /// The first-tier relative seek: the newest `setStepSeek`, else 5 seconds.
-    pub(crate) fn step_seconds(&self) -> f64 {
-        self.step_seek
-            .values()
-            .max_by_key(|(sequence, ..)| *sequence)
-            .map_or(core_actions::DEFAULT_STEP, |(_, seconds, _)| *seconds)
-    }
-    /// Whether step seeks land on keyframes: the newest `setStepSeek`'s
-    /// `keyframes` (written as a pair with the seconds), else exact.
-    pub(crate) fn step_keyframes(&self) -> bool {
-        self.step_seek
-            .values()
-            .max_by_key(|(sequence, ..)| *sequence)
-            .is_some_and(|(.., keyframes)| *keyframes)
-    }
     /// The seek menu titles carry the step: re-register them when it changes.
     pub(crate) fn step_seek_changed(&mut self, before: f64) {
-        let after = self.step_seconds();
+        let after = self.core.step_seconds();
         if after == before {
             return;
         }
         for (id, declaration) in core_actions::declarations(after) {
             if id == "seek-backward" || id == "seek-forward" {
-                let _ = self.commands.remove(bindings::HOST, id);
+                let _ = self.core.commands.remove(bindings::HOST, id);
                 if let Err(error) = self.register_core_action(id, declaration) {
                     diag!("host.error core action {id}: {error}");
                 }
             }
         }
-        self.core_action_states();
-    }
-    /// The last source state with the sequence flags merged in.
-    pub(crate) fn core_facts(&self) -> core_actions::Facts {
-        let mut state = self.last_source.clone();
-        self.patch_source(&mut state);
-        core_actions::Facts::from_state(&state)
-    }
-    /// Publish changed enabled/checked/busy states of the registered actions.
-    pub(crate) fn core_action_states(&mut self) {
-        let facts = self.core_facts();
-        for id in core_actions::ACTIONS {
-            if core_actions::WINDOW_ACTIONS.contains(&id) {
-                continue;
-            }
-            let state = core_actions::state(id, &facts, self.actions_busy.contains(id));
-            if self
-                .commands
-                .get(bindings::HOST, id)
-                .is_some_and(|entry| entry.state != state)
-            {
-                self.host_revision += 1;
-                let _ = self
-                    .commands
-                    .update(bindings::HOST, id, self.host_revision, state);
-            }
-        }
+        self.core.core_action_states();
     }
     /// Run a core action for a binding, the menu or `host.run`. `reply` (a
     /// plugin's `host.run`) is answered when it finished. `Ok(true)` means
@@ -275,7 +236,7 @@ impl Host {
                 Err(RpcError::new("unavailable", "the player has no window"))
             };
         }
-        let facts = self.core_facts();
+        let facts = self.core.core_facts();
         let state = core_actions::state(action, &facts, false);
         if !state.enabled {
             return Err(RpcError::new(
@@ -285,6 +246,7 @@ impl Host {
         }
         if matches!(action, "previous" | "next") {
             let (provider, ..) = self
+                .core
                 .sequence
                 .ok_or_else(|| RpcError::new("unavailable", "no sequence provider"))?;
             self.send(
@@ -296,24 +258,25 @@ impl Host {
             ));
             return Ok(true);
         }
-        if core_actions::exclusive(action) && !self.actions_busy.insert(action.to_owned()) {
+        if core_actions::exclusive(action) && !self.core.actions_busy.insert(action.to_owned()) {
             // The same action is still running: this trigger is dropped.
             return Ok(true);
         }
-        self.core_action_states();
+        self.core.core_action_states();
         let reply = reply.cloned().unwrap_or(Reply {
             owner: bindings::HOST,
             id: 0,
         });
-        self.backend
+        self.core
+            .backend
             .commands
             .send(Command {
                 reply,
                 method: "host.action".into(),
                 // `queuedUs`: a slow way to the worker is logged (`stall.rs`).
                 params: json!({"action":action,"queuedUs":super::stall::clock_us(),
-                    "step":step.unwrap_or_else(|| self.step_seconds()),
-                    "keyframes":self.step_keyframes(),
+                    "step":step.unwrap_or_else(|| self.core.step_seconds()),
+                    "keyframes":self.core.step_keyframes(),
                     "sequence":{"next":facts.next,"previous":facts.previous}}),
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
@@ -326,7 +289,7 @@ impl Host {
         action: &str,
         result: std::result::Result<Value, RpcError>,
     ) {
-        self.actions_busy.remove(action);
+        self.core.actions_busy.remove(action);
         match &result {
             Ok(value) => {
                 if let Some(text) = value["osd"].as_str() {
@@ -337,7 +300,7 @@ impl Host {
             Err(error) if reply.owner == bindings::HOST => self.show_osd(&error.message),
             Err(_) => {}
         }
-        self.core_action_states();
+        self.core.core_action_states();
         if reply.owner != bindings::HOST {
             self.respond(reply, result.map(|_| Value::Null));
         }
@@ -380,7 +343,7 @@ impl Host {
         } else {
             OSD_MS
         };
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         self.osd_until = Some(now + ms);
         self.osd_shown_at = now;
         self.osd_clear_at = None;
@@ -403,7 +366,7 @@ impl Host {
         self.osd_debug(&OsdEvent::Hide(reason));
         self.osd_until = None;
         self.osd_actions = None;
-        self.osd_clear_at = Some(self.now_ms() + OSD_CLEAR_MS);
+        self.osd_clear_at = Some(self.core.now_ms() + OSD_CLEAR_MS);
         self.osd_shown.visible = false;
         self.write_osd();
     }
@@ -428,9 +391,10 @@ impl Host {
         if !debug_osd() {
             return;
         }
-        let from = self
-            .osd_from
-            .map_or_else(|| "the player".to_owned(), |owner| self.plugin_id(owner));
+        let from = self.osd_from.map_or_else(
+            || "the player".to_owned(),
+            |owner| self.core.plugin_id(owner),
+        );
         let actions = self
             .osd_actions
             .as_ref()
@@ -454,41 +418,6 @@ impl Host {
         self.act(owner, origins::Origin::Main);
         if let Err(error) = self.execute_command(owner, &id) {
             diag!("osd action {id}: {}", error.message);
-        }
-    }
-    pub(crate) fn host_command_states(&mut self, fullscreen: bool) {
-        let checked = self
-            .commands
-            .get(bindings::HOST, "fullscreen")
-            .and_then(|entry| entry.state.checked);
-        if checked == Some(fullscreen) {
-            return;
-        }
-        self.host_revision += 1;
-        let revision = self.host_revision;
-        let _ = self.commands.update(
-            bindings::HOST,
-            "fullscreen",
-            revision,
-            commands::CommandState {
-                enabled: true,
-                checked: Some(fullscreen),
-                busy: false,
-                reason: None,
-            },
-        );
-        for (id, enabled) in fullscreen_command_states(fullscreen) {
-            let _ = self.commands.update(
-                bindings::HOST,
-                id,
-                revision,
-                commands::CommandState {
-                    enabled,
-                    checked: None,
-                    busy: false,
-                    reason: None,
-                },
-            );
         }
     }
     pub(crate) fn host_command(&mut self, id: &str) {
@@ -540,6 +469,84 @@ impl Host {
             _ => {}
         }
         true
+    }
+}
+impl Core {
+    /// The first-tier relative seek: the newest `setStepSeek`, else 5 seconds.
+    pub(crate) fn step_seconds(&self) -> f64 {
+        self.step_seek
+            .values()
+            .max_by_key(|(sequence, ..)| *sequence)
+            .map_or(core_actions::DEFAULT_STEP, |(_, seconds, _)| *seconds)
+    }
+    /// Whether step seeks land on keyframes: the newest `setStepSeek`'s
+    /// `keyframes` (written as a pair with the seconds), else exact.
+    pub(crate) fn step_keyframes(&self) -> bool {
+        self.step_seek
+            .values()
+            .max_by_key(|(sequence, ..)| *sequence)
+            .is_some_and(|(.., keyframes)| *keyframes)
+    }
+    /// The last source state with the sequence flags merged in.
+    pub(crate) fn core_facts(&self) -> core_actions::Facts {
+        let mut state = self.last_source.clone();
+        self.patch_source(&mut state);
+        core_actions::Facts::from_state(&state)
+    }
+    /// Publish changed enabled/checked/busy states of the registered actions.
+    pub(crate) fn core_action_states(&mut self) {
+        let facts = self.core_facts();
+        for id in core_actions::ACTIONS {
+            if core_actions::WINDOW_ACTIONS.contains(&id) {
+                continue;
+            }
+            let state = core_actions::state(id, &facts, self.actions_busy.contains(id));
+            if self
+                .commands
+                .get(bindings::HOST, id)
+                .is_some_and(|entry| entry.state != state)
+            {
+                self.host_revision += 1;
+                let _ = self
+                    .commands
+                    .update(bindings::HOST, id, self.host_revision, state);
+            }
+        }
+    }
+    pub(crate) fn host_command_states(&mut self, fullscreen: bool) {
+        let checked = self
+            .commands
+            .get(bindings::HOST, "fullscreen")
+            .and_then(|entry| entry.state.checked);
+        if checked == Some(fullscreen) {
+            return;
+        }
+        self.host_revision += 1;
+        let revision = self.host_revision;
+        let _ = self.commands.update(
+            bindings::HOST,
+            "fullscreen",
+            revision,
+            commands::CommandState {
+                enabled: true,
+                checked: Some(fullscreen),
+                busy: false,
+                reason: None,
+            },
+        );
+        for (id, enabled) in fullscreen_command_states(fullscreen) {
+            let _ = self.commands.update(
+                bindings::HOST,
+                id,
+                revision,
+                commands::CommandState {
+                    enabled,
+                    checked: None,
+                    busy: false,
+                    reason: None,
+                },
+            );
+        }
     }
 }
 

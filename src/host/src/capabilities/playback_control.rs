@@ -39,9 +39,10 @@ impl Capability for PlaybackControl {
     }
     /// What it holds in the playback worker is answered there (`owner.resources`).
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.step_seek.contains_key(&owner)
+        if host.core.step_seek.contains_key(&owner)
             || host.power.holds(owner)
             || host
+                .core
                 .sequence
                 .is_some_and(|(provider, ..)| provider == owner)
         {
@@ -62,10 +63,11 @@ impl Capability for PlaybackControl {
                     Value::Bool(keyframes) => *keyframes,
                     _ => return Err(RpcError::invalid("keyframes must be a boolean")),
                 };
-                let before = host.step_seconds();
-                host.step_writes += 1;
-                host.step_seek
-                    .insert(reply.owner, (host.step_writes, seconds, keyframes));
+                let before = host.core.step_seconds();
+                host.core.step_writes += 1;
+                host.core
+                    .step_seek
+                    .insert(reply.owner, (host.core.step_writes, seconds, keyframes));
                 host.step_seek_changed(before);
                 Ok(Some(Value::Null))
             }
@@ -77,10 +79,10 @@ impl Capability for PlaybackControl {
                 Ok(Some(Value::Null))
             }
             "sequence.set" => {
-                if let Some((provider, ..)) = host.sequence
+                if let Some((provider, ..)) = host.core.sequence
                     && provider != reply.owner
                 {
-                    let holder = host.plugin_id(provider);
+                    let holder = host.core.plugin_id(provider);
                     let text = i18n::tr_args(
                         "Previous/Next not taken over: provided by {}",
                         &json!([holder]),
@@ -91,9 +93,9 @@ impl Capability for PlaybackControl {
                         text,
                     ));
                 }
-                host.clear_warning(reply.owner, "sequence-taken");
+                host.core.clear_warning(reply.owner, "sequence-taken");
                 let flags = &params["flags"];
-                host.sequence = if flags.is_null() {
+                host.core.sequence = if flags.is_null() {
                     None
                 } else {
                     let flag = |key: &str| {
@@ -109,6 +111,7 @@ impl Capability for PlaybackControl {
             "sequence.step" => {
                 let direction = string(params, "direction")?;
                 let (provider, next, previous) = host
+                    .core
                     .sequence
                     .ok_or_else(|| RpcError::new("unavailable", "no sequence provider"))?;
                 let allowed = match direction {

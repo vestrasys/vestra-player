@@ -11,7 +11,7 @@
 //!
 //! This module is the process layer: spawning, the reader and writer
 //! threads, a member's send and stop, the heartbeat and the restart policy
-//! ([`Policy`]). Who runs here (`Host::trust`) and what a restart does
+//! ([`Policy`]). Who runs here (`Core::trust`) and what a restart does
 //! (`Host::restart_shared`) live in `package_manager.rs`.
 #![forbid(unsafe_code)]
 

@@ -42,7 +42,7 @@ impl Capability for UiWindow {
 }
 
 fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
-    if host.headless {
+    if host.core.headless {
         return Err(RpcError::new(
             "unavailable",
             "UI is unavailable in headless mode",
@@ -81,7 +81,7 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
         &id,
         &values,
         &callbacks,
-        host.events.clone(),
+        host.core.events.clone(),
         |instance| {
             if theme != theme::THEMES[0] && theme::apply(instance, &theme).is_err()
                 || theme::apply_fonts(instance).is_err()
@@ -118,7 +118,7 @@ fn change(
     let mut done = None;
     if method == "ui.set" {
         let property = string(params, "property")?;
-        prepared = host.take_prepared(reply);
+        prepared = host.core.take_prepared(reply);
         match host.parts(
             reply.owner,
             &view_key,

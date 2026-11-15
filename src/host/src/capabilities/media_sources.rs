@@ -76,7 +76,7 @@ pub(crate) fn locate_dialog(
     reply: &Reply,
     fields: Value,
 ) -> std::result::Result<(), RpcError> {
-    if host.headless {
+    if host.core.headless {
         return Err(RpcError::new(
             "unavailable",
             "native dialogs require a running native window",
@@ -121,7 +121,7 @@ pub(crate) fn locate_dialog(
     // RFD creates the native operation on this Slint main thread; only
     // awaiting its completion belongs to the worker.
     let task = dialog.pick_file();
-    let events = host.events.clone();
+    let events = host.core.events.clone();
     let reply = reply.clone();
     std::thread::spawn(move || {
         let path = pollster::block_on(task).map(|file| file.path().to_path_buf());
@@ -129,6 +129,7 @@ pub(crate) fn locate_dialog(
     });
     host.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
-    host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    host.core
+        .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
     Ok(())
 }

@@ -121,12 +121,14 @@ impl Host {
             } else {
                 ""
             },
-            self.supervisor.budget_count()
+            self.core.supervisor.budget_count()
         );
-        self.supervisor.set_now(now);
-        self.supervisor.memory_pressure(level);
+        self.core.supervisor.set_now(now);
+        self.core.supervisor.memory_pressure(level);
         self.supervisor_run();
     }
+}
+impl Core {
     /// Why the core asks `owner` for its resources, when that is the
     /// process budget or memory pressure (a log line; the idle timer's
     /// asks are not logged).

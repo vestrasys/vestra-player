@@ -58,7 +58,7 @@ impl Capability for UiDialog {
 /// for a system dialog, the sheet's answer otherwise). One confirmation at
 /// a time, a system dialog's or a sheet's (an approval sheet's too).
 fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
-    if host.headless {
+    if host.core.headless {
         return Err(RpcError::new(
             "unavailable",
             "native dialogs require a running native window",
@@ -92,7 +92,7 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
         } else {
             &Value::Null
         };
-        shown[field] = host.plugin_sentence(reply.owner, text, args)?.into();
+        shown[field] = host.core.plugin_sentence(reply.owner, text, args)?.into();
     }
     let options = confirm::parse(&shown)?;
     // The window where the user last acted for the caller (`host/origins`):
@@ -118,13 +118,13 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
             // in the palette's first row: the caller holds the lead, the
             // user last acted for it there (not in its panel, say, while an
             // older request's ticket is still live) and that request is live.
-            let now = host.now_ms();
+            let now = host.core.now_ms();
             let request = host
                 .lead
                 .as_ref()
                 .filter(|lead| lead.owner == reply.owner)
                 .filter(|_| host.origins.get(reply.owner) == Some(&Origin::Lead))
-                .and_then(|_| host.command_runs.live_request(reply.owner, now));
+                .and_then(|_| host.core.command_runs.live_request(reply.owner, now));
             host.open_confirm(reply.clone(), options, request);
             return Ok(());
         }
@@ -142,13 +142,14 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     if let Some(instance) = &owner {
         view::show_again(instance, platform::app_in_foreground());
     }
-    let events = host.events.clone();
+    let events = host.core.events.clone();
     let answer = reply.clone();
     // Busy before it shows: macOS without a window runs it modally here.
     host.dialog_busy = true;
     host.confirm_open = true;
     #[cfg(feature = "producer-audio")]
-    host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    host.core
+        .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
     if let Err(error) = platform::confirm(
         &options,
         owner.as_ref().map(|instance| instance.window()),
@@ -166,7 +167,7 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
 
 /// `dialogs.open`: answered when the picker closes (`Event::DialogDone`).
 fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
-    if host.headless {
+    if host.core.headless {
         return Err(RpcError::new(
             "unavailable",
             "native dialogs require a running native window",
@@ -181,7 +182,9 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     }
     let title = match &params["title"] {
         Value::Null => i18n::tr("Select a path"),
-        title => host.plugin_sentence(reply.owner, title, &Value::Null)?,
+        title => host
+            .core
+            .plugin_sentence(reply.owner, title, &Value::Null)?,
     };
     if title.len() > 256 {
         return Err(RpcError::invalid("dialog title too long"));
@@ -192,7 +195,8 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     // translated, a path separator in the translation replaced.
     let name = match &params["fileName"] {
         name if i18n::text::is_text(name) => Some(
-            host.plugin_sentence(reply.owner, name, &Value::Null)?
+            host.core
+                .plugin_sentence(reply.owner, name, &Value::Null)?
                 .replace(['/', '\\'], "-"),
         ),
         name => name.as_str().map(str::to_owned),
@@ -203,7 +207,7 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
         }
         dialog = dialog.set_file_name(name);
     }
-    let events = host.events.clone();
+    let events = host.core.events.clone();
     let reply = reply.clone();
     // RFD creates the native operation on this Slint main thread.
     // Only awaiting its completion belongs to the worker.
@@ -232,6 +236,7 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     }
     host.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
-    host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    host.core
+        .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
     Ok(())
 }

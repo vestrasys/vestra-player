@@ -29,7 +29,7 @@
 //! playthrough that plays again after its end (a seek back) leaves
 //! playback again later and gets a second `ended`, as the stream showed it
 //! end twice. `source.ended` with `reason: "quit"` is not derived here: the
-//! quit sends it (`Host::quit_source_ended`).
+//! quit sends it (`Core::quit_source_ended`).
 #![forbid(unsafe_code)]
 
 use serde_json::{Value, json};

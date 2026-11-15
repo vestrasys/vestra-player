@@ -100,7 +100,7 @@ pub(crate) struct Review {
     pub(crate) checkbox: String,
     /// The box is checked (the host's state; unchecked for every sheet).
     pub(crate) checked: bool,
-    /// When it last showed (`Host::now_ms`); `None` while it waits to show.
+    /// When it last showed (`Core::now_ms`); `None` while it waits to show.
     pub(crate) shown_at: Option<u64>,
     /// It has shown once: the main window came into view for it
     /// (`Host::present_review`), which is not repeated when it shows again
@@ -330,7 +330,7 @@ impl Host {
         // Nothing of the texts: they may name the user's file.
         diag!(
             "review sheet: {} asks to confirm",
-            self.plugin_id(reply.owner)
+            self.core.plugin_id(reply.owner)
         );
         self.open_sheet(Review {
             reply,
@@ -354,7 +354,7 @@ impl Host {
         self.review
             .as_ref()
             .is_some_and(|review| match review.asks {
-                Asks::Run { .. } => self.command_runs.waiting(&review.reply),
+                Asks::Run { .. } => self.core.command_runs.waiting(&review.reply),
                 Asks::Confirm { .. } => true,
             })
     }
@@ -397,7 +397,8 @@ impl Host {
             self.close_menu();
         }
         #[cfg(feature = "producer-audio")]
-        self.physical_revoke(producer_input::RevokeReason::Menu);
+        self.core
+            .physical_revoke(producer_input::RevokeReason::Menu);
         let Some(value) = self.review_value() else {
             return;
         };
@@ -415,7 +416,7 @@ impl Host {
             Ok(())
         })();
         self.report_menu(result);
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let first = self.review.as_mut().is_some_and(|review| {
             review.shown_at = Some(now);
             !std::mem::replace(&mut review.hinted, true)
@@ -499,6 +500,7 @@ impl Host {
             return;
         }
         let Some((text, checked)) = self
+            .core
             .command_runs
             .offered(&review.reply)
             .and_then(|names| offer_after(names, &review.checkbox, review.checked))
@@ -526,7 +528,7 @@ impl Host {
             Ok(())
         })();
         self.report_menu(result);
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         if let Some(review) = self.review.as_mut() {
             review.shown_at = Some(now);
         }
@@ -552,7 +554,7 @@ impl Host {
         }
         if review
             .ticket()
-            .is_some_and(|ticket| !self.command_runs.is_live(ticket, now))
+            .is_some_and(|ticket| !self.core.command_runs.is_live(ticket, now))
         {
             diag!("review sheet: the ticket ended: Don't Run");
             let checked = review.reports_checkbox() && review.checked;
@@ -579,7 +581,7 @@ impl Host {
         let decision = decide(
             action,
             review.shown_at.unwrap_or(0),
-            self.now_ms(),
+            self.core.now_ms(),
             !review.checkbox.is_empty(),
             review.checked,
             review.reports_checkbox(),
@@ -615,14 +617,15 @@ impl Host {
         input_trace::follow(&format!("review sheet: answered {yes} (checked {checked})"));
         match review.asks {
             Asks::Run { .. } => {
-                let _ = self
-                    .events
-                    .send(Event::CommandRunAnswered(review.reply, yes, checked));
+                let _ =
+                    self.core
+                        .events
+                        .send(Event::CommandRunAnswered(review.reply, yes, checked));
             }
             Asks::Confirm { .. } => {
                 // As `Event::ConfirmDone` (the system dialog's answer) and
                 // `Event::CommandRunAnswered` (a plan's) do.
-                self.policy.activity(self.now_ms());
+                self.policy.activity(self.core.now_ms());
                 self.respond(
                     review.reply,
                     Ok(json!({"confirmed": yes, "checked": checked})),

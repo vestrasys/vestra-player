@@ -195,6 +195,7 @@ impl Host {
                 continue;
             }
             let owner = self
+                .core
                 .plugins
                 .iter()
                 .find(|(_, p)| p.manifest.id == test.manifest)
@@ -221,7 +222,7 @@ impl Host {
         };
         let id = match self.on_demand.held.get(&owner) {
             Some(held) => held.id.clone(),
-            None => self.plugin_id(owner),
+            None => self.core.plugin_id(owner),
         };
         let line = json!({"moment":moment,"id":id,"registry":self.registry_of(owner)});
         let written = std::fs::OpenOptions::new()
@@ -238,12 +239,13 @@ impl Host {
         if self.on_demand.probe.file.is_none() {
             return;
         }
-        for owner in self.plugins.keys().chain(self.on_demand.held.keys()) {
+        for owner in self.core.plugins.keys().chain(self.on_demand.held.keys()) {
             self.probe_registry(*owner, "quit");
         }
     }
     fn registry_of(&self, owner: u64) -> Value {
         let commands = self
+            .core
             .commands
             .entries_of(owner)
             .into_iter()
@@ -330,7 +332,7 @@ impl Host {
                 })
             })
             .collect::<Vec<_>>();
-        let wakes = match self.plugins.get(&owner) {
+        let wakes = match self.core.plugins.get(&owner) {
             Some(plugin) => plugin
                 .subscriptions
                 .iter()
