@@ -307,6 +307,7 @@ fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(
         && lead.owner != owner
     {
         let holder = host
+            .core
             .plugins
             .get(&lead.owner)
             .map(|p| p.manifest.id.clone())
@@ -413,7 +414,7 @@ impl Capability for PaletteLead {
             "palette.lead.clear" => clear(host, reply.owner),
             _ => {
                 let ticket = string(params, "ticket")?;
-                host.command_runs.done(reply.owner, ticket);
+                host.core.command_runs.done(reply.owner, ticket);
             }
         }
         Ok(Some(Value::Null))

@@ -195,7 +195,7 @@ impl Host {
     pub(crate) fn lead_ended(&mut self, status: &LeadStatus) {
         // The state only: the text may quote the user's request.
         diag!("lead strip: {}", status.state.name());
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         self.lead_strip.step = None;
         self.lead_strip.ended = Some(Ended {
             text: status.text.clone(),
@@ -232,7 +232,7 @@ impl Host {
     /// Write the strip into the shell if it changed.
     pub(crate) fn refresh_strip(&mut self) {
         let covered = self.menu_open && self.menu_generation == self.shell_generation;
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let cached = self.lead_strip.animations;
         let mut read = None;
         let next = project(
@@ -276,7 +276,7 @@ impl Host {
             .lead_strip
             .step
             .as_ref()
-            .is_some_and(|step| !self.command_runs.is_live(&step.ticket, now))
+            .is_some_and(|step| !self.core.command_runs.is_live(&step.ticket, now))
         {
             self.lead_strip.step = None;
         }

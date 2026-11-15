@@ -1,7 +1,7 @@
 //! A plugin's host-side state and its runner: its own Node process
 //! (`runner.ts`, one JSONL pipe each way), or a member of the shared runner
 //! (`shared_runner.rs`) for the built-ins the host trusts
-//! (`Host::trust`).
+//! (`Core::trust`).
 pub(crate) mod reaper;
 pub(crate) mod runtime_paths;
 pub(crate) mod shared_runner;

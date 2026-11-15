@@ -16,49 +16,24 @@ impl Host {
     }
     /// Mount requests held while the built-ins start, answered in order once they have.
     pub(crate) fn release_held_mounts(&mut self) {
-        if self.held_mounts.is_empty() {
+        if self.core.held_mounts.is_empty() {
             return;
         }
-        let starting = self.builtins_starting();
-        for (reply, method, params) in self.held_mounts.release(starting) {
-            if self.plugins.contains_key(&reply.owner) {
+        let starting = self.core.builtins_starting();
+        for (reply, method, params) in self.core.held_mounts.release(starting) {
+            if self.core.plugins.contains_key(&reply.owner) {
                 self.answer(reply, &method, &params);
             }
         }
     }
-    /// The manifest id of a running plugin (its owner number otherwise).
-    pub(crate) fn plugin_id(&self, owner: u64) -> String {
-        self.plugins
-            .get(&owner)
-            .map_or_else(|| owner.to_string(), |p| p.manifest.id.clone())
-    }
-    /// Refuse what another plugin holds (`RpcError::taken`): recorded for
-    /// A sentence of a plugin's (`osd.show`, dialogs) in the interface
-    /// language: a template translated with its catalog and formatted with
-    /// `args`, or a text value (`i18n::text`).
-    pub(crate) fn plugin_sentence(
-        &self,
-        owner: u64,
-        text: &Value,
-        args: &Value,
-    ) -> std::result::Result<String, RpcError> {
-        let texts = self.plugins.get(&owner).map_or(
-            i18n::text::Texts {
-                catalog: None,
-                locale: i18n::locale(),
-            },
-            process::Plugin::texts,
-        );
-        texts.sentence(text, args).map_err(RpcError::invalid)
-    }
     /// `packages.list`, shown on the OSD and announced as `host.error`.
     pub(crate) fn refuse_taken(&mut self, owner: u64, error: RpcError, text: String) -> RpcError {
-        let id = self.plugin_id(owner);
+        let id = self.core.plugin_id(owner);
         let mut warning = Value::Object(error.detail.clone().unwrap_or_default());
         if let Some(reason) = warning.as_object_mut().and_then(|w| w.remove("reason")) {
             warning["code"] = reason;
         }
-        let warnings = self.warnings.edit().entry(owner).or_default();
+        let warnings = self.core.warnings.edit().entry(owner).or_default();
         warnings.retain(|(w, _)| w["code"] != warning["code"] || w["slot"] != warning["slot"]);
         warnings.push((warning.clone(), text.clone()));
         diag!("{id}: {}", error.message);
@@ -67,30 +42,6 @@ impl Host {
         warning["message"] = error.message.clone().into();
         self.broadcast("host.error", warning);
         error
-    }
-    pub(crate) fn clear_warning(&mut self, owner: u64, code: &str) {
-        if let Some(warnings) = self.warnings.edit().get_mut(&owner) {
-            warnings.retain(|(w, _)| w["code"] != code);
-        }
-    }
-    /// `packages.list` `warnings` of a running plugin.
-    pub(crate) fn warnings_of(&self, owner: u64) -> Vec<Value> {
-        self.warnings
-            .get(&owner)
-            .into_iter()
-            .flatten()
-            .map(|(warning, _)| warning.clone())
-            .collect()
-    }
-    /// The same warnings as text: 「面板未显示：侧栏已被 vestra.playlist 使用」.
-    pub(crate) fn warning_text(&self, owner: u64) -> Option<String> {
-        let text = self
-            .warnings
-            .get(&owner)?
-            .iter()
-            .map(|(_, text)| text.as_str())
-            .collect::<Vec<_>>();
-        (!text.is_empty()).then(|| text.join(&i18n::tr("; ")))
     }
     pub(crate) fn respond(
         &mut self,
@@ -107,7 +58,7 @@ impl Host {
                 .remove("target")
                 .and_then(|t| t.as_str().map(str::to_owned))
                 .unwrap_or_default();
-            let id = self.plugin_id(holder);
+            let id = self.core.plugin_id(holder);
             detail.insert("owner".into(), id.clone().into());
             detail.insert("target".into(), target.clone().into());
             error.message = i18n::tr_args("{} is resolved by {}", &json!([target, id]));
@@ -116,13 +67,15 @@ impl Host {
             result = Err(self.refuse_taken(reply.owner, refusal, text));
         }
         let activation_ui = self
+            .core
             .supervisor
             .activation_ui_take(Pid(reply.owner), reply.id);
         if activation_ui {
             let outcome = activation_outcome(&result);
-            let now = self.now_ms();
+            let now = self.core.now_ms();
             if let Err(error) =
-                self.supervisor
+                self.core
+                    .supervisor
                     .activation_ui_finish(Pid(reply.owner), reply.id, outcome, now)
             {
                 diag!("activation UI completion: {error}");
@@ -130,7 +83,7 @@ impl Host {
         }
         // Answered: it no longer counts against the plugin's limits of
         // unanswered requests (`process/unanswered.rs`).
-        if let Some(plugin) = self.plugins.get(&reply.owner) {
+        if let Some(plugin) = self.core.plugins.get(&reply.owner) {
             plugin.answered(reply.id);
         }
         let message = match result {
@@ -152,6 +105,7 @@ impl Host {
         params: &Value,
     ) -> std::result::Result<Option<Value>, RpcError> {
         let plugin = self
+            .core
             .plugins
             .get(&reply.owner)
             .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
@@ -161,7 +115,7 @@ impl Host {
         // provenance. Every other request is open to every plugin (a
         // manifest declares nothing since player 0.9.0).
         if route.builtin_only() {
-            route.check_caller(self.is_builtin(reply.owner))?;
+            route.check_caller(self.core.is_builtin(reply.owner))?;
         }
         // Text values (i18n.md §7) in property values, timeline titles,
         // subtitle track titles and resolver failures become the strings
@@ -193,5 +147,56 @@ impl Host {
             params
         };
         route.handle(self, reply, method, params)
+    }
+}
+impl Core {
+    /// The manifest id of a running plugin (its owner number otherwise).
+    pub(crate) fn plugin_id(&self, owner: u64) -> String {
+        self.plugins
+            .get(&owner)
+            .map_or_else(|| owner.to_string(), |p| p.manifest.id.clone())
+    }
+    /// Refuse what another plugin holds (`RpcError::taken`): recorded for
+    /// A sentence of a plugin's (`osd.show`, dialogs) in the interface
+    /// language: a template translated with its catalog and formatted with
+    /// `args`, or a text value (`i18n::text`).
+    pub(crate) fn plugin_sentence(
+        &self,
+        owner: u64,
+        text: &Value,
+        args: &Value,
+    ) -> std::result::Result<String, RpcError> {
+        let texts = self.plugins.get(&owner).map_or(
+            i18n::text::Texts {
+                catalog: None,
+                locale: i18n::locale(),
+            },
+            process::Plugin::texts,
+        );
+        texts.sentence(text, args).map_err(RpcError::invalid)
+    }
+    pub(crate) fn clear_warning(&mut self, owner: u64, code: &str) {
+        if let Some(warnings) = self.warnings.edit().get_mut(&owner) {
+            warnings.retain(|(w, _)| w["code"] != code);
+        }
+    }
+    /// `packages.list` `warnings` of a running plugin.
+    pub(crate) fn warnings_of(&self, owner: u64) -> Vec<Value> {
+        self.warnings
+            .get(&owner)
+            .into_iter()
+            .flatten()
+            .map(|(warning, _)| warning.clone())
+            .collect()
+    }
+    /// The same warnings as text: 「面板未显示：侧栏已被 vestra.playlist 使用」.
+    pub(crate) fn warning_text(&self, owner: u64) -> Option<String> {
+        let text = self
+            .warnings
+            .get(&owner)?
+            .iter()
+            .map(|(_, text)| text.as_str())
+            .collect::<Vec<_>>();
+        (!text.is_empty()).then(|| text.join(&i18n::tr("; ")))
     }
 }

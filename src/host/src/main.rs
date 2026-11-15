@@ -37,7 +37,7 @@ mod version;
 
 use anyhow::{Result, bail};
 use host::{
-    Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, RESIZE_SINK,
+    Core, Event, FRAME_SINK, Host, InputShared, LAST_SOURCE, MenuMode, PIP_GPU_SINK, RESIZE_SINK,
     event_loop_ended, restart_log, restart_logged, restart_player, run_through_loss, teardown_step,
 };
 use packages::package_manager;
@@ -486,21 +486,85 @@ fn player() -> Result<()> {
     let (mount_events, mount_input) = mpsc::sync_channel(64);
     let reaper = process::reaper::Reaper::spawn(events.clone());
     let on_demand = host::supervisor::OnDemand::from_env();
-    let mut host = Host {
+    // Read before `ui_state` opens, as in the `Host` literal before plan
+    // step S2b split `Core` out.
+    let clock = Instant::now();
+    // Opened before the core's package store, as before `Core` was split
+    // out of `Host` (plan step S2b).
+    let ui_state = if headless {
+        ui_state::Store::disabled()
+    } else {
+        ui_state::Store::open(&ui_state::default_path())
+    };
+    let core = Core {
         backend,
         shared: None,
         shared_policy: Default::default(),
         plugins: BTreeMap::new(),
         plugins_revision: 0,
-        views: BTreeMap::new(),
         events,
         headless,
+        panel_plugins: Default::default(),
+        command_runs: Default::default(),
+        clock,
+        sequence: None,
+        last_source: Value::Null,
+        rendering: host::Rendering {
+            facts: startup.facts,
+            started: render.mode,
+            windows: render.windows,
+            preference: startup.preference,
+            file: startup.file,
+            relaunch: host::Relaunch {
+                directories: directories.clone(),
+                silent,
+            },
+            restarted_at,
+        },
+        source_state_replies: Default::default(),
+        host_revision: 0,
+        supervisor: host::supervisor::new(),
+        activation_receipts: Default::default(),
+        file_types: json!([]),
+        held_mounts: Default::default(),
+        prepared: None,
+        warnings: Default::default(),
+        packages: package_manager::Manager::open()?,
+        reaper,
+        actions_busy: Default::default(),
+        step_seek: BTreeMap::new(),
+        step_writes: 0,
+        development: Default::default(),
+        dev_disabled: Default::default(),
+        failures: Default::default(),
+        start_error: None,
+        data_removals: BTreeMap::new(),
+        dev_loading: None,
+        session_storage: Default::default(),
+        bindings_sent: 0,
+        bindings_list_sent: Value::Null,
+        bindings_seen: [0; 2],
+        packages_sent: Value::Null,
+        packages_seen: None,
+        notified_at: 0,
+        keys_checked: 0,
+        keys_sent: BTreeMap::new(),
+        timeline: Default::default(),
+        opens: Default::default(),
+        triggers: Default::default(),
+        trigger_state: Default::default(),
+        commands: commands::Registry::new(),
+        shader_guard,
+        memory_logged: None,
+    };
+    let mut host = Host {
+        core,
+        views: BTreeMap::new(),
         dialog_busy: false,
         origins: Default::default(),
         confirm_open: false,
         shell: None,
         mounts: BTreeMap::new(),
-        panel_plugins: Default::default(),
         mount_queue: std::collections::VecDeque::new(),
         preparing: None,
         mount_singly: 0,
@@ -521,9 +585,7 @@ fn player() -> Result<()> {
         lead: None,
         lead_strip: Default::default(),
         review: None,
-        command_runs: Default::default(),
         policy: window_state::Policy::new(0),
-        clock: Instant::now(),
         window_facts: Value::Null,
         measured_shell: None,
         menu_open: false,
@@ -540,11 +602,7 @@ fn player() -> Result<()> {
         native_before: None,
         native_unavailable: None,
         input: Rc::new(RefCell::new(InputShared::default())),
-        ui_state: if headless {
-            ui_state::Store::disabled()
-        } else {
-            ui_state::Store::open(&ui_state::default_path())
-        },
+        ui_state,
         osd_until: None,
         osd_actions: None,
         osd_shown_at: 0,
@@ -552,62 +610,19 @@ fn player() -> Result<()> {
         osd_shown: Default::default(),
         osd_from: None,
         info_panels: BTreeMap::new(),
-        sequence: None,
-        last_source: Value::Null,
-        rendering: host::Rendering {
-            facts: startup.facts,
-            started: render.mode,
-            windows: render.windows,
-            preference: startup.preference,
-            file: startup.file,
-            relaunch: host::Relaunch {
-                directories: directories.clone(),
-                silent,
-            },
-            restarted_at,
-        },
-        source_state_replies: Default::default(),
         floating: None,
         menu_mode: MenuMode::Main,
         menu_generation: 1,
-        host_revision: 0,
         window_title: "Vestra Player".into(),
-        supervisor: host::supervisor::new(),
-        activation_receipts: Default::default(),
-        file_types: json!([]),
-        held_mounts: Default::default(),
-        prepared: None,
-        warnings: Default::default(),
-        packages: package_manager::Manager::open()?,
-        reaper,
         power: power::Power::system(),
         last_frame: None,
         sizing: Default::default(),
         frame_log: render_target::FrameLog::from_env(),
         shown_size: None,
-        actions_busy: Default::default(),
-        step_seek: BTreeMap::new(),
-        step_writes: 0,
         on_top: window_control::LastWrite::new(false),
         cursor_playing: window_control::LastWrite::new(false),
         on_top_applied: None,
         area_replies: Vec::new(),
-        development: Default::default(),
-        dev_disabled: Default::default(),
-        failures: Default::default(),
-        start_error: None,
-        data_removals: BTreeMap::new(),
-        dev_loading: None,
-        session_storage: Default::default(),
-        bindings_sent: 0,
-        bindings_list_sent: Value::Null,
-        bindings_seen: [0; 2],
-        packages_sent: Value::Null,
-        packages_seen: None,
-        notified_at: 0,
-        keys_checked: 0,
-        keys_sent: BTreeMap::new(),
-        timeline: Default::default(),
         images: Default::default(),
         no_video: true,
         video_absent: true,
@@ -621,21 +636,15 @@ fn player() -> Result<()> {
         pip_gpu: Default::default(),
         gpu_paced: false,
         drops: Default::default(),
-        opens: Default::default(),
         settings: Default::default(),
         settings_category: None,
         theme_pending: false,
         placements: view::Placements::default(),
         bar: bar_buttons::Strip::default(),
         on_demand,
-        triggers: Default::default(),
-        trigger_state: Default::default(),
-        commands: commands::Registry::new(),
-        shader_guard,
-        memory_logged: None,
     };
     // Kept trigger conditions: one file per installed instance.
-    host.triggers = triggers::Triggers::new(Some(host.triggers_dir()));
+    host.core.triggers = triggers::Triggers::new(Some(host.core.triggers_dir()));
     // The interface language of this run (doc/architecture/i18n.md §2):
     // `VESTRA_LANGUAGE` (development and tests), else the saved choice, else
     // the system's languages. Headless runs ignore the system: English
@@ -678,7 +687,7 @@ fn player() -> Result<()> {
         if renamed || escape {
             // Saved ids now name the commands' current ids, and the
             // migrations are recorded; saved once.
-            let now = host.now_ms();
+            let now = host.core.now_ms();
             host.ui_state.touch(now);
             host.ui_state.flush();
         }
@@ -696,7 +705,7 @@ fn player() -> Result<()> {
     }
     // A restart continues its first file where the replaced player was.
     if let (Some(resume), Some(file)) = (resume, files.first()) {
-        let _ = host.backend.commands.send(playback::backend::Command {
+        let _ = host.core.backend.commands.send(playback::backend::Command {
             reply: host::Reply { owner: 0, id: 0 },
             method: "host.resume".into(),
             params: json!({"source":file.to_string_lossy(),"seconds":resume.seconds,"paused":resume.paused}),
@@ -745,8 +754,8 @@ fn player() -> Result<()> {
             host.open_files_tick();
             if let Some(log) = host.frame_log.as_mut() {
                 log.tick_took(began.elapsed());
-                let presentation = &host.backend.render.presentation;
-                let (produced, shown) = host.backend.frame.counts();
+                let presentation = &host.core.backend.render.presentation;
+                let (produced, shown) = host.core.backend.frame.counts();
                 let (draws, presented) = presentation.counts();
                 let counts = render_target::LogCounts {
                     produced,
@@ -755,18 +764,18 @@ fn player() -> Result<()> {
                     presented,
                 };
                 if let Some(line) = log.line(counts, presentation, || None, None, Instant::now()) {
-                    diag!("{line}{}", host.backend.frame.stages.text());
+                    diag!("{line}{}", host.core.backend.frame.stages.text());
                 }
             }
             if let Some(evidence) = evidence.as_mut() {
-                evidence.sample(&host.backend, &observed_source, start)?;
+                evidence.sample(&host.core.backend, &observed_source, start)?;
             }
         }
         // Every plugin process stops within one deadline (supervisor.md
         // T31), each running plugin recorded first.
         host.shutdown_plugins(host::QUIT_BUDGET);
         stop_handoffs();
-        host.shader_guard.quit();
+        host.core.shader_guard.quit();
         logged!("exit: normal");
     } else {
         // Windows: no window opens white (cloaked until its first draw).
@@ -822,7 +831,8 @@ fn player() -> Result<()> {
         // Interpolation (`video.render()`) resamples to the main display's rate.
         let displays = platform::displays();
         let main_display = displays.iter().find(|d| d.primary).or(displays.first());
-        host.backend
+        host.core
+            .backend
             .render
             .set_refresh(main_display.and_then(|d| d.refresh_rate));
         host.native_before = native_before.clone();
@@ -841,7 +851,7 @@ fn player() -> Result<()> {
         drop(window);
         // Render cadence: each new frame wakes the event loop (coalesced)
         // instead of waiting for the 16 ms tick.
-        let frames = host.borrow().backend.frame.clone();
+        let frames = host.borrow().core.backend.frame.clone();
         let frame_host = host.clone();
         let busy = frames.clone();
         FRAME_SINK.with(|sink| {
@@ -924,8 +934,8 @@ fn player() -> Result<()> {
                     turn.step("test UI stall");
                 }
                 if first_draws.is_some() {
-                    let (draws, pictures) = host.backend.render.presentation.counts();
-                    let opening = opened_at_start || host.last_source["phase"] == "loading";
+                    let (draws, pictures) = host.core.backend.render.presentation.counts();
+                    let opening = opened_at_start || host.core.last_source["phase"] == "loading";
                     if playback::render_state::windows_started(draws, pictures, opening)
                         && let Some(guard) = first_draws.take()
                     {
@@ -962,16 +972,16 @@ fn player() -> Result<()> {
                     host.theme_all();
                     turn.step("theme");
                 }
-                if host.commands.revision() != binding_revision {
-                    binding_revision = host.commands.revision();
-                    let disabled = host.commands.disabled();
+                if host.core.commands.revision() != binding_revision {
+                    binding_revision = host.core.commands.revision();
+                    let disabled = host.core.commands.disabled();
                     host.input.borrow_mut().table.set_disabled(disabled);
                 }
                 // The revision alone, not a snapshot: a snapshot builds the
                 // whole menu tree, longer than a frame with many plugins.
                 // A closed menu is built when it opens (`open_menu`).
                 if host.shell.is_some() {
-                    let revision = host.commands.revision();
+                    let revision = host.core.commands.revision();
                     if revision != menu_revision {
                         menu_revision = revision;
                         if host.menu_open
@@ -987,7 +997,7 @@ fn player() -> Result<()> {
                 turn.step("bindings and menu");
                 // The renderer's wake-up delivers frames; this only catches
                 // one whose wake-up found the host busy.
-                if host.backend.frame.missed() {
+                if host.core.backend.frame.missed() {
                     host.show_frame();
                 }
                 frame_pacing::tick();
@@ -995,7 +1005,7 @@ fn player() -> Result<()> {
                 if let Some(log) = host.frame_log.as_mut() {
                     log.tick_took(began.elapsed());
                 }
-                host::stall::tick_ended(&turn, |owner| host.plugin_id(owner));
+                host::stall::tick_ended(&turn, |owner| host.core.plugin_id(owner));
                 if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
                     if let Some(path) = snapshot.as_ref()
                         && let Some(window) = host.shell.as_ref()
@@ -1066,14 +1076,14 @@ fn player() -> Result<()> {
             // started from the device's callback; this is the fallback).
             teardown_step("saving the UI state");
             host.borrow_mut().ui_state.flush();
-            let source = host.borrow().last_source.clone();
+            let source = host.borrow().core.last_source.clone();
             // Plugin shaders stay `applying` if they were: a device lost
             // while they were on keeps them off in the restarted player.
             logged!("exit: restarting, the windows' GPU device was lost");
             restart_player(&lost_device, &source);
         } else {
             guard.settle();
-            host.borrow_mut().shader_guard.quit();
+            host.borrow_mut().core.shader_guard.quit();
             if let Err(error) = &ran {
                 logged!("exit: the event loop failed ({error})");
             }

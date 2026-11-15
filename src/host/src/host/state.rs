@@ -71,24 +71,14 @@ pub(crate) fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot>
 }
 
 impl Host {
-    /// Merge the sequence provider's flags into a source state (C6).
-    pub(crate) fn patch_source(&self, state: &mut Value) {
-        if state.is_object() {
-            let (next, previous) = self
-                .sequence
-                .map(|(_, next, previous)| (next, previous))
-                .unwrap_or((false, false));
-            state["sequence"] = json!({"next":next,"previous":previous});
-        }
-    }
     /// Re-send the last source state with the current sequence flags.
     pub(crate) fn rebroadcast_source(&mut self) {
-        if self.last_source.is_object() {
-            let mut state = self.last_source.clone();
-            self.patch_source(&mut state);
-            self.last_source = state.clone();
+        if self.core.last_source.is_object() {
+            let mut state = self.core.last_source.clone();
+            self.core.patch_source(&mut state);
+            self.core.last_source = state.clone();
             self.broadcast("source.state", state);
-            self.core_action_states();
+            self.core.core_action_states();
         }
     }
     /// R-U3: follow the source into `no-video`; an empty source also drops
@@ -102,7 +92,7 @@ impl Host {
             .any(|m| m.spec.slot == composition::Slot::Backdrop);
         if mounted != self.cover_art_off {
             self.cover_art_off = mounted;
-            let _ = self.backend.commands.send(Command {
+            let _ = self.core.backend.commands.send(Command {
                 reply: Reply {
                     owner: bindings::HOST,
                     id: 0,
@@ -113,15 +103,16 @@ impl Host {
         }
     }
     pub(crate) fn backdrop_source(&mut self) {
-        self.video_absent = composition::video_absent(self.video_absent, &self.last_source);
-        let next = composition::no_video(self.no_video, &self.last_source);
-        let empty = self.last_source["phase"] == "empty";
+        self.video_absent = composition::video_absent(self.video_absent, &self.core.last_source);
+        let next = composition::no_video(self.no_video, &self.core.last_source);
+        let empty = self.core.last_source["phase"] == "empty";
         let Some(shell) = &self.shell else {
             self.no_video = next;
             return;
         };
         // GPU frames are not kept in `last_image`: clear once per empty phase.
         let gpu = self
+            .core
             .backend
             .render
             .gpu()
@@ -141,7 +132,7 @@ impl Host {
     }
     /// C9: "<source name> - Vestra Player", or "Vestra Player" without a source.
     pub(crate) fn update_title(&mut self) {
-        let source = &self.last_source;
+        let source = &self.core.last_source;
         let name = match source["source"].as_str() {
             None => None,
             Some(_) if source["kind"] == "producer" => None,
@@ -176,7 +167,7 @@ impl Host {
     /// Keep the sleep assertion in line with what is playing: ready and not
     /// paused (media or stream), video when a frame arrived within a second.
     pub(crate) fn power_tick(&mut self) {
-        let source = &self.last_source;
+        let source = &self.core.last_source;
         let playback = power::Playback {
             playing: source["phase"] == "ready" && source["paused"] == false,
             video: self
@@ -190,7 +181,7 @@ impl Host {
     /// `window.setAlwaysOnTop`: every ordinary window of the application at
     /// the floating level, applied again when windows open or close.
     pub(crate) fn apply_on_top(&mut self) {
-        if self.headless {
+        if self.core.headless {
             return;
         }
         let want = self.on_top.get();
@@ -217,7 +208,7 @@ impl Host {
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
-            "appearance":self.theme(),"fileTypes":self.file_types,
+            "appearance":self.theme(),"fileTypes":self.core.file_types,
             "language":self.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
             "locale":i18n::locale()})
     }
@@ -295,7 +286,7 @@ impl Host {
             reply: reply.clone(),
             video: fit.video,
             result: json!({"width":fit.video.0,"height":fit.video.1,"clamped":fit.clamped}),
-            deadline: self.now_ms() + 1000,
+            deadline: self.core.now_ms() + 1000,
         });
         Ok(())
     }
@@ -367,6 +358,18 @@ impl Host {
                 Value::Null,
                 |m| json!({"owner":m.spec.owner,"effective":self.no_video}),
             )
+    }
+}
+impl Core {
+    /// Merge the sequence provider's flags into a source state (C6).
+    pub(crate) fn patch_source(&self, state: &mut Value) {
+        if state.is_object() {
+            let (next, previous) = self
+                .sequence
+                .map(|(_, next, previous)| (next, previous))
+                .unwrap_or((false, false));
+            state["sequence"] = json!({"next":next,"previous":previous});
+        }
     }
 }
 

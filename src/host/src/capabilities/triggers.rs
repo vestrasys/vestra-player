@@ -34,6 +34,7 @@ impl Capability for Triggers {
     fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         let plugin = host
+            .core
             .triggers_plugin(reply.owner)
             .ok_or_else(|| RpcError::new("unavailable", "the plugin does not run"))?;
         match method {
@@ -42,6 +43,7 @@ impl Capability for Triggers {
                 // Facts are not followed while nothing is kept: now.
                 host.triggers_facts_now();
                 let (seq, out) = host
+                    .core
                     .triggers
                     .set(
                         &plugin,
@@ -57,11 +59,11 @@ impl Capability for Triggers {
             "triggers.off" => {
                 let trigger = TriggerId::parse(&params["trigger"]).map_err(refused)?;
                 let seq = if params["unhandled"] == true {
-                    host.triggers.unhandled(&plugin, &trigger)
+                    host.core.triggers.unhandled(&plugin, &trigger)
                 } else {
-                    host.triggers.off(&plugin, &trigger)
+                    host.core.triggers.off(&plugin, &trigger)
                 };
-                host.sync_trigger_watch();
+                host.core.sync_trigger_watch();
                 Ok(Some(json!({ "seq": seq })))
             }
             _ => {
@@ -89,12 +91,16 @@ impl Capability for Triggers {
                     .ok_or_else(|| {
                         RpcError::invalid(format!("unnamed is a count 0–{MAX_TRIGGERS}"))
                     })?;
-                host.triggers
+                host.core
+                    .triggers
                     .declare(&plugin, reply.owner, &names, unnamed as u32);
                 // What could not be delivered before fires again now that
                 // its triggers are declared; the removed conditions'
                 // boundaries go from the position model (`deliver_fired`).
-                let out = host.triggers.redeliver(&plugin, crate::host::wall_ms());
+                let out = host
+                    .core
+                    .triggers
+                    .redeliver(&plugin, crate::host::wall_ms());
                 host.deliver_fired(out);
                 Ok(Some(Value::Null))
             }

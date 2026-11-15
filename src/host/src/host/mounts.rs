@@ -126,9 +126,9 @@ impl Host {
             match &change.contribution {
                 None => true,
                 Some(mount) if mount.recorded => {
-                    self.plugins.contains_key(&owner) || self.on_demand.held(owner).is_some()
+                    self.core.plugins.contains_key(&owner) || self.on_demand.held(owner).is_some()
                 }
-                Some(_) => self.plugins.contains_key(&owner),
+                Some(_) => self.core.plugins.contains_key(&owner),
             }
         });
         if changes.is_empty() {
@@ -139,7 +139,7 @@ impl Host {
             let owner = change.reply.owner;
             if let Some(mount) = &change.contribution {
                 // Mounted after all: an earlier refusal no longer applies.
-                self.clear_warning(owner, "slot-occupied");
+                self.core.clear_warning(owner, "slot-occupied");
                 next.insert(change.key, mount.clone());
             } else {
                 next.remove(&change.key);
@@ -417,7 +417,7 @@ impl Host {
             }
             self.policy.order_column(policy_column(column), &plan.order);
         }
-        self.policy.activity(self.now_ms());
+        self.policy.activity(self.core.now_ms());
         {
             let mut input = self.input.borrow_mut();
             input.bottom = next
@@ -550,7 +550,7 @@ impl Host {
             mount.manifest,
             mount.spec.slot.name(),
             took.map_or_else(String::new, |ms| format!(" in {ms:.1} ms")),
-            self.now_ms(),
+            self.core.now_ms(),
             if took.is_some() { "ready" } else { "failed" }
         );
     }

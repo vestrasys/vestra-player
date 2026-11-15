@@ -276,7 +276,8 @@ impl Host {
                 if !taken.is_empty() {
                     diag!(
                         "drops: {} already provided for {taken:?}; the earlier provider keeps them",
-                        self.plugins
+                        self.core
+                            .plugins
                             .get(&owner)
                             .map_or("?", |p| p.manifest.id.as_str())
                     );

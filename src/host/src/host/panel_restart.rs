@@ -169,30 +169,10 @@ pub(crate) fn coming(state: &crate::supervisor::UnitState, starts: bool) -> Comi
 }
 
 impl Host {
-    /// Whether run `owner`, stopping now, is restarted by the supervisor by
-    /// itself: it is deactivating after a failure, to land inactive, with a
-    /// start of it waiting (a crash under `OnFailure`, the shared runner's
-    /// restart). Not a reload, a disable, an uninstall, standby or a start
-    /// limit hit.
-    pub(crate) fn auto_restarting(&self, owner: u64) -> bool {
-        use crate::supervisor::{StopReason as Core, Then, UnitState};
-        let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
-            return false;
-        };
-        let deactivating = self.supervisor.unit(unit).is_some_and(|u| {
-            matches!(u.state, UnitState::Deactivating { pid, reason: Core::Failed, then: Then::Inactive, .. } if pid.0 == owner)
-                && !u.removed
-        });
-        deactivating
-            && self
-                .supervisor
-                .job(unit)
-                .is_some_and(crate::supervisor::Job::will_start)
-    }
     /// `stop_run` of a run that the supervisor restarts: its panels stay
     /// (dimmed, with the line) instead of going. The keys kept.
     pub(crate) fn keep_panels(&mut self, owner: u64) -> BTreeSet<u64> {
-        let Some(plugin) = self.plugins.get(&owner) else {
+        let Some(plugin) = self.core.plugins.get(&owner) else {
             return BTreeSet::new();
         };
         let keys = self
@@ -327,12 +307,13 @@ impl Host {
         }
         let mounts = &self.mounts;
         self.restarts.prune(|key| mounts.contains_key(&key));
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let ids = self.restarts.plugins.keys().cloned().collect::<Vec<_>>();
         for id in ids {
-            let state = self.supervisor.by_id(&id).and_then(|unit| {
-                let u = self.supervisor.unit(unit)?;
+            let state = self.core.supervisor.by_id(&id).and_then(|unit| {
+                let u = self.core.supervisor.unit(unit)?;
                 let starts = self
+                    .core
                     .supervisor
                     .job(unit)
                     .is_some_and(crate::supervisor::Job::will_start);
@@ -341,7 +322,7 @@ impl Host {
             match state.unwrap_or(Coming::No) {
                 Coming::Waiting => {}
                 Coming::Running { pid, ready } => {
-                    if self.plugins.contains_key(&pid) {
+                    if self.core.plugins.contains_key(&pid) {
                         self.adopt_panels(&id, pid);
                     }
                     let Some(entry) = self.restarts.plugins.get_mut(&id) else {
@@ -462,6 +443,28 @@ impl Host {
                 announced: true,
             });
         }
+    }
+}
+impl Core {
+    /// Whether run `owner`, stopping now, is restarted by the supervisor by
+    /// itself: it is deactivating after a failure, to land inactive, with a
+    /// start of it waiting (a crash under `OnFailure`, the shared runner's
+    /// restart). Not a reload, a disable, an uninstall, standby or a start
+    /// limit hit.
+    pub(crate) fn auto_restarting(&self, owner: u64) -> bool {
+        use crate::supervisor::{StopReason as Core, Then, UnitState};
+        let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
+            return false;
+        };
+        let deactivating = self.supervisor.unit(unit).is_some_and(|u| {
+            matches!(u.state, UnitState::Deactivating { pid, reason: Core::Failed, then: Then::Inactive, .. } if pid.0 == owner)
+                && !u.removed
+        });
+        deactivating
+            && self
+                .supervisor
+                .job(unit)
+                .is_some_and(crate::supervisor::Job::will_start)
     }
 }
 

@@ -910,7 +910,7 @@ impl<'a> PlainEncoder<'a> {
 
 /// A large property write converted on the plugin's reader thread
 /// (`prepare_request`), handed to the UI thread with the request
-/// (`Host::take_prepared`).
+/// (`Core::take_prepared`).
 #[derive(Debug)]
 pub struct Prepared {
     /// A whole value, taken out of the request (whose `params.value` is

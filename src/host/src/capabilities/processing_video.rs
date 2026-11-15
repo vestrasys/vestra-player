@@ -150,11 +150,12 @@ fn shader_request(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcE
         })
         .collect::<Result<Vec<_>, _>>()?;
     let manifest = host
+        .core
         .plugins
         .get(&owner)
         .map(|plugin| plugin.manifest.id.clone())
         .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
-    let (tier, installed_at) = host.install_rank(owner);
+    let (tier, installed_at) = host.core.install_rank(owner);
     Ok(json!({"id":id,"paths":paths,"manifestId":manifest,"rank":[tier, installed_at]}))
 }
 
