@@ -318,7 +318,9 @@ impl Host {
     /// place on this thread until plan step S3a. Plan step S2c(3):
     /// `ui.setMount`, answered from the interface's `UiReport::Answered`
     /// (a mount change is taken by the batching window instead,
-    /// `Core::mount_command`). The other commands follow in later steps.
+    /// `Core::mount_command`); S2c(4): `settings.*`
+    /// (`Host::settings_command`, ui/settings_window.rs). The other
+    /// commands follow in later steps.
     pub(crate) fn ui_command(&mut self, command: UiCommand) {
         match command {
             UiCommand::SetMount(op) => {
@@ -337,7 +339,8 @@ impl Host {
                     handoff: None,
                 });
             }
-            _ => unreachable!("not sent before plan step S2c(4)"),
+            UiCommand::Settings(op) => self.settings_command(op),
+            _ => unreachable!("not sent before plan step S2c(5)"),
         }
     }
     fn log_prepared(&self, changes: usize, started: Instant, ok: bool) {

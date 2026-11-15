@@ -20,7 +20,7 @@ impl Capability for UiSettings {
     }
     /// Each page as its plugin registered it, with its current properties.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        match host.settings.recording(owner) {
+        match host.core.settings.recording(owner) {
             Some(calls) => Recorded::Calls(
                 calls
                     .into_iter()
@@ -30,18 +30,28 @@ impl Capability for UiSettings {
             None => Recorded::Live("a settings page without its registration"),
         }
     }
+    /// The core's pages move to generation `to`; an open options window's
+    /// callbacks follow (the interface's part, called in place:
+    /// a later step routes it as `UiCommand::RekeyOwner`).
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        host.settings.rekey(from, to);
+        let moved = host.core.settings.rekey(from, to);
+        host.settings.rekey(&moved, to);
     }
+    /// The core's pages of `owner` are kept as recorded or go; an open
+    /// options window is rebuilt when one went (the interface's part,
+    /// called in place: plan step S2d routes it as
+    /// `UiCommand::RevokeOwner`).
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if keep_recorded {
-            host.settings.mark_recorded(owner);
-        } else {
-            host.settings.remove_owner(owner);
+            host.core.settings.mark_recorded(owner);
+        } else if host.core.settings.remove_owner(owner) {
+            host.settings.changed();
         }
     }
     fn prune(&self, host: &mut Host, owner: u64) {
-        host.settings.remove_recorded(owner);
+        if host.core.settings.remove_recorded(owner) {
+            host.settings.changed();
+        }
     }
     fn replay(&self, host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Handled {
         match call.method.as_str() {

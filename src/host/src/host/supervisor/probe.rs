@@ -307,6 +307,7 @@ impl Host {
             })
             .collect::<Vec<_>>();
         let pages = self
+            .core
             .settings
             .pages_of(owner)
             .into_iter()
