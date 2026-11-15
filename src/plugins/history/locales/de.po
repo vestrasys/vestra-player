@@ -18,8 +18,12 @@ msgstr "Zuletzt abgespielte Medien und Fortsetzen an der letzten Stelle"
 
 #: manifest.json
 #, x-machine
-msgid "Open ▸ Recently Played lists the files and links opened recently. Resume Playback, in the command palette, offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped."
-msgstr "Öffnen ▸ Zuletzt abgespielt listet die zuletzt geöffneten Dateien und Links. Unter Wiedergabe fortsetzen in der Befehlspalette wählen Sie „Nicht fortsetzen“, „Automatisch fortsetzen“ oder „Jedes Mal fragen“: Beim nächsten Öffnen derselben Datei geht es dort weiter, wo sie angehalten wurde."
+msgid ""
+"Open ▸ Recently Played lists the files and links opened recently. Resume Playback, in the command palette, offers Don't Resume, Resume Automatically or Ask Every Time: the next time the same file is opened, it continues where it stopped.\n"
+"→ Menu: Open ▸ Recently Played"
+msgstr ""
+"Öffnen ▸ Zuletzt abgespielt listet die zuletzt geöffneten Dateien und Links. Unter Wiedergabe fortsetzen in der Befehlspalette wählen Sie „Nicht fortsetzen“, „Automatisch fortsetzen“ oder „Jedes Mal fragen“: Beim nächsten Öffnen derselben Datei geht es dort weiter, wo sie angehalten wurde.\n"
+"→ Menü: Öffnen ▸ Zuletzt abgespielt"
 
 #: manifest.json
 #, x-machine

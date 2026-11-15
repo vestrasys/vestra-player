@@ -316,10 +316,10 @@ msgstr "按当前视频搜索并下载字幕"
 #: manifest.json
 msgid ""
 "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
-"Find it in the right-click menu under Subtitles ▸ Online Subtitles."
+"→ Menu: Open ▸ Search and Download Subtitles"
 msgstr ""
 "用 OpenSubtitles.com 或射手网(伪)按文件哈希和片名搜索字幕，下载后直接载入，并在视频旁保存一份。需要用户自己的 API 密钥，密钥保存在系统的密钥存储中。\n"
-"入口在右键菜单「字幕 ▸ 在线字幕」。"
+"→ 菜单：打开 ▸ 搜索与下载字幕"
 
 #: manifest.json
 msgid "subtitles"

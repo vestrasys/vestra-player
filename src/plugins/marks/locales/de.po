@@ -50,10 +50,12 @@ msgstr "Nach Kapiteln und Lesezeichen springen"
 #, x-machine
 msgid ""
 "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
-"Find it in the context menu under \"Tools ▸ Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback)."
+"The other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback).\n"
+"→ Press H: Chapter and Bookmark List"
 msgstr ""
 "Listet die Kapitel des Mediums auf; fügt für jede Datei Lesezeichen hinzu, benennt und verwaltet sie; springt zwischen Kapiteln und Lesezeichen und zeigt sie als Markierungen auf der Zeitleiste.\n"
-"Zu finden im Kontextmenü unter „Werkzeuge ▸ Kapitel- und Lesezeichenliste…“ (H); die übrigen Befehle stehen in der Befehlspalette unter „Kapitel und Lesezeichen“. Die A-B-Wiederholung befindet sich im Bereich „Wiedergabe“ (Grundlegende Wiedergabe)."
+"Die übrigen Befehle stehen in der Befehlspalette unter „Kapitel und Lesezeichen“. Die A-B-Wiederholung befindet sich im Bereich „Wiedergabe“ (Grundlegende Wiedergabe).\n"
+"→ Taste H: Kapitel- und Lesezeichenliste"
 
 #: manifest.json
 #, x-machine

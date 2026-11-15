@@ -207,10 +207,10 @@ msgstr "Consulta y reasigna atajos de teclado y acciones del mouse"
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts."
+"→ Options (F5) ▸ Keys and Mouse"
 msgstr ""
 "Muestra los comandos del reproductor y de cada complemento en la categoría Teclas y mouse de la ventana de opciones: busca por comando o tecla, reasigna, quita asignaciones, restaura los predeterminados, revisa conflictos y exporta la lista. Asigna comandos a los clics y la rueda del mouse sobre el video, y puede ignorar todos los atajos predeterminados a la vez.\n"
-"Ábrelo desde la ventana de opciones (Opciones…, F5) o la paleta de comandos: Configuración: Atajos de teclado… / Mouse… / Ignorar atajos predeterminados."
+"→ Opciones (F5) ▸ Teclas y mouse"
 
 #: manifest.json
 #, x-machine
