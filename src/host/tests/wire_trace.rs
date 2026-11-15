@@ -189,6 +189,34 @@ fn verify_wire(args: &[&std::ffi::OsStr]) -> (i32, String) {
     (output.status.code().unwrap_or(-1), text)
 }
 
+/// A trace's records of `plugin`.
+fn records_of(text: &str, plugin: &str) -> Vec<Value> {
+    text.lines()
+        .filter_map(|line| serde_json::from_str::<Value>(line).ok())
+        .filter(|record| record["plugin"] == plugin)
+        .collect()
+}
+
+/// `plugin`'s requests (by `method` when given) and how many of them
+/// were answered, per process.
+fn answered(text: &str, plugin: &str, method: Option<&str>) -> (usize, usize) {
+    let records = records_of(text, plugin);
+    let key = |record: &Value| (record["owner"].as_u64(), record["line"]["id"].as_u64());
+    let requests: std::collections::BTreeSet<_> = records
+        .iter()
+        .filter(|r| r["dir"] == "in" && r["line"]["method"].is_string())
+        .filter(|r| method.is_none_or(|m| r["line"]["method"] == m))
+        .map(key)
+        .collect();
+    let replies = records
+        .iter()
+        .filter(|r| r["dir"] == "out" && r["line"].get("method").is_none())
+        .filter(|r| r["line"].get("result").is_some() || r["line"].get("error").is_some())
+        .filter(|r| requests.contains(&key(r)))
+        .count();
+    (requests.len(), replies)
+}
+
 #[test]
 #[ignore = "needs Node 26 and libmpv: run with --include-ignored (ci:local)"]
 fn two_runs_of_controlled_plugins_have_exactly_equal_wire_traces() {
@@ -218,7 +246,30 @@ fn two_runs_of_controlled_plugins_have_exactly_equal_wire_traces() {
             assert!(lines.contains(&format!("\"plugin\":\"{id}\"")), "{id}");
         }
         assert!(lines.contains("\"method\":\"ui.mount\""));
-        assert!(lines.contains("\"event\":\"triggers.fired\""));
+        // Counts, so that a hook that drops a line in every run fails.
+        assert_eq!(
+            answered(&lines, "test.wire-poll", Some("source.state")),
+            (10, 10),
+            "ten polls, ten replies"
+        );
+        let fired = records_of(&lines, "test.wire-trigger")
+            .iter()
+            .filter(|r| r["dir"] == "out" && r["line"]["event"] == "triggers.fired")
+            .count();
+        assert_eq!(fired, 1, "the trigger fired once");
+        let (requests, replies) = answered(&lines, "test.wire-sequential", None);
+        // read: source.state, timeline.marks; set, get; the command; five
+        // refreshes; the SDK's window.state read.
+        assert_eq!(requests, 11, "the sequential plugin's requests");
+        assert_eq!(replies, requests, "every sequential request answered");
+        let (requests, replies) = answered(&lines, "vestra.fixture-wire-park", None);
+        assert_eq!(replies, requests, "every parked plugin's request answered");
+        if let Some(dir) = std::env::var_os("VESTRA_TEST_LOG_DIR") {
+            let dir = PathBuf::from(dir);
+            std::fs::create_dir_all(&dir).unwrap();
+            let name = trace.parent().unwrap().file_name().unwrap();
+            std::fs::copy(trace, dir.join(name).with_extension("wire.jsonl")).unwrap();
+        }
     }
     for mode in [None, Some("--allow-reorders")] {
         let mut args: Vec<&std::ffi::OsStr> = vec![

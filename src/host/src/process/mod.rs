@@ -560,6 +560,9 @@ fn own_process(
             }
             // One write per line: `to_writer` on the unbuffered pipe made a
             // system call per JSON token (stress measurement 2026-11-11).
+            // Traced (and numbered) before the write: the plugin's answer
+            // to this line must not come first (a test switch).
+            let traced = wire_trace::line(generation, wire_trace::Dir::Out, &message);
             let mut write = || -> Result<()> {
                 let mut line = serde_json::to_vec(&message)?;
                 line.push(b'\n');
@@ -568,13 +571,13 @@ fn own_process(
                 Ok(())
             };
             if let Err(error) = write() {
+                wire_trace::failed(traced);
                 let _ = write_events.send(Event::RuntimeFault(
                     generation,
                     format!("plugin stdin: {error}"),
                 ));
                 break;
             }
-            wire_trace::line(generation, wire_trace::Dir::Out, &message);
         }
     });
     let stdout = child.stdout.take().context("plugin stdout")?;

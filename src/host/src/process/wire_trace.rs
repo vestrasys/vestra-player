@@ -17,16 +17,20 @@
 //!   for people; `src/scripts/verify-wire.mjs` normalises them away.
 //! - `line`: the protocol line as parsed (in) or as written (out, without
 //!   the shared runner's `g`). A line that could not be parsed has
-//!   `invalid` (the reason) in its place.
+//!   `invalid` (the reason) in its place; one of the shared runner's
+//!   without a generation is under [`RUNNER`].
 //!
 //! Lines are taken where they cross the pipe: on each own process's reader
 //! and writer threads (`process/mod.rs`) and the shared runner's
 //! (`shared_runner.rs`), so replies, events, broadcasts, the readers' limit
-//! refusals and `runtime.stop` are all in it. Not in it: a line that was
-//! queued but never written (the pipe closed), and what a reader drains
-//! without reading after a fault or once the host stopped listening (at
-//! quit). The first line of each player run is `{"start":<pid>}`; the file
-//! is appended to.
+//! refusals and `runtime.stop` are all in it. A line written is traced
+//! (and numbered) just before its write, so a plugin's answer never has an
+//! earlier `seq` than the line it answers; a write that fails adds
+//! `{"plugin","owner","dir":"out","failed":<its seq>}` after it. Not in it:
+//! a line that was queued but never taken by its writer (the pipe had
+//! closed before), and what a reader drains without reading after a fault
+//! or once the host stopped listening (at quit). The first line of each
+//! player run is `{"start":<pid>}`; the file is appended to.
 //!
 //! Off (the variable unset or empty), every hook is one check of a
 //! once-initialised `None`: nothing is serialised, written or allocated.
@@ -128,8 +132,9 @@ impl Trace {
     fn bind(&self, owner: u64, plugin: &str) {
         self.lock().owners.insert(owner, plugin.to_owned());
     }
-    /// One line of `owner`'s (or of the plugin named `plugin` when given).
-    fn line(&self, owner: u64, plugin: Option<&str>, dir: Dir, line: Value) {
+    /// One line of `owner`'s (or of the plugin named `plugin` when given);
+    /// the line's handle, for [`failed`].
+    fn line(&self, owner: u64, plugin: Option<&str>, dir: Dir, line: Value) -> Traced {
         let ms = self.began.elapsed().as_millis() as u64;
         let mut state = self.lock();
         let plugin = match plugin {
@@ -140,11 +145,12 @@ impl Trace {
                 .cloned()
                 .unwrap_or_else(|| format!("(owner {owner})")),
         };
-        let seq = state.seq.entry(plugin.clone()).or_insert(0);
-        *seq += 1;
+        let counter = state.seq.entry(plugin.clone()).or_insert(0);
+        *counter += 1;
+        let seq = *counter;
         let record = json!({
             "plugin": plugin,
-            "seq": *seq,
+            "seq": seq,
             "dir": dir.as_str(),
             "owner": owner,
             "ms": ms,
@@ -153,20 +159,37 @@ impl Trace {
         let mut text = record.to_string();
         text.push('\n');
         let _ = state.file.write_all(text.as_bytes());
+        Traced { plugin, owner, seq }
     }
-    fn control(&self, dir: Dir, line: Value) {
+    fn control(&self, dir: Dir, line: Value) -> Traced {
         let data = &line["data"];
         if line["event"] == "plugin.start"
             && let Some(id) = data["id"].as_str()
         {
             let (owner, id) = (data["g"].as_u64().unwrap_or(0), id.to_owned());
-            self.line(owner, Some(&id), dir, line);
+            self.line(owner, Some(&id), dir, line)
         } else if let Some(owner) = data["g"].as_u64().filter(|g| *g > 0) {
-            self.line(owner, None, dir, line);
+            self.line(owner, None, dir, line)
         } else {
-            self.line(0, Some(RUNNER), dir, line);
+            self.line(0, Some(RUNNER), dir, line)
         }
     }
+    fn failed(&self, traced: &Traced) {
+        self.write_raw(&json!({
+            "plugin": traced.plugin,
+            "owner": traced.owner,
+            "dir": "out",
+            "failed": traced.seq,
+        }));
+    }
+}
+
+/// A traced line written to a plugin: marked [`failed`] when its write
+/// fails.
+pub struct Traced {
+    plugin: String,
+    owner: u64,
+    seq: u64,
 }
 
 /// Owner `owner` is the plugin `id` (at its load, before its first line).
@@ -177,26 +200,38 @@ pub fn bind(owner: u64, id: &str) {
 }
 
 /// A line of an own process's, or of a shared-runner member's (`owner`).
-pub fn line(owner: u64, dir: Dir, line: &Value) {
-    if let Some(trace) = trace() {
-        trace.line(owner, None, dir, line.clone());
+/// A line written is traced before its write.
+pub fn line(owner: u64, dir: Dir, line: &Value) -> Option<Traced> {
+    trace().map(|trace| trace.line(owner, None, dir, line.clone()))
+}
+
+/// The write of a traced line failed.
+pub fn failed(traced: Option<Traced>) {
+    if let (Some(trace), Some(traced)) = (trace(), traced) {
+        trace.failed(&traced);
     }
 }
 
-/// A line read from an own process that could not be parsed (`why`).
+/// A line read from `owner` that could not be parsed (`why`).
 pub fn invalid(owner: u64, why: &str) {
     if let Some(trace) = trace() {
         trace.line(owner, None, Dir::In, json!({ "invalid": why }));
     }
 }
 
+/// A line read from the shared runner that names no member it has
+/// (`why`): under [`RUNNER`].
+pub fn runner_invalid(why: &str) {
+    if let Some(trace) = trace() {
+        trace.line(0, Some(RUNNER), Dir::In, json!({ "invalid": why }));
+    }
+}
+
 /// A control line of the shared runner (`g` 0): one that names a member
 /// (`plugin.start`'s `data.id`, `runner.stopped`'s and `runner.fault`'s
 /// `data.g`) goes to that plugin, the rest to [`RUNNER`].
-pub fn control(dir: Dir, line: &Value) {
-    if let Some(trace) = trace() {
-        trace.control(dir, line.clone());
-    }
+pub fn control(dir: Dir, line: &Value) -> Option<Traced> {
+    trace().map(|trace| trace.control(dir, line.clone()))
 }
 
 #[cfg(test)]
@@ -291,6 +326,21 @@ mod tests {
                 ("c.three".into(), 2),
                 (RUNNER.into(), 2),
             ]
+        );
+    }
+
+    #[test]
+    fn a_failed_write_marks_the_line_it_traced_before() {
+        let sink = Sink::default();
+        let trace = Trace::new(Box::new(sink.clone()));
+        trace.bind(3, "a.one");
+        let traced = trace.line(3, None, Dir::Out, json!({"event":"x"}));
+        trace.failed(&traced);
+        let records = sink.records();
+        assert_eq!(records[1]["seq"], 1);
+        assert_eq!(
+            records[2],
+            json!({"plugin":"a.one","owner":3,"dir":"out","failed":1})
         );
     }
 }

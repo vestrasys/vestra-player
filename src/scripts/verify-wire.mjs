@@ -57,24 +57,36 @@
  *                                  use: the plugin's requests `#1, #2, …`
  *                                  (its replies by the request's number),
  *                                  the host's requests to it `h#1, …`
- *   times                          numbers under a time-like key (`at`,
- *                                  `time`, `now`, `ms`, `elapsed`, `since`,
- *                                  `until`, `timestamp`, `position`,
- *                                  `deadline`, `uptime`, `heapUsed`, any
- *                                  key ending in `At`, `Ms` or `Time`),
- *                                  and any number from 10^12 up (a wall
- *                                  clock in ms, as a `time` trigger's
- *                                  bounds)
+ *   times                          only what is measured or read from the
+ *                                  clock, each found varying run to run on
+ *                                  the controlled plugins: `elapsedMs`
+ *                                  (`ui.preparing`: how long a mount took
+ *                                  to prepare), `prepareMs` (the same in
+ *                                  the `ui.mount` reply), and any number
+ *                                  from 10^12 up (a wall clock in ms, as a
+ *                                  `time` trigger's bounds). Media
+ *                                  positions, requested delays, patch
+ *                                  positions (`at`) and every other number
+ *                                  are compared; in V2's scenarios their
+ *                                  run-to-run variation (positions while
+ *                                  playing, `playback.stats`) is what the
+ *                                  noise baseline holds
  *   paths, GUIDs, digests, versions  as V2 does (verify-runtime.mjs
  *                                  `normaliser`): the roots of run.json and
  *                                  --root, instance GUIDs, package digests
  *   heartbeat                      the shared runner's `runner.ping` and
  *                                  `runner.pong` are dropped (one every 2 s:
  *                                  their count is the run's length)
- *   repeats                        a line equal to the one before it in the
- *                                  same plugin and direction is dropped (a
- *                                  state broadcast while playing comes about
- *                                  10 times a second; how many is timing)
+ *   repeated state broadcasts      an outgoing event whose name ends in
+ *                                  `.state`, equal to the plugin's line
+ *                                  written before it, is dropped (a state
+ *                                  broadcast while playing comes about 10
+ *                                  times a second; how many is timing).
+ *                                  Every other line counts each time, a
+ *                                  one-shot event (`triggers.fired`,
+ *                                  `ui.preparing`) included
+ *   failed writes                  a line whose write failed is compared
+ *                                  with ` [write failed]` after it
  *   directions                     a plugin's lines read and its lines
  *                                  written are compared as two sequences:
  *                                  their interleaving is the pipes' timing
@@ -103,8 +115,8 @@ const DESIGN = join(HERE, "..", "..", "doc", "architecture", "core-thread.md");
 /** The `plugin` of the shared runner's own lines (wire_trace.rs `RUNNER`). */
 export const RUNNER = "(shared runner)";
 const HEARTBEAT = new Set(["runner.ping", "runner.pong"]);
-const TIME_KEY =
-  /^(at|time|now|ms|elapsed|since|until|timestamp|position|deadline|uptime|heapUsed)$|(At|Ms|Time)$/;
+/** Keys of measured durations (see the header, "times"). */
+const TIME_KEY = /^(elapsedMs|prepareMs)$/;
 const EPOCH_MS = 1_000_000_000_000;
 const OWNER_KEY = /^(g|owner|pid|generation)$/;
 
@@ -210,8 +222,23 @@ export function normaliseTrace(records, context = {}) {
       );
     return input;
   };
+  // Each kept entry by `plugin:seq`, for a failed write that marks it.
+  const entries = new Map();
   for (const record of records) {
     const { plugin, dir, owner } = record;
+    if ("failed" in record) {
+      const entry = entries.get(`${plugin}:${record.failed}`);
+      if (entry) entry.text += " [write failed]";
+      else
+        ((plugins[plugin] ??= { in: [], out: [] }).out ??= []).push({
+          text: "[a write failed]",
+          stream: "I",
+          kind: "write failed",
+          seq: record.failed,
+          ms: null,
+        });
+      continue;
+    }
     const line = record.line ?? {};
     if (
       plugin === RUNNER &&
@@ -247,8 +274,17 @@ export function normaliseTrace(records, context = {}) {
     if (id !== null) normalised.id = id;
     const text = JSON.stringify(normalised);
     const side = ((plugins[plugin] ??= { in: [], out: [] })[dir] ??= []);
-    if (side.length && side[side.length - 1].text === text) continue;
-    side.push({ text, stream, kind, seq: record.seq, ms: record.ms });
+    // Only a repeated state broadcast is collapsed: every other line,
+    // a one-shot event included, counts each time it is sent.
+    const broadcast =
+      dir === "out" &&
+      typeof line.event === "string" &&
+      line.event.endsWith(".state");
+    if (broadcast && side.length && side[side.length - 1].text === text)
+      continue;
+    const entry = { text, stream, kind, seq: record.seq, ms: record.ms };
+    side.push(entry);
+    entries.set(`${plugin}:${record.seq}`, entry);
   }
   return { plugins, unknown: [...unknown].sort() };
 }
@@ -528,7 +564,7 @@ export function checkTrace(records, streams) {
   const notes = [];
   const runs = new Map();
   for (const record of records) {
-    if (record.plugin === RUNNER) continue;
+    if (record.plugin === RUNNER || "failed" in record) continue;
     const key = `${record.plugin}\u0000${record.owner}`;
     if (!runs.has(key)) runs.set(key, []);
     runs.get(key).push(record);

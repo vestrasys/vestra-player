@@ -90,8 +90,16 @@ const STEPS: Step[] = [
   ["x.one", "out", { id: 1, result: { phase: "idle", position: 1.25 } }],
   ["x.one", "out", { id: 3, result: null }],
   ["x.one", "out", { id: 2, result: { ok: true } }],
-  ["x.one", "out", { event: "source.state", data: { position: 3.5, at: 17 } }],
-  ["x.one", "out", { event: "source.state", data: { position: 3.6, at: 18 } }],
+  [
+    "x.one",
+    "out",
+    { event: "source.state", data: { phase: "idle", elapsedMs: 3.5 } },
+  ],
+  [
+    "x.one",
+    "out",
+    { event: "source.state", data: { phase: "idle", elapsedMs: 3.6 } },
+  ],
   [
     "x.one",
     "out",
@@ -476,4 +484,54 @@ test("check: pairing, the UI-bound order, ui.preparing and R13 as the wire shows
     },
   ]);
   assert.deepEqual(checkTrace(late, STREAMS).violations, []);
+});
+
+test("one-shot events and compared numbers are not normalised away", () => {
+  // A duplicated triggers.fired (differing only in a wall-clock time) and a
+  // changed media position are both differences.
+  const fired: Step = [
+    "x.one",
+    "out",
+    { event: "triggers.fired", data: { trigger: "t", at: 1794714810718 } },
+  ];
+  const once = [...STEPS, fired];
+  const twice = [
+    ...STEPS,
+    fired,
+    [
+      "x.one",
+      "out",
+      { event: "triggers.fired", data: { trigger: "t", at: 1794714819629 } },
+    ] as Step,
+  ];
+  const duplicated = compareTraces(
+    normalise(trace(once, A), A),
+    normalise(trace(twice, B), B),
+  );
+  assert.equal(
+    duplicated.differences.length,
+    1,
+    "a second triggers.fired is seen",
+  );
+  const moved = STEPS.map((step): Step =>
+    step[1] === "out" && step[2].id === 1
+      ? [step[0], step[1], { id: 1, result: { phase: "idle", position: 9.75 } }]
+      : step,
+  );
+  const seek = compareTraces(
+    normalise(trace(STEPS, A), A),
+    normalise(trace(moved, B), B),
+  );
+  assert.equal(seek.differences.length, 1, "a position is compared");
+  // A failed write marks its line.
+  const failed =
+    trace(STEPS, A) +
+    JSON.stringify({ plugin: "y.two", owner: 4, dir: "out", failed: 2 }) +
+    "\n";
+  const marked = compareTraces(
+    normalise(trace(STEPS, A), A),
+    normalise(failed, A),
+  );
+  assert.equal(marked.differences.length, 1);
+  assert.match(marked.differences[0], /\[write failed\]/);
 });
