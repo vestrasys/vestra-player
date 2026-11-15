@@ -583,6 +583,7 @@ fn player() -> Result<()> {
             empty: false,
             title: "Vestra Player".into(),
         },
+        binding_revision: u64::MAX,
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,
@@ -764,29 +765,20 @@ fn player() -> Result<()> {
                 Err(mpsc::RecvTimeoutError::Timeout) => None,
                 Err(_) => break,
             };
-            // At least 128 events a tick, then what its time budget allows,
-            // as the windowed tick (`host::drain_events`): one a tick fell
-            // behind while the start-up queue held each tick (`START_BUDGET`),
-            // and the shared runner's answered pings waited past its
-            // heartbeat limit.
-            let mut handle = |event: Event| {
-                if let Event::Broadcast(name, data) = &event
+            // The core's turn (plan step S2e): the same as the windowed
+            // tick's, with no interface steps around it. At least 128 events
+            // a tick, then what its time budget allows (`host::events::drain`):
+            // one a tick fell behind while the start-up queue held each tick
+            // (`START_BUDGET`), and the shared runner's answered pings waited
+            // past its heartbeat limit.
+            host.core_events(&receiver, began, first, None, |event| {
+                if let Event::Broadcast(name, data) = event
                     && name == "source.state"
                 {
                     observed_source = data.clone();
                 }
-                host.handle(event);
-            };
-            let handled = first.map(&mut handle).map_or(0, |()| 1);
-            host::drain_events(&receiver, began, handled, handle);
-            host.activation_tick();
-            host.on_demand_tick();
-            host.power_tick();
-            host.diagnostics_tick();
-            host.package_tick();
-            host.notify_tick();
-            host.timeline_tick();
-            host.open_files_tick();
+            });
+            host.core_steps(None);
             if let Some(log) = host.frame_log.as_mut() {
                 log.tick_took(began.elapsed());
                 let presentation = &host.core.backend.render.presentation;
@@ -943,7 +935,6 @@ fn player() -> Result<()> {
         let tick_host = host.clone();
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
-        let mut binding_revision = u64::MAX;
         timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(16),
@@ -954,11 +945,8 @@ fn player() -> Result<()> {
                 host::stall::tick_began(began);
                 let mut turn = host::stall::Turn::new(began);
                 let mut host = tick_host.borrow_mut();
-                host::drain_events(&receiver, began, 0, |event| {
-                    let (label, at) = (event.label(), Instant::now());
-                    host.handle(event);
-                    turn.event(label, at.elapsed());
-                });
+                // The core's turn, first half (plan step S2e): the events.
+                host.core_events(&receiver, began, None, Some(&mut turn), |_| ());
                 turn.step("events");
                 // The UI part of the turn starts here. The UI stall test
                 // switch holds it once (`ui_stall_switch`).
@@ -991,35 +979,20 @@ fn player() -> Result<()> {
                 turn.step("window tick");
                 platform::tool_windows_tick();
                 turn.step("tool windows");
-                host.activation_tick();
-                host.on_demand_tick();
-                turn.step("plugin activation");
-                host.power_tick();
-                host.diagnostics_tick();
-                turn.step("power and diagnostics");
-                host.package_tick();
-                turn.step("packages");
-                host.notify_tick();
-                host.timeline_tick();
+                // The core's turn, second half (plan step S2e): its periodic
+                // steps, with the binding table's disabled set and the state
+                // file's write.
+                host.core_steps(Some(&mut turn));
+                // The interface's steps after it: a complete file drop goes
+                // to the core (`UiReport::Drop`), the options window, the
+                // palette, the tables, the menu, the frame.
                 host.drops_tick();
-                host.open_files_tick();
-                turn.step("notifications, timeline, drops, open files");
+                turn.step("drops");
                 host.settings_tick();
                 turn.step("settings");
                 if host.theme_pending {
                     host.theme_all();
                     turn.step("theme");
-                }
-                // The core's step: the binding table follows the registry's
-                // disabled commands (keys bound to them pass on).
-                if host.core.commands.revision() != binding_revision {
-                    binding_revision = host.core.commands.revision();
-                    let disabled = host.core.commands.disabled();
-                    // Only a change is a write: the interface's copy of the
-                    // table is made again only then (`host/tables.rs`).
-                    if *host.core.bindings().disabled() != disabled {
-                        host.core.bindings_mut().set_disabled(disabled);
-                    }
                 }
                 // The interface's step, on its copy of the registry (rule
                 // R8, `host/tables.rs`). The revision alone, not a snapshot:

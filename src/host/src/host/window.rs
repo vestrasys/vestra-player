@@ -340,9 +340,6 @@ impl Host {
                 json!({"code":"window-policy","message":error.to_string()}),
             ),
         }
-        // The state file is the core's to write (plan step S2c(7)): its
-        // debounced write stays at today's point, the end of this tick.
-        self.core.ui_state.save_if_due(now);
     }
     /// The UI's facts value `facts` as the core receives it (rule R9),
     /// with the next `seq` of the UI's one counter. Besides the facts

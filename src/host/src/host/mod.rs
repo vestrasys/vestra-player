@@ -73,7 +73,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-pub(crate) use events::{Event, Injected, MenuAction, drain as drain_events};
+pub(crate) use events::{Event, Injected, MenuAction};
 #[cfg(feature = "producer-audio")]
 pub(crate) use input::host_key;
 pub(crate) use input::{
@@ -570,6 +570,10 @@ pub(crate) struct Core {
     /// `UiSnapshot::Source` where a new state arrives
     /// (`source_display_next`).
     pub(crate) source_display: messages::SourceShown,
+    /// The command registry's revision the binding table's disabled set
+    /// last followed (`core_steps`; plan step S2e moved it from the
+    /// windowed tick).
+    pub(crate) binding_revision: u64,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
