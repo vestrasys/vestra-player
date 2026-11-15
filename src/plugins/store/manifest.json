@@ -1,12 +1,12 @@
 {
   "id": "vestra.store",
-  "version": "0.2.22",
+  "version": "0.3.1",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Plugin Store",
   "author": "Vestra Player",
   "punchline": "Browse, install and update plugins",
-  "description": "Browse plugins from the official Vestra Player plugin repository: descriptions, changelogs, version history and the permissions they need. Install, update or uninstall in one click; add third-party repositories (clearly marked as unofficial), install from a link or a local .vxp file, or drop a .vxp file on the video area. The official repository's index is digitally signed, and the store checks the signature and every package's checksum; versions revoked by a repository are disabled, with the reason.",
+  "description": "Browse plugins from the official Vestra Player plugin repository: descriptions, changelogs, version history and the permissions they need. Install, update or uninstall in one click; add third-party repositories (clearly marked as unofficial), install from a link or a local .vxp file, or drop a .vxp file on the video area. The official repository's index is digitally signed, and the store checks the signature and every package's checksum; versions revoked by a repository are disabled, with the reason.\n→ Menu: Tools ▸ Plugin Store",
   "tags": [
     "plugins",
     "store"

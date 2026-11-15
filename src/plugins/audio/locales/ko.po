@@ -440,10 +440,12 @@ msgstr "이퀄라이저, 오디오 싱크, 채널, 오디오 트랙, 출력 장�
 #, x-machine
 msgid ""
 "A ten-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\n"
-"Settings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Tools ▸ Audio Track in the right-click menu."
+"Settings are kept across files and restarts; the tracks are also under Tools ▸ Audio Track in the right-click menu.\n"
+"→ Adjustments and Effects ▸ Audio (Alt+2)"
 msgstr ""
 "프리셋이 있는 10밴드 이퀄라이저, 오디오 싱크, 노멀라이즈와 크리스털라이저, 채널 선택, 그리고 오디오 트랙 전환, 외부 오디오 파일 불러오기, 출력 장치 선택.\n"
-"설정은 파일과 재시작 후에도 유지됩니다. 모든 기능은 영상 옆의 오디오 패널(오디오…, Alt+2)에 있고, 트랙은 오른쪽 클릭 메뉴의 도구 ▸ 오디오 트랙에도 있습니다."
+"설정은 파일과 재시작 후에도 유지됩니다. 트랙은 오른쪽 클릭 메뉴의 도구 ▸ 오디오 트랙에도 있습니다.\n"
+"→ 조정 및 효과 ▸ 오디오 (Alt+2)"
 
 #: manifest.json
 #, x-machine

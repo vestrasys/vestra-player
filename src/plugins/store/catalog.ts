@@ -1,6 +1,7 @@
 import type { PluginInfo } from "@vestra-player/sdk";
 import { translationFor, type IndexEntry, type IndexVersion, type Revocation } from "./index-format.ts";
 import { reservedId, reservedText } from "./labels.ts";
+import { splitDescription } from "./open-line.ts";
 import type { Repo } from "./repos.ts";
 import { compareVersions, isVersion, playerAtLeast, satisfies } from "./semver.ts";
 import { msg, type Msg } from "./text.ts";
@@ -94,9 +95,12 @@ export interface Item {
   name: string;
   author: string | null;
   punchline: string | null;
+  /** The description without its "how to open" line (open-line.ts). */
   description: string | null;
+  /** The description's "how to open" line (open-line.ts), `null` none. */
+  open: string | null;
   tags: string[];
-  /** The English name, punchline and tags (search and the tag filter match these too). */
+  /** The English name, punchline and tags (search and the category filter match these too). */
   english: string[];
   published: string | null;
   local: Display | null;
@@ -191,7 +195,7 @@ export function buildItems(
       name: local.name,
       author: local.author,
       punchline: local.punchline,
-      description: local.description,
+      ...splitDescription(local.description),
       tags: local.tags,
       english: local.english,
       published: null,
@@ -217,7 +221,7 @@ export function buildItems(
       name: local.name,
       author: local.author,
       punchline: local.punchline,
-      description: local.description,
+      ...splitDescription(local.description),
       tags: local.tags,
       english: local.english,
       published: null,
@@ -233,7 +237,7 @@ function shown(entry: IndexEntry, locale: string) {
   return {
     name: t.name ?? entry.name,
     punchline: t.punchline ?? entry.punchline,
-    description: t.description ?? entry.description,
+    ...splitDescription(t.description ?? entry.description),
     tags: t.tags ?? entry.tags,
     english: [entry.name, entry.punchline ?? "", ...entry.tags],
   };
@@ -249,6 +253,15 @@ export const isInstalledRow = (item: Item) =>
   item.state === "revoked" ||
   item.state === "local" ||
   (item.state === "builtin" && item.repo === null);
+
+/**
+ * A repository's entry whose id has no installed instance, no built-in and no
+ * development load, and that this player can install (the Not installed tab):
+ * what could still be added. Entries that cannot be installed (incompatible,
+ * every version revoked, a reserved `vestra.` id) stay under All with their
+ * reason; listing them here would offer nothing to do.
+ */
+export const isNotInstalledRow = (item: Item) => item.entry !== null && item.state === "available" && !item.development;
 
 /**
  * A built-in plugin's row (shipped with the player; it cannot be uninstalled

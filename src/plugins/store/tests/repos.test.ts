@@ -218,8 +218,10 @@ test("third-party repositories: no signature read, `official: true` ignored, lab
     assert.equal(net.count(`${THIRD}.sig`), 0);
     await openStore(host);
     await tab(host, ALL);
-    const row = rows(host).find((r) => r.name === "Viz") as { meta: string } | undefined;
-    assert.equal(row?.meta, "Someone · 非官方：Vestra 官方（third.example）");
+    const row = rows(host).find((r) => r.name === "Viz");
+    assert.deepEqual([row?.by, row?.byNote], ["作者：Someone", "· 非官方"]);
+    await choose(host, "Viz");
+    assert.equal(props(host)["d-meta"], "Someone · 非官方：Vestra 官方（third.example）");
   } finally {
     await stop();
   }

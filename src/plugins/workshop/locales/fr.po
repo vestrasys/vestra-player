@@ -835,13 +835,15 @@ msgid ""
 "\n"
 "Each conversation has its own folder; the AI can only read and write that folder and cannot run commands. The API key is kept only in the system keychain, never in a file. The cost of calling the model is charged to your provider account.\n"
 "\n"
-"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project."
+"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project.\n"
+"→ Menu: Tools ▸ Vestra Player AI"
 msgstr ""
 "Vestra Player AI est l'assistant IA intégré au lecteur, basé sur pi (github.com/earendil-works/pi). Choisissez un fournisseur dans les paramètres (Anthropic, OpenAI, Google, OpenRouter, DeepSeek ou un service compatible OpenAI comme Ollama) et enregistrez votre propre clé API pour commencer une conversation.\n"
 "\n"
 "Chaque conversation a son propre dossier ; l'IA ne peut lire et écrire que dans ce dossier et ne peut pas exécuter de commandes. La clé API est conservée uniquement dans le trousseau du système, jamais dans un fichier. Le coût des appels au modèle est facturé sur votre compte chez le fournisseur.\n"
 "\n"
-"L'IA écrit des plugins à partir de la documentation du SDK des plugins et corrige ses propres erreurs grâce aux outils de vérification des types, de tests et d'empaquetage ; un plugin terminé peut être installé ou exporté en .vxp ou en projet source complet."
+"L'IA écrit des plugins à partir de la documentation du SDK des plugins et corrige ses propres erreurs grâce aux outils de vérification des types, de tests et d'empaquetage ; un plugin terminé peut être installé ou exporté en .vxp ou en projet source complet.\n"
+"→ Menu : Outils ▸ Vestra Player AI"
 
 #: manifest.json
 #, x-machine

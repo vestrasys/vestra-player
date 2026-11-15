@@ -196,10 +196,10 @@ msgstr "ビデオの倍率によるウインドウサイズ、常に手前に表
 #, x-machine
 msgid ""
 "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
-"The items are in the context menu under Screen."
+"→ Command palette (Ctrl+Shift+P): Window"
 msgstr ""
 "ウインドウをビデオの 0.5〜2 倍のサイズにしたり、ビデオのアスペクト比に合わせたりでき、再生開始時に自動でサイズを変更することもできます。常に手前に表示（しない、常に、再生中、フルスクリーン再生中）、ミニサイズとシステムのピクチャ・イン・ピクチャ、再生中のポインタの非表示に対応しています。\n"
-"項目はコンテキストメニューの「画面」にあります。"
+"→ コマンドパレット (Ctrl+Shift+P)：ウインドウ"
 
 #: manifest.json
 #, x-machine

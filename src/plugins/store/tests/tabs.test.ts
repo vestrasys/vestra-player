@@ -1,17 +1,20 @@
 /**
- * The tabs All · Installed · Updates (store 0.2.11, user ruling 2026-11-03,
- * as GNOME Software, KDE Discover, the JetBrains Marketplace and VS Code):
- * All lists every plugin of every repository, installed ones included, and
- * the installed plugins no repository lists, each row with its state and its
- * own buttons. The store remembers the last tab; the first open is All, and a
- * remembered "available" (the tab All replaced) is All.
+ * The tabs All · Not installed · Installed · Updates (store 0.2.11, user
+ * ruling 2026-11-03, as GNOME Software, KDE Discover, the JetBrains
+ * Marketplace and VS Code; Not installed since 0.3.1, as Steam and
+ * Synaptic): All lists every plugin of every repository, installed ones
+ * included, and the installed plugins no repository lists, each card with
+ * its state and its button (Store v3), the rest on its page. Not installed
+ * lists the repositories' plugins nothing installed has the id of. The store
+ * remembers the last tab; the first open is All, and a remembered
+ * "available" (the tab All replaced) is All.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ALL, BUILTIN, controls, FakeNet, info, type Info, INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
+import { ALL, BUILTIN, choose, controls, FakeNet, info, type Info, INSTALLED, manage, more, NOT_INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-tabs-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -40,32 +43,31 @@ test("All lists the repositories' plugins, installed or not, and installed plugi
     await openStore(host);
     await until(host, () => store.items.length === 6, "rows");
     assert.equal(props(host)["category"], ALL);
-    type Row = { name: string; mark: string; badge: string; meta?: string };
     assert.deepEqual(
-      (rows(host) as Row[]).map((r) => [r.name, r.mark, r.badge, r.meta]),
+      rows(host).map((r) => [r.name, r.state, r.by, r.byNote]),
       [
-        ["Alpha", "✓", "", "Someone · 官方仓库"],
-        ["Beta", "", "可更新 → 2.0.0", "Someone · 官方仓库"],
-        ["Gamma", "", "", "Someone · 官方仓库"],
-        ["s.side", "✓", "", "未知作者 · 本地文件"],
-        ["w.work", "已停用", "", "未知作者 · 插件工坊"],
+        ["Alpha", "✓ 已安装", "作者：Someone", ""],
+        ["Beta", "有更新", "作者：Someone", ""],
+        ["Gamma", "", "作者：Someone", ""],
+        ["s.side", "✓ 已安装", "作者：未知作者", "· 本地文件"],
+        ["w.work", "已停用", "作者：未知作者", "· 插件工坊"],
       ],
-      "the built-in is hidden (the check box is on by default)",
+      "the built-in is hidden (\"Show built-in plugins\" is off by default)",
     );
     assert.equal(props(host)["all-count"], 5);
     assert.equal(props(host)["installed-count"], 4);
     assert.equal(props(host)["updates"], 1);
 
-    // Each row's one control by its state (Install, Update, else the ⋯ menu in the fixed order Disable or Enable, Uninstall…).
-    const of = (name: string) => {
-      const { primary, menu } = controls(host, name);
-      return [...(primary ? [primary] : []), ...menu].map((a) => a.id);
+    // Each card's one button by its state (Install, Update, Enable, else none); its page has the rest in the fixed order.
+    const of = (name: string) => controls(host, name).button?.id ?? null;
+    assert.deepEqual(["Gamma", "Alpha", "Beta", "s.side", "w.work"].map(of), ["install", null, "update", null, "enable"]);
+    const page = async (name: string) => {
+      const { buttons, more } = await manage(host, name);
+      return [...buttons, ...more].map((a) => a.id);
     };
-    assert.deepEqual(of("Gamma"), ["install"]);
-    assert.deepEqual(of("Alpha"), ["disable", "uninstall", "reload", "openData"]);
-    assert.deepEqual(of("Beta"), ["update"]);
-    assert.deepEqual(of("s.side"), ["disable", "uninstall", "reload", "openData"]);
-    assert.deepEqual(of("w.work"), ["enable", "uninstall", "openData"]);
+    assert.deepEqual(await page("Alpha"), ["disable", "uninstall", "reload", "openData"]);
+    assert.deepEqual(await page("s.side"), ["disable", "uninstall", "reload", "openData"]);
+    assert.deepEqual(await page("w.work"), ["enable", "uninstall", "openData"]);
     assert.equal(controls(host, "w.work").dim, true);
 
     // Installed and Updates as before.
@@ -74,7 +76,7 @@ test("All lists the repositories' plugins, installed or not, and installed plugi
     await tab(host, UPDATES);
     assert.deepEqual(rows(host).map((r) => r.name), ["Beta"]);
 
-    // Search and the tag filter apply to All as they did to Available.
+    // Search applies to All as it did to Available.
     await tab(host, ALL);
     host.window("store").emit("search", "side");
     await host.settle();
@@ -87,7 +89,7 @@ test("All lists the repositories' plugins, installed or not, and installed plugi
   }
 });
 
-test("the same plugin in two repositories: one row under All when installed, one per repository when not", async () => {
+test("the same plugin in two repositories: one card under All when installed, one per repository when not", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
@@ -104,24 +106,24 @@ test("the same plugin in two repositories: one row under All when installed, one
     await store.refreshAll(true);
     await openStore(host);
     await until(host, () => store.items.length === 4, "rows");
-    type Row = { key: string; mark: string };
-    // Alpha (installed from the official repository): its installed row only. Beta (not installed): one row per repository.
+    // Alpha (installed from the official repository): its installed card only. Beta (not installed): one card per repository.
     assert.deepEqual(
-      (rows(host) as Row[]).map((r) => [r.key, r.mark]).sort(),
+      rows(host).map((r) => [r.key, r.state, r.byNote]).sort(),
       [
-        [`${OFFICIAL}\na.alpha`, "✓"],
-        [`${OFFICIAL}\nb.beta`, ""],
-        [`${THIRD}\nb.beta`, ""],
+        [`${OFFICIAL}\na.alpha`, "✓ 已安装", ""],
+        [`${OFFICIAL}\nb.beta`, "", ""],
+        [`${THIRD}\nb.beta`, "", "· 非官方"],
       ].sort(),
     );
     assert.equal(props(host)["all-count"], 3);
-    // The other repository's version is replaced from the … menu (a newer version there is no update: updates only from the original source).
+    // The other repository's version is replaced from the page's ⋯ menu (a newer version there is no update: updates only from the original source).
     assert.equal(props(host)["updates"], 0);
-    const replace = controls(host, "Alpha").menu.at(-1)!;
+    await choose(host, "Alpha");
+    const replace = more(host).at(-1)!;
     assert.equal(replace.id, `replace:${THIRD}\na.alpha`);
     assert.match(String(replace.text), /^用.+的 5\.0\.0 替换…$/);
     await tab(host, INSTALLED);
-    assert.deepEqual((rows(host) as Row[]).map((r) => r.key), [`${OFFICIAL}\na.alpha`]);
+    assert.deepEqual(rows(host).map((r) => r.key), [`${OFFICIAL}\na.alpha`]);
   } finally {
     await stop();
   }
@@ -161,6 +163,9 @@ test("the tab is remembered; the first open is All; a remembered Available (befo
   // Installed is kept the same way; a value of the wrong type is All and does not reset the settings.
   writeFileSync(join(old, "settings.json"), JSON.stringify(settings("installed")));
   await run(old, ({ host }) => assert.equal(props(host)["category"], INSTALLED));
+  // Not installed (store 0.3.1) too; the tabs after it keep their names, so a remembered tab stays the same tab.
+  writeFileSync(join(old, "settings.json"), JSON.stringify(settings("notInstalled")));
+  await run(old, ({ host }) => assert.equal(props(host)["category"], NOT_INSTALLED));
   writeFileSync(join(old, "settings.json"), JSON.stringify(settings(7)));
   await run(old, ({ host, store }) => {
     assert.equal(props(host)["category"], ALL);
@@ -191,13 +196,13 @@ test("offline, no index: All in English shows the installed plugins, their count
     assert.deepEqual(rows(host).map((r) => r.name), ["s.side", "w.work"]);
     assert.equal(props(host)["all-count"], 2);
     assert.equal(props(host)["list-note"], "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.");
-    assert.deepEqual(controls(host, "s.side").menu[0]?.id, "disable");
+    assert.deepEqual((await manage(host, "s.side")).buttons[0]?.id, "disable");
   } finally {
     await stop();
   }
 });
 
-test("All in English: one control per row (Install, Update, ⋯) and the state left of the version; a .vxp install a repository lists too is one row", async () => {
+test("All in English: one button per card (Install, Update) and the state in words; a .vxp install a repository lists too is one card", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     { id: "t.tube", name: "Tube", versions: [{ version: "2.0.0" }] },
@@ -222,26 +227,23 @@ test("All in English: one control per row (Install, Update, ⋯) and the state l
   try {
     await openStore(host);
     await until(host, () => store.items.length === 6, "rows");
-    type Row = { name: string; mark: string; markLabel: string; version: string; badge: string; dim: boolean };
     assert.deepEqual(
-      (rows(host) as unknown as Row[]).map((r) => [r.name, r.mark, r.markLabel, r.version, r.badge, r.dim]),
+      rows(host).map((r) => [r.name, r.state, r.by, r.byNote, r.intro, r.dim]),
       [
-        ["Gamma", "", "", "1.0.0", "", false],
-        ["Newer", "", "", "1.3.0", "Update → 1.4.0", false],
-        ["Quiet", "Disabled", "", "0.9.0", "", true],
-        ["Tube", "✓", "Installed", "1.0.0", "", false],
+        ["Gamma", "", "by Someone", "", "Gamma 的简介", false],
+        ["Newer", "Update available", "by Someone", "", "Newer 的简介", false],
+        ["Quiet", "Disabled", "by Someone", "", "Quiet 的简介", true],
+        ["Tube", "✓ Installed", "by Unknown author", "· Local file", "Plays tubes", false],
       ],
     );
-    const one = (name: string) => {
-      const { primary, menu } = controls(host, name);
-      return primary ? primary.text : menu.length ? "⋯" : "";
-    };
-    assert.deepEqual(["Gamma", "Newer", "Quiet", "Tube"].map(one), ["Install", "Update", "⋯", "⋯"]);
+    const one = (name: string) => controls(host, name).button?.text ?? "";
+    assert.deepEqual(["Gamma", "Newer", "Quiet", "Tube"].map(one), ["Install", "Update", "Enable", ""]);
+    assert.deepEqual(rows(host).find((r) => r.name === "Tube")!.menu.map((m) => m.text), ["Disable", "Uninstall…"]);
     assert.equal(props(host)["all-count"], 4);
-    host.window("store").emit("select", "\nt.tube");
+    host.window("store").emit("openCard", "\nt.tube");
     await host.settle();
     assert.ok((props(host)["banners"] as { text: string }[]).some((b) => b.text === "Also in Official repository"));
-    assert.equal(controls(host, "Tube").menu.at(-1)?.text, "Replace with 2.0.0 from Official repository…");
+    assert.equal(more(host).at(-1)?.text, "Replace with 2.0.0 from Official repository…");
   } finally {
     await stop();
   }
@@ -255,28 +257,121 @@ test("a development load (--plugin) folds nothing: the repository's entry of its
   try {
     await openStore(host);
     await until(host, () => store.items.length === 3, "rows");
-    type Row = { key: string; name: string; primary: { id: string } };
-    const all = rows(host) as unknown as Row[];
+    const all = rows(host);
     assert.deepEqual(all.map((r) => r.key).sort(), ["\nt.dev", `${OFFICIAL}\nt.dev`].sort());
     assert.equal(props(host)["all-count"], 2);
     const entry = all.find((r) => r.key === `${OFFICIAL}\nt.dev`)!;
-    assert.equal(entry.primary.id, "install");
+    assert.equal(entry.button.id, "install");
     // Asked for by its key, the entry itself is shown (not the development row).
     store.select(entry.key);
     await host.settle();
     assert.equal(store.selected, entry.key);
-    // No "Also in" and no replace entry on the development row.
-    assert.ok(!controls(host, "t.dev").menu.some((m) => m.id.startsWith("replace:")));
-    // The install question, then (as before 0.2.11) the store's question about replacing the loaded copy.
+    // No "Also in" and no replace entry on the development row's page.
+    await choose(host, "t.dev");
+    assert.ok(!more(host).some((m) => m.id.startsWith("replace:")));
+    // The card's Install: the install question, then (as before 0.2.11) the store's question about replacing the loaded copy.
     host.dialogAnswers.push(yes, yes);
-    host.window("store").emit("rowAct", entry.key, "install");
+    host.window("store").emit("cardAct", entry.key, "install");
     await until(host, () => host.packageCalls.some((c) => c.method === "install"), "installed from the repository");
   } finally {
     await stop();
   }
 });
 
-test("an update row offers only Update; another repository's version is replaced from the details", async () => {
+test("Not installed (store 0.3.1): the repositories' plugins with no installed copy, no built-in and no development load of their id", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [
+    { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
+    { id: "b.beta", name: "Beta", versions: [{ version: "1.0.0" }] },
+    { id: "s.side", name: "Side", versions: [{ version: "1.0.0" }] },
+    { id: "t.dev", name: "Dev Tool", versions: [{ version: "1.0.0" }] },
+    { id: "o.off", name: "Off", versions: [{ version: "1.0.0" }] },
+    // A repository listing a built-in's id: it is installed (built in), so not here.
+    { id: "vestra.video", name: "Fake Video", versions: [{ version: "9.0.0" }] },
+    // Not installed but not installable either: All lists them with the reason, this tab does not.
+    { id: "i.incompat", name: "Incompat", versions: [{ version: "1.0.0", minPlayerVersion: "99.0.0" }] },
+    { id: "r.revoked", name: "Revoked", versions: [{ version: "1.0.0" }] },
+    { id: "vestra.other", name: "Reserved", versions: [{ version: "1.0.0" }] },
+  ], { revoked: [{ id: "r.revoked", versions: "*", reason: "malware" }] });
+  publish(net, THIRD, [{ id: "b.beta", name: "Beta", versions: [{ version: "2.0.0" }] }]);
+  const { host, store, stop } = await start({
+    net,
+    locale: "en",
+    packages: [
+      BUILTIN,
+      info("a.alpha", { version: "1.0.0", source: fromRepo }),
+      // Sideloaded, and disabled: installed all the same.
+      info("s.side", { version: "1.0.0", source: { kind: "file" } }),
+      info("o.off", { version: "1.0.0", source: fromRepo, state: "disabled" }),
+      info("t.dev", { origin: "development", source: null }),
+    ],
+  });
+  try {
+    store.settings.save({ ...store.settings.value, repos: [THIRD] });
+    store.repos.sync([THIRD]);
+    await store.refreshAll(true);
+    await openStore(host);
+    // Ten repository rows, and the local rows of the built-in, the sideload and the development load.
+    await until(host, () => store.items.length === 13, "rows");
+    const states = (name: string) => store.items.find((each) => each.name === name)?.state;
+    assert.deepEqual(["Incompat", "Revoked", "Reserved"].map(states), ["incompatible", "allRevoked", "reserved"]);
+    // One card per repository, as under All; the count is the tab's before a search.
+    assert.equal(props(host)["not-installed-count"], 2);
+    await tab(host, NOT_INSTALLED);
+    assert.deepEqual(rows(host).map((r) => [r.key, r.state, r.byNote, r.button.id]).sort(), [
+      [`${OFFICIAL}\nb.beta`, "", "", "install"],
+      [`${THIRD}\nb.beta`, "", "· Unofficial", "install"],
+    ]);
+    // Showing the built-ins adds nothing here.
+    host.window("store").emit("setHideBuiltins", false);
+    await host.settle();
+    assert.equal(props(host)["not-installed-count"], 2);
+    assert.equal(rows(host).length, 2);
+    // Kept by name in settings.json.
+    assert.equal(store.settings.value.tab, "notInstalled");
+    // A search with no match says so, as every tab does.
+    host.window("store").emit("search", "alpha");
+    await host.settle();
+    assert.equal(rows(host).length, 0);
+    assert.equal(props(host)["empty-text"], "No plugins match");
+  } finally {
+    await stop();
+  }
+});
+
+test("Not installed, empty: nothing more to install says so; offline, the repositories cannot be reached", async () => {
+  const net = new FakeNet();
+  // Alpha is installed; Incompat cannot be.
+  publish(net, OFFICIAL, [
+    { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
+    { id: "i.incompat", name: "Incompat", versions: [{ version: "1.0.0", minPlayerVersion: "99.0.0" }] },
+  ]);
+  const all = await start({ net, locale: "en", packages: [BUILTIN, info("a.alpha", { version: "1.0.0", source: fromRepo })] });
+  try {
+    await openStore(all.host);
+    await until(all.host, () => all.store.items.length === 3, "rows");
+    await tab(all.host, NOT_INSTALLED);
+    assert.equal(props(all.host)["not-installed-count"], 0);
+    assert.deepEqual(rows(all.host), []);
+    assert.equal(props(all.host)["empty-text"], "There are no more plugins to install");
+  } finally {
+    await all.stop();
+  }
+  const offline = new FakeNet();
+  offline.offline = true;
+  const off = await start({ net: offline, locale: "en", packages: [BUILTIN, info("s.side", { version: "1.0.0" })] });
+  try {
+    await openStore(off.host);
+    await until(off.host, () => !off.store.repos.official.refreshing, "gave up");
+    await tab(off.host, NOT_INSTALLED);
+    assert.deepEqual(rows(off.host), []);
+    assert.equal(props(off.host)["empty-text"], "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.");
+  } finally {
+    await off.stop();
+  }
+});
+
+test("an update card offers only Update; another repository's version is replaced from its page's ⋯ menu", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "2.0.0" }, { version: "1.0.0" }] }]);
   publish(net, THIRD, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "5.0.0" }] }]);
@@ -288,16 +383,16 @@ test("an update row offers only Update; another repository's version is replaced
     await openStore(host);
     await store.refreshAll(true);
     await until(host, () => rows(host).length === 1, "rows");
-    assert.deepEqual(controls(host, "Alpha").primary?.id, "update");
-    assert.deepEqual(controls(host, "Alpha").menu, []);
-    host.window("store").emit("select", rows(host)[0]!.key);
+    assert.deepEqual(controls(host, "Alpha").button?.id, "update");
+    host.window("store").emit("openCard", rows(host)[0]!.key);
     await host.settle();
     const replace = `replace:${THIRD}\na.alpha`;
     assert.deepEqual(
       (props(host)["actions"] as { id: string }[]).map((a) => a.id),
-      ["update", "disable", "uninstall", "reload", replace],
+      ["update", "disable", "uninstall", "reload"],
     );
-    // Its button asks as Replace… did.
+    assert.deepEqual(more(host).map((m) => m.id), ["openData", replace]);
+    // Its entry asks as Replace… did.
     host.dialogAnswers.push(yes);
     host.window("store").emit("act", replace);
     await until(host, () => host.packageCalls.some((c) => c.method === "install"), "replaced");

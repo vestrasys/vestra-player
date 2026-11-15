@@ -667,7 +667,8 @@ msgid ""
 "\n"
 "Each conversation has its own folder; the AI can only read and write that folder and cannot run commands. The API key is kept only in the system keychain, never in a file. The cost of calling the model is charged to your provider account.\n"
 "\n"
-"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project."
+"The AI writes plugins from the plugin SDK's documentation and fixes its own errors with the type check, tests and packing tools; a finished plugin can be installed or exported as a .vxp or as a complete source project.\n"
+"→ Menu: Tools ▸ Vestra Player AI"
 msgstr ""
 
 #: manifest.json

@@ -51,10 +51,14 @@ test("menu Plugin Store… counts updates from the same source only, announces t
     host.window("store").emit("act", "update");
     await until(host, () => path(host)?.[1] === "Plugin Store…", "count gone after the update");
     await until(host, () => !store.busy);
-    // The updated plugin left Updates; the tab stays, empty, without details.
+    // The updated plugin left Updates; its page stays open, and the tab under it is empty.
     assert.equal(props(host)["category"], UPDATES);
     assert.equal(props(host)["empty-text"], "所有插件都是最新的");
-    assert.equal(props(host)["has-selection"], false);
+    assert.equal(props(host)["detail-open"], true);
+    assert.equal(props(host)["d-name"], "YouTube");
+    host.window("store").emit("back");
+    await host.settle();
+    assert.equal(props(host)["detail-open"], false);
   } finally {
     await stop();
   }
@@ -166,31 +170,40 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     await showBuiltins(host);
     await until(host, () => store.items.length === 5);
     const window = host.window("store");
-    // All (the first tab): every plugin, each with its state; tags of this tab only.
+    // All (the first tab): every plugin, each with its state.
     assert.equal(props(host)["category"], ALL);
-    assert.deepEqual(rows(host).map((r) => [r.name, r.badge || r.mark]), [
+    assert.deepEqual(rows(host).map((r) => [r.name, r.state]), [
       ["Alpha", ""],
-      ["Beta", "✓"],
+      ["Beta", "✓ 已安装"],
       ["Delta", "已撤回"],
       ["Gamma", "不兼容"],
-      ["vestra.video", "内置"],
+      ["vestra.video", "随播放器提供"],
     ]);
-    // The first entry is "Tags: All", translated by the plugin.
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "网络视频", "字幕"]);
+    // The first entry is "Category: All", translated by the plugin.
+    assert.equal((props(host)["goal-model"] as string[])[0], "分类：全部");
     assert.equal(props(host)["all-count"], 5);
     assert.equal(props(host)["installed-count"], 2);
     // Installed: built-ins first, then third-party.
     await tab(host, INSTALLED);
-    assert.deepEqual(rows(host).map((r) => [r.name, r.badge || r.mark]), [
-      ["vestra.video", "内置"],
-      ["Beta", "✓"],
+    assert.deepEqual(rows(host).map((r) => [r.name, r.state]), [
+      ["vestra.video", "随播放器提供"],
+      ["Beta", "✓ 已安装"],
     ]);
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "字幕"]);
     await tab(host, ALL);
-    window.emit("setTag", 1);
+    // Tags no category knows: Other; a search still finds them by tag.
+    window.emit("setGoal", 8);
+    await host.settle();
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "vestra.video"]);
+    window.emit("setGoal", 1);
+    await host.settle();
+    assert.deepEqual(rows(host).map((r) => r.name), []);
+    assert.equal(props(host)["can-clear"], true);
+    window.emit("clearSearch");
+    await host.settle();
+    assert.equal(props(host)["goal-index"], 0);
+    window.emit("search", "网络视频");
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Alpha"]);
-    window.emit("setTag", 0);
     window.emit("search", "ANN");
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Alpha"]);
@@ -203,21 +216,21 @@ test("list: filters, search, tags, sort; incompatible and fully revoked plugins"
     assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma", "Beta", "Alpha", "vestra.video"]);
 
     const gamma = await choose(host, "Gamma");
-    assert.equal(gamma.badge, "不兼容");
+    assert.equal(gamma.state, "不兼容");
     assert.deepEqual(actions(host), []);
     assert.ok(banners(host).includes("需要 Vestra Player ≥ 9.0.0（当前 0.2.0）"));
     const delta = await choose(host, "Delta");
-    assert.equal(delta.badge, "已撤回");
+    assert.equal(delta.state, "已撤回");
     assert.ok(banners(host).includes("此插件已被撤回：停止维护"));
     await choose(host, "vestra.video");
     assert.ok(banners(host).some((b) => b.startsWith("内置插件随播放器更新")));
-    assert.deepEqual(actions(host), []);
+    assert.deepEqual(actions(host).map((a) => a.id), ["reload"]);
   } finally {
     await stop();
   }
 });
 
-test("README and changelog tabs; missing ones say so; 显示图片 for a third-party README", async () => {
+test("README (About) and changelog (Details) tabs; missing ones say so; 显示图片 for a third-party README", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [
     { id: "a.alpha", name: "Alpha", readme: "# Alpha\n\n![x](https://img.test/a.png)", changelog: "## 1.0.0\n\n- first" },
@@ -236,10 +249,18 @@ test("README and changelog tabs; missing ones say so; 显示图片 for a third-p
     await until(host, () => host.markdown(props(host)["doc"]) !== null, "readme");
     assert.match(host.markdown(props(host)["doc"])!.text, /^# Alpha/);
     assert.ok(!banners(host).some((b) => b.startsWith("已阻止")), "official READMEs load remote images");
+    // Details ▸ Changelog (the first of its two tabs).
     host.window("store").emit("setTab", 1);
     await until(host, () => host.markdown(props(host)["doc"])?.text.startsWith("## 1.0.0") === true, "changelog");
+    // A card opens on About.
     await choose(host, "Beta");
+    assert.equal(props(host)["tab"], 0);
+    await until(host, () => props(host)["doc-note"] === "作者没有提供说明");
+    host.window("store").emit("setTab", 1);
     await until(host, () => props(host)["doc-note"] === "作者没有提供更新日志");
+    host.window("store").emit("setSubTab", 1);
+    await host.settle();
+    assert.equal(props(host)["sub-tab"], 1);
     host.window("store").emit("setTab", 0);
     await until(host, () => props(host)["doc-note"] === "作者没有提供说明");
 

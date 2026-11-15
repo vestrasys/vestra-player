@@ -1118,10 +1118,12 @@ msgstr "Color, procesamiento de imagen, relación de aspecto, recorte, rotación
 #, x-machine
 msgid ""
 "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\n"
-"Everything is in the Picture panel beside the video: press Alt+1, or right-click Adjustments and Effects and pick the Picture tab. Each control shows its key."
+"Each control shows its key.\n"
+"→ Adjustments and Effects ▸ Picture (Alt+1)"
 msgstr ""
 "Ajusta el brillo, el contraste, la saturación y el tono; procesamiento de imagen como enfoque, reducción de ruido y desbloqueo; volteo, rotación, desentrelazado y duplicación de fotogramas; relación de aspecto, recorte/estiramiento, zoom y desplazamiento de la imagen; con renderizado por GPU, también mapeo de tonos HDR, shaders de píxeles e interpolación de movimiento.\n"
-"Todo está en el panel Imagen junto al vídeo: pulsa Alt+1, o haz clic derecho en «Ajustes y efectos» y elige la pestaña Imagen. Cada control muestra su tecla."
+"Cada control muestra su tecla.\n"
+"→ Ajustes y efectos ▸ Imagen (Alt+1)"
 
 #: manifest.json
 #, x-machine

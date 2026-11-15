@@ -358,8 +358,12 @@ msgstr "再生情報のオーバーレイ、再生のプロパティ、「この
 
 #: manifest.json
 #, x-machine
-msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
-msgstr "ビデオの左上に、ファイル、時間、コーデック、フレームレートなどのリアルタイム情報（Tab）または簡易情報（Shift+Tab）を表示します。「再生のプロパティ…」ではデコードの状態、ファイルのストリームとメタデータ、システム情報を一覧表示し、テキストとしてコピー・保存できます。「Vestra Player について…」ではバージョン、コンポーネント、読み込まれたプラグインを表示します。"
+msgid ""
+"Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins.\n"
+"→ Press Tab (overlay) or F1 (About)"
+msgstr ""
+"ビデオの左上に、ファイル、時間、コーデック、フレームレートなどのリアルタイム情報（Tab）または簡易情報（Shift+Tab）を表示します。「再生のプロパティ…」ではデコードの状態、ファイルのストリームとメタデータ、システム情報を一覧表示し、テキストとしてコピー・保存できます。「Vestra Player について…」ではバージョン、コンポーネント、読み込まれたプラグインを表示します。\n"
+"→ Tab（情報表示）または F1（バージョン情報）"
 
 #: manifest.json
 #, x-machine
