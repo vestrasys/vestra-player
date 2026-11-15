@@ -588,6 +588,8 @@ impl Host {
     /// double-click interval passes without a second press. It runs here,
     /// not through the event queue, so it costs no further loop turn.
     pub(crate) fn click_tick(&mut self, pointer: (f64, f64)) {
+        // On the interface's copies of the tables (rule R8).
+        self.sync_tables();
         let Some(click) = self.input.borrow().click else {
             return;
         };
@@ -595,8 +597,7 @@ impl Host {
             mods: click.mods,
             name: "Mouse:LeftClick".into(),
         };
-        let immediate =
-            video_click::immediate(&self.input.borrow().table, &self.core.commands, &input);
+        let immediate = video_click::immediate(&self.input.borrow().table, &*self.registry, &input);
         let verdict = click.verdict(Instant::now(), pointer, double_click_interval(), immediate);
         if verdict == video_click::Verdict::Wait {
             return;
@@ -616,9 +617,7 @@ impl Host {
             // click whose command cannot run now (play/pause with nothing
             // open) does nothing, without the reason a key would show.
             if matches!(
-                self.core
-                    .commands
-                    .resolve_execution(target.owner, &target.id),
+                self.registry.resolve_execution(target.owner, &target.id),
                 Err(commands::CommandError::Disabled { .. })
             ) {
                 input_trace::mark(&format!(

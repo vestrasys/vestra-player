@@ -86,7 +86,7 @@ impl Press {
 /// Whether this `Mouse:LeftClick` need not wait for a double click.
 pub fn immediate(
     table: &crate::bindings::Table,
-    commands: &crate::commands::Registry,
+    commands: &impl crate::commands::Lookup,
     click: &crate::bindings::Input,
 ) -> bool {
     let Some(target) = table.resolve(click, None) else {

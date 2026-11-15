@@ -136,9 +136,25 @@ impl Host {
         // The status strip yields: the first row shows the status.
         self.refresh_strip();
     }
-    /// The commands the palette lists, as they are now (also
-    /// `commands.list` and `commands.run`).
+    /// The commands the open palette lists: from the interface's copies
+    /// of the tables (rule R8; `refresh_menu` took the newest).
     pub(crate) fn palette_items(&self) -> Vec<Item> {
+        self.items_of(&self.registry.shown_entries(), &self.labels())
+    }
+    /// The commands the palette lists, from the core's own tables: what
+    /// `commands.list` answers and `commands.run` checks against.
+    pub(crate) fn listed_items(&self) -> Vec<Item> {
+        let bindings = self.core.bindings();
+        self.items_of(&self.core.commands.shown_entries(), &|owner, id| {
+            bindings.label(owner, id)
+        })
+    }
+    /// The palette's items of `entries`, with the keys `labels` gives.
+    fn items_of(
+        &self,
+        entries: &[commands::CommandSnapshot],
+        labels: &dyn Fn(u64, &str) -> Option<String>,
+    ) -> Vec<Item> {
         let names = self.core.plugin_names();
         let name = |id: &str| {
             names
@@ -147,9 +163,7 @@ impl Host {
                 .or_else(|| self.core.on_demand.name_of(id).map(str::to_owned))
                 .unwrap_or_else(|| id.to_owned())
         };
-        let labels = self.labels();
-        let entries = self.core.commands.shown_entries();
-        command_palette::items(&entries, &name, &labels)
+        command_palette::items(entries, &name, labels)
     }
     /// The lead was set, changed or cleared (`palette.lead`): an open
     /// palette shows it now; `moved` (it came or went) places the cursor

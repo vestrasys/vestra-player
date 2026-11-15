@@ -17,7 +17,7 @@ mod input;
 pub(crate) mod lead_strip;
 mod lifecycle;
 mod menus;
-mod messages;
+pub(crate) mod messages;
 mod mounts;
 pub(crate) mod origins;
 pub(crate) mod palette;
@@ -32,6 +32,7 @@ mod shell;
 pub(crate) mod stall;
 mod state;
 pub(crate) mod supervisor;
+mod tables;
 mod triggers;
 mod video;
 mod window;
@@ -191,7 +192,9 @@ pub(crate) struct Floating {
 /// Read synchronously by the shell's key/mouse callbacks, without borrowing Host.
 #[derive(Default)]
 pub(crate) struct InputShared {
-    pub(crate) table: bindings::Table,
+    /// The interface's copy of the core's binding table (rule R8,
+    /// `host/tables.rs`): read here by the key and mouse callbacks.
+    pub(crate) table: bindings::Snapshot,
     pub(crate) bottom: Option<u64>,
     pub(crate) sidebar: Option<u64>,
     /// The adjust column's current tab (`panel:adjust` keys).
@@ -356,11 +359,17 @@ pub(crate) struct Core {
     pub(crate) plugins_revision: u64,
     pub(crate) events: mpsc::Sender<Event>,
     pub(crate) headless: bool,
+    /// The command registry (rule R8): the interface reads its copy,
+    /// `Host::registry` (`host/tables.rs`).
     pub(crate) commands: commands::Registry,
+    /// The binding table (rule R8), written through `bindings_mut`, and
+    /// what the interface was last given of both tables
+    /// (`host/tables.rs`).
+    pub(crate) tables: tables::Tables,
     /// The plugins (manifest ids) that have mounted a panel in this run,
     /// a replayed tab's placeholder included: `bindings.list` lists their
     /// `focus: "panel"` commands for the rest of the run
-    /// (`Host::note_panel_plugins`).
+    /// (`Core::note_panel_plugins`).
     pub(crate) panel_plugins: std::collections::BTreeSet<String>,
     /// `commands.run` tickets and rates.
     pub(crate) command_runs: crate::capabilities::CommandRuns,
@@ -389,6 +398,23 @@ pub(crate) struct Core {
     pub(crate) window_facts_seq: Option<u64>,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
+    /// The mount registry (K6; plan step S2c(3)): every plugin's panel by
+    /// its key (`panel_key`), a placeholder tab replayed from a recording
+    /// included, with its spec, values and the `ui.mount` call a recording
+    /// keeps. Standby recording, `rekey`, `revoke`, `prune` and `replay`
+    /// read and write it here. A batch of changes is applied to it by the
+    /// interface (`Host::prepare_mount_tick`, `UiReport::MountApplied`).
+    pub(crate) mounts: BTreeMap<u64, Mount>,
+    /// Mount changes the core accepted (`ui.mount`, `ui.unmount`, a replayed
+    /// tab, a removal) that the interface has not taken into its batching
+    /// window yet (`UiCommand::Mount`, `Core::mount_command`).
+    pub(crate) mount_queue: std::collections::VecDeque<MountChange>,
+    /// The registry of settings pages (K7; plan step S2c(4)): pages,
+    /// registrations waiting for the `settings-check` thread, recorded
+    /// pages and their recordings. The open options window is the
+    /// interface's (`Host::settings`), told of changes as
+    /// `UiCommand::Settings`.
+    pub(crate) settings: settings_window::Settings,
     /// The large array of the request being answered, converted on its
     /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
     /// request id, rows.
@@ -482,8 +508,9 @@ pub(crate) struct Host {
     /// picker): it comes into view when another request is refused `busy`.
     pub(crate) confirm_open: bool,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
-    pub(crate) mounts: BTreeMap<u64, Mount>,
-    pub(crate) mount_queue: std::collections::VecDeque<MountChange>,
+    /// The interface's mount batching window (K6): the change that opened
+    /// it and when. The changes the core hands over during the next 32 ms
+    /// join it (`prepare_mount_tick`).
     pub(crate) preparing: Option<(Instant, MountChange)>,
     /// Shell preparations still to run one change each, after a batch of
     /// changes failed to compile (`prepare_mount_tick`).
@@ -620,8 +647,9 @@ pub(crate) struct Host {
     pub(crate) gpu_paced: bool,
     /// File drops (R-U2).
     pub(crate) drops: drops::Drops,
-    /// Settings pages and the options window (R-S1, R-H7).
-    pub(crate) settings: settings_window::Settings,
+    /// The options window (R-H7; K7): the pages it shows are the core's
+    /// (`Core::settings`).
+    pub(crate) settings: settings_window::Options,
     /// The category of the page the options window last showed.
     pub(crate) settings_category: Option<usize>,
     /// A view missed the palette: deliver again on the next tick.
@@ -630,6 +658,10 @@ pub(crate) struct Host {
     pub(crate) placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     pub(crate) bar: bar_buttons::Strip,
+    /// The interface's copy of the core's command registry (rule R8,
+    /// `host/tables.rs`): menus, the palette, the bar, the tab keys and
+    /// the video click read it.
+    pub(crate) registry: Arc<commands::View>,
 }
 pub(crate) struct AreaReply {
     pub(crate) reply: Reply,

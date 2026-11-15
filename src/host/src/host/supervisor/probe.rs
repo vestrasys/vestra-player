@@ -285,9 +285,8 @@ impl Host {
             })
             .collect::<Vec<_>>();
         let bindings = self
-            .input
-            .borrow()
-            .table
+            .core
+            .bindings()
             .infos()
             .into_iter()
             .filter(|info| info.owner == owner)
@@ -308,6 +307,7 @@ impl Host {
             })
             .collect::<Vec<_>>();
         let pages = self
+            .core
             .settings
             .pages_of(owner)
             .into_iter()

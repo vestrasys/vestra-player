@@ -5,6 +5,7 @@
 
 use crate::platform::KeyLabels;
 use std::collections::{BTreeMap, BTreeSet};
+use std::sync::Arc;
 
 pub type Owner = u64;
 /// Owner generation of the host's own commands; lower generations win conflicts.
@@ -655,7 +656,7 @@ struct Claim {
 
 type Slot = (Scope, Input);
 
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct Table {
     declared: BTreeMap<(Owner, String), Declared>,
     /// `"<manifest id>/<command id>"` → bindings; `[]` unbinds.
@@ -686,6 +687,36 @@ pub struct Table {
     /// owner generation (`rekey`, which keeps their rank) or it declares
     /// them again as they were (supervisor.md).
     listed: u64,
+}
+
+/// The interface's read-only copy of the binding table (rule R8 of
+/// doc/architecture/core-thread.md; plan step S2c): the core owns the
+/// table, and the interface (the key and mouse callbacks, menus, the bar)
+/// looks inputs up in the newest copy it was given, replaced whole. Shared
+/// (`Arc`): a copy is made once per change and handed over without another.
+#[derive(Clone, Default)]
+pub struct Snapshot(Arc<Table>);
+
+impl From<Arc<Table>> for Snapshot {
+    fn from(table: Arc<Table>) -> Self {
+        Self(table)
+    }
+}
+
+impl std::ops::Deref for Snapshot {
+    type Target = Table;
+    fn deref(&self) -> &Table {
+        &self.0
+    }
+}
+
+/// Unit tests that predate the core's ownership build a table in place
+/// (host/input.rs). Never in the player: there the copy is read-only.
+#[cfg(test)]
+impl std::ops::DerefMut for Snapshot {
+    fn deref_mut(&mut self) -> &mut Table {
+        Arc::make_mut(&mut self.0)
+    }
 }
 
 /// What an input resolves to.
@@ -889,7 +920,7 @@ impl Table {
     }
 
     /// What `bindings.list` shows changed outside the table (a plugin's
-    /// panel commands are listed from now on, `Host::note_panel_plugins`):
+    /// panel commands are listed from now on, `Core::note_panel_plugins`):
     /// the revision and the listed revision move.
     pub fn listed_elsewhere(&mut self) {
         self.revision += 1;
@@ -1168,6 +1199,11 @@ impl Table {
     /// them pass to the next command bound to the same input.
     pub fn set_disabled(&mut self, disabled: BTreeMap<(Owner, String), Option<String>>) {
         self.disabled = disabled;
+    }
+
+    /// The disabled commands last set ([`Table::set_disabled`]).
+    pub fn disabled(&self) -> &BTreeMap<(Owner, String), Option<String>> {
+        &self.disabled
     }
 
     /// The enabled command an input fires, if any (see [`Table::lookup`]).

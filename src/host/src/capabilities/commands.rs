@@ -58,22 +58,21 @@ impl Capability for Commands {
         if let Err(error) = host.core.commands.rekey(from, to) {
             diag!("lazy: commands of {from}: {error}");
         }
-        host.input.borrow_mut().table.rekey(from, to);
+        host.core.bindings_mut().rekey(from, to);
     }
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if keep_recorded {
             host.core.commands.mark_recorded(owner);
         } else {
             let _ = host.core.commands.remove_owner(owner);
-            host.input.borrow_mut().table.remove_owner(owner);
+            host.core.bindings_mut().remove_owner(owner);
         }
     }
     fn prune(&self, host: &mut Host, owner: u64) {
         match host.core.commands.remove_recorded(owner) {
             Ok(gone) => {
-                let mut input = host.input.borrow_mut();
                 for id in gone {
-                    input.table.remove(owner, &id);
+                    host.core.bindings_mut().remove(owner, &id);
                 }
             }
             Err(error) => diag!("lazy: commands of {owner}: {error}"),
@@ -111,7 +110,7 @@ impl Capability for Commands {
                     .commands
                     .remove(reply.owner, id)
                     .map_err(|e| RpcError::new(e.code(), e.to_string()))?;
-                host.input.borrow_mut().table.remove(reply.owner, id);
+                host.core.bindings_mut().remove(reply.owner, id);
                 if host.menu_open {
                     let result = host.refresh_menu();
                     host.report_menu(result);
@@ -263,9 +262,8 @@ fn register(
         params["state"].clone(),
         params["when"].clone(),
     );
-    host.input
-        .borrow_mut()
-        .table
+    host.core
+        .bindings_mut()
         .declare(owner, id, &origin.id, &bindings, panel, repeat)
         .map_err(RpcError::invalid)?;
     Ok(())

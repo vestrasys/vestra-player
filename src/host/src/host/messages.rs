@@ -2,8 +2,12 @@
 //! (doc/architecture/core-thread.md, rule R3): [`UiCommand`] (core → UI) and
 //! [`UiReport`] (UI → core). Plan step S2a added the types; S2c and S2d
 //! route today's code through them while still on one thread (S2c(1):
-//! [`UiReport::WindowFacts`], `Host::ui_report`), S3a moves the core to its
-//! own thread.
+//! [`UiReport::WindowFacts`], `Host::ui_report`; S2c(3): [`UiCommand::Mount`],
+//! [`UiCommand::SetMount`], [`UiReport::MountPreparing`],
+//! [`UiReport::MountApplied`] and the `ui.setMount` [`UiReport::Answered`],
+//! host/mounts.rs; S2c(4): [`UiCommand::Settings`] and the `settings.set` /
+//! `.show` [`UiReport::Answered`], ui/settings_window.rs), S3a moves the core
+//! to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -120,13 +124,16 @@ pub(crate) enum UiCommand {
 /// The core's tables and values the UI shows. Each is the whole value at
 /// one moment; a newer one replaces an older one (R3).
 pub(crate) enum UiSnapshot {
-    /// The command registry as menus, the palette, the bar and the tab keys
-    /// read it (rows 21, 31–33; R8). The registry already publishes this
-    /// type, shared (`commands::Registry::snapshot`); whether S2c widens it
-    /// is measured there (K11).
-    Registry(Arc<commands::MenuSnapshot>),
+    /// The command registry as menus, the palette, the bar, the tab keys
+    /// and the video click read it (rows 21, 31–33; R8): a copy of its
+    /// commands and held owners at one revision, with the menu tree built
+    /// from it once (`commands::Registry::view`). Plan step S2c(2) widened
+    /// it from the menu tree alone: the bar, the panel menus and the
+    /// palette read commands the tree leaves out. Copied once per revision
+    /// and shared (K11; `host/tables.rs`).
+    Registry(Arc<commands::View>),
     /// The binding table the key callbacks look up synchronously (rows 31,
-    /// 33, 76, 77; R8).
+    /// 33, 76, 77; R8). Copied once per change and shared.
     Bindings(Arc<bindings::Table>),
     /// The info panels of `osd.panel` (row 67), by owner.
     InfoPanels(Arc<BTreeMap<u64, String>>),
@@ -411,12 +418,19 @@ pub(crate) struct WindowFacts {
 
 /// See [`UiReport::MountApplied`]: the panel keys of the batch, its one
 /// result, how long it took, and the facts after it (R13: the core updates
-/// its mount registry and layout, then answers, then broadcasts).
+/// its mount registry and layout, then answers, then broadcasts). Plan
+/// step S2c(3) sends one per change of a batch, each right after that
+/// change's restart line, so the interleaving with the interface's work is
+/// today's (`Host::prepare_mount_tick`).
 pub(crate) struct MountApplied {
     pub(crate) batch: Vec<(Reply, u64)>,
     pub(crate) result: std::result::Result<Value, RpcError>,
     pub(crate) elapsed_ms: f64,
     pub(crate) handoff: Option<Box<WindowFacts>>,
+    /// The keys of `batch` that are placeholder tabs replayed from a
+    /// recording: their plugin, in standby, is told nothing (no
+    /// `ui.preparing`); a failure is still announced as `host.error`.
+    pub(crate) placeholders: Vec<u64>,
 }
 
 /// One of today's UI-originated [`Event`]s (study §2.1: keys, clicks,
@@ -591,10 +605,7 @@ mod tests {
     /// One of each, in declaration order.
     fn every_snapshot() -> Vec<UiSnapshot> {
         vec![
-            UiSnapshot::Registry(Arc::new(commands::MenuSnapshot {
-                revision: 1,
-                roots: vec![],
-            })),
+            UiSnapshot::Registry(Arc::new(commands::Registry::new().view())),
             UiSnapshot::Bindings(Arc::new(bindings::Table::default())),
             UiSnapshot::InfoPanels(Arc::new(BTreeMap::from([(7, "info".into())]))),
             UiSnapshot::Theme("dark".into()),
@@ -815,6 +826,7 @@ mod tests {
                 result: Ok(Value::Null),
                 elapsed_ms: 1.5,
                 handoff: Some(facts()),
+                placeholders: vec![],
             }),
             UiReport::Acted {
                 owner: 7,

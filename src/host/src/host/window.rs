@@ -17,6 +17,9 @@ pub(crate) struct ColumnMemory {
 
 impl Host {
     pub(crate) fn window_tick(&mut self) {
+        // The title strip, the tab keys and the bar read the interface's
+        // copies of the tables (rule R8).
+        self.sync_tables();
         self.pip_tick();
         self.menu_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
@@ -331,8 +334,9 @@ impl Host {
     /// themselves it carries what later steps read on the core (plan S2c
     /// (5), S2d): the shell's generation, whether the shell has the menu
     /// origin, picture-in-picture as `facts` shows it, and the columns' tab
-    /// order. All are plain reads; none is read on the core yet.
-    fn window_facts_report(
+    /// order. All are plain reads; none is read on the core yet. Also the
+    /// R13 handoff of a mount batch (`Host::mount_handoff`).
+    pub(super) fn window_facts_report(
         &mut self,
         shell: &slint_interpreter::ComponentInstance,
         facts: Value,
@@ -351,24 +355,43 @@ impl Host {
             facts,
         }
     }
-    /// A report of the UI reaches the core (rule R3). Plan step S2c(1):
-    /// only the window facts are reported, delivered in place on this
-    /// thread; the other reports follow in later steps.
+    /// A report of the UI reaches the core (rule R3), delivered in place on
+    /// this thread until plan step S3a. Plan step S2c(1): the window facts;
+    /// S2c(3): the mount reports and the `ui.setMount` result
+    /// (host/mounts.rs); S2c(4): the `settings.set` and `settings.show`
+    /// results. The other reports follow in later steps.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
-        let UiReport::WindowFacts(facts) = report else {
-            unreachable!("only window facts are reported before plan step S2c(2)");
-        };
-        // A value older than the one applied is skipped (module
-        // `messages`: a coalesced snapshot can overtake a handoff).
-        if !facts.newer_than(self.core.window_facts_seq) {
-            return;
+        match report {
+            UiReport::WindowFacts(facts) => {
+                // A value older than the one applied is skipped (module
+                // `messages`: a coalesced snapshot can overtake a handoff).
+                if !facts.newer_than(self.core.window_facts_seq) {
+                    return;
+                }
+                let WindowFacts { seq, facts, .. } = *facts;
+                self.core.window_facts_seq = Some(seq);
+                self.core.window_facts = facts.clone();
+                // The core broadcasts `window.state` from the facts (R9): its
+                // conditions and triggers are evaluated first (`broadcast`).
+                self.broadcast("window.state", facts);
+            }
+            UiReport::MountPreparing(changes) => self.mounts_preparing(changes),
+            UiReport::MountApplied(applied) => self.mounts_applied(applied),
+            // R13: the handoff first (none is sent yet), then the reply.
+            UiReport::Answered {
+                reply,
+                result,
+                handoff,
+            } => {
+                let changed = handoff.is_some_and(|facts| self.core.apply_facts(*facts));
+                self.respond(reply, result);
+                if changed {
+                    let facts = self.core.window_facts.clone();
+                    self.broadcast("window.state", facts);
+                }
+            }
+            _ => unreachable!("not reported before plan step S2c(5)"),
         }
-        let WindowFacts { seq, facts, .. } = *facts;
-        self.core.window_facts_seq = Some(seq);
-        self.core.window_facts = facts.clone();
-        // The core broadcasts `window.state` from the facts (R9): its
-        // conditions and triggers are evaluated first (`broadcast`).
-        self.broadcast("window.state", facts);
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
     /// fullscreen main window where the system shows no title bar there
@@ -528,7 +551,7 @@ impl Host {
             .policy
             .panels(slot_of)
             .iter()
-            .filter_map(|owner| self.mounts.get(owner).map(|m| m.manifest.clone()))
+            .filter_map(|owner| self.core.mounts.get(owner).map(|m| m.manifest.clone()))
             .collect::<Vec<_>>();
         let waiting = memory
             .active
@@ -538,7 +561,7 @@ impl Host {
             memory.active = self
                 .policy
                 .active(slot_of)
-                .and_then(|owner| self.mounts.get(&owner))
+                .and_then(|owner| self.core.mounts.get(&owner))
                 .map(|m| m.manifest.clone());
         }
         let current = manifests.iter().map(String::as_str).collect::<Vec<_>>();
@@ -606,7 +629,7 @@ impl Host {
             self.columns[index].woken = None;
             return;
         };
-        let Some(mount) = self.mounts.get(&owner) else {
+        let Some(mount) = self.core.mounts.get(&owner) else {
             return;
         };
         if mount.spec.slot != column.slot() {
@@ -671,7 +694,7 @@ impl Host {
             && let Some(floating) = &self.floating
         {
             set_index(&floating.instance, &floating.owners);
-            if let Some(mount) = active.and_then(|owner| self.mounts.get(&owner)) {
+            if let Some(mount) = active.and_then(|owner| self.core.mounts.get(&owner)) {
                 let title = SValue::String(mount.title.as_str().into());
                 if floating.instance.get_property("panel-title").ok().as_ref() != Some(&title) {
                     let _ = floating.instance.set_property("panel-title", title);
@@ -708,10 +731,11 @@ impl Host {
     /// with its current key, "" for none. Written only when the binding
     /// table, the commands, the shell or the tabs changed.
     fn tab_keys(&mut self, shell: &slint_interpreter::ComponentInstance, column: Column) {
+        self.sync_tables();
         let index = column.index();
         let from = (
             self.input.borrow().table.revision(),
-            self.core.commands.revision(),
+            self.registry.revision(),
             self.shell_generation,
             self.columns[index].tabs.clone(),
         );
@@ -723,11 +747,11 @@ impl Host {
             .iter()
             .map(|&owner| {
                 let plugin = panel_plugin(owner);
-                let entries = self.core.commands.entries_of(plugin);
+                let entries = self.registry.entries_of(plugin);
                 sidebar_tabs::tab_command(
                     entries
                         .iter()
-                        .map(|(entry, ..)| entry.declaration.home.as_deref()),
+                        .map(|entry| entry.declaration.home.as_deref()),
                 )
                 .and_then(|id| self.input.borrow().table.label(plugin, id))
                 .unwrap_or_default()
@@ -742,7 +766,7 @@ impl Host {
     pub(crate) fn tab_titles(&self, owners: &[u64]) -> Result<SValue> {
         let titles = owners
             .iter()
-            .filter_map(|owner| self.mounts.get(owner).map(|m| m.title.clone()))
+            .filter_map(|owner| self.core.mounts.get(owner).map(|m| m.title.clone()))
             .collect::<Vec<_>>();
         ui_values::from_json(&json!(titles))
     }
@@ -823,7 +847,8 @@ impl Host {
         let tabs = owners
             .iter()
             .map(|owner| {
-                self.mounts
+                self.core
+                    .mounts
                     .get(owner)
                     .cloned()
                     .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))
@@ -956,6 +981,22 @@ impl Host {
                 .filter(|f| f.generation == generation)
                 .map(|f| &f.instance)
         }
+    }
+}
+impl Core {
+    /// The facts of an R13 handoff (`UiReport::Answered`,
+    /// `UiReport::MountApplied`) reach the core's copy when newer than the
+    /// last applied (module `messages`). Whether the core's value changed:
+    /// then `window.state` goes out after the reply.
+    pub(crate) fn apply_facts(&mut self, facts: WindowFacts) -> bool {
+        if !facts.newer_than(self.window_facts_seq) {
+            return false;
+        }
+        let WindowFacts { seq, facts, .. } = facts;
+        self.window_facts_seq = Some(seq);
+        let changed = self.window_facts != facts;
+        self.window_facts = facts;
+        changed
     }
 }
 
