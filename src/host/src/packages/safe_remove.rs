@@ -83,19 +83,57 @@ pub fn within(root: &Path, path: &Path) -> Result<PathBuf> {
 
 /// Remove `path` (strictly under `root`, `within`) and everything in it
 /// under the rules above. Returns what was left, one `path: error` each;
-/// empty when all of it went. A path outside `root` is an error and nothing
-/// is touched.
+/// empty when all of it went (or nothing was there: only `NotFound` means
+/// absent; any other failure to read the entry is left and reported). A
+/// path outside `root` is an error and nothing is touched.
+///
+/// Every entry is judged again right before it is touched: its parent must
+/// still resolve under `root` (so a directory swapped for a junction while
+/// it is walked is refused below it), and a directory or file must still
+/// not be a reparse point when it is deleted (a swapped one is removed as
+/// the link). What remains is the short window between that last check and
+/// the path-based delete call itself: closing it needs deletion by handle
+/// opened with `FILE_FLAG_OPEN_REPARSE_POINT` (`SetFileInformationByHandle`),
+/// which std does not offer and first-party code may not call without
+/// `unsafe`. Only a process of the same user that writes inside the
+/// player's own folders can race it.
 pub fn remove_within(root: &Path, path: &Path) -> Result<Vec<String>> {
-    if fs::symlink_metadata(path).is_err() {
-        return Ok(Vec::new());
+    match fs::symlink_metadata(path) {
+        Ok(_) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
+        Err(error) => return Ok(vec![format!("{}: {error}", path.display())]),
     }
     let entry = within(root, path)?;
+    let root = dunce::canonicalize(root)?;
     let mut left = Vec::new();
-    remove_entry(&entry, &mut left);
+    remove_entry(&root, &entry, &mut left);
     Ok(left)
 }
 
-fn remove_entry(path: &Path, left: &mut Vec<String>) {
+/// Whether `path`'s parent still resolves strictly under `root` (canonical).
+fn parent_within(root: &Path, path: &Path) -> std::io::Result<bool> {
+    let Some(parent) = path.parent() else {
+        return Ok(false);
+    };
+    Ok(dunce::canonicalize(parent)?.starts_with(root))
+}
+
+fn remove_entry(root: &Path, path: &Path, left: &mut Vec<String>) {
+    match parent_within(root, path) {
+        Ok(true) => {}
+        Ok(false) => {
+            left.push(format!(
+                "{}: now outside {}; refused",
+                path.display(),
+                root.display()
+            ));
+            return;
+        }
+        Err(error) => {
+            left.push(format!("{}: {error}", path.display()));
+            return;
+        }
+    }
     let metadata = match fs::symlink_metadata(path) {
         Ok(metadata) => metadata,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return,
@@ -105,44 +143,72 @@ fn remove_entry(path: &Path, left: &mut Vec<String>) {
         }
     };
     if is_reparse(&metadata) {
-        // The link itself only: `remove_dir` on a directory link or a
-        // junction removes the link and never its target's contents.
-        let removed = if is_directory_entry(&metadata) {
-            fs::remove_dir(path)
-        } else {
-            fs::remove_file(path)
-        };
-        if let Err(error) = removed {
-            left.push(format!("{} (link): {error}", path.display()));
-        }
+        remove_link(path, &metadata, left);
         return;
     }
     if metadata.is_dir() {
         let before = left.len();
-        match fs::read_dir(path) {
-            Ok(entries) => {
-                for entry in entries {
-                    match entry {
-                        Ok(entry) => remove_entry(&entry.path(), left),
-                        Err(error) => left.push(format!("{}: {error}", path.display())),
-                    }
-                }
-            }
+        let entries = match fs::read_dir(path) {
+            Ok(entries) => entries,
             Err(error) => {
                 left.push(format!("{}: {error}", path.display()));
                 return;
             }
+        };
+        // Swapped for a link between the check above and the listing: the
+        // listing may be the target's; not one entry of it is touched.
+        if let Some(now) = swapped(path, left) {
+            remove_link(path, &now, left);
+            return;
+        }
+        for entry in entries {
+            match entry {
+                Ok(entry) => remove_entry(root, &entry.path(), left),
+                Err(error) => left.push(format!("{}: {error}", path.display())),
+            }
         }
         // Something inside stays: so does this directory (reported there).
-        if left.len() == before
-            && let Err(error) = retry_read_only(path, &metadata, remove_dir)
-        {
-            left.push(format!("{}: {error}", path.display()));
+        if left.len() == before {
+            if let Some(now) = swapped(path, left) {
+                remove_link(path, &now, left);
+            } else if let Err(error) = retry_read_only(path, &metadata, remove_dir) {
+                left.push(format!("{}: {error}", path.display()));
+            }
         }
         return;
     }
-    if let Err(error) = retry_read_only(path, &metadata, remove_file) {
+    if let Some(now) = swapped(path, left) {
+        remove_link(path, &now, left);
+    } else if let Err(error) = retry_read_only(path, &metadata, remove_file) {
         left.push(format!("{}: {error}", path.display()));
+    }
+}
+
+/// `path`'s metadata when it is now a reparse point (checked right before
+/// it is touched); `None` when it is not, or is gone (an error to read it
+/// is reported and then the delete reports again).
+fn swapped(path: &Path, left: &mut Vec<String>) -> Option<Metadata> {
+    match fs::symlink_metadata(path) {
+        Ok(now) if is_reparse(&now) => Some(now),
+        Ok(_) => None,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+        Err(error) => {
+            left.push(format!("{}: {error}", path.display()));
+            None
+        }
+    }
+}
+
+/// The link itself only: `remove_dir` on a directory link or a junction
+/// removes the link and never its target's contents.
+fn remove_link(path: &Path, metadata: &Metadata, left: &mut Vec<String>) {
+    let removed = if is_directory_entry(metadata) {
+        fs::remove_dir(path)
+    } else {
+        fs::remove_file(path)
+    };
+    if let Err(error) = removed {
+        left.push(format!("{} (link): {error}", path.display()));
     }
 }
 
@@ -258,6 +324,53 @@ pub(crate) mod tests {
             assert!(fs::symlink_metadata(&top).is_err());
             assert!(outside.join("precious.txt").exists());
         }
+    }
+
+    /// An entry below a link judged against the real root (not the link):
+    /// its parent resolves outside, so it is refused and the target's
+    /// contents survive, whether asked for directly or met while walking
+    /// (a directory swapped for a junction during the walk).
+    #[test]
+    fn an_entry_below_a_link_is_refused() {
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path().join("root");
+        let outside = base.path().join("outside");
+        fs::create_dir_all(&root).unwrap();
+        fs::create_dir_all(outside.join("x")).unwrap();
+        fs::write(outside.join("x").join("precious.txt"), b"keep").unwrap();
+        let held = root.join("held");
+        assert!(
+            make_directory_link(&outside, &held),
+            "a junction needs no privilege"
+        );
+        assert!(remove_within(&root, &held.join("x")).is_err());
+        let canonical = dunce::canonicalize(&root).unwrap();
+        let mut left = Vec::new();
+        remove_entry(&canonical, &held.join("x"), &mut left);
+        assert!(left.iter().any(|line| line.contains("refused")), "{left:?}");
+        assert_eq!(
+            fs::read(outside.join("x").join("precious.txt")).unwrap(),
+            b"keep"
+        );
+    }
+
+    /// Only `NotFound` means absent: an entry that cannot even be read is
+    /// left and reported, never passed over in silence.
+    #[test]
+    fn an_unreadable_entry_is_reported_not_taken_as_absent() {
+        let base = tempfile::tempdir().unwrap();
+        let root = base.path();
+        assert_eq!(
+            remove_within(root, &root.join("missing")).unwrap(),
+            Vec::<String>::new()
+        );
+        #[cfg(windows)]
+        let bad = root.join("bad<name");
+        #[cfg(not(windows))]
+        let bad = root.join("bad\0name");
+        let left = remove_within(root, &bad).unwrap();
+        assert_eq!(left.len(), 1, "{left:?}");
+        assert!(left[0].contains("bad"), "{left:?}");
     }
 
     /// A file that cannot be deleted (held open without delete sharing, as

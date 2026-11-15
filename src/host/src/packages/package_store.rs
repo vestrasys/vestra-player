@@ -1903,8 +1903,10 @@ impl Library {
     /// `path: error` each) for the next start.
     pub fn purge_held(&self) -> Vec<String> {
         let holding = self.holding();
-        let Ok(metadata) = fs::symlink_metadata(&holding) else {
-            return Vec::new();
+        let metadata = match fs::symlink_metadata(&holding) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+            Err(error) => return vec![format!("{}: {error}", holding.display())],
         };
         let mut left = Vec::new();
         if crate::packages::safe_remove::is_reparse(&metadata) || !metadata.is_dir() {
@@ -1919,10 +1921,21 @@ impl Library {
             Ok(entries) => entries,
             Err(error) => return vec![format!("{}: {error}", holding.display())],
         };
-        for entry in entries.flatten() {
-            match crate::packages::safe_remove::remove_within(&holding, &entry.path()) {
+        // Judged against the library, not the holding folder: should the
+        // holding folder be swapped for a junction after the check above,
+        // its entries resolve outside the library and are refused
+        // (`safe_remove::within`), never deleted at the junction's target.
+        for entry in entries {
+            let path = match entry {
+                Ok(entry) => entry.path(),
+                Err(error) => {
+                    left.push(format!("{}: {error}", holding.display()));
+                    continue;
+                }
+            };
+            match crate::packages::safe_remove::remove_within(&self.packages, &path) {
                 Ok(rest) => left.extend(rest),
-                Err(error) => left.push(format!("{}: {error:#}", entry.path().display())),
+                Err(error) => left.push(format!("{}: {error:#}", path.display())),
             }
         }
         if left.is_empty() {
@@ -2909,6 +2922,35 @@ pub(crate) mod tests {
             b"keep"
         );
         assert!(linked || cfg!(unix), "a junction needs no privilege");
+    }
+
+    /// A holding folder that is a junction to somewhere else: only the
+    /// link goes, nothing at its target; entries are judged against the
+    /// library, so one reached through such a link is refused.
+    #[test]
+    fn a_holding_folder_that_is_a_link_is_never_walked() {
+        let root = tempfile::tempdir().unwrap();
+        let store = Store::open(root.path().into()).unwrap();
+        let library = store.library();
+        let outside = tempfile::tempdir().unwrap();
+        fs::create_dir(outside.path().join("x-1")).unwrap();
+        fs::write(outside.path().join("x-1").join("precious.txt"), b"keep").unwrap();
+        let holding = library.holding();
+        assert!(crate::packages::safe_remove::tests::make_directory_link(
+            outside.path(),
+            &holding
+        ));
+        assert!(
+            crate::packages::safe_remove::remove_within(&library.packages, &holding.join("x-1"))
+                .is_err(),
+            "below the link: outside the library"
+        );
+        assert!(library.purge_held().is_empty());
+        assert!(fs::symlink_metadata(&holding).is_err(), "the link went");
+        assert_eq!(
+            fs::read(outside.path().join("x-1").join("precious.txt")).unwrap(),
+            b"keep"
+        );
     }
 
     /// A file of the package that cannot be deleted (held open without
