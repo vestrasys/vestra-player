@@ -1,6 +1,6 @@
 //! Source, window, picture-in-picture, layout and backdrop state, the
 //! title, power and always-on-top.
-use super::messages::{UiCommand, UiSnapshot, WindowOp};
+use super::messages::{UiCommand, UiReport, UiSnapshot, WindowOp};
 use super::*;
 use crate::playback::renderer::GpuBackend as _;
 
@@ -318,7 +318,11 @@ impl Host {
     }
     /// `window.setVideoArea { width, height }`: resize the window so the video
     /// column gets that size (bars added, fitted to the screen). Answered when
-    /// the layout shows it, or after a second.
+    /// the layout shows it, or after a second. Plan step S2d: the core
+    /// checks the size and sends `WindowOp::VideoArea`; the interface fits
+    /// the window (`video_area_command`) and reports `UiReport::AreaFitted`
+    /// (or its error); the core keeps the reply (`Core::area_replies`) and
+    /// answers it from the layout's `UiReport::VideoArea`.
     pub(crate) fn set_video_area(
         &mut self,
         reply: &Reply,
@@ -331,6 +335,36 @@ impl Host {
         if !window_control::valid_size(width, height) {
             return Err(RpcError::invalid("width and height must be 1..16384"));
         }
+        self.ui_command(UiCommand::Window(WindowOp::VideoArea {
+            reply: reply.clone(),
+            width,
+            height,
+        }));
+        Ok(())
+    }
+    /// The interface's side of `WindowOp::VideoArea` (plan step S2d): fit
+    /// the main window and report the size the video waits for
+    /// (`UiReport::AreaFitted`), or why it cannot (`UiReport::Answered`).
+    pub(crate) fn video_area_command(&mut self, reply: Reply, width: f64, height: f64) {
+        match self.fit_video_area(width, height) {
+            Ok((video, result)) => self.ui_report(UiReport::AreaFitted {
+                reply,
+                video,
+                result,
+            }),
+            Err(error) => self.ui_report(UiReport::Answered {
+                reply,
+                result: Err(error),
+                handoff: None,
+                confirm_failed: false,
+            }),
+        }
+    }
+    fn fit_video_area(
+        &mut self,
+        width: f64,
+        height: f64,
+    ) -> std::result::Result<((f64, f64), Value), RpcError> {
         let unavailable = |message: &str| RpcError::new("unavailable", message);
         let shell = self
             .shell
@@ -381,22 +415,16 @@ impl Host {
         };
         let fit = window_control::fit(width, height, frame);
         platform::resize_content(id, fit.content.0, fit.content.1).map_err(|e| unavailable(e.0))?;
-        self.area_replies.push(AreaReply {
-            reply: reply.clone(),
-            video: fit.video,
-            result: json!({"width":fit.video.0,"height":fit.video.1,"clamped":fit.clamped}),
-            deadline: self.core.now_ms() + 1000,
-        });
-        Ok(())
+        Ok((
+            fit.video,
+            json!({"width":fit.video.0,"height":fit.video.1,"clamped":fit.clamped}),
+        ))
     }
+    /// The core's side of `UiReport::VideoArea` (plan step S2d): answer the
+    /// pending `window.setVideoArea` requests the laid-out `video` size
+    /// shows, or whose deadline passed by `now`.
     pub(crate) fn answer_video_area(&mut self, video: (f64, f64), now: u64) {
-        let (done, waiting): (Vec<_>, Vec<_>) = self.area_replies.drain(..).partition(|pending| {
-            now >= pending.deadline
-                || ((video.0 - pending.video.0).abs() <= 1.
-                    && (video.1 - pending.video.1).abs() <= 1.)
-        });
-        self.area_replies = waiting;
-        for pending in done {
+        for pending in self.core.due_area_replies(video, now) {
             self.respond(pending.reply, Ok(pending.result));
         }
     }
@@ -481,6 +509,18 @@ impl Host {
     }
 }
 impl Core {
+    /// The core's side of `UiReport::AreaFitted` (plan step S2d): the
+    /// fitted `window.setVideoArea` waits for the layout to show `video`,
+    /// at most a second from now.
+    pub(crate) fn area_fitted(&mut self, reply: Reply, video: (f64, f64), result: Value) {
+        let now = self.now_ms();
+        area_fitted(&mut self.area_replies, reply, video, result, now);
+    }
+    /// The pending `window.setVideoArea` requests that are due
+    /// (`due_area_replies`).
+    pub(crate) fn due_area_replies(&mut self, video: (f64, f64), now: u64) -> Vec<AreaReply> {
+        due_area_replies(&mut self.area_replies, video, now)
+    }
     /// Merge the sequence provider's flags into a source state (C6).
     pub(crate) fn patch_source(&self, state: &mut Value) {
         if state.is_object() {
@@ -552,6 +592,42 @@ impl Core {
         self.ui_state.state.set_interface(state);
         self.ui_state.touch(at);
     }
+}
+
+/// The core's side of `UiReport::AreaFitted` (plan step S2d): the fitted
+/// `window.setVideoArea` waits in `pending` for the layout to show `video`,
+/// at most a second from `now`, the report's receipt.
+pub(crate) fn area_fitted(
+    pending: &mut Vec<AreaReply>,
+    reply: Reply,
+    video: (f64, f64),
+    result: Value,
+    now: u64,
+) {
+    pending.push(AreaReply {
+        reply,
+        video,
+        result,
+        deadline: now + 1000,
+    });
+}
+
+/// The pending `window.setVideoArea` requests that are due: the laid-out
+/// `video` size shows theirs (within a pixel), or their deadline passed by
+/// `now`. They leave `pending` in the order they came; each is answered
+/// with the result the interface computed when it fitted the window, also
+/// on the timeout path (today's reply).
+pub(crate) fn due_area_replies(
+    pending: &mut Vec<AreaReply>,
+    video: (f64, f64),
+    now: u64,
+) -> Vec<AreaReply> {
+    let (done, waiting): (Vec<_>, Vec<_>) = pending.drain(..).partition(|pending| {
+        now >= pending.deadline
+            || ((video.0 - pending.video.0).abs() <= 1. && (video.1 - pending.video.1).abs() <= 1.)
+    });
+    *pending = waiting;
+    done
 }
 
 #[cfg(test)]
@@ -769,5 +845,133 @@ mod tests {
         }
         // Both kinds of refusal occur.
         assert!(refused > 0 && deferred > 0, "{refused} {deferred}");
+    }
+}
+
+/// The `window.setVideoArea` and `window.setPictureInPicture` seam of plan
+/// step S2d, on the core's side with the interface played by the test
+/// (offscreen runs have no native window: both are refused at once there).
+#[cfg(test)]
+mod seam_tests {
+    use super::*;
+
+    fn reply(id: u64) -> Reply {
+        Reply { owner: 7, id }
+    }
+    fn result(width: f64, height: f64) -> Value {
+        json!({"width":width,"height":height,"clamped":false})
+    }
+    fn ids(done: &[AreaReply]) -> Vec<u64> {
+        done.iter().map(|pending| pending.reply.id).collect()
+    }
+
+    /// R5 / R13 (case 2): nothing is answered before the interface reported
+    /// the fitted size; afterwards the reply leaves at the first layout that
+    /// shows it (within a pixel), with the result the interface computed.
+    #[test]
+    fn an_area_is_answered_only_after_the_ui_fitted_it_and_its_layout_shows_it() {
+        let mut pending = Vec::new();
+        assert!(due_area_replies(&mut pending, (640., 360.), 10).is_empty());
+        area_fitted(
+            &mut pending,
+            reply(1),
+            (640., 360.),
+            result(640., 360.),
+            100,
+        );
+        assert!(due_area_replies(&mut pending, (800., 450.), 116).is_empty());
+        let done = due_area_replies(&mut pending, (640.5, 359.2), 132);
+        assert_eq!(ids(&done), [1]);
+        assert_eq!(done[0].result, result(640., 360.));
+        assert!(pending.is_empty());
+    }
+
+    /// The 1 s timeout path (design §5): a size the layout never shows is
+    /// answered at receipt + 1000 ms, not a millisecond earlier, with
+    /// today's reply (the size the host computed).
+    #[test]
+    fn an_area_never_shown_is_answered_after_one_second_with_todays_reply() {
+        let mut pending = Vec::new();
+        area_fitted(
+            &mut pending,
+            reply(2),
+            (1920., 1080.),
+            result(1920., 1080.),
+            500,
+        );
+        assert!(due_area_replies(&mut pending, (1280., 720.), 1499).is_empty());
+        let done = due_area_replies(&mut pending, (1280., 720.), 1500);
+        assert_eq!(ids(&done), [2]);
+        assert_eq!(done[0].result, result(1920., 1080.));
+    }
+
+    /// Several pending: the shown one and the timed-out one leave together,
+    /// in the order they came; the others wait.
+    #[test]
+    fn due_areas_leave_in_arrival_order_and_the_rest_wait() {
+        let mut pending = Vec::new();
+        area_fitted(&mut pending, reply(1), (640., 360.), result(640., 360.), 0);
+        area_fitted(
+            &mut pending,
+            reply(2),
+            (800., 450.),
+            result(800., 450.),
+            600,
+        );
+        area_fitted(
+            &mut pending,
+            reply(3),
+            (320., 180.),
+            result(320., 180.),
+            700,
+        );
+        let done = due_area_replies(&mut pending, (320., 180.), 1000);
+        assert_eq!(ids(&done), [1, 3]);
+        assert_eq!(ids(&pending), [2]);
+    }
+
+    /// The window tick of the source after `needle`.
+    fn after<'a>(source: &'a str, needle: &str) -> &'a str {
+        &source[source.find(needle).expect(needle)..]
+    }
+
+    /// R13's wire order for `window.setVideoArea` (and today's): in the
+    /// window tick the layout's size goes to the core (`VideoArea`: the
+    /// replies) before the facts (`WindowFacts`: the `window.state`
+    /// broadcast); and the core's handling of a UI result applies the
+    /// handoff, then replies, then broadcasts.
+    #[test]
+    fn the_area_reply_goes_before_the_window_state_broadcast() {
+        let window = include_str!("window.rs");
+        let tick = after(window, "fn window_tick(");
+        let area = tick.find("UiReport::VideoArea {").expect("area report");
+        let facts = tick
+            .find("self.ui_report(UiReport::WindowFacts(")
+            .expect("facts report");
+        assert!(area < facts, "the area replies before the facts");
+        let answered = after(after(window, "fn ui_report("), "UiReport::Answered {");
+        let apply = answered.find("apply_facts").expect("handoff applied");
+        let respond = answered.find("self.respond(reply, result)").expect("reply");
+        let broadcast = answered.find("\"window.state\"").expect("broadcast");
+        assert!(apply < respond && respond < broadcast);
+    }
+
+    /// `window.setPictureInPicture` (R13 case 3, as built in S2d): its
+    /// results reach the core as `Answered` without a handoff, so the core
+    /// broadcasts nothing with the reply; `window.state` keeps coming from
+    /// the window tick's facts, as today, and reads the live PiP state.
+    #[test]
+    fn a_picture_in_picture_reply_carries_no_handoff() {
+        let video = include_str!("video.rs");
+        let answered = after(video, "fn pip_answered(");
+        let body = &answered[..answered.find("\n    }").expect("end")];
+        assert!(body.contains("handoff: None"));
+        assert!(
+            after(video, "fn pip_tick(").contains(
+                "pip::Effect::Respond(reply, result) => self.pip_answered(reply, result)"
+            )
+        );
+        let state = include_str!("state.rs");
+        assert!(after(state, "fn window_state(").contains("\"pictureInPicture\":self.pip_state()"));
     }
 }

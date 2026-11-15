@@ -310,7 +310,9 @@ impl Host {
         // the columns and fullscreen above changed it (read before them, a
         // toggled column reached the renderer a tick later).
         let video = self.follow_video_area(&shell, fullscreen);
-        self.answer_video_area(video, now);
+        // The core answers the `window.setVideoArea` requests this layout
+        // shows, or whose second is up (plan step S2d).
+        self.ui_report(UiReport::VideoArea { size: video, now });
         self.bar_tick(&shell, columns_seen);
         match result {
             Ok(facts) => {
@@ -416,8 +418,10 @@ impl Host {
     /// results; S2c(5): the tabs with the facts, `layout.set`'s result, a
     /// sheet's confirmation and a confirmation that failed to show, and
     /// where the user acted (`Acted`); S2c(7): the interface's part of the
-    /// state file (`Remembered`) and a complete file drop (`Drop`). The
-    /// other reports follow in later steps.
+    /// state file (`Remembered`) and a complete file drop (`Drop`); S2d(1):
+    /// the view requests' and picture-in-picture's results (`Answered`),
+    /// and the video area (`AreaFitted`, `VideoArea`). The other reports
+    /// follow in later steps.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         match report {
             UiReport::WindowFacts(facts) => {
@@ -456,6 +460,14 @@ impl Host {
             // a complete file drop.
             UiReport::Remembered { state, at } => self.core.remember(*state, at),
             UiReport::Drop(drop) => self.deliver_drop(drop),
+            // Plan step S2d(1): `window.setVideoArea` fitted, and the size
+            // the layout shows.
+            UiReport::AreaFitted {
+                reply,
+                video,
+                result,
+            } => self.core.area_fitted(reply, video, result),
+            UiReport::VideoArea { size, now } => self.answer_video_area(size, now),
             _ => unreachable!("not reported before plan step S2d"),
         }
     }

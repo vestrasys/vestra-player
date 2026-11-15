@@ -550,7 +550,7 @@ impl Host {
                     } else {
                         (*max_side).min(64)
                     };
-                    let roots = self.image_roots(item.owner);
+                    let roots = self.core.image_roots(item.owner);
                     match self.images.load_within(item.owner, &roots, path, side) {
                         Ok((key, image)) => {
                             self.images.assign(item.owner, "$bar", &item.id, Some(key));

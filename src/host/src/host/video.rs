@@ -1,5 +1,6 @@
 //! Video frames on the shell, picture-in-picture, the render size and
 //! clicks on the video.
+use super::messages::{UiCommand, UiReport, WindowOp};
 use super::*;
 use crate::playback::render_mode::Reason;
 use crate::playback::renderer::GpuBackend as _;
@@ -292,7 +293,10 @@ impl Host {
     }
     /// `window.setPictureInPicture { on }` (R-W5): answered once the system
     /// window has opened or closed. From fullscreen the player leaves
-    /// fullscreen first.
+    /// fullscreen first. Plan step S2d: the core checks `on` and sends
+    /// `WindowOp::Pip`; the interface's PiP state machine carries it out
+    /// (`pip_command`) and answers with `UiReport::Answered`, at once or
+    /// from `pip_tick`.
     pub(crate) fn set_picture_in_picture(
         &mut self,
         reply: &Reply,
@@ -301,19 +305,44 @@ impl Host {
         let on = params["on"]
             .as_bool()
             .ok_or_else(|| RpcError::invalid("on requires a boolean"))?;
+        self.ui_command(UiCommand::Window(WindowOp::Pip {
+            reply: reply.clone(),
+            on,
+        }));
+        Ok(None)
+    }
+    /// The interface's side of `WindowOp::Pip` (plan step S2d): an answer
+    /// the state machine gives at once (a refusal, or nothing to change) is
+    /// reported now; otherwise `pip_tick` reports it when the system window
+    /// has opened or closed.
+    pub(crate) fn pip_command(&mut self, reply: Reply, on: bool) {
         let facts = self.pip_facts();
         let now = self.core.now_ms();
         let answer = self
             .pip
-            .request(reply.clone(), on, &facts, now, platform::PipWindow::new)?;
+            .request(reply.clone(), on, &facts, now, platform::PipWindow::new);
         if on
-            && answer.is_none()
+            && matches!(answer, Ok(None))
             && facts.fullscreen
             && let Some(shell) = &self.shell
         {
             shell.window().set_fullscreen(false);
         }
-        Ok(answer)
+        match answer {
+            Ok(None) => {}
+            Ok(Some(value)) => self.pip_answered(reply, Ok(value)),
+            Err(error) => self.pip_answered(reply, Err(error)),
+        }
+    }
+    /// A `window.setPictureInPicture` result of the interface reaches the
+    /// core (`UiReport::Answered`, no handoff: `WindowOp::Pip`).
+    fn pip_answered(&mut self, reply: Reply, result: std::result::Result<Value, RpcError>) {
+        self.ui_report(UiReport::Answered {
+            reply,
+            result,
+            handoff: None,
+            confirm_failed: false,
+        });
     }
     /// Each UI tick (R-H8): keep the PiP source layer on the video area,
     /// report playback to the PiP window, run what its buttons ask, and
@@ -392,7 +421,7 @@ impl Host {
         }
         for effect in self.pip.tick(&facts, place, &playback, now) {
             match effect {
-                pip::Effect::Respond(reply, result) => self.respond(reply, result),
+                pip::Effect::Respond(reply, result) => self.pip_answered(reply, result),
                 pip::Effect::Action(action, step) => {
                     if let Err(error) = self.run_core_action_with(action, None, step) {
                         diag!("pip: {action}: {}", error.message);
