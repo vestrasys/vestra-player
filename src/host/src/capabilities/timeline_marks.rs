@@ -25,17 +25,18 @@ impl Capability for TimelineMarks {
         Recorded::Nothing
     }
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        host.timeline.rekey(from, to);
+        host.core.timeline.rekey(from, to);
     }
     /// A held owner's standby ends for good (disabled, uninstalled,
     /// reloaded, upgraded, or its wake failed): its kept layer goes.
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if !keep_recorded {
-            host.timeline.remove_owner(owner);
+            host.core.timeline.remove_owner(owner);
         }
     }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-        host.timeline_dispatch(reply.owner, method, params)
+        host.core
+            .timeline_dispatch(reply.owner, method, params)
             .map(Some)
     }
 }

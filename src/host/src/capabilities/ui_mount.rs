@@ -120,7 +120,7 @@ impl Capability for UiMount {
         if call.method != "ui.mount" {
             return Err(RpcError::new("unsupported", "not a recorded method"));
         }
-        if host.headless {
+        if host.core.headless {
             return Ok(None);
         }
         let params = &call.params;
@@ -133,7 +133,7 @@ impl Capability for UiMount {
                 "only a tab of the sidebar or the adjust column is recorded",
             ));
         }
-        let builtin = host.is_builtin_package(origin);
+        let builtin = host.core.is_builtin_package(origin);
         let (mut mount, _) = new_mount(
             owner,
             &origin.directory,
@@ -284,7 +284,7 @@ fn mount(
     method: &str,
     params: &Value,
 ) -> std::result::Result<(), RpcError> {
-    if host.headless {
+    if host.core.headless {
         return Err(RpcError::new(
             "unavailable",
             "mounts require a native shell",
@@ -292,7 +292,7 @@ fn mount(
     }
     // Panels kept over this plugin's restart belong to this run from now
     // on (normally done at its spawn already, `panel_restart.rs`).
-    let id = host.plugin_id(reply.owner);
+    let id = host.core.plugin_id(reply.owner);
     host.adopt_panels(&id, reply.owner);
     if method == "ui.unmount" {
         let keys = match params.get("slot").filter(|v| !v.is_null()) {
@@ -391,12 +391,12 @@ fn mount(
             .collect::<Vec<_>>();
         let mounted = host.mounts.values().map(|m| (m.plugin, m.spec.slot));
         if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
-            let error = RpcError::slot_occupied(slot, &host.plugin_id(holder));
+            let error = RpcError::slot_occupied(slot, &host.core.plugin_id(holder));
             let text = i18n::tr_args("Panel not shown: {}", &json!([error.message]));
             return Err(host.refuse_taken(reply.owner, error, text));
         }
     }
-    let builtin = host.is_builtin(reply.owner);
+    let builtin = host.core.is_builtin(reply.owner);
     let plugin = plugin(host, reply)?;
     let name = plugin.manifest.name.clone().unwrap_or_default();
     let (mut mount, refused) = new_mount(
@@ -430,7 +430,7 @@ fn pending_change(host: &Host, key: u64) -> bool {
 /// A mount or unmount of panel `key` of plugin `owner` waits to be applied
 /// (a held request of the plugin counts for all its panels).
 fn pending(host: &Host, owner: u64, key: u64) -> bool {
-    pending_change(host, key) || host.held_mounts.waiting(owner)
+    pending_change(host, key) || host.core.held_mounts.waiting(owner)
 }
 
 /// The mount changes of `owner`'s panels not applied yet, oldest first: the
@@ -440,6 +440,7 @@ fn pending(host: &Host, owner: u64, key: u64) -> bool {
 /// (live, the safe side), and a held unmount without a slot as all panels.
 fn waiting_mounts(host: &Host, owner: u64) -> Vec<(u64, Option<composition::Slot>, Value)> {
     let name = host
+        .core
         .plugins
         .get(&owner)
         .and_then(|plugin| plugin.manifest.name.clone())
@@ -462,7 +463,7 @@ fn waiting_mounts(host: &Host, owner: u64) -> Vec<(u64, Option<composition::Slot
         .filter(|m| m.plugin == owner)
         .map(|m| m.spec.owner)
         .collect::<Vec<_>>();
-    for (_, method, params) in host.held_mounts.held_of(owner) {
+    for (_, method, params) in host.core.held_mounts.held_of(owner) {
         let slot = params["slot"].as_str().and_then(composition::Slot::parse);
         if method == "ui.mount" {
             let slot = slot.unwrap_or(composition::Slot::Bottom);
@@ -542,7 +543,7 @@ fn set_mount(
 ) -> std::result::Result<Value, RpcError> {
     // A large array converted on the plugin's reader thread: its whole
     // value was taken out of `params` (P3).
-    let mut prepared = host.take_prepared(reply);
+    let mut prepared = host.core.take_prepared(reply);
     let key = panel_of(host, reply.owner, params)?
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
     let slot = host
@@ -721,7 +722,7 @@ fn interaction(
         popup_open: boolean("popupOpen")?,
     };
     let slot = mount.spec.slot;
-    host.policy.activity(host.now_ms());
+    host.policy.activity(host.core.now_ms());
     // The backdrop never auto-hides: nothing to lock.
     if let Some(slot) = policy_slot(slot) {
         host.policy
@@ -757,7 +758,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
     for item in items {
         match item {
             Value::Null => ids.push(None),
-            Value::String(id) if host.commands.get(reply.owner, id).is_some() => {
+            Value::String(id) if host.core.commands.get(reply.owner, id).is_some() => {
                 ids.push(Some(id.clone()))
             }
             _ => {
@@ -817,7 +818,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
 }
 
 fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, RpcError> {
-    if host.headless {
+    if host.core.headless {
         return Err(RpcError::new(
             "unavailable",
             "layout requires a native shell",
@@ -861,7 +862,7 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
             .map_err(anyhow::Error::from)?;
     }
     if let Some(visible) = visible {
-        let now = host.now_ms();
+        let now = host.core.now_ms();
         // `reveal: false` (SDK 1.6.13 `toggle()`): a switch, which in
         // fullscreen pops nothing out (user ruling 2026-11-08); absent or
         // true (`show()`, `setVisible`, older SDKs): reveal, as before.

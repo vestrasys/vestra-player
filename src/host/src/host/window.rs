@@ -21,7 +21,7 @@ impl Host {
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let fullscreen = shell.window().is_fullscreen();
         // `WindowState.maximized`: never while fullscreen (a window maximized
         // before fullscreen reads maximized again after it). A main window
@@ -59,6 +59,7 @@ impl Host {
             .set_obstructions(self.menu_open, self.dialog_busy);
         #[cfg(feature = "producer-audio")]
         let captured = self
+            .core
             .backend
             .input
             .lock()
@@ -99,7 +100,7 @@ impl Host {
         );
         self.lead_strip_tick(now, hover);
         self.review_tick(now);
-        self.host_command_states(fullscreen);
+        self.core.host_command_states(fullscreen);
         // The sidebar and plugin panels show and hide `if` elements.
         view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
@@ -113,12 +114,12 @@ impl Host {
         let video = (number("video-width"), number("video-height"));
         self.backdrop_cover_art();
         let scale = f64::from(shell.window().scale_factor());
-        let presentation = &self.backend.render.presentation;
+        let presentation = &self.core.backend.render.presentation;
         presentation.sample(Instant::now());
         if let Some(log) = self.frame_log.as_mut() {
             let ((mut produced, mut shown), mut size) =
-                (self.backend.frame.counts(), self.shown_size);
-            if let Some(gpu) = self.backend.render.gpu() {
+                (self.core.backend.frame.counts(), self.shown_size);
+            if let Some(gpu) = self.core.backend.render.gpu() {
                 (produced, shown) = (produced + gpu.frames(), shown + gpu.shown());
                 size = gpu.size().or(size);
             }
@@ -133,9 +134,10 @@ impl Host {
             if let Some(line) = log.line(counts, presentation, refresh, size, Instant::now()) {
                 diag!(
                     "{line}{}{}{}{}",
-                    self.backend.frame.stages.text(),
+                    self.core.backend.frame.stages.text(),
                     frame_pacing::log_text(),
-                    self.backend
+                    self.core
+                        .backend
                         .render
                         .gpu()
                         .map_or_else(String::new, |gpu| gpu.log_text()),
@@ -156,7 +158,7 @@ impl Host {
         }
         // IA-CORE-03: the normal frame and whether the window is maximized;
         // fullscreen keeps what was under it.
-        if !self.headless && !placing {
+        if !self.core.headless && !placing {
             let minimized = shell.window().is_minimized();
             match record(fullscreen, maximized, minimized) {
                 Record::Normal => {
@@ -272,8 +274,8 @@ impl Host {
             }
             state.popped = popped;
             state.shown = popped || docked;
-            let playing =
-                self.last_source["phase"] == "ready" && self.last_source["paused"] == false;
+            let playing = self.core.last_source["phase"] == "ready"
+                && self.core.last_source["paused"] == false;
             // UI-SHELL-09: in fullscreen the pointer hides while playing and
             // idle (3 s without motion or keys, not over the bar or in its
             // band, no menu, dialog or bar lock); FS-BAR-1 decoupled it from
@@ -377,7 +379,7 @@ impl Host {
     /// A title strip button: Minimize, Exit Fullscreen (the
     /// `exit-fullscreen` command) and Close (the window close button: Quit).
     pub(crate) fn title_strip_action(&mut self, action: &str) {
-        self.policy.activity(self.now_ms());
+        self.policy.activity(self.core.now_ms());
         match action {
             "minimize" => {
                 if let Some(shell) = &self.shell {
@@ -405,7 +407,7 @@ impl Host {
         };
         if self.ui_state.state.window != Some(frame) {
             self.ui_state.state.window = Some(frame);
-            self.ui_state.touch(self.now_ms());
+            self.ui_state.touch(self.core.now_ms());
         }
     }
     /// Record whether the main window is maximized and, where the system
@@ -417,7 +419,7 @@ impl Host {
         if state.window_maximized != maximized || state.window_physical != physical {
             state.window_maximized = maximized;
             state.window_physical = physical;
-            self.ui_state.touch(self.now_ms());
+            self.ui_state.touch(self.core.now_ms());
         }
     }
     /// The slot's remembered state (defaults before anything was saved).
@@ -490,7 +492,7 @@ impl Host {
                 .map(|m| m.manifest.clone());
         }
         let current = manifests.iter().map(String::as_str).collect::<Vec<_>>();
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         match column {
             Column::Sidebar => {
                 let mut slot = self.sidebar_slot();
@@ -522,7 +524,7 @@ impl Host {
     /// Hide the whole sidebar (the floating window closed).
     pub(crate) fn close_sidebar(&mut self) {
         if let Some(owner) = self.policy.sidebar_active() {
-            let now = self.now_ms();
+            let now = self.core.now_ms();
             let _ = self
                 .policy
                 .set_preferred(window_state::Slot::Sidebar, owner, false, now);
@@ -659,7 +661,7 @@ impl Host {
         let index = column.index();
         let from = (
             self.input.borrow().table.revision(),
-            self.commands.revision(),
+            self.core.commands.revision(),
             self.shell_generation,
             self.columns[index].tabs.clone(),
         );
@@ -671,7 +673,7 @@ impl Host {
             .iter()
             .map(|&owner| {
                 let plugin = panel_plugin(owner);
-                let entries = self.commands.entries_of(plugin);
+                let entries = self.core.commands.entries_of(plugin);
                 sidebar_tabs::tab_command(
                     entries
                         .iter()
@@ -710,7 +712,7 @@ impl Host {
                 continue;
             }
             let p = column.prefix();
-            let events = self.events.clone();
+            let events = self.core.events.clone();
             window.set_callback(&format!("{p}-tab"), move |args| {
                 if let Some(SValue::Number(index)) = args.first()
                     && *index >= 0.
@@ -719,7 +721,7 @@ impl Host {
                 }
                 SValue::Void
             })?;
-            let events = self.events.clone();
+            let events = self.core.events.clone();
             window.set_callback(&format!("{p}-overflow"), move |args| {
                 if let [SValue::Number(x), SValue::Number(y)] = args {
                     let _ = events.send(Event::TabOverflow(generation, column, *x, *y));
@@ -727,13 +729,13 @@ impl Host {
                 SValue::Void
             })?;
         }
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("sidebar-detach", move |_| {
             let _ = events.send(Event::SidebarDetach(generation));
             SValue::Void
         })?;
         if has_adjust {
-            let events = self.events.clone();
+            let events = self.core.events.clone();
             window.set_callback("adjust-dismiss", move |_| {
                 let _ = events.send(Event::AdjustDismiss(generation));
                 SValue::Void
@@ -801,7 +803,7 @@ impl Host {
         self.bind_keys(&instance, generation)?;
         view::bind_focus(&instance)?;
         self.bind_tabs(&instance, generation)?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::FloatingClosed(generation));
             slint::CloseRequestResponse::KeepWindowShown
@@ -857,7 +859,7 @@ impl Host {
         if slot.floating != Some(frame) {
             slot.floating = Some(frame);
             self.ui_state.state.sidebar_slot = Some(slot);
-            self.ui_state.touch(self.now_ms());
+            self.ui_state.touch(self.core.now_ms());
         }
     }
     pub(crate) fn close_floating(&mut self) {

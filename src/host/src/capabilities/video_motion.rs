@@ -34,11 +34,12 @@ impl Capability for VideoMotion {
         // Only the fields the worker reads; the rendering state is the
         // host's, never the plugin's.
         let mut forwarded =
-            json!({"rendering": host.rendering_state(), "engine": params["engine"].clone()});
+            json!({"rendering": host.core.rendering_state(), "engine": params["engine"].clone()});
         if method == "video.motion.set" {
             forwarded["mode"] = params["mode"].clone();
         }
-        host.backend
+        host.core
+            .backend
             .commands
             .send(Command {
                 reply: reply.clone(),

@@ -56,6 +56,7 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     // catalog, then formatted with `args` (i18n.md §5).
     i18n::valid_args(&params["args"]).map_err(RpcError::invalid)?;
     let text = host
+        .core
         .plugin_sentence(reply.owner, &params["text"], &params["args"])?
         .replace(['\n', '\r'], " ");
     if text.trim().is_empty() || text.chars().count() > OSD_MESSAGE_CHARS {
@@ -66,8 +67,8 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     let owner = reply.owner;
     let actions = parse_actions(
         &params["actions"],
-        |title| host.plugin_sentence(owner, title, &Value::Null),
-        |id| host.commands.get(owner, id).is_some(),
+        |title| host.core.plugin_sentence(owner, title, &Value::Null),
+        |id| host.core.commands.get(owner, id).is_some(),
     )?;
     if host.shell.is_none() {
         return Err(RpcError::new("unavailable", "native shell unavailable"));
@@ -128,7 +129,9 @@ fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<
             host.info_panels.remove(&reply.owner);
         }
         text if text.is_string() || i18n::text::is_text(text) => {
-            let mut text = host.plugin_sentence(reply.owner, text, &params["args"])?;
+            let mut text = host
+                .core
+                .plugin_sentence(reply.owner, text, &params["args"])?;
             // Cut after translation: the plugin cannot measure
             // the translated lines.
             match &params["maxColumns"] {

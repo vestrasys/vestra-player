@@ -19,6 +19,12 @@
  *     [--slow <factor>]             multiply every run time (a loaded machine)
  *     [--quiet-flag <file>]         wait while it exists before each player run
  *                                   (default C:\vestra\quiet.flag)
+ *     [--wire-trace]                each step also writes its wire trace
+ *                                   (VESTRA_TEST_WIRE_TRACE, a host test switch
+ *                                   since the core thread's S1.1) to
+ *                                   raw/<scenario>/<step>.wire.jsonl, compared
+ *                                   by verify-wire.mjs diff <A> <B>; a host
+ *                                   without the switch writes none
  *   node src/scripts/verify-runtime.mjs diff <directory A> <directory B> [--report <file>]
  *   node src/scripts/verify-runtime.mjs compare --a <staged player> --b <staged player>
  *     --out <directory> [the options of run]     run A, run B, diff
@@ -812,6 +818,8 @@ async function run(options) {
       const seconds = Math.ceil(step.total * slow);
       const registry = join(directory, `${step.name}.registry.jsonl`);
       const env = { ...step.env, VESTRA_TEST_REGISTRY: registry };
+      if (options.wireTrace)
+        env.VESTRA_TEST_WIRE_TRACE = join(directory, `${step.name}.wire.jsonl`);
       if (step.wakeAfterSettled)
         env.VESTRA_TEST_WAKE = String(
           Math.ceil((step.settleWithin + step.wakeAfterSettled) * slow * 1000),
@@ -1079,7 +1087,7 @@ function parse(argv, flags) {
 
 async function main(argv) {
   const command = argv[0];
-  const options = parse(argv.slice(1), ["--no-store-plugins"]);
+  const options = parse(argv.slice(1), ["--no-store-plugins", "--wire-trace"]);
   if (process.platform === "win32" && options.quietFlag === undefined)
     options.quietFlag = "C:\\vestra\\quiet.flag";
   if (command === "run" && options.stage && options.out) {

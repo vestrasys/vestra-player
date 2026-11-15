@@ -166,7 +166,7 @@ impl super::Host {
     /// to the generation it wakes as) counts: a stopped owner's, or no
     /// plugin's (the host's own commands, owner 0), records nothing.
     pub(crate) fn act(&mut self, owner: u64, origin: Origin) {
-        if self.plugins.contains_key(&owner) || self.held_id(owner).is_some() {
+        if self.core.plugins.contains_key(&owner) || self.held_id(owner).is_some() {
             self.origins.acted(owner, origin);
         }
     }

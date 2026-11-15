@@ -224,6 +224,14 @@ impl Timeline {
 }
 
 impl Host {
+    pub(super) fn timeline_tick(&mut self) {
+        let now = self.core.now_ms();
+        if let Some(lists) = self.core.timeline.due(now) {
+            self.broadcast("timeline.changed", lists);
+        }
+    }
+}
+impl Core {
     pub(super) fn timeline_dispatch(
         &mut self,
         owner: u64,
@@ -262,12 +270,6 @@ impl Host {
         let generation = |state: &Value| state["stamp"]["generation"].as_u64();
         if generation(previous) != generation(next) {
             self.timeline.clear();
-        }
-    }
-    pub(super) fn timeline_tick(&mut self) {
-        let now = self.now_ms();
-        if let Some(lists) = self.timeline.due(now) {
-            self.broadcast("timeline.changed", lists);
         }
     }
 }

@@ -331,7 +331,7 @@ impl Host {
     ) {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         let input = self.input.clone();
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
         let shortcuts = view::WindowShortcuts::default();
         let floating = window.as_weak();
@@ -365,7 +365,7 @@ impl Host {
         generation: u64,
     ) -> Result<()> {
         let input = self.input.clone();
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("key-input", move |args| {
             let [SValue::String(scope), SValue::String(text), rest @ ..] = args else {
                 return SValue::Bool(false);

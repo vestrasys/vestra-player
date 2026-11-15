@@ -22,6 +22,6 @@ impl Capability for Secrets {
     }
     fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-        host.system_dispatch(reply, method, params)
+        host.core.system_dispatch(reply, method, params)
     }
 }
