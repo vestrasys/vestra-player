@@ -11,12 +11,25 @@ export const AUTO_SIZES: readonly AutoSize[] = ["off", 0.5, 1, 1.5, 2, "fit"];
 /** `settings.json`: the preferences the core does not keep (H05, B30, G-02). */
 export interface Settings {
   onTop: OnTop;
+  /** The user chose `onTop` (menu, Ctrl+T, palette, settings page); otherwise it follows the default. */
+  onTopChosen: boolean;
   hideCursorWhilePlaying: boolean;
   autoSize: AutoSize;
   autoSizeOnce: boolean;
 }
-/** The defaults: `OnTopMode=3`, `AutoHideMouse=1`, `PlayScreenSize=2` (1.0x), `PlayScreenSizeFirst=0`. */
-export const DEFAULTS: Settings = { onTop: "fullscreen", hideCursorWhilePlaying: true, autoSize: 1, autoSizeOnce: false };
+/**
+ * The defaults: on top Never (IA-WIN-03, user ruling 2026-11-15: mpv's `ontop=no`, VLC's "Never"),
+ * `AutoHideMouse=1`, `PlayScreenSize=2` (1.0x), `PlayScreenSizeFirst=0`.
+ */
+export const DEFAULTS: Settings = {
+  onTop: "never",
+  onTopChosen: false,
+  hideCursorWhilePlaying: true,
+  autoSize: 1,
+  autoSizeOnce: false,
+};
+/** The default up to 0.1.8 (PotPlayer's `OnTopMode=3`). */
+const OLD_DEFAULT_ON_TOP: OnTop = "fullscreen";
 
 /** Runs `run` after `ms` milliseconds; the result cancels it. */
 export type Later = (run: () => void, ms: number) => () => void;
@@ -38,10 +51,24 @@ const isObject = (value: unknown): value is Settings =>
 
 const bool = (value: unknown, fallback: boolean) => (typeof value === "boolean" ? value : fallback);
 
-/** One bad field falls back to its default; the others are kept. */
+/**
+ * Whether the stored `onTop` is the user's choice. A file from 0.1.9 on says so (`onTopChosen`). An
+ * older file holds the whole settings object, written whenever any setting changed, so its `onTop` is
+ * a choice only when it differs from the old default; the old default itself is taken as untouched
+ * (IA-WIN-03 item 5).
+ */
+function chosen(value: Partial<Record<keyof Settings, unknown>>): boolean {
+  if (!ON_TOP.includes(value.onTop as OnTop)) return false;
+  if (typeof value.onTopChosen === "boolean") return value.onTopChosen;
+  return value.onTop !== OLD_DEFAULT_ON_TOP;
+}
+
+/** One bad field falls back to its default; the others are kept. An on-top mode never chosen follows the default. */
 export function normalize(value: Partial<Record<keyof Settings, unknown>>): Settings {
+  const onTopChosen = chosen(value);
   return {
-    onTop: ON_TOP.includes(value.onTop as OnTop) ? (value.onTop as OnTop) : DEFAULTS.onTop,
+    onTop: onTopChosen ? (value.onTop as OnTop) : DEFAULTS.onTop,
+    onTopChosen,
     hideCursorWhilePlaying: bool(value.hideCursorWhilePlaying, DEFAULTS.hideCursorWhilePlaying),
     autoSize: AUTO_SIZES.includes(value.autoSize as AutoSize) ? (value.autoSize as AutoSize) : DEFAULTS.autoSize,
     autoSizeOnce: bool(value.autoSizeOnce, DEFAULTS.autoSizeOnce),

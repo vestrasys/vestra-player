@@ -370,7 +370,7 @@ impl Host {
             UiCommand::Dialog(request) => self.dialog_command(request),
             UiCommand::Confirm(request) => self.confirm_command(request),
             UiCommand::Review(request) => self.review_command(request),
-            _ => unreachable!("not sent before plan step S2c(6)"),
+            _ => unreachable!("not sent before plan step S2d"),
         }
     }
     fn log_prepared(&self, changes: usize, started: Instant, ok: bool) {

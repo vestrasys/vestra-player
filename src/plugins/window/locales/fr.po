@@ -198,10 +198,10 @@ msgstr "Taille de la fenêtre selon l'échelle de la vidéo, toujours au premier
 #, x-machine
 msgid ""
 "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
-"The items are in the context menu under Screen."
+"→ Command palette (Ctrl+Shift+P): Window"
 msgstr ""
 "Redimensionne la fenêtre de 0,5 à 2× la taille de la vidéo ou l'adapte au format de la vidéo, et la redimensionne automatiquement au début de la lecture ; jamais au premier plan, toujours au premier plan, au premier plan pendant la lecture ou pendant la lecture en plein écran ; taille mini et image dans l'image du système ; masque le pointeur pendant la lecture.\n"
-"Les éléments se trouvent dans le menu contextuel, sous Écran."
+"→ Palette de commandes (Ctrl+Shift+P) : Fenêtre"
 
 #: manifest.json
 #, x-machine

@@ -275,13 +275,15 @@ impl Host {
         }
     }
     /// `window.setAlwaysOnTop`: every ordinary window of the application at
-    /// the floating level, applied again when windows open or close.
+    /// the floating level, applied again when windows open or close; not
+    /// while a system dialog is open (`window_control::floating`), and
+    /// back when it closes (the next tick).
     pub(crate) fn apply_on_top(&mut self) {
         if self.core.headless {
             return;
         }
         self.sync_window_settings();
-        let want = self.on_top;
+        let want = window_control::floating(self.on_top, self.core.dialog_busy);
         let count = platform::window_count();
         if self.on_top_applied == Some((want, count)) {
             return;

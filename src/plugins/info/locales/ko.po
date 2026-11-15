@@ -358,8 +358,12 @@ msgstr "재생 정보 오버레이, 재생 속성, 정보 창"
 
 #: manifest.json
 #, x-machine
-msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
-msgstr "비디오 왼쪽 위에 파일, 시간, 코덱, 프레임 속도 등의 실시간 정보를 표시하거나(Tab), Shift+Tab으로 간단한 요약을 표시합니다. 재생 속성…에서는 디코딩 상태, 파일의 스트림과 메타데이터, 시스템 정보를 보고 텍스트로 복사하거나 저장할 수 있습니다. Vestra Player 정보…에서는 버전, 구성 요소, 로드된 플러그인을 보여 줍니다."
+msgid ""
+"Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins.\n"
+"→ Press Tab (overlay) or F1 (About)"
+msgstr ""
+"비디오 왼쪽 위에 파일, 시간, 코덱, 프레임 속도 등의 실시간 정보를 표시하거나(Tab), Shift+Tab으로 간단한 요약을 표시합니다. 재생 속성…에서는 디코딩 상태, 파일의 스트림과 메타데이터, 시스템 정보를 보고 텍스트로 복사하거나 저장할 수 있습니다. Vestra Player 정보…에서는 버전, 구성 요소, 로드된 플러그인을 보여 줍니다.\n"
+"→ Tab(정보 표시) 또는 F1(정보)"
 
 #: manifest.json
 #, x-machine

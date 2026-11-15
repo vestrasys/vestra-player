@@ -110,6 +110,15 @@ pub fn valid_size(width: f64, height: f64) -> bool {
         .all(|v| v.is_finite() && (1. ..=16384.).contains(v))
 }
 
+/// Whether the player's windows float (`window.setAlwaysOnTop`): when the
+/// plugins' choice (`want`, [`LastWrite`]) says so and no system dialog
+/// (file dialog or confirmation, `dialog_open`) is open. While one is open
+/// the user may switch to other applications (Alt+Tab, the taskbar) to
+/// look something up; the choice comes back when it closes.
+pub fn floating(want: bool, dialog_open: bool) -> bool {
+    want && !dialog_open
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -194,5 +203,16 @@ mod tests {
         let small = fit(160., 90., frame(320.));
         assert_eq!(small.video.0, 318.);
         assert!(valid_size(1., 16384.) && !valid_size(0., 10.) && !valid_size(f64::NAN, 10.));
+    }
+
+    /// The bug of 2026-11-15: a fullscreen player held on top kept its Save
+    /// dialog and every other application behind it. Every combination: on
+    /// top only when wanted and no dialog is open.
+    #[test]
+    fn no_floating_while_a_dialog_is_open() {
+        assert!(!floating(false, false));
+        assert!(floating(true, false));
+        assert!(!floating(false, true));
+        assert!(!floating(true, true), "a dialog is open: not on top");
     }
 }

@@ -72,7 +72,11 @@ impl Host {
             .is_some_and(|routing| routing.captured);
         #[cfg(not(feature = "producer-audio"))]
         let captured = false;
-        self.input.borrow_mut().blocked = self.menu_open || self.core.dialog_busy || captured;
+        {
+            let mut input = self.input.borrow_mut();
+            input.blocked = self.menu_open || self.core.dialog_busy || captured;
+            input.dialog = self.core.dialog_busy;
+        }
         if let Err(error) = shell.set_property(
             "input-blocked",
             (self.menu_open || self.core.dialog_busy).into(),
