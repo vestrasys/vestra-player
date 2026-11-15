@@ -38,6 +38,7 @@ mod source_resolve;
 mod subtitles_control;
 mod subtitles_read;
 mod timeline_marks;
+mod triggers;
 mod ui_dialog;
 mod ui_drop;
 pub(crate) mod ui_mount;
@@ -56,7 +57,7 @@ pub(crate) use commands_run::{
     ask_again as ask_again_before_plugin_commands, forget_trust as forget_command_trust,
     shown_name,
 };
-pub(crate) use events::WAKE_EVENTS;
+pub(crate) use events::{SOURCE_EVENTS, WAKE_EVENTS, wake_trigger};
 pub(crate) use media_sources::locate_dialog;
 #[cfg(test)]
 pub(crate) use mpv::check as mpv_check;
@@ -68,7 +69,7 @@ pub struct Info {
     pub name: &'static str,
     /// Only built-in plugins may use it: `Host::dispatch` and `replay`
     /// refuse its methods to any other plugin with `capability`, built-in
-    /// by provenance (`Host::is_builtin`), never by a manifest field or a
+    /// by provenance (`Core::is_builtin`), never by a manifest field or a
     /// load mode.
     pub builtin_only: bool,
 }
@@ -197,7 +198,7 @@ pub fn replay(host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Hand
     let capability = route
         .and_then(|route| route.owner)
         .ok_or_else(|| RpcError::new("unsupported", "unknown method"))?;
-    let builtin = host.is_builtin_package(origin);
+    let builtin = host.core.is_builtin_package(origin);
     route.map_or(Ok(()), |route| route.check_caller(builtin))?;
     capability.replay(host, owner, origin, call)
 }
@@ -237,6 +238,8 @@ pub static ALL: &[&dyn Capability] = &[
     &palette_lead::PaletteLead,
     // The mpv pass-through (SDK 1.8.0).
     &mpv::Mpv,
+    // Triggers (SDK 1.10.0).
+    &triggers::Triggers,
 ];
 
 /// Where a method goes: its owner (`None`: `uncapable`).
@@ -308,7 +311,8 @@ pub fn lookup(method: &str) -> Option<Route> {
 /// What the plugin holds there may change with it: a run that may still go
 /// to standby has the worker asked again (`Host::worker_requested`).
 fn forward(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-    host.backend
+    host.core
+        .backend
         .commands
         .send(Command {
             reply: reply.clone(),
@@ -324,7 +328,8 @@ fn forward(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Hand
 /// (subtitles, snapshots, jobs, video view and render). As `forward`, what
 /// the plugin holds there is asked again.
 fn forward_media(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-    host.backend
+    host.core
+        .backend
         .commands
         .send(Command {
             reply: reply.clone(),
@@ -338,7 +343,8 @@ fn forward_media(host: &mut Host, reply: &Reply, method: &str, params: &Value) -
 
 /// The running plugin a request came from (`Host::dispatch` checked it).
 fn plugin<'a>(host: &'a Host, reply: &Reply) -> std::result::Result<&'a crate::Plugin, RpcError> {
-    host.plugins
+    host.core
+        .plugins
         .get(&reply.owner)
         .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))
 }

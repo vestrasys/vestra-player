@@ -399,4 +399,18 @@ mod tests {
         assert!(parse(Node::Array(rows)).is_err());
         assert!(parse(Node::Array(vec![Node::None; 1025])).is_err());
     }
+
+    /// The wire shape of `audioTracks` that the SDK reads (SDK 1.10.0 shows
+    /// `streamIndex` as `AudioTrack.streamIndex`): the index, or null.
+    #[test]
+    fn audio_tracks_send_their_stream_index() {
+        let known = serde_json::to_value(track(7, false, 4)).unwrap();
+        assert_eq!(known["trackId"], 7);
+        assert_eq!(known["streamIndex"], 4);
+        let mut unknown = track(8, false, 0);
+        unknown.stream_index = None;
+        let unknown = serde_json::to_value(unknown).unwrap();
+        assert!(unknown["streamIndex"].is_null());
+        assert!(unknown.as_object().unwrap().contains_key("streamIndex"));
+    }
 }

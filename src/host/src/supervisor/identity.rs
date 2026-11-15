@@ -82,6 +82,19 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
+    /// The pid a trigger for plugin `id` goes to through [`Self::wake`]: a
+    /// start's process (held for its ready), the holder a start without a
+    /// process yet replaces, else its process or its holder in standby.
+    /// Read-only, as `wake` resolves the same pids.
+    pub fn trigger_pid(&self, id: &str) -> Option<Pid> {
+        let unit = self.units.get(self.by_id.get(id)?)?;
+        match unit.state {
+            UnitState::Activating { pid: Some(pid), .. } => Some(pid),
+            UnitState::Activating { pid: None, .. } => unit.holder,
+            _ => self.process_of(id).or_else(|| self.holder_of(id)),
+        }
+    }
+
     /// When a unit woken from standby started `pid`, while it is not ready yet
     /// (today's `lazy.waking`). Every start holds its triggers for its ready;
     /// this one says the run was woken.

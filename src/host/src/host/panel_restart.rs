@@ -169,33 +169,14 @@ pub(crate) fn coming(state: &crate::supervisor::UnitState, starts: bool) -> Comi
 }
 
 impl Host {
-    /// Whether run `owner`, stopping now, is restarted by the supervisor by
-    /// itself: it is deactivating after a failure, to land inactive, with a
-    /// start of it waiting (a crash under `OnFailure`, the shared runner's
-    /// restart). Not a reload, a disable, an uninstall, standby or a start
-    /// limit hit.
-    pub(crate) fn auto_restarting(&self, owner: u64) -> bool {
-        use crate::supervisor::{StopReason as Core, Then, UnitState};
-        let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
-            return false;
-        };
-        let deactivating = self.supervisor.unit(unit).is_some_and(|u| {
-            matches!(u.state, UnitState::Deactivating { pid, reason: Core::Failed, then: Then::Inactive, .. } if pid.0 == owner)
-                && !u.removed
-        });
-        deactivating
-            && self
-                .supervisor
-                .job(unit)
-                .is_some_and(crate::supervisor::Job::will_start)
-    }
     /// `stop_run` of a run that the supervisor restarts: its panels stay
     /// (dimmed, with the line) instead of going. The keys kept.
     pub(crate) fn keep_panels(&mut self, owner: u64) -> BTreeSet<u64> {
-        let Some(plugin) = self.plugins.get(&owner) else {
+        let Some(plugin) = self.core.plugins.get(&owner) else {
             return BTreeSet::new();
         };
         let keys = self
+            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner)
@@ -233,7 +214,7 @@ impl Host {
                 r.keys
                     .iter()
                     .copied()
-                    .filter(|&key| self.mounts.contains_key(&rekey_panel(key, to)))
+                    .filter(|&key| self.core.mounts.contains_key(&rekey_panel(key, to)))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -325,14 +306,15 @@ impl Host {
         if self.restarts.plugins.is_empty() {
             return;
         }
-        let mounts = &self.mounts;
+        let mounts = &self.core.mounts;
         self.restarts.prune(|key| mounts.contains_key(&key));
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let ids = self.restarts.plugins.keys().cloned().collect::<Vec<_>>();
         for id in ids {
-            let state = self.supervisor.by_id(&id).and_then(|unit| {
-                let u = self.supervisor.unit(unit)?;
+            let state = self.core.supervisor.by_id(&id).and_then(|unit| {
+                let u = self.core.supervisor.unit(unit)?;
                 let starts = self
+                    .core
                     .supervisor
                     .job(unit)
                     .is_some_and(crate::supervisor::Job::will_start);
@@ -341,7 +323,7 @@ impl Host {
             match state.unwrap_or(Coming::No) {
                 Coming::Waiting => {}
                 Coming::Running { pid, ready } => {
-                    if self.plugins.contains_key(&pid) {
+                    if self.core.plugins.contains_key(&pid) {
                         self.adopt_panels(&id, pid);
                     }
                     let Some(entry) = self.restarts.plugins.get_mut(&id) else {
@@ -369,7 +351,7 @@ impl Host {
                     );
                     for &key in &stale {
                         self.restarts.done(key);
-                        if let Some(mount) = self.mounts.get(&key) {
+                        if let Some(mount) = self.core.mounts.get(&key) {
                             self.images
                                 .release_view(mount.plugin, mount_view(mount.spec.slot));
                         }
@@ -405,7 +387,7 @@ impl Host {
     }
     /// A change of panel `key` waits to be applied.
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
-        self.mount_queue.iter().any(|c| c.key == key)
+        self.core.mount_queue.iter().any(|c| c.key == key)
             || self.preparing.as_ref().is_some_and(|(_, c)| c.key == key)
     }
     /// Remove panels `keys` of run `owner` (queued: one change for them),
@@ -413,7 +395,7 @@ impl Host {
     pub(crate) fn drop_panels(&mut self, owner: u64, keys: Vec<u64>) {
         let keys = keys
             .into_iter()
-            .filter(|key| self.mounts.contains_key(key))
+            .filter(|key| self.core.mounts.contains_key(key))
             .collect::<Vec<_>>();
         if keys.is_empty() {
             return;
@@ -422,7 +404,8 @@ impl Host {
         let tabs_before = keys
             .iter()
             .map(|key| {
-                self.mounts
+                self.core
+                    .mounts
                     .get(key)
                     .filter(|m| m.spec.slot.tabbed())
                     .and_then(|m| policy_slot(m.spec.slot))
@@ -441,8 +424,9 @@ impl Host {
         for key in &keys {
             self.policy.remove_owner(*key);
         }
+        self.report_tabs();
         for (key, tabs_before) in keys.into_iter().zip(tabs_before) {
-            let Some(mount) = self.mounts.remove(&key) else {
+            let Some(mount) = self.core.mounts.remove(&key) else {
                 continue;
             };
             // Another tab of its column stays shown until the shell is rebuilt.
@@ -453,8 +437,8 @@ impl Host {
             {
                 let _ = shell.set_property(property, false.into());
             }
-            self.mount_queue.retain(|c| c.key != key);
-            self.mount_queue.push_front(MountChange {
+            self.core.mount_queue.retain(|c| c.key != key);
+            self.core.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
                 key,
                 contribution: None,
@@ -462,6 +446,28 @@ impl Host {
                 announced: true,
             });
         }
+    }
+}
+impl Core {
+    /// Whether run `owner`, stopping now, is restarted by the supervisor by
+    /// itself: it is deactivating after a failure, to land inactive, with a
+    /// start of it waiting (a crash under `OnFailure`, the shared runner's
+    /// restart). Not a reload, a disable, an uninstall, standby or a start
+    /// limit hit.
+    pub(crate) fn auto_restarting(&self, owner: u64) -> bool {
+        use crate::supervisor::{StopReason as Core, Then, UnitState};
+        let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
+            return false;
+        };
+        let deactivating = self.supervisor.unit(unit).is_some_and(|u| {
+            matches!(u.state, UnitState::Deactivating { pid, reason: Core::Failed, then: Then::Inactive, .. } if pid.0 == owner)
+                && !u.removed
+        });
+        deactivating
+            && self
+                .supervisor
+                .job(unit)
+                .is_some_and(crate::supervisor::Job::will_start)
     }
 }
 

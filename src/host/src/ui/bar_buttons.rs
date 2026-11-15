@@ -219,14 +219,14 @@ impl Host {
         else {
             return;
         };
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let show = !preferred;
         if self
             .policy
             .switch(window_state::Slot::Sidebar, owner, show, now)
             .is_ok()
         {
-            if let Some(mount) = self.mounts.get_mut(&owner) {
+            if let Some(mount) = self.core.mounts.get_mut(&owner) {
                 mount.visible = show;
             }
             self.remember_sidebar(false);
@@ -249,7 +249,7 @@ impl Host {
         let Some(owner) = self.policy.active(window_state::Slot::Adjust) else {
             return;
         };
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         if self
             .policy
             .switch(window_state::Slot::Adjust, owner, visible, now)
@@ -281,14 +281,16 @@ impl Host {
                 }),
             };
             if self
+                .core
                 .commands
                 .get(bindings::HOST, id)
                 .is_some_and(|entry| entry.state != state)
             {
-                self.host_revision += 1;
-                let _ = self
-                    .commands
-                    .update(bindings::HOST, id, self.host_revision, state);
+                self.core.host_revision += 1;
+                let _ =
+                    self.core
+                        .commands
+                        .update(bindings::HOST, id, self.core.host_revision, state);
             }
         }
     }
@@ -296,7 +298,7 @@ impl Host {
     /// The plugins' cells (the strip's, then the ones past eight), and the
     /// buttons not in the strip (owner, id, plugin id, where they went).
     fn bar_items(&self) -> (Vec<Item>, Vec<Item>, Vec<Dropped>) {
-        let buttons = self.commands.buttons();
+        let buttons = self.registry.buttons();
         let input = self.input.borrow();
         let items = |list: &[&commands::CommandSnapshot]| -> Vec<Item> {
             list.iter()
@@ -345,7 +347,7 @@ impl Host {
     /// The command palette's cell (`host/palette`): the magnifier (the ask
     /// bubble while a lead is set), always shown, right of `»`.
     fn palette_item(&self) -> Option<Item> {
-        let entry = self.commands.get(bindings::HOST, palette::PALETTE)?;
+        let entry = self.registry.get(bindings::HOST, palette::PALETTE)?;
         let mut label = label(entry.declaration.shown_title());
         let key = self
             .input
@@ -354,7 +356,7 @@ impl Host {
             .label(bindings::HOST, palette::PALETTE);
         // While a plugin holds the palette's first row (`palette.lead`):
         // the speech bubble with the AI sparkle, and the row named in the tip.
-        let icon = match &self.lead {
+        let icon = match &self.core.lead {
             Some(lead) => {
                 label = i18n::tr_args(
                     "{palette} and {lead}",
@@ -381,7 +383,7 @@ impl Host {
     /// icon, its on dot while the sidebar is wanted, at half opacity while it is
     /// wanted but the window is too narrow for it (G-18).
     fn sidebar_item(&self, sidebar: Option<window_state::Visibility>) -> Option<Item> {
-        let entry = self.commands.get(bindings::HOST, SIDEBAR)?;
+        let entry = self.registry.get(bindings::HOST, SIDEBAR)?;
         let label = label(entry.declaration.shown_title());
         let key = self.input.borrow().table.label(bindings::HOST, SIDEBAR);
         let dimmed = sidebar.is_some_and(|s| {
@@ -411,7 +413,7 @@ impl Host {
     /// sliders icon, its on dot while the column is wanted shown; disabled
     /// while no panel is in it.
     fn adjust_item(&self) -> Option<Item> {
-        let entry = self.commands.get(bindings::HOST, ADJUST)?;
+        let entry = self.registry.get(bindings::HOST, ADJUST)?;
         let label = label(entry.declaration.shown_title());
         let key = self.input.borrow().table.label(bindings::HOST, ADJUST);
         Some(Item {
@@ -439,10 +441,15 @@ impl Host {
         ),
     ) {
         let sidebar = columns.0;
+        // The strip reads the interface's copies of the tables (rule R8).
+        self.sync_tables();
         if !self.bar.begin(&self.bar_inputs(sidebar)) {
             return;
         }
+        // A write of the host's own commands to the core's registry; the
+        // strip then reads its new copy.
         self.sidebar_command_state();
+        self.sync_tables();
         let (buttons, overflow, dropped) = self.bar_items();
         for (owner, id, manifest, limit) in dropped {
             if self.bar.logged.insert((owner, id.clone())) && debug_bar() {
@@ -503,7 +510,7 @@ impl Host {
     /// What the strip depends on, at this tick.
     fn bar_inputs(&self, sidebar: Option<window_state::Visibility>) -> Inputs {
         Inputs {
-            commands: self.commands.revision(),
+            commands: self.registry.revision(),
             bindings: self.input.borrow().table.revision(),
             sidebar,
             slot: self.policy.sidebar_state(),
@@ -516,7 +523,7 @@ impl Host {
                     .bar_instance(self.shell_generation)
                     .map(|(serial, _)| serial),
             ),
-            lead: self.lead.as_ref().map(|lead| lead.row.title.clone()),
+            lead: self.core.lead.as_ref().map(|lead| lead.row.title.clone()),
         }
     }
 
@@ -526,7 +533,7 @@ impl Host {
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) -> Result<()> {
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_global_callback(GLOBAL, "clicked", move |args| {
             if let Some(SValue::String(token)) = args.first() {
                 let _ = events.send(Event::BarButton(generation, token.to_string()));
@@ -595,6 +602,7 @@ impl Host {
             self.bar.placed = Some(self.shell_generation);
             if debug_bar() {
                 let bar = self
+                    .core
                     .mounts
                     .values()
                     .find(|mount| mount.spec.slot == composition::Slot::Bottom)
@@ -628,7 +636,7 @@ impl Host {
             return;
         }
         input_trace::mark("host loop: bar button »");
-        self.policy.activity(self.now_ms());
+        self.policy.activity(self.core.now_ms());
         let _ = window.set_property("menu-origin-x", x.into());
         let _ = window.set_property("menu-origin-y", y.into());
         self.open_menu(generation, MenuMode::Bar(items));
@@ -643,7 +651,7 @@ impl Host {
             return;
         };
         input_trace::mark(&format!("host loop: bar button → {owner}/{id}"));
-        self.policy.activity(self.now_ms());
+        self.policy.activity(self.core.now_ms());
         self.acted_in(owner, generation);
         if let Err(error) = self.execute_command(owner, &id) {
             diag!("bar button execute: {error:?}");

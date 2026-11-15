@@ -1,5 +1,6 @@
 //! The window tick, the tabs of the columns (the sidebar, the adjust
 //! column) and the sidebar's floating window.
+use super::messages::{UiReport, WindowFacts};
 use super::mounts::policy_column;
 use super::*;
 use crate::playback::renderer::GpuBackend as _;
@@ -16,12 +17,15 @@ pub(crate) struct ColumnMemory {
 
 impl Host {
     pub(crate) fn window_tick(&mut self) {
+        // The title strip, the tab keys and the bar read the interface's
+        // copies of the tables (rule R8).
+        self.sync_tables();
         self.pip_tick();
         self.menu_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
             return;
         };
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let fullscreen = shell.window().is_fullscreen();
         // `WindowState.maximized`: never while fullscreen (a window maximized
         // before fullscreen reads maximized again after it). A main window
@@ -56,9 +60,10 @@ impl Host {
         }
         self.policy.set_fullscreen(fullscreen, now);
         self.policy
-            .set_obstructions(self.menu_open, self.dialog_busy);
+            .set_obstructions(self.menu_open, self.core.dialog_busy);
         #[cfg(feature = "producer-audio")]
         let captured = self
+            .core
             .backend
             .input
             .lock()
@@ -67,10 +72,15 @@ impl Host {
             .is_some_and(|routing| routing.captured);
         #[cfg(not(feature = "producer-audio"))]
         let captured = false;
-        self.input.borrow_mut().blocked = self.menu_open || self.dialog_busy || captured;
-        if let Err(error) =
-            shell.set_property("input-blocked", (self.menu_open || self.dialog_busy).into())
         {
+            let mut input = self.input.borrow_mut();
+            input.blocked = self.menu_open || self.core.dialog_busy || captured;
+            input.dialog = self.core.dialog_busy;
+        }
+        if let Err(error) = shell.set_property(
+            "input-blocked",
+            (self.menu_open || self.core.dialog_busy).into(),
+        ) {
             diag!("host.error physical-input bridge: {error}");
         }
         if self.osd_until.is_some_and(|until| now >= until) {
@@ -99,7 +109,7 @@ impl Host {
         );
         self.lead_strip_tick(now, hover);
         self.review_tick(now);
-        self.host_command_states(fullscreen);
+        self.core.host_command_states(fullscreen);
         // The sidebar and plugin panels show and hide `if` elements.
         view::settle_layout(shell.window());
         let number = |name: &str| match shell.get_property(name) {
@@ -113,12 +123,12 @@ impl Host {
         let video = (number("video-width"), number("video-height"));
         self.backdrop_cover_art();
         let scale = f64::from(shell.window().scale_factor());
-        let presentation = &self.backend.render.presentation;
+        let presentation = &self.core.backend.render.presentation;
         presentation.sample(Instant::now());
         if let Some(log) = self.frame_log.as_mut() {
             let ((mut produced, mut shown), mut size) =
-                (self.backend.frame.counts(), self.shown_size);
-            if let Some(gpu) = self.backend.render.gpu() {
+                (self.core.backend.frame.counts(), self.shown_size);
+            if let Some(gpu) = self.core.backend.render.gpu() {
                 (produced, shown) = (produced + gpu.frames(), shown + gpu.shown());
                 size = gpu.size().or(size);
             }
@@ -133,9 +143,10 @@ impl Host {
             if let Some(line) = log.line(counts, presentation, refresh, size, Instant::now()) {
                 diag!(
                     "{line}{}{}{}{}",
-                    self.backend.frame.stages.text(),
+                    self.core.backend.frame.stages.text(),
                     frame_pacing::log_text(),
-                    self.backend
+                    self.core
+                        .backend
                         .render
                         .gpu()
                         .map_or_else(String::new, |gpu| gpu.log_text()),
@@ -156,7 +167,7 @@ impl Host {
         }
         // IA-CORE-03: the normal frame and whether the window is maximized;
         // fullscreen keeps what was under it.
-        if !self.headless && !placing {
+        if !self.core.headless && !placing {
             let minimized = shell.window().is_minimized();
             match record(fullscreen, maximized, minimized) {
                 Record::Normal => {
@@ -272,8 +283,8 @@ impl Host {
             }
             state.popped = popped;
             state.shown = popped || docked;
-            let playing =
-                self.last_source["phase"] == "ready" && self.last_source["paused"] == false;
+            let playing = self.core.last_source["phase"] == "ready"
+                && self.core.last_source["paused"] == false;
             // UI-SHELL-09: in fullscreen the pointer hides while playing and
             // idle (3 s without motion or keys, not over the bar or in its
             // band, no menu, dialog or bar lock); FS-BAR-1 decoupled it from
@@ -288,7 +299,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.core.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
             )
         })();
         // The slots' containers show their panels (a column opened, a tab
@@ -305,10 +316,20 @@ impl Host {
                 let detached = facts["slots"]["sidebar"]["effective"] == true
                     && facts["slots"]["sidebar"]["detached"] == true;
                 self.sync_floating(detached);
-                if facts != self.window_facts {
-                    self.measured_shell = Some(self.shell_generation);
-                    self.window_facts = facts.clone();
-                    self.broadcast("window.state", facts);
+                let changed = facts != self.window_facts;
+                if changed || self.policy_tabs() != self.tabs_sent {
+                    if changed {
+                        self.measured_shell = Some(self.shell_generation);
+                        self.window_facts = facts.clone();
+                    }
+                    let report = self.window_facts_report(Some(&shell), facts);
+                    // Rule R9: the facts go to the core as a snapshot. Until
+                    // plan step S3a it runs on this thread, so the report is
+                    // applied here, in place: at the point and in the order
+                    // of today's `window.state` broadcast (which the core
+                    // sends only when the facts changed, not for the tabs
+                    // alone).
+                    self.ui_report(UiReport::WindowFacts(Box::new(report)));
                 }
             }
             Err(error) => self.broadcast(
@@ -317,6 +338,118 @@ impl Host {
             ),
         }
         self.ui_state.save_if_due(now);
+    }
+    /// The UI's facts value `facts` as the core receives it (rule R9),
+    /// with the next `seq` of the UI's one counter. Besides the facts
+    /// themselves it carries what later steps read on the core (plan S2c
+    /// (5), S2d): the shell's generation, whether the shell has the menu
+    /// origin, picture-in-picture as `facts` shows it, and the columns' tab
+    /// order and bottom panel (`PanelTabs`, read on the core since plan
+    /// step S2c(5)). Also the R13 handoff of a mount batch and of
+    /// `layout.set` (`Host::facts_handoff`), and the tabs alone
+    /// (`report_tabs`). Without a shell: no generation, no menu origin.
+    pub(super) fn window_facts_report(
+        &mut self,
+        shell: Option<&slint_interpreter::ComponentInstance>,
+        facts: Value,
+    ) -> WindowFacts {
+        self.facts_seq += 1;
+        let pip = &facts["pictureInPicture"];
+        let tabs = self.policy_tabs();
+        self.tabs_sent = tabs.clone();
+        WindowFacts {
+            seq: self.facts_seq,
+            shell: shell.map(|_| self.shell_generation),
+            menu_origin: shell.is_some_and(|shell| {
+                shell.get_property("menu-origin-x").is_ok()
+                    && shell.get_property("menu-origin-y").is_ok()
+            }),
+            pip_supported: pip["supported"] == true,
+            pip_active: pip["active"] == true,
+            sidebar_panels: tabs.sidebar,
+            adjust_panels: tabs.adjust,
+            bottom_panel: tabs.bottom,
+            facts,
+        }
+    }
+    /// The panel policy's tabs (`state::PanelTabs`).
+    pub(crate) fn policy_tabs(&self) -> state::PanelTabs {
+        state::PanelTabs {
+            bottom: self.policy.bottom(),
+            sidebar: self.policy.sidebar_panels(),
+            adjust: self.policy.panels(window_state::Slot::Adjust),
+        }
+    }
+    /// The panel policy's tabs changed outside the window tick (a panel
+    /// attached, removed, reordered or rekeyed): the interface reports them
+    /// to the core at once (rule R9, plan step S2c(5)), with the facts it
+    /// last sent, so the core's copy is never behind the policy when it
+    /// judges a request. The facts themselves did not change, so the core
+    /// broadcasts nothing.
+    pub(crate) fn report_tabs(&mut self) {
+        if self.policy_tabs() == self.tabs_sent {
+            return;
+        }
+        let shell = self.shell.as_ref().map(ComponentHandle::clone_strong);
+        let facts = self.window_facts.clone();
+        let report = self.window_facts_report(shell.as_ref(), facts);
+        self.ui_report(UiReport::WindowFacts(Box::new(report)));
+    }
+    /// Debug builds: the core's copy of the tabs is the policy's wherever
+    /// the core reads it (plan step S2c(5): `report_tabs` after every
+    /// change). Removed with the in-place delivery (plan S3a).
+    #[cfg(debug_assertions)]
+    pub(crate) fn check_panel_tabs(&self) {
+        debug_assert_eq!(
+            self.core.panel_tabs,
+            self.policy_tabs(),
+            "the core's panel tabs are behind the policy"
+        );
+    }
+    /// A report of the UI reaches the core (rule R3), delivered in place on
+    /// this thread until plan step S3a. Plan step S2c(1): the window facts;
+    /// S2c(3): the mount reports and the `ui.setMount` result
+    /// (host/mounts.rs); S2c(4): the `settings.set` and `settings.show`
+    /// results; S2c(5): the tabs with the facts, `layout.set`'s result, a
+    /// sheet's confirmation and a confirmation that failed to show, and
+    /// where the user acted (`Acted`). The other reports follow in later
+    /// steps.
+    pub(crate) fn ui_report(&mut self, report: UiReport) {
+        match report {
+            UiReport::WindowFacts(facts) => {
+                // A value older than the one applied is skipped (module
+                // `messages`: a coalesced snapshot can overtake a handoff).
+                // The core broadcasts `window.state` from the facts (R9): its
+                // conditions and triggers are evaluated first (`broadcast`);
+                // a value with only the tabs changed broadcasts nothing.
+                if self.core.apply_facts(*facts) {
+                    let facts = self.core.window_facts.clone();
+                    self.broadcast("window.state", facts);
+                }
+            }
+            UiReport::MountPreparing(changes) => self.mounts_preparing(changes),
+            UiReport::MountApplied(applied) => self.mounts_applied(applied),
+            // R13: the handoff first, then the reply.
+            UiReport::Answered {
+                reply,
+                result,
+                handoff,
+                confirm_failed,
+            } => {
+                let changed = handoff.is_some_and(|facts| self.core.apply_facts(*facts));
+                (self.core.dialog_busy, self.core.confirm_open) = dialog_flags_after(
+                    (self.core.dialog_busy, self.core.confirm_open),
+                    confirm_failed,
+                );
+                self.respond(reply, result);
+                if changed {
+                    let facts = self.core.window_facts.clone();
+                    self.broadcast("window.state", facts);
+                }
+            }
+            UiReport::Acted { owner, origin } => self.core.act(owner, origin),
+            _ => unreachable!("not reported before plan step S2d"),
+        }
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
     /// fullscreen main window where the system shows no title bar there
@@ -377,7 +510,7 @@ impl Host {
     /// A title strip button: Minimize, Exit Fullscreen (the
     /// `exit-fullscreen` command) and Close (the window close button: Quit).
     pub(crate) fn title_strip_action(&mut self, action: &str) {
-        self.policy.activity(self.now_ms());
+        self.policy.activity(self.core.now_ms());
         match action {
             "minimize" => {
                 if let Some(shell) = &self.shell {
@@ -405,7 +538,7 @@ impl Host {
         };
         if self.ui_state.state.window != Some(frame) {
             self.ui_state.state.window = Some(frame);
-            self.ui_state.touch(self.now_ms());
+            self.ui_state.touch(self.core.now_ms());
         }
     }
     /// Record whether the main window is maximized and, where the system
@@ -417,7 +550,7 @@ impl Host {
         if state.window_maximized != maximized || state.window_physical != physical {
             state.window_maximized = maximized;
             state.window_physical = physical;
-            self.ui_state.touch(self.now_ms());
+            self.ui_state.touch(self.core.now_ms());
         }
     }
     /// The slot's remembered state (defaults before anything was saved).
@@ -476,7 +609,7 @@ impl Host {
             .policy
             .panels(slot_of)
             .iter()
-            .filter_map(|owner| self.mounts.get(owner).map(|m| m.manifest.clone()))
+            .filter_map(|owner| self.core.mounts.get(owner).map(|m| m.manifest.clone()))
             .collect::<Vec<_>>();
         let waiting = memory
             .active
@@ -486,11 +619,11 @@ impl Host {
             memory.active = self
                 .policy
                 .active(slot_of)
-                .and_then(|owner| self.mounts.get(&owner))
+                .and_then(|owner| self.core.mounts.get(&owner))
                 .map(|m| m.manifest.clone());
         }
         let current = manifests.iter().map(String::as_str).collect::<Vec<_>>();
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         match column {
             Column::Sidebar => {
                 let mut slot = self.sidebar_slot();
@@ -522,7 +655,7 @@ impl Host {
     /// Hide the whole sidebar (the floating window closed).
     pub(crate) fn close_sidebar(&mut self) {
         if let Some(owner) = self.policy.sidebar_active() {
-            let now = self.now_ms();
+            let now = self.core.now_ms();
             let _ = self
                 .policy
                 .set_preferred(window_state::Slot::Sidebar, owner, false, now);
@@ -554,7 +687,7 @@ impl Host {
             self.columns[index].woken = None;
             return;
         };
-        let Some(mount) = self.mounts.get(&owner) else {
+        let Some(mount) = self.core.mounts.get(&owner) else {
             return;
         };
         if mount.spec.slot != column.slot() {
@@ -619,7 +752,7 @@ impl Host {
             && let Some(floating) = &self.floating
         {
             set_index(&floating.instance, &floating.owners);
-            if let Some(mount) = active.and_then(|owner| self.mounts.get(&owner)) {
+            if let Some(mount) = active.and_then(|owner| self.core.mounts.get(&owner)) {
                 let title = SValue::String(mount.title.as_str().into());
                 if floating.instance.get_property("panel-title").ok().as_ref() != Some(&title) {
                     let _ = floating.instance.set_property("panel-title", title);
@@ -656,10 +789,11 @@ impl Host {
     /// with its current key, "" for none. Written only when the binding
     /// table, the commands, the shell or the tabs changed.
     fn tab_keys(&mut self, shell: &slint_interpreter::ComponentInstance, column: Column) {
+        self.sync_tables();
         let index = column.index();
         let from = (
             self.input.borrow().table.revision(),
-            self.commands.revision(),
+            self.registry.revision(),
             self.shell_generation,
             self.columns[index].tabs.clone(),
         );
@@ -671,11 +805,11 @@ impl Host {
             .iter()
             .map(|&owner| {
                 let plugin = panel_plugin(owner);
-                let entries = self.commands.entries_of(plugin);
+                let entries = self.registry.entries_of(plugin);
                 sidebar_tabs::tab_command(
                     entries
                         .iter()
-                        .map(|(entry, ..)| entry.declaration.home.as_deref()),
+                        .map(|entry| entry.declaration.home.as_deref()),
                 )
                 .and_then(|id| self.input.borrow().table.label(plugin, id))
                 .unwrap_or_default()
@@ -690,7 +824,7 @@ impl Host {
     pub(crate) fn tab_titles(&self, owners: &[u64]) -> Result<SValue> {
         let titles = owners
             .iter()
-            .filter_map(|owner| self.mounts.get(owner).map(|m| m.title.clone()))
+            .filter_map(|owner| self.core.mounts.get(owner).map(|m| m.title.clone()))
             .collect::<Vec<_>>();
         ui_values::from_json(&json!(titles))
     }
@@ -710,7 +844,7 @@ impl Host {
                 continue;
             }
             let p = column.prefix();
-            let events = self.events.clone();
+            let events = self.core.events.clone();
             window.set_callback(&format!("{p}-tab"), move |args| {
                 if let Some(SValue::Number(index)) = args.first()
                     && *index >= 0.
@@ -719,7 +853,7 @@ impl Host {
                 }
                 SValue::Void
             })?;
-            let events = self.events.clone();
+            let events = self.core.events.clone();
             window.set_callback(&format!("{p}-overflow"), move |args| {
                 if let [SValue::Number(x), SValue::Number(y)] = args {
                     let _ = events.send(Event::TabOverflow(generation, column, *x, *y));
@@ -727,13 +861,13 @@ impl Host {
                 SValue::Void
             })?;
         }
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("sidebar-detach", move |_| {
             let _ = events.send(Event::SidebarDetach(generation));
             SValue::Void
         })?;
         if has_adjust {
-            let events = self.events.clone();
+            let events = self.core.events.clone();
             window.set_callback("adjust-dismiss", move |_| {
                 let _ = events.send(Event::AdjustDismiss(generation));
                 SValue::Void
@@ -771,7 +905,8 @@ impl Host {
         let tabs = owners
             .iter()
             .map(|owner| {
-                self.mounts
+                self.core
+                    .mounts
                     .get(owner)
                     .cloned()
                     .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))
@@ -801,7 +936,7 @@ impl Host {
         self.bind_keys(&instance, generation)?;
         view::bind_focus(&instance)?;
         self.bind_tabs(&instance, generation)?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::FloatingClosed(generation));
             slint::CloseRequestResponse::KeepWindowShown
@@ -857,7 +992,7 @@ impl Host {
         if slot.floating != Some(frame) {
             slot.floating = Some(frame);
             self.ui_state.state.sidebar_slot = Some(slot);
-            self.ui_state.touch(self.now_ms());
+            self.ui_state.touch(self.core.now_ms());
         }
     }
     pub(crate) fn close_floating(&mut self) {
@@ -906,6 +1041,51 @@ impl Host {
         }
     }
 }
+impl Core {
+    /// Window facts (`UiReport::WindowFacts`, or the handoff of
+    /// `UiReport::Answered` and `UiReport::MountApplied`) reach the core's
+    /// copy when newer than the last applied (module `messages`), with the
+    /// panel tabs. Whether the core's facts value changed: then
+    /// `window.state` goes out (after the reply, for a handoff). The
+    /// interface sends a snapshot only when its facts or its tabs changed,
+    /// and its last facts are the core's, so "changed" is today's
+    /// condition for the broadcast.
+    pub(crate) fn apply_facts(&mut self, facts: WindowFacts) -> bool {
+        if !facts.newer_than(self.window_facts_seq) {
+            return false;
+        }
+        let WindowFacts {
+            seq,
+            facts,
+            sidebar_panels,
+            adjust_panels,
+            bottom_panel,
+            ..
+        } = facts;
+        self.window_facts_seq = Some(seq);
+        self.panel_tabs = state::PanelTabs {
+            bottom: bottom_panel,
+            sidebar: sidebar_panels,
+            adjust: adjust_panels,
+        };
+        let changed = self.window_facts != facts;
+        self.window_facts = facts;
+        changed
+    }
+}
+
+/// The native-dialog flags (`dialog_busy`, `confirm_open`) after a
+/// `UiReport::Answered`: only a system confirmation's failure to show
+/// (`confirm_failed`) clears them, as `platform::confirm`'s own error did
+/// before plan step S2c(5); any other answer leaves them, also an error of
+/// another request of the same plugin with the same id.
+fn dialog_flags_after(flags: (bool, bool), confirm_failed: bool) -> (bool, bool) {
+    if confirm_failed {
+        (false, false)
+    } else {
+        flags
+    }
+}
 
 /// What a tick records of the main window for the next launch (IA-CORE-03).
 #[derive(Debug, PartialEq, Eq)]
@@ -947,5 +1127,38 @@ mod tests {
             assert_eq!(record(false, maximized, true), Record::Nothing);
             assert_eq!(record(true, maximized, true), Record::Nothing);
         }
+    }
+
+    /// Review of S2c(5): `dialogs.confirm` id 7 shows a system dialog,
+    /// then the same plugin's `settings.set` id 7 is answered with an
+    /// error (the host tolerates a repeated id). That answer is not the
+    /// confirmation's: the dialog is still open, so `dialog_busy` and
+    /// `confirm_open` stay set (`window.state.dialogOpen`, the `busy`
+    /// refusal of a second dialog, `Busy::Dialog`). Only the report marked
+    /// `confirm_failed` clears them.
+    #[test]
+    fn only_the_confirmations_own_failure_clears_the_dialog_flags() {
+        let reply = Reply { owner: 3, id: 7 };
+        let settings_error = UiReport::Answered {
+            reply: reply.clone(),
+            result: Err(RpcError::invalid("value does not convert")),
+            handoff: None,
+            confirm_failed: false,
+        };
+        let confirm_error = UiReport::Answered {
+            reply,
+            result: Err(RpcError::new("unavailable", "no dialog")),
+            handoff: None,
+            confirm_failed: true,
+        };
+        let open = (true, true);
+        for (report, expected) in [(settings_error, open), (confirm_error, (false, false))] {
+            let UiReport::Answered { confirm_failed, .. } = report else {
+                unreachable!()
+            };
+            assert_eq!(dialog_flags_after(open, confirm_failed), expected);
+        }
+        // A file picker open (busy, no confirmation): only the marker clears.
+        assert_eq!(dialog_flags_after((true, false), false), (true, false));
     }
 }

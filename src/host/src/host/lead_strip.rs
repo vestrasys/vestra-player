@@ -188,14 +188,14 @@ impl Host {
     /// its `strip` text when it gave one (SDK 1.8.0), else its `text` (the
     /// palette's row always shows `text`).
     fn lead_working(&self) -> Option<&str> {
-        self.lead.as_ref()?.row.working_strip()
+        self.core.lead.as_ref()?.row.working_strip()
     }
     /// The holder set an end state (`palette.lead.set`): the strip shows it
     /// once, in place of any step.
     pub(crate) fn lead_ended(&mut self, status: &LeadStatus) {
         // The state only: the text may quote the user's request.
         diag!("lead strip: {}", status.state.name());
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         self.lead_strip.step = None;
         self.lead_strip.ended = Some(Ended {
             text: status.text.clone(),
@@ -218,7 +218,11 @@ impl Host {
     /// end state still on screen (a new request); no status or no lead ends
     /// the steps.
     pub(crate) fn lead_strip_follow(&mut self) {
-        let status = self.lead.as_ref().and_then(|lead| lead.row.status.as_ref());
+        let status = self
+            .core
+            .lead
+            .as_ref()
+            .and_then(|lead| lead.row.status.as_ref());
         match status {
             Some(status) if status.state == StatusState::Working => {
                 if self.lead_strip.step.is_none() {
@@ -232,7 +236,7 @@ impl Host {
     /// Write the strip into the shell if it changed.
     pub(crate) fn refresh_strip(&mut self) {
         let covered = self.menu_open && self.menu_generation == self.shell_generation;
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let cached = self.lead_strip.animations;
         let mut read = None;
         let next = project(
@@ -276,7 +280,7 @@ impl Host {
             .lead_strip
             .step
             .as_ref()
-            .is_some_and(|step| !self.command_runs.is_live(&step.ticket, now))
+            .is_some_and(|step| !self.core.command_runs.is_live(&step.ticket, now))
         {
             self.lead_strip.step = None;
         }

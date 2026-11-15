@@ -110,7 +110,8 @@ impl Host {
             self.close_menu();
         }
         #[cfg(feature = "producer-audio")]
-        self.physical_revoke(producer_input::RevokeReason::Menu);
+        self.core
+            .physical_revoke(producer_input::RevokeReason::Menu);
         self.menu_open = true;
         self.menu_generation = self.shell_generation;
         self.menu_mode = MenuMode::Palette;
@@ -135,32 +136,34 @@ impl Host {
         // The status strip yields: the first row shows the status.
         self.refresh_strip();
     }
-    /// The shown name of each plugin with commands, by manifest id.
-    fn plugin_names(&self) -> BTreeMap<String, String> {
-        let mut names = BTreeMap::new();
-        for plugin in self.plugins.values() {
-            let catalog = plugin.origin().catalog;
-            names.insert(
-                plugin.manifest.id.clone(),
-                package_manager::display_name(&plugin.manifest, catalog.as_deref()),
-            );
-        }
-        names
-    }
-    /// The commands the palette lists, as they are now (also
-    /// `commands.list` and `commands.run`).
+    /// The commands the open palette lists: from the interface's copies
+    /// of the tables (rule R8; `refresh_menu` took the newest).
     pub(crate) fn palette_items(&self) -> Vec<Item> {
-        let names = self.plugin_names();
+        self.items_of(&self.registry.shown_entries(), &self.labels())
+    }
+    /// The commands the palette lists, from the core's own tables: what
+    /// `commands.list` answers and `commands.run` checks against.
+    pub(crate) fn listed_items(&self) -> Vec<Item> {
+        let bindings = self.core.bindings();
+        self.items_of(&self.core.commands.shown_entries(), &|owner, id| {
+            bindings.label(owner, id)
+        })
+    }
+    /// The palette's items of `entries`, with the keys `labels` gives.
+    fn items_of(
+        &self,
+        entries: &[commands::CommandSnapshot],
+        labels: &dyn Fn(u64, &str) -> Option<String>,
+    ) -> Vec<Item> {
+        let names = self.core.plugin_names();
         let name = |id: &str| {
             names
                 .get(id)
                 .cloned()
-                .or_else(|| self.on_demand.name_of(id).map(str::to_owned))
+                .or_else(|| self.core.on_demand.name_of(id).map(str::to_owned))
                 .unwrap_or_else(|| id.to_owned())
         };
-        let labels = self.labels();
-        let entries = self.commands.shown_entries();
-        command_palette::items(&entries, &name, &labels)
+        command_palette::items(entries, &name, labels)
     }
     /// The lead was set, changed or cleared (`palette.lead`): an open
     /// palette shows it now; `moved` (it came or went) places the cursor
@@ -189,6 +192,7 @@ impl Host {
         );
         let (_, size) = super::menus::menu_frame(window);
         let lead = self
+            .core
             .lead
             .as_ref()
             .map(|lead| (lead.owner, lead.row.clone()));
@@ -313,6 +317,7 @@ impl Host {
     fn run_lead(&mut self, keep: bool) {
         let query = self.palette.query.clone();
         let has_status = self
+            .core
             .lead
             .as_ref()
             .is_some_and(|lead| lead.row.status.is_some());
@@ -339,7 +344,7 @@ impl Host {
     /// `lead:<query>@<ms>`, headless): the row showed the holder's status
     /// when it has one and nothing is typed.
     pub(crate) fn lead_activated(&mut self, query: String, keep: bool) {
-        let Some(lead) = &self.lead else {
+        let Some(lead) = &self.core.lead else {
             return;
         };
         let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query);
@@ -349,7 +354,7 @@ impl Host {
     /// the user activated the status (Enter on the status row, the strip's
     /// Stop), which stops the running request.
     pub(crate) fn lead_event(&mut self, query: String, keep: bool, status: bool) {
-        let Some(lead) = &self.lead else {
+        let Some(lead) = &self.core.lead else {
             return;
         };
         let owner = lead.owner;
@@ -358,11 +363,11 @@ impl Host {
         // Vestra's consent, the commands it runs) go to its sheet, with the
         // request box, even after the holder's own window was shown.
         self.act(owner, origins::Origin::Lead);
-        let now = self.now_ms();
-        let ticket = self.command_runs.mint(owner, &query, now);
+        let now = self.core.now_ms();
+        let ticket = self.core.command_runs.mint(owner, &query, now);
         // A new request: its end state shows even when it is the same as
         // the last one's (the same failure twice in a row).
-        if let Some(lead) = self.lead.as_mut() {
+        if let Some(lead) = self.core.lead.as_mut() {
             lead.ended = None;
         }
         input_trace::follow(&format!("palette lead to plugin {owner} (keep {keep})"));
@@ -453,7 +458,7 @@ impl Host {
                     return;
                 }
                 command_palette::remember(&mut self.ui_state.state.palette_recent, &item.global);
-                let now = self.now_ms();
+                let now = self.core.now_ms();
                 self.ui_state.touch(now);
                 // Kept open: the cursor stays on this command wherever it
                 // now sorts (the recent list reorders an empty query).
@@ -484,14 +489,14 @@ impl Host {
         let send = move |events: &mpsc::Sender<Event>, action: PaletteAction| {
             let _ = events.send(Event::MenuAction(generation, MenuAction::Palette(action)));
         };
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("palette-edited", move |args| {
             if let Some(SValue::String(text)) = args.first() {
                 send(&events, PaletteAction::Query(text.to_string()));
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("palette-moved", move |args| {
             if let Some(SValue::Number(by)) = args.first()
                 && by.is_finite()
@@ -500,7 +505,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("palette-scrolled", move |args| {
             if let Some(SValue::Number(by)) = args.first()
                 && by.is_finite()
@@ -509,7 +514,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("palette-run", move |args| {
             let slot = match args.first() {
                 Some(SValue::Number(slot)) if *slot >= 0. => Some(*slot as usize),
@@ -520,6 +525,20 @@ impl Host {
             SValue::Void
         })?;
         Ok(())
+    }
+}
+impl Core {
+    /// The shown name of each plugin with commands, by manifest id.
+    fn plugin_names(&self) -> BTreeMap<String, String> {
+        let mut names = BTreeMap::new();
+        for plugin in self.plugins.values() {
+            let catalog = plugin.origin().catalog;
+            names.insert(
+                plugin.manifest.id.clone(),
+                package_manager::display_name(&plugin.manifest, catalog.as_deref()),
+            );
+        }
+        names
     }
 }
 

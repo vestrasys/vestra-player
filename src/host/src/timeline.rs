@@ -10,9 +10,13 @@ use serde_json::{Value, json};
 use std::collections::BTreeMap;
 
 pub const MAX_MARKS: usize = 1000;
-/// Ranges in one layer: a seek line with more bands than this is
-/// unreadable, and the reader draws every one.
-pub const MAX_RANGES: usize = 100;
+/// Ranges in one list: a timeline layer's (`timeline.setRanges`), and the
+/// range list of a trigger's position condition when it comes (one number
+/// for both, SDK `TIMELINE_LIMITS.ranges`). The seek line draws them merged
+/// per physical pixel column (the playback plugin's `seekRanges`): at most
+/// half the line's width in rectangles, whatever this is. Drawing cost:
+/// `ui::widgets_tests::range_band_frame_time`.
+pub const MAX_RANGES: usize = 1000;
 pub const MAX_TITLE: usize = 100;
 /// `timeline.changed` is pushed at most this often.
 const PUSH_MS: u64 = 100;
@@ -94,7 +98,7 @@ pub fn parse(
         .collect()
 }
 
-/// Validate one `layer.setRanges` list: ≤ 100 ranges, known styles, titles
+/// Validate one `layer.setRanges` list: ≤ `MAX_RANGES` ranges, known styles, titles
 /// ≤ 100 characters, `0 ≤ start < end`, and `end` within the media while
 /// its duration is known.
 pub fn parse_ranges(
@@ -166,6 +170,25 @@ impl Timeline {
         self.set(owner, Vec::new());
         self.set_ranges(owner, Vec::new());
     }
+    /// A parked owner woke as `to` (`Capability::rekey`): its layer, kept
+    /// through standby (events-and-triggers.md §4.8), is the new run's.
+    /// Readers are told only when the merged lists change (marks of two
+    /// plugins at the same time keep layer order, which follows the owner).
+    pub fn rekey(&mut self, from: u64, to: u64) {
+        if from == to || !self.holds(from) {
+            return;
+        }
+        let before = (self.merged(), self.merged_ranges());
+        if let Some(marks) = self.layers.remove(&from) {
+            self.layers.insert(to, marks);
+        }
+        if let Some(ranges) = self.ranges.remove(&from) {
+            self.ranges.insert(to, ranges);
+        }
+        if (self.merged(), self.merged_ranges()) != before {
+            self.revision += 1;
+        }
+    }
     pub fn clear(&mut self) {
         if !self.layers.is_empty() || !self.ranges.is_empty() {
             self.layers.clear();
@@ -201,6 +224,14 @@ impl Timeline {
 }
 
 impl Host {
+    pub(super) fn timeline_tick(&mut self) {
+        let now = self.core.now_ms();
+        if let Some(lists) = self.core.timeline.due(now) {
+            self.broadcast("timeline.changed", lists);
+        }
+    }
+}
+impl Core {
     pub(super) fn timeline_dispatch(
         &mut self,
         owner: u64,
@@ -239,12 +270,6 @@ impl Host {
         let generation = |state: &Value| state["stamp"]["generation"].as_u64();
         if generation(previous) != generation(next) {
             self.timeline.clear();
-        }
-    }
-    pub(super) fn timeline_tick(&mut self) {
-        let now = self.now_ms();
-        if let Some(lists) = self.timeline.due(now) {
-            self.broadcast("timeline.changed", lists);
         }
     }
 }
@@ -366,6 +391,22 @@ mod tests {
         assert_eq!(timeline.due(500).unwrap()["ranges"], json!([]));
     }
 
+    /// SDK 1.10.0 / player 0.10.0: 1000 ranges, as many as marks (it was 100).
+    #[test]
+    fn a_layer_holds_1000_ranges() {
+        let many: Vec<_> = (0..1001)
+            .map(|i| range(i as f64, i as f64 + 0.5, "region"))
+            .collect();
+        assert_eq!(
+            parse_ranges(&json!(many[..1000]), "a", None).unwrap().len(),
+            1000
+        );
+        assert_eq!(
+            parse_ranges(&json!(many), "a", None).unwrap_err(),
+            "a layer holds at most 1000 ranges"
+        );
+    }
+
     #[test]
     fn range_limits_are_invalid() {
         let many: Vec<_> = (0..=MAX_RANGES)
@@ -390,6 +431,81 @@ mod tests {
         }
         // Without a duration only the order is checked.
         assert!(parse_ranges(&json!([range(600., 700., "region")]), "a", None).is_ok());
+    }
+
+    /// Events-and-triggers.md §4.8: a parked owner's layer stays under its
+    /// holder and moves to the woken run unchanged (readers are told
+    /// nothing); the run's next write replaces it; a new source clears it
+    /// with every other layer; removing the holder (its standby ended for
+    /// good) removes it.
+    #[test]
+    fn a_kept_layer_moves_to_the_woken_run_and_is_replaced_or_cleared() {
+        let mut timeline = Timeline::default();
+        // Plugin "b" marks from 10 s, so the merged order is by time alone.
+        let marks = |n: usize, plugin: &str| {
+            let from = if plugin == "b" { 10. } else { 0. };
+            parse(
+                &json!(
+                    (0..n)
+                        .map(|i| mark(from + i as f64, "marker"))
+                        .collect::<Vec<_>>()
+                ),
+                plugin,
+                None,
+            )
+            .unwrap()
+        };
+        timeline.set(7, marks(1, "a"));
+        timeline.set_ranges(
+            7,
+            parse_ranges(&json!([range(1., 2., "region")]), "a", None).unwrap(),
+        );
+        timeline.set(9, marks(2, "b"));
+        let pushed = timeline.due(0).unwrap();
+        assert_eq!(pushed["marks"].as_array().unwrap().len(), 3);
+        // Parked as 7, woken as 12: the same lists, nothing to push.
+        timeline.rekey(7, 12);
+        assert!(!timeline.holds(7) && timeline.holds(12));
+        assert!(timeline.due(500).is_none(), "the lists did not change");
+        assert_eq!(timeline.snapshot(), pushed);
+        // A holder with nothing, or the same owner: nothing happens.
+        timeline.rekey(30, 31);
+        timeline.rekey(12, 12);
+        assert!(!timeline.holds(31) && timeline.holds(12));
+        assert!(timeline.due(600).is_none());
+        // Its next write replaces its list (2 marks, not 1 + 2).
+        timeline.set(12, marks(2, "a"));
+        let after = timeline.due(700).unwrap();
+        let mine = after["marks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|m| m["plugin"] == "a")
+            .count();
+        assert_eq!(mine, 2);
+        assert_eq!(after["ranges"].as_array().unwrap().len(), 1);
+        // A woken run that lands among others with marks at the same time
+        // changes the merged order: readers are told.
+        let mut order = Timeline::default();
+        order.set(5, marks(1, "x"));
+        order.set(6, marks(1, "y"));
+        order.due(0);
+        order.rekey(5, 8);
+        assert_eq!(
+            order.due(200).unwrap()["marks"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|m| m["plugin"].as_str().unwrap())
+                .collect::<Vec<_>>(),
+            ["y", "x"]
+        );
+        // Removed when its standby ends; cleared by a new source.
+        timeline.remove_owner(12);
+        assert!(!timeline.holds(12) && timeline.holds(9));
+        timeline.set(12, marks(1, "a"));
+        timeline.clear();
+        assert!(!timeline.holds(12) && !timeline.holds(9));
     }
 
     #[test]

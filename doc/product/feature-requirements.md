@@ -2697,7 +2697,7 @@ Manifest capabilities: `commands`, `events`, `playback.read`, `ui.osd`, `ui.sett
 | Screen ▸ When Playback Starts ▸ Don't Resize · 0.5× · 1× · 1.5× · 2× · Fit to Video Aspect Ratio (radio, default 1×) | 716–721 / screen-auto | — | G-02 |
 | Screen ▸ When Playback Starts ▸ Only Once (checkbox, off by default) | 722 / screen-auto-once | — | G-02; a separator between it and the radio items |
 | Screen ▸ Always on Top ▸ Cycle Mode | 725 / screen-top | Ctrl+T | |
-| Screen ▸ Always on Top ▸ Never · Always · While Playing · While Playing in Fullscreen (radio, default the last one) | 726–729 / screen-top-mode | — | A separator between them and "Cycle Mode"; IA-WIN-03 |
+| Screen ▸ Always on Top ▸ Never · Always · While Playing · While Playing in Fullscreen (radio, default Never, user ruling 2026-11-15) | 726–729 / screen-top-mode | — | A separator between them and "Cycle Mode"; IA-WIN-03 |
 | Playback ▸ Hide Pointer While Playing (checkbox) | 241 / playback-options | — | Placed in the playback domain, in the same group as playback's 240, 242, 243 |
 
 Conflict check: 1, 2, 3, 4, 8, `` ` `` and Ctrl+T are not used by any command now. On macOS a Ctrl binding can also be triggered with ⌘: ⌘T does not conflict with a system shortcut. ⌘` (cycle windows of the same app) is not affected, because mini size binds `` ` `` without modifiers. The digit keys 1–4 and 8 are global bindings; if another domain (for example aspect ratio presets) wants digit keys later, they have to be allocated together in menus.md.
@@ -2805,9 +2805,9 @@ Reason: the window size is controlled by the host, and only the host knows how t
 
 ### H05 On top: always / while playing / while fullscreen
 
-> Item 6 and the default have been superseded by IA-WIN-03 in the [interaction spec](interaction-spec.md): four modes, default "While Playing in Fullscreen"; mini size is no longer on top (IA-WIN-02).
+> Item 6 and the default have been superseded by IA-WIN-03 in the [interaction spec](interaction-spec.md): four modes, default "Never" (user ruling 2026-11-15; "While Playing in Fullscreen" until window plugin 0.1.8); mini size is no longer on top (IA-WIN-02).
 
-**Requirement**: choose how the main window stays on top: never, always, while playing, while playing in fullscreen (default). When on top, the main window floats above other applications' windows.
+**Requirement**: choose how the main window stays on top: never, always, while playing, while playing in fullscreen; default never (IA-WIN-03). When on top, the main window floats above other applications' windows.
 
 **Entry points**
 - "Screen ▸ Always on Top ▸ Never · Always · While Playing · While Playing in Fullscreen" (radio); the same radio group on the "Options ▸ Playback ▸ Window" settings page.
@@ -2816,12 +2816,12 @@ Reason: the window size is controlled by the host, and only the host knows how t
 **Behavior details**
 1. Always: call `setAlwaysOnTop(true)` immediately.
 2. While playing: on top when `phase === "ready" && !paused`; cancelled on pause, end, close or error; follows immediately when switching back and forth.
-3. When the core puts the window on top, the main window and the floating sidebar window use the same floating level. Tool windows opened while on top use the same level too, so they are not hidden behind the main window. System file dialogs are not affected.
+3. When the core puts the window on top, the main window and the floating sidebar window use the same floating level. Tool windows opened while on top use the same level too, so they are not hidden behind the main window. While a system dialog is open (a file dialog of `dialogs.open` or `media.sources.locate`, a system confirmation) the core holds nothing on top, whatever the mode, and applies the mode again when it closes; file dialogs are owned by the requesting tool window, else the main window, so they are never under the player (IA-WIN-03 item 7).
 4. Messages: "Always on top: Always", "Always on top: While playing", "Always on top: While playing in fullscreen", "Always on top: Off".
 5. When the plugin is disabled, the core cancels on-top.
-6. While playing in fullscreen: on top when `window.state.fullscreen && phase === "ready" && !paused`, otherwise not; follows `window.onChange` and the playback state. macOS fullscreen uses a separate Space where the main window is already frontmost, so this mode has no visible effect on macOS; it is still offered and is the default, so that the settings are the same on both systems; on Windows the effect is visible. (The former item 6 "not offered" has been superseded by IA-WIN-03.)
+6. While playing in fullscreen: on top when `window.state.fullscreen && phase === "ready" && !paused`, otherwise not; follows `window.onChange` and the playback state. macOS fullscreen uses a separate Space where the main window is already frontmost, so this mode has no visible effect on macOS; it is still offered, so that the settings are the same on both systems; on Windows the effect is visible. (The former item 6 "not offered" has been superseded by IA-WIN-03.)
 
-**Persistence**: `onTop: "never" | "always" | "playing" | "fullscreen"` in `settings.json`, default `"fullscreen"`; values already saved are kept.
+**Persistence**: `onTop: "never" | "always" | "playing" | "fullscreen"` in `settings.json`, default `"never"` (IA-WIN-03, user ruling 2026-11-15), with `onTopChosen: boolean`, set to true when the user chooses a mode (menu, Ctrl+T, palette, settings page). A mode not chosen follows the default. A file without `onTopChosen` (window plugin 0.1.8 or older, which saved the whole object whenever any setting changed) counts a stored `"fullscreen"`, the old default, as not chosen, so it becomes `"never"`; any other stored mode counts as chosen and is kept.
 
 **Implementation**: actual on-top = always, or (while playing and playing), or (while playing in fullscreen and fullscreen and playing); `setAlwaysOnTop` is called only when this value changes, and nothing is sent at activation when the value is "not on top" (so a value another plugin wrote last is not overwritten). Mini size takes no part (IA-WIN-02).
 
@@ -2837,7 +2837,7 @@ Reason: the window level (NSWindow level) can only be set by the host.
 - After choosing "Always", click Finder: the player stays above the Finder window.
 - After choosing "While Playing", pause: Finder can cover the player; after resuming, the player comes back on top.
 - Ctrl+T cycles through the four modes with the correct message text.
-- On first launch the dot is on "While Playing in Fullscreen"; while playing in windowed mode, Finder can cover the player.
+- On first launch the dot is on "Never" (IA-WIN-03); while playing in windowed mode, Finder can cover the player.
 - The mode is kept after a restart.
 
 **Notes**: there is no "Other" menu; it goes under "Screen".

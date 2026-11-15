@@ -5,9 +5,9 @@
 //! here for the file dialog (`Event::SourceLocate`). Exports of their parts
 //! are `jobs.start` / `jobs.check` with `parts` (`media_control.rs`).
 use super::{Capability, Handled, Info, Recorded, forward_media, plugin};
-use crate::{
-    host::{Event, Host, Reply, RpcError},
-    i18n,
+use crate::host::{
+    Host, Reply, RpcError,
+    messages::{DialogPurpose, DialogRequest, UiCommand},
 };
 use serde_json::{Value, json};
 
@@ -76,13 +76,13 @@ pub(crate) fn locate_dialog(
     reply: &Reply,
     fields: Value,
 ) -> std::result::Result<(), RpcError> {
-    if host.headless {
+    if host.core.headless {
         return Err(RpcError::new(
             "unavailable",
             "native dialogs require a running native window",
         ));
     }
-    if host.dialog_busy {
+    if host.core.dialog_busy {
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
     // One dialog per plugin every few seconds: a plugin cannot put up one
@@ -105,30 +105,19 @@ pub(crate) fn locate_dialog(
         last.retain(|_, at| now.duration_since(*at) < LOCATE_INTERVAL);
         last.insert(reply.owner, now);
     }
-    let name = fields["name"].as_str().unwrap_or_default();
-    let mut dialog =
-        rfd::AsyncFileDialog::new().set_title(i18n::tr_args("Locate {}", &json!([name])));
-    if let Some(directory) = fields["directory"]
-        .as_str()
-        .map(std::path::Path::new)
-        .filter(|d| d.is_dir())
-    {
-        dialog = dialog.set_directory(directory);
-    }
-    if !name.is_empty() {
-        dialog = dialog.set_file_name(name);
-    }
-    // RFD creates the native operation on this Slint main thread; only
-    // awaiting its completion belongs to the worker.
-    let task = dialog.pick_file();
-    let events = host.events.clone();
-    let reply = reply.clone();
-    std::thread::spawn(move || {
-        let path = pollster::block_on(task).map(|file| file.path().to_path_buf());
-        let _ = events.send(Event::SourceLocated(reply, fields, path));
-    });
-    host.dialog_busy = true;
+    // Busy before it shows (`dialogs.open`). The interface creates the
+    // dialog (`UiCommand::Dialog`, plan step S2c(5)), owned like
+    // `dialogs.open`'s (`origins::dialog_place`); its choice comes back as
+    // `Event::SourceLocated`.
+    host.core.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
-    host.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    host.core
+        .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    let place = host.dialog_place(reply.owner);
+    host.ui_command(UiCommand::Dialog(DialogRequest {
+        reply: reply.clone(),
+        purpose: DialogPurpose::Locate(fields),
+        place,
+    }));
     Ok(())
 }

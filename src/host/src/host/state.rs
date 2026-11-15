@@ -3,6 +3,110 @@
 use super::*;
 use crate::playback::renderer::GpuBackend as _;
 
+/// The panel policy's tabs (`window_state::Policy`) as the interface
+/// reports them with its window facts (rule R9; plan step S2c(5)): the
+/// bottom bar's panel and each column's panels in tab order. A column
+/// holds at least one panel or does not exist, and its current tab is one
+/// of its panels. The core keeps the last one reported
+/// (`Core::panel_tabs`) and judges from it what the policy would refuse
+/// (`window_state::Error::MissingOwner`, `Docked`).
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct PanelTabs {
+    pub(crate) bottom: Option<u64>,
+    pub(crate) sidebar: Vec<u64>,
+    pub(crate) adjust: Vec<u64>,
+}
+
+impl PanelTabs {
+    /// A column's panels (`None`: the bottom bar, which has no column).
+    fn column(&self, slot: window_state::Slot) -> Option<&[u64]> {
+        match slot {
+            window_state::Slot::Bottom => None,
+            window_state::Slot::Sidebar => Some(&self.sidebar),
+            window_state::Slot::Adjust => Some(&self.adjust),
+        }
+    }
+    /// The column holding `owner`'s panel (`Policy::tabs_mut`).
+    fn column_of(&self, owner: u64) -> Option<window_state::Slot> {
+        [window_state::Slot::Sidebar, window_state::Slot::Adjust]
+            .into_iter()
+            .find(|&slot| self.column(slot).is_some_and(|tabs| tabs.contains(&owner)))
+    }
+    /// The column of `slot` exists (has a panel, so a current tab).
+    fn has_column(&self, slot: window_state::Slot) -> bool {
+        self.column(slot).is_some_and(|tabs| !tabs.is_empty())
+    }
+    /// `Policy::set_locks`, `set_preferred` and `switch` for `owner` in
+    /// `slot`: the bottom bar's panel, or one of the column's.
+    pub(crate) fn holds(
+        &self,
+        slot: window_state::Slot,
+        owner: u64,
+    ) -> std::result::Result<(), window_state::Error> {
+        let held = match self.column(slot) {
+            None => self.bottom == Some(owner),
+            Some(tabs) => tabs.contains(&owner),
+        };
+        held.then_some(()).ok_or(window_state::Error::MissingOwner)
+    }
+    /// `Policy::set_active`: a panel of either column.
+    fn set_active(&self, owner: u64) -> std::result::Result<(), window_state::Error> {
+        self.column_of(owner)
+            .map(|_| ())
+            .ok_or(window_state::Error::MissingOwner)
+    }
+    /// `Policy::set_detached` for a panel of `column` (`None`: of none).
+    fn set_detached(
+        column: Option<window_state::Slot>,
+    ) -> std::result::Result<(), window_state::Error> {
+        match column {
+            None => Err(window_state::Error::MissingOwner),
+            Some(window_state::Slot::Adjust) => Err(window_state::Error::Docked),
+            Some(_) => Ok(()),
+        }
+    }
+    /// `layout.set`'s steps on the policy, in its order (the current tab,
+    /// floating, the preference; `Host::layout_apply`), for `change` in
+    /// `slot` whose first panel is `first`: the panel the steps go
+    /// through is the column's current tab, else `first`. `Err` when a
+    /// step is refused before any step took effect: nothing changes, and
+    /// the core refuses at once. A step refused after an earlier one took
+    /// effect is the interface's to report, after that earlier step (as
+    /// today), so that case is `Ok`.
+    pub(crate) fn judge_layout(
+        &self,
+        slot: composition::Slot,
+        policy_slot: window_state::Slot,
+        change: &LayoutChange,
+        first: u64,
+    ) -> std::result::Result<(), window_state::Error> {
+        let current = slot.tabbed() && self.has_column(policy_slot);
+        let mut changed = false;
+        if let Some(active) = change.active
+            && slot.tabbed()
+        {
+            self.set_active(active)?;
+            changed = true;
+        }
+        if change.detached.is_some() {
+            let column = if current {
+                Some(policy_slot)
+            } else {
+                self.column_of(first)
+            };
+            match Self::set_detached(column) {
+                Err(error) if !changed => return Err(error),
+                Err(_) => return Ok(()),
+                Ok(()) => changed = true,
+            }
+        }
+        if change.visible.is_some() && !current && !changed {
+            self.holds(policy_slot, first)?;
+        }
+        Ok(())
+    }
+}
+
 /// What a `layout.set` changes: the preference, floating, the current tab.
 #[derive(Debug, PartialEq)]
 pub(crate) struct LayoutChange {
@@ -71,24 +175,14 @@ pub(crate) fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot>
 }
 
 impl Host {
-    /// Merge the sequence provider's flags into a source state (C6).
-    pub(crate) fn patch_source(&self, state: &mut Value) {
-        if state.is_object() {
-            let (next, previous) = self
-                .sequence
-                .map(|(_, next, previous)| (next, previous))
-                .unwrap_or((false, false));
-            state["sequence"] = json!({"next":next,"previous":previous});
-        }
-    }
     /// Re-send the last source state with the current sequence flags.
     pub(crate) fn rebroadcast_source(&mut self) {
-        if self.last_source.is_object() {
-            let mut state = self.last_source.clone();
-            self.patch_source(&mut state);
-            self.last_source = state.clone();
+        if self.core.last_source.is_object() {
+            let mut state = self.core.last_source.clone();
+            self.core.patch_source(&mut state);
+            self.core.last_source = state.clone();
             self.broadcast("source.state", state);
-            self.core_action_states();
+            self.core.core_action_states();
         }
     }
     /// R-U3: follow the source into `no-video`; an empty source also drops
@@ -97,12 +191,13 @@ impl Host {
     /// art as a video track while one is mounted (from the next file opened).
     pub(crate) fn backdrop_cover_art(&mut self) {
         let mounted = self
+            .core
             .mounts
             .values()
             .any(|m| m.spec.slot == composition::Slot::Backdrop);
         if mounted != self.cover_art_off {
             self.cover_art_off = mounted;
-            let _ = self.backend.commands.send(Command {
+            let _ = self.core.backend.commands.send(Command {
                 reply: Reply {
                     owner: bindings::HOST,
                     id: 0,
@@ -113,15 +208,16 @@ impl Host {
         }
     }
     pub(crate) fn backdrop_source(&mut self) {
-        self.video_absent = composition::video_absent(self.video_absent, &self.last_source);
-        let next = composition::no_video(self.no_video, &self.last_source);
-        let empty = self.last_source["phase"] == "empty";
+        self.video_absent = composition::video_absent(self.video_absent, &self.core.last_source);
+        let next = composition::no_video(self.no_video, &self.core.last_source);
+        let empty = self.core.last_source["phase"] == "empty";
         let Some(shell) = &self.shell else {
             self.no_video = next;
             return;
         };
         // GPU frames are not kept in `last_image`: clear once per empty phase.
         let gpu = self
+            .core
             .backend
             .render
             .gpu()
@@ -141,7 +237,7 @@ impl Host {
     }
     /// C9: "<source name> - Vestra Player", or "Vestra Player" without a source.
     pub(crate) fn update_title(&mut self) {
-        let source = &self.last_source;
+        let source = &self.core.last_source;
         let name = match source["source"].as_str() {
             None => None,
             Some(_) if source["kind"] == "producer" => None,
@@ -176,7 +272,7 @@ impl Host {
     /// Keep the sleep assertion in line with what is playing: ready and not
     /// paused (media or stream), video when a frame arrived within a second.
     pub(crate) fn power_tick(&mut self) {
-        let source = &self.last_source;
+        let source = &self.core.last_source;
         let playback = power::Playback {
             playing: source["phase"] == "ready" && source["paused"] == false,
             video: self
@@ -188,12 +284,14 @@ impl Host {
         }
     }
     /// `window.setAlwaysOnTop`: every ordinary window of the application at
-    /// the floating level, applied again when windows open or close.
+    /// the floating level, applied again when windows open or close; not
+    /// while a system dialog is open (`window_control::floating`), and
+    /// back when it closes (the next tick).
     pub(crate) fn apply_on_top(&mut self) {
-        if self.headless {
+        if self.core.headless {
             return;
         }
-        let want = self.on_top.get();
+        let want = window_control::floating(self.on_top.get(), self.core.dialog_busy);
         let count = platform::window_count();
         if self.on_top_applied == Some((want, count)) {
             return;
@@ -211,13 +309,13 @@ impl Host {
     /// with `appearance`, the file resolvers' extensions (`fileTypes`, from
     /// the `resolvers.fileTypes` event), `language` and `locale`.
     pub(crate) fn window_state(&self) -> Value {
-        let facts = &self.window_facts;
+        let facts = &self.core.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
             "maximized":reported_maximized(facts),
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
-            "appearance":self.theme(),"fileTypes":self.file_types,
+            "appearance":self.theme(),"fileTypes":self.core.file_types,
             "language":self.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
             "locale":i18n::locale()})
     }
@@ -295,7 +393,7 @@ impl Host {
             reply: reply.clone(),
             video: fit.video,
             result: json!({"width":fit.video.0,"height":fit.video.1,"clamped":fit.clamped}),
-            deadline: self.now_ms() + 1000,
+            deadline: self.core.now_ms() + 1000,
         });
         Ok(())
     }
@@ -320,7 +418,7 @@ impl Host {
     }
     /// Current layout of both positions, or `pending` until the shell is measured.
     pub(crate) fn layout_state(&self) -> std::result::Result<Value, RpcError> {
-        if self.window_facts["shellGeneration"].as_u64() != Some(self.shell_generation) {
+        if self.core.window_facts["shellGeneration"].as_u64() != Some(self.shell_generation) {
             return Err(RpcError::new(
                 "pending",
                 "current shell layout is not yet confirmed",
@@ -329,26 +427,30 @@ impl Host {
         // `panels`: the slot's panels in tab order (sidebar tabs); `owner`
         // is the current one's.
         let bottom = self
+            .core
             .mounts
             .values()
             .filter(|m| m.spec.slot == composition::Slot::Bottom)
             .map(|m| m.spec.owner)
             .collect::<Vec<_>>();
-        let sidebar = self.policy.sidebar_panels();
-        let adjust = self.policy.panels(window_state::Slot::Adjust);
+        // The tab orders from the core's copy (plan step S2c(5)).
+        #[cfg(debug_assertions)]
+        self.check_panel_tabs();
+        let sidebar = &self.core.panel_tabs.sidebar;
+        let adjust = &self.core.panel_tabs.adjust;
         let slot = |name: &str| {
-            let slot = &self.window_facts["slots"][name];
+            let slot = &self.core.window_facts["slots"][name];
             if slot.is_null() {
                 return Value::Null;
             }
             let owners = match name {
-                "sidebar" => &sidebar,
-                "adjust" => &adjust,
+                "sidebar" => sidebar,
+                "adjust" => adjust,
                 _ => &bottom,
             };
             let panels = owners
                 .iter()
-                .filter_map(|owner| self.mounts.get(owner))
+                .filter_map(|owner| self.core.mounts.get(owner))
                 .map(|m| json!({"owner":m.spec.owner,"plugin":m.manifest,"title":m.title}))
                 .collect::<Vec<_>>();
             json!({"owner":slot["owner"],"preferred":slot["preferred"],"effective":slot["effective"],
@@ -360,13 +462,26 @@ impl Host {
     }
     /// `panels.backdrop.state`: `{ owner, effective }`, null without a backdrop.
     pub(crate) fn backdrop_state(&self) -> Value {
-        self.mounts
+        self.core
+            .mounts
             .values()
             .find(|m| m.spec.slot == composition::Slot::Backdrop)
             .map_or(
                 Value::Null,
                 |m| json!({"owner":m.spec.owner,"effective":self.no_video}),
             )
+    }
+}
+impl Core {
+    /// Merge the sequence provider's flags into a source state (C6).
+    pub(crate) fn patch_source(&self, state: &mut Value) {
+        if state.is_object() {
+            let (next, previous) = self
+                .sequence
+                .map(|(_, next, previous)| (next, previous))
+                .unwrap_or((false, false));
+            state["sequence"] = json!({"next":next,"previous":previous});
+        }
     }
 }
 
@@ -444,5 +559,146 @@ mod tests {
             Some(true)
         );
         assert_eq!(policy_slot(Slot::Adjust), Some(window_state::Slot::Adjust));
+    }
+
+    /// The policy's tabs as the interface reports them (`Host::policy_tabs`).
+    fn tabs_of(policy: &window_state::Policy) -> PanelTabs {
+        PanelTabs {
+            bottom: policy.bottom(),
+            sidebar: policy.sidebar_panels(),
+            adjust: policy.panels(window_state::Slot::Adjust),
+        }
+    }
+
+    /// `Host::layout_apply`'s steps on `policy`: on a refusal, the error and
+    /// whether an earlier step took effect.
+    fn apply_layout(
+        policy: &mut window_state::Policy,
+        slot: composition::Slot,
+        policy_slot: window_state::Slot,
+        change: &LayoutChange,
+        first: u64,
+    ) -> std::result::Result<(), (window_state::Error, bool)> {
+        let owner = slot
+            .tabbed()
+            .then(|| policy.active(policy_slot))
+            .flatten()
+            .unwrap_or(first);
+        let mut changed = false;
+        if let Some(active) = change.active
+            && slot.tabbed()
+        {
+            policy.set_active(active).map_err(|e| (e, changed))?;
+            changed = true;
+        }
+        if let Some(detached) = change.detached {
+            policy
+                .set_detached(owner, detached)
+                .map_err(|e| (e, changed))?;
+            changed = true;
+        }
+        if let Some(visible) = change.visible {
+            policy
+                .set_preferred(policy_slot, owner, visible, 0)
+                .map_err(|e| (e, changed))?;
+        }
+        Ok(())
+    }
+
+    /// Plan step S2c(5): what the core judges from its copy of the tabs is
+    /// the policy's own answer, for every panel and change. `holds` is
+    /// `set_locks`'s and `set_preferred`'s answer; `judge_layout` refuses
+    /// exactly what the policy refuses before any step took effect, and
+    /// leaves a later refusal (after a step took effect) to the interface.
+    #[test]
+    fn the_cores_judgement_from_the_tabs_is_the_policys() {
+        use composition::Slot as C;
+        let slots = [C::Bottom, C::Sidebar, C::Adjust];
+        let layouts: Vec<Vec<(C, u64)>> = vec![
+            vec![],
+            vec![(C::Bottom, 1)],
+            vec![(C::Sidebar, 1), (C::Sidebar, 2)],
+            vec![(C::Adjust, 3)],
+            vec![
+                (C::Bottom, 1),
+                (C::Sidebar, 2),
+                (C::Adjust, 3),
+                (C::Adjust, 4),
+            ],
+        ];
+        let keys: Vec<u64> = (1..=5)
+            .flat_map(|owner| slots.map(|slot| panel_key(owner, slot)))
+            .collect();
+        let flags = [None, Some(false), Some(true)];
+        let mut refused = 0;
+        let mut deferred = 0;
+        for layout in &layouts {
+            let mut policy = window_state::Policy::new(0);
+            for &(slot, owner) in layout {
+                policy
+                    .attach(
+                        policy_slot(slot).unwrap(),
+                        panel_key(owner, slot),
+                        true,
+                        false,
+                    )
+                    .unwrap();
+            }
+            let tabs = tabs_of(&policy);
+            for slot in slots {
+                let ps = policy_slot(slot).unwrap();
+                for &key in &keys {
+                    let locks = window_state::Locks::default();
+                    assert_eq!(
+                        tabs.holds(ps, key),
+                        policy.clone().set_locks(ps, key, locks)
+                    );
+                    assert_eq!(
+                        tabs.holds(ps, key),
+                        policy.clone().set_preferred(ps, key, true, 0)
+                    );
+                    assert_eq!(tabs.holds(ps, key), policy.clone().switch(ps, key, true, 0));
+                }
+                for &first in &keys {
+                    for active in std::iter::once(None).chain(keys.iter().copied().map(Some)) {
+                        for detached in flags {
+                            // `layout_change` refuses these first.
+                            if (detached.is_some() && slot == C::Bottom)
+                                || (detached == Some(true) && slot == C::Adjust)
+                            {
+                                continue;
+                            }
+                            for visible in flags {
+                                let change = LayoutChange {
+                                    visible,
+                                    detached,
+                                    active,
+                                };
+                                let real =
+                                    apply_layout(&mut policy.clone(), slot, ps, &change, first);
+                                let judged = tabs.judge_layout(slot, ps, &change, first);
+                                let expected = match real {
+                                    Ok(()) => Ok(()),
+                                    Err((_, true)) => {
+                                        deferred += 1;
+                                        Ok(())
+                                    }
+                                    Err((error, false)) => {
+                                        refused += 1;
+                                        Err(error)
+                                    }
+                                };
+                                assert_eq!(
+                                    judged, expected,
+                                    "{layout:?} {slot:?} first {first} {change:?}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        // Both kinds of refusal occur.
+        assert!(refused > 0 && deferred > 0, "{refused} {deferred}");
     }
 }

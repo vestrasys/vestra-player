@@ -81,8 +81,9 @@ impl Capability for Mpv {
                 forwarded.insert(key.into(), value.clone());
             }
         }
-        forwarded.insert("plugin".into(), host.plugin_id(reply.owner).into());
-        host.backend
+        forwarded.insert("plugin".into(), host.core.plugin_id(reply.owner).into());
+        host.core
+            .backend
             .commands
             .send(Command {
                 reply: reply.clone(),

@@ -18,7 +18,9 @@
 //! matching its display exactly (`unmatch_display`), whether an open
 //! file is on a network file system (`file_is_remote`), the free space of
 //! the volume holding a path (`disk_space`), waiting for a
-//! process to end (`wait_for_process_exit`), the thread's CPU cycles
+//! process to end (`wait_for_process_exit`), whether a process runs and
+//! since when (`process_creation_time`: the owner of an export's folder of
+//! intermediate parts), the thread's CPU cycles
 //! (`thread_cycles`), the process's private memory and the system commit
 //! charge (`memory_status`, the host log's memory line), the physical
 //! memory and the system's low-memory notification (`physical_memory`,
@@ -839,41 +841,43 @@ pub fn physical_memory() -> Option<PhysicalMemory> {
 /// The system's low-memory notification
 /// (`CreateMemoryResourceNotification(LowMemoryResourceNotification)`):
 /// signaled while the memory manager considers available physical memory
-/// low. Read without waiting (`QueryMemoryResourceNotification`); the
-/// handle is closed on drop.
+/// low. Read without waiting (`QueryMemoryResourceNotification`). The
+/// handle is an [`OwnedHandle`](std::os::windows::io::OwnedHandle): the
+/// value is `Send` and `Sync` (the host's core may own it on a thread of
+/// its own, doc/architecture/core-thread.md) and the handle is closed on
+/// drop (`CloseHandle`), once.
 #[derive(Debug)]
-pub struct LowMemoryNotification(windows_sys::Win32::Foundation::HANDLE);
+pub struct LowMemoryNotification(std::os::windows::io::OwnedHandle);
 
 impl LowMemoryNotification {
     /// `None` when the system refuses the handle.
     pub fn new() -> Option<Self> {
+        use std::os::windows::io::{FromRawHandle, OwnedHandle};
         use windows_sys::Win32::System::Memory::{
             CreateMemoryResourceNotification, LowMemoryResourceNotification,
         };
         // SAFETY: a notification type by value; the returned handle (null
-        // on failure) is ours and closed exactly once in `Drop`.
+        // on failure) is ours.
         let handle = unsafe { CreateMemoryResourceNotification(LowMemoryResourceNotification) };
-        (!handle.is_null()).then_some(Self(handle))
+        if handle.is_null() {
+            return None;
+        }
+        // SAFETY: `handle` is open (non-null: the call succeeded) and owned
+        // by nothing else; `OwnedHandle` takes it over and closes it
+        // exactly once, when this value drops.
+        Some(Self(unsafe { OwnedHandle::from_raw_handle(handle) }))
     }
 
     /// Whether available physical memory is low now; `None` when the query
     /// fails.
     pub fn signaled(&self) -> Option<bool> {
+        use std::os::windows::io::AsRawHandle;
         use windows_sys::Win32::System::Memory::QueryMemoryResourceNotification;
         let mut state = 0;
         // SAFETY: the live notification handle this value owns and a live
         // local out-parameter.
-        let ok = unsafe { QueryMemoryResourceNotification(self.0, &mut state) };
+        let ok = unsafe { QueryMemoryResourceNotification(self.0.as_raw_handle(), &mut state) };
         (ok != 0).then_some(state != 0)
-    }
-}
-
-impl Drop for LowMemoryNotification {
-    fn drop(&mut self) {
-        use windows_sys::Win32::Foundation::CloseHandle;
-        // SAFETY: the handle `new` created, owned by this value and closed
-        // only here.
-        unsafe { CloseHandle(self.0) };
     }
 }
 
@@ -911,6 +915,65 @@ pub fn wait_for_process_exit(pid: u32, timeout_ms: u32) -> bool {
         CloseHandle(process);
         ended
     }
+}
+
+/// Whether process `pid` runs, and since when: `Ok(Some(t))` with its
+/// creation time (`FILETIME` ticks, which tell a reused process id from the
+/// process that had it), `Ok(None)` when no process has that id or it has
+/// ended, `Err(())` when the system does not say (access refused, a failed
+/// wait).
+#[allow(clippy::result_unit_err)]
+pub fn process_creation_time(pid: u32) -> Result<Option<u64>, ()> {
+    use windows_sys::Win32::Foundation::{
+        CloseHandle, ERROR_INVALID_PARAMETER, FILETIME, GetLastError, WAIT_OBJECT_0, WAIT_TIMEOUT,
+    };
+    use windows_sys::Win32::System::Threading::{
+        GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
+        WaitForSingleObject,
+    };
+    // SAFETY: OpenProcess takes plain values and returns a handle we own
+    // (null when the process is gone or not accessible); GetLastError reads
+    // this thread's last error right after it.
+    let (process, error) = unsafe {
+        let process = OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_SYNCHRONIZE,
+            0,
+            pid,
+        );
+        (process, GetLastError())
+    };
+    if process.is_null() {
+        // No process with that id.
+        return if error == ERROR_INVALID_PARAMETER {
+            Ok(None)
+        } else {
+            Err(())
+        };
+    }
+    let zero = FILETIME {
+        dwLowDateTime: 0,
+        dwHighDateTime: 0,
+    };
+    let (mut created, mut exited, mut kernel, mut user) = (zero, zero, zero, zero);
+    // SAFETY: a live process handle of ours, queried with local
+    // out-parameters and closed exactly once. A zero wait only polls.
+    let (wait, times) = unsafe {
+        let wait = WaitForSingleObject(process, 0);
+        let times = GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user);
+        CloseHandle(process);
+        (wait, times != 0)
+    };
+    if wait == WAIT_OBJECT_0 {
+        // Ended; a handle someone still holds keeps it openable.
+        return Ok(None);
+    }
+    // Only a timeout says it runs; a failed wait says nothing.
+    if wait != WAIT_TIMEOUT || !times {
+        return Err(());
+    }
+    Ok(Some(
+        (u64::from(created.dwHighDateTime) << 32) | u64::from(created.dwLowDateTime),
+    ))
 }
 
 /// When window `hwnd` covers its display exactly (a borderless full-screen

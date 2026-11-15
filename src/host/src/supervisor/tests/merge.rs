@@ -226,6 +226,47 @@ fn m_standby_waiting_start_replaces_and_delivers_now() {
     assert_eq!(sim.st(u), S::Active(pid));
 }
 
+/// A message the host sends a running plugin outside `wake` (a trigger
+/// notification, a source event) cancels a standby on its way as a wake
+/// trigger does: the late answer stops nothing.
+#[test]
+fn m_standby_waiting_a_message_sent_now_cancels_it() {
+    let mut sim = sim();
+    let (u, pid) = standby_waiting(&mut sim);
+    sim.delivering(pid);
+    assert_eq!(sim.job(u), None, "Standby canceled");
+    let acts = sim.resources(pid, false);
+    assert!(terminates(&acts).is_empty());
+    assert_eq!(sim.st(u), S::Active(pid));
+}
+
+/// The same for a standby job not yet asking (enqueued, `run_jobs` not
+/// called yet).
+#[test]
+fn m_standby_enqueued_a_message_sent_now_cancels_it() {
+    let mut sim = sim();
+    let (u, pid) = sim.in_active(normal("a"));
+    sim.standby(u);
+    assert!(matches!(sim.job(u), Some(J::Standby { .. })));
+    sim.delivering(pid);
+    assert_eq!(sim.job(u), None, "Standby canceled");
+    let acts = sim.run();
+    assert!(terminates(&acts).is_empty());
+    assert_eq!(sim.st(u), S::Active(pid));
+}
+
+/// Once the process is stopping for standby a message sent now changes
+/// nothing (the host routes it through `wake`, which holds it for the next
+/// start).
+#[test]
+fn m_standby_running_a_message_sent_now_changes_nothing() {
+    let mut sim = sim();
+    let (u, pid) = standby_running(&mut sim);
+    let before = sim.st(u);
+    sim.delivering(pid);
+    assert_eq!(sim.st(u), before);
+}
+
 #[test]
 fn m_standby_waiting_standby_stays() {
     let mut sim = sim();

@@ -100,7 +100,7 @@ pub(crate) struct Review {
     pub(crate) checkbox: String,
     /// The box is checked (the host's state; unchecked for every sheet).
     pub(crate) checked: bool,
-    /// When it last showed (`Host::now_ms`); `None` while it waits to show.
+    /// When it last showed (`Core::now_ms`); `None` while it waits to show.
     pub(crate) shown_at: Option<u64>,
     /// It has shown once: the main window came into view for it
     /// (`Host::present_review`), which is not repeated when it shows again
@@ -289,6 +289,24 @@ pub(crate) fn confirm_sheet(
 }
 
 impl Host {
+    /// The interface's side of `UiCommand::Review` (plan step S2c(5)): the
+    /// core admitted the request and chose the main window's sheet; its
+    /// answer goes back as `Event::CommandRunAnswered` (a plan) or
+    /// `UiReport::Answered` (a confirmation).
+    pub(crate) fn review_command(&mut self, request: messages::ReviewRequest) {
+        let messages::ReviewRequest { reply, kind } = request;
+        match kind {
+            messages::ReviewKind::Confirm(messages::ConfirmSheet { options, request }) => {
+                self.open_confirm(reply, options, request)
+            }
+            messages::ReviewKind::CommandRun(messages::RunSheet {
+                ticket,
+                query,
+                steps,
+                remember,
+            }) => self.open_review(reply, ticket, query, steps, remember),
+        }
+    }
     /// `commands.run` asks the user about `steps` (the run's own first) on
     /// `ticket`, offering "Don't ask again" with the text `remember` (empty:
     /// not offered): the sheet shows now, or once nothing is in its way. One
@@ -330,7 +348,7 @@ impl Host {
         // Nothing of the texts: they may name the user's file.
         diag!(
             "review sheet: {} asks to confirm",
-            self.plugin_id(reply.owner)
+            self.core.plugin_id(reply.owner)
         );
         self.open_sheet(Review {
             reply,
@@ -354,7 +372,7 @@ impl Host {
         self.review
             .as_ref()
             .is_some_and(|review| match review.asks {
-                Asks::Run { .. } => self.command_runs.waiting(&review.reply),
+                Asks::Run { .. } => self.core.command_runs.waiting(&review.reply),
                 Asks::Confirm { .. } => true,
             })
     }
@@ -387,7 +405,7 @@ impl Host {
     /// any open menu or palette, unless a native dialog is open or there is
     /// no window yet. Its guard starts now.
     pub(crate) fn present_review(&mut self) {
-        if self.review.is_none() || self.dialog_busy || self.review_presented() {
+        if self.review.is_none() || self.core.dialog_busy || self.review_presented() {
             return;
         }
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
@@ -397,7 +415,8 @@ impl Host {
             self.close_menu();
         }
         #[cfg(feature = "producer-audio")]
-        self.physical_revoke(producer_input::RevokeReason::Menu);
+        self.core
+            .physical_revoke(producer_input::RevokeReason::Menu);
         let Some(value) = self.review_value() else {
             return;
         };
@@ -415,7 +434,7 @@ impl Host {
             Ok(())
         })();
         self.report_menu(result);
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let first = self.review.as_mut().is_some_and(|review| {
             review.shown_at = Some(now);
             !std::mem::replace(&mut review.hinted, true)
@@ -440,7 +459,7 @@ impl Host {
         // The request box: the lead's icon and title when the caller holds
         // it (always for a plan, today: only the lead mints tickets), else
         // its name.
-        let (title, icon) = match self.lead.as_ref().filter(|lead| lead.owner == owner) {
+        let (title, icon) = match self.core.lead.as_ref().filter(|lead| lead.owner == owner) {
             Some(lead) => (lead.row.title.clone(), lead.row.icon.clone()),
             None => (
                 crate::capabilities::shown_name(self, owner),
@@ -499,6 +518,7 @@ impl Host {
             return;
         }
         let Some((text, checked)) = self
+            .core
             .command_runs
             .offered(&review.reply)
             .and_then(|names| offer_after(names, &review.checkbox, review.checked))
@@ -526,7 +546,7 @@ impl Host {
             Ok(())
         })();
         self.report_menu(result);
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         if let Some(review) = self.review.as_mut() {
             review.shown_at = Some(now);
         }
@@ -552,14 +572,14 @@ impl Host {
         }
         if review
             .ticket()
-            .is_some_and(|ticket| !self.command_runs.is_live(ticket, now))
+            .is_some_and(|ticket| !self.core.command_runs.is_live(ticket, now))
         {
             diag!("review sheet: the ticket ended: Don't Run");
             let checked = review.reports_checkbox() && review.checked;
             self.end_review(Some((false, checked)));
             return;
         }
-        if self.dialog_busy {
+        if self.core.dialog_busy {
             if self.review_presented() {
                 self.close_menu();
             }
@@ -579,7 +599,7 @@ impl Host {
         let decision = decide(
             action,
             review.shown_at.unwrap_or(0),
-            self.now_ms(),
+            self.core.now_ms(),
             !review.checkbox.is_empty(),
             review.checked,
             review.reports_checkbox(),
@@ -615,18 +635,21 @@ impl Host {
         input_trace::follow(&format!("review sheet: answered {yes} (checked {checked})"));
         match review.asks {
             Asks::Run { .. } => {
-                let _ = self
-                    .events
-                    .send(Event::CommandRunAnswered(review.reply, yes, checked));
+                let _ =
+                    self.core
+                        .events
+                        .send(Event::CommandRunAnswered(review.reply, yes, checked));
             }
             Asks::Confirm { .. } => {
                 // As `Event::ConfirmDone` (the system dialog's answer) and
                 // `Event::CommandRunAnswered` (a plan's) do.
-                self.policy.activity(self.now_ms());
-                self.respond(
-                    review.reply,
-                    Ok(json!({"confirmed": yes, "checked": checked})),
-                );
+                self.policy.activity(self.core.now_ms());
+                self.ui_report(messages::UiReport::Answered {
+                    reply: review.reply,
+                    result: Ok(json!({"confirmed": yes, "checked": checked})),
+                    handoff: None,
+                    confirm_failed: false,
+                });
             }
         }
     }

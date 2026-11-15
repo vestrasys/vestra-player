@@ -2,6 +2,12 @@ import type { Json } from "../../wire.ts";
 import type { SourceState } from "../../source.ts";
 import type { TestHost } from "./index.ts";
 import type { Handler, Internals } from "./internals.ts";
+/**
+ * Broadcast the source state `host.source` became from `previous`, then
+ * the discrete source events it adds (`source.opening`, `source.ready`,
+ * `source.ended`), as the player sends them after it.
+ */
+export declare function emitSource(host: TestHost, previous: SourceState, reload?: boolean): void;
 export declare function initialSource(): SourceState;
 export declare const readyCapabilities: {
     pause: boolean;

@@ -90,7 +90,7 @@ impl Host {
     /// the core, which puts idle third-party plugins in standby for Low and
     /// Critical.
     pub(super) fn memory_tick(&mut self, now: u64) {
-        let memory = &mut self.on_demand.memory;
+        let memory = &mut self.core.on_demand.memory;
         let level = if memory.simulated {
             let due = memory.tests.iter().take_while(|(at, _)| *at <= now).count();
             match memory.tests.drain(..due).next_back() {
@@ -121,12 +121,14 @@ impl Host {
             } else {
                 ""
             },
-            self.supervisor.budget_count()
+            self.core.supervisor.budget_count()
         );
-        self.supervisor.set_now(now);
-        self.supervisor.memory_pressure(level);
+        self.core.supervisor.set_now(now);
+        self.core.supervisor.memory_pressure(level);
         self.supervisor_run();
     }
+}
+impl Core {
     /// Why the core asks `owner` for its resources, when that is the
     /// process budget or memory pressure (a log line; the idle timer's
     /// asks are not logged).

@@ -15,20 +15,20 @@ impl Host {
         use slint::winit_030::{EventResult, WinitWindowAccessor, winit};
         // The window's close request quits the player, whatever tool windows
         // are still open (set again with each shell, like the hook below).
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         view::on_main_close(window.window(), move || {
             let _ = events.send(Event::MainClosed);
         });
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         #[cfg(feature = "producer-audio")]
-        let routing = self.backend.input.clone();
+        let routing = self.core.backend.input.clone();
         let input = self.input.clone();
         let weak = window.as_weak();
         let modifiers = std::cell::Cell::new(winit::keyboard::ModifiersState::empty());
         let menu_cursor = std::cell::Cell::new((f64::NAN, f64::NAN));
         // Software windows: this hook also counts the window's draws.
         let winit_draws = self.winit_draws.clone();
-        let render = self.backend.render.clone();
+        let render = self.core.backend.render.clone();
         window.window().on_winit_window_event(move |slint_window, event| {
                 video::count_winit_draw(winit_draws.get(), event, &render.presentation);
                 if debug_menu()
@@ -105,9 +105,9 @@ impl Host {
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) -> Result<()> {
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         #[cfg(feature = "producer-audio")]
-        let routing = self.backend.input.clone();
+        let routing = self.core.backend.input.clone();
         window.set_callback("window-input", move |args| {
             if let Some(slint_interpreter::Value::String(kind)) = args.first() {
                 #[cfg(feature = "producer-audio")]
@@ -141,7 +141,7 @@ impl Host {
         self.bind_keys(window, generation)?;
         view::bind_focus(window)?;
         let input = self.input.clone();
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("mouse-input", move |args| {
             let [SValue::String(name), mods @ ..] = args else {
                 return SValue::Bool(false);
@@ -173,33 +173,33 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("pip-return", move |_| {
             let _ = events.send(Event::PipReturn(generation));
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("title-strip-action", move |args| {
             if let Some(SValue::String(action)) = args.first() {
                 let _ = events.send(Event::TitleStrip(generation, action.to_string()));
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("lead-strip-action", move |args| {
             if let Some(SValue::String(action)) = args.first() {
                 let _ = events.send(Event::LeadStrip(generation, action.to_string()));
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("review-sheet-action", move |args| {
             if let Some(SValue::String(action)) = args.first() {
                 let _ = events.send(Event::ReviewSheet(generation, action.to_string()));
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("osd-action", move |args| {
             if let Some(SValue::Number(index)) = args.first()
                 && (0. ..2.).contains(index)
@@ -261,7 +261,7 @@ impl Host {
             SValue::Void
         })?;
         let input = self.input.clone();
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("wheel-input", move |args| {
             let number = |i: usize| match args.get(i) {
                 Some(SValue::Number(n)) if n.is_finite() => *n,
@@ -308,14 +308,14 @@ impl Host {
             }
             SValue::Bool(true)
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("bar-more", move |args| {
             if let [SValue::Number(x), SValue::Number(y)] = args {
                 let _ = events.send(Event::BarMore(generation, *x, *y));
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("sidebar-resized", move |args| {
             if let Some(SValue::Number(width)) = args.first() {
                 let _ = events.send(Event::SidebarResized(generation, *width));
@@ -323,7 +323,7 @@ impl Host {
             SValue::Void
         })?;
         window.set_property("sidebar-width", self.policy.sidebar_user_width().into())?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("adjust-resized", move |args| {
             if let Some(SValue::Number(width)) = args.first() {
                 let _ = events.send(Event::AdjustResized(generation, *width));
@@ -339,7 +339,7 @@ impl Host {
             "info-panels",
             ui_values::from_json(&json!(self.info_panels.values().collect::<Vec<_>>()))?,
         )?;
-        let snapshot = self.commands.snapshot();
+        let snapshot = self.registry.snapshot();
         let labels = self.labels();
         // Through `apply_menu_levels`, so `menu_shown` follows the window:
         // a new shell's `menu-levels` is not the model it remembers, so this

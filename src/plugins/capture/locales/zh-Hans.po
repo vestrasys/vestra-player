@@ -252,10 +252,10 @@ msgstr "保存或复制当前画面、连拍"
 #: manifest.json
 msgid ""
 "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n"
-"Right-click menu: Tools ▸ Snapshot ▸."
+"→ Menu: Tools ▸ Snapshot"
 msgstr ""
 "将当前画面（含显示中的字幕，或含视频效果的实际画面）保存、另存为或复制为 PNG、JPEG 或 BMP，并可连拍多张画面。设置位于 选项 ▸ 视频 ▸ 截图。\n"
-"右键菜单：工具 ▸ 截图 ▸。"
+"→ 菜单：工具 ▸ 截图"
 
 #: manifest.json
 msgid "video"

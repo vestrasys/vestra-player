@@ -26,7 +26,19 @@ impl<T: Copy + PartialEq> LastWrite<T> {
     pub fn remove(&mut self, owner: u64) {
         self.writes.remove(&owner);
     }
-    /// `owner` wrote a value that is in effect until it stops.
+    /// A parked owner woke as `to`: its write, kept through standby
+    /// (events-and-triggers.md §4.8), is the new run's, in its place in the
+    /// order of writes (a write by another plugin after it still wins).
+    pub fn rekey(&mut self, from: u64, to: u64) {
+        if from == to {
+            return;
+        }
+        if let Some(write) = self.writes.remove(&from) {
+            self.writes.insert(to, write);
+        }
+    }
+    /// `owner` wrote a value that is in effect until it is removed: its run
+    /// stops other than by going to standby, or its standby ends for good.
     pub fn holds(&self, owner: u64) -> bool {
         self.writes.contains_key(&owner)
     }
@@ -98,6 +110,15 @@ pub fn valid_size(width: f64, height: f64) -> bool {
         .all(|v| v.is_finite() && (1. ..=16384.).contains(v))
 }
 
+/// Whether the player's windows float (`window.setAlwaysOnTop`): when the
+/// plugins' choice (`want`, [`LastWrite`]) says so and no system dialog
+/// (file dialog or confirmation, `dialog_open`) is open. While one is open
+/// the user may switch to other applications (Alt+Tab, the taskbar) to
+/// look something up; the choice comes back when it closes.
+pub fn floating(want: bool, dialog_open: bool) -> bool {
+    want && !dialog_open
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -125,6 +146,42 @@ mod tests {
         assert!(!on_top.get(), "back to the default");
     }
 
+    /// Events-and-triggers.md §4.8: a parked plugin's write stays in effect
+    /// under its holder and moves to its woken run in its place in the
+    /// order: a later write by another plugin still wins, and the woken
+    /// run's own next write replaces it. Removing the holder (its standby
+    /// ended for good) gives way to the newest remaining one.
+    #[test]
+    fn a_kept_write_moves_to_the_woken_run_and_the_last_write_wins() {
+        let mut on_top = LastWrite::new(false);
+        on_top.set(1, true);
+        // 1 parked, then woken as 5: still in effect.
+        on_top.rekey(1, 5);
+        assert!(!on_top.holds(1) && on_top.holds(5));
+        assert!(on_top.get());
+        // Another plugin writes after it: the last write wins.
+        on_top.set(2, false);
+        on_top.rekey(5, 6);
+        assert!(
+            !on_top.get(),
+            "plugin 2 wrote last, the move changes nothing"
+        );
+        // The woken run writes again: its write is the newest.
+        on_top.set(6, true);
+        assert!(on_top.get());
+        // A holder that wrote nothing, or the same owner: nothing happens.
+        on_top.rekey(9, 10);
+        on_top.rekey(6, 6);
+        assert!(!on_top.holds(10) && on_top.holds(6));
+        // Its standby ends for good: plugin 2's value again.
+        on_top.remove(6);
+        assert!(!on_top.get());
+        let mut cursor = LastWrite::new(false);
+        cursor.set(3, true);
+        cursor.rekey(3, 4);
+        assert!(cursor.get());
+    }
+
     #[test]
     fn the_video_area_gets_the_bars_added_and_fits_the_screen() {
         let plain = fit(1920., 1080., frame(0.));
@@ -146,5 +203,16 @@ mod tests {
         let small = fit(160., 90., frame(320.));
         assert_eq!(small.video.0, 318.);
         assert!(valid_size(1., 16384.) && !valid_size(0., 10.) && !valid_size(f64::NAN, 10.));
+    }
+
+    /// The bug of 2026-11-15: a fullscreen player held on top kept its Save
+    /// dialog and every other application behind it. Every combination: on
+    /// top only when wanted and no dialog is open.
+    #[test]
+    fn no_floating_while_a_dialog_is_open() {
+        assert!(!floating(false, false));
+        assert!(floating(true, false));
+        assert!(!floating(false, true));
+        assert!(!floating(true, true), "a dialog is open: not on top");
     }
 }

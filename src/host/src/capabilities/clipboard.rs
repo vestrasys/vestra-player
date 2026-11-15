@@ -25,7 +25,7 @@ impl Capability for Clipboard {
     }
     fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
     fn handle(&self, host: &mut Host, _: &Reply, method: &str, params: &Value) -> Handled {
-        if host.headless {
+        if host.core.headless {
             return Err(RpcError::new(
                 "unavailable",
                 "the clipboard is unavailable in headless mode",

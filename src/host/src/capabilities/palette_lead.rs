@@ -7,7 +7,11 @@
 use super::{Call, Capability, Handled, Info, Recorded};
 use crate::{
     commands::{BUTTON_ICONS, ButtonIcon},
-    host::{Host, Origin, Reply, RpcError, string},
+    host::{
+        Host, Origin, Reply, RpcError,
+        messages::{LeadOp, UiCommand},
+        string,
+    },
     i18n,
 };
 use serde_json::{Value, json};
@@ -303,15 +307,17 @@ pub fn parse(
 
 /// Sets `owner`'s lead from `params`, refused while another plugin holds it.
 fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(), RpcError> {
-    if let Some(lead) = &host.lead
+    if let Some(lead) = &host.core.lead
         && lead.owner != owner
     {
         let holder = host
+            .core
             .plugins
             .get(&lead.owner)
             .map(|p| p.manifest.id.clone())
             .or_else(|| {
-                host.on_demand
+                host.core
+                    .on_demand
                     .held(lead.owner)
                     .map(|held| held.origin.id.clone())
             })
@@ -323,7 +329,7 @@ fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(
         ));
     }
     let mut row = parse(&origin.texts(), &origin.image_roots(), params)?;
-    let appeared = host.lead.is_none();
+    let appeared = host.core.lead.is_none();
     // An end state goes to the strip once and is neither kept on the row
     // nor recorded: the row goes back to its usual form.
     let mut sent = params.clone();
@@ -333,25 +339,51 @@ fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(
     {
         object.remove("status");
     }
-    let before = host.lead.as_ref().and_then(|lead| lead.ended.clone());
-    host.lead = Some(Lead {
+    let before = host.core.lead.as_ref().and_then(|lead| lead.ended.clone());
+    host.core.lead = Some(Lead {
         owner,
         sent,
         row,
         recorded: false,
         ended: ended.clone(),
     });
-    if let Some(status) = ended.filter(|status| before.as_ref() != Some(status)) {
-        host.lead_ended(&status);
-    }
-    host.lead_changed(appeared);
+    // The row and the strip are the interface's (plan step S2c(5)).
+    host.ui_command(UiCommand::Lead(LeadOp::Set {
+        owner,
+        appeared,
+        ended: ended.filter(|status| before.as_ref() != Some(status)),
+    }));
     Ok(())
 }
 
 fn clear(host: &mut Host, owner: u64) {
-    if host.lead.as_ref().is_some_and(|lead| lead.owner == owner) {
-        host.lead = None;
-        host.lead_changed(true);
+    if host
+        .core
+        .lead
+        .as_ref()
+        .is_some_and(|lead| lead.owner == owner)
+    {
+        host.core.lead = None;
+        host.ui_command(UiCommand::Lead(LeadOp::Clear { owner }));
+    }
+}
+
+impl Host {
+    /// The interface's side of `UiCommand::Lead` (plan step S2c(5)): the
+    /// palette's row, the status strip and the bar's icon follow
+    /// `Core::lead`; an end state shows in the strip once.
+    pub(crate) fn lead_command(&mut self, op: LeadOp) {
+        match op {
+            LeadOp::Set {
+                appeared, ended, ..
+            } => {
+                if let Some(status) = ended {
+                    self.lead_ended(&status);
+                }
+                self.lead_changed(appeared);
+            }
+            LeadOp::Clear { .. } => self.lead_changed(true),
+        }
     }
 }
 
@@ -364,7 +396,7 @@ impl Capability for PaletteLead {
     }
     /// The row as its holder set it: shown without its process.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        match &host.lead {
+        match &host.core.lead {
             Some(lead) if lead.owner == owner => {
                 Recorded::Calls(vec![Call::new("palette.lead.set", lead.sent.clone())])
             }
@@ -372,18 +404,22 @@ impl Capability for PaletteLead {
         }
     }
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        if let Some(lead) = host.lead.as_mut().filter(|lead| lead.owner == from) {
+        if let Some(lead) = host.core.lead.as_mut().filter(|lead| lead.owner == from) {
             lead.owner = to;
         }
     }
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if keep_recorded {
-            let Some(lead) = host.lead.as_mut().filter(|lead| lead.owner == owner) else {
+            let Some(lead) = host.core.lead.as_mut().filter(|lead| lead.owner == owner) else {
                 return;
             };
             if lead.park() {
                 // Off the palette's row and the strip at once.
-                host.lead_changed(false);
+                host.ui_command(UiCommand::Lead(LeadOp::Set {
+                    owner,
+                    appeared: false,
+                    ended: None,
+                }));
             }
         } else {
             clear(host, owner);
@@ -391,6 +427,7 @@ impl Capability for PaletteLead {
     }
     fn prune(&self, host: &mut Host, owner: u64) {
         if host
+            .core
             .lead
             .as_ref()
             .is_some_and(|lead| lead.owner == owner && lead.recorded)
@@ -413,7 +450,7 @@ impl Capability for PaletteLead {
             "palette.lead.clear" => clear(host, reply.owner),
             _ => {
                 let ticket = string(params, "ticket")?;
-                host.command_runs.done(reply.owner, ticket);
+                host.core.command_runs.done(reply.owner, ticket);
             }
         }
         Ok(Some(Value::Null))

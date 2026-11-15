@@ -931,6 +931,21 @@ export declare function createWire(transport: Transport): {
         observeProperty: (name: string) => Promise<void>;
         unobserveProperty: (name: string) => Promise<void>;
     };
+    /**
+     * Trigger conditions (1.10.0, `plugin.trigger`): `set` hands one over
+     * (or replaces it), `off` removes it, `declare` names what `activate()`
+     * declared. Each `set` and `off` answers the condition's sequence
+     * number; the flips arrive as `triggers.fired` events.
+     */
+    triggers: {
+        set: (trigger: number | string, when: Json) => Promise<{
+            seq: number;
+        }>;
+        off: (trigger: number | string, unhandled?: boolean) => Promise<{
+            seq: number;
+        }>;
+        declare: (names: string[], unnamed: number) => Promise<null>;
+    };
     /** The system's secret store, per plugin (`secrets`). */
     secrets: {
         get: (name: string) => Promise<string | null>;

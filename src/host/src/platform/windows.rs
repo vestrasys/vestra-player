@@ -783,7 +783,7 @@ pub fn confirm(
         })
         .or_else(|| parent.and_then(|id| window(id).ok()))
         .and_then(|window| native_hwnd(&window));
-    CONFIRM_OWNER.set(owner);
+    DIALOG_OWNER.set(owner);
     let options = options.clone();
     std::thread::Builder::new()
         .name("confirm".into())
@@ -811,21 +811,42 @@ pub fn confirm(
 }
 
 thread_local! {
-    /// The owner (HWND) of the last confirmation `confirm` showed.
-    static CONFIRM_OWNER: Cell<Option<isize>> = const { Cell::new(None) };
+    /// The owner (HWND) of the last system dialog shown: a confirmation
+    /// (`confirm`) or a file dialog (`own_file_dialog`).
+    static DIALOG_OWNER: Cell<Option<isize>> = const { Cell::new(None) };
 }
 
-/// Bring the open confirmation into view (another request was refused
-/// `busy`): the task dialog itself, the last active popup of its owner
-/// (the owner is disabled while it is open), to the front while the player
-/// is in the `foreground`; otherwise its owner asks for attention.
-pub fn show_open_confirm(foreground: bool) {
-    let Some(owner) = CONFIRM_OWNER.get() else {
+/// `dialog` (rfd's, shown later on its own thread) owned by `owner`'s
+/// native window: above it, so never under a fullscreen or on-top player,
+/// and modal to it (the system dialog disables its owner while it is
+/// open). Remembered for [`show_open_dialog`]. Without an owner or its
+/// native window: `dialog` as it is, and no owner is remembered.
+pub fn own_file_dialog(
+    dialog: rfd::AsyncFileDialog,
+    owner: Option<&slint::Window>,
+) -> rfd::AsyncFileDialog {
+    // No owner found: forgotten, so a raise never brings the previous
+    // dialog's window forward.
+    let native = owner.and_then(native_of);
+    DIALOG_OWNER.set(native.as_deref().and_then(native_hwnd));
+    match native {
+        Some(native) => dialog.set_parent(&*native),
+        None => dialog,
+    }
+}
+
+/// Bring the open system dialog into view (another request was refused
+/// `busy`, or a key came while it is open): the confirmation or file
+/// dialog itself, the last active popup of its owner (the owner is disabled
+/// while it is open), to the front while the player is in the
+/// `foreground`; otherwise its owner asks for attention.
+pub fn show_open_dialog(foreground: bool) {
+    let Some(owner) = DIALOG_OWNER.get() else {
         return;
     };
     if foreground {
         if !vestra_win32::set_foreground(vestra_win32::last_active_popup(owner)) {
-            diag!("platform: the open confirmation could not come to the front");
+            diag!("platform: the open dialog could not come to the front");
         }
         return;
     }

@@ -125,6 +125,11 @@ pub(crate) enum Event {
     /// The playback worker's answer to `owner.resources` (lazy activation):
     /// (owner, `{ live, resolvers }`).
     OwnerResources(u64, Value),
+    /// The position model's report (`playback/position_model.rs`): a
+    /// boundary a trigger waits for was reached, or the position jumped.
+    Position(crate::playback::position_model::Report),
+    /// The primary subtitle track changed (the `subtitleTrack` condition).
+    SubtitleTrack(Option<String>),
 }
 
 impl Event {
@@ -181,6 +186,8 @@ impl Event {
             Self::BarButton(..) => ("BarButton", None),
             Self::BarMore(..) => ("BarMore", None),
             Self::OwnerResources(owner, _) => ("OwnerResources", Some(*owner)),
+            Self::Position(_) => ("Position", None),
+            Self::SubtitleTrack(_) => ("SubtitleTrack", None),
         }
     }
 }

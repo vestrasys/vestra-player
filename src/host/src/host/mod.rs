@@ -1,7 +1,9 @@
 //! The `Host`: the UI thread's state (one per player), its events, the
 //! lifecycle of plugins, the dispatch of their requests and the window,
 //! menu, mount and input handling. Capabilities (`crate::capabilities`) and
-//! a few other modules add their own `impl Host` blocks.
+//! a few other modules add their own `impl Host` blocks. The state that
+//! never touches the interface is `Host::core` ([`Core`], with its own
+//! `impl Core` blocks beside them).
 mod actions;
 pub(crate) use actions::migrate_fullscreen_escape;
 mod diagnostics;
@@ -15,6 +17,7 @@ mod input;
 pub(crate) mod lead_strip;
 mod lifecycle;
 mod menus;
+pub(crate) mod messages;
 mod mounts;
 pub(crate) mod origins;
 pub(crate) mod palette;
@@ -29,8 +32,11 @@ mod shell;
 pub(crate) mod stall;
 mod state;
 pub(crate) mod supervisor;
+mod tables;
+mod triggers;
 mod video;
 mod window;
+pub(crate) use triggers::{TriggerState, wall_ms};
 
 use crate::packages::{manifest, package_manager};
 #[cfg(feature = "producer-audio")]
@@ -40,7 +46,7 @@ use crate::playback::{
     frame_pacing, render_target, video_click,
 };
 use crate::process::{Plugin, StopReason, shared_runner};
-use crate::supervisor::{Pid, Supervisor, Trigger, activation};
+use crate::supervisor::{Pid, Supervisor, activation};
 use crate::ui::{
     bar_buttons, composition, drops, menu, pip, settings_window, sidebar_tabs, slot_claims,
     ui_image, ui_state, ui_values, view, window_control, window_state,
@@ -112,6 +118,18 @@ pub(crate) fn rekey_panel(key: u64, to: u64) -> u64 {
 /// The plugin a panel key belongs to.
 pub(crate) fn panel_plugin(key: u64) -> u64 {
     key / PANEL_SLOTS
+}
+/// The slot of a panel key (`panel_key`).
+pub(crate) fn panel_slot(key: u64) -> composition::Slot {
+    [
+        composition::Slot::Bottom,
+        composition::Slot::Sidebar,
+        composition::Slot::Backdrop,
+        composition::Slot::Adjust,
+    ]
+    .into_iter()
+    .find(|&slot| slot as u64 == key % PANEL_SLOTS)
+    .unwrap_or(composition::Slot::Bottom)
 }
 /// Slots per plugin in a panel key (bottom, sidebar, backdrop, adjust).
 const PANEL_SLOTS: u64 = 4;
@@ -186,12 +204,17 @@ pub(crate) struct Floating {
 /// Read synchronously by the shell's key/mouse callbacks, without borrowing Host.
 #[derive(Default)]
 pub(crate) struct InputShared {
-    pub(crate) table: bindings::Table,
+    /// The interface's copy of the core's binding table (rule R8,
+    /// `host/tables.rs`): read here by the key and mouse callbacks.
+    pub(crate) table: bindings::Snapshot,
     pub(crate) bottom: Option<u64>,
     pub(crate) sidebar: Option<u64>,
     /// The adjust column's current tab (`panel:adjust` keys).
     pub(crate) adjust: Option<u64>,
     pub(crate) blocked: bool,
+    /// A system dialog (file dialog or confirmation) is open (`dialog_busy`):
+    /// an input that comes while `blocked` brings it to the front.
+    pub(crate) dialog: bool,
     pub(crate) wheel: (f64, f64),
     /// The key press being dispatched, recorded by the window's winit hook.
     pub(crate) physical: Option<bindings::Physical>,
@@ -333,7 +356,11 @@ pub(crate) struct MountChange {
     /// its batch failed).
     pub(crate) announced: bool,
 }
-pub(crate) struct Host {
+/// The host's core: the state that never touches a Slint object or a
+/// window (doc/architecture/core-thread.md, plan step S2b; the CORE rows
+/// of doc/process/research/core-loop-study.md §1.1). `Host` holds it as
+/// `core`, still on the UI thread until plan step S3a.
+pub(crate) struct Core {
     pub(crate) backend: Backend,
     /// The shared runner of the trusted plugins, while one runs. Declared
     /// before `plugins`: at quit it stops (all members at once) before the
@@ -345,26 +372,178 @@ pub(crate) struct Host {
     /// Moves when a plugin comes or goes in `plugins` (`add_plugin`, `stop`,
     /// `quit_stop`): a source of `packages.list` (`packages_key`).
     pub(crate) plugins_revision: u64,
-
-    pub(crate) views: BTreeMap<(u64, String), view::View>,
     pub(crate) events: mpsc::Sender<Event>,
     pub(crate) headless: bool,
+    /// The command registry (rule R8): the interface reads its copy,
+    /// `Host::registry` (`host/tables.rs`).
     pub(crate) commands: commands::Registry,
-    pub(crate) dialog_busy: bool,
-    /// Where the user last acted for each plugin: the window its
-    /// `dialogs.confirm` belongs to (`origins`, palette-lead.md §2.3).
-    pub(crate) origins: origins::Origins,
-    /// A system confirmation is open (`dialog_busy` is also a file
-    /// picker): it comes into view when another request is refused `busy`.
-    pub(crate) confirm_open: bool,
-    pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
-    pub(crate) mounts: BTreeMap<u64, Mount>,
+    /// The binding table (rule R8), written through `bindings_mut`, and
+    /// what the interface was last given of both tables
+    /// (`host/tables.rs`).
+    pub(crate) tables: tables::Tables,
     /// The plugins (manifest ids) that have mounted a panel in this run,
     /// a replayed tab's placeholder included: `bindings.list` lists their
     /// `focus: "panel"` commands for the rest of the run
-    /// (`Host::note_panel_plugins`).
+    /// (`Core::note_panel_plugins`).
     pub(crate) panel_plugins: std::collections::BTreeSet<String>,
+    /// `commands.run` tickets and rates.
+    pub(crate) command_runs: crate::capabilities::CommandRuns,
+    pub(crate) clock: Instant,
+    /// The sequence provider: owner, can-next, can-previous (C6).
+    pub(crate) sequence: Option<(u64, bool, bool)>,
+    pub(crate) last_source: Value,
+    /// The rendering API's facts, preference and restart (`rendering.rs`).
+    pub(crate) rendering: Rendering,
+    pub(crate) source_state_replies: std::collections::BTreeSet<(u64, u64)>,
+    pub(crate) host_revision: u64,
+    /// The plugin process supervisor's core (doc/architecture/supervisor.md):
+    /// the unit table (identity: `by_id`, `by_pid`, owner
+    /// generations) and each unit's activation; the Host adapter is
+    /// `host/supervisor/`.
+    pub(crate) supervisor: Supervisor<Value>,
+    pub(crate) activation_receipts: std::collections::VecDeque<Value>,
+    /// `resolvers.fileTypes` as last pushed by the backend (an array).
+    pub(crate) file_types: Value,
+    /// The core's copy of the window facts (rule R9; plan step S2c): set
+    /// only from a `UiReport::WindowFacts` newer than `window_facts_seq`.
+    /// Conditions and triggers, `window.state`, `layout.state` and
+    /// `ui.menu`'s refusals read it.
+    pub(crate) window_facts: Value,
+    /// The `seq` of the facts last applied (`None`: none yet).
+    pub(crate) window_facts_seq: Option<u64>,
+    /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
+    pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
+    /// The mount registry (K6; plan step S2c(3)): every plugin's panel by
+    /// its key (`panel_key`), a placeholder tab replayed from a recording
+    /// included, with its spec, values and the `ui.mount` call a recording
+    /// keeps. Standby recording, `rekey`, `revoke`, `prune` and `replay`
+    /// read and write it here. A batch of changes is applied to it by the
+    /// interface (`Host::prepare_mount_tick`, `UiReport::MountApplied`).
+    pub(crate) mounts: BTreeMap<u64, Mount>,
+    /// Mount changes the core accepted (`ui.mount`, `ui.unmount`, a replayed
+    /// tab, a removal) that the interface has not taken into its batching
+    /// window yet (`UiCommand::Mount`, `Core::mount_command`).
     pub(crate) mount_queue: std::collections::VecDeque<MountChange>,
+    /// The registry of settings pages (K7; plan step S2c(4)): pages,
+    /// registrations waiting for the `settings-check` thread, recorded
+    /// pages and their recordings. The open options window is the
+    /// interface's (`Host::settings`), told of changes as
+    /// `UiCommand::Settings`.
+    pub(crate) settings: settings_window::Settings,
+    /// The large array of the request being answered, converted on its
+    /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
+    /// request id, rows.
+    pub(crate) prepared: Option<(u64, u64, Box<crate::ui::ui_values::Prepared>)>,
+    /// What a running plugin was refused because another holds it: the
+    /// `packages.list` `warnings` entry and its text, per owner.
+    pub(crate) warnings: revised::Revised<BTreeMap<u64, Vec<(Value, String)>>>,
+    pub(crate) packages: package_manager::Manager,
+    /// The `plugin-reaper` thread: every plugin the host stops is waited
+    /// for (and killed after its grace) there (supervisor.md §1).
+    pub(crate) reaper: process::reaper::Reaper,
+    /// Core actions in flight that drop a repeated trigger.
+    pub(crate) actions_busy: std::collections::BTreeSet<String>,
+    /// `player.setStepSeek` per owner: (write sequence, seconds, keyframes);
+    /// the newest pair wins.
+    pub(crate) step_seek: BTreeMap<u64, (u64, f64, bool)>,
+    pub(crate) step_writes: u64,
+    /// Development loads of this run (`--plugin`, or re-enabled): directory, manifest.
+    pub(crate) development: revised::Revised<BTreeMap<String, (PathBuf, process::Manifest)>>,
+    /// Development loads the user disabled (this run only).
+    pub(crate) dev_disabled: revised::Revised<std::collections::BTreeSet<String>>,
+    /// Why a plugin last stopped on its own, by id.
+    pub(crate) failures: revised::Revised<BTreeMap<String, String>>,
+    /// A package RPC that starts a plugin and answers with its start's
+    /// error (`setEnabled`, `reload`, a development load): the id, and
+    /// the error of a spawn that failed while the RPC ran (`spawn_unit`).
+    pub(crate) start_error: Option<(String, Option<RpcError>)>,
+    /// An uninstall's data directories, resolved at each request, by unit:
+    /// deleted at the core's `RemoveData` (supervisor.md).
+    pub(crate) data_removals: BTreeMap<crate::supervisor::UnitId, Vec<PathBuf>>,
+    /// The directory of a development load being started (`load`), for its
+    /// spawn (`load_development_as`).
+    pub(crate) dev_loading: Option<PathBuf>,
+    /// `plugin.storage.session`: per plugin identity, for this player run.
+    pub(crate) session_storage: session_storage::SessionStorage,
+    /// What `bindings.changed` / `packages.changed` last announced.
+    pub(crate) bindings_sent: u64,
+    /// The binding list `bindings.changed` last announced: a table rebuilt
+    /// to the same list (a plugin woken or parked) announces nothing.
+    pub(crate) bindings_list_sent: Value,
+    /// What the list behind `bindings_list_sent` showed was built from:
+    /// the table's and the command registry's listed revisions. It is
+    /// built again only once they moved (`notify_tick`).
+    pub(crate) bindings_seen: [u64; 2],
+    pub(crate) packages_sent: Value,
+    /// The sources of the `packages.list` behind `packages_sent`: the list
+    /// is built again only once they moved (`packages_key`).
+    pub(crate) packages_seen: Option<crate::binding_manager::PackagesKey>,
+    pub(crate) notified_at: u64,
+    /// `commands.keys` (player 0.7.6): the binding table revision it was
+    /// last checked at, and what each plugin (by manifest id) last got.
+    pub(crate) keys_checked: u64,
+    pub(crate) keys_sent: BTreeMap<String, Value>,
+    /// `plugin.timeline` layers (R-M3).
+    pub(crate) timeline: timeline::Timeline,
+    /// Files the system or another launch asked to open.
+    pub(crate) opens: open_files::OpenFiles,
+    /// Trigger conditions (`crate::triggers`, SDK 1.10.0) and what the
+    /// Host keeps beside them (`triggers.rs`).
+    pub(crate) triggers: crate::triggers::Triggers,
+    pub(crate) trigger_state: TriggerState,
+    /// The plugin shaders' crash guard (`diagnostics.rs`).
+    pub(crate) shader_guard: ShaderGuard,
+    /// When the memory line last went to the host log (`diagnostics.rs`).
+    pub(crate) memory_logged: Option<Instant>,
+    /// A native dialog is open, a file picker or a system confirmation
+    /// (plan step S2c(5)): `dialogs.open`, `dialogs.confirm` and
+    /// `media.sources.locate` are refused `busy` while it is, and it counts
+    /// as `Busy::Dialog`. The interface reads it for its window policy
+    /// (input blocked, `window.state.dialogOpen`).
+    pub(crate) dialog_busy: bool,
+    /// A system confirmation is open (`dialog_busy` is also a file
+    /// picker): it comes into view when another request is refused
+    /// `busy`. A confirmation that failed to show (`UiReport::Answered`
+    /// marked `confirm_failed`) clears both.
+    pub(crate) confirm_open: bool,
+    /// Where the user last acted for each plugin: the window its
+    /// `dialogs.confirm` belongs to (`origins`, palette-lead.md §2.3). The
+    /// interface reports each act as `UiReport::Acted` (`Core::act`).
+    pub(crate) origins: origins::Origins,
+    /// The palette's first row and its holder (`palette.lead`; plan step
+    /// S2c(5)): admission, the recording and the holder's lifecycle are
+    /// the core's; the interface is told of each change as
+    /// `UiCommand::Lead` and draws the row, the strip and the bar's icon.
+    pub(crate) lead: Option<crate::capabilities::Lead>,
+    /// The panel policy's tabs as the interface last reported them with
+    /// the window facts (rule R9; plan step S2c(5)). The policy stays the
+    /// interface's; the core judges `ui.interaction`'s and `layout.set`'s
+    /// refusals and answers `layout.state`'s tab order from this copy.
+    pub(crate) panel_tabs: state::PanelTabs,
+    /// On-demand start: the Host's side of standby, wake and
+    /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
+    /// in plan step S2c as its last field, so it drops after every other
+    /// core field (after the backend, the shared runner and the plugins, as
+    /// before); like every core field it now drops before the UI fields,
+    /// none of which its drop touches (it closes the low-memory handle and
+    /// the recorder's queue).
+    pub(crate) on_demand: supervisor::OnDemand,
+}
+// `Core` may move to its own thread (plan step S3a): every field is `Send`.
+const _: fn() = || {
+    fn send<T: Send>() {}
+    send::<Core>();
+};
+pub(crate) struct Host {
+    /// The core part (`Core`). Declared first, so it is dropped first, as
+    /// `backend`, `shared` and `plugins` (its first fields) were before the
+    /// split.
+    pub(crate) core: Core,
+    pub(crate) views: BTreeMap<(u64, String), view::View>,
+    pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
+    /// The interface's mount batching window (K6): the change that opened
+    /// it and when. The changes the core hands over during the next 32 ms
+    /// join it (`prepare_mount_tick`).
     pub(crate) preparing: Option<(Instant, MountChange)>,
     /// Shell preparations still to run one change each, after a batch of
     /// changes failed to compile (`prepare_mount_tick`).
@@ -396,18 +575,22 @@ pub(crate) struct Host {
     pub(crate) menu_shown: RefCell<menus::ShownMenu>,
     /// The open command palette (`MenuMode::Palette`).
     pub(crate) palette: palette::PaletteState,
-    /// The palette's first row and its holder (`palette.lead`).
-    pub(crate) lead: Option<crate::capabilities::Lead>,
     /// The status strip: the lead's status while the palette is closed.
     pub(crate) lead_strip: lead_strip::LeadStrip,
     /// The sheet waiting for the user (`MenuMode::Review`): a plan's or a
     /// confirmation's.
     pub(crate) review: Option<review_sheet::Review>,
-    /// `commands.run` tickets and rates.
-    pub(crate) command_runs: crate::capabilities::CommandRuns,
     pub(crate) policy: window_state::Policy,
-    pub(crate) clock: Instant,
+    /// The window facts the UI last sent the core (`UiReport::WindowFacts`,
+    /// rule R9): `window_tick` sends a value only when it differs from
+    /// this one. The UI's own readers (drops, `window.setVideoArea`) read
+    /// it; the core reads its copy, `Core::window_facts`.
     pub(crate) window_facts: Value,
+    /// The UI's one counter of facts values sent (`WindowFacts.seq`).
+    pub(crate) facts_seq: u64,
+    /// The panel tabs the UI last sent the core with its facts
+    /// (`report_tabs`; plan step S2c(5)).
+    pub(crate) tabs_sent: state::PanelTabs,
     pub(crate) measured_shell: Option<u64>,
     pub(crate) menu_open: bool,
     /// The fullscreen title strip (`title-strip.slint`).
@@ -449,39 +632,11 @@ pub(crate) struct Host {
     /// The plugin that showed the message on screen; `None`: the player.
     pub(crate) osd_from: Option<u64>,
     pub(crate) info_panels: BTreeMap<u64, String>,
-    /// The sequence provider: owner, can-next, can-previous (C6).
-    pub(crate) sequence: Option<(u64, bool, bool)>,
-    pub(crate) last_source: Value,
-    /// The rendering API's facts, preference and restart (`rendering.rs`).
-    pub(crate) rendering: Rendering,
-    pub(crate) source_state_replies: std::collections::BTreeSet<(u64, u64)>,
     pub(crate) floating: Option<Floating>,
     pub(crate) menu_mode: MenuMode,
     /// Window generation the open menu belongs to (shell or floating).
     pub(crate) menu_generation: u64,
-    pub(crate) host_revision: u64,
     pub(crate) window_title: String,
-    /// The plugin process supervisor's core (doc/architecture/supervisor.md):
-    /// the unit table (identity: `by_id`, `by_pid`, owner
-    /// generations) and each unit's activation; the Host adapter is
-    /// `host/supervisor/`.
-    pub(crate) supervisor: Supervisor<Value>,
-    pub(crate) activation_receipts: std::collections::VecDeque<Value>,
-    /// `resolvers.fileTypes` as last pushed by the backend (an array).
-    pub(crate) file_types: Value,
-    /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
-    pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
-    /// The large array of the request being answered, converted on its
-    /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
-    /// request id, rows.
-    pub(crate) prepared: Option<(u64, u64, Box<crate::ui::ui_values::Prepared>)>,
-    /// What a running plugin was refused because another holds it: the
-    /// `packages.list` `warnings` entry and its text, per owner.
-    pub(crate) warnings: revised::Revised<BTreeMap<u64, Vec<(Value, String)>>>,
-    pub(crate) packages: package_manager::Manager,
-    /// The `plugin-reaper` thread: every plugin the host stops is waited
-    /// for (and killed after its grace) there (supervisor.md §1).
-    pub(crate) reaper: process::reaper::Reaper,
     pub(crate) power: power::Power,
     /// When the shell last received a video frame (`power` keeps the display awake).
     pub(crate) last_frame: Option<Instant>,
@@ -490,12 +645,6 @@ pub(crate) struct Host {
     /// `VESTRA_FRAME_LOG=1` diagnostics and the size last set on the UI.
     pub(crate) frame_log: Option<render_target::FrameLog>,
     pub(crate) shown_size: Option<render_target::Size>,
-    /// Core actions in flight that drop a repeated trigger.
-    pub(crate) actions_busy: std::collections::BTreeSet<String>,
-    /// `player.setStepSeek` per owner: (write sequence, seconds, keyframes);
-    /// the newest pair wins.
-    pub(crate) step_seek: BTreeMap<u64, (u64, f64, bool)>,
-    pub(crate) step_writes: u64,
     /// `window.setAlwaysOnTop` and `setCursorAutoHide("playing")` per plugin.
     pub(crate) on_top: window_control::LastWrite<bool>,
     pub(crate) cursor_playing: window_control::LastWrite<bool>,
@@ -503,44 +652,6 @@ pub(crate) struct Host {
     pub(crate) on_top_applied: Option<(bool, usize)>,
     /// `window.setVideoArea` answered once the video area shows the target.
     pub(crate) area_replies: Vec<AreaReply>,
-    /// Development loads of this run (`--plugin`, or re-enabled): directory, manifest.
-    pub(crate) development: revised::Revised<BTreeMap<String, (PathBuf, process::Manifest)>>,
-    /// Development loads the user disabled (this run only).
-    pub(crate) dev_disabled: revised::Revised<std::collections::BTreeSet<String>>,
-    /// Why a plugin last stopped on its own, by id.
-    pub(crate) failures: revised::Revised<BTreeMap<String, String>>,
-    /// A package RPC that starts a plugin and answers with its start's
-    /// error (`setEnabled`, `reload`, a development load): the id, and
-    /// the error of a spawn that failed while the RPC ran (`spawn_unit`).
-    pub(crate) start_error: Option<(String, Option<RpcError>)>,
-    /// An uninstall's data directories, resolved at each request, by unit:
-    /// deleted at the core's `RemoveData` (supervisor.md).
-    pub(crate) data_removals: BTreeMap<crate::supervisor::UnitId, Vec<PathBuf>>,
-    /// The directory of a development load being started (`load`), for its
-    /// spawn (`load_development_as`).
-    pub(crate) dev_loading: Option<PathBuf>,
-    /// `plugin.storage.session`: per plugin identity, for this player run.
-    pub(crate) session_storage: session_storage::SessionStorage,
-    /// What `bindings.changed` / `packages.changed` last announced.
-    pub(crate) bindings_sent: u64,
-    /// The binding list `bindings.changed` last announced: a table rebuilt
-    /// to the same list (a plugin woken or parked) announces nothing.
-    pub(crate) bindings_list_sent: Value,
-    /// What the list behind `bindings_list_sent` showed was built from:
-    /// the table's and the command registry's listed revisions. It is
-    /// built again only once they moved (`notify_tick`).
-    pub(crate) bindings_seen: [u64; 2],
-    pub(crate) packages_sent: Value,
-    /// The sources of the `packages.list` behind `packages_sent`: the list
-    /// is built again only once they moved (`packages_key`).
-    pub(crate) packages_seen: Option<crate::binding_manager::PackagesKey>,
-    pub(crate) notified_at: u64,
-    /// `commands.keys` (player 0.7.6): the binding table revision it was
-    /// last checked at, and what each plugin (by manifest id) last got.
-    pub(crate) keys_checked: u64,
-    pub(crate) keys_sent: BTreeMap<String, Value>,
-    /// `plugin.timeline` layers (R-M3).
-    pub(crate) timeline: timeline::Timeline,
     /// Decoded `plugin.ui.image` files (R-U1).
     pub(crate) images: ui_image::Images,
     /// No video frame to show (R-U3): the backdrop is effective.
@@ -570,10 +681,9 @@ pub(crate) struct Host {
     pub(crate) gpu_paced: bool,
     /// File drops (R-U2).
     pub(crate) drops: drops::Drops,
-    /// Files the system or another launch asked to open.
-    pub(crate) opens: open_files::OpenFiles,
-    /// Settings pages and the options window (R-S1, R-H7).
-    pub(crate) settings: settings_window::Settings,
+    /// The options window (R-H7; K7): the pages it shows are the core's
+    /// (`Core::settings`).
+    pub(crate) settings: settings_window::Options,
     /// The category of the page the options window last showed.
     pub(crate) settings_category: Option<usize>,
     /// A view missed the palette: deliver again on the next tick.
@@ -582,13 +692,10 @@ pub(crate) struct Host {
     pub(crate) placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     pub(crate) bar: bar_buttons::Strip,
-    /// On-demand start: the Host's side of standby, wake and
-    /// classification (`supervisor/`, supervisor.md §4).
-    pub(crate) on_demand: supervisor::OnDemand,
-    /// The plugin shaders' crash guard (`diagnostics.rs`).
-    pub(crate) shader_guard: ShaderGuard,
-    /// When the memory line last went to the host log (`diagnostics.rs`).
-    pub(crate) memory_logged: Option<Instant>,
+    /// The interface's copy of the core's command registry (rule R8,
+    /// `host/tables.rs`): menus, the palette, the bar, the tab keys and
+    /// the video click read it.
+    pub(crate) registry: Arc<commands::View>,
 }
 pub(crate) struct AreaReply {
     pub(crate) reply: Reply,

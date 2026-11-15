@@ -1,5 +1,6 @@
 import { failure, toError } from "./errors.js";
 import { commands, keysOf, palette } from "./commands.js";
+import { triggersOf } from "./triggers.js";
 import { WHEN } from "./when.js";
 import { dialogs } from "./services/dialogs.js";
 import { ui } from "./view/image.js";
@@ -60,6 +61,10 @@ export class ScopeImpl {
     get disposed() {
         return this.#disposed || (this.#parent?.disposed ?? false);
     }
+    /** The plugin itself, not a scope made with `scope()`. */
+    get root() {
+        return this.#parent === undefined;
+    }
     /**
      * Start the SDK's copy that `event` keeps current (`plugin.commands.keys`,
      * `plugin.timeline`, `plugin.appearance`), for `player.on`; nothing for
@@ -113,6 +118,9 @@ export class ScopeImpl {
     }
     scope() {
         return this.add(new ScopeImpl(this.runtime, this));
+    }
+    trigger(name) {
+        return triggersOf(this.runtime).declare(this, name);
     }
     add(item) {
         if (this.#disposed)

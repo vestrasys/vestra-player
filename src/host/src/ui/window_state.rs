@@ -436,6 +436,11 @@ impl Policy {
             .map(|tabs| tabs.active)
     }
 
+    /// The bottom bar's panel.
+    pub fn bottom(&self) -> Option<u64> {
+        self.bottom.map(|attachment| attachment.owner)
+    }
+
     /// The sidebar's panels in tab order (empty without a sidebar).
     pub fn sidebar_panels(&self) -> Vec<u64> {
         self.panels(Slot::Sidebar)

@@ -19,11 +19,13 @@ impl Host {
     pub(crate) fn shutdown_plugins(&mut self, budget: Duration) {
         let began = Instant::now();
         let deadline = began + budget;
+        self.core.quit_source_ended();
         self.probe_quit();
         // Nothing more is created; a process the spawn thread created and
         // the Host did not take yet (its `Event::Spawned` still queued)
         // stops with the rest, within the same deadline.
         let created = self
+            .core
             .on_demand
             .spawner
             .as_ref()
@@ -33,12 +35,12 @@ impl Host {
             diag!("supervisor: plugin {owner} created as the player quits; stopped");
             plugin.set_stop_reason(StopReason::Quit);
             plugin.set_stop_wait(budget);
-            self.reaper.reap(owner, plugin);
+            self.core.reaper.reap(owner, plugin);
         }
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let budget_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX);
-        let actions = self.supervisor.shutdown(now, budget_ms);
-        let running = self.plugins.len();
+        let actions = self.core.supervisor.shutdown(now, budget_ms);
+        let running = self.core.plugins.len();
         // Checkpoints first, from the registrations as they are now.
         let (checkpoints, rest): (Vec<_>, Vec<_>) = actions
             .into_iter()
@@ -58,19 +60,19 @@ impl Host {
             self.quit_checkpoint(owner, resident);
         }
         // Stops from here on are the quit's: no UI cleanup, one deadline.
-        self.on_demand.quitting = true;
+        self.core.on_demand.quitting = true;
         // The shared runner stops all its members with one `runner.stop`.
-        if let Some(runner) = self.shared.take() {
-            runner.quit(budget, &self.reaper);
+        if let Some(runner) = self.core.shared.take() {
+            runner.quit(budget, &self.core.reaper);
         }
         self.supervisor_execute(rest);
         // Anything the core did not stop (none expected) stops all the same.
-        let left = self.plugins.keys().copied().collect::<Vec<_>>();
+        let left = self.core.plugins.keys().copied().collect::<Vec<_>>();
         for owner in left {
             diag!("supervisor: plugin {owner} stopped at quit without its unit");
-            self.quit_stop(owner, budget_ms);
+            self.core.quit_stop(owner, budget_ms);
         }
-        let done = self.reaper.finish_by(deadline);
+        let done = self.core.reaper.finish_by(deadline);
         // The reaper polls every 5 ms and a gone process's stderr is read
         // up to 100 ms (`process::STDERR_WAIT`).
         let waited = done.recv_timeout(budget + Duration::from_millis(200));
@@ -84,27 +86,14 @@ impl Host {
             }
         );
     }
-    /// A quit's stop of `owner` (the `Terminate` executor while quitting):
-    /// its `runtime.stop` (\`quit\`), killed after `grace`; nothing else is
-    /// cleaned up, the player goes. A shared-runner member stops with its
-    /// runner (`runner.stop`).
-    pub(super) fn quit_stop(&mut self, owner: u64, grace: u64) {
-        let Some(mut plugin) = self.plugins.remove(&owner) else {
-            return;
-        };
-        self.plugins_revision += 1;
-        plugin.set_stop_reason(StopReason::Quit);
-        plugin.set_stop_wait(Duration::from_millis(grace));
-        self.reaper.reap(owner, plugin);
-    }
     /// A run's checkpoint at quit (today's `lazy_quit`): resident as such,
     /// a lazy one with its registrations as they are now.
     fn quit_checkpoint(&mut self, owner: u64, resident: bool) {
-        let Some(key) = self.checkpoint_key_of(owner) else {
+        let Some(key) = self.core.checkpoint_key_of(owner) else {
             return;
         };
-        let directory = self.activation_dir();
-        let id = self.plugin_id(owner);
+        let directory = self.core.activation_dir();
+        let id = self.core.plugin_id(owner);
         let (calls, resident) = if resident {
             if checkpoint::read(&directory, &key).is_some_and(|r| r.resident_at_ready) {
                 return;
@@ -112,6 +101,7 @@ impl Host {
             (Vec::new(), true)
         } else {
             let backend = self
+                .core
                 .on_demand
                 .answers
                 .get(&owner)
@@ -123,9 +113,9 @@ impl Host {
             // classification without an answer. The next start launches it,
             // and its ready classifies it again.
             let live = held_in_worker(&backend).is_some();
-            let unanswered =
-                self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner);
-            if (live || unanswered) && !self.on_demand.probe.park_all {
+            let unanswered = self.core.on_demand.refreshing.contains(&owner)
+                || self.core.on_demand.stale.contains(&owner);
+            if (live || unanswered) && !self.core.on_demand.probe.park_all {
                 diag!("lazy: {id} holds something live in the playback worker at quit");
                 (Vec::new(), true)
             } else {
@@ -142,5 +132,47 @@ impl Host {
             Ok(()) => diag!("lazy: {id} recorded at quit"),
             Err(error) => diag!("lazy: {id}: its recording: {error}"),
         }
+    }
+}
+impl Core {
+    /// The player quits with a source in playback: each running plugin that
+    /// listens to `source.ended` gets it with `reason: "quit"` and the
+    /// source's last state, ahead of its stop on the same pipe, so within
+    /// the quit's deadline (events-and-triggers.md §4.6). A plugin in
+    /// standby gets nothing: it is neither woken nor is the event kept
+    /// (§6, M5).
+    fn quit_source_ended(&mut self) {
+        let Some(data) = crate::source_events::at_quit(&self.last_source) else {
+            return;
+        };
+        let event = crate::source_events::ENDED;
+        let message = serde_json::json!({"event":event,"data":data});
+        let mut failed = Vec::new();
+        for (owner, plugin) in self
+            .plugins
+            .iter_mut()
+            .filter(|(_, plugin)| plugin.subscriptions.contains_key(event))
+        {
+            if let Err(error) = plugin.send(message.clone()) {
+                failed.push((*owner, error));
+            }
+        }
+        // A full queue: its stop follows anyway (the deadline kills it).
+        for (owner, error) in failed {
+            diag!("plugin {owner} quit: source.ended not sent: {error}");
+        }
+    }
+    /// A quit's stop of `owner` (the `Terminate` executor while quitting):
+    /// its `runtime.stop` (\`quit\`), killed after `grace`; nothing else is
+    /// cleaned up, the player goes. A shared-runner member stops with its
+    /// runner (`runner.stop`).
+    pub(super) fn quit_stop(&mut self, owner: u64, grace: u64) {
+        let Some(mut plugin) = self.plugins.remove(&owner) else {
+            return;
+        };
+        self.plugins_revision += 1;
+        plugin.set_stop_reason(StopReason::Quit);
+        plugin.set_stop_wait(Duration::from_millis(grace));
+        self.reaper.reap(owner, plugin);
     }
 }

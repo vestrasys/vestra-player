@@ -208,26 +208,27 @@ impl Host {
     /// wakes, first runs and restarts of a storm): unless a package RPC answers
     /// with its spawn's error now (`start_now`).
     pub(crate) fn spawn_off_thread(&self) -> bool {
-        self.start_error.is_none() && !self.on_demand.quitting
+        self.core.start_error.is_none() && !self.core.on_demand.quitting
     }
     /// Queues an own process's creation on the spawn thread; `Err` gives
     /// the job back (no thread: spawn here).
     pub(crate) fn spawn_queued(&mut self, job: SpawnJob) -> std::result::Result<(), Box<SpawnJob>> {
-        if self.on_demand.spawner.is_none() {
-            self.on_demand.spawner = Spawner::start(self.events.clone(), self.reaper.clone());
+        if self.core.on_demand.spawner.is_none() {
+            self.core.on_demand.spawner =
+                Spawner::start(self.core.events.clone(), self.core.reaper.clone());
         }
-        match &self.on_demand.spawner {
+        match &self.core.on_demand.spawner {
             Some(spawner) => spawner.spawn(job),
             None => Err(Box::new(job)),
         }
     }
     /// Whether `owner`'s process is still being created (its events wait).
     pub(crate) fn spawning(&self, owner: u64) -> bool {
-        self.on_demand.spawning.contains_key(&owner)
+        self.core.on_demand.spawning.contains_key(&owner)
     }
     /// An event of `owner`'s process before the Host has it: held for it.
     pub(crate) fn hold_spawning_event(&mut self, owner: u64, event: Event) {
-        if let Some(spawning) = self.on_demand.spawning.get_mut(&owner) {
+        if let Some(spawning) = self.core.on_demand.spawning.get_mut(&owner) {
             spawning.events.push(event);
         }
     }
@@ -236,14 +237,15 @@ impl Host {
     /// process said meanwhile.
     pub(crate) fn spawned(&mut self, owner: u64, result: std::result::Result<(), String>) {
         let made = self
+            .core
             .on_demand
             .spawner
             .as_ref()
             .and_then(|spawner| spawner.take(owner));
-        let Some(spawning) = self.on_demand.spawning.remove(&owner) else {
+        let Some(spawning) = self.core.on_demand.spawning.remove(&owner) else {
             // Not asked for: stopped.
             if let Some(plugin) = made {
-                self.reaper.discard(plugin);
+                self.core.reaper.discard(plugin);
             }
             return;
         };
@@ -253,17 +255,17 @@ impl Host {
             (Ok(()), None) => return,
             (Err(error), _) => Err(error),
         };
-        let id = self.unit_id(spawning.unit);
+        let id = self.core.unit_id(spawning.unit);
         match result {
             Ok(plugin) => {
                 let name = plugin.manifest.name.clone();
                 if spawning.canceled.is_none() {
                     // Before `add_plugin` (its `process_spawned`): the
                     // core knows it runs alone from the start.
-                    self.supervisor.placed_own(Pid(owner));
+                    self.core.supervisor.placed_own(Pid(owner));
                 }
-                self.add_plugin(owner, *plugin);
-                let _ = self.backend.commands.send(Command {
+                self.core.add_plugin(owner, *plugin);
+                let _ = self.core.backend.commands.send(Command {
                     reply: Reply { owner, id: 0 },
                     method: "owner.registered".into(),
                     params: json!({"manifestId":id,"manifestName":name}),
@@ -298,13 +300,13 @@ impl Host {
                 self.supervisor_run();
             }
             Err(error) => {
-                self.supervisor.activation_end(Pid(owner));
-                let now = self.now_ms();
-                self.supervisor.set_now(now);
+                self.core.supervisor.activation_end(Pid(owner));
+                let now = self.core.now_ms();
+                self.core.supervisor.set_now(now);
                 if spawning.canceled.is_some() {
                     // Nothing ran: the stop the core waits for is over.
-                    self.supervisor.process_reaped(Pid(owner), None);
-                    self.supervisor.backend_cleaned(Pid(owner));
+                    self.core.supervisor.process_reaped(Pid(owner), None);
+                    self.core.supervisor.backend_cleaned(Pid(owner));
                     self.supervisor_run();
                     // Kept in standby after a start timeout: its hold.
                     self.note_hold(spawning.unit);

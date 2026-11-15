@@ -2297,3 +2297,100 @@ fn a_stopped_lead_strip_is_dismissed_by_a_press() {
     click(&w, right - 20., 24.);
     assert_eq!(string(&w, "last"), "dismiss");
 }
+
+/// The seek line's timeline ranges at their limit (`timeline::MAX_RANGES`,
+/// 1000 since player 0.10.0): the playback plugin draws them as one Path per
+/// style, `M x0 0 H x1 V 1 H x0 Z` per run of columns (its `seekRanges`, ranges
+/// that touch merged), so a line `span` px wide never has more than `span / 2`
+/// rectangles. Times a full software-rendered frame of a 4K-wide bar with no
+/// band, 100, 1000 and the 1920 rectangles of the worst case: in one Path,
+/// in one Path whose commands change every frame, and split over Paths of
+/// at most 100. Measured 2026-11-14 (release, Slint 1.18.1): one Path grows
+/// with the square of its rectangles (100: 0.8 ms, 1000: 40 ms, 1920: 145 ms);
+/// Paths of 100 grow linearly (1000: 3.8 ms, 1920: 7.1 ms).
+/// `cargo test --release range_band_frame_time -- --ignored --nocapture`.
+#[test]
+#[ignore = "a timing bench: prints frame times, asserts nothing about them"]
+// Run by hand with --nocapture: its figures go to the console.
+#[allow(clippy::disallowed_macros)]
+fn range_band_frame_time() {
+    const SOURCE: &str = r#"
+export component W inherits Window {
+    in property <string> ranges;
+    // The same rectangles split over several Paths, at most 100 each.
+    in property <[string]> chunks;
+    in property <float> progress;
+    background: #202020;
+    Rectangle { x: 0; y: 10px; width: root.progress * root.width; height: 2px; background: #3070f0; }
+    Path {
+        x: 0; y: 8px; width: root.width; height: 6px;
+        viewbox-width: 3840; viewbox-height: 1; fit: fill;
+        commands: root.ranges;
+        fill: #ffffff59;
+    }
+    for chunk in root.chunks: Path {
+        x: 0; y: 8px; width: root.width; height: 6px;
+        viewbox-width: 3840; viewbox-height: 1; fit: fill;
+        commands: chunk;
+        fill: #ffffff59;
+    }
+}"#;
+    let w = build(SOURCE, 3840., 30.);
+    // `count` one-column rectangles `every` columns apart, from `shift`.
+    let commands = |count: usize, every: usize, shift: usize| {
+        (0..count)
+            .map(|i| i * every + shift)
+            .map(|x| format!("M{x} 0H{}V1H{x}Z", x + 1))
+            .collect::<String>()
+    };
+    let median = |w: &ComponentInstance, change: &dyn Fn(usize)| {
+        let mut times: Vec<f64> = (0..31)
+            .map(|frame| {
+                change(frame);
+                let start = std::time::Instant::now();
+                let _ = render(w, 1., 3840., 30.);
+                start.elapsed().as_secs_f64() * 1000.
+            })
+            .collect();
+        times.sort_by(f64::total_cmp);
+        times[15]
+    };
+    let set = |name: &str, value: Value| w.set_property(name, value).unwrap();
+    for (count, every) in [(0, 1), (100, 38), (1000, 3), (1920, 2)] {
+        set("ranges", Value::String(commands(count, every, 0).into()));
+        // The playhead moves every frame; the band stays.
+        let still = median(&w, &|frame| {
+            set("progress", Value::Number(frame as f64 / 31.))
+        });
+        // The band changes every frame (a plugin rewriting its ranges).
+        let changing = median(&w, &|frame| {
+            set(
+                "ranges",
+                Value::String(commands(count, every, frame % 2).into()),
+            )
+        });
+        // The same rectangles as Paths of at most 100 each.
+        set("ranges", Value::String("".into()));
+        let parts: Vec<Value> = (0..count.div_ceil(100))
+            .map(|part| {
+                let first = part * 100;
+                let n = (count - first).min(100);
+                Value::String(commands(n, every, first * every).into())
+            })
+            .collect();
+        set(
+            "chunks",
+            Value::Model(slint::ModelRc::new(slint::VecModel::from(parts))),
+        );
+        let split = median(&w, &|frame| {
+            set("progress", Value::Number(frame as f64 / 31.))
+        });
+        set(
+            "chunks",
+            Value::Model(slint::ModelRc::new(slint::VecModel::<Value>::default())),
+        );
+        println!(
+            "range band: {count} rectangles: frame {still:.2} ms with the playhead moving, {changing:.2} ms when the ranges change, {split:.2} ms as Paths of 100"
+        );
+    }
+}

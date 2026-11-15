@@ -30,6 +30,13 @@ export interface ExtractOptions {
     compilerOptions?: TS.CompilerOptions;
 }
 export declare const pluralForms: (language: string) => "nplurals=1; plural=0;" | "nplurals=2; plural=(n != 1);";
+/**
+ * Thrown by {@link extract} when a text cannot be read for want of the SDK's
+ * types: `code` is `"sdk-types"`, `message` names each call and why.
+ */
+export declare class SdkTypesMissing extends Error {
+    readonly code = "sdk-types";
+}
 /** Find every translatable text of a plugin, in reference order. */
 export declare function extract(options: ExtractOptions): {
     messages: Message[];

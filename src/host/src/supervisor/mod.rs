@@ -910,6 +910,43 @@ impl<P: Clone> Supervisor<P> {
         }
     }
 
+    /// A message goes now to `pid`, its unit's running process, without a
+    /// `wake` (a trigger notification or a source event the host sends a
+    /// running plugin, events-and-triggers.md §4.9): as a trigger to an
+    /// Active unit in `wake`, it counts as use and cancels a standby on its
+    /// way (the idle timer's job, waiting or asking for resources), so the
+    /// process is not stopped under the handler the message starts. Nothing
+    /// for any other pid or state.
+    pub fn delivering(&mut self, pid: Pid) {
+        let Some(&u) = self.by_pid.get(&pid) else {
+            return;
+        };
+        let now = self.now;
+        let Some(unit) = self.units.get_mut(&u) else {
+            return;
+        };
+        let UnitState::Active {
+            pid: current,
+            last_active,
+            ..
+        } = &mut unit.state
+        else {
+            return;
+        };
+        if *current != pid {
+            return;
+        }
+        *last_active = (*last_active).max(now);
+        if unit
+            .job
+            .as_ref()
+            .is_some_and(|job| job.kind == JobKind::Standby)
+        {
+            self.cancel_standby(u);
+            self.sync(u);
+        }
+    }
+
     /// `kill`: escalate the stopping process now (not a job).
     pub fn kill(&mut self, u: UnitId) {
         let Some(unit) = self.units.get_mut(&u) else {

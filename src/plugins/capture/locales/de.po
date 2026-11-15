@@ -315,10 +315,10 @@ msgstr "Aktuelles Bild speichern oder kopieren, Serienaufnahmen"
 #, x-machine
 msgid ""
 "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n"
-"Right-click menu: Tools ▸ Snapshot ▸."
+"→ Menu: Tools ▸ Snapshot"
 msgstr ""
 "Speichert, speichert unter oder kopiert das aktuelle Bild (mit den angezeigten Untertiteln oder das gerenderte Bild mit Videoeffekten) als PNG, JPEG oder BMP und nimmt Bildserien auf. Die Einstellungen finden Sie unter Optionen ▸ Video ▸ Schnappschuss.\n"
-"Kontextmenü: Werkzeuge ▸ Schnappschuss ▸."
+"→ Menü: Werkzeuge ▸ Schnappschuss"
 
 #: manifest.json
 #, x-machine

@@ -1,5 +1,9 @@
 # Changelog
 
+## 2.2.44
+
+- The vendored SDK is 1.10.0 as published on npm (`npm run vendor:sdk`), the version the player now uses. 1.10.0 adds the source events, triggers (`plugin.trigger`), the state stream (`plugin.player.stream`), the grown `when` language, 1000 timeline ranges and the TestHost's trigger model; the documentation tree and `capability-scan.json` (the new members) follow. The Workshop uses none of them; the layout the scan uses is unchanged. Who must change: nobody.
+
 ## 2.2.43
 
 - The install dialog for an AI-generated plugin says again what the plugin uses (user approval 2026-11-13; the "Capabilities: …" line went with the field in 2.2.42). Before asking, the Workshop runs its own vendored scanner (`vestra-plugin scan <project>`, `Toolchain.scan()`) on the project, under the same Node permission model as the type check (it reads the Workshop's package, the SDK copy, the project and its scratch folder; no child processes), with a 30 s limit. The detail is "{1} {2}" and then, as the Plugin Store words its scan-based disclosure, "It will be able to:" with one "· " line per category in the scan's order (a category word the table does not know: "Unknown permission: …", last).

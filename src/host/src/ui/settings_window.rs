@@ -3,6 +3,7 @@
 //! the right, Close at the bottom. The player owns the window; each page is a
 //! plugin Slint component with its own bridge global, composed like panels.
 #![forbid(unsafe_code)]
+use crate::host::messages::{SettingsOp, UiCommand, UiReport};
 use crate::host::*;
 use crate::process;
 use crate::ui::{composition, ui_image, ui_patch, ui_values};
@@ -87,15 +88,15 @@ struct Open {
     owners: BTreeMap<u64, Rc<Cell<u64>>>,
 }
 
+/// The registry of settings pages (K7; plan step S2c(4)): the core's
+/// (`Core::settings`). Pages, their serials, the registrations waiting for
+/// the `settings-check` thread, recorded pages and their recordings. The
+/// open options window is the interface's ([`Options`]); it learns of
+/// changes as `UiCommand::Settings` (host/messages.rs).
 #[derive(Default)]
 pub struct Settings {
     pages: Vec<Page>,
     next_serial: u64,
-    open: Option<Open>,
-    /// The page shown (or to show): manifest/id.
-    current: Option<String>,
-    /// The page set changed while the window is open: rebuild it.
-    stale: bool,
     /// Registrations whose page compiles on the `settings-check` thread:
     /// (request, page, initial properties refused). The reply waits for it.
     checking: Vec<(Reply, Page, Vec<RpcError>)>,
@@ -108,6 +109,18 @@ pub struct Settings {
     /// Each page's `settings.register` as its plugin sent it, without the
     /// properties (the page keeps the current ones): its recording.
     sent: BTreeMap<u64, Value>,
+}
+
+/// The options window as the interface holds it (K7; plan step S2c(4)):
+/// `Host::settings`. It reads the pages from the core's registry
+/// ([`Settings`]) when it builds the window or its tree.
+#[derive(Default)]
+pub struct Options {
+    open: Option<Open>,
+    /// The page shown (or to show): manifest/id.
+    current: Option<String>,
+    /// The page set changed while the window is open: rebuild it.
+    stale: bool,
 }
 
 /// Compiles each registered page on its own on a thread of its own, so that
@@ -371,9 +384,6 @@ fn moved(before: &Page, after: &Page) -> bool {
 }
 
 impl Settings {
-    pub fn window(&self) -> Option<&slint_interpreter::ComponentInstance> {
-        self.open.as_ref().map(|open| &open.instance)
-    }
     pub fn page(&self, owner: u64, id: &str) -> Option<&Page> {
         self.pages.iter().find(|p| p.owner == owner && p.id == id)
     }
@@ -382,18 +392,14 @@ impl Settings {
             .iter_mut()
             .find(|p| p.owner == owner && p.id == id)
     }
-    /// The serial of the page at a tree index of the open window.
-    fn at(&self, generation: u64, index: usize) -> Option<u64> {
-        let open = self.open.as_ref().filter(|o| o.generation == generation)?;
-        open.order.get(index).copied()
-    }
+    /// `owner`'s pages and registrations go; whether a page went (an open
+    /// window is then rebuilt: `Options::changed`).
     pub fn remove_owner(&mut self, owner: u64) -> bool {
         self.checking.retain(|(reply, ..)| reply.owner != owner);
         let before = self.pages.len();
         self.pages.retain(|p| p.owner != owner);
         let changed = self.pages.len() != before;
         self.forget_gone();
-        self.stale |= changed && self.open.is_some();
         changed
     }
     /// Drops the recorded marks and sent registrations of removed pages.
@@ -421,7 +427,8 @@ impl Settings {
         self.recorded.extend(serials);
     }
     /// At `runtime.ready` of a woken plugin: its recorded pages it did not
-    /// register again go.
+    /// register again go; whether one went (an open window is then
+    /// rebuilt: `Options::changed`).
     pub fn remove_recorded(&mut self, owner: u64) -> bool {
         let before = self.pages.len();
         let recorded = std::mem::take(&mut self.recorded);
@@ -429,9 +436,7 @@ impl Settings {
             .retain(|p| !(p.owner == owner && recorded.contains(&p.serial)));
         self.recorded = recorded;
         self.forget_gone();
-        let changed = self.pages.len() != before;
-        self.stale |= changed && self.open.is_some();
-        changed
+        self.pages.len() != before
     }
     /// A woken plugin's registration of a recorded page with the same files
     /// (the recording is of this package, so the same source): the page
@@ -459,38 +464,15 @@ impl Settings {
         self.sent.insert(serial, sent);
         Some(before)
     }
-    /// After [`Self::reregister`]: the page as registered again when the open
-    /// window can take it in place. A value it no longer sets returns to its
-    /// default (the SDK contract: an omitted property keeps its default),
-    /// which only a new component gives: the window is built again
-    /// (`stale`), inside its own native window. `None` too without a window.
-    fn in_place(&mut self, before: &Page) -> Option<Page> {
-        self.open.as_ref()?;
-        let page = self
-            .pages
-            .iter()
-            .find(|p| p.serial == before.serial)?
-            .clone();
-        if before
-            .properties
-            .keys()
-            .any(|name| !page.properties.contains_key(name))
-        {
-            self.stale = true;
-            return None;
-        }
-        Some(page)
-    }
-    /// Wake: `from`'s pages move to generation `to`, in an open window too
-    /// (its callbacks read their page's owner when called): nothing is
-    /// built again.
-    pub fn rekey(&mut self, from: u64, to: u64) {
+    /// Wake: `from`'s pages move to generation `to`; their serials (an
+    /// open window's callbacks follow: `Options::rekey`).
+    pub fn rekey(&mut self, from: u64, to: u64) -> Vec<u64> {
+        let mut moved = Vec::new();
         for page in self.pages.iter_mut().filter(|p| p.owner == from) {
             page.owner = to;
-            if let Some(owner) = self.open.as_ref().and_then(|o| o.owners.get(&page.serial)) {
-                owner.set(to);
-            }
+            moved.push(page.serial);
         }
+        moved
     }
     /// `owner`'s pages as `settings.register` calls, each with its current
     /// properties; `None` when one has no sent form (cannot be recorded).
@@ -514,11 +496,59 @@ impl Settings {
             .map(|page| (page, self.is_recorded(page)))
             .collect()
     }
-    /// Whether `owner` has a page compiling or showing in the open window
-    /// (it waits for, or answers, its plugin).
-    pub fn busy(&self, owner: u64) -> bool {
+    /// Whether `owner` has a page compiling or, with the options window
+    /// `open`, showing in it (it waits for, or answers, its plugin).
+    pub fn busy(&self, owner: u64, open: bool) -> bool {
         self.checking.iter().any(|(reply, ..)| reply.owner == owner)
-            || self.open.is_some() && self.pages.iter().any(|p| p.owner == owner)
+            || open && self.pages.iter().any(|p| p.owner == owner)
+    }
+}
+
+impl Options {
+    pub fn window(&self) -> Option<&slint_interpreter::ComponentInstance> {
+        self.open.as_ref().map(|open| &open.instance)
+    }
+    /// The serial of the page at a tree index of the open window.
+    fn at(&self, generation: u64, index: usize) -> Option<u64> {
+        let open = self.open.as_ref().filter(|o| o.generation == generation)?;
+        open.order.get(index).copied()
+    }
+    /// The page set changed: an open window is rebuilt (`settings_tick`).
+    pub fn changed(&mut self) {
+        self.stale |= self.open.is_some();
+    }
+    /// Wake: the pages of `serials` moved to generation `to`; an open
+    /// window's callbacks read their page's owner when called, so nothing
+    /// is built again.
+    pub fn rekey(&self, serials: &[u64], to: u64) {
+        let Some(open) = &self.open else {
+            return;
+        };
+        for serial in serials {
+            if let Some(owner) = open.owners.get(serial) {
+                owner.set(to);
+            }
+        }
+    }
+    /// After `Settings::reregister`: whether the open window can take the
+    /// page registered again (`page`, `before` as it was) in place. A
+    /// value it no longer sets returns to its default (the SDK contract:
+    /// an omitted property keeps its default), which only a new component
+    /// gives: the window is built again (`stale`), inside its own native
+    /// window. `false` too without a window.
+    fn in_place(&mut self, before: &Page, page: &Page) -> bool {
+        if self.open.is_none() {
+            return false;
+        }
+        if before
+            .properties
+            .keys()
+            .any(|name| !page.properties.contains_key(name))
+        {
+            self.stale = true;
+            return false;
+        }
+        true
     }
 }
 
@@ -545,7 +575,72 @@ fn params_page(params: &Value) -> std::result::Result<&str, RpcError> {
     Ok(id)
 }
 
+impl Core {
+    /// A registration's compile check (K7): `page` alone, as the window's
+    /// `source`, on the `settings-check` thread (`spawn_checker`), started
+    /// on first use. `false`: the thread is missing (the caller compiles).
+    fn settings_queue_check(&mut self, serial: u64, source: String) -> bool {
+        if self.settings.checker.is_none() {
+            self.settings.checker = spawn_checker(self.events.clone());
+        }
+        let queued = self
+            .settings
+            .checker
+            .as_ref()
+            .is_some_and(|checker| checker.send((serial, source)).is_ok());
+        if !queued {
+            self.settings.checker = None;
+        }
+        queued
+    }
+    /// A checked page joins the registry: a recorded page of the same id
+    /// (a woken plugin's, with other files) is replaced.
+    fn settings_insert(&mut self, page: Page) {
+        let owner = page.owner;
+        let recorded = &self.settings.recorded;
+        match self
+            .settings
+            .pages
+            .iter()
+            .position(|p| p.owner == owner && p.id == page.id && recorded.contains(&p.serial))
+        {
+            Some(index) => self.settings.pages[index] = page,
+            None => self.settings.pages.push(page),
+        }
+        self.settings.forget_gone();
+    }
+    /// `settings.unregister` of a page still compiling: its registration,
+    /// taken (it ends with an error and the page is never added).
+    fn settings_take_checking(&mut self, owner: u64, id: &str) -> Option<Reply> {
+        let index = self
+            .settings
+            .checking
+            .iter()
+            .position(|(_, page, _)| page.owner == owner && page.id == id)?;
+        Some(self.settings.checking.remove(index).0)
+    }
+    /// `settings.unregister`: the page goes; whether there was one.
+    fn settings_unregister(&mut self, owner: u64, id: &str) -> bool {
+        let before = self.settings.pages.len();
+        self.settings
+            .pages
+            .retain(|p| !(p.owner == owner && p.id == id));
+        self.settings.forget_gone();
+        self.settings.pages.len() != before
+    }
+}
+
 impl Host {
+    /// `settings.*` (rows 83a–83d; K7, plan step S2c(4)). The registry is
+    /// the core's (`Core::settings`), the open options window the
+    /// interface's (`Host::settings`, [`Options`]). `register` is answered
+    /// after the compile check (`settings_checked`) and `unregister` at
+    /// once (stream I); an open window learns of either as a
+    /// `UiCommand::Settings`. `set` and `show` are UI-bound (stream B,
+    /// R5): the core refuses what it can judge from its registry, then
+    /// sends the request to the interface, whose `UiReport::Answered` is
+    /// the reply. Until plan step S3a each message is delivered in place,
+    /// at the point today's code did its work.
     pub(crate) fn settings_dispatch(
         &mut self,
         reply: &Reply,
@@ -556,19 +651,35 @@ impl Host {
         match method {
             "settings.register" => {
                 let origin = self
+                    .core
                     .plugins
                     .get(&owner)
                     .map(process::Plugin::origin)
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
-                let (page, refused) = self.settings_page(owner, &origin, params)?;
-                // Row patches apply on the initial properties again (seq 0).
-                self.images.reset_writes(owner, &page.view());
+                let (page, refused) = self.core.settings_page(owner, &origin, params)?;
+                // Row patches apply on the initial properties again (seq 0):
+                // the interface drops the page's write records (plan step
+                // S2c(6)).
+                self.ui_command(UiCommand::ResetWrites {
+                    owner,
+                    view: page.view(),
+                });
                 // A woken plugin registers its recorded page again: the same
                 // files need no compile (the recording is of this package).
-                if let Some(before) = self.settings.reregister(&page, sent_page(params)) {
+                if let Some(before) = self.core.settings.reregister(&page, sent_page(params)) {
                     // The same source: an open window keeps its component
                     // and its native window; only what changed is written.
-                    self.settings_update(&before);
+                    // Delivered where today's code wrote it, before the
+                    // reply: what the window reports to the plugin (a value
+                    // that no longer converts) precedes the reply (R6).
+                    let page = Page {
+                        serial: before.serial,
+                        ..page
+                    };
+                    self.ui_command(UiCommand::Settings(SettingsOp::Updated {
+                        before: Box::new(before),
+                        page: Box::new(page),
+                    }));
                     self.report_refused(owner, refused);
                     return Ok(Some(Value::Null));
                 }
@@ -576,38 +687,30 @@ impl Host {
                 // registration instead of the shared window: on the
                 // `settings-check` thread (`spawn_checker`); the reply waits.
                 let checked = source(&[&page])?;
-                self.settings.sent.insert(page.serial, sent_page(params));
-                if self.settings.checker.is_none() {
-                    self.settings.checker = spawn_checker(self.events.clone());
-                }
-                let queued =
-                    self.settings.checker.as_ref().is_some_and(|checker| {
-                        checker.send((page.serial, checked.clone())).is_ok()
-                    });
-                if !queued {
+                self.core
+                    .settings
+                    .sent
+                    .insert(page.serial, sent_page(params));
+                if !self.core.settings_queue_check(page.serial, checked.clone()) {
                     // No thread: compiled here, as before.
-                    self.settings.checker = None;
                     if let Err(error) = composition::build(checked, "OptionsWindow") {
-                        self.settings.forget_gone();
+                        self.core.settings.forget_gone();
                         return Err(RpcError::new("ui-prepare", format!("{error:#}")));
                     }
                     self.settings_add(page, refused);
                     return Ok(Some(Value::Null));
                 }
-                self.settings.checking.push((reply.clone(), page, refused));
+                self.core
+                    .settings
+                    .checking
+                    .push((reply.clone(), page, refused));
                 Ok(None)
             }
             "settings.unregister" => {
                 let id = params_page(params)?.to_owned();
                 // Still compiling: the registration ends with an error and the
                 // page is never added.
-                if let Some(index) = self
-                    .settings
-                    .checking
-                    .iter()
-                    .position(|(_, page, _)| page.owner == owner && page.id == id)
-                {
-                    let (pending, ..) = self.settings.checking.remove(index);
+                if let Some(pending) = self.core.settings_take_checking(owner, &id) {
                     self.respond(
                         pending,
                         Err(RpcError::new(
@@ -616,111 +719,184 @@ impl Host {
                         )),
                     );
                 }
-                let before = self.settings.pages.len();
-                self.settings
-                    .pages
-                    .retain(|p| !(p.owner == owner && p.id == id));
-                self.settings.forget_gone();
-                if self.settings.pages.len() != before {
-                    self.images.release_view(owner, &format!("$settings:{id}"));
-                    self.settings.stale |= self.settings.open.is_some();
+                if self.core.settings_unregister(owner, &id) {
+                    self.ui_command(UiCommand::Settings(SettingsOp::Removed { owner, id }));
                 }
                 Ok(Some(Value::Null))
             }
             "settings.set" => {
                 // A large array converted on the reader thread (P3): its
                 // whole value was taken out of `params`.
-                let mut prepared = self.take_prepared(reply);
-                let id = params_page(params)?.to_owned();
-                let property = string(params, "property")?.to_owned();
-                let page = self
+                let prepared = self.core.take_prepared(reply);
+                let id = params_page(params)?;
+                string(params, "property")?;
+                self.core
                     .settings
-                    .page(owner, &id)
+                    .page(owner, id)
                     .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
-                let (view, serial) = (page.view(), page.serial);
-                let window = self.settings.window().map(ComponentHandle::clone_strong);
-                // A part of a whole value sent in parts: held until the last.
-                let parted = self.parts(owner, &view, &property, params, prepared.as_deref())?;
-                let done = match parted {
-                    ui_patch::Parted::Held => return Ok(Some(Value::Null)),
-                    ui_patch::Parted::Done(value, rows, seq) => Some((value, Some(rows), seq)),
-                    ui_patch::Parted::Not => None,
-                };
-                let (value, rows, seq) = match (done, params.get("patch")) {
-                    (Some(done), _) => done,
-                    (None, Some(patch)) => {
-                        let (base, seq, ops) = ui_patch::request(patch)?;
-                        if self.images.seq(owner, &view, &property) != base {
-                            return Err(ui_patch::stale());
-                        }
-                        match self.patch_page(
-                            owner,
-                            &id,
-                            serial,
-                            window.as_ref(),
-                            &property,
-                            ops,
-                            prepared.take(),
-                        )? {
-                            None => {
-                                self.images.set_seq(owner, &view, &property, seq);
-                                return Ok(Some(Value::Null));
-                            }
-                            Some(patched) => (patched, None, seq),
-                        }
-                    }
-                    (None, None) => {
-                        let seq = params["seq"].as_u64().unwrap_or(0);
-                        match prepared.map(|prepared| *prepared) {
-                            Some(prepared) => {
-                                (prepared.whole.unwrap_or_default(), Some(prepared.rows), seq)
-                            }
-                            None => (params["value"].clone(), None, seq),
-                        }
-                    }
-                };
-                if let Some(window) = window {
-                    let value =
-                        self.prop_value_with(owner, &view, &property, &value, rows.as_ref())?;
-                    let alias = alias(serial);
-                    let current = window
-                        .get_global_property(&alias, &property)
-                        .map_err(|e| RpcError::new("ui", e.to_string()))?;
-                    if !ui_values::reconcile_in(window.window(), &current, &value)? {
-                        ui_values::set(&window, Some(&alias), &property, value)
-                            .map_err(|e| RpcError::new("ui", e.to_string()))?;
-                    }
-                } else if ui_image::reference(&value).is_some() {
-                    // Checked now, shown when the window opens.
-                    self.prop_value(owner, &view, &property, &value)?;
-                } else if rows.is_none() {
-                    // Prepared rows were checked on the reader thread.
-                    RpcError::check_property(&property, &value)?;
-                }
-                if let Some(page) = self.settings.page_mut(owner, &id) {
-                    page.properties.insert(property.clone(), value);
-                }
-                self.images.set_seq(owner, &view, &property, seq);
-                Ok(Some(Value::Null))
+                self.ui_command(UiCommand::Settings(SettingsOp::Set {
+                    reply: reply.clone(),
+                    params: params.clone(),
+                    prepared,
+                }));
+                Ok(None)
             }
             "settings.show" => {
-                if self.headless {
+                if self.core.headless {
                     return Err(RpcError::new("unavailable", "no user interface"));
                 }
                 if !params["id"].is_null() {
                     let id = params_page(params)?;
-                    let page = self
+                    self.core
                         .settings
                         .page(owner, id)
                         .ok_or_else(|| RpcError::invalid("not a settings page of this plugin"))?;
-                    self.settings.current = Some(page.key());
                 }
-                self.settings_open()
-                    .map_err(|e| RpcError::new("ui", format!("{e:#}")))?;
-                Ok(Some(Value::Null))
+                self.ui_command(UiCommand::Settings(SettingsOp::Show {
+                    reply: reply.clone(),
+                    params: params.clone(),
+                }));
+                Ok(None)
             }
             _ => Err(RpcError::new("unsupported", "unknown settings method")),
         }
+    }
+    /// The interface's side of `UiCommand::Settings` (K7; plan step
+    /// S2c(4)): the open options window follows the registry, and `set`
+    /// and `show` are carried out and answered (`UiReport::Answered`).
+    pub(crate) fn settings_command(&mut self, op: SettingsOp) {
+        match op {
+            SettingsOp::Added(_) => self.settings.changed(),
+            SettingsOp::Updated { before, page } => self.settings_update(&before, &page),
+            SettingsOp::Removed { owner, id } => {
+                self.images.release_view(owner, &format!("$settings:{id}"));
+                self.settings.changed();
+            }
+            SettingsOp::Set {
+                reply,
+                params,
+                prepared,
+            } => {
+                let result = self.settings_write(&reply, &params, prepared);
+                self.ui_report(UiReport::Answered {
+                    reply,
+                    result,
+                    handoff: None,
+                    confirm_failed: false,
+                });
+            }
+            SettingsOp::Show { reply, params } => {
+                let result = self.settings_show(reply.owner, &params);
+                self.ui_report(UiReport::Answered {
+                    reply,
+                    result,
+                    handoff: None,
+                    confirm_failed: false,
+                });
+            }
+        }
+    }
+    /// `settings.set` in the interface (row 83c): the value goes into the
+    /// open window (conversion and reconcile errors are the reply) and
+    /// into the page's stored properties.
+    fn settings_write(
+        &mut self,
+        reply: &Reply,
+        params: &Value,
+        mut prepared: Option<Box<ui_values::Prepared>>,
+    ) -> std::result::Result<Value, RpcError> {
+        let owner = reply.owner;
+        let id = params_page(params)?.to_owned();
+        let property = string(params, "property")?.to_owned();
+        let page = self
+            .core
+            .settings
+            .page(owner, &id)
+            .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
+        let (view, serial) = (page.view(), page.serial);
+        let window = self.settings.window().map(ComponentHandle::clone_strong);
+        // A part of a whole value sent in parts: held until the last.
+        let parted = self.parts(owner, &view, &property, params, prepared.as_deref())?;
+        let done = match parted {
+            ui_patch::Parted::Held => return Ok(Value::Null),
+            ui_patch::Parted::Done(value, rows, seq) => Some((value, Some(rows), seq)),
+            ui_patch::Parted::Not => None,
+        };
+        let (value, rows, seq) = match (done, params.get("patch")) {
+            (Some(done), _) => done,
+            (None, Some(patch)) => {
+                let (base, seq, ops) = ui_patch::request(patch)?;
+                if self.images.seq(owner, &view, &property) != base {
+                    return Err(ui_patch::stale());
+                }
+                match self.patch_page(
+                    owner,
+                    &id,
+                    serial,
+                    window.as_ref(),
+                    &property,
+                    ops,
+                    prepared.take(),
+                )? {
+                    None => {
+                        self.images.set_seq(owner, &view, &property, seq);
+                        return Ok(Value::Null);
+                    }
+                    Some(patched) => (patched, None, seq),
+                }
+            }
+            (None, None) => {
+                let seq = params["seq"].as_u64().unwrap_or(0);
+                match prepared.map(|prepared| *prepared) {
+                    Some(prepared) => {
+                        (prepared.whole.unwrap_or_default(), Some(prepared.rows), seq)
+                    }
+                    None => (params["value"].clone(), None, seq),
+                }
+            }
+        };
+        if let Some(window) = window {
+            let value = self.prop_value_with(owner, &view, &property, &value, rows.as_ref())?;
+            let alias = alias(serial);
+            let current = window
+                .get_global_property(&alias, &property)
+                .map_err(|e| RpcError::new("ui", e.to_string()))?;
+            if !ui_values::reconcile_in(window.window(), &current, &value)? {
+                ui_values::set(&window, Some(&alias), &property, value)
+                    .map_err(|e| RpcError::new("ui", e.to_string()))?;
+            }
+        } else if ui_image::reference(&value).is_some() {
+            // Checked now, shown when the window opens.
+            self.prop_value(owner, &view, &property, &value)?;
+        } else if rows.is_none() {
+            // Prepared rows were checked on the reader thread.
+            RpcError::check_property(&property, &value)?;
+        }
+        if let Some(page) = self.core.settings.page_mut(owner, &id) {
+            page.properties.insert(property.clone(), value);
+        }
+        self.images.set_seq(owner, &view, &property, seq);
+        Ok(Value::Null)
+    }
+    /// `settings.show` in the interface (row 83d): the page to show, then
+    /// the window opened; its open error is the reply.
+    fn settings_show(
+        &mut self,
+        owner: u64,
+        params: &Value,
+    ) -> std::result::Result<Value, RpcError> {
+        if !params["id"].is_null() {
+            let id = params_page(params)?;
+            let page = self
+                .core
+                .settings
+                .page(owner, id)
+                .ok_or_else(|| RpcError::invalid("not a settings page of this plugin"))?;
+            self.settings.current = Some(page.key());
+        }
+        self.settings_open()
+            .map_err(|e| RpcError::new("ui", format!("{e:#}")))?;
+        Ok(Value::Null)
     }
     /// A row patch of a settings page's property (`ui_patch`): in place in
     /// the open window's model and in the stored properties (`None`), or,
@@ -740,6 +916,7 @@ impl Host {
         prepared: Option<Box<ui_values::Prepared>>,
     ) -> std::result::Result<Option<Value>, RpcError> {
         let page = self
+            .core
             .settings
             .page(owner, id)
             .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
@@ -763,6 +940,7 @@ impl Host {
                 .filter(|rows| ui_patch::applicable(&current, ops.before, &ops.shapes, rows));
             let Some(rows) = rows else {
                 return match self
+                    .core
                     .settings
                     .page(owner, id)
                     .and_then(|page| page.properties.get(property))
@@ -777,6 +955,7 @@ impl Host {
         } else {
             // The rows it keeps count toward the totals too.
             let Some(Value::Array(stored)) = self
+                .core
                 .settings
                 .page(owner, id)
                 .and_then(|page| page.properties.get(property))
@@ -785,7 +964,7 @@ impl Host {
             };
             let whole = ui_patch::patched(stored, &ops);
             RpcError::check_property(property, &whole)?;
-            if let Some(page) = self.settings.page_mut(owner, id) {
+            if let Some(page) = self.core.settings.page_mut(owner, id) {
                 page.properties.insert(property.to_owned(), whole);
             }
             return Ok(None);
@@ -796,6 +975,7 @@ impl Host {
             _ => ops.rows.iter().map(|row| (*row).clone()).collect(),
         };
         if let Some(Value::Array(stored)) = self
+            .core
             .settings
             .page_mut(owner, id)
             .and_then(|page| page.properties.get_mut(property))
@@ -804,6 +984,9 @@ impl Host {
         }
         Ok(None)
     }
+}
+
+impl Core {
     /// A `settings.register` of `owner`'s (from `origin`, its package),
     /// checked, with a new serial: the page and its refused initial
     /// properties. A recorded page of the same id does not count against it.
@@ -872,13 +1055,13 @@ impl Host {
     }
     /// Replays a recorded `settings.register` for a parked `owner`: the page
     /// is added as recorded, without a compile (it compiled when recorded,
-    /// and the recording is of this package).
-    pub(crate) fn settings_replay(
+    /// and the recording is of this package). The page added.
+    fn settings_replay(
         &mut self,
         owner: u64,
         origin: &crate::host::Origin,
         params: &Value,
-    ) -> std::result::Result<(), RpcError> {
+    ) -> std::result::Result<Page, RpcError> {
         let (page, _) = self.settings_page(owner, origin, params)?;
         if self.settings.page(owner, &page.id).is_some() {
             return Err(RpcError::invalid(format!(
@@ -888,8 +1071,22 @@ impl Host {
         }
         self.settings.sent.insert(page.serial, sent_page(params));
         self.settings.recorded.insert(page.serial);
-        self.settings.pages.push(page);
-        self.settings.stale |= self.settings.open.is_some();
+        self.settings.pages.push(page.clone());
+        Ok(page)
+    }
+}
+
+impl Host {
+    /// Replays a recorded `settings.register` for a parked `owner`
+    /// (`Core::settings_replay`); an open window is rebuilt.
+    pub(crate) fn settings_replay(
+        &mut self,
+        owner: u64,
+        origin: &crate::host::Origin,
+        params: &Value,
+    ) -> std::result::Result<(), RpcError> {
+        let page = self.core.settings_replay(owner, origin, params)?;
+        self.ui_command(UiCommand::Settings(SettingsOp::Added(Box::new(page))));
         Ok(())
     }
     /// Open (or rebuild) the window, select the current page, bring it front.
@@ -906,14 +1103,15 @@ impl Host {
         Ok(())
     }
     fn settings_build(&mut self) -> Result<()> {
-        let order: Vec<u64> = sorted(&self.settings.pages)
+        let order: Vec<u64> = sorted(&self.core.settings.pages)
             .iter()
             .map(|p| p.serial)
             .collect();
         let pages: Vec<Page> = order
             .iter()
             .filter_map(|serial| {
-                self.settings
+                self.core
+                    .settings
                     .pages
                     .iter()
                     .find(|p| p.serial == *serial)
@@ -991,10 +1189,10 @@ impl Host {
                 &alias,
                 owner,
                 page.view(),
-                self.events.clone(),
+                self.core.events.clone(),
             )?;
         }
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.set_callback("select", move |args| {
             if let Some(SValue::Number(index)) = args.first()
                 && *index >= 0.
@@ -1003,7 +1201,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.set_callback("close-window", move |_| {
             let _ = events.send(Event::Settings(generation, None));
             SValue::Void
@@ -1019,7 +1217,7 @@ impl Host {
         instance: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) {
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         instance.window().on_close_requested(move || {
             let _ = events.send(Event::Settings(generation, None));
             slint::CloseRequestResponse::KeepWindowShown
@@ -1044,11 +1242,12 @@ impl Host {
     /// changed values in place, and its tree the new title, category or
     /// order. Nothing is compiled; the component and its native window
     /// stay. A registration that leaves out a value the page had is built
-    /// again instead (`Settings::in_place`).
-    fn settings_update(&mut self, before: &Page) {
-        let Some(page) = self.settings.in_place(before) else {
+    /// again instead (`Options::in_place`). The interface's side of
+    /// `SettingsOp::Updated`.
+    fn settings_update(&mut self, before: &Page, page: &Page) {
+        if !self.settings.in_place(before, page) {
             return;
-        };
+        }
         let Some(instance) = self
             .settings
             .window()
@@ -1057,7 +1256,7 @@ impl Host {
             return;
         };
         let alias = alias(page.serial);
-        for (name, value) in changed_values(before, &page) {
+        for (name, value) in changed_values(before, page) {
             let written = self
                 .prop_value(page.owner, &page.view(), name, value)
                 .map_err(|error| {
@@ -1069,7 +1268,7 @@ impl Host {
                 diag!("settings property {}/{name}: {error:#}", page.key());
             }
         }
-        if moved(before, &page)
+        if moved(before, page)
             && let Err(error) = self.settings_rows()
         {
             diag!("host.error settings window: {error:#}");
@@ -1080,7 +1279,7 @@ impl Host {
         let Some(open) = &self.settings.open else {
             return Ok(());
         };
-        let pages = sorted(&self.settings.pages);
+        let pages = sorted(&self.core.settings.pages);
         let current = self
             .settings
             .current
@@ -1094,7 +1293,7 @@ impl Host {
     }
     /// Show `serial`, or the current / last page with the fallbacks of `pick`.
     fn settings_select(&mut self, serial: Option<u64>) -> Result<()> {
-        let pages = sorted(&self.settings.pages);
+        let pages = sorted(&self.core.settings.pages);
         let wanted = match serial {
             Some(serial) => pages.iter().find(|p| p.serial == serial).map(|p| p.key()),
             None => self.settings.current.clone().or_else(|| {
@@ -1131,7 +1330,7 @@ impl Host {
                 .get_or_insert_with(Default::default);
             if last.last_page != key {
                 last.last_page = key;
-                let now = self.now_ms();
+                let now = self.core.now_ms();
                 self.ui_state.touch(now);
             }
         }
@@ -1159,22 +1358,13 @@ impl Host {
             }
         }
     }
+    /// A checked page joins the core's registry (`Core::settings_insert`);
+    /// an open window is rebuilt (`SettingsOp::Added`, where today's code
+    /// marked it); its refused initial properties are reported.
     fn settings_add(&mut self, page: Page, refused: Vec<RpcError>) {
         let owner = page.owner;
-        // A recorded page of the same id (a woken plugin's, with other
-        // files) is replaced.
-        let recorded = &self.settings.recorded;
-        match self
-            .settings
-            .pages
-            .iter()
-            .position(|p| p.owner == owner && p.id == page.id && recorded.contains(&p.serial))
-        {
-            Some(index) => self.settings.pages[index] = page,
-            None => self.settings.pages.push(page),
-        }
-        self.settings.forget_gone();
-        self.settings.stale |= self.settings.open.is_some();
+        self.core.settings_insert(page.clone());
+        self.ui_command(UiCommand::Settings(SettingsOp::Added(Box::new(page))));
         self.report_refused(owner, refused);
     }
     /// A page's compile on the `settings-check` thread finished: the
@@ -1185,6 +1375,7 @@ impl Host {
         result: std::result::Result<(), String>,
     ) {
         let Some(index) = self
+            .core
             .settings
             .checking
             .iter()
@@ -1192,9 +1383,9 @@ impl Host {
         else {
             return;
         };
-        let (reply, page, refused) = self.settings.checking.remove(index);
-        if !self.plugins.contains_key(&reply.owner) {
-            self.settings.forget_gone();
+        let (reply, page, refused) = self.core.settings.checking.remove(index);
+        if !self.core.plugins.contains_key(&reply.owner) {
+            self.core.settings.forget_gone();
             return;
         }
         match result {
@@ -1203,7 +1394,7 @@ impl Host {
                 self.respond(reply, Ok(Value::Null));
             }
             Err(message) => {
-                self.settings.forget_gone();
+                self.core.settings.forget_gone();
                 self.respond(reply, Err(RpcError::new("ui-prepare", message)))
             }
         }
@@ -1558,7 +1749,12 @@ mod tests {
     /// Opens `settings`' window as `settings_build` does (the values as
     /// they are, each page's callbacks reading its owner cell), in place of
     /// `old` when given.
-    fn open_window(settings: &mut Settings, events: &mpsc::Sender<Event>, old: Option<Open>) {
+    fn open_window(
+        settings: &Settings,
+        options: &mut Options,
+        events: &mpsc::Sender<Event>,
+        old: Option<Open>,
+    ) {
         let order: Vec<u64> = sorted(&settings.pages).iter().map(|p| p.serial).collect();
         let pages: Vec<Page> = order
             .iter()
@@ -1605,17 +1801,17 @@ mod tests {
             instance.show().unwrap();
         }
         drop(old);
-        settings.open = Some(Open {
+        options.open = Some(Open {
             instance,
             generation: 1,
             order,
             owners,
         });
-        settings.stale = false;
+        options.stale = false;
     }
 
-    fn caption(settings: &Settings, serial: u64) -> SValue {
-        settings
+    fn caption(options: &Options, serial: u64) -> SValue {
+        options
             .window()
             .unwrap()
             .get_global_property(&alias(serial), "caption")
@@ -1632,26 +1828,28 @@ mod tests {
         let native_calls = crate::ui::view::recording_platform();
         let (events, received) = mpsc::channel();
         let mut settings = Settings::default();
+        let mut options = Options::default();
         let mut keys = page("x.hotkeys", "keys", 5, 0, 1);
         keys.owner = 4;
         keys.properties.insert("caption".into(), json!("before"));
         settings.pages = vec![keys.clone(), page("y.other", "other", 5, 10, 2)];
-        open_window(&mut settings, &events, None);
+        open_window(&settings, &mut options, &events, None);
         assert_eq!(
             native_calls().iter().filter(|c| *c == "new window").count(),
             1
         );
-        let instance = settings.window().unwrap().clone_strong();
+        let instance = options.window().unwrap().clone_strong();
         let tree = crate::ui::view::ShownTree::of(instance.window()).unwrap();
         assert_eq!(
-            caption(&settings, 1),
+            caption(&options, 1),
             SValue::from(slint::SharedString::from("before"))
         );
 
         // Park, wake (the new generation is 9), register again.
         settings.mark_recorded(4);
-        settings.rekey(4, 9);
-        assert!(!settings.stale, "a wake does not rebuild the window");
+        let serials = settings.rekey(4, 9);
+        options.rekey(&serials, 9);
+        assert!(!options.stale, "a wake does not rebuild the window");
         let mut again = Page {
             owner: 9,
             serial: 77,
@@ -1661,17 +1859,18 @@ mod tests {
         };
         again.properties.insert("caption".into(), json!("after"));
         let before = settings.reregister(&again, json!({"id":"keys"})).unwrap();
-        assert!(!settings.stale, "the same source is not compiled again");
+        assert!(!options.stale, "the same source is not compiled again");
         assert!(settings.recorded.is_empty());
-        let page = settings.in_place(&before).expect("taken in place");
-        assert!(!settings.stale);
+        let page = settings.page(9, "keys").unwrap().clone();
+        assert!(options.in_place(&before, &page), "taken in place");
+        assert!(!options.stale);
         assert_eq!(page.serial, 1, "the page keeps its serial (its alias)");
         assert_eq!(settings.page(9, "keys").unwrap().serial, 1);
 
         // What `settings_update` writes: only the changed value.
         let changed = changed_values(&before, &page);
         assert_eq!(changed, [("caption", &json!("after"))]);
-        let window = settings.window().unwrap();
+        let window = options.window().unwrap();
         for (name, value) in changed {
             composition::set_alias_value(
                 window,
@@ -1682,12 +1881,12 @@ mod tests {
             .unwrap();
         }
         assert_eq!(
-            caption(&settings, 1),
+            caption(&options, 1),
             SValue::from(slint::SharedString::from("after"))
         );
         // The tree: "keys" now after "other", still pointing at its slot.
         assert!(moved(&before, &page));
-        let open = settings.open.as_ref().unwrap();
+        let open = options.open.as_ref().unwrap();
         let tree_rows = rows(&sorted(&settings.pages), Some(1), &open.order);
         let labels: Vec<_> = tree_rows
             .as_array()
@@ -1714,7 +1913,7 @@ mod tests {
         // of the windowing system.
         assert!(native_calls().is_empty());
         assert!(tree.is_shown_in(instance.window()));
-        assert!(settings.window().unwrap().as_weak().upgrade().is_some());
+        assert!(options.window().unwrap().as_weak().upgrade().is_some());
         drop(received);
     }
 
@@ -1726,6 +1925,7 @@ mod tests {
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../plugins");
         let (events, received) = mpsc::channel();
         let mut settings = Settings::default();
+        let mut options = Options::default();
         let mut page = Page {
             file: base.join("window/ui/page.slint"),
             component: "WindowSettingsPage".into(),
@@ -1734,8 +1934,8 @@ mod tests {
         };
         page.owner = 4;
         settings.pages = vec![page];
-        open_window(&mut settings, &events, None);
-        let instance = settings.window().unwrap().clone_strong();
+        open_window(&settings, &mut options, &events, None);
+        let instance = options.window().unwrap().clone_strong();
         let fire = || {
             instance
                 .invoke_global(&alias(3), "set-auto", &[SValue::Number(1.)])
@@ -1743,7 +1943,8 @@ mod tests {
         };
         fire();
         settings.mark_recorded(4);
-        settings.rekey(4, 9);
+        let serials = settings.rekey(4, 9);
+        options.rekey(&serials, 9);
         fire();
         let owners: Vec<u64> = received
             .try_iter()
@@ -1766,11 +1967,12 @@ mod tests {
         let native_calls = crate::ui::view::recording_platform();
         let (events, _received) = mpsc::channel();
         let mut settings = Settings::default();
+        let mut options = Options::default();
         let mut keys = page("x.hotkeys", "keys", 5, 0, 1);
         keys.owner = 4;
         settings.pages = vec![keys.clone()];
-        open_window(&mut settings, &events, None);
-        let instance = settings.window().unwrap().clone_strong();
+        open_window(&settings, &mut options, &events, None);
+        let instance = options.window().unwrap().clone_strong();
         instance
             .window()
             .set_position(slint::PhysicalPosition::new(120, 64));
@@ -1790,12 +1992,12 @@ mod tests {
         assert!(settings.reregister(&other, json!({})).is_none());
         assert_ne!(source(&[&other]).unwrap(), before);
         settings.pages = vec![other];
-        let old = settings.open.take();
-        open_window(&mut settings, &events, old);
+        let old = options.open.take();
+        open_window(&settings, &mut options, &events, old);
         let calls = native_calls();
         assert!(!calls.iter().any(|c| c == "new window"), "{calls:?}");
         assert!(!calls.iter().any(|c| c == "set_visible false"), "{calls:?}");
-        let window = settings.window().unwrap().window();
+        let window = options.window().unwrap().window();
         assert!(!old_tree.is_shown_in(window));
         assert!(window.is_visible());
         assert_eq!(window.size(), slint::PhysicalSize::new(640, 480));
@@ -1813,32 +2015,34 @@ mod tests {
         let native_calls = crate::ui::view::recording_platform();
         let (events, _received) = mpsc::channel();
         let mut settings = Settings::default();
+        let mut options = Options::default();
         let mut keys = page("x.hotkeys", "keys", 5, 0, 1);
         keys.owner = 4;
         keys.properties.insert("caption".into(), json!("custom"));
         settings.pages = vec![keys.clone()];
-        open_window(&mut settings, &events, None);
-        let instance = settings.window().unwrap().clone_strong();
+        open_window(&settings, &mut options, &events, None);
+        let instance = options.window().unwrap().clone_strong();
         assert_eq!(
-            caption(&settings, 1),
+            caption(&options, 1),
             SValue::from(slint::SharedString::from("custom"))
         );
         native_calls();
 
         settings.mark_recorded(4);
-        settings.rekey(4, 9);
+        let serials = settings.rekey(4, 9);
+        options.rekey(&serials, 9);
         let again = Page {
             owner: 9,
             properties: BTreeMap::new(),
             ..keys.clone()
         };
         let before = settings.reregister(&again, json!({})).unwrap();
-        assert!(settings.in_place(&before).is_none());
-        assert!(settings.stale, "built again, as `settings_tick` does");
-        let old = settings.open.take();
-        open_window(&mut settings, &events, old);
+        assert!(!options.in_place(&before, settings.page(9, "keys").unwrap()));
+        assert!(options.stale, "built again, as `settings_tick` does");
+        let old = options.open.take();
+        open_window(&settings, &mut options, &events, old);
         assert_eq!(
-            caption(&settings, 1),
+            caption(&options, 1),
             SValue::from(slint::SharedString::default()),
             "the omitted property shows its default"
         );
@@ -1855,7 +2059,8 @@ mod tests {
         let _ = crate::ui::view::recording_platform();
         let base = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/settings");
         let (events, _received) = mpsc::channel();
-        let mut settings = Settings {
+        let mut options = Options::default();
+        let settings = Settings {
             pages: vec![Page {
                 file: base.join("combo.slint"),
                 component: "ComboPage".into(),
@@ -1864,15 +2069,15 @@ mod tests {
             }],
             ..Default::default()
         };
-        open_window(&mut settings, &events, None);
-        settings
+        open_window(&settings, &mut options, &events, None);
+        options
             .window()
             .unwrap()
             .set_property("current", SValue::Number(0.))
             .unwrap();
-        crate::ui::view::settle_layout(settings.window().unwrap().window());
+        crate::ui::view::settle_layout(options.window().unwrap().window());
         // Tab moves the focus into the page (its ComboBox).
-        let window = settings.window().unwrap().window();
+        let window = options.window().unwrap().window();
         window.dispatch_event(slint::platform::WindowEvent::KeyPressed {
             text: slint::platform::Key::Tab.into(),
         });
@@ -1881,7 +2086,7 @@ mod tests {
         });
         let focused = || {
             slint::private_unstable_api::re_exports::WindowInner::from_pub(
-                settings.window().unwrap().window(),
+                options.window().unwrap().window(),
             )
             .focus_item
             .borrow()
@@ -1889,7 +2094,7 @@ mod tests {
         };
         let before = focused().expect("a page item has the focus");
         let definition = composition::build(source(&[]).unwrap(), "OptionsWindow").unwrap();
-        let failed = create_window(&definition, settings.window(), |_| {
+        let failed = create_window(&definition, options.window(), |_| {
             anyhow::bail!("set-up failed")
         });
         assert!(failed.is_err());

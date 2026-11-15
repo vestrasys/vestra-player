@@ -395,10 +395,10 @@ msgstr "현재 비디오의 자막 검색 및 다운로드"
 #, x-machine
 msgid ""
 "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
-"Find it in the right-click menu under Subtitles ▸ Online Subtitles."
+"→ Menu: Open ▸ Search and Download Subtitles"
 msgstr ""
 "OpenSubtitles.com이나 Assrt에서 파일 해시와 제목으로 자막을 검색하고, 바로 불러오며 비디오 옆에 사본을 저장합니다. 본인의 API 키가 필요하며, 키는 시스템 보안 저장소에 보관됩니다.\n"
-"오른쪽 클릭 메뉴의 자막 ▸ 온라인 자막에서 찾을 수 있습니다."
+"→ 메뉴: 열기 ▸ 자막 검색 및 다운로드"
 
 #: manifest.json
 #, x-machine

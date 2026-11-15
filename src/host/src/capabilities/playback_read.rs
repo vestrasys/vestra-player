@@ -31,11 +31,14 @@ impl Capability for PlaybackRead {
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "timeline.marks" => host
+                .core
                 .timeline_dispatch(reply.owner, method, params)
                 .map(Some),
             _ => {
                 if method == "source.state" {
-                    host.source_state_replies.insert((reply.owner, reply.id));
+                    host.core
+                        .source_state_replies
+                        .insert((reply.owner, reply.id));
                 }
                 forward(host, reply, method, params)
             }

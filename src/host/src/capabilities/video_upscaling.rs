@@ -34,11 +34,12 @@ impl Capability for VideoUpscaling {
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         // Only the fields the worker reads; the rendering state is the
         // host's, never the plugin's.
-        let mut forwarded = json!({"rendering": host.rendering_state()});
+        let mut forwarded = json!({"rendering": host.core.rendering_state()});
         if method == "video.upscaling.set" {
             forwarded["enabled"] = params["enabled"].clone();
         }
-        host.backend
+        host.core
+            .backend
             .commands
             .send(Command {
                 reply: reply.clone(),

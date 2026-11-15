@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.3.1
+
+- A new tab **Not installed** right after All (as Steam and Synaptic name it): the repositories' plugins that this player can install and that are neither installed, built in nor loaded with `--plugin`, one card per repository as under All, with its count in the title. Entries that cannot be installed (Incompatible, every version revoked, a reserved `vestra.` id) are left out: the tab is what you could still add, and All keeps them with the reason. It follows search, Category, Sort and "Show built-in plugins" like the other tabs; empty, it says "There are no more plugins to install", or, without any index, that the repositories cannot be reached. The tab is remembered by name, so a tab kept by 0.3.0 (Installed, Updates) opens as before.
+- The window's minimum width grows past 600 when the four tabs need it in the interface language (Spanish, Japanese), so Refresh and ⋯ stay in the window; the search box shrinks to 120 first.
+- A card's "✓ Installed" is green: a darker green on the light palette, the video plugin's green on the dark one (the theme has no green token; both read at 4.5:1 or more against the panel).
+- The accent Update button: "Update to x" on a plugin's page is drawn like the card's Update; hover and press darken it; disabled, it looks like any disabled button (white text on the light palette's pale accent could not be read).
+- A card's ⋯ menu closes when the grid changes under it, so it can no longer act on the plugin that took that card's place.
+- "Replace with x from y…" shows "Installing… n%" on the installed plugin's card, as Install and Update do.
+- Translations of the tab title and the empty-tab text: zh-Hans by hand; de, es, fr, ja and ko by machine, marked `x-machine` for review.
+
+## 0.3.0
+
+- Store v3 (design store-v3 rev. 2, owner rulings 2026-11-15): the window is one grid of cards instead of a list with the details always beside it. The grid takes as many columns as fit (two to five, by a Slint binding on the grid's width; a `ListView` of rows, so only the visible rows are built); the window is at least 600 × 480 (was 760), 920 × 640 at first.
+- A card: icon (drawn 40, decoded at 80), name, "by <author>" with "· Unofficial" for another repository or the source of a plugin from no repository, the introduction, the "how to open" line, the state in words (✓ Installed, Update available, Disabled, Failed, Revoked, Comes with the player, Incompatible, Cannot be installed, Development load, Installed from …) and at most one button, Install or Update. Every line is one line, cut with "…" by the window; the tooltip has the whole introduction. Version, tags, badges and the row's ⋯ manage menu are gone from the list.
+- A click on a card opens the plugin's page in the same window; ← All Plugins, Esc or the mouse's back button returns to the grid as it was (tab, search, category, scroll). The grid has no selection any more: a tab, search or sort change no longer moves any details. The page has the header and the buttons [Update to x] [Disable | Enable] [Uninstall…] [Reload], a ⋯ menu with Open Data Folder and "Replace with x from y…", the notices, "Where to find it", and the tabs **About** (the README) and **Details** (facts, permissions, Changelog / Versions). It follows its plugin through install, update and uninstall, and closes when the plugin leaves the list.
+- Reload is now a button on the page of every running or failed plugin (was: in the row's ⋯ menu, and on the page only for a failed plugin or one with an update). Built-in plugins' pages offer Reload, and Open Data Folder in the ⋯ menu.
+- "How to open": a new convention in the manifest `description` (no manifest field, owner ruling 2026-11-15): a last line starting with `→ ` and at most 48 characters after it is shown on the card and under "Where to find it", and the description is shown without it. Without one, an installed plugin's card shows its own menu entry or command palette row from `commands.list`. See the README.
+- The Tags drop-down is replaced by Category, a fixed list (Picture, Sound, Subtitles, Online video, Library and playlists, Tools, Games, Other) matched from the plugins' tags; tags still feed the search. An empty result offers Clear Search. The ⚙ button is now ⋯; the "drop a .vxp" hint left the window (the README keeps it).
+- Store v4 (design store-v4, owner rulings 2026-11-15), in the same release: the top is one 31px strip (the library Tabs at their own height, the search box, Refresh, ⋯) with a rule under it, then a filter row with the check box **Show built-in plugins (n)** (moved out of the ⋯ menu; same setting and default), Category and Sort. The detail page keeps the strip, with ← All Plugins in it.
+- Installed cards act in place (store-v4 §3): a ⋯ (Manage) with Disable or Enable and Uninstall… (asks first), placed before the card's text button and opening upward near the window's bottom; Enable is the text button of a disabled card; Update wins over Enable and is drawn in the accent colour with white text (a Store-local button from Theme tokens). Not on cards: Reload, Open Data Folder, Replace, Enable Anyway…. A revoked card offers Uninstall… only, a development load Disable or Enable only, a built-in nothing. A disabled card with an update says "Update available".
+- While a plugin installs from its repository its card shows "Installing… n%" instead of the Install button. A search or category with no result says how many hidden built-in plugins would match and offers Show Built-in Plugins.
+- New text translated by machine (marked `x-machine`; zh-Hans by hand). Who must change: nobody. Plugin authors may add the "→ " line to their description.
+
+## 0.2.22
+
+- A plugin the player set aside at start (listed failed, without a package directory) no longer offers Disable or Reload, which the player refused with "no plugin"; its row and details offer Uninstall… (and Update or a reinstall from its repository). With player 0.10.1 that uninstall removes it completely, after which it can be installed again. The same holds for a failed row whose package could not be read this run (retried at the next start). Who must change: nobody.
+
+## 0.2.21
+
+- Plugins the player lists without a directory (installed records it set aside at start: player 0.9.0 sets aside packages built before it, whose manifest still has `capabilities`) each show their own name. Formerly their display fields were cached by directory and version alone, both empty, so every such row showed the first one's name. Nothing is read from the working directory for them either.
+
 ## 0.2.20
 
 - A package not from the official repository (another repository, a file, a link) is no longer silent about its permissions: its install and update confirmations say **It is not from the official repository, so its permissions were not checked.** (user ruling 2026-11-13). A file or a link: after "Plugins may read your files or use the network.". Another repository: after its warning, which says files and network already; its update and reinstall confirmations: "Current: x." then both sentences. Formerly a file or a link said only the files-and-network sentence, and another repository's update only "Current: x.".

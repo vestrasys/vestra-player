@@ -547,11 +547,30 @@ pub fn confirm(
     Ok(())
 }
 
-/// Bring the open confirmation into view (another request was refused
-/// `busy`): the window its `NSAlert` sheet is attached to comes to the
-/// front as the key window while the player is the active application
-/// (an app-modal alert is in front already).
-pub fn show_open_confirm(foreground: bool) {
+/// `dialog` (rfd's) as a sheet on `owner`'s window, the window the request
+/// came from (`origins::dialog_place`); without the owner rfd would attach
+/// it to the application's main window, else its first. A sheet stays a
+/// sheet: rfd runs it app-modally only when the application is not
+/// running yet.
+pub fn own_file_dialog(
+    dialog: rfd::AsyncFileDialog,
+    owner: Option<&slint::Window>,
+) -> rfd::AsyncFileDialog {
+    use slint::winit_030::WinitWindowAccessor;
+    let Some(owner) = owner else {
+        return dialog;
+    };
+    owner
+        .with_winit_window(|native| dialog.clone().set_parent(native))
+        .unwrap_or(dialog)
+}
+
+/// Bring the open confirmation or file dialog into view (another request
+/// was refused `busy`, or a key came while it is open): the window its
+/// `NSAlert` or file panel sheet is attached to comes to the front as the
+/// key window while the player is the active application (an app-modal
+/// alert is in front already).
+pub fn show_open_dialog(foreground: bool) {
     let Ok(app) = app() else { return };
     if !foreground {
         return;

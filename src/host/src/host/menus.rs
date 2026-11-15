@@ -392,7 +392,7 @@ impl Host {
         generation: u64,
         reset: bool,
     ) -> Result<()> {
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("menu-hover", move |args| {
             if let [
                 SValue::Number(level),
@@ -408,7 +408,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("menu-scroll", move |args| {
             if let [SValue::Number(level), SValue::Number(offset)] = args
                 && *level >= 0.
@@ -420,7 +420,7 @@ impl Host {
             }
             SValue::Void
         })?;
-        let events = self.events.clone();
+        let events = self.core.events.clone();
         window.set_callback("menu-invoke", move |args| {
             if let Some(SValue::String(token)) = args.first() {
                 let _ = events.send(Event::MenuAction(
@@ -435,7 +435,7 @@ impl Host {
             callbacks.push("menu-reset");
         }
         for callback in callbacks {
-            let events = self.events.clone();
+            let events = self.core.events.clone();
             window.set_callback(callback, move |_| {
                 let action = match callback {
                     "menu-reset" => MenuAction::Reset,
@@ -502,7 +502,7 @@ impl Host {
         if !self.menu_open {
             return;
         }
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         let pointer = self.menu_pointer();
         if let Some(path) = self.menu_aim.tick(pointer, now) {
             self.set_menu_path(path);
@@ -517,6 +517,8 @@ impl Host {
             .map(|(_, point)| point)
     }
     pub(crate) fn refresh_menu(&mut self) -> Result<()> {
+        // The menus read the interface's copies of the tables (rule R8).
+        self.sync_tables();
         let labels = self.labels();
         let Some(window) = self
             .window_for(self.menu_generation)
@@ -528,7 +530,7 @@ impl Host {
         let window = &window;
         let model = match &self.menu_mode {
             MenuMode::Main => {
-                let snapshot = self.commands.snapshot();
+                let snapshot = self.registry.snapshot();
                 let (model, panels) = menu_levels(
                     window,
                     &snapshot.roots,
@@ -545,7 +547,7 @@ impl Host {
                     .iter()
                     .filter_map(|id| match id {
                         None => Some(None),
-                        Some(id) => self.commands.get(*owner, id).map(Some),
+                        Some(id) => self.registry.get(*owner, id).map(Some),
                     })
                     .collect();
                 let (origin, size) = menu_frame(window);
@@ -563,7 +565,7 @@ impl Host {
                 // A button whose command went while `»` is open drops out.
                 let entries: Vec<_> = items
                     .iter()
-                    .filter_map(|(owner, id)| self.commands.get(*owner, id))
+                    .filter_map(|(owner, id)| self.registry.get(*owner, id))
                     .collect();
                 let (origin, size) = menu_frame(window);
                 let scroll = self.menu_scroll.first().copied().unwrap_or(0.);
@@ -587,7 +589,12 @@ impl Host {
                 };
                 let tabs = owners
                     .iter()
-                    .filter_map(|owner| self.mounts.get(owner).map(|m| (*owner, m.title.clone())))
+                    .filter_map(|owner| {
+                        self.core
+                            .mounts
+                            .get(owner)
+                            .map(|m| (*owner, m.title.clone()))
+                    })
                     .collect::<Vec<_>>();
                 let (origin, size) = menu_frame(window);
                 let scroll = self.menu_scroll.first().copied().unwrap_or(0.);

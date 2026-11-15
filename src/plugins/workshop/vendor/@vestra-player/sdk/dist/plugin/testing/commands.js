@@ -9,7 +9,8 @@
 import { HostError } from "../../wire.js";
 import { BAR_BUTTON_ICONS, BAR_BUTTON_LIMITS, BUILTIN_COMMANDS, COMMAND_LIMITS, MENU_IDS, thenProblem, } from "../../commands.js";
 import { canonical, keyLabel } from "../bindings.js";
-import { evaluate } from "../when.js";
+import { evaluate, readsPositionOrTime } from "../when.js";
+import { conditionFacts } from "./triggers.js";
 import { PALETTE_LEAD_LIMITS, PALETTE_LEAD_STATES } from "../../commands.js";
 import { menuKeys, textKey } from "../../i18n.js";
 import { commandInvalid, commandConflict, commandText, menuTextKey, checkDeclaration, } from "./declarations.js";
@@ -145,31 +146,24 @@ function bindingRows(host, inner) {
     });
     return commands;
 }
+/**
+ * A command's `when` as the player refuses it (`conditions.rs`
+ * `Conditions::parse`): a position or time condition is a trigger's.
+ */
+function commandWhenChecked(when) {
+    if (!when || typeof when !== "object")
+        return;
+    for (const [name, condition] of Object.entries(when))
+        if (condition && readsPositionOrTime(condition))
+            throw new HostError("invalid", `${name}: a position or time condition is for a trigger (plugin.trigger), not a command's state`);
+}
 /** A command's state as the player shows it: its conditions evaluated. */
 export function commandShown(host, _inner, sent, when) {
     if (!when)
         return sent;
-    const source = host.source;
-    const capabilities = source.capabilities;
-    const facts = {
-        phase: source.phase,
-        paused: source.paused,
-        kind: source.kind === "producer" ? "stream" : "media",
-        can: {
-            pause: capabilities.pause,
-            seek: capabilities.seek,
-            rate: capabilities.rate,
-            restart: capabilities.restart,
-            close: capabilities.close,
-            snapshot: capabilities.snapshotSource,
-            // As the player: the flags merged into the source state.
-            next: source.sequence?.next === true,
-            previous: source.sequence?.previous === true,
-        },
-        fullscreen: host.mainWindow.fullscreen,
-        theme: host.appearance,
-        language: host.language,
-    };
+    // As the player: the same facts as a trigger's (next and previous are
+    // the flags merged into the source state).
+    const facts = conditionFacts(host);
     const shown = { ...sent };
     if (when.enabled) {
         shown.enabled = evaluate(when.enabled, facts);
@@ -338,6 +332,7 @@ export function commandsHandlers(host, inner) {
                 host.commands.size + host.coreCommands.size + hostOnly.length >=
                     COMMAND_LIMITS.total)
                 throw new HostError("limit", "command registry limit reached");
+            commandWhenChecked(p.when);
             let sent = p.state;
             host.commands.set(id, {
                 declaration,
@@ -394,6 +389,7 @@ export function commandsHandlers(host, inner) {
                 catch (error) {
                     throw new HostError("command", error.message);
                 }
+            commandWhenChecked(p.when);
             command.revision = Number(p.revision);
             command.state = p.state;
             if (p.when)

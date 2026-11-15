@@ -13,6 +13,13 @@ export type { PluginManifest, RuntimeOptions };
 export interface PluginInstance {
     plugin: Plugin;
     /**
+     * Call the plugin's `activate(plugin)` as `entry`: `plugin.trigger()`
+     * works only during its synchronous part, after which the player is told
+     * which triggers it declared (1.10.0). Returns what `entry` returned, as a
+     * promise. The runner and the test host call it instead of `entry`.
+     */
+    activate(entry: (plugin: Plugin) => unknown): Promise<unknown>;
+    /**
      * Wait for registrations started during activation; rejects if one failed.
      * A command declaration the player refused is not a failure (it is
      * logged, skipped and reported to `onError`) unless

@@ -4,6 +4,7 @@ import { failure } from "./errors.js";
 import { ScopeImpl } from "./scope.js";
 import { windowOf } from "./window.js";
 import { timelineOf } from "./timeline.js";
+import { triggersOf } from "./triggers.js";
 export async function createPlugin(transport, manifest, directory, dataDirectory, 
 /** `plugin.app` (the runner passes the player's `VESTRA_APP_INFO`). */
 app, 
@@ -32,8 +33,20 @@ options) {
         const { code, message } = (data ?? {});
         root.report(failure(code ?? "ui", message ?? "user interface error"));
     }));
+    const triggers = triggersOf(runtime);
     return {
         plugin: root,
+        activate(entry) {
+            triggers.begin();
+            let result;
+            try {
+                result = entry(root);
+            }
+            finally {
+                triggers.end();
+            }
+            return Promise.resolve(result);
+        },
         activated: () => runtime.activated(),
         dispose: async (info) => {
             runtime.stopping ??= { reason: stopReason(info?.reason) };
