@@ -920,7 +920,7 @@ impl Table {
     }
 
     /// What `bindings.list` shows changed outside the table (a plugin's
-    /// panel commands are listed from now on, `Host::note_panel_plugins`):
+    /// panel commands are listed from now on, `Core::note_panel_plugins`):
     /// the revision and the listed revision move.
     pub fn listed_elsewhere(&mut self) {
         self.revision += 1;

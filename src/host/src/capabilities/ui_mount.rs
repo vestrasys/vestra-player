@@ -4,7 +4,9 @@ use super::{Call, Capability, Handled, Info, Recorded, plugin};
 use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
-        layout_change, mount_view, panel_key, policy_slot, refuse_initial, string,
+        layout_change,
+        messages::{SetMount, UiCommand},
+        mount_view, panel_key, policy_slot, refuse_initial, string,
     },
     i18n, process,
     ui::composition,
@@ -50,6 +52,7 @@ impl Capability for UiMount {
         // the mounted ones, then the waiting changes in order (a waiting
         // bottom bar or backdrop is live, `sidebar_tabs::pending_live`).
         let mut panels: BTreeMap<u64, (composition::Slot, Value)> = host
+            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner)
@@ -86,6 +89,7 @@ impl Capability for UiMount {
     /// `Host::stop_run` itself.
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         let keys = host
+            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner)
@@ -95,7 +99,7 @@ impl Capability for UiMount {
             // Its mounts not applied yet (replayed tabs among them) go too,
             // also when another of its panels is applied: a queued
             // placeholder would otherwise stay without its plugin.
-            forget_queued(&mut host.mount_queue, owner);
+            forget_queued(&mut host.core.mount_queue, owner);
         }
         for key in keys {
             revoke_panel(host, key, keep_recorded);
@@ -104,6 +108,7 @@ impl Capability for UiMount {
     /// At a woken run's ready: a placeholder it did not mount again goes.
     fn prune(&self, host: &mut Host, owner: u64) {
         let stale = host
+            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner && m.recorded)
@@ -146,8 +151,8 @@ impl Capability for UiMount {
         mount.recorded = true;
         mount.call = params.clone();
         let key = mount.spec.owner;
-        host.mount_queue.retain(|c| c.key != key);
-        host.mount_queue.push_back(MountChange {
+        host.core.mount_queue.retain(|c| c.key != key);
+        host.core.mount_queue.push_back(MountChange {
             reply: Reply { owner, id: 0 },
             key,
             contribution: Some(mount),
@@ -161,7 +166,10 @@ impl Capability for UiMount {
                 mount(host, reply, method, params)?;
                 Ok(None)
             }
-            "ui.setMount" => set_mount(host, reply, params).map(Some),
+            "ui.setMount" => {
+                set_mount(host, reply, params)?;
+                Ok(None)
+            }
             "ui.interaction" => interaction(host, reply, params).map(Some),
             "ui.menu" => menu(host, reply, params).map(Some),
             "layout.state" => host.layout_state().map(Some),
@@ -178,6 +186,7 @@ impl Capability for UiMount {
 /// dropped).
 pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
     let keys = host
+        .core
         .mounts
         .values()
         .filter(|m| m.plugin == from)
@@ -185,12 +194,12 @@ pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
         .collect::<Vec<_>>();
     for (old, slot) in keys {
         let new = panel_key(to, slot);
-        let Some(mut mount) = host.mounts.remove(&old) else {
+        let Some(mut mount) = host.core.mounts.remove(&old) else {
             continue;
         };
         mount.spec.owner = new;
         mount.plugin = to;
-        host.mounts.insert(new, mount);
+        host.core.mounts.insert(new, mount);
         host.policy.rekey(old, new);
         host.panels.rekey(old, new);
         let swap = |key: &mut u64| {
@@ -229,7 +238,7 @@ fn forget_queued(queue: &mut std::collections::VecDeque<MountChange>, owner: u64
 
 /// [`UiMount::revoke`] for one panel.
 fn revoke_panel(host: &mut Host, key: u64, keep_recorded: bool) {
-    let Some(mount) = host.mounts.get_mut(&key) else {
+    let Some(mount) = host.core.mounts.get_mut(&key) else {
         return;
     };
     if keep_recorded {
@@ -238,10 +247,10 @@ fn revoke_panel(host: &mut Host, key: u64, keep_recorded: bool) {
         }
     } else if mount.recorded {
         let owner = mount.plugin;
-        host.mounts.remove(&key);
+        host.core.mounts.remove(&key);
         host.policy.remove_owner(key);
-        host.mount_queue.retain(|c| c.key != key);
-        host.mount_queue.push_front(MountChange {
+        host.core.mount_queue.retain(|c| c.key != key);
+        host.core.mount_queue.push_front(MountChange {
             reply: Reply { owner, id: 0 },
             key,
             contribution: None,
@@ -263,6 +272,7 @@ fn panel_of(host: &Host, owner: u64, params: &Value) -> std::result::Result<Opti
         return Ok(Some(panel_key(owner, slot)));
     }
     let mut keys = host
+        .core
         .mounts
         .values()
         .filter(|m| m.plugin == owner && !m.recorded && !host.restarts.waiting(m.spec.owner))
@@ -301,6 +311,7 @@ fn mount(
             // now, not left for `REMOUNT_LIMIT` (with `slot` it is the
             // slot's panel either way).
             None => host
+                .core
                 .mounts
                 .values()
                 .filter(|m| m.plugin == reply.owner && !m.recorded)
@@ -317,7 +328,7 @@ fn mount(
         }
         if keys.is_empty() {
             // Answered at the next preparation, as before: nothing to remove.
-            host.mount_queue.push_back(MountChange {
+            host.core.mount_queue.push_back(MountChange {
                 reply: reply.clone(),
                 key: panel_key(reply.owner, composition::Slot::Bottom),
                 contribution: None,
@@ -327,7 +338,7 @@ fn mount(
         for (index, key) in keys.iter().copied().enumerate() {
             // One answer for the call: the last change carries the reply.
             let last = index + 1 == keys.len();
-            host.mount_queue.push_back(MountChange {
+            host.core.mount_queue.push_back(MountChange {
                 reply: if last {
                     reply.clone()
                 } else {
@@ -350,7 +361,7 @@ fn mount(
     // plugin's ready, an id 0 unmount) gives way to the plugin's own mount:
     // a plugin that mounts a little after its ready keeps its tab.
     let removal = |c: &MountChange| c.key == key && c.reply.id == 0 && c.contribution.is_none();
-    host.mount_queue.retain(|c| !removal(c));
+    host.core.mount_queue.retain(|c| !removal(c));
     if host.preparing.as_ref().is_some_and(|(_, c)| removal(c)) {
         host.preparing = None;
     }
@@ -362,6 +373,7 @@ fn mount(
     }
     // Placeholders replayed from recordings do not count (any number).
     if host
+        .core
         .mount_queue
         .iter()
         .filter(|c| !c.contribution.as_ref().is_some_and(|m| m.recorded))
@@ -373,7 +385,7 @@ fn mount(
     // One panel per slot and plugin; a placeholder tab of this plugin
     // (sidebar-tabs.md) is taken over by its woken run's mount, a panel
     // kept over its restart by its restarted run's (`panel_restart.rs`).
-    if host.mounts.get(&key).is_some_and(|m| !m.recorded) && !host.restarts.waiting(key) {
+    if host.core.mounts.get(&key).is_some_and(|m| !m.recorded) && !host.restarts.waiting(key) {
         return Err(RpcError::new(
             "conflict",
             "this plugin already has a panel in this slot",
@@ -384,12 +396,13 @@ fn mount(
     // and the adjust column take any number of tabs (sidebar-tabs.md).
     if !slot.tabbed() {
         let pending = host
+            .core
             .mount_queue
             .iter()
             .chain(host.preparing.as_ref().map(|(_, change)| change))
             .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
             .collect::<Vec<_>>();
-        let mounted = host.mounts.values().map(|m| (m.plugin, m.spec.slot));
+        let mounted = host.core.mounts.values().map(|m| (m.plugin, m.spec.slot));
         if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
             let error = RpcError::slot_occupied(slot, &host.core.plugin_id(holder));
             let text = i18n::tr_args("Panel not shown: {}", &json!([error.message]));
@@ -412,7 +425,7 @@ fn mount(
     host.report_refused(reply.owner, refused);
     // Row patches apply on the initial properties again (seq 0).
     host.images.reset_writes(reply.owner, mount_view(slot));
-    host.mount_queue.push_back(MountChange {
+    host.core.mount_queue.push_back(MountChange {
         reply: reply.clone(),
         key,
         contribution: Some(mount),
@@ -423,7 +436,7 @@ fn mount(
 
 /// A change of panel `key` waits to be applied.
 fn pending_change(host: &Host, key: u64) -> bool {
-    host.mount_queue.iter().any(|c| c.key == key)
+    host.core.mount_queue.iter().any(|c| c.key == key)
         || host.preparing.as_ref().is_some_and(|(_, c)| c.key == key)
 }
 
@@ -450,7 +463,7 @@ fn waiting_mounts(host: &Host, owner: u64) -> Vec<(u64, Option<composition::Slot
         .as_ref()
         .map(|(_, change)| change)
         .into_iter()
-        .chain(host.mount_queue.iter())
+        .chain(host.core.mount_queue.iter())
         .filter(|change| change.reply.owner == owner)
         .map(|change| match &change.contribution {
             Some(mount) => (change.key, Some(mount.spec.slot), mount.call.clone()),
@@ -458,6 +471,7 @@ fn waiting_mounts(host: &Host, owner: u64) -> Vec<(u64, Option<composition::Slot
         })
         .collect::<Vec<_>>();
     let mounted = host
+        .core
         .mounts
         .values()
         .filter(|m| m.plugin == owner)
@@ -536,17 +550,36 @@ fn new_mount(
     Ok((mount, refused))
 }
 
-fn set_mount(
-    host: &mut Host,
-    reply: &Reply,
-    params: &Value,
-) -> std::result::Result<Value, RpcError> {
+/// `ui.setMount` (row 41, UI-bound; plan step S2c(3)): the core names the
+/// panel and sends `UiCommand::SetMount`; the interface writes the value
+/// (`write_mount`) and its `UiReport::Answered` is the reply.
+fn set_mount(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
     // A large array converted on the plugin's reader thread: its whole
     // value was taken out of `params` (P3).
-    let mut prepared = host.core.take_prepared(reply);
+    let prepared = host.core.take_prepared(reply);
     let key = panel_of(host, reply.owner, params)?
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
+    host.ui_command(UiCommand::SetMount(SetMount {
+        reply: reply.clone(),
+        key,
+        params: params.clone(),
+        prepared,
+    }));
+    Ok(())
+}
+
+/// The interface's side of `ui.setMount`: the value goes to the mount that
+/// is ready when the command arrives, else `missing` (design §5.1, the
+/// `ui.setMount` note).
+pub(crate) fn write_mount(
+    host: &mut Host,
+    reply: &Reply,
+    key: u64,
+    params: &Value,
+    mut prepared: Option<Box<crate::ui::ui_values::Prepared>>,
+) -> std::result::Result<Value, RpcError> {
     let slot = host
+        .core
         .mounts
         .get(&key)
         .filter(|mount| !mount.recorded && !host.restarts.waiting(key))
@@ -609,7 +642,7 @@ fn set_mount(
     if let Some(panel) = &panel {
         panel.write(property, converted)?;
     }
-    if let Some(mount) = host.mounts.get_mut(&key) {
+    if let Some(mount) = host.core.mounts.get_mut(&key) {
         mount.properties.insert(property.into(), value);
     }
     host.images.set_seq(reply.owner, view, property, seq);
@@ -624,6 +657,7 @@ fn patched_mount(
     ops: &Value,
 ) -> std::result::Result<Value, RpcError> {
     let Some(Value::Array(stored)) = host
+        .core
         .mounts
         .get(&key)
         .and_then(|mount| mount.properties.get(property))
@@ -647,7 +681,7 @@ fn patch_mount(
     ops: &Value,
     prepared: Option<Box<crate::ui::ui_values::Prepared>>,
 ) -> std::result::Result<bool, RpcError> {
-    let Some(mount) = host.mounts.get(&key) else {
+    let Some(mount) = host.core.mounts.get(&key) else {
         return Err(ui_patch::stale());
     };
     let view = mount_view(mount.spec.slot);
@@ -690,6 +724,7 @@ fn patch_mount(
     };
     let shapes = ops.shapes;
     if let Some(Value::Array(stored)) = host
+        .core
         .mounts
         .get_mut(&key)
         .and_then(|mount| mount.properties.get_mut(property))
@@ -707,6 +742,7 @@ fn interaction(
     let key = panel_of(host, reply.owner, params)?
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
     let mount = host
+        .core
         .mounts
         .get(&key)
         .filter(|_| !host.restarts.waiting(key))
@@ -746,6 +782,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
     let key = panel_of(host, reply.owner, params)?
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
     let mount = host
+        .core
         .mounts
         .get(&key)
         .filter(|_| !host.restarts.waiting(key))
@@ -828,6 +865,7 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
         .filter(|slot| *slot != composition::Slot::Backdrop)
         .ok_or_else(|| RpcError::invalid("unknown slot"))?;
     let panels = host
+        .core
         .mounts
         .values()
         .filter(|m| m.spec.slot == slot)
@@ -873,7 +911,7 @@ fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, Rpc
             host.policy.switch(policy_slot, owner, visible, now)
         }
         .map_err(anyhow::Error::from)?;
-        if let Some(mount) = host.mounts.get_mut(&owner) {
+        if let Some(mount) = host.core.mounts.get_mut(&owner) {
             mount.visible = visible;
         }
     }

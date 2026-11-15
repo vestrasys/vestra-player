@@ -589,7 +589,12 @@ impl Host {
                 };
                 let tabs = owners
                     .iter()
-                    .filter_map(|owner| self.mounts.get(owner).map(|m| (*owner, m.title.clone())))
+                    .filter_map(|owner| {
+                        self.core
+                            .mounts
+                            .get(owner)
+                            .map(|m| (*owner, m.title.clone()))
+                    })
                     .collect::<Vec<_>>();
                 let (origin, size) = menu_frame(window);
                 let scroll = self.menu_scroll.first().copied().unwrap_or(0.);

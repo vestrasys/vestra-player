@@ -226,7 +226,7 @@ impl Host {
             .switch(window_state::Slot::Sidebar, owner, show, now)
             .is_ok()
         {
-            if let Some(mount) = self.mounts.get_mut(&owner) {
+            if let Some(mount) = self.core.mounts.get_mut(&owner) {
                 mount.visible = show;
             }
             self.remember_sidebar(false);
@@ -602,6 +602,7 @@ impl Host {
             self.bar.placed = Some(self.shell_generation);
             if debug_bar() {
                 let bar = self
+                    .core
                     .mounts
                     .values()
                     .find(|mount| mount.spec.slot == composition::Slot::Bottom)

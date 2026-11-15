@@ -76,7 +76,7 @@ impl Host {
             self.startup_panels = true;
         }
         if !self.startup_panels {
-            self.startup_panels = self.mount_queue.is_empty()
+            self.startup_panels = self.core.mount_queue.is_empty()
                 && self.preparing.is_none()
                 && self.core.held_mounts.is_empty()
                 && self.startup_has_settled();
