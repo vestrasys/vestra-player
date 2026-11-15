@@ -350,6 +350,8 @@ type Row = {
   state: string;
   stateTone: number;
   button: { id: string; text: string; enabled: boolean };
+  /** The card's ⋯ menu (Store v4): Disable or Enable, Uninstall…. */
+  menu: { id: string; text: string; enabled: boolean }[];
   dim: boolean;
   tip: string;
 };
@@ -368,7 +370,7 @@ export async function tab(host: TestHost, index: number) {
   await host.settle();
 }
 
-/** The ⋯ menu's "Show built-in plugins" (off by default): the grid shows the built-ins again. */
+/** The filter row's "Show built-in plugins" (off by default): the grid shows the built-ins again. */
 export async function showBuiltins(host: TestHost) {
   host.window("store").emit("setHideBuiltins", false);
   await host.settle();
@@ -398,11 +400,16 @@ export async function choose(host: TestHost, name: string) {
   return row;
 }
 
-/** A card's button (Install, Update; null none), state and dimming as shown. */
+/** A card's button (Install, Update, Enable; null none), its ⋯ menu, state and dimming as shown. */
 export const controls = (host: TestHost, name: string) => {
   const row = rows(host).find((r) => r.name === name);
   if (!row) throw new Error(`no card ${name} in this tab`);
-  return { button: row.button.id === "" && row.button.text === "" ? null : row.button, state: row.state, dim: row.dim };
+  return {
+    button: row.button.id === "" && row.button.text === "" ? null : row.button,
+    menu: row.menu.map((each) => each.id),
+    state: row.state,
+    dim: row.dim,
+  };
 };
 
 /** The detail page's ⋯ menu (Open Data Folder, Replace with x from y…). */

@@ -104,6 +104,9 @@ export const WINDOW = [
   "Removed {}",
   // The list.
   "No plugins match",
+  // Under it, when hidden built-in plugins match the search or the category.
+  "1 built-in plugin matches, but built-in plugins are hidden",
+  "{} built-in plugins match, but built-in plugins are hidden",
   "All plugins are up to date",
   "No plugins installed yet",
   "No plugins installed besides the built-in ones, which are hidden",
@@ -117,6 +120,9 @@ export const WINDOW = [
   // A card's state (Store v3): "✓ Installed", or a word.
   "✓ {}",
   "Update available",
+  // While its plugin downloads and installs (its button is hidden).
+  "Installing…",
+  "Installing… {}%",
   "Comes with the player",
   "Revoked",
   "Installed from {}",

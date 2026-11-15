@@ -106,13 +106,23 @@ test("hiding built-ins leaves an open built-in's page open; a search only built-
     await host.settle();
     assert.equal(details(host), null);
 
-    // Only built-ins matched the search: nothing left, Clear Search offered; showing them fills the grid again.
+    // Only built-ins matched the search: nothing left, Clear Search and Show Built-in Plugins offered (store-v4 §2);
+    // showing them fills the grid again.
     host.window("store").emit("search", "vestra");
     await host.settle();
     assert.deepEqual(names(host), []);
-    assert.equal(props(host)["empty-text"], "没有符合条件的插件");
+    assert.equal(props(host)["empty-text"], "没有符合条件的插件\n\n有 1 个内置插件符合条件，但内置插件已隐藏");
     assert.equal(props(host)["can-clear"], true);
+    assert.equal(props(host)["can-show-builtins"], true);
+    // "Show built-in plugins (n)" counts the built-in plugins whatever the search.
+    assert.equal(props(host)["builtin-count"], 1);
+    host.window("store").emit("search", "nothing like it");
+    await host.settle();
+    assert.equal(props(host)["empty-text"], "没有符合条件的插件");
+    assert.equal(props(host)["can-show-builtins"], false);
+    host.window("store").emit("search", "vestra");
     await showBuiltins(host);
+    assert.equal(props(host)["can-show-builtins"], false);
     assert.deepEqual(names(host), ["vestra.video"]);
     assert.equal(props(host)["can-clear"], false);
   } finally {

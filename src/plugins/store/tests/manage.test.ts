@@ -230,8 +230,9 @@ test("development loads: under Installed, said on the card; disable and enable f
     assert.equal(row(host, "d.dev")!.by, "作者：未知作者");
     assert.equal(row(host, "d.dev")!.byNote, "");
     assert.equal(props(host)["installed-count"], 2);
-    // No button on the card.
+    // No button on the card; its ⋯ has Disable only (it cannot be uninstalled here).
     assert.equal(controls(host, "d.dev").button, null);
+    assert.deepEqual(controls(host, "d.dev").menu, ["disable"]);
     await choose(host, "d.dev");
     assert.equal(props(host)["d-meta"], "未知作者 · 开发加载");
     assert.ok(!actions(host).some((a) => a.id === "uninstall"), "a development load is not uninstalled from the store");
@@ -242,7 +243,8 @@ test("development loads: under Installed, said on the card; disable and enable f
     host.window("store").emit("cardAct", "\nd.dev", "disable");
     await until(host, () => controls(host, "d.dev").dim && props(host)["status-text"] === "已停用「d.dev」，到播放器退出为止", "disabled");
     assert.equal(host.confirms.length, 0, "no question (user ruling)");
-    assert.equal(controls(host, "d.dev").button, null);
+    assert.deepEqual(controls(host, "d.dev").button?.id, "enable");
+    assert.deepEqual(controls(host, "d.dev").menu, ["enable"]);
     assert.deepEqual(actions(host).map((a) => a.id), ["enable"], "Enable in Disable's place; not reloaded while disabled");
     assert.deepEqual(controls(host, "d.dev").state, "已停用");
     host.window("store").emit("cardAct", "\nd.dev", "enable");

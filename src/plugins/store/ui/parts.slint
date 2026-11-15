@@ -31,8 +31,6 @@ export global StoreIcons {
 component MenuRow {
     in property <string> text;
     in property <bool> enabled: true;
-    // 0: no check column, 1: a check item that is off, 2: on (a ✓ before the text).
-    in property <int> check;
     callback picked();
     private property <bool> lit: touch.has-hover && root.enabled;
     height: 24px;
@@ -54,13 +52,6 @@ component MenuRow {
     HorizontalLayout {
         padding-left: 8px;
         padding-right: 8px;
-        if root.check > 0: Text {
-            width: 16px;
-            text: root.check == 2 ? "✓" : "";
-            color: root.enabled ? Theme.text-list : Theme.text-dim;
-            font-size: Theme.font-tab;
-            vertical-alignment: center;
-        }
         Text {
             text: root.text;
             color: !root.enabled ? Theme.text-dim : root.lit ? Theme.text : Theme.text-list;
@@ -76,17 +67,24 @@ component MenuRow {
 
 // An icon button that opens a menu under it, right-aligned with it, in the
 // main menu's style (bg-panel, a line border, radius-panel). The caller sizes it.
+// Given the window's height, it opens above the button when the menu would not
+// fit under it (a card in the grid's last visible row; design store-v4 §4).
 export component MenuButton {
     in property <string> icon;
     in property <length> icon-width: 14px;
     in property <length> icon-height: 12px;
     in property <string> tip;
     in property <[MenuEntry]> entries;
-    // Per entry (same order, may be shorter): MenuRow's `check`; a menu with checks gives every row the column.
-    in property <[int]> checks;
     in property <bool> enabled: true;
+    // The window's height; 0: always under the button.
+    in property <length> window-height: 0px;
     callback picked(string);
-    private property <length> menu-width: max(120px, measure.preferred-width + 20px + (root.checks.length > 0 ? 16px : 0px));
+    private property <length> menu-width: max(120px, measure.preferred-width + 20px);
+    // At most: 24px rows (a separator is 7) and the 2px padding above and below.
+    private property <length> menu-height: root.entries.length * 24px + 4px;
+    private property <bool> above: root.window-height > 0px
+        && root.absolute-position.y + root.height + 2px + root.menu-height > root.window-height
+        && root.absolute-position.y - 2px - root.menu-height >= 0px;
     ToolTipArea {
         width: 100%;
         height: 100%;
@@ -114,7 +112,7 @@ export component MenuButton {
     }
     menu := PopupWindow {
         x: root.width - root.menu-width;
-        y: root.height + 2px;
+        y: root.above ? -root.menu-height - 2px : root.height + 2px;
         width: root.menu-width;
         Rectangle {
             background: Theme.bg-panel;
@@ -123,7 +121,7 @@ export component MenuButton {
             border-radius: Theme.radius-panel;
             VerticalLayout {
                 padding: 2px;
-                for entry[index] in root.entries: VerticalLayout {
+                for entry in root.entries: VerticalLayout {
                     if entry.id == "": Rectangle {
                         height: 7px;
                         Rectangle { x: 8px; width: parent.width - 16px; height: 1px; background: Theme.line; }
@@ -131,7 +129,6 @@ export component MenuButton {
                     if entry.id != "": MenuRow {
                         text: entry.text;
                         enabled: entry.enabled;
-                        check: index < root.checks.length ? max(1, root.checks[index]) : root.checks.length > 0 ? 1 : 0;
                         // Pick first: closing the popup drops this row, and
                         // `entry` would then read as empty.
                         picked => {

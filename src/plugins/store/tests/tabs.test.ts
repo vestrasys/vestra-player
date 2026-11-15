@@ -55,9 +55,9 @@ test("All lists the repositories' plugins, installed or not, and installed plugi
     assert.equal(props(host)["installed-count"], 4);
     assert.equal(props(host)["updates"], 1);
 
-    // Each card's one button by its state (Install, Update, else none); its page has the rest in the fixed order.
+    // Each card's one button by its state (Install, Update, Enable, else none); its page has the rest in the fixed order.
     const of = (name: string) => controls(host, name).button?.id ?? null;
-    assert.deepEqual(["Gamma", "Alpha", "Beta", "s.side", "w.work"].map(of), ["install", null, "update", null, null]);
+    assert.deepEqual(["Gamma", "Alpha", "Beta", "s.side", "w.work"].map(of), ["install", null, "update", null, "enable"]);
     const page = async (name: string) => {
       const { buttons, more } = await manage(host, name);
       return [...buttons, ...more].map((a) => a.id);
@@ -231,7 +231,8 @@ test("All in English: one button per card (Install, Update) and the state in wor
       ],
     );
     const one = (name: string) => controls(host, name).button?.text ?? "";
-    assert.deepEqual(["Gamma", "Newer", "Quiet", "Tube"].map(one), ["Install", "Update", "", ""]);
+    assert.deepEqual(["Gamma", "Newer", "Quiet", "Tube"].map(one), ["Install", "Update", "Enable", ""]);
+    assert.deepEqual(rows(host).find((r) => r.name === "Tube")!.menu.map((m) => m.text), ["Disable", "Uninstall…"]);
     assert.equal(props(host)["all-count"], 4);
     host.window("store").emit("openCard", "\nt.tube");
     await host.settle();

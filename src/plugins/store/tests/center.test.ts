@@ -120,8 +120,11 @@ test("card buttons and the detail page's buttons and ⋯ menu by state", async (
     assert.deepEqual(page.buttons, [{ id: "reload", text: "重新加载", enabled: true }]);
     assert.deepEqual(page.more, [{ id: "openData", text: "打开数据目录", enabled: true }]);
 
+    assert.deepEqual(builtin.menu, [], "built-ins have no ⋯ either");
     const running = controls(host, "A Run");
     assert.equal(running.button, null);
+    // Its card's ⋯ (Store v4 §3): Disable, Uninstall…; Reload and Open Data Folder stay on the page.
+    assert.deepEqual(running.menu, ["disable", "uninstall"]);
     assert.equal(running.dim, false);
     page = await manage(host, "A Run");
     // One fixed order (Disable/Enable, Uninstall…, Reload), Open Data Folder in the ⋯ menu.
@@ -129,22 +132,27 @@ test("card buttons and the detail page's buttons and ⋯ menu by state", async (
     assert.deepEqual(ids(page.more), ["openData"]);
 
     const disabled = controls(host, "B Off");
-    assert.equal(disabled.button, null);
+    // A disabled card's text button is Enable; its ⋯ reads Enable, Uninstall….
+    assert.deepEqual(disabled.button, { id: "enable", text: "启用", enabled: true });
+    assert.deepEqual(disabled.menu, ["enable", "uninstall"]);
     assert.equal(disabled.dim, true);
     page = await manage(host, "B Off");
     assert.deepEqual(ids(page.buttons), ["enable", "uninstall"], "a disabled plugin is not reloaded");
     assert.deepEqual(ids(page.more), ["openData"]);
 
     assert.equal(controls(host, "C Bad").button, null);
+    assert.deepEqual(controls(host, "C Bad").menu, ["disable", "uninstall"], "no Reload on the card");
     assert.equal(rows(host).find((r) => r.name === "C Bad")!.tip, "boom", "the reason on hover");
     page = await manage(host, "C Bad");
     assert.deepEqual(ids(page.buttons), ["disable", "uninstall", "reload"]);
 
-    // An update: the Update button on the card.
+    // An update: the Update button on the card, its ⋯ beside it.
     assert.deepEqual(controls(host, "D Old").button, { id: "update", text: "更新", enabled: true });
+    assert.deepEqual(controls(host, "D Old").menu, ["disable", "uninstall"]);
 
     await tab(host, ALL);
     assert.deepEqual(controls(host, "E New").button, { id: "install", text: "安装", enabled: true });
+    assert.deepEqual(controls(host, "E New").menu, []);
     page = await manage(host, "E New");
     assert.deepEqual(page.buttons, [{ id: "install", text: "安装 1.0.0", enabled: true }]);
     assert.deepEqual(page.more, []);
@@ -162,7 +170,7 @@ test("detail page: disable and enable through packages.setEnabled; the card dims
     await until(host, () => controls(host, "A Run").dim, "dimmed");
     assert.deepEqual(enables(host), [["a.run", false]]);
     assert.equal(host.confirms.length, 0, "no question: it can be enabled again at once");
-    assert.equal(controls(host, "A Run").button, null);
+    assert.deepEqual(controls(host, "A Run").button, { id: "enable", text: "启用", enabled: true });
     assert.equal(controls(host, "A Run").state, "已停用");
     assert.equal(props(host)["status-text"], "已停用「A Run」");
     assert.ok(host.osd.includes("已停用「A Run」"));
@@ -524,8 +532,10 @@ test("buttons keep their places: Disable and Enable swap only their words (VS Co
     host.setPackages(host.packages.map((p) => (p.id === "d.old" ? { ...p, state: "disabled" } : p)));
     await until(host, () => controls(host, "D Old").dim, "D Old disabled");
     assert.deepEqual(ids(actions(host)), ["update", "enable", "uninstall"]);
+    // Update wins over Enable; the card says the update and stays dimmed (store-v4 §3).
     assert.deepEqual(controls(host, "D Old").button, { id: "update", text: "更新", enabled: true });
-    assert.equal(controls(host, "D Old").state, "已停用");
+    assert.deepEqual(controls(host, "D Old").menu, ["enable", "uninstall"]);
+    assert.equal(controls(host, "D Old").state, "有更新");
   } finally {
     await stop();
   }

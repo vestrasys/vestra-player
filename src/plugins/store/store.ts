@@ -206,6 +206,8 @@ export class Store {
   readonly #logos = new Map<string, ImageRef | null | "pending">();
   /** The row whose enable, disable or reload is running. */
   #working: string | null = null;
+  /** The plugin a repository install or update is downloading or installing (its card shows the progress). */
+  installing: { key: string; percent: number | null } | null = null;
   /** A reload the player accepted: done once the plugin left `starting` (`packages.onChange`). */
   #reloading: Reloading | null = null;
   // Menu
@@ -609,9 +611,9 @@ export class Store {
   }
 
   /** The current tab, searched, filtered by category and sorted (design store-v3 §3.1); built-ins (when shown) first under Installed. */
-  visible(): Item[] {
+  visible(hide = this.hideBuiltins): Item[] {
     const query = this.search.trim().toLowerCase();
-    let items = this.#inCategory().filter((item) =>
+    let items = this.#inCategory(hide).filter((item) =>
       !query
         ? true
         : [item.name, item.id, item.author ?? "", item.punchline ?? "", ...item.tags, ...item.english].some((text) =>
@@ -627,13 +629,19 @@ export class Store {
     return items.sort((a, b) => group(a) - group(b) || order(a, b));
   }
 
-  /** The rows "Hide built-in plugins" leaves in: every tab's list and its count draw on these. */
-  #listed(): Item[] {
-    return this.hideBuiltins ? this.items.filter((item) => !isBuiltinRow(item)) : this.items;
+  /** While built-ins are hidden: how many of them the tab, search and category would list. */
+  #hiddenMatches(): number {
+    if (!this.hideBuiltins || (!this.search.trim() && !this.goal)) return 0;
+    return this.visible(false).filter(isBuiltinRow).length;
   }
 
-  #inCategory(): Item[] {
-    const items = this.#listed();
+  /** The rows "Hide built-in plugins" leaves in: every tab's list and its count draw on these. */
+  #listed(hide = this.hideBuiltins): Item[] {
+    return hide ? this.items.filter((item) => !isBuiltinRow(item)) : this.items;
+  }
+
+  #inCategory(hide = this.hideBuiltins): Item[] {
+    const items = this.#listed(hide);
     if (this.category === INSTALLED) return items.filter(isInstalledRow);
     if (this.category === UPDATES) return items.filter((item) => item.state === "update");
     // All: every row, the repositories' and the installed ones (sideloaded, workshop, development loads),
@@ -706,11 +714,14 @@ export class Store {
       goalIndex: this.goal,
       sortIndex: this.sort,
       hideBuiltins: this.hideBuiltins,
+      // "Show built-in plugins (n)": what the switch adds.
+      builtinCount: this.items.filter((each) => isBuiltinRow(each) && isInstalledRow(each)).length,
       // One flat array in display order: the window lays it out in rows of as many cards as fit.
       cards: visible.map((each) => this.#card(each, action)),
       emptyText: shown(this.#emptyText(visible)),
       // The empty grid offers Clear Search while a search or a category hides plugins.
       canClear: visible.length === 0 && (this.search.trim() !== "" || this.goal !== 0),
+      canShowBuiltins: visible.length === 0 && this.#hiddenMatches() > 0,
       listNote: shown(this.#listNote(visible)),
       linkOpen: this.linkOpen,
       status: this.shown(joined(status, "{} · {}")),
@@ -757,7 +768,14 @@ export class Store {
 
   #emptyText(visible: Item[]): Msg | null {
     if (visible.length) return null;
-    if (this.search.trim() || this.goal) return msg("No plugins match");
+    if (this.search.trim() || this.goal) {
+      // Hidden built-ins would match (design store-v4 §2, question 2): say so; the window offers to show them.
+      const hidden = this.#hiddenMatches();
+      if (hidden === 1) return msg("{}\n\n{}", msg("No plugins match"), msg("1 built-in plugin matches, but built-in plugins are hidden"));
+      if (hidden > 1)
+        return msg("{}\n\n{}", msg("No plugins match"), msg("{} built-in plugins match, but built-in plugins are hidden", hidden));
+      return msg("No plugins match");
+    }
     if (this.category === INSTALLED)
       // Only built-ins are installed and they are hidden: say so rather than "nothing installed".
       return this.hideBuiltins && this.items.some((item) => isBuiltinRow(item) && isInstalledRow(item))
@@ -800,10 +818,15 @@ export class Store {
     const info = item.installed;
     const own = isInstalledRow(item) ? info : null;
     const dev = isDevelopmentRow(item);
+    const installing = this.installing?.key === item.key ? this.installing : null;
     const [state, stateTone] = ((): [Msg | null, number] => {
+      // While this plugin installs: the progress in place of the Install button (store-v4 §3, question 6).
+      if (installing) return [installing.percent === null ? msg("Installing…") : msg("Installing… {}%", installing.percent), 4];
       if (this.#working === item.key) return [msg("Working…"), 4];
       // Revoked first: why it was turned off matters more than that it is.
       if (item.state === "revoked" || item.state === "allRevoked") return [msg("Revoked"), 3];
+      // An update waiting says so on a disabled card too (store-v4 §3); the card is still dimmed.
+      if (item.state === "update" && !dev) return [msg("Update available"), 1];
       if (own?.state === "disabled") return [msg("Disabled"), 2];
       if (own?.state === "failed") return [msg("Failed"), 2];
       if (dev) return [msg("Development load"), 4];
@@ -824,9 +847,7 @@ export class Store {
           return [msg("✓ {}", msg("Installed")), 4];
       }
     })();
-    // One button: Install for a plugin not installed, Update while a newer version exists.
-    const primary = this.#button(item, false);
-    const button = primary && (primary.id === "install" || primary.id === "update") ? primary : null;
+    const { button, menu } = installing ? { button: null, menu: [] } : this.#cardActions(item);
     const warnings = own?.state === "running" ? this.#warnings(own) : [];
     const note = item.repo && !item.repo.official ? msg("Unofficial") : item.repo || dev || !own || own.builtin ? null : sourceName(own.source);
     return {
@@ -840,6 +861,7 @@ export class Store {
       state: this.shown(state),
       stateTone,
       button: action(button),
+      menu: menu.map((each) => action(each)),
       dim: own?.state === "disabled",
       // On hover: a failed plugin's reason, a running one's warnings, else the whole introduction.
       tip:
@@ -849,6 +871,30 @@ export class Store {
             ? this.shown(joined(warnings, "{} · {}"))
             : (item.punchline ?? item.description ?? ""),
     };
+  }
+
+  /**
+   * A card's actions (design store-v4 §3): at most one text button, the most
+   * likely next step, Install, Update or Enable (Update wins); and for an
+   * installed plugin that is not built in, a ⋯ menu with Disable or Enable
+   * and Uninstall…, the detail page's own actions in their order. Revoked:
+   * Uninstall… only (Enable Anyway… stays next to its warning on the page);
+   * a development load: Disable or Enable only; a record without a package:
+   * Uninstall… only. Reload, Open Data Folder and Replace are on the page.
+   */
+  #cardActions(item: Item): { button: Action | null; menu: Action[] } {
+    const info = item.installed;
+    const first = this.#button(item, false);
+    if (!info || !isInstalledRow(item) || info.builtin || this.#working === item.key)
+      return { button: first?.id === "install" ? first : null, menu: [] };
+    const ordered = this.#ordered(item, false);
+    const update = ordered.find((each) => each.id === "update") ?? null;
+    const enable = ordered.find((each) => each.id === "enable") ?? null;
+    const revoked = item.state === "revoked";
+    const menu = ordered.filter(
+      (each) => each.id === "uninstall" || (!revoked && (each.id === "disable" || each.id === "enable")),
+    );
+    return { button: update ?? (revoked ? null : enable), menu };
   }
 
   /**

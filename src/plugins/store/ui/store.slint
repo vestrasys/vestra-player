@@ -1,7 +1,9 @@
-// Plugin Store v3 (vestra.store, design store-v3 rev. 2, owner rulings
-// 2026-11-15): one window-wide grid of cards. On top the search box, Refresh
-// and the ⋯ menu; then the tabs All / Installed / Updates with the Category
-// and Sort drop-downs; the grid; a status line at the bottom. A click on a
+// Plugin Store v4 (vestra.store, designs store-v3 rev. 2 and store-v4, owner
+// rulings 2026-11-15): one window-wide grid of cards. On top a 31px strip with
+// the tabs All / Installed / Updates, the search box, Refresh and the ⋯ menu;
+// under its rule the filter row: "Show built-in plugins (n)", Category and
+// Sort; the grid; a status line at the bottom. An installed card has its own
+// ⋯ (Disable or Enable, Uninstall…) before its one text button. A click on a
 // card opens its detail page in the same window (the grid stays alive under
 // it with `visible:`, so it keeps its scroll position): ← All Plugins, the
 // header and its buttons, notices, "Where to find it", tabs About (the
@@ -14,7 +16,7 @@
 import { LineEdit, ListView } from "std-widgets.slint";
 import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
-import { Button, Choice, Tabs, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
+import { Button, Check, Choice, Tabs, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 import { Cell, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
 
 // One card of the grid (design store-v3 §4.2).
@@ -36,8 +38,10 @@ export struct StoreCard {
     state: string,
     // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim (see Tone).
     stateTone: int,
-    // Install or Update (`id` "": no button).
+    // Install, Update or Enable (`id` "": no button). Update is drawn in the accent colour.
     button: MenuEntry,
+    // The card's ⋯ menu: Disable or Enable, Uninstall… (empty: no ⋯).
+    menu: [MenuEntry],
     // Disabled: drawn dimmed.
     dim: bool,
     // On hover: the whole introduction, or why it failed.
@@ -102,6 +106,35 @@ component SizedButton inherits Rectangle {
     }
 }
 
+// The emphasised button (owner ruling 2026-11-15: Update stands out): the
+// accent colour with white text, as the library's checked box is. The
+// library has no such button, so it is the store's own, from Theme tokens.
+component AccentButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: max(Theme.button-min-width, label.preferred-width + 2 * Theme.button-padding);
+    height: Theme.button-height;
+    border-radius: Theme.radius-control;
+    background: !root.enabled ? Theme.accent-disabled : touch.pressed ? Theme.accent-press : Theme.accent;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { root.clicked(); }
+    label := Text {
+        text: root.text;
+        color: Colors.white;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
 // The "how to open" pointer, 11px, in the dim text colour.
 component Pointer inherits Path {
     width: 11px;
@@ -116,11 +149,13 @@ component Pointer inherits Path {
     stroke-line-join: round;
 }
 
-// A card (design store-v3 §3.3): 136 high, padding 12; the icon with the
-// name and the by-line, the introduction, "how to open", then the state and
-// at most one button. Every text is one line, elided.
+// A card (design store-v3 §3.3, store-v4 §3): 136 high, padding 12; the icon
+// with the name and the by-line, the introduction, "how to open", then the
+// state, the ⋯ menu and at most one text button. Every text is one line, elided.
 component Card inherits Rectangle {
     in property <StoreCard> item;
+    // The window's height: the ⋯ menu opens upward near the bottom.
+    in property <length> window-height;
     callback open();
     callback act(string);
     background: touch.has-hover ? Theme.hover-bg : Theme.bg-list;
@@ -189,7 +224,27 @@ component Card inherits Rectangle {
             height: Theme.button-height;
             spacing: 6px;
             Cell { horizontal-stretch: 1; text: root.item.state; color: Tone.color(root.item.stateTone); }
-            if root.item.button.id != "": SizedButton {
+            // ⋯ first, then the text button (owner ruling 2026-11-15), both at the right end.
+            if root.item.menu.length > 0: Rectangle {
+                width: 23px;
+                background: Theme.button-bg;
+                border-radius: Theme.radius-control;
+                MenuButton {
+                    width: 100%;
+                    height: 100%;
+                    icon: StoreIcons.more;
+                    tip: @tr("Manage");
+                    entries: root.item.menu;
+                    window-height: root.window-height;
+                    picked(id) => { root.act(id); }
+                }
+            }
+            if root.item.button.id == "update": AccentButton {
+                text: root.item.button.text;
+                enabled: root.item.button.enabled;
+                clicked => { root.act(root.item.button.id); }
+            }
+            if root.item.button.id != "" && root.item.button.id != "update": SizedButton {
                 text: root.item.button.text;
                 enabled: root.item.button.enabled;
                 clicked => { root.act(root.item.button.id); }
@@ -220,13 +275,16 @@ export component StoreWindow inherits Window {
     // In-out: the drop-downs set them on a pick (then ask with set-goal / set-sort).
     in-out property <int> goal-index;
     in-out property <int> sort-index;
-    // The ⋯ menu's "Show built-in plugins" is its opposite.
+    // "Show built-in plugins (n)" is its opposite; n: how many built-in plugins there are.
     in property <bool> hide-builtins: true;
+    in property <int> builtin-count;
     // The grid's cards in display order.
     in property <[StoreCard]> cards;
     in property <string> empty-text;
-    // The empty grid offers Clear Search (a search or a category hides plugins).
+    // The empty grid offers Clear Search (a search or a category hides plugins), and
+    // Show Built-in Plugins when hidden built-in plugins match.
     in property <bool> can-clear;
+    in property <bool> can-show-builtins;
     // Over a grid that is not empty: All without any repository index ("" none).
     in property <string> list-note;
     in property <bool> link-open;
@@ -330,83 +388,106 @@ export component StoreWindow inherits Window {
     }
 
     VerticalLayout {
-        padding-top: 8px;
         spacing: 6px;
         Rectangle {
             vertical-stretch: 1;
             // The grid page.
             VerticalLayout {
                 visible: !root.detail-open;
-                spacing: 6px;
-                HorizontalLayout {
-                    padding-left: 16px;
-                    padding-right: 16px;
-                    spacing: 6px;
-                    height: 22px;
-                    search-box := LineEdit {
-                        min-width: 160px;
-                        max-width: 420px;
-                        horizontal-stretch: 1;
-                        placeholder-text: @tr("Search names, authors, tags…");
-                        font-size: Theme.font-body;
-                        text <=> root.search-text;
-                        edited(text) => { root.search(text); }
-                    }
-                    Rectangle { horizontal-stretch: 1; }
-                    ToolTipArea {
-                        width: 23px;
-                        text: @tr("Refresh");
-                        Button {
-                            width: 100%;
-                            height: 100%;
-                            icon: StoreIcons.refresh;
-                            stroked: true;
-                            clicked => { root.refresh(); }
+                spacing: 0px;
+                // The strip (design store-v4 §1): the library Tabs at their own height and background,
+                // the search box, Refresh and ⋯. Left padding 13: the tab's hover plate is inset 3.
+                Rectangle {
+                    height: 31px;
+                    background: Theme.bg-bar;
+                    HorizontalLayout {
+                        padding-left: 13px;
+                        padding-right: 16px;
+                        spacing: 6px;
+                        // Updates is in the accent colour while updates wait.
+                        Tabs {
+                            horizontal-stretch: 0;
+                            model: [
+                                @tr("All ({})", root.all-count),
+                                @tr("Installed ({})", root.installed-count),
+                                @tr("Updates ({})", root.updates),
+                            ];
+                            emphasis: [false, false, root.updates > 0];
+                            current-index <=> root.category;
+                            selected(index) => { root.set-category(index); }
                         }
-                    }
-                    MenuButton {
-                        width: 23px;
-                        icon: StoreIcons.more;
-                        tip: @tr("More");
-                        entries: [
-                            { id: "file", text: @tr("Install from File…"), enabled: true },
-                            { id: "link", text: @tr("Install from Link…"), enabled: true },
-                            { id: "repos", text: @tr("Repositories…"), enabled: true },
-                            { id: "", text: "", enabled: false },
-                            { id: "builtins", text: @tr("Show built-in plugins"), enabled: true },
-                            { id: "", text: "", enabled: false },
-                            { id: "settings", text: @tr("Store Settings…"), enabled: true },
-                        ];
-                        checks: [1, 1, 1, 0, root.hide-builtins ? 1 : 2];
-                        picked(id) => {
-                            if id == "file" { root.from-file(); }
-                            if id == "link" { root.from-link(); }
-                            if id == "repos" { root.repos(); }
-                            if id == "builtins" { root.set-hide-builtins(!root.hide-builtins); }
-                            if id == "settings" { root.settings(); }
+                        Rectangle { horizontal-stretch: 1; }
+                        VerticalLayout {
+                            alignment: center;
+                            search-box := LineEdit {
+                                min-width: 160px;
+                                max-width: 240px;
+                                preferred-width: 240px;
+                                height: Theme.input-height;
+                                placeholder-text: @tr("Search names, authors, tags…");
+                                font-size: Theme.font-body;
+                                text <=> root.search-text;
+                                edited(text) => { root.search(text); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            ToolTipArea {
+                                width: 23px;
+                                height: 21px;
+                                text: @tr("Refresh");
+                                Button {
+                                    width: 100%;
+                                    height: 100%;
+                                    icon: StoreIcons.refresh;
+                                    stroked: true;
+                                    clicked => { root.refresh(); }
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            MenuButton {
+                                width: 23px;
+                                height: 21px;
+                                icon: StoreIcons.more;
+                                tip: @tr("More");
+                                entries: [
+                                    { id: "file", text: @tr("Install from File…"), enabled: true },
+                                    { id: "link", text: @tr("Install from Link…"), enabled: true },
+                                    { id: "repos", text: @tr("Repositories…"), enabled: true },
+                                    { id: "", text: "", enabled: false },
+                                    { id: "settings", text: @tr("Store Settings…"), enabled: true },
+                                ];
+                                picked(id) => {
+                                    if id == "file" { root.from-file(); }
+                                    if id == "link" { root.from-link(); }
+                                    if id == "repos" { root.repos(); }
+                                    if id == "settings" { root.settings(); }
+                                }
+                            }
                         }
                     }
                 }
+                Rectangle { height: 1px; background: Theme.line; }
+                // The filter row: 10 + 21 + 10, 16 at the sides, the cards' edges.
                 HorizontalLayout {
                     padding-left: 16px;
                     padding-right: 16px;
+                    padding-top: 10px;
+                    padding-bottom: 10px;
                     spacing: 6px;
-                    height: 22px;
-                    // The library Tabs (Left/Right/Home/End, tab-list role) at the row's 22px on
-                    // the panel background: Updates is in the accent colour while updates wait.
-                    Tabs {
-                        height: 22px;
-                        horizontal-stretch: 1;
-                        background: transparent;
-                        model: [
-                            @tr("All ({})", root.all-count),
-                            @tr("Installed ({})", root.installed-count),
-                            @tr("Updates ({})", root.updates),
-                        ];
-                        emphasis: [false, false, root.updates > 0];
-                        current-index <=> root.category;
-                        selected(index) => { root.set-category(index); }
+                    height: 41px;
+                    VerticalLayout {
+                        alignment: center;
+                        Check {
+                            text: @tr("Show built-in plugins ({})", root.builtin-count);
+                            checked: !root.hide-builtins;
+                            self-toggle: false;
+                            toggled(on) => { root.set-hide-builtins(!on); }
+                        }
                     }
+                    Rectangle { horizontal-stretch: 1; }
                     Choice {
                         width: root.goal-width;
                         model: root.goal-model;
@@ -453,12 +534,12 @@ export component StoreWindow inherits Window {
                 Rectangle {
                     vertical-stretch: 1;
                     // Rows of cards (design store-v3 §4.2): always `columns` cells, so the cards are equally wide
-                    // and a short last row keeps their width. 12px above the first row; centred beyond 1800px.
+                    // and a short last row keeps their width. The first row right under the filter row; centred
+                    // beyond 1800px.
                     grid := ListView {
                         x: (parent.width - self.width) / 2;
-                        y: 6px;
                         width: min(parent.width, 1800px);
-                        height: parent.height - 6px;
+                        height: parent.height;
                         for r in root.row-count: HorizontalLayout {
                             height: 148px;
                             padding-left: 16px;
@@ -471,6 +552,7 @@ export component StoreWindow inherits Window {
                                     width: 100%;
                                     height: 100%;
                                     item: root.cards[r * root.columns + c];
+                                    window-height: root.height;
                                     open => { root.open-card(self.item.key); }
                                     act(id) => { root.card-act(self.item.key, id); }
                                 }
@@ -490,12 +572,18 @@ export component StoreWindow inherits Window {
                             line-height-factor: 1.25;
                             horizontal-alignment: center;
                         }
-                        if root.can-clear: HorizontalLayout {
+                        if root.can-clear || root.can-show-builtins: HorizontalLayout {
                             alignment: center;
-                            SizedButton {
+                            spacing: 6px;
+                            if root.can-clear: SizedButton {
                                 height: Theme.button-height;
                                 text: @tr("Clear Search");
                                 clicked => { root.clear-search(); }
+                            }
+                            if root.can-show-builtins: SizedButton {
+                                height: Theme.button-height;
+                                text: @tr("Show Built-in Plugins");
+                                clicked => { root.set-hide-builtins(false); }
                             }
                         }
                     }
@@ -520,18 +608,31 @@ export component StoreWindow inherits Window {
                     }
                 }
                 VerticalLayout {
+                    spacing: 0px;
+                    // The same 31px strip and rule as the grid's, so nothing jumps when a card opens.
+                    Rectangle {
+                        height: 31px;
+                        background: Theme.bg-bar;
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            alignment: start;
+                            VerticalLayout {
+                                alignment: center;
+                                SizedButton {
+                                    height: Theme.button-height;
+                                    text: @tr("← All Plugins");
+                                    clicked => { root.back(); }
+                                }
+                            }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.line; }
+                    VerticalLayout {
+                    padding-top: 10px;
                     padding-left: 16px;
                     padding-right: 16px;
                     spacing: 6px;
-                    HorizontalLayout {
-                        height: 22px;
-                        alignment: start;
-                        SizedButton {
-                            height: Theme.button-height;
-                            text: @tr("← All Plugins");
-                            clicked => { root.back(); }
-                        }
-                    }
                     HorizontalLayout {
                         spacing: 10px;
                         height: 56px;
@@ -793,6 +894,7 @@ export component StoreWindow inherits Window {
                                 }
                             }
                         }
+                    }
                     }
                 }
             }
