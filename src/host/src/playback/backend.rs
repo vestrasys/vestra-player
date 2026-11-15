@@ -377,8 +377,8 @@ impl Backend {
                 jobs.sources = Arc::new(std::sync::Mutex::new(
                     crate::playback::media_sources::Store::open_default(),
                 ));
-                // What a crashed export of parts left behind (no export
-                // runs before this worker serves requests).
+                // What a crashed export of parts left behind; the folders
+                // of exports other players of this cache still run stay.
                 if let Some(root) = crate::playback::media_join::scratch_root() {
                     crate::playback::media_join::clean_scratch(&root);
                 }

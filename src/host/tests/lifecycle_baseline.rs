@@ -37,6 +37,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 #[path = "explicit/mod.rs"]
 mod explicit;
+mod isolation;
 
 /// `package_stage::read_tree`'s digest over a flat fixture (as in
 /// tests/shared_runner.rs).
@@ -156,6 +157,7 @@ impl Root {
             std::fs::write(catalog, self.catalog.to_string()).unwrap();
         }
         let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+        isolation::isolate(&mut command, self.path());
         command
             .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
             .env("VESTRA_BUILTIN_PLUGINS", self.path().join("plugins"))

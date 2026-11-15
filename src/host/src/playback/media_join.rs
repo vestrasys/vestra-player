@@ -64,22 +64,94 @@ pub struct JoinRequest {
 }
 
 /// The player's own folder for intermediate parts:
-/// `<app cache>/export-parts`, out of the user's folders; its leftover
-/// `.vestra-join-*` folders are removed at start-up ([`clean_scratch`]), so a
-/// crash or a power cut mid-export
-/// leaves nothing beside the user's videos.
+/// `<app cache>/export-parts`, out of the user's folders; the
+/// `.vestra-join-*` folders a crashed player left there are removed at
+/// start-up ([`clean_scratch`]), so a crash or a power cut mid-export
+/// leaves nothing beside the user's videos. `None` in the host's unit
+/// tests, which never touch the user's cache (a join then works beside its
+/// destination).
 pub fn scratch_root() -> Option<PathBuf> {
+    if cfg!(test) {
+        return None;
+    }
     crate::platform::app_cache_dir().map(|dir| dir.join("export-parts"))
 }
 
 /// The prefix of an export's folder of intermediate parts.
 const WORK_PREFIX: &str = ".vestra-join-";
 
-/// Removes what an earlier run left in `root` (no export runs yet): only
-/// the export folders (`.vestra-join-*`), and only when `root` itself is a
-/// real directory, not a link or junction to somewhere else. A link among
-/// the entries is removed itself, never followed.
+/// The file in an export's folder that names the process running the
+/// export: its id and its start mark (`platform::process_start`), one per
+/// line.
+const OWNER_FILE: &str = "owner";
+
+/// How long a folder without a readable owner stays (one from a player
+/// before the owner file, or one whose owner the system does not report):
+/// removed once nothing in it changed for this long.
+const UNOWNED_KEPT: std::time::Duration = std::time::Duration::from_secs(24 * 60 * 60);
+
+/// Writes the owner file of an export's folder `work`: this process. A
+/// player of the same user and cache that starts meanwhile (a second
+/// player, a test run) leaves the folder alone while this process runs.
+fn claim(work: &Path) -> Result<()> {
+    let start = match crate::platform::process_start(std::process::id()) {
+        crate::platform::ProcessStart::Running(start) => start,
+        // Unknown: the age rule protects it.
+        _ => String::new(),
+    };
+    std::fs::write(
+        work.join(OWNER_FILE),
+        format!("{}\n{start}\n", std::process::id()),
+    )
+    .context("the temporary folder's owner could not be written")
+}
+
+/// The owner a folder's owner file names: its process id and start mark;
+/// `None` without a readable file or with an empty mark.
+fn owner(work: &Path) -> Option<(u32, String)> {
+    let text = std::fs::read_to_string(work.join(OWNER_FILE)).ok()?;
+    let mut lines = text.lines();
+    let pid = lines.next()?.trim().parse().ok()?;
+    let start = lines.next()?.trim();
+    (!start.is_empty()).then(|| (pid, start.to_owned()))
+}
+
+/// When anything in `work` last changed: the folder and its entries (not
+/// followed), the latest; `None` when the system does not say.
+fn last_change(work: &Path) -> Option<std::time::SystemTime> {
+    let mut latest = std::fs::symlink_metadata(work).ok()?.modified().ok()?;
+    for entry in std::fs::read_dir(work).ok()?.flatten() {
+        if let Ok(changed) = entry.metadata().and_then(|meta| meta.modified()) {
+            latest = latest.max(changed);
+        }
+    }
+    Some(latest)
+}
+
+/// Removes the export folders (`.vestra-join-*`) in `root` whose export no
+/// longer runs, at start-up: other players of the same user and cache may
+/// be exporting into their own folders there (a second player, a test
+/// run). A folder whose owner process still runs (its id with the same
+/// start mark, so a reused id does not count) stays; one whose owner has
+/// ended goes; one without a readable owner, or whose owner the system does
+/// not report, goes only once nothing in it changed for a day. Only when
+/// `root` itself is a real directory, not a link or junction to somewhere
+/// else; a link among the entries is removed itself, never followed.
 pub fn clean_scratch(root: &Path) {
+    clean_scratch_with(
+        root,
+        crate::platform::process_start,
+        std::time::SystemTime::now(),
+    );
+}
+
+/// [`clean_scratch`] with the owner check and the clock given (tests).
+fn clean_scratch_with(
+    root: &Path,
+    process_start: impl Fn(u32) -> crate::platform::ProcessStart,
+    now: std::time::SystemTime,
+) {
+    use crate::platform::ProcessStart;
     let real_directory = std::fs::symlink_metadata(root)
         .is_ok_and(|meta| meta.is_dir() && !meta.file_type().is_symlink());
     if !real_directory {
@@ -87,6 +159,11 @@ pub fn clean_scratch(root: &Path) {
     }
     let Ok(entries) = std::fs::read_dir(root) else {
         return;
+    };
+    let old = |path: &Path| {
+        last_change(path)
+            .and_then(|changed| now.duration_since(changed).ok())
+            .is_some_and(|age| age >= UNOWNED_KEPT)
     };
     for entry in entries.flatten() {
         if !entry.file_name().to_string_lossy().starts_with(WORK_PREFIX) {
@@ -100,6 +177,17 @@ pub fn clean_scratch(root: &Path) {
             // A link (or a junction) goes as a link.
             std::fs::remove_file(&path).or_else(|_| std::fs::remove_dir(&path))
         } else if meta.is_dir() {
+            let ended = match owner(&path) {
+                Some((pid, start)) => match process_start(pid) {
+                    ProcessStart::Running(running) => running != start,
+                    ProcessStart::Gone => true,
+                    ProcessStart::Unknown => old(&path),
+                },
+                None => old(&path),
+            };
+            if !ended {
+                continue;
+            }
             std::fs::remove_dir_all(&path)
         } else {
             std::fs::remove_file(&path)
@@ -385,6 +473,7 @@ fn join(request: &JoinRequest, control: &Control) -> Result<Outcome> {
         .prefix(WORK_PREFIX)
         .tempdir_in(&scratch)
         .context("the temporary folder could not be created")?;
+    claim(work.path())?;
     // A copied part is Matroska whatever the output: it has no edit list,
     // so the frames FFmpeg copies past a part's end (it cuts in decode
     // order) are presented and counted in its duration, and the next part
@@ -787,7 +876,12 @@ fn encode_command(
 mod tests {
     use super::*;
     use crate::playback::media_worker::{CancelResult, real};
-    use std::{process::Command, sync::Arc, thread, time::Duration};
+    use std::{
+        process::Command,
+        sync::Arc,
+        thread,
+        time::{Duration, SystemTime},
+    };
 
     #[test]
     fn concat_lines_quote_any_windows_or_unix_path() {
@@ -1149,17 +1243,136 @@ mod tests {
         };
         assert_eq!(names(&videos).len(), 2, "{:?}", names(&videos));
         assert!(names(&scratch).is_empty(), "{:?}", names(&scratch));
-        // A crash's leftovers go at the next start; nothing else does.
+        // A crash's leftovers go at a later start; nothing else does.
         std::fs::create_dir_all(scratch.join(".vestra-join-old")).unwrap();
         std::fs::write(scratch.join(".vestra-join-old").join("part-000.mkv"), b"x").unwrap();
         std::fs::write(scratch.join("someone-else.txt"), b"keep").unwrap();
-        clean_scratch(&scratch);
+        clean_scratch_with(
+            &scratch,
+            crate::platform::process_start,
+            std::time::SystemTime::now() + UNOWNED_KEPT,
+        );
         assert_eq!(names(&scratch), ["someone-else.txt"]);
         // A root that is not a real directory is left alone.
         let file = dir.path().join("not-a-dir");
         std::fs::write(&file, b"x").unwrap();
         clean_scratch(&file);
         assert!(file.is_file());
+    }
+
+    /// Start-up removes only the export folders whose owner has ended: a
+    /// running owner's folder stays (another player of the same cache is
+    /// exporting into it), an ended or replaced owner's goes, and a folder
+    /// without an owner (an older player's) goes only once it is a day old.
+    #[test]
+    fn start_up_removes_only_folders_whose_owner_has_ended() {
+        use crate::platform::ProcessStart;
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path();
+        let folder = |name: &str, owner: Option<&str>| {
+            let path = root.join(format!("{WORK_PREFIX}{name}"));
+            std::fs::create_dir(&path).unwrap();
+            std::fs::write(path.join("part-000.mp4"), b"x").unwrap();
+            if let Some(owner) = owner {
+                std::fs::write(path.join(OWNER_FILE), owner).unwrap();
+            }
+            path
+        };
+        let names = || -> Vec<String> {
+            let mut names: Vec<_> = std::fs::read_dir(root)
+                .unwrap()
+                .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+                .collect();
+            names.sort();
+            names
+        };
+        // This process, through the real check: its folder stays, even a
+        // day later.
+        let mine = folder("mine", None);
+        claim(&mine).unwrap();
+        let (pid, start) = owner(&mine).unwrap();
+        assert_eq!(pid, std::process::id());
+        // Its id with another start: the id was reused, the owner ended.
+        folder("reused", Some(&format!("{pid}\nnot-{start}\n")));
+        clean_scratch_with(
+            root,
+            crate::platform::process_start,
+            SystemTime::now() + UNOWNED_KEPT,
+        );
+        assert_eq!(names(), [".vestra-join-mine"]);
+
+        // Through a given check and clock.
+        let owners = |pid: u32| match pid {
+            1 => ProcessStart::Running("a".into()),
+            2 => ProcessStart::Gone,
+            _ => ProcessStart::Unknown,
+        };
+        let reset = || {
+            for name in names() {
+                std::fs::remove_dir_all(root.join(name)).unwrap();
+            }
+            folder("alive", Some("1\na\n"));
+            folder("restarted", Some("1\nb\n"));
+            folder("dead", Some("2\na\n"));
+            folder("unknown", Some("3\na\n"));
+            folder("legacy", None);
+            folder("unmarked", Some("1\n\n"));
+        };
+        // Now: the alive owner's folder stays, the ended ones go, the
+        // folders without a known owner stay while they are new.
+        reset();
+        clean_scratch_with(root, owners, SystemTime::now());
+        assert_eq!(
+            names(),
+            [
+                ".vestra-join-alive",
+                ".vestra-join-legacy",
+                ".vestra-join-unknown",
+                ".vestra-join-unmarked"
+            ]
+        );
+        // A day on: only the alive owner's folder stays.
+        reset();
+        clean_scratch_with(root, owners, SystemTime::now() + UNOWNED_KEPT);
+        assert_eq!(names(), [".vestra-join-alive"]);
+    }
+
+    /// A link (or junction) named like an export folder is removed as a
+    /// link: what it points to is never entered.
+    #[test]
+    fn a_link_among_the_export_folders_is_removed_not_followed() {
+        let dir = tempfile::tempdir().unwrap();
+        let root = dir.path().join("export-parts");
+        let elsewhere = dir.path().join("elsewhere");
+        std::fs::create_dir(&root).unwrap();
+        std::fs::create_dir(&elsewhere).unwrap();
+        std::fs::write(elsewhere.join("keep.mp4"), b"x").unwrap();
+        // An ended owner, as a folder would be removed for.
+        std::fs::write(elsewhere.join(OWNER_FILE), "2\na\n").unwrap();
+        let link = root.join(format!("{WORK_PREFIX}link"));
+        #[cfg(windows)]
+        let made = std::os::windows::fs::symlink_dir(&elsewhere, &link).is_ok()
+            // No symbolic-link privilege: a junction (no privilege needed).
+            || std::process::Command::new("cmd")
+                .arg("/C")
+                .arg("mklink")
+                .arg("/J")
+                .arg(&link)
+                .arg(&elsewhere)
+                .stdout(std::process::Stdio::null())
+                .status()
+                .is_ok_and(|status| status.success());
+        #[cfg(not(windows))]
+        let made = std::os::unix::fs::symlink(&elsewhere, &link).is_ok();
+        assert!(made, "no link could be made");
+        clean_scratch_with(
+            &root,
+            |_| crate::platform::ProcessStart::Gone,
+            SystemTime::now() + UNOWNED_KEPT,
+        );
+        assert!(std::fs::symlink_metadata(&link).is_err(), "the link stays");
+        assert!(elsewhere.join("keep.mp4").is_file());
+        assert!(elsewhere.join(OWNER_FILE).is_file());
     }
 
     /// The check takes a snapshot's clip too: one part from its held file;
