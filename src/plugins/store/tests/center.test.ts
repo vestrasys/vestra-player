@@ -512,3 +512,29 @@ test("buttons keep their places: Disable and Enable swap only their words (VS Co
     await stop();
   }
 });
+
+test("plugins the player set aside at start (no directory, no version) keep their own names", async () => {
+  // Player 0.9.0 lists an installed record it set aside (a package with `capabilities`) without a directory or a
+  // version; the display cache was keyed by those two only, so every such row showed the first one's name.
+  const aside = (id: string, name: string | null) =>
+    info(id, {
+      version: null,
+      state: "failed",
+      error: "the plugin library's record of this plugin was set aside: unreadable",
+      directory: "",
+      source: fromRepo,
+      display: { name, punchline: null, description: null, tags: [] },
+    } as Partial<Info>);
+  const { host, store, stop } = await start({
+    packages: [BUILTIN, aside("z.amd", "AMD Motion"), aside("z.auto", "Auto Frame"), aside("z.clip", null)],
+  });
+  try {
+    await openStore(host);
+    await until(host, () => store.items.length === 4, "rows");
+    await tab(host, INSTALLED);
+    assert.deepEqual(rows(host).map((r) => r.name).sort(), ["AMD Motion", "Auto Frame", "z.clip"]);
+    assert.equal(controls(host, "Auto Frame").mark, "失败");
+  } finally {
+    await stop();
+  }
+});
