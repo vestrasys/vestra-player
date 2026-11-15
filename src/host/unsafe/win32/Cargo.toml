@@ -4,7 +4,7 @@ version = "0.0.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 publish = false
-description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, foreground window, double-click time, menu show delay, the animation setting, sleep prevention, dark title bars, windows cloaked until their first frame, display work areas and window placements, vertical blank waits, files on network file systems, a volume's free space, the DXGI adapters and their driver versions, whether a GPU's driver offers RTX Video Super Resolution, the process's private memory and the system commit charge, the physical memory and the system's low-memory notification, confirmation task dialogs without a system sound)"
+description = "Win32 calls the host's Windows platform module needs (pointer, modifier keys, foreground window, double-click time, menu show delay, the animation setting, sleep prevention, dark title bars, windows cloaked until their first frame, display work areas and window placements, vertical blank waits, files on network file systems, a volume's free space, whether a process runs and since when,the DXGI adapters and their driver versions, whether a GPU's driver offers RTX Video Super Resolution, the process's private memory and the system commit charge, the physical memory and the system's low-memory notification, confirmation task dialogs without a system sound)"
 
 # One of the crates under src/host/unsafe/: the only place first-party Rust may
 # use `unsafe`. Every block carries a SAFETY comment; the public API is safe.

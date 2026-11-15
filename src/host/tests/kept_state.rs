@@ -18,6 +18,8 @@ use sha2::{Digest, Sha256};
 use std::path::Path;
 use std::process::Command;
 
+mod isolation;
+
 /// `package_stage::read_tree`'s digest over a flat fixture (as in
 /// tests/lazy_activation.rs).
 fn digest(files: &[(&str, String)]) -> String {
@@ -96,6 +98,7 @@ fn install(store: &Path, catalog: &mut serde_json::Value, n: usize, id: &str, ma
 /// Run the host headless for `seconds`; its stderr.
 fn run(root: &Path, seconds: u32, env: &[(&str, &str)]) -> String {
     let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+    isolation::isolate(&mut command, root);
     command
         .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
         .env("VESTRA_BUILTIN_PLUGINS", root.join("plugins"))

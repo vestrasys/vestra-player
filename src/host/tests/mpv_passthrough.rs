@@ -15,6 +15,7 @@ use std::path::Path;
 use std::process::Command;
 #[path = "explicit/mod.rs"]
 mod explicit;
+mod isolation;
 
 const ID: &str = "vestra.fixture-mpv";
 const THIRD: &str = "zysilm.fixture-third";
@@ -149,25 +150,28 @@ fn run(seconds: u32) -> String {
     .unwrap();
     let development = root.path().join("dev");
     package(&development, THIRD, &[], third());
-    let output = Command::new(env!("CARGO_BIN_EXE_vestra-host"))
-        .args([
-            "--headless",
-            "--silent",
-            "--seconds",
-            &seconds.to_string(),
-            "--plugin",
-        ])
-        .arg(development.join(THIRD))
-        .env("VESTRA_BUILTIN_PLUGINS", &plugins)
-        .env("VESTRA_PACKAGE_STORE", root.path().join("store"))
-        .env("VESTRA_PLUGIN_DATA", root.path().join("data"))
-        .env("VESTRA_SHARED", "0")
-        .env_remove("VESTRA_IDLE_MS")
-        .env_remove("VESTRA_TEST_EXECUTE")
-        .env_remove("VESTRA_TEST_PARK")
-        .env_remove("VESTRA_INSTANCE_DIR")
-        .output()
-        .unwrap();
+    let output = isolation::isolate(
+        &mut Command::new(env!("CARGO_BIN_EXE_vestra-host")),
+        root.path(),
+    )
+    .args([
+        "--headless",
+        "--silent",
+        "--seconds",
+        &seconds.to_string(),
+        "--plugin",
+    ])
+    .arg(development.join(THIRD))
+    .env("VESTRA_BUILTIN_PLUGINS", &plugins)
+    .env("VESTRA_PACKAGE_STORE", root.path().join("store"))
+    .env("VESTRA_PLUGIN_DATA", root.path().join("data"))
+    .env("VESTRA_SHARED", "0")
+    .env_remove("VESTRA_IDLE_MS")
+    .env_remove("VESTRA_TEST_EXECUTE")
+    .env_remove("VESTRA_TEST_PARK")
+    .env_remove("VESTRA_INSTANCE_DIR")
+    .output()
+    .unwrap();
     let log = String::from_utf8_lossy(&output.stderr).into_owned();
     assert!(output.status.success(), "{log}");
     log

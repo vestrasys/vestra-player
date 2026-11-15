@@ -11,6 +11,7 @@ use std::path::Path;
 use std::process::Command;
 #[path = "explicit/mod.rs"]
 mod explicit;
+mod isolation;
 
 /// `package_stage::read_tree`'s digest (also `stage-plugins.mjs`
 /// `packageDigest`), over a flat fixture.
@@ -94,6 +95,7 @@ fn run(plugins: &[serde_json::Value], root: &Path, seconds: u32, env: &[(&str, &
     )
     .unwrap();
     let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+    isolation::isolate(&mut command, root);
     command
         .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
         .env("VESTRA_BUILTIN_PLUGINS", root.join("plugins"))

@@ -23,6 +23,7 @@ use std::path::Path;
 use std::process::Command;
 #[path = "explicit/mod.rs"]
 mod explicit;
+mod isolation;
 
 const ID: &str = "vestra.fixture-lead";
 const THIRD: &str = "zysilm.fixture-third";
@@ -241,6 +242,7 @@ fn run(seconds: u32, env: &[(&str, &str)]) -> String {
         third(),
     );
     let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+    isolation::isolate(&mut command, root.path());
     command
         .args([
             "--headless",

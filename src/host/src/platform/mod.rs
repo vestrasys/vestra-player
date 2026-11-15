@@ -25,7 +25,7 @@
 //! | child processes | `tool_command`, `hide_console` (Windows: `CREATE_NO_WINDOW` when the host has no console; elsewhere nothing) |
 //! | storage | `sync_dir` (Unix: `fsync` below; Windows: `FlushFileBuffers` on a directory handle) |
 //! | generated streams | `av_listen` → `AvListener` / `AvStream` (Unix: `av_unix` below; Windows: `av_tcp`) |
-//! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file), `disk_space` (free bytes and volume of a path: Windows through `vestra-win32`; elsewhere `df -Pk`) |
+//! | offline media | `HELD_FILE_INPUT` (how FFmpeg names its stdin, the held source file), `disk_space` (free bytes and volume of a path: Windows through `vestra-win32`; elsewhere `df -Pk`), `process_start` → `ProcessStart` (whether the owner of an export's intermediate parts still runs: Windows through `vestra-win32`; Linux `/proc`; macOS `ps`) |
 //! | opening windows | `cloak_until_drawn`, `window_drawing` (Windows: each window is cloaked from its show to its first draw, so it never opens white, through `vestra-win32`; elsewhere nothing) |
 //! | full screen | `fullscreen_resized` (Windows: a full-screen window is kept one pixel off its display's rectangle; elsewhere nothing) |
 //! | video texture | `VIDEO_TEXTURE` (Windows: software-rendered pictures through one reused texture, OpenGL or wgpu, `vestra-video-texture`; elsewhere a new image per frame), `same_video_image` (Windows: also compares wgpu textures; elsewhere `Image` equality) |
@@ -99,6 +99,78 @@ pub fn disk_space(path: &std::path::Path) -> Option<(u64, String)> {
     parse_df(&text)
 }
 
+/// Whether a process runs, with a mark of its start that tells it from a
+/// later process given the same id ([`process_start`]).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ProcessStart {
+    /// It runs; the mark of its start (opaque, compared as a whole).
+    Running(String),
+    /// No process has that id.
+    Gone,
+    /// The system does not say.
+    Unknown,
+}
+
+/// Whether process `pid` runs, and its start mark (Windows: its creation
+/// time through `vestra-win32`; Linux: the boot and the start tick from
+/// `/proc`; macOS: `ps -o lstart=`, to the second). The owner check of an
+/// export's folder of intermediate parts (`media_join::clean_scratch`).
+#[cfg(target_os = "windows")]
+pub fn process_start(pid: u32) -> ProcessStart {
+    match vestra_win32::process_creation_time(pid) {
+        Ok(Some(created)) => ProcessStart::Running(created.to_string()),
+        Ok(None) => ProcessStart::Gone,
+        Err(()) => ProcessStart::Unknown,
+    }
+}
+#[cfg(target_os = "linux")]
+pub fn process_start(pid: u32) -> ProcessStart {
+    let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
+        return if std::path::Path::new("/proc/self/stat").exists() {
+            ProcessStart::Gone
+        } else {
+            ProcessStart::Unknown
+        };
+    };
+    let boot = std::fs::read_to_string("/proc/sys/kernel/random/boot_id").unwrap_or_default();
+    match proc_stat_start(&stat) {
+        // A zombie has ended; only its parent has not collected it yet.
+        Some((state, _)) if state == "Z" || state == "X" => ProcessStart::Gone,
+        Some((_, start)) => ProcessStart::Running(format!("{}:{start}", boot.trim())),
+        None => ProcessStart::Unknown,
+    }
+}
+#[cfg(not(any(target_os = "windows", target_os = "linux")))]
+pub fn process_start(pid: u32) -> ProcessStart {
+    // `/bin/ps`, not whatever `ps` is first on PATH: it exits 1 with no
+    // output when no process has the id.
+    let Ok(output) = std::process::Command::new("/bin/ps")
+        .args(["-o", "lstart=", "-p", &pid.to_string()])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+    else {
+        return ProcessStart::Unknown;
+    };
+    let started = String::from_utf8_lossy(&output.stdout).trim().to_owned();
+    match (output.status.success(), started.is_empty()) {
+        (true, false) => ProcessStart::Running(started),
+        (false, true) => ProcessStart::Gone,
+        _ => ProcessStart::Unknown,
+    }
+}
+
+/// `/proc/<pid>/stat`: the state and the start tick (fields 3 and 22),
+/// read after the last `)` so a command name with spaces or parentheses
+/// does not shift them.
+#[cfg_attr(not(target_os = "linux"), allow(dead_code))]
+fn proc_stat_start(stat: &str) -> Option<(String, u64)> {
+    let rest = &stat[stat.rfind(')')? + 1..];
+    let fields: Vec<&str> = rest.split_whitespace().collect();
+    // `rest` starts at field 3 (the state); field 22 is 19 further on.
+    Some((fields.first()?.to_string(), fields.get(19)?.parse().ok()?))
+}
+
 /// POSIX `df -Pk`: a header line, then device, blocks, used, available
 /// (1024-byte blocks) and capacity (`NN%`), the mount point last. Read from
 /// the capacity column (the `NN%` after three numbers), so a device or
@@ -116,6 +188,39 @@ fn parse_df(text: &str) -> Option<(u64, String)> {
     let available = fields.get(capacity.checked_sub(1)?)?.parse::<u64>().ok()?;
     let mount = fields.get(capacity + 1..)?.join(" ");
     (!mount.is_empty()).then(|| (available.saturating_mul(1024), mount))
+}
+
+#[cfg(test)]
+mod process_start_tests {
+    use super::{ProcessStart, proc_stat_start, process_start};
+
+    #[test]
+    fn this_process_runs_with_a_stable_mark_and_an_ended_one_is_gone() {
+        let own = process_start(std::process::id());
+        assert!(matches!(own, ProcessStart::Running(_)), "{own:?}");
+        assert_eq!(process_start(std::process::id()), own);
+        let mut child = if cfg!(windows) {
+            std::process::Command::new("cmd")
+                .args(["/C", "exit"])
+                .spawn()
+                .unwrap()
+        } else {
+            std::process::Command::new("true").spawn().unwrap()
+        };
+        let pid = child.id();
+        child.wait().unwrap();
+        // Collected: no process has the id any more (unless the system
+        // gave it to a new one at once, which then starts later).
+        assert_ne!(process_start(pid), own);
+        assert!(!matches!(process_start(pid), ProcessStart::Unknown));
+    }
+
+    #[test]
+    fn proc_stat_is_read_after_the_command_name() {
+        let stat = "1234 (a b) c)) S 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18 987654 19 20";
+        assert_eq!(proc_stat_start(stat), Some(("S".into(), 987654)));
+        assert_eq!(proc_stat_start("1234 (x) S 1"), None);
+    }
 }
 
 #[cfg(test)]
