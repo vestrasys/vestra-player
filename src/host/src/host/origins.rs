@@ -160,15 +160,24 @@ pub(crate) fn of_view(view: &str, open: bool) -> Option<Origin> {
     }
 }
 
-impl super::Host {
+impl super::Core {
     /// The user acted for `owner` (a plugin's owner generation) in
-    /// `origin`. Only a running plugin's or a parked one's (its entry moves
-    /// to the generation it wakes as) counts: a stopped owner's, or no
-    /// plugin's (the host's own commands, owner 0), records nothing.
+    /// `origin` (`UiReport::Acted`). Only a running plugin's or a parked
+    /// one's (its entry moves to the generation it wakes as) counts: a
+    /// stopped owner's, or no plugin's (the host's own commands, owner 0),
+    /// records nothing.
     pub(crate) fn act(&mut self, owner: u64, origin: Origin) {
-        if self.core.plugins.contains_key(&owner) || self.held_id(owner).is_some() {
+        if self.plugins.contains_key(&owner) || self.on_demand.held(owner).is_some() {
             self.origins.acted(owner, origin);
         }
+    }
+}
+
+impl super::Host {
+    /// The user acted for `owner` in `origin`: the interface tells the
+    /// core (`UiReport::Acted`, plan step S2c(5)), which keeps the origins.
+    pub(crate) fn act(&mut self, owner: u64, origin: Origin) {
+        self.ui_report(super::messages::UiReport::Acted { owner, origin });
     }
     /// The user acted for `owner` in the window of `generation`
     /// ([`of_generation`]).
@@ -209,7 +218,7 @@ impl super::Host {
             .map(|(_, id)| id.clone())
             .collect();
         route(
-            self.origins.get(owner),
+            self.core.origins.get(owner),
             self.shell.is_some(),
             &own,
             |place| {
@@ -231,7 +240,7 @@ impl super::Host {
             if let Some(shell) = &self.shell {
                 crate::ui::view::show_again(shell, foreground);
             }
-        } else if self.dialog_busy && self.confirm_open {
+        } else if self.core.dialog_busy && self.core.confirm_open.is_some() {
             crate::platform::show_open_confirm(foreground);
         }
     }

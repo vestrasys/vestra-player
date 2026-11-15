@@ -424,6 +424,7 @@ impl Host {
         for key in &keys {
             self.policy.remove_owner(*key);
         }
+        self.report_tabs();
         for (key, tabs_before) in keys.into_iter().zip(tabs_before) {
             let Some(mount) = self.core.mounts.remove(&key) else {
                 continue;

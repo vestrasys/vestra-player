@@ -6,8 +6,11 @@
 //! [`UiCommand::SetMount`], [`UiReport::MountPreparing`],
 //! [`UiReport::MountApplied`] and the `ui.setMount` [`UiReport::Answered`],
 //! host/mounts.rs; S2c(4): [`UiCommand::Settings`] and the `settings.set` /
-//! `.show` [`UiReport::Answered`], ui/settings_window.rs), S3a moves the core
-//! to its own thread.
+//! `.show` [`UiReport::Answered`], ui/settings_window.rs; S2c(5):
+//! [`UiCommand::Layout`], [`UiCommand::Lead`], [`UiCommand::Dialog`],
+//! [`UiCommand::Confirm`], [`UiCommand::Review`], [`UiReport::Acted`], the
+//! `layout.set` and sheet-confirmation [`UiReport::Answered`] and the tab
+//! order in [`WindowFacts`]), S3a moves the core to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -249,7 +252,9 @@ pub(crate) enum FullscreenChange {
 }
 
 pub(crate) enum DialogPurpose {
-    /// `dialogs.open`: its parameters.
+    /// `dialogs.open`: its parameters as the core checked them, the title
+    /// and file name in the plugin's language (`{ kind, title, fileName }`;
+    /// capabilities/ui_dialog.rs).
     Open(Value),
     /// `media.sources.locate`: `{ store, token, name }` of the reference.
     Locate(Value),
@@ -261,17 +266,39 @@ pub(crate) struct DialogRequest {
 }
 
 /// `dialogs.confirm` as a system confirmation. Admission (headless,
-/// `dialog_busy`, the rate checks) stays on the core (note 8).
+/// `dialog_busy`, the rate checks) and the choice of the window stay on
+/// the core (note 8): `options` in the caller's language, and the tool
+/// window that owns the dialog (`None`: the focused one's, else the main
+/// window's, `platform::confirm`). A confirmation that fails to show is
+/// answered with [`UiReport::Answered`]'s error.
 pub(crate) struct ConfirmRequest {
     pub(crate) reply: Reply,
-    pub(crate) params: Value,
+    pub(crate) options: crate::ui::confirm::Options,
+    pub(crate) place: Option<origins::Place>,
 }
 
 pub(crate) enum ReviewKind {
     /// `dialogs.confirm` shown in the main window.
-    Confirm(Value),
-    /// `commands.run` whose plan asks: the request's parameters.
-    CommandRun(Value),
+    Confirm(ConfirmSheet),
+    /// `commands.run` whose plan asks.
+    CommandRun(RunSheet),
+}
+
+/// What the sheet asks of a `dialogs.confirm` (`Host::open_confirm`): the
+/// caller's texts, and its live ticket and request when it holds the lead.
+pub(crate) struct ConfirmSheet {
+    pub(crate) options: crate::ui::confirm::Options,
+    pub(crate) request: Option<(String, String)>,
+}
+
+/// What the sheet asks of a `commands.run` plan (`Host::open_review`): the
+/// ticket, its request, the plan's steps and the "Don't ask again" text
+/// (empty: not offered).
+pub(crate) struct RunSheet {
+    pub(crate) ticket: String,
+    pub(crate) query: String,
+    pub(crate) steps: Vec<review_sheet::Step>,
+    pub(crate) remember: String,
 }
 
 pub(crate) struct ReviewRequest {
@@ -313,19 +340,29 @@ pub(crate) struct PanelMenu {
 /// a whole policy sent by the core would overwrite the UI's own writes. The
 /// UI reports the resulting tab order with its window facts (R9).
 pub(crate) enum LayoutOp {
-    /// `ui.interaction` (row 43): the locks of panel `key`. The UI also
-    /// marks activity on the policy (`policy.activity`, ui_mount.rs:724).
+    /// `ui.interaction` (row 43): the locks of panel `key` (its slot is the
+    /// key's, `panel_slot`). The UI also marks activity on the policy
+    /// (`policy.activity`). The core answers from its own judgement of the
+    /// locks (`PanelTabs::holds`), not from the UI's.
     Locks {
         key: u64,
         locks: window_state::Locks,
     },
-    /// `layout.set` (row 46, stream B): the request's parameters, checked
-    /// by the core. Today it runs a layout pass before answering so that a
-    /// following `layout.state` sees the change (ui_mount.rs:888-889; the
-    /// SDK reads right after it): the UI answers with
-    /// [`UiReport::Answered`] whose handoff carries the facts after the
-    /// pass (R13).
-    Set { reply: Reply, params: Value },
+    /// `layout.set` (row 46, stream B), as the core checked it: the slot,
+    /// the change, the slot's first panel (the panel the change goes
+    /// through when the column has no current tab) and `reveal`. The core
+    /// refuses at once what is refused before any step takes effect
+    /// (`PanelTabs::judge_layout`). The UI applies it, runs a layout pass
+    /// so that a following `layout.state` sees the change (the SDK reads
+    /// right after it), and answers with [`UiReport::Answered`] whose
+    /// handoff carries the facts and tab order after the pass (R13).
+    Set {
+        reply: Reply,
+        slot: composition::Slot,
+        change: LayoutChange,
+        first: u64,
+        reveal: bool,
+    },
     /// The host's Sidebar and Adjustments commands (`host_command`,
     /// `toggle_sidebar` / `toggle_adjust`): switch the column's current
     /// panel on or off.
@@ -333,9 +370,17 @@ pub(crate) enum LayoutOp {
 }
 
 pub(crate) enum LeadOp {
-    /// `palette.lead.set`: the plugin's parameters.
-    Set { owner: u64, params: Value },
-    /// `palette.lead.clear`.
+    /// `palette.lead.set` (or its replay), as the core took it into
+    /// `Core::lead`: whether the row appeared (none was set before), and
+    /// the end-state status the strip shows once (one not shown before).
+    /// Also a parked holder's row losing its working status (`appeared`
+    /// false, no end state).
+    Set {
+        owner: u64,
+        appeared: bool,
+        ended: Option<crate::capabilities::LeadStatus>,
+    },
+    /// `palette.lead.clear`, or its holder gone.
     Clear { owner: u64 },
 }
 
@@ -411,9 +456,13 @@ pub(crate) struct WindowFacts {
     pub(crate) pip_supported: bool,
     pub(crate) pip_active: bool,
     /// The panel policy's tab order of the sidebar and the adjust column
-    /// (`layout.state`; the layout part of R13's handoff).
+    /// (`layout.state`; the layout part of R13's handoff), and the bottom
+    /// bar's panel: the core's `PanelTabs`, from which it judges
+    /// `ui.interaction`'s and `layout.set`'s refusals (plan step S2c(5)).
+    /// The UI also sends a value when only these changed (`report_tabs`).
     pub(crate) sidebar_panels: Vec<u64>,
     pub(crate) adjust_panels: Vec<u64>,
+    pub(crate) bottom_panel: Option<u64>,
 }
 
 /// See [`UiReport::MountApplied`]: the panel keys of the batch, its one
@@ -574,7 +623,19 @@ mod tests {
             pip_active: false,
             sidebar_panels: vec![28],
             adjust_panels: vec![],
+            bottom_panel: None,
         })
+    }
+
+    fn options() -> crate::ui::confirm::Options {
+        crate::ui::confirm::Options {
+            message: "Sure?".into(),
+            detail: None,
+            confirm: "OK".into(),
+            cancel: "Cancel".into(),
+            destructive: false,
+            checkbox: None,
+        }
     }
 
     fn mount_change() -> MountChange {
@@ -701,15 +762,24 @@ mod tests {
             }),
             UiCommand::Confirm(ConfirmRequest {
                 reply: reply(12),
-                params: json!({}),
+                options: options(),
+                place: None,
             }),
             UiCommand::Review(ReviewRequest {
                 reply: reply(13),
-                kind: ReviewKind::Confirm(json!({})),
+                kind: ReviewKind::Confirm(ConfirmSheet {
+                    options: options(),
+                    request: None,
+                }),
             }),
             UiCommand::Review(ReviewRequest {
                 reply: reply(14),
-                kind: ReviewKind::CommandRun(json!({})),
+                kind: ReviewKind::CommandRun(RunSheet {
+                    ticket: "t".into(),
+                    query: "q".into(),
+                    steps: vec![],
+                    remember: String::new(),
+                }),
             }),
             UiCommand::Osd(OsdOp::Show {
                 text: "hello".into(),
@@ -739,14 +809,22 @@ mod tests {
             }),
             UiCommand::Layout(LayoutOp::Set {
                 reply: reply(15),
-                params: json!({"slot":"sidebar"}),
+                slot: composition::Slot::Sidebar,
+                change: LayoutChange {
+                    visible: Some(true),
+                    detached: None,
+                    active: None,
+                },
+                first: 29,
+                reveal: true,
             }),
             UiCommand::Layout(LayoutOp::Toggle(crate::ui::sidebar_tabs::Column::Sidebar)),
             UiCommand::Layout(LayoutOp::Toggle(crate::ui::sidebar_tabs::Column::Adjust)),
             UiCommand::OpenPalette,
             UiCommand::Lead(LeadOp::Set {
                 owner: 7,
-                params: json!({}),
+                appeared: true,
+                ended: None,
             }),
             UiCommand::Lead(LeadOp::Clear { owner: 7 }),
             UiCommand::RevokeOwner {

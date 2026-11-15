@@ -242,7 +242,7 @@ impl Host {
                 .into_iter()
                 .collect();
             let handoff = if std::mem::take(&mut first) {
-                self.mount_handoff()
+                self.facts_handoff()
             } else {
                 None
             };
@@ -255,15 +255,15 @@ impl Host {
             }));
         }
     }
-    /// The R13 handoff of a mount batch: the window facts the interface
-    /// last reported, with the columns' tab order as the apply left it
+    /// The R13 handoff of a mount batch and of `layout.set`: the window
+    /// facts the interface last reported, with the tabs as the apply left it
     /// (`window_facts_report`). The facts themselves are measured at the
     /// next `window_tick` as before (its `window.state` goes out then);
     /// `None` without a shell.
-    fn mount_handoff(&mut self) -> Option<Box<WindowFacts>> {
+    pub(crate) fn facts_handoff(&mut self) -> Option<Box<WindowFacts>> {
         let shell = self.shell.as_ref().map(ComponentHandle::clone_strong)?;
         let facts = self.window_facts.clone();
-        Some(Box::new(self.window_facts_report(&shell, facts)))
+        Some(Box::new(self.window_facts_report(Some(&shell), facts)))
     }
     /// The core's side of `UiReport::MountPreparing` (R6): the changes left
     /// the batching queue, so their plugins hear `ui.preparing`
@@ -319,8 +319,11 @@ impl Host {
     /// `ui.setMount`, answered from the interface's `UiReport::Answered`
     /// (a mount change is taken by the batching window instead,
     /// `Core::mount_command`); S2c(4): `settings.*`
-    /// (`Host::settings_command`, ui/settings_window.rs). The other
-    /// commands follow in later steps.
+    /// (`Host::settings_command`, ui/settings_window.rs); S2c(5): the
+    /// layout, the palette's lead, the file dialogs, the system
+    /// confirmation and the sheet (`Host::layout_command`,
+    /// `lead_command`, `dialog_command`, `confirm_command`,
+    /// `review_command`). The other commands follow in later steps.
     pub(crate) fn ui_command(&mut self, command: UiCommand) {
         match command {
             UiCommand::SetMount(op) => {
@@ -340,7 +343,12 @@ impl Host {
                 });
             }
             UiCommand::Settings(op) => self.settings_command(op),
-            _ => unreachable!("not sent before plan step S2c(5)"),
+            UiCommand::Layout(op) => self.layout_command(op),
+            UiCommand::Lead(op) => self.lead_command(op),
+            UiCommand::Dialog(request) => self.dialog_command(request),
+            UiCommand::Confirm(request) => self.confirm_command(request),
+            UiCommand::Review(request) => self.review_command(request),
+            _ => unreachable!("not sent before plan step S2c(6)"),
         }
     }
     fn log_prepared(&self, changes: usize, started: Instant, ok: bool) {
@@ -563,6 +571,8 @@ impl Host {
             }
             self.policy.order_column(policy_column(column), &plan.order);
         }
+        // The tabs as the batch left them reach the core (rule R9).
+        self.report_tabs();
         self.policy.activity(self.core.now_ms());
         {
             let mut input = self.input.borrow_mut();

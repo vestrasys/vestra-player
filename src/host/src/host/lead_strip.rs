@@ -188,7 +188,7 @@ impl Host {
     /// its `strip` text when it gave one (SDK 1.8.0), else its `text` (the
     /// palette's row always shows `text`).
     fn lead_working(&self) -> Option<&str> {
-        self.lead.as_ref()?.row.working_strip()
+        self.core.lead.as_ref()?.row.working_strip()
     }
     /// The holder set an end state (`palette.lead.set`): the strip shows it
     /// once, in place of any step.
@@ -218,7 +218,11 @@ impl Host {
     /// end state still on screen (a new request); no status or no lead ends
     /// the steps.
     pub(crate) fn lead_strip_follow(&mut self) {
-        let status = self.lead.as_ref().and_then(|lead| lead.row.status.as_ref());
+        let status = self
+            .core
+            .lead
+            .as_ref()
+            .and_then(|lead| lead.row.status.as_ref());
         match status {
             Some(status) if status.state == StatusState::Working => {
                 if self.lead_strip.step.is_none() {

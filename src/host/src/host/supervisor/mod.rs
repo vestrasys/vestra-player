@@ -1168,7 +1168,7 @@ impl Host {
             busy.insert(Busy::Activation);
         }
         // A confirmation on the sheet counts as a dialog open (H5).
-        if self.dialog_busy || self.confirm_waiting() {
+        if self.core.dialog_busy || self.confirm_waiting() {
             busy.insert(Busy::Dialog);
         }
         if self.core.package_rpc_busy(&id) {
