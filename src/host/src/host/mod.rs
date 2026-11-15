@@ -15,6 +15,7 @@ mod input;
 pub(crate) mod lead_strip;
 mod lifecycle;
 mod menus;
+mod messages;
 mod mounts;
 pub(crate) mod origins;
 pub(crate) mod palette;

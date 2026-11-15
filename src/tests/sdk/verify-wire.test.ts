@@ -122,12 +122,12 @@ const normalise = (text: string, run: typeof A) =>
     roots: [[run.profile, "<profile>"]],
   });
 
-test("the stream map is the design's method table (126 rows: 111 I, 15 B)", () => {
+test("the stream map is the design's method table (126 rows: 110 I, 16 B)", () => {
   const streams = streamsFromDesign(readFileSync(DESIGN, "utf8"));
   assert.deepEqual(STREAMS, streams, "regenerate: verify-wire.mjs streams");
   assert.equal(streams.rows, 126);
-  assert.equal(streams.uiBound.length, 15);
-  assert.equal(streams.uiIndependent.length, 111);
+  assert.equal(streams.uiBound.length, 16);
+  assert.equal(streams.uiIndependent.length, 110);
   for (const name of [
     "ui.open",
     "ui.mount",
