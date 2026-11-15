@@ -145,7 +145,7 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     // A system dialog. Busy before it shows: macOS without a window runs
     // it modally (`Host::confirm_command`).
     host.core.dialog_busy = true;
-    host.core.confirm_open = Some(reply.clone());
+    host.core.confirm_open = true;
     #[cfg(feature = "producer-audio")]
     host.core
         .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
@@ -278,7 +278,7 @@ impl Host {
     /// asking for attention otherwise); else the focused window's, else the
     /// main window's (`platform::confirm`). The answer comes back as
     /// `Event::ConfirmDone`; a dialog that fails to show is answered with
-    /// the error (`UiReport::Answered`).
+    /// the error (`UiReport::Answered`, marked `confirm_failed`).
     pub(crate) fn confirm_command(&mut self, request: ConfirmRequest) {
         let ConfirmRequest {
             reply,
@@ -306,6 +306,7 @@ impl Host {
                 reply,
                 result: Err(error),
                 handoff: None,
+                confirm_failed: true,
             });
         }
     }

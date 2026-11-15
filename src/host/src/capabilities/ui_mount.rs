@@ -939,6 +939,7 @@ impl Host {
                     reply,
                     result,
                     handoff,
+                    confirm_failed: false,
                 });
             }
             LayoutOp::Toggle(Column::Sidebar) => self.toggle_sidebar(),

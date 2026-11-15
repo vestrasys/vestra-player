@@ -430,20 +430,13 @@ impl Host {
                 reply,
                 result,
                 handoff,
+                confirm_failed,
             } => {
                 let changed = handoff.is_some_and(|facts| self.core.apply_facts(*facts));
-                // A system confirmation that failed to show: no dialog is
-                // open (`ConfirmRequest`).
-                if result.is_err()
-                    && self
-                        .core
-                        .confirm_open
-                        .as_ref()
-                        .is_some_and(|open| open.owner == reply.owner && open.id == reply.id)
-                {
-                    self.core.dialog_busy = false;
-                    self.core.confirm_open = None;
-                }
+                (self.core.dialog_busy, self.core.confirm_open) = dialog_flags_after(
+                    (self.core.dialog_busy, self.core.confirm_open),
+                    confirm_failed,
+                );
                 self.respond(reply, result);
                 if changed {
                     let facts = self.core.window_facts.clone();
@@ -1077,6 +1070,19 @@ impl Core {
     }
 }
 
+/// The native-dialog flags (`dialog_busy`, `confirm_open`) after a
+/// `UiReport::Answered`: only a system confirmation's failure to show
+/// (`confirm_failed`) clears them, as `platform::confirm`'s own error did
+/// before plan step S2c(5); any other answer leaves them, also an error of
+/// another request of the same plugin with the same id.
+fn dialog_flags_after(flags: (bool, bool), confirm_failed: bool) -> (bool, bool) {
+    if confirm_failed {
+        (false, false)
+    } else {
+        flags
+    }
+}
+
 /// What a tick records of the main window for the next launch (IA-CORE-03).
 #[derive(Debug, PartialEq, Eq)]
 enum Record {
@@ -1117,5 +1123,38 @@ mod tests {
             assert_eq!(record(false, maximized, true), Record::Nothing);
             assert_eq!(record(true, maximized, true), Record::Nothing);
         }
+    }
+
+    /// Review of S2c(5): `dialogs.confirm` id 7 shows a system dialog,
+    /// then the same plugin's `settings.set` id 7 is answered with an
+    /// error (the host tolerates a repeated id). That answer is not the
+    /// confirmation's: the dialog is still open, so `dialog_busy` and
+    /// `confirm_open` stay set (`window.state.dialogOpen`, the `busy`
+    /// refusal of a second dialog, `Busy::Dialog`). Only the report marked
+    /// `confirm_failed` clears them.
+    #[test]
+    fn only_the_confirmations_own_failure_clears_the_dialog_flags() {
+        let reply = Reply { owner: 3, id: 7 };
+        let settings_error = UiReport::Answered {
+            reply: reply.clone(),
+            result: Err(RpcError::invalid("value does not convert")),
+            handoff: None,
+            confirm_failed: false,
+        };
+        let confirm_error = UiReport::Answered {
+            reply,
+            result: Err(RpcError::new("unavailable", "no dialog")),
+            handoff: None,
+            confirm_failed: true,
+        };
+        let open = (true, true);
+        for (report, expected) in [(settings_error, open), (confirm_error, (false, false))] {
+            let UiReport::Answered { confirm_failed, .. } = report else {
+                unreachable!()
+            };
+            assert_eq!(dialog_flags_after(open, confirm_failed), expected);
+        }
+        // A file picker open (busy, no confirmation): only the marker clears.
+        assert_eq!(dialog_flags_after((true, false), false), (true, false));
     }
 }

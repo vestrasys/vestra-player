@@ -340,6 +340,7 @@ impl Host {
                     reply,
                     result,
                     handoff: None,
+                    confirm_failed: false,
                 });
             }
             UiCommand::Settings(op) => self.settings_command(op),

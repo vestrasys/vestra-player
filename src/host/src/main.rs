@@ -563,7 +563,7 @@ fn player() -> Result<()> {
         shader_guard,
         memory_logged: None,
         dialog_busy: false,
-        confirm_open: None,
+        confirm_open: false,
         origins: Default::default(),
         lead: None,
         panel_tabs: Default::default(),

@@ -655,6 +655,7 @@ mod tests {
                         tabs.holds(ps, key),
                         policy.clone().set_preferred(ps, key, true, 0)
                     );
+                    assert_eq!(tabs.holds(ps, key), policy.clone().switch(ps, key, true, 0));
                 }
                 for &first in &keys {
                     for active in std::iter::once(None).chain(keys.iter().copied().map(Some)) {

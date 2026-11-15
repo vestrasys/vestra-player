@@ -470,7 +470,7 @@ impl Host {
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.core.now_ms());
                 self.core.dialog_busy = false;
-                self.core.confirm_open = None;
+                self.core.confirm_open = false;
                 self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
             }
             Event::SourceLocate(reply, fields) => {

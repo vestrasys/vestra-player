@@ -240,7 +240,7 @@ impl super::Host {
             if let Some(shell) = &self.shell {
                 crate::ui::view::show_again(shell, foreground);
             }
-        } else if self.core.dialog_busy && self.core.confirm_open.is_some() {
+        } else if self.core.dialog_busy && self.core.confirm_open {
             crate::platform::show_open_confirm(foreground);
         }
     }

@@ -498,11 +498,11 @@ pub(crate) struct Core {
     /// as `Busy::Dialog`. The interface reads it for its window policy
     /// (input blocked, `window.state.dialogOpen`).
     pub(crate) dialog_busy: bool,
-    /// The request whose system confirmation is open (`dialog_busy` is
-    /// also a file picker): it comes into view when another request is
-    /// refused `busy`; a confirmation that failed to show (its
-    /// `UiReport::Answered` error) clears both.
-    pub(crate) confirm_open: Option<Reply>,
+    /// A system confirmation is open (`dialog_busy` is also a file
+    /// picker): it comes into view when another request is refused
+    /// `busy`. A confirmation that failed to show (`UiReport::Answered`
+    /// marked `confirm_failed`) clears both.
+    pub(crate) confirm_open: bool,
     /// Where the user last acted for each plugin: the window its
     /// `dialogs.confirm` belongs to (`origins`, palette-lead.md §2.3). The
     /// interface reports each act as `UiReport::Acted` (`Core::act`).

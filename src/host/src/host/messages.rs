@@ -401,14 +401,22 @@ pub(crate) enum UiReport {
     FrameShown(Instant),
     /// The UI's result of an ordered request with a reply: the view ops
     /// (rows 36–39), `ui.setMount` (41), `settings.set` / `.show` (83c,
-    /// 83d), picture-in-picture (74), `layout.set` (46), and the errors
-    /// of `window.setVideoArea` (71). The core handles it in R13's order:
-    /// apply the `handoff` (only if its `seq` is newer than the facts it
-    /// has, see the module doc), send the reply, broadcast what changed.
+    /// 83d), picture-in-picture (74), `layout.set` (46), a sheet's
+    /// `dialogs.confirm` (48), a system confirmation that failed to show
+    /// (48), and the errors of `window.setVideoArea` (71). The core
+    /// handles it in R13's order: apply the `handoff` (only if its `seq`
+    /// is newer than the facts it has, see the module doc), send the reply,
+    /// broadcast what changed.
     Answered {
         reply: Reply,
         result: std::result::Result<Value, RpcError>,
         handoff: Option<Box<WindowFacts>>,
+        /// The answer is a system confirmation's failure to show
+        /// ([`ConfirmRequest`]): no native dialog is open any more, so the
+        /// core clears `dialog_busy` and `confirm_open`. Marked, not
+        /// matched by reply: another request of the same plugin may carry
+        /// the same id.
+        confirm_failed: bool,
     },
     /// `window.setVideoArea` was fitted: the video size it waits for and
     /// the reply it will carry. The core keeps it with its deadline
@@ -887,11 +895,13 @@ mod tests {
                 reply: reply(1),
                 result: Ok(Value::Null),
                 handoff: None,
+                confirm_failed: false,
             },
             UiReport::Answered {
                 reply: reply(9),
                 result: Err(RpcError::new("unavailable", "no window")),
                 handoff: Some(facts()),
+                confirm_failed: false,
             },
             UiReport::AreaFitted {
                 reply: reply(8),

@@ -648,6 +648,7 @@ impl Host {
                     reply: review.reply,
                     result: Ok(json!({"confirmed": yes, "checked": checked})),
                     handoff: None,
+                    confirm_failed: false,
                 });
             }
         }
