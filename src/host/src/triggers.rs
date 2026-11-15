@@ -482,6 +482,32 @@ impl Triggers {
         kept.entered = kept.heard;
         kept.retry = true;
     }
+    /// A notification kept over the start-up mute (counted as delivered
+    /// then: `heard` moved past it, and evaluations since may have taken it
+    /// as the plugin's state) could not be delivered when the mute ended:
+    /// the plugin never heard it, so `heard` goes back by its edge (an
+    /// `enter` was not heard: not entered; a `leave` of a range was not
+    /// heard: still in that range) before it counts as lost
+    /// (`undelivered`).
+    pub fn undelivered_replay(&mut self, plugin: &str, data: &Value, why: &str) {
+        let (Ok(id), Some(seq), Some(edge)) = (
+            TriggerId::parse(&data["trigger"]),
+            data["seq"].as_u64(),
+            data["edge"].as_str(),
+        ) else {
+            return;
+        };
+        let range = data["range"]["index"].as_u64().map(|index| index as usize);
+        if let Some(kept) = self
+            .plugins
+            .get_mut(plugin)
+            .and_then(|p| p.kept.get_mut(&id))
+            .filter(|kept| kept.seq == seq)
+        {
+            kept.heard = if edge == "enter" { None } else { Some(range) };
+        }
+        self.undelivered(plugin, data, why);
+    }
     /// The Host delivered `plugin`'s notification `data` (sent, held for
     /// its ready, or a wake): the plugin knows it (`heard`); after a lost
     /// one of the same batch "entered" follows it too (`undelivered`). Its

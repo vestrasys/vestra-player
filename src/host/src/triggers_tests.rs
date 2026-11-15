@@ -865,3 +865,88 @@ fn a_batch_partly_delivered_follows_what_arrived() {
     assert!(t.redeliver(P, NOW).is_empty());
     assert_eq!(edges(&t.position(1, 30., true, NOW)), [("leave", Some(1))]);
 }
+
+/// Review of 1854eab7: a notification kept over the start-up mute counted
+/// as delivered; an evaluation since took it as the plugin's state; its
+/// replay at the mute's end fails. The plugin never heard the enter: it is
+/// sent again, not left latched.
+#[test]
+fn a_failed_mute_replay_takes_back_what_was_counted_as_heard() {
+    let mut t = registry();
+    t.set_facts(ready(false, true), 1, Some(0.), NOW);
+    let (_, out) = t
+        .set(P, 5, TriggerId::Unnamed(0), &playing_fullscreen(), NOW)
+        .unwrap();
+    assert_eq!(edges(&out), [("enter", None)]);
+    // Kept by the mute: counted as delivered.
+    t.delivered(P, &out[0].data(&json!({})));
+    // Another evaluation meanwhile (nothing flips).
+    let mut muted = ready(false, true);
+    muted.muted = true;
+    assert!(t.set_facts(muted, 1, Some(0.), NOW).is_empty());
+    // The replay fails.
+    t.undelivered_replay(P, &out[0].data(&json!({})), "test");
+    assert!(!t.kept(P)[0].3, "un-latched");
+    assert_eq!(edges(&t.redeliver(P, NOW)), [("enter", None)]);
+}
+
+/// An enter lost, the leave after it in the same batch delivered (a range
+/// passed between two checks): nothing is latched, nothing repeats.
+#[test]
+fn an_enter_lost_and_its_leave_delivered_latches_nothing() {
+    let mut t = registry();
+    t.set_facts(ready(false, false), 1, Some(5.), NOW);
+    let when = json!({"position":{"ranges":[[10, 10.004]]}});
+    t.set(P, 5, TriggerId::Unnamed(0), &when, NOW).unwrap();
+    let out = t.position(1, 10.02, true, NOW);
+    assert_eq!(edges(&out), [("enter", Some(0)), ("leave", Some(0))]);
+    t.undelivered(P, &out[0].data(&json!({})), "test");
+    t.delivered(P, &out[1].data(&json!({})));
+    assert!(!t.kept(P)[0].3);
+    assert!(t.redeliver(P, NOW).is_empty());
+    assert!(t.position(1, 11., true, NOW).is_empty());
+}
+
+/// A lost enter, then the plugin gives a longer list holding the same range
+/// before the next evaluation: the plugin is not in it as far as it knows,
+/// so nothing is carried: the new list enters at once (T3).
+#[test]
+fn a_replacement_after_a_lost_enter_enters_at_once() {
+    let mut t = registry();
+    t.set_facts(ready(false, false), 1, Some(5.), NOW);
+    let list = |ranges: Value| json!({"position":{"ranges":ranges}});
+    let (first, _) = t
+        .set(P, 5, TriggerId::Unnamed(0), &list(json!([[10, 20]])), NOW)
+        .unwrap();
+    let out = t.position(1, 10., true, NOW);
+    t.undelivered(P, &out[0].data(&json!({})), "test");
+    let (second, out) = t
+        .set(
+            P,
+            5,
+            TriggerId::Unnamed(0),
+            &list(json!([[2, 3], [10, 20]])),
+            NOW,
+        )
+        .unwrap();
+    assert!(second > first, "not carried: a new number");
+    assert_eq!(edges(&out), [("enter", Some(1))]);
+}
+
+/// A lost enter, then `off` before the next evaluation: nothing is kept,
+/// nothing fires again, and a late report of the lost one changes nothing.
+#[test]
+fn off_after_a_lost_enter_leaves_nothing_to_retry() {
+    let mut t = registry();
+    t.set_facts(ready(false, false), 1, Some(5.), NOW);
+    let when = json!({"position":{"ranges":[[10, 20]]}});
+    t.set(P, 5, TriggerId::Unnamed(0), &when, NOW).unwrap();
+    let out = t.position(1, 10., true, NOW);
+    t.undelivered(P, &out[0].data(&json!({})), "test");
+    t.off(P, &TriggerId::Unnamed(0));
+    assert!(t.redeliver(P, NOW).is_empty());
+    t.undelivered(P, &out[0].data(&json!({})), "test");
+    t.delivered(P, &out[0].data(&json!({})));
+    assert!(t.kept(P).is_empty());
+    assert!(t.position(1, 12., true, NOW).is_empty());
+}

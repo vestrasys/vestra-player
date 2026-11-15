@@ -204,9 +204,11 @@ impl Host {
         for (plugin, held) in muted {
             for (key, message) in held {
                 let data = message["data"].clone();
+                // Counted as delivered when the mute kept it: a failure now
+                // takes back what the plugin was taken to have heard.
                 match self.fire(&plugin, key, message) {
                     Ok(()) => self.triggers.delivered(&plugin, &data),
-                    Err(why) => self.triggers.undelivered(&plugin, &data, why),
+                    Err(why) => self.triggers.undelivered_replay(&plugin, &data, why),
                 }
             }
         }
