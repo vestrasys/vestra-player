@@ -17,6 +17,7 @@
 
 use crate::host::Event;
 use crate::process::unanswered::{Admission, Unanswered};
+use crate::process::wire_trace::{self, Dir};
 use crate::process::{MAX_MESSAGE_BYTES, StopReason, stop_message};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
@@ -680,6 +681,17 @@ fn write_lines(mut stdin: impl Write, output: mpsc::Receiver<Line>) {
         if written.is_err() {
             break;
         }
+        trace_line(line.g, Dir::Out, &line.message);
+    }
+}
+
+/// The wire trace (a test switch): a member's line, or the runner's own
+/// (`g` 0).
+fn trace_line(g: u64, dir: Dir, message: &Value) {
+    if g == 0 {
+        wire_trace::control(dir, message);
+    } else {
+        wire_trace::line(g, dir, message);
     }
 }
 
@@ -732,6 +744,7 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             Ok(_) if bytes.len() > LINE_LIMIT => match prefix_generation(&bytes) {
                 // That plugin is stopped; the runner and the others go on.
                 Some(g) if g > 0 && link.is_member(g) => {
+                    wire_trace::invalid(g, "oversize");
                     if listening {
                         let _ = events.send(Event::RuntimeFault(
                             g,
@@ -749,6 +762,7 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             },
             Ok(_) => match parse_line(&bytes) {
                 Ok((0, message)) => {
+                    trace_line(0, Dir::In, &message);
                     match message["event"].as_str() {
                         Some("runner.hello") => link.state().hello_heard = true,
                         Some("runner.pong") => {
@@ -765,6 +779,11 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                     }
                 }
                 Ok((g, message)) => {
+                    // As an own process's reader: not once the host stopped
+                    // listening (quitting).
+                    if listening {
+                        trace_line(g, Dir::In, &message);
+                    }
                     // A plugin already stopped (its last lines), or none of
                     // this runner's: never another owner's.
                     if listening
