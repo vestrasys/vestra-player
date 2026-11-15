@@ -777,6 +777,7 @@ impl Host {
                     reply,
                     result,
                     handoff: None,
+                    confirm_failed: false,
                 });
             }
             SettingsOp::Show { reply, params } => {
@@ -785,6 +786,7 @@ impl Host {
                     reply,
                     result,
                     handoff: None,
+                    confirm_failed: false,
                 });
             }
         }

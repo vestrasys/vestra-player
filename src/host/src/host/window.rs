@@ -60,7 +60,7 @@ impl Host {
         }
         self.policy.set_fullscreen(fullscreen, now);
         self.policy
-            .set_obstructions(self.menu_open, self.dialog_busy);
+            .set_obstructions(self.menu_open, self.core.dialog_busy);
         #[cfg(feature = "producer-audio")]
         let captured = self
             .core
@@ -72,10 +72,11 @@ impl Host {
             .is_some_and(|routing| routing.captured);
         #[cfg(not(feature = "producer-audio"))]
         let captured = false;
-        self.input.borrow_mut().blocked = self.menu_open || self.dialog_busy || captured;
-        if let Err(error) =
-            shell.set_property("input-blocked", (self.menu_open || self.dialog_busy).into())
-        {
+        self.input.borrow_mut().blocked = self.menu_open || self.core.dialog_busy || captured;
+        if let Err(error) = shell.set_property(
+            "input-blocked",
+            (self.menu_open || self.core.dialog_busy).into(),
+        ) {
             diag!("host.error physical-input bridge: {error}");
         }
         if self.osd_until.is_some_and(|until| now >= until) {
@@ -294,7 +295,7 @@ impl Host {
                 (playing && ((fullscreen && idle) || windowed)).into(),
             )?;
             Ok(
-                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
+                json!({"shellGeneration":self.shell_generation,"fullscreen":fullscreen,"maximized":maximized,"logicalWidth":viewport.width,"logicalHeight":viewport.height,"videoArea":{"width":video.0,"height":video.1},"menuOpen":self.menu_open,"dialogOpen":self.core.dialog_busy,"nativeActive":native.map(|facts|facts.active),"nativeUnavailable":self.native_unavailable,"slots":snapshot,"backdrop":self.backdrop_state(),"pictureInPicture":self.pip_state()}),
             )
         })();
         // The slots' containers show their panels (a column opened, a tab
@@ -311,14 +312,19 @@ impl Host {
                 let detached = facts["slots"]["sidebar"]["effective"] == true
                     && facts["slots"]["sidebar"]["detached"] == true;
                 self.sync_floating(detached);
-                if facts != self.window_facts {
-                    self.measured_shell = Some(self.shell_generation);
-                    self.window_facts = facts.clone();
-                    let report = self.window_facts_report(&shell, facts);
+                let changed = facts != self.window_facts;
+                if changed || self.policy_tabs() != self.tabs_sent {
+                    if changed {
+                        self.measured_shell = Some(self.shell_generation);
+                        self.window_facts = facts.clone();
+                    }
+                    let report = self.window_facts_report(Some(&shell), facts);
                     // Rule R9: the facts go to the core as a snapshot. Until
                     // plan step S3a it runs on this thread, so the report is
                     // applied here, in place: at the point and in the order
-                    // of today's `window.state` broadcast.
+                    // of today's `window.state` broadcast (which the core
+                    // sends only when the facts changed, not for the tabs
+                    // alone).
                     self.ui_report(UiReport::WindowFacts(Box::new(report)));
                 }
             }
@@ -334,63 +340,111 @@ impl Host {
     /// themselves it carries what later steps read on the core (plan S2c
     /// (5), S2d): the shell's generation, whether the shell has the menu
     /// origin, picture-in-picture as `facts` shows it, and the columns' tab
-    /// order. All are plain reads; none is read on the core yet. Also the
-    /// R13 handoff of a mount batch (`Host::mount_handoff`).
+    /// order and bottom panel (`PanelTabs`, read on the core since plan
+    /// step S2c(5)). Also the R13 handoff of a mount batch and of
+    /// `layout.set` (`Host::facts_handoff`), and the tabs alone
+    /// (`report_tabs`). Without a shell: no generation, no menu origin.
     pub(super) fn window_facts_report(
         &mut self,
-        shell: &slint_interpreter::ComponentInstance,
+        shell: Option<&slint_interpreter::ComponentInstance>,
         facts: Value,
     ) -> WindowFacts {
         self.facts_seq += 1;
         let pip = &facts["pictureInPicture"];
+        let tabs = self.policy_tabs();
+        self.tabs_sent = tabs.clone();
         WindowFacts {
             seq: self.facts_seq,
-            shell: Some(self.shell_generation),
-            menu_origin: shell.get_property("menu-origin-x").is_ok()
-                && shell.get_property("menu-origin-y").is_ok(),
+            shell: shell.map(|_| self.shell_generation),
+            menu_origin: shell.is_some_and(|shell| {
+                shell.get_property("menu-origin-x").is_ok()
+                    && shell.get_property("menu-origin-y").is_ok()
+            }),
             pip_supported: pip["supported"] == true,
             pip_active: pip["active"] == true,
-            sidebar_panels: self.policy.sidebar_panels(),
-            adjust_panels: self.policy.panels(window_state::Slot::Adjust),
+            sidebar_panels: tabs.sidebar,
+            adjust_panels: tabs.adjust,
+            bottom_panel: tabs.bottom,
             facts,
         }
+    }
+    /// The panel policy's tabs (`state::PanelTabs`).
+    pub(crate) fn policy_tabs(&self) -> state::PanelTabs {
+        state::PanelTabs {
+            bottom: self.policy.bottom(),
+            sidebar: self.policy.sidebar_panels(),
+            adjust: self.policy.panels(window_state::Slot::Adjust),
+        }
+    }
+    /// The panel policy's tabs changed outside the window tick (a panel
+    /// attached, removed, reordered or rekeyed): the interface reports them
+    /// to the core at once (rule R9, plan step S2c(5)), with the facts it
+    /// last sent, so the core's copy is never behind the policy when it
+    /// judges a request. The facts themselves did not change, so the core
+    /// broadcasts nothing.
+    pub(crate) fn report_tabs(&mut self) {
+        if self.policy_tabs() == self.tabs_sent {
+            return;
+        }
+        let shell = self.shell.as_ref().map(ComponentHandle::clone_strong);
+        let facts = self.window_facts.clone();
+        let report = self.window_facts_report(shell.as_ref(), facts);
+        self.ui_report(UiReport::WindowFacts(Box::new(report)));
+    }
+    /// Debug builds: the core's copy of the tabs is the policy's wherever
+    /// the core reads it (plan step S2c(5): `report_tabs` after every
+    /// change). Removed with the in-place delivery (plan S3a).
+    #[cfg(debug_assertions)]
+    pub(crate) fn check_panel_tabs(&self) {
+        debug_assert_eq!(
+            self.core.panel_tabs,
+            self.policy_tabs(),
+            "the core's panel tabs are behind the policy"
+        );
     }
     /// A report of the UI reaches the core (rule R3), delivered in place on
     /// this thread until plan step S3a. Plan step S2c(1): the window facts;
     /// S2c(3): the mount reports and the `ui.setMount` result
     /// (host/mounts.rs); S2c(4): the `settings.set` and `settings.show`
-    /// results. The other reports follow in later steps.
+    /// results; S2c(5): the tabs with the facts, `layout.set`'s result, a
+    /// sheet's confirmation and a confirmation that failed to show, and
+    /// where the user acted (`Acted`). The other reports follow in later
+    /// steps.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         match report {
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).
-                if !facts.newer_than(self.core.window_facts_seq) {
-                    return;
-                }
-                let WindowFacts { seq, facts, .. } = *facts;
-                self.core.window_facts_seq = Some(seq);
-                self.core.window_facts = facts.clone();
                 // The core broadcasts `window.state` from the facts (R9): its
-                // conditions and triggers are evaluated first (`broadcast`).
-                self.broadcast("window.state", facts);
+                // conditions and triggers are evaluated first (`broadcast`);
+                // a value with only the tabs changed broadcasts nothing.
+                if self.core.apply_facts(*facts) {
+                    let facts = self.core.window_facts.clone();
+                    self.broadcast("window.state", facts);
+                }
             }
             UiReport::MountPreparing(changes) => self.mounts_preparing(changes),
             UiReport::MountApplied(applied) => self.mounts_applied(applied),
-            // R13: the handoff first (none is sent yet), then the reply.
+            // R13: the handoff first, then the reply.
             UiReport::Answered {
                 reply,
                 result,
                 handoff,
+                confirm_failed,
             } => {
                 let changed = handoff.is_some_and(|facts| self.core.apply_facts(*facts));
+                (self.core.dialog_busy, self.core.confirm_open) = dialog_flags_after(
+                    (self.core.dialog_busy, self.core.confirm_open),
+                    confirm_failed,
+                );
                 self.respond(reply, result);
                 if changed {
                     let facts = self.core.window_facts.clone();
                     self.broadcast("window.state", facts);
                 }
             }
-            _ => unreachable!("not reported before plan step S2c(5)"),
+            UiReport::Acted { owner, origin } => self.core.act(owner, origin),
+            _ => unreachable!("not reported before plan step S2d"),
         }
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
@@ -984,19 +1038,48 @@ impl Host {
     }
 }
 impl Core {
-    /// The facts of an R13 handoff (`UiReport::Answered`,
-    /// `UiReport::MountApplied`) reach the core's copy when newer than the
-    /// last applied (module `messages`). Whether the core's value changed:
-    /// then `window.state` goes out after the reply.
+    /// Window facts (`UiReport::WindowFacts`, or the handoff of
+    /// `UiReport::Answered` and `UiReport::MountApplied`) reach the core's
+    /// copy when newer than the last applied (module `messages`), with the
+    /// panel tabs. Whether the core's facts value changed: then
+    /// `window.state` goes out (after the reply, for a handoff). The
+    /// interface sends a snapshot only when its facts or its tabs changed,
+    /// and its last facts are the core's, so "changed" is today's
+    /// condition for the broadcast.
     pub(crate) fn apply_facts(&mut self, facts: WindowFacts) -> bool {
         if !facts.newer_than(self.window_facts_seq) {
             return false;
         }
-        let WindowFacts { seq, facts, .. } = facts;
+        let WindowFacts {
+            seq,
+            facts,
+            sidebar_panels,
+            adjust_panels,
+            bottom_panel,
+            ..
+        } = facts;
         self.window_facts_seq = Some(seq);
+        self.panel_tabs = state::PanelTabs {
+            bottom: bottom_panel,
+            sidebar: sidebar_panels,
+            adjust: adjust_panels,
+        };
         let changed = self.window_facts != facts;
         self.window_facts = facts;
         changed
+    }
+}
+
+/// The native-dialog flags (`dialog_busy`, `confirm_open`) after a
+/// `UiReport::Answered`: only a system confirmation's failure to show
+/// (`confirm_failed`) clears them, as `platform::confirm`'s own error did
+/// before plan step S2c(5); any other answer leaves them, also an error of
+/// another request of the same plugin with the same id.
+fn dialog_flags_after(flags: (bool, bool), confirm_failed: bool) -> (bool, bool) {
+    if confirm_failed {
+        (false, false)
+    } else {
+        flags
     }
 }
 
@@ -1040,5 +1123,38 @@ mod tests {
             assert_eq!(record(false, maximized, true), Record::Nothing);
             assert_eq!(record(true, maximized, true), Record::Nothing);
         }
+    }
+
+    /// Review of S2c(5): `dialogs.confirm` id 7 shows a system dialog,
+    /// then the same plugin's `settings.set` id 7 is answered with an
+    /// error (the host tolerates a repeated id). That answer is not the
+    /// confirmation's: the dialog is still open, so `dialog_busy` and
+    /// `confirm_open` stay set (`window.state.dialogOpen`, the `busy`
+    /// refusal of a second dialog, `Busy::Dialog`). Only the report marked
+    /// `confirm_failed` clears them.
+    #[test]
+    fn only_the_confirmations_own_failure_clears_the_dialog_flags() {
+        let reply = Reply { owner: 3, id: 7 };
+        let settings_error = UiReport::Answered {
+            reply: reply.clone(),
+            result: Err(RpcError::invalid("value does not convert")),
+            handoff: None,
+            confirm_failed: false,
+        };
+        let confirm_error = UiReport::Answered {
+            reply,
+            result: Err(RpcError::new("unavailable", "no dialog")),
+            handoff: None,
+            confirm_failed: true,
+        };
+        let open = (true, true);
+        for (report, expected) in [(settings_error, open), (confirm_error, (false, false))] {
+            let UiReport::Answered { confirm_failed, .. } = report else {
+                unreachable!()
+            };
+            assert_eq!(dialog_flags_after(open, confirm_failed), expected);
+        }
+        // A file picker open (busy, no confirmation): only the marker clears.
+        assert_eq!(dialog_flags_after((true, false), false), (true, false));
     }
 }

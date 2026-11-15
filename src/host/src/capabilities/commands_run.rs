@@ -18,7 +18,12 @@
 use super::{Capability, Handled, Info, Recorded};
 use crate::{
     bindings,
-    host::{Event, Host, Reply, RpcError, palette::PALETTE, review_sheet, string},
+    host::{
+        Event, Host, Reply, RpcError,
+        messages::{ReviewKind, ReviewRequest, RunSheet, UiCommand},
+        palette::PALETTE,
+        review_sheet, string,
+    },
     i18n,
     ui::command_palette::Item,
 };
@@ -642,7 +647,11 @@ fn perform(
     item: &Item,
     step: Option<(u64, u64)>,
 ) -> Result<(), RpcError> {
-    let holds_lead = host.lead.as_ref().is_some_and(|lead| lead.owner == caller);
+    let holds_lead = host
+        .core
+        .lead
+        .as_ref()
+        .is_some_and(|lead| lead.owner == caller);
     let line = if holds_lead {
         // The strip's icon says who is working: the step and the command.
         match step {
@@ -687,7 +696,7 @@ fn perform(
         host.show_osd(&line);
     }
     // Run on the caller's behalf: a confirmation goes where the caller's would.
-    host.origins.inherit(caller, item.owner);
+    host.core.origins.inherit(caller, item.owner);
     host.execute_command(item.owner, &item.id)
 }
 
@@ -831,13 +840,16 @@ fn ask(
             builtin: step.builtin,
         })
         .collect();
-    host.open_review(
-        reply.clone(),
-        ticket.to_owned(),
-        query.to_owned(),
-        rows,
-        review_sheet::remember_text(remember),
-    );
+    // The sheet is the interface's (`UiCommand::Review`, plan step S2c(5)).
+    host.ui_command(UiCommand::Review(ReviewRequest {
+        reply: reply.clone(),
+        kind: ReviewKind::CommandRun(RunSheet {
+            ticket: ticket.to_owned(),
+            query: query.to_owned(),
+            steps: rows,
+            remember: review_sheet::remember_text(remember),
+        }),
+    }));
 }
 
 /// The reason a step shows on the sheet (Ask Vestra UX §4.5, user ruling 2

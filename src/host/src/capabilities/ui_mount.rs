@@ -5,12 +5,12 @@ use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
         layout_change,
-        messages::{SetMount, UiCommand},
-        mount_view, panel_key, policy_slot, refuse_initial, string,
+        messages::{LayoutOp, SetMount, UiCommand, UiReport},
+        mount_view, panel_key, panel_slot, policy_slot, refuse_initial, string,
     },
     i18n, process,
     ui::composition,
-    ui::sidebar_tabs,
+    ui::sidebar_tabs::{self, Column},
     ui::slot_claims,
     ui::ui_patch,
     ui::window_state,
@@ -173,7 +173,7 @@ impl Capability for UiMount {
             "ui.interaction" => interaction(host, reply, params).map(Some),
             "ui.menu" => menu(host, reply, params).map(Some),
             "layout.state" => host.layout_state().map(Some),
-            _ => layout_set(host, params).map(Some),
+            _ => layout_set(host, reply, params),
         }
     }
 }
@@ -218,16 +218,19 @@ pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
         }
     }
     // The panel keys' owners (plugins).
-    let mut shared = host.input.borrow_mut();
-    let input = &mut *shared;
-    for owner in [&mut input.sidebar, &mut input.adjust]
-        .into_iter()
-        .flatten()
     {
-        if *owner == from {
-            *owner = to;
+        let mut shared = host.input.borrow_mut();
+        let input = &mut *shared;
+        for owner in [&mut input.sidebar, &mut input.adjust]
+            .into_iter()
+            .flatten()
+        {
+            if *owner == from {
+                *owner = to;
+            }
         }
     }
+    host.report_tabs();
 }
 
 /// Drop the mounts of plugin `owner` that wait in `queue` (its unmounts
@@ -249,6 +252,7 @@ fn revoke_panel(host: &mut Host, key: u64, keep_recorded: bool) {
         let owner = mount.plugin;
         host.core.mounts.remove(&key);
         host.policy.remove_owner(key);
+        host.report_tabs();
         host.core.mount_queue.retain(|c| c.key != key);
         host.core.mount_queue.push_front(MountChange {
             reply: Reply { owner, id: 0 },
@@ -758,14 +762,62 @@ fn interaction(
         popup_open: boolean("popupOpen")?,
     };
     let slot = mount.spec.slot;
-    host.policy.activity(host.core.now_ms());
+    // The core judges the locks from its copy of the tabs (plan step
+    // S2c(5)); the interface marks activity and sets them (`LayoutOp::Locks`).
+    #[cfg(debug_assertions)]
+    host.check_panel_tabs();
     // The backdrop never auto-hides: nothing to lock.
-    if let Some(slot) = policy_slot(slot) {
-        host.policy
-            .set_locks(slot, key, locks)
-            .map_err(anyhow::Error::from)?;
-    }
+    let judged = policy_slot(slot).map_or(Ok(()), |slot| host.core.panel_tabs.holds(slot, key));
+    host.ui_command(UiCommand::Layout(LayoutOp::Locks { key, locks }));
+    judged.map_err(anyhow::Error::from)?;
     Ok(Value::Null)
+}
+
+/// `layout.set` as the core checks it: the request's own errors, then a
+/// refusal of the policy before any step took effect (from the core's
+/// copy of the tabs, `PanelTabs::judge_layout`); the interface applies the
+/// rest and answers (`LayoutOp::Set`, `Host::layout_apply`).
+fn layout_set(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
+    if host.core.headless {
+        return Err(RpcError::new(
+            "unavailable",
+            "layout requires a native shell",
+        ));
+    }
+    let slot = composition::Slot::parse(string(params, "slot")?)
+        .filter(|slot| *slot != composition::Slot::Backdrop)
+        .ok_or_else(|| RpcError::invalid("unknown slot"))?;
+    let panels = host
+        .core
+        .mounts
+        .values()
+        .filter(|m| m.spec.slot == slot)
+        .map(|m| (m.spec.owner, m.manifest.clone()))
+        .collect::<Vec<_>>();
+    if panels.is_empty() {
+        return Err(RpcError::new("missing", "no panel at this position"));
+    }
+    let policy_slot =
+        policy_slot(slot).ok_or_else(|| RpcError::invalid("the backdrop has no preference"))?;
+    let change = layout_change(params, slot, &panels)?;
+    #[cfg(debug_assertions)]
+    host.check_panel_tabs();
+    host.core
+        .panel_tabs
+        .judge_layout(slot, policy_slot, &change, panels[0].0)
+        .map_err(anyhow::Error::from)?;
+    // `reveal: false` (SDK 1.6.13 `toggle()`): a switch, which in
+    // fullscreen pops nothing out (user ruling 2026-11-08); absent or
+    // true (`show()`, `setVisible`, older SDKs): reveal, as before.
+    let reveal = params["reveal"].as_bool().unwrap_or(true);
+    host.ui_command(UiCommand::Layout(LayoutOp::Set {
+        reply: reply.clone(),
+        slot,
+        change,
+        first: panels[0].0,
+        reveal,
+    }));
+    Ok(None)
 }
 
 /// `ui.menu`: a panel's own context menu of its commands.
@@ -775,7 +827,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             "keys: ui.menu owner={} menu_open={} dialog={} sidebar_effective={}",
             reply.owner,
             host.menu_open,
-            host.dialog_busy,
+            host.core.dialog_busy,
             host.core.window_facts["slots"]["sidebar"]["effective"]
         );
     }
@@ -854,73 +906,102 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
     Ok(Value::Null)
 }
 
-fn layout_set(host: &mut Host, params: &Value) -> std::result::Result<Value, RpcError> {
-    if host.core.headless {
-        return Err(RpcError::new(
-            "unavailable",
-            "layout requires a native shell",
-        ));
-    }
-    let slot = composition::Slot::parse(string(params, "slot")?)
-        .filter(|slot| *slot != composition::Slot::Backdrop)
-        .ok_or_else(|| RpcError::invalid("unknown slot"))?;
-    let panels = host
-        .core
-        .mounts
-        .values()
-        .filter(|m| m.spec.slot == slot)
-        .map(|m| (m.spec.owner, m.manifest.clone()))
-        .collect::<Vec<_>>();
-    if panels.is_empty() {
-        return Err(RpcError::new("missing", "no panel at this position"));
-    }
-    let policy_slot =
-        policy_slot(slot).ok_or_else(|| RpcError::invalid("the backdrop has no preference"))?;
-    let LayoutChange {
-        visible,
-        detached,
-        active,
-    } = layout_change(params, slot, &panels)?;
-    // The slot's state goes through its current panel (any tab's would do).
-    let owner = slot
-        .tabbed()
-        .then(|| host.policy.active(policy_slot))
-        .flatten()
-        .unwrap_or(panels[0].0);
-    if let Some(active) = active
-        && slot.tabbed()
-    {
-        host.policy
-            .set_active(active)
-            .map_err(anyhow::Error::from)?;
-    }
-    if let Some(detached) = detached {
-        host.policy
-            .set_detached(owner, detached)
-            .map_err(anyhow::Error::from)?;
-    }
-    if let Some(visible) = visible {
-        let now = host.core.now_ms();
-        // `reveal: false` (SDK 1.6.13 `toggle()`): a switch, which in
-        // fullscreen pops nothing out (user ruling 2026-11-08); absent or
-        // true (`show()`, `setVisible`, older SDKs): reveal, as before.
-        let reveal = params["reveal"].as_bool().unwrap_or(true);
-        if reveal {
-            host.policy.set_preferred(policy_slot, owner, visible, now)
-        } else {
-            host.policy.switch(policy_slot, owner, visible, now)
-        }
-        .map_err(anyhow::Error::from)?;
-        if let Some(mount) = host.core.mounts.get_mut(&owner) {
-            mount.visible = visible;
+impl Host {
+    /// The interface's side of `UiCommand::Layout` (plan step S2c(5)): the
+    /// policy stays the interface's.
+    pub(crate) fn layout_command(&mut self, op: LayoutOp) {
+        match op {
+            LayoutOp::Locks { key, locks } => {
+                self.policy.activity(self.core.now_ms());
+                // The backdrop never auto-hides: nothing to lock. A refusal
+                // is the core's to report (`interaction`), from the same
+                // tabs (`check_panel_tabs`).
+                if let Some(slot) = policy_slot(panel_slot(key)) {
+                    let _ = self.policy.set_locks(slot, key, locks);
+                }
+            }
+            LayoutOp::Set {
+                reply,
+                slot,
+                change,
+                first,
+                reveal,
+            } => {
+                let result = self.layout_apply(slot, change, first, reveal);
+                // R13: the facts and tabs after the layout pass (none after
+                // a refusal, which runs no pass).
+                let handoff = if result.is_ok() {
+                    self.facts_handoff()
+                } else {
+                    None
+                };
+                self.ui_report(UiReport::Answered {
+                    reply,
+                    result,
+                    handoff,
+                    confirm_failed: false,
+                });
+            }
+            LayoutOp::Toggle(Column::Sidebar) => self.toggle_sidebar(),
+            LayoutOp::Toggle(Column::Adjust) => self.toggle_adjust(),
         }
     }
-    if let Some(column) = sidebar_tabs::Column::of(slot) {
-        host.remember_column(column, active.is_some());
+    /// `layout.set` in the interface (row 46): the current tab, floating,
+    /// the preference, through the column's current panel (else `first`),
+    /// then a layout pass so that a following `layout.state` sees it. A
+    /// step refused after an earlier one took effect is the answer, as
+    /// before; the core refused at once what is refused before that.
+    fn layout_apply(
+        &mut self,
+        slot: composition::Slot,
+        change: LayoutChange,
+        first: u64,
+        reveal: bool,
+    ) -> std::result::Result<Value, RpcError> {
+        let policy_slot =
+            policy_slot(slot).ok_or_else(|| RpcError::invalid("the backdrop has no preference"))?;
+        let LayoutChange {
+            visible,
+            detached,
+            active,
+        } = change;
+        // The slot's state goes through its current panel (any tab's would do).
+        let owner = slot
+            .tabbed()
+            .then(|| self.policy.active(policy_slot))
+            .flatten()
+            .unwrap_or(first);
+        if let Some(active) = active
+            && slot.tabbed()
+        {
+            self.policy
+                .set_active(active)
+                .map_err(anyhow::Error::from)?;
+        }
+        if let Some(detached) = detached {
+            self.policy
+                .set_detached(owner, detached)
+                .map_err(anyhow::Error::from)?;
+        }
+        if let Some(visible) = visible {
+            let now = self.core.now_ms();
+            if reveal {
+                self.policy.set_preferred(policy_slot, owner, visible, now)
+            } else {
+                self.policy.switch(policy_slot, owner, visible, now)
+            }
+            .map_err(anyhow::Error::from)?;
+            if let Some(mount) = self.core.mounts.get_mut(&owner) {
+                mount.visible = visible;
+            }
+        }
+        if let Some(column) = sidebar_tabs::Column::of(slot) {
+            self.remember_column(column, active.is_some());
+        }
+        // Answer after the next layout pass so a following layout.state sees it.
+        self.window_tick();
+        Ok(Value::Null)
     }
-    // Answer after the next layout pass so a following layout.state sees it.
-    host.window_tick();
-    Ok(Value::Null)
 }
 
 #[cfg(test)]

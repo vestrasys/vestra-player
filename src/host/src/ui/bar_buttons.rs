@@ -356,7 +356,7 @@ impl Host {
             .label(bindings::HOST, palette::PALETTE);
         // While a plugin holds the palette's first row (`palette.lead`):
         // the speech bubble with the AI sparkle, and the row named in the tip.
-        let icon = match &self.lead {
+        let icon = match &self.core.lead {
             Some(lead) => {
                 label = i18n::tr_args(
                     "{palette} and {lead}",
@@ -523,7 +523,7 @@ impl Host {
                     .bar_instance(self.shell_generation)
                     .map(|(serial, _)| serial),
             ),
-            lead: self.lead.as_ref().map(|lead| lead.row.title.clone()),
+            lead: self.core.lead.as_ref().map(|lead| lead.row.title.clone()),
         }
     }
 

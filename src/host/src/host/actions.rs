@@ -425,12 +425,18 @@ impl Host {
             }
             return;
         }
+        // The columns are the interface's (its panel policy): told as
+        // `LayoutOp::Toggle` (plan step S2c(5)).
         if id == bar_buttons::SIDEBAR {
-            self.toggle_sidebar();
+            self.ui_command(messages::UiCommand::Layout(messages::LayoutOp::Toggle(
+                crate::ui::sidebar_tabs::Column::Sidebar,
+            )));
             return;
         }
         if id == bar_buttons::ADJUST {
-            self.toggle_adjust();
+            self.ui_command(messages::UiCommand::Layout(messages::LayoutOp::Toggle(
+                crate::ui::sidebar_tabs::Column::Adjust,
+            )));
             return;
         }
         if id == palette::PALETTE {

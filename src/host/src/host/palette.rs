@@ -192,6 +192,7 @@ impl Host {
         );
         let (_, size) = super::menus::menu_frame(window);
         let lead = self
+            .core
             .lead
             .as_ref()
             .map(|lead| (lead.owner, lead.row.clone()));
@@ -316,6 +317,7 @@ impl Host {
     fn run_lead(&mut self, keep: bool) {
         let query = self.palette.query.clone();
         let has_status = self
+            .core
             .lead
             .as_ref()
             .is_some_and(|lead| lead.row.status.is_some());
@@ -342,7 +344,7 @@ impl Host {
     /// `lead:<query>@<ms>`, headless): the row showed the holder's status
     /// when it has one and nothing is typed.
     pub(crate) fn lead_activated(&mut self, query: String, keep: bool) {
-        let Some(lead) = &self.lead else {
+        let Some(lead) = &self.core.lead else {
             return;
         };
         let status = command_palette::lead_shows_status(lead.row.status.is_some(), &query);
@@ -352,7 +354,7 @@ impl Host {
     /// the user activated the status (Enter on the status row, the strip's
     /// Stop), which stops the running request.
     pub(crate) fn lead_event(&mut self, query: String, keep: bool, status: bool) {
-        let Some(lead) = &self.lead else {
+        let Some(lead) = &self.core.lead else {
             return;
         };
         let owner = lead.owner;
@@ -365,7 +367,7 @@ impl Host {
         let ticket = self.core.command_runs.mint(owner, &query, now);
         // A new request: its end state shows even when it is the same as
         // the last one's (the same failure twice in a row).
-        if let Some(lead) = self.lead.as_mut() {
+        if let Some(lead) = self.core.lead.as_mut() {
             lead.ended = None;
         }
         input_trace::follow(&format!("palette lead to plugin {owner} (keep {keep})"));

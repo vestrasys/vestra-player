@@ -119,6 +119,18 @@ pub(crate) fn rekey_panel(key: u64, to: u64) -> u64 {
 pub(crate) fn panel_plugin(key: u64) -> u64 {
     key / PANEL_SLOTS
 }
+/// The slot of a panel key (`panel_key`).
+pub(crate) fn panel_slot(key: u64) -> composition::Slot {
+    [
+        composition::Slot::Bottom,
+        composition::Slot::Sidebar,
+        composition::Slot::Backdrop,
+        composition::Slot::Adjust,
+    ]
+    .into_iter()
+    .find(|&slot| slot as u64 == key % PANEL_SLOTS)
+    .unwrap_or(composition::Slot::Bottom)
+}
 /// Slots per plugin in a panel key (bottom, sidebar, backdrop, adjust).
 const PANEL_SLOTS: u64 = 4;
 /// The view a panel's images and row patches are kept under, per slot
@@ -480,6 +492,31 @@ pub(crate) struct Core {
     pub(crate) shader_guard: ShaderGuard,
     /// When the memory line last went to the host log (`diagnostics.rs`).
     pub(crate) memory_logged: Option<Instant>,
+    /// A native dialog is open, a file picker or a system confirmation
+    /// (plan step S2c(5)): `dialogs.open`, `dialogs.confirm` and
+    /// `media.sources.locate` are refused `busy` while it is, and it counts
+    /// as `Busy::Dialog`. The interface reads it for its window policy
+    /// (input blocked, `window.state.dialogOpen`).
+    pub(crate) dialog_busy: bool,
+    /// A system confirmation is open (`dialog_busy` is also a file
+    /// picker): it comes into view when another request is refused
+    /// `busy`. A confirmation that failed to show (`UiReport::Answered`
+    /// marked `confirm_failed`) clears both.
+    pub(crate) confirm_open: bool,
+    /// Where the user last acted for each plugin: the window its
+    /// `dialogs.confirm` belongs to (`origins`, palette-lead.md §2.3). The
+    /// interface reports each act as `UiReport::Acted` (`Core::act`).
+    pub(crate) origins: origins::Origins,
+    /// The palette's first row and its holder (`palette.lead`; plan step
+    /// S2c(5)): admission, the recording and the holder's lifecycle are
+    /// the core's; the interface is told of each change as
+    /// `UiCommand::Lead` and draws the row, the strip and the bar's icon.
+    pub(crate) lead: Option<crate::capabilities::Lead>,
+    /// The panel policy's tabs as the interface last reported them with
+    /// the window facts (rule R9; plan step S2c(5)). The policy stays the
+    /// interface's; the core judges `ui.interaction`'s and `layout.set`'s
+    /// refusals and answers `layout.state`'s tab order from this copy.
+    pub(crate) panel_tabs: state::PanelTabs,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -500,13 +537,6 @@ pub(crate) struct Host {
     /// split.
     pub(crate) core: Core,
     pub(crate) views: BTreeMap<(u64, String), view::View>,
-    pub(crate) dialog_busy: bool,
-    /// Where the user last acted for each plugin: the window its
-    /// `dialogs.confirm` belongs to (`origins`, palette-lead.md §2.3).
-    pub(crate) origins: origins::Origins,
-    /// A system confirmation is open (`dialog_busy` is also a file
-    /// picker): it comes into view when another request is refused `busy`.
-    pub(crate) confirm_open: bool,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
     /// The interface's mount batching window (K6): the change that opened
     /// it and when. The changes the core hands over during the next 32 ms
@@ -542,8 +572,6 @@ pub(crate) struct Host {
     pub(crate) menu_shown: RefCell<menus::ShownMenu>,
     /// The open command palette (`MenuMode::Palette`).
     pub(crate) palette: palette::PaletteState,
-    /// The palette's first row and its holder (`palette.lead`).
-    pub(crate) lead: Option<crate::capabilities::Lead>,
     /// The status strip: the lead's status while the palette is closed.
     pub(crate) lead_strip: lead_strip::LeadStrip,
     /// The sheet waiting for the user (`MenuMode::Review`): a plan's or a
@@ -557,6 +585,9 @@ pub(crate) struct Host {
     pub(crate) window_facts: Value,
     /// The UI's one counter of facts values sent (`WindowFacts.seq`).
     pub(crate) facts_seq: u64,
+    /// The panel tabs the UI last sent the core with its facts
+    /// (`report_tabs`; plan step S2c(5)).
+    pub(crate) tabs_sent: state::PanelTabs,
     pub(crate) measured_shell: Option<u64>,
     pub(crate) menu_open: bool,
     /// The fullscreen title strip (`title-strip.slint`).

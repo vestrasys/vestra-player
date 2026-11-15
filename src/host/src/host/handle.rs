@@ -469,8 +469,8 @@ impl Host {
             }
             Event::ConfirmDone(reply, confirmed, checked) => {
                 self.policy.activity(self.core.now_ms());
-                self.dialog_busy = false;
-                self.confirm_open = false;
+                self.core.dialog_busy = false;
+                self.core.confirm_open = false;
                 self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
             }
             Event::SourceLocate(reply, fields) => {
@@ -480,7 +480,7 @@ impl Host {
             }
             Event::SourceLocated(reply, mut fields, path) => {
                 self.policy.activity(self.core.now_ms());
-                self.dialog_busy = false;
+                self.core.dialog_busy = false;
                 match path.as_deref().map(|path| path.to_str()) {
                     None => self.respond(reply, Ok(Value::Null)),
                     Some(None) => self.respond(
@@ -512,7 +512,7 @@ impl Host {
             }
             Event::DialogDone(reply, paths) => {
                 self.policy.activity(self.core.now_ms());
-                self.dialog_busy = false;
+                self.core.dialog_busy = false;
                 self.respond(
                     reply,
                     Ok(json!({"cancelled":paths.is_none(),"paths":paths.unwrap_or_default()})),

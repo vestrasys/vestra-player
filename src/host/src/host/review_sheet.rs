@@ -289,6 +289,24 @@ pub(crate) fn confirm_sheet(
 }
 
 impl Host {
+    /// The interface's side of `UiCommand::Review` (plan step S2c(5)): the
+    /// core admitted the request and chose the main window's sheet; its
+    /// answer goes back as `Event::CommandRunAnswered` (a plan) or
+    /// `UiReport::Answered` (a confirmation).
+    pub(crate) fn review_command(&mut self, request: messages::ReviewRequest) {
+        let messages::ReviewRequest { reply, kind } = request;
+        match kind {
+            messages::ReviewKind::Confirm(messages::ConfirmSheet { options, request }) => {
+                self.open_confirm(reply, options, request)
+            }
+            messages::ReviewKind::CommandRun(messages::RunSheet {
+                ticket,
+                query,
+                steps,
+                remember,
+            }) => self.open_review(reply, ticket, query, steps, remember),
+        }
+    }
     /// `commands.run` asks the user about `steps` (the run's own first) on
     /// `ticket`, offering "Don't ask again" with the text `remember` (empty:
     /// not offered): the sheet shows now, or once nothing is in its way. One
@@ -387,7 +405,7 @@ impl Host {
     /// any open menu or palette, unless a native dialog is open or there is
     /// no window yet. Its guard starts now.
     pub(crate) fn present_review(&mut self) {
-        if self.review.is_none() || self.dialog_busy || self.review_presented() {
+        if self.review.is_none() || self.core.dialog_busy || self.review_presented() {
             return;
         }
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
@@ -441,7 +459,7 @@ impl Host {
         // The request box: the lead's icon and title when the caller holds
         // it (always for a plan, today: only the lead mints tickets), else
         // its name.
-        let (title, icon) = match self.lead.as_ref().filter(|lead| lead.owner == owner) {
+        let (title, icon) = match self.core.lead.as_ref().filter(|lead| lead.owner == owner) {
             Some(lead) => (lead.row.title.clone(), lead.row.icon.clone()),
             None => (
                 crate::capabilities::shown_name(self, owner),
@@ -561,7 +579,7 @@ impl Host {
             self.end_review(Some((false, checked)));
             return;
         }
-        if self.dialog_busy {
+        if self.core.dialog_busy {
             if self.review_presented() {
                 self.close_menu();
             }
@@ -626,10 +644,12 @@ impl Host {
                 // As `Event::ConfirmDone` (the system dialog's answer) and
                 // `Event::CommandRunAnswered` (a plan's) do.
                 self.policy.activity(self.core.now_ms());
-                self.respond(
-                    review.reply,
-                    Ok(json!({"confirmed": yes, "checked": checked})),
-                );
+                self.ui_report(messages::UiReport::Answered {
+                    reply: review.reply,
+                    result: Ok(json!({"confirmed": yes, "checked": checked})),
+                    handoff: None,
+                    confirm_failed: false,
+                });
             }
         }
     }

@@ -267,6 +267,7 @@ impl Host {
         for key in &gone {
             self.policy.remove_owner(*key);
         }
+        self.report_tabs();
         self.power.remove_owner(owner);
         // Its timeline layer and window settings stay through a standby,
         // held under `owner` until it wakes (`rekey`) or its standby ends
