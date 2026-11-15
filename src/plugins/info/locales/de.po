@@ -358,8 +358,12 @@ msgstr "Wiedergabeinformationen im Bild, Wiedergabeeigenschaften und das Fenster
 
 #: manifest.json
 #, x-machine
-msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
-msgstr "Zeigt oben links im Video aktuelle Angaben (Tab): Datei, Zeit, Codecs, Bildrate und mehr, oder mit Shift+Tab eine Kurzübersicht. „Wiedergabeeigenschaften…“ listet den Dekodierstatus, die Streams und Metadaten der Datei sowie Systeminformationen auf, zum Kopieren oder Speichern als Text. „Über Vestra Player…“ zeigt die Version, die Komponenten und die geladenen Plugins."
+msgid ""
+"Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins.\n"
+"→ Press Tab (overlay) or F1 (About)"
+msgstr ""
+"Zeigt oben links im Video aktuelle Angaben (Tab): Datei, Zeit, Codecs, Bildrate und mehr, oder mit Shift+Tab eine Kurzübersicht. „Wiedergabeeigenschaften…“ listet den Dekodierstatus, die Streams und Metadaten der Datei sowie Systeminformationen auf, zum Kopieren oder Speichern als Text. „Über Vestra Player…“ zeigt die Version, die Komponenten und die geladenen Plugins.\n"
+"→ Tab (Einblendung) oder F1 (Über) drücken"
 
 #: manifest.json
 #, x-machine

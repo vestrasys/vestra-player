@@ -1,54 +1,55 @@
-// Plugin Store (vestra.store, design §2.1; plugin-center spec 2026-10): tabs
-// All / Installed / Updates with the refresh and ⚙ menu buttons on top,
-// then search, tags and sort; the plugin list on the left (300 wide, 62px
-// rows with the logo, one button and a … menu), the selected plugin on the
-// right (header, actions, notices, tabs Description / Changelog / Versions
-// and a 200px column with facts and permissions), a status line at the bottom.
-// Texts built at run time come translated from TypeScript (text values).
-// Minimum 760×480: the tabs and two 23px buttons, search ≥ 180 + two 110px
-// drop-downs; the detail keeps ≥ 440 next to the list.
+// Plugin Store v4 (vestra.store, designs store-v3 rev. 2 and store-v4, owner
+// rulings 2026-11-15): one window-wide grid of cards. On top a 31px strip with
+// the tabs All / Not installed / Installed / Updates (store 0.3.1), the search
+// box, Refresh and the ⋯ menu;
+// under its rule the filter row: "Show built-in plugins (n)", Category and
+// Sort; the grid; a status line at the bottom. An installed card has its own
+// ⋯ (Disable or Enable, Uninstall…) before its one text button. A click on a
+// card opens its detail page in the same window (the grid stays alive under
+// it with `visible:`, so it keeps its scroll position): ← All Plugins, the
+// header and its buttons, notices, "Where to find it", tabs About (the
+// README) and Details (facts, permissions, Changelog / Versions).
+// The grid is a ListView of rows of cards: the column count follows the
+// grid's width by a binding, TypeScript hands over one flat array and is not
+// told about resizes. Texts built at run time come translated from
+// TypeScript (text values); long ones are elided here, never cut there.
+// Minimum 600×480 (two columns of cards), wider when the strip or the filter
+// row needs more in the interface language: the window's minimum width is the
+// larger of 600 and those two rows' own minimum widths, so the four tabs,
+// the search box (at least 120), Refresh and ⋯ always fit.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
 import { Button, Check, Choice, Tabs, ToolTipArea, UrlInputRow } from "@vestra/widgets.slint";
 import { Cell, MenuButton, MenuEntry, StoreIcons, Tone } from "parts.slint";
 
-// A row's small tag before the badge (Dev, Warning).
-export struct StoreTag {
-    text: string,
-    // As StoreRow.tone.
-    tone: int,
-}
-
-export struct StoreRow {
+// One card of the grid (design store-v3 §4.2).
+export struct StoreCard {
+    // Row identity (keyed patches).
     key: string,
     name: string,
-    version: string,
-    meta: string,
-    punchline: string,
-    // Left of the version: ✓ (installed), Disabled or Failed; "" none.
-    mark: string,
-    // As tone.
-    markTone: int,
-    // The mark's text alternative when it is a symbol (✓: "Installed"); "" when it is a word.
-    markLabel: string,
-    // The second line's state (Update → x, Revoked, Built-in…); "" none.
-    badge: string,
-    // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim (see Tone)
-    tone: int,
-    selected: bool,
-    // On hover: the punchline, or why it failed.
-    tip: string,
+    // "by <author>".
+    by: string,
+    // "· Unofficial", "· Local file"…; "" none. Drawn in the warning colour.
+    byNote: string,
+    // The introduction (the punchline), whole: elided by the Text.
+    intro: string,
+    // "How to open", whole: elided by the Text; "" none (the line stays empty).
+    open: string,
+    // The plugin's icon (drawn 40px, decoded at 80).
+    icon: image,
+    // "✓ Installed", "Update available", "Disabled"…; "" none.
+    state: string,
+    // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim, 5 success (see Tone).
+    stateTone: int,
+    // Install, Update or Enable (`id` "": no button). Update is drawn in the accent colour.
+    button: MenuEntry,
+    // The card's ⋯ menu: Disable or Enable, Uninstall… (empty: no ⋯).
+    menu: [MenuEntry],
     // Disabled: drawn dimmed.
     dim: bool,
-    // Tags before the badge: a development load, what a running plugin was refused.
-    flags: [StoreTag],
-    // The plugin's logo (drawn 32px, decoded at 64).
-    logo: image,
-    // The row's one control, bottom right: a button by state (Install, Update; `id` "": none),
-    // else the ⋯ manage menu (empty: none). Never both.
-    primary: MenuEntry,
-    menu: [MenuEntry],
+    // On hover: the whole introduction, or why it failed.
+    tip: string,
 }
 
 export struct StoreAction {
@@ -109,14 +110,69 @@ component SizedButton inherits Rectangle {
     }
 }
 
-component ListRow inherits Rectangle {
-    in property <StoreRow> item;
-    callback select();
+// The emphasised button (owner ruling 2026-11-15: Update stands out): the
+// accent colour with white text, as the library's checked box is. The
+// library has no such button, so it is the store's own, from Theme tokens.
+// Hover and press darken the accent (halfway to accent-press, then
+// accent-press), so the white text keeps its contrast; disabled, it is drawn
+// as the library's disabled Button (button-disabled, text-dim), which reads
+// in both palettes (white on the light palette's accent-disabled did not).
+component AccentButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    callback clicked();
+    width: max(Theme.button-min-width, label.preferred-width + 2 * Theme.button-padding);
+    height: Theme.button-height;
+    border-radius: Theme.radius-control;
+    background: !root.enabled ? Theme.button-disabled
+        : touch.pressed ? Theme.accent-press
+        : touch.has-hover ? Theme.accent.mix(Theme.accent-press, 0.5) : Theme.accent;
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => { if root.enabled { root.clicked(); } }
+    label := Text {
+        text: root.text;
+        color: root.enabled ? Colors.white : Theme.text-dim;
+        font-size: Theme.font-body;
+        horizontal-alignment: center;
+        vertical-alignment: center;
+    }
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => { root.clicked(); }
+    }
+}
+
+// The "how to open" pointer, 11px, in the dim text colour.
+component Pointer inherits Path {
+    width: 11px;
+    height: 11px;
+    viewbox-width: 14;
+    viewbox-height: 14;
+    commands: StoreIcons.pointer;
+    fill: transparent;
+    stroke: Theme.text-dim;
+    stroke-width: 1.5px;
+    stroke-line-cap: round;
+    stroke-line-join: round;
+}
+
+// A card (design store-v3 §3.3, store-v4 §3): 136 high, padding 12; the icon
+// with the name and the by-line, the introduction, "how to open", then the
+// state, the ⋯ menu and at most one text button. Every text is one line, elided.
+component Card inherits Rectangle {
+    in property <StoreCard> item;
+    // The window's height: the ⋯ menu opens upward near the bottom.
+    in property <length> window-height;
+    callback open();
     callback act(string);
-    // The 32px logo, then three lines (18 + 16 + 18) with 4px padding top and bottom.
-    height: 62px;
-    background: root.item.selected ? Theme.selected-bg : touch.has-hover ? Theme.hover-bg : transparent;
-    // Under the content, so the row's buttons take their own clicks.
+    background: touch.has-hover ? Theme.hover-bg : Theme.bg-list;
+    border-width: 1px;
+    border-color: Theme.line;
+    border-radius: Theme.radius-panel;
+    // Under the content, so the button takes its own clicks; anywhere else opens the detail page.
     ToolTipArea {
         width: 100%;
         height: 100%;
@@ -124,118 +180,148 @@ component ListRow inherits Rectangle {
         touch := TouchArea {
             width: 100%;
             height: 100%;
-            clicked => { root.select(); }
+            clicked => { root.open(); }
         }
     }
-    HorizontalLayout {
-        padding-left: 8px;
-        padding-right: 8px;
-        padding-top: 4px;
-        padding-bottom: 4px;
-        spacing: 8px;
-        // In line with the name and the author.
-        VerticalLayout {
-            alignment: start;
-            padding-top: 2px;
+    VerticalLayout {
+        padding: 12px;
+        spacing: 0px;
+        HorizontalLayout {
+            height: 40px;
+            spacing: 10px;
             Image {
-                width: 32px;
-                height: 32px;
-                source: root.item.logo;
+                width: 40px;
+                height: 40px;
+                source: root.item.icon;
                 image-fit: contain;
                 opacity: root.item.dim ? 0.5 : 1;
             }
+            VerticalLayout {
+                alignment: center;
+                Cell {
+                    height: 18px;
+                    text: root.item.name;
+                    color: root.item.dim ? Theme.text-dim : Theme.text;
+                    font-size: Theme.font-title;
+                }
+                HorizontalLayout {
+                    height: 16px;
+                    spacing: 4px;
+                    Cell { horizontal-stretch: 0; text: root.item.by; color: Theme.text-dim; }
+                    if root.item.byNote != "": Cell { horizontal-stretch: 0; text: root.item.byNote; color: Tone.warn; }
+                    Rectangle { horizontal-stretch: 1; }
+                }
+            }
         }
-        VerticalLayout {
-            spacing: 1px;
-            HorizontalLayout {
-                height: 18px;
-                spacing: 6px;
-                Cell { horizontal-stretch: 1; text: root.item.name; color: root.item.dim ? Theme.text-dim : Theme.text; font-size: Theme.font-tab; }
-                // ✓ / Disabled / Failed right before the version (VS Code's extension list).
-                if root.item.mark != "": Cell {
-                    text: root.item.mark;
-                    color: Tone.color(root.item.markTone);
-                    accessible-label: root.item.markLabel != "" ? root.item.markLabel : root.item.mark;
-                }
-                Cell { text: root.item.version; color: Theme.text-dim; }
+        Rectangle { height: 8px; }
+        Cell {
+            height: 16px;
+            text: root.item.intro;
+            color: root.item.dim ? Theme.text-dim : Theme.text-list;
+        }
+        Rectangle { height: 2px; }
+        HorizontalLayout {
+            height: 16px;
+            spacing: 5px;
+            if root.item.open != "": VerticalLayout {
+                alignment: center;
+                Pointer { }
             }
-            HorizontalLayout {
-                height: 16px;
-                spacing: 6px;
-                Cell { horizontal-stretch: 1; text: root.item.meta; color: Theme.text-dim; }
-                for flag in root.item.flags: Cell { text: flag.text; color: Tone.color(flag.tone); }
-                if root.item.badge != "": Cell { text: root.item.badge; color: Tone.color(root.item.tone); }
-            }
-            HorizontalLayout {
-                height: Theme.button-small-height;
-                spacing: 4px;
-                Cell { horizontal-stretch: 1; text: root.item.punchline; color: root.item.dim ? Theme.text-dim : Theme.text-list; }
-                if root.item.primary.id != "" || root.item.primary.text != "": Button {
-                    small: true;
-                    text: root.item.primary.text;
-                    enabled: root.item.primary.enabled;
-                    clicked => { root.act(root.item.primary.id); }
-                }
-                // One control in the same place on every row: the button, or the ⋯ manage menu.
-                if root.item.primary.id == "" && root.item.primary.text == "" && root.item.menu.length > 0: MenuButton {
-                    width: Theme.button-small-height;
-                    height: Theme.button-small-height;
+            Cell { horizontal-stretch: 1; text: root.item.open; color: Theme.text-dim; }
+        }
+        Rectangle { min-height: 8px; vertical-stretch: 1; }
+        HorizontalLayout {
+            height: Theme.button-height;
+            spacing: 6px;
+            Cell { horizontal-stretch: 1; text: root.item.state; color: Tone.color(root.item.stateTone); }
+            // ⋯ first, then the text button (owner ruling 2026-11-15), both at the right end.
+            if root.item.menu.length > 0: Rectangle {
+                width: 23px;
+                background: Theme.button-bg;
+                border-radius: Theme.radius-control;
+                MenuButton {
+                    width: 100%;
+                    height: 100%;
                     icon: StoreIcons.more;
                     tip: @tr("Manage");
                     entries: root.item.menu;
+                    window-height: root.window-height;
+                    context: root.item.key;
                     picked(id) => { root.act(id); }
                 }
             }
+            if root.item.button.id == "update": AccentButton {
+                text: root.item.button.text;
+                enabled: root.item.button.enabled;
+                clicked => { root.act(root.item.button.id); }
+            }
+            if root.item.button.id != "" && root.item.button.id != "update": SizedButton {
+                text: root.item.button.text;
+                enabled: root.item.button.enabled;
+                clicked => { root.act(root.item.button.id); }
+            }
         }
     }
-    Rectangle { y: parent.height - 1px; height: 1px; background: Theme.line; }
 }
 
 export component StoreWindow inherits Window {
     title: @tr("Plugin Store");
-    preferred-width: 900px;
-    preferred-height: 600px;
-    min-width: 760px;
+    preferred-width: 920px;
+    preferred-height: 640px;
+    // An explicit minimum replaces the layout's own: the strip's and the filter row's are folded in here
+    // (four tabs in Spanish or Japanese need more than 600).
+    min-width: max(600px, strip.min-width, filters.min-width);
     min-height: 480px;
     background: Theme.bg-panel;
 
-    // Tabs and list: 0 All (installed plugins included), 1 Installed, 2 Updates.
     in-out property <string> search-text;
+    // Tabs: 0 All (installed plugins included), 1 Not installed, 2 Installed, 3 Updates.
     // In-out: the tab strip sets it on a click or an arrow key (then asks with set-category).
     in-out property <int> category;
     // What All can show: without any repository index, the installed plugins only.
     in property <int> all-count;
+    // The repositories' plugins that are neither installed, built in nor loaded for development.
+    in property <int> not-installed-count;
     in property <int> installed-count;
     // Plugins with an update (0: none).
     in property <int> updates;
-    // Tags; the first entry ("Tags: All", translated by the plugin) stands for all of them.
-    in property <[string]> tag-model;
-    // In-out: the drop-downs set them on a pick (then ask with set-tag / set-sort).
-    in-out property <int> tag-index;
+    // The Category drop-down; the first entry ("Category: All", translated by the plugin) stands for all of them.
+    in property <[string]> goal-model;
+    // In-out: the drop-downs set them on a pick (then ask with set-goal / set-sort).
+    in-out property <int> goal-index;
     in-out property <int> sort-index;
-    // In-out: "Hide built-in plugins" sets it on a click or Space (then asks with set-hide-builtins).
-    in-out property <bool> hide-builtins: true;
-    in property <[StoreRow]> rows;
+    // "Show built-in plugins (n)" is its opposite; n: how many built-in plugins there are.
+    in property <bool> hide-builtins: true;
+    in property <int> builtin-count;
+    // The grid's cards in display order.
+    in property <[StoreCard]> cards;
     in property <string> empty-text;
-    // Under a list that is not empty: All without any repository index ("" none).
+    // The empty grid offers Clear Search (a search or a category hides plugins), and
+    // Show Built-in Plugins when hidden built-in plugins match.
+    in property <bool> can-clear;
+    in property <bool> can-show-builtins;
+    // Over a grid that is not empty: All without any repository index ("" none).
     in property <string> list-note;
     in property <bool> link-open;
     in-out property <string> link-text;
-    // Detail: the selected row (always one the list shows; -1 none) and its details.
-    in property <bool> has-selection;
-    in property <int> selected-index: -1;
-    // Bumped when the list should bring the selected row into view (a tab, search, tag or sort change, a selection made for you).
-    in property <int> scroll-request;
-    // Bumped when the search box is to be emptied (to show a plugin the search hid).
-    in property <int> clear-search;
+    // Bumped when the search box is to be emptied.
+    in property <int> search-reset;
+    // The detail page is open, with these details.
+    in property <bool> detail-open;
     in property <string> d-name;
     in property <string> d-meta;
     in property <string> d-punchline;
+    // "How to open" in full; "" none (no Where to find it row).
+    in property <string> d-open;
     in property <image> d-icon;
     in property <[StoreAction]> actions;
+    // The action row's ⋯ menu (Open Data Folder, Replace with x from y…); empty: no ⋯.
+    in property <[MenuEntry]> more;
     in property <[StoreBanner]> banners;
-    // In-out: the detail tab strip sets it (then asks with set-tab).
+    // In-out: the detail's tab strips set them (then ask with set-tab / set-sub-tab).
+    // tab: 0 About, 1 Details; sub-tab (under Details): 0 Changelog, 1 Versions.
     in-out property <int> tab;
+    in-out property <int> sub-tab;
     in property <[MarkdownBlock]> doc;
     in property <string> doc-note;
     in property <[StoreVersion]> versions;
@@ -251,13 +337,16 @@ export component StoreWindow inherits Window {
 
     callback search(string);
     callback set-category(int);
-    // A row's button or … menu entry: the row's key and the action.
-    callback row-act(string, string);
-    callback set-tag(int);
+    callback set-goal(int);
     callback set-sort(int);
     callback set-hide-builtins(bool);
-    callback select(string);
+    callback clear-search();
+    // A click on a card (its key); a card's button (its key and the action).
+    callback open-card(string);
+    callback card-act(string, string);
+    callback back();
     callback set-tab(int);
+    callback set-sub-tab(int);
     callback act(string);
     callback banner-act(string);
     callback install-version(string);
@@ -274,28 +363,24 @@ export component StoreWindow inherits Window {
 
     forward-focus: search-box;
 
-    changed clear-search => { root.search-text = ""; }
-    // Rows are 62px (ListRow): scroll only as far as needed to show the selected row; nothing selected: the top.
-    // Kept within the list, which may have just become shorter.
-    changed scroll-request => {
-        let top = root.selected-index * 62px;
-        let view = plugin-list.visible-height;
-        let lowest = min(0px, view - root.rows.length * 62px);
-        let current = max(lowest, min(0px, plugin-list.content-y));
-        if root.selected-index < 0 {
-            plugin-list.content-y = 0px;
-        } else if top < -current {
-            plugin-list.content-y = -top;
-        } else if top + 62px > view - current {
-            plugin-list.content-y = max(lowest, view - top - 62px);
+    changed search-reset => { root.search-text = ""; }
+    // The page takes the keys (Esc goes back); back on the grid, the search box.
+    changed detail-open => {
+        if root.detail-open {
+            page.focus();
         } else {
-            plugin-list.content-y = current;
+            search-box.focus();
         }
     }
 
+    // The only layout arithmetic (design store-v3 §3.2): how many cards of at
+    // least 264px fit with 16px sides and 12px gaps.
+    private property <int> columns: clamp(floor((grid.width - 20px) / 276px), 2, 5);
+    private property <int> row-count: ceil(root.cards.length / root.columns);
+
     // Widths that follow the interface language, never under the original ones.
     // A drop-down: its widest label + 21px (6 + 5 padding, 2 gap, 8 caret).
-    private property <length> tag-width: max(110px, tag-measure.preferred-width + 21px);
+    private property <length> goal-width: max(120px, goal-measure.preferred-width + 21px);
     private property <length> sort-width: max(110px, sort-measure.preferred-width + 21px);
     private property <length> version-width: max(56px, version-measure.preferred-width);
     private property <length> published-width: max(76px, published-measure.preferred-width);
@@ -305,7 +390,7 @@ export component StoreWindow inherits Window {
         visible: false;
         width: 0;
         height: 0;
-        tag-measure := Cell { text: @tr("Tags: All"); }
+        goal-measure := Cell { text: root.goal-model.length > 0 ? root.goal-model[0] : ""; }
         sort-measure := VerticalLayout {
             for text in [@tr("Sort: Name"), @tr("Sort: Updated")]: Cell { text: text; }
         }
@@ -318,172 +403,252 @@ export component StoreWindow inherits Window {
     }
 
     VerticalLayout {
-        padding: 8px;
         spacing: 6px;
-        HorizontalLayout {
-            spacing: 6px;
-            height: 22px;
-            // The library Tabs (Left/Right/Home/End, tab-list role) at the row's 22px on
-            // the panel background: Updates is in the accent colour while updates wait.
-            Tabs {
-                height: 22px;
-                horizontal-stretch: 1;
-                background: transparent;
-                model: [
-                    @tr("All ({})", root.all-count),
-                    @tr("Installed ({})", root.installed-count),
-                    @tr("Updates ({})", root.updates),
-                ];
-                emphasis: [false, false, root.updates > 0];
-                current-index <=> root.category;
-                selected(index) => { root.set-category(index); }
-            }
-            ToolTipArea {
-                width: 23px;
-                text: @tr("Refresh");
-                Button {
-                    width: 100%;
-                    height: 100%;
-                    icon: StoreIcons.refresh;
-                    stroked: true;
-                    clicked => { root.refresh(); }
-                }
-            }
-            MenuButton {
-                width: 23px;
-                icon: StoreIcons.settings;
-                tip: @tr("More");
-                entries: [
-                    { id: "file", text: @tr("Install from File…"), enabled: true },
-                    { id: "link", text: @tr("Install from Link…"), enabled: true },
-                    { id: "repos", text: @tr("Repositories…"), enabled: true },
-                    { id: "", text: "", enabled: false },
-                    { id: "settings", text: @tr("Store Settings…"), enabled: true },
-                ];
-                picked(id) => {
-                    if id == "file" { root.from-file(); }
-                    if id == "link" { root.from-link(); }
-                    if id == "repos" { root.repos(); }
-                    if id == "settings" { root.settings(); }
-                }
-            }
-        }
-        HorizontalLayout {
-            spacing: 6px;
-            height: 24px;
-            search-box := LineEdit {
-                min-width: 180px;
-                horizontal-stretch: 1;
-                placeholder-text: @tr("Search names, authors, tags…");
-                font-size: Theme.font-body;
-                text <=> root.search-text;
-                edited(text) => { root.search(text); }
-            }
-            Choice {
-                width: root.tag-width;
-                y: 1px;
-                model: root.tag-model;
-                max-visible-rows: 11;
-                popup-min-width: 120px;
-                current-index <=> root.tag-index;
-                selected(index) => { root.set-tag(index); }
-            }
-            Choice {
-                width: root.sort-width;
-                y: 1px;
-                model: [@tr("Sort: Name"), @tr("Sort: Updated")];
-                popup-min-width: 120px;
-                current-index <=> root.sort-index;
-                selected(index) => { root.set-sort(index); }
-            }
-        }
-        HorizontalLayout {
-            spacing: 6px;
-            height: Theme.button-height;
-            Cell {
-                horizontal-stretch: 1;
-                text: @tr("You can also drop a .vxp plugin package on the player's video area to install it");
-                color: Theme.text-dim;
-            }
-            // Under the two drop-downs, as wide as both; Tab reaches it after them.
-            Check {
-                width: root.tag-width + 6px + root.sort-width;
-                text: @tr("Hide built-in plugins");
-                checked <=> root.hide-builtins;
-                toggled(on) => { root.set-hide-builtins(on); }
-            }
-        }
-        if root.link-open: link-row := UrlInputRow {
-            text <=> root.link-text;
-            placeholder: @tr("Plugin package link (https://…/name-version.vxp)");
-            confirm-text: @tr("Install");
-            accepted(url) => { root.link-accepted(url); }
-            cancelled => { root.link-cancelled(); }
-            init => { self.focus-input(); }
-        }
-        HorizontalLayout {
+        Rectangle {
             vertical-stretch: 1;
-            spacing: 8px;
-            // The plugin list, and under it All's offline note (installed plugins shown, the repositories' not).
+            // The grid page.
             VerticalLayout {
-                width: 300px;
-                spacing: root.list-note == "" ? 0px : 4px;
+                visible: !root.detail-open;
+                spacing: 0px;
+                // The strip (design store-v4 §1): the library Tabs at their own height and background,
+                // the search box, Refresh and ⋯. Left padding 13: the tab's hover plate is inset 3.
                 Rectangle {
-                    vertical-stretch: 1;
-                    background: Theme.bg-list;
-                    border-width: 1px;
-                    border-color: Theme.line;
-                    plugin-list := ListView {
-                        x: 1px;
-                        y: 1px;
-                        width: parent.width - 2px;
-                        height: parent.height - 2px;
-                        for row in root.rows: ListRow {
-                            item: row;
-                            select => { root.select(row.key); }
-                            act(id) => { root.row-act(row.key, id); }
+                    height: 31px;
+                    background: Theme.bg-bar;
+                    strip := HorizontalLayout {
+                        padding-left: 13px;
+                        padding-right: 16px;
+                        spacing: 6px;
+                        // Updates is in the accent colour while updates wait.
+                        Tabs {
+                            horizontal-stretch: 0;
+                            model: [
+                                @tr("All ({})", root.all-count),
+                                @tr("Not installed ({})", root.not-installed-count),
+                                @tr("Installed ({})", root.installed-count),
+                                @tr("Updates ({})", root.updates),
+                            ];
+                            emphasis: [false, false, false, root.updates > 0];
+                            current-index <=> root.category;
+                            selected(index) => { root.set-category(index); }
+                        }
+                        Rectangle { horizontal-stretch: 1; }
+                        VerticalLayout {
+                            alignment: center;
+                            // Shrinks to 120 before the window has to grow (four tabs, store 0.3.1).
+                            search-box := LineEdit {
+                                min-width: 120px;
+                                max-width: 240px;
+                                preferred-width: 240px;
+                                height: Theme.input-height;
+                                placeholder-text: @tr("Search names, authors, tags…");
+                                font-size: Theme.font-body;
+                                text <=> root.search-text;
+                                edited(text) => { root.search(text); }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            ToolTipArea {
+                                width: 23px;
+                                height: 21px;
+                                text: @tr("Refresh");
+                                Button {
+                                    width: 100%;
+                                    height: 100%;
+                                    icon: StoreIcons.refresh;
+                                    stroked: true;
+                                    clicked => { root.refresh(); }
+                                }
+                            }
+                        }
+                        VerticalLayout {
+                            alignment: center;
+                            MenuButton {
+                                width: 23px;
+                                height: 21px;
+                                icon: StoreIcons.more;
+                                tip: @tr("More");
+                                entries: [
+                                    { id: "file", text: @tr("Install from File…"), enabled: true },
+                                    { id: "link", text: @tr("Install from Link…"), enabled: true },
+                                    { id: "repos", text: @tr("Repositories…"), enabled: true },
+                                    { id: "", text: "", enabled: false },
+                                    { id: "settings", text: @tr("Store Settings…"), enabled: true },
+                                ];
+                                picked(id) => {
+                                    if id == "file" { root.from-file(); }
+                                    if id == "link" { root.from-link(); }
+                                    if id == "repos" { root.repos(); }
+                                    if id == "settings" { root.settings(); }
+                                }
+                            }
                         }
                     }
-                    if root.rows.length == 0: Text {
-                        x: 12px;
-                        width: parent.width - 24px;
-                        height: parent.height;
-                        text: root.empty-text;
+                }
+                Rectangle { height: 1px; background: Theme.line; }
+                // The filter row: 10 + 21 + 10, 16 at the sides, the cards' edges.
+                filters := HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    padding-top: 10px;
+                    padding-bottom: 10px;
+                    spacing: 6px;
+                    height: 41px;
+                    VerticalLayout {
+                        alignment: center;
+                        Check {
+                            text: @tr("Show built-in plugins ({})", root.builtin-count);
+                            checked: !root.hide-builtins;
+                            self-toggle: false;
+                            toggled(on) => { root.set-hide-builtins(!on); }
+                        }
+                    }
+                    Rectangle { horizontal-stretch: 1; }
+                    Choice {
+                        width: root.goal-width;
+                        model: root.goal-model;
+                        max-visible-rows: 11;
+                        popup-min-width: 160px;
+                        current-index <=> root.goal-index;
+                        selected(index) => { root.set-goal(index); }
+                    }
+                    Choice {
+                        width: root.sort-width;
+                        model: [@tr("Sort: Name"), @tr("Sort: Updated")];
+                        popup-min-width: 120px;
+                        current-index <=> root.sort-index;
+                        selected(index) => { root.set-sort(index); }
+                    }
+                }
+                if root.link-open: HorizontalLayout {
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    UrlInputRow {
+                        text <=> root.link-text;
+                        placeholder: @tr("Plugin package link (https://…/name-version.vxp)");
+                        confirm-text: @tr("Install");
+                        accepted(url) => { root.link-accepted(url); }
+                        cancelled => { root.link-cancelled(); }
+                        init => { self.focus-input(); }
+                    }
+                }
+                // All offline: the installed plugins are shown, the repositories' are not.
+                // `visible:`, not `if`: a tab change toggles it (menu-view.slint rule); no height while hidden.
+                HorizontalLayout {
+                    visible: root.list-note != "" && root.cards.length > 0;
+                    max-height: self.visible ? 200px : 0px;
+                    padding-left: 16px;
+                    padding-right: 16px;
+                    Text {
+                        text: root.list-note;
                         color: Theme.text-dim;
                         font-size: Theme.font-body;
                         wrap: word-wrap;
                         line-height-factor: 1.25;
-                        horizontal-alignment: center;
-                        vertical-alignment: center;
                     }
                 }
-                // `visible:`, not `if`: a tab change toggles it (menu-view.slint rule); no height while hidden.
-                Text {
-                    visible: root.list-note != "";
-                    max-height: self.visible ? 200px : 0px;
-                    text: root.list-note;
-                    color: Theme.text-dim;
-                    font-size: Theme.font-body;
-                    wrap: word-wrap;
-                    line-height-factor: 1.25;
+                Rectangle {
+                    vertical-stretch: 1;
+                    // Rows of cards (design store-v3 §4.2): always `columns` cells, so the cards are equally wide
+                    // and a short last row keeps their width. The first row right under the filter row; centred
+                    // beyond 1800px.
+                    grid := ListView {
+                        x: (parent.width - self.width) / 2;
+                        width: min(parent.width, 1800px);
+                        height: parent.height;
+                        for r in root.row-count: HorizontalLayout {
+                            height: 148px;
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            padding-bottom: 12px;
+                            spacing: 12px;
+                            for c in root.columns: Rectangle {
+                                horizontal-stretch: 1;
+                                if r * root.columns + c < root.cards.length: Card {
+                                    width: 100%;
+                                    height: 100%;
+                                    item: root.cards[r * root.columns + c];
+                                    window-height: root.height;
+                                    open => { root.open-card(self.item.key); }
+                                    act(id) => { root.card-act(self.item.key, id); }
+                                }
+                            }
+                        }
+                    }
+                    if root.cards.length == 0: VerticalLayout {
+                        padding-left: 16px;
+                        padding-right: 16px;
+                        spacing: 10px;
+                        alignment: center;
+                        Text {
+                            text: root.empty-text;
+                            color: Theme.text-dim;
+                            font-size: Theme.font-body;
+                            wrap: word-wrap;
+                            line-height-factor: 1.25;
+                            horizontal-alignment: center;
+                        }
+                        if root.can-clear || root.can-show-builtins: HorizontalLayout {
+                            alignment: center;
+                            spacing: 6px;
+                            if root.can-clear: SizedButton {
+                                height: Theme.button-height;
+                                text: @tr("Clear Search");
+                                clicked => { root.clear-search(); }
+                            }
+                            if root.can-show-builtins: SizedButton {
+                                height: Theme.button-height;
+                                text: @tr("Show Built-in Plugins");
+                                clicked => { root.set-hide-builtins(false); }
+                            }
+                        }
+                    }
                 }
             }
-            // The selected plugin; an empty list leaves the pane empty (the list says why).
-            // `visible:`, not `if`: a tab, search or tag change toggles it (menu-view.slint rule).
-            Rectangle {
-                horizontal-stretch: 1;
-                Text {
-                    visible: !root.has-selection && root.rows.length > 0;
-                    width: 100%;
-                    height: 100%;
-                    text: @tr("Select a plugin on the left to see its details");
-                    color: Theme.text-dim;
-                    font-size: Theme.font-body;
-                    horizontal-alignment: center;
-                    vertical-alignment: center;
+            // The detail page (design store-v3 §3.5). Esc and the mouse's back button go back too.
+            page := FocusScope {
+                visible: root.detail-open;
+                key-pressed(event) => {
+                    if event.text == Key.Escape {
+                        root.back();
+                        return accept;
+                    }
+                    return reject;
+                }
+                // Under the content: the back button anywhere on the page.
+                TouchArea {
+                    pointer-event(event) => {
+                        if event.button == PointerEventButton.back && event.kind == PointerEventKind.down {
+                            root.back();
+                        }
+                    }
                 }
                 VerticalLayout {
-                    visible: root.has-selection;
+                    spacing: 0px;
+                    // The same 31px strip and rule as the grid's, so nothing jumps when a card opens.
+                    Rectangle {
+                        height: 31px;
+                        background: Theme.bg-bar;
+                        HorizontalLayout {
+                            padding-left: 16px;
+                            padding-right: 16px;
+                            alignment: start;
+                            VerticalLayout {
+                                alignment: center;
+                                SizedButton {
+                                    height: Theme.button-height;
+                                    text: @tr("← All Plugins");
+                                    clicked => { root.back(); }
+                                }
+                            }
+                        }
+                    }
+                    Rectangle { height: 1px; background: Theme.line; }
+                    VerticalLayout {
+                    padding-top: 10px;
+                    padding-left: 16px;
+                    padding-right: 16px;
                     spacing: 6px;
                     HorizontalLayout {
                         spacing: 10px;
@@ -499,17 +664,35 @@ export component StoreWindow inherits Window {
                             spacing: 2px;
                             Cell { text: root.d-name; color: Theme.text; font-size: Theme.font-title; font-weight: 700; }
                             Cell { text: root.d-meta; color: Theme.text-dim; }
-                            Cell { text: root.d-punchline; color: Theme.text-list; }
+                            ToolTipArea {
+                                text: root.d-punchline;
+                                Cell { width: 100%; height: 100%; text: root.d-punchline; color: Theme.text-list; }
+                            }
                         }
                     }
                     HorizontalLayout {
                         height: Theme.button-height;
                         spacing: 6px;
                         alignment: start;
-                        for action in root.actions: SizedButton {
-                            text: action.text;
-                            enabled: action.enabled;
-                            clicked => { root.act(action.id); }
+                        // "Update to x" in the accent colour, as on the card (owner ruling 2026-11-15).
+                        for action in root.actions: HorizontalLayout {
+                            if action.id == "update": AccentButton {
+                                text: action.text;
+                                enabled: action.enabled;
+                                clicked => { root.act(action.id); }
+                            }
+                            if action.id != "update": SizedButton {
+                                text: action.text;
+                                enabled: action.enabled;
+                                clicked => { root.act(action.id); }
+                            }
+                        }
+                        if root.more.length > 0: MenuButton {
+                            width: 23px;
+                            icon: StoreIcons.more;
+                            tip: @tr("More");
+                            entries: root.more;
+                            picked(id) => { root.act(id); }
                         }
                     }
                     for banner in root.banners: Rectangle {
@@ -537,145 +720,215 @@ export component StoreWindow inherits Window {
                             }
                         }
                     }
-                    HorizontalLayout {
-                        vertical-stretch: 1;
-                        spacing: 8px;
-                        VerticalLayout {
-                            horizontal-stretch: 1;
-                            spacing: 0px;
-                            Tabs {
-                                height: 22px;
-                                background: transparent;
-                                model: [@tr("Description"), @tr("Changelog"), @tr("Versions")];
-                                current-index <=> root.tab;
-                                selected(index) => { root.set-tab(index); }
+                    // Where to find it: the pointer, the label and the line in full (at most 2 lines).
+                    if root.d-open != "": Rectangle {
+                        background: Theme.bg-list;
+                        border-radius: Theme.radius-control;
+                        HorizontalLayout {
+                            padding-top: 6px;
+                            padding-bottom: 6px;
+                            padding-left: 8px;
+                            padding-right: 8px;
+                            spacing: 6px;
+                            VerticalLayout {
+                                alignment: center;
+                                Pointer { }
                             }
-                            Rectangle {
-                                vertical-stretch: 1;
-                                background: Theme.bg-list;
-                                border-width: 1px;
-                                border-color: Theme.line;
-                                if root.tab != 2: MarkdownView {
-                                    x: 1px;
-                                    y: 1px;
-                                    width: parent.width - 2px;
-                                    height: parent.height - 2px;
-                                    blocks: root.doc;
-                                    link-clicked(url) => { root.open-link(url); }
-                                }
-                                if root.tab != 2 && root.doc-note != "": Text {
-                                    x: 12px;
-                                    width: parent.width - 24px;
-                                    height: parent.height;
-                                    text: root.doc-note;
-                                    color: Theme.text-dim;
-                                    font-size: Theme.font-body;
-                                    wrap: word-wrap;
-                                    line-height-factor: 1.25;
-                                    horizontal-alignment: center;
-                                    vertical-alignment: center;
-                                }
-                                if root.tab == 2: VerticalLayout {
-                                    x: 1px;
-                                    y: 1px;
-                                    width: parent.width - 2px;
-                                    height: parent.height - 2px;
-                                    HorizontalLayout {
-                                        height: 20px;
-                                        padding-left: 6px;
-                                        padding-right: 8px;
-                                        spacing: 6px;
-                                        Cell { width: root.version-width; text: @tr("Version"); color: Theme.text-dim; }
-                                        Cell { width: root.published-width; text: @tr("Published"); color: Theme.text-dim; }
-                                        Cell { horizontal-stretch: 1; text: @tr("Minimum player"); color: Theme.text-dim; }
-                                        Rectangle { width: root.install-width; }
+                            Text {
+                                text: @tr("Where to find it");
+                                color: Theme.text-dim;
+                                font-size: Theme.font-body;
+                                vertical-alignment: center;
+                            }
+                            Text {
+                                horizontal-stretch: 1;
+                                text: root.d-open;
+                                color: Theme.text-list;
+                                font-size: Theme.font-body;
+                                wrap: word-wrap;
+                                max-lines: 2;
+                                overflow: elide;
+                                line-height-factor: 1.25;
+                                vertical-alignment: center;
+                            }
+                        }
+                    }
+                    Tabs {
+                        height: 22px;
+                        background: transparent;
+                        model: [@tr("About"), @tr("Details")];
+                        current-index <=> root.tab;
+                        selected(index) => { root.set-tab(index); }
+                    }
+                    Rectangle {
+                        vertical-stretch: 1;
+                        // About: the README.
+                        if root.tab == 0: Rectangle {
+                            background: Theme.bg-list;
+                            border-width: 1px;
+                            border-color: Theme.line;
+                            MarkdownView {
+                                x: 1px;
+                                y: 1px;
+                                width: parent.width - 2px;
+                                height: parent.height - 2px;
+                                blocks: root.doc;
+                                link-clicked(url) => { root.open-link(url); }
+                            }
+                            if root.doc-note != "": Text {
+                                x: 12px;
+                                width: parent.width - 24px;
+                                height: parent.height;
+                                text: root.doc-note;
+                                color: Theme.text-dim;
+                                font-size: Theme.font-body;
+                                wrap: word-wrap;
+                                line-height-factor: 1.25;
+                                horizontal-alignment: center;
+                                vertical-alignment: center;
+                            }
+                        }
+                        // Details: facts and permissions, then the changelog and the version history.
+                        if root.tab == 1: HorizontalLayout {
+                            spacing: 12px;
+                            VerticalLayout {
+                                width: 240px;
+                                spacing: 2px;
+                                for fact[index] in root.facts: HorizontalLayout {
+                                    height: 18px;
+                                    spacing: 6px;
+                                    Cell { width: root.fact-width; text: fact.label; color: Theme.text-dim; }
+                                    ToolTipArea {
+                                        horizontal-stretch: 1;
+                                        text: fact.text;
+                                        Cell {
+                                            width: 100%;
+                                            height: 100%;
+                                            text: fact.text;
+                                            color: fact.link ? Theme.accent : Theme.text-list;
+                                        }
+                                        if fact.link: TouchArea {
+                                            width: 100%;
+                                            height: 100%;
+                                            mouse-cursor: pointer;
+                                            clicked => { root.fact-link(index); }
+                                        }
                                     }
-                                    Rectangle { height: 1px; background: Theme.line; }
-                                    // Two lines per version: the facts, then the status in full (wrapped).
-                                    ListView {
-                                        vertical-stretch: 1;
-                                        for v in root.versions: VerticalLayout {
+                                }
+                                Rectangle { height: 6px; }
+                                // Only with a scan of the version shown: without one the store has nothing to say, not "(0)".
+                                if root.scanned: Cell { text: @tr("Permissions ({})", root.permissions.length); color: Theme.text; }
+                                if root.scanned: Rectangle { height: 1px; background: Theme.line; }
+                                ListView {
+                                    vertical-stretch: 1;
+                                    for p in root.permissions: Text {
+                                        height: self.preferred-height + 3px;
+                                        text: "· " + p.text;
+                                        color: p.risky ? Tone.warn : Theme.text-list;
+                                        font-size: Theme.font-body;
+                                        wrap: word-wrap;
+                                        line-height-factor: 1.25;
+                                    }
+                                }
+                            }
+                            VerticalLayout {
+                                horizontal-stretch: 1;
+                                spacing: 0px;
+                                Tabs {
+                                    height: 22px;
+                                    background: transparent;
+                                    model: [@tr("Changelog"), @tr("Versions")];
+                                    current-index <=> root.sub-tab;
+                                    selected(index) => { root.set-sub-tab(index); }
+                                }
+                                Rectangle {
+                                    vertical-stretch: 1;
+                                    background: Theme.bg-list;
+                                    border-width: 1px;
+                                    border-color: Theme.line;
+                                    if root.sub-tab == 0: MarkdownView {
+                                        x: 1px;
+                                        y: 1px;
+                                        width: parent.width - 2px;
+                                        height: parent.height - 2px;
+                                        blocks: root.doc;
+                                        link-clicked(url) => { root.open-link(url); }
+                                    }
+                                    if root.sub-tab == 0 && root.doc-note != "": Text {
+                                        x: 12px;
+                                        width: parent.width - 24px;
+                                        height: parent.height;
+                                        text: root.doc-note;
+                                        color: Theme.text-dim;
+                                        font-size: Theme.font-body;
+                                        wrap: word-wrap;
+                                        line-height-factor: 1.25;
+                                        horizontal-alignment: center;
+                                        vertical-alignment: center;
+                                    }
+                                    if root.sub-tab == 1: VerticalLayout {
+                                        x: 1px;
+                                        y: 1px;
+                                        width: parent.width - 2px;
+                                        height: parent.height - 2px;
+                                        HorizontalLayout {
+                                            height: 20px;
                                             padding-left: 6px;
                                             padding-right: 8px;
-                                            padding-top: 3px;
-                                            padding-bottom: 3px;
-                                            HorizontalLayout {
-                                                height: 20px;
-                                                spacing: 6px;
-                                                Cell { width: root.version-width; text: v.version; color: Theme.text; }
-                                                Cell { width: root.published-width; text: v.date; color: Theme.text-list; }
-                                                Cell { horizontal-stretch: 1; text: v.minimum; color: Theme.text-list; }
-                                                VerticalLayout {
-                                                    width: root.install-width;
-                                                    alignment: center;
-                                                    if v.canInstall: Button {
-                                                        small: true;
-                                                        text: @tr("Install");
-                                                        clicked => { root.install-version(v.version); }
+                                            spacing: 6px;
+                                            Cell { width: root.version-width; text: @tr("Version"); color: Theme.text-dim; }
+                                            Cell { width: root.published-width; text: @tr("Published"); color: Theme.text-dim; }
+                                            Cell { horizontal-stretch: 1; text: @tr("Minimum player"); color: Theme.text-dim; }
+                                            Rectangle { width: root.install-width; }
+                                        }
+                                        Rectangle { height: 1px; background: Theme.line; }
+                                        // Two lines per version: the facts, then the status in full (wrapped).
+                                        ListView {
+                                            vertical-stretch: 1;
+                                            for v in root.versions: VerticalLayout {
+                                                padding-left: 6px;
+                                                padding-right: 8px;
+                                                padding-top: 3px;
+                                                padding-bottom: 3px;
+                                                HorizontalLayout {
+                                                    height: 20px;
+                                                    spacing: 6px;
+                                                    Cell { width: root.version-width; text: v.version; color: Theme.text; }
+                                                    Cell { width: root.published-width; text: v.date; color: Theme.text-list; }
+                                                    Cell { horizontal-stretch: 1; text: v.minimum; color: Theme.text-list; }
+                                                    VerticalLayout {
+                                                        width: root.install-width;
+                                                        alignment: center;
+                                                        if v.canInstall: Button {
+                                                            small: true;
+                                                            text: @tr("Install");
+                                                            clicked => { root.install-version(v.version); }
+                                                        }
                                                     }
                                                 }
-                                            }
-                                            if v.status != "": Text {
-                                                text: v.status;
-                                                color: Tone.color(v.tone);
-                                                font-size: Theme.font-body;
-                                                wrap: word-wrap;
-                                                line-height-factor: 1.25;
+                                                if v.status != "": Text {
+                                                    text: v.status;
+                                                    color: Tone.color(v.tone);
+                                                    font-size: Theme.font-body;
+                                                    wrap: word-wrap;
+                                                    line-height-factor: 1.25;
+                                                }
                                             }
                                         }
                                     }
                                 }
                             }
                         }
-                        // Facts and permissions.
-                        VerticalLayout {
-                            width: 200px;
-                            spacing: 2px;
-                            for fact[index] in root.facts: HorizontalLayout {
-                                height: 18px;
-                                spacing: 6px;
-                                Cell { width: root.fact-width; text: fact.label; color: Theme.text-dim; }
-                                ToolTipArea {
-                                    horizontal-stretch: 1;
-                                    text: fact.text;
-                                    Cell {
-                                        width: 100%;
-                                        height: 100%;
-                                        text: fact.text;
-                                        color: fact.link ? Theme.accent : Theme.text-list;
-                                    }
-                                    if fact.link: TouchArea {
-                                        width: 100%;
-                                        height: 100%;
-                                        mouse-cursor: pointer;
-                                        clicked => { root.fact-link(index); }
-                                    }
-                                }
-                            }
-                            Rectangle { height: 6px; }
-                            // Only with a scan of the version shown: without one the store has nothing to say, not "(0)".
-                            if root.scanned: Cell { text: @tr("Permissions ({})", root.permissions.length); color: Theme.text; }
-                            if root.scanned: Rectangle { height: 1px; background: Theme.line; }
-                            ListView {
-                                vertical-stretch: 1;
-                                for p in root.permissions: Text {
-                                    height: self.preferred-height + 3px;
-                                    text: "· " + p.text;
-                                    color: p.risky ? Tone.warn : Theme.text-list;
-                                    font-size: Theme.font-body;
-                                    wrap: word-wrap;
-                                    line-height-factor: 1.25;
-                                }
-                            }
-                        }
                     }
-
+                    }
                 }
             }
         }
         // Status line.
         HorizontalLayout {
             height: 20px;
+            padding-left: 16px;
+            padding-right: 16px;
             spacing: 8px;
             ToolTipArea {
                 horizontal-stretch: 1;

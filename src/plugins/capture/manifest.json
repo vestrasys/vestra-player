@@ -6,7 +6,7 @@
   "name": "Snapshot",
   "author": "Vestra Player",
   "punchline": "Save or copy the current frame and capture bursts",
-  "description": "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\nRight-click menu: Tools ▸ Snapshot ▸.",
+  "description": "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n→ Menu: Tools ▸ Snapshot",
   "tags": [
     "video",
     "snapshot"

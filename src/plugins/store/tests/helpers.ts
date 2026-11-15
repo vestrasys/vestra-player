@@ -339,15 +339,31 @@ export function props(host: TestHost): Record<string, Json> {
 /** The settings page's props as shown. */
 export const pageProps = (host: TestHost) => host.settingsPage("store.repos").props as Record<string, Json>;
 
-type Row = { key: string; name: string; badge: string; version: string; mark: string; markLabel: string };
+/** A card of the grid as shown (Store v3). */
+type Row = {
+  key: string;
+  name: string;
+  by: string;
+  byNote: string;
+  intro: string;
+  open: string;
+  state: string;
+  stateTone: number;
+  button: { id: string; text: string; enabled: boolean };
+  /** The card's ⋯ menu (Store v4): Disable or Enable, Uninstall…. */
+  menu: { id: string; text: string; enabled: boolean }[];
+  dim: boolean;
+  tip: string;
+};
 
-/** The rows of the current tab. */
-export const rows = (host: TestHost) => (props(host)["rows"] as Row[]) ?? [];
+/** The cards of the current tab. */
+export const rows = (host: TestHost) => (props(host)["cards"] as Row[]) ?? [];
 
-/** The window's tabs (store 0.2.11: All replaced Available and comes first). */
+/** The window's tabs (store 0.2.11: All replaced Available and comes first; 0.3.1: Not installed after it). */
 export const ALL = 0;
-export const INSTALLED = 1;
-export const UPDATES = 2;
+export const NOT_INSTALLED = 1;
+export const INSTALLED = 2;
+export const UPDATES = 3;
 
 /** Switch the store window to a tab. */
 export async function tab(host: TestHost, index: number) {
@@ -355,29 +371,23 @@ export async function tab(host: TestHost, index: number) {
   await host.settle();
 }
 
-/** Untick "Hide built-in plugins" (on by default): the lists show the built-ins again. */
+/** The filter row's "Show built-in plugins" (off by default): the grid shows the built-ins again. */
 export async function showBuiltins(host: TestHost) {
   host.window("store").emit("setHideBuiltins", false);
   await host.settle();
 }
 
-/** Every row: the All tab's, in its order (by name unless sorted otherwise). */
+/** Every card: the All tab's, in its order (by name unless sorted otherwise). */
 export async function allRows(host: TestHost) {
   const current = (props(host)["category"] as number | undefined) ?? ALL;
-  // Switching tabs moves the selection (the details follow the list): select the same row again afterwards.
-  const selected = (rows(host) as (Row & { selected?: boolean })[]).find((r) => r.selected)?.key;
   const all: Row[] = [];
   await tab(host, ALL);
   all.push(...rows(host));
   await tab(host, current);
-  if (selected !== undefined) {
-    host.window("store").emit("select", selected);
-    await host.settle();
-  }
   return all;
 }
 
-/** Select the row with this name in the store window, switching to the tab that shows it. */
+/** Open the detail page of the card with this name, switching to the tab that shows it. */
 export async function choose(host: TestHost, name: string) {
   let row = rows(host).find((r) => r.name === name);
   for (const index of [ALL, INSTALLED, UPDATES]) {
@@ -385,20 +395,33 @@ export async function choose(host: TestHost, name: string) {
     await tab(host, index);
     row = rows(host).find((r) => r.name === name);
   }
-  if (!row) throw new Error(`no row ${name}: ${(await allRows(host)).map((r) => r.name).join(", ")}`);
-  host.window("store").emit("select", row.key);
+  if (!row) throw new Error(`no card ${name}: ${(await allRows(host)).map((r) => r.name).join(", ")}`);
+  host.window("store").emit("openCard", row.key);
   await host.settle();
   return row;
 }
 
-/** A row's button and `…` menu as shown. */
+/** A card's button (Install, Update, Enable; null none), its ⋯ menu, state and dimming as shown. */
 export const controls = (host: TestHost, name: string) => {
-  const row = rows(host).find((r) => r.name === name) as
-    | (Row & { primary: { id: string; text: string; enabled: boolean }; menu: { id: string; text: string; enabled: boolean }[]; dim: boolean })
-    | undefined;
-  if (!row) throw new Error(`no row ${name} in this tab`);
-  return { primary: row.primary.id === "" && row.primary.text === "" ? null : row.primary, menu: row.menu, dim: row.dim, badge: row.badge, mark: row.mark };
+  const row = rows(host).find((r) => r.name === name);
+  if (!row) throw new Error(`no card ${name} in this tab`);
+  return {
+    button: row.button.id === "" && row.button.text === "" ? null : row.button,
+    menu: row.menu.map((each) => each.id),
+    state: row.state,
+    dim: row.dim,
+  };
 };
 
+/** The detail page's ⋯ menu (Open Data Folder, Replace with x from y…). */
+export const more = (host: TestHost) => (props(host)["more"] as { id: string; text: string; enabled: boolean }[]) ?? [];
+
+/** Open a plugin's detail page: its buttons and its ⋯ menu as shown. */
+export async function manage(host: TestHost, name: string) {
+  await choose(host, name);
+  return { buttons: actions(host), more: more(host) };
+}
+
+/** The detail page's buttons. */
 export const actions = (host: TestHost) => (props(host)["actions"] as { id: string; text: string; enabled: boolean }[]) ?? [];
 export const banners = (host: TestHost) => ((props(host)["banners"] as { text: string }[]) ?? []).map((b) => b.text);

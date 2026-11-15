@@ -22,6 +22,8 @@ export global StoreIcons {
     // Three dots.
     // (Small rings: a zero-length line draws nothing in the software renderer.)
     out property <string> more: "M 3.5 6 A 0.5 0.5 0 1 1 2.5 6 A 0.5 0.5 0 1 1 3.5 6 M 7.5 6 A 0.5 0.5 0 1 1 6.5 6 A 0.5 0.5 0 1 1 7.5 6 M 11.5 6 A 0.5 0.5 0 1 1 10.5 6 A 0.5 0.5 0 1 1 11.5 6";
+    // The "how to open" pointer (design store-v3 §3.0, its mock's glyph), in a 14×14 box.
+    out property <string> pointer: "M 3 3 L 6 12 L 8 8.5 L 11.5 6 Z";
 }
 
 // A menu row in the main menu's style (ui-spec §6.3): 24px, 12px text, the
@@ -65,6 +67,8 @@ component MenuRow {
 
 // An icon button that opens a menu under it, right-aligned with it, in the
 // main menu's style (bg-panel, a line border, radius-panel). The caller sizes it.
+// Given the window's height, it opens above the button when the menu would not
+// fit under it (a card in the grid's last visible row; design store-v4 §4).
 export component MenuButton {
     in property <string> icon;
     in property <length> icon-width: 14px;
@@ -72,8 +76,20 @@ export component MenuButton {
     in property <string> tip;
     in property <[MenuEntry]> entries;
     in property <bool> enabled: true;
+    // The window's height; 0: always under the button.
+    in property <length> window-height: 0px;
+    // What the menu acts on (a card's key). A ListView reuses its rows: when the
+    // list changes under an open menu, the button may now stand for another
+    // plugin, so a change closes the menu before anything can be picked.
+    in property <string> context;
     callback picked(string);
+    changed context => { menu.close(); }
     private property <length> menu-width: max(120px, measure.preferred-width + 20px);
+    // At most: 24px rows (a separator is 7) and the 2px padding above and below.
+    private property <length> menu-height: root.entries.length * 24px + 4px;
+    private property <bool> above: root.window-height > 0px
+        && root.absolute-position.y + root.height + 2px + root.menu-height > root.window-height
+        && root.absolute-position.y - 2px - root.menu-height >= 0px;
     ToolTipArea {
         width: 100%;
         height: 100%;
@@ -101,7 +117,7 @@ export component MenuButton {
     }
     menu := PopupWindow {
         x: root.width - root.menu-width;
-        y: root.height + 2px;
+        y: root.above ? -root.menu-height - 2px : root.height + 2px;
         width: root.menu-width;
         Rectangle {
             background: Theme.bg-panel;
@@ -131,15 +147,18 @@ export component MenuButton {
     }
 }
 
-// Status colours: amber for warnings (the theme has no token for it: a
-// darker amber on a light palette's panels), the theme's danger red for
-// revoked or tampered things.
+// Status colours: amber for warnings and green for a card's "✓ Installed"
+// (the theme has no token for either: a darker shade on a light palette's
+// panels, each at least 4.5:1 against them), the theme's danger red for
+// revoked or tampered things. The dark palette's green is the video
+// plugin's "on" green (picture.slint).
 export global Tone {
     out property <color> warn: Theme.bg-panel.to-hsv().value > 0.5 ? #a8670a : #e3a336;
+    out property <color> success: Theme.bg-panel.to-hsv().value > 0.5 ? #1b7337 : #4ad17a;
     out property <color> danger: Theme.danger;
-    // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim.
+    // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim, 5 success.
     public pure function color(tone: int) -> color {
-        return tone == 1 ? Theme.accent : tone == 2 ? self.warn : tone == 3 ? self.danger : tone == 4 ? Theme.text-dim : Theme.text-list;
+        return tone == 1 ? Theme.accent : tone == 2 ? self.warn : tone == 3 ? self.danger : tone == 4 ? Theme.text-dim : tone == 5 ? self.success : Theme.text-list;
     }
 }
 

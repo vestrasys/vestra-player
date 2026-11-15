@@ -104,27 +104,42 @@ export const WINDOW = [
   "Removed {}",
   // The list.
   "No plugins match",
+  // Under it, when hidden built-in plugins match the search or the category.
+  "1 built-in plugin matches, but built-in plugins are hidden",
+  "{} built-in plugins match, but built-in plugins are hidden",
   "All plugins are up to date",
   "No plugins installed yet",
   "No plugins installed besides the built-in ones, which are hidden",
   "Reading repositories…",
   "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.",
   "The repositories have no plugins yet",
+  // Not installed, empty: the repositories list plugins, each installed (or built in) or not installable.
+  "There are no more plugins to install",
   // Under All's list, offline: the installed plugins are shown, the repositories' are not.
   "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.",
   "{} · {}",
   "Installed",
-  "Update → {}",
+  // A card's state (Store v3): "✓ Installed", or a word.
+  "✓ {}",
+  "Update available",
+  // While its plugin downloads and installs (its button is hidden).
+  "Installing…",
+  "Installing… {}%",
+  "Comes with the player",
   "Revoked",
   "Installed from {}",
   "Incompatible",
   "Cannot be installed",
   "Disabled",
   "Failed",
-  // A row's small tags: a development load (--plugin), what a running plugin was refused.
-  "Dev",
-  "Warning",
+  // A development load (--plugin): a card's state and an origin.
   "Development load",
+  // A card's by-line, and its note for another repository than the official one.
+  "by {}",
+  "Unofficial",
+  // A card's "how to open" line when the description has none (open-line.ts): from the plugin's commands.
+  "Menu: {}",
+  "Command palette: {}",
   // A button and its … menu.
   "Install",
   "Update",
@@ -216,8 +231,16 @@ export const WINDOW = [
   "Package",
   "Data folder",
   "Data size",
-  // The tag drop-down's first entry.
-  "Tags: All",
+  // The Category drop-down: its first entry, then the goals (open-line.ts GOALS).
+  "Category: All",
+  "Picture",
+  "Sound",
+  "Subtitles",
+  "Online video",
+  "Library and playlists",
+  "Tools",
+  "Games",
+  "Other",
   // A banner (the permissions are a list).
   "The new version needs new permissions: {}",
 ] as const;

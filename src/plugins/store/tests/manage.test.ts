@@ -1,6 +1,6 @@
 /**
- * Finishing the plugin center (store 0.2.1): row logos (own package icon,
- * repository icon through ui.remoteImage, the store's icon otherwise),
+ * Finishing the plugin center (store 0.2.1; cards since Store v3): card icons
+ * (own package icon, repository icon through ui.remoteImage, the store's icon otherwise),
  * reloading through packages.reload (built-ins too) and its refusals, the
  * warnings of a running plugin, development loads under Installed, and the
  * list read again after a refusal.
@@ -21,6 +21,7 @@ import {
   FakeNet,
   info,
   type Info,
+  more,
   OFFICIAL,
   openStore,
   props,
@@ -41,12 +42,11 @@ const fromRepo = { kind: "repository", url: OFFICIAL } as const;
 const one = (id: string, name: string, extra: { iconUrl?: string } = {}) => ({ id, name, ...extra, versions: [{ version: "1.0.0" }] });
 
 type Host = Awaited<ReturnType<typeof start>>["host"];
-type Tag = { text: string; tone: number };
-type ShownRow = { key: string; name: string; badge: string; tip: string; logo: unknown; flags: Tag[] };
-const row = (host: Host, name: string) => (rows(host) as unknown as ShownRow[]).find((r) => r.name === name);
+type ShownRow = ReturnType<typeof rows>[number] & { icon: unknown };
+const row = (host: Host, name: string) => (rows(host) as ShownRow[]).find((r) => r.name === name);
 const logoOf = (host: Host, name: string) => {
   const found = row(host, name);
-  return found ? host.imagePath(found.logo as never) : null;
+  return found ? host.imagePath(found.icon as never) : null;
 };
 const reloads = (host: Host) => host.packageCalls.filter((c) => c.method === "reload").map((c) => c.id);
 
@@ -65,7 +65,7 @@ function packageDir(id: string, withIcon: boolean) {
   return directory;
 }
 
-test("row logos: an installed plugin's own icon (offline too), else the store's; decoded at 64", async () => {
+test("card icons: an installed plugin's own icon (offline too), else the store's; decoded at 80", async () => {
   const net = new FakeNet();
   net.offline = true;
   const own = info("x.own", { directory: packageDir("x.own", true) });
@@ -81,9 +81,9 @@ test("row logos: an installed plugin's own icon (offline too), else the store's;
     assert.match(String(logoOf(host, "vestra.video")), /assets[\\/]icon\.png$/);
     for (const name of ["x.own", "x.plain", "vestra.video"]) {
       const path = logoOf(host, name);
-      assert.equal(host.images.find((image) => image.path === path)?.maxSide, 64, name);
+      assert.equal(host.images.find((image) => image.path === path)?.maxSide, 80, name);
     }
-    // One reference per file: a row written again keeps its image (x.own stays selected, its details too).
+    // One reference per file: a card written again keeps its image (x.own's page stays open too).
     await choose(host, "x.own");
     const refs = () => new Set(host.images.map((image) => image.ref)).size;
     const before = refs();
@@ -95,7 +95,7 @@ test("row logos: an installed plugin's own icon (offline too), else the store's;
   }
 });
 
-test("row logos: repository icons through ui.remoteImage for the rows shown; the store's icon when it fails", async () => {
+test("card icons: repository icons through ui.remoteImage for the cards listed; the store's icon when it fails", async () => {
   const net = new FakeNet();
   const good = "https://plugins.test/assets/r.icon/icon.png";
   const broken = "https://plugins.test/assets/r.broken/icon.png";
@@ -120,7 +120,7 @@ test("row logos: repository icons through ui.remoteImage for the rows shown; the
     assert.equal(host.images.filter((image) => image.path.includes(".vestra-cache")).length, 0, "their rows not shown yet: nothing fetched");
     await tab(host, ALL);
     await until(host, () => /\.vestra-cache/.test(String(logoOf(host, "R Icon"))), "remote logo");
-    assert.equal(host.images.find((image) => image.path === logoOf(host, "R Icon"))?.maxSide, 64);
+    assert.equal(host.images.find((image) => image.path === logoOf(host, "R Icon"))?.maxSide, 80);
     assert.match(String(logoOf(host, "R Broken")), /assets[\\/]icon\.png$/);
     assert.match(String(logoOf(host, "R None")), /assets[\\/]icon\.png$/);
     // The details' icon is decoded at twice its 56px.
@@ -150,7 +150,7 @@ test("reload: busy, invalid (disabled meanwhile), missing (list read again) and 
     host.handle("packages.reload", () => {
       throw new HostError("busy", "the package is being installed or reloaded");
     });
-    window.emit("rowAct", "\na.run", "reload");
+    window.emit("cardAct", "\na.run", "reload");
     await until(host, () => status() === "「a.run」正在安装或重新加载，请稍后再试", "busy");
     assert.equal(props(host)["status-warn"], true);
 
@@ -159,14 +159,14 @@ test("reload: busy, invalid (disabled meanwhile), missing (list read again) and 
     });
     // Disabled somewhere else, and the store has not heard yet.
     host.packages = host.packages.map((p) => (p.id === "b.run" ? { ...p, state: "disabled" } : p));
-    window.emit("rowAct", "\nb.run", "reload");
+    window.emit("cardAct", "\nb.run", "reload");
     await until(host, () => status() === "「b.run」已停用，请启用它，而不是重新加载" && controls(host, "b.run").dim, "invalid, re-read");
 
     host.handle("packages.reload", () => {
       throw new HostError("missing", "no plugin c.run");
     });
     host.packages = host.packages.filter((p) => p.id !== "c.run");
-    window.emit("rowAct", "\nc.run", "reload");
+    window.emit("cardAct", "\nc.run", "reload");
     await until(host, () => status() === "无法重新加载「c.run」：这个插件已不存在" && !row(host, "c.run"), "missing, re-read");
 
     // Accepted, then the new run fails.
@@ -178,15 +178,15 @@ test("reload: busy, invalid (disabled meanwhile), missing (list read again) and 
         20,
       );
     });
-    window.emit("rowAct", "\nd.run", "reload");
-    await until(host, () => status() === "无法重新加载「d.run」：boom" && controls(host, "d.run").mark === "失败", "failed restart");
+    window.emit("cardAct", "\nd.run", "reload");
+    await until(host, () => status() === "无法重新加载「d.run」：boom" && controls(host, "d.run").state === "失败", "failed restart");
     assert.deepEqual(reloads(host), ["d.run"]);
   } finally {
     await stop();
   }
 });
 
-test("warnings of a running plugin: a Warning tag with the reasons on hover, and notices in the details", async () => {
+test("warnings of a running plugin: the reasons on hover, and notices on its page", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   const held = {
@@ -199,13 +199,13 @@ test("warnings of a running plugin: a Warning tag with the reasons on hover, and
   const { host, stop } = await start({ net, packages: [BUILTIN, held, info("w.calm")] });
   try {
     await openStore(host);
-    await until(host, () => row(host, "w.bar")?.flags.length === 1, "tagged");
-    assert.deepEqual(row(host, "w.bar")!.flags, [{ text: "警告", tone: 2 }]);
+    await until(host, () => row(host, "w.bar") !== undefined, "listed");
     assert.equal(
       row(host, "w.bar")!.tip,
       "它的底栏没有显示：底栏由「vestra.video」占用 · 它的上一个/下一个没有生效：由「x.gone」提供",
     );
-    assert.deepEqual(row(host, "w.calm")!.flags, []);
+    assert.equal(row(host, "w.bar")!.state, "✓ 已安装");
+    assert.equal(row(host, "w.calm")!.tip, "");
     await choose(host, "w.bar");
     const notices = ["它的底栏没有显示：底栏由「vestra.video」占用", "它的上一个/下一个没有生效：由「x.gone」提供"];
     await until(host, () => notices.every((text) => banners(host).includes(text)), "notices");
@@ -217,7 +217,7 @@ test("warnings of a running plugin: a Warning tag with the reasons on hover, and
   }
 });
 
-test("development loads: under Installed with a Dev tag; disable and enable for this run, never uninstall", async () => {
+test("development loads: under Installed, said on the card; disable and enable for this run, never uninstall", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, []);
   const dev = info("d.dev", { origin: "development", source: null, directory: packageDir("d.dev", false) });
@@ -226,31 +226,28 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
     await openStore(host);
     await showBuiltins(host);
     await until(host, () => row(host, "d.dev") !== undefined, "dev row");
-    assert.deepEqual(row(host, "d.dev")!.flags, [{ text: "开发", tone: 1 }]);
-    assert.equal(row(host, "d.dev")!.badge, "");
-    assert.equal((row(host, "d.dev") as { meta?: string }).meta, "未知作者 · 开发加载");
+    assert.deepEqual([row(host, "d.dev")!.state, row(host, "d.dev")!.stateTone], ["开发加载", 4]);
+    assert.equal(row(host, "d.dev")!.by, "作者：未知作者");
+    assert.equal(row(host, "d.dev")!.byNote, "");
     assert.equal(props(host)["installed-count"], 2);
-    const shown = controls(host, "d.dev");
-    // The ⋯ manage menu, no button; no ✓ (its Dev tag says what it is).
-    assert.equal(shown.primary, null);
-    assert.equal(shown.mark, "");
-    assert.deepEqual(
-      shown.menu.map((m) => m.id),
-      ["disable", "reload", "openData"],
-    );
+    // No button on the card; its ⋯ has Disable only (it cannot be uninstalled here).
+    assert.equal(controls(host, "d.dev").button, null);
+    assert.deepEqual(controls(host, "d.dev").menu, ["disable"]);
     await choose(host, "d.dev");
+    assert.equal(props(host)["d-meta"], "未知作者 · 开发加载");
     assert.ok(!actions(host).some((a) => a.id === "uninstall"), "a development load is not uninstalled from the store");
-    assert.deepEqual(actions(host).map((a) => a.id), ["disable"]);
+    assert.deepEqual(actions(host).map((a) => a.id), ["disable", "reload"]);
+    assert.deepEqual(more(host).map((m) => m.id), ["openData"]);
     assert.deepEqual(banners(host), ["本次运行以开发方式加载（--plugin）：停用只到播放器退出为止，也不能在这里卸载"], "not called sideloaded");
 
-    host.window("store").emit("rowAct", "\nd.dev", "disable");
+    host.window("store").emit("cardAct", "\nd.dev", "disable");
     await until(host, () => controls(host, "d.dev").dim && props(host)["status-text"] === "已停用「d.dev」，到播放器退出为止", "disabled");
     assert.equal(host.confirms.length, 0, "no question (user ruling)");
-    assert.equal(controls(host, "d.dev").primary, null);
-    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["enable", "openData"], "not reloaded while disabled");
-    assert.deepEqual(actions(host).map((a) => a.id), ["enable"], "Enable in Disable's place");
-    assert.deepEqual(controls(host, "d.dev").mark, "已停用");
-    host.window("store").emit("rowAct", "\nd.dev", "enable");
+    assert.deepEqual(controls(host, "d.dev").button?.id, "enable");
+    assert.deepEqual(controls(host, "d.dev").menu, ["enable"]);
+    assert.deepEqual(actions(host).map((a) => a.id), ["enable"], "Enable in Disable's place; not reloaded while disabled");
+    assert.deepEqual(controls(host, "d.dev").state, "已停用");
+    host.window("store").emit("cardAct", "\nd.dev", "enable");
     await until(host, () => !controls(host, "d.dev").dim && props(host)["status-text"] === "已启用「d.dev」", "enabled");
     assert.deepEqual(
       host.packageCalls.map((c) => [c.method, c.id, c.enabled]),
@@ -261,9 +258,8 @@ test("development loads: under Installed with a Dev tag; disable and enable for 
     );
     // Failed: the same places, Reload after them.
     host.setPackages(host.packages.map((p) => (p.id === "d.dev" ? { ...p, state: "failed", error: "boom" } : p)));
-    await until(host, () => controls(host, "d.dev").mark === "失败", "failed");
-    assert.equal(controls(host, "d.dev").primary, null);
-    assert.deepEqual(controls(host, "d.dev").menu.map((m) => m.id), ["disable", "reload", "openData"]);
+    await until(host, () => controls(host, "d.dev").state === "失败", "failed");
+    assert.equal(controls(host, "d.dev").button, null);
     assert.deepEqual(actions(host).map((a) => a.id), ["disable", "reload"]);
   } finally {
     await stop();
@@ -286,7 +282,7 @@ test("a refused uninstall or a missing plugin: the store reads the list again", 
     });
     host.packages = host.packages.filter((p) => p.id !== "u.gone");
     host.dialogAnswers.push(yes);
-    window.emit("rowAct", "\nu.gone", "uninstall");
+    window.emit("cardAct", "\nu.gone", "uninstall");
     await until(host, () => !row(host, "u.gone") && props(host)["status-text"] === "这个插件已不存在", "gone");
 
     // Refused while it was disabled elsewhere: the row follows the player's list.
@@ -295,7 +291,7 @@ test("a refused uninstall or a missing plugin: the store reads the list again", 
     });
     host.packages = host.packages.map((p) => (p.id === "u.busy" ? { ...p, state: "disabled" } : p));
     host.dialogAnswers.push(yes);
-    window.emit("rowAct", "\nu.busy", "uninstall");
+    window.emit("cardAct", "\nu.busy", "uninstall");
     await until(host, () => controls(host, "u.busy").dim && props(host)["status-text"] === "正在安装或清理插件，请稍后再试", "re-read");
   } finally {
     await stop();

@@ -217,6 +217,9 @@ export async function installFromRepository(store: Store, item: Item, version: I
 
   const controller = new AbortController();
   if (!store.begin(msg("Downloading {} {}", name, version.version), () => controller.abort())) return;
+  // Its card shows the progress in place of its button (design store-v4 §3); a replacement from another
+  // repository shows it on the installed plugin's card, which stands for this entry under All.
+  store.installing = { key: item.key, id: item.id, percent: null };
   let file: string | null = null;
   try {
     file = await download(store, version.downloadUrl, { name, version: version.version }, controller.signal, {
@@ -234,6 +237,7 @@ export async function installFromRepository(store: Store, item: Item, version: I
   } catch (error) {
     store.report(failureText(store, error, item.id), true);
   } finally {
+    store.installing = null;
     store.end();
     if (file) await rm(file, { force: true }).catch(() => {});
   }
@@ -284,6 +288,7 @@ async function download(
       const percent = Math.floor((received / whole) * 100);
       if (percent === shown) return;
       shown = percent;
+      if (label && store.installing) store.installing.percent = percent;
       store.progress(
         label
           ? msg("Downloading {} {} ({}%)", label.name, label.version, percent)

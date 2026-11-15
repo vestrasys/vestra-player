@@ -32,10 +32,10 @@ test("English by default: the menu, the list and the OSD", async () => {
     await showBuiltins(host);
     await until(host, () => store.items.length === 2);
     assert.deepEqual(
-      (await allRows(host)).map((r) => [r.name, r.badge, (r as { meta?: string }).meta]),
+      (await allRows(host)).map((r) => [r.name, r.state, r.by, r.byNote, r.button.text]),
       [
-        ["Alpha", "", "Someone · Official repository"],
-        ["vestra.video", "Built-in", "Unknown author · Built-in"],
+        ["Alpha", "", "by Someone", "", "Install"],
+        ["vestra.video", "Comes with the player", "by Unknown author", "", ""],
       ],
     );
     host.window("store").emit("openLink", "javascript:alert(1)");

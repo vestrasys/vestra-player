@@ -4,7 +4,7 @@ import { join } from "node:path";
 import test from "node:test";
 import { HostError } from "@vestra-player/sdk/testing";
 import { installFromRepository } from "../installer.ts";
-import { actions, ALL, allRows, banners, BUILTIN, choose, controls, FakeNet, INSTALLED, tab, info, no, OFFICIAL, openStore, props, publish, showBuiltins, start, THIRD, until, yes } from "./helpers.ts";
+import { actions, ALL, allRows, banners, BUILTIN, choose, controls, FakeNet, INSTALLED, tab, info, more, no, OFFICIAL, openStore, props, publish, showBuiltins, start, THIRD, until, yes } from "./helpers.ts";
 
 const YT = {
   id: "zysilm.youtube",
@@ -33,9 +33,11 @@ test("official install: confirm with permissions, download through a redirect, c
   net.route("https://assets.test/yt.vxp", asset);
   const { host, store, stop } = await ready(net);
   try {
-    const row = (await choose(host, "YouTube")) as { meta?: string };
+    const row = await choose(host, "YouTube");
+    assert.equal(row.by, "作者：zysilm");
+    assert.equal(row.byNote, "", "the official repository needs no note");
     // The repository is official; the plugin is a third-party one hosted there.
-    assert.equal(row.meta, "zysilm · 官方仓库");
+    assert.equal(props(host)["d-meta"], "zysilm · 官方仓库");
     assert.deepEqual(actions(host).map((a) => a.text), ["安装 0.2.0"]);
     // The window counts them ("Permissions ({})", in Slint).
     assert.equal((props(host)["permissions"] as unknown[]).length, 0);
@@ -58,13 +60,12 @@ test("official install: confirm with permissions, download through a redirect, c
     await until(host, () => host.osd.includes("已安装 YouTube 0.2.0"), "osd");
     await until(host, () => !store.busy);
     assert.deepEqual(readdirSync(join(host.dataDirectory, "downloads")), [], "download removed");
-    assert.equal((await allRows(host)).find((r) => r.name === "YouTube")?.mark, "✓");
-    // All lists it installed now: it stays selected, with Disable and Uninstall… (formerly in the Plugin Manager).
+    assert.equal((await allRows(host)).find((r) => r.name === "YouTube")?.state, "✓ 已安装");
+    // Its page stays open, now with Disable, Uninstall… and Reload (formerly in the Plugin Manager).
     assert.equal(props(host)["category"], ALL);
     assert.equal(props(host)["d-name"], "YouTube");
-    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
-    assert.equal(controls(host, "YouTube").primary, null);
-    assert.equal(controls(host, "YouTube").menu[0]?.id, "disable");
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…", "重新加载"]);
+    assert.equal(controls(host, "YouTube").button, null);
   } finally {
     await stop();
   }
@@ -131,7 +132,7 @@ test("an entry's legacy capabilities are never compared with the package (SDK 1.
   }
 });
 
-test("installed from a .vxp and in a repository: one row under All; its … menu replaces it, asking once", async () => {
+test("installed from a .vxp and in a repository: one card under All; its page's ⋯ menu replaces it, asking once", async () => {
   const net = new FakeNet();
   publish(net, OFFICIAL, [YT]);
   const { host, store, stop } = await ready(net, [BUILTIN, info("zysilm.youtube", { version: "0.1.5", source: { kind: "file" } })]);
@@ -142,37 +143,33 @@ test("installed from a .vxp and in a repository: one row under All; its … menu
     // All: the installed row (named from its manifest, here unreadable: the id) stands for the repository's entry.
     const all = await allRows(host);
     assert.deepEqual(
-      all.filter((r) => r.key.endsWith("zysilm.youtube")).map((r) => [r.key, r.mark]),
-      [[local, "✓"]],
+      all.filter((r) => r.key.endsWith("zysilm.youtube")).map((r) => [r.key, r.state, r.byNote]),
+      [[local, "✓ 已安装", "· 本地文件"]],
     );
     assert.equal(props(host)["all-count"], 1);
     await choose(host, "zysilm.youtube");
     assert.ok(banners(host).includes("也在官方仓库里"));
-    // Its buttons stay; Replace with the repository's version is last in the … menu.
-    const { primary, menu } = controls(host, "zysilm.youtube");
-    assert.equal(primary, null);
+    // Its buttons stay; Replace with the repository's version is last in the ⋯ menu.
+    assert.equal(controls(host, "zysilm.youtube").button, null);
     assert.deepEqual(
-      menu.map((m) => [m.id, m.text]),
+      more(host).map((m) => [m.id, m.text]),
       [
-        ["disable", "停用"],
-        ["uninstall", "卸载…"],
-        ["reload", "重新加载"],
         ["openData", "打开数据目录"],
         [replace, "用官方仓库的 0.2.0 替换…"],
       ],
     );
-    assert.deepEqual(actions(host).map((a) => a.id), ["disable", "uninstall"]);
+    assert.deepEqual(actions(host).map((a) => a.id), ["disable", "uninstall", "reload"]);
     // The repository's entry, asked for by its key, shows the installed row.
     store.select(repoKey);
     await host.settle();
     assert.equal(store.selected, local);
     // Installed is unchanged: no replace entry there.
     await tab(host, INSTALLED);
-    assert.ok(!controls(host, "zysilm.youtube").menu.some((m) => m.id === replace));
+    assert.ok(!more(host).some((m) => m.id === replace));
     await tab(host, ALL);
 
     host.dialogAnswers.push(no);
-    host.window("store").emit("rowAct", local, replace);
+    host.window("store").emit("act", replace);
     await until(host, () => host.confirms.length === 1, "replace question");
     assert.equal(host.confirmTexts.at(-1)!.message, "替换已安装的「YouTube」？");
     assert.equal(host.confirms.at(-1)!["destructive"], true);
@@ -182,7 +179,7 @@ test("installed from a .vxp and in a repository: one row under All; its … menu
     assert.equal(installs(host).length, 0);
 
     host.dialogAnswers.push(yes);
-    host.window("store").emit("rowAct", local, replace);
+    host.window("store").emit("act", replace);
     await until(host, () => installs(host).length === 1);
     assert.deepEqual(installs(host)[0], { method: "install", id: "zysilm.youtube", source: { kind: "repository", url: OFFICIAL }, replace: true });
     assert.equal(host.confirms.length, 2, "one question per attempt");
@@ -224,15 +221,15 @@ test("vestra. ids in any repository: refused before downloading (reserved for bu
     // A repository's entry for a built-in's id: All shows the built-in's own row only.
     const all = await allRows(host);
     assert.ok(!all.some((r) => r.name === "Fake Video"));
-    assert.equal(all.find((r) => r.name === "vestra.video" && r.key === "\nvestra.video")?.badge, "内置");
+    assert.equal(all.find((r) => r.name === "vestra.video" && r.key === "\nvestra.video")?.state, "随播放器提供");
     const fake = store.items.find((i) => i.name === "Fake Video")!;
     assert.equal(fake.state, "reserved");
     store.select(fake.key);
     await host.settle();
     assert.equal(store.selected, "\nvestra.video");
-    assert.deepEqual(actions(host), []);
+    assert.deepEqual(actions(host).map((a) => a.id), ["reload"], "a built-in's page: Reload only");
     const extra = await choose(host, "Extra");
-    assert.equal(extra.badge, "不能安装");
+    assert.equal(extra.state, "不能安装");
     assert.deepEqual(actions(host), []);
     // Even if asked to (an older window, a race): no question, no download, no install.
     const item = store.items.find((i) => i.id === "Vestra.extra")!;
@@ -297,7 +294,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
   const { host, store, stop } = await ready(net, [BUILTIN, installed]);
   try {
     const row = await choose(host, "YouTube");
-    assert.equal(row.badge, "可更新 → 0.3.0");
+    assert.equal(row.state, "有更新");
     assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.3.0", "停用", "卸载…", "重新加载"]);
     assert.ok(!banners(host).includes("新版本需要新的权限：读写剪贴板"));
     // The Updates chip shows the count ("Updates {}", in Slint).
@@ -318,7 +315,7 @@ test("update and uninstall from the same repository; no rollback and no older ve
     assert.equal(host.confirmTexts.at(-1)!.detail, "当前 0.2.0。");
     await until(host, () => !store.busy);
     // No Roll Back / Restore.
-    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…", "重新加载"]);
     await until(host, () => (props(host)["versions"] as Version[]).some((v) => v.version === "0.3.0" && v.status === "当前"));
     assert.deepEqual(versions(), [
       ["0.3.0", "当前", false],
