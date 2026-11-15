@@ -250,8 +250,8 @@ impl Host {
             self.rebroadcast_source();
         }
         self.drop_osd_actions(owner);
-        if self.info_panels.remove(&owner).is_some() {
-            self.show_info_panels();
+        if self.core.info_panels.remove(&owner).is_some() {
+            self.info_panels_changed();
         }
         // The floating window opens again without this panel (`sync_floating`).
         if self
@@ -274,8 +274,8 @@ impl Host {
         // (`revoke`); a stop after a fault, and every other stop, removes them.
         if !keeps_shown_state(park, reason) {
             self.core.timeline.remove_owner(owner);
-            self.on_top.remove(owner);
-            self.cursor_playing.remove(owner);
+            self.core.on_top.remove(owner);
+            self.core.cursor_playing.remove(owner);
         }
         self.images.release_owner(owner);
         self.pip.remove_owner(owner);

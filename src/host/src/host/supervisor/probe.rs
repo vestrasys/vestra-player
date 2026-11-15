@@ -326,6 +326,7 @@ impl Host {
             })
             .collect::<Vec<_>>();
         let drops = self
+            .core
             .drops
             .providers_of(owner)
             .into_iter()

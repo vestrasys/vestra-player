@@ -451,7 +451,7 @@ impl Host {
             // Before anything waits on the GPU.
             platform::release_gpu_waits();
             crate::stop_handoffs();
-            self.ui_state.flush();
+            self.core.ui_state.flush();
             let _ = slint::quit_event_loop();
             return;
         }

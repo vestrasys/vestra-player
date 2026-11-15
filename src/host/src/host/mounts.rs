@@ -1,6 +1,8 @@
 //! Mounted panels: preparing the shell for mount changes, their values
 //! and callbacks.
-use super::messages::{MountApplied, SetMount, UiCommand, UiReport, WindowFacts};
+use super::messages::{
+    MountApplied, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts, WindowOp,
+};
 use super::*;
 use crate::ui::sidebar_tabs::Column;
 
@@ -324,10 +326,26 @@ impl Host {
     /// confirmation and the sheet (`Host::layout_command`,
     /// `lead_command`, `dialog_command`, `confirm_command`,
     /// `review_command`); S2c(6): a view's row-patch records dropped
-    /// (`ResetWrites`, `ui::ui_image::Images::reset_writes`). The other
-    /// commands follow in later steps.
+    /// (`ResetWrites`, `ui::ui_image::Images::reset_writes`); S2c(7): the
+    /// last `source.state`, the info panels, the palette, the window
+    /// settings in effect (`LastSource`, `InfoPanels`, `Theme`,
+    /// `CursorAutoHide`, `WindowOp::OnTop`). The other commands follow in
+    /// later steps.
     pub(crate) fn ui_command(&mut self, command: UiCommand) {
         match command {
+            UiCommand::Snapshot(UiSnapshot::LastSource(source)) => self.source = source,
+            UiCommand::Snapshot(UiSnapshot::InfoPanels(panels)) => {
+                self.info_panels = panels;
+                self.show_info_panels();
+            }
+            UiCommand::Snapshot(UiSnapshot::Theme(theme)) => {
+                self.shown_theme = theme;
+                self.theme_all();
+            }
+            UiCommand::Snapshot(UiSnapshot::CursorAutoHide(playing)) => {
+                self.cursor_playing = playing;
+            }
+            UiCommand::Window(WindowOp::OnTop(on)) => self.on_top = on,
             UiCommand::ResetWrites { owner, view } => self.images.reset_writes(owner, &view),
             UiCommand::SetMount(op) => {
                 let SetMount {

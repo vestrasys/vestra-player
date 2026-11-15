@@ -32,7 +32,7 @@ impl Capability for UiOsd {
         METHODS
     }
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.info_panels.contains_key(&owner) {
+        if host.core.info_panels.contains_key(&owner) {
             return Recorded::Live("an OSD panel");
         }
         // Its buttons run its commands while the message shows.
@@ -126,7 +126,7 @@ fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<
     }
     match &params["text"] {
         Value::Null => {
-            host.info_panels.remove(&reply.owner);
+            host.core.info_panels.remove(&reply.owner);
         }
         text if text.is_string() || i18n::text::is_text(text) => {
             let mut text = host
@@ -153,11 +153,11 @@ fn panel(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<
                     "osd panel allows {OSD_PANEL_LINES} lines, {OSD_PANEL_BYTES} bytes"
                 )));
             }
-            host.info_panels.insert(reply.owner, text);
+            host.core.info_panels.insert(reply.owner, text);
         }
         _ => return Err(RpcError::invalid("text requires string or null")),
     }
-    host.show_info_panels();
+    host.info_panels_changed();
     Ok(())
 }
 

@@ -520,6 +520,34 @@ pub(crate) struct Core {
     /// interface's; the core judges `ui.interaction`'s and `layout.set`'s
     /// refusals and answers `layout.state`'s tab order from this copy.
     pub(crate) panel_tabs: state::PanelTabs,
+    /// The info panels of `osd.panel`, by owner (plan step S2c(7)): the
+    /// interface shows its copy (`Host::info_panels`), given whole as
+    /// `UiSnapshot::InfoPanels` at every change.
+    pub(crate) info_panels: BTreeMap<u64, String>,
+    /// `window.setAlwaysOnTop` and `setCursorAutoHide("playing")` per
+    /// plugin (plan step S2c(7)): the interface reads the values in effect
+    /// from its copies (`Host::on_top`, `Host::cursor_playing`;
+    /// `Core::window_settings`).
+    pub(crate) on_top: window_control::LastWrite<bool>,
+    pub(crate) cursor_playing: window_control::LastWrite<bool>,
+    /// What the interface was last given of `on_top` and `cursor_playing`
+    /// (`None`: nothing yet).
+    pub(crate) window_settings_sent: (Option<bool>, Option<bool>),
+    /// A backdrop is mounted, so mpv is told not to show cover art (R-U3;
+    /// `Core::backdrop_cover_art`).
+    pub(crate) cover_art_off: bool,
+    /// The registry of file drops (R-U2; plan step S2c(7)): the providers,
+    /// the panels that listen and the recorded providers. The drop being
+    /// collected and where it lands are the interface's (`Host::drops`);
+    /// a complete drop reaches the core as `UiReport::Drop`.
+    pub(crate) drops: drops::Drops,
+    /// The interface state file (`ui-state.json`; plan step S2c(7), design
+    /// K8): the core is its one writer. Its own parts (the binding
+    /// overlay, the appearance, the trusted plugins) it writes here; the
+    /// interface's parts (window frame, columns, palette recents, the
+    /// options window's last page) the interface reports whole as
+    /// `UiReport::Remembered` when they change.
+    pub(crate) ui_state: ui_state::Store,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other
@@ -609,7 +637,11 @@ pub(crate) struct Host {
     pub(crate) restarts: panel_restart::Restarts,
     /// The plugins' start-up panels are in place: start-up settled with no
     /// mount left to apply (`open_files_tick`; a file given at launch opens
-    /// only then, so no panel's compile lands on early playback).
+    /// only then, so no panel's compile lands on early playback). Still
+    /// here after plan step S2c(7): `open_files_tick` (a core step) decides
+    /// it from the core's queues and the interface's batching window, and
+    /// the interface reads it for its columns; that coupling gets its
+    /// explicit pair in plan step S2d.
     pub(crate) startup_panels: bool,
     /// Panels whose file did not compile when they were first shown
     /// (reported to their plugin): left out until they mount again.
@@ -620,7 +652,19 @@ pub(crate) struct Host {
     pub(crate) native_before: Option<platform::NativeSnapshot>,
     pub(crate) native_unavailable: Option<String>,
     pub(crate) input: Rc<RefCell<InputShared>>,
-    pub(crate) ui_state: ui_state::Store,
+    /// The interface's part of the interface state file (plan step
+    /// S2c(7)): window frame, columns, palette recents, the options
+    /// window's last page. The interface reads and writes it here and
+    /// reports it whole to the core, the file's writer, at every change
+    /// (`Host::remember`).
+    pub(crate) remembered: ui_state::Interface,
+    /// The palette the interface shows: the core's appearance
+    /// (`Core::theme`), given as `UiSnapshot::Theme` (plan step S2c(7)).
+    pub(crate) shown_theme: String,
+    /// The interface's copy of the core's last `source.state`
+    /// (`Core::last_source`; plan step S2c(7)), replaced whole by
+    /// `UiSnapshot::LastSource` wherever the core replaces its own.
+    pub(crate) source: Arc<Value>,
     pub(crate) osd_until: Option<u64>,
     pub(crate) osd_actions: Option<OsdActions>,
     /// When the message on screen showed (`osd_hold`).
@@ -631,12 +675,18 @@ pub(crate) struct Host {
     pub(crate) osd_shown: OsdShown,
     /// The plugin that showed the message on screen; `None`: the player.
     pub(crate) osd_from: Option<u64>,
-    pub(crate) info_panels: BTreeMap<u64, String>,
+    /// The interface's copy of the core's info panels (`osd.panel`,
+    /// `Core::info_panels`; `UiSnapshot::InfoPanels`).
+    pub(crate) info_panels: Arc<BTreeMap<u64, String>>,
     pub(crate) floating: Option<Floating>,
     pub(crate) menu_mode: MenuMode,
     /// Window generation the open menu belongs to (shell or floating).
     pub(crate) menu_generation: u64,
     pub(crate) window_title: String,
+    /// `power.preventSleep` (K10: the core's, on the core thread from plan
+    /// step S3a). Still here after plan step S2c(7): its platform launcher
+    /// and assertion are not `Send` (`power::Launcher`), so it moves with
+    /// the thread in S3a, and `last_frame` with it (`UiReport::FrameShown`).
     pub(crate) power: power::Power,
     /// When the shell last received a video frame (`power` keeps the display awake).
     pub(crate) last_frame: Option<Instant>,
@@ -645,12 +695,18 @@ pub(crate) struct Host {
     /// `VESTRA_FRAME_LOG=1` diagnostics and the size last set on the UI.
     pub(crate) frame_log: Option<render_target::FrameLog>,
     pub(crate) shown_size: Option<render_target::Size>,
-    /// `window.setAlwaysOnTop` and `setCursorAutoHide("playing")` per plugin.
-    pub(crate) on_top: window_control::LastWrite<bool>,
-    pub(crate) cursor_playing: window_control::LastWrite<bool>,
+    /// The values of `window.setAlwaysOnTop` and
+    /// `setCursorAutoHide("playing")` in effect, as the core last gave them
+    /// (`Core::window_settings`; plan step S2c(7)).
+    pub(crate) on_top: bool,
+    pub(crate) cursor_playing: bool,
     /// The level last applied: (floating, window count when applied).
     pub(crate) on_top_applied: Option<(bool, usize)>,
     /// `window.setVideoArea` answered once the video area shows the target.
+    /// Still here after plan step S2c(7): the window tick answers them
+    /// from the size its layout shows, on its own clock; plan step S2d
+    /// gives them the explicit pair (`WindowOp::VideoArea`,
+    /// `UiReport::AreaFitted`, answered from the window facts).
     pub(crate) area_replies: Vec<AreaReply>,
     /// Decoded `plugin.ui.image` files (R-U1).
     pub(crate) images: ui_image::Images,
@@ -660,8 +716,6 @@ pub(crate) struct Host {
     pub(crate) video_absent: bool,
     /// GPU rendering: the video area was cleared for this empty phase.
     pub(crate) video_cleared: bool,
-    /// A backdrop is mounted, so mpv is told not to show cover art (R-U3).
-    pub(crate) cover_art_off: bool,
     /// `window.setPictureInPicture` (R-W5, R-H8).
     pub(crate) pip: pip::PictureInPicture<platform::PipWindow>,
     /// The last `VESTRA_PIP_LOG=1` line (printed when it changes).
@@ -679,7 +733,10 @@ pub(crate) struct Host {
     /// GPU rendering with host pacing: the frame callback that owes the main
     /// window a draw is registered (`gpu_pacing_hook`).
     pub(crate) gpu_paced: bool,
-    /// File drops (R-U2).
+    /// File drops (R-U2): the drop being collected (`Drops::arrived`,
+    /// `due`). Only that part of this value is used: the registry of
+    /// providers and listening panels is the core's (`Core::drops`; plan
+    /// step S2c(7)).
     pub(crate) drops: drops::Drops,
     /// The options window (R-H7; K7): the pages it shows are the core's
     /// (`Core::settings`).

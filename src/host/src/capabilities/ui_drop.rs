@@ -21,11 +21,12 @@ impl Capability for UiDrop {
     }
     /// Its drop targets; a panel listening for drops is live.
     fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
-        if host.drops.panels.contains(&owner) {
+        if host.core.drops.panels.contains(&owner) {
             return Recorded::Live("a panel listening for drops");
         }
         Recorded::Calls(
-            host.drops
+            host.core
+                .drops
                 .recording(owner)
                 .into_iter()
                 .map(|params| Call::new("drops.provide", params))
@@ -33,24 +34,24 @@ impl Capability for UiDrop {
         )
     }
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        host.drops.rekey(from, to);
+        host.core.drops.rekey(from, to);
     }
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if keep_recorded {
-            host.drops.mark_recorded(owner);
+            host.core.drops.mark_recorded(owner);
         } else {
-            host.drops.remove_owner(owner);
+            host.core.drops.remove_owner(owner);
         }
     }
     fn prune(&self, host: &mut Host, owner: u64) {
-        host.drops.remove_recorded(owner);
+        host.core.drops.remove_recorded(owner);
     }
     fn replay(&self, host: &mut Host, owner: u64, _: &Origin, call: &Call) -> Handled {
         if call.method != "drops.provide" {
             return Err(RpcError::new("unsupported", "not a recorded method"));
         }
         let extensions = parse_extensions(&call.params["extensions"]).map_err(RpcError::invalid)?;
-        host.drops.provide_recorded(Provider {
+        host.core.drops.provide_recorded(Provider {
             owner,
             id: string(&call.params, "id")?.into(),
             extensions,

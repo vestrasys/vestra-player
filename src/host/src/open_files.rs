@@ -102,7 +102,7 @@ impl Host {
             files.len(),
             self.core.now_ms()
         );
-        let taken = self.drops.groups(&files);
+        let taken = self.core.drops.groups(&files);
         for path in &files {
             let text = path.to_string_lossy();
             if !taken
