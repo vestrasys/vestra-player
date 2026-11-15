@@ -25,6 +25,7 @@ use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 #[path = "explicit/mod.rs"]
 mod explicit;
+mod isolation;
 use std::time::Duration;
 
 /// `package_stage::read_tree`'s digest over a fixture (tests/lazy_activation.rs).
@@ -253,6 +254,7 @@ impl Profile {
             PathBuf::from,
         );
         let mut command = Command::new(exe);
+        isolation::isolate(&mut command, root);
         command
             .arg("--silent")
             .args(args)

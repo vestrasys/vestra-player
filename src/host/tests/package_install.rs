@@ -18,6 +18,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 #[path = "explicit/mod.rs"]
 mod explicit;
+mod isolation;
 
 const INSTALLER: &str = "vestra.fixture-installer";
 
@@ -196,7 +197,7 @@ fn installer(root: &Path, steps: &[Step]) -> PathBuf {
 /// Run the host headless for `seconds` on `root` (own processes; on-demand
 /// start for everyone, with resident fixtures); its stderr.
 fn run(root: &Path, seconds: u32) -> String {
-    let output = Command::new(env!("CARGO_BIN_EXE_vestra-host"))
+    let output = isolation::isolate(&mut Command::new(env!("CARGO_BIN_EXE_vestra-host")), root)
         .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
         .env("VESTRA_BUILTIN_PLUGINS", root.join("plugins"))
         .env("VESTRA_PACKAGE_STORE", root.join("store"))

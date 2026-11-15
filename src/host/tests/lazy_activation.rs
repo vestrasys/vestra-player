@@ -15,6 +15,7 @@ use std::path::Path;
 use std::process::Command;
 #[path = "explicit/mod.rs"]
 mod explicit;
+mod isolation;
 
 const ID: &str = "vestra.fixture-lazy";
 
@@ -104,6 +105,7 @@ fn recordings(root: &Path) -> Vec<serde_json::Value> {
 /// Run the host headless for `seconds`; its stderr.
 fn run(root: &Path, seconds: u32, env: &[(&str, &str)]) -> String {
     let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+    isolation::isolate(&mut command, root);
     command
         .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
         .env("VESTRA_BUILTIN_PLUGINS", root.join("plugins"))
@@ -1159,6 +1161,7 @@ fn every_built_in_keeps_its_registry_through_park_replay_and_wake() {
     let probe = |name: &str, seconds: u32, env: &[(&str, &str)]| {
         let file = root.path().join(format!("{name}.jsonl"));
         let mut command = Command::new(env!("CARGO_BIN_EXE_vestra-host"));
+        isolation::isolate(&mut command, root.path());
         command
             .args(["--headless", "--silent", "--seconds", &seconds.to_string()])
             .env("VESTRA_BUILTIN_PLUGINS", &plugins)
