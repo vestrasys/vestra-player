@@ -105,15 +105,19 @@ pub(crate) fn locate_dialog(
         last.retain(|_, at| now.duration_since(*at) < LOCATE_INTERVAL);
         last.insert(reply.owner, now);
     }
-    // The interface creates the dialog (`UiCommand::Dialog`, plan step
-    // S2c(5)); its choice comes back as `Event::SourceLocated`.
-    host.ui_command(UiCommand::Dialog(DialogRequest {
-        reply: reply.clone(),
-        purpose: DialogPurpose::Locate(fields),
-    }));
+    // Busy before it shows (`dialogs.open`). The interface creates the
+    // dialog (`UiCommand::Dialog`, plan step S2c(5)), owned like
+    // `dialogs.open`'s (`origins::dialog_place`); its choice comes back as
+    // `Event::SourceLocated`.
     host.core.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
     host.core
         .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    let place = host.dialog_place(reply.owner);
+    host.ui_command(UiCommand::Dialog(DialogRequest {
+        reply: reply.clone(),
+        purpose: DialogPurpose::Locate(fields),
+        place,
+    }));
     Ok(())
 }

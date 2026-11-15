@@ -4,8 +4,8 @@ import type { Preferences } from "./settings.ts";
 export const playing = (state: PlayerState) => state.phase === "ready" && !state.paused;
 
 /**
- * H05 / IA-WIN-03: the window floats when the mode says so: always, while
- * playing, or while playing in fullscreen (the default). Mini Size
+ * H05 / IA-WIN-03: the window floats when the mode says so (by default never): always, while
+ * playing, or while playing in fullscreen. Mini Size
  * does not float (IA-WIN-02). Only changes are sent, in order, so another
  * plugin's last write is not overridden for nothing; the core drops this
  * plugin's request when it is deactivated. Callers re-apply on player and
