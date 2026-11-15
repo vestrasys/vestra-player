@@ -1,7 +1,10 @@
 //! `ui.osd`: messages on the video and the information panel.
 use super::{Capability, Handled, Info, Recorded};
 use crate::{
-    host::{Host, OsdActions, Reply, RpcError},
+    host::{
+        Host, Reply, RpcError,
+        messages::{OsdButtons, OsdOp, UiCommand},
+    },
     i18n,
 };
 use serde_json::Value;
@@ -75,9 +78,18 @@ fn show(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     }
     let actions = (!actions.is_empty()).then(|| {
         let (titles, commands) = actions.into_iter().unzip();
-        (OsdActions { owner, commands }, titles)
+        OsdButtons {
+            owner,
+            commands,
+            titles,
+        }
     });
-    host.put_osd(&text, Some(owner), actions);
+    // The interface shows it (`UiCommand::Osd`, plan step S2d(4)).
+    host.ui_command(UiCommand::Osd(OsdOp::Show {
+        text,
+        from: Some(owner),
+        actions,
+    }));
     Ok(())
 }
 

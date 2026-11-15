@@ -565,6 +565,11 @@ pub(crate) struct Core {
     /// (`Host::startup_panels`, `UiSnapshot::StartupSettled`; plan step
     /// S2d(2)).
     pub(crate) startup_panels: bool,
+    /// What `source.state` showed last (plan step S2d(4)): no video, the
+    /// empty phase, the window title, sent to the interface as
+    /// `UiSnapshot::Source` where a new state arrives
+    /// (`source_display_next`).
+    pub(crate) source_display: messages::SourceShown,
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
     /// in plan step S2c as its last field, so it drops after every other

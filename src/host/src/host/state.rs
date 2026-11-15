@@ -1,6 +1,6 @@
 //! Source, window, picture-in-picture, layout and backdrop state, the
 //! title, power and always-on-top.
-use super::messages::{UiCommand, UiReport, UiSnapshot, WindowOp};
+use super::messages::{SourceShown, UiCommand, UiReport, UiSnapshot, WindowOp};
 use super::*;
 use crate::playback::renderer::GpuBackend as _;
 
@@ -195,13 +195,24 @@ impl Host {
         let source = Arc::new(self.core.last_source.clone());
         self.ui_command(UiCommand::Snapshot(UiSnapshot::LastSource(source)));
     }
-    /// R-U3: follow the source into `no-video`; an empty source also drops
-    /// the last video frame, so the video area shows the backdrop or plain
-    /// colour (the interface's copy of the source, `Host::source`).
-    pub(crate) fn backdrop_source(&mut self) {
+    /// The interface's side of `UiSnapshot::Source` (plan step S2d(4)):
+    /// what the core decided `source.state` shows.
+    pub(crate) fn show_source(&mut self, shown: SourceShown) {
+        let SourceShown {
+            no_video,
+            empty,
+            title,
+        } = shown;
+        self.backdrop_source(no_video, empty);
+        self.update_title(title);
+    }
+    /// R-U3: follow the source into `no-video` (`next`, the core's
+    /// decision); an empty source (`empty`) also drops the last video
+    /// frame, so the video area shows the backdrop or plain colour. Whether
+    /// the source has video at all (picture-in-picture) is the interface's,
+    /// from its copy of the source (`Host::source`).
+    fn backdrop_source(&mut self, next: bool, empty: bool) {
         self.video_absent = composition::video_absent(self.video_absent, &self.source);
-        let next = composition::no_video(self.no_video, &self.source);
-        let empty = self.source["phase"] == "empty";
         let Some(shell) = &self.shell else {
             self.no_video = next;
             return;
@@ -226,30 +237,8 @@ impl Host {
             let _ = shell.set_property("no-video", next.into());
         }
     }
-    /// C9: "<source name> - Vestra Player", or "Vestra Player" without a source.
-    pub(crate) fn update_title(&mut self) {
-        let source = &self.source;
-        let name = match source["source"].as_str() {
-            None => None,
-            Some(_) if source["kind"] == "producer" => None,
-            Some(text) if text.contains("://") => Some(
-                source["title"]
-                    .as_str()
-                    .filter(|t| !t.is_empty())
-                    .unwrap_or(text)
-                    .to_owned(),
-            ),
-            Some(text) => Some(
-                Path::new(text)
-                    .file_name()
-                    .map(|n| n.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| text.to_owned()),
-            ),
-        };
-        let title = name.map_or_else(
-            || "Vestra Player".to_owned(),
-            |name| format!("{name} - Vestra Player"),
-        );
+    /// C9: the window title the core decided (`source_title`).
+    fn update_title(&mut self, title: String) {
         if title != self.window_title {
             self.window_title = title;
             if let Some(shell) = &self.shell {
@@ -260,6 +249,35 @@ impl Host {
             }
         }
     }
+}
+
+/// C9: "<source name> - Vestra Player", or "Vestra Player" without a source
+/// (the core's decision of what `source.state` shows, plan step S2d(4)).
+pub(crate) fn source_title(source: &Value) -> String {
+    let name = match source["source"].as_str() {
+        None => None,
+        Some(_) if source["kind"] == "producer" => None,
+        Some(text) if text.contains("://") => Some(
+            source["title"]
+                .as_str()
+                .filter(|t| !t.is_empty())
+                .unwrap_or(text)
+                .to_owned(),
+        ),
+        Some(text) => Some(
+            Path::new(text)
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_else(|| text.to_owned()),
+        ),
+    };
+    name.map_or_else(
+        || "Vestra Player".to_owned(),
+        |name| format!("{name} - Vestra Player"),
+    )
+}
+
+impl Host {
     /// Keep the sleep assertion in line with what is playing: ready and not
     /// paused (media or stream), video when a frame arrived within a second.
     pub(crate) fn power_tick(&mut self) {
@@ -509,6 +527,19 @@ impl Host {
     }
 }
 impl Core {
+    /// What `source.state` shows (plan step S2d(4); `UiSnapshot::Source`):
+    /// no video (R-U3, from what it showed before), the empty phase, the
+    /// window title, from the core's last source.
+    pub(crate) fn source_display_next(&mut self) -> SourceShown {
+        let source = &self.last_source;
+        let shown = SourceShown {
+            no_video: composition::no_video(self.source_display.no_video, source),
+            empty: source["phase"] == "empty",
+            title: source_title(source),
+        };
+        self.source_display = shown.clone();
+        shown
+    }
     /// The core's side of `UiReport::AreaFitted` (plan step S2d): the
     /// fitted `window.setVideoArea` waits for the layout to show `video`,
     /// at most a second from now.
@@ -973,5 +1004,32 @@ mod seam_tests {
         );
         let state = include_str!("state.rs");
         assert!(after(state, "fn window_state(").contains("\"pictureInPicture\":self.pip_state()"));
+    }
+}
+
+/// What `source.state` shows, as the core decides it (plan step S2d(4)).
+#[cfg(test)]
+mod source_display_tests {
+    use super::*;
+
+    #[test]
+    fn the_title_names_the_file_or_the_streams_title() {
+        assert_eq!(source_title(&Value::Null), "Vestra Player");
+        assert_eq!(
+            source_title(&json!({"source":"C:/clips/a.mkv"})),
+            "a.mkv - Vestra Player"
+        );
+        assert_eq!(
+            source_title(&json!({"source":"https://x/y","title":"Talk"})),
+            "Talk - Vestra Player"
+        );
+        assert_eq!(
+            source_title(&json!({"source":"https://x/y","title":""})),
+            "https://x/y - Vestra Player"
+        );
+        assert_eq!(
+            source_title(&json!({"source":"cam","kind":"producer"})),
+            "Vestra Player"
+        );
     }
 }

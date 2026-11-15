@@ -509,10 +509,21 @@ impl Host {
             UiCommand::RevokeOwner { owner, park: _ } => self.revoke_owner(owner),
             UiCommand::Panels(op) => self.panels_command(op),
             UiCommand::DropConfirm { owner } => self.drop_confirm_of(owner),
+            // Plan step S2d(4): the OSD, what `source.state` shows, the
+            // window's one-way operations, the palette, a panel's menu.
+            UiCommand::Osd(op) => self.osd_command(op),
+            UiCommand::Snapshot(UiSnapshot::Source(shown)) => self.show_source(shown),
+            UiCommand::Window(
+                op @ (WindowOp::Fullscreen(_) | WindowOp::Raise | WindowOp::Quit),
+            ) => self.window_op(op),
+            UiCommand::OpenPalette => self.open_palette(),
+            UiCommand::PanelMenu(menu) => self.panel_menu(menu),
             UiCommand::Snapshot(UiSnapshot::StartupSettled(settled)) => {
                 self.startup_panels = settled;
             }
-            _ => unreachable!("not sent until plan step S2d(3), S2d(4) or S3a"),
+            _ => unreachable!(
+                "not sent here: the tables go by `sync_tables`; `RekeyOwner` is not sent"
+            ),
         }
     }
     fn log_prepared(&self, changes: usize, started: Instant, ok: bool) {

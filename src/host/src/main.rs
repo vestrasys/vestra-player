@@ -578,6 +578,11 @@ fn player() -> Result<()> {
         handed: None,
         // Headless runs mount nothing.
         startup_panels: headless,
+        source_display: host::messages::SourceShown {
+            no_video: true,
+            empty: false,
+            title: "Vestra Player".into(),
+        },
         // Made above, before the clock, as before plan step S2c moved it
         // from `Host`.
         on_demand,

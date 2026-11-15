@@ -134,10 +134,9 @@ impl Host {
             );
         }
     }
+    /// The main window to the front (`WindowOp::Raise`, plan step S2d(4)).
     fn bring_to_front(&mut self) {
-        if let Some(shell) = &self.shell {
-            crate::ui::view::raise(shell);
-        }
+        self.ui_command(UiCommand::Window(crate::host::messages::WindowOp::Raise));
     }
 }
 
