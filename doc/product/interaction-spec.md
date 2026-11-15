@@ -75,7 +75,7 @@ The decisions below replace earlier wording in the feature requirements and the 
 
 **Requirements**:
 
-1. Applies when: fullscreen, and the sidebar is mounted and attached (`detached` is false). A floating sidebar stays a separate window and is not affected.
+1. Applies when: fullscreen, and the column (sidebar or adjust column) is mounted and attached (`detached` is false). A floating column stays a separate window and is not affected.
 2. Two states: **retracted** (not shown) and **popped out** (overlaid on the right side of the video, without squeezing the video). Entering fullscreen starts retracted.
 3. Pop-out condition: the user preference is shown (`preferred`), and the pointer enters within **4 px** of the right edge of the screen. When the preference is hidden, the right edge does not trigger.
 4. Pop-out geometry: full height from the top of the screen to the bottom; the width is the sidebar width the user dragged in windowed mode, and at most "screen width − 318". While popped out, the bottom bar width immediately narrows to "screen width − pop-out width", with the right end of the bottom bar aligned to the left edge of the pop-out.
@@ -102,7 +102,7 @@ The decisions below replace earlier wording in the feature requirements and the 
 4. With the list popped out, click the search box, type text and move the pointer away: the list does not retract; press Esc to clear the search, so focus returns to the list, then move away: the list retracts.
 5. With the list closed in windowed mode (F6), enter fullscreen and move the pointer to the right edge: it does not pop out. Press F6 in fullscreen: it pops out immediately; press F6 again: it retracts immediately.
 6. The lit / dim state of the list button on the bottom bar matches the preference in each step of item 5 (G-18).
-7. Enter fullscreen while the list is floating: the floating window stays as it is, and the right edge does not trigger.
+7. Enter fullscreen while the list or the adjust column is floating: its floating window stays as it is, and the right edge does not pop it out.
 
 ### G-04 In fullscreen, the bottom bar does not hide while the pointer rests on it (P1)
 

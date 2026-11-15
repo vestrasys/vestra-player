@@ -2479,6 +2479,65 @@ export component W inherits Window {
         shell.hide().unwrap();
     }
 
+    /// The adjust column's strip with its detach button (coordinator ruling
+    /// 2026-11-15): its four built-in tabs, with keys under them, fit
+    /// without `»` at its least width (docked, and the floating window's
+    /// least) and at the narrow window's overlay width; one pixel less and
+    /// the fourth goes into `»`, so the least width is the smallest that
+    /// fits. The shell's splitter and `adjust-actual` use the same least.
+    #[test]
+    fn four_adjust_tabs_fit_at_the_columns_least_and_overlay_widths() {
+        use crate::ui::window_state::{ADJUST_MIN_WIDTH, ADJUST_OVER_VIDEO_WIDTH};
+        headless();
+        let source = r#"import { SidebarTabs } from "sidebar-tabs.slint";
+export component T inherits Window {
+    in property <length> strip-width;
+    width: 900px; height: 40px;
+    strip := SidebarTabs {
+        x: 0px; y: 0px; width: root.strip-width;
+        titles: [ "Picture", "Audio", "Subtitles", "Playback" ];
+        keys: [ "Alt+1", "Alt+2", "Alt+3", "Alt+4" ];
+        active: 3; detached: false;
+    }
+    out property <bool> overflowing: strip.overflowing;
+    out property <int> shown: strip.shown;
+}"#;
+        let result = pollster::block_on(
+            compiler().build_from_source(source.into(), ui_dir().join("t.slint")),
+        );
+        let window = result
+            .component("T")
+            .unwrap_or_else(|| panic!("{:?}", result.diagnostics().collect::<Vec<_>>()))
+            .create()
+            .unwrap();
+        let fits = |width: f64| {
+            window
+                .set_property("strip-width", Value::Number(width))
+                .unwrap();
+            window.get_property("overflowing").unwrap() == Value::Bool(false)
+                && window.get_property("shown").unwrap() == Value::Number(4.)
+        };
+        assert!(fits(ADJUST_MIN_WIDTH), "least width {ADJUST_MIN_WIDTH}");
+        assert!(
+            fits(ADJUST_OVER_VIDEO_WIDTH),
+            "overlay {ADJUST_OVER_VIDEO_WIDTH}"
+        );
+        assert!(fits(crate::ui::ui_state::ADJUST_WIDTH), "default width");
+        assert!(!fits(ADJUST_MIN_WIDTH - 1.), "the smallest that fits");
+        let shell = crate::ui::composition::shell_source().unwrap();
+        let least = format!("{ADJUST_MIN_WIDTH}, max({ADJUST_MIN_WIDTH}, root.width / 1px * 0.5)");
+        assert_eq!(
+            shell.matches(&least).count(),
+            2,
+            "splitter and adjust-actual"
+        );
+        assert!(shell.contains(&format!("min({ADJUST_OVER_VIDEO_WIDTH}, root.video-width)")));
+        let floating =
+            crate::ui::composition::floating_source(crate::ui::sidebar_tabs::Column::Adjust)
+                .unwrap();
+        assert!(floating.contains(&format!("min-width: {ADJUST_MIN_WIDTH}px;")));
+    }
+
     /// The strip's overflow (sidebar-tabs.md): tabs stay at least 72 px; the
     /// rest go into `»`, and the current tab takes the last place when it
     /// would not fit.

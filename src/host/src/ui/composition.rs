@@ -357,7 +357,7 @@ struct AdjustColumn {
     /// Docked between the video column and the sidebar, with its splitter.
     docked: String,
     /// Over the video's right side while the window is too narrow to dock
-    /// it (300 px, the list colour at 90 %, a shadow on its left), or, in
+    /// it (316 px, the list colour at 90 %, a shadow on its left), or, in
     /// fullscreen, sliding out from the right edge left of the sidebar's
     /// overlay (G-01). Esc inside it closes it in a window (fullscreen keeps
     /// Esc for Toggle Fullscreen). Its hover area reports to the host.
@@ -372,16 +372,17 @@ fn adjust_column() -> AdjustColumn {
     let docked = format!(
         "if root.adjust-visible: Rectangle {{ width: 3px; horizontal-stretch: 0; background: Theme.line; \
          TouchArea {{ mouse-cursor: MouseCursor.ew-resize; \
-         moved => {{ if self.pressed {{ root.adjust-width = clamp(root.width / 1px - (root.sidebar-visible ? root.sidebar-actual + 3 : 0) - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, 280, max(280, root.width / 1px * 0.5)); }} }} \
+         moved => {{ if self.pressed {{ root.adjust-width = clamp(root.width / 1px - (root.sidebar-visible ? root.sidebar-actual + 3 : 0) - (self.absolute-position.x + self.mouse-x) / 1px - 1.5, {min}, max({min}, root.width / 1px * 0.5)); }} }} \
          pointer-event(event) => {{ if event.kind == PointerEventKind.up {{ root.adjust-resized(root.adjust-actual); }} }} }} }}\n\
          if root.adjust-visible: adjust-keys := FocusScope {{ width: root.adjust-actual * 1px; horizontal-stretch: 0; {keys} {} }}",
-        column_content(Column::Adjust, "adjust-keys", "false", "Theme.bg-list")
+        column_content(Column::Adjust, "adjust-keys", "false", "Theme.bg-list"),
+        min = crate::ui::window_state::ADJUST_MIN_WIDTH,
     );
     let overlay = format!(
         "if root.adjust-overlay: Rectangle {{ \
          x: root.host-fullscreen ? root.width : (root.video-x + root.video-width) * 1px - self.width; \
          y: root.host-fullscreen ? 0px : root.video-y * 1px; \
-         width: (root.host-fullscreen ? root.adjust-pop-width : min(300, root.video-width)) * 1px; \
+         width: (root.host-fullscreen ? root.adjust-pop-width : min({over}, root.video-width)) * 1px; \
          height: root.host-fullscreen ? root.height : root.video-height * 1px; \
          drop-shadow-blur: root.host-fullscreen ? 0px : 12px; drop-shadow-offset-x: -2px; \
          drop-shadow-color: root.host-fullscreen ? transparent : #00000080; \
@@ -402,7 +403,8 @@ fn adjust_column() -> AdjustColumn {
             "adjust-overlay-keys",
             "false",
             "root.host-fullscreen ? Theme.bg-list : transparent"
-        )
+        ),
+        over = crate::ui::window_state::ADJUST_OVER_VIDEO_WIDTH,
     );
     AdjustColumn { docked, overlay }
 }
@@ -1070,7 +1072,7 @@ pub(crate) mod tests {
         ));
         assert!(floating.contains("key-input(\"panel:adjust\""));
         assert!(
-            floating.contains("min-width: 280px;") && floating.contains("preferred-width: 317px;")
+            floating.contains("min-width: 316px;") && floating.contains("preferred-width: 317px;")
         );
         // The overlay comes after the sidebar's (G-01), before the title
         // strip and the menu layer (G-19); Esc closes it in a window.
@@ -1116,7 +1118,7 @@ pub(crate) mod tests {
 
     /// The adjust column's place in the shell: docked at 317 between a
     /// video of the rest and the sidebar; in a narrow window over the
-    /// video's right side, 300 wide; in fullscreen slid out left of the
+    /// video's right side, 316 wide; in fullscreen slid out left of the
     /// sidebar's overlay (headless, laid out by Slint), with panels in the
     /// containers.
     #[test]
@@ -1151,7 +1153,7 @@ pub(crate) mod tests {
         set("adjust-popped", true);
         composed.settle();
         assert_eq!(number("video-width"), 1080.);
-        // Half the window at most, 280 at least.
+        // Half the window at most, 316 at least.
         instance
             .set_property("adjust-width", Value::Number(1000.))
             .unwrap();
@@ -1159,7 +1161,7 @@ pub(crate) mod tests {
         instance
             .set_property("adjust-width", Value::Number(10.))
             .unwrap();
-        assert_eq!(number("adjust-actual"), 280.);
+        assert_eq!(number("adjust-actual"), 316.);
         // Fullscreen: both popped out cover their widths at the right edge.
         instance
             .set_property("adjust-width", Value::Number(317.))

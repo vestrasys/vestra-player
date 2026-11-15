@@ -17,14 +17,20 @@ pub const LEAVE_MS: u64 = 500;
 pub const VIDEO_MIN_WIDTH: f64 = 318.0;
 pub const SPLITTER_WIDTH: f64 = 3.0;
 pub const SIDEBAR_MIN_WIDTH: f64 = 317.0;
-/// Menu redesign §3.3: the adjust column is at least 280 wide, at most half
-/// the window (317 by default, `ui_state::ADJUST_WIDTH`).
-pub const ADJUST_MIN_WIDTH: f64 = 280.0;
+/// Menu redesign §3.3: the adjust column is at least this wide, at most
+/// half the window (317 by default, `ui_state::ADJUST_WIDTH`): its four
+/// built-in tabs (72 px each at least) beside the strip's detach button
+/// (25 px and a 3 px margin) fit without `»` (coordinator ruling
+/// 2026-11-15; 280 before the strip had the button). Also the floating
+/// window's least width.
+pub const ADJUST_MIN_WIDTH: f64 = 4.0 * 72.0 + 28.0;
 /// Docked, the adjust column leaves the video at least this wide; in a
 /// narrower window it floats over the video instead (§3.3, provisional).
 pub const ADJUST_DOCKED_VIDEO: f64 = 480.0;
-/// The adjust column floating over the video of a narrow window.
-pub const ADJUST_OVER_VIDEO_WIDTH: f64 = 300.0;
+/// The adjust column floating over the video of a narrow window (at most
+/// the video's width; 300 before the strip had the detach button): as wide
+/// as its least width, so its four built-in tabs fit.
+pub const ADJUST_OVER_VIDEO_WIDTH: f64 = ADJUST_MIN_WIDTH;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Slot {
@@ -70,7 +76,8 @@ pub fn overlay_width(width: f64, user: f64) -> f64 {
 }
 
 /// The adjust column's width for a window `width` wide and a user width:
-/// at least 280, at most half the window (host.slint's `adjust-actual`).
+/// at least [`ADJUST_MIN_WIDTH`], at most half the window (host.slint's
+/// `adjust-actual`).
 pub fn adjust_width(width: f64, user: f64) -> f64 {
     user.min((width * 0.5).max(ADJUST_MIN_WIDTH))
         .max(ADJUST_MIN_WIDTH)
@@ -1645,7 +1652,7 @@ mod tests {
         let tiny = policy.evaluate(viewport(600.0, 400.0), 0).unwrap();
         assert_eq!(tiny.sidebar.unwrap().reason, Some(Reason::Space));
         assert!(tiny.adjust_over_video && tiny.adjust.unwrap().effective);
-        // Width: at least 280, at most half the window.
+        // Width: at least 316 (`ADJUST_MIN_WIDTH`), at most half the window.
         policy.set_adjust_width(900.0);
         assert_eq!(
             policy

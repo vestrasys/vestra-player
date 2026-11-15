@@ -771,7 +771,9 @@ mod tests {
             UiCommand::Dialog(DialogRequest {
                 reply: reply(11),
                 purpose: DialogPurpose::Locate(json!({"name":"a.mkv"})),
-                place: Some(origins::Place::Floating),
+                place: Some(origins::Place::Floating(
+                    crate::ui::sidebar_tabs::Column::Adjust,
+                )),
             }),
             UiCommand::Confirm(ConfirmRequest {
                 reply: reply(12),

@@ -135,6 +135,8 @@ Menus merge by English key ([i18n §5](../architecture/i18n.md#5-declarations-an
 
 Slots: `bottom` (the control bar), `adjust` (one column of task panels beside the video, Alt+1–4, Adjustments and Effects on the bottom bar and in the palette), `sidebar` (tabs, always rightmost, Sidebar on the bottom bar and in the palette), `backdrop` (video-area layers), plus tool windows (`ui.window`, owned by the main window since host 0.7.7: they stay above it, hide and restore with it, and have no taskbar button or minimize button). The bottom bar's right end is the host-owned button strip: `[plugin buttons…][»][🔍][Adjustments and Effects][Sidebar]`.
 
+Both columns detach into a floating window of their own with the detach/attach button at the right end of their tab strip (or `layout.set` `detached`); closing that window hides the column, which stays detached. The adjust column is at least 316 px wide (docked, floating, and over a narrow window's video), so its four built-in tabs and the detach button fit without `»`.
+
 | Plugin | UI |
 | --- | --- |
 | playback | Bottom bar (always present): source, seek bar (including the chapter/bookmark marks from marks), time, open/pause/speed/mute, volume; inline edit boxes (seek, speed, volume). Adjust panel **Playback** (Alt+4): speed ruler 0.25–4 (1× centred, snapping, double-click 1×, click to type), A-B Loop (mini timeline, A and B rows, Loop switch, Count, ↺ Chapter), jump, frame and keyframe steps, seek steps |

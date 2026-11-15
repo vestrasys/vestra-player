@@ -703,7 +703,8 @@ mod tests {
             None,
             Some(Origin::Main),
             Some(Origin::Lead),
-            Some(Origin::Floating),
+            Some(Origin::Floating(Column::Sidebar)),
+            Some(Origin::Floating(Column::Adjust)),
             Some(Origin::Options),
             Some(view("link")),
         ];
@@ -719,7 +720,9 @@ mod tests {
                         let owner = dialog_place(route(origins.get(TUBE), main, own, shown));
                         let expected = match origin {
                             Some(Origin::Main | Origin::Lead) if main => None,
-                            Some(Origin::Floating) if shown_window => Some(Place::Floating),
+                            Some(Origin::Floating(column)) if shown_window => {
+                                Some(Place::Floating(*column))
+                            }
                             Some(Origin::Options) if shown_window => Some(Place::Options),
                             Some(Origin::View(id)) if shown_window && own.contains(id) => {
                                 Some(place(id))
@@ -739,8 +742,12 @@ mod tests {
         assert_eq!(dialog_place(Route::Sheet), None);
         assert_eq!(dialog_place(Route::Focus), None);
         assert_eq!(
-            dialog_place(Route::Owned(Place::Floating)),
-            Some(Place::Floating)
+            dialog_place(Route::Owned(Place::Floating(Column::Sidebar))),
+            Some(Place::Floating(Column::Sidebar))
+        );
+        assert_eq!(
+            dialog_place(Route::Owned(Place::Floating(Column::Adjust))),
+            Some(Place::Floating(Column::Adjust))
         );
         assert_eq!(
             dialog_place(Route::Owned(place("link"))),
@@ -752,7 +759,7 @@ mod tests {
     /// own windows and the origin's window.
     fn own_or_origin(p: &Place, own: &[String], origin: &Option<Origin>) -> bool {
         match p {
-            Place::Floating => matches!(origin, Some(Origin::Floating)),
+            Place::Floating(column) => *origin == Some(Origin::Floating(*column)),
             Place::Options => matches!(origin, Some(Origin::Options)),
             Place::View(id) => own.contains(id),
         }

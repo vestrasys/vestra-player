@@ -77,6 +77,7 @@ Date: 2026-10-20. Implementation status checked against the current Vestra `main
 | --- | --- | --- | --- |
 | C01 | Show / hide the playlist | ✅ | playlist |
 | C02 | Attach / detach as a floating window | ✅ | playlist + core |
+| C02a | Attach / detach the Adjustments and Effects column as a floating window | ✅ | core |
 | C03 | Add file / add link | ✅ | playlist |
 | C04 | Add folder | ✗ | playlist |
 | C05 | Play with double-click / Enter / P | ✅ | playlist |
