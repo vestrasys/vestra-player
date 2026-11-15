@@ -427,8 +427,13 @@ fn mount(
     )?;
     mount.call = sidebar_tabs::recorded_call(params, &name);
     host.report_refused(reply.owner, refused);
-    // Row patches apply on the initial properties again (seq 0).
-    host.images.reset_writes(reply.owner, mount_view(slot));
+    // Row patches apply on the initial properties again (seq 0): the
+    // interface drops the view's write records now, at the request, not
+    // when the batch is applied (plan step S2c(6)).
+    host.ui_command(UiCommand::ResetWrites {
+        owner: reply.owner,
+        view: mount_view(slot).to_owned(),
+    });
     host.core.mount_queue.push_back(MountChange {
         reply: reply.clone(),
         key,

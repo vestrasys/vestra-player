@@ -10,7 +10,8 @@
 //! [`UiCommand::Layout`], [`UiCommand::Lead`], [`UiCommand::Dialog`],
 //! [`UiCommand::Confirm`], [`UiCommand::Review`], [`UiReport::Acted`], the
 //! `layout.set` and sheet-confirmation [`UiReport::Answered`] and the tab
-//! order in [`WindowFacts`]), S3a moves the core to its own thread.
+//! order in [`WindowFacts`]; S2c(6): [`UiCommand::ResetWrites`]), S3a
+//! moves the core to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -122,6 +123,17 @@ pub(crate) enum UiCommand {
     /// A woken or restarted plugin's interface moves to its new owner
     /// generation (panels, views, settings pages).
     RekeyOwner { from: u64, to: u64 },
+    /// A view shows its initial properties again: `ui.mount` (row 40, at
+    /// the request, before the batching window) and `settings.register`
+    /// (row 83a). Row patches apply on them (`seq` 0), so the interface
+    /// drops the view's write records: each property's last `seq`, the
+    /// parts of a whole write held until its last part, and the rows'
+    /// images and value costs (`ui_image::Images::reset_writes`). Ordered:
+    /// a write of the view sent after it is judged against the reset
+    /// records. The records stay the interface's, with the decoded images
+    /// (plan step S2c(6); design §7, K8): the `stale` check and the write
+    /// it guards are one step of the UI-bound stream.
+    ResetWrites { owner: u64, view: String },
 }
 
 /// The core's tables and values the UI shows. Each is the whole value at
@@ -995,6 +1007,7 @@ mod tests {
             UiCommand::OpenPalette => "OpenPalette",
             UiCommand::RevokeOwner { .. } => "RevokeOwner",
             UiCommand::RekeyOwner { .. } => "RekeyOwner",
+            UiCommand::ResetWrites { .. } => "ResetWrites",
         }
     }
 
@@ -1018,6 +1031,23 @@ mod tests {
         let unique: std::collections::BTreeSet<_> = names.iter().collect();
         assert_eq!(unique.len(), names.len(), "{names:?}");
         assert_eq!(names.len(), 6 + 36);
+    }
+
+    /// The variant plan step S2c(6) added, constructed and matched on its
+    /// own (`every_command` keeps the S2a set its count names): ordered,
+    /// never collapsed.
+    #[test]
+    fn reset_writes_is_constructed_matched_and_ordered() {
+        let reset = UiCommand::ResetWrites {
+            owner: 7,
+            view: "$mount".into(),
+        };
+        assert_eq!(command_name(&reset), "ResetWrites");
+        assert!(!reset.replaces(&reset));
+        for other in every_command() {
+            assert!(!reset.replaces(&other) && !other.replaces(&reset));
+            assert_ne!(command_name(&other), "ResetWrites");
+        }
     }
 
     #[test]

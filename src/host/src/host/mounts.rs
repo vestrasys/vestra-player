@@ -323,9 +323,12 @@ impl Host {
     /// layout, the palette's lead, the file dialogs, the system
     /// confirmation and the sheet (`Host::layout_command`,
     /// `lead_command`, `dialog_command`, `confirm_command`,
-    /// `review_command`). The other commands follow in later steps.
+    /// `review_command`); S2c(6): a view's row-patch records dropped
+    /// (`ResetWrites`, `ui::ui_image::Images::reset_writes`). The other
+    /// commands follow in later steps.
     pub(crate) fn ui_command(&mut self, command: UiCommand) {
         match command {
+            UiCommand::ResetWrites { owner, view } => self.images.reset_writes(owner, &view),
             UiCommand::SetMount(op) => {
                 let SetMount {
                     reply,

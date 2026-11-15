@@ -657,8 +657,13 @@ impl Host {
                     .map(process::Plugin::origin)
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
                 let (page, refused) = self.core.settings_page(owner, &origin, params)?;
-                // Row patches apply on the initial properties again (seq 0).
-                self.images.reset_writes(owner, &page.view());
+                // Row patches apply on the initial properties again (seq 0):
+                // the interface drops the page's write records (plan step
+                // S2c(6)).
+                self.ui_command(UiCommand::ResetWrites {
+                    owner,
+                    view: page.view(),
+                });
                 // A woken plugin registers its recorded page again: the same
                 // files need no compile (the recording is of this package).
                 if let Some(before) = self.core.settings.reregister(&page, sent_page(params)) {
