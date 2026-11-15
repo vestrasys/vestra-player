@@ -17,6 +17,7 @@
 
 use crate::host::Event;
 use crate::process::unanswered::{Admission, Unanswered};
+use crate::process::wire_trace::{self, Dir};
 use crate::process::{MAX_MESSAGE_BYTES, StopReason, stop_message};
 use anyhow::{Context, Result};
 use serde_json::{Value, json};
@@ -669,6 +670,8 @@ fn write_lines(mut stdin: impl Write, output: mpsc::Receiver<Line>) {
             diag!("shared runner: a message that is not an object was not sent");
             continue;
         };
+        // Traced (and numbered) before the write (a test switch).
+        let traced = trace_line(line.g, Dir::Out, &line.message);
         let written = stdin
             .write_all(text.as_bytes())
             .and_then(|()| stdin.write_all(b"\n"))
@@ -678,8 +681,28 @@ fn write_lines(mut stdin: impl Write, output: mpsc::Receiver<Line>) {
         }
         // The runner is gone; its reader reports the exit.
         if written.is_err() {
+            wire_trace::failed(traced);
             break;
         }
+    }
+}
+
+/// The wire trace (a test switch): a member's line, or the runner's own
+/// (`g` 0).
+fn trace_line(g: u64, dir: Dir, message: &Value) -> Option<wire_trace::Traced> {
+    if g == 0 {
+        wire_trace::control(dir, message)
+    } else {
+        wire_trace::line(g, dir, message)
+    }
+}
+
+/// The wire trace: a line that could not be read as a member's, under the
+/// member its first bytes name, else under the runner.
+fn trace_invalid(bytes: &[u8], why: &str) {
+    match prefix_generation(bytes) {
+        Some(g) if g > 0 => wire_trace::invalid(g, why),
+        _ => wire_trace::runner_invalid(why),
     }
 }
 
@@ -732,6 +755,7 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
             Ok(_) if bytes.len() > LINE_LIMIT => match prefix_generation(&bytes) {
                 // That plugin is stopped; the runner and the others go on.
                 Some(g) if g > 0 && link.is_member(g) => {
+                    wire_trace::invalid(g, "oversize");
                     if listening {
                         let _ = events.send(Event::RuntimeFault(
                             g,
@@ -743,12 +767,14 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                     }
                 }
                 _ => {
+                    trace_invalid(&bytes, "oversize");
                     fault("an oversize line without a plugin generation".into());
                     faulted = true;
                 }
             },
             Ok(_) => match parse_line(&bytes) {
                 Ok((0, message)) => {
+                    let _ = trace_line(0, Dir::In, &message);
                     match message["event"].as_str() {
                         Some("runner.hello") => link.state().hello_heard = true,
                         Some("runner.pong") => {
@@ -765,6 +791,11 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                     }
                 }
                 Ok((g, message)) => {
+                    // As an own process's reader: not once the host stopped
+                    // listening (quitting).
+                    if listening {
+                        let _ = trace_line(g, Dir::In, &message);
+                    }
                     // A plugin already stopped (its last lines), or none of
                     // this runner's: never another owner's.
                     if listening
@@ -775,6 +806,7 @@ fn read_lines(mut reader: impl BufRead, link: &Link, events: &mpsc::Sender<Event
                     }
                 }
                 Err(error) => {
+                    trace_invalid(&bytes, "unparsable");
                     fault(error);
                     faulted = true;
                 }

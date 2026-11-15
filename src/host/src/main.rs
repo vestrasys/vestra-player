@@ -159,7 +159,40 @@ fn main() -> Result<()> {
     player()
 }
 
+/// `VESTRA_TEST_UI_STALL=<start ms>,<length ms>`, a test switch (core
+/// thread plan S1.2; tests/ui_stall.rs): `<start ms>` after the player
+/// process started, the windowed tick's UI part sleeps `<length ms>` once,
+/// as a UI thread held by Slint, the GPU or Windows would. Only on the
+/// offscreen platform (`VESTRA_TEST_OFFSCREEN=1`); ignored, with a line
+/// saying so, anywhere else. When and how long: `Some((due, length))`.
+fn ui_stall_switch(launched: Instant, offscreen: bool) -> Option<(Instant, Duration)> {
+    let value = std::env::var("VESTRA_TEST_UI_STALL")
+        .ok()
+        .filter(|value| !value.is_empty())?;
+    if !offscreen {
+        diag!("VESTRA_TEST_UI_STALL ignored: only with VESTRA_TEST_OFFSCREEN=1 and a window");
+        return None;
+    }
+    let parsed = value.split_once(',').and_then(|(start, length)| {
+        Some((
+            start.trim().parse::<u64>().ok()?,
+            length.trim().parse::<u64>().ok()?,
+        ))
+    });
+    match parsed {
+        Some((start, length)) => Some((
+            launched + Duration::from_millis(start),
+            Duration::from_millis(length),
+        )),
+        None => {
+            diag!("VESTRA_TEST_UI_STALL={value}: not <start ms>,<length ms>; ignored");
+            None
+        }
+    }
+}
+
 fn player() -> Result<()> {
+    let launched = Instant::now();
     let args: Vec<String> = std::env::args().skip(1).collect();
     let launch::Launch {
         directories,
@@ -271,6 +304,7 @@ fn player() -> Result<()> {
     // Tests that run the windowed host with no window on screen
     // (`ui::offscreen`): software rendering, as headless runs.
     let offscreen = !headless && ui::offscreen::requested();
+    let mut ui_stall = ui_stall_switch(launched, offscreen);
     let startup = host::rendering_startup(headless || offscreen);
     let mut render = render_mode::decide(&startup.facts, startup.preference);
     logged!("{}", render.line());
@@ -878,6 +912,17 @@ fn player() -> Result<()> {
                     turn.event(label, at.elapsed());
                 });
                 turn.step("events");
+                // The UI part of the turn starts here. The UI stall test
+                // switch holds it once (`ui_stall_switch`).
+                if let Some((due, length)) = ui_stall
+                    && began >= due
+                {
+                    ui_stall = None;
+                    diag!("test: UI stall of {} ms began", length.as_millis());
+                    std::thread::sleep(length);
+                    diag!("test: UI stall ended");
+                    turn.step("test UI stall");
+                }
                 if first_draws.is_some() {
                     let (draws, pictures) = host.backend.render.presentation.counts();
                     let opening = opened_at_start || host.last_source["phase"] == "loading";
