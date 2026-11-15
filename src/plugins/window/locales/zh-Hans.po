@@ -160,11 +160,9 @@ msgstr "窗口倍数尺寸、置顶、迷你尺寸与画中画"
 #: manifest.json
 msgid ""
 "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
-"The items are in the context menu under Screen.\n"
 "→ Command palette (Ctrl+Shift+P): Window"
 msgstr ""
 "把窗口调整为视频的 0.5–2 倍或适应视频比例，开始播放时自动调整窗口尺寸；不置顶、总是置顶、播放时或全屏播放时置顶；迷你尺寸与系统画中画；播放时隐藏鼠标指针。\n"
-"入口在右键菜单「屏幕」。\n"
 "→ 命令面板（Ctrl+Shift+P）：窗口"
 
 #: manifest.json

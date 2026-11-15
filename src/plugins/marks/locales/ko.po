@@ -50,11 +50,11 @@ msgstr "챕터와 북마크로 이동합니다"
 #, x-machine
 msgid ""
 "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\n"
-"Find it in the context menu under \"Tools ▸ Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback).\n"
+"The other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback).\n"
 "→ Press H: Chapter and Bookmark List"
 msgstr ""
 "미디어의 챕터를 표시하고, 파일마다 북마크를 추가하고 이름을 붙여 관리합니다. 챕터와 북마크 사이를 이동하고 탐색 막대에 표시합니다.\n"
-"컨텍스트 메뉴의 ‘도구 ▸ 챕터 및 북마크 목록…’(H)에서 찾을 수 있으며, 나머지 명령은 명령 팔레트의 ‘챕터 및 북마크’에 있습니다. A-B 구간 반복은 ‘재생’ 패널(기본 재생)에 있습니다.\n"
+"나머지 명령은 명령 팔레트의 ‘챕터 및 북마크’에 있습니다. A-B 구간 반복은 ‘재생’ 패널(기본 재생)에 있습니다.\n"
 "→ H 키: 챕터 및 북마크 목록"
 
 #: manifest.json

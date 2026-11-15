@@ -209,11 +209,9 @@ msgstr "Afficher et réassocier les raccourcis clavier et les actions de la sour
 #, x-machine
 msgid ""
 "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\n"
-"Open it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts.\n"
 "→ Options (F5) ▸ Keys and Mouse"
 msgstr ""
 "Liste les commandes du lecteur et de chaque plugin dans la catégorie Clavier et souris de la fenêtre des options : recherche par commande ou par touche, réassociation, dissociation, rétablissement des valeurs par défaut, vérification des conflits et exportation de la liste. Associe des commandes aux clics et à la molette de la souris sur la vidéo, et peut ignorer d'un coup tous les raccourcis par défaut.\n"
-"Accessible depuis la fenêtre des options (Options…, F5) ou la palette de commandes : Paramètres : Raccourcis clavier… / Souris… / Ignorer les raccourcis par défaut.\n"
 "→ Options (F5) ▸ Clavier et souris"
 
 #: manifest.json

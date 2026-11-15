@@ -442,11 +442,11 @@ msgstr "Égaliseur, synchronisation audio, canaux, pistes audio et périphériqu
 #, x-machine
 msgid ""
 "A ten-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\n"
-"Settings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Tools ▸ Audio Track in the right-click menu.\n"
+"Settings are kept across files and restarts; the tracks are also under Tools ▸ Audio Track in the right-click menu.\n"
 "→ Adjustments and Effects ▸ Audio (Alt+2)"
 msgstr ""
 "Un égaliseur à dix bandes avec préréglages, synchronisation audio, normaliser et cristalliseur, choix des canaux, ainsi que le changement de piste audio, le chargement de fichiers audio externes et le choix du périphérique de sortie.\n"
-"Les réglages sont conservés d’un fichier et d’un redémarrage à l’autre ; tout se trouve dans le panneau Audio à côté de la vidéo (Audio…, Alt+2), les pistes aussi sous Outils ▸ Piste audio dans le menu contextuel.\n"
+"Les réglages sont conservés d’un fichier et d’un redémarrage à l’autre ; les pistes se trouvent aussi sous Outils ▸ Piste audio dans le menu contextuel.\n"
 "→ Réglages et effets ▸ Audio (Alt+2)"
 
 #: manifest.json

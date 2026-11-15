@@ -6,7 +6,7 @@
   "name": "Main Window",
   "author": "Vestra Player",
   "punchline": "Window sizes by video scale, always on top, mini size and picture-in-picture",
-  "description": "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\nThe items are in the context menu under Screen.\n→ Command palette (Ctrl+Shift+P): Window",
+  "description": "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n→ Command palette (Ctrl+Shift+P): Window",
   "tags": [
     "screen",
     "window",

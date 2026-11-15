@@ -397,11 +397,9 @@ msgstr "Rechercher et télécharger des sous-titres pour la vidéo actuelle"
 #, x-machine
 msgid ""
 "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
-"Find it in the right-click menu under Subtitles ▸ Online Subtitles.\n"
 "→ Menu: Open ▸ Search and Download Subtitles"
 msgstr ""
 "Recherche des sous-titres sur OpenSubtitles.com ou Assrt par empreinte de fichier et par titre, les charge immédiatement et en garde une copie à côté de la vidéo. Nécessite votre propre clé API, conservée dans le coffre de secrets du système.\n"
-"Accessible depuis le menu contextuel, sous Sous-titres ▸ Sous-titres en ligne.\n"
 "→ Menu : Ouvrir ▸ Rechercher des sous-titres"
 
 #: manifest.json

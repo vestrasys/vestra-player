@@ -196,11 +196,9 @@ msgstr "비디오 배율별 창 크기, 항상 위에 표시, 미니 크기, PIP
 #, x-machine
 msgid ""
 "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
-"The items are in the context menu under Screen.\n"
 "→ Command palette (Ctrl+Shift+P): Window"
 msgstr ""
 "창 크기를 비디오의 0.5–2배로 조정하거나 비디오 화면비에 맞추고, 재생이 시작되면 자동으로 크기를 조정합니다. 항상 위에 표시(안 함, 항상, 재생 중, 전체 화면 재생 중), 미니 크기, 시스템 PIP 모드, 재생 중 포인터 숨기기를 제공합니다.\n"
-"컨텍스트 메뉴의 화면에서 찾을 수 있습니다.\n"
 "→ 명령 팔레트 (Ctrl+Shift+P): 창"
 
 #: manifest.json

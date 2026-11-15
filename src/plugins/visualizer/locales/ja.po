@@ -125,11 +125,9 @@ msgstr "オーディオのみのときにアルバムカバーを、待機中に
 #, x-machine
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
-"Entries: the Logo and Album Cover page in Options…; in the command palette, Audio: Show Album Cover for Audio Only and Appearance: Show Logo When Idle / Choose Logo Image….\n"
 "→ Automatic: album cover and idle logo"
 msgstr ""
 "映像のないオーディオの再生中は、アルバムカバーとタイトル、アーティスト、アルバムを表示します。メディアが開かれていないときはロゴ（自分の画像に置き換え可能）を表示し、メディアを開いている間は読み込み画面を表示します。\n"
-"入口：「オプション…」の「ロゴとアルバムカバー」ページ。コマンドパレットでは「オーディオ: オーディオのみのときアルバムカバーを表示」と「外観: 待機中にロゴを表示 / ロゴ画像を選択…」。\n"
 "→ 自動：アルバムアートと待機中のロゴ"
 
 #: manifest.json

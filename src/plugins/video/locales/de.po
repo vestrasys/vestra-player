@@ -1118,11 +1118,11 @@ msgstr "Farbe, Bildverarbeitung, Seitenverhältnis, Zuschnitt, Drehung und HDR"
 #, x-machine
 msgid ""
 "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\n"
-"Everything is in the Picture panel beside the video: press Alt+1, or right-click Adjustments and Effects and pick the Picture tab. Each control shows its key.\n"
+"Each control shows its key.\n"
 "→ Adjustments and Effects ▸ Picture (Alt+1)"
 msgstr ""
 "Helligkeit, Kontrast, Sättigung und Farbton anpassen; Bildverarbeitung wie Schärfen, Rauschunterdrückung und Deblocking; Spiegeln, Drehung, Deinterlacing und Bildverdopplung; Seitenverhältnis, Zuschneiden/Strecken sowie Zoomen und Verschieben des Bildausschnitts; mit GPU-Rendering zusätzlich HDR-Tone-Mapping, Pixel-Shader und Bewegungsinterpolation.\n"
-"Alles befindet sich im Bild-Bereich neben dem Video: Alt+1 drücken oder per Rechtsklick „Anpassungen und Effekte“ wählen und den Tab „Bild“ öffnen. Jedes Steuerelement zeigt seine Taste.\n"
+"Jedes Steuerelement zeigt seine Taste.\n"
 "→ Anpassungen und Effekte ▸ Bild (Alt+1)"
 
 #: manifest.json

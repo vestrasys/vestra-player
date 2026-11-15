@@ -470,11 +470,9 @@ msgstr "외부 자막 불러오기, 트랙 선택, 스타일과 싱크 조정"
 #, x-machine
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Its panel is beside the video: press Alt+3, or right-click Adjustments and Effects and pick the Subtitles tab.\n"
 "→ Adjustments and Effects ▸ Subtitles (Alt+3)"
 msgstr ""
 "자막 트랙을 선택하고 전환하며, SRT, ASS/SSA, WebVTT, SAMI, MicroDVD 자막을 불러오고(인코딩 자동 감지), 로컬 동영상을 열 때 이름이 같은 자막 파일도 불러오며, 보조 자막을 표시합니다. 크기, 위치, 글꼴, 색상, 윤곽선, 그림자, 배경 상자와 싱크를 조정하고, 대사 단위로 이동하며, 외부 자막 파일이 바뀌면 자동으로 다시 불러옵니다.\n"
-"패널은 동영상 옆에 있습니다. Alt+3을 누르거나, 마우스 오른쪽 버튼으로 \"조정 및 효과\"를 선택한 뒤 자막 탭을 여세요.\n"
 "→ 조정 및 효과 ▸ 자막 (Alt+3)"
 
 #: manifest.json

@@ -99,7 +99,6 @@ msgstr ""
 #: manifest.json
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
-"Entries: the Logo and Album Cover page in Options…; in the command palette, Audio: Show Album Cover for Audio Only and Appearance: Show Logo When Idle / Choose Logo Image….\n"
 "→ Automatic: album cover and idle logo"
 msgstr ""
 

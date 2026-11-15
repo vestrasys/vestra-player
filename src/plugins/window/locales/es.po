@@ -196,11 +196,9 @@ msgstr "Tamaños de ventana según la escala del video, siempre visible, tamaño
 #, x-machine
 msgid ""
 "Resizes the window to 0.5–2× the video or fits it to the video's aspect ratio, and resizes it automatically when playback starts; never on top, always on top, on top while playing or while playing in fullscreen; mini size and the system's picture-in-picture; hides the pointer while playing.\n"
-"The items are in the context menu under Screen.\n"
 "→ Command palette (Ctrl+Shift+P): Window"
 msgstr ""
 "Cambia el tamaño de la ventana a 0.5–2× el video o la ajusta a la relación de aspecto del video, y la redimensiona automáticamente al iniciar la reproducción; siempre visible: nunca, siempre, durante la reproducción o durante la reproducción en pantalla completa; tamaño mini e imagen en imagen del sistema; oculta el puntero durante la reproducción.\n"
-"Las opciones están en el menú contextual, en Pantalla.\n"
 "→ Paleta de comandos (Ctrl+Shift+P): Ventana"
 
 #: manifest.json

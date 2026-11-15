@@ -395,11 +395,9 @@ msgstr "現在のビデオの字幕を検索してダウンロード"
 #, x-machine
 msgid ""
 "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
-"Find it in the right-click menu under Subtitles ▸ Online Subtitles.\n"
 "→ Menu: Open ▸ Search and Download Subtitles"
 msgstr ""
 "OpenSubtitles.com または Assrt で、ファイルのハッシュとタイトルから字幕を検索し、すぐに読み込んで、ビデオの横にコピーを保存します。ご自身の API キーが必要で、キーはシステムのシークレットストアに保存されます。\n"
-"右クリックメニューの「字幕 ▸ オンライン字幕」から使えます。\n"
 "→ メニュー：開く ▸ 字幕を検索してダウンロード"
 
 #: manifest.json
