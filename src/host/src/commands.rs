@@ -919,14 +919,16 @@ impl Registry {
         &self,
         owner: OwnerGeneration,
     ) -> Vec<(&CommandSnapshot, bool, Option<&Sent>)> {
-        let mut entries = self
-            .commands
-            .iter()
-            .filter(|(key, _)| key.owner == owner)
-            .map(|(key, entry)| (entry, self.recorded.contains(key), self.sent.get(key)))
-            .collect::<Vec<_>>();
-        entries.sort_by_key(|(entry, ..)| entry.sequence);
-        entries
+        entries_of(&self.commands, owner)
+            .into_iter()
+            .map(|entry| {
+                (
+                    entry,
+                    self.recorded.contains(&entry.key),
+                    self.sent.get(&entry.key),
+                )
+            })
+            .collect()
     }
 
     /// A command of `owner`'s is busy (its run is in progress).
@@ -1306,13 +1308,7 @@ impl View {
     /// An owner's entries in registration order, as
     /// [`Registry::entries_of`] lists them.
     pub fn entries_of(&self, owner: OwnerGeneration) -> Vec<&CommandSnapshot> {
-        let mut entries = self
-            .commands
-            .values()
-            .filter(|entry| entry.key.owner == owner)
-            .collect::<Vec<_>>();
-        entries.sort_by_key(|entry| entry.sequence);
-        entries
+        entries_of(&self.commands, owner)
     }
 
     /// See [`Registry::resolve_execution`]: what the registry would answer
@@ -1352,6 +1348,16 @@ fn entry<'a>(
         owner,
         local_id: id.into(),
     })
+}
+
+/// An owner's entries in registration order (the menu's tie-break).
+fn entries_of(commands: &Commands, owner: OwnerGeneration) -> Vec<&CommandSnapshot> {
+    let mut entries = commands
+        .values()
+        .filter(|entry| entry.key.owner == owner)
+        .collect::<Vec<_>>();
+    entries.sort_by_key(|entry| entry.sequence);
+    entries
 }
 
 /// The state `entry` shows: its own, or disabled with the reason while its
