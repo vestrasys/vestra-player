@@ -66,7 +66,23 @@ export declare class PlayerService implements StreamSource {
     current(): Promise<PlayerState>;
     /** Drop anything older than what was already delivered. */
     accept(raw: SourceState): void;
+    /**
+     * A source event's data (`source.opening`, `source.ready`,
+     * `source.ended`) as the listener gets it: `state` as a
+     * {@link PlayerState}. The state of an opening or a ready is the
+     * player's newest, so `plugin.player.state` takes it first (when it is
+     * newer than what the plugin has): `isCurrent(state)` and `ifCurrent`
+     * then hold after a wake too, without a read. An ended source's state
+     * is not the player's current one and is not taken.
+     */
+    sourceEvent(event: string, data: unknown): unknown;
     watch(watcher: (raw: SourceState) => void): Disposable;
+    /**
+     * `watch`, for `plugin.player.stream`: the copy hears `source.state` while
+     * the watcher is open, with or without `subscribe()`, and the plugin
+     * counts as listening to it (`Connection.follow`).
+     */
+    follow(watcher: (raw: SourceState) => void, why: () => string): Disposable;
     refresh(): Promise<PlayerState>;
     /**
      * Submit an intent and wait for its definite outcome. A reply from the host

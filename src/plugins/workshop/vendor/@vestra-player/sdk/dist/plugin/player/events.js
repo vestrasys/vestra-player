@@ -23,6 +23,9 @@ export const EVENT_NEEDS = {
     "resolvers.fileTypes": "events",
     "video.upscaling.changed": null,
     "video.motion.changed": null,
+    "source.opening": null,
+    "source.ready": null,
+    "source.ended": null,
 };
 /** `Player.on`'s arguments: a {@link HostEvent} name and a function. */
 export function checkOn(event, listener) {
@@ -31,14 +34,27 @@ export function checkOn(event, listener) {
     if (typeof listener !== "function")
         throw failure("invalid", "on takes an event name and a listener");
 }
-/** `Player.on`: `listener` hears each `event`, with a copy of its data. */
-export function playerOn(scope, event, listener) {
+/**
+ * The discrete source events (player 0.10.0): their `state` reaches the
+ * listener as a `PlayerState`, not in the wire shape.
+ */
+export const SOURCE_EVENTS = new Set([
+    "source.opening",
+    "source.ready",
+    "source.ended",
+]);
+/**
+ * `Player.on`: `listener` hears each `event`, with a copy of its data;
+ * `convert` (the source events) turns the copy into what the listener
+ * gets.
+ */
+export function playerOn(scope, event, listener, convert = (data) => data) {
     checkOn(event, listener);
     const watch = scope.runtime.on(event, 
     // A copy: the same data also feeds the SDK's own state copies.
     // No full pass after it (`runQuiet`): the listener pushes its own
     // values; `plugin.state` writes run the passes that concern them.
-    (data) => scope.runQuiet(listener, structuredClone(data)), EVENT_NEEDS[event]);
+    (data) => scope.runQuiet(listener, convert(structuredClone(data))), EVENT_NEEDS[event]);
     const handle = {
         dispose: async () => {
             scope.forget(handle);

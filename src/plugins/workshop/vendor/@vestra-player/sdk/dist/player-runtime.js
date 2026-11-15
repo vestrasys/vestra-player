@@ -18,6 +18,9 @@ export { COMMAND_RUN_LIMITS, PALETTE_LEAD_LIMITS, PALETTE_LEAD_STATES, } from ".
 export { MPV_LIMITS, MPV_RULES } from "./mpv.js";
 export { OSD_LIMITS } from "./plugin/osd.js";
 export { TIMELINE_LIMITS } from "./plugin/timeline.js";
+export { TRIGGER_LIMITS } from "./plugin/triggers.js";
+export { CONDITION_TABLE } from "./condition-table.js";
+export { evaluateTruth } from "./plugin/when.js";
 export { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./plugin/services.js";
 export { SUBTITLE_LIMITS } from "./plugin/subtitles.js";
 export { VIDEO_PROCESSING_LIMITS } from "./processing.js";

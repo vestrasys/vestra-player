@@ -13,6 +13,17 @@ import { isTextValue } from "../../i18n.js";
 import { taken } from "./transport.js";
 import { declaredText, hostText } from "./i18n.js";
 import { timelineChanged } from "./layout.js";
+import { sourceEvents } from "./source-events.js";
+/**
+ * Broadcast the source state `host.source` became from `previous`, then
+ * the discrete source events it adds (`source.opening`, `source.ready`,
+ * `source.ended`), as the player sends them after it.
+ */
+export function emitSource(host, previous, reload = false) {
+    host.emit("source.state", host.source);
+    for (const [name, data] of sourceEvents(previous, host.source, reload))
+        host.emit(name, structuredClone(data));
+}
 export function initialSource() {
     return {
         kind: "media",
@@ -145,12 +156,13 @@ export function sourceIntent(host, inner, intent) {
         inner.selected = Number(intent.producerId);
     if (intent.kind === "open" || intent.kind === "close")
         inner.selected = null;
+    const previous = host.source;
     host.source = next;
     host.subtitles.source = {
         generation: next.stamp.generation,
         phase: next.phase,
     };
-    host.emit("source.state", host.source);
+    emitSource(host, previous, intent.kind === "restart");
     cancelResolutions(host, inner);
     return { ticket: { stamp: next.stamp, cycle: next.cycle, owner: 1 } };
 }
@@ -389,6 +401,7 @@ export function setSource(host, inner, patch) {
     // (the player reads this as the end arrives).
     if (patch.phase === "ended" && host.source.phase !== "ended")
         inner.endKeepsPause = inner.stepped || host.source.paused;
+    const previous = host.source;
     host.source = {
         ...host.source,
         ...patch,
@@ -400,7 +413,7 @@ export function setSource(host, inner, patch) {
         generation: host.source.stamp.generation,
         phase: host.source.phase,
     };
-    host.emit("source.state", host.source);
+    emitSource(host, previous);
     // Like the player (reference §6.3): loading shows the backdrop.
     if (patch.phase === "loading" && host.backdrop && !host.backdrop.effective)
         host.setBackdropEffective(true);

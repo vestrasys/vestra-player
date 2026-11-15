@@ -9,7 +9,7 @@ import type { Timeline, TimelineMark, TimelineRange } from "./types.ts";
  * player's tests check that these agree with the player.
  *
  * @example Keep a long list of ranges inside the limit
- * The plugin publishes the first 100 of its ranges; the player refuses a
+ * The plugin publishes the first 1000 of its ranges; the player refuses a
  * longer list whole.
  * ```ts
  * import type { Plugin } from "@vestra-player/sdk";
@@ -33,8 +33,8 @@ import type { Timeline, TimelineMark, TimelineRange } from "./types.ts";
 export declare const TIMELINE_LIMITS: Readonly<{
     /** Marks in one layer (`TimelineLayer.set`) (1000). */
     readonly marks: 1000;
-    /** Ranges in one layer (`TimelineLayer.setRanges`) (100). */
-    readonly ranges: 100;
+    /** Ranges in one layer (`TimelineLayer.setRanges`) (1000; 100 before SDK 1.10.0). */
+    readonly ranges: 1000;
     /** Characters of a mark's or a range's title, as shown (100). */
     readonly titleChars: 100;
 }>;

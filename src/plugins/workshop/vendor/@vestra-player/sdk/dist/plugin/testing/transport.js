@@ -9,6 +9,7 @@
 import { rmSync } from "node:fs";
 import { HostError } from "../../wire.js";
 import { WAKE_EVENTS } from "../connection.js";
+import { hearEvent } from "./triggers.js";
 export const tick = () => new Promise((resolve) => setImmediate(resolve));
 /**
  * Refusals for a position or resolver another plugin holds: not activation
@@ -49,6 +50,10 @@ export function on(_host, inner, event, listener) {
 }
 /** Implements `TestHost.emit`. */
 export function emit(host, inner, event, data) {
+    // Trigger conditions first (the player evaluates them before it sends
+    // the state); a parked plugin hears nothing, a wake event wakes it.
+    if (hearEvent(host, inner, event, data))
+        return;
     if ([
         "source.state",
         "playback.backend",

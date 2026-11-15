@@ -1,6 +1,6 @@
 # Events and triggers (design)
 
-**Status: decided, not implemented.** Written 2026-11-14 by the API maintainer from the user's rulings of that day. First release: SDK 1.10.0 / player 0.10.0. The execution plan is [events-and-triggers-plan.md](../process/events-and-triggers-plan.md). This file is the authority for the design; where an earlier draft differs (the drafts v1–v3 in the local folder `design/wake-design/`), this file wins.
+**Status: release A implemented and shipped in SDK 1.10.0 / player 0.10.0 (2026-11-15); release B (second batch of events, removal of subscribe()/onChange()) not started.** Written 2026-11-14 by the API maintainer from the user's rulings of that day. First release: SDK 1.10.0 / player 0.10.0. The execution plan is [events-and-triggers-plan.md](../process/events-and-triggers-plan.md). This file is the authority for the design; where an earlier draft differs (the drafts v1–v3 in the local folder `design/wake-design/`), this file wins.
 
 No code was written, no player was run and nothing was measured for this document. No example in it was compiled. Every measured value is quoted with its source; every other figure is an estimate and is listed in [§8](#8-estimates-not-yet-measured).
 

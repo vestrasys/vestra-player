@@ -61,6 +61,9 @@ export const API_REQUESTS = Object.freeze({
     "Subtitles.load": [{ method: "subtitles.upload.begin" }, readsSubtitles],
     "Subtitles.remove": [{ method: "subtitles.remove" }, readsSubtitles],
     "Subtitles.setStyle": [{ method: "subtitles.style" }, readsSubtitles],
+    "Plugin.trigger": [{ method: "triggers.declare" }],
+    "Trigger.firesOn": [{ method: "triggers.set" }],
+    "Trigger.off": [{ method: "triggers.off" }],
     "Timeline.marks": [{ method: "timeline.marks" }],
     "Timeline.ranges": [{ method: "timeline.marks" }],
     "Timeline.layer": [
@@ -166,9 +169,10 @@ export const API_REQUESTS = Object.freeze({
 });
 /**
  * The events whose listener subscribes (`events.subscribe` with the event
- * name): the plugin API's `HostEvent`. Other names a plugin listens to
- * (`commands.execute`, `ui.callback`) arrive unasked and need nothing.
- * test/wire-facade.test.ts keeps it equal to `HostEvent`.
+ * name): the plugin API's `HostEvent` and `SourceEvent`. Other names a
+ * plugin listens to (`commands.execute`, `ui.callback`) arrive unasked and
+ * need nothing.
+ * test/wire-facade.test.ts keeps it equal to `EVENT_NEEDS`.
  *
  * @internal
  */
@@ -184,4 +188,7 @@ export const SUBSCRIBED_EVENTS = Object.freeze([
     "resolvers.fileTypes",
     "video.upscaling.changed",
     "video.motion.changed",
+    "source.opening",
+    "source.ready",
+    "source.ended",
 ]);
