@@ -773,11 +773,12 @@ pub fn wait_for_process_exit(pid: u32, timeout_ms: u32) -> bool {
 /// Whether process `pid` runs, and since when: `Ok(Some(t))` with its
 /// creation time (`FILETIME` ticks, which tell a reused process id from the
 /// process that had it), `Ok(None)` when no process has that id or it has
-/// ended, `Err(())` when the system does not say (access refused).
+/// ended, `Err(())` when the system does not say (access refused, a failed
+/// wait).
 #[allow(clippy::result_unit_err)]
 pub fn process_creation_time(pid: u32) -> Result<Option<u64>, ()> {
     use windows_sys::Win32::Foundation::{
-        CloseHandle, ERROR_INVALID_PARAMETER, FILETIME, GetLastError, WAIT_TIMEOUT,
+        CloseHandle, ERROR_INVALID_PARAMETER, FILETIME, GetLastError, WAIT_OBJECT_0, WAIT_TIMEOUT,
     };
     use windows_sys::Win32::System::Threading::{
         GetProcessTimes, OpenProcess, PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE,
@@ -809,17 +810,18 @@ pub fn process_creation_time(pid: u32) -> Result<Option<u64>, ()> {
     let (mut created, mut exited, mut kernel, mut user) = (zero, zero, zero, zero);
     // SAFETY: a live process handle of ours, queried with local
     // out-parameters and closed exactly once. A zero wait only polls.
-    let (running, times) = unsafe {
-        let running = WaitForSingleObject(process, 0) == WAIT_TIMEOUT;
+    let (wait, times) = unsafe {
+        let wait = WaitForSingleObject(process, 0);
         let times = GetProcessTimes(process, &mut created, &mut exited, &mut kernel, &mut user);
         CloseHandle(process);
-        (running, times != 0)
+        (wait, times != 0)
     };
-    if !running {
+    if wait == WAIT_OBJECT_0 {
         // Ended; a handle someone still holds keeps it openable.
         return Ok(None);
     }
-    if !times {
+    // Only a timeout says it runs; a failed wait says nothing.
+    if wait != WAIT_TIMEOUT || !times {
         return Err(());
     }
     Ok(Some(

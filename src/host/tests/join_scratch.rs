@@ -54,6 +54,9 @@ fn own_start() -> String {
     {
         let output = Command::new("/bin/ps")
             .args(["-o", "lstart=", "-p", &std::process::id().to_string()])
+            // As the host reads it: fixed locale and time zone.
+            .env("LC_ALL", "C")
+            .env("TZ", "UTC")
             .output()
             .unwrap();
         String::from_utf8_lossy(&output.stdout).trim().to_owned()

@@ -125,6 +125,8 @@ pub fn process_start(pid: u32) -> ProcessStart {
 }
 #[cfg(target_os = "linux")]
 pub fn process_start(pid: u32) -> ProcessStart {
+    // Within this pid namespace only: a player in another sandbox (Flatpak)
+    // reads as gone, and its folder goes.
     let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
         return if std::path::Path::new("/proc/self/stat").exists() {
             ProcessStart::Gone
@@ -143,9 +145,13 @@ pub fn process_start(pid: u32) -> ProcessStart {
 #[cfg(not(any(target_os = "windows", target_os = "linux")))]
 pub fn process_start(pid: u32) -> ProcessStart {
     // `/bin/ps`, not whatever `ps` is first on PATH: it exits 1 with no
-    // output when no process has the id.
+    // output when no process has the id. `lstart` is printed through
+    // strftime, so the locale and time zone are fixed: players started from
+    // Finder and from a terminal read the same mark for one process.
     let Ok(output) = std::process::Command::new("/bin/ps")
         .args(["-o", "lstart=", "-p", &pid.to_string()])
+        .env("LC_ALL", "C")
+        .env("TZ", "UTC")
         .stdin(std::process::Stdio::null())
         .stderr(std::process::Stdio::null())
         .output()
