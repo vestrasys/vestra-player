@@ -333,7 +333,7 @@ Columns. **Today**: F = forwarded to the playback worker, answered later by `Eve
 | 87 | `secrets.set` | secrets.rs:24; system.rs:155 | C | I | — · from the `system-request` thread |
 | 88 | `secrets.delete` | secrets.rs:24; system.rs:155 | C | I | — · from the `system-request` thread |
 | 89 | `rendering.setPreference` | rendering_manage.rs:26; host/rendering.rs:316 | C | I | — · at once |
-| 90 | `rendering.restart` | rendering_manage.rs:26; host/rendering.rs:326 | C | I | `WindowOp::Quit` after the reply · at once |
+| 90 | `rendering.restart` | rendering_manage.rs:26; host/rendering.rs:326 | C | I | `WindowOp::Quit` after the reply · at once. As built in plan step S2d(4): the host's own `quit` command sends `WindowOp::Quit` after the core stopped the handoffs and wrote the state file, so the state file is now written before the GPU waits are released (and the handoffs stop before that release too); `rendering.restart` keeps its own quit after the reply (`invoke_from_event_loop`, safe from any thread) |
 | 91 | `video.upscaling.state` | video_upscaling.rs:34 | F | I | — · worker |
 | 92 | `video.upscaling.set` | video_upscaling.rs:34 | F | I | — · worker |
 | 93 | `video.motion.state` | video_motion.rs:33 | F | I | — · worker |

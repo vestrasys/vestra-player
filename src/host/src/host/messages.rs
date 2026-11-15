@@ -340,10 +340,12 @@ pub(crate) enum WindowOp {
     Fullscreen(FullscreenChange),
     /// `OpenFiles` from another launch: the main window to the front.
     Raise,
-    /// The player ends its event loop: `rendering.restart` (row 90, after
-    /// the reply) and the host's `quit` command (`host_command`: the GPU
-    /// waits released, handoffs stopped; the state file, the core's since
-    /// plan step S2c(7), written by the core before it sends this).
+    /// The player ends its event loop: the host's `quit` command
+    /// (`host_command`; plan step S2d(4)). The core stops the handoffs and
+    /// writes the state file (the core's since plan step S2c(7)) before it
+    /// sends this; the interface releases the GPU waits and ends the loop.
+    /// `rendering.restart` (row 90) keeps its own quit after its reply
+    /// (`slint::invoke_from_event_loop`, safe from any thread).
     Quit,
 }
 

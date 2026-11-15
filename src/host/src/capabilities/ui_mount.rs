@@ -992,6 +992,8 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
         owner: reply.owner,
         key,
         ids,
+        // Carried for plan step S3a (the origin and its refusals judged on
+        // the core, design §5.1 note 7); unused for now.
         params: params.clone(),
     }));
     Ok(Value::Null)
