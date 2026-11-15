@@ -160,3 +160,15 @@ Collected here so that nothing waits silently. None of these blocks a merge exce
 - S2 cannot reach zero difference for a field without a behaviour change: stop that field, report which behaviour, continue with the others.
 - `Core` cannot be made `Send` without `unsafe` or a lock on a hot path: stop and bring the field to the user.
 - S3a's stall test passes but V3 shows a frame-rate regression: stop before the merge.
+
+## 10. After S3 (user rulings 2026-11-15)
+
+These start only when S3c is merged and the core thread has been stable in use.
+
+| Item | What | Authority |
+| --- | --- | --- |
+| F1 | **Interface-only recovery after a device loss.** First a verification: can Slint close every window, take a new device and reopen them in the same process while the core, the plugins and playback keep running? Measure the size of the change | If small and contained: implement without asking. If it needs another round of core changes: drop it and report |
+| F2 | **TestHost models the two streams**, so a plugin test shows a dependence on order across the two kinds of request. This changes TestHost behaviour and ships as an SDK release of its own | Decided: after the core thread work is done, not during it |
+| F3 | **SDK docs** state the ordering rule (R4, R5) for plugin authors | May be written at any time |
+
+Not planned (user, 2026-11-15): the default adapter rule ("render on the adapter that drives the main window's screen"). It stays on the blackboard as a possible stopgap only.
