@@ -1,6 +1,7 @@
 // Plugin Store v4 (vestra.store, designs store-v3 rev. 2 and store-v4, owner
 // rulings 2026-11-15): one window-wide grid of cards. On top a 31px strip with
-// the tabs All / Installed / Updates, the search box, Refresh and the ⋯ menu;
+// the tabs All / Not installed / Installed / Updates (store 0.3.1), the search
+// box, Refresh and the ⋯ menu;
 // under its rule the filter row: "Show built-in plugins (n)", Category and
 // Sort; the grid; a status line at the bottom. An installed card has its own
 // ⋯ (Disable or Enable, Uninstall…) before its one text button. A click on a
@@ -12,7 +13,10 @@
 // grid's width by a binding, TypeScript hands over one flat array and is not
 // told about resizes. Texts built at run time come translated from
 // TypeScript (text values); long ones are elided here, never cut there.
-// Minimum 600×480: two columns of cards; the tabs and two drop-downs fit.
+// Minimum 600×480 (two columns of cards), wider when the strip or the filter
+// row needs more in the interface language: the window's minimum width is the
+// larger of 600 and those two rows' own minimum widths, so the four tabs,
+// the search box (at least 120), Refresh and ⋯ always fit.
 import { LineEdit, ListView } from "std-widgets.slint";
 import { MarkdownView, MarkdownBlock } from "@vestra/markdown.slint";
 import { Theme } from "@vestra/theme.slint";
@@ -109,6 +113,10 @@ component SizedButton inherits Rectangle {
 // The emphasised button (owner ruling 2026-11-15: Update stands out): the
 // accent colour with white text, as the library's checked box is. The
 // library has no such button, so it is the store's own, from Theme tokens.
+// Hover and press darken the accent (halfway to accent-press, then
+// accent-press), so the white text keeps its contrast; disabled, it is drawn
+// as the library's disabled Button (button-disabled, text-dim), which reads
+// in both palettes (white on the light palette's accent-disabled did not).
 component AccentButton inherits Rectangle {
     in property <string> text;
     in property <bool> enabled: true;
@@ -116,14 +124,16 @@ component AccentButton inherits Rectangle {
     width: max(Theme.button-min-width, label.preferred-width + 2 * Theme.button-padding);
     height: Theme.button-height;
     border-radius: Theme.radius-control;
-    background: !root.enabled ? Theme.accent-disabled : touch.pressed ? Theme.accent-press : Theme.accent;
+    background: !root.enabled ? Theme.button-disabled
+        : touch.pressed ? Theme.accent-press
+        : touch.has-hover ? Theme.accent.mix(Theme.accent-press, 0.5) : Theme.accent;
     accessible-role: button;
     accessible-label: root.text;
     accessible-enabled: root.enabled;
-    accessible-action-default => { root.clicked(); }
+    accessible-action-default => { if root.enabled { root.clicked(); } }
     label := Text {
         text: root.text;
-        color: Colors.white;
+        color: root.enabled ? Colors.white : Theme.text-dim;
         font-size: Theme.font-body;
         horizontal-alignment: center;
         vertical-alignment: center;
@@ -236,6 +246,7 @@ component Card inherits Rectangle {
                     tip: @tr("Manage");
                     entries: root.item.menu;
                     window-height: root.window-height;
+                    context: root.item.key;
                     picked(id) => { root.act(id); }
                 }
             }
@@ -257,7 +268,9 @@ export component StoreWindow inherits Window {
     title: @tr("Plugin Store");
     preferred-width: 920px;
     preferred-height: 640px;
-    min-width: 600px;
+    // An explicit minimum replaces the layout's own: the strip's and the filter row's are folded in here
+    // (four tabs in Spanish or Japanese need more than 600).
+    min-width: max(600px, strip.min-width, filters.min-width);
     min-height: 480px;
     background: Theme.bg-panel;
 
@@ -402,7 +415,7 @@ export component StoreWindow inherits Window {
                 Rectangle {
                     height: 31px;
                     background: Theme.bg-bar;
-                    HorizontalLayout {
+                    strip := HorizontalLayout {
                         padding-left: 13px;
                         padding-right: 16px;
                         spacing: 6px;
@@ -422,8 +435,9 @@ export component StoreWindow inherits Window {
                         Rectangle { horizontal-stretch: 1; }
                         VerticalLayout {
                             alignment: center;
+                            // Shrinks to 120 before the window has to grow (four tabs, store 0.3.1).
                             search-box := LineEdit {
-                                min-width: 160px;
+                                min-width: 120px;
                                 max-width: 240px;
                                 preferred-width: 240px;
                                 height: Theme.input-height;
@@ -474,7 +488,7 @@ export component StoreWindow inherits Window {
                 }
                 Rectangle { height: 1px; background: Theme.line; }
                 // The filter row: 10 + 21 + 10, 16 at the sides, the cards' edges.
-                HorizontalLayout {
+                filters := HorizontalLayout {
                     padding-left: 16px;
                     padding-right: 16px;
                     padding-top: 10px;
@@ -660,10 +674,18 @@ export component StoreWindow inherits Window {
                         height: Theme.button-height;
                         spacing: 6px;
                         alignment: start;
-                        for action in root.actions: SizedButton {
-                            text: action.text;
-                            enabled: action.enabled;
-                            clicked => { root.act(action.id); }
+                        // "Update to x" in the accent colour, as on the card (owner ruling 2026-11-15).
+                        for action in root.actions: HorizontalLayout {
+                            if action.id == "update": AccentButton {
+                                text: action.text;
+                                enabled: action.enabled;
+                                clicked => { root.act(action.id); }
+                            }
+                            if action.id != "update": SizedButton {
+                                text: action.text;
+                                enabled: action.enabled;
+                                clicked => { root.act(action.id); }
+                            }
                         }
                         if root.more.length > 0: MenuButton {
                             width: 23px;

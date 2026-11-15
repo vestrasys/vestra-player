@@ -256,9 +256,12 @@ export const isInstalledRow = (item: Item) =>
 
 /**
  * A repository's entry whose id has no installed instance, no built-in and no
- * development load (the Not installed tab): what could still be added.
+ * development load, and that this player can install (the Not installed tab):
+ * what could still be added. Entries that cannot be installed (incompatible,
+ * every version revoked, a reserved `vestra.` id) stay under All with their
+ * reason; listing them here would offer nothing to do.
  */
-export const isNotInstalledRow = (item: Item) => item.entry !== null && item.installed === null && !item.development;
+export const isNotInstalledRow = (item: Item) => item.entry !== null && item.state === "available" && !item.development;
 
 /**
  * A built-in plugin's row (shipped with the player; it cannot be uninstalled

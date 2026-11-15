@@ -288,7 +288,11 @@ test("Not installed (store 0.3.1): the repositories' plugins with no installed c
     { id: "o.off", name: "Off", versions: [{ version: "1.0.0" }] },
     // A repository listing a built-in's id: it is installed (built in), so not here.
     { id: "vestra.video", name: "Fake Video", versions: [{ version: "9.0.0" }] },
-  ]);
+    // Not installed but not installable either: All lists them with the reason, this tab does not.
+    { id: "i.incompat", name: "Incompat", versions: [{ version: "1.0.0", minPlayerVersion: "99.0.0" }] },
+    { id: "r.revoked", name: "Revoked", versions: [{ version: "1.0.0" }] },
+    { id: "vestra.other", name: "Reserved", versions: [{ version: "1.0.0" }] },
+  ], { revoked: [{ id: "r.revoked", versions: "*", reason: "malware" }] });
   publish(net, THIRD, [{ id: "b.beta", name: "Beta", versions: [{ version: "2.0.0" }] }]);
   const { host, store, stop } = await start({
     net,
@@ -307,8 +311,10 @@ test("Not installed (store 0.3.1): the repositories' plugins with no installed c
     store.repos.sync([THIRD]);
     await store.refreshAll(true);
     await openStore(host);
-    // Seven repository rows, and the local rows of the built-in, the sideload and the development load.
-    await until(host, () => store.items.length === 10, "rows");
+    // Ten repository rows, and the local rows of the built-in, the sideload and the development load.
+    await until(host, () => store.items.length === 13, "rows");
+    const states = (name: string) => store.items.find((each) => each.name === name)?.state;
+    assert.deepEqual(["Incompat", "Revoked", "Reserved"].map(states), ["incompatible", "allRevoked", "reserved"]);
     // One card per repository, as under All; the count is the tab's before a search.
     assert.equal(props(host)["not-installed-count"], 2);
     await tab(host, NOT_INSTALLED);
@@ -333,17 +339,21 @@ test("Not installed (store 0.3.1): the repositories' plugins with no installed c
   }
 });
 
-test("Not installed, empty: every repository plugin installed says so; offline, the repositories cannot be reached", async () => {
+test("Not installed, empty: nothing more to install says so; offline, the repositories cannot be reached", async () => {
   const net = new FakeNet();
-  publish(net, OFFICIAL, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] }]);
+  // Alpha is installed; Incompat cannot be.
+  publish(net, OFFICIAL, [
+    { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
+    { id: "i.incompat", name: "Incompat", versions: [{ version: "1.0.0", minPlayerVersion: "99.0.0" }] },
+  ]);
   const all = await start({ net, locale: "en", packages: [BUILTIN, info("a.alpha", { version: "1.0.0", source: fromRepo })] });
   try {
     await openStore(all.host);
-    await until(all.host, () => all.store.items.length === 2, "rows");
+    await until(all.host, () => all.store.items.length === 3, "rows");
     await tab(all.host, NOT_INSTALLED);
     assert.equal(props(all.host)["not-installed-count"], 0);
     assert.deepEqual(rows(all.host), []);
-    assert.equal(props(all.host)["empty-text"], "Every plugin in the repositories is installed");
+    assert.equal(props(all.host)["empty-text"], "There are no more plugins to install");
   } finally {
     await all.stop();
   }

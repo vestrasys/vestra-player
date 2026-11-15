@@ -78,7 +78,12 @@ export component MenuButton {
     in property <bool> enabled: true;
     // The window's height; 0: always under the button.
     in property <length> window-height: 0px;
+    // What the menu acts on (a card's key). A ListView reuses its rows: when the
+    // list changes under an open menu, the button may now stand for another
+    // plugin, so a change closes the menu before anything can be picked.
+    in property <string> context;
     callback picked(string);
+    changed context => { menu.close(); }
     private property <length> menu-width: max(120px, measure.preferred-width + 20px);
     // At most: 24px rows (a separator is 7) and the 2px padding above and below.
     private property <length> menu-height: root.entries.length * 24px + 4px;

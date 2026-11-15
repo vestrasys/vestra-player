@@ -2,9 +2,13 @@
 
 ## 0.3.1
 
-- A new tab **Not installed** right after All (as Steam and Synaptic name it): the repositories' plugins that are neither installed, built in nor loaded with `--plugin`, one card per repository as under All, with its count in the title. It follows search, Category, Sort and "Show built-in plugins" like the other tabs; empty, it says that every plugin in the repositories is installed, or, without any index, that the repositories cannot be reached. The tab is remembered by name, so a tab kept by 0.3.0 (Installed, Updates) opens as before.
+- A new tab **Not installed** right after All (as Steam and Synaptic name it): the repositories' plugins that this player can install and that are neither installed, built in nor loaded with `--plugin`, one card per repository as under All, with its count in the title. Entries that cannot be installed (Incompatible, every version revoked, a reserved `vestra.` id) are left out: the tab is what you could still add, and All keeps them with the reason. It follows search, Category, Sort and "Show built-in plugins" like the other tabs; empty, it says "There are no more plugins to install", or, without any index, that the repositories cannot be reached. The tab is remembered by name, so a tab kept by 0.3.0 (Installed, Updates) opens as before.
+- The window's minimum width grows past 600 when the four tabs need it in the interface language (Spanish, Japanese), so Refresh and ⋯ stay in the window; the search box shrinks to 120 first.
 - A card's "✓ Installed" is green: a darker green on the light palette, the video plugin's green on the dark one (the theme has no green token; both read at 4.5:1 or more against the panel).
-- New text translated by machine (marked `x-machine`; zh-Hans by hand). Who must change: nobody.
+- The accent Update button: "Update to x" on a plugin's page is drawn like the card's Update; hover and press darken it; disabled, it looks like any disabled button (white text on the light palette's pale accent could not be read).
+- A card's ⋯ menu closes when the grid changes under it, so it can no longer act on the plugin that took that card's place.
+- "Replace with x from y…" shows "Installing… n%" on the installed plugin's card, as Install and Update do.
+- Translations of the tab title and the empty-tab text: zh-Hans by hand; de, es, fr, ja and ko by machine, marked `x-machine` for review.
 
 ## 0.3.0
 

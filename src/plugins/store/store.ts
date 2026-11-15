@@ -212,7 +212,7 @@ export class Store {
   /** The row whose enable, disable or reload is running. */
   #working: string | null = null;
   /** The plugin a repository install or update is downloading or installing (its card shows the progress). */
-  installing: { key: string; percent: number | null } | null = null;
+  installing: { key: string; id: string; percent: number | null } | null = null;
   /** A reload the player accepted: done once the plugin left `starting` (`packages.onChange`). */
   #reloading: Reloading | null = null;
   // Menu
@@ -263,7 +263,8 @@ export class Store {
       this.sort = index === 1 ? 1 : 0;
       this.changed();
     });
-    // The ⋯ menu's "Show built-in plugins": the new state of "hide" (not a flip), kept in settings.json.
+    // The filter row's "Show built-in plugins (n)" (and the empty grid's Show Built-in Plugins): the new state of
+    // "hide" (not a flip), kept in settings.json.
     storeWindow.on("setHideBuiltins", (on: boolean) => {
       this.#setHideBuiltins(on === true);
       this.changed();
@@ -422,7 +423,7 @@ export class Store {
     if (name !== undefined && this.settings.value.tab !== name) this.settings.save({ ...this.settings.value, tab: name });
   }
 
-  /** "Hide built-in plugins" is on (the ⋯ menu's "Show built-in plugins" off): the default, also for settings saved before the option. */
+  /** "Hide built-in plugins" is on (the filter row's "Show built-in plugins (n)" unticked): the default, also for settings saved before the option. */
   get hideBuiltins(): boolean {
     return this.settings.value.hideBuiltins !== false;
   }
@@ -794,9 +795,9 @@ export class Store {
       return msg("Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.");
     }
     if (this.category === UPDATES) return msg("All plugins are up to date");
-    // Not installed, with plugins in the repositories: every one of them is installed.
+    // Not installed, with plugins in the repositories: each is installed, or cannot be (All says why).
     if (this.category === NOT_INSTALLED && this.repos.list.some((repo) => (repo.index?.plugins.length ?? 0) > 0))
-      return msg("Every plugin in the repositories is installed");
+      return msg("There are no more plugins to install");
     return msg("The repositories have no plugins yet");
   }
 
@@ -818,17 +819,25 @@ export class Store {
   }
 
   /**
-   * A card (design store-v3 §3.3, §3.4): name, "by <author>" with a note for
-   * another repository or a sideload, the introduction, the "how to open"
-   * line, the state in words and at most one button, Install or Update. The
-   * rest (Disable, Uninstall…, Reload, Open Data Folder, Replace) is on the
-   * detail page. Long texts are elided by the window, never cut here.
+   * A card (design store-v3 §3.3, §3.4, store-v4 §3): name, "by <author>"
+   * with a note for another repository or a sideload, the introduction, the
+   * "how to open" line, the state in words, and the actions of
+   * `#cardActions`: at most one text button (Install, Update or Enable) and,
+   * for an installed plugin that is not built in, a ⋯ menu (Disable or
+   * Enable, Uninstall…). Reload, Open Data Folder and Replace are on the
+   * detail page. While the plugin installs, the progress replaces the
+   * actions. Long texts are elided by the window, never cut here.
    */
   #card(item: Item, action: (a: Action | null) => { id: string; text: TextValue; enabled: boolean }) {
     const info = item.installed;
     const own = isInstalledRow(item) ? info : null;
     const dev = isDevelopmentRow(item);
-    const installing = this.installing?.key === item.key ? this.installing : null;
+    // The entry being installed, or, for a replacement from another repository (whose entry has no card of its
+    // own under All), the installed card of the same id.
+    const installing =
+      this.installing && (this.installing.key === item.key || (this.installing.id === item.id && fromLibrary(item)))
+        ? this.installing
+        : null;
     const [state, stateTone] = ((): [Msg | null, number] => {
       // While this plugin installs: the progress in place of the Install button (store-v4 §3, question 6).
       if (installing) return [installing.percent === null ? msg("Installing…") : msg("Installing… {}%", installing.percent), 4];

@@ -72,10 +72,11 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
     await tab(host, ALL);
     await tab(host, INSTALLED);
     assert.deepEqual(names(host), ["Alpha", "Old"]);
-    // Not installed: never a built-in's id, whichever way the switch is (checked again below).
+    // Not installed: never a built-in's id, whichever way the switch is (checked again below), nor a reserved
+    // id the player does not ship ("Other": it cannot be installed; All keeps it with its reason).
     await tab(host, NOT_INSTALLED);
-    assert.deepEqual(names(host), ["Beta", "Other"]);
-    assert.equal(props(host)["not-installed-count"], 2);
+    assert.deepEqual(names(host), ["Beta"]);
+    assert.equal(props(host)["not-installed-count"], 1);
     await tab(host, ALL);
 
     await showBuiltins(host);
@@ -91,8 +92,8 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
     // The update count (the menu, the Updates tab) never counted built-ins.
     assert.equal(props(host)["updates"], 1);
     await tab(host, NOT_INSTALLED);
-    assert.deepEqual(names(host), ["Beta", "Other"]);
-    assert.equal(props(host)["not-installed-count"], 2);
+    assert.deepEqual(names(host), ["Beta"]);
+    assert.equal(props(host)["not-installed-count"], 1);
   } finally {
     await stop();
   }
