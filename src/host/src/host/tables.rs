@@ -19,12 +19,17 @@
 //! into the newest (last value wins, R3). [`Host::sync_tables`] is the
 //! interface's side: it applies them, replacing what it had. Until plan
 //! step S3a both run on this thread, so the interface takes them in place,
-//! right where it reads: at the start of each reader of the tables
-//! (`refresh_menu`, `bar_tick`, `tab_keys`, `click_tick`, the title strip
-//! in `window_tick`, the loop's menu step), and at the end of each tick and
-//! of start-up, before Slint runs the key and mouse callbacks again. A
-//! reader therefore sees the tables exactly as the core left them, as it
-//! did when it read the core's own: order and timing are unchanged. From
+//! right where it reads: at the start of the readers that take `&mut
+//! self` (`refresh_menu`, `bar_tick` (again after its own write of the
+//! host's commands), `tab_keys`, `click_tick`, `window_tick` for its title
+//! strip, the loop's menu step); the readers that take `&self` rely on
+//! their caller having synced (`palette_items` is called only from
+//! `refresh_menu`, through `refresh_palette`; the bar's items only from
+//! `bar_tick`; `bind_shell` only at start-up, right after the sync there);
+//! and at the end of each tick and of start-up, before Slint runs the key
+//! and mouse callbacks again. A reader therefore sees the tables exactly
+//! as the core left them, as it did when it read the core's own: order
+//! and timing are unchanged. From
 //! S3a on the core sends them on its queue to the UI thread at the end of
 //! its turn, coalesced in place (module `messages`); a key event behind a
 //! table update in that queue is judged by the updated table (R8).
