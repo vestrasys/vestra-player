@@ -63,6 +63,9 @@ pub struct Manager {
     /// Package directories an operation freed while the thread ran; they
     /// go on its next run.
     cleanup_queue: BTreeSet<String>,
+    /// The holding folder has package directories to delete
+    /// (`Library::hold`): on the cleanup thread's next run.
+    purge_held: bool,
     /// Built-in digest checks for the shared runner (`verify`), by id.
     verified: BTreeMap<String, Verified>,
     verify_serial: u64,
@@ -236,6 +239,7 @@ impl Manager {
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
+            purge_held: false,
             verified: BTreeMap::new(),
             verify_serial: 0,
             verify_results: std::sync::mpsc::channel(),
@@ -1228,10 +1232,14 @@ impl Host {
             .into_iter()
             .filter(|digest| !referenced.contains(digest))
             .collect::<BTreeSet<_>>();
-        if digests.is_empty() {
+        let work = if !digests.is_empty() {
+            cleanup::Work::Only(digests)
+        } else if std::mem::take(&mut self.packages.purge_held) {
+            cleanup::Work::Held
+        } else {
             return;
-        }
-        match cleanup::spawn(self.packages.store.library(), cleanup::Work::Only(digests)) {
+        };
+        match cleanup::spawn(self.packages.store.library(), work) {
             Ok(running) => self.packages.cleanup = Some(running),
             Err(error) => diag!("package library: {error}"),
         }
@@ -1490,24 +1498,32 @@ impl Host {
             };
             list.insert(id.clone(), entry);
         }
-        // Installed records the library set aside at start (`Quarantined`):
-        // failed, with the reason, until installed again.
-        for record in self.packages.store.quarantined() {
-            if record.section != "installed" || list.contains_key(&record.id) {
+        // Installed records the library set aside at start, this one or an
+        // earlier one (`Store::set_aside_installed`): failed, with the
+        // reason, named, versioned and sourced from the record as read,
+        // until installed again or uninstalled (`uninstall_set_aside`).
+        let dormant = self.packages.store.dormant();
+        let aside = self.packages.store.set_aside_installed();
+        for (id, (entry, reason)) in aside {
+            if list.contains_key(&id) {
                 continue;
             }
-            let error = format!(
-                "the plugin library's record of this plugin was set aside: {}",
-                record.reason
-            );
+            let error =
+                format!("the plugin library's record of this plugin was set aside: {reason}");
+            let (version, source, display) = set_aside_fields(entry);
+            // Its instance was retired with its data (`Store::screen`).
+            let data = entry["instance"]["guid"]
+                .as_str()
+                .filter(|guid| dormant.get(*guid).is_some_and(|d| d.id == id))
+                .and_then(|guid| self.data_directory_of(&DataKey::Instance(guid.to_owned())));
             list.insert(
-                record.id.clone(),
-                json!({"id":record.id,"version":null,
+                id.clone(),
+                json!({"id":id,"version":version,
                     "origin":"installed","state":"failed","error":error,
                     "directory":"",
-                    "builtin":false,"source":null,
-                    "dataDirectory":null,"warnings":[],
-                    "display":{"name":null,"punchline":null,"description":null,"tags":[]}}),
+                    "builtin":false,"source":source,
+                    "dataDirectory":data,"warnings":[],
+                    "display":display}),
             );
         }
         for (id, (directory, manifest)) in self.development.iter() {
@@ -1728,6 +1744,13 @@ impl Host {
             return Err(RpcError::invalid("a plugin cannot uninstall itself"));
         }
         let installed = self.packages.store.get(&id);
+        if installed.current.is_none()
+            && !self.development.contains_key(&id)
+            && self.running(&id).is_none()
+            && self.packages.store.set_aside_installed().contains_key(&id)
+        {
+            return self.uninstall_set_aside(&id, &request, spec, params, installed.revision);
+        }
         uninstallable(
             &id,
             &installed,
@@ -1815,6 +1838,107 @@ impl Host {
         }
         self.purge_dropped_secrets();
         Ok(receipt)
+    }
+    /// `packages.uninstall` of an installed record the library set aside
+    /// at start, this one or an earlier one (a package an older player
+    /// installed that this one refuses, such as a manifest with
+    /// `capabilities`). Forced (user ruling 2026-11-15): nothing of it runs,
+    /// so every record of it goes from `quarantine.json` and the id is free
+    /// at once; the package directories only those records referred to are
+    /// moved out of the library into its holding folder and deleted there
+    /// on the cleanup thread (`Library::hold`, `purge_held`). With
+    /// `removeData` its retired instance goes too: data directory, dormant
+    /// record, secrets and session values. What cannot be moved or deleted
+    /// is logged with its path and left, never in the way of an install.
+    fn uninstall_set_aside(
+        &mut self,
+        id: &str,
+        request: &str,
+        spec: Value,
+        params: &Value,
+        revision: u64,
+    ) -> std::result::Result<Value, RpcError> {
+        if params["expectedRevision"].as_u64() != Some(revision) {
+            return Err(RpcError::new(
+                "revisionConflict",
+                "installed revision changed",
+            ));
+        }
+        self.library_busy(None)?;
+        if self.package_rpc_busy(id) {
+            return Err(busy());
+        }
+        let guid = self
+            .packages
+            .store
+            .set_aside_installed()
+            .get(id)
+            .and_then(|(entry, _)| entry["instance"]["guid"].as_str())
+            .filter(|guid| {
+                self.packages
+                    .store
+                    .dormant()
+                    .get(*guid)
+                    .is_some_and(|dormant| dormant.id == id)
+            })
+            .map(str::to_owned);
+        let receipt =
+            json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
+        let freed = self
+            .packages
+            .store
+            .forget_set_aside(id, request, receipt.clone())?;
+        self.packages.receipts = self.packages.store.operations();
+        self.hold_freed(&freed);
+        self.failures.edit().remove(id);
+        crate::capabilities::forget_command_trust(self, id);
+        if let Some(guid) = guid {
+            let key = DataKey::Instance(guid.clone());
+            // As every uninstall: its session values and source references.
+            self.session_storage.clear(&key);
+            let _ = self
+                .backend
+                .commands
+                .send(crate::playback::backend::Command {
+                    reply: Reply { owner: 0, id: 0 },
+                    method: "owner.sourcesRevoked".into(),
+                    params: json!({"store": crate::playback::media_sources::store_key(&key)}),
+                });
+            if params["removeData"] == true {
+                if let (Some(root), Some(directory)) =
+                    (process::data_root(), self.data_directory_of(&key))
+                {
+                    match crate::packages::safe_remove::remove_within(&root, &directory) {
+                        Ok(left) if left.is_empty() => {}
+                        Ok(left) => {
+                            diag!("uninstall {id}: data left in place: {}", left.join("; "))
+                        }
+                        Err(error) => diag!("uninstall {id}: data not removed: {error:#}"),
+                    }
+                }
+                self.packages.store.forget_dormant(&guid)?;
+                self.purge_secrets(&key);
+            }
+        }
+        self.purge_dropped_secrets();
+        Ok(receipt)
+    }
+    /// Package directories a record set aside no longer keeps (`freed`):
+    /// out of the library now (`Library::hold`), deleted on the cleanup
+    /// thread. One that cannot be moved stays whole under its digest (the
+    /// next start's `collect` takes it), logged.
+    fn hold_freed(&mut self, freed: &BTreeSet<String>) {
+        if freed.is_empty() {
+            return;
+        }
+        let library = self.packages.store.library();
+        for digest in freed {
+            if let Err(error) = library.hold(digest) {
+                diag!("package library: {digest} left in place for the next start: {error:#}");
+            }
+        }
+        self.packages.purge_held = true;
+        self.cleanup_tick();
     }
     /// Deletes the secret store entries recorded for `key` (on a worker
     /// thread: keychain calls block and may prompt).
@@ -2304,6 +2428,15 @@ impl Host {
         if let Some(old) = &op.old {
             self.discard(&old.digest);
         }
+        // A record of this id the library set aside is superseded: it goes
+        // from `quarantine.json`, and the package directories only it kept.
+        match self.packages.store.release_set_aside(&op.package) {
+            Ok(freed) => self.hold_freed(&freed),
+            Err(error) => diag!(
+                "package library: {}: set-aside record kept: {error:#}",
+                op.package
+            ),
+        }
         Ok(())
     }
 }
@@ -2378,6 +2511,46 @@ fn display(manifest: &process::Manifest, catalog: Option<&crate::i18n::Catalog>)
         .collect();
     json!({"name":text(&manifest.name),"punchline":text(&manifest.punchline),
         "description":text(&manifest.description),"tags":tags})
+}
+
+/// What `packages.list` shows of an installed record set aside at start,
+/// from its JSON as read (`Store::set_aside_installed`): its version, its
+/// source and its manifest's display fields (untranslated). Only what reads
+/// as the expected type within the manifest limits; null otherwise.
+fn set_aside_fields(entry: &Value) -> (Value, Value, Value) {
+    let version = entry["current"]["manifest"]["version"]
+        .as_str()
+        .filter(|version| !version.is_empty() && version.len() <= 64)
+        .map_or(Value::Null, |version| Value::String(version.into()));
+    let source =
+        serde_json::from_value::<package_store::Source>(entry["instance"]["source"].clone())
+            .ok()
+            .and_then(|source| serde_json::to_value(source).ok())
+            .unwrap_or(Value::Null);
+    (
+        version,
+        source,
+        set_aside_display(&entry["current"]["manifest"]),
+    )
+}
+
+fn set_aside_display(manifest: &Value) -> Value {
+    use crate::packages::manifest::{DESCRIPTION_MAX, NAME_MAX, PUNCHLINE_MAX, TAG_MAX, TAGS_MAX};
+    let text = |field: &str, max: usize| {
+        manifest[field]
+            .as_str()
+            .filter(|text| !text.is_empty() && text.chars().count() <= max)
+    };
+    let tags: Vec<&str> = manifest["tags"]
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(Value::as_str)
+        .filter(|tag| !tag.is_empty() && tag.chars().count() <= TAG_MAX)
+        .take(TAGS_MAX)
+        .collect();
+    json!({"name":text("name", NAME_MAX),"punchline":text("punchline", PUNCHLINE_MAX),
+        "description":text("description", DESCRIPTION_MAX),"tags":tags})
 }
 
 /// A plugin's name as shown, else its id (lazy activation's "Starting…").
@@ -2705,6 +2878,8 @@ mod cleanup {
         Unreferenced(BTreeSet<String>),
         /// Only these directories (by digest).
         Only(BTreeSet<String>),
+        /// Only what the holding folder holds (`Library::purge_held`).
+        Held,
     }
 
     pub struct Running {
@@ -2737,14 +2912,28 @@ mod cleanup {
         let only = match &work {
             Work::Unreferenced(_) => None,
             Work::Only(digests) => Some(digests.clone()),
+            // Never a digest name: no install waits for it.
+            Work::Held => Some(BTreeSet::new()),
         };
         let handle = std::thread::Builder::new()
             .name(THREAD.into())
             .spawn(move || {
                 let started = std::time::Instant::now();
+                // At start, and after a forced uninstall: what the holding
+                // folder holds (left there by an earlier run, say).
+                if matches!(work, Work::Unreferenced(_) | Work::Held) {
+                    let left = library.purge_held();
+                    if !left.is_empty() {
+                        diag!(
+                            "package library: left in the holding folder for the next start: {}",
+                            left.join("; ")
+                        );
+                    }
+                }
                 let result = match &work {
                     Work::Unreferenced(referenced) => library.collect(referenced),
                     Work::Only(digests) => library.remove(digests),
+                    Work::Held => Ok(0),
                 };
                 let ms = started.elapsed().as_millis();
                 match result {
@@ -3223,6 +3412,77 @@ mod tests {
         assert_ne!(fresh.instance.unwrap().guid, guid);
     }
 
+    /// After the forced uninstall of a record set aside, the same id
+    /// installs as new: without `removeData` it reattaches the retired
+    /// instance's data (as any uninstall that keeps data); with it (the
+    /// dormant record forgotten) it starts with new data.
+    #[test]
+    fn a_set_aside_id_installs_again_after_its_uninstall() {
+        for remove_data in [false, true] {
+            let root = tempfile::tempdir().unwrap();
+            let root_path = dunce::canonicalize(root.path()).unwrap();
+            let mut store = Store::open(root_path.clone()).unwrap();
+            let guid = install(&mut store, "k", "1.0.0", Source::File, false)
+                .unwrap()
+                .instance
+                .unwrap()
+                .guid;
+            drop(store);
+            let path = root_path.join("catalog.json");
+            let mut catalog: Value =
+                serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+            catalog["installed"]["k"]["current"]["manifest"]["capabilities"] = json!(["events"]);
+            std::fs::write(&path, serde_json::to_vec(&catalog).unwrap()).unwrap();
+            let mut store = Store::open(root_path.clone()).unwrap();
+            assert!(store.set_aside_installed().contains_key("k"));
+            let freed = store.forget_set_aside("k", "rm", json!({})).unwrap();
+            assert_eq!(freed.len(), 1);
+            if remove_data {
+                store.forget_dormant(&guid).unwrap();
+            }
+            let again = install(&mut store, "k", "1.0.0", Source::File, false).unwrap();
+            assert_eq!(
+                again.instance.unwrap().guid == guid,
+                !remove_data,
+                "removeData {remove_data}"
+            );
+            assert!(store.release_set_aside("k").unwrap().is_empty());
+        }
+    }
+
+    /// An installed record set aside is listed with its version, source
+    /// and display fields read from its JSON; what does not read within
+    /// the manifest limits is null, never the record of another.
+    #[test]
+    fn a_set_aside_record_is_listed_with_its_own_fields() {
+        let entry = json!({"current":{"manifest":{"id":"z.amd","version":"0.1.0",
+            "name":"AMD Motion Smoothing","punchline":"Smoother","tags":["video", 3, "x".repeat(25)],
+            "capabilities":["events"]}},
+            "instance":{"guid":"g","source":{"kind":"repository","url":"https://example.com/index.json"},
+            "installedAt":1}});
+        let (version, source, display) = set_aside_fields(&entry);
+        assert_eq!(version, "0.1.0");
+        assert_eq!(
+            source,
+            json!({"kind":"repository","url":"https://example.com/index.json"})
+        );
+        assert_eq!(
+            display,
+            json!({"name":"AMD Motion Smoothing","punchline":"Smoother","description":null,"tags":["video"]})
+        );
+        let (version, source, display) = set_aside_fields(&json!({"truncated": 70000}));
+        assert_eq!((version, source), (Value::Null, Value::Null));
+        assert_eq!(
+            display,
+            json!({"name":null,"punchline":null,"description":null,"tags":[]})
+        );
+        let long = json!({"current":{"manifest":{"name":"n".repeat(65),"version":7}},
+            "instance":{"source":{"kind":"unknown"}}});
+        let (version, source, display) = set_aside_fields(&long);
+        assert_eq!((version, source), (Value::Null, Value::Null));
+        assert_eq!(display["name"], Value::Null);
+    }
+
     /// `packages.install`'s optional `enabled`: absent for SDKs that do not
     /// send it, a boolean otherwise.
     #[test]
@@ -3377,6 +3637,7 @@ mod tests {
             builtins,
             cleanup: None,
             cleanup_queue: BTreeSet::new(),
+            purge_held: false,
             verified: BTreeMap::new(),
             verify_serial: 0,
             verify_results: std::sync::mpsc::channel(),
