@@ -526,6 +526,8 @@ fn player() -> Result<()> {
         supervisor: host::supervisor::new(),
         activation_receipts: Default::default(),
         file_types: json!([]),
+        window_facts: Value::Null,
+        window_facts_seq: None,
         held_mounts: Default::default(),
         prepared: None,
         warnings: Default::default(),
@@ -556,6 +558,9 @@ fn player() -> Result<()> {
         commands: commands::Registry::new(),
         shader_guard,
         memory_logged: None,
+        // Made above, before the clock, as before plan step S2c moved it
+        // from `Host`.
+        on_demand,
     };
     let mut host = Host {
         core,
@@ -587,6 +592,7 @@ fn player() -> Result<()> {
         review: None,
         policy: window_state::Policy::new(0),
         window_facts: Value::Null,
+        facts_seq: 0,
         measured_shell: None,
         menu_open: false,
         title_strip: Default::default(),
@@ -641,7 +647,6 @@ fn player() -> Result<()> {
         theme_pending: false,
         placements: view::Placements::default(),
         bar: bar_buttons::Strip::default(),
-        on_demand,
     };
     // Kept trigger conditions: one file per installed instance.
     host.core.triggers = triggers::Triggers::new(Some(host.core.triggers_dir()));

@@ -1101,7 +1101,7 @@ impl Host {
             let disabled = self.core.packages.store.disabled().contains(&id);
             let parked = self
                 .parked_id(&id)
-                .and_then(|owner| self.on_demand.held(owner));
+                .and_then(|owner| self.core.on_demand.held(owner));
             let listed = self
                 .core
                 .supervisor

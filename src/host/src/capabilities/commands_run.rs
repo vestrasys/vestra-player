@@ -373,6 +373,7 @@ fn builtin_owner(host: &Host, owner: u64) -> bool {
     owner == bindings::HOST
         || host.core.is_builtin(owner)
         || host
+            .core
             .on_demand
             .held(owner)
             .is_some_and(|held| host.core.is_builtin_package(&held.origin))

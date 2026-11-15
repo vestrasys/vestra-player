@@ -76,7 +76,7 @@ impl Host {
     /// classification question; held back (`true`), it is handled by
     /// `probe_late_tick` once due.
     pub(super) fn probe_hold_answer(&mut self, owner: u64, answer: &Value, now: u64) -> bool {
-        let probe = &mut self.on_demand.probe;
+        let probe = &mut self.core.on_demand.probe;
         let Some(late) = probe.classify_late else {
             return false;
         };
@@ -88,10 +88,10 @@ impl Host {
     }
     /// The held-back classification answers that are due are handled now.
     pub(super) fn probe_late_tick(&mut self, now: u64) {
-        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.on_demand.probe.late)
+        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.core.on_demand.probe.late)
             .into_iter()
             .partition(|(_, _, at)| *at <= now);
-        self.on_demand.probe.late = waiting;
+        self.core.on_demand.probe.late = waiting;
         for (owner, answer, _) in due {
             diag!("lazy: VESTRA_TEST_CLASSIFY_LATE: owner {owner}'s answer handled");
             self.resources_answer_now(owner, &answer);
@@ -150,18 +150,18 @@ impl Host {
         owner: u64,
         backend: &Value,
     ) -> std::result::Result<Vec<Call>, &'static str> {
-        if self.on_demand.probe.park_all {
+        if self.core.on_demand.probe.park_all {
             return Ok(capabilities::recordable(self, owner, backend));
         }
         capabilities::record(self, owner, backend)
     }
     /// `VESTRA_TEST_WAKE`: once due, every parked plugin wakes.
     pub(super) fn probe_tick(&mut self, now: u64) {
-        if self.on_demand.probe.wake_at.is_none_or(|at| now < at) {
+        if self.core.on_demand.probe.wake_at.is_none_or(|at| now < at) {
             return;
         }
-        self.on_demand.probe.wake_at = None;
-        let parked = self.on_demand.held.keys().copied().collect::<Vec<_>>();
+        self.core.on_demand.probe.wake_at = None;
+        let parked = self.core.on_demand.held.keys().copied().collect::<Vec<_>>();
         diag!("lazy: VESTRA_TEST_WAKE: {} parked", parked.len());
         for owner in parked {
             self.page_shown(owner);
@@ -170,6 +170,7 @@ impl Host {
     /// `VESTRA_TEST_EXECUTE` entries timed from the park of `id` start now.
     pub(super) fn probe_parked(&mut self, id: &str, now: u64) {
         if let Some(test) = self
+            .core
             .on_demand
             .tests
             .iter_mut()
@@ -181,13 +182,13 @@ impl Host {
     }
     /// `VESTRA_TEST_EXECUTE`: the due commands run, by manifest id.
     pub(super) fn test_execute(&mut self, now: u64) {
-        if self.on_demand.tests.is_empty() {
+        if self.core.on_demand.tests.is_empty() {
             return;
         }
-        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.on_demand.tests)
+        let (due, waiting): (Vec<_>, Vec<_>) = std::mem::take(&mut self.core.on_demand.tests)
             .into_iter()
             .partition(|test| matches!(test.at, When::At(at) if at <= now));
-        self.on_demand.tests = waiting;
+        self.core.on_demand.tests = waiting;
         for test in due {
             if test.lead {
                 diag!("lazy: VESTRA_TEST_EXECUTE lead:{}", test.command);
@@ -217,10 +218,10 @@ impl Host {
     }
     /// `VESTRA_TEST_REGISTRY`: `owner`'s registries now, as one line.
     pub(crate) fn probe_registry(&self, owner: u64, moment: &str) {
-        let Some(file) = &self.on_demand.probe.file else {
+        let Some(file) = &self.core.on_demand.probe.file else {
             return;
         };
-        let id = match self.on_demand.held.get(&owner) {
+        let id = match self.core.on_demand.held.get(&owner) {
             Some(held) => held.id.clone(),
             None => self.core.plugin_id(owner),
         };
@@ -236,10 +237,15 @@ impl Host {
     }
     /// At quit: every running and parked plugin's registries.
     pub(super) fn probe_quit(&self) {
-        if self.on_demand.probe.file.is_none() {
+        if self.core.on_demand.probe.file.is_none() {
             return;
         }
-        for owner in self.core.plugins.keys().chain(self.on_demand.held.keys()) {
+        for owner in self
+            .core
+            .plugins
+            .keys()
+            .chain(self.core.on_demand.held.keys())
+        {
             self.probe_registry(*owner, "quit");
         }
     }
@@ -342,6 +348,7 @@ impl Host {
                 .map(|(event, _)| event.clone())
                 .collect::<Vec<_>>(),
             None => self
+                .core
                 .on_demand
                 .wakes
                 .get(&owner)

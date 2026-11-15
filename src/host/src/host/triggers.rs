@@ -38,7 +38,7 @@ impl Host {
         let language = self.language_preference();
         let mut facts = Facts::new(
             &self.core.last_source,
-            &self.window_facts,
+            &self.core.window_facts,
             crate::ui::theme::known(self.theme()),
             language.as_deref().unwrap_or(i18n::SYSTEM),
         );
@@ -165,7 +165,7 @@ impl Host {
                 Ok(())
             }
             Delivery::Dropped
-                if !self.on_demand.caught_up && self.core.supervisor.events_muted() =>
+                if !self.core.on_demand.caught_up && self.core.supervisor.events_muted() =>
             {
                 let held = self
                     .core

@@ -380,6 +380,13 @@ pub(crate) struct Core {
     pub(crate) activation_receipts: std::collections::VecDeque<Value>,
     /// `resolvers.fileTypes` as last pushed by the backend (an array).
     pub(crate) file_types: Value,
+    /// The core's copy of the window facts (rule R9; plan step S2c): set
+    /// only from a `UiReport::WindowFacts` newer than `window_facts_seq`.
+    /// Conditions and triggers, `window.state`, `layout.state` and
+    /// `ui.menu`'s refusals read it.
+    pub(crate) window_facts: Value,
+    /// The `seq` of the facts last applied (`None`: none yet).
+    pub(crate) window_facts_seq: Option<u64>,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
     /// The large array of the request being answered, converted on its
@@ -447,6 +454,14 @@ pub(crate) struct Core {
     pub(crate) shader_guard: ShaderGuard,
     /// When the memory line last went to the host log (`diagnostics.rs`).
     pub(crate) memory_logged: Option<Instant>,
+    /// On-demand start: the Host's side of standby, wake and
+    /// classification (`supervisor/`, supervisor.md §4). Moved from `Host`
+    /// in plan step S2c as its last field, so it drops after every other
+    /// core field (after the backend, the shared runner and the plugins, as
+    /// before); like every core field it now drops before the UI fields,
+    /// none of which its drop touches (it closes the low-memory handle and
+    /// the recorder's queue).
+    pub(crate) on_demand: supervisor::OnDemand,
 }
 // `Core` may move to its own thread (plan step S3a): every field is `Send`.
 const _: fn() = || {
@@ -508,7 +523,13 @@ pub(crate) struct Host {
     /// confirmation's.
     pub(crate) review: Option<review_sheet::Review>,
     pub(crate) policy: window_state::Policy,
+    /// The window facts the UI last sent the core (`UiReport::WindowFacts`,
+    /// rule R9): `window_tick` sends a value only when it differs from
+    /// this one. The UI's own readers (drops, `window.setVideoArea`) read
+    /// it; the core reads its copy, `Core::window_facts`.
     pub(crate) window_facts: Value,
+    /// The UI's one counter of facts values sent (`WindowFacts.seq`).
+    pub(crate) facts_seq: u64,
     pub(crate) measured_shell: Option<u64>,
     pub(crate) menu_open: bool,
     /// The fullscreen title strip (`title-strip.slint`).
@@ -609,9 +630,6 @@ pub(crate) struct Host {
     pub(crate) placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     pub(crate) bar: bar_buttons::Strip,
-    /// On-demand start: the Host's side of standby, wake and
-    /// classification (`supervisor/`, supervisor.md §4).
-    pub(crate) on_demand: supervisor::OnDemand,
 }
 pub(crate) struct AreaReply {
     pub(crate) reply: Reply,

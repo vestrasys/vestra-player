@@ -266,7 +266,7 @@ impl Host {
                 self.core.failures.revision(),
                 self.core.dev_disabled.revision(),
                 self.core.development.revision(),
-                self.on_demand.held_revision(),
+                self.core.on_demand.held_revision(),
                 store,
                 operations,
             ],
@@ -358,6 +358,7 @@ impl Host {
             })
             .collect::<Vec<_>>();
         let parked = self
+            .core
             .on_demand
             .wakes
             .iter()
@@ -406,9 +407,9 @@ impl Host {
     }
     /// Broadcast `event`; `first` (the first of a run) wakes no parked plugin.
     fn announce(&mut self, event: &str, data: Value, first: bool) {
-        self.on_demand.mute = first;
+        self.core.on_demand.mute = first;
         self.broadcast(event, data);
-        self.on_demand.mute = false;
+        self.core.on_demand.mute = false;
     }
     /// A running plugin subscribed to `event`, or a parked one is woken by it.
     fn listened(&self, event: &str) -> bool {
@@ -417,6 +418,7 @@ impl Host {
             .values()
             .any(|plugin| plugin.subscriptions.contains_key(event))
             || self
+                .core
                 .on_demand
                 .wakes
                 .values()

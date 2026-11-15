@@ -456,7 +456,8 @@ impl Host {
         if let Some(plugin) = self.core.plugins.get(&owner) {
             return plugin.origin().image_roots();
         }
-        self.on_demand
+        self.core
+            .on_demand
             .held(owner)
             .map(|held| held.origin.image_roots())
             .unwrap_or_default()

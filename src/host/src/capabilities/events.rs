@@ -130,12 +130,12 @@ impl Capability for Events {
     }
     /// The woken plugin subscribes again itself.
     fn rekey(&self, host: &mut Host, from: u64, _: u64) {
-        host.on_demand.wakes.remove(&from);
+        host.core.on_demand.wakes.remove(&from);
     }
     /// A parked plugin keeps its wake events; otherwise they go.
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if !keep_recorded {
-            host.on_demand.wakes.remove(&owner);
+            host.core.on_demand.wakes.remove(&owner);
             return;
         }
         let Some(plugin) = host.core.plugins.get(&owner) else {
@@ -150,7 +150,7 @@ impl Capability for Events {
         if !wakes.is_empty() {
             // What it last had of each, while start-up mutes them.
             host.note_parked_listener(owner, &wakes);
-            host.on_demand.wakes.insert(owner, wakes);
+            host.core.on_demand.wakes.insert(owner, wakes);
         }
     }
     fn replay(&self, host: &mut Host, owner: u64, _: &Origin, call: &Call) -> Handled {
@@ -158,7 +158,8 @@ impl Capability for Events {
         if call.method != "events.subscribe" || !WAKE_EVENTS.contains(&event) {
             return Err(RpcError::new("unsupported", "not a recorded method"));
         }
-        host.on_demand
+        host.core
+            .on_demand
             .wakes
             .entry(owner)
             .or_default()

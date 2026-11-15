@@ -367,7 +367,8 @@ impl Host {
         #[cfg(test)]
         assert_eq!(
             owner,
-            self.on_demand
+            self.core
+                .on_demand
                 .held
                 .iter()
                 .find(|(_, held)| held.id == id)
@@ -420,7 +421,7 @@ impl Host {
         else {
             return;
         };
-        if until <= now || self.on_demand.holds.contains_key(&holder.0) {
+        if until <= now || self.core.on_demand.holds.contains_key(&holder.0) {
             return;
         }
         let name = self.unit_name(unit);
@@ -434,13 +435,13 @@ impl Host {
             until - now
         );
         self.core.commands.set_held(holder.0, Some(reason));
-        self.on_demand.holds.insert(holder.0, (unit, until));
+        self.core.on_demand.holds.insert(holder.0, (unit, until));
     }
     /// Holds that are over, or whose unit left standby: the menu items
     /// show their own state again.
     fn holds_tick(&mut self, now: u64) {
         let over = self
-            .on_demand
+            .core.on_demand
             .holds
             .iter()
             .filter(|(holder, (unit, until))| {
@@ -458,7 +459,7 @@ impl Host {
     }
     /// `holder`'s menu items show their own state again.
     pub(super) fn release_hold(&mut self, holder: u64) {
-        if self.on_demand.holds.remove(&holder).is_some() {
+        if self.core.on_demand.holds.remove(&holder).is_some() {
             self.core.commands.set_held(holder, None);
         }
     }
@@ -587,12 +588,13 @@ impl Host {
     /// then are not a change, and a woken plugin reads the current state when
     /// it starts anyway.
     pub(crate) fn wake_listeners(&mut self, event: &str, data: &Value) {
-        if self.on_demand.mute {
+        if self.core.on_demand.mute {
             return;
         }
         // Every broadcast comes here (`source.state` ten times a second):
         // the listeners first.
         let owners = self
+            .core
             .on_demand
             .wakes
             .iter()
@@ -611,7 +613,7 @@ impl Host {
     /// `commands.keys` (player 0.7.6) wakes only the plugin whose keys
     /// changed, through this.
     pub(crate) fn wake_listener(&mut self, owner: u64, event: &str, data: &Value) {
-        if !self.on_demand.held.contains_key(&owner) {
+        if !self.core.on_demand.held.contains_key(&owner) {
             return;
         }
         let now = self.core.now_ms();
@@ -622,7 +624,7 @@ impl Host {
             self.wake_started(owner);
         }
         if delivery == Delivery::Dropped
-            && !self.on_demand.caught_up
+            && !self.core.on_demand.caught_up
             && self.core.supervisor.events_muted()
             && capabilities::SOURCE_EVENTS.contains(&event)
         {
@@ -635,7 +637,7 @@ impl Host {
     fn mute_source_event(&mut self, owner: u64, event: &str, data: &Value) {
         let id = crate::source_events::source_id(data);
         let max = self.core.supervisor.tunables().backlog_max;
-        let held = self.on_demand.muted_sources.entry(owner).or_default();
+        let held = self.core.on_demand.muted_sources.entry(owner).or_default();
         held.retain(|(name, old)| name != event || crate::source_events::source_id(old) != id);
         held.push((event.to_owned(), data.clone()));
         // The backlog's bound: the oldest go first.
@@ -654,7 +656,8 @@ impl Host {
             data
         };
         let digest = state_digest(state);
-        self.on_demand
+        self.core
+            .on_demand
             .announced
             .insert(event.to_owned(), (digest, data.clone()));
     }
@@ -663,7 +666,7 @@ impl Host {
     /// each it last had is noted (`OnDemand::seen`), for `wake_missed`.
     /// Nothing once that ran.
     pub(crate) fn note_parked_listener(&mut self, owner: u64, events: &BTreeSet<String>) {
-        if self.on_demand.caught_up {
+        if self.core.on_demand.caught_up {
             return;
         }
         let manifest = self.core.plugins.get(&owner).map(|p| p.manifest.id.clone());
@@ -676,7 +679,8 @@ impl Host {
                         .and_then(|manifest| self.core.keys_sent.get(manifest))
                         .map(state_digest)
                 } else {
-                    self.on_demand
+                    self.core
+                        .on_demand
                         .announced
                         .get(event)
                         .map(|(digest, _)| *digest)
@@ -684,7 +688,7 @@ impl Host {
                 (event.clone(), digest)
             })
             .collect();
-        self.on_demand.seen.insert(owner, seen);
+        self.core.on_demand.seen.insert(owner, seen);
     }
     /// The mute of start-up ended (`on_demand_tick`): wake events muted
     /// meanwhile were dropped, so a plugin parked before them would keep
@@ -696,7 +700,7 @@ impl Host {
     /// (replayed: it has what its recording has), is not woken. Whatever
     /// the order plugins parked and registered in.
     fn wake_missed(&mut self) {
-        let seen = std::mem::take(&mut self.on_demand.seen);
+        let seen = std::mem::take(&mut self.core.on_demand.seen);
         let mut current = BTreeMap::new();
         for (owner, events) in &seen {
             for event in events.keys() {
@@ -704,7 +708,7 @@ impl Host {
                     let keys = self.keys_state(*owner);
                     Some((state_digest(&keys), keys))
                 } else {
-                    self.on_demand.announced.get(event).cloned()
+                    self.core.on_demand.announced.get(event).cloned()
                 };
                 if let Some(state) = state {
                     current.insert((*owner, event.clone()), state);
@@ -714,8 +718,9 @@ impl Host {
         let missed = missed_wakes(
             &seen,
             |owner, event| {
-                self.on_demand.held.contains_key(&owner)
+                self.core.on_demand.held.contains_key(&owner)
                     && self
+                        .core
                         .on_demand
                         .wakes
                         .get(&owner)
@@ -743,11 +748,12 @@ impl Host {
         // The source events the mute kept, in their order, to each plugin
         // still in standby and still listening (one started meanwhile
         // started after them and reads the state, as every start does).
-        let muted = std::mem::take(&mut self.on_demand.muted_sources);
+        let muted = std::mem::take(&mut self.core.on_demand.muted_sources);
         for (owner, events) in muted {
             for (event, data) in events {
-                let listens = self.on_demand.held.contains_key(&owner)
+                let listens = self.core.on_demand.held.contains_key(&owner)
                     && self
+                        .core
                         .on_demand
                         .wakes
                         .get(&owner)
@@ -763,13 +769,17 @@ impl Host {
     }
     /// The manifest id of a plugin in standby.
     pub(crate) fn held_id(&self, owner: u64) -> Option<&str> {
-        self.on_demand.held.get(&owner).map(|held| held.id.as_str())
+        self.core
+            .on_demand
+            .held
+            .get(&owner)
+            .map(|held| held.id.as_str())
     }
     /// A settings page of `owner` is shown: a unit in standby starts, so the
     /// page shows its current values and its callbacks have a receiver (nothing
     /// is delivered at its ready).
     pub(crate) fn page_shown(&mut self, owner: u64) {
-        if !self.on_demand.held.contains_key(&owner) {
+        if !self.core.on_demand.held.contains_key(&owner) {
             return;
         }
         let now = self.core.now_ms();
@@ -798,6 +808,7 @@ impl Host {
     /// map lookup. The previous tab's work ends at the next `CHECK_MS` poll.
     pub(crate) fn tab_work(&mut self, owner: u64) {
         if self
+            .core
             .on_demand
             .work
             .get(&owner)
@@ -813,18 +824,19 @@ impl Host {
     /// at launch have run their first activation, and with it asked for
     /// the panels they mount at once (`open_files_tick`).
     pub(crate) fn startup_has_settled(&mut self) -> bool {
-        self.on_demand.settled || self.core.startup_settled()
+        self.core.on_demand.settled || self.core.startup_settled()
     }
     /// `owner` is held in standby now (its registrations kept under it).
     fn hold(&mut self, owner: u64, held: Held) {
-        self.on_demand
+        self.core
+            .on_demand
             .names
             .insert(held.id.clone(), held.name.clone());
-        self.on_demand.held.edit().insert(owner, held);
+        self.core.on_demand.held.edit().insert(owner, held);
     }
     /// `owner` is no longer held: its catalog goes.
     pub(super) fn unhold(&mut self, owner: u64) -> Option<Held> {
-        let held = self.on_demand.held.edit().remove(&owner)?;
+        let held = self.core.on_demand.held.edit().remove(&owner)?;
         held.release();
         Some(held)
     }
@@ -899,7 +911,7 @@ impl Host {
         // then it holds its triggers and its start slot (`ui_finished`).
         if self.core.supervisor.activating(Pid(owner)) {
             diag!("supervisor: owner {owner} ready, its UI not yet");
-            self.on_demand.ui_pending.insert(owner, waking);
+            self.core.on_demand.ui_pending.insert(owner, waking);
             return;
         }
         self.became_ready(owner, waking);
@@ -911,7 +923,7 @@ impl Host {
         self.core.supervisor.set_now(now);
         self.core.supervisor.ui_finish(Pid(owner));
         if !self.core.supervisor.activating(Pid(owner))
-            && let Some(waking) = self.on_demand.ui_pending.remove(&owner)
+            && let Some(waking) = self.core.on_demand.ui_pending.remove(&owner)
         {
             self.became_ready(owner, waking);
         }
@@ -1028,7 +1040,7 @@ impl Host {
             self.development_ready(owner);
             return;
         }
-        if self.on_demand.probe.park_all {
+        if self.core.on_demand.probe.park_all {
             self.class_known(owner, None, Value::Null);
             return;
         }
@@ -1045,7 +1057,10 @@ impl Host {
             // The run's ready, as the core has it (`process_ready`): one
             // deadline with the core's classify timer.
             let ready = self.core.supervisor.now();
-            self.on_demand.asked.insert(owner, Ask::Classify(ready));
+            self.core
+                .on_demand
+                .asked
+                .insert(owner, Ask::Classify(ready));
         }
     }
     /// A development load (`--plugin`) is never put in standby; at its ready
@@ -1110,7 +1125,7 @@ impl Host {
         {
             match self.standby_record(owner, &backend) {
                 Ok(calls) => {
-                    self.on_demand.answers.insert(owner, backend.clone());
+                    self.core.on_demand.answers.insert(owner, backend.clone());
                     self.record_ahead(owner, calls, false, AfterRecording::Classified(backend));
                     return;
                 }
@@ -1122,10 +1137,10 @@ impl Host {
         self.classify_with(owner, resident, backend);
     }
     fn classify_with(&mut self, owner: u64, resident: Option<String>, backend: Value) {
-        self.on_demand.answers.insert(owner, backend);
+        self.core.on_demand.answers.insert(owner, backend);
         self.core.supervisor.classified(Pid(owner), resident);
         self.supervisor_run();
-        self.on_demand.written = None;
+        self.core.on_demand.written = None;
     }
     /// What the Host itself knows keeps `owner` busy now (`Busy`).
     fn host_busy(&mut self, owner: u64, now: u64) -> BTreeSet<Busy> {
@@ -1134,10 +1149,15 @@ impl Host {
             return busy;
         };
         let id = plugin.manifest.id.clone();
-        if matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_))) {
+        if matches!(
+            self.core.on_demand.asked.get(&owner),
+            Some(Ask::Classify(_))
+        ) {
             busy.insert(Busy::Classify);
         }
-        if self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner) {
+        if self.core.on_demand.refreshing.contains(&owner)
+            || self.core.on_demand.stale.contains(&owner)
+        {
             busy.insert(Busy::WorkerAsk);
         }
         if !matches!(
@@ -1202,7 +1222,7 @@ impl Host {
         if recording {
             busy.insert(Busy::Recording);
         }
-        let before = self.on_demand.work.remove(&owner).unwrap_or_default();
+        let before = self.core.on_demand.work.remove(&owner).unwrap_or_default();
         self.core.supervisor.set_now(now);
         for kind in before.difference(&busy) {
             self.core
@@ -1217,7 +1237,7 @@ impl Host {
         if busy.is_empty() {
             return false;
         }
-        self.on_demand.work.insert(owner, busy);
+        self.core.on_demand.work.insert(owner, busy);
         true
     }
     /// A standby's recording, written before the core decides the standby
@@ -1238,11 +1258,11 @@ impl Host {
             return;
         };
         let directory = self.core.activation_dir();
-        if self.on_demand.recorder.is_none() {
-            self.on_demand.recorder = checkpoint::Writer::start(self.core.events.clone());
+        if self.core.on_demand.recorder.is_none() {
+            self.core.on_demand.recorder = checkpoint::Writer::start(self.core.events.clone());
         }
         let kept = calls.clone();
-        let queued = match self.on_demand.recorder.as_mut() {
+        let queued = match self.core.on_demand.recorder.as_mut() {
             Some(recorder) => {
                 recorder.write(directory.clone(), key.clone(), calls, resident, owner)
             }
@@ -1250,7 +1270,7 @@ impl Host {
         };
         match queued {
             Ok(serial) => {
-                self.on_demand.recording.insert(
+                self.core.on_demand.recording.insert(
                     owner,
                     Recording {
                         serial,
@@ -1277,6 +1297,7 @@ impl Host {
         result: std::result::Result<(), String>,
     ) {
         if self
+            .core
             .on_demand
             .recording
             .get(&owner)
@@ -1284,10 +1305,10 @@ impl Host {
         {
             return;
         }
-        let Some(recording) = self.on_demand.recording.remove(&owner) else {
+        let Some(recording) = self.core.on_demand.recording.remove(&owner) else {
             return;
         };
-        if self.on_demand.quitting {
+        if self.core.on_demand.quitting {
             return;
         }
         // The plugin still ran while it was written: what it registered
@@ -1338,7 +1359,7 @@ impl Host {
     ) {
         let written = match result {
             Ok(()) => {
-                self.on_demand.written = Some((owner, count));
+                self.core.on_demand.written = Some((owner, count));
                 true
             }
             Err(error) => {
@@ -1372,7 +1393,7 @@ impl Host {
                 }
             }
         }
-        self.on_demand.written = None;
+        self.core.on_demand.written = None;
     }
     /// Waits (at most `RECORDING_WAIT`) until the recorder thread wrote
     /// every recording it was given: before a recording is read, written
@@ -1381,7 +1402,7 @@ impl Host {
         self.recordings_written_by(RECORDING_WAIT);
     }
     pub(crate) fn recordings_written_by(&self, budget: Duration) {
-        if let Some(recorder) = &self.on_demand.recorder
+        if let Some(recorder) = &self.core.on_demand.recorder
             && !recorder.flush(budget)
         {
             diag!(
@@ -1395,8 +1416,11 @@ impl Host {
     /// of a standby the core asked for (`QueryResources`): it goes to
     /// standby if it is still idle and nothing it holds is live.
     pub(crate) fn resources_answer(&mut self, owner: u64, answer: &Value) {
-        if !self.on_demand.refreshing.contains(&owner)
-            && matches!(self.on_demand.asked.get(&owner), Some(Ask::Classify(_)))
+        if !self.core.on_demand.refreshing.contains(&owner)
+            && matches!(
+                self.core.on_demand.asked.get(&owner),
+                Some(Ask::Classify(_))
+            )
         {
             let now = self.core.now_ms();
             if self.probe_hold_answer(owner, answer, now) {
@@ -1407,18 +1431,18 @@ impl Host {
     }
     fn resources_answer_now(&mut self, owner: u64, answer: &Value) {
         // Asked only when nothing else was: this answer is the refresh's.
-        if self.on_demand.refreshing.remove(&owner) {
+        if self.core.on_demand.refreshing.remove(&owner) {
             self.refresh_answer(owner, answer);
         } else {
             self.asked_answer(owner, answer);
         }
         // A request to the worker came while this ask was out.
-        if self.on_demand.stale.remove(&owner) {
+        if self.core.on_demand.stale.remove(&owner) {
             self.worker_requested(owner);
         }
     }
     fn asked_answer(&mut self, owner: u64, answer: &Value) {
-        match self.on_demand.asked.remove(&owner) {
+        match self.core.on_demand.asked.remove(&owner) {
             Some(Ask::Classify(ready)) => {
                 if !self.core.plugins.contains_key(&owner) {
                     return;
@@ -1428,7 +1452,7 @@ impl Host {
                 // answer may not count it. Asked again before a lazy class
                 // parks it, within the same deadline (`classify_timeouts`).
                 if held_in_worker(answer).is_none()
-                    && self.on_demand.stale.remove(&owner)
+                    && self.core.on_demand.stale.remove(&owner)
                     && self
                         .core
                         .backend
@@ -1440,7 +1464,10 @@ impl Host {
                         })
                         .is_ok()
                 {
-                    self.on_demand.asked.insert(owner, Ask::Classify(ready));
+                    self.core
+                        .on_demand
+                        .asked
+                        .insert(owner, Ask::Classify(ready));
                     return;
                 }
                 let resident = answer["live"]
@@ -1481,7 +1508,9 @@ impl Host {
             return;
         }
         let recorded = match answer["live"].as_array().and_then(|live| live.first()) {
-            Some(_) if !self.on_demand.probe.park_all => Err("a resource in the playback worker"),
+            Some(_) if !self.core.on_demand.probe.park_all => {
+                Err("a resource in the playback worker")
+            }
             _ => self.standby_record(owner, answer),
         };
         match recorded {
@@ -1508,7 +1537,7 @@ impl Host {
                 // (`holds_live`). Work in flight there only keeps it up.
                 self.acquired_live(owner, answer);
                 // Asked again after another idle period.
-                if self.on_demand.told.insert(owner, reason) != Some(reason) {
+                if self.core.on_demand.told.insert(owner, reason) != Some(reason) {
                     diag!(
                         "lazy: {} stays running: {reason}{}{}",
                         self.core.plugin_id(owner),
@@ -1534,13 +1563,15 @@ impl Host {
     /// while another ask is out is asked after its answer.
     pub(crate) fn worker_requested(&mut self, owner: u64) {
         if self.core.checkpoint_key_of(owner).is_none()
-            || self.on_demand.probe.park_all
+            || self.core.on_demand.probe.park_all
             || !self.core.supervisor.may_stand_by(Pid(owner))
         {
             return;
         }
-        if self.on_demand.refreshing.contains(&owner) || self.on_demand.asked.contains_key(&owner) {
-            self.on_demand.stale.insert(owner);
+        if self.core.on_demand.refreshing.contains(&owner)
+            || self.core.on_demand.asked.contains_key(&owner)
+        {
+            self.core.on_demand.stale.insert(owner);
             return;
         }
         let asked = self.core.backend.commands.send(Command {
@@ -1549,7 +1580,7 @@ impl Host {
             params: Value::Null,
         });
         if asked.is_ok() {
-            self.on_demand.refreshing.insert(owner);
+            self.core.on_demand.refreshing.insert(owner);
         }
     }
     /// The worker's answer to `worker_requested`'s ask: the run's resolvers
@@ -1559,7 +1590,7 @@ impl Host {
         if !self.core.plugins.contains_key(&owner) {
             return;
         }
-        if let Some(known) = self.on_demand.answers.get_mut(&owner) {
+        if let Some(known) = self.core.on_demand.answers.get_mut(&owner) {
             *known = answer.clone();
         }
         self.acquired_live(owner, answer);
@@ -1574,7 +1605,7 @@ impl Host {
         let Some(live) = held_in_worker(answer) else {
             return;
         };
-        if self.on_demand.probe.park_all {
+        if self.core.on_demand.probe.park_all {
             return;
         }
         let now = self.core.now_ms();
@@ -1601,7 +1632,7 @@ impl Host {
                 params: Value::Null,
             });
             if asked.is_ok() {
-                self.on_demand.asked.insert(owner, Ask::Standby(now));
+                self.core.on_demand.asked.insert(owner, Ask::Standby(now));
                 return;
             }
         }
@@ -1619,6 +1650,7 @@ impl Host {
     fn classify_timeouts(&mut self, now: u64) {
         let wait = self.core.supervisor.tunables().classify_wait;
         let late = self
+            .core
             .on_demand
             .asked
             .iter()
@@ -1626,7 +1658,7 @@ impl Host {
             .map(|(owner, _)| *owner)
             .collect::<Vec<_>>();
         for owner in late {
-            self.on_demand.asked.remove(&owner);
+            self.core.on_demand.asked.remove(&owner);
             if self.core.plugins.contains_key(&owner) {
                 diag!(
                     "lazy: {}: the playback worker did not answer within {wait} ms",
@@ -1639,14 +1671,14 @@ impl Host {
     }
     /// A run stopped (`Host::stop`): what was asked or logged for it goes.
     pub(crate) fn on_demand_forget(&mut self, owner: u64) {
-        self.on_demand.asked.remove(&owner);
-        self.on_demand.ui_pending.remove(&owner);
-        self.on_demand.told.remove(&owner);
-        self.on_demand.answers.remove(&owner);
-        self.on_demand.refreshing.remove(&owner);
-        self.on_demand.stale.remove(&owner);
+        self.core.on_demand.asked.remove(&owner);
+        self.core.on_demand.ui_pending.remove(&owner);
+        self.core.on_demand.told.remove(&owner);
+        self.core.on_demand.answers.remove(&owner);
+        self.core.on_demand.refreshing.remove(&owner);
+        self.core.on_demand.stale.remove(&owner);
         // The core's work of the run went with it.
-        self.on_demand.work.remove(&owner);
+        self.core.on_demand.work.remove(&owner);
     }
     /// Every host tick: the test hooks, and every `CHECK_MS` (250 ms)
     /// whether start-up settled. The idle checks, first runs, "Starting…"
@@ -1654,7 +1686,7 @@ impl Host {
     pub(crate) fn on_demand_tick(&mut self) {
         let now = self.core.now_ms();
         self.test_execute(now);
-        if !self.on_demand.holds.is_empty() {
+        if !self.core.on_demand.holds.is_empty() {
             self.holds_tick(now);
         }
         self.probe_tick(now);
@@ -1662,27 +1694,27 @@ impl Host {
         self.memory_tick(now);
         // Trigger conditions on the clock (crate::triggers).
         self.triggers_tick();
-        if now < self.on_demand.next_check {
+        if now < self.core.on_demand.next_check {
             return;
         }
-        self.on_demand.next_check = now + CHECK_MS;
+        self.core.on_demand.next_check = now + CHECK_MS;
         // Busy runs: their declared work ends when the Host's checks pass
         // (O(busy runs) every `CHECK_MS`).
-        let busy = self.on_demand.work.keys().copied().collect::<Vec<_>>();
+        let busy = self.core.on_demand.work.keys().copied().collect::<Vec<_>>();
         for owner in busy {
             self.sync_work(owner, false);
         }
-        if !self.on_demand.settled && self.core.startup_settled() {
+        if !self.core.on_demand.settled && self.core.startup_settled() {
             diag!("lazy: start-up settled");
-            self.on_demand.settled = true;
+            self.core.on_demand.settled = true;
             self.core.supervisor.settled(now);
         }
         // The mute of start-up ended (`quiet_after_start` after it settled):
         // what it dropped wakes now, where it changed something.
-        if self.on_demand.settled && !self.on_demand.caught_up {
+        if self.core.on_demand.settled && !self.core.on_demand.caught_up {
             self.core.supervisor.set_now(now);
             if !self.core.supervisor.events_muted() {
-                self.on_demand.caught_up = true;
+                self.core.on_demand.caught_up = true;
                 self.wake_missed();
             }
         }

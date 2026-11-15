@@ -126,7 +126,8 @@ impl Host {
             match &change.contribution {
                 None => true,
                 Some(mount) if mount.recorded => {
-                    self.core.plugins.contains_key(&owner) || self.on_demand.held(owner).is_some()
+                    self.core.plugins.contains_key(&owner)
+                        || self.core.on_demand.held(owner).is_some()
                 }
                 Some(_) => self.core.plugins.contains_key(&owner),
             }
