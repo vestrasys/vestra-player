@@ -131,7 +131,6 @@ pub(crate) fn os_facts() -> &'static platform::OsFacts {
     FACTS.get_or_init(platform::os_facts)
 }
 
-impl Host {}
 impl Core {
     pub(super) fn system_dispatch(
         &mut self,

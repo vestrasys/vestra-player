@@ -486,6 +486,9 @@ fn player() -> Result<()> {
     let (mount_events, mount_input) = mpsc::sync_channel(64);
     let reaper = process::reaper::Reaper::spawn(events.clone());
     let on_demand = host::supervisor::OnDemand::from_env();
+    // Read before `ui_state` opens, as in the `Host` literal before plan
+    // step S2b split `Core` out.
+    let clock = Instant::now();
     // Opened before the core's package store, as before `Core` was split
     // out of `Host` (plan step S2b).
     let ui_state = if headless {
@@ -503,7 +506,7 @@ fn player() -> Result<()> {
         headless,
         panel_plugins: Default::default(),
         command_runs: Default::default(),
-        clock: Instant::now(),
+        clock,
         sequence: None,
         last_source: Value::Null,
         rendering: host::Rendering {
