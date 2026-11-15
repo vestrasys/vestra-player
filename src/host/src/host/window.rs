@@ -1,5 +1,6 @@
 //! The window tick, the tabs of the columns (the sidebar, the adjust
 //! column) and the sidebar's floating window.
+use super::messages::{UiReport, WindowFacts};
 use super::mounts::policy_column;
 use super::*;
 use crate::playback::renderer::GpuBackend as _;
@@ -310,7 +311,12 @@ impl Host {
                 if facts != self.window_facts {
                     self.measured_shell = Some(self.shell_generation);
                     self.window_facts = facts.clone();
-                    self.broadcast("window.state", facts);
+                    let report = self.window_facts_report(&shell, facts);
+                    // Rule R9: the facts go to the core as a snapshot. Until
+                    // plan step S3a it runs on this thread, so the report is
+                    // applied here, in place: at the point and in the order
+                    // of today's `window.state` broadcast.
+                    self.ui_report(UiReport::WindowFacts(Box::new(report)));
                 }
             }
             Err(error) => self.broadcast(
@@ -319,6 +325,50 @@ impl Host {
             ),
         }
         self.ui_state.save_if_due(now);
+    }
+    /// The UI's facts value `facts` as the core receives it (rule R9),
+    /// with the next `seq` of the UI's one counter. Besides the facts
+    /// themselves it carries what later steps read on the core (plan S2c
+    /// (5), S2d): the shell's generation, whether the shell has the menu
+    /// origin, picture-in-picture as `facts` shows it, and the columns' tab
+    /// order. All are plain reads; none is read on the core yet.
+    fn window_facts_report(
+        &mut self,
+        shell: &slint_interpreter::ComponentInstance,
+        facts: Value,
+    ) -> WindowFacts {
+        self.facts_seq += 1;
+        let pip = &facts["pictureInPicture"];
+        WindowFacts {
+            seq: self.facts_seq,
+            shell: Some(self.shell_generation),
+            menu_origin: shell.get_property("menu-origin-x").is_ok()
+                && shell.get_property("menu-origin-y").is_ok(),
+            pip_supported: pip["supported"] == true,
+            pip_active: pip["active"] == true,
+            sidebar_panels: self.policy.sidebar_panels(),
+            adjust_panels: self.policy.panels(window_state::Slot::Adjust),
+            facts,
+        }
+    }
+    /// A report of the UI reaches the core (rule R3). Plan step S2c(1):
+    /// only the window facts are reported, delivered in place on this
+    /// thread; the other reports follow in later steps.
+    pub(crate) fn ui_report(&mut self, report: UiReport) {
+        let UiReport::WindowFacts(facts) = report else {
+            unreachable!("only window facts are reported before plan step S2c(2)");
+        };
+        // A value older than the one applied is skipped (module
+        // `messages`: a coalesced snapshot can overtake a handoff).
+        if !facts.newer_than(self.core.window_facts_seq) {
+            return;
+        }
+        let WindowFacts { seq, facts, .. } = *facts;
+        self.core.window_facts_seq = Some(seq);
+        self.core.window_facts = facts.clone();
+        // The core broadcasts `window.state` from the facts (R9): its
+        // conditions and triggers are evaluated first (`broadcast`).
+        self.broadcast("window.state", facts);
     }
     /// The fullscreen title strip (`title-strip.slint`): it applies to the
     /// fullscreen main window where the system shows no title bar there

@@ -696,41 +696,43 @@ pub fn physical_memory() -> Option<PhysicalMemory> {
 /// The system's low-memory notification
 /// (`CreateMemoryResourceNotification(LowMemoryResourceNotification)`):
 /// signaled while the memory manager considers available physical memory
-/// low. Read without waiting (`QueryMemoryResourceNotification`); the
-/// handle is closed on drop.
+/// low. Read without waiting (`QueryMemoryResourceNotification`). The
+/// handle is an [`OwnedHandle`](std::os::windows::io::OwnedHandle): the
+/// value is `Send` and `Sync` (the host's core may own it on a thread of
+/// its own, doc/architecture/core-thread.md) and the handle is closed on
+/// drop (`CloseHandle`), once.
 #[derive(Debug)]
-pub struct LowMemoryNotification(windows_sys::Win32::Foundation::HANDLE);
+pub struct LowMemoryNotification(std::os::windows::io::OwnedHandle);
 
 impl LowMemoryNotification {
     /// `None` when the system refuses the handle.
     pub fn new() -> Option<Self> {
+        use std::os::windows::io::{FromRawHandle, OwnedHandle};
         use windows_sys::Win32::System::Memory::{
             CreateMemoryResourceNotification, LowMemoryResourceNotification,
         };
         // SAFETY: a notification type by value; the returned handle (null
-        // on failure) is ours and closed exactly once in `Drop`.
+        // on failure) is ours.
         let handle = unsafe { CreateMemoryResourceNotification(LowMemoryResourceNotification) };
-        (!handle.is_null()).then_some(Self(handle))
+        if handle.is_null() {
+            return None;
+        }
+        // SAFETY: `handle` is open (non-null: the call succeeded) and owned
+        // by nothing else; `OwnedHandle` takes it over and closes it
+        // exactly once, when this value drops.
+        Some(Self(unsafe { OwnedHandle::from_raw_handle(handle) }))
     }
 
     /// Whether available physical memory is low now; `None` when the query
     /// fails.
     pub fn signaled(&self) -> Option<bool> {
+        use std::os::windows::io::AsRawHandle;
         use windows_sys::Win32::System::Memory::QueryMemoryResourceNotification;
         let mut state = 0;
         // SAFETY: the live notification handle this value owns and a live
         // local out-parameter.
-        let ok = unsafe { QueryMemoryResourceNotification(self.0, &mut state) };
+        let ok = unsafe { QueryMemoryResourceNotification(self.0.as_raw_handle(), &mut state) };
         (ok != 0).then_some(state != 0)
-    }
-}
-
-impl Drop for LowMemoryNotification {
-    fn drop(&mut self) {
-        use windows_sys::Win32::Foundation::CloseHandle;
-        // SAFETY: the handle `new` created, owned by this value and closed
-        // only here.
-        unsafe { CloseHandle(self.0) };
     }
 }
 

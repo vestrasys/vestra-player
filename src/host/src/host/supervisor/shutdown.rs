@@ -25,6 +25,7 @@ impl Host {
         // the Host did not take yet (its `Event::Spawned` still queued)
         // stops with the rest, within the same deadline.
         let created = self
+            .core
             .on_demand
             .spawner
             .as_ref()
@@ -59,7 +60,7 @@ impl Host {
             self.quit_checkpoint(owner, resident);
         }
         // Stops from here on are the quit's: no UI cleanup, one deadline.
-        self.on_demand.quitting = true;
+        self.core.on_demand.quitting = true;
         // The shared runner stops all its members with one `runner.stop`.
         if let Some(runner) = self.core.shared.take() {
             runner.quit(budget, &self.core.reaper);
@@ -100,6 +101,7 @@ impl Host {
             (Vec::new(), true)
         } else {
             let backend = self
+                .core
                 .on_demand
                 .answers
                 .get(&owner)
@@ -111,9 +113,9 @@ impl Host {
             // classification without an answer. The next start launches it,
             // and its ready classifies it again.
             let live = held_in_worker(&backend).is_some();
-            let unanswered =
-                self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner);
-            if (live || unanswered) && !self.on_demand.probe.park_all {
+            let unanswered = self.core.on_demand.refreshing.contains(&owner)
+                || self.core.on_demand.stale.contains(&owner);
+            if (live || unanswered) && !self.core.on_demand.probe.park_all {
                 diag!("lazy: {id} holds something live in the playback worker at quit");
                 (Vec::new(), true)
             } else {

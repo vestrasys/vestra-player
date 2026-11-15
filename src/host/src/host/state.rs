@@ -202,7 +202,7 @@ impl Host {
     /// with `appearance`, the file resolvers' extensions (`fileTypes`, from
     /// the `resolvers.fileTypes` event), `language` and `locale`.
     pub(crate) fn window_state(&self) -> Value {
-        let facts = &self.window_facts;
+        let facts = &self.core.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
             "maximized":reported_maximized(facts),
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
@@ -311,7 +311,7 @@ impl Host {
     }
     /// Current layout of both positions, or `pending` until the shell is measured.
     pub(crate) fn layout_state(&self) -> std::result::Result<Value, RpcError> {
-        if self.window_facts["shellGeneration"].as_u64() != Some(self.shell_generation) {
+        if self.core.window_facts["shellGeneration"].as_u64() != Some(self.shell_generation) {
             return Err(RpcError::new(
                 "pending",
                 "current shell layout is not yet confirmed",
@@ -328,7 +328,7 @@ impl Host {
         let sidebar = self.policy.sidebar_panels();
         let adjust = self.policy.panels(window_state::Slot::Adjust);
         let slot = |name: &str| {
-            let slot = &self.window_facts["slots"][name];
+            let slot = &self.core.window_facts["slots"][name];
             if slot.is_null() {
                 return Value::Null;
             }

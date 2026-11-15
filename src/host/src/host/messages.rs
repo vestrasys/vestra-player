@@ -1,8 +1,9 @@
 //! The two kinds of message that cross between the core and the UI thread
 //! (doc/architecture/core-thread.md, rule R3): [`UiCommand`] (core → UI) and
-//! [`UiReport`] (UI → core). Plan step S2a: the types only, with no caller;
-//! S2c and S2d route today's code through them while still on one thread,
-//! S3a moves the core to its own thread.
+//! [`UiReport`] (UI → core). Plan step S2a added the types; S2c and S2d
+//! route today's code through them while still on one thread (S2c(1):
+//! [`UiReport::WindowFacts`], `Host::ui_report`), S3a moves the core to its
+//! own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -48,7 +49,7 @@
 //! host/handle.rs:294-311). Which ones the UI handles itself and which it
 //! forwards is decided per event in S2c/S2d; this type only carries them.
 
-// S2a: the message types exist before any caller (plan S2c/S2d); the
+// S2a: the message types exist before most callers (plan S2c/S2d); the
 // tests construct and match every variant but read no field.
 #![allow(dead_code)]
 

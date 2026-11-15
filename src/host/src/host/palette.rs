@@ -144,7 +144,7 @@ impl Host {
             names
                 .get(id)
                 .cloned()
-                .or_else(|| self.on_demand.name_of(id).map(str::to_owned))
+                .or_else(|| self.core.on_demand.name_of(id).map(str::to_owned))
                 .unwrap_or_else(|| id.to_owned())
         };
         let labels = self.labels();

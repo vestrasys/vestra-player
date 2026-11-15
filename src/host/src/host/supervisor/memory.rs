@@ -90,7 +90,7 @@ impl Host {
     /// the core, which puts idle third-party plugins in standby for Low and
     /// Critical.
     pub(super) fn memory_tick(&mut self, now: u64) {
-        let memory = &mut self.on_demand.memory;
+        let memory = &mut self.core.on_demand.memory;
         let level = if memory.simulated {
             let due = memory.tests.iter().take_while(|(at, _)| *at <= now).count();
             match memory.tests.drain(..due).next_back() {

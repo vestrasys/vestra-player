@@ -312,7 +312,8 @@ fn set(host: &mut Host, owner: u64, origin: &Origin, params: &Value) -> Result<(
             .get(&lead.owner)
             .map(|p| p.manifest.id.clone())
             .or_else(|| {
-                host.on_demand
+                host.core
+                    .on_demand
                     .held(lead.owner)
                     .map(|held| held.origin.id.clone())
             })

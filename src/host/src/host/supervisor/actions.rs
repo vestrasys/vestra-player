@@ -35,7 +35,7 @@ impl Host {
                 Action::Terminate {
                     pid, reason, grace, ..
                 } => self.terminate(pid.0, reason, grace),
-                Action::Rekey { from, to, .. } => self.on_demand.rekey = Some((from.0, to.0)),
+                Action::Rekey { from, to, .. } => self.core.on_demand.rekey = Some((from.0, to.0)),
                 Action::Spawn {
                     unit, pid, image, ..
                 } => self.spawn_unit(unit, pid.0, image),
@@ -81,6 +81,7 @@ impl Host {
     /// the file does not say so (today's `lazy_classified`).
     fn checkpoint(&mut self, unit: UnitId, owner: u64, resident: bool) {
         if self
+            .core
             .on_demand
             .written
             .is_some_and(|(written, _)| written == owner)
@@ -127,7 +128,7 @@ impl Host {
     /// (today's `park` after its recording), or a start that failed or timed
     /// out (its recording is the one it was woken from): stopped, held.
     fn park(&mut self, owner: u64, reason: crate::supervisor::StopReason, grace: u64) {
-        if self.on_demand.quitting {
+        if self.core.on_demand.quitting {
             self.terminate(owner, reason, grace);
             return;
         }
@@ -205,6 +206,7 @@ impl Host {
             origin.catalog.as_deref(),
         );
         let count = self
+            .core
             .on_demand
             .written
             .filter(|(written, _)| *written == owner)
@@ -270,7 +272,7 @@ impl Host {
         if self.spawn_canceled(owner, reason, grace, false) {
             return;
         }
-        if self.on_demand.quitting {
+        if self.core.on_demand.quitting {
             self.core.quit_stop(owner, grace);
             return;
         }
@@ -301,6 +303,7 @@ impl Host {
     fn spawn_unit(&mut self, unit: UnitId, to: u64, image: Option<String>) {
         let id = self.core.unit_id(unit);
         let from = self
+            .core
             .on_demand
             .rekey
             .take()
@@ -346,7 +349,7 @@ impl Host {
             }
             // On the spawn thread (`worker.rs`): `spawned` goes on.
             Ok(false) => {
-                self.on_demand.spawning.insert(
+                self.core.on_demand.spawning.insert(
                     to,
                     worker::Spawning {
                         unit,
@@ -409,7 +412,7 @@ impl Host {
         error: &anyhow::Error,
     ) {
         if let Some(from) = from {
-            self.on_demand.unrekeyed.insert(to, from);
+            self.core.on_demand.unrekeyed.insert(to, from);
         }
         self.core
             .supervisor
@@ -441,7 +444,7 @@ impl Host {
                 Some(crate::supervisor::UnitState::Standby { holder, .. }) if holder.0 == to
             );
         if kept && let Some(from) = from {
-            self.on_demand.unrekeyed.remove(&to);
+            self.core.on_demand.unrekeyed.remove(&to);
             capabilities::rekey(self, from, to);
             if let Some(held) = held {
                 self.hold(to, held.reheld());
@@ -461,7 +464,7 @@ impl Host {
         grace: u64,
         keep: bool,
     ) -> bool {
-        let Some(spawning) = self.on_demand.spawning.get_mut(&owner) else {
+        let Some(spawning) = self.core.on_demand.spawning.get_mut(&owner) else {
             return false;
         };
         if spawning.canceled.is_none() {
@@ -485,14 +488,19 @@ impl Host {
     /// standby left for good): today's `forget_entries`, and the held data
     /// goes.
     fn revoke_held(&mut self, owner: u64) {
-        let owner = self.on_demand.unrekeyed.remove(&owner).unwrap_or(owner);
+        let owner = self
+            .core
+            .on_demand
+            .unrekeyed
+            .remove(&owner)
+            .unwrap_or(owner);
         self.unhold(owner);
         self.forget_entries(owner);
     }
     /// The name `unit` is shown by in notices (as held).
     pub(super) fn unit_name(&self, unit: UnitId) -> String {
         let id = self.core.unit_id(unit);
-        self.on_demand.names.get(&id).cloned().unwrap_or(id)
+        self.core.on_demand.names.get(&id).cloned().unwrap_or(id)
     }
     /// An OSD for `unit` (i18n texts here).
     fn notice(&mut self, unit: UnitId, notice: Notice) {
@@ -556,6 +564,7 @@ impl Host {
     fn supervisor_osd(&mut self, unit: UnitId, text: String) {
         let now = self.core.now_ms();
         let repeated = self
+            .core
             .on_demand
             .last_osd
             .as_ref()
@@ -565,7 +574,7 @@ impl Host {
         if !repeated {
             diag!("supervisor: OSD \"{text}\"");
             self.show_osd(&text);
-            self.on_demand.last_osd = Some((unit, text, now));
+            self.core.on_demand.last_osd = Some((unit, text, now));
         }
     }
     /// A held trigger that cannot be delivered (answered, and a

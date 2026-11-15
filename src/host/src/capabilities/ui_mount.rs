@@ -740,7 +740,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             reply.owner,
             host.menu_open,
             host.dialog_busy,
-            host.window_facts["slots"]["sidebar"]["effective"]
+            host.core.window_facts["slots"]["sidebar"]["effective"]
         );
     }
     let key = panel_of(host, reply.owner, params)?
@@ -800,7 +800,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             .is_some_and(|f| f.owners.contains(&key))
     {
         host.floating.as_ref().unwrap().generation
-    } else if host.window_facts["slots"][slot]["effective"] == true {
+    } else if host.core.window_facts["slots"][slot]["effective"] == true {
         host.shell_generation
     } else {
         return Err(RpcError::new("unavailable", "the panel is not shown"));
