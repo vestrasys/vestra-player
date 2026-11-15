@@ -9,7 +9,7 @@
 //!
 //! - **Snapshot**: a whole, immutable value; the receiver replaces what it
 //!   had (last value wins, R3). Several in a row collapse to the newest.
-//! - **Ordered**: a request (with the [`Reply`] it answers, for the 15
+//! - **Ordered**: a request (with the [`Reply`] it answers, for the 16
 //!   UI-bound method names) or a one-way change; applied in arrival order,
 //!   never collapsed (R4: the UI-bound stream keeps execution order).
 //!
