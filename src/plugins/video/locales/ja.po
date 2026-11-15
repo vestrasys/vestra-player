@@ -1118,10 +1118,12 @@ msgstr "色、画像処理、アスペクト比、クロップ、回転、HDR"
 #, x-machine
 msgid ""
 "Adjust brightness, contrast, saturation and hue; image processing such as sharpening, denoising and deblocking; flip, rotation, deinterlacing and frame doubling; aspect ratio, crop/stretch and zooming and panning the frame; with GPU rendering also HDR tone mapping, pixel shaders and motion interpolation.\n"
-"Everything is in the Picture panel beside the video: press Alt+1, or right-click Adjustments and Effects and pick the Picture tab. Each control shows its key."
+"Everything is in the Picture panel beside the video: press Alt+1, or right-click Adjustments and Effects and pick the Picture tab. Each control shows its key.\n"
+"→ Adjustments and Effects ▸ Picture (Alt+1)"
 msgstr ""
 "明るさ、コントラスト、彩度、色相の調整、シャープ、ノイズ除去、ブロックノイズ除去などの画像処理、反転、回転、インターレース解除、フレーム倍増、アスペクト比、クロップ/ストレッチ、フレームの拡大・縮小とパンができます。GPU レンダリング時は HDR トーンマッピング、ピクセルシェーダ、動き補間も使えます。\n"
-"すべては映像の横の「映像」パネルにあります。Alt+1 を押すか、右クリックで「調整とエフェクト」を選んで「映像」タブを開きます。各コントロールにキーが表示されます。"
+"すべては映像の横の「映像」パネルにあります。Alt+1 を押すか、右クリックで「調整とエフェクト」を選んで「映像」タブを開きます。各コントロールにキーが表示されます。\n"
+"→ 調整とエフェクト ▸ 映像 (Alt+1)"
 
 #: manifest.json
 #, x-machine

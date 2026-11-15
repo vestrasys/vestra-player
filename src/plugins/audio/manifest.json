@@ -6,7 +6,7 @@
   "name": "Audio",
   "author": "Vestra Player",
   "punchline": "Equalizer, audio sync, channels, audio tracks and output device",
-  "description": "A ten-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\nSettings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Tools ▸ Audio Track in the right-click menu.",
+  "description": "A ten-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\nSettings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Tools ▸ Audio Track in the right-click menu.\n→ Adjustments and Effects ▸ Audio (Alt+2)",
   "tags": [
     "audio",
     "equalizer",

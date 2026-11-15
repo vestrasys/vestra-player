@@ -1,10 +1,10 @@
 /**
- * "Hide built-in plugins" (store 0.2.8), under the tag and sort drop-downs:
- * on by default, also for settings saved before it; built-ins are left out of
- * every tab (their own Installed rows and a repository's entries for them),
- * of the tab titles' counts and of the tag list. Search and tag combine with
- * it, the details follow the list as for a tag, and the choice is kept in
- * settings.json.
+ * "Hide built-in plugins" (store 0.2.8; Store v3: "Show built-in plugins" in
+ * the ⋯ menu, its opposite): on by default, also for settings saved before
+ * it; built-ins are left out of every tab (their own Installed cards and a
+ * repository's entries for them) and of the tab titles' counts. Search and
+ * category combine with it, an open detail page stays, and the choice is
+ * kept in settings.json.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -50,7 +50,7 @@ async function ready(dataDirectory?: string) {
 type Host = Awaited<ReturnType<typeof start>>["host"];
 
 const names = (host: Host) => rows(host).map((r) => r.name);
-const details = (host: Host) => (props(host)["has-selection"] ? (props(host)["d-name"] as string) : null);
+const details = (host: Host) => (props(host)["detail-open"] ? (props(host)["d-name"] as string) : null);
 const hide = async (host: Host, on: boolean) => {
   host.window("store").emit("setHideBuiltins", on);
   await host.settle();
@@ -63,11 +63,13 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
     assert.equal(props(host)["category"], ALL);
     // All: the built-in's own row and the repository's entry for it go; a reserved id the player does not ship stays.
     assert.deepEqual(names(host), ["Alpha", "Beta", "Old", "Other"]);
-    assert.equal(details(host), "Alpha");
+    assert.equal(details(host), null, "the grid: no plugin is selected");
     // The tab titles count what the tabs list.
     assert.equal(props(host)["all-count"], 4);
     assert.equal(props(host)["installed-count"], 2);
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "audio"]);
+    await tab(host, INSTALLED);
+    assert.deepEqual(names(host), ["Alpha", "Old"]);
+    await tab(host, ALL);
     await tab(host, INSTALLED);
     assert.deepEqual(names(host), ["Alpha", "Old"]);
     await tab(host, ALL);
@@ -77,9 +79,7 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
     assert.equal(store.settings.value.hideBuiltins, false);
     // One row per built-in id: its own row stands for the repository's entry ("Video").
     assert.deepEqual(names(host), ["Alpha", "Beta", "Old", "Other", "vestra.video"]);
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "audio", "core"]);
     assert.equal(props(host)["all-count"], 5);
-    assert.equal(details(host), "Alpha", "the selection stays while listed");
     await tab(host, INSTALLED);
     // As before the option: built-ins first under Installed.
     assert.deepEqual(names(host), ["vestra.video", "Alpha", "Old"]);
@@ -91,42 +91,36 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
   }
 });
 
-test("hiding the selected built-in selects the list's first row; an emptied list has no details", async () => {
+test("hiding built-ins leaves an open built-in's page open; a search only built-ins match empties the grid", async () => {
   const { host, stop } = await ready();
   try {
     await tab(host, INSTALLED);
     await showBuiltins(host);
-    host.window("store").emit("select", "\nvestra.video");
+    host.window("store").emit("openCard", "\nvestra.video");
     await host.settle();
     assert.equal(details(host), "vestra.video");
-    const scroll = props(host)["scroll-request"] as number;
     await hide(host, true);
     assert.deepEqual(names(host), ["Alpha", "Old"]);
-    assert.equal(details(host), "Alpha");
-    assert.ok((props(host)["scroll-request"] as number) > scroll, "the list scrolls to the selection");
+    assert.equal(details(host), "vestra.video", "the page stays");
+    host.window("store").emit("back");
+    await host.settle();
+    assert.equal(details(host), null);
 
-    // A selection the list keeps stays.
-    host.window("store").emit("select", rows(host)[1]!.key);
-    await showBuiltins(host);
-    assert.equal(details(host), "Old");
-    await hide(host, true);
-    assert.equal(details(host), "Old");
-
-    // Only built-ins matched the search: nothing left, no details; showing them fills the list again.
+    // Only built-ins matched the search: nothing left, Clear Search offered; showing them fills the grid again.
     host.window("store").emit("search", "vestra");
     await host.settle();
     assert.deepEqual(names(host), []);
-    assert.equal(details(host), null);
     assert.equal(props(host)["empty-text"], "没有符合条件的插件");
+    assert.equal(props(host)["can-clear"], true);
     await showBuiltins(host);
     assert.deepEqual(names(host), ["vestra.video"]);
-    assert.equal(details(host), "vestra.video");
+    assert.equal(props(host)["can-clear"], false);
   } finally {
     await stop();
   }
 });
 
-test("search and tag combine with it; a tag only built-ins have goes back to Tags: All", async () => {
+test("search and category combine with it", async () => {
   const { host, stop } = await ready();
   try {
     const window = host.window("store");
@@ -138,16 +132,15 @@ test("search and tag combine with it; a tag only built-ins have goes back to Tag
     await showBuiltins(host);
     assert.deepEqual(names(host), ["Other", "vestra.video"], "All: the built-in's own row, for its entry too");
     window.emit("search", "");
-    window.emit("setTag", 2);
+    // Other: tags no category knows ("core"), or none.
+    window.emit("setGoal", 8);
     await host.settle();
-    assert.deepEqual(names(host), ["vestra.video"]);
-    assert.equal(details(host), "vestra.video");
+    assert.deepEqual(names(host), ["Alpha", "Old", "Other", "vestra.video"]);
     await hide(host, true);
-    assert.equal(props(host)["tag-index"], 0, "Tags: All");
-    assert.deepEqual(names(host), ["Alpha", "Beta", "Old", "Other"]);
-    assert.equal(details(host), "Alpha");
-    // A tag other plugins have stays and filters as before.
-    window.emit("setTag", 1);
+    assert.equal(props(host)["goal-index"], 8, "the category stays");
+    assert.deepEqual(names(host), ["Alpha", "Old", "Other"]);
+    // Sound: "audio".
+    window.emit("setGoal", 2);
     await host.settle();
     assert.deepEqual(names(host), ["Beta"]);
   } finally {
@@ -193,23 +186,22 @@ test("the choice is kept in settings.json; settings saved before the option hide
   }
 });
 
-test("select(key) of a hidden built-in shows the built-ins first and keeps the search that lists it", async () => {
+test("select(key) of a hidden built-in opens its page and changes nothing on the grid", async () => {
   const { host, store, stop } = await ready();
   try {
     await tab(host, INSTALLED);
     host.window("store").emit("search", "vestra");
     await host.settle();
     assert.deepEqual(names(host), []);
-    const clear = props(host)["clear-search"];
+    const reset = props(host)["search-reset"];
     store.select("\nvestra.video");
     await host.settle();
-    assert.equal(store.hideBuiltins, false);
-    assert.equal(props(host)["hide-builtins"], false);
-    assert.equal(store.search, "vestra", "the search still lists it");
-    assert.equal(props(host)["clear-search"], clear);
-    assert.equal(props(host)["category"], INSTALLED);
-    assert.deepEqual(names(host), ["vestra.video"]);
     assert.equal(details(host), "vestra.video");
+    assert.equal(store.hideBuiltins, true);
+    assert.equal(store.search, "vestra");
+    assert.equal(props(host)["search-reset"], reset);
+    assert.equal(props(host)["category"], INSTALLED);
+    assert.deepEqual(names(host), []);
   } finally {
     await stop();
   }

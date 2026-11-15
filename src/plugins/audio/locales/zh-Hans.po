@@ -355,10 +355,12 @@ msgstr "均衡器、声音同步、声道、音轨与输出设备"
 #, x-machine
 msgid ""
 "A ten-band equalizer with presets, audio sync, normalize and crystalizer, channel selection, plus audio track switching, loading external audio files and choosing the output device.\n"
-"Settings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Tools ▸ Audio Track in the right-click menu."
+"Settings are kept across files and restarts; everything is in the Audio panel beside the video (Audio…, Alt+2), the tracks also under Tools ▸ Audio Track in the right-click menu.\n"
+"→ Adjustments and Effects ▸ Audio (Alt+2)"
 msgstr ""
 "带预设的十段均衡器、声音同步、规格化与晶化、声道选择，以及音轨切换、载入外部音频文件和输出设备选择。\n"
-"设置跨文件、跨重启保留；全部在视频旁的「声音」面板（声音…，Alt+2），音轨也在右键菜单「工具 ▸ 音轨」中。"
+"设置跨文件、跨重启保留；全部在视频旁的「声音」面板（声音…，Alt+2），音轨也在右键菜单「工具 ▸ 音轨」中。\n"
+"→ 调整与效果 ▸ 声音（Alt+2）"
 
 #: manifest.json
 msgid "audio"

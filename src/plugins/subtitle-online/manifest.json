@@ -6,7 +6,7 @@
   "name": "Online Subtitles",
   "author": "Vestra Player",
   "punchline": "Search and download subtitles for the current video",
-  "description": "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\nFind it in the right-click menu under Subtitles ▸ Online Subtitles.",
+  "description": "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\nFind it in the right-click menu under Subtitles ▸ Online Subtitles.\n→ Menu: Open ▸ Search and Download Subtitles",
   "tags": [
     "subtitles",
     "download"

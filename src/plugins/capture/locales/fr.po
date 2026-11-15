@@ -317,10 +317,10 @@ msgstr "Enregistrer ou copier l'image actuelle, capturer des rafales"
 #, x-machine
 msgid ""
 "Saves, saves as or copies the current frame (with the subtitles shown, or the rendered frame with video effects) as PNG, JPEG or BMP, and captures a burst of frames. The settings are in Options ▸ Video ▸ Snapshot.\n"
-"Right-click menu: Tools ▸ Snapshot ▸."
+"→ Menu: Tools ▸ Snapshot"
 msgstr ""
 "Enregistre, enregistre sous ou copie l’image actuelle (avec les sous-titres affichés, ou l’image rendue avec effets vidéo) en PNG, JPEG ou BMP, et capture une rafale d’images. Les paramètres se trouvent dans Options ▸ Vidéo ▸ Capture.\n"
-"Menu contextuel : Outils ▸ Capture ▸."
+"→ Menu : Outils ▸ Capture"
 
 #: manifest.json
 #, x-machine

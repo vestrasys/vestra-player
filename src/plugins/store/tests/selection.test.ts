@@ -1,17 +1,19 @@
 /**
- * The details follow the list (GUI test 2026-10-27: Available, now All, showed
- * the Installed tab's built-in in its details): a tab, search or tag change keeps
- * the selection while the list shows it, else selects the list's first row,
- * and an empty list has no details. A plugin that left the list (installed,
- * updated, uninstalled, dropped) gives way to the row in its place; the tab stays.
+ * The detail page (Store v3, design store-v3 §3.5): a click on a card opens
+ * its page in the same window, on About; ← All Plugins (or Esc) goes back to
+ * the grid, which kept its tab, search, category and scroll. The grid has no
+ * selection. The page follows its plugin through install, update and
+ * uninstall; a plugin that leaves the store's list closes it. `select(key)`
+ * (after an install from a file or a link, from the revocation notice) opens
+ * a page too, once the plugin is listed.
  */
 import assert from "node:assert/strict";
 import test from "node:test";
-import { ALL, BUILTIN, choose, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until, UPDATES, yes } from "./helpers.ts";
+import { ALL, BUILTIN, choose, controls, FakeNet, info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until, UPDATES, yes } from "./helpers.ts";
 
 const fromRepo = { kind: "repository", url: OFFICIAL } as const;
 
-/** Installed: the built-in, Alpha, Old (an update); not installed: Beta, Gamma (tagged), Delta. All lists them all. */
+/** Installed: the built-in, Alpha, Old (an update), Side (from a file); not installed: Beta, Gamma, Delta. */
 const PLUGINS = [
   { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
   { id: "o.old", name: "Old", versions: [{ version: "2.0.0" }, { version: "1.0.0" }] },
@@ -29,299 +31,165 @@ async function ready() {
       BUILTIN,
       info("a.alpha", { version: "1.0.0", source: fromRepo }),
       info("o.old", { version: "1.0.0", source: fromRepo }),
+      info("x.side", { version: "1.0.0", source: { kind: "file" } }),
     ],
   });
   await openStore(started.host);
   await showBuiltins(started.host);
-  await until(started.host, () => started.store.items.length === 6, "rows");
+  await until(started.host, () => started.store.items.length === 7, "cards");
   return started;
 }
 
 type Host = Awaited<ReturnType<typeof start>>["host"];
 
-/** What the details show: the name, or null for none; checked against the list. */
-function details(host: Host): string | null {
-  const p = props(host);
-  const list = rows(host) as { name: string; selected?: boolean }[];
-  const marked = list.filter((r) => r.selected).map((r) => r.name);
-  if (!p["has-selection"]) {
-    assert.deepEqual(marked, [], "no row marked without details");
-    assert.equal(p["selected-index"], -1);
-    return null;
-  }
-  // The details are those of the row marked selected, at the index the window scrolls to.
-  assert.deepEqual(marked, [p["d-name"]]);
-  assert.equal(list[p["selected-index"] as number]?.name, p["d-name"]);
-  return p["d-name"] as string;
-}
+/** The open page's plugin, or null on the grid. */
+const page = (host: Host) => (props(host)["detail-open"] ? (props(host)["d-name"] as string) : null);
+const keyOf = (id: string) => `${OFFICIAL}\n${id}`;
 
-const search = async (host: Host, text: string) => {
-  host.window("store").emit("search", text);
-  await host.settle();
-};
-
-test("a tab switch selects the new list's first row, or keeps the selection that it lists", async () => {
+test("a click on a card opens its page on About; back returns to the grid as it was", async () => {
   const { host, store, stop } = await ready();
   try {
-    // The first open is All: every plugin, installed ones included.
+    const window = host.window("store");
+    // The grid: every plugin, nothing selected.
     assert.equal(props(host)["category"], ALL);
-    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video"]);
-    // Alpha was the first row while the built-in was hidden; showing it keeps the selection.
-    assert.equal(details(host), "Alpha");
-    // Installed lists Alpha too: kept.
-    await tab(host, INSTALLED);
-    assert.equal(details(host), "Alpha");
-    await tab(host, ALL);
-    await choose(host, "Gamma");
-    // Installed does not list Gamma: its first row.
-    await tab(host, INSTALLED);
-    assert.equal(details(host), "vestra.video");
-    await tab(host, UPDATES);
-    assert.equal(details(host), "Old");
-    // Old is listed under Installed and All too: it stays selected.
-    await tab(host, INSTALLED);
-    assert.equal(details(host), "Old");
-    await tab(host, ALL);
-    assert.equal(details(host), "Old");
-    await choose(host, "Beta");
-    // A refresh that keeps the selection leaves the list where the user scrolled it.
-    const scroll = props(host)["scroll-request"];
-    await store.refreshAll(true);
-    await host.settle();
-    assert.equal(details(host), "Beta");
-    assert.equal(props(host)["scroll-request"], scroll);
-  } finally {
-    await stop();
-  }
-});
-
-test("a search or tag that hides the selected plugin selects the first row it leaves; none left: no details", async () => {
-  const { host, store, stop } = await ready();
-  try {
-    await tab(host, ALL);
-    await choose(host, "Gamma");
-    const before = props(host)["scroll-request"] as number;
-    // Still listed: kept, and brought into view.
-    await search(host, "a");
-    assert.equal(details(host), "Gamma");
-    assert.ok((props(host)["scroll-request"] as number) > before);
-    await search(host, "delta");
-    assert.deepEqual(rows(host).map((r) => r.name), ["Delta"]);
-    assert.equal(details(host), "Delta");
-    await search(host, "nothing like it");
-    assert.deepEqual(rows(host), []);
-    assert.equal(details(host), null);
-    assert.equal(store.selected, null);
-    await search(host, "");
-    assert.equal(details(host), "Alpha");
-    // Tags: All, audio, video.
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "audio", "video"]);
-    host.window("store").emit("setTag", 1);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video", "x.side"]);
+    assert.equal(page(host), null);
+    window.emit("search", "a");
+    window.emit("setGoal", 2);
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
-    assert.equal(details(host), "Delta");
+    window.emit("setTab", 1);
     await choose(host, "Gamma");
-    host.window("store").emit("setTag", 0);
+    assert.equal(page(host), "Gamma");
+    assert.equal(props(host)["tab"], 0, "a page opens on About");
+    assert.equal(store.selected, keyOf("g.gamma"));
+    // Back: the grid with its tab, search and category.
+    window.emit("back");
     await host.settle();
-    assert.equal(details(host), "Gamma");
+    assert.equal(page(host), null);
+    assert.equal(store.selected, null);
+    assert.equal(store.search, "a");
+    assert.equal(props(host)["goal-index"], 2);
+    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
+    // A card the grid no longer has opens nothing.
+    window.emit("openCard", `${OFFICIAL}\nz.none`);
+    await host.settle();
+    assert.equal(page(host), null);
   } finally {
     await stop();
   }
 });
 
-test("an empty tab has no details; the next tab selects its first row again", async () => {
-  const net = new FakeNet();
-  publish(net, OFFICIAL, [{ id: "b.beta", name: "Beta", versions: [{ version: "1.0.0" }] }]);
-  const { host, store, stop } = await start({ net });
-  try {
-    await openStore(host);
-    await showBuiltins(host);
-    await until(host, () => store.items.length === 2, "rows");
-    assert.equal(details(host), "Beta");
-    await tab(host, INSTALLED);
-    assert.equal(details(host), "vestra.video");
-    await tab(host, UPDATES);
-    assert.deepEqual(rows(host), []);
-    assert.equal(details(host), null);
-    assert.equal(props(host)["empty-text"], "所有插件都是最新的");
-    await tab(host, ALL);
-    assert.equal(details(host), "Beta");
-  } finally {
-    await stop();
-  }
-});
-
-test("install, update, uninstall and a repository dropping a plugin keep the tab; the row in its place is selected", async () => {
+test("the page follows its plugin through install, update and uninstall; a plugin that leaves the list closes it", async () => {
   const { host, net, store, stop } = await ready();
   try {
-    await tab(host, ALL);
+    const window = host.window("store");
     await choose(host, "Delta");
     host.dialogAnswers.push(yes);
-    host.window("store").emit("act", "install");
+    window.emit("act", "install");
     await until(host, () => !store.busy && host.packages.some((p) => p.id === "d.delta"), "installed");
     await host.settle();
-    // All lists it installed now: it stays selected, with its new state.
-    assert.equal(props(host)["category"], ALL);
-    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video"]);
-    assert.equal(details(host), "Delta");
-    assert.equal(rows(host).find((r) => r.name === "Delta")!.mark, "✓");
-    // The last update under Updates: the tab stays, now empty, without details.
+    assert.equal(page(host), "Delta");
+    assert.equal(controls(host, "Delta").state, "✓ 已安装");
+
     await tab(host, UPDATES);
-    assert.equal(details(host), "Old");
+    await choose(host, "Old");
     host.dialogAnswers.push(yes);
-    host.window("store").emit("act", "update");
+    window.emit("act", "update");
     await until(host, () => !store.busy && host.packages.some((p) => p.id === "o.old" && p.version === "2.0.0"), "updated");
     await host.settle();
+    // It left Updates; its page stays.
     assert.equal(props(host)["category"], UPDATES);
     assert.deepEqual(rows(host), []);
-    assert.equal(details(host), null);
-    // The repository drops Gamma while it is selected under All: the row in its place.
+    assert.equal(page(host), "Old");
+
+    // Uninstalled: its repository's entry stands for it, the page stays with Install.
+    await tab(host, INSTALLED);
+    await choose(host, "Alpha");
+    host.dialogAnswers.push(yes);
+    window.emit("act", "uninstall");
+    await until(host, () => !store.busy && !host.packages.some((p) => p.id === "a.alpha"), "uninstalled");
+    await host.settle();
+    assert.equal(page(host), "Alpha");
+    assert.deepEqual((props(host)["actions"] as { id: string }[]).map((a) => a.id), ["install"]);
+
+    // A sideloaded plugin uninstalled: nothing stands for it, the grid shows.
+    await choose(host, "x.side");
+    host.dialogAnswers.push(yes);
+    window.emit("act", "uninstall");
+    await until(host, () => !store.busy && !host.packages.some((p) => p.id === "x.side"), "side uninstalled");
+    await host.settle();
+    assert.equal(page(host), null);
+    assert.equal(props(host)["category"], INSTALLED, "the tab stays");
+
+    // The repository drops Gamma while its page is open: the grid shows.
     await tab(host, ALL);
     await choose(host, "Gamma");
     publish(net, OFFICIAL, PLUGINS.filter((p) => p.id !== "g.gamma"));
     await store.refreshAll(true);
     await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Old", "vestra.video"]);
-    assert.equal(details(host), "Old");
-    // Uninstalled under Installed: the row below takes its place.
-    await tab(host, INSTALLED);
-    assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "Alpha", "Delta", "Old"]);
-    await choose(host, "Alpha");
-    host.dialogAnswers.push(yes);
-    host.window("store").emit("act", "uninstall");
-    await until(host, () => !store.busy && !host.packages.some((p) => p.id === "a.alpha"), "uninstalled");
-    await host.settle();
-    assert.equal(props(host)["category"], INSTALLED);
-    assert.equal(details(host), "Delta");
+    assert.equal(page(host), null);
+    assert.ok(!rows(host).some((r) => r.name === "Gamma"));
   } finally {
     await stop();
   }
 });
 
-const keyOf = (id: string) => `${OFFICIAL}\n${id}`;
-const scroll = (host: Host) => props(host)["scroll-request"] as number;
-
-test("select(key) shows the plugin: its tab, then without the tag, then without the search", async () => {
+test("a card's button acts in place: the grid stays", async () => {
   const { host, store, stop } = await ready();
   try {
-    // Not on this tab: an installed plugin goes to Installed, another to All.
-    await tab(host, UPDATES);
-    let before = scroll(host);
-    store.select(keyOf("a.alpha"));
+    const beta = rows(host).find((r) => r.name === "Beta")!;
+    assert.deepEqual(beta.button, { id: "install", text: "安装", enabled: true });
+    host.dialogAnswers.push(yes);
+    host.window("store").emit("cardAct", beta.key, "install");
+    await until(host, () => !store.busy && host.packages.some((p) => p.id === "b.beta"), "installed");
     await host.settle();
-    assert.equal(props(host)["category"], INSTALLED);
-    assert.equal(details(host), "Alpha");
-    assert.ok(scroll(host) > before);
-    before = scroll(host);
+    assert.equal(page(host), null);
+    assert.equal(controls(host, "Beta").state, "✓ 已安装");
+    assert.equal(controls(host, "Beta").button, null);
+  } finally {
+    await stop();
+  }
+});
+
+test("select(key) opens the page: a repository entry of an installed plugin opens the installed one; nothing on the grid changes", async () => {
+  const { host, store, stop } = await ready();
+  try {
+    const window = host.window("store");
+    await tab(host, UPDATES);
+    window.emit("search", "zzz");
+    await host.settle();
     store.select(keyOf("d.delta"));
     await host.settle();
-    assert.equal(props(host)["category"], ALL);
-    assert.equal(details(host), "Delta");
-    assert.ok(scroll(host) > before);
-    // A tag that hides it is dropped.
-    await tab(host, ALL);
-    host.window("store").emit("setTag", 1);
+    assert.equal(page(host), "Delta");
+    assert.equal(props(host)["category"], UPDATES);
+    assert.equal(store.search, "zzz");
+    // A built-in's repository entry: the built-in's own page.
+    store.select(keyOf("vestra.video"));
     await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
-    store.select(keyOf("b.beta"));
+    assert.equal(store.selected, keyOf("vestra.video"), "the repository lists no vestra.video here: its key, waiting");
+    assert.equal(page(host), null);
+    store.select("\nvestra.video");
     await host.settle();
-    assert.equal(props(host)["category"], ALL);
-    assert.equal(props(host)["tag-index"], 0);
-    assert.equal(details(host), "Beta");
-    // A search that hides it is cleared, in the window's box too.
-    await search(host, "gamma");
-    assert.equal(details(host), "Gamma");
-    const cleared = props(host)["clear-search"] as number;
-    store.select(keyOf("b.beta"));
-    await host.settle();
-    assert.equal(props(host)["clear-search"], cleared + 1);
-    assert.equal(store.search, "");
-    assert.deepEqual(rows(host).map((r) => r.name), ["Alpha", "Beta", "Delta", "Gamma", "Old", "vestra.video"]);
-    assert.equal(details(host), "Beta");
-    // Sorting keeps the selection and brings it into view.
-    before = scroll(host);
-    host.window("store").emit("setSort", 1);
-    await host.settle();
-    assert.equal(details(host), "Beta");
-    assert.ok(scroll(host) > before);
+    assert.equal(page(host), "vestra.video");
   } finally {
     await stop();
   }
 });
 
-test("a plugin selected before it is in the plugin list is shown and scrolled to once it arrives", async () => {
+test("a plugin selected before it is in the store's list opens once it arrives", async () => {
   const { host, store, stop } = await ready();
   try {
-    await tab(host, ALL);
-    const before = scroll(host);
-    store.select("\nx.side");
+    store.select("\nx.new");
     await host.settle();
-    // Not listed yet: no details, and the list does not move.
-    assert.equal(details(host), null);
-    assert.equal(scroll(host), before);
-    host.packages = [...host.packages, info("x.side", { version: "1.0.0" })];
+    // Not listed yet: the grid.
+    assert.equal(page(host), null);
+    host.packages = [...host.packages, info("x.new", { version: "1.0.0" })];
     await store.reread();
     await host.settle();
-    // All lists it: the tab stays.
-    assert.equal(props(host)["category"], ALL);
-    assert.equal(store.selected, "\nx.side");
-    assert.equal(details(host), "x.side");
-    assert.ok(scroll(host) > before);
-  } finally {
-    await stop();
-  }
-});
-
-test("an empty list that fills selects its first row; a tab without the chosen tag drops it", async () => {
-  const { host, net, store, stop } = await ready();
-  try {
-    await tab(host, ALL);
-    await search(host, "zeta");
-    assert.deepEqual(rows(host), []);
-    assert.equal(details(host), null);
-    publish(net, OFFICIAL, [...PLUGINS, { id: "z.zeta", name: "Zeta", versions: [{ version: "1.0.0" }] }]);
-    await store.refreshAll(true);
-    await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Zeta"]);
-    assert.equal(details(host), "Zeta");
-    await search(host, "");
-    // "video" (Beta) has no plugin under Installed: Installed shows all its plugins under "Tags: All".
-    host.window("store").emit("setTag", 2);
-    await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Beta"]);
-    await tab(host, INSTALLED);
-    assert.equal(props(host)["tag-index"], 0);
-    assert.equal(store.tag, null);
-    assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "Alpha", "Old"]);
-    assert.equal(details(host), "vestra.video");
-  } finally {
-    await stop();
-  }
-});
-
-test("select(key) on All stays on All: an installed plugin hidden by the tag or the search does not jump to Installed", async () => {
-  const { host, store, stop } = await ready();
-  try {
-    assert.equal(props(host)["category"], ALL);
-    // The tag hides Alpha (installed): it goes back to "Tags: All".
-    host.window("store").emit("setTag", 1);
-    await host.settle();
-    assert.deepEqual(rows(host).map((r) => r.name), ["Delta", "Gamma"]);
-    store.select(keyOf("a.alpha"));
-    await host.settle();
-    assert.equal(props(host)["category"], ALL);
-    assert.equal(props(host)["tag-index"], 0);
-    assert.equal(details(host), "Alpha");
-    // The search hides Old (installed, with an update): cleared, still All.
-    await search(host, "gamma");
-    const cleared = props(host)["clear-search"] as number;
-    store.select(keyOf("o.old"));
-    await host.settle();
-    assert.equal(props(host)["category"], ALL);
-    assert.equal(store.search, "");
-    assert.equal(props(host)["clear-search"], cleared + 1);
-    assert.equal(details(host), "Old");
-    assert.equal(store.settings.value.tab, undefined, "no tab was picked");
+    assert.equal(store.selected, "\nx.new");
+    assert.equal(page(host), "x.new");
+    assert.equal(props(host)["category"], ALL, "the tab stays");
   } finally {
     await stop();
   }

@@ -30,6 +30,7 @@ import { addedBy, categories, day, hostOf, reasonOf, sourceName } from "./labels
 import { get, NetError } from "./net.ts";
 import { Revocations, revocationKey } from "./revocations.ts";
 import { Repos, type Deps } from "./repos.ts";
+import { commandLine, GOAL_NAMES, goalsOf, type ListedCommand } from "./open-line.ts";
 import { compareVersions, isVersion } from "./semver.ts";
 import { SettingsPage } from "./settings-page.ts";
 import { bytes, directorySize } from "./sizes.ts";
@@ -103,9 +104,6 @@ export const tabOf = (name: unknown): number => {
  */
 const fromLibrary = (item: Item) => isInstalledRow(item) && !isDevelopmentRow(item);
 
-/** The tab a row hidden by Installed or Updates is brought up on: Installed for an installed one, else All (which lists every row). */
-const homeOf = (item: Item) => (isInstalledRow(item) ? INSTALLED : ALL);
-
 export const MENU_ORDER = 822;
 /**
  * The bottom bar's button (player 0.5.10): position only, low further left and
@@ -116,12 +114,15 @@ export const BUTTON_ORDER = 200;
 const README_LIMIT = 256 * 1024;
 const REMOTE_IMAGE = /!\[[^\]]*\]\(\s*<?(https?:\/\/[^)\s>]+)/g;
 /**
- * Decoded sizes, about twice the drawn size: the rows' 32px logos and the
- * details' 56px icon. A 64px logo is 16 KB decoded, so even a thousand rows
- * stay far under the player's 32 MB per view (`IMAGE_LIMITS.viewBytes`).
+ * Decoded sizes, twice the drawn size: the cards' 40px icons and the detail
+ * page's 56px icon. An 80px icon is 25 KB decoded, so even a thousand cards
+ * stay under the player's 32 MB per view (`IMAGE_LIMITS.viewBytes`).
  */
-const ROW_LOGO = 64;
+const CARD_ICON = 80;
 const DETAIL_ICON = 112;
+/** The detail page's tabs (Store v3): About (the README), Details (facts, permissions, changelog and versions). */
+export const ABOUT = 0;
+export const DETAILS = 1;
 /** A reload that never reports back (the player starts it within 20 s). */
 const RELOAD_WAIT = 30_000;
 
@@ -137,7 +138,7 @@ export interface Question {
 
 type Banner = { text: Msg | null; tone: number; action: string; actionText: Msg | null };
 
-/** A button or a `…` menu entry of a row; `id` is what `#act` does. */
+/** A button or a `⋯` menu entry; `id` is what `#act` does. */
 type Action = { id: string; text: Msg; enabled: boolean };
 
 type Fact = { label: Msg; text: Msg; url: string | null; action?: "openData" };
@@ -180,10 +181,14 @@ export class Store {
   // Window state
   category = ALL;
   search = "";
-  tag: string | null = null;
+  /** The Category drop-down: 0 all, else `GOAL_NAMES[goal - 1]`. */
+  goal = 0;
   sort = 0;
+  /** The plugin whose detail page is open (Store v3: a click on a card opens it); `null`: the grid. */
   selected: string | null = null;
-  tab = 0;
+  /** The detail page's tab (ABOUT, DETAILS) and, under Details, Changelog (0) or Versions (1). */
+  tab = ABOUT;
+  subTab = 0;
   linkOpen = false;
   linkText = "";
   #message: { text: Msg; warn: boolean } | null = null;
@@ -209,12 +214,15 @@ export class Store {
   #menuChain: Promise<void> = Promise.resolve();
   #announced = false;
   #disposed = false;
-  /** Bumped when the list should scroll the selected row into view (`scroll-request`). */
-  #scroll = 0;
   /** Bumped when the search box is to be emptied (`clear-search`): the box's text is the window's own. */
   #clearSearch = 0;
   /** A plugin `select`ed before it was in the plugin list (just installed from a file or link). */
   #pending: string | null = null;
+  /** The palette's table (`commands.list`) for the cards' fallback "how to open" line; its revision. */
+  #commands: readonly ListedCommand[] = [];
+  #commandsRevision = -1;
+  /** `commands.list` refused (not a built-in plugin, as in tests): not asked again. */
+  #noCommands = false;
 
   constructor(plugin: Plugin, deps: Omit<Deps, "userAgent">) {
     this.plugin = plugin;
@@ -231,45 +239,58 @@ export class Store {
     rmSync(join(plugin.dataDirectory, "downloads"), { recursive: true, force: true });
 
     const storeWindow = (this.storeWindow = plugin.windows.create("ui/store.slint"));
-    // The details follow the list: a tab, search or tag that hides the selected plugin selects the list's first row.
+    // The grid (Store v3): the tab, the search, the category and the sort pick and order the cards.
     storeWindow.on("search", (text: string) => {
       this.search = text;
-      this.#listChanged();
+      this.changed();
     });
     storeWindow.on("setCategory", (index: number) => {
       this.#setCategory(Math.max(ALL, Math.min(UPDATES, Math.trunc(Number(index) || 0))));
-      // A tag the new tab has no plugin for would empty its list under "Tags: All".
-      const tag = this.tag?.toLowerCase();
-      if (tag !== undefined && !this.#tags().some((each) => each.toLowerCase() === tag)) this.tag = null;
-      this.#listChanged();
+      this.changed();
     });
-    storeWindow.on("setTag", (index: number) => {
-      this.tag = index <= 0 ? null : (this.#tags()[index - 1] ?? null);
-      this.#listChanged();
+    storeWindow.on("setGoal", (index: number) => {
+      this.goal = Math.max(0, Math.min(GOAL_NAMES.length, Math.trunc(Number(index) || 0)));
+      this.changed();
     });
     storeWindow.on("setSort", (index: number) => {
       this.sort = index === 1 ? 1 : 0;
-      this.#listChanged();
+      this.changed();
     });
-    // The check box's new state (not a flip), kept in settings.json.
+    // The ⋯ menu's "Show built-in plugins": the new state of "hide" (not a flip), kept in settings.json.
     storeWindow.on("setHideBuiltins", (on: boolean) => {
       this.#setHideBuiltins(on === true);
       this.changed();
     });
-    storeWindow.on("select", (key: string) => {
-      if (this.selected === key) return;
+    // The empty grid's Clear Search: the search and the category.
+    storeWindow.on("clearSearch", () => {
+      this.search = "";
+      this.goal = 0;
+      this.#clearSearch++;
+      this.changed();
+    });
+    // A click on a card opens its detail page; "← All Plugins", Esc or the mouse's back button closes it.
+    storeWindow.on("openCard", (key: string) => this.#open(key));
+    storeWindow.on("back", () => {
+      this.selected = null;
       this.#pending = null;
-      this.selected = key;
-      void this.#loadDoc();
+      this.changed();
     });
     storeWindow.on("setTab", (index: number) => {
-      this.tab = Math.max(0, Math.min(2, index));
+      this.tab = index === DETAILS ? DETAILS : ABOUT;
       void this.#loadDoc();
     });
-    storeWindow.on("act", (action: string) => this.#act(action));
-    storeWindow.on("rowAct", (key: string, action: string) => {
-      if (this.selected !== key) this.select(key);
-      return this.#act(action);
+    storeWindow.on("setSubTab", (index: number) => {
+      this.subTab = index === 1 ? 1 : 0;
+      void this.#loadDoc();
+    });
+    storeWindow.on("act", (action: string) => {
+      const item = this.selectedItem();
+      if (item) return this.#act(item, action);
+    });
+    // A card's button (Install, Update) acts in place: the grid stays.
+    storeWindow.on("cardAct", (key: string, action: string) => {
+      const item = this.items.find((each) => each.key === key);
+      if (item) return this.#act(item, action);
     });
     storeWindow.on("bannerAct", (action: string) => this.#bannerAct(action));
     storeWindow.on("installVersion", (version: string) => {
@@ -357,53 +378,34 @@ export class Store {
     await this.storeWindow.show();
     // A short wait for the headers: offline, the Installed tab never waits for the network anyway.
     if (refresh && this.repos.list.some((repo) => this.repos.stale(repo))) void this.refreshAll(false, timing.openHeaders);
-    this.#listChanged();
+    void this.#readCommands();
     this.changed();
   }
 
   /**
-   * Show this plugin's details (after an install, from the revocation
-   * notice). The details only ever show a row of the list, so a plugin on
-   * another tab, or hidden by the tag or the search, brings its tab up and
-   * those filters off first.
+   * Open this plugin's detail page (after an install from a file or a link,
+   * from the revocation notice). A repository entry an installed plugin
+   * stands for shows that plugin; one not in the store's list yet (just
+   * installed) opens once it is.
    */
   select(key: string) {
-    // A repository entry an installed row stands for shows that row (one row per installed id in All).
     const found = this.items.find((each) => each.key === key);
     const item = found ? this.#primary(found) : undefined;
-    if (item) key = item.key;
     this.#pending = item ? null : key;
-    if (item) this.#reveal(item);
-    this.selected = key;
-    // Not in the list yet: scrolled to once it is (`rebuild`).
-    if (item) this.#scroll++;
+    this.selected = item ? item.key : key;
     void this.#loadDoc();
     this.changed();
   }
 
-  /**
-   * Bring a row into the list: a hidden built-in shows the built-ins first,
-   * then its tab (All stays All, which lists every row), then without the
-   * tag, then without the search, each only while the row is still not listed.
-   */
-  #reveal(item: Item) {
+  /** A card was clicked: its detail page, on About. */
+  #open(key: string) {
+    const found = this.items.find((each) => each.key === key);
+    if (!found) return;
     this.#pending = null;
-    if (this.#shows(item.key)) return;
-    if (isBuiltinRow(item) && this.hideBuiltins) {
-      this.settings.save({ ...this.settings.value, hideBuiltins: false });
-      if (this.#shows(item.key)) {
-        this.#scroll++;
-        return;
-      }
-    }
-    // All lists every row: it stays, and only the tag and the search give way.
-    if (this.category !== ALL) this.#setCategory(homeOf(item));
-    if (!this.#shows(item.key)) this.tag = null;
-    if (!this.#shows(item.key)) {
-      this.search = "";
-      this.#clearSearch++;
-    }
-    this.#scroll++;
+    this.selected = this.#primary(found).key;
+    this.tab = ABOUT;
+    void this.#loadDoc();
+    this.changed();
   }
 
   /** Switch tabs and remember the tab in settings.json: the next open, also after a restart, starts there. */
@@ -413,53 +415,19 @@ export class Store {
     if (name !== undefined && this.settings.value.tab !== name) this.settings.save({ ...this.settings.value, tab: name });
   }
 
-  /** "Hide built-in plugins" is on: the default, also for settings saved before the option. */
+  /** "Hide built-in plugins" is on (the ⋯ menu's "Show built-in plugins" off): the default, also for settings saved before the option. */
   get hideBuiltins(): boolean {
     return this.settings.value.hideBuiltins !== false;
   }
 
-  /** The check box: the details follow the list as for a tag or a search. */
   #setHideBuiltins(on: boolean) {
     if (on === this.hideBuiltins) return;
     this.settings.save({ ...this.settings.value, hideBuiltins: on });
-    // A tag only built-ins have would empty the list under "Tags: All".
-    const tag = this.tag?.toLowerCase();
-    if (tag !== undefined && !this.#tags().some((each) => each.toLowerCase() === tag)) this.tag = null;
-    this.#listChanged();
-  }
-
-  /** The list shows this row now. */
-  #shows(key: string | null): boolean {
-    return key !== null && this.visible().some((each) => each.key === key);
-  }
-
-  /**
-   * The details follow the list (plugin-center spec, like app stores and
-   * VS Code's extensions view): keep the selection while the list shows it,
-   * else select the row at `at` (the first after a tab, search or tag
-   * change; the same place after the plugin left the list), or nothing when
-   * the list is empty.
-   */
-  #follow(at = 0) {
-    if (this.#shows(this.selected)) return;
-    const visible = this.visible();
-    const next = visible[Math.max(0, Math.min(at, visible.length - 1))]?.key ?? null;
-    if (next === this.selected) return;
-    this.selected = next;
-    this.#pending = null;
-    this.#scroll++;
-    void this.#loadDoc();
-  }
-
-  /** After a tab, search, tag or sort change: follow the list and bring the selected row into view. */
-  #listChanged() {
-    this.#follow();
-    this.#scroll++;
   }
 
   /** Recompute rows after the repositories or the install library changed. */
   rebuild(afterRefresh = false) {
-    const at = this.visible().findIndex((each) => each.key === this.selected);
+    const before = this.selectedItem();
     this.items = buildItems(
       this.repos.list,
       this.packages,
@@ -467,19 +435,20 @@ export class Store {
       (info) => this.#display(info),
       this.plugin.i18n.locale,
     );
-    // A row that became another source's entry (its plugin installed from elsewhere) gives way to the installed row.
-    const now = this.#pending === null ? this.selectedItem() : null;
-    if (now && this.#primary(now) !== now) this.selected = this.#primary(now).key;
-    // A plugin selected before it reached the list (installed from a file or link) is shown once it has.
-    const pending = this.#pending !== null && this.selected === this.#pending ? this.selectedItem() : null;
-    if (pending) {
-      this.#reveal(pending);
-      this.#scroll++;
+    if (this.selected !== null) {
+      const now = this.selectedItem();
+      if (now) {
+        // A row that became another source's entry (its plugin installed from elsewhere) gives way to the installed row;
+        // a plugin opened before it reached the list (installed from a file or a link) is shown once it has.
+        this.selected = this.#primary(now).key;
+        this.#pending = null;
+      } else if (this.#pending === null) {
+        // The plugin left the list (a sideloaded one uninstalled, a repository that dropped it): another row of the
+        // same id stands for it (its repository's entry), else the page closes and the grid shows.
+        const same = before ? this.items.find((each) => each.id === before.id) : undefined;
+        this.selected = same ? this.#primary(same).key : null;
+      }
     }
-    // The tab stays: a plugin that left the list (installed, updated, uninstalled, dropped by its
-    // repository) gives way to the row in its place, like VS Code's extensions view and app stores.
-    // An empty list that fills (an index read, a refresh that adds matches) selects its first row.
-    else if (at >= 0 || (this.selected === null && this.#pending === null)) this.#follow(Math.max(0, at));
     void this.updateMenu(afterRefresh);
     void this.revocations.check();
     void this.#loadDoc();
@@ -494,6 +463,26 @@ export class Store {
     this.packages = list;
     this.#reloaded();
     this.rebuild();
+    void this.#readCommands();
+  }
+
+  /**
+   * The palette's table for the cards' fallback line (open-line.ts): read when
+   * the window opens and when the plugins change; `commands.list` is for
+   * built-in plugins only, and a refusal is not asked again.
+   */
+  async #readCommands() {
+    if (this.#noCommands || this.#disposed) return;
+    try {
+      const { revision, commands } = await this.plugin.commands.list();
+      if (revision === this.#commandsRevision) return;
+      this.#commandsRevision = revision;
+      this.#commands = commands.map(({ id, path, label }) => ({ id, path, label }));
+      this.changed();
+    } catch (error) {
+      if ((error as { code?: string }).code === "capability") this.#noCommands = true;
+      else this.deps.log(`commands.list: ${(error as Error).message}`);
+    }
   }
 
   /**
@@ -619,7 +608,7 @@ export class Store {
     return this.items.find((item) => item.key === this.selected) ?? null;
   }
 
-  /** The current tab, searched, tag-filtered and sorted (design §2.1); built-ins (when shown) first under Installed. */
+  /** The current tab, searched, filtered by category and sorted (design store-v3 §3.1); built-ins (when shown) first under Installed. */
   visible(): Item[] {
     const query = this.search.trim().toLowerCase();
     let items = this.#inCategory().filter((item) =>
@@ -629,10 +618,8 @@ export class Store {
             text.toLowerCase().includes(query),
           ),
     );
-    if (this.tag) {
-      const tag = this.tag.toLowerCase();
-      items = items.filter((item) => [...item.tags, ...item.english].some((t) => t.toLowerCase() === tag));
-    }
+    const goal = GOAL_NAMES[this.goal - 1];
+    if (goal) items = items.filter((item) => this.#goals(item).includes(goal));
     const group = (item: Item) => (this.category === INSTALLED && item.installed?.builtin ? 0 : 1);
     const byName = (a: Item, b: Item) => a.name.localeCompare(b.name, "zh") || a.key.localeCompare(b.key);
     const order =
@@ -640,7 +627,7 @@ export class Store {
     return items.sort((a, b) => group(a) - group(b) || order(a, b));
   }
 
-  /** The rows "Hide built-in plugins" leaves in: every tab's list, its tags and its count draw on these. */
+  /** The rows "Hide built-in plugins" leaves in: every tab's list and its count draw on these. */
   #listed(): Item[] {
     return this.hideBuiltins ? this.items.filter((item) => !isBuiltinRow(item)) : this.items;
   }
@@ -658,7 +645,7 @@ export class Store {
    * All shows one row per installed id: the installed row stands for the
    * repositories' entries of the same id (another source's, a built-in's, a
    * reserved one), which it names ("Also in …") and whose replace action its
-   * … menu offers. A plugin not installed keeps one row per (repository, id).
+   * page's ⋯ menu offers. A plugin not installed keeps one row per (repository, id).
    */
   #collapsed(items: Item[]): Item[] {
     const installed = new Set(items.filter(fromLibrary).map((each) => each.id));
@@ -677,7 +664,7 @@ export class Store {
     return this.items.filter((each) => each.id === item.id && each !== item && each.repo !== null && !isInstalledRow(each));
   }
 
-  /** All: the … menu's "Replace with x from <repository>…", one per other source that offers a version. */
+  /** All: the page's ⋯ menu's "Replace with x from <repository>…", one per other source that offers a version. */
   #replacements(item: Item): Action[] {
     const idle = !this.busy && this.#working === null;
     return this.#alsoIn(item)
@@ -685,10 +672,9 @@ export class Store {
       .map((each) => ({ id: `replace:${each.key}`, text: msg("Replace with {0} from {1}…", each.best!.version, each.repo!.origin), enabled: idle }));
   }
 
-  #tags(): string[] {
-    const tags = new Map<string, string>();
-    for (const item of this.#inCategory()) for (const tag of item.tags) if (!tags.has(tag.toLowerCase())) tags.set(tag.toLowerCase(), tag);
-    return [...tags.values()].sort((a, b) => a.localeCompare(b, "zh"));
+  /** The categories a plugin is in, from its tags as shown and its English ones (`english` is name, punchline, tags). */
+  #goals(item: Item) {
+    return goalsOf([...item.tags, ...item.english.slice(2)]);
   }
 
   /** Some repository has an index (fresh or cached): All's repository part and Updates mean something. */
@@ -698,18 +684,16 @@ export class Store {
 
   props() {
     const visible = this.visible();
-    const tags = this.#tags();
-    // Only a row of the list has details (a plugin selected before it reached the list waits for it).
-    const index = visible.findIndex((each) => each.key === this.selected);
-    const item = index >= 0 ? visible[index]! : null;
+    // The detail page (a plugin opened before it reached the list waits for it).
+    const item = this.#pending === null ? this.selectedItem() : null;
     const op = this.#operation;
     // One message, or a text per repository.
     const status = this.#message
       ? [this.#message.text]
       : this.repos.list.flatMap((repo) => (repo.status.text ? [repo.status.text] : []));
-    const shown = (text: Msg | null) => this.shown(text);
+    const shown = (text: Arg | null) => this.shown(text);
     const action = (a: Action | null) => (a ? { id: a.id, text: shown(a.text), enabled: a.enabled } : { id: "", text: "", enabled: false });
-    // The tab titles count what the tabs list before a search or a tag: built-ins only when shown.
+    // The tab titles count what the tabs list before a search or a category: built-ins only when shown.
     const listed = this.#listed();
     const base = {
       category: this.category,
@@ -717,23 +701,24 @@ export class Store {
       allCount: this.#collapsed(listed).length,
       installedCount: listed.filter(isInstalledRow).length,
       updates: updateCount(this.items),
-      // The first entry stands for all tags (the library drop-down shows the model as it is).
-      tagModel: [shown(msg("Tags: All")), ...tags],
-      tagIndex: this.tag ? Math.max(0, tags.findIndex((t) => t.toLowerCase() === this.tag!.toLowerCase()) + 1) : 0,
+      // The first entry stands for every category (the library drop-down shows the model as it is).
+      goalModel: [shown(msg("Category: All")), ...GOAL_NAMES.map((name) => shown(msg(name)))],
+      goalIndex: this.goal,
       sortIndex: this.sort,
       hideBuiltins: this.hideBuiltins,
-      rows: visible.map((each) => this.#row(each, action)),
+      // One flat array in display order: the window lays it out in rows of as many cards as fit.
+      cards: visible.map((each) => this.#card(each, action)),
       emptyText: shown(this.#emptyText(visible)),
+      // The empty grid offers Clear Search while a search or a category hides plugins.
+      canClear: visible.length === 0 && (this.search.trim() !== "" || this.goal !== 0),
       listNote: shown(this.#listNote(visible)),
       linkOpen: this.linkOpen,
       status: this.shown(joined(status, "{} · {}")),
       statusWarn: this.#message?.warn ?? this.repos.list.some((repo) => repo.status.warn),
       busyText: shown(op?.text ?? null),
       canCancel: op?.cancel != null,
-      hasSelection: item !== null,
-      selectedIndex: index,
-      scrollRequest: this.#scroll,
-      clearSearch: this.#clearSearch,
+      detailOpen: item !== null,
+      searchReset: this.#clearSearch,
     };
     if (!item) return base;
     // The scanned categories of the version shown (the one to install, else the installed one as the index lists
@@ -744,15 +729,19 @@ export class Store {
       ? item.entry?.versions.find((v) => v.version === item.installed?.version)
       : item.entry?.versions[0];
     const scan = item.repo?.official ? ((item.best ?? indexed)?.scan ?? null) : null;
+    const detail = this.#detailActions(item);
     return {
       ...base,
       dName: item.name,
       dMeta: shown(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
       dPunchline: item.punchline ?? item.description ?? "",
+      dOpen: shown(this.#openLine(item)),
       dIcon: this.#icon(item),
-      actions: this.#actions(item).map(action),
+      actions: detail.buttons.map(action),
+      more: detail.more.map(action),
       banners: this.#banners(item).map((b) => ({ ...b, text: shown(b.text), actionText: shown(b.actionText) })),
       tab: this.tab,
+      subTab: this.subTab,
       doc: this.#doc.key === this.#docKey(item) && this.#doc.ref ? this.#doc.ref : [],
       docNote: shown(this.#doc.key === this.#docKey(item) ? this.#doc.note : msg("Loading…")),
       versions: this.#versions(item),
@@ -768,7 +757,7 @@ export class Store {
 
   #emptyText(visible: Item[]): Msg | null {
     if (visible.length) return null;
-    if (this.search || this.tag) return msg("No plugins match");
+    if (this.search.trim() || this.goal) return msg("No plugins match");
     if (this.category === INSTALLED)
       // Only built-ins are installed and they are hidden: say so rather than "nothing installed".
       return this.hideBuiltins && this.items.some((item) => isBuiltinRow(item) && isInstalledRow(item))
@@ -800,107 +789,89 @@ export class Store {
     return sourceName(item.installed?.source ?? null);
   }
 
-  #row(item: Item, action: (a: Action | null) => { id: string; text: TextValue; enabled: boolean }) {
+  /**
+   * A card (design store-v3 §3.3, §3.4): name, "by <author>" with a note for
+   * another repository or a sideload, the introduction, the "how to open"
+   * line, the state in words and at most one button, Install or Update. The
+   * rest (Disable, Uninstall…, Reload, Open Data Folder, Replace) is on the
+   * detail page. Long texts are elided by the window, never cut here.
+   */
+  #card(item: Item, action: (a: Action | null) => { id: string; text: TextValue; enabled: boolean }) {
     const info = item.installed;
-    const installedVersion = info?.version ?? "";
-    const shown = item.state === "otherSource" || item.state === "available" || item.state === "incompatible" || item.state === "allRevoked" || item.state === "reserved"
-      ? (item.best ?? item.entry?.versions[0])?.version ?? ""
-      : installedVersion;
     const own = isInstalledRow(item) ? info : null;
     const dev = isDevelopmentRow(item);
-    // Left of the version (store 0.2.12, VS Code's extension list): ✓ for an installed plugin
-    // in grey (not for one with an update, whose badge says so, nor for a development load, tagged Dev),
-    // Disabled or Failed for one that does not run.
-    const check = raw("✓");
-    const [mark, markTone] = ((): [Msg | null, number] => {
-      if (own?.state === "disabled") return [msg("Disabled"), 4];
+    const [state, stateTone] = ((): [Msg | null, number] => {
+      if (this.#working === item.key) return [msg("Working…"), 4];
+      // Revoked first: why it was turned off matters more than that it is.
+      if (item.state === "revoked" || item.state === "allRevoked") return [msg("Revoked"), 3];
+      if (own?.state === "disabled") return [msg("Disabled"), 2];
       if (own?.state === "failed") return [msg("Failed"), 2];
-      if (!own || dev || item.state === "update") return [null, 0];
-      return [check, 4];
-    })();
-    // The second line's badge: what more there is to say (an update, a revocation, another source…).
-    const [badge, tone] = ((): [Msg | null, number] => {
-      // A development load says so in its Dev tag.
-      if (dev) return [null, 0];
+      if (dev) return [msg("Development load"), 4];
       switch (item.state) {
         case "update":
-          return [msg("Update → {}", item.best!.version), 1];
-        case "revoked":
-          return [msg("Revoked"), 3];
+          return [msg("Update available"), 1];
         case "otherSource":
           return [msg("Installed from {}", sourceName(info?.source ?? null)), 4];
         case "builtin":
-          return [msg("Built-in"), 4];
+          return [msg("Comes with the player"), 4];
         case "incompatible":
-          return [msg("Incompatible"), 4];
+          return [msg("Incompatible"), 2];
         case "reserved":
           return [msg("Cannot be installed"), 3];
-        case "allRevoked":
-          return [msg("Revoked"), 3];
-        default:
+        case "available":
           return [null, 0];
+        default:
+          return [msg("✓ {}", msg("Installed")), 4];
       }
     })();
-    const { primary, menu } = this.#rowControls(item);
+    // One button: Install for a plugin not installed, Update while a newer version exists.
+    const primary = this.#button(item, false);
+    const button = primary && (primary.id === "install" || primary.id === "update") ? primary : null;
     const warnings = own?.state === "running" ? this.#warnings(own) : [];
-    // Small tags before the badge: a development load, and what a running plugin was refused.
-    const flags: { text: TextValue; tone: number }[] = [];
-    if (dev) flags.push({ text: this.shown(msg("Dev")), tone: 1 });
-    if (warnings.length) flags.push({ text: this.shown(msg("Warning")), tone: 2 });
+    const note = item.repo && !item.repo.official ? msg("Unofficial") : item.repo || dev || !own || own.builtin ? null : sourceName(own.source);
     return {
       key: item.key,
       name: item.name,
-      version: shown,
-      meta: this.shown(msg("{} · {}", item.author ?? msg("Unknown author"), this.#origin(item))),
-      punchline: item.punchline ?? "",
-      // On hover: a failed plugin's reason, a running one's warnings, else the punchline.
+      by: this.shown(msg("by {}", item.author ?? msg("Unknown author"))),
+      byNote: this.shown(note ? msg("· {}", note) : null),
+      intro: item.punchline ?? item.description ?? "",
+      open: this.shown(this.#openLine(item)),
+      icon: this.#cardIcon(item),
+      state: this.shown(state),
+      stateTone,
+      button: action(button),
+      dim: own?.state === "disabled",
+      // On hover: a failed plugin's reason, a running one's warnings, else the whole introduction.
       tip:
         own?.state === "failed" && own.error
           ? own.error
           : warnings.length
             ? this.shown(joined(warnings, "{} · {}"))
-            : (item.punchline ?? ""),
-      mark: this.shown(mark),
-      markTone,
-      // The ✓'s text alternative (a word mark reads as itself).
-      markLabel: mark === check ? this.shown(msg("Installed")) : "",
-      badge: this.shown(badge),
-      tone,
-      flags,
-      selected: item.key === this.selected,
-      dim: isInstalledRow(item) && info?.state === "disabled",
-      logo: this.#rowLogo(item),
-      primary: action(primary),
-      menu: menu.map((each) => action(each)),
+            : (item.punchline ?? item.description ?? ""),
     };
   }
 
   /**
-   * A row's one control in its bottom-right slot (store 0.2.12, user ruling
-   * 2026-11-03, VS Code's extension list): Install for a plugin not
-   * installed, Update while a newer version exists, else the ⋯ manage menu
-   * with every action in the fixed order (Disable or Enable, Uninstall…,
-   * Reload, Open Data Folder), then All's "Replace with x from y…". The
-   * details keep their buttons.
+   * "How to open" (open-line.ts): the description's own line, else for an
+   * installed plugin its menu entry or palette row from the commands it
+   * registered, else nothing.
    */
-  #rowControls(item: Item): { primary: Action | null; menu: Action[] } {
-    const { primary, menu } = this.#controls(item, false);
-    if (this.#working === item.key || !isInstalledRow(item)) return { primary, menu };
-    if (primary?.id === "update") return { primary, menu: [] };
-    return { primary: null, menu: [...(primary ? [primary] : []), ...menu, ...this.#replacements(item)] };
+  #openLine(item: Item): Msg | string | null {
+    if (item.open) return item.open;
+    if (!item.installed || !isInstalledRow(item)) return null;
+    return commandLine(this.#commands, item.installed.id);
   }
 
   /**
-   * A row's logo (plugin-center spec, "List rows"): an installed plugin's own
-   * icon from its package (works offline), else the repository index's icon
-   * through `ui.remoteImage` (only for the rows shown, once each), else the
-   * store's own icon.
+   * A card's icon: an installed plugin's own icon from its package (works
+   * offline), else the repository index's icon through `ui.remoteImage`
+   * (once each), else the store's own icon.
    */
-  #rowLogo(item: Item): ImageRef {
+  #cardIcon(item: Item): ImageRef {
     if (item.installed) {
       const icon = (item.local ?? this.#display(item.installed)).icon;
       const path = icon ? this.icons.local(join(item.installed.directory, icon)) : null;
-      if (path) return this.#image(path, ROW_LOGO);
+      if (path) return this.#image(path, CARD_ICON);
     }
     const url = item.entry?.iconUrl;
     // Third-party icons only from the index's own host (it would tell another host who looks); https only.
@@ -908,7 +879,7 @@ export class Store {
       const known = this.#logos.get(url);
       if (known === undefined) {
         this.#logos.set(url, "pending");
-        this.plugin.ui.remoteImage(url, { maxSide: ROW_LOGO }).then(
+        this.plugin.ui.remoteImage(url, { maxSide: CARD_ICON }).then(
           (ref) => {
             this.#logos.set(url, ref);
             this.changed();
@@ -920,7 +891,7 @@ export class Store {
         );
       } else if (known !== null && known !== "pending") return known;
     }
-    return this.#image(this.#logo, ROW_LOGO);
+    return this.#image(this.#logo, CARD_ICON);
   }
 
   /** What a running plugin was refused because another plugin holds it (`PluginInfo.warnings`), in words. */
@@ -970,31 +941,21 @@ export class Store {
   }
 
   /**
-   * A row's one button and its `…` menu by state (plugin-center spec, "List
-   * rows"); `detail` words the install and update buttons with the version.
-   * Built-ins have no button; their menu offers only Reload and Open Data
-   * Folder. An installed plugin's actions keep one fixed order (`#ordered`):
-   * the button is the first of them, the menu the rest, so Disable and Enable
-   * swap only their words and nothing changes place (VS Code's extension page).
+   * The one button by state: Install (with the version on the detail page)
+   * for a plugin not installed; for an installed one the first of its actions
+   * in their fixed order (`#ordered`), Update while a newer version exists;
+   * none for a built-in. Working… while its enable, disable or reload runs.
    */
-  #controls(item: Item, detail: boolean): { primary: Action | null; menu: Action[] } {
+  #button(item: Item, detail: boolean): Action | null {
     const idle = !this.busy && this.#working === null;
-    if (this.#working === item.key) return { primary: { id: "", text: msg("Working…"), enabled: false }, menu: [] };
-    const a = (id: string, text: Msg, enabled = idle): Action => ({ id, text, enabled: enabled && idle });
+    if (this.#working === item.key) return { id: "", text: msg("Working…"), enabled: false };
     const info = item.installed;
-    if (!info || !isInstalledRow(item)) {
-      if (item.state === "available")
-        return { primary: a("install", detail ? msg("Install {}", item.best!.version) : msg("Install")), menu: [] };
-      return { primary: null, menu: [] };
-    }
-    const openData = a("openData", msg("Open Data Folder"), info.dataDirectory !== null);
-    // `packages.reload` restarts any plugin but this one; a starting one is busy.
-    const reload = a("reload", msg("Reload"), info.id !== this.plugin.id && info.state !== "starting");
-    if (info.builtin) return { primary: null, menu: [reload, openData] };
-    const [primary, ...rest] = this.#ordered(item, detail);
-    // A disabled plugin is not reloaded (the player refuses it: enable it instead), nor one without a package.
-    const menu = info.state === "disabled" || isStrandedRow(item) ? [...rest, openData] : [...rest, reload, openData];
-    return { primary: primary ?? null, menu };
+    if (!info || !isInstalledRow(item))
+      return item.state === "available"
+        ? { id: "install", text: detail ? msg("Install {}", item.best!.version) : msg("Install"), enabled: idle }
+        : null;
+    if (info.builtin) return null;
+    return this.#ordered(item, detail)[0] ?? null;
   }
 
   /**
@@ -1023,7 +984,7 @@ export class Store {
     return list;
   }
 
-  /** The details' icon: as the row's, but the repository's icon is checked against the index's size and sha256. */
+  /** The detail page's icon: as the card's, but the repository's icon is checked against the index's size and sha256. */
   #icon(item: Item): ImageRef {
     let path: string | null = null;
     // An installed plugin's own icon from its package (offline too).
@@ -1037,7 +998,7 @@ export class Store {
     return this.#image(path ?? this.#logo, DETAIL_ICON);
   }
 
-  /** One reference per file and size: a row written again keeps its image. */
+  /** One reference per file and size: a card written again keeps its image. */
   #image(path: string, maxSide: number): ImageRef {
     const key = `${maxSide}\n${path}`;
     let ref = this.#images.get(key);
@@ -1049,31 +1010,35 @@ export class Store {
   }
 
   /**
-   * The detail's buttons in fixed places: [Update to x] [Disable | Enable]
-   * [Uninstall…] for a third-party plugin, the same as its row's button and
-   * menu, plus Reload last for a failed one (last, so disabling it moves
-   * nothing). Replace… for another source's entry, Install for an available one.
+   * The detail page's buttons in fixed places (design store-v3 §3.5): [Update
+   * to x] [Disable | Enable] [Uninstall…] [Reload] for a third-party plugin,
+   * Reload for a built-in, so disabling or enabling changes only the words
+   * (Reload, last, leaves while disabled); Open Data Folder and All's "Replace
+   * with x from y…" in the ⋯ menu next to them. Replace… for another source's
+   * entry, Install x for an available one.
    */
-  #actions(item: Item): Action[] {
+  #detailActions(item: Item): { buttons: Action[]; more: Action[] } {
     const idle = !this.busy && this.#working === null;
     const info = item.installed;
-    if (this.#working === item.key || !info || info.builtin || !isInstalledRow(item)) {
-      const { primary } = this.#controls(item, true);
-      const list: Action[] = primary ? [primary] : [];
-      if (item.state === "otherSource" && item.best) list.push({ id: "replace", text: msg("Replace…"), enabled: idle });
-      return list;
+    if (this.#working === item.key || !info || !isInstalledRow(item)) {
+      const primary = this.#button(item, true);
+      const buttons: Action[] = primary ? [primary] : [];
+      if (this.#working !== item.key && item.state === "otherSource" && item.best)
+        buttons.push({ id: "replace", text: msg("Replace…"), enabled: idle });
+      return { buttons, more: [] };
     }
-    const list = this.#ordered(item, true);
-    if (info.state === "failed" && !isStrandedRow(item))
-      list.push({ id: "reload", text: msg("Reload"), enabled: idle && info.id !== this.plugin.id });
-    // A row with an update offers only Update: what its ⋯ menu would hold comes here instead, Reload
-    // (a running plugin; a failed one has it above), then another repository's version (All).
-    if (this.#rowControls(item).primary?.id === "update") {
-      if (info.state !== "disabled" && info.state !== "failed")
-        list.push({ id: "reload", text: msg("Reload"), enabled: idle && info.id !== this.plugin.id && info.state !== "starting" });
-      list.push(...this.#replacements(item));
-    }
-    return list;
+    const openData: Action = { id: "openData", text: msg("Open Data Folder"), enabled: idle && info.dataDirectory !== null };
+    // `packages.reload` restarts any plugin but this one; a starting one is busy.
+    const reload: Action = {
+      id: "reload",
+      text: msg("Reload"),
+      enabled: idle && info.id !== this.plugin.id && info.state !== "starting",
+    };
+    if (info.builtin) return { buttons: [reload], more: [openData] };
+    const buttons = this.#ordered(item, true);
+    // A disabled plugin is not reloaded (the player refuses it: enable it instead), nor one without a package.
+    if (info.state !== "disabled" && !isStrandedRow(item)) buttons.push(reload);
+    return { buttons, more: [openData, ...this.#replacements(item)] };
   }
 
   #banners(item: Item): Banner[] {
@@ -1253,11 +1218,10 @@ export class Store {
     return known === "pending" ? "…" : bytes(known);
   }
 
-  async #act(action: string) {
-    const item = this.selectedItem();
-    if (!item) return;
+  /** A button or menu entry of the detail page, or a card's button, on that plugin. */
+  async #act(item: Item, action: string) {
     if (action.startsWith("replace:")) {
-      // All's … menu: another source's version of the installed plugin (the replace question as before).
+      // All, the page's ⋯ menu: another source's version of the installed plugin (the replace question as before).
       const other = this.#alsoIn(item).find((each) => `replace:${each.key}` === action);
       if (other?.state === "otherSource" && other.best) await installer.installFromRepository(this, other, other.best);
       return;
@@ -1324,7 +1288,7 @@ export class Store {
    * Restart a plugin, built-ins included, through `packages.reload`. The
    * player answers once it stopped the plugin; the result comes with
    * `packages.onChange` (`starting`, then `running` or `failed`), so the
-   * row says Working… until then.
+   * card says Working… until then.
    */
   async #reload(item: Item) {
     const info = item.installed;
@@ -1382,7 +1346,7 @@ export class Store {
     if (this.#working === pending.key) this.#working = null;
     if (this.#disposed) return;
     if (!info) {
-      // Gone, or still starting after the wait: the row shows its state.
+      // Gone, or still starting after the wait: the card shows its state.
       const now = this.packages.find((p) => p.id === pending.id);
       if (!now) this.report(msg("Couldn't reload “{}”: {}", pending.name, msg("This plugin no longer exists")), true);
       else this.changed();
@@ -1451,19 +1415,24 @@ export class Store {
     return item.repo?.official === true || this.#remoteShown.has(item.key);
   }
 
+  /** What the detail page's Markdown box shows: 0 the README (About), 1 the changelog (Details ▸ Changelog), 2 none (Details ▸ Versions). */
+  #docKind(): number {
+    return this.tab === ABOUT ? 0 : this.subTab === 0 ? 1 : 2;
+  }
+
   #docKey(item: Item): string {
     const version = item.best?.version ?? item.installed?.version ?? "";
-    return `${item.key}\n${version}\n${this.tab}\n${this.#remoteImages(item)}`;
+    return `${item.key}\n${version}\n${this.#docKind()}\n${this.#remoteImages(item)}`;
   }
 
   async #loadDoc() {
     const item = this.selectedItem();
-    if (!item || this.tab === 2 || this.#disposed) return;
+    if (!item || this.#pending !== null || this.#docKind() === 2 || this.#disposed) return;
     const key = this.#docKey(item);
     if (this.#doc.key === key) return;
     this.#docAbort?.abort();
     const abort = (this.#docAbort = new AbortController());
-    const changelog = this.tab === 1;
+    const changelog = this.#docKind() === 1;
     const previous = this.#doc;
     this.#doc = {
       key,

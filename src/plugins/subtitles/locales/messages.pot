@@ -375,7 +375,8 @@ msgstr ""
 #: manifest.json
 msgid ""
 "Pick and switch subtitle tracks, load SRT, ASS/SSA, WebVTT, SAMI and MicroDVD subtitles (the encoding is detected), also the ones named like a local video when it opens, show a secondary subtitle; adjust size, position, font, colour, outline, shadow and background box, and the sync; jump by dialogue; reload external subtitle files automatically when they change.\n"
-"Its panel is beside the video: press Alt+3, or right-click Adjustments and Effects and pick the Subtitles tab."
+"Its panel is beside the video: press Alt+3, or right-click Adjustments and Effects and pick the Subtitles tab.\n"
+"→ Adjustments and Effects ▸ Subtitles (Alt+3)"
 msgstr ""
 
 #: manifest.json

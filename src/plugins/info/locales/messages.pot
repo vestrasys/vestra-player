@@ -286,7 +286,9 @@ msgid "Playback info overlay, playback properties and the About window"
 msgstr ""
 
 #: manifest.json
-msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
+msgid ""
+"Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins.\n"
+"→ Press Tab (overlay) or F1 (About)"
 msgstr ""
 
 #: manifest.json

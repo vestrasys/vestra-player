@@ -315,7 +315,8 @@ msgstr ""
 #: manifest.json
 msgid ""
 "Search OpenSubtitles.com or Assrt for subtitles by file hash and title, load them right away and keep a copy beside the video. Needs your own API key, kept in the system's secret store.\n"
-"Find it in the right-click menu under Subtitles ▸ Online Subtitles."
+"Find it in the right-click menu under Subtitles ▸ Online Subtitles.\n"
+"→ Menu: Open ▸ Search and Download Subtitles"
 msgstr ""
 
 #: manifest.json

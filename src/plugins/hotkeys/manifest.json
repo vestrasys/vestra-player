@@ -6,7 +6,7 @@
   "name": "Shortcut Settings",
   "author": "Vestra Player",
   "punchline": "View and rebind keyboard shortcuts and mouse actions",
-  "description": "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\nOpen it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts.",
+  "description": "Lists the commands of the player and of every plugin in the Keys and Mouse category of the options window: search by command or key, rebind, unbind, restore defaults, check conflicts and export the list. Assigns commands to mouse clicks and the wheel on the video, and can ignore every default shortcut at once.\nOpen it from the options window (Options…, F5) or the command palette: Settings: Keyboard Shortcuts… / Mouse… / Ignore Default Shortcuts.\n→ Options (F5) ▸ Keys and Mouse",
   "tags": [
     "settings",
     "shortcuts",

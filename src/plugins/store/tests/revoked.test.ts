@@ -56,11 +56,12 @@ test("a revoked version installed from the repository is disabled once, with one
 
     await openStore(host);
     const row = await choose(host, "YouTube");
-    assert.equal(row.badge, "已撤回");
+    assert.equal(row.state, "已撤回");
     assert.ok(banners(host).includes("此版本已被撤回：会删除下载目录。商城已停用它。"));
     assert.deepEqual(actions(host).map((a) => a.text), ["更新到 0.2.1", "仍然启用…", "卸载…"]);
-    // The revoked version cannot be installed again from 版本.
-    host.window("store").emit("setTab", 2);
+    // The revoked version cannot be installed again from 详细信息 ▸ 版本.
+    host.window("store").emit("setTab", 1);
+    host.window("store").emit("setSubTab", 1);
     await host.settle();
     const versions = props(host)["versions"] as { version: string; status: string; canInstall: boolean }[];
     assert.deepEqual(versions[1], { version: "0.2.0", date: "2026-10-21", minimum: "0.2.0", status: "当前，已撤回：会删除下载目录", tone: 3, canInstall: false });
@@ -198,13 +199,13 @@ test("review A: a delisted plugin revoked with '*' is still disabled (and one wh
     assert.equal(evil.state, "revoked");
     assert.equal(evil.entry, null);
     await openStore(host);
-    host.window("store").emit("select", evil.key);
+    host.window("store").emit("openCard", evil.key);
     await host.settle();
     assert.ok(banners(host).includes("此版本已被撤回：恶意插件。商城已停用它。"));
     assert.ok(!banners(host).some((b) => b.includes("仓库已从商城移除")));
     assert.deepEqual(actions(host).map((a) => a.text), ["仍然启用…", "卸载…"]);
     // Delisted without a revocation: says so truthfully.
-    host.window("store").emit("select", "\nzysilm.gone");
+    host.window("store").emit("openCard", "\nzysilm.gone");
     await host.settle();
     assert.ok(banners(host).includes("仓库已不再提供这个插件，商城不再为它检查更新（仍会检查撤回）"));
   } finally {

@@ -114,17 +114,24 @@ export const WINDOW = [
   "Can't reach the repositories; only installed plugins are shown. Click Refresh to retry.",
   "{} · {}",
   "Installed",
-  "Update → {}",
+  // A card's state (Store v3): "✓ Installed", or a word.
+  "✓ {}",
+  "Update available",
+  "Comes with the player",
   "Revoked",
   "Installed from {}",
   "Incompatible",
   "Cannot be installed",
   "Disabled",
   "Failed",
-  // A row's small tags: a development load (--plugin), what a running plugin was refused.
-  "Dev",
-  "Warning",
+  // A development load (--plugin): a card's state and an origin.
   "Development load",
+  // A card's by-line, and its note for another repository than the official one.
+  "by {}",
+  "Unofficial",
+  // A card's "how to open" line when the description has none (open-line.ts): from the plugin's commands.
+  "Menu: {}",
+  "Command palette: {}",
   // A button and its … menu.
   "Install",
   "Update",
@@ -216,8 +223,16 @@ export const WINDOW = [
   "Package",
   "Data folder",
   "Data size",
-  // The tag drop-down's first entry.
-  "Tags: All",
+  // The Category drop-down: its first entry, then the goals (open-line.ts GOALS).
+  "Category: All",
+  "Picture",
+  "Sound",
+  "Subtitles",
+  "Online video",
+  "Library and playlists",
+  "Tools",
+  "Games",
+  "Other",
   // A banner (the permissions are a list).
   "The new version needs new permissions: {}",
 ] as const;

@@ -297,8 +297,12 @@ msgid "Playback info overlay, playback properties and the About window"
 msgstr "播放信息层、播放属性与关于窗口"
 
 #: manifest.json
-msgid "Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins."
-msgstr "在视频左上角显示文件、时间、编码、帧率等实时信息（Tab），或按 Shift+Tab 显示简要信息；「播放属性…」列出解码状态、文件的流与元数据、系统信息，可复制或保存为文本；「关于 Vestra Player…」显示版本、组件与已加载的插件。"
+msgid ""
+"Shows live facts at the top left of the video (Tab): file, time, codecs, frame rate and more, or a short summary with Shift+Tab. Playback Properties… lists the decoding state, the file's streams and metadata, and system information, to copy or save as text. About Vestra Player… shows the version, components and loaded plugins.\n"
+"→ Press Tab (overlay) or F1 (About)"
+msgstr ""
+"在视频左上角显示文件、时间、编码、帧率等实时信息（Tab），或按 Shift+Tab 显示简要信息；「播放属性…」列出解码状态、文件的流与元数据、系统信息，可复制或保存为文本；「关于 Vestra Player…」显示版本、组件与已加载的插件。\n"
+"→ 按 Tab（信息叠加）或 F1（关于）"
 
 #: manifest.json
 msgid "Media info"

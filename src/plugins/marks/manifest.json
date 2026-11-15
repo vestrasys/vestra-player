@@ -6,7 +6,7 @@
   "name": "Chapters and Bookmarks",
   "author": "Vestra Player",
   "punchline": "Jump by chapter and bookmark",
-  "description": "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\nFind it in the context menu under \"Tools ▸ Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback).",
+  "description": "Lists the media's chapters; adds, names and manages bookmarks for each file; jumps between chapters and bookmarks and shows them as marks on the seek bar.\nFind it in the context menu under \"Tools ▸ Chapter and Bookmark List…\" (H); the other commands are in the command palette under \"Chapters and Bookmarks\". A-B Loop is in the Playback panel (Basic Playback).\n→ Press H: Chapter and Bookmark List",
   "tags": [
     "Playback",
     "Chapters",

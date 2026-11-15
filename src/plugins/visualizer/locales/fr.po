@@ -127,10 +127,12 @@ msgstr "Affiche la pochette d'album pour l'audio seul et un logo sur l'écran d'
 #, x-machine
 msgid ""
 "While audio without a picture plays, shows the album cover with title, artist and album; with no media open, shows a logo (which can be replaced with your own image); while media opens, shows a loading screen.\n"
-"Entries: the Logo and Album Cover page in Options…; in the command palette, Audio: Show Album Cover for Audio Only and Appearance: Show Logo When Idle / Choose Logo Image…."
+"Entries: the Logo and Album Cover page in Options…; in the command palette, Audio: Show Album Cover for Audio Only and Appearance: Show Logo When Idle / Choose Logo Image….\n"
+"→ Automatic: album cover and idle logo"
 msgstr ""
 "Pendant la lecture d'un fichier audio sans image, affiche la pochette d'album avec le titre, l'artiste et l'album ; sans média ouvert, affiche un logo (remplaçable par votre propre image) ; pendant l'ouverture d'un média, affiche un écran de chargement.\n"
-"Accès : la page Logo et pochette d'album dans Options… ; dans la palette de commandes, Audio : Afficher la pochette d'album pour l'audio seul et Apparence : Afficher le logo sur l'écran d'attente / Choisir l'image du logo…."
+"Accès : la page Logo et pochette d'album dans Options… ; dans la palette de commandes, Audio : Afficher la pochette d'album pour l'audio seul et Apparence : Afficher le logo sur l'écran d'attente / Choisir l'image du logo….\n"
+"→ Automatique : pochette d'album et logo"
 
 #: manifest.json
 #, x-machine

@@ -1,6 +1,6 @@
 /**
- * The plugin center (2026-10-26): tabs, one button and a
- * … menu per row by state, enable / disable / reload / data folder through
+ * The plugin center (2026-10-26; Store v3 2026-11-15): tabs, a card's state
+ * and its one button, the detail page's buttons and ⋯ menu by state, enable / disable / reload / data folder through
  * `packages`, built-ins that can be neither disabled nor uninstalled, the
  * details the Plugin Manager used to show, offline with a short wait and a
  * calm note, and translated display fields.
@@ -24,6 +24,7 @@ import {
   info,
   type Info,
   INSTALLED,
+  manage,
   OFFICIAL,
   openStore,
   props,
@@ -84,20 +85,17 @@ test("tabs: All first (every plugin, installed ones with their state), Installed
   try {
     assert.equal(props(host)["category"], ALL, "the first open is All");
     assert.deepEqual(
-      rows(host).map((r) => [r.name, r.mark, r.version, r.badge]),
+      rows(host).map((r) => [r.name, r.state, r.stateTone]),
       [
-        // Left of the version: ✓ installed, or why it does not run; the second line says the rest.
-        ["A Run", "✓", "1.0.0", ""],
-        ["B Off", "已停用", "1.0.0", ""],
-        ["C Bad", "失败", "1.0.0", ""],
-        ["D Old", "", "1.0.0", "可更新 → 2.0.0"],
-        ["E New", "", "1.0.0", ""],
-        ["vestra.video", "✓", "0.2.0", "内置"],
+        // The state in words (Store v3 §3.4): ✓ installed in grey, or why it does not run, or what waits.
+        ["A Run", "✓ 已安装", 4],
+        ["B Off", "已停用", 2],
+        ["C Bad", "失败", 2],
+        ["D Old", "有更新", 1],
+        ["E New", "", 0],
+        ["vestra.video", "随播放器提供", 4],
       ],
     );
-    // The ✓'s text alternative.
-    assert.equal(rows(host)[0]!.markLabel, "已安装");
-    assert.equal(rows(host)[1]!.markLabel, "");
     assert.equal(props(host)["all-count"], 6);
     assert.equal(props(host)["installed-count"], 5);
     assert.equal(props(host)["updates"], 1);
@@ -111,113 +109,112 @@ test("tabs: All first (every plugin, installed ones with their state), Installed
   }
 });
 
-test("row buttons and … menus by state", async () => {
+test("card buttons and the detail page's buttons and ⋯ menu by state", async () => {
   const { host, stop } = await center();
   try {
-    // One control per row, bottom right (store 0.2.12, VS Code's extension list): Install, Update, else the ⋯ manage menu.
+    // One button at most on a card (Store v3 §3.4): Install or Update; everything else is on the detail page.
     const builtin = controls(host, "vestra.video");
-    assert.equal(builtin.primary, null, "built-ins have no button");
-    assert.deepEqual(ids(builtin.menu), ["reload", "openData"]);
+    assert.equal(builtin.button, null, "built-ins have no button");
+    let page = await manage(host, "vestra.video");
     // A running built-in is restarted through packages.reload (player 0.5.1, request STORE-RELOAD-BUILTIN).
-    assert.deepEqual(builtin.menu.map((m) => m.enabled), [true, true]);
-    assert.equal(builtin.badge, "内置");
+    assert.deepEqual(page.buttons, [{ id: "reload", text: "重新加载", enabled: true }]);
+    assert.deepEqual(page.more, [{ id: "openData", text: "打开数据目录", enabled: true }]);
 
     const running = controls(host, "A Run");
-    // One fixed order in the ⋯ menu (Disable/Enable, Uninstall…, Reload, Open Data Folder); no button.
-    assert.equal(running.primary, null);
-    assert.deepEqual(ids(running.menu), ["disable", "uninstall", "reload", "openData"]);
-    assert.deepEqual(running.menu.map((m) => m.text), ["停用", "卸载…", "重新加载", "打开数据目录"]);
-    assert.equal(running.mark, "✓");
-    assert.equal(running.badge, "");
+    assert.equal(running.button, null);
     assert.equal(running.dim, false);
+    page = await manage(host, "A Run");
+    // One fixed order (Disable/Enable, Uninstall…, Reload), Open Data Folder in the ⋯ menu.
+    assert.deepEqual(page.buttons.map((a) => a.text), ["停用", "卸载…", "重新加载"]);
+    assert.deepEqual(ids(page.more), ["openData"]);
 
     const disabled = controls(host, "B Off");
-    assert.equal(disabled.primary, null);
-    assert.deepEqual(ids(disabled.menu), ["enable", "uninstall", "openData"], "a disabled plugin is not reloaded");
+    assert.equal(disabled.button, null);
     assert.equal(disabled.dim, true);
-    assert.equal(disabled.mark, "已停用");
+    page = await manage(host, "B Off");
+    assert.deepEqual(ids(page.buttons), ["enable", "uninstall"], "a disabled plugin is not reloaded");
+    assert.deepEqual(ids(page.more), ["openData"]);
 
-    const failed = controls(host, "C Bad");
-    assert.equal(failed.primary, null);
-    assert.deepEqual(ids(failed.menu), ["disable", "uninstall", "reload", "openData"]);
-    assert.equal(failed.mark, "失败");
-    assert.equal((rows(host).find((r) => r.name === "C Bad") as { tip?: string }).tip, "boom", "the reason on hover");
+    assert.equal(controls(host, "C Bad").button, null);
+    assert.equal(rows(host).find((r) => r.name === "C Bad")!.tip, "boom", "the reason on hover");
+    page = await manage(host, "C Bad");
+    assert.deepEqual(ids(page.buttons), ["disable", "uninstall", "reload"]);
 
-    const outdated = controls(host, "D Old");
-    // An update: the Update button only (the rest is in the details).
-    assert.deepEqual(outdated.primary, { id: "update", text: "更新", enabled: true });
-    assert.deepEqual(outdated.menu, []);
-    assert.equal(outdated.mark, "");
+    // An update: the Update button on the card.
+    assert.deepEqual(controls(host, "D Old").button, { id: "update", text: "更新", enabled: true });
 
     await tab(host, ALL);
-    const available = controls(host, "E New");
-    assert.deepEqual(available.primary, { id: "install", text: "安装", enabled: true });
-    assert.deepEqual(available.menu, []);
+    assert.deepEqual(controls(host, "E New").button, { id: "install", text: "安装", enabled: true });
+    page = await manage(host, "E New");
+    assert.deepEqual(page.buttons, [{ id: "install", text: "安装 1.0.0", enabled: true }]);
+    assert.deepEqual(page.more, []);
   } finally {
     await stop();
   }
 });
 
-test("… menu: disable and enable through packages.setEnabled; the row dims and its button follows", async () => {
+test("detail page: disable and enable through packages.setEnabled; the card dims", async () => {
   const { host, stop } = await center();
   try {
-    const key = rows(host).find((r) => r.name === "A Run")!.key;
+    await choose(host, "A Run");
     const window = host.window("store");
-    window.emit("rowAct", key, "disable");
+    window.emit("act", "disable");
     await until(host, () => controls(host, "A Run").dim, "dimmed");
     assert.deepEqual(enables(host), [["a.run", false]]);
     assert.equal(host.confirms.length, 0, "no question: it can be enabled again at once");
-    assert.equal(controls(host, "A Run").primary, null);
-    assert.equal(controls(host, "A Run").mark, "已停用");
+    assert.equal(controls(host, "A Run").button, null);
+    assert.equal(controls(host, "A Run").state, "已停用");
     assert.equal(props(host)["status-text"], "已停用「A Run」");
     assert.ok(host.osd.includes("已停用「A Run」"));
-    // The row's key selected it: the detail mirrors the row, Enable in Disable's place.
+    // Enable in Disable's place; Reload leaves while disabled.
     assert.deepEqual(actions(host).map((a) => a.text), ["启用", "卸载…"]);
-    assert.deepEqual(ids(controls(host, "A Run").menu), ["enable", "uninstall", "openData"]);
 
-    window.emit("rowAct", key, "enable");
+    window.emit("act", "enable");
     await until(host, () => !controls(host, "A Run").dim, "enabled again");
     assert.deepEqual(enables(host), [
       ["a.run", false],
       ["a.run", true],
     ]);
     assert.equal(props(host)["status-text"], "已启用「A Run」");
-    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…"]);
+    assert.deepEqual(actions(host).map((a) => a.text), ["停用", "卸载…", "重新加载"]);
   } finally {
     await stop();
   }
 });
 
-test("… menu: reload restarts a running plugin and starts a failed one (packages.reload); open the data folder", async () => {
+test("detail page: reload restarts a running plugin and starts a failed one (packages.reload); open the data folder", async () => {
   const { host, stop } = await center();
   try {
     const window = host.window("store");
-    const key = (name: string) => rows(host).find((r) => r.name === name)!.key;
-    window.emit("rowAct", key("A Run"), "reload");
+    await choose(host, "A Run");
+    window.emit("act", "reload");
     await until(host, () => props(host)["status-text"] === "已重新加载「A Run」", "reloaded");
     assert.deepEqual(reloads(host), ["a.run"]);
     assert.deepEqual(enables(host), [], "never through setEnabled: a reload leaves no disabled flag behind");
-    window.emit("rowAct", key("C Bad"), "reload");
+    await choose(host, "C Bad");
+    window.emit("act", "reload");
     await until(
       host,
-      () => props(host)["status-text"] === "已重新加载「C Bad」" && controls(host, "C Bad").mark === "✓",
+      () => props(host)["status-text"] === "已重新加载「C Bad」" && controls(host, "C Bad").state === "✓ 已安装",
       "failed one started",
     );
     assert.deepEqual(reloads(host), ["a.run", "c.bad"]);
 
-    window.emit("rowAct", key("A Run"), "openData");
+    await choose(host, "A Run");
+    window.emit("act", "openData");
     await until(host, () => host.system.opened.length === 1, "opened");
     assert.deepEqual(host.system.opened, [dataOf("a.run")]);
     host.handle("system.openPath", () => {
       throw new HostError("missing", "no such folder");
     });
-    window.emit("rowAct", key("B Off"), "openData");
+    await choose(host, "B Off");
+    window.emit("act", "openData");
     await until(host, () => props(host)["status-text"] === "它的数据目录还不存在", "missing folder");
     assert.equal(props(host)["status-warn"], true);
 
-    // Uninstall from the … menu keeps today's question.
+    // Uninstall… keeps today's question.
     host.dialogAnswers.push(yes);
-    window.emit("rowAct", key("B Off"), "uninstall");
+    window.emit("act", "uninstall");
     await until(host, () => host.packageCalls.some((c) => c.method === "uninstall"), "uninstall");
     assert.equal(host.confirmTexts.at(-1)!.message, "卸载「B Off」？");
   } finally {
@@ -229,20 +226,20 @@ test("built-ins: no disable and no uninstall anywhere; a refused disable says so
   const { host, store, stop } = await center();
   try {
     await choose(host, "vestra.video");
-    assert.deepEqual(actions(host), [], "no button under the title");
+    assert.deepEqual(ids(actions(host)), ["reload"], "only Reload under the title");
     // Even if asked (a stale window): the player refuses and the store words it.
-    host.window("store").emit("rowAct", "\nvestra.video", "disable");
+    host.window("store").emit("cardAct", "\nvestra.video", "disable");
     await until(host, () => props(host)["status-text"] === "内置插件不能停用", "refused");
     assert.deepEqual(enables(host), []);
     assert.equal(store.items.find((i) => i.id === "vestra.video")?.installed?.state, "running");
 
     // A running built-in is restarted, a failed one started again: packages.reload either way.
-    host.window("store").emit("rowAct", "\nvestra.video", "reload");
+    host.window("store").emit("act", "reload");
     await until(host, () => props(host)["status-text"] === "已重新加载「vestra.video」", "restarted");
     host.setPackages(host.packages.map((p) => (p.id === "vestra.video" ? { ...p, state: "failed", error: "crash" } : p)));
-    await until(host, () => controls(host, "vestra.video").mark === "失败", "failed");
-    host.window("store").emit("rowAct", "\nvestra.video", "reload");
-    await until(host, () => reloads(host).length === 2 && controls(host, "vestra.video").mark === "✓", "started");
+    await until(host, () => controls(host, "vestra.video").state === "失败", "failed");
+    host.window("store").emit("act", "reload");
+    await until(host, () => reloads(host).length === 2 && controls(host, "vestra.video").state === "随播放器提供", "started");
     assert.deepEqual(reloads(host), ["vestra.video", "vestra.video"]);
     assert.deepEqual(enables(host), []);
   } finally {
@@ -313,9 +310,11 @@ test("offline on open: a short wait for the headers, then a calm note; All shows
     assert.equal(props(host)["empty-text"], "");
     assert.match(String(props(host)["status-text"]), /^无法连接 官方仓库/);
     assert.equal(props(host)["status-warn"], false, "calm, not the warning colour");
-    // Its rows keep their buttons offline.
-    assert.equal(controls(host, "s.side").primary, null);
-    assert.deepEqual(ids(controls(host, "s.side").menu), ["disable", "uninstall", "reload", "openData"]);
+    // Its detail page keeps its buttons offline.
+    assert.equal(controls(host, "s.side").button, null);
+    assert.deepEqual(ids((await manage(host, "s.side")).buttons), ["disable", "uninstall", "reload"]);
+    host.window("store").emit("back");
+    await host.settle();
     await showBuiltins(host);
     assert.deepEqual(rows(host).map((r) => r.name), ["s.side", "vestra.video"]);
     assert.equal(props(host)["all-count"], 2);
@@ -360,8 +359,19 @@ test("index translations: the interface language, its base language, then Englis
     await tab(host, ALL);
     await until(host, () => rows(host).length === 3);
     assert.deepEqual(rows(host).map((r) => r.name).sort(), ["No Translation", "基础", "管道播放器"].sort());
-    assert.equal((rows(host).find((r) => r.name === "管道播放器") as { punchline?: string }).punchline, "播放管道");
-    assert.deepEqual(props(host)["tag-model"], ["标签：全部", "视频", "audio", "online"]);
+    assert.equal(rows(host).find((r) => r.name === "管道播放器")!.intro, "播放管道");
+    // A fixed list of categories, matched by the tags as shown and the English ones.
+    assert.deepEqual(props(host)["goal-model"], [
+      "分类：全部",
+      "画面",
+      "声音",
+      "字幕",
+      "在线视频",
+      "媒体库与播放列表",
+      "工具",
+      "游戏",
+      "其他",
+    ]);
     const window = host.window("store");
     for (const query of ["tube", "管道", "video"]) {
       window.emit("search", query);
@@ -369,9 +379,20 @@ test("index translations: the interface language, its base language, then Englis
       assert.deepEqual(rows(host).map((r) => r.name), ["管道播放器"], query);
     }
     window.emit("search", "");
-    window.emit("setTag", 1);
+    // Picture: "video".
+    window.emit("setGoal", 1);
     await host.settle();
     assert.deepEqual(rows(host).map((r) => r.name), ["管道播放器"]);
+    // Online video: "online"; Sound: "audio"; Other: no tag a category knows.
+    window.emit("setGoal", 4);
+    await host.settle();
+    assert.deepEqual(rows(host).map((r) => r.name), ["管道播放器"]);
+    window.emit("setGoal", 2);
+    await host.settle();
+    assert.deepEqual(rows(host).map((r) => r.name), ["No Translation"]);
+    window.emit("setGoal", 8);
+    await host.settle();
+    assert.deepEqual(rows(host).map((r) => r.name), ["基础"]);
   } finally {
     await stop();
   }
@@ -406,7 +427,7 @@ test("installed plugins show the player's translation (PluginInfo.display), Engl
   try {
     await openStore(host);
     await until(host, () => rows(host).some((r) => r.name === "时钟"), "translated");
-    assert.equal((rows(host).find((r) => r.name === "时钟") as { punchline?: string }).punchline, "显示时间");
+    assert.equal(rows(host).find((r) => r.name === "时钟")!.intro, "显示时间");
     // No display and no manifest: the id.
     assert.ok(rows(host).some((r) => r.name === "x.plain"));
     host.window("store").emit("search", "clock");
@@ -484,14 +505,12 @@ test("buttons keep their places: Disable and Enable swap only their words (VS Co
       await choose(host, name);
       return ids(actions(host));
     };
-    assert.deepEqual(await detail("A Run"), ["disable", "uninstall"], "enabled");
+    // Reload last (Store v3: every running or failed plugin has it), so disabling only takes Reload away.
+    assert.deepEqual(await detail("A Run"), ["disable", "uninstall", "reload"], "enabled");
     assert.deepEqual(await detail("B Off"), ["enable", "uninstall"], "disabled");
-    // A failed one: Reload last, so disabling it moves nothing.
     assert.deepEqual(await detail("C Bad"), ["disable", "uninstall", "reload"], "failed");
-    // Update available: the row has Update only, so the details offer what its ⋯ menu would (Reload after Uninstall…).
     assert.deepEqual(await detail("D Old"), ["update", "disable", "uninstall", "reload"], "update available");
     assert.deepEqual(actions(host).map((a) => a.text), ["更新到 2.0.0", "停用", "卸载…", "重新加载"]);
-    assert.deepEqual(controls(host, "D Old").menu, [], "the row: Update only");
     host.window("store").emit("act", "reload");
     await until(host, () => reloads(host).includes("d.old"), "reloaded from the details");
     // Starting: Reload stays in its place, disabled.
@@ -505,9 +524,8 @@ test("buttons keep their places: Disable and Enable swap only their words (VS Co
     host.setPackages(host.packages.map((p) => (p.id === "d.old" ? { ...p, state: "disabled" } : p)));
     await until(host, () => controls(host, "D Old").dim, "D Old disabled");
     assert.deepEqual(ids(actions(host)), ["update", "enable", "uninstall"]);
-    assert.deepEqual(controls(host, "D Old").primary, { id: "update", text: "更新", enabled: true });
-    assert.deepEqual(controls(host, "D Old").menu, []);
-    assert.equal(controls(host, "D Old").mark, "已停用");
+    assert.deepEqual(controls(host, "D Old").button, { id: "update", text: "更新", enabled: true });
+    assert.equal(controls(host, "D Old").state, "已停用");
   } finally {
     await stop();
   }
@@ -533,14 +551,11 @@ test("plugins the player set aside at start (no directory, no version) keep thei
     await until(host, () => store.items.length === 4, "rows");
     await tab(host, INSTALLED);
     assert.deepEqual(rows(host).map((r) => r.name).sort(), ["AMD Motion", "Auto Frame", "z.clip"]);
-    assert.equal(controls(host, "Auto Frame").mark, "失败");
+    assert.equal(controls(host, "Auto Frame").state, "失败");
     // Nothing of it runs: no Disable, no Reload; Uninstall… (player 0.10.1 removes it completely) and Open Data Folder.
-    assert.deepEqual(
-      controls(host, "Auto Frame").menu.map((a) => a.id),
-      ["uninstall", "openData"],
-    );
-    await choose(host, "Auto Frame");
-    assert.deepEqual(ids(actions(host)), ["uninstall"]);
+    const page = await manage(host, "Auto Frame");
+    assert.deepEqual(ids(page.buttons), ["uninstall"]);
+    assert.deepEqual(ids(page.more), ["openData"]);
   } finally {
     await stop();
   }
