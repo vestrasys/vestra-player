@@ -23,7 +23,7 @@ The decisions below replace earlier wording in the feature requirements and the 
 | Dropping on the video area: clear the list first, then add and play; dropping on the list: append to the end, "insert at the drop position" is an option, off by default | G-11, G-12 |
 | When playback starts, resize the window to 1× the video size (default) | G-02 |
 | Hide the pointer while playing is on by default | G-06 |
-| Four always-on-top modes, default "While Playing in Fullscreen" | IA-WIN-03 |
+| Four always-on-top modes, default "Never" (user ruling 2026-11-15) | IA-WIN-03 |
 | `` ` `` is "Mini Size" on every system; mini size is not on top; picture-in-picture is a separate command with no default key | IA-WIN-01, IA-WIN-02 |
 | Seek bar hover time is off by default | IA-PB-01 |
 | Seeking after the end (seek bar, ← →, plugins) plays on; previous frame (D) stays paused | IA-PB-09 |
@@ -1008,22 +1008,23 @@ None. This chapter uses only the existing API.
 
 **Acceptance**: with the always-on-top mode "Never", press `` ` ``: the window becomes small, and after clicking Finder / File Explorer the player is covered.
 
-### IA-WIN-03 Four always-on-top modes, default "While Playing in Fullscreen" (P2)
+### IA-WIN-03 Four always-on-top modes, default "Never" (P2)
 
-**Status**: implemented (uses only the existing `setAlwaysOnTop(boolean)`).
+**Status**: implemented (uses only the existing `setAlwaysOnTop(boolean)`). The default is "Never" since window plugin 0.1.9 (user ruling 2026-11-15, the precedent of mpv's `ontop=no` and VLC's "Never"); it supersedes the PotPlayer default "While Playing in Fullscreen" (`OnTopMode=3`) of earlier versions, under which a fullscreen player held on top kept file dialogs and other applications behind it.
 
 **Requirements**:
 
-1. "Screen ▸ Always on Top ▸" has four modes (radio): Never, Always, While Playing, While Playing in Fullscreen (order 729). The default is "While Playing in Fullscreen". The settings page "Options ▸ Playback ▸ Window" also has these four radio options.
+1. "Screen ▸ Always on Top ▸" has four modes (radio): Never, Always, While Playing, While Playing in Fullscreen (order 729). The default is "Never". The settings page "Options ▸ Playback ▸ Window" also has these four radio options.
 2. "While Playing in Fullscreen": on top when `window.state.fullscreen && phase === "ready" && !paused`, otherwise not; recomputed when fullscreen toggles. `setAlwaysOnTop` is called only when the value changes.
 3. Ctrl+T cycles: Never → Always → While Playing → While Playing in Fullscreen → Never.
 4. OSD: "Always on top: While playing in fullscreen".
-5. Users who have already saved settings keep their value.
+5. A mode the user chose (menu, Ctrl+T, palette or settings page) is kept. A user who never chose one gets the new default: a settings file written before 0.1.9 holds the whole settings object, so its `onTop` counts as chosen only when it differs from the old default "While Playing in Fullscreen"; from 0.1.9 the file records whether the mode was chosen (`onTopChosen`).
 6. Modeless tool windows are not put on top on their own; they go on top together when the whole is on top.
+7. While a system dialog is open (a file dialog of `dialogs.open` or `media.sources.locate`, a system confirmation) the player is not on top, whatever the mode, so the user can switch to other applications; the mode applies again when it closes. File dialogs are owned by the window the request came from (a shown tool window of the plugin), else by the main window, so they are never under the player; a key or click in the player while one is open brings it to the front.
 
-**Cross-platform**: macOS fullscreen is a separate space where the main window is in front anyway, so "While Playing in Fullscreen" has no visible effect on macOS; it is still offered and is the default, to keep the settings consistent on both systems. On Windows, fullscreen is an always-on-top borderless window, so other windows that pop up do not cover the player.
+**Cross-platform**: macOS fullscreen is a separate space where the main window is in front anyway, so "While Playing in Fullscreen" has no visible effect on macOS; it is still offered, to keep the settings consistent on both systems. On Windows, a fullscreen player in an on-top mode stays above windows that pop up.
 
-**Acceptance**: on first launch the radio dot of the menu "Screen ▸ Always on Top" is on "While Playing in Fullscreen"; on Windows, while playing in fullscreen, open a program that brings itself to the foreground: the player stays on top; not on top in windowed mode. Ctrl+T four times returns to the original mode.
+**Acceptance**: on first launch the radio dot of the menu "Screen ▸ Always on Top" is on "Never"; with "While Playing in Fullscreen" chosen, on Windows, while playing in fullscreen, open a program that brings itself to the foreground: the player stays on top; not on top in windowed mode. Ctrl+T four times returns to the original mode. In fullscreen with any mode, a plugin's Save dialog shows above the player and Alt+Tab reaches other applications while it is open.
 
 ### IA-WIN-04 Lower and upper bounds when resizing to the video size (P3)
 
@@ -1313,7 +1314,7 @@ Vestra's specification written cell by cell as "state × interaction element". O
 | F-10 | Title bar | Not shown (on macOS the system shows the menu bar when the pointer moves to the top) | IA-CORE-07 |
 | F-11 | OSD and info layer | Same as windowed mode; misc info can be set to "show only in fullscreen" (not implemented) | IA-INFO-02 |
 | F-12 | Entering fullscreen | Esc toggles (user ruling 2026-11-01; Enter, Alt+Enter and F11 up to 0.5.x; a double click only when the user binds it); Enter / Leave Fullscreen without a default key; Ctrl+Enter stretched fullscreen, Ctrl+Shift+Enter fullscreen on another display (not implemented) | IA-CORE-04 |
-| F-13 | Always on top | Default "While Playing in Fullscreen" | IA-WIN-03 |
+| F-13 | Always on top | Default "Never" (user ruling 2026-11-15); never while a system dialog is open | IA-WIN-03 |
 | F-14 | Window size commands | Disabled, with the reason "Not available in fullscreen" | |
 | F-15 | Other displays | System behaviour, not filled with black | |
 

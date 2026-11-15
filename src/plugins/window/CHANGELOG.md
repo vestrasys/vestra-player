@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.9
+
+- Always on top is "Never" by default (IA-WIN-03, user ruling 2026-11-15; mpv's `ontop=no`, VLC's "Never"), replacing "While Playing in Fullscreen" (PotPlayer's `OnTopMode=3`). Held on top in fullscreen, the player kept a plugin's Save or Open dialog and other applications behind it. The other modes, Ctrl+T's cycle and the OSD texts are unchanged. Who must change: nobody. What users see: a user who never chose a mode no longer floats in fullscreen; a chosen mode is kept. `settings.json` now records `onTopChosen` when the mode is chosen (menu, Ctrl+T, palette, settings page). A file written by 0.1.8 or older holds the whole settings object whenever any setting changed, so there "While Playing in Fullscreen" (the old default) is taken as never chosen and becomes "Never", and any other mode is kept as chosen; whoever wants the old behaviour picks "While Playing in Fullscreen" again once.
+
 ## 0.1.8
 
 - Manifest capabilities are gone (SDK 1.9.0, player 0.9.0): `capabilities` is removed from manifest.json. `activate()` now starts with `plugin.player.subscribe()` (was `events`) and then `await plugin.player.read()` (was `playback.read`), the calls that replace the two declarations that changed how it ran; the others need nothing. Behaviour is unchanged, except the ruled start-up order: the player's `window.state` read now comes before the state requests. Who must change: nobody.

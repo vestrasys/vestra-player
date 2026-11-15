@@ -218,5 +218,22 @@ pub fn background_tool_command(program: impl AsRef<std::ffi::OsStr>) -> std::pro
     }
 }
 
-/// No system alerts: nothing open to show.
-pub fn show_open_confirm(_foreground: bool) {}
+/// `dialog` (rfd's) with `owner`'s window as its parent (the portal's
+/// parent window), the window the request came from
+/// (`origins::dialog_place`).
+pub fn own_file_dialog(
+    dialog: rfd::AsyncFileDialog,
+    owner: Option<&slint::Window>,
+) -> rfd::AsyncFileDialog {
+    use slint::winit_030::WinitWindowAccessor;
+    let Some(owner) = owner else {
+        return dialog;
+    };
+    owner
+        .with_winit_window(|native| dialog.clone().set_parent(native))
+        .unwrap_or(dialog)
+}
+
+/// No system alerts, and the window manager places file dialogs: nothing
+/// to show.
+pub fn show_open_dialog(_foreground: bool) {}

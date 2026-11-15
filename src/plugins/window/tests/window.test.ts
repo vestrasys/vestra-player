@@ -153,21 +153,57 @@ test("geometry: scales, nearness, aspect fit, mini box, clamp notes, display siz
 
 
 test("settings: the spec defaults; a bad field falls back to its default, the others are kept", () => {
-  assert.deepEqual(normalize({}), { onTop: "fullscreen", hideCursorWhilePlaying: true, autoSize: 1, autoSizeOnce: false });
+  assert.deepEqual(normalize({}), {
+    onTop: "never",
+    onTopChosen: false,
+    hideCursorWhilePlaying: true,
+    autoSize: 1,
+    autoSizeOnce: false,
+  });
   assert.deepEqual(normalize({ onTop: "sometimes", hideCursorWhilePlaying: false, autoSize: "fit", autoSizeOnce: true }), {
-    onTop: "fullscreen",
+    onTop: "never",
+    onTopChosen: false,
     hideCursorWhilePlaying: false,
     autoSize: "fit",
     autoSizeOnce: true,
   });
   assert.deepEqual(normalize({ onTop: "playing", hideCursorWhilePlaying: "yes", autoSize: 3, autoSizeOnce: 1 }), {
     onTop: "playing",
+    onTopChosen: true,
     hideCursorWhilePlaying: true,
     autoSize: 1,
     autoSizeOnce: false,
   });
   assert.equal(normalize({ autoSize: "off" }).autoSize, "off");
   assert.equal(normalize({ autoSize: 0.5 }).autoSize, 0.5);
+});
+
+test("IA-WIN-03 (ruling 2026-11-15): the default is Never; only a mode the user chose is kept", () => {
+  const onTop = (value: Record<string, unknown>) => {
+    const { onTop, onTopChosen } = normalize(value);
+    return [onTop, onTopChosen];
+  };
+  // No file, or a file without the field: the default.
+  assert.deepEqual(onTop({}), ["never", false]);
+  assert.deepEqual(onTop({ autoSize: 2 }), ["never", false]);
+  // A file of 0.1.8 or older: the whole object was saved whenever any setting changed, so the old
+  // default there is untouched and becomes the new one; any other mode was chosen.
+  assert.deepEqual(onTop({ onTop: "fullscreen", hideCursorWhilePlaying: true, autoSize: 1, autoSizeOnce: true }), [
+    "never",
+    false,
+  ]);
+  for (const mode of ["never", "always", "playing"]) assert.deepEqual(onTop({ onTop: mode }), [mode, true], mode);
+  // From 0.1.9 the file says whether the mode was chosen, for every mode.
+  for (const mode of ["never", "always", "playing", "fullscreen"]) {
+    assert.deepEqual(onTop({ onTop: mode, onTopChosen: true }), [mode, true], mode);
+    assert.deepEqual(onTop({ onTop: mode, onTopChosen: false }), ["never", false], mode);
+  }
+  // A bad mode is never a choice, whatever the marker says.
+  assert.deepEqual(onTop({ onTop: "sometimes", onTopChosen: true }), ["never", false]);
+  assert.deepEqual(onTop({ onTop: 3 }), ["never", false]);
+  // A bad marker: as an older file.
+  assert.deepEqual(onTop({ onTop: "fullscreen", onTopChosen: "yes" }), ["never", false]);
+  assert.deepEqual(onTop({ onTop: "always", onTopChosen: 1 }), ["always", true]);
 });
 
 // ------------------------------------------------------------------ menus
@@ -209,10 +245,10 @@ test("palette only (menu sweep B5): no menu paths; titles, orders, groups and bi
   for (const id of ["size.1", "auto.1", "top.never"]) assert.equal(host.command(id).declaration.radio, true);
   assert.equal(host.command("auto.once").declaration.radio, false);
   assert.deepEqual(host.conflicts, []);
-  // First start: 1倍, 全屏播放时置顶, 隐藏指针 checked.
+  // First start: 1倍, 从不置顶 (IA-WIN-03, ruling 2026-11-15), 隐藏指针 checked.
   assert.deepEqual(
-    ["auto.1", "auto.once", "top.fullscreen", "hide-cursor", "mini", "pip"].map((id) => state(host, id).checked),
-    [true, false, true, true, false, false],
+    ["auto.1", "auto.once", "top.never", "top.fullscreen", "hide-cursor", "mini", "pip"].map((id) => state(host, id).checked),
+    [true, false, true, false, true, false, false],
   );
   // Only the cursor mode differs from the core's default; nothing floats in a window.
   assert.deepEqual(host.sent("window.setAlwaysOnTop"), []);
@@ -411,7 +447,8 @@ test("G-02: the six choices and 只调整一次 by menu; OSD; kept after a resta
   assert.equal(state(host, "auto.once").checked, true);
   await stop();
   assert.deepEqual(JSON.parse(readFileSync(join(data, "settings.json"), "utf8")), {
-    onTop: "fullscreen",
+    onTop: "never",
+    onTopChosen: false,
     hideCursorWhilePlaying: true,
     autoSize: 1,
     autoSizeOnce: true,
@@ -446,7 +483,7 @@ test("settings page: 选项 ▶ 播放 ▶ 窗口 shows and sets the same prefer
   assert.deepEqual([page.category, page.title, page.order, page.file], ["playback", "Window", 30, "ui/page.slint"]);
   assert.deepEqual(
     [page.props["auto-index"], page.props["auto-once"], page.props["top-index"], page.props["hide-cursor"]],
-    [2, false, 3, true],
+    [2, false, 0, true],
   );
   page.emit("set-auto", 5);
   page.emit("set-auto-once", true);
@@ -650,8 +687,21 @@ test("H04: 8 keeps the width and takes the video's aspect ratio; a second press 
 
 // ------------------------------------------------------------------ H05 / IA-WIN-03
 
-test("IA-WIN-03: 全屏播放时置顶 (the default) floats only while playing in fullscreen", async () => {
+test("IA-WIN-03 (ruling 2026-11-15): by default (从不) the player never floats, also playing in fullscreen", async () => {
   const { host } = await manual();
+  await play(host);
+  host.setMainWindow({ fullscreen: true });
+  await host.settle();
+  assert.equal(host.mainWindow.onTop, false, "playing in fullscreen");
+  host.setMainWindow({ fullscreen: false });
+  await host.settle();
+  assert.equal(host.mainWindow.onTop, false);
+  assert.deepEqual(host.sent("window.setAlwaysOnTop"), [], "nothing to send: the core's default is not on top");
+});
+
+test("IA-WIN-03: 全屏播放时置顶 (chosen) floats only while playing in fullscreen", async () => {
+  const { host } = await manual();
+  await host.command("top.fullscreen").run();
   await play(host);
   assert.equal(host.mainWindow.onTop, false, "playing in a window");
   host.setMainWindow({ fullscreen: true });
@@ -736,6 +786,40 @@ test("H05: a saved mode and cursor choice are kept; always on top is applied at 
   assert.equal(state(host, "hide-cursor").checked, false);
   assert.deepEqual(host.sent("window.setCursorAutoHide"), []);
   assert.equal(state(host, "auto.1").checked, true, "a field missing from an older file takes its default");
+});
+
+test("IA-WIN-03: an existing user who never chose a mode gets Never; a chosen mode survives restarts", async () => {
+  // A 0.1.8 file written when the user changed another setting: the old default was saved with it.
+  const data = mkdtempSync(join(scratch, "top-old-"));
+  const file = join(data, "settings.json");
+  writeFileSync(file, JSON.stringify({ onTop: "fullscreen", hideCursorWhilePlaying: true, autoSize: 2, autoSizeOnce: false }));
+  const host = new TestHost();
+  const { stop } = await start(host, data);
+  assert.equal(state(host, "top.never").checked, true);
+  assert.equal(state(host, "auto.2").checked, true, "the other settings are kept");
+  await play(host);
+  host.setMainWindow({ fullscreen: true });
+  await host.settle();
+  assert.equal(host.mainWindow.onTop, false);
+  // The user picks "While Playing in Fullscreen" on the settings page: kept as a choice.
+  host.settingsPage(PAGE_ID).emit("set-top", 3);
+  await host.settle();
+  assert.equal(host.mainWindow.onTop, true);
+  await stop();
+  assert.deepEqual(
+    (({ onTop, onTopChosen }) => [onTop, onTopChosen])(JSON.parse(readFileSync(file, "utf8"))),
+    ["fullscreen", true],
+  );
+  const again = new TestHost();
+  await start(again, data);
+  assert.equal(again.command("top.fullscreen").state.checked, true, "an explicit choice of the old default stays");
+
+  // A 0.1.8 file with a mode other than the old default: the user chose it.
+  const other = mkdtempSync(join(scratch, "top-old-other-"));
+  writeFileSync(join(other, "settings.json"), JSON.stringify({ onTop: "playing", hideCursorWhilePlaying: true }));
+  const third = new TestHost();
+  await start(third, other);
+  assert.equal(third.command("top.playing").state.checked, true);
 });
 
 // ------------------------------------------------------------------ B30 / G-06
