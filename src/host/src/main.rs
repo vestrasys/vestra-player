@@ -620,7 +620,7 @@ fn player() -> Result<()> {
         osd_shown: Default::default(),
         osd_from: None,
         info_panels: BTreeMap::new(),
-        floating: None,
+        floating: [None, None],
         menu_mode: MenuMode::Main,
         menu_generation: 1,
         window_title: "Vestra Player".into(),

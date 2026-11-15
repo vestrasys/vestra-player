@@ -116,7 +116,8 @@ pub struct Visibility {
     pub effective: bool,
     pub reason: Option<Reason>,
     pub overlay: bool,
-    /// The sidebar is shown in its own floating window (C14).
+    /// The column is shown in its own floating window (C14: the sidebar;
+    /// the adjust column too since 2026-11-15).
     pub detached: bool,
 }
 
@@ -130,9 +131,11 @@ pub struct Snapshot {
     /// docked (hidden, floating, or the fullscreen overlay, which takes none).
     pub sidebar_width: f64,
     /// The adjust column (menu redesign step 3b): `overlay` in fullscreen
-    /// and while it floats over the video of a narrow window.
+    /// and while it floats over the video of a narrow window, unless it is
+    /// detached into its own window.
     pub adjust: Option<Visibility>,
-    /// Its docked width, zero whenever it is not shown docked.
+    /// Its docked width, zero whenever it is not shown docked (hidden,
+    /// detached, or an overlay).
     pub adjust_width: f64,
     /// It floats over the video: the window is too narrow to dock it
     /// beside a video at least [`ADJUST_DOCKED_VIDEO`] wide.
@@ -147,15 +150,12 @@ pub enum Error {
     Invalid,
     Occupied,
     MissingOwner,
-    /// The adjust column does not detach (menu redesign, open question 2).
-    Docked,
 }
 
 impl std::fmt::Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.write_str(match self {
             Self::Invalid => "invalid viewport",
-            Self::Docked => "the adjust column cannot be detached",
             Self::Occupied => "visibility slot is already attached",
             Self::MissingOwner => {
                 "visibility slot is absent or belongs to another owner generation"
@@ -174,8 +174,9 @@ struct Attachment {
     locks: Locks,
 }
 
-/// The sidebar: one or more panels as tabs (panel-slots.md step 1). Shown,
-/// hidden and detached as a whole; one tab is current.
+/// A column (the sidebar, the adjust column): one or more panels as tabs
+/// (panel-slots.md step 1). Shown, hidden and detached as a whole; one tab
+/// is current.
 #[derive(Clone, Debug)]
 struct Tabs {
     /// Tab order, with each panel's own interaction locks.
@@ -295,15 +296,12 @@ impl Policy {
         self.adjust_user_width
     }
 
-    /// Float or dock the whole sidebar; `owner` is any of its panels. The
-    /// adjust column does not detach.
+    /// Float or dock a whole column (the sidebar, the adjust column);
+    /// `owner` is any of its panels. Its fullscreen overlay slides in.
     pub fn set_detached(&mut self, owner: u64, detached: bool) -> Result<()> {
         let (column, tabs) = self.tabs_mut(owner)?;
-        if column == ADJUST {
-            return Err(Error::Docked);
-        }
         tabs.detached = detached;
-        self.overlay.open[SIDEBAR] = false;
+        self.overlay.open[column] = false;
         if !self.overlay.any() {
             self.overlay = Overlay::default();
         }
@@ -370,7 +368,7 @@ impl Policy {
                     panels: vec![(owner, Locks::default())],
                     active: owner,
                     preferred,
-                    detached: detached && column == SIDEBAR,
+                    detached,
                 });
             }
         }
@@ -875,6 +873,9 @@ impl Policy {
         let adjust = self.columns[ADJUST].as_ref().map(|tabs| {
             let reason = if !tabs.preferred {
                 Some(Reason::UserHidden)
+            } else if tabs.detached {
+                // A floating window follows only the preference.
+                None
             } else if self.fullscreen && !self.overlay.open[ADJUST] {
                 Some(Reason::Fullscreen)
             } else {
@@ -885,8 +886,8 @@ impl Policy {
                 preferred: tabs.preferred,
                 effective: reason.is_none(),
                 reason,
-                overlay: self.fullscreen || over_video,
-                detached: false,
+                overlay: !tabs.detached && (self.fullscreen || over_video),
+                detached: tabs.detached,
             }
         });
         let next_deadline_ms = if self.fullscreen
@@ -907,7 +908,7 @@ impl Policy {
             sidebar,
             sidebar_width,
             adjust,
-            adjust_width: if adjust.is_some_and(|v| v.effective && !v.overlay) {
+            adjust_width: if adjust.is_some_and(|v| v.effective && !v.overlay && !v.detached) {
                 docked_adjust
             } else {
                 0.0
@@ -1671,7 +1672,7 @@ mod tests {
     }
 
     #[test]
-    fn the_adjust_column_has_its_own_tabs_and_never_detaches() {
+    fn the_adjust_column_has_its_own_tabs() {
         let mut policy = both_columns();
         assert_eq!(policy.panels(Slot::Adjust), [5, 6]);
         assert_eq!(policy.sidebar_panels(), [2]);
@@ -1687,7 +1688,6 @@ mod tests {
             Some(2),
             "the sidebar keeps its tab"
         );
-        assert_eq!(policy.set_detached(5, true), Err(Error::Docked));
         assert_eq!(policy.column_state(Slot::Adjust), Some((true, false)));
         policy.order_column(Slot::Adjust, &[6, 5]);
         assert_eq!(policy.panels(Slot::Adjust), [6, 5]);
@@ -1698,9 +1698,70 @@ mod tests {
         policy.remove_owner(5);
         assert_eq!(policy.column_state(Slot::Adjust), None);
         assert!(policy.evaluate(roomy(), 0).unwrap().adjust.is_none());
-        // A first panel brings the column's remembered state; never detached.
+        // A first panel brings the column's remembered state, floating too.
         policy.attach(Slot::Adjust, 7, false, true).unwrap();
-        assert_eq!(policy.column_state(Slot::Adjust), Some((false, false)));
+        assert_eq!(policy.column_state(Slot::Adjust), Some((false, true)));
+    }
+
+    /// The adjust column detaches as the sidebar does (user request
+    /// 2026-11-15): as a whole, through any of its tabs, on its own; it
+    /// then follows only its preference, takes no width, is never an
+    /// overlay (narrow window, fullscreen) and the right edge does not pop
+    /// it out; the sidebar is not affected.
+    #[test]
+    fn the_adjust_column_detaches_into_its_own_window() {
+        let mut policy = both_columns();
+        policy.set_detached(6, true).unwrap();
+        assert_eq!(policy.column_state(Slot::Adjust), Some((true, true)));
+        assert_eq!(policy.sidebar_state(), Some((true, false)));
+        let roomy_state = policy.evaluate(roomy(), 0).unwrap();
+        let adjust = roomy_state.adjust.unwrap();
+        assert!(adjust.effective && adjust.detached && !adjust.overlay);
+        assert_eq!(adjust.reason, None);
+        assert_eq!(
+            roomy_state.adjust_width, 0.0,
+            "a floating column takes none"
+        );
+        assert!(roomy_state.sidebar_width > 0.0, "the sidebar stays docked");
+        // A narrow window: no overlay over the video.
+        let narrow = policy.evaluate(viewport(600.0, 400.0), 0).unwrap();
+        assert!(narrow.adjust.unwrap().effective && !narrow.adjust.unwrap().overlay);
+        assert!(!narrow.adjust_over_video);
+        // Fullscreen: the window stays, the right edge pops out the sidebar
+        // only.
+        policy.set_fullscreen(true, 0);
+        let full = policy.evaluate(screen(), 0).unwrap();
+        assert!(full.adjust.unwrap().effective && !full.adjust.unwrap().overlay);
+        policy.pointer(1919.0, 1920.0, 100);
+        assert!(policy.overlay.open[SIDEBAR] && !policy.overlay.open[ADJUST]);
+        assert_eq!(
+            policy.overlay_extent(1920.0),
+            overlay_width(1920.0, policy.sidebar_user_width)
+        );
+        policy.set_fullscreen(false, 200);
+        // Hidden by preference: the window goes, the column stays detached.
+        policy.set_preferred(Slot::Adjust, 5, false, 0).unwrap();
+        let hidden = policy.evaluate(roomy(), 0).unwrap().adjust.unwrap();
+        assert!(!hidden.effective && hidden.detached);
+        assert_eq!(hidden.reason, Some(Reason::UserHidden));
+        // Docked again through another tab.
+        policy.set_preferred(Slot::Adjust, 5, true, 0).unwrap();
+        policy.set_detached(5, false).unwrap();
+        let docked = policy.evaluate(viewport(1400.0, 600.0), 0).unwrap();
+        assert!(!docked.adjust.unwrap().detached && docked.adjust_width > 0.0);
+    }
+
+    /// Detaching a popped-out fullscreen column slides in only that one.
+    #[test]
+    fn detaching_a_popped_out_column_slides_in_only_that_one() {
+        let mut policy = both_columns();
+        policy.set_fullscreen(true, 0);
+        policy.pointer(1919.0, 1920.0, 100);
+        assert_eq!(policy.overlay.open, [true, true]);
+        policy.set_detached(5, true).unwrap();
+        assert_eq!(policy.overlay.open, [true, false]);
+        policy.set_detached(2, true).unwrap();
+        assert!(!policy.overlay.any());
     }
 
     /// G-01 with two columns: the right edge pops out both, the sidebar

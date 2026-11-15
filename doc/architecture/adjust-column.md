@@ -15,7 +15,8 @@ flowchart LR
 ```
 
 - Layout `[video][adjust][sidebar]`; both columns may be open; each has its own 3 px splitter. A floating sidebar leaves the adjust column rightmost.
-- The strip is the sidebar's (`sidebar-tabs.slint`) with `keys` (the key under each title) and `detachable: false`. It is drawn with one tab too. No close or detach button. The key is the label of the command the tab's plugin's commands name as their `home` (`sidebar_tabs::tab_command`, the most named), rewritten when the binding table, the commands, the shell or the tabs change.
+- Detach (user request 2026-11-15): the column floats in its own window as the sidebar does (C14), through the detach/attach button at the right end of its strip or `layout.set` `detached` (`plugin.panels.adjust`). One `Floating` per column (`Host::floating[Column::index]`, `composition::floating(column)`): the window shows every tab with the keys under the titles, is titled with the current tab, takes no width in the main window and is no overlay (narrow window, fullscreen: the right edge does not pop it out). Closing the window hides the column, which stays detached; the frame is remembered per column (`adjustSlot.floating`; before one is remembered 317 × 408 left of the sidebar's default; at least 280 × 250). `adjustSlot.detached` and `floating` are written only once used.
+- The strip is the sidebar's (`sidebar-tabs.slint`) with `keys` (the key under each title). It is drawn with one tab too. No close button; the detach/attach button as in the sidebar. The key is the label of the command the tab's plugin's commands name as their `home` (`sidebar_tabs::tab_command`, the most named), rewritten when the binding table, the commands, the shell or the tabs change.
 - Narrow window: docked only while the video keeps `ADJUST_DOCKED_VIDEO` (480 px, provisional) beside a docked sidebar; otherwise it floats over the right of the video, 300 px, `bg-list` at 90 %, a shadow on its left, and takes no width. The sidebar keeps its own rules (video to 318, then hidden). Esc inside the overlay closes it (`adjust-dismiss`).
 - Fullscreen (G-01): one `Overlay` with an open flag per column. The right edge pops out every column shown by preference, the sidebar outermost and the adjust column left of it. A toggle (the Adjustments and Effects and Sidebar buttons and menu items, Alt+n, a panel's `toggle()`, which sends `layout.set` with `reveal: false` from SDK 1.6.13) switches a column on and off exactly as in a window (user ruling 2026-11-08): on, the right edge reveals it; off, the edge does not, and a popped-out column slides in at once; nothing pops out when it is switched on (`Policy::switch`). Only a plugin's `show()` or `setVisible(true)` (`Policy::set_preferred`, documented SDK behaviour) pops a column out. The leave delay starts left of both; the fullscreen bar ends at both (`columns-popped-width`, `Policy::overlay_extent`). The title strip (G-19) spans the video only: it ends at the popped-out columns' left edge (the same `columns-popped-width`, following the overlays' 150 ms slide) and the top edge over them does not reveal it (`Policy::at_title_edge`).
 - Remembered in `ui_state.adjustSlot { visible, width, active, order }`; it starts closed.
@@ -26,13 +27,13 @@ flowchart LR
 | Where | What |
 | --- | --- |
 | `ui/sidebar_tabs.rs` | `Column` (Sidebar, Adjust): index, slot, prefix, first tabs (the playlist; video, audio, subtitles, playback), `always_tabbed`; `order` per column; `tab_command` |
-| `ui/window_state.rs` | `Slot::Adjust`, `columns: [Option<Tabs>; 2]`, `Overlay.open: [bool; 2]`, `adjust_width`, `adjust_overlay_width`, `Snapshot.adjust`, `adjust_width`, `adjust_over_video`, `Error::Docked` |
+| `ui/window_state.rs` | `Slot::Adjust`, `columns: [Option<Tabs>; 2]`, `Overlay.open: [bool; 2]`, `adjust_width`, `adjust_overlay_width`, `Snapshot.adjust`, `adjust_width`, `adjust_over_video`; `set_detached` for either column |
 | `ui/composition.rs`, `ui/host.slint` | `Slot::Adjust` (`parse`, `tabbed`), `column_content`, `adjust_column` (docked + one overlay), `VESTRA-MOUNT-ADJUST`, `adjust-*` properties |
 | `host/mod.rs` | `ColumnState` per column (tabs, current tab, tabbed, woken, refresh failure, popped, shown, `opened`, keys) replaces the sidebar-only fields |
 | `host/mounts.rs` | `apply_mounts`, `compile_shell` per column (`ColumnPlan`, `ColumnStrip`); `compiles` |
 | `host/window.rs` | `column_memory`, `remember_column`, `tab_order`, `sync_column`, `tab_keys`, `tab_demand` per column; the tick writes `adjust-visible/overlay/popped` |
 | `ui/bar_buttons.rs`, `ui/bar-strip.slint`, `ui/vestra/bar-buttons.slint` | the Adjust cell |
-| `capabilities/ui_mount.rs`, `host/state.rs` | the slot on the wire, `layout.state.adjust`, `layout.set` (no detach), menus, recordings and placeholders |
+| `capabilities/ui_mount.rs`, `host/state.rs` | the slot on the wire, `layout.state.adjust`, `layout.set` (`detached` for either column), menus, recordings and placeholders |
 
 ## On demand (open question 1)
 

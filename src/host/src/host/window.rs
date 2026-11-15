@@ -1,5 +1,5 @@
 //! The window tick, the tabs of the columns (the sidebar, the adjust
-//! column) and the sidebar's floating window.
+//! column) and their floating windows.
 use super::messages::{UiReport, WindowFacts};
 use super::mounts::policy_column;
 use super::*;
@@ -13,6 +13,41 @@ pub(crate) struct ColumnMemory {
     pub(crate) detached: bool,
     pub(crate) active: Option<String>,
     pub(crate) order: Vec<String>,
+}
+
+/// A column's floating window before it has a remembered frame, and its
+/// least size (logical px): the sidebar's as it always was (300 × 408 at
+/// 438, 100; at least 300 × 250); the adjust column's as wide as its
+/// docked default and least widths, left of the sidebar's so the two do
+/// not open on top of each other.
+struct FloatingLimits {
+    default: ui_state::Frame,
+    min: (f64, f64),
+}
+
+impl FloatingLimits {
+    fn of(column: Column) -> Self {
+        match column {
+            Column::Sidebar => Self {
+                default: ui_state::Frame {
+                    x: 438.,
+                    y: 100.,
+                    width: 300.,
+                    height: 408.,
+                },
+                min: (300., 250.),
+            },
+            Column::Adjust => Self {
+                default: ui_state::Frame {
+                    x: 438. - ui_state::ADJUST_WIDTH - 8.,
+                    y: 100.,
+                    width: ui_state::ADJUST_WIDTH,
+                    height: 408.,
+                },
+                min: (window_state::ADJUST_MIN_WIDTH, 250.),
+            },
+        }
+    }
 }
 
 impl Host {
@@ -259,8 +294,8 @@ impl Host {
             state.popped = popped;
             // The adjust column: docked, over the video of a narrow window,
             // or in fullscreen an overlay that exists collapsed too, so it
-            // can slide out.
-            let adjust = snapshot.adjust;
+            // can slide out. Detached, it is in its own window instead.
+            let adjust = snapshot.adjust.filter(|a| !a.detached);
             let docked = adjust.is_some_and(|a| a.effective && !a.overlay);
             shell.set_property("adjust-visible", docked.into())?;
             shell.set_property(
@@ -309,9 +344,13 @@ impl Host {
         self.bar_tick(&shell, columns_seen);
         match result {
             Ok(facts) => {
-                let detached = facts["slots"]["sidebar"]["effective"] == true
-                    && facts["slots"]["sidebar"]["detached"] == true;
-                self.sync_floating(detached);
+                for column in Column::ALL {
+                    let slot = &facts["slots"][column.prefix()];
+                    self.sync_floating(
+                        column,
+                        slot["effective"] == true && slot["detached"] == true,
+                    );
+                }
                 let changed = facts != self.window_facts;
                 if changed || self.policy_tabs() != self.tabs_sent {
                     if changed {
@@ -557,8 +596,8 @@ impl Host {
     pub(crate) fn adjust_slot(&self) -> ui_state::AdjustSlot {
         self.ui_state.state.adjust_slot.clone().unwrap_or_default()
     }
-    /// What a column remembers across launches: shown, floating (the
-    /// sidebar only), its current tab and its tab order.
+    /// What a column remembers across launches: shown, floating, its
+    /// current tab and its tab order.
     pub(crate) fn column_memory(&self, column: Column) -> ColumnMemory {
         match column {
             Column::Sidebar => {
@@ -574,7 +613,7 @@ impl Host {
                 let slot = self.adjust_slot();
                 ColumnMemory {
                     visible: slot.visible,
-                    detached: false,
+                    detached: slot.detached,
                     active: slot.active,
                     order: slot.order,
                 }
@@ -586,8 +625,8 @@ impl Host {
     pub(crate) fn remember_sidebar(&mut self, chosen: bool) {
         self.remember_column(Column::Sidebar, chosen);
     }
-    /// Keep a column's persisted state current: shown, floating (the
-    /// sidebar), the current tab and the tab order. `chosen`: the current
+    /// Keep a column's persisted state current: shown, floating, the
+    /// current tab and the tab order. `chosen`: the current
     /// tab was just chosen (a click, `layout.set` `active`), so it is
     /// remembered even over one not mounted yet.
     pub(crate) fn remember_column(&mut self, column: Column, chosen: bool) {
@@ -637,6 +676,7 @@ impl Host {
             Column::Adjust => {
                 let mut slot = self.adjust_slot();
                 slot.visible = memory.visible;
+                slot.detached = memory.detached;
                 slot.active = memory.active;
                 for manifest in &current {
                     slot.remember_among(manifest, &current);
@@ -648,14 +688,14 @@ impl Host {
             }
         }
     }
-    /// Hide the whole sidebar (the floating window closed).
-    pub(crate) fn close_sidebar(&mut self) {
-        if let Some(owner) = self.policy.sidebar_active() {
+    /// Hide a whole column (its floating window closed); it stays
+    /// detached, so showing it opens the window again.
+    pub(crate) fn close_column(&mut self, column: Column) {
+        let slot = policy_column(column);
+        if let Some(owner) = self.policy.active(slot) {
             let now = self.core.now_ms();
-            let _ = self
-                .policy
-                .set_preferred(window_state::Slot::Sidebar, owner, false, now);
-            self.remember_sidebar(false);
+            let _ = self.policy.set_preferred(slot, owner, false, now);
+            self.remember_column(column, false);
         }
     }
     /// A column's panels in tab order (`sidebar_tabs::order`): its first
@@ -744,9 +784,7 @@ impl Host {
             }
         };
         set_index(shell, &self.columns[index].tabs);
-        if column == Column::Sidebar
-            && let Some(floating) = &self.floating
-        {
+        if let Some(floating) = &self.floating[index] {
             set_index(&floating.instance, &floating.owners);
             if let Some(mount) = active.and_then(|owner| self.core.mounts.get(&owner)) {
                 let title = SValue::String(mount.title.as_str().into());
@@ -783,7 +821,8 @@ impl Host {
     /// The keys under a column's tabs (the adjust column, menu redesign
     /// §3.3): each tab's command that opens it (`sidebar_tabs::tab_command`)
     /// with its current key, "" for none. Written only when the binding
-    /// table, the commands, the shell or the tabs changed.
+    /// table, the commands, the shell or the tabs changed, to the shell and
+    /// the column's floating window (which gets them when it opens too).
     fn tab_keys(&mut self, shell: &slint_interpreter::ComponentInstance, column: Column) {
         self.sync_tables();
         let index = column.index();
@@ -796,8 +835,20 @@ impl Host {
         if self.columns[index].keys_from.as_ref() == Some(&from) {
             return;
         }
-        let keys = self.columns[index]
-            .tabs
+        self.write_tab_keys(shell, column, &self.columns[index].tabs);
+        if let Some(floating) = &self.floating[index] {
+            self.write_tab_keys(&floating.instance, column, &floating.owners);
+        }
+        self.columns[index].keys_from = Some(from);
+    }
+    /// [`Self::tab_keys`]' value for the tabs `owners` of `window`.
+    fn write_tab_keys(
+        &self,
+        window: &slint_interpreter::ComponentInstance,
+        column: Column,
+        owners: &[u64],
+    ) {
+        let keys = owners
             .iter()
             .map(|&owner| {
                 let plugin = panel_plugin(owner);
@@ -812,9 +863,8 @@ impl Host {
             })
             .collect::<Vec<_>>();
         if let Ok(value) = ui_values::from_json(&json!(keys)) {
-            let _ = shell.set_property(&format!("{}-keys", column.prefix()), value);
+            let _ = window.set_property(&format!("{}-keys", column.prefix()), value);
         }
-        self.columns[index].keys_from = Some(from);
     }
     /// The titles of a column's tabs, in tab order.
     pub(crate) fn tab_titles(&self, owners: &[u64]) -> Result<SValue> {
@@ -824,22 +874,21 @@ impl Host {
             .collect::<Vec<_>>();
         ui_values::from_json(&json!(titles))
     }
-    /// The host's tab strip callbacks of a shell or floating window (the
-    /// adjust column's where the window has it: the shell).
+    /// The host's tab strip callbacks of a shell or floating window: those
+    /// of each column the window has (the shell: both; a floating window:
+    /// its own), and the adjust overlay's Esc where the window has it (the
+    /// shell).
     pub(crate) fn bind_tabs(
         &self,
         window: &slint_interpreter::ComponentInstance,
         generation: u64,
     ) -> Result<()> {
-        let has_adjust = window
-            .definition()
-            .callbacks()
-            .any(|name| name == "adjust-tab");
+        let has = |callback: &str| window.definition().callbacks().any(|name| name == callback);
         for column in Column::ALL {
-            if column == Column::Adjust && !has_adjust {
+            let p = column.prefix();
+            if !has(&format!("{p}-tab")) {
                 continue;
             }
-            let p = column.prefix();
             let events = self.core.events.clone();
             window.set_callback(&format!("{p}-tab"), move |args| {
                 if let Some(SValue::Number(index)) = args.first()
@@ -856,13 +905,13 @@ impl Host {
                 }
                 SValue::Void
             })?;
+            let events = self.core.events.clone();
+            window.set_callback(&format!("{p}-detach"), move |_| {
+                let _ = events.send(Event::Detach(generation, column));
+                SValue::Void
+            })?;
         }
-        let events = self.core.events.clone();
-        window.set_callback("sidebar-detach", move |_| {
-            let _ = events.send(Event::SidebarDetach(generation));
-            SValue::Void
-        })?;
-        if has_adjust {
+        if has("adjust-dismiss") {
             let events = self.core.events.clone();
             window.set_callback("adjust-dismiss", move |_| {
                 let _ = events.send(Event::AdjustDismiss(generation));
@@ -871,33 +920,36 @@ impl Host {
         }
         Ok(())
     }
-    /// Open or close the floating window so it matches the policy; a window
-    /// with other panels than the sidebar's now opens again.
-    pub(crate) fn sync_floating(&mut self, want: bool) {
-        let owners = self.policy.sidebar_panels();
-        match (&self.floating, want) {
+    /// Open or close a column's floating window so it matches the policy;
+    /// a window with other panels than the column's now opens again.
+    pub(crate) fn sync_floating(&mut self, column: Column, want: bool) {
+        let index = column.index();
+        let owners = self.policy.panels(policy_column(column));
+        match (&self.floating[index], want) {
             (Some(floating), true) if floating.owners == owners => {
-                self.remember_floating();
+                self.remember_floating(column);
             }
             (None, true) if !owners.is_empty() => {
-                if let Err(error) = self.open_floating(&owners) {
+                if let Err(error) = self.open_floating(column, &owners) {
                     diag!("floating panel: {error:#}");
                     if let Some(&owner) = owners.first() {
                         for owner in &owners {
                             self.send(panel_plugin(*owner), json!({"event":"ui.error","data":{"code":"ui-prepare","message":format!("ui-prepare: {error:#}")}}));
                         }
                         let _ = self.policy.set_detached(owner, false);
-                        self.remember_sidebar(false);
+                        self.remember_column(column, false);
                     }
                 }
             }
-            (Some(_), _) => self.close_floating(),
+            (Some(_), _) => self.close_floating(column),
             _ => {}
         }
     }
-    /// The floating window with every tab in its strip and the shell's
-    /// compiled panels (sidebar-tabs.md); it opens again when they change.
-    pub(crate) fn open_floating(&mut self, owners: &[u64]) -> Result<()> {
+    /// A column's floating window with every tab in its strip and the
+    /// shell's compiled panels (sidebar-tabs.md); it opens again when they
+    /// change. Its frame is the column's remembered one, else the default.
+    pub(crate) fn open_floating(&mut self, column: Column, owners: &[u64]) -> Result<()> {
+        let p = column.prefix();
         let tabs = owners
             .iter()
             .map(|owner| {
@@ -905,27 +957,31 @@ impl Host {
                     .mounts
                     .get(owner)
                     .cloned()
-                    .ok_or_else(|| anyhow::anyhow!("no sidebar mount"))
+                    .ok_or_else(|| anyhow::anyhow!("no {p} mount"))
             })
             .collect::<Result<Vec<_>>>()?;
-        let active = self.policy.sidebar_active();
+        let active = self.policy.active(policy_column(column));
         let title = tabs
             .iter()
             .find(|m| Some(m.spec.owner) == active)
             .unwrap_or(&tabs[0])
             .title
             .clone();
-        let tabbed = tabs.len() > 1;
         self.next_shell_generation += 1;
         let generation = self.next_shell_generation;
         // The window is compiled once a run; the current tab's panel is
         // shown in its container (`ui/panels.rs`) before it opens.
-        let instance = composition::floating()?;
+        let instance = composition::floating(column)?;
         instance.set_property("panel-title", SValue::String(title.as_str().into()))?;
-        instance.set_property("sidebar-tabbed", tabbed.into())?;
-        instance.set_property("sidebar-titles", self.tab_titles(owners)?)?;
+        if column == Column::Sidebar {
+            instance.set_property("sidebar-tabbed", (tabs.len() > 1).into())?;
+        }
+        instance.set_property(&format!("{p}-titles"), self.tab_titles(owners)?)?;
         if let Some(index) = active.and_then(|a| owners.iter().position(|&o| o == a)) {
-            instance.set_property("sidebar-active", SValue::Number(index as f64))?;
+            instance.set_property(&format!("{p}-active"), SValue::Number(index as f64))?;
+        }
+        if column == Column::Adjust {
+            self.write_tab_keys(&instance, column, owners);
         }
         self.bind_menu(&instance, generation, false)?;
         self.observe_keys(&instance, generation);
@@ -937,18 +993,14 @@ impl Host {
             let _ = events.send(Event::FloatingClosed(generation));
             slint::CloseRequestResponse::KeepWindowShown
         });
-        let frame = self.sidebar_slot().floating.unwrap_or(ui_state::Frame {
-            x: 438.,
-            y: 100.,
-            width: 300.,
-            height: 408.,
-        });
+        let limits = FloatingLimits::of(column);
+        let frame = self.floating_frame(column).unwrap_or(limits.default);
         instance.window().set_size(slint::LogicalSize::new(
-            frame.width.max(300.) as f32,
-            frame.height.max(250.) as f32,
+            frame.width.max(limits.min.0) as f32,
+            frame.height.max(limits.min.1) as f32,
         ));
         self.theme_view(&instance);
-        if self.show_panel(&instance, generation, composition::Slot::Sidebar, active) {
+        if self.show_panel(&instance, generation, column.slot(), active) {
             view::settle_layout(instance.window());
         }
         let before = platform::capture_windows().ok();
@@ -958,8 +1010,9 @@ impl Host {
         )?;
         platform::shown(&instance);
         let native = before.and_then(|before| platform::associate_new(&before).ok());
-        self.floating = Some(Floating {
+        self.floating[column.index()] = Some(Floating {
             instance,
+            column,
             owners: owners.to_vec(),
             generation,
             native,
@@ -968,8 +1021,16 @@ impl Host {
         self.sync_restart_lines();
         Ok(())
     }
-    pub(crate) fn remember_floating(&mut self) {
-        let Some(floating) = &self.floating else {
+    /// A column's remembered floating frame (`ui_state`).
+    fn floating_frame(&self, column: Column) -> Option<ui_state::Frame> {
+        match column {
+            Column::Sidebar => self.sidebar_slot().floating,
+            Column::Adjust => self.adjust_slot().floating,
+        }
+    }
+    /// Keep a column's floating window's frame for the next launch.
+    pub(crate) fn remember_floating(&mut self, column: Column) {
+        let Some(floating) = &self.floating[column.index()] else {
             return;
         };
         let window = floating.instance.window();
@@ -978,21 +1039,31 @@ impl Host {
         if size.width == 0 || scale <= 0. {
             return;
         }
-        let frame = ui_state::Frame {
+        let frame = Some(ui_state::Frame {
             x: position.x as f64 / scale,
             y: position.y as f64 / scale,
             width: size.width as f64 / scale,
             height: size.height as f64 / scale,
-        };
-        let mut slot = self.sidebar_slot();
-        if slot.floating != Some(frame) {
-            slot.floating = Some(frame);
-            self.ui_state.state.sidebar_slot = Some(slot);
-            self.ui_state.touch(self.core.now_ms());
+        });
+        if self.floating_frame(column) == frame {
+            return;
         }
+        match column {
+            Column::Sidebar => {
+                let mut slot = self.sidebar_slot();
+                slot.floating = frame;
+                self.ui_state.state.sidebar_slot = Some(slot);
+            }
+            Column::Adjust => {
+                let mut slot = self.adjust_slot();
+                slot.floating = frame;
+                self.ui_state.state.adjust_slot = Some(slot);
+            }
+        }
+        self.ui_state.touch(self.core.now_ms());
     }
-    pub(crate) fn close_floating(&mut self) {
-        if let Some(floating) = self.floating.take() {
+    pub(crate) fn close_floating(&mut self, column: Column) {
+        if let Some(floating) = self.floating[column.index()].take() {
             if self.menu_open && self.menu_generation == floating.generation {
                 self.menu_open = false;
                 self.menu_path.clear();
@@ -1003,11 +1074,25 @@ impl Host {
             let _ = floating.instance.hide();
         }
     }
+    /// Close each floating window holding any of `keys` (panels that go):
+    /// it opens again without them (`sync_floating`).
+    pub(crate) fn close_floating_with(&mut self, keys: &[u64]) {
+        for column in Column::ALL {
+            if self.floating[column.index()]
+                .as_ref()
+                .is_some_and(|f| keys.iter().any(|key| f.owners.contains(key)))
+            {
+                self.close_floating(column);
+            }
+        }
+    }
     /// Quitting: every window but the main one goes away now, before the
     /// plugins and the backend are torn down (a shown Slint window keeps
     /// itself alive until hidden, so dropping it is not enough).
     pub(crate) fn close_secondary_windows(&mut self) {
-        self.close_floating();
+        for column in Column::ALL {
+            self.close_floating(column);
+        }
         for view in std::mem::take(&mut self.views).into_values() {
             let _ = view.instance.hide();
         }
@@ -1015,13 +1100,20 @@ impl Host {
             let _ = window.hide();
         }
     }
+    /// A column's current tab (the policy's).
+    pub(crate) fn column_active(&self, column: Column) -> Option<u64> {
+        self.policy.active(policy_column(column))
+    }
+    /// The open floating window of `generation`, if it is one.
+    pub(crate) fn floating_of(&self, generation: u64) -> Option<&Floating> {
+        self.floating
+            .iter()
+            .flatten()
+            .find(|f| f.generation == generation)
+    }
     /// Shell or floating window generation still alive.
     pub(crate) fn window_generation_live(&self, generation: u64) -> bool {
-        generation == self.shell_generation
-            || self
-                .floating
-                .as_ref()
-                .is_some_and(|f| f.generation == generation)
+        generation == self.shell_generation || self.floating_of(generation).is_some()
     }
     pub(crate) fn window_for(
         &self,
@@ -1030,10 +1122,7 @@ impl Host {
         if generation == self.shell_generation {
             self.shell.as_ref()
         } else {
-            self.floating
-                .as_ref()
-                .filter(|f| f.generation == generation)
-                .map(|f| &f.instance)
+            self.floating_of(generation).map(|f| &f.instance)
         }
     }
 }

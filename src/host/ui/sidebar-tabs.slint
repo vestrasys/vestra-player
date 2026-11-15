@@ -1,9 +1,9 @@
 // The tab strip of a column (panel-slots.md step 1), drawn by the host above
 // the current panel: the sidebar's while it holds two or more, the adjust
-// column's always (menu redesign step 3b, with the keys under the titles
-// and no detach button). The playlist's tab strip (ui-spec §5.2) with one
-// tab per panel. The detach/attach button at the sidebar strip's right end
-// acts on the whole sidebar. There is no close button: next
+// column's always (menu redesign step 3b, with the keys under the titles).
+// The playlist's tab strip (ui-spec §5.2) with one tab per panel. The
+// detach/attach button at the strip's right end acts on the whole column
+// (the adjust column's too since 2026-11-15). There is no close button: next
 // to the window's own close button it closed the player when missed (user
 // ruling 2026-11-07); the bottom bar's sidebar button, F6 and the menus
 // hide the sidebar.
@@ -134,9 +134,8 @@ export component SidebarTabs inherits Rectangle {
     in property <int> active;
     in property <bool> detached;
     // The adjust column (menu redesign step 3b): the key under each title
-    // (by index; missing or "" for none), and no detach button.
+    // (by index; missing or "" for none).
     in property <[string]> keys;
-    in property <bool> detachable: true;
     // A tab was clicked (its index), the overflow button (the menu's
     // origin, window coordinates), the detach/attach button.
     callback tab(int);
@@ -145,8 +144,8 @@ export component SidebarTabs inherits Rectangle {
     height: 31px;
     background: Theme.bg-bar;
     accessible-role: tab-list;
-    // The room beside the detach button (25px and 3px), or the 3px margin.
-    private property <length> room: max(0px, self.width - (root.detachable ? 28px : 3px));
+    // The room beside the detach button (25px and 3px).
+    private property <length> room: max(0px, self.width - 28px);
     // Tabs stay at least 72px wide (sidebar-tabs.md); the ones that do not
     // fit go into the `»` menu, which takes 25px of the room.
     // `overflowing`, `shown` (the places for tabs) and `last` (the tab in the
@@ -183,7 +182,6 @@ export component SidebarTabs inherits Rectangle {
         clicked(x, y) => { root.overflow(x / 1px, y / 1px); }
     }
     StripButton {
-        visible: root.detachable;
         x: root.width - 28px;
         y: 0px;
         height: root.height;

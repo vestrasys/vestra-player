@@ -578,13 +578,8 @@ impl Host {
             MenuMode::Tabs(column) => {
                 let column = *column;
                 // Every tab, in that window's tab order (sidebar-tabs.md).
-                let owners = match &self.floating {
-                    Some(floating)
-                        if floating.generation == self.menu_generation
-                            && column == sidebar_tabs::Column::Sidebar =>
-                    {
-                        &floating.owners
-                    }
+                let owners = match self.floating_of(self.menu_generation) {
+                    Some(floating) if floating.column == column => &floating.owners,
                     _ => &self.columns[column.index()].tabs,
                 };
                 let tabs = owners
@@ -621,15 +616,13 @@ impl Host {
         self.palette = palette::PaletteState::default();
         // An approval sheet still waiting shows again at the next tick.
         self.review_hidden();
-        for window in [
-            self.shell.as_ref(),
-            self.floating.as_ref().map(|f| &f.instance),
-        ]
-        .into_iter()
-        .flatten()
+        for window in self
+            .shell
+            .iter()
+            .chain(self.floating.iter().flatten().map(|f| &f.instance))
         {
             let _ = window.set_property("menu-open", false.into());
-            // The floating window has no palette: its refusal is nothing.
+            // A floating window has no palette: its refusal is nothing.
             let _ = window.set_property("palette-open", false.into());
             let _ = window.set_property("review-open", false.into());
         }

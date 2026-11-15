@@ -310,13 +310,10 @@ impl Host {
                 }
             }
             Event::FloatingClosed(generation) => {
-                if self
-                    .floating
-                    .as_ref()
-                    .is_some_and(|f| f.generation == generation)
-                {
-                    self.close_sidebar();
-                    self.close_floating();
+                // Its column hides (and stays detached).
+                if let Some(column) = self.floating_of(generation).map(|f| f.column) {
+                    self.close_column(column);
+                    self.close_floating(column);
                 }
             }
             Event::Tab(generation, column, index) => {
@@ -324,13 +321,8 @@ impl Host {
                     return;
                 }
                 // The index is in that window's tab order.
-                let tabs = match &self.floating {
-                    Some(floating)
-                        if floating.generation == generation
-                            && column == sidebar_tabs::Column::Sidebar =>
-                    {
-                        &floating.owners
-                    }
+                let tabs = match self.floating_of(generation) {
+                    Some(floating) if floating.column == column => &floating.owners,
                     _ => &self.columns[column.index()].tabs,
                 };
                 if let Some(&owner) = tabs.get(index)
@@ -369,15 +361,16 @@ impl Host {
                     self.set_adjust_visible(false);
                 }
             }
-            Event::SidebarDetach(generation) => {
+            Event::Detach(generation, column) => {
                 if !self.window_generation_live(generation) {
                     return;
                 }
+                let slot = super::mounts::policy_column(column);
                 if let (Some(owner), Some((_, detached))) =
-                    (self.policy.sidebar_active(), self.policy.sidebar_state())
+                    (self.policy.active(slot), self.policy.column_state(slot))
                     && self.policy.set_detached(owner, !detached).is_ok()
                 {
-                    self.remember_sidebar(false);
+                    self.remember_column(column, false);
                     self.window_tick();
                 }
             }

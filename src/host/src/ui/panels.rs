@@ -1464,8 +1464,8 @@ pub(crate) mod tests {
     /// placed by hand (`composition::container`), never in a layout, so a
     /// panel whose size constraints depend on its own size (in either
     /// direction, its own or a child layout's) is no binding loop there.
-    /// Each such panel compiles, shows in the sidebar (docked, overlay,
-    /// floating window), the adjust column (docked, overlay) and the
+    /// Each such panel compiles, shows in the sidebar and the adjust column
+    /// (docked, overlay, floating window) and the
     /// backdrop, and the windows lay out and draw, also after a resize,
     /// without Slint's "Recursion detected" (a panic, which fails the test).
     #[test]
@@ -1531,9 +1531,10 @@ pub(crate) mod tests {
                     }
                     draw(&composed.shell, &format!("{what}, overlay"));
                 }
-                // The sidebar's floating window.
-                if slot == Slot::Sidebar {
-                    let floating = composition::floating().unwrap();
+                // The column's floating window (the adjust column's too
+                // since 2026-11-15).
+                if let Some(column) = crate::ui::sidebar_tabs::Column::of(slot) {
+                    let floating = composition::floating(column).unwrap();
                     let shown = composed
                         .panels
                         .show(&floating, 2, slot, Some(41), &composed.sender)

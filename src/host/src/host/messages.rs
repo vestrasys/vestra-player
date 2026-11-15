@@ -520,7 +520,7 @@ fn from_ui(event: &Event) -> bool {
         | Event::AdjustResized(..)
         | Event::Tab(..)
         | Event::TabOverflow(..)
-        | Event::SidebarDetach(..)
+        | Event::Detach(..)
         | Event::AdjustDismiss(..)
         | Event::PipReturn(..)
         | Event::FloatingClosed(..)
@@ -854,7 +854,7 @@ mod tests {
             Event::AdjustResized(1, 300.),
             Event::Tab(1, column, 0),
             Event::TabOverflow(1, column, 0., 0.),
-            Event::SidebarDetach(1),
+            Event::Detach(1, column),
             Event::AdjustDismiss(1),
             Event::PipReturn(1),
             Event::FloatingClosed(1),

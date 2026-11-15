@@ -397,10 +397,12 @@ fn sources() -> Vec<(String, String)> {
         "generated:shell".into(),
         crate::ui::composition::shell_source().unwrap(),
     ));
-    sources.push((
-        "generated:floating".into(),
-        crate::ui::composition::floating_source().unwrap(),
-    ));
+    for column in crate::ui::sidebar_tabs::Column::ALL {
+        sources.push((
+            format!("generated:floating-{}", column.prefix()),
+            crate::ui::composition::floating_source(column).unwrap(),
+        ));
+    }
     sources.push((
         "generated:options".into(),
         crate::ui::settings_window::source(&[&page]).unwrap(),

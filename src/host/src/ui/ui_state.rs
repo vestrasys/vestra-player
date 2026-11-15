@@ -1,6 +1,6 @@
 //! Interface state kept across launches (core-ui-design.md §8): window frame
 //! and whether it was maximized, sidebar width, the sidebar slot (shown, floating, current tab, tab order,
-//! floating frame), the user's binding overlay, and the plugins whose
+//! floating frame), the adjust column's (the same, with its width), the user's binding overlay, and the plugins whose
 //! commands a `commands.run` caller runs without asking (Ask Vestra UX step
 //! 4, H4). One JSON file, written atomically and debounced.
 #![forbid(unsafe_code)]
@@ -104,9 +104,10 @@ pub const ADJUST_WIDTH: f64 = 317.0;
 
 /// The adjust column (menu redesign step 3b), whichever panels it holds:
 /// shown or not, its width, its current tab and its tab order (plugin
-/// manifest ids, including plugins not running now). The same shape as
-/// [`SidebarSlot`], without floating (the adjust column does not detach);
-/// closed until the user opens it.
+/// manifest ids, including plugins not running now), whether it floats and
+/// its floating frame: the same shape as [`SidebarSlot`] with a width;
+/// closed until the user opens it. `detached` and `floating` are written
+/// only once used, so a file of a user who never detached it is as before.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AdjustSlot {
@@ -118,6 +119,10 @@ pub struct AdjustSlot {
     pub active: Option<String>,
     #[serde(default)]
     pub order: Vec<String>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub detached: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub floating: Option<Frame>,
 }
 
 fn adjust_width() -> f64 {
@@ -131,6 +136,8 @@ impl Default for AdjustSlot {
             width: ADJUST_WIDTH,
             active: None,
             order: Vec::new(),
+            detached: false,
+            floating: None,
         }
     }
 }
@@ -414,6 +421,7 @@ impl UiState {
                 if !slot.width.is_finite() || slot.width <= 0. || slot.width > 100_000. {
                     slot.width = ADJUST_WIDTH;
                 }
+                slot.floating = slot.floating.filter(Frame::valid);
                 slot.order.truncate(ORDER_LIMIT);
                 slot
             });
@@ -589,6 +597,14 @@ mod tests {
             width: 340.,
             active: Some("vestra.audio".into()),
             order: vec!["examples.adjust-panel".into()],
+            // Detached (2026-11-15), with its floating frame.
+            detached: true,
+            floating: Some(Frame {
+                x: 40.,
+                y: 60.,
+                width: 330.,
+                height: 500.,
+            }),
         });
         store.touch(0);
         store.save_if_due(999);
@@ -685,6 +701,37 @@ mod tests {
         );
         assert_eq!(read(r#"{"adjustSlot":7}"#), None);
         assert_eq!(read("{}"), None);
+        // Floating (2026-11-15): a bad frame is dropped alone.
+        assert_eq!(
+            read(
+                r#"{"adjustSlot":{"detached":true,"floating":{"x":1,"y":2,"width":0,"height":5}}}"#
+            ),
+            Some(AdjustSlot {
+                detached: true,
+                ..AdjustSlot::default()
+            })
+        );
+    }
+
+    /// A column never detached writes what it wrote before floating came
+    /// to the adjust column: no `detached`, no `floating`.
+    #[test]
+    fn an_adjust_slot_never_detached_is_written_as_before() {
+        let text = serde_json::to_string(&AdjustSlot::default()).unwrap();
+        assert_eq!(text, r#"{"visible":false,"width":317.0,"order":[]}"#);
+        let floating = serde_json::to_value(AdjustSlot {
+            detached: true,
+            floating: Some(Frame {
+                x: 1.,
+                y: 2.,
+                width: 300.,
+                height: 400.,
+            }),
+            ..AdjustSlot::default()
+        })
+        .unwrap();
+        assert_eq!(floating["detached"], true);
+        assert_eq!(floating["floating"]["width"], 300.0);
     }
 
     #[test]

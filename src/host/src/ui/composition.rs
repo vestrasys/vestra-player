@@ -203,31 +203,28 @@ const SHELL_PROPERTIES: &str = "in property <bool> bottom-visible: true;\n\
     in property <[string]> adjust-keys;\n\
     callback adjust-tab(int);\n\
     callback adjust-overflow(float, float);\n\
+    callback adjust-detach();\n\
     callback adjust-dismiss();";
 
 /// The height of the host's sidebar tab strip (the playlist's, ui-spec §5.2).
 pub const TAB_STRIP_HEIGHT: f64 = 31.0;
 
-/// What fills a column of tabs (docked, overlay, the sidebar's floating
-/// window): the tab strip (the sidebar: while it has two or more tabs,
-/// `sidebar-tabbed`; the adjust column: always) over the container of the
-/// current tab's panel, so switching between tabs is a property change. A
-/// tab without a panel (a placeholder, one that does not compile) shows
-/// nothing. A click on a tab gives the keys to `keys` (the column's
-/// FocusScope): the panel that had them is gone. The adjust column's strip
-/// has the keys under its titles and no detach button; `background`: the
-/// panels' ground under the strip.
+/// What fills a column of tabs (docked, overlay, its floating window): the
+/// tab strip (the sidebar: while it has two or more tabs, `sidebar-tabbed`;
+/// the adjust column: always) over the container of the current tab's
+/// panel, so switching between tabs is a property change. A tab without a
+/// panel (a placeholder, one that does not compile) shows nothing. A click
+/// on a tab gives the keys to `keys` (the column's FocusScope): the panel
+/// that had them is gone. Each strip has the detach/attach button
+/// (`<column>-detach`, `detached`: in the floating window); the adjust
+/// column's has the keys under its titles too; `background`: the panels'
+/// ground under the strip.
 fn column_content(column: Column, keys: &str, detached: &str, background: &str) -> String {
     let p = column.prefix();
+    let detach = format!("detached: {detached}; detach => {{ root.{p}-detach(); }}");
     let (tabbed, strip) = match column {
-        Column::Sidebar => (
-            "root.sidebar-tabbed",
-            format!("detached: {detached}; detach => {{ root.sidebar-detach(); }}"),
-        ),
-        Column::Adjust => (
-            "true",
-            "keys: root.adjust-keys; detachable: false;".to_owned(),
-        ),
+        Column::Sidebar => ("root.sidebar-tabbed", detach),
+        Column::Adjust => ("true", format!("keys: root.adjust-keys; {detach}")),
     };
     let (container, restarting) = (container(column.slot()), restarting_overlay(column.slot()));
     // Placed by hand, not in a layout: a layout here would pass its size
@@ -368,7 +365,7 @@ struct AdjustColumn {
 }
 
 /// [`AdjustColumn`]: it always draws its strip (text tabs with the keys
-/// under them, no detach) over its container.
+/// under them, the detach button) over its container.
 fn adjust_column() -> AdjustColumn {
     let keys = key_forward("panel:adjust");
     // The splitter's right edge: the window's, less a docked sidebar.
@@ -410,12 +407,28 @@ fn adjust_column() -> AdjustColumn {
     AdjustColumn { docked, overlay }
 }
 
-/// The detached sidebar (C14): a window of its own with the sidebar's
-/// container, the shell's key forwarding, menu layer and (two or more
-/// tabs, `sidebar-tabbed`) tab strip. The host sets `panel-title` to the
-/// current tab's title.
-pub fn floating_source() -> Result<String> {
-    let content = column_content(Column::Sidebar, "panel-keys", "true", "Theme.bg-list");
+/// A detached column (C14: the sidebar; the adjust column since
+/// 2026-11-15): a window of its own with the column's container, the
+/// shell's key forwarding, menu layer and tab strip (the sidebar's from two
+/// tabs on, `sidebar-tabbed`; the adjust column's always, with its keys).
+/// The host sets `panel-title` to the current tab's title. The sidebar's
+/// window keeps its size limits (300 × 250 at least, 300 × 408 preferred);
+/// the adjust column's is at least its docked least width.
+pub fn floating_source(column: Column) -> Result<String> {
+    let p = column.prefix();
+    let content = column_content(column, "panel-keys", "true", "Theme.bg-list");
+    let (min_width, preferred_width, shown) = match column {
+        Column::Sidebar => (
+            300.,
+            300.,
+            "in property <bool> sidebar-tabbed: false;".to_owned(),
+        ),
+        Column::Adjust => (
+            crate::ui::window_state::ADJUST_MIN_WIDTH,
+            crate::ui::ui_state::ADJUST_WIDTH,
+            "in property <[string]> adjust-keys;".to_owned(),
+        ),
+    };
     Ok(format!(
         r#"import {{ PanelRestarting }} from "panel-restarting.slint";
 import {{ SidebarTabs }} from "sidebar-tabs.slint";
@@ -428,8 +441,8 @@ export {{ VestraFocus }} from "@vestra/focus.slint";
 export component FloatingPanel inherits Window {{
     in property <string> panel-title;
     title: root.panel-title;
-    min-width: 300px; min-height: 250px;
-    preferred-width: 300px; preferred-height: 408px;
+    min-width: {min_width}px; min-height: 250px;
+    preferred-width: {preferred_width}px; preferred-height: 408px;
     background: Theme.bg-list;
     in property <[MenuLevel]> menu-levels;
     in property <bool> menu-open: false;
@@ -443,14 +456,14 @@ export component FloatingPanel inherits Window {{
     callback menu-back();
     callback menu-dismiss();
     callback key-input(string, string, bool, bool, bool, bool, bool) -> bool;
-    in-out property <int> sidebar-active: 0;
-    in property <bool> sidebar-tabbed: false;
-    in property <component-factory> sidebar-factory;
+    in-out property <int> {p}-active: 0;
+    {shown}
+    in property <component-factory> {p}-factory;
     {restarting}
-    in property <[string]> sidebar-titles;
-    callback sidebar-tab(int);
-    callback sidebar-overflow(float, float);
-    callback sidebar-detach();
+    in property <[string]> {p}-titles;
+    callback {p}-tab(int);
+    callback {p}-overflow(float, float);
+    callback {p}-detach();
     // `VestraFocus.release` (view::bind_focus): no video here, so the
     // window's key scope takes the keys from the panel's control.
     callback focus-video();
@@ -474,8 +487,8 @@ export component FloatingPanel inherits Window {{
     }}
 }}
 "#,
-        keys = key_forward("panel:sidebar"),
-        restarting = restarting_properties(&[Slot::Sidebar]),
+        keys = key_forward(&format!("panel:{p}")),
+        restarting = restarting_properties(&[column.slot()]),
     ))
 }
 
@@ -579,11 +592,11 @@ pub(crate) fn build_panel(source: String) -> Result<(ComponentDefinition, Vec<Pa
 }
 
 thread_local! {
-    /// The compiled shell and floating window: their source never changes
-    /// in a run, so each compiles once (the floating window when it first
-    /// opens).
+    /// The compiled shell and floating windows (by `Column::index`): their
+    /// source never changes in a run, so each compiles once (a floating
+    /// window when it first opens).
     static SHELL: std::cell::RefCell<Option<ComponentDefinition>> = const { std::cell::RefCell::new(None) };
-    static FLOATING: std::cell::RefCell<Option<ComponentDefinition>> = const { std::cell::RefCell::new(None) };
+    static FLOATING: std::cell::RefCell<[Option<ComponentDefinition>; 2]> = const { std::cell::RefCell::new([None, None]) };
 }
 
 fn shell_definition() -> Result<ComponentDefinition> {
@@ -611,13 +624,14 @@ pub fn shell_in(window: Option<&slint::Window>) -> Result<ComponentInstance> {
     })
 }
 
-/// The floating panel window; not shown.
-pub fn floating() -> Result<ComponentInstance> {
-    let definition = match FLOATING.with(|floating| floating.borrow().clone()) {
+/// A column's floating panel window; not shown.
+pub fn floating(column: Column) -> Result<ComponentInstance> {
+    let index = column.index();
+    let definition = match FLOATING.with(|floating| floating.borrow()[index].clone()) {
         Some(definition) => definition,
         None => {
-            let definition = build_shell(floating_source()?, "FloatingPanel")?;
-            FLOATING.with(|floating| *floating.borrow_mut() = Some(definition.clone()));
+            let definition = build_shell(floating_source(column)?, "FloatingPanel")?;
+            FLOATING.with(|floating| floating.borrow_mut()[index] = Some(definition.clone()));
             definition
         }
     };
@@ -872,7 +886,49 @@ pub(crate) mod tests {
     #[test]
     fn the_shell_and_the_floating_window_compile_with_their_containers() {
         let shell = build_shell(shell_source().unwrap(), "HostWindow").unwrap();
-        let floating = build_shell(floating_source().unwrap(), "FloatingPanel").unwrap();
+        let floating =
+            build_shell(floating_source(Column::Sidebar).unwrap(), "FloatingPanel").unwrap();
+        let adjust =
+            build_shell(floating_source(Column::Adjust).unwrap(), "FloatingPanel").unwrap();
+        // The adjust column's floating window (2026-11-15): its column's
+        // properties and callbacks, the sidebar's none.
+        for property in [
+            "adjust-active",
+            "adjust-titles",
+            "adjust-keys",
+            "adjust-factory",
+            "adjust-restarting",
+            "panel-title",
+            "menu-levels",
+        ] {
+            assert!(
+                adjust.properties().any(|(name, _)| name == property),
+                "{property}"
+            );
+        }
+        for callback in [
+            "adjust-tab",
+            "adjust-overflow",
+            "adjust-detach",
+            "key-input",
+        ] {
+            assert!(
+                adjust.callbacks().any(|name| name == callback),
+                "{callback}"
+            );
+        }
+        assert!(
+            !adjust
+                .properties()
+                .any(|(name, _)| name.starts_with("sidebar-"))
+        );
+        assert!(!adjust.callbacks().any(|name| name == "adjust-dismiss"));
+        assert!(
+            adjust
+                .global_properties(crate::ui::bar_buttons::GLOBAL)
+                .is_some()
+        );
+        assert!(shell.callbacks().any(|name| name == "adjust-detach"));
         // Player 0.5.10: both windows export the bar buttons' global.
         for window in [&shell, &floating] {
             let names: Vec<_> = window
@@ -962,7 +1018,7 @@ pub(crate) mod tests {
         assert!(source.contains("clip: root.sidebar-tabbed;"));
         assert!(source.contains("sidebar-keys.focus()") && source.contains("overlay-keys.focus()"));
         assert_eq!(source.matches("focus-on-click").count(), 1);
-        let floating = floating_source().unwrap();
+        let floating = floating_source(Column::Sidebar).unwrap();
         assert!(!floating.contains("focus-on-click"));
         assert_eq!(
             floating
@@ -977,7 +1033,7 @@ pub(crate) mod tests {
     /// sits between the video column and the sidebar, docked with its own
     /// splitter, and has one overlay (over a narrow window's video, and the
     /// fullscreen slide-out left of the sidebar's); its strip always shows,
-    /// with the keys under the titles and no detach button.
+    /// with the keys under the titles and (2026-11-15) the detach button.
     #[test]
     fn the_adjust_column_sits_between_the_video_and_the_sidebar() {
         let source = shell_source().unwrap();
@@ -999,8 +1055,23 @@ pub(crate) mod tests {
             2
         );
         assert_eq!(source.matches("if true: SidebarTabs {").count(), 2);
-        assert!(source.contains("keys: root.adjust-keys; detachable: false;"));
-        assert!(!source.contains("root.adjust-detach"));
+        assert_eq!(
+            source
+                .matches(
+                    "keys: root.adjust-keys; detached: false; detach => { root.adjust-detach(); }"
+                )
+                .count(),
+            2
+        );
+        // Its floating window: the strip with `detached` set, its own keys.
+        let floating = floating_source(Column::Adjust).unwrap();
+        assert!(floating.contains(
+            "keys: root.adjust-keys; detached: true; detach => { root.adjust-detach(); }"
+        ));
+        assert!(floating.contains("key-input(\"panel:adjust\""));
+        assert!(
+            floating.contains("min-width: 280px;") && floating.contains("preferred-width: 317px;")
+        );
         // The overlay comes after the sidebar's (G-01), before the title
         // strip and the menu layer (G-19); Esc closes it in a window.
         let overlay = source.find("if root.adjust-overlay: Rectangle").unwrap();

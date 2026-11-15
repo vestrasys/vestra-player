@@ -9,7 +9,7 @@ use crate::playback::renderer::GpuBackend as _;
 /// holds at least one panel or does not exist, and its current tab is one
 /// of its panels. The core keeps the last one reported
 /// (`Core::panel_tabs`) and judges from it what the policy would refuse
-/// (`window_state::Error::MissingOwner`, `Docked`).
+/// (`window_state::Error::MissingOwner`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub(crate) struct PanelTabs {
     pub(crate) bottom: Option<u64>,
@@ -55,15 +55,12 @@ impl PanelTabs {
             .map(|_| ())
             .ok_or(window_state::Error::MissingOwner)
     }
-    /// `Policy::set_detached` for a panel of `column` (`None`: of none).
+    /// `Policy::set_detached` for a panel of `column` (`None`: of none):
+    /// either column detaches (the adjust column since 2026-11-15).
     fn set_detached(
         column: Option<window_state::Slot>,
     ) -> std::result::Result<(), window_state::Error> {
-        match column {
-            None => Err(window_state::Error::MissingOwner),
-            Some(window_state::Slot::Adjust) => Err(window_state::Error::Docked),
-            Some(_) => Ok(()),
-        }
+        column.map(|_| ()).ok_or(window_state::Error::MissingOwner)
     }
     /// `layout.set`'s steps on the policy, in its order (the current tab,
     /// floating, the preference; `Host::layout_apply`), for `change` in
@@ -135,9 +132,6 @@ pub(crate) fn layout_change(
     let (visible, detached) = (flag("visible")?, flag("detached")?);
     if detached.is_some() && slot == composition::Slot::Bottom {
         return Err(RpcError::invalid("the bottom bar cannot be detached"));
-    }
-    if detached == Some(true) && slot == composition::Slot::Adjust {
-        return Err(RpcError::invalid("the adjust column cannot be detached"));
     }
     let active = match params.get("active").filter(|v| !v.is_null()) {
         None => None,
@@ -544,8 +538,13 @@ mod tests {
         assert_eq!(code(json!({"active":7}), Slot::Sidebar), "invalid");
         assert_eq!(code(json!({"visible":"yes"}), Slot::Sidebar), "invalid");
         assert_eq!(code(json!({"detached":true}), Slot::Bottom), "invalid");
-        // Menu redesign step 3b: the adjust column does not detach.
-        assert_eq!(code(json!({"detached":true}), Slot::Adjust), "invalid");
+        // The adjust column detaches as the sidebar does (2026-11-15).
+        assert_eq!(
+            layout_change(&json!({"detached":true}), Slot::Adjust, &panels)
+                .unwrap()
+                .detached,
+            Some(true)
+        );
         assert_eq!(
             layout_change(
                 &json!({"detached":false,"visible":true}),
@@ -661,9 +660,7 @@ mod tests {
                     for active in std::iter::once(None).chain(keys.iter().copied().map(Some)) {
                         for detached in flags {
                             // `layout_change` refuses these first.
-                            if (detached.is_some() && slot == C::Bottom)
-                                || (detached == Some(true) && slot == C::Adjust)
-                            {
+                            if detached.is_some() && slot == C::Bottom {
                                 continue;
                             }
                             for visible in flags {

@@ -2137,21 +2137,29 @@ export component W inherits Window {
         shell.hide().unwrap();
     }
 
-    /// The detached sidebar has no video: `VestraFocus.release()` gives the
-    /// keys to the window's own key scope (unaccepted keys then reach the
-    /// player's shortcuts through `key-input`).
+    /// A detached column (the sidebar; the adjust column since 2026-11-15)
+    /// has no video: `VestraFocus.release()` gives the keys to the window's
+    /// own key scope (unaccepted keys then reach the player's shortcuts
+    /// through `key-input`).
     #[test]
     fn a_detached_panel_gives_the_keys_to_its_window() {
         use slint::platform::Key;
         headless();
-        let source = crate::ui::composition::floating_source().unwrap();
-        let composed = focus_window(source, "panel-keys", "FloatingPanel", &focus_list());
-        let window = &composed.shell;
-        click_at(window, 150., 50.);
-        assert!(!focused(window), "the list has the keys");
-        press(window, Key::Return);
-        assert!(focused(window), "the window's key scope has them");
-        window.hide().unwrap();
+        for column in crate::ui::sidebar_tabs::Column::ALL {
+            let source = crate::ui::composition::floating_source(column).unwrap();
+            let mut specs = focus_list();
+            specs[0].slot = column.slot();
+            let composed = focus_window(source, "panel-keys", "FloatingPanel", &specs);
+            let window = &composed.shell;
+            click_at(window, 150., 50.);
+            assert!(!focused(window), "{column:?}: the list has the keys");
+            press(window, Key::Return);
+            assert!(
+                focused(window),
+                "{column:?}: the window's key scope has them"
+            );
+            window.hide().unwrap();
+        }
     }
 
     /// A docked panel whose rows are a `ListView` of `TouchArea`s (the SDK's
@@ -2928,7 +2936,16 @@ export component T inherits Window {
         };
         for (source, experimental) in [
             (crate::ui::composition::shell_source().unwrap(), true),
-            (crate::ui::composition::floating_source().unwrap(), true),
+            (
+                crate::ui::composition::floating_source(crate::ui::sidebar_tabs::Column::Sidebar)
+                    .unwrap(),
+                true,
+            ),
+            (
+                crate::ui::composition::floating_source(crate::ui::sidebar_tabs::Column::Adjust)
+                    .unwrap(),
+                true,
+            ),
             (crate::ui::settings_window::source(&[&page]).unwrap(), false),
         ] {
             let mut compiler = compiler();

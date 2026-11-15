@@ -796,8 +796,8 @@ impl Host {
     }
     /// Every slot's container shows its panel (each tick, and at once after
     /// a mount change): the bottom bar, the backdrop, and each column's
-    /// current tab while the column is wanted shown, in the shell and (the
-    /// sidebar) the floating window. Only what changed touches Slint; a
+    /// current tab while the column is wanted shown, in the shell and (a
+    /// detached column) its floating window. Only what changed touches Slint; a
     /// changed container gets its instance before the next frame, and
     /// before the host reads geometry.
     pub(crate) fn sync_panels(&mut self) {
@@ -809,14 +809,15 @@ impl Host {
         let generation = self.shell_generation;
         // The palette a new instance gets.
         self.panels.set_theme(self.theme());
-        let floating = self
-            .floating
-            .as_ref()
-            .map(|f| (f.instance.clone_strong(), f.generation));
-        match &floating {
-            Some((_, floating)) => self.panels.prune(&[generation, *floating]),
-            None => self.panels.prune(&[generation]),
-        }
+        // The detached columns' windows, by `Column::index`.
+        let floating = self.floating.each_ref().map(|f| {
+            f.as_ref()
+                .map(|f| (f.instance.clone_strong(), f.generation))
+        });
+        let live = std::iter::once(generation)
+            .chain(floating.iter().flatten().map(|(_, floating)| *floating))
+            .collect::<Vec<_>>();
+        self.panels.prune(&live);
         let mut changed = false;
         for slot in [Slot::Bottom, Slot::Backdrop] {
             let key = self
@@ -855,10 +856,9 @@ impl Host {
             if shown || loaded {
                 self.panels.evict(slot);
             }
-            // The floating sidebar shows its current tab whatever it showed
-            // (none while the column waits for its remembered tab).
-            if column == Column::Sidebar
-                && let Some((window, floating)) = &floating
+            // A detached column's window shows its current tab whatever it
+            // showed (none while the column waits for its remembered tab).
+            if let Some((window, floating)) = &floating[column.index()]
                 && self.show_panel(window, *floating, slot, current.tab())
             {
                 view::settle_layout(window.window());

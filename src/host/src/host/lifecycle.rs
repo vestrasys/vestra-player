@@ -254,13 +254,7 @@ impl Host {
             self.show_info_panels();
         }
         // The floating window opens again without this panel (`sync_floating`).
-        if self
-            .floating
-            .as_ref()
-            .is_some_and(|f| gone.iter().any(|key| f.owners.contains(key)))
-        {
-            self.close_floating();
-        }
+        self.close_floating_with(&gone);
         if matches!(&self.menu_mode, MenuMode::Panel(menu_owner, _) if *menu_owner == owner) {
             self.close_menu();
         }

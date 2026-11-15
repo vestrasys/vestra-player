@@ -83,9 +83,9 @@ pub struct Inputs {
     /// The adjust column's state (its toggle's dot).
     pub adjust: Option<(bool, bool)>,
     pub locale: &'static str,
-    /// The shell's and the floating window's generations, and the bottom
-    /// bar's instance (its own `BarButtonsHost`, `ui/panels.rs`).
-    pub windows: (u64, Option<u64>, Option<u64>),
+    /// The shell's and the floating windows' generations (by `Column::index`),
+    /// and the bottom bar's instance (its own `BarButtonsHost`, `ui/panels.rs`).
+    pub windows: (u64, [Option<u64>; 2], Option<u64>),
     /// The palette lead's title (`palette.lead`): the palette cell's icon
     /// and tip.
     pub lead: Option<String>,
@@ -477,7 +477,7 @@ impl Host {
             self.bar.bar_applied = None;
         }
         let mut windows = vec![(self.shell_generation, shell.clone_strong())];
-        if let Some(floating) = &self.floating {
+        for floating in self.floating.iter().flatten() {
             windows.push((floating.generation, floating.instance.clone_strong()));
         }
         self.bar
@@ -518,7 +518,9 @@ impl Host {
             locale: i18n::locale(),
             windows: (
                 self.shell_generation,
-                self.floating.as_ref().map(|floating| floating.generation),
+                self.floating
+                    .each_ref()
+                    .map(|f| f.as_ref().map(|f| f.generation)),
                 self.panels
                     .bar_instance(self.shell_generation)
                     .map(|(serial, _)| serial),
@@ -775,7 +777,7 @@ mod tests {
             slot: Some((true, false)),
             adjust: None,
             locale: "en",
-            windows: (2, None, None),
+            windows: (2, [None, None], None),
             lead: None,
         };
         let mut strip = Strip::default();
@@ -800,12 +802,12 @@ mod tests {
                 ..inputs.clone()
             },
             Inputs {
-                windows: (2, Some(5), None),
+                windows: (2, [Some(5), None], None),
                 ..inputs.clone()
             },
             // A new bottom bar instance (its own strip global).
             Inputs {
-                windows: (2, None, Some(9)),
+                windows: (2, [None, None], Some(9)),
                 ..inputs.clone()
             },
             // Step 3b: the adjust column opened (its toggle's dot).

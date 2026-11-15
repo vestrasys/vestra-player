@@ -192,10 +192,13 @@ pub(crate) struct ColumnState {
     /// and the tabs (the adjust column).
     pub(crate) keys_from: Option<(u64, u64, u64, Vec<u64>)>,
 }
-/// The detached sidebar's own window (C14).
+/// A detached column's own window (C14: the sidebar; the adjust column
+/// since 2026-11-15).
 pub(crate) struct Floating {
     pub(crate) instance: slint_interpreter::ComponentInstance,
-    /// The sidebar's panels when it opened, in tab order.
+    /// The column it shows.
+    pub(crate) column: sidebar_tabs::Column,
+    /// The column's panels when it opened, in tab order.
     pub(crate) owners: Vec<u64>,
     pub(crate) generation: u64,
     /// Its native window, for the pointer at a file drop.
@@ -629,7 +632,8 @@ pub(crate) struct Host {
     /// The plugin that showed the message on screen; `None`: the player.
     pub(crate) osd_from: Option<u64>,
     pub(crate) info_panels: BTreeMap<u64, String>,
-    pub(crate) floating: Option<Floating>,
+    /// The detached columns' windows, by `Column::index`.
+    pub(crate) floating: [Option<Floating>; 2],
     pub(crate) menu_mode: MenuMode,
     /// Window generation the open menu belongs to (shell or floating).
     pub(crate) menu_generation: u64,

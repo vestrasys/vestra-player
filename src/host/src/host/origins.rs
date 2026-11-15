@@ -12,7 +12,7 @@
 //!
 //! - **What counts**: a UI callback of the plugin's window, of its settings
 //!   page (the Options window) or of its panel (the main window, or the
-//!   floating sidebar's window); its command run from a menu, the command
+//!   window of a detached column); its command run from a menu, the command
 //!   palette, a key, a bottom-bar button or a message's button (the window
 //!   the menu or key was in); a request typed in the palette's first row,
 //!   or its Stop in the status strip, for the lead's holder (the main
@@ -23,12 +23,13 @@
 //!   (`commands.run`) takes the caller's, or none when the caller has none.
 //!   Only a live or parked plugin's input counts ([`super::Host::act`]).
 //! - **Where it goes**: a tool window (the plugin's window, Options, the
-//!   floating sidebar) still shown gets a system dialog owned by it, brought
+//!   floating columns) still shown gets a system dialog owned by it, brought
 //!   to the front; the main window gets the sheet. A closed origin falls
 //!   back to the plugin's own shown window, and with neither to the focus
 //!   test (`platform::tool_window_focused`), as before.
 //! - Keyed by owner generation: a parked plugin's entry moves to its woken
 //!   generation (`Capability::rekey` of `ui.dialog`) and goes when it stops.
+use crate::ui::sidebar_tabs::Column;
 use slint::ComponentHandle;
 use std::collections::BTreeMap;
 
@@ -43,8 +44,9 @@ pub(crate) enum Origin {
     /// (`capabilities/ui_dialog.rs`), which an action in its panel since
     /// then (plain `Main`) does not.
     Lead,
-    /// The floating sidebar's window (its panels, menus and keys).
-    Floating,
+    /// A detached column's window (its panels, menus and keys): the
+    /// floating sidebar's, or the adjust column's.
+    Floating(Column),
     /// The Options window (the plugin's settings page).
     Options,
     /// The plugin's own tool window (`ui.open` id).
@@ -86,7 +88,7 @@ impl Origins {
 /// A tool window a confirmation can be owned by.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) enum Place {
-    Floating,
+    Floating(Column),
     Options,
     /// The plugin's window with this id.
     View(String),
@@ -116,7 +118,7 @@ pub(crate) fn route(
     let place = match origin {
         Some(Origin::Main | Origin::Lead) if main => return Route::Sheet,
         Some(Origin::Main | Origin::Lead) | None => None,
-        Some(Origin::Floating) => Some(Place::Floating),
+        Some(Origin::Floating(column)) => Some(Place::Floating(*column)),
         Some(Origin::Options) => Some(Place::Options),
         Some(Origin::View(id)) => Some(Place::View(id.clone())),
     };
@@ -136,14 +138,20 @@ pub(crate) fn route(
 
 /// The origin of input in the window of `generation` (a menu, a key, a
 /// bottom-bar button, a panel's callback): the main window's
-/// (`shell`) or the floating sidebar's (`floating`); a stale one: none.
-pub(crate) fn of_generation(generation: u64, shell: u64, floating: Option<u64>) -> Option<Origin> {
+/// (`shell`) or a detached column's (`floating`: the open floating
+/// windows' generations and columns); a stale one: none.
+pub(crate) fn of_generation(
+    generation: u64,
+    shell: u64,
+    floating: &[(u64, Column)],
+) -> Option<Origin> {
     if generation == shell {
         Some(Origin::Main)
-    } else if floating == Some(generation) {
-        Some(Origin::Floating)
     } else {
-        None
+        floating
+            .iter()
+            .find(|(open, _)| *open == generation)
+            .map(|(_, column)| Origin::Floating(*column))
     }
 }
 
@@ -182,8 +190,13 @@ impl super::Host {
     /// The user acted for `owner` in the window of `generation`
     /// ([`of_generation`]).
     pub(crate) fn acted_in(&mut self, owner: u64, generation: u64) {
-        let floating = self.floating.as_ref().map(|floating| floating.generation);
-        if let Some(origin) = of_generation(generation, self.shell_generation, floating) {
+        let floating = self
+            .floating
+            .iter()
+            .flatten()
+            .map(|floating| (floating.generation, floating.column))
+            .collect::<Vec<_>>();
+        if let Some(origin) = of_generation(generation, self.shell_generation, &floating) {
             self.act(owner, origin);
         }
     }
@@ -201,7 +214,9 @@ impl super::Host {
         place: &Place,
     ) -> Option<&'a slint_interpreter::ComponentInstance> {
         match place {
-            Place::Floating => self.floating.as_ref().map(|floating| &floating.instance),
+            Place::Floating(column) => self.floating[column.index()]
+                .as_ref()
+                .map(|floating| &floating.instance),
             Place::Options => self.settings.window(),
             Place::View(id) => self
                 .views
@@ -324,9 +339,10 @@ mod tests {
         );
     }
 
-    /// Options and the floating sidebar are tool windows too: a settings
+    /// Options and the floating columns are tool windows too: a settings
     /// page's or a floating panel's request is owned by that window while
-    /// it is shown, and falls back once it closed.
+    /// it is shown, and falls back once it closed; each column's window
+    /// owns its own panels' requests.
     #[test]
     fn options_and_the_floating_sidebar_own_their_requests() {
         let mut origins = Origins::default();
@@ -340,15 +356,23 @@ mod tests {
             route(origins.get(STORE), true, &[], |_| false),
             Route::Focus
         );
-        origins.acted(PLAYLIST, Origin::Floating);
+        origins.acted(PLAYLIST, Origin::Floating(Column::Sidebar));
         assert_eq!(
             route(origins.get(PLAYLIST), true, &[], all),
-            Route::Owned(Place::Floating)
+            Route::Owned(Place::Floating(Column::Sidebar))
         );
         // Docked again (the floating window closed): the focus decides.
         assert_eq!(
-            route(origins.get(PLAYLIST), true, &[], |p| *p != Place::Floating),
+            route(origins.get(PLAYLIST), true, &[], |p| *p
+                != Place::Floating(Column::Sidebar)),
             Route::Focus
+        );
+        // The adjust column's window (2026-11-15): its own place.
+        origins.acted(STORE, Origin::Floating(Column::Adjust));
+        assert_eq!(
+            route(origins.get(STORE), true, &[], |p| *p
+                == Place::Floating(Column::Adjust)),
+            Route::Owned(Place::Floating(Column::Adjust))
         );
     }
 
@@ -411,11 +435,20 @@ mod tests {
             Some(Origin::Options)
         );
         assert_eq!(of_view("$settings:repos", true), Some(Origin::Options));
-        assert_eq!(of_generation(4, 4, None), Some(Origin::Main));
-        assert_eq!(of_generation(4, 4, Some(5)), Some(Origin::Main));
-        assert_eq!(of_generation(5, 4, Some(5)), Some(Origin::Floating));
-        assert_eq!(of_generation(3, 4, Some(5)), None);
-        assert_eq!(of_generation(5, 4, None), None);
+        let sidebar = [(5, Column::Sidebar)];
+        let both = [(5, Column::Sidebar), (6, Column::Adjust)];
+        assert_eq!(of_generation(4, 4, &[]), Some(Origin::Main));
+        assert_eq!(of_generation(4, 4, &sidebar), Some(Origin::Main));
+        assert_eq!(
+            of_generation(5, 4, &sidebar),
+            Some(Origin::Floating(Column::Sidebar))
+        );
+        assert_eq!(
+            of_generation(6, 4, &both),
+            Some(Origin::Floating(Column::Adjust))
+        );
+        assert_eq!(of_generation(3, 4, &both), None);
+        assert_eq!(of_generation(5, 4, &[]), None);
     }
 
     /// A delay before the request (a download, a check, a busy plugin

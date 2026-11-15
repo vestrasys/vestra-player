@@ -208,7 +208,7 @@ impl Host {
         let mut instances: Vec<_> = self
             .shell
             .iter()
-            .chain(self.floating.iter().map(|f| &f.instance))
+            .chain(self.floating.iter().flatten().map(|f| &f.instance))
             .chain(self.views.values().map(|v| &v.instance))
             .chain(self.settings.window())
             .map(ComponentHandle::clone_strong)

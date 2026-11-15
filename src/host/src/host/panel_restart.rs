@@ -257,15 +257,16 @@ impl Host {
         let windows = self
             .shell
             .iter()
-            .map(|shell| (shell, self.shell_generation, &Slot::ALL[..]))
+            .map(|shell| (shell, self.shell_generation, Slot::ALL.to_vec()))
             .chain(
                 self.floating
                     .iter()
-                    .map(|f| (&f.instance, f.generation, &[Slot::Sidebar][..])),
+                    .flatten()
+                    .map(|f| (&f.instance, f.generation, vec![f.column.slot()])),
             );
         let mut places = Vec::new();
         for (window, generation, slots) in windows {
-            for &slot in slots {
+            for slot in slots {
                 if key.is_none_or(|key| self.panels.shown(generation, slot) == Some(key)) {
                     places.push((window.clone_strong(), generation, slot));
                 }
@@ -414,13 +415,7 @@ impl Host {
             })
             .collect::<Vec<_>>();
         // The floating window opens again without this panel (`sync_floating`).
-        if self
-            .floating
-            .as_ref()
-            .is_some_and(|f| keys.iter().any(|key| f.owners.contains(key)))
-        {
-            self.close_floating();
-        }
+        self.close_floating_with(&keys);
         for key in &keys {
             self.policy.remove_owner(*key);
         }

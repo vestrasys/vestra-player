@@ -207,7 +207,7 @@ pub(crate) fn rekey_panels(host: &mut Host, from: u64, to: u64) {
                 *key = new;
             }
         };
-        if let Some(floating) = &mut host.floating {
+        for floating in host.floating.iter_mut().flatten() {
             floating.owners.iter_mut().for_each(swap);
         }
         for state in &mut host.columns {
@@ -882,13 +882,14 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
             "the panel's tab is not the current one",
         ));
     }
-    let generation = if mount_slot == composition::Slot::Sidebar
-        && host
-            .floating
-            .as_ref()
-            .is_some_and(|f| f.owners.contains(&key))
-    {
-        host.floating.as_ref().unwrap().generation
+    // A detached column's panel: its floating window.
+    let floating = host
+        .floating
+        .iter()
+        .flatten()
+        .find(|f| f.column.slot() == mount_slot && f.owners.contains(&key));
+    let generation = if let Some(floating) = floating {
+        floating.generation
     } else if host.core.window_facts["slots"][slot]["effective"] == true {
         host.shell_generation
     } else {

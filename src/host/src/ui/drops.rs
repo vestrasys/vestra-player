@@ -316,18 +316,12 @@ impl Host {
                 .collect::<Vec<_>>()
         );
         // The panel under the pointer, in its own coordinates.
-        let panel = if self
-            .floating
-            .as_ref()
-            .is_some_and(|f| f.generation == generation)
-        {
-            let floating = self.floating.as_ref().unwrap();
+        let panel = if let Some(floating) = self.floating_of(generation) {
             let at = floating
                 .native
                 .and_then(|id| platform::pointer_in(id).ok())
                 .unwrap_or((0., 0.));
-            self.policy
-                .sidebar_active()
+            self.column_active(floating.column)
                 .map(|key| (panel_plugin(key), at))
         } else if generation == self.shell_generation {
             if let Some(shell) = &self.shell {

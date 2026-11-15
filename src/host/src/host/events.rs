@@ -36,8 +36,9 @@ pub(crate) enum Event {
     Tab(u64, crate::ui::sidebar_tabs::Column, usize),
     /// A strip's `»` (sidebar-tabs.md): the overflow menu's origin, logical px.
     TabOverflow(u64, crate::ui::sidebar_tabs::Column, f64, f64),
-    /// The sidebar strip's detach/attach button.
-    SidebarDetach(u64),
+    /// A column strip's detach/attach button (shell or floating window
+    /// generation).
+    Detach(u64, crate::ui::sidebar_tabs::Column),
     /// Esc inside the adjust column floating over a narrow window's video.
     AdjustDismiss(u64),
     /// IA-CORE-12: a double click on the video during picture-in-picture.
@@ -145,7 +146,7 @@ impl Event {
             Self::AdjustResized(..) => ("AdjustResized", None),
             Self::Tab(..) => ("Tab", None),
             Self::TabOverflow(..) => ("TabOverflow", None),
-            Self::SidebarDetach(..) => ("SidebarDetach", None),
+            Self::Detach(..) => ("Detach", None),
             Self::AdjustDismiss(..) => ("AdjustDismiss", None),
             Self::PipReturn(..) => ("PipReturn", None),
             Self::FloatingClosed(..) => ("FloatingClosed", None),
