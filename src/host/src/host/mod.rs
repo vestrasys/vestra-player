@@ -590,6 +590,10 @@ pub(crate) struct Host {
     /// it and when. The changes the core hands over during the next 32 ms
     /// join it (`prepare_mount_tick`).
     pub(crate) preparing: Option<(Instant, MountChange)>,
+    /// Debug builds: a change is being handed over from the core to the
+    /// batching window (`prepare_mount_tick`; `check_handed` waits).
+    #[cfg(debug_assertions)]
+    pub(crate) handing_over: bool,
     /// Shell preparations still to run one change each, after a batch of
     /// changes failed to compile (`prepare_mount_tick`).
     pub(crate) mount_singly: usize,

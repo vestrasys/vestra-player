@@ -2,7 +2,10 @@
 //! refuses the methods it does not know).
 use super::{Call, Capability, Handled, Info, Recorded};
 use crate::host::Origin;
-use crate::host::{Host, Reply};
+use crate::host::{
+    Host, Reply,
+    messages::{SettingsOp, UiCommand},
+};
 use serde_json::Value;
 
 pub struct UiSettings;
@@ -31,26 +34,25 @@ impl Capability for UiSettings {
         }
     }
     /// The core's pages move to generation `to`; an open options window's
-    /// callbacks follow (the interface's part, called in place:
-    /// a later step routes it as `UiCommand::RekeyOwner`).
+    /// callbacks follow (the interface's part: `SettingsOp::Rekeyed`, plan
+    /// step S2d(3)).
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        let moved = host.core.settings.rekey(from, to);
-        host.settings.rekey(&moved, to);
+        let serials = host.core.settings.rekey(from, to);
+        host.ui_command(UiCommand::Settings(SettingsOp::Rekeyed { serials, to }));
     }
     /// The core's pages of `owner` are kept as recorded or go; an open
-    /// options window is rebuilt when one went (the interface's part,
-    /// called in place: plan step S2d routes it as
-    /// `UiCommand::RevokeOwner`).
+    /// options window is rebuilt when one went (the interface's part:
+    /// `SettingsOp::OwnerGone`, plan step S2d(3)).
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if keep_recorded {
             host.core.settings.mark_recorded(owner);
         } else if host.core.settings.remove_owner(owner) {
-            host.settings.changed();
+            host.ui_command(UiCommand::Settings(SettingsOp::OwnerGone { owner }));
         }
     }
     fn prune(&self, host: &mut Host, owner: u64) {
         if host.core.settings.remove_recorded(owner) {
-            host.settings.changed();
+            host.ui_command(UiCommand::Settings(SettingsOp::OwnerGone { owner }));
         }
     }
     fn replay(&self, host: &mut Host, owner: u64, origin: &Origin, call: &Call) -> Handled {
