@@ -399,7 +399,8 @@ fn owner_id(host: &Host, owner: u64) -> Option<String> {
 
 /// The plugins `caller` runs without asking (H4), by manifest id.
 fn trusted_by(host: &Host, caller: u64) -> &[String] {
-    host.ui_state
+    host.core
+        .ui_state
         .state
         .trusted_plugins
         .get(&host.core.plugin_id(caller))
@@ -468,11 +469,11 @@ fn trust_offer(steps: &[Judged]) -> Vec<(String, String)> {
 /// from now on (kept in `ui-state.json`, across restarts).
 fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
     let caller_id = host.core.plugin_id(caller);
-    if !host.ui_state.state.trust(&caller_id, plugins) {
+    if !host.core.ui_state.state.trust(&caller_id, plugins) {
         return;
     }
     let now = host.core.now_ms();
-    host.ui_state.touch(now);
+    host.core.ui_state.touch(now);
     // Manifest ids only (README §4.3, Host log).
     crate::diag::log_only(&format!(
         "commands.run: {caller_id} no longer asks before the commands of {}",
@@ -486,10 +487,10 @@ pub(crate) fn ask_again(host: &mut Host) {
     // A sheet open now does not trust anything either.
     host.core.command_runs.forget_remembered(None);
     host.review_offer_changed();
-    if host.ui_state.state.clear_trust() {
+    if host.core.ui_state.state.clear_trust() {
         // Written now, not a second later: a crash right after must not
         // bring the trust back.
-        host.ui_state.flush();
+        host.core.ui_state.flush();
         crate::diag::log_only("commands.run: plugin commands ask again");
     }
     host.show_osd(&i18n::tr("Plugin commands will ask again"));
@@ -502,8 +503,8 @@ pub(crate) fn forget_trust(host: &mut Host, id: &str) {
     host.core.command_runs.forget_remembered(Some(id));
     // Its checkbox no longer names it (and goes when it named only it).
     host.review_offer_changed();
-    if host.ui_state.state.forget_trust(id) {
-        host.ui_state.flush();
+    if host.core.ui_state.state.forget_trust(id) {
+        host.core.ui_state.flush();
     }
 }
 

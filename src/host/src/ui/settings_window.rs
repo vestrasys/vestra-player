@@ -1297,8 +1297,7 @@ impl Host {
         let wanted = match serial {
             Some(serial) => pages.iter().find(|p| p.serial == serial).map(|p| p.key()),
             None => self.settings.current.clone().or_else(|| {
-                self.ui_state
-                    .state
+                self.remembered
                     .settings
                     .as_ref()
                     .and_then(|s| s.last_page.clone())
@@ -1324,14 +1323,13 @@ impl Host {
         }
         if key.is_some() {
             let last = self
-                .ui_state
-                .state
+                .remembered
                 .settings
                 .get_or_insert_with(Default::default);
             if last.last_page != key {
                 last.last_page = key;
                 let now = self.core.now_ms();
-                self.ui_state.touch(now);
+                self.remember(now);
             }
         }
         // Lazy activation: a parked plugin's page shown starts it (its

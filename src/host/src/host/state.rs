@@ -1,5 +1,6 @@
 //! Source, window, picture-in-picture, layout and backdrop state, the
 //! title, power and always-on-top.
+use super::messages::{UiCommand, UiSnapshot, WindowOp};
 use super::*;
 use crate::playback::renderer::GpuBackend as _;
 
@@ -181,36 +182,26 @@ impl Host {
             let mut state = self.core.last_source.clone();
             self.core.patch_source(&mut state);
             self.core.last_source = state.clone();
+            self.source_shown();
             self.broadcast("source.state", state);
             self.core.core_action_states();
         }
     }
-    /// R-U3: follow the source into `no-video`; an empty source also drops
-    /// the last video frame, so the video area shows the backdrop or plain colour.
-    /// A mounted backdrop shows audio files itself: mpv stops picking cover
-    /// art as a video track while one is mounted (from the next file opened).
-    pub(crate) fn backdrop_cover_art(&mut self) {
-        let mounted = self
-            .core
-            .mounts
-            .values()
-            .any(|m| m.spec.slot == composition::Slot::Backdrop);
-        if mounted != self.cover_art_off {
-            self.cover_art_off = mounted;
-            let _ = self.core.backend.commands.send(Command {
-                reply: Reply {
-                    owner: bindings::HOST,
-                    id: 0,
-                },
-                method: "host.coverArt".into(),
-                params: json!({ "off": mounted }),
-            });
-        }
+    /// The core's last `source.state` reaches the interface's copy
+    /// (`UiSnapshot::LastSource`; plan step S2c(7)), in place, right where
+    /// the core replaced its own: what the interface reads from the source
+    /// from here on is what the core has.
+    pub(crate) fn source_shown(&mut self) {
+        let source = Arc::new(self.core.last_source.clone());
+        self.ui_command(UiCommand::Snapshot(UiSnapshot::LastSource(source)));
     }
+    /// R-U3: follow the source into `no-video`; an empty source also drops
+    /// the last video frame, so the video area shows the backdrop or plain
+    /// colour (the interface's copy of the source, `Host::source`).
     pub(crate) fn backdrop_source(&mut self) {
-        self.video_absent = composition::video_absent(self.video_absent, &self.core.last_source);
-        let next = composition::no_video(self.no_video, &self.core.last_source);
-        let empty = self.core.last_source["phase"] == "empty";
+        self.video_absent = composition::video_absent(self.video_absent, &self.source);
+        let next = composition::no_video(self.no_video, &self.source);
+        let empty = self.source["phase"] == "empty";
         let Some(shell) = &self.shell else {
             self.no_video = next;
             return;
@@ -237,7 +228,7 @@ impl Host {
     }
     /// C9: "<source name> - Vestra Player", or "Vestra Player" without a source.
     pub(crate) fn update_title(&mut self) {
-        let source = &self.core.last_source;
+        let source = &self.source;
         let name = match source["source"].as_str() {
             None => None,
             Some(_) if source["kind"] == "producer" => None,
@@ -289,7 +280,8 @@ impl Host {
         if self.core.headless {
             return;
         }
-        let want = self.on_top.get();
+        self.sync_window_settings();
+        let want = self.on_top;
         let count = platform::window_count();
         if self.on_top_applied == Some((want, count)) {
             return;
@@ -313,8 +305,8 @@ impl Host {
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
-            "appearance":self.theme(),"fileTypes":self.core.file_types,
-            "language":self.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
+            "appearance":self.core.theme(),"fileTypes":self.core.file_types,
+            "language":self.core.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
             "locale":i18n::locale()})
     }
     /// `WindowState.pictureInPicture`: offered here, and the window showing.
@@ -406,6 +398,22 @@ impl Host {
             self.respond(pending.reply, Ok(pending.result));
         }
     }
+    /// The window settings in effect reach the interface's copies
+    /// (`Core::window_settings`; plan step S2c(7)), in place, right where
+    /// it reads them (`apply_on_top`, `window_tick`), as the binding table
+    /// and the command registry do (`sync_tables`).
+    pub(crate) fn sync_window_settings(&mut self) {
+        for command in self.core.window_settings() {
+            self.ui_command(command);
+        }
+    }
+    /// The core's info panels changed (`osd.panel`, a plugin stopped): the
+    /// interface shows its new copy (`UiSnapshot::InfoPanels`; plan step
+    /// S2c(7)), in place.
+    pub(crate) fn info_panels_changed(&mut self) {
+        let panels = Arc::new(self.core.info_panels.clone());
+        self.ui_command(UiCommand::Snapshot(UiSnapshot::InfoPanels(panels)));
+    }
     pub(crate) fn show_info_panels(&self) {
         if let Some(shell) = &self.shell
             && let Ok(value) =
@@ -480,6 +488,67 @@ impl Core {
                 .unwrap_or((false, false));
             state["sequence"] = json!({"next":next,"previous":previous});
         }
+    }
+    /// R-U3: a mounted backdrop shows audio files itself: mpv stops picking
+    /// cover art as a video track while one is mounted (from the next file
+    /// opened). Reads and writes only the core's state; called from the
+    /// window tick as before plan step S2c(7) moved it to the core.
+    pub(crate) fn backdrop_cover_art(&mut self) {
+        let mounted = self
+            .mounts
+            .values()
+            .any(|m| m.spec.slot == composition::Slot::Backdrop);
+        if mounted != self.cover_art_off {
+            self.cover_art_off = mounted;
+            let _ = self.backend.commands.send(Command {
+                reply: Reply {
+                    owner: bindings::HOST,
+                    id: 0,
+                },
+                method: "host.coverArt".into(),
+                params: json!({ "off": mounted }),
+            });
+        }
+    }
+    /// The values of `window.setAlwaysOnTop` and
+    /// `setCursorAutoHide("playing")` in effect that the interface has not
+    /// been given yet (plan step S2c(7)): `WindowOp::OnTop` and
+    /// `UiSnapshot::CursorAutoHide`, each only when it changed.
+    pub(crate) fn window_settings(&mut self) -> Vec<UiCommand> {
+        let mut commands = Vec::new();
+        let (on_top, playing) = (self.on_top.get(), self.cursor_playing.get());
+        if self.window_settings_sent.0 != Some(on_top) {
+            self.window_settings_sent.0 = Some(on_top);
+            commands.push(UiCommand::Window(WindowOp::OnTop(on_top)));
+        }
+        if self.window_settings_sent.1 != Some(playing) {
+            self.window_settings_sent.1 = Some(playing);
+            commands.push(UiCommand::Snapshot(UiSnapshot::CursorAutoHide(playing)));
+        }
+        commands
+    }
+    /// The palette (`plugin.appearance`), the core's: kept in the state file.
+    pub(crate) fn theme(&self) -> &str {
+        self.ui_state
+            .state
+            .appearance
+            .as_ref()
+            .map_or(crate::ui::theme::THEMES[0], |a| a.theme.as_str())
+    }
+    /// The saved interface language, `None` = follow the system.
+    pub(crate) fn language_preference(&self) -> Option<String> {
+        self.ui_state
+            .state
+            .appearance
+            .as_ref()
+            .and_then(|a| a.language.clone())
+    }
+    /// The interface's part of the state file, given whole at `at` (plan
+    /// step S2c(7), `UiReport::Remembered`): written with the core's part
+    /// a second later, as the interface's own change was before.
+    pub(crate) fn remember(&mut self, state: ui_state::Interface, at: u64) {
+        self.ui_state.state.set_interface(state);
+        self.ui_state.touch(at);
     }
 }
 

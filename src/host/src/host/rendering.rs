@@ -359,7 +359,7 @@ impl Host {
             child.id()
         );
         crate::stop_handoffs();
-        self.ui_state.flush();
+        self.core.ui_state.flush();
         // Quitting: nothing may wait on a GPU frame any more (§11.6).
         platform::release_gpu_waits();
         // After this request's reply went out.

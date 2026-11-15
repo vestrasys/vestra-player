@@ -35,11 +35,11 @@ impl Host {
     /// The facts conditions read, now: a trigger's and a command's state
     /// (`capabilities::refresh_conditions`) read the same.
     pub(crate) fn condition_facts(&self) -> Facts {
-        let language = self.language_preference();
+        let language = self.core.language_preference();
         let mut facts = Facts::new(
             &self.core.last_source,
             &self.core.window_facts,
-            crate::ui::theme::known(self.theme()),
+            crate::ui::theme::known(self.core.theme()),
             language.as_deref().unwrap_or(i18n::SYSTEM),
         );
         facts.subtitle_track = self.core.trigger_state.subtitle.clone();

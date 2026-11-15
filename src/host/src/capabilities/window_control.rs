@@ -34,15 +34,15 @@ impl Capability for WindowControl {
         Recorded::Nothing
     }
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        host.on_top.rekey(from, to);
-        host.cursor_playing.rekey(from, to);
+        host.core.on_top.rekey(from, to);
+        host.core.cursor_playing.rekey(from, to);
     }
     /// A held owner's standby ends for good: its kept settings go (the
     /// window follows at its next tick, `Host::apply_on_top`).
     fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
         if !keep_recorded {
-            host.on_top.remove(owner);
-            host.cursor_playing.remove(owner);
+            host.core.on_top.remove(owner);
+            host.core.cursor_playing.remove(owner);
         }
     }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
@@ -58,7 +58,7 @@ impl Capability for WindowControl {
                 if host.core.headless {
                     return Err(RpcError::new("unavailable", "no native window"));
                 }
-                host.on_top.set(reply.owner, on);
+                host.core.on_top.set(reply.owner, on);
                 host.apply_on_top();
                 Ok(Some(Value::Null))
             }
@@ -69,7 +69,7 @@ impl Capability for WindowControl {
                     "playing" => true,
                     _ => return Err(RpcError::invalid("mode is fullscreen or playing")),
                 };
-                host.cursor_playing.set(reply.owner, playing);
+                host.core.cursor_playing.set(reply.owner, playing);
                 Ok(Some(Value::Null))
             }
         }

@@ -8,6 +8,7 @@
 //! controls: scroll bars, line edits, combo boxes, check boxes), so they are
 //! light in a light palette although the host compiles them as fluent-dark.
 #![forbid(unsafe_code)]
+use crate::host::messages::{UiCommand, UiSnapshot};
 use crate::host::*;
 use crate::ui::ui_state;
 use anyhow::Result;
@@ -179,12 +180,10 @@ pub fn export_line() -> String {
 }
 
 impl Host {
+    /// The palette the interface shows: its copy of the core's
+    /// (`Core::theme`, `UiSnapshot::Theme`; plan step S2c(7)).
     pub(crate) fn theme(&self) -> &str {
-        self.ui_state
-            .state
-            .appearance
-            .as_ref()
-            .map_or(THEMES[0], |a| a.theme.as_str())
+        &self.shown_theme
     }
     /// Deliver the palette to one new instance (failures retried on the next tick).
     pub(crate) fn theme_view(&mut self, instance: &slint_interpreter::ComponentInstance) {
@@ -232,16 +231,19 @@ impl Host {
         // An id the player does not have selects the default (`known`):
         // plugins built for an older SDK may still send a retired palette.
         let theme = known(string(params, "theme")?);
-        if theme != self.theme() {
-            let language = self.language_preference();
-            self.ui_state.state.appearance = Some(ui_state::Appearance {
+        if theme != self.core.theme() {
+            let language = self.core.language_preference();
+            self.core.ui_state.state.appearance = Some(ui_state::Appearance {
                 theme: theme.into(),
                 language,
             });
             let now = self.core.now_ms();
-            self.ui_state.touch(now);
-            self.theme_all();
-            let language = self.language_preference();
+            self.core.ui_state.touch(now);
+            // The interface shows the new palette in place (plan step
+            // S2c(7)), where it did before: every view, then the event.
+            let shown = UiSnapshot::Theme(theme.into());
+            self.ui_command(UiCommand::Snapshot(shown));
+            let language = self.core.language_preference();
             let language = language.as_deref().unwrap_or(crate::i18n::SYSTEM);
             // `changed` (an additive field): what this event changed, so a
             // plugin woken by it can tell a palette change from a language
@@ -252,14 +254,6 @@ impl Host {
             );
         }
         Ok(Value::Null)
-    }
-    /// The saved interface language, `None` = follow the system.
-    pub(crate) fn language_preference(&self) -> Option<String> {
-        self.ui_state
-            .state
-            .appearance
-            .as_ref()
-            .and_then(|a| a.language.clone())
     }
     /// `appearance.setLanguage`: saved for the next start (the language of
     /// this run never changes); every plugin hears `appearance.changed`.
@@ -272,16 +266,16 @@ impl Host {
             )));
         }
         let language = (value != crate::i18n::SYSTEM).then(|| value.to_owned());
-        if language != self.language_preference() {
-            self.ui_state.state.appearance = Some(ui_state::Appearance {
-                theme: self.theme().into(),
+        if language != self.core.language_preference() {
+            self.core.ui_state.state.appearance = Some(ui_state::Appearance {
+                theme: self.core.theme().into(),
                 language,
             });
             let now = self.core.now_ms();
-            self.ui_state.touch(now);
+            self.core.ui_state.touch(now);
             self.broadcast(
                 "appearance.changed",
-                appearance_changed(self.theme(), value, "language"),
+                appearance_changed(self.core.theme(), value, "language"),
             );
         }
         Ok(Value::Null)

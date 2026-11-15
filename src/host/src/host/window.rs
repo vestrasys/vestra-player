@@ -33,7 +33,7 @@ impl Host {
         // `Placements` maximizes it, so automatic sizing leaves it alone.
         let placing = self.placements.placing(shell.window());
         let maximized = !fullscreen
-            && (shell.window().is_maximized() || (placing && self.ui_state.state.window_maximized));
+            && (shell.window().is_maximized() || (placing && self.remembered.window_maximized));
         if self.native_window.is_none()
             && let Some(before) = &self.native_before
         {
@@ -117,7 +117,7 @@ impl Host {
             height: number("logical-height"),
         };
         let video = (number("video-width"), number("video-height"));
-        self.backdrop_cover_art();
+        self.core.backdrop_cover_art();
         let scale = f64::from(shell.window().scale_factor());
         let presentation = &self.core.backend.render.presentation;
         presentation.sample(Instant::now());
@@ -225,6 +225,9 @@ impl Host {
         self.title_strip_tick(&shell, fullscreen, at_edge, now);
         self.sync_tabs(&shell);
         let mut columns_seen = (None, None);
+        // The pointer's auto-hide below reads the interface's copy of the
+        // window settings (plan step S2c(7)).
+        self.sync_window_settings();
         let result = (|| -> Result<Value> {
             let snapshot = self.policy.evaluate(viewport, now)?;
             columns_seen = (snapshot.sidebar, snapshot.adjust);
@@ -279,8 +282,7 @@ impl Host {
             }
             state.popped = popped;
             state.shown = popped || docked;
-            let playing = self.core.last_source["phase"] == "ready"
-                && self.core.last_source["paused"] == false;
+            let playing = self.source["phase"] == "ready" && self.source["paused"] == false;
             // UI-SHELL-09: in fullscreen the pointer hides while playing and
             // idle (3 s without motion or keys, not over the bar or in its
             // band, no menu, dialog or bar lock); FS-BAR-1 decoupled it from
@@ -288,8 +290,7 @@ impl Host {
             // it has focus.
             // Never while the pointer is at the top edge or over the title strip.
             let idle = self.policy.idle(now) && !self.title_strip.holding();
-            let windowed =
-                self.cursor_playing.get() && idle && native.is_some_and(|facts| facts.active);
+            let windowed = self.cursor_playing && idle && native.is_some_and(|facts| facts.active);
             shell.set_property(
                 "cursor-hidden",
                 (playing && ((fullscreen && idle) || windowed)).into(),
@@ -333,7 +334,9 @@ impl Host {
                 json!({"code":"window-policy","message":error.to_string()}),
             ),
         }
-        self.ui_state.save_if_due(now);
+        // The state file is the core's to write (plan step S2c(7)): its
+        // debounced write stays at today's point, the end of this tick.
+        self.core.ui_state.save_if_due(now);
     }
     /// The UI's facts value `facts` as the core receives it (rule R9),
     /// with the next `seq` of the UI's one counter. Besides the facts
@@ -408,8 +411,9 @@ impl Host {
     /// (host/mounts.rs); S2c(4): the `settings.set` and `settings.show`
     /// results; S2c(5): the tabs with the facts, `layout.set`'s result, a
     /// sheet's confirmation and a confirmation that failed to show, and
-    /// where the user acted (`Acted`). The other reports follow in later
-    /// steps.
+    /// where the user acted (`Acted`); S2c(7): the interface's part of the
+    /// state file (`Remembered`) and a complete file drop (`Drop`). The
+    /// other reports follow in later steps.
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         match report {
             UiReport::WindowFacts(facts) => {
@@ -444,6 +448,10 @@ impl Host {
                 }
             }
             UiReport::Acted { owner, origin } => self.core.act(owner, origin),
+            // Plan step S2c(7): the interface's part of the state file, and
+            // a complete file drop.
+            UiReport::Remembered { state, at } => self.core.remember(*state, at),
+            UiReport::Drop(drop) => self.deliver_drop(drop),
             _ => unreachable!("not reported before plan step S2d"),
         }
     }
@@ -532,30 +540,37 @@ impl Host {
             width: size.width as f64 / scale,
             height: size.height as f64 / scale,
         };
-        if self.ui_state.state.window != Some(frame) {
-            self.ui_state.state.window = Some(frame);
-            self.ui_state.touch(self.core.now_ms());
+        if self.remembered.window != Some(frame) {
+            self.remembered.window = Some(frame);
+            self.remember(self.core.now_ms());
         }
     }
     /// Record whether the main window is maximized and, where the system
     /// gives it (Windows), its normal frame in desktop pixels, also while
     /// maximized, for the next launch.
     fn remember_maximized(&mut self, maximized: bool, window: &slint::Window) {
-        let physical = platform::normal_frame(window).or(self.ui_state.state.window_physical);
-        let state = &mut self.ui_state.state;
+        let physical = platform::normal_frame(window).or(self.remembered.window_physical);
+        let state = &mut self.remembered;
         if state.window_maximized != maximized || state.window_physical != physical {
             state.window_maximized = maximized;
             state.window_physical = physical;
-            self.ui_state.touch(self.core.now_ms());
+            self.remember(self.core.now_ms());
         }
+    }
+    /// The interface's part of the state file changed at `now`: the core,
+    /// the file's one writer, takes it whole (plan step S2c(7)), in place
+    /// at the point where the interface marked the file due before.
+    pub(crate) fn remember(&mut self, now: u64) {
+        let state = Box::new(self.remembered.clone());
+        self.ui_report(UiReport::Remembered { state, at: now });
     }
     /// The slot's remembered state (defaults before anything was saved).
     pub(crate) fn sidebar_slot(&self) -> ui_state::SidebarSlot {
-        self.ui_state.state.sidebar_slot.clone().unwrap_or_default()
+        self.remembered.sidebar_slot.clone().unwrap_or_default()
     }
     /// The adjust column's remembered state (defaults: closed, 317 wide).
     pub(crate) fn adjust_slot(&self) -> ui_state::AdjustSlot {
-        self.ui_state.state.adjust_slot.clone().unwrap_or_default()
+        self.remembered.adjust_slot.clone().unwrap_or_default()
     }
     /// What a column remembers across launches: shown, floating (the
     /// sidebar only), its current tab and its tab order.
@@ -629,9 +644,9 @@ impl Host {
                 for manifest in &current {
                     slot.remember_among(manifest, &current);
                 }
-                if self.ui_state.state.sidebar_slot.as_ref() != Some(&slot) {
-                    self.ui_state.state.sidebar_slot = Some(slot);
-                    self.ui_state.touch(now);
+                if self.remembered.sidebar_slot.as_ref() != Some(&slot) {
+                    self.remembered.sidebar_slot = Some(slot);
+                    self.remember(now);
                 }
             }
             Column::Adjust => {
@@ -641,9 +656,9 @@ impl Host {
                 for manifest in &current {
                     slot.remember_among(manifest, &current);
                 }
-                if self.ui_state.state.adjust_slot.as_ref() != Some(&slot) {
-                    self.ui_state.state.adjust_slot = Some(slot);
-                    self.ui_state.touch(now);
+                if self.remembered.adjust_slot.as_ref() != Some(&slot) {
+                    self.remembered.adjust_slot = Some(slot);
+                    self.remember(now);
                 }
             }
         }
@@ -987,8 +1002,8 @@ impl Host {
         let mut slot = self.sidebar_slot();
         if slot.floating != Some(frame) {
             slot.floating = Some(frame);
-            self.ui_state.state.sidebar_slot = Some(slot);
-            self.ui_state.touch(self.core.now_ms());
+            self.remembered.sidebar_slot = Some(slot);
+            self.remember(self.core.now_ms());
         }
     }
     pub(crate) fn close_floating(&mut self) {

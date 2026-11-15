@@ -353,7 +353,7 @@ impl Host {
                 };
                 (id, area)
             });
-        let source = &self.core.last_source;
+        let source = &self.source;
         let seconds = |key: &str| source[key].as_f64().filter(|n| n.is_finite());
         let playback = pip::Playback {
             paused: source["paused"] == true,

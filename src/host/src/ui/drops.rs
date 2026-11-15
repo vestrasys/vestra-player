@@ -6,6 +6,7 @@
 //! the panel under the pointer (if it listens) or, by extension, to the
 //! providers (`drops.provide`). Directories match the reserved name `folder`.
 #![forbid(unsafe_code)]
+use crate::host::messages::{FileDrop, UiReport};
 use crate::host::*;
 use crate::platform;
 use crate::ui::view;
@@ -268,7 +269,7 @@ impl Host {
                 let id = string(params, "id")?;
                 let extensions =
                     parse_extensions(&params["extensions"]).map_err(RpcError::invalid)?;
-                let taken = self.drops.provide(Provider {
+                let taken = self.core.drops.provide(Provider {
                     owner,
                     id: id.into(),
                     extensions,
@@ -285,7 +286,7 @@ impl Host {
                 Ok(Value::Null)
             }
             "drops.withdraw" => {
-                self.drops.withdraw(owner, string(params, "id")?);
+                self.core.drops.withdraw(owner, string(params, "id")?);
                 Ok(Value::Null)
             }
             "drops.listen" => {
@@ -293,28 +294,24 @@ impl Host {
                     .as_bool()
                     .ok_or_else(|| RpcError::invalid("listen requires a boolean"))?;
                 if listen {
-                    self.drops.panels.insert(owner);
+                    self.core.drops.panels.insert(owner);
                 } else {
-                    self.drops.panels.remove(&owner);
+                    self.core.drops.panels.remove(&owner);
                 }
                 Ok(Value::Null)
             }
             _ => Err(RpcError::new("unsupported", "unknown drops method")),
         }
     }
-    /// Deliver a completed drop.
+    /// A completed drop: the interface finds the panel under the pointer
+    /// and hands the drop to the core (`UiReport::Drop`; plan step
+    /// S2c(7)), which delivers it (`deliver_drop`).
     pub(crate) fn drops_tick(&mut self) {
         let Some((generation, paths)) = self.drops.due() else {
             return;
         };
         let (alt, shift, cmd) = platform::modifier_keys();
         let modifiers = json!({"alt":alt,"shift":shift,"cmd":cmd});
-        let paths_json = json!(
-            paths
-                .iter()
-                .map(|p| p.to_string_lossy())
-                .collect::<Vec<_>>()
-        );
         // The panel under the pointer, in its own coordinates.
         let panel = if self
             .floating
@@ -390,8 +387,29 @@ impl Host {
                 (owner, (x, y))
             }
         });
+        self.ui_report(UiReport::Drop(FileDrop {
+            paths,
+            panel,
+            modifiers,
+        }));
+    }
+    /// The core delivers a complete drop from its registry: to the panel
+    /// under the pointer if it listens, else by extension to the providers
+    /// (plan step S2c(7)).
+    pub(crate) fn deliver_drop(&mut self, drop: FileDrop) {
+        let FileDrop {
+            paths,
+            panel,
+            modifiers,
+        } = drop;
+        let paths_json = json!(
+            paths
+                .iter()
+                .map(|p| p.to_string_lossy())
+                .collect::<Vec<_>>()
+        );
         if let Some((owner, (x, y))) = panel
-            && self.drops.panels.contains(&owner)
+            && self.core.drops.panels.contains(&owner)
         {
             self.send(
                 owner,
@@ -399,7 +417,7 @@ impl Host {
             );
             return;
         }
-        for (owner, id, paths) in self.drops.groups(&paths) {
+        for (owner, id, paths) in self.core.drops.groups(&paths) {
             self.send(
                 owner,
                 json!({"event":"drops.drop","data":{"id":id,"paths":paths,"modifiers":modifiers}}),

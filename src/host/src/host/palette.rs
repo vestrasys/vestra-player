@@ -185,11 +185,8 @@ impl Host {
         window: &slint_interpreter::ComponentInstance,
     ) -> Result<()> {
         let items = self.palette_items();
-        let hits = command_palette::search(
-            &items,
-            &self.palette.query,
-            &self.ui_state.state.palette_recent,
-        );
+        let hits =
+            command_palette::search(&items, &self.palette.query, &self.remembered.palette_recent);
         let (_, size) = super::menus::menu_frame(window);
         let lead = self
             .core
@@ -457,9 +454,9 @@ impl Host {
                     self.close_menu();
                     return;
                 }
-                command_palette::remember(&mut self.ui_state.state.palette_recent, &item.global);
+                command_palette::remember(&mut self.remembered.palette_recent, &item.global);
                 let now = self.core.now_ms();
-                self.ui_state.touch(now);
+                self.remember(now);
                 // Kept open: the cursor stays on this command wherever it
                 // now sorts (the recent list reorders an empty query).
                 self.palette.cursor = row;
