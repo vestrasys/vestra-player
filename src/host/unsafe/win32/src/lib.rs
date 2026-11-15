@@ -32,7 +32,10 @@
 //! question as the main instruction, a native checkbox and no standard
 //! icon, so no system sound (`task_dialog`), and keeping a system DLL
 //! loaded for the life of the process (`pin_module`: `d3dcompiler_47.dll`
-//! under wgpu's Direct3D 12 windows). Each is one call with plain integer arguments, a
+//! under wgpu's Direct3D 12 windows), and a thread timer that runs only
+//! while a window of the thread is in the system's modal move/size loop
+//! (`on_move_size`, a thread-local `WH_CALLWNDPROC` hook: the host's tick
+//! keeps running there). Each is one call with plain integer arguments, a
 //! borrowed handle, or local out-parameters; the public
 //! API is safe. Compiled only on Windows (cross-checked from macOS by
 //! `npm run portability`, not yet run on Windows).
@@ -499,6 +502,148 @@ pub fn cloak_on_show(class: &str, cloaked: impl Fn(isize) + 'static) -> bool {
     };
     if hook.is_null() {
         CLOAK_ON_SHOW.set(None);
+        return false;
+    }
+    true
+}
+
+/// What [`on_move_size`] reports.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum MoveSize {
+    /// `WM_ENTERSIZEMOVE`: a window of this thread entered the system's
+    /// modal move or size loop (its title bar or border held, or Move/Size
+    /// from its window menu); the timer runs from now on.
+    Entered,
+    /// The timer fired, inside the loop.
+    Timer,
+    /// `WM_EXITSIZEMOVE`: the loop ended; the timer is stopped.
+    Exited,
+}
+
+/// Which move/size message `message` is, if any.
+fn move_size(message: u32) -> Option<MoveSize> {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE};
+    match message {
+        WM_ENTERSIZEMOVE => Some(MoveSize::Entered),
+        WM_EXITSIZEMOVE => Some(MoveSize::Exited),
+        _ => None,
+    }
+}
+
+/// What [`on_move_size`] installed on this thread: whom it tells, the
+/// timer's period and its id while it runs.
+struct MoveSizeHook {
+    told: Box<dyn Fn(MoveSize)>,
+    period_ms: u32,
+    timer: std::cell::Cell<usize>,
+}
+
+thread_local! {
+    static ON_MOVE_SIZE: std::cell::RefCell<Option<MoveSizeHook>> =
+        const { std::cell::RefCell::new(None) };
+}
+
+/// Tell [`on_move_size`]'s callback `what`; a panic does not unwind into
+/// the system's call. Nothing while the thread's locals are torn down.
+fn tell_move_size(what: MoveSize) {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{KillTimer, SetTimer};
+    let _ = ON_MOVE_SIZE.try_with(|hook| {
+        let Ok(hook) = hook.try_borrow() else {
+            return;
+        };
+        let Some(hook) = hook.as_ref() else {
+            return;
+        };
+        match what {
+            MoveSize::Entered if hook.timer.get() == 0 => {
+                // SAFETY: a thread timer (no window, id chosen by the
+                // system) whose procedure is a plain function of this
+                // crate, alive for the process; no memory is passed.
+                let id = unsafe {
+                    SetTimer(
+                        std::ptr::null_mut(),
+                        0,
+                        hook.period_ms,
+                        Some(move_size_timer),
+                    )
+                };
+                hook.timer.set(id);
+            }
+            MoveSize::Exited if hook.timer.get() != 0 => {
+                // SAFETY: the id SetTimer returned for this thread's timer
+                // without a window; a stale id makes the call fail, nothing
+                // else.
+                unsafe { KillTimer(std::ptr::null_mut(), hook.timer.replace(0)) };
+            }
+            _ => {}
+        }
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| (hook.told)(what)));
+    });
+}
+
+/// The thread timer of [`on_move_size`]: `DispatchMessage` calls it for its
+/// `WM_TIMER`, from the move/size loop's own message loop.
+///
+/// # Safety
+///
+/// Called only by the system as a `TIMERPROC`; no argument is used.
+unsafe extern "system" fn move_size_timer(_window: HWND, _message: u32, _id: usize, _time: u32) {
+    tell_move_size(MoveSize::Timer);
+}
+
+/// The `WH_CALLWNDPROC` hook of [`on_move_size`].
+///
+/// # Safety
+///
+/// Called only by the system as a `WH_CALLWNDPROC` hook procedure: with
+/// `code == HC_ACTION`, `lparam` points at a `CWPSTRUCT` valid for the call.
+unsafe extern "system" fn move_size_hook(code: i32, wparam: usize, lparam: isize) -> isize {
+    use windows_sys::Win32::UI::WindowsAndMessaging::{CWPSTRUCT, CallNextHookEx, HC_ACTION};
+    if code == HC_ACTION as i32 && lparam != 0 {
+        // SAFETY: for WH_CALLWNDPROC with HC_ACTION, `lparam` points at the
+        // system's CWPSTRUCT for this message, valid for the hook call (this
+        // function's contract); it is only read, before the call returns.
+        let sent = unsafe { &*(lparam as *const CWPSTRUCT) };
+        if let Some(what) = move_size(sent.message) {
+            tell_move_size(what);
+        }
+    }
+    // SAFETY: passes this hook's arguments on unchanged, as every hook must.
+    unsafe { CallNextHookEx(std::ptr::null_mut(), code, wparam, lparam) }
+}
+
+/// From now on, while a window of this thread is in the system's modal
+/// move or size loop (`WM_ENTERSIZEMOVE` to `WM_EXITSIZEMOVE`: its title
+/// bar or a border held, or Move/Size from its window menu), call `told`
+/// every `period_ms` from a thread timer, and once at the loop's start and
+/// end. That loop dispatches messages itself, so an event loop that waits
+/// for its own timers (winit's) gets no turn of its own until it ends; the
+/// timer's `WM_TIMER` is dispatched by the loop. Nothing runs outside the
+/// loop. Once per thread (a thread-local `WH_CALLWNDPROC` hook, kept until
+/// the thread ends); false when already installed or the system refused.
+pub fn on_move_size(period_ms: u32, told: impl Fn(MoveSize) + 'static) -> bool {
+    use windows_sys::Win32::System::Threading::GetCurrentThreadId;
+    use windows_sys::Win32::UI::WindowsAndMessaging::{SetWindowsHookExW, WH_CALLWNDPROC};
+    if ON_MOVE_SIZE.with_borrow(Option::is_some) {
+        return false;
+    }
+    ON_MOVE_SIZE.set(Some(MoveSizeHook {
+        told: Box::new(told),
+        period_ms,
+        timer: std::cell::Cell::new(0),
+    }));
+    // SAFETY: a thread-local hook (no module handle, this thread's id) whose
+    // procedure is a plain function of this crate, alive for the process.
+    let hook = unsafe {
+        SetWindowsHookExW(
+            WH_CALLWNDPROC,
+            Some(move_size_hook),
+            std::ptr::null_mut(),
+            GetCurrentThreadId(),
+        )
+    };
+    if hook.is_null() {
+        ON_MOVE_SIZE.set(None);
         return false;
     }
     true
@@ -1809,6 +1954,79 @@ mod tests {
                 started.elapsed()
             );
         }
+    }
+
+    /// `on_move_size`: the hook sees a window's move/size loop messages and
+    /// the timer runs only between them (a message-only window of the
+    /// test's thread, messages sent as the system sends them; no loop is
+    /// entered, so the test pumps the timer's messages itself).
+    #[test]
+    fn the_move_size_timer_runs_only_inside_the_loop() {
+        use super::{MoveSize, move_size, on_move_size};
+        use std::cell::RefCell;
+        use std::rc::Rc;
+        use windows_sys::Win32::UI::WindowsAndMessaging::{
+            CreateWindowExW, DestroyWindow, DispatchMessageW, HWND_MESSAGE, MSG, PM_REMOVE,
+            PeekMessageW, SendMessageW, WM_ENTERSIZEMOVE, WM_EXITSIZEMOVE, WM_SIZE,
+        };
+        assert_eq!(move_size(WM_ENTERSIZEMOVE), Some(MoveSize::Entered));
+        assert_eq!(move_size(WM_EXITSIZEMOVE), Some(MoveSize::Exited));
+        assert_eq!(move_size(WM_SIZE), None);
+        let seen = Rc::new(RefCell::new(Vec::new()));
+        let log = seen.clone();
+        assert!(on_move_size(10, move |what| log.borrow_mut().push(what)));
+        assert!(!on_move_size(10, |_| {}), "once per thread");
+        let class: Vec<u16> = "STATIC\0".encode_utf16().collect();
+        // SAFETY: a message-only window of the system's STATIC class; the
+        // class name is a live NUL-terminated local, the other pointers null.
+        let window = unsafe {
+            CreateWindowExW(
+                0,
+                class.as_ptr(),
+                std::ptr::null(),
+                0,
+                0,
+                0,
+                0,
+                0,
+                HWND_MESSAGE,
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null(),
+            )
+        };
+        assert!(!window.is_null());
+        let pump = |for_ms: u64| {
+            let until = Instant::now() + Duration::from_millis(for_ms);
+            while Instant::now() < until {
+                // SAFETY: `message` is a live local the call fills; a
+                // dispatched WM_TIMER calls this crate's timer procedure.
+                unsafe {
+                    let mut message: MSG = std::mem::zeroed();
+                    while PeekMessageW(&mut message, std::ptr::null_mut(), 0, 0, PM_REMOVE) != 0 {
+                        DispatchMessageW(&message);
+                    }
+                }
+                std::thread::sleep(Duration::from_millis(2));
+            }
+        };
+        pump(60);
+        assert!(seen.borrow().is_empty(), "nothing outside the loop");
+        // SAFETY: a message sent to the window created above, no pointers.
+        unsafe { SendMessageW(window, WM_ENTERSIZEMOVE, 0, 0) };
+        pump(200);
+        // SAFETY: as above.
+        unsafe { SendMessageW(window, WM_EXITSIZEMOVE, 0, 0) };
+        let inside = seen.borrow().len();
+        pump(100);
+        let seen = seen.borrow();
+        assert_eq!(seen.first(), Some(&MoveSize::Entered));
+        assert_eq!(seen[inside - 1], MoveSize::Exited);
+        let timers = seen.iter().filter(|&&what| what == MoveSize::Timer).count();
+        assert!(timers >= 3, "the timer ran inside the loop: {seen:?}");
+        assert_eq!(seen.len(), inside, "nothing after the loop: {seen:?}");
+        // SAFETY: destroys the window this test created, on its thread.
+        unsafe { DestroyWindow(window) };
     }
 
     /// `cloak_on_show` cloaks a top-level window's own show from hidden

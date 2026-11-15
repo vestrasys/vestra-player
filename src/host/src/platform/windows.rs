@@ -1702,6 +1702,105 @@ pub fn on_session_end(ended: impl Fn(super::SessionEvent) + 'static) {
     });
 }
 
+thread_local! {
+    /// [`keep_ticking`]'s state (UI thread).
+    static KEEP_ALIVE: RefCell<super::move_size::KeepAlive> =
+        RefCell::new(super::move_size::KeepAlive::default());
+    /// The tick a post from a move/size loop runs ([`keep_ticking`]).
+    static KEPT_TICK: RefCell<Option<Box<dyn Fn()>>> = const { RefCell::new(None) };
+}
+
+/// The host's tick (`main.rs`), kept running while a window of the UI
+/// thread is moved or sized (`move_size.rs`): the returned closure is the
+/// normal timer's; inside a move/size loop a post runs the same tick, at
+/// most one at a time and never while a tick runs (`tick` is busy) or the
+/// host is borrowed (`busy`). Call once, on the UI thread.
+pub fn keep_ticking(
+    tick: impl FnMut() + 'static,
+    busy: impl Fn() -> bool + 'static,
+) -> impl FnMut() + 'static {
+    use std::time::Instant;
+    let tick = std::rc::Rc::new(RefCell::new(tick));
+    // Weak: the tick (and the host it holds) goes with the normal timer.
+    let kept = std::rc::Rc::downgrade(&tick);
+    KEPT_TICK.set(Some(Box::new(move || {
+        let Some(tick) = kept.upgrade() else {
+            return;
+        };
+        if busy() {
+            return;
+        }
+        if let Ok(mut tick) = tick.try_borrow_mut() {
+            KEEP_ALIVE.with_borrow_mut(|keep| keep.tick_began(Instant::now(), true));
+            tick();
+        }
+    })));
+    fn arrived() {
+        let run = KEEP_ALIVE
+            .try_with(|keep| {
+                keep.try_borrow_mut()
+                    .is_ok_and(|mut keep| keep.arrived(Instant::now()))
+            })
+            .unwrap_or(false);
+        if run {
+            let _ = KEPT_TICK.try_with(|tick| {
+                if let Ok(tick) = tick.try_borrow()
+                    && let Some(tick) = tick.as_ref()
+                {
+                    tick();
+                }
+            });
+        }
+    }
+    // `VESTRA_FRAME_LOG=1`: one host log line per move/size loop.
+    let frame_log = std::env::var("VESTRA_FRAME_LOG").as_deref() == Ok("1");
+    let installed = vestra_win32::on_move_size(super::move_size::PERIOD_MS, move |what| {
+        let mut ended = None;
+        let post = KEEP_ALIVE
+            .try_with(|keep| {
+                let Ok(mut keep) = keep.try_borrow_mut() else {
+                    return false;
+                };
+                let now = Instant::now();
+                match what {
+                    vestra_win32::MoveSize::Entered => keep.entered(now),
+                    vestra_win32::MoveSize::Exited => ended = keep.exited(now),
+                    vestra_win32::MoveSize::Timer => return keep.timer(now),
+                }
+                false
+            })
+            .unwrap_or(false);
+        if frame_log && let Some(summary) = ended {
+            logged!(
+                "ui: move/size loop of {} ms: {} posts, {} kept ticks, {} normal ticks, longest gap {} ms",
+                summary.took.as_millis(),
+                summary.posts,
+                summary.kept,
+                summary.normal,
+                summary.longest_gap.as_millis(),
+            );
+        }
+        if post && slint::invoke_from_event_loop(arrived).is_err() {
+            let _ = KEEP_ALIVE.try_with(|keep| {
+                if let Ok(mut keep) = keep.try_borrow_mut() {
+                    keep.not_posted();
+                }
+            });
+        }
+    });
+    if !installed {
+        logged!("ui: the tick stops while a window is moved or sized (no move/size hook)");
+    }
+    move || {
+        // The timer cannot fire inside a tick on this thread; skipped, not
+        // a panic, if it ever did.
+        if let Ok(mut tick) = tick.try_borrow_mut() {
+            KEEP_ALIVE.with_borrow_mut(|keep| keep.tick_began(Instant::now(), false));
+            tick();
+        }
+    }
+}
+
 /// The host log's memory line: this process's private bytes and the system
 /// commit charge.
 pub fn memory_status() -> Option<super::MemoryStatus> {

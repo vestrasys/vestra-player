@@ -856,120 +856,130 @@ fn player() -> Result<()> {
         let timer = slint::Timer::default();
         let mut menu_revision = u64::MAX;
         let mut binding_revision = u64::MAX;
+        // Busy: a post from Windows' move/size loop runs no tick then
+        // (`platform::keep_ticking`).
+        let held = Rc::downgrade(&host);
+        let busy = move || {
+            held.upgrade()
+                .is_none_or(|host| host.try_borrow_mut().is_err())
+        };
         timer.start(
             slint::TimerMode::Repeated,
             Duration::from_millis(16),
-            move || {
-                let began = Instant::now();
-                // A slow turn, or a gap before it, goes to the host log
-                // (`host/stall.rs`).
-                host::stall::tick_began(began);
-                let mut turn = host::stall::Turn::new(began);
-                let mut host = tick_host.borrow_mut();
-                host::drain_events(&receiver, began, 0, |event| {
-                    let (label, at) = (event.label(), Instant::now());
-                    host.handle(event);
-                    turn.event(label, at.elapsed());
-                });
-                turn.step("events");
-                if first_draws.is_some() {
-                    let (draws, pictures) = host.backend.render.presentation.counts();
-                    let opening = opened_at_start || host.last_source["phase"] == "loading";
-                    if playback::render_state::windows_started(draws, pictures, opening)
-                        && let Some(guard) = first_draws.take()
-                    {
-                        guard.settle();
-                    }
-                    turn.step("crash guard first draws");
-                }
-                host.placements.tick();
-                host.mount_callbacks();
-                host.prepare_mount_tick();
-                turn.step("mounts");
-                host.panel_restart_tick();
-                turn.step("panel restarts");
-                host.window_tick();
-                turn.step("window tick");
-                platform::tool_windows_tick();
-                turn.step("tool windows");
-                host.activation_tick();
-                host.on_demand_tick();
-                turn.step("plugin activation");
-                host.power_tick();
-                host.diagnostics_tick();
-                turn.step("power and diagnostics");
-                host.package_tick();
-                turn.step("packages");
-                host.notify_tick();
-                host.timeline_tick();
-                host.drops_tick();
-                host.open_files_tick();
-                turn.step("notifications, timeline, drops, open files");
-                host.settings_tick();
-                turn.step("settings");
-                if host.theme_pending {
-                    host.theme_all();
-                    turn.step("theme");
-                }
-                if host.commands.revision() != binding_revision {
-                    binding_revision = host.commands.revision();
-                    let disabled = host.commands.disabled();
-                    host.input.borrow_mut().table.set_disabled(disabled);
-                }
-                // The revision alone, not a snapshot: a snapshot builds the
-                // whole menu tree, longer than a frame with many plugins.
-                // A closed menu is built when it opens (`open_menu`).
-                if host.shell.is_some() {
-                    let revision = host.commands.revision();
-                    if revision != menu_revision {
-                        menu_revision = revision;
-                        if host.menu_open
-                            && let Err(error) = host.refresh_menu()
+            platform::keep_ticking(
+                move || {
+                    let began = Instant::now();
+                    // A slow turn, or a gap before it, goes to the host log
+                    // (`host/stall.rs`).
+                    host::stall::tick_began(began);
+                    let mut turn = host::stall::Turn::new(began);
+                    let mut host = tick_host.borrow_mut();
+                    host::drain_events(&receiver, began, 0, |event| {
+                        let (label, at) = (event.label(), Instant::now());
+                        host.handle(event);
+                        turn.event(label, at.elapsed());
+                    });
+                    turn.step("events");
+                    if first_draws.is_some() {
+                        let (draws, pictures) = host.backend.render.presentation.counts();
+                        let opening = opened_at_start || host.last_source["phase"] == "loading";
+                        if playback::render_state::windows_started(draws, pictures, opening)
+                            && let Some(guard) = first_draws.take()
                         {
-                            host.broadcast(
-                                "host.error",
-                                json!({"code":"menu-projection","message":error.to_string()}),
-                            );
+                            guard.settle();
+                        }
+                        turn.step("crash guard first draws");
+                    }
+                    host.placements.tick();
+                    host.mount_callbacks();
+                    host.prepare_mount_tick();
+                    turn.step("mounts");
+                    host.panel_restart_tick();
+                    turn.step("panel restarts");
+                    host.window_tick();
+                    turn.step("window tick");
+                    platform::tool_windows_tick();
+                    turn.step("tool windows");
+                    host.activation_tick();
+                    host.on_demand_tick();
+                    turn.step("plugin activation");
+                    host.power_tick();
+                    host.diagnostics_tick();
+                    turn.step("power and diagnostics");
+                    host.package_tick();
+                    turn.step("packages");
+                    host.notify_tick();
+                    host.timeline_tick();
+                    host.drops_tick();
+                    host.open_files_tick();
+                    turn.step("notifications, timeline, drops, open files");
+                    host.settings_tick();
+                    turn.step("settings");
+                    if host.theme_pending {
+                        host.theme_all();
+                        turn.step("theme");
+                    }
+                    if host.commands.revision() != binding_revision {
+                        binding_revision = host.commands.revision();
+                        let disabled = host.commands.disabled();
+                        host.input.borrow_mut().table.set_disabled(disabled);
+                    }
+                    // The revision alone, not a snapshot: a snapshot builds the
+                    // whole menu tree, longer than a frame with many plugins.
+                    // A closed menu is built when it opens (`open_menu`).
+                    if host.shell.is_some() {
+                        let revision = host.commands.revision();
+                        if revision != menu_revision {
+                            menu_revision = revision;
+                            if host.menu_open
+                                && let Err(error) = host.refresh_menu()
+                            {
+                                host.broadcast(
+                                    "host.error",
+                                    json!({"code":"menu-projection","message":error.to_string()}),
+                                );
+                            }
                         }
                     }
-                }
-                turn.step("bindings and menu");
-                // The renderer's wake-up delivers frames; this only catches
-                // one whose wake-up found the host busy.
-                if host.backend.frame.missed() {
-                    host.show_frame();
-                }
-                frame_pacing::tick();
-                turn.step("frame");
-                if let Some(log) = host.frame_log.as_mut() {
-                    log.tick_took(began.elapsed());
-                }
-                host::stall::tick_ended(&turn, |owner| host.plugin_id(owner));
-                if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
-                    if let Some(path) = snapshot.as_ref()
-                        && let Some(window) = host.shell.as_ref()
-                    {
-                        let save = || -> Result<()> {
-                            let pixels = window.window().take_snapshot()?;
-                            let mut encoder = png::Encoder::new(
-                                std::fs::File::create(path)?,
-                                pixels.width(),
-                                pixels.height(),
-                            );
-                            encoder.set_color(png::ColorType::Rgba);
-                            encoder.set_depth(png::BitDepth::Eight);
-                            encoder
-                                .write_header()?
-                                .write_image_data(pixels.as_bytes())?;
-                            Ok(())
-                        };
-                        if let Err(error) = save() {
-                            diag!("snapshot failed: {error}");
-                        }
+                    turn.step("bindings and menu");
+                    // The renderer's wake-up delivers frames; this only catches
+                    // one whose wake-up found the host busy.
+                    if host.backend.frame.missed() {
+                        host.show_frame();
                     }
-                    let _ = slint::quit_event_loop();
-                }
-            },
+                    frame_pacing::tick();
+                    turn.step("frame");
+                    if let Some(log) = host.frame_log.as_mut() {
+                        log.tick_took(began.elapsed());
+                    }
+                    host::stall::tick_ended(&turn, |owner| host.plugin_id(owner));
+                    if seconds.is_some_and(|seconds| start.elapsed().as_secs_f64() >= seconds) {
+                        if let Some(path) = snapshot.as_ref()
+                            && let Some(window) = host.shell.as_ref()
+                        {
+                            let save = || -> Result<()> {
+                                let pixels = window.window().take_snapshot()?;
+                                let mut encoder = png::Encoder::new(
+                                    std::fs::File::create(path)?,
+                                    pixels.width(),
+                                    pixels.height(),
+                                );
+                                encoder.set_color(png::ColorType::Rgba);
+                                encoder.set_depth(png::BitDepth::Eight);
+                                encoder
+                                    .write_header()?
+                                    .write_image_data(pixels.as_bytes())?;
+                                Ok(())
+                            };
+                            if let Err(error) = save() {
+                                diag!("snapshot failed: {error}");
+                            }
+                        }
+                        let _ = slint::quit_event_loop();
+                    }
+                },
+                busy,
+            ),
         );
         // GPU rendering that ran this long started: settle the crash guard.
         let started = guard.clone();
