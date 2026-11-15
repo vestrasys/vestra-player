@@ -199,6 +199,10 @@ pub struct Store {
     catalog: Catalog,
     /// Records `open` set aside this run (`Quarantined`).
     quarantined: Vec<Quarantined>,
+    /// `quarantine.json`'s records as this run knows them (those of earlier
+    /// starts and this one's, as written or as they would have been):
+    /// what `set_aside_installed` lists until `release_set_aside`.
+    records: Vec<Value>,
     /// Package digests the records `quarantine.json` lists name
     /// (`digests_of`): kept in the library (`referenced`), so that
     /// a record set aside can still be restored with its files.
@@ -257,6 +261,25 @@ fn digests_of(entry: &Value) -> BTreeSet<String> {
     }
     digests
 }
+/// The package digests `quarantine.json` records name (`kept`): each one's
+/// `digests`, or, written without them, those its entry holds.
+fn record_digests(records: &[Value]) -> BTreeSet<String> {
+    let mut digests = BTreeSet::new();
+    for record in records {
+        match record["digests"].as_array() {
+            Some(listed) => digests.extend(
+                listed
+                    .iter()
+                    .filter_map(Value::as_str)
+                    .filter(|digest| digest_name(digest))
+                    .map(str::to_owned),
+            ),
+            None => digests.extend(digests_of(&record["entry"])),
+        }
+    }
+    digests
+}
+
 /// One record in `quarantine.json` at most (its JSON); a larger one keeps
 /// only a note.
 const MAX_QUARANTINED_ENTRY: usize = 64 * 1024;
@@ -399,6 +422,7 @@ impl Store {
             root,
             catalog,
             quarantined: Vec::new(),
+            records: Vec::new(),
             kept: BTreeSet::new(),
             deferred: BTreeMap::new(),
             revision: 0,
@@ -430,9 +454,11 @@ impl Store {
                 backup.display()
             );
             store.set_aside(&aside);
+        } else {
+            store.records = store.quarantine_records();
         }
         // This run's too, should `quarantine.json` not have been written.
-        store.kept = store.quarantine_digests();
+        store.kept = record_digests(&store.records);
         for item in &aside {
             store.kept.extend(digests_of(&item.entry));
         }
@@ -984,24 +1010,134 @@ impl Store {
             total = total.saturating_sub(sizes.remove(0));
             kept.remove(0);
         }
-        let write = || -> Result<()> {
-            // Compact: what was measured is what is written.
-            let bytes = serde_json::to_vec(&serde_json::json!({ "records": kept }))?;
-            ensure!(bytes.len() <= MAX_CATALOG, "quarantine records too large");
-            let mut temporary = tempfile::NamedTempFile::new_in(&self.root)?;
-            temporary.write_all(&bytes)?;
-            temporary.as_file().sync_all()?;
-            temporary.persist(&path).map_err(|error| error.error)?;
-            Ok(())
-        };
-        if let Err(error) = write() {
+        if let Err(error) = self.write_quarantine(&kept) {
             diag!("package library: {}: {error:#}", path.display());
         }
+        self.records = kept;
+    }
+
+    /// Replace `quarantine.json` with `records` (compact: what was measured
+    /// is what is written).
+    fn write_quarantine(&self, records: &[Value]) -> Result<()> {
+        let bytes = serde_json::to_vec(&serde_json::json!({ "records": records }))?;
+        ensure!(bytes.len() <= MAX_CATALOG, "quarantine records too large");
+        let mut temporary = tempfile::NamedTempFile::new_in(&self.root)?;
+        temporary.write_all(&bytes)?;
+        temporary.as_file().sync_all()?;
+        temporary
+            .persist(self.root.join("quarantine.json"))
+            .map_err(|error| error.error)?;
+        Ok(())
     }
 
     /// The records `open` set aside this run.
     pub fn quarantined(&self) -> &[Quarantined] {
         &self.quarantined
+    }
+
+    /// The installed records set aside, this start or an earlier one, that
+    /// `quarantine.json` still lists and that nothing installed under their
+    /// id since: id → (the record as read, why it was set aside), the most
+    /// recent one per id. `packages.list` shows each as failed so that it
+    /// can always be uninstalled (`release_set_aside`); nothing broken
+    /// stays out of sight with its files kept.
+    pub fn set_aside_installed(&self) -> BTreeMap<String, (&Value, &str)> {
+        let mut listed = BTreeMap::new();
+        for record in &self.records {
+            let Some(id) = record["id"].as_str() else {
+                continue;
+            };
+            if record["section"] != "installed"
+                || identifier(id).is_err()
+                || self
+                    .catalog
+                    .installed
+                    .get(id)
+                    .is_some_and(|installed| installed.current.is_some())
+                || self.catalog.pending.contains_key(id)
+            {
+                continue;
+            }
+            let reason = record["reason"].as_str().unwrap_or_default();
+            listed.insert(id.to_owned(), (&record["entry"], reason));
+        }
+        listed
+    }
+
+    /// Drop every record `quarantine.json` keeps of package `id` (its
+    /// installed and interrupted-install records, however many starts set
+    /// them aside) and return the package digests that nothing else refers
+    /// to any more: not another record kept, not the catalog. Those
+    /// directories are the caller's to remove (`Library::hold`). Nothing
+    /// changes when `quarantine.json` cannot be written. The forced
+    /// uninstall of a record set aside (`forget_set_aside`), and an install
+    /// of the same id once it commits.
+    pub fn release_set_aside(&mut self, id: &str) -> Result<BTreeSet<String>> {
+        let of_id = |record: &Value| {
+            record["id"] == id
+                && (record["section"] == "installed" || record["section"] == "pending")
+        };
+        if !self.records.iter().any(of_id)
+            && !self
+                .quarantined
+                .iter()
+                .any(|q| q.id == id && matches!(q.section, "installed" | "pending"))
+        {
+            return Ok(BTreeSet::new());
+        }
+        let (dropped, rest): (Vec<Value>, Vec<Value>) = self
+            .records
+            .iter()
+            .cloned()
+            .partition(|record| of_id(record));
+        let mut still = record_digests(&rest);
+        for installed in self.catalog.installed.values() {
+            if let Some(package) = &installed.current {
+                still.insert(package.digest.clone());
+            }
+        }
+        for recovery in self.catalog.pending.values() {
+            still.insert(recovery.target.digest.clone());
+        }
+        let freed = record_digests(&dropped)
+            .difference(&still)
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        if !dropped.is_empty() {
+            self.write_quarantine(&rest)?;
+        }
+        self.records = rest;
+        self.kept.retain(|digest| !freed.contains(digest));
+        self.quarantined
+            .retain(|q| !(q.id == id && matches!(q.section, "installed" | "pending")));
+        self.revision += 1;
+        Ok(freed)
+    }
+
+    /// `packages.uninstall` of an installed record set aside
+    /// (`set_aside_installed`): every record of it goes
+    /// (`release_set_aside`) and the catalog keeps the receipt. Returns the
+    /// package digests it freed. Its instance was retired with its data
+    /// when it was set aside (`screen`); the caller removes that too when
+    /// asked (`forget_dormant`).
+    pub fn forget_set_aside(
+        &mut self,
+        id: &str,
+        operation_id: &str,
+        receipt: Value,
+    ) -> Result<BTreeSet<String>> {
+        identifier(id)?;
+        identifier(operation_id)?;
+        check_receipt(&receipt)?;
+        ensure!(
+            self.set_aside_installed().contains_key(id),
+            "package is not installed"
+        );
+        let freed = self.release_set_aside(id)?;
+        let mut next = self.catalog.clone();
+        insert_receipt(&mut next, operation_id, receipt)?;
+        self.publish(next)?;
+        Ok(freed)
     }
 
     /// Installed records left as they are this run (`deferred`): id → why.
@@ -1037,26 +1173,6 @@ impl Store {
             .into_iter()
             .filter(Value::is_object)
             .collect()
-    }
-
-    /// The package digests the records
-    /// `quarantine.json` lists name (`kept`).
-    fn quarantine_digests(&self) -> BTreeSet<String> {
-        let mut digests = BTreeSet::new();
-        for record in self.quarantine_records() {
-            match record["digests"].as_array() {
-                Some(listed) => digests.extend(
-                    listed
-                        .iter()
-                        .filter_map(Value::as_str)
-                        .filter(|digest| digest_name(digest))
-                        .map(str::to_owned),
-                ),
-                // Written without its digests: read them from the entry.
-                None => digests.extend(digests_of(&record["entry"])),
-            }
-        }
-        digests
     }
 
     fn publish(&mut self, next: Catalog) -> Result<()> {
@@ -1739,6 +1855,95 @@ impl Library {
         self.delete(names)
     }
 
+    /// The holding folder (`packages/.removed`): package directories the
+    /// forced uninstall of a record set aside took out of the library
+    /// (`hold`), until `purge_held` deletes them. Never a digest name, so
+    /// staging and `collect` never meet it.
+    fn holding(&self) -> PathBuf {
+        self.packages.join(HOLDING)
+    }
+
+    /// Take package directory `digest` out of the library at once: renamed
+    /// (same volume) into the holding folder as `<digest>-<ms>`, so that
+    /// nothing of it is in the way of an install while it is deleted later
+    /// (`purge_held`). The directory must be a digest name strictly under
+    /// the library (`safe_remove::within`); one that is a link (symbolic
+    /// link, junction) is removed as the link, its target untouched.
+    /// `Ok(false)` when there was nothing. On an error it stays where it
+    /// is, whole: a later start's `collect` takes it.
+    pub fn hold(&self, digest: &str) -> Result<bool> {
+        ensure!(digest_name(digest), "not a package digest");
+        let path = self.packages.join(digest);
+        let Ok(metadata) = fs::symlink_metadata(&path) else {
+            return Ok(false);
+        };
+        let entry = crate::packages::safe_remove::within(&self.packages, &path)?;
+        if crate::packages::safe_remove::is_reparse(&metadata) || !metadata.is_dir() {
+            let left = crate::packages::safe_remove::remove_within(&self.packages, &entry)?;
+            ensure!(left.is_empty(), "{}", left.join("; "));
+            return Ok(true);
+        }
+        let holding = self.holding();
+        fs::create_dir_all(&holding)?;
+        let held = fs::symlink_metadata(&holding)?;
+        ensure!(
+            held.is_dir() && !crate::packages::safe_remove::is_reparse(&held),
+            "{} is not a plain directory",
+            holding.display()
+        );
+        crate::packages::safe_remove::within(&self.packages, &holding)?;
+        fs::rename(&entry, holding.join(format!("{digest}-{}", unix_ms())))?;
+        crate::platform::sync_dir(&self.packages)?;
+        Ok(true)
+    }
+
+    /// Delete what the holding folder holds (`hold`), under the rules of
+    /// `safe_remove`: nothing outside it, links removed as links, read-only
+    /// attributes cleared, anything denied left there and returned (one
+    /// `path: error` each) for the next start.
+    pub fn purge_held(&self) -> Vec<String> {
+        let holding = self.holding();
+        let metadata = match fs::symlink_metadata(&holding) {
+            Ok(metadata) => metadata,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+            Err(error) => return vec![format!("{}: {error}", holding.display())],
+        };
+        let mut left = Vec::new();
+        if crate::packages::safe_remove::is_reparse(&metadata) || !metadata.is_dir() {
+            // Not ours to walk: only the link itself goes.
+            match crate::packages::safe_remove::remove_within(&self.packages, &holding) {
+                Ok(rest) => left.extend(rest),
+                Err(error) => left.push(format!("{}: {error:#}", holding.display())),
+            }
+            return left;
+        }
+        let entries = match fs::read_dir(&holding) {
+            Ok(entries) => entries,
+            Err(error) => return vec![format!("{}: {error}", holding.display())],
+        };
+        // Judged against the library, not the holding folder: should the
+        // holding folder be swapped for a junction after the check above,
+        // its entries resolve outside the library and are refused
+        // (`safe_remove::within`), never deleted at the junction's target.
+        for entry in entries {
+            let path = match entry {
+                Ok(entry) => entry.path(),
+                Err(error) => {
+                    left.push(format!("{}: {error}", holding.display()));
+                    continue;
+                }
+            };
+            match crate::packages::safe_remove::remove_within(&self.packages, &path) {
+                Ok(rest) => left.extend(rest),
+                Err(error) => left.push(format!("{}: {error:#}", path.display())),
+            }
+        }
+        if left.is_empty() {
+            let _ = fs::remove_dir(&holding);
+        }
+        left
+    }
+
     fn delete(&self, names: Vec<String>) -> Result<usize> {
         let mut removed = 0;
         let mut failures = Vec::new();
@@ -1778,6 +1983,9 @@ impl Library {
         Ok(removed)
     }
 }
+
+/// The library's holding folder (`Library::hold`).
+const HOLDING: &str = ".removed";
 
 /// A library entry named after a package digest (64 lowercase hex digits).
 fn digest_name(name: &str) -> bool {
@@ -2575,6 +2783,241 @@ pub(crate) mod tests {
         assert!(other.directory.is_dir());
         assert!(root_path.join("packages").join(&future).is_dir());
         assert!(store.dormant().contains_key(&guid));
+    }
+
+    /// `counter` installed by an older player with a manifest this one
+    /// refuses (`capabilities`, player 0.9.0): set aside at the next start.
+    /// Returns its package and instance GUID.
+    fn counter_set_aside(root_path: &std::path::Path) -> (StoredPackage, String) {
+        let (counter, _) = two_installed(root_path);
+        let guid = Store::open(root_path.into())
+            .unwrap()
+            .get("counter")
+            .instance
+            .unwrap()
+            .guid;
+        edit_catalog(root_path, |catalog| {
+            let manifest = &mut catalog["installed"]["counter"]["current"]["manifest"];
+            manifest["capabilities"] = serde_json::json!(["events"]);
+            manifest["name"] = "Counter".into();
+        });
+        (counter, guid)
+    }
+
+    fn quarantine_ids(root_path: &std::path::Path) -> Vec<String> {
+        let kept: Value =
+            serde_json::from_slice(&fs::read(root_path.join("quarantine.json")).unwrap()).unwrap();
+        kept["records"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|record| record["id"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
+    /// The user's report (player 0.10.0): a record set aside at one start
+    /// is listed again at the next ones (`set_aside_installed`), once per
+    /// id however many records `quarantine.json` holds of it; the forced
+    /// uninstall drops them all and frees the package only they kept, which
+    /// leaves the library at once (`hold`) and is deleted (`purge_held`).
+    /// Its retired instance stays for the caller to keep or remove.
+    #[test]
+    fn a_set_aside_record_from_earlier_starts_is_listed_until_uninstalled() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, guid) = counter_set_aside(&root_path);
+        let store = Store::open(root_path.clone()).unwrap();
+        assert!(store.get("counter").current.is_none());
+        let listed = store.set_aside_installed();
+        assert_eq!(listed.len(), 1);
+        assert_eq!(
+            listed["counter"].0["current"]["manifest"]["name"],
+            "Counter"
+        );
+        assert!(
+            listed["counter"].1.contains("capabilities"),
+            "{}",
+            listed["counter"].1
+        );
+        drop(store);
+        // A second start that set it aside again: two records of one id.
+        let path = root_path.join("quarantine.json");
+        let mut kept: Value = serde_json::from_slice(&fs::read(&path).unwrap()).unwrap();
+        let copy = kept["records"][0].clone();
+        kept["records"].as_array_mut().unwrap().push(copy);
+        fs::write(&path, serde_json::to_vec(&kept).unwrap()).unwrap();
+        assert_eq!(quarantine_ids(&root_path), ["counter", "counter"]);
+        // A later start sets nothing aside and still lists it, once.
+        let mut store = Store::open(root_path.clone()).unwrap();
+        assert!(store.quarantined().is_empty());
+        let listed = store.set_aside_installed();
+        assert_eq!(listed.keys().collect::<Vec<_>>(), ["counter"]);
+        assert_eq!(listed["counter"].0["instance"]["guid"], guid.as_str());
+        assert!(
+            store
+                .forget_set_aside("other", "rm-other", serde_json::json!({}))
+                .is_err(),
+            "only a record set aside"
+        );
+        let revision = store.revision();
+        let freed = store
+            .forget_set_aside("counter", "rm", serde_json::json!({"status":"committed"}))
+            .unwrap();
+        assert_eq!(freed, [counter.digest.clone()].into());
+        assert!(store.revision() > revision);
+        assert!(store.set_aside_installed().is_empty());
+        assert!(quarantine_ids(&root_path).is_empty());
+        assert_eq!(store.operations()["rm"]["status"], "committed");
+        assert!(store.dormant().contains_key(&guid), "its data stays");
+        assert!(!store.referenced().contains(&counter.digest));
+        assert!(store.library().hold(&counter.digest).unwrap());
+        assert!(!counter.directory.exists(), "out of the library at once");
+        assert!(store.library().purge_held().is_empty());
+        assert!(!root_path.join("packages").join(HOLDING).exists());
+        assert!(
+            store
+                .forget_set_aside("counter", "rm2", serde_json::json!({}))
+                .is_err()
+        );
+        drop(store);
+        let store = Store::open(root_path).unwrap();
+        assert!(store.set_aside_installed().is_empty());
+        assert!(store.get("other").current.is_some());
+    }
+
+    /// The forced removal takes only what is ours: a read-only file goes, a
+    /// junction (Windows) or symbolic link inside the package goes as a
+    /// link with its target outside untouched, and a name that is not a
+    /// digest of this library is refused.
+    #[test]
+    fn a_held_package_goes_without_following_links() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, _) = counter_set_aside(&root_path);
+        let outside = tempfile::tempdir().unwrap();
+        fs::write(outside.path().join("precious.txt"), b"keep").unwrap();
+        let file = counter.directory.join("main.js");
+        let mut permissions = fs::metadata(&file).unwrap().permissions();
+        permissions.set_readonly(true);
+        fs::set_permissions(&file, permissions).unwrap();
+        let linked = crate::packages::safe_remove::tests::make_directory_link(
+            outside.path(),
+            &counter.directory.join("link"),
+        );
+        let mut store = Store::open(root_path.clone()).unwrap();
+        for bad in ["..", "x", &"g".repeat(64)] {
+            assert!(store.library().hold(bad).is_err(), "{bad}");
+        }
+        let freed = store
+            .forget_set_aside("counter", "rm", serde_json::json!({}))
+            .unwrap();
+        for digest in &freed {
+            store.library().hold(digest).unwrap();
+        }
+        assert!(store.library().purge_held().is_empty());
+        assert!(!counter.directory.exists());
+        assert!(!root_path.join("packages").join(HOLDING).exists());
+        assert_eq!(
+            fs::read(outside.path().join("precious.txt")).unwrap(),
+            b"keep"
+        );
+        assert!(linked || cfg!(unix), "a junction needs no privilege");
+    }
+
+    /// A holding folder that is a junction to somewhere else: only the
+    /// link goes, nothing at its target; entries are judged against the
+    /// library, so one reached through such a link is refused.
+    #[test]
+    fn a_holding_folder_that_is_a_link_is_never_walked() {
+        let root = tempfile::tempdir().unwrap();
+        let store = Store::open(root.path().into()).unwrap();
+        let library = store.library();
+        let outside = tempfile::tempdir().unwrap();
+        fs::create_dir(outside.path().join("x-1")).unwrap();
+        fs::write(outside.path().join("x-1").join("precious.txt"), b"keep").unwrap();
+        let holding = library.holding();
+        assert!(crate::packages::safe_remove::tests::make_directory_link(
+            outside.path(),
+            &holding
+        ));
+        assert!(
+            crate::packages::safe_remove::remove_within(&library.packages, &holding.join("x-1"))
+                .is_err(),
+            "below the link: outside the library"
+        );
+        assert!(library.purge_held().is_empty());
+        assert!(fs::symlink_metadata(&holding).is_err(), "the link went");
+        assert_eq!(
+            fs::read(outside.path().join("x-1").join("precious.txt")).unwrap(),
+            b"keep"
+        );
+    }
+
+    /// A file of the package that cannot be deleted (held open without
+    /// delete sharing) never keeps the id: the records go at once; what
+    /// stays is left whole under its digest (the move failed) or in the
+    /// holding folder (the delete failed), reported, and goes once free.
+    #[cfg(windows)]
+    #[test]
+    fn an_undeletable_file_never_keeps_the_id() {
+        use std::os::windows::fs::OpenOptionsExt;
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, _) = counter_set_aside(&root_path);
+        let handle = fs::OpenOptions::new()
+            .read(true)
+            .share_mode(0)
+            .open(counter.directory.join("main.js"))
+            .unwrap();
+        let mut store = Store::open(root_path.clone()).unwrap();
+        let freed = store
+            .forget_set_aside("counter", "rm", serde_json::json!({}))
+            .unwrap();
+        assert!(store.set_aside_installed().is_empty(), "the id is free");
+        assert!(quarantine_ids(&root_path).is_empty());
+        let held = store.library().hold(&counter.digest);
+        let left = store.library().purge_held();
+        assert!(
+            held.is_err() || !left.is_empty(),
+            "something stays while the file is held"
+        );
+        assert!(held.is_err() == counter.directory.join("main.js").exists());
+        drop(handle);
+        if held.is_err() {
+            // The next start's collect takes it.
+            store.library().collect(&store.referenced()).unwrap();
+        } else {
+            assert!(store.library().purge_held().is_empty());
+        }
+        assert!(!counter.directory.exists());
+        assert!(!root_path.join("packages").join(HOLDING).exists());
+        assert_eq!(freed, [counter.digest].into());
+    }
+
+    /// An install of the same id supersedes the records set aside: once
+    /// it commits they go (`release_set_aside`), freeing the old package
+    /// and never the new one.
+    #[test]
+    fn an_install_of_a_set_aside_id_releases_its_records() {
+        let root = tempfile::tempdir().unwrap();
+        let root_path = dunce::canonicalize(root.path()).unwrap();
+        let (counter, guid) = counter_set_aside(&root_path);
+        let mut store = Store::open(root_path.clone()).unwrap();
+        assert_eq!(store.dormant_match("counter", "manual").unwrap().0, guid);
+        let (_dir, newer) = candidate("2.0.0");
+        let target = store.stage(&newer).unwrap();
+        store.prepare("counter", 0, &target, "again").unwrap();
+        assert!(
+            store.set_aside_installed().is_empty(),
+            "not listed while it installs"
+        );
+        store.commit("counter", "again").unwrap();
+        assert!(store.set_aside_installed().is_empty());
+        let freed = store.release_set_aside("counter").unwrap();
+        assert_eq!(freed, [counter.digest.clone()].into());
+        assert!(quarantine_ids(&root_path).is_empty());
+        assert!(store.referenced().contains(&target.digest));
+        assert!(store.release_set_aside("counter").unwrap().is_empty());
     }
 
     /// Holds a file so that reading it fails with an I/O error (an
