@@ -200,9 +200,17 @@ flowchart TB
 | R11 | **No SDK change, no wire change, no change to the scheduling rules.** When a plugin starts, parks, wakes and is stopped is decided by the same supervisor rules ([supervisor.md](supervisor.md)); only the thread that runs them changes |
 | R12 | **The readiness coupling is kept.** A plugin's run is ready only after its first `ui.open` / `ui.mount` was answered (P:host/dispatch.rs:118-144, P:host/supervisor/mod.rs:995-1030). A run that starts during an interface stall therefore becomes ready when the stall ends |
 
+**Handoff requirement (with R5 and R6; from the plugin scan S0.3, 2026-11-15).** For a UI-bound request, the core applies the state the UI reports as its result (the window facts snapshot, the mount and layout record) **before** it sends the reply. A plugin that reads state right after awaiting a UI-bound reply must find the new state. Evidence, all in code that awaits correctly:
+
+1. The SDK's `plugin/view/panel.ts:52-63` calls `layout.state` right after `await ui.mount`: the core's mount and layout record must be updated before the `ui.mount` reply goes out.
+2. `plugin/window.ts:137-138` reads `window.state` right after `await window.setVideoArea`; the Window plugin's Mini Size compares it (`window/size.ts:31-34, 92-96`).
+3. `plugin/window.ts:158-159` does the same after `window.setPictureInPicture` (`window/pip.ts:62`).
+
+Test target for plan S2d (the seam, one thread) and S3a (two threads): for each of the three, a request followed by the read returns the post-change state.
+
 ### 5.1 Which requests are in which stream
 
-From the study's inventory of the 119 route entries (its §2.2, with every method named):
+From the study's inventory of the 119 route entries (its §2.2, with every method named). The summary as the study had it; the method table below (plan S0.2) is the authority where they differ:
 
 | Stream | Count | What |
 | --- | --- | --- |
@@ -211,7 +219,169 @@ From the study's inventory of the 119 route entries (its §2.2, with every metho
 | Touches the interface, but the reply does not depend on its result | 25 | `osd.*`, `appearance.set`, `commands.register/update/unregister`, `bindings.*`, `layout.*`, `ui.interaction`, `ui.menu`, `window.setAlwaysOnTop`, `palette.lead.*`, `commands.run`, `dialogs.*`, `host.run`, `app.system`, `clipboard.*` |
 | **UI-bound: the reply depends on an interface result** | 10 | `ui.open`, `ui.set`, `ui.show`, `ui.close`, `ui.mount`, `ui.unmount`, `ui.setMount`, `settings.*`, `window.setVideoArea`, `window.setPictureInPicture` |
 
-The 25 of the third row are answered by the core as soon as its own part is done (registry write, snapshot sent); the interface catches up when it can. Which of them stay there and which join the UI-bound stream is settled method by method in plan step S0, as a table added to this section; the default is the study's classification.
+The 25 of the third row are answered by the core as soon as its own part is done (registry write, snapshot sent); the interface catches up when it can (R5, K13). Which of them stay there and which join the UI-bound stream is settled method by method in the table below.
+
+#### The method table (plan S0.2)
+
+Read on player 0.10.0 (tag `v0.10.0`, `c3f8ebea`). **Route count: 119**, the same as the study: 33 areas in `capabilities::ALL` (`capabilities/mod.rs:207-243`) with 107 names, plus 12 names of `capabilities/uncapable.rs:6-21`; 112 exact names and 7 `prefix.*` entries (`snapshot.*`, `jobs.*`, `media.sources.*`, `packages.*`, `sourceResolvers.*`, `subtitles.*`, `settings.*`). The router is `capabilities::lookup` (`mod.rs:300-308`), called from `Host::dispatch` (`host/dispatch.rs:149-196`) after the start-up gates of `host/handle.rs:68-105`. Files below are under `src/host/src/capabilities/` unless a directory is named.
+
+Columns. **Today**: F = forwarded to the playback worker, answered later by `Event::Reply`; C = core only; U = touches the interface, reply independent of it; R = the reply needs an interface result. **Stream** (rule R4): I = UI-independent, answered by the core (or the worker) without waiting for the UI; B = UI-bound. **UI work**: what the core sends to the UI under the design, as a `UiCommand` kind (names from study §4.2, regrouped in plan S2a), and when the reply leaves. "Snapshot" kinds are last-value-wins (R3). A dash: no UI work.
+
+| # | Entry | Handler | Today | Stream | UI work (`UiCommand`) · reply |
+| --- | --- | --- | --- | --- | --- |
+| 1 | `producer.prepare` | producer_av.rs:31 | F | I | — · worker |
+| 2 | `producer.state` | producer_av.rs:31 | F | I | — · worker |
+| 3 | `producer.release` | producer_av.rs:31 | F | I | — · worker |
+| 4 | `producer.ack` | producer_av.rs:31 | F | I | — · worker |
+| 5 | `producer.declareInput` | producer_av.rs:31 | F | I | — · worker |
+| 6 | `producer.ackInput` | producer_av.rs:31 | F | I | — · worker |
+| 7 | `source.state` | playback_read.rs:37-40 | F | I | — · worker; sequence flags patched by the core (host/handle.rs:223-229) |
+| 8 | `processing.state` | playback_read.rs:40 | F | I | — · worker |
+| 9 | `playback.stats` | playback_read.rs:40 | F | I | — · worker |
+| 10 | `player.chapters` | playback_read.rs:40 | F | I | — · worker |
+| 11 | `player.audioDevices` | playback_read.rs:40 | F | I | — · worker |
+| 12 | `timeline.marks` | playback_read.rs:33 | C | I | — · at once |
+| 13 | `playback.set` | playback_control.rs:152 | F | I | — · worker |
+| 14 | `source.submit` | playback_control.rs:152 | F | I | — · worker |
+| 15 | `source.operation` | playback_control.rs:152 | F | I | — · worker |
+| 16 | `audio.addTrack` | playback_control.rs:152 | F | I | — · worker |
+| 17 | `audio.selectTrack` | playback_control.rs:152 | F | I | — · worker |
+| 18 | `player.setLoop` | playback_control.rs:152 | F | I | — · worker |
+| 19 | `player.setAudioDevice` | playback_control.rs:152 | F | I | — · worker |
+| 20 | `player.step` | playback_control.rs:152 | F | I | — · worker |
+| 21 | `player.setStepSeek` | playback_control.rs:55 | C | I | — · at once |
+| 22 | `power.preventSleep` | playback_control.rs:72 | C | I | — · at once (`power` on the core, K10) |
+| 23 | `sequence.set` | playback_control.rs:79 | C | I | `Osd` on a refusal (note 3) · at once; start-up gate (note 6) |
+| 24 | `sequence.step` | playback_control.rs:109 | C | I | — · at once |
+| 25 | `sourceResolvers.register` | source_resolve.rs:74 | F | I | — · worker; start-up gate (note 6) |
+| 26 | `sourceResolvers.unregister` | source_resolve.rs:74 | F | I | — · worker; start-up gate (note 6) |
+| 27 | `sourceResolvers.respond` | source_resolve.rs:69 | F | I | `Osd` on a taken refusal (note 3) · worker |
+| 28 | `sourceResolvers.*` | source_resolve.rs:77 | C | I | — · at once (`unsupported`; note 2) |
+| 29 | `events.subscribe` | events.rs:168 | C | I | — · at once |
+| 30 | `events.unsubscribe` | events.rs:168 | C | I | — · at once |
+| 31 | `commands.register` | commands.rs:120, 126 | U | I | `Registry`, `Bindings` snapshots · at once |
+| 32 | `commands.update` | commands.rs:120, 126 | U | I | `Registry` snapshot · at once |
+| 33 | `commands.unregister` | commands.rs:108 | U | I | `Registry`, `Bindings` snapshots (open menu refreshed from them) · at once |
+| 34 | `host.run` | commands.rs:90; host/actions.rs:263 | U | I | `WindowOp::Fullscreen` · at once; playback actions: worker, `Osd` from the result (note 4) |
+| 35 | `commands.keys` | commands.rs:107 | C | I | — · at once |
+| 36 | `ui.open` | ui_window.rs:37, 44 | R | B | `ViewOp::Open` · after the UI reports the view created or the compile error; readiness (note 5) |
+| 37 | `ui.set` | ui_window.rs:38, 103 | R | B | `ViewOp::Set` · after the UI wrote it |
+| 38 | `ui.show` | ui_window.rs:38, 103 | R | B | `ViewOp::Show` · after the UI showed it |
+| 39 | `ui.close` | ui_window.rs:38, 103 | R | B | `ViewOp::Close` · after the UI closed it |
+| 40 | `ui.mount` | ui_mount.rs:160, 281 | R | B | `MountChange` · after `MountApplied`, `ui.preparing` first; readiness and start-up gate (notes 5, 6); handoff (R12) |
+| 41 | `ui.setMount` | ui_mount.rs:164, 538 | R | B | `SetMount` · after the UI wrote it |
+| 42 | `ui.unmount` | ui_mount.rs:160, 281 | R | B | `MountChange` · after `MountApplied`; start-up gate (note 6) |
+| 43 | `ui.interaction` | ui_mount.rs:165, 701 | U | I | `Layout` snapshot (panel locks) · at once |
+| 44 | `ui.menu` | ui_mount.rs:166, 735 | U | I | `PanelMenu` · at once; refusals judged on the last window facts (note 7) |
+| 45 | `layout.state` | ui_mount.rs:167; host/state.rs:322 | C | I | — · at once, from the window facts snapshot (note 1) |
+| 46 | `layout.set` | ui_mount.rs:168, 819 | U | I | `Layout` snapshot · at once |
+| 47 | `dialogs.open` | ui_dialog.rs:51, 167 | R | B | `Dialog` · on the user's choice (`DialogDone`); refusals at once (note 8) |
+| 48 | `dialogs.confirm` | ui_dialog.rs:50, 60 | R | B | `Confirm` or `Review` · on the user's answer (`ConfirmDone`); refusals at once (note 8) |
+| 49 | `packages.*` | plugins_manage.rs:25-31 | C | I | `RevokeOwner` when a plugin stops (K3) · at once, or from the operation / validation thread |
+| 50 | `processing.replace` | processing_video.rs:45 | F | I | — · worker |
+| 51 | `processing.operation` | processing_video.rs:49 | F | I | — · worker |
+| 52 | `video.view.set` | processing_video.rs:72 | F | I | — · worker |
+| 53 | `video.view.release` | processing_video.rs:72 | F | I | — · worker |
+| 54 | `video.render.set` | processing_video.rs:59 | F | I | — · worker |
+| 55 | `video.render.release` | processing_video.rs:68 | F | I | — · worker |
+| 56 | `video.shaders.set` | processing_video.rs:50 | F | I | — · worker |
+| 57 | `subtitles.state` | subtitles_read.rs:24 | F | I | — · worker |
+| 58 | `subtitles.*` | subtitles_control.rs:26 | F | I | — · worker |
+| 59 | `snapshot.state` | media_read.rs:24 | F | I | — · worker |
+| 60 | `jobs.state` | media_read.rs:24 | F | I | — · worker |
+| 61 | `jobs.operation` | media_read.rs:24 | F | I | — · worker |
+| 62 | `snapshot.*` | media_control.rs:35-37 | F | I | — · worker |
+| 63 | `jobs.*` | media_control.rs:35-37 | F | I | — · worker |
+| 64 | `media.sources.open` | media_sources.rs:40-44 | F | I | — · worker |
+| 65 | `media.sources.*` | media_sources.rs:40-44 | F | I | `Dialog` for `locate` only · worker, after the user's choice (note 9) |
+| 66 | `osd.show` | ui_osd.rs:47, 54 | U | I | `Osd` · at once |
+| 67 | `osd.panel` | ui_osd.rs:48 | U | I | `InfoPanels` snapshot · at once |
+| 68 | `clipboard.readText` | clipboard.rs:27 | U | I | — · from a worker thread (note 10) |
+| 69 | `clipboard.writeText` | clipboard.rs:27 | U | I | — · from a worker thread (note 10) |
+| 70 | `clipboard.writeImage` | clipboard.rs:27 | U | I | — · from a worker thread (note 10) |
+| 71 | `window.setVideoArea` | window_control.rs:50; host/state.rs:232-309 | R | B | `WindowOp::VideoArea` · when the window facts show the size, or after 1 s; handoff (R12) |
+| 72 | `window.setAlwaysOnTop` | window_control.rs:54; host/state.rs:192 | U | I | `WindowOp::OnTop` · at once (errors are only logged today) |
+| 73 | `window.setCursorAutoHide` | window_control.rs:66 | C | I | cursor mode snapshot · at once |
+| 74 | `window.setPictureInPicture` | window_control.rs:65; host/video.rs:291 | R | B | `WindowOp::Pip` · from the PiP state machine; handoff (R12) |
+| 75 | `bindings.list` | bindings_manage.rs:25; binding_manager.rs:94 | C | I | — · at once (note 1) |
+| 76 | `bindings.set` | bindings_manage.rs:25; binding_manager.rs:95 | U | I | `Bindings` snapshot (open menu refreshed from it) · at once |
+| 77 | `bindings.reset` | bindings_manage.rs:25; binding_manager.rs:113 | U | I | `Bindings` snapshot · at once |
+| 78 | `timeline.set` | timeline_marks.rs:37 | C | I | — · at once |
+| 79 | `timeline.setRanges` | timeline_marks.rs:37 | C | I | — · at once |
+| 80 | `drops.provide` | ui_drop.rs:60 | C | I | — · at once |
+| 81 | `drops.withdraw` | ui_drop.rs:60 | C | I | — · at once |
+| 82 | `drops.listen` | ui_drop.rs:60 | C | I | — · at once |
+| 83 | `settings.*` | ui_settings.rs:57; ui/settings_window.rs:549-723 | R | B | `SettingsOp` · per method (note 11) |
+| 84 | `appearance.set` | ui_theme.rs:25; ui/theme.rs:228 | U | I | `Theme` · at once |
+| 85 | `appearance.setLanguage` | ui_theme.rs:26; ui/theme.rs:266 | C | I | — · at once |
+| 86 | `secrets.get` | secrets.rs:24; system.rs:155 | C | I | — · from the `system-request` thread |
+| 87 | `secrets.set` | secrets.rs:24; system.rs:155 | C | I | — · from the `system-request` thread |
+| 88 | `secrets.delete` | secrets.rs:24; system.rs:155 | C | I | — · from the `system-request` thread |
+| 89 | `rendering.setPreference` | rendering_manage.rs:26; host/rendering.rs:316 | C | I | — · at once |
+| 90 | `rendering.restart` | rendering_manage.rs:26; host/rendering.rs:326 | C | I | `WindowOp::Quit` after the reply · at once |
+| 91 | `video.upscaling.state` | video_upscaling.rs:34 | F | I | — · worker |
+| 92 | `video.upscaling.set` | video_upscaling.rs:34 | F | I | — · worker |
+| 93 | `video.motion.state` | video_motion.rs:33 | F | I | — · worker |
+| 94 | `video.motion.set` | video_motion.rs:33 | F | I | — · worker |
+| 95 | `commands.list` | commands_run.rs:911 | C | I | — · at once |
+| 96 | `commands.run` | commands_run.rs:924, 701 | R | B | `Review` when the plan asks · `{ran:true}` at once when nothing asks, else on the user's answer (note 8) |
+| 97 | `palette.lead.set` | palette_lead.rs:409 | U | I | `Lead` (palette row, strip) · at once |
+| 98 | `palette.lead.clear` | palette_lead.rs:413 | U | I | `Lead` · at once |
+| 99 | `palette.lead.done` | palette_lead.rs:416 | C | I | — · at once (note 1) |
+| 100 | `mpv.command` | mpv.rs:74 | F | I | — · worker |
+| 101 | `mpv.get` | mpv.rs:74 | F | I | — · worker |
+| 102 | `mpv.set` | mpv.rs:74 | F | I | — · worker |
+| 103 | `mpv.observe` | mpv.rs:74 | F | I | — · worker |
+| 104 | `mpv.unobserve` | mpv.rs:74 | F | I | — · worker |
+| 105 | `triggers.set` | triggers.rs:40 | C | I | — · at once |
+| 106 | `triggers.off` | triggers.rs:57 | C | I | — · at once |
+| 107 | `triggers.declare` | triggers.rs:67 | C | I | — · at once |
+| 108 | `packages.list` | uncapable.rs:25 | C | I | — · at once |
+| 109 | `window.state` | uncapable.rs:26; host/state.rs:213 | C | I | — · at once, from the window facts snapshot (R9) |
+| 110 | `system.reveal` | uncapable.rs:37; system.rs:143 | C | I | — · from the `system-request` thread |
+| 111 | `system.openPath` | uncapable.rs:37; system.rs:147 | C | I | — · from the `system-request` thread |
+| 112 | `system.openUrl` | uncapable.rs:37; system.rs:151 | C | I | — · from the `system-request` thread |
+| 113 | `app.system` | uncapable.rs:37; system.rs:186-203 | U | I | — · from the `system-request` thread, displays from a `Displays` report (note 10) |
+| 114 | `ui.markdownScan` | uncapable.rs:27; ui/ui_markdown.rs:658 | C | I | — · at once |
+| 115 | `storage.session.get` | uncapable.rs:29 | C | I | — · at once |
+| 116 | `storage.session.set` | uncapable.rs:29 | C | I | — · at once |
+| 117 | `storage.session.delete` | uncapable.rs:29 | C | I | — · at once |
+| 118 | `storage.session.keys` | uncapable.rs:29 | C | I | — · at once |
+| 119 | `rendering.state` | uncapable.rs:28 | C | I | — · at once |
+
+**Totals.**
+
+| Today | Count | Stream |
+| --- | --- | --- |
+| F, forwarded to the playback worker | 47 | I |
+| C, core only | 40 | I |
+| U, touches the interface, reply independent | 19 | I (answered by the core at once, R5 / K13) |
+| R, reply needs an interface result | 13 | B |
+| **All** | **119** | **106 I, 13 B** |
+
+The study had 48 / 36 / 25 / 10. The differences, each from the source:
+
+| Entry | Study | Here | Evidence |
+| --- | --- | --- | --- |
+| `sourceResolvers.*` | F | C | The prefix entry reaches only names other than `register`/`unregister`/`respond`, and those are refused `unsupported` at once (source_resolve.rs:77); nothing is forwarded |
+| `layout.state`, `bindings.list`, `palette.lead.done` | U | C | Pure reads or bookkeeping: `layout_state` reads `window_facts`, the panel policy and mounts (host/state.rs:322-360); `bindings_list` reads the binding table (binding_manager.rs:142); `done` drops a ticket (commands_run.rs:202). None touches a Slint object |
+| `dialogs.open`, `dialogs.confirm`, `commands.run` | U | R | The reply carries the user's answer, collected by an interface element (note 8) |
+
+**Notes.**
+
+1. *Core-only reads of shared tables.* `layout.state`, `bindings.list` and `window.state` read tables the design gives to the core (R8) or mirrors the UI feeds (R9). They answer from the core's copy at once, as today they answer from the mirror.
+2. *`sourceResolvers.*`.* The prefix entry exists in the area's list but its handler accepts only the three exact names, which are routed before the prefix. It answers every other name with a refusal on the core.
+3. *OSD side effects of core refusals.* `sequence.set` refused as taken, and a `resolver-taken` reply rewritten in `respond`, call `refuse_taken` → `show_osd` (host/dispatch.rs:55-71, 97-115). The reply does not wait for it: the core sends `Osd` and answers.
+4. *`host.run`.* `fullscreen` is a window command: today `window_command` toggles the shell window and answers `true` if one exists (host/actions.rs:269-277, 531-543); under the design the core answers from "a shell exists" and sends `WindowOp::Fullscreen`. `previous`/`next` send `sequence.step` to the provider and answer at once (:286-298). The other 12 actions go to the worker as `host.action` and are answered from `Event::ActionDone`, which may also show an OSD (:308-342).
+5. *Readiness coupling (R12).* For `ui.open` and `ui.mount` of a run whose activation is `Pending`, `handle.rs:68-87` calls `activation_ui_begin`/`activation_ui_wait` and `ui_begun`; `respond` takes it back (`activation_ui_take`, `activation_ui_finish`, host/dispatch.rs:118-131) and, after the reply line, calls `ui_finished` (:142-144) → `became_ready` (host/supervisor/mod.rs:1002-1030). **Mapping:** begin, wait, take, finish and `ui_finished` stay on the core with the supervisor; the UI's part is only the result (`UiReport` of the view, `MountApplied`). The core answers from that report in today's order: the reply, then `ui_finished`. During a UI stall the run stays `Pending` and becomes ready when the report arrives, as R12 says. Nothing of the supervisor moves to the UI.
+6. *Start-up gate (held mounts).* On a windowed run, `ui.mount`, `ui.unmount`, `sequence.set`, `sourceResolvers.register` and `sourceResolvers.unregister` of a plugin that is not built-in are held while any built-in is still starting (`builtins_starting`: packages not started, a built-in's first run queued, or a built-in's activation `Pending`), and after that behind any earlier held request of the same plugin (host/handle.rs:88-105, ui/slot_claims.rs:73-75, packages/package_manager.rs:1308-1327). They are released in order by `release_held_mounts` (host/dispatch.rs:18-28). A built-in's `Pending` ends only when its first `ui.open`/`ui.mount` was answered (note 5), so during start-up **three UI-independent methods can wait, indirectly, for a built-in's interface result**. This is a scheduling rule (built-ins claim the sequence, resolvers and slots first), not a route through the interface: the gate stays on the core and reads core state. R7 is not broken, and R11 keeps the rule as it is. It is listed so the stall test does not count it as a violation at start-up.
+7. *`ui.menu`.* Its refusals read `window_facts["slots"]`, the floating window's owners and the active tab (ui_mount.rs:784-806). Under the design they read the core's last window facts snapshot (R9), which can be a frame older than the UI. The UI drops a `PanelMenu` whose generation is gone, as `window_for(generation)` does today.
+8. *Replies that carry the user's answer (moved to B).* `dialogs.open` replies with the paths the user chose (`DialogDone`, host/handle.rs:512); `dialogs.confirm` with `{confirmed, checked}` (`ConfirmDone`, :470-475, or the sheet's answer); `commands.run`, when its plan asks, with the answer on the approval sheet (`CommandRunAnswered`, :466-469; commands_run.rs:747-772). These answers are interface results, so by R5's own definition the three are UI-bound. **No behaviour changes:** they are already answered by a later event today, and a later request of the same plugin is already answered before them. The core keeps the admission: the headless refusal, `dialog_busy`, `sheet_waiting`, the ticket and rate checks are core state and are refused at once; only the dialog or sheet and its answer are the UI's. `commands.run` with nothing to ask answers `{ran:true}` at once from the core.
+9. *`media.sources.locate`.* One of the six names behind `media.sources.*` (media_sources.rs:21-28). The worker answers it by asking for the file dialog (`Event::SourceLocate`, playback/media_sources.rs:1176-1183); the dialog's choice goes back to the worker (`owner.sourceLocated`, host/handle.rs:476-510), which then replies. Under the design the core receives `SourceLocate`, sends `Dialog`, and forwards the choice. The request is never routed through the UI; only its dialog step is. The entry stays I; this one name's reply waits for the user, like `dialogs.open`.
+10. *Replies made on the UI thread today, but not interface results.* `app.system` reads the displays from the live winit window, "on the UI thread, where the windows live" (system.rs:187-192; platform/windows.rs:1250-1270; on macOS `NSScreen` is main-thread only, platform/macos.rs:763-769). The `Displays` report of study §4.2 is a UI fact like those of R9: the UI sends it when it changes, and the core answers from its copy. `clipboard.*` runs `arboard` (Windows) or `NSPasteboard` (macOS) where it is called; the "called on the UI thread" of clipboard.rs:2 describes where it runs today, not a requirement of the Windows call (study: inferred). The reply carries the system call's result, not an interface result, so by R5/K13 the entries stay I: the call runs on a worker thread, as `system.*` does, and the reply comes from it. This changes K10's "clipboard stays on the UI side". On macOS, whether `NSPasteboard` may be used off the main thread is unverified (inferred); if it must stay on the main thread there, the three entries are UI-bound on macOS only.
+11. *`settings.*`.* One route entry with four names, kept B as ruled. By name: `settings.register` is answered after the `settings-check` thread compiled the page (ui/settings_window.rs:575-598), not after the UI (K7); `settings.unregister` touches only the page registry (:600-628); `settings.set` writes into the open options window, and conversion and reconcile errors there are the reply (:630-705); `settings.show` replies with the window's open error (:706-721). By R7, the implementer routes `unregister` and `register` through the core (the check thread's result goes to the core), and only `set` and `show` through the UI.
+
+**Check (R7).** No I entry is routed through the UI: every F entry goes from the core to the worker, every C and U entry is answered by the core (or the worker or a `system-request`-style thread) without waiting for a `UiReport`. The UI work of a U entry is a command or snapshot sent with no reply handle. The only waits of I entries on an interface result are the start-up gate (note 6), a scheduling rule kept by R11, and `media.sources.locate`'s dialog (note 9), whose result is the user's choice.
 
 ### 5.2 What the two streams change for a plugin
 
@@ -244,7 +414,7 @@ The same idea applied to video: video gets its own swap chain and render thread 
 
 | No. | Risk or open point | How it is handled |
 | --- | --- | --- |
-| K1 | A plugin sends a UI-bound request without awaiting it and then depends on it having taken effect (for example a read of state that the interface change produces) | A read-only scan of all built-in plugins and the plugin repository before the core moves (plan S0). Each finding is fixed in the plugin, or the pair is brought to the user  **User ruling (2026-11-15):** findings are fixed in the plugins; no ordering exception is kept for them. Third-party authors are told in the SDK docs (order across the two kinds is not guaranteed; await the first reply when order matters). TestHost is changed to model the two streams only after the core thread work is finished and stable, as a later SDK release; nothing in the SDK changes during S0–S3 |
+| K1 | A plugin sends a UI-bound request without awaiting it and then depends on it having taken effect (for example a read of state that the interface change produces) | A read-only scan of all built-in plugins and the plugin repository before the core moves (plan S0). Each finding is fixed in the plugin, or the pair is brought to the user  **Scan result (S0.3, 2026-11-15):** no K1 case in the 14 built-in plugins, the 8 store plugins and the 11 SDK examples; the SDK awaits every UI-bound reply. The scan's three read-after-await cases became the handoff requirement under R12  **User ruling (2026-11-15):** findings are fixed in the plugins; no ordering exception is kept for them. Third-party authors are told in the SDK docs (order across the two kinds is not guaranteed; await the first reply when order matters). TestHost is changed to model the two streams only after the core thread work is finished and stable, as a later SDK release; nothing in the SDK changes during S0–S3 |
 | K2 | The 10 UI-bound methods need a round trip; their replies no longer leave in the same turn as the request | They get an explicit request/reply seam while still on one thread (plan S2d), so the move itself changes only the thread |
 | K3 | `stop_run` (stopping a plugin) reaches the interface: views, mounts, OSD buttons, the floating window, shell properties (P:host/lifecycle.rs:282-445) | Splits into a registry part on the core and a "revoke this owner" message to the UI. During a stall the interface part is late; the process is stopped on time |
 | K4 | The `time` trigger atom runs from the 16 ms UI tick | It moves with `on_demand_tick` to the core. [events-and-triggers.md §4.4](events-and-triggers.md) says "later only while the UI thread is busy"; that sentence is updated when S3 merges |
