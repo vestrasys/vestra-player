@@ -5,7 +5,7 @@ use crate::{
     host::{
         Host, LayoutChange, MenuMode, Mount, MountChange, Origin, Reply, RpcError, debug_keys,
         layout_change,
-        messages::{LayoutOp, SetMount, UiCommand, UiReport},
+        messages::{LayoutOp, MountCancel, SetMount, UiCommand, UiReport},
         mount_view, panel_key, panel_slot, policy_slot, refuse_initial, string,
     },
     i18n, process,
@@ -366,8 +366,13 @@ fn mount(
     // a plugin that mounts a little after its ready keeps its tab.
     let removal = |c: &MountChange| c.key == key && c.reply.id == 0 && c.contribution.is_none();
     host.core.mount_queue.retain(|c| !removal(c));
-    if host.preparing.as_ref().is_some_and(|(_, c)| removal(c)) {
-        host.preparing = None;
+    // One the interface's batching window holds already: the core cancels
+    // it there (plan step S2d(2)).
+    #[cfg(debug_assertions)]
+    host.check_handed();
+    if host.core.handed.as_ref().is_some_and(|h| h.removes(key)) {
+        host.core.handed = None;
+        host.ui_command(UiCommand::CancelMount(MountCancel::Removal { key }));
     }
     if pending_change(host, key) {
         return Err(RpcError::new(
@@ -403,8 +408,8 @@ fn mount(
             .core
             .mount_queue
             .iter()
-            .chain(host.preparing.as_ref().map(|(_, change)| change))
             .map(|c| (c.reply.owner, c.contribution.as_ref().map(|m| m.spec.slot)))
+            .chain(host.core.handed.as_ref().map(|h| (h.reply.owner, h.slot)))
             .collect::<Vec<_>>();
         let mounted = host.core.mounts.values().map(|m| (m.plugin, m.spec.slot));
         if let Some(holder) = slot_claims::occupant(slot, reply.owner, mounted, &pending) {
@@ -443,10 +448,9 @@ fn mount(
     Ok(())
 }
 
-/// A change of panel `key` waits to be applied.
+/// A change of panel `key` waits to be applied (`Core::mount_pending`).
 fn pending_change(host: &Host, key: u64) -> bool {
-    host.core.mount_queue.iter().any(|c| c.key == key)
-        || host.preparing.as_ref().is_some_and(|(_, c)| c.key == key)
+    host.core.mount_pending(key)
 }
 
 /// A mount or unmount of panel `key` of plugin `owner` waits to be applied
@@ -468,16 +472,22 @@ fn waiting_mounts(host: &Host, owner: u64) -> Vec<(u64, Option<composition::Slot
         .and_then(|plugin| plugin.manifest.name.clone())
         .unwrap_or_default();
     let mut waiting = host
-        .preparing
+        .core
+        .handed
         .as_ref()
-        .map(|(_, change)| change)
+        .filter(|held| held.reply.owner == owner)
+        .map(|held| (held.key, held.slot, held.call.clone()))
         .into_iter()
-        .chain(host.core.mount_queue.iter())
-        .filter(|change| change.reply.owner == owner)
-        .map(|change| match &change.contribution {
-            Some(mount) => (change.key, Some(mount.spec.slot), mount.call.clone()),
-            None => (change.key, None, Value::Null),
-        })
+        .chain(
+            host.core
+                .mount_queue
+                .iter()
+                .filter(|change| change.reply.owner == owner)
+                .map(|change| match &change.contribution {
+                    Some(mount) => (change.key, Some(mount.spec.slot), mount.call.clone()),
+                    None => (change.key, None, Value::Null),
+                }),
+        )
         .collect::<Vec<_>>();
     let mounted = host
         .core

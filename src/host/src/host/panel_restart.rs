@@ -385,10 +385,10 @@ impl Host {
         );
         self.drop_panels(entry.owner, entry.keys.into_iter().collect());
     }
-    /// A change of panel `key` waits to be applied.
+    /// A change of panel `key` waits to be applied: the core's record
+    /// (`Core::mount_pending`, plan step S2d(2)).
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
-        self.core.mount_queue.iter().any(|c| c.key == key)
-            || self.preparing.as_ref().is_some_and(|(_, c)| c.key == key)
+        self.core.mount_pending(key)
     }
     /// Remove panels `keys` of run `owner` (queued: one change for them),
     /// as `stop_run` removes a stopped run's.

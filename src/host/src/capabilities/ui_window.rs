@@ -289,6 +289,10 @@ fn show(
     Ok(view::show_again(instance, foreground))
 }
 
+// The two core parts stay below the interface's functions: the source test
+// `host::origins::tests::every_input_path_records_an_origin` reads the first
+// `fn open(` and `"ui.show" =>` of this file, which must be the interface's.
+
 /// The core's part of `ui.open` (row 36): no interface without a window,
 /// the view's id, then the package file, the initial properties and the
 /// callbacks (`ViewKind::Open`). A refusal of those three is not answered

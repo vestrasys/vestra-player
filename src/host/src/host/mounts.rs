@@ -1,7 +1,7 @@
 //! Mounted panels: preparing the shell for mount changes, their values
 //! and callbacks.
 use super::messages::{
-    MountApplied, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts, WindowOp,
+    MountApplied, MountCancel, SetMount, UiCommand, UiReport, UiSnapshot, WindowFacts, WindowOp,
 };
 use super::*;
 use crate::ui::sidebar_tabs::Column;
@@ -83,13 +83,68 @@ impl Core {
     /// oldest accepted mount change, handed to the interface's batching
     /// window. Until plan step S3a the interface takes it in place, at the
     /// point it took it from the queue before (`prepare_mount_tick`).
+    /// The core records the change it hands over (`Core::handed`, plan step
+    /// S2d(2)): until the interface reports its window closed
+    /// (`UiReport::Batching`), the change still counts as pending for the
+    /// core's own checks.
     fn mount_command(&mut self) -> Option<UiCommand> {
-        self.mount_queue.pop_front().map(UiCommand::Mount)
+        let change = self.mount_queue.pop_front()?;
+        self.handed = Some(HandedMount::of(&change));
+        Some(UiCommand::Mount(change))
+    }
+    /// The change of panel `key` the interface's batching window holds,
+    /// as the core recorded it (`handed`), or one in the core's queue.
+    pub(crate) fn mount_pending(&self, key: u64) -> bool {
+        self.mount_queue.iter().any(|c| c.key == key)
+            || self.handed.as_ref().is_some_and(|h| h.key == key)
     }
     /// Every accepted mount change, oldest first, for the batching window
     /// about to close (a `UiCommand::Mount` each).
     fn mount_commands(&mut self) -> Vec<UiCommand> {
         self.mount_queue.drain(..).map(UiCommand::Mount).collect()
+    }
+}
+
+/// What the core records of the mount change the interface's batching
+/// window holds (plan step S2d(2); `Core::handed`): enough for the core's
+/// own checks, which read it instead of the interface's window (a change
+/// still waiting there, the slot it claims, the call a recording keeps,
+/// the host's own removal of a panel).
+#[derive(Clone)]
+pub(crate) struct HandedMount {
+    pub(crate) reply: Reply,
+    /// The panel (`panel_key`).
+    pub(crate) key: u64,
+    /// A mount's slot; `None`: an unmount.
+    pub(crate) slot: Option<composition::Slot>,
+    /// A mount's call as a recording keeps it (`Mount::call`); `Null` for
+    /// an unmount.
+    pub(crate) call: Value,
+}
+impl HandedMount {
+    pub(crate) fn of(change: &MountChange) -> Self {
+        Self {
+            reply: change.reply.clone(),
+            key: change.key,
+            slot: change.contribution.as_ref().map(|m| m.spec.slot),
+            call: change
+                .contribution
+                .as_ref()
+                .map_or(Value::Null, |m| m.call.clone()),
+        }
+    }
+    /// The host's own removal of panel `key` (an unmount with id 0), the
+    /// change a plugin's own mount of that panel replaces.
+    pub(crate) fn removes(&self, key: u64) -> bool {
+        self.key == key && self.reply.id == 0 && self.slot.is_none()
+    }
+    /// The same change (debug check of the record against the window).
+    fn same(&self, other: &Self) -> bool {
+        self.reply.owner == other.reply.owner
+            && self.reply.id == other.reply.id
+            && self.key == other.key
+            && self.slot == other.slot
+            && self.call == other.call
     }
 }
 
@@ -129,7 +184,7 @@ impl Host {
                 if !preparing.is_empty() {
                     self.ui_report(UiReport::MountPreparing(preparing));
                 }
-                self.preparing = Some((Instant::now(), change));
+                self.set_preparing(Some((Instant::now(), change)));
             }
             return;
         }
@@ -143,6 +198,8 @@ impl Host {
             return;
         }
         let (_, change) = self.preparing.take().unwrap();
+        // The window closed: its change is applied now, not held.
+        self.ui_report(UiReport::Batching(None));
         let started = Instant::now();
         // Every change queued meanwhile joins this one. After a failed
         // batch its changes go one at a time again, so that one bad
@@ -207,7 +264,7 @@ impl Host {
             let due = Instant::now()
                 .checked_sub(Duration::from_millis(32))
                 .unwrap_or_else(Instant::now);
-            self.preparing = Some((due, first));
+            self.set_preparing(Some((due, first)));
             return;
         }
         let elapsed = started.elapsed().as_secs_f64() * 1000.;
@@ -256,6 +313,53 @@ impl Host {
                 placeholders,
             }));
         }
+    }
+    /// The interface's batching window now holds `preparing` (plan step
+    /// S2d(2)): the core is told which change it holds, or none
+    /// (`UiReport::Batching`), and reads that record (`Core::handed`)
+    /// instead of the window.
+    pub(crate) fn set_preparing(&mut self, preparing: Option<(Instant, MountChange)>) {
+        let held = preparing
+            .as_ref()
+            .map(|(_, change)| HandedMount::of(change));
+        self.preparing = preparing;
+        self.ui_report(UiReport::Batching(held));
+    }
+    /// The interface's side of `UiCommand::CancelMount` (plan step S2d(2)):
+    /// the change the batching window holds is dropped when it is the one
+    /// the core cancels.
+    pub(crate) fn cancel_mount(&mut self, cancel: MountCancel) {
+        let dropped = self
+            .preparing
+            .as_ref()
+            .is_some_and(|(_, change)| match cancel {
+                MountCancel::Removal { key } => {
+                    change.key == key && change.reply.id == 0 && change.contribution.is_none()
+                }
+                MountCancel::Owner(owner) => change.reply.owner == owner,
+            });
+        if dropped {
+            self.set_preparing(None);
+        }
+    }
+    /// Debug builds: the core's record of the change the batching window
+    /// holds is the window's wherever the core reads it (plan step S2d(2)).
+    /// Removed with the in-place delivery (plan S3a).
+    #[cfg(debug_assertions)]
+    pub(crate) fn check_handed(&self) {
+        let window = self
+            .preparing
+            .as_ref()
+            .map(|(_, change)| HandedMount::of(change));
+        let same = match (&self.core.handed, &window) {
+            (None, None) => true,
+            (Some(core), Some(window)) => core.same(window),
+            _ => false,
+        };
+        debug_assert!(
+            same,
+            "the core's record of the batching window is behind it"
+        );
     }
     /// The R13 handoff of a mount batch and of `layout.set`: the window
     /// facts the interface last reported, with the tabs as the apply left it
@@ -380,7 +484,13 @@ impl Host {
                 height,
             }) => self.video_area_command(reply, width, height),
             UiCommand::Window(WindowOp::Pip { reply, on }) => self.pip_command(reply, on),
-            _ => unreachable!("not sent before plan step S2d"),
+            // Plan step S2d(2): the core cancels the change the batching
+            // window holds; start-up settled.
+            UiCommand::CancelMount(cancel) => self.cancel_mount(cancel),
+            UiCommand::Snapshot(UiSnapshot::StartupSettled(settled)) => {
+                self.startup_panels = settled;
+            }
+            _ => unreachable!("not sent until plan step S2d(3), S2d(4) or S3a"),
         }
     }
     fn log_prepared(&self, changes: usize, started: Instant, ok: bool) {
@@ -1021,5 +1131,42 @@ mod tests {
                 .len(),
             4
         );
+    }
+}
+
+/// Plan step S2d(2): the core's record of the change the batching window
+/// holds.
+#[cfg(test)]
+mod handed_tests {
+    use super::*;
+
+    fn held(id: u64, slot: Option<composition::Slot>) -> HandedMount {
+        HandedMount {
+            reply: Reply { owner: 7, id },
+            key: 28,
+            slot,
+            call: Value::Null,
+        }
+    }
+
+    /// Only the host's own unmount (id 0) of that panel gives way to the
+    /// plugin's mount; a plugin's unmount or any mount does not.
+    #[test]
+    fn only_the_hosts_own_unmount_of_the_panel_is_a_removal() {
+        assert!(held(0, None).removes(28));
+        assert!(!held(0, None).removes(29));
+        assert!(!held(5, None).removes(28));
+        assert!(!held(0, Some(composition::Slot::Sidebar)).removes(28));
+    }
+
+    #[test]
+    fn records_are_the_same_only_when_every_field_is() {
+        let base = held(3, Some(composition::Slot::Sidebar));
+        assert!(base.same(&base.clone()));
+        assert!(!base.same(&held(4, Some(composition::Slot::Sidebar))));
+        assert!(!base.same(&held(3, None)));
+        let mut called = base.clone();
+        called.call = json!({"slot":"sidebar"});
+        assert!(!base.same(&called));
     }
 }
