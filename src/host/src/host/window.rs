@@ -17,6 +17,9 @@ pub(crate) struct ColumnMemory {
 
 impl Host {
     pub(crate) fn window_tick(&mut self) {
+        // The title strip, the tab keys and the bar read the interface's
+        // copies of the tables (rule R8).
+        self.sync_tables();
         self.pip_tick();
         self.menu_tick();
         let Some(shell) = self.shell.as_ref().map(ComponentHandle::clone_strong) else {
@@ -708,10 +711,11 @@ impl Host {
     /// with its current key, "" for none. Written only when the binding
     /// table, the commands, the shell or the tabs changed.
     fn tab_keys(&mut self, shell: &slint_interpreter::ComponentInstance, column: Column) {
+        self.sync_tables();
         let index = column.index();
         let from = (
             self.input.borrow().table.revision(),
-            self.core.commands.revision(),
+            self.registry.revision(),
             self.shell_generation,
             self.columns[index].tabs.clone(),
         );
@@ -723,11 +727,11 @@ impl Host {
             .iter()
             .map(|&owner| {
                 let plugin = panel_plugin(owner);
-                let entries = self.core.commands.entries_of(plugin);
+                let entries = self.registry.entries_of(plugin);
                 sidebar_tabs::tab_command(
                     entries
                         .iter()
-                        .map(|(entry, ..)| entry.declaration.home.as_deref()),
+                        .map(|entry| entry.declaration.home.as_deref()),
                 )
                 .and_then(|id| self.input.borrow().table.label(plugin, id))
                 .unwrap_or_default()

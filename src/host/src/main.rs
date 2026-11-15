@@ -556,6 +556,7 @@ fn player() -> Result<()> {
         triggers: Default::default(),
         trigger_state: Default::default(),
         commands: commands::Registry::new(),
+        tables: Default::default(),
         shader_guard,
         memory_logged: None,
         // Made above, before the clock, as before plan step S2c moved it
@@ -647,6 +648,7 @@ fn player() -> Result<()> {
         theme_pending: false,
         placements: view::Placements::default(),
         bar: bar_buttons::Strip::default(),
+        registry: Default::default(),
     };
     // Kept trigger conditions: one file per installed instance.
     host.core.triggers = triggers::Triggers::new(Some(host.core.triggers_dir()));
@@ -681,7 +683,7 @@ fn player() -> Result<()> {
         // Host 0.6.0: an override of Toggle Fullscreen gets its new
         // default Escape, once (`migrate_fullscreen_escape`).
         let holders = bindings::parse("Escape")
-            .map(|escape| host.input.borrow().table.default_holders(&escape))
+            .map(|escape| host.core.bindings().default_holders(&escape))
             .unwrap_or_default();
         let state = &mut host.ui_state.state;
         let escape = host::migrate_fullscreen_escape(
@@ -697,7 +699,7 @@ fn player() -> Result<()> {
             host.ui_state.flush();
         }
         let overlay = host.ui_state.state.bindings.clone();
-        host.input.borrow_mut().table.set_overlay(overlay);
+        host.core.bindings_mut().set_overlay(overlay);
         if let Some(sidebar) = &host.ui_state.state.sidebar {
             host.policy.set_sidebar_width(sidebar.width);
         }
@@ -844,6 +846,9 @@ fn player() -> Result<()> {
         host.native_window = native_before
             .as_ref()
             .and_then(|before| platform::associate_new(before).ok());
+        // The interface's first copies of the tables (rule R8): the host's
+        // commands, the overlay and what start-up registered.
+        host.sync_tables();
         let host = Rc::new(RefCell::new(host));
         host.borrow().bind_shell(&window, 1)?;
         host.borrow().bind_tabs(&window, 1)?;
@@ -977,16 +982,25 @@ fn player() -> Result<()> {
                     host.theme_all();
                     turn.step("theme");
                 }
+                // The core's step: the binding table follows the registry's
+                // disabled commands (keys bound to them pass on).
                 if host.core.commands.revision() != binding_revision {
                     binding_revision = host.core.commands.revision();
                     let disabled = host.core.commands.disabled();
-                    host.input.borrow_mut().table.set_disabled(disabled);
+                    // Only a change is a write: the interface's copy of the
+                    // table is made again only then (`host/tables.rs`).
+                    if *host.core.bindings().disabled() != disabled {
+                        host.core.bindings_mut().set_disabled(disabled);
+                    }
                 }
-                // The revision alone, not a snapshot: a snapshot builds the
-                // whole menu tree, longer than a frame with many plugins.
-                // A closed menu is built when it opens (`open_menu`).
+                // The interface's step, on its copy of the registry (rule
+                // R8, `host/tables.rs`). The revision alone, not a snapshot:
+                // a snapshot builds the whole menu tree, longer than a frame
+                // with many plugins. A closed menu is built when it opens
+                // (`open_menu`).
+                host.sync_tables();
                 if host.shell.is_some() {
-                    let revision = host.core.commands.revision();
+                    let revision = host.registry.revision();
                     if revision != menu_revision {
                         menu_revision = revision;
                         if host.menu_open
@@ -1007,6 +1021,9 @@ fn player() -> Result<()> {
                 }
                 frame_pacing::tick();
                 turn.step("frame");
+                // The key and mouse callbacks that Slint runs before the
+                // next tick read the tables as this tick left them (R8).
+                host.sync_tables();
                 if let Some(log) = host.frame_log.as_mut() {
                     log.tick_took(began.elapsed());
                 }

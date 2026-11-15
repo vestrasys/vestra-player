@@ -101,7 +101,7 @@ impl Host {
                 }
                 let inputs = bindings::Table::canonical(&inputs).map_err(RpcError::invalid)?;
                 let key = format!("{plugin}/{command}");
-                if !self.input.borrow().table.declares(&plugin, &command)
+                if !self.core.bindings().declares(&plugin, &command)
                     && !self.ui_state.state.bindings.contains_key(&key)
                 {
                     return Err(RpcError::new("missing", format!("no command {key}")));
@@ -117,7 +117,7 @@ impl Host {
                     let (plugin, command) = reference(params)?;
                     let key = format!("{plugin}/{command}");
                     if self.ui_state.state.bindings.remove(&key).is_none()
-                        && !self.input.borrow().table.declares(&plugin, &command)
+                        && !self.core.bindings().declares(&plugin, &command)
                     {
                         return Err(RpcError::new("missing", format!("no command {key}")));
                     }
@@ -131,7 +131,7 @@ impl Host {
     /// The overlay is kept in the interface state file (debounced save).
     fn overlay_changed(&mut self) {
         let overlay = self.ui_state.state.bindings.clone();
-        self.input.borrow_mut().table.set_overlay(overlay);
+        self.core.bindings_mut().set_overlay(overlay);
         let now = self.core.now_ms();
         self.ui_state.touch(now);
         if self.menu_open {
@@ -140,7 +140,7 @@ impl Host {
         }
     }
     fn bindings_list(&self) -> Value {
-        let table = &self.input.borrow().table;
+        let table = self.core.bindings();
         list(
             table,
             |info| Some(&self.core.commands.get(info.owner, &info.id)?.declaration),
@@ -159,7 +159,7 @@ impl Host {
             }
         }
         if grew {
-            self.input.borrow_mut().table.listed_elsewhere();
+            self.core.bindings_mut().listed_elsewhere();
         }
     }
     /// `bindings.changed` (declarations or overlay) and `packages.changed`
@@ -171,7 +171,7 @@ impl Host {
         }
         self.core.notified_at = now;
         let (revision, key) = {
-            let table = &self.input.borrow().table;
+            let table = self.core.bindings();
             (
                 table.revision(),
                 [
@@ -304,13 +304,12 @@ impl Host {
     /// revision they are of (a larger one is newer: the SDK keeps the
     /// newest of an answer and an event that cross).
     fn keys_data(&self, keys: Value) -> Value {
-        json!({"keys":keys,"revision":self.input.borrow().table.revision()})
+        json!({"keys":keys,"revision":self.core.bindings().revision()})
     }
     /// `owner`'s manifest id (running or in standby) and its key labels
     /// (`labels_with_host`).
     fn keys_of(&self, owner: u64) -> (Option<String>, Value) {
-        let input = self.input.borrow();
-        let (declared_by, labels) = labels_with_host(&input.table, owner);
+        let (declared_by, labels) = labels_with_host(self.core.bindings(), owner);
         let manifest = self
             .core
             .plugins

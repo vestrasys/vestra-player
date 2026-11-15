@@ -32,6 +32,7 @@ mod shell;
 pub(crate) mod stall;
 mod state;
 pub(crate) mod supervisor;
+mod tables;
 mod triggers;
 mod video;
 mod window;
@@ -191,7 +192,9 @@ pub(crate) struct Floating {
 /// Read synchronously by the shell's key/mouse callbacks, without borrowing Host.
 #[derive(Default)]
 pub(crate) struct InputShared {
-    pub(crate) table: bindings::Table,
+    /// The interface's copy of the core's binding table (rule R8,
+    /// `host/tables.rs`): read here by the key and mouse callbacks.
+    pub(crate) table: bindings::Snapshot,
     pub(crate) bottom: Option<u64>,
     pub(crate) sidebar: Option<u64>,
     /// The adjust column's current tab (`panel:adjust` keys).
@@ -356,7 +359,13 @@ pub(crate) struct Core {
     pub(crate) plugins_revision: u64,
     pub(crate) events: mpsc::Sender<Event>,
     pub(crate) headless: bool,
+    /// The command registry (rule R8): the interface reads its copy,
+    /// `Host::registry` (`host/tables.rs`).
     pub(crate) commands: commands::Registry,
+    /// The binding table (rule R8), written through `bindings_mut`, and
+    /// what the interface was last given of both tables
+    /// (`host/tables.rs`).
+    pub(crate) tables: tables::Tables,
     /// The plugins (manifest ids) that have mounted a panel in this run,
     /// a replayed tab's placeholder included: `bindings.list` lists their
     /// `focus: "panel"` commands for the rest of the run
@@ -630,6 +639,10 @@ pub(crate) struct Host {
     pub(crate) placements: view::Placements,
     /// Bottom-bar command buttons (`bar_buttons.rs`).
     pub(crate) bar: bar_buttons::Strip,
+    /// The interface's copy of the core's command registry (rule R8,
+    /// `host/tables.rs`): menus, the palette, the bar, the tab keys and
+    /// the video click read it.
+    pub(crate) registry: Arc<commands::View>,
 }
 pub(crate) struct AreaReply {
     pub(crate) reply: Reply,
