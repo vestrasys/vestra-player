@@ -253,6 +253,15 @@ pub(crate) fn debug_keys() -> bool {
     *ON.get_or_init(|| std::env::var_os("VESTRA_DEBUG_KEYS").is_some_and(|v| v == "1"))
 }
 
+/// Whether a blocked input (`name`, `bindings::Input::name`) brings the
+/// open system dialog to the front: a file dialog or confirmation is open
+/// (not only a menu), and it is a new key press or click: an auto-repeat
+/// does not raise it again and again, and the wheel over the player is no
+/// request for it.
+pub(crate) fn raises_dialog(dialog: bool, repeat: bool, name: &str) -> bool {
+    dialog && !repeat && !name.starts_with("Mouse:Wheel")
+}
+
 /// Resolve a bound input on the UI thread; true = bound (Slint stops propagating).
 /// Auto-repeats fire only commands that declared `repeat`.
 pub(crate) fn fire(
@@ -265,6 +274,12 @@ pub(crate) fn fire(
 ) -> bool {
     let shared = input.borrow();
     if shared.blocked {
+        // The user presses keys in the player while a dialog waits: the
+        // dialog comes to the front, so the input is not dead for nothing
+        // (`Host::show_waiting_confirmation` for a refused request).
+        if raises_dialog(shared.dialog, repeat, &event.name) {
+            platform::show_open_dialog(platform::app_in_foreground());
+        }
         return false;
     }
     let target = match shared.table.lookup(event, panel) {
@@ -565,5 +580,40 @@ mod tests {
         input.borrow_mut().blocked = true;
         assert!(!press(MouseButton::Back));
         assert!(fired(&received).is_empty());
+        // Also while a system dialog is open: the input still fires nothing
+        // (the dialog comes to the front instead, `raises_dialog`).
+        input.borrow_mut().dialog = true;
+        assert!(!press(MouseButton::Back));
+        assert!(fired(&received).is_empty());
+    }
+
+    /// The bug of 2026-11-15: with a file dialog open every shortcut was
+    /// dead and nothing showed why. A key press or click brings the dialog
+    /// to the front; an auto-repeat, the wheel, or a block without a dialog
+    /// (a menu) does not. Every combination.
+    #[test]
+    fn a_blocked_press_raises_the_open_dialog() {
+        for dialog in [false, true] {
+            for repeat in [false, true] {
+                for name in [
+                    "Space",
+                    "Ctrl+O",
+                    "Mouse:LeftClick",
+                    "Mouse:LeftDoubleClick",
+                    "Mouse:X1",
+                    "Mouse:WheelUp",
+                    "Mouse:WheelDown",
+                    "Mouse:WheelLeft",
+                    "Mouse:WheelRight",
+                ] {
+                    let wheel = name.starts_with("Mouse:Wheel");
+                    assert_eq!(
+                        raises_dialog(dialog, repeat, name),
+                        dialog && !repeat && !wheel,
+                        "dialog {dialog}, repeat {repeat}, {name}"
+                    );
+                }
+            }
+        }
     }
 }

@@ -193,7 +193,7 @@ export default async function activate(plugin: Plugin) {
 
   // Always on Top ▸ (725–729).
   const setMode = (mode: Mode, say = true) => {
-    preferences.update({ onTop: mode });
+    preferences.update({ onTop: mode, onTopChosen: true });
     void onTop.apply();
     if (say) quiet(plugin.osd.show(MODE_OSD[mode]));
   };
