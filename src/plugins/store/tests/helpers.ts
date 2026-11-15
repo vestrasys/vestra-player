@@ -359,10 +359,11 @@ type Row = {
 /** The cards of the current tab. */
 export const rows = (host: TestHost) => (props(host)["cards"] as Row[]) ?? [];
 
-/** The window's tabs (store 0.2.11: All replaced Available and comes first). */
+/** The window's tabs (store 0.2.11: All replaced Available and comes first; 0.3.1: Not installed after it). */
 export const ALL = 0;
-export const INSTALLED = 1;
-export const UPDATES = 2;
+export const NOT_INSTALLED = 1;
+export const INSTALLED = 2;
+export const UPDATES = 3;
 
 /** Switch the store window to a tab. */
 export async function tab(host: TestHost, index: number) {

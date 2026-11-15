@@ -255,6 +255,12 @@ export const isInstalledRow = (item: Item) =>
   (item.state === "builtin" && item.repo === null);
 
 /**
+ * A repository's entry whose id has no installed instance, no built-in and no
+ * development load (the Not installed tab): what could still be added.
+ */
+export const isNotInstalledRow = (item: Item) => item.entry !== null && item.installed === null && !item.development;
+
+/**
  * A built-in plugin's row (shipped with the player; it cannot be uninstalled
  * or disabled): its own row under Installed and All, and a repository's entry
  * for it under All ("builtin", or "reserved" for a `vestra.` id).

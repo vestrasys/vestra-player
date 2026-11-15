@@ -1,17 +1,20 @@
 /**
- * The tabs All · Installed · Updates (store 0.2.11, user ruling 2026-11-03,
- * as GNOME Software, KDE Discover, the JetBrains Marketplace and VS Code):
- * All lists every plugin of every repository, installed ones included, and
- * the installed plugins no repository lists, each card with its state and
- * its button (Store v3), the rest on its page. The store remembers the last tab; the first open is All, and a
- * remembered "available" (the tab All replaced) is All.
+ * The tabs All · Not installed · Installed · Updates (store 0.2.11, user
+ * ruling 2026-11-03, as GNOME Software, KDE Discover, the JetBrains
+ * Marketplace and VS Code; Not installed since 0.3.1, as Steam and
+ * Synaptic): All lists every plugin of every repository, installed ones
+ * included, and the installed plugins no repository lists, each card with
+ * its state and its button (Store v3), the rest on its page. Not installed
+ * lists the repositories' plugins nothing installed has the id of. The store
+ * remembers the last tab; the first open is All, and a remembered
+ * "available" (the tab All replaced) is All.
  */
 import assert from "node:assert/strict";
 import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ALL, BUILTIN, choose, controls, FakeNet, info, type Info, INSTALLED, manage, more, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
+import { ALL, BUILTIN, choose, controls, FakeNet, info, type Info, INSTALLED, manage, more, NOT_INSTALLED, OFFICIAL, openStore, props, publish, rows, start, tab, THIRD, until, UPDATES, yes } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-tabs-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -160,6 +163,9 @@ test("the tab is remembered; the first open is All; a remembered Available (befo
   // Installed is kept the same way; a value of the wrong type is All and does not reset the settings.
   writeFileSync(join(old, "settings.json"), JSON.stringify(settings("installed")));
   await run(old, ({ host }) => assert.equal(props(host)["category"], INSTALLED));
+  // Not installed (store 0.3.1) too; the tabs after it keep their names, so a remembered tab stays the same tab.
+  writeFileSync(join(old, "settings.json"), JSON.stringify(settings("notInstalled")));
+  await run(old, ({ host }) => assert.equal(props(host)["category"], NOT_INSTALLED));
   writeFileSync(join(old, "settings.json"), JSON.stringify(settings(7)));
   await run(old, ({ host, store }) => {
     assert.equal(props(host)["category"], ALL);
@@ -269,6 +275,89 @@ test("a development load (--plugin) folds nothing: the repository's entry of its
     await until(host, () => host.packageCalls.some((c) => c.method === "install"), "installed from the repository");
   } finally {
     await stop();
+  }
+});
+
+test("Not installed (store 0.3.1): the repositories' plugins with no installed copy, no built-in and no development load of their id", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [
+    { id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] },
+    { id: "b.beta", name: "Beta", versions: [{ version: "1.0.0" }] },
+    { id: "s.side", name: "Side", versions: [{ version: "1.0.0" }] },
+    { id: "t.dev", name: "Dev Tool", versions: [{ version: "1.0.0" }] },
+    { id: "o.off", name: "Off", versions: [{ version: "1.0.0" }] },
+    // A repository listing a built-in's id: it is installed (built in), so not here.
+    { id: "vestra.video", name: "Fake Video", versions: [{ version: "9.0.0" }] },
+  ]);
+  publish(net, THIRD, [{ id: "b.beta", name: "Beta", versions: [{ version: "2.0.0" }] }]);
+  const { host, store, stop } = await start({
+    net,
+    locale: "en",
+    packages: [
+      BUILTIN,
+      info("a.alpha", { version: "1.0.0", source: fromRepo }),
+      // Sideloaded, and disabled: installed all the same.
+      info("s.side", { version: "1.0.0", source: { kind: "file" } }),
+      info("o.off", { version: "1.0.0", source: fromRepo, state: "disabled" }),
+      info("t.dev", { origin: "development", source: null }),
+    ],
+  });
+  try {
+    store.settings.save({ ...store.settings.value, repos: [THIRD] });
+    store.repos.sync([THIRD]);
+    await store.refreshAll(true);
+    await openStore(host);
+    // Seven repository rows, and the local rows of the built-in, the sideload and the development load.
+    await until(host, () => store.items.length === 10, "rows");
+    // One card per repository, as under All; the count is the tab's before a search.
+    assert.equal(props(host)["not-installed-count"], 2);
+    await tab(host, NOT_INSTALLED);
+    assert.deepEqual(rows(host).map((r) => [r.key, r.state, r.byNote, r.button.id]).sort(), [
+      [`${OFFICIAL}\nb.beta`, "", "", "install"],
+      [`${THIRD}\nb.beta`, "", "· Unofficial", "install"],
+    ]);
+    // Showing the built-ins adds nothing here.
+    host.window("store").emit("setHideBuiltins", false);
+    await host.settle();
+    assert.equal(props(host)["not-installed-count"], 2);
+    assert.equal(rows(host).length, 2);
+    // Kept by name in settings.json.
+    assert.equal(store.settings.value.tab, "notInstalled");
+    // A search with no match says so, as every tab does.
+    host.window("store").emit("search", "alpha");
+    await host.settle();
+    assert.equal(rows(host).length, 0);
+    assert.equal(props(host)["empty-text"], "No plugins match");
+  } finally {
+    await stop();
+  }
+});
+
+test("Not installed, empty: every repository plugin installed says so; offline, the repositories cannot be reached", async () => {
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [{ id: "a.alpha", name: "Alpha", versions: [{ version: "1.0.0" }] }]);
+  const all = await start({ net, locale: "en", packages: [BUILTIN, info("a.alpha", { version: "1.0.0", source: fromRepo })] });
+  try {
+    await openStore(all.host);
+    await until(all.host, () => all.store.items.length === 2, "rows");
+    await tab(all.host, NOT_INSTALLED);
+    assert.equal(props(all.host)["not-installed-count"], 0);
+    assert.deepEqual(rows(all.host), []);
+    assert.equal(props(all.host)["empty-text"], "Every plugin in the repositories is installed");
+  } finally {
+    await all.stop();
+  }
+  const offline = new FakeNet();
+  offline.offline = true;
+  const off = await start({ net: offline, locale: "en", packages: [BUILTIN, info("s.side", { version: "1.0.0" })] });
+  try {
+    await openStore(off.host);
+    await until(off.host, () => !off.store.repos.official.refreshing, "gave up");
+    await tab(off.host, NOT_INSTALLED);
+    assert.deepEqual(rows(off.host), []);
+    assert.equal(props(off.host)["empty-text"], "Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.");
+  } finally {
+    await off.stop();
   }
 });
 

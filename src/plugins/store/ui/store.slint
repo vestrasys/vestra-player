@@ -36,7 +36,7 @@ export struct StoreCard {
     icon: image,
     // "✓ Installed", "Update available", "Disabled"…; "" none.
     state: string,
-    // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim (see Tone).
+    // 0 plain, 1 accent, 2 warn, 3 danger, 4 dim, 5 success (see Tone).
     stateTone: int,
     // Install, Update or Enable (`id` "": no button). Update is drawn in the accent colour.
     button: MenuEntry,
@@ -262,11 +262,13 @@ export component StoreWindow inherits Window {
     background: Theme.bg-panel;
 
     in-out property <string> search-text;
-    // Tabs: 0 All (installed plugins included), 1 Installed, 2 Updates.
+    // Tabs: 0 All (installed plugins included), 1 Not installed, 2 Installed, 3 Updates.
     // In-out: the tab strip sets it on a click or an arrow key (then asks with set-category).
     in-out property <int> category;
     // What All can show: without any repository index, the installed plugins only.
     in property <int> all-count;
+    // The repositories' plugins that are neither installed, built in nor loaded for development.
+    in property <int> not-installed-count;
     in property <int> installed-count;
     // Plugins with an update (0: none).
     in property <int> updates;
@@ -409,10 +411,11 @@ export component StoreWindow inherits Window {
                             horizontal-stretch: 0;
                             model: [
                                 @tr("All ({})", root.all-count),
+                                @tr("Not installed ({})", root.not-installed-count),
                                 @tr("Installed ({})", root.installed-count),
                                 @tr("Updates ({})", root.updates),
                             ];
-                            emphasis: [false, false, root.updates > 0];
+                            emphasis: [false, false, false, root.updates > 0];
                             current-index <=> root.category;
                             selected(index) => { root.set-category(index); }
                         }

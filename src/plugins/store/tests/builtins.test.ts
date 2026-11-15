@@ -11,7 +11,7 @@ import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "nod
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { ALL, BUILTIN, FakeNet, info, type Info, INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until } from "./helpers.ts";
+import { ALL, BUILTIN, FakeNet, info, type Info, INSTALLED, NOT_INSTALLED, OFFICIAL, openStore, props, publish, rows, showBuiltins, start, tab, until } from "./helpers.ts";
 
 const scratch = mkdtempSync(join(tmpdir(), "vestra-store-builtins-"));
 test.after(() => rmSync(scratch, { recursive: true, force: true }));
@@ -72,6 +72,10 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
     await tab(host, ALL);
     await tab(host, INSTALLED);
     assert.deepEqual(names(host), ["Alpha", "Old"]);
+    // Not installed: never a built-in's id, whichever way the switch is (checked again below).
+    await tab(host, NOT_INSTALLED);
+    assert.deepEqual(names(host), ["Beta", "Other"]);
+    assert.equal(props(host)["not-installed-count"], 2);
     await tab(host, ALL);
 
     await showBuiltins(host);
@@ -86,6 +90,53 @@ test("on by default: built-ins are left out of the lists, the counts and the tag
     assert.equal(props(host)["installed-count"], 3);
     // The update count (the menu, the Updates tab) never counted built-ins.
     assert.equal(props(host)["updates"], 1);
+    await tab(host, NOT_INSTALLED);
+    assert.deepEqual(names(host), ["Beta", "Other"]);
+    assert.equal(props(host)["not-installed-count"], 2);
+  } finally {
+    await stop();
+  }
+});
+
+test("every plugin the player lists as built in is one; a built-in's id loaded with --plugin is a development load, not a built-in", async () => {
+  // The player's packages.list: a bundled built-in is `origin: "installed", builtin: true`; a
+  // development load (`--plugin`) of the same id, while it runs, is `origin: "development",
+  // builtin: false` (host package_list: a development load is never the installation's built-in).
+  const bundled = (id: string) => info(id, { version: "1.0.0", builtin: true, source: { kind: "bundled" } });
+  const dev = (id: string) => info(id, { version: "1.0.0", origin: "development", source: null, directory: `/src/plugins/${id}` });
+  const net = new FakeNet();
+  publish(net, OFFICIAL, [{ id: "b.beta", name: "Beta", versions: [{ version: "1.0.0" }] }]);
+  const started = await start({
+    net,
+    locale: "en",
+    packages: [bundled("vestra.audio"), bundled("vestra.marks"), bundled("vestra.video"), dev("vestra.window"), dev("vestra.history")],
+  });
+  const { host, store, stop } = started;
+  try {
+    await openStore(host);
+    await until(host, () => store.items.length === 6, "rows");
+    // Hidden: every bundled built-in goes; the development loads stay, as the development loads they are.
+    assert.deepEqual(
+      rows(host).map((r) => [r.name, r.state]),
+      [
+        ["Beta", ""],
+        ["vestra.history", "Development load"],
+        ["vestra.window", "Development load"],
+      ],
+    );
+    assert.equal(props(host)["builtin-count"], 3);
+    await showBuiltins(host);
+    await tab(host, INSTALLED);
+    assert.deepEqual(
+      rows(host).map((r) => [r.name, r.state]),
+      [
+        ["vestra.audio", "Comes with the player"],
+        ["vestra.marks", "Comes with the player"],
+        ["vestra.video", "Comes with the player"],
+        ["vestra.history", "Development load"],
+        ["vestra.window", "Development load"],
+      ],
+    );
   } finally {
     await stop();
   }

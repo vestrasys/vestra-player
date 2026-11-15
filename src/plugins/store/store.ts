@@ -18,6 +18,7 @@ import {
   isBuiltinRow,
   isDevelopmentRow,
   isInstalledRow,
+  isNotInstalledRow,
   isStrandedRow,
   updateCount,
   type Display,
@@ -83,13 +84,17 @@ export const timing = {
 /**
  * The window's tabs (store 0.2.11, user ruling 2026-11-03): All lists every
  * plugin, installed ones included, with their state on the row, as GNOME
- * Software, KDE Discover, the JetBrains Marketplace and VS Code do.
+ * Software, KDE Discover, the JetBrains Marketplace and VS Code do. Not
+ * installed (store 0.3.1) lists the repositories' plugins that nothing
+ * installed, built in or loaded for development has the id of (Steam's and
+ * Synaptic's "Not installed").
  */
 export const ALL = 0;
-export const INSTALLED = 1;
-export const UPDATES = 2;
-/** The tabs as kept in settings.json, by index. */
-export const TAB_NAMES = ["all", "installed", "updates"] as const;
+export const NOT_INSTALLED = 1;
+export const INSTALLED = 2;
+export const UPDATES = 3;
+/** The tabs as kept in settings.json, by index (by name: a tab added in between keeps the remembered one). */
+export const TAB_NAMES = ["all", "notInstalled", "installed", "updates"] as const;
 
 /** A remembered tab: none (the first open), "available" (the tab All replaced in 0.2.11) or anything unknown is All. */
 export const tabOf = (name: unknown): number => {
@@ -247,7 +252,7 @@ export class Store {
       this.changed();
     });
     storeWindow.on("setCategory", (index: number) => {
-      this.#setCategory(Math.max(ALL, Math.min(UPDATES, Math.trunc(Number(index) || 0))));
+      this.#setCategory(Math.max(ALL, Math.min(TAB_NAMES.length - 1, Math.trunc(Number(index) || 0))));
       this.changed();
     });
     storeWindow.on("setGoal", (index: number) => {
@@ -642,6 +647,7 @@ export class Store {
 
   #inCategory(hide = this.hideBuiltins): Item[] {
     const items = this.#listed(hide);
+    if (this.category === NOT_INSTALLED) return items.filter(isNotInstalledRow);
     if (this.category === INSTALLED) return items.filter(isInstalledRow);
     if (this.category === UPDATES) return items.filter((item) => item.state === "update");
     // All: every row, the repositories' and the installed ones (sideloaded, workshop, development loads),
@@ -707,6 +713,7 @@ export class Store {
       category: this.category,
       // All counts its rows (one per installed id): without any index, the installed plugins only.
       allCount: this.#collapsed(listed).length,
+      notInstalledCount: listed.filter(isNotInstalledRow).length,
       installedCount: listed.filter(isInstalledRow).length,
       updates: updateCount(this.items),
       // The first entry stands for every category (the library drop-down shows the model as it is).
@@ -787,6 +794,9 @@ export class Store {
       return msg("Can't reach the repositories. Showing nothing until you're online; click Refresh to retry.");
     }
     if (this.category === UPDATES) return msg("All plugins are up to date");
+    // Not installed, with plugins in the repositories: every one of them is installed.
+    if (this.category === NOT_INSTALLED && this.repos.list.some((repo) => (repo.index?.plugins.length ?? 0) > 0))
+      return msg("Every plugin in the repositories is installed");
     return msg("The repositories have no plugins yet");
   }
 
@@ -844,7 +854,8 @@ export class Store {
         case "available":
           return [null, 0];
         default:
-          return [msg("✓ {}", msg("Installed")), 4];
+          // Green (user request 2026-11-15): the one state that is plainly good.
+          return [msg("✓ {}", msg("Installed")), 5];
       }
     })();
     const { button, menu } = installing ? { button: null, menu: [] } : this.#cardActions(item);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.1
+
+- A new tab **Not installed** right after All (as Steam and Synaptic name it): the repositories' plugins that are neither installed, built in nor loaded with `--plugin`, one card per repository as under All, with its count in the title. It follows search, Category, Sort and "Show built-in plugins" like the other tabs; empty, it says that every plugin in the repositories is installed, or, without any index, that the repositories cannot be reached. The tab is remembered by name, so a tab kept by 0.3.0 (Installed, Updates) opens as before.
+- A card's "✓ Installed" is green: a darker green on the light palette, the video plugin's green on the dark one (the theme has no green token; both read at 4.5:1 or more against the panel).
+- New text translated by machine (marked `x-machine`; zh-Hans by hand). Who must change: nobody.
+
 ## 0.3.0
 
 - Store v3 (design store-v3 rev. 2, owner rulings 2026-11-15): the window is one grid of cards instead of a list with the details always beside it. The grid takes as many columns as fit (two to five, by a Slint binding on the grid's width; a `ListView` of rows, so only the visible rows are built); the window is at least 600 × 480 (was 760), 920 × 640 at first.

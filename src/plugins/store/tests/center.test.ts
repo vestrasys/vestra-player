@@ -25,6 +25,7 @@ import {
   type Info,
   INSTALLED,
   manage,
+  NOT_INSTALLED,
   OFFICIAL,
   openStore,
   props,
@@ -80,15 +81,15 @@ const enables = (host: Awaited<ReturnType<typeof start>>["host"]) =>
 const reloads = (host: Awaited<ReturnType<typeof start>>["host"]) =>
   host.packageCalls.filter((c) => c.method === "reload").map((c) => c.id);
 
-test("tabs: All first (every plugin, installed ones with their state), Installed (built-ins first), Updates; counts", async () => {
+test("tabs: All first (every plugin, installed ones with their state), Not installed, Installed (built-ins first), Updates; counts", async () => {
   const { host, stop } = await center();
   try {
     assert.equal(props(host)["category"], ALL, "the first open is All");
     assert.deepEqual(
       rows(host).map((r) => [r.name, r.state, r.stateTone]),
       [
-        // The state in words (Store v3 §3.4): ✓ installed in grey, or why it does not run, or what waits.
-        ["A Run", "✓ 已安装", 4],
+        // The state in words (Store v3 §3.4): ✓ installed in green (store 0.3.1), or why it does not run, or what waits.
+        ["A Run", "✓ 已安装", 5],
         ["B Off", "已停用", 2],
         ["C Bad", "失败", 2],
         ["D Old", "有更新", 1],
@@ -97,9 +98,12 @@ test("tabs: All first (every plugin, installed ones with their state), Installed
       ],
     );
     assert.equal(props(host)["all-count"], 6);
+    assert.equal(props(host)["not-installed-count"], 1);
     assert.equal(props(host)["installed-count"], 5);
     assert.equal(props(host)["updates"], 1);
     assert.equal(props(host)["list-note"], "", "an index was read");
+    await tab(host, NOT_INSTALLED);
+    assert.deepEqual(rows(host).map((r) => r.name), ["E New"]);
     await tab(host, INSTALLED);
     assert.deepEqual(rows(host).map((r) => r.name), ["vestra.video", "A Run", "B Off", "C Bad", "D Old"]);
     await tab(host, UPDATES);
