@@ -87,6 +87,7 @@ impl Host {
     /// art as a video track while one is mounted (from the next file opened).
     pub(crate) fn backdrop_cover_art(&mut self) {
         let mounted = self
+            .core
             .mounts
             .values()
             .any(|m| m.spec.slot == composition::Slot::Backdrop);
@@ -320,6 +321,7 @@ impl Host {
         // `panels`: the slot's panels in tab order (sidebar tabs); `owner`
         // is the current one's.
         let bottom = self
+            .core
             .mounts
             .values()
             .filter(|m| m.spec.slot == composition::Slot::Bottom)
@@ -339,7 +341,7 @@ impl Host {
             };
             let panels = owners
                 .iter()
-                .filter_map(|owner| self.mounts.get(owner))
+                .filter_map(|owner| self.core.mounts.get(owner))
                 .map(|m| json!({"owner":m.spec.owner,"plugin":m.manifest,"title":m.title}))
                 .collect::<Vec<_>>();
             json!({"owner":slot["owner"],"preferred":slot["preferred"],"effective":slot["effective"],
@@ -351,7 +353,8 @@ impl Host {
     }
     /// `panels.backdrop.state`: `{ owner, effective }`, null without a backdrop.
     pub(crate) fn backdrop_state(&self) -> Value {
-        self.mounts
+        self.core
+            .mounts
             .values()
             .find(|m| m.spec.slot == composition::Slot::Backdrop)
             .map_or(

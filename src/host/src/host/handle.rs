@@ -196,6 +196,7 @@ impl Host {
                             self.close_menu();
                             if self.policy.set_active(owner).is_ok() {
                                 let column = self
+                                    .core
                                     .mounts
                                     .get(&owner)
                                     .and_then(|m| sidebar_tabs::Column::of(m.spec.slot))

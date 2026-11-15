@@ -2,8 +2,10 @@
 //! (doc/architecture/core-thread.md, rule R3): [`UiCommand`] (core → UI) and
 //! [`UiReport`] (UI → core). Plan step S2a added the types; S2c and S2d
 //! route today's code through them while still on one thread (S2c(1):
-//! [`UiReport::WindowFacts`], `Host::ui_report`), S3a moves the core to its
-//! own thread.
+//! [`UiReport::WindowFacts`], `Host::ui_report`; S2c(3): [`UiCommand::Mount`],
+//! [`UiCommand::SetMount`], [`UiReport::MountPreparing`],
+//! [`UiReport::MountApplied`] and the `ui.setMount` [`UiReport::Answered`],
+//! host/mounts.rs), S3a moves the core to its own thread.
 //!
 //! Each variant names the rows of the design's method table (§5.1, "row
 //! 36") and the rules it serves. A variant is one of two kinds:
@@ -414,12 +416,19 @@ pub(crate) struct WindowFacts {
 
 /// See [`UiReport::MountApplied`]: the panel keys of the batch, its one
 /// result, how long it took, and the facts after it (R13: the core updates
-/// its mount registry and layout, then answers, then broadcasts).
+/// its mount registry and layout, then answers, then broadcasts). Plan
+/// step S2c(3) sends one per change of a batch, each right after that
+/// change's restart line, so the interleaving with the interface's work is
+/// today's (`Host::prepare_mount_tick`).
 pub(crate) struct MountApplied {
     pub(crate) batch: Vec<(Reply, u64)>,
     pub(crate) result: std::result::Result<Value, RpcError>,
     pub(crate) elapsed_ms: f64,
     pub(crate) handoff: Option<Box<WindowFacts>>,
+    /// The keys of `batch` that are placeholder tabs replayed from a
+    /// recording: their plugin, in standby, is told nothing (no
+    /// `ui.preparing`); a failure is still announced as `host.error`.
+    pub(crate) placeholders: Vec<u64>,
 }
 
 /// One of today's UI-originated [`Event`]s (study §2.1: keys, clicks,
@@ -815,6 +824,7 @@ mod tests {
                 result: Ok(Value::Null),
                 elapsed_ms: 1.5,
                 handoff: Some(facts()),
+                placeholders: vec![],
             }),
             UiReport::Acted {
                 owner: 7,

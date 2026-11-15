@@ -1191,23 +1191,29 @@ impl Host {
         // The adjust column's current tab counts only while the column is
         // wanted shown (its panel is not needed while it is closed).
         // Any of its panels (one per slot) being a current tab.
-        if self.mounts.values().filter(|m| m.plugin == owner).any(|m| {
-            crate::host::policy_slot(m.spec.slot).is_some_and(|column| {
-                let open = column != crate::ui::window_state::Slot::Adjust
-                    || self
-                        .policy
-                        .column_state(column)
-                        .is_some_and(|(preferred, _)| preferred);
-                // None while the column waits for its remembered tab.
-                open && crate::ui::sidebar_tabs::Column::of(m.spec.slot).is_some_and(|tabs| {
-                    crate::ui::sidebar_tabs::shown_tab(
-                        m.spec.slot,
-                        m.spec.owner,
-                        self.current_tab(tabs),
-                    )
+        if self
+            .core
+            .mounts
+            .values()
+            .filter(|m| m.plugin == owner)
+            .any(|m| {
+                crate::host::policy_slot(m.spec.slot).is_some_and(|column| {
+                    let open = column != crate::ui::window_state::Slot::Adjust
+                        || self
+                            .policy
+                            .column_state(column)
+                            .is_some_and(|(preferred, _)| preferred);
+                    // None while the column waits for its remembered tab.
+                    open && crate::ui::sidebar_tabs::Column::of(m.spec.slot).is_some_and(|tabs| {
+                        crate::ui::sidebar_tabs::shown_tab(
+                            m.spec.slot,
+                            m.spec.owner,
+                            self.current_tab(tabs),
+                        )
+                    })
                 })
             })
-        }) {
+        {
             busy.insert(Busy::ShownTab);
         }
         busy

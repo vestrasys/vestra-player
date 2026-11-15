@@ -209,6 +209,7 @@ impl Host {
         // (sidebar-tabs.md), its panel in the shell if it is compiled; the
         // others go.
         let gone = self
+            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner && !(park && m.recorded))
@@ -231,7 +232,8 @@ impl Host {
         let tabs_before = gone
             .iter()
             .map(|key| {
-                self.mounts
+                self.core
+                    .mounts
                     .get(key)
                     .filter(|m| m.spec.slot.tabbed())
                     .and_then(|m| policy_slot(m.spec.slot))
@@ -280,7 +282,7 @@ impl Host {
         if self.core.step_seek.remove(&owner).is_some() {
             self.step_seek_changed(step);
         }
-        self.mount_queue.retain(|c| c.reply.owner != owner);
+        self.core.mount_queue.retain(|c| c.reply.owner != owner);
         if self
             .preparing
             .as_ref()
@@ -289,7 +291,7 @@ impl Host {
             self.preparing = None;
         }
         for (key, tabs_before) in gone.into_iter().zip(tabs_before) {
-            let Some(mount) = self.mounts.remove(&key) else {
+            let Some(mount) = self.core.mounts.remove(&key) else {
                 continue;
             };
             // Another tab of its column stays shown until the shell is rebuilt.
@@ -300,7 +302,7 @@ impl Host {
             {
                 let _ = shell.set_property(property, false.into());
             }
-            self.mount_queue.push_front(MountChange {
+            self.core.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
                 key,
                 contribution: None,

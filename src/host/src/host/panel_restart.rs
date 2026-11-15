@@ -176,6 +176,7 @@ impl Host {
             return BTreeSet::new();
         };
         let keys = self
+            .core
             .mounts
             .values()
             .filter(|m| m.plugin == owner)
@@ -213,7 +214,7 @@ impl Host {
                 r.keys
                     .iter()
                     .copied()
-                    .filter(|&key| self.mounts.contains_key(&rekey_panel(key, to)))
+                    .filter(|&key| self.core.mounts.contains_key(&rekey_panel(key, to)))
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
@@ -305,7 +306,7 @@ impl Host {
         if self.restarts.plugins.is_empty() {
             return;
         }
-        let mounts = &self.mounts;
+        let mounts = &self.core.mounts;
         self.restarts.prune(|key| mounts.contains_key(&key));
         let now = self.core.now_ms();
         let ids = self.restarts.plugins.keys().cloned().collect::<Vec<_>>();
@@ -350,7 +351,7 @@ impl Host {
                     );
                     for &key in &stale {
                         self.restarts.done(key);
-                        if let Some(mount) = self.mounts.get(&key) {
+                        if let Some(mount) = self.core.mounts.get(&key) {
                             self.images
                                 .release_view(mount.plugin, mount_view(mount.spec.slot));
                         }
@@ -386,7 +387,7 @@ impl Host {
     }
     /// A change of panel `key` waits to be applied.
     pub(crate) fn mount_pending(&self, key: u64) -> bool {
-        self.mount_queue.iter().any(|c| c.key == key)
+        self.core.mount_queue.iter().any(|c| c.key == key)
             || self.preparing.as_ref().is_some_and(|(_, c)| c.key == key)
     }
     /// Remove panels `keys` of run `owner` (queued: one change for them),
@@ -394,7 +395,7 @@ impl Host {
     pub(crate) fn drop_panels(&mut self, owner: u64, keys: Vec<u64>) {
         let keys = keys
             .into_iter()
-            .filter(|key| self.mounts.contains_key(key))
+            .filter(|key| self.core.mounts.contains_key(key))
             .collect::<Vec<_>>();
         if keys.is_empty() {
             return;
@@ -403,7 +404,8 @@ impl Host {
         let tabs_before = keys
             .iter()
             .map(|key| {
-                self.mounts
+                self.core
+                    .mounts
                     .get(key)
                     .filter(|m| m.spec.slot.tabbed())
                     .and_then(|m| policy_slot(m.spec.slot))
@@ -423,7 +425,7 @@ impl Host {
             self.policy.remove_owner(*key);
         }
         for (key, tabs_before) in keys.into_iter().zip(tabs_before) {
-            let Some(mount) = self.mounts.remove(&key) else {
+            let Some(mount) = self.core.mounts.remove(&key) else {
                 continue;
             };
             // Another tab of its column stays shown until the shell is rebuilt.
@@ -434,8 +436,8 @@ impl Host {
             {
                 let _ = shell.set_property(property, false.into());
             }
-            self.mount_queue.retain(|c| c.key != key);
-            self.mount_queue.push_front(MountChange {
+            self.core.mount_queue.retain(|c| c.key != key);
+            self.core.mount_queue.push_front(MountChange {
                 reply: Reply { owner, id: 0 },
                 key,
                 contribution: None,

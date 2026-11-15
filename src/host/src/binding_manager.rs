@@ -147,21 +147,6 @@ impl Host {
             |manifest| self.core.panel_plugins.contains(manifest),
         )
     }
-    /// After the mounted panels changed: a plugin with a panel for the first
-    /// time in this run has its panel commands listed from now on
-    /// (`bindings.list`), so the list's revision moves.
-    pub(crate) fn note_panel_plugins(&mut self) {
-        let mut grew = false;
-        for mount in self.mounts.values() {
-            if !self.core.panel_plugins.contains(&mount.manifest) {
-                self.core.panel_plugins.insert(mount.manifest.clone());
-                grew = true;
-            }
-        }
-        if grew {
-            self.core.bindings_mut().listed_elsewhere();
-        }
-    }
     /// `bindings.changed` (declarations or overlay) and `packages.changed`
     /// (the plugin list) to the plugins that subscribed; at most every 200 ms.
     pub(super) fn notify_tick(&mut self) {
@@ -422,6 +407,23 @@ impl Host {
                 .wakes
                 .values()
                 .any(|events| events.contains(event))
+    }
+}
+impl Core {
+    /// After the mounted panels changed: a plugin with a panel for the first
+    /// time in this run has its panel commands listed from now on
+    /// (`bindings.list`), so the list's revision moves.
+    pub(crate) fn note_panel_plugins(&mut self) {
+        let mut grew = false;
+        for mount in self.mounts.values() {
+            if !self.panel_plugins.contains(&mount.manifest) {
+                self.panel_plugins.insert(mount.manifest.clone());
+                grew = true;
+            }
+        }
+        if grew {
+            self.bindings_mut().listed_elsewhere();
+        }
     }
 }
 

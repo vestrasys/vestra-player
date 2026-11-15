@@ -17,7 +17,7 @@ mod input;
 pub(crate) mod lead_strip;
 mod lifecycle;
 mod menus;
-mod messages;
+pub(crate) mod messages;
 mod mounts;
 pub(crate) mod origins;
 pub(crate) mod palette;
@@ -369,7 +369,7 @@ pub(crate) struct Core {
     /// The plugins (manifest ids) that have mounted a panel in this run,
     /// a replayed tab's placeholder included: `bindings.list` lists their
     /// `focus: "panel"` commands for the rest of the run
-    /// (`Host::note_panel_plugins`).
+    /// (`Core::note_panel_plugins`).
     pub(crate) panel_plugins: std::collections::BTreeSet<String>,
     /// `commands.run` tickets and rates.
     pub(crate) command_runs: crate::capabilities::CommandRuns,
@@ -398,6 +398,17 @@ pub(crate) struct Core {
     pub(crate) window_facts_seq: Option<u64>,
     /// Mount requests of other plugins waiting for the built-ins to start: reply, method, params.
     pub(crate) held_mounts: slot_claims::Gate<(Reply, String, Value)>,
+    /// The mount registry (K6; plan step S2c(3)): every plugin's panel by
+    /// its key (`panel_key`), a placeholder tab replayed from a recording
+    /// included, with its spec, values and the `ui.mount` call a recording
+    /// keeps. Standby recording, `rekey`, `revoke`, `prune` and `replay`
+    /// read and write it here. A batch of changes is applied to it by the
+    /// interface (`Host::prepare_mount_tick`, `UiReport::MountApplied`).
+    pub(crate) mounts: BTreeMap<u64, Mount>,
+    /// Mount changes the core accepted (`ui.mount`, `ui.unmount`, a replayed
+    /// tab, a removal) that the interface has not taken into its batching
+    /// window yet (`UiCommand::Mount`, `Core::mount_command`).
+    pub(crate) mount_queue: std::collections::VecDeque<MountChange>,
     /// The large array of the request being answered, converted on its
     /// plugin's reader thread (`Event::Prepared`, `take_prepared`): owner,
     /// request id, rows.
@@ -491,8 +502,9 @@ pub(crate) struct Host {
     /// picker): it comes into view when another request is refused `busy`.
     pub(crate) confirm_open: bool,
     pub(crate) shell: Option<slint_interpreter::ComponentInstance>,
-    pub(crate) mounts: BTreeMap<u64, Mount>,
-    pub(crate) mount_queue: std::collections::VecDeque<MountChange>,
+    /// The interface's mount batching window (K6): the change that opened
+    /// it and when. The changes the core hands over during the next 32 ms
+    /// join it (`prepare_mount_tick`).
     pub(crate) preparing: Option<(Instant, MountChange)>,
     /// Shell preparations still to run one change each, after a batch of
     /// changes failed to compile (`prepare_mount_tick`).
