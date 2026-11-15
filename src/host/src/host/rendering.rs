@@ -312,7 +312,7 @@ impl Host {
         params: &Value,
     ) -> std::result::Result<Value, RpcError> {
         match method {
-            "rendering.state" => Ok(self.rendering_state()),
+            "rendering.state" => Ok(self.core.rendering_state()),
             "rendering.setPreference" => {
                 let preference = params["preference"]
                     .as_str()
@@ -320,26 +320,17 @@ impl Host {
                     .ok_or_else(|| {
                         RpcError::new("invalid", "preference must be auto, gpu or software")
                     })?;
-                self.rendering.set_preference(preference)?;
-                Ok(self.rendering_state())
+                self.core.rendering.set_preference(preference)?;
+                Ok(self.core.rendering_state())
             }
             "rendering.restart" => self.restart_player().map(|()| Value::Null),
             _ => Err(RpcError::new("unsupported", "unknown rendering method")),
         }
     }
-    pub(crate) fn rendering_state(&self) -> Value {
-        let (gpu, reason) = self.backend.render.now();
-        self.rendering.state(gpu, &reason)
-    }
-    /// Whether the GPU renders now, and `SystemInfo.renderingReason`.
-    pub(crate) fn rendering_reason(&self) -> (bool, Value) {
-        let (gpu, reason) = self.backend.render.now();
-        (gpu, self.rendering.reason_json(gpu, &reason))
-    }
     /// Start a new player now (it waits for this one's instance lock), then
     /// quit as the Quit command does.
     fn restart_player(&mut self) -> std::result::Result<(), RpcError> {
-        if self.headless {
+        if self.core.headless {
             return Err(RpcError::new(
                 "unsupported",
                 "a player without windows does not restart",
@@ -347,14 +338,15 @@ impl Host {
         }
         if let Some(why) = restart_refused(
             RESTARTING.load(Ordering::Acquire),
-            self.rendering.restarted_at,
+            self.core.rendering.restarted_at,
             std::time::Instant::now(),
         ) {
             return Err(RpcError::new("busy", why));
         }
         let exe = std::env::current_exe()
             .map_err(|error| RpcError::new("failed", format!("the player's path: {error}")))?;
-        let mut command = relaunch_command(&exe, &self.rendering.relaunch, &self.last_source);
+        let mut command =
+            relaunch_command(&exe, &self.core.rendering.relaunch, &self.core.last_source);
         diag!("restart: {command:?}");
         // Windows: the new player may take the foreground from this one.
         platform::allow_handoff_foreground();
@@ -375,6 +367,17 @@ impl Host {
             let _ = slint::quit_event_loop();
         });
         Ok(())
+    }
+}
+impl Core {
+    pub(crate) fn rendering_state(&self) -> Value {
+        let (gpu, reason) = self.backend.render.now();
+        self.rendering.state(gpu, &reason)
+    }
+    /// Whether the GPU renders now, and `SystemInfo.renderingReason`.
+    pub(crate) fn rendering_reason(&self) -> (bool, Value) {
+        let (gpu, reason) = self.backend.render.now();
+        (gpu, self.rendering.reason_json(gpu, &reason))
     }
 }
 

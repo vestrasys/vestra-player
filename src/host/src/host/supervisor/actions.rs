@@ -16,8 +16,8 @@ impl Host {
             match action {
                 Action::JobFinished {
                     unit, kind, result, ..
-                } => self.job_finished(unit, &kind, result),
-                Action::RemoveData { unit } => self.remove_unit_data(unit),
+                } => self.core.job_finished(unit, &kind, result),
+                Action::RemoveData { unit } => self.core.remove_unit_data(unit),
                 Action::QueryResources { pid, .. } => self.query_resources(pid.0),
                 Action::Checkpoint {
                     unit,
@@ -39,13 +39,17 @@ impl Host {
                 Action::Spawn {
                     unit, pid, image, ..
                 } => self.spawn_unit(unit, pid.0, image),
-                Action::Verify { unit } => self.verify_unit(unit),
+                Action::Verify { unit } => self.core.verify_unit(unit),
                 Action::Replay { unit, holder } => self.replay_unit(unit, holder.0),
                 // A process that ended by itself (no `Terminate`): its
                 // stop's cleanup revokes; else a held unit's entries.
-                Action::Revoke { unit, pid } if self.plugins.contains_key(&pid.0) => {
-                    let grace = self.supervisor.unit(unit).map_or(300, |u| {
-                        self.supervisor.tunables().policy(u.class).failure_grace
+                Action::Revoke { unit, pid } if self.core.plugins.contains_key(&pid.0) => {
+                    let grace = self.core.supervisor.unit(unit).map_or(300, |u| {
+                        self.core
+                            .supervisor
+                            .tunables()
+                            .policy(u.class)
+                            .failure_grace
                     });
                     self.terminate(pid.0, crate::supervisor::StopReason::Failed, grace);
                 }
@@ -66,53 +70,10 @@ impl Host {
                 Action::Notify { unit: None, notice } => self.runner_notice(notice),
                 // The reaper kills at each stop's grace by itself; a kill
                 // now (quit, a stuck process) hastens it.
-                Action::Kill { pid, .. } => self.reaper.kill(pid.0),
+                Action::Kill { pid, .. } => self.core.reaper.kill(pid.0),
                 // The Host retired the runner already (`restart_shared`).
                 Action::KillRunner { .. } | Action::ListChanged { .. } => {}
             }
-        }
-    }
-    /// A job ended. A wake that failed (its spawn, or its stopped process
-    /// that did not go within 20 s) is today's `wake_failed`; an enable or
-    /// reload whose previous process did not go is today's `reload_tick`
-    /// failure. A failed spawn of any other start was recorded by its
-    /// executor (`spawn_unit`); a package operation reads its job's result.
-    fn job_finished(&mut self, unit: UnitId, kind: &JobKind, result: JobResult) {
-        let id = self.unit_id(unit);
-        if id.is_empty() {
-            return;
-        }
-        if matches!(
-            kind,
-            JobKind::Stop {
-                then: crate::supervisor::Then::Removed,
-                ..
-            }
-        ) {
-            self.remove_if_gone(unit);
-        }
-        match (kind, result) {
-            (
-                JobKind::Start {
-                    cause: Cause::Trigger(_),
-                },
-                JobResult::Failed(error),
-            ) => {
-                diag!("lazy: {id} could not start: {error}");
-                self.failures
-                    .edit()
-                    .insert(id, error.chars().take(512).collect());
-            }
-            (
-                JobKind::Start {
-                    cause: Cause::Enable,
-                }
-                | JobKind::Restart { image: None, .. },
-                JobResult::Failed(text),
-            ) if text == STUCK_RELOAD => {
-                self.failures.edit().insert(id, format!("reload: {text}"));
-            }
-            _ => {}
         }
     }
     /// The core decided a checkpoint (`Action::Checkpoint`). A standby's
@@ -126,7 +87,7 @@ impl Host {
         {
             return;
         }
-        let Some(key) = self.checkpoint_key_of(owner) else {
+        let Some(key) = self.core.checkpoint_key_of(owner) else {
             return;
         };
         if !resident {
@@ -134,18 +95,21 @@ impl Host {
             // are written by `shutdown_plugins` before any stop.
             diag!(
                 "supervisor: unit {}: lazy checkpoint not written ahead",
-                self.unit_id(unit)
+                self.core.unit_id(unit)
             );
             return;
         }
-        let directory = self.activation_dir();
+        let directory = self.core.activation_dir();
         self.recordings_written();
         let recorded = checkpoint::read(&directory, &key).is_some_and(|r| r.resident_at_ready);
         if !recorded && let Err(error) = checkpoint::write(&directory, &key, Vec::new(), true) {
-            diag!("lazy: {}: its recording: {error}", self.plugin_id(owner));
+            diag!(
+                "lazy: {}: its recording: {error}",
+                self.core.plugin_id(owner)
+            );
             // The core follows the file as it is now.
             let left = checkpoint::read(&directory, &key).map(|r| r.resident_at_ready);
-            self.supervisor.checkpoint_failed(unit, left);
+            self.core.supervisor.checkpoint_failed(unit, left);
         }
     }
     /// The unit's recording is of no use any more (an uninstall at its
@@ -153,10 +117,10 @@ impl Host {
     /// installed instance's recording goes (today's `forget_parked(id,
     /// true)`; the package RPCs remove it at the request too).
     fn drop_checkpoint(&mut self, unit: UnitId) {
-        let id = self.unit_id(unit);
-        if let Some(instance) = self.installed_instance(&id) {
+        let id = self.core.unit_id(unit);
+        if let Some(instance) = self.core.installed_instance(&id) {
             self.recordings_written();
-            checkpoint::remove(&self.activation_dir(), &instance);
+            checkpoint::remove(&self.core.activation_dir(), &instance);
         }
     }
     /// The core's `Terminate` keeping the run's registrations: an idle run
@@ -172,8 +136,10 @@ impl Host {
         if self.spawn_canceled(owner, reason, grace, true) {
             return;
         }
-        let (Some(_), Some(plugin)) = (self.checkpoint_key_of(owner), self.plugins.get(&owner))
-        else {
+        let (Some(_), Some(plugin)) = (
+            self.core.checkpoint_key_of(owner),
+            self.core.plugins.get(&owner),
+        ) else {
             // A failed start with nothing to hold: stopped as any other
             // stop (an idle park of such a run never comes).
             if reason != crate::supervisor::StopReason::Idle {
@@ -183,19 +149,19 @@ impl Host {
         };
         if reason != crate::supervisor::StopReason::Idle {
             let id = plugin.manifest.id.clone();
-            let now = self.now_ms();
+            let now = self.core.now_ms();
             let timed_out = matches!(
-                self.activation_status(owner, now),
+                self.core.activation_status(owner, now),
                 Ok(activation::Status::TimedOut)
             );
             if timed_out {
-                self.record_failure(owner, "activation timed out");
+                self.core.record_failure(owner, "activation timed out");
             } else {
                 // A crash kept in standby: not failed, it starts again on
                 // its next use after its hold.
-                self.failures.edit().remove(&id);
+                self.core.failures.edit().remove(&id);
             }
-            let plugin = &self.plugins[&owner];
+            let plugin = &self.core.plugins[&owner];
             let origin = Origin {
                 catalog: i18n::load(&plugin.directory),
                 ..plugin.origin()
@@ -204,7 +170,7 @@ impl Host {
                 &plugin.manifest,
                 origin.catalog.as_deref(),
             );
-            let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
+            let (warnings, warning) = (self.core.warnings_of(owner), self.core.warning_text(owner));
             // Its entries stay: stopped as a park is.
             self.stop_run(
                 owner,
@@ -243,12 +209,12 @@ impl Host {
             .written
             .filter(|(written, _)| *written == owner)
             .map_or(0, |(_, count)| count);
-        let (warnings, warning) = (self.warnings_of(owner), self.warning_text(owner));
+        let (warnings, warning) = (self.core.warnings_of(owner), self.core.warning_text(owner));
         self.probe_registry(owner, "parking");
         self.stop_process(owner, StopReason::Idle, Duration::from_millis(grace));
         diag!("lazy: {id} parked ({count} recorded calls)");
         // `VESTRA_TEST_EXECUTE` entries timed from this park.
-        let now = self.now_ms();
+        let now = self.core.now_ms();
         self.probe_parked(&id, now);
         // Its settings pages still show in its language.
         self.hold(
@@ -267,21 +233,25 @@ impl Host {
     /// runs here, as the `Terminate` executor's would; its entries stay when
     /// the core keeps them for standby.
     pub(crate) fn exit_cleanup(&mut self, owner: u64) {
-        if !self.plugins.contains_key(&owner) {
+        if !self.core.plugins.contains_key(&owner) {
             return;
         }
-        let Some(unit) = self.supervisor.by_pid(Pid(owner)) else {
+        let Some(unit) = self.core.supervisor.by_pid(Pid(owner)) else {
             return;
         };
-        let Some((reason, kept, class)) = self.supervisor.unit(unit).and_then(|u| match u.state {
-            crate::supervisor::UnitState::Deactivating { pid, reason, .. } if pid.0 == owner => {
-                Some((reason, u.stopping.is_some_and(|s| s.kept), u.class))
-            }
-            _ => None,
-        }) else {
+        let Some((reason, kept, class)) =
+            self.core.supervisor.unit(unit).and_then(|u| match u.state {
+                crate::supervisor::UnitState::Deactivating { pid, reason, .. }
+                    if pid.0 == owner =>
+                {
+                    Some((reason, u.stopping.is_some_and(|s| s.kept), u.class))
+                }
+                _ => None,
+            })
+        else {
             return;
         };
-        let grace = self.supervisor.tunables().policy(class).failure_grace;
+        let grace = self.core.supervisor.tunables().policy(class).failure_grace;
         if kept {
             self.park(owner, reason, grace);
         } else {
@@ -301,19 +271,21 @@ impl Host {
             return;
         }
         if self.on_demand.quitting {
-            self.quit_stop(owner, grace);
+            self.core.quit_stop(owner, grace);
             return;
         }
-        if !self.plugins.contains_key(&owner) {
+        if !self.core.plugins.contains_key(&owner) {
             return;
         }
         let reason = wire_reason(reason);
         if reason == StopReason::Failed {
-            let now = self.now_ms();
-            match self.activation_status(owner, now) {
-                Ok(activation::Status::Failed { message }) => self.record_failure(owner, &message),
+            let now = self.core.now_ms();
+            match self.core.activation_status(owner, now) {
+                Ok(activation::Status::Failed { message }) => {
+                    self.core.record_failure(owner, &message)
+                }
                 Ok(activation::Status::TimedOut) => {
-                    self.record_failure(owner, "activation timed out")
+                    self.core.record_failure(owner, "activation timed out")
                 }
                 _ => {}
             }
@@ -327,7 +299,7 @@ impl Host {
     /// to it (`Rekey`). A spawn that fails is recorded as the start that asked
     /// for it did.
     fn spawn_unit(&mut self, unit: UnitId, to: u64, image: Option<String>) {
-        let id = self.unit_id(unit);
+        let id = self.core.unit_id(unit);
         let from = self
             .on_demand
             .rekey
@@ -339,6 +311,7 @@ impl Host {
             self.unhold(from)
         });
         let first = self
+            .core
             .supervisor
             .unit(unit)
             .and_then(|unit| {
@@ -347,13 +320,14 @@ impl Host {
                     .find(|trigger| !trigger.payload.is_null())
             })
             .and_then(|trigger| event(&trigger.payload).map(str::to_owned));
-        let job = self.supervisor.job(unit).cloned();
-        let now = self.now_ms();
+        let job = self.core.supervisor.job(unit).cloned();
+        let now = self.core.now_ms();
         let deadline = job
             .as_ref()
             .and_then(|job| job.deadline)
             .unwrap_or(now + 15_000);
         let development = self
+            .core
             .supervisor
             .unit(unit)
             .is_some_and(|unit| unit.class == crate::supervisor::Class::Development);
@@ -361,11 +335,12 @@ impl Host {
         match self.start_unit_process(&id, to, image.as_deref(), development, deadline) {
             Ok(true) => {
                 if self
+                    .core
                     .plugins
                     .get(&to)
                     .is_some_and(|plugin| plugin.shared_runner().is_none())
                 {
-                    self.supervisor.placed_own(Pid(to));
+                    self.core.supervisor.placed_own(Pid(to));
                 }
                 self.started_now(&id, to, from, first.as_deref(), kind.as_ref());
             }
@@ -436,9 +411,10 @@ impl Host {
         if let Some(from) = from {
             self.on_demand.unrekeyed.insert(to, from);
         }
-        self.supervisor
+        self.core
+            .supervisor
             .process_spawned(Pid(to), Err(error.to_string()));
-        let state = self.supervisor.unit(unit).map(|u| u.state.clone());
+        let state = self.core.supervisor.unit(unit).map(|u| u.state.clone());
         let retried = matches!(
             state,
             Some(crate::supervisor::UnitState::Activating {
@@ -452,11 +428,12 @@ impl Host {
         // A package RPC answering now still gets this spawn's error; the
         // retries go on behind it.
         let answering = self
+            .core
             .start_error
             .as_ref()
             .is_some_and(|(slot, error)| slot == id && error.is_none());
         if !retried || answering {
-            self.start_failed(id, kind, error);
+            self.core.start_failed(id, kind, error);
         }
         let kept = retried
             || matches!(
@@ -504,6 +481,180 @@ impl Host {
         }
         true
     }
+    /// The core revokes the registrations under `owner` (a failed wake, a
+    /// standby left for good): today's `forget_entries`, and the held data
+    /// goes.
+    fn revoke_held(&mut self, owner: u64) {
+        let owner = self.on_demand.unrekeyed.remove(&owner).unwrap_or(owner);
+        self.unhold(owner);
+        self.forget_entries(owner);
+    }
+    /// The name `unit` is shown by in notices (as held).
+    pub(super) fn unit_name(&self, unit: UnitId) -> String {
+        let id = self.core.unit_id(unit);
+        self.on_demand.names.get(&id).cloned().unwrap_or(id)
+    }
+    /// An OSD for `unit` (i18n texts here).
+    fn notice(&mut self, unit: UnitId, notice: Notice) {
+        let name = self.unit_name(unit);
+        let id = self.core.unit_id(unit);
+        let text = match notice {
+            Notice::Starting => i18n::tr_args("Starting {}…", &json!([name])),
+            Notice::CouldNotStart => i18n::tr_args("{} could not start", &json!([name])),
+            Notice::Crashed(crate::supervisor::ExitCause::Oom) => {
+                diag!("supervisor: {id} ran out of memory");
+                // Its failure, if it is listed failed, says so too.
+                if let Some(failure) = self.core.failures.edit().get_mut(&id) {
+                    *failure = crate::supervisor::ExitCause::Oom.text().to_owned();
+                }
+                i18n::tr_args("{} ran out of memory", &json!([name]))
+            }
+            Notice::Crashed(cause) => {
+                diag!("supervisor: {id} stopped unexpectedly ({cause:?})");
+                i18n::tr_args("{} stopped unexpectedly", &json!([name]))
+            }
+            Notice::StartLimitHit => {
+                // Settings > Plugins lists it failed with why.
+                if let Some(text) = self.core.supervisor.failure_of(unit) {
+                    diag!("supervisor: {id} start limit hit: {text}");
+                    self.core
+                        .failures
+                        .edit()
+                        .insert(id, text.chars().take(512).collect());
+                }
+                i18n::tr_args("{} stopped after repeated faults", &json!([name]))
+            }
+            Notice::RunnerRestarted | Notice::RunnerFailedOpen => {
+                self.runner_notice(notice);
+                return;
+            }
+        };
+        self.supervisor_osd(unit, text);
+    }
+    /// The shared runner's restart: today's two OSDs.
+    fn runner_notice(&mut self, notice: Notice) {
+        let text = match notice {
+            Notice::RunnerFailedOpen => {
+                diag!(
+                    "shared runner: {} restarts within {} s; every plugin runs in its own process until the player quits",
+                    crate::process::shared_runner::RESTART_LIMIT,
+                    crate::process::shared_runner::RESTART_WINDOW_MS / 1000
+                );
+                i18n::tr("Built-in plugins run separately for this session after repeated faults")
+            }
+            Notice::RunnerRestarted => i18n::tr("Built-in plugins restarted after a fault"),
+            other => {
+                diag!("supervisor: notice {other:?} without a unit");
+                return;
+            }
+        };
+        self.show_osd(&text);
+    }
+    /// A supervisor OSD for `unit`, shown once for the same text within a
+    /// second: a start that could not start and the answers to its held
+    /// clicks, or a storm of clicks answered busy, show one.
+    fn supervisor_osd(&mut self, unit: UnitId, text: String) {
+        let now = self.core.now_ms();
+        let repeated = self
+            .on_demand
+            .last_osd
+            .as_ref()
+            .is_some_and(|(u, shown, at)| {
+                *u == unit && *shown == text && now.saturating_sub(*at) < 1_000
+            });
+        if !repeated {
+            diag!("supervisor: OSD \"{text}\"");
+            self.show_osd(&text);
+            self.on_demand.last_osd = Some((unit, text, now));
+        }
+    }
+    /// A held trigger that cannot be delivered (answered, and a
+    /// trigger refused by the bounds): a command shows why in an OSD ("`<name>`
+    /// is busy" / "could not start" / "is disabled"); a resolution request
+    /// fails at once with that text instead of at its 30 s deadline; a drop or
+    /// a UI callback is dropped with a diagnostic line; a wake event never
+    /// comes here (dropped silently by the core).
+    fn held_unanswered(&mut self, unit: UnitId, reason: AnswerReason, payload: &Value) {
+        let name = self.unit_name(unit);
+        let what = event(payload).unwrap_or("a shown settings page");
+        diag!(
+            "supervisor: unit {}: {what} not delivered: {reason:?}",
+            self.core.unit_id(unit)
+        );
+        let text = match reason {
+            AnswerReason::Busy => i18n::tr_args("{} is busy", &json!([name])),
+            AnswerReason::Disabled => i18n::tr_args("{} is disabled", &json!([name])),
+            AnswerReason::CouldNotStart => i18n::tr_args("{} could not start", &json!([name])),
+            // A restart hold after a fault: as its menu items say.
+            AnswerReason::Held { .. } => i18n::tr_args(
+                "{} stopped after a fault; try again in a moment",
+                &json!([name]),
+            ),
+            // Uninstalled, or its start canceled by another stop (a reload,
+            // quit): nothing the click can still do.
+            AnswerReason::Removed | AnswerReason::Stopped => {
+                i18n::tr_args("{} is no longer available", &json!([name]))
+            }
+        };
+        match what {
+            "commands.execute" => self.supervisor_osd(unit, text),
+            "source.resolveRequest" => {
+                if let Some(id) = payload["data"]["requestId"].as_u64() {
+                    let _ = self.core.backend.commands.send(Command {
+                        reply: Reply { owner: 0, id: 0 },
+                        method: "owner.refuseResolution".into(),
+                        params: json!({"requestId": id, "message": text}),
+                    });
+                }
+            }
+            _ => {}
+        }
+    }
+}
+impl Core {
+    /// A job ended. A wake that failed (its spawn, or its stopped process
+    /// that did not go within 20 s) is today's `wake_failed`; an enable or
+    /// reload whose previous process did not go is today's `reload_tick`
+    /// failure. A failed spawn of any other start was recorded by its
+    /// executor (`spawn_unit`); a package operation reads its job's result.
+    fn job_finished(&mut self, unit: UnitId, kind: &JobKind, result: JobResult) {
+        let id = self.unit_id(unit);
+        if id.is_empty() {
+            return;
+        }
+        if matches!(
+            kind,
+            JobKind::Stop {
+                then: crate::supervisor::Then::Removed,
+                ..
+            }
+        ) {
+            self.remove_if_gone(unit);
+        }
+        match (kind, result) {
+            (
+                JobKind::Start {
+                    cause: Cause::Trigger(_),
+                },
+                JobResult::Failed(error),
+            ) => {
+                diag!("lazy: {id} could not start: {error}");
+                self.failures
+                    .edit()
+                    .insert(id, error.chars().take(512).collect());
+            }
+            (
+                JobKind::Start {
+                    cause: Cause::Enable,
+                }
+                | JobKind::Restart { image: None, .. },
+                JobResult::Failed(text),
+            ) if text == STUCK_RELOAD => {
+                self.failures.edit().insert(id, format!("reload: {text}"));
+            }
+            _ => {}
+        }
+    }
     /// A start's process could not be created: where today's start put
     /// the error. A package RPC answering now (`setEnabled`, `reload`, a
     /// development load) returns it; a boot start or first run is listed
@@ -549,14 +700,6 @@ impl Host {
         self.packages_verify_begin(&id, unit);
         self.verify_tick();
     }
-    /// The core revokes the registrations under `owner` (a failed wake, a
-    /// standby left for good): today's `forget_entries`, and the held data
-    /// goes.
-    fn revoke_held(&mut self, owner: u64) {
-        let owner = self.on_demand.unrekeyed.remove(&owner).unwrap_or(owner);
-        self.unhold(owner);
-        self.forget_entries(owner);
-    }
     /// An uninstall's data may go now (no process may write it any more):
     /// every directory the uninstall requests of `unit` resolved goes, then
     /// the unit, while it is still removed and tracks no process (a
@@ -574,126 +717,6 @@ impl Host {
     pub(super) fn remove_if_gone(&mut self, unit: UnitId) {
         if self.supervisor.removable(unit) {
             self.supervisor.remove_unit(unit);
-        }
-    }
-    /// The name `unit` is shown by in notices (as held).
-    pub(super) fn unit_name(&self, unit: UnitId) -> String {
-        let id = self.unit_id(unit);
-        self.on_demand.names.get(&id).cloned().unwrap_or(id)
-    }
-    /// An OSD for `unit` (i18n texts here).
-    fn notice(&mut self, unit: UnitId, notice: Notice) {
-        let name = self.unit_name(unit);
-        let id = self.unit_id(unit);
-        let text = match notice {
-            Notice::Starting => i18n::tr_args("Starting {}…", &json!([name])),
-            Notice::CouldNotStart => i18n::tr_args("{} could not start", &json!([name])),
-            Notice::Crashed(crate::supervisor::ExitCause::Oom) => {
-                diag!("supervisor: {id} ran out of memory");
-                // Its failure, if it is listed failed, says so too.
-                if let Some(failure) = self.failures.edit().get_mut(&id) {
-                    *failure = crate::supervisor::ExitCause::Oom.text().to_owned();
-                }
-                i18n::tr_args("{} ran out of memory", &json!([name]))
-            }
-            Notice::Crashed(cause) => {
-                diag!("supervisor: {id} stopped unexpectedly ({cause:?})");
-                i18n::tr_args("{} stopped unexpectedly", &json!([name]))
-            }
-            Notice::StartLimitHit => {
-                // Settings > Plugins lists it failed with why.
-                if let Some(text) = self.supervisor.failure_of(unit) {
-                    diag!("supervisor: {id} start limit hit: {text}");
-                    self.failures
-                        .edit()
-                        .insert(id, text.chars().take(512).collect());
-                }
-                i18n::tr_args("{} stopped after repeated faults", &json!([name]))
-            }
-            Notice::RunnerRestarted | Notice::RunnerFailedOpen => {
-                self.runner_notice(notice);
-                return;
-            }
-        };
-        self.supervisor_osd(unit, text);
-    }
-    /// The shared runner's restart: today's two OSDs.
-    fn runner_notice(&mut self, notice: Notice) {
-        let text = match notice {
-            Notice::RunnerFailedOpen => {
-                diag!(
-                    "shared runner: {} restarts within {} s; every plugin runs in its own process until the player quits",
-                    crate::process::shared_runner::RESTART_LIMIT,
-                    crate::process::shared_runner::RESTART_WINDOW_MS / 1000
-                );
-                i18n::tr("Built-in plugins run separately for this session after repeated faults")
-            }
-            Notice::RunnerRestarted => i18n::tr("Built-in plugins restarted after a fault"),
-            other => {
-                diag!("supervisor: notice {other:?} without a unit");
-                return;
-            }
-        };
-        self.show_osd(&text);
-    }
-    /// A supervisor OSD for `unit`, shown once for the same text within a
-    /// second: a start that could not start and the answers to its held
-    /// clicks, or a storm of clicks answered busy, show one.
-    fn supervisor_osd(&mut self, unit: UnitId, text: String) {
-        let now = self.now_ms();
-        let repeated = self
-            .on_demand
-            .last_osd
-            .as_ref()
-            .is_some_and(|(u, shown, at)| {
-                *u == unit && *shown == text && now.saturating_sub(*at) < 1_000
-            });
-        if !repeated {
-            diag!("supervisor: OSD \"{text}\"");
-            self.show_osd(&text);
-            self.on_demand.last_osd = Some((unit, text, now));
-        }
-    }
-    /// A held trigger that cannot be delivered (answered, and a
-    /// trigger refused by the bounds): a command shows why in an OSD ("`<name>`
-    /// is busy" / "could not start" / "is disabled"); a resolution request
-    /// fails at once with that text instead of at its 30 s deadline; a drop or
-    /// a UI callback is dropped with a diagnostic line; a wake event never
-    /// comes here (dropped silently by the core).
-    fn held_unanswered(&mut self, unit: UnitId, reason: AnswerReason, payload: &Value) {
-        let name = self.unit_name(unit);
-        let what = event(payload).unwrap_or("a shown settings page");
-        diag!(
-            "supervisor: unit {}: {what} not delivered: {reason:?}",
-            self.unit_id(unit)
-        );
-        let text = match reason {
-            AnswerReason::Busy => i18n::tr_args("{} is busy", &json!([name])),
-            AnswerReason::Disabled => i18n::tr_args("{} is disabled", &json!([name])),
-            AnswerReason::CouldNotStart => i18n::tr_args("{} could not start", &json!([name])),
-            // A restart hold after a fault: as its menu items say.
-            AnswerReason::Held { .. } => i18n::tr_args(
-                "{} stopped after a fault; try again in a moment",
-                &json!([name]),
-            ),
-            // Uninstalled, or its start canceled by another stop (a reload,
-            // quit): nothing the click can still do.
-            AnswerReason::Removed | AnswerReason::Stopped => {
-                i18n::tr_args("{} is no longer available", &json!([name]))
-            }
-        };
-        match what {
-            "commands.execute" => self.supervisor_osd(unit, text),
-            "source.resolveRequest" => {
-                if let Some(id) = payload["data"]["requestId"].as_u64() {
-                    let _ = self.backend.commands.send(Command {
-                        reply: Reply { owner: 0, id: 0 },
-                        method: "owner.refuseResolution".into(),
-                        params: json!({"requestId": id, "message": text}),
-                    });
-                }
-            }
-            _ => {}
         }
     }
 }

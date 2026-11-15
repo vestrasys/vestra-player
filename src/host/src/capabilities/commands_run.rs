@@ -59,7 +59,7 @@ const DESTRUCTIVE_MENUS: [&str; 2] = ["Settings", "Reset"];
 struct Ticket {
     owner: u64,
     query: String,
-    /// Minted or last run (ms of `Host::now_ms`).
+    /// Minted or last run (ms of `Core::now_ms`).
     last: u64,
     runs: u32,
     /// Run times within the last second.
@@ -371,11 +371,11 @@ fn in_destructive_menu(path: &[String]) -> bool {
 /// running built-in, or a built-in in standby (its recorded commands).
 fn builtin_owner(host: &Host, owner: u64) -> bool {
     owner == bindings::HOST
-        || host.is_builtin(owner)
+        || host.core.is_builtin(owner)
         || host
             .on_demand
             .held(owner)
-            .is_some_and(|held| host.is_builtin_package(&held.origin))
+            .is_some_and(|held| host.core.is_builtin_package(&held.origin))
 }
 
 /// The manifest id of the plugin whose commands `owner` registered,
@@ -384,7 +384,8 @@ fn owner_id(host: &Host, owner: u64) -> Option<String> {
     if owner == bindings::HOST {
         return None;
     }
-    host.plugins
+    host.core
+        .plugins
         .get(&owner)
         .map(|plugin| plugin.manifest.id.clone())
         .or_else(|| host.held_id(owner).map(str::to_owned))
@@ -395,7 +396,7 @@ fn trusted_by(host: &Host, caller: u64) -> &[String] {
     host.ui_state
         .state
         .trusted_plugins
-        .get(&host.plugin_id(caller))
+        .get(&host.core.plugin_id(caller))
         .map_or(&[], Vec::as_slice)
 }
 
@@ -460,11 +461,11 @@ fn trust_offer(steps: &[Judged]) -> Vec<(String, String)> {
 /// "Don't ask again" was checked on `caller`'s sheet: it trusts `plugins`
 /// from now on (kept in `ui-state.json`, across restarts).
 fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
-    let caller_id = host.plugin_id(caller);
+    let caller_id = host.core.plugin_id(caller);
     if !host.ui_state.state.trust(&caller_id, plugins) {
         return;
     }
-    let now = host.now_ms();
+    let now = host.core.now_ms();
     host.ui_state.touch(now);
     // Manifest ids only (README §4.3, Host log).
     crate::diag::log_only(&format!(
@@ -477,7 +478,7 @@ fn trust_plugins(host: &mut Host, caller: u64, plugins: &[String]) {
 /// again before any command of a plugin that is not built in; its OSD line.
 pub(crate) fn ask_again(host: &mut Host) {
     // A sheet open now does not trust anything either.
-    host.command_runs.forget_remembered(None);
+    host.core.command_runs.forget_remembered(None);
     host.review_offer_changed();
     if host.ui_state.state.clear_trust() {
         // Written now, not a second later: a crash right after must not
@@ -492,7 +493,7 @@ pub(crate) fn ask_again(host: &mut Host) {
 /// trusts it any more (written at once, as for [`ask_again`]).
 pub(crate) fn forget_trust(host: &mut Host, id: &str) {
     // Nor does a sheet opened before (it would trust the new source).
-    host.command_runs.forget_remembered(Some(id));
+    host.core.command_runs.forget_remembered(Some(id));
     // Its checkbox no longer names it (and goes when it named only it).
     host.review_offer_changed();
     if host.ui_state.state.forget_trust(id) {
@@ -618,7 +619,7 @@ fn runnable(host: &Host, global: &str) -> Result<Item, RpcError> {
 
 /// The shown name of a running plugin.
 pub(crate) fn shown_name(host: &Host, owner: u64) -> String {
-    host.plugins.get(&owner).map_or_else(
+    host.core.plugins.get(&owner).map_or_else(
         || owner.to_string(),
         |plugin| {
             crate::packages::package_manager::display_name(
@@ -666,7 +667,7 @@ fn perform(
     let place = if holds_lead { "strip" } else { "osd" };
     diag!(
         "commands.run: {} ran {} ({place}: {line})",
-        host.plugin_id(caller),
+        host.core.plugin_id(caller),
         item.global
     );
     // In the host log too: what a plugin ran on the user's behalf, for a bug
@@ -675,7 +676,7 @@ fn perform(
     let logged = step.map_or_else(String::new, |(step, of)| format!(" (step {step}/{of})"));
     crate::diag::log_only(&format!(
         "commands.run: {} ran {}{logged}",
-        host.plugin_id(caller),
+        host.core.plugin_id(caller),
         item.global
     ));
     if holds_lead {
@@ -728,14 +729,19 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         .map(|item| Judged::new(host, &trusted, item))
         .collect();
     let plan_asks = steps.iter().any(Judged::dangerous);
-    let now = host.now_ms();
+    let now = host.core.now_ms();
     // A confirmation on the sheet (`dialogs.confirm`, H5): one sheet at a
     // time, as `admit` keeps it among runs; a dead ticket is refused as such.
     if host.confirm_waiting()
         && host
+            .core
             .command_runs
             .would_ask(reply.owner, &ticket, global, then.is_some(), plan_asks)
-        && host.command_runs.query(reply.owner, &ticket, now).is_some()
+        && host
+            .core
+            .command_runs
+            .query(reply.owner, &ticket, now)
+            .is_some()
     {
         // The confirmation to answer first comes into view.
         host.show_waiting_confirmation();
@@ -744,9 +750,14 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
             "another confirmation is waiting for the user's answer",
         ));
     }
-    let asks =
-        host.command_runs
-            .admit(reply.owner, &ticket, global, then.is_some(), plan_asks, now)?;
+    let asks = host.core.command_runs.admit(
+        reply.owner,
+        &ticket,
+        global,
+        then.is_some(),
+        plan_asks,
+        now,
+    )?;
     if !asks {
         // Nothing asks, or a step of the approved plan (used up now): no
         // sheet, and no new plan is kept.
@@ -754,13 +765,14 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
         return Ok(Some(json!({"ran": true})));
     }
     let query = host
+        .core
         .command_runs
         .query(reply.owner, &ticket, now)
         .unwrap_or_default()
         .to_owned();
     let (remember, names): (Vec<String>, Vec<String>) = trust_offer(&steps).into_iter().unzip();
     ask(host, reply, &ticket, &steps, &query, &names);
-    host.command_runs.confirming.push(ConfirmedRun {
+    host.core.command_runs.confirming.push(ConfirmedRun {
         reply: reply.clone(),
         ticket,
         global: global.to_owned(),
@@ -787,14 +799,14 @@ fn ask(
     query: &str,
     remember: &[String],
 ) {
-    if host.headless {
+    if host.core.headless {
         let answer = std::env::var("VESTRA_TEST_CONFIRM");
         let yes = matches!(answer.as_deref(), Ok("run" | "always"));
         let always = answer.as_deref() == Ok("always");
         let globals: Vec<&str> = steps.iter().map(|step| step.item.global.as_str()).collect();
         diag!(
             "commands.run: {} asks to run {} (headless: {yes}{})",
-            host.plugin_id(reply.owner),
+            host.core.plugin_id(reply.owner),
             globals.join(", "),
             if always && !remember.is_empty() {
                 ", remember"
@@ -803,6 +815,7 @@ fn ask(
             }
         );
         let _ = host
+            .core
             .events
             .send(Event::CommandRunAnswered(reply.clone(), yes, always));
         return;
@@ -850,7 +863,7 @@ fn reason(item: &Item, builtin: bool) -> String {
 /// live and the command still runnable; Don't Run runs nothing, keeps no
 /// plan and trusts nothing. The caller gets the answer either way.
 pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool) {
-    let Some(run) = host.command_runs.answered(&reply) else {
+    let Some(run) = host.core.command_runs.answered(&reply) else {
         return;
     };
     if !yes {
@@ -863,13 +876,14 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool)
         let still: Vec<String> = run
             .remember
             .iter()
-            .filter(|id| host.trustable_plugin(id))
+            .filter(|id| host.core.trustable_plugin(id))
             .cloned()
             .collect();
         trust_plugins(host, reply.owner, &still);
     }
-    let now = host.now_ms();
+    let now = host.core.now_ms();
     let result = if host
+        .core
         .command_runs
         .query(reply.owner, &run.ticket, now)
         .is_none()
@@ -880,7 +894,7 @@ pub(crate) fn answered(host: &mut Host, reply: Reply, yes: bool, remember: bool)
         ))
     } else {
         if let Some(then) = run.then {
-            host.command_runs.set_plan(&run.ticket, then);
+            host.core.command_runs.set_plan(&run.ticket, then);
         }
         runnable(host, &run.global)
             .and_then(|item| perform(host, reply.owner, &run.ticket, &item, run.step))
@@ -901,10 +915,10 @@ impl Capability for CommandsRun {
         Recorded::Nothing
     }
     fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        host.command_runs.rekey(from, to);
+        host.core.command_runs.rekey(from, to);
     }
     fn revoke(&self, host: &mut Host, owner: u64, _keep_recorded: bool) {
-        host.command_runs.revoke(owner);
+        host.core.command_runs.revoke(owner);
     }
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
@@ -917,7 +931,7 @@ impl Capability for CommandsRun {
                     .map(|item| listed(host, trusted, item))
                     .collect();
                 Ok(Some(json!({
-                    "revision": host.commands.revision(),
+                    "revision": host.core.commands.revision(),
                     "commands": commands,
                 })))
             }

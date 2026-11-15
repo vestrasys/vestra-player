@@ -55,7 +55,7 @@ impl Capability for WindowControl {
                 let on = params["onTop"]
                     .as_bool()
                     .ok_or_else(|| RpcError::invalid("onTop requires a boolean"))?;
-                if host.headless {
+                if host.core.headless {
                     return Err(RpcError::new("unavailable", "no native window"));
                 }
                 host.on_top.set(reply.owner, on);

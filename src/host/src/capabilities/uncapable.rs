@@ -30,10 +30,11 @@ pub fn handle(host: &mut Host, reply: &Reply, method: &str, params: &Value) -> H
             // Keyed by the plugin's data identity, not by `reply.owner`: the
             // values outlive this process (session_storage.rs).
             let key = plugin(host, reply)?.data_key.clone();
-            host.session_storage
+            host.core
+                .session_storage
                 .dispatch(&key, method, params)
                 .map(Some)
         }
-        _ => host.system_dispatch(reply, method, params),
+        _ => host.core.system_dispatch(reply, method, params),
     }
 }

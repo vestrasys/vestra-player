@@ -453,7 +453,7 @@ impl Host {
     /// a parked plugin's too (lazy activation: its bar button and settings
     /// pages still show).
     pub(crate) fn image_roots(&self, owner: u64) -> Vec<PathBuf> {
-        if let Some(plugin) = self.plugins.get(&owner) {
+        if let Some(plugin) = self.core.plugins.get(&owner) {
             return plugin.origin().image_roots();
         }
         self.on_demand

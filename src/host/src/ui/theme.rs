@@ -238,7 +238,7 @@ impl Host {
                 theme: theme.into(),
                 language,
             });
-            let now = self.now_ms();
+            let now = self.core.now_ms();
             self.ui_state.touch(now);
             self.theme_all();
             let language = self.language_preference();
@@ -277,7 +277,7 @@ impl Host {
                 theme: self.theme().into(),
                 language,
             });
-            let now = self.now_ms();
+            let now = self.core.now_ms();
             self.ui_state.touch(now);
             self.broadcast(
                 "appearance.changed",

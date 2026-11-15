@@ -136,7 +136,7 @@ enum Verified {
     /// `Err`: why it runs in its own process.
     Done(std::result::Result<(), String>),
 }
-/// Where `load_package` runs a plugin (`Host::trust`).
+/// Where `load_package` runs a plugin (`Core::trust`).
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum Trust {
     /// In the shared runner.
@@ -317,7 +317,7 @@ impl Manager {
         self.verified.insert(id.to_owned(), state);
     }
     /// Take the finished digest checks (a start waiting for one goes on,
-    /// `Host::verify_tick`, in start order as today's queue).
+    /// `Core::verify_tick`, in start order as today's queue).
     fn poll_verified(&mut self) {
         while let Ok((id, serial, result)) = self.verify_results.1.try_recv() {
             if !matches!(self.verified.get(&id), Some(Verified::Running(s, _)) if *s == serial) {
@@ -336,42 +336,19 @@ impl Manager {
     }
 }
 impl Host {
-    /// Where plugin `id`, about to run from `directory`, runs (doc/
-    /// architecture/README.md §2): in the shared runner only a
-    /// built-in by provenance — listed in `builtin.json`, running from the
-    /// installation's own directory, recorded as built-in in the catalog —
-    /// whose files still have the digest packaging recorded, unless
-    /// `VESTRA_SHARED=0`, the runner failed repeatedly this run, or a fault
-    /// was attributed to it. Never from a manifest field; development loads
-    /// (`Host::load`) never ask.
-    pub(crate) fn trust(&self, id: &str, directory: &Path) -> Trust {
-        trust_of(
-            id,
-            self.packages.builtins.get(id),
-            directory,
-            self.packages
-                .store
-                .get(id)
-                .instance
-                .is_some_and(|instance| instance.builtin),
-            shared_runner::enabled(),
-            &self.shared_policy,
-            self.packages.verified.get(id),
-        )
-    }
     /// The shared runner at a host tick: the heartbeat (a hang restarts
     /// every member), and an idle runner let go (after the runner idle
     /// exit, at least 30 s; supervisor.md §6).
     fn shared_tick(&mut self) {
-        let now = self.now_ms();
-        let after = crate::host::supervisor::runner_idle_exit(&self.supervisor);
-        let Some(shared) = self.shared.as_mut() else {
+        let now = self.core.now_ms();
+        let after = crate::host::supervisor::runner_idle_exit(&self.core.supervisor);
+        let Some(shared) = self.core.shared.as_mut() else {
             return;
         };
         if shared.idle(now, after) {
-            if let Some(runner) = self.shared.take() {
+            if let Some(runner) = self.core.shared.take() {
                 diag!("shared runner {}: no plugin left; stopped", runner.link.id);
-                runner.retire(true, &self.reaper);
+                runner.retire(true, &self.core.reaper);
             }
             return;
         }
@@ -381,7 +358,7 @@ impl Host {
     }
     /// A control line from shared runner `runner` (`Event::Runner`).
     pub(crate) fn runner_event(&mut self, runner: shared_runner::RunnerId, message: &Value) {
-        let Some(shared) = self.shared.as_mut().filter(|s| s.link.id == runner) else {
+        let Some(shared) = self.core.shared.as_mut().filter(|s| s.link.id == runner) else {
             return;
         };
         let Some((g, text)) = shared.control(message) else {
@@ -393,6 +370,7 @@ impl Host {
             return;
         }
         let Some(id) = self
+            .core
             .plugins
             .get(&g)
             .filter(|plugin| plugin.shared_runner() == Some(runner))
@@ -403,7 +381,7 @@ impl Host {
         // That plugin alone stops, as if its own process had crashed, and
         // runs in its own process if it starts again this run.
         diag!("shared runner {runner}: {id} faulted; its own process from now on");
-        self.shared_policy.quarantined.insert(id);
+        self.core.shared_policy.quarantined.insert(id);
         self.handle(Event::RuntimeFault(
             g,
             format!("uncaught exception: {text}"),
@@ -417,7 +395,7 @@ impl Host {
     /// Session storage is keyed by the plugin's data key, not by process,
     /// so the restarted plugins find their values (`session_storage.rs`).
     pub(crate) fn restart_shared(&mut self, reason: &str) {
-        let Some(runner) = self.shared.take() else {
+        let Some(runner) = self.core.shared.take() else {
             return;
         };
         let id = runner.link.id;
@@ -427,20 +405,21 @@ impl Host {
             runner.link.leaked(),
             runner.stats
         );
-        runner.retire(false, &self.reaper);
+        runner.retire(false, &self.core.reaper);
         // The Host's trust check counts the restart too: fail-open after
         // the third in a minute (`Policy::restart`), as the core does.
-        let now = self.now_ms();
-        self.shared_policy.restart(now);
+        let now = self.core.now_ms();
+        self.core.shared_policy.restart(now);
         // The core's runner group restart (supervisor.md §7): every member
         // stops at once (no member gets its `runtime.stop`: the runner is
         // killed), goes back to standby by replay when it has a standby
         // recording, else starts again in the built-in lane: the first
         // restart at once, a later one in the window after the restart delay
         // (3 s × 2ⁿ), once the playback worker cleaned up after it.
-        self.supervisor.set_now(now);
-        let runner = self.supervisor.runner();
-        self.supervisor
+        self.core.supervisor.set_now(now);
+        let runner = self.core.supervisor.runner();
+        self.core
+            .supervisor
             .runner_failed(runner, crate::supervisor::ExitCause::Transport);
         self.supervisor_run();
     }
@@ -457,10 +436,12 @@ impl Host {
     ) -> Result<bool> {
         let id = manifest.id.clone();
         anyhow::ensure!(
-            self.running(&id).is_none_or(|running| running == owner),
+            self.core
+                .running(&id)
+                .is_none_or(|running| running == owner),
             "plugin already running"
         );
-        self.activation_begin(&id, owner, deadline)?;
+        self.core.activation_begin(&id, owner, deadline)?;
         let manifest = process::Manifest {
             id: id.clone(),
             ..manifest.clone()
@@ -472,13 +453,13 @@ impl Host {
             // On the spawn thread (`host/supervisor/worker.rs`).
             Ok(None) => return Ok(false),
             Err(error) => {
-                self.supervisor.activation_end(Pid(owner));
+                self.core.supervisor.activation_end(Pid(owner));
                 return Err(error);
             }
         };
         let name = plugin.manifest.name.clone();
-        self.add_plugin(owner, plugin);
-        self.backend.commands.send(Command {
+        self.core.add_plugin(owner, plugin);
+        self.core.backend.commands.send(Command {
             reply: Reply { owner, id: 0 },
             method: "owner.registered".into(),
             params: json!({"manifestId":id,"manifestName":name}),
@@ -497,18 +478,19 @@ impl Host {
         manifest: process::Manifest,
         key: DataKey,
     ) -> Result<Option<Plugin>> {
-        Ok(Some(match self.trust(id, directory) {
+        Ok(Some(match self.core.trust(id, directory) {
             Trust::Shared => {
-                if self.shared.is_none() {
-                    let runner = self.shared_policy.next_id();
-                    let now = self.now_ms();
-                    self.shared = Some(shared_runner::SharedRunner::spawn(
+                if self.core.shared.is_none() {
+                    let runner = self.core.shared_policy.next_id();
+                    let now = self.core.now_ms();
+                    self.core.shared = Some(shared_runner::SharedRunner::spawn(
                         runner,
-                        self.events.clone(),
+                        self.core.events.clone(),
                         now,
                     )?);
                 }
                 let shared = self
+                    .core
                     .shared
                     .as_mut()
                     .ok_or_else(|| anyhow::anyhow!("shared runner"))?;
@@ -516,7 +498,7 @@ impl Host {
                 Plugin::load_manifest(
                     directory,
                     owner,
-                    self.events.clone(),
+                    self.core.events.clone(),
                     manifest,
                     key,
                     process::Placement::Shared(shared),
@@ -531,10 +513,17 @@ impl Host {
                     _ => {}
                 }
                 let heap_mib = self
+                    .core
                     .supervisor
                     .by_id(id)
-                    .and_then(|unit| self.supervisor.unit(unit))
-                    .and_then(|unit| self.supervisor.tunables().policy(unit.class).memory_max_mib);
+                    .and_then(|unit| self.core.supervisor.unit(unit))
+                    .and_then(|unit| {
+                        self.core
+                            .supervisor
+                            .tunables()
+                            .policy(unit.class)
+                            .memory_max_mib
+                    });
                 if self.spawn_off_thread() {
                     let job = crate::host::supervisor::worker::SpawnJob {
                         owner,
@@ -550,7 +539,7 @@ impl Host {
                             Plugin::load_manifest(
                                 &job.directory,
                                 owner,
-                                self.events.clone(),
+                                self.core.events.clone(),
                                 job.manifest,
                                 job.key,
                                 process::Placement::Own { heap_mib },
@@ -561,7 +550,7 @@ impl Host {
                     Plugin::load_manifest(
                         directory,
                         owner,
-                        self.events.clone(),
+                        self.core.events.clone(),
                         manifest,
                         key,
                         process::Placement::Own { heap_mib },
@@ -569,12 +558,6 @@ impl Host {
                 }
             }
         }))
-    }
-    fn package_status(&mut self, owner: u64) -> String {
-        self.activation(owner)
-            .ok()
-            .and_then(|v| v["activation"]["status"].as_str().map(str::to_owned))
-            .unwrap_or_else(|| "unknown".into())
     }
     /// `packages.validate` and `packages.validateArchive`: the request is
     /// read here, the package checked on a thread (package_validate.rs), and
@@ -586,7 +569,7 @@ impl Host {
         params: &Value,
     ) -> std::result::Result<(), RpcError> {
         let request = crate::packages::package_validate::Request::read(method, params)?;
-        for (reply, error) in self.packages.validations.start(reply.clone(), request) {
+        for (reply, error) in self.core.packages.validations.start(reply.clone(), request) {
             self.respond(reply, Err(error));
         }
         Ok(())
@@ -594,17 +577,18 @@ impl Host {
     /// Answer finished validations: a passing package gets its token and
     /// joins the recent candidates (`Manager::remember`).
     fn answer_validations(&mut self) {
-        let running = &self.plugins;
+        let running = &self.core.plugins;
         let done = self
+            .core
             .packages
             .validations
             .poll(|owner| running.contains_key(&owner));
         for (reply, result) in done {
             let result = result.map(|candidate| {
-                self.packages.next += 1;
-                let token = format!("candidate-{}-{}", self.packages.next, candidate.digest());
+                self.core.packages.next += 1;
+                let token = format!("candidate-{}-{}", self.core.packages.next, candidate.digest());
                 let report = json!({"token":token,"digest":candidate.digest(),"apiVersion":process::API,"manifest":candidate.manifest(),"checks":["manifest","digest","productionJavaScript","slintCompile"],"trustedExecution":true});
-                self.packages.remember(token, candidate);
+                self.core.packages.remember(token, candidate);
                 report
             });
             self.respond(reply, result);
@@ -618,7 +602,7 @@ impl Host {
     ) -> std::result::Result<Value, RpcError> {
         match method {
             "packages.installed" => Ok(serde_json::to_value(
-                self.packages.store.get(string(params, "id")?),
+                self.core.packages.store.get(string(params, "id")?),
             )
             .map_err(anyhow::Error::from)?),
             "packages.install" => {
@@ -627,7 +611,7 @@ impl Host {
                     return Err(RpcError::invalid("requestId must contain 1..128 bytes"));
                 }
                 let request_spec = json!({"method":method,"params":params});
-                if let Some(receipt) = self.packages.receipts.get(&request) {
+                if let Some(receipt) = self.core.packages.receipts.get(&request) {
                     if receipt["request"] != request_spec {
                         return Err(RpcError::new(
                             "conflict",
@@ -636,7 +620,7 @@ impl Host {
                     }
                     return Ok(receipt.clone());
                 }
-                if let Some(operation) = self.packages.operations.get(&request) {
+                if let Some(operation) = self.core.packages.operations.get(&request) {
                     if operation.request != request_spec {
                         return Err(RpcError::new(
                             "conflict",
@@ -645,8 +629,8 @@ impl Host {
                     }
                     return Ok(operation.result.clone());
                 }
-                self.library_busy(None)?;
-                if self.packages.operations.len() >= 64 {
+                self.core.library_busy(None)?;
+                if self.core.packages.operations.len() >= 64 {
                     return Err(RpcError::new("busy", "operation history full"));
                 }
                 let source = install_source(params)?;
@@ -654,6 +638,7 @@ impl Host {
                 let requested = install_enabled(params)?;
                 let token = string(params, "token")?;
                 let candidate = self
+                    .core
                     .packages
                     .candidates
                     .get(token)
@@ -664,7 +649,7 @@ impl Host {
                 let expected = params["expectedRevision"]
                     .as_u64()
                     .ok_or_else(|| RpcError::invalid("expectedRevision required"))?;
-                let before = self.packages.store.get(&id);
+                let before = self.core.packages.store.get(&id);
                 if before.revision != expected {
                     return Err(RpcError::new(
                         "revisionConflict",
@@ -672,7 +657,8 @@ impl Host {
                     ));
                 }
                 let new_source = source_changes(&before, &source);
-                let (instance, fresh) = self.install_instance(&id, &before, source, replace)?;
+                let (instance, fresh) =
+                    self.core.install_instance(&id, &before, source, replace)?;
                 // A replace from another source is another plugin to the
                 // user: "Don't ask again" for the old one does not carry over
                 // (an update from the same source keeps it).
@@ -682,13 +668,13 @@ impl Host {
                 // Garbage is collected off the UI thread, not here. Staging
                 // reuses an identical directory still in the library, so it
                 // waits while the cleanup thread removes that one.
-                self.library_busy(Some(candidate.digest()))?;
-                let target = self.packages.store.stage(&candidate)?;
+                self.core.library_busy(Some(candidate.digest()))?;
+                let target = self.core.packages.store.stage(&candidate)?;
                 // An update of a package the user disabled stays disabled
                 // and is not activated, unless the installer asks.
                 let enabled = package_store::enables_after_install(
                     &before,
-                    self.packages.store.disabled().contains(&id),
+                    self.core.packages.store.disabled().contains(&id),
                     requested,
                 );
                 self.start_operation(
@@ -702,7 +688,7 @@ impl Host {
             }
             "packages.operation" | "packages.cancel" => {
                 let id = string(params, "operationId")?;
-                if let Some(receipt) = self.packages.receipts.get(id) {
+                if let Some(receipt) = self.core.packages.receipts.get(id) {
                     return Ok(
                         if method == "packages.cancel" && receipt["status"] == "committed" {
                             json!({"operationId":id,"status":"tooLate","result":receipt})
@@ -712,6 +698,7 @@ impl Host {
                     );
                 }
                 let operation = self
+                    .core
                     .packages
                     .operations
                     .edit()
@@ -745,20 +732,6 @@ impl Host {
             _ => Err(RpcError::new("unsupported", "unknown package method")),
         }
     }
-    /// Which instance an install goes into (store proposal §1.3): the same
-    /// source upgrades, another source needs `replace` and reconnects to a
-    /// dormant instance of that source when there is one. Built-ins are
-    /// updated with the player only. `(instance, fresh)`: `fresh` when new
-    /// data starts.
-    fn install_instance(
-        &self,
-        id: &str,
-        before: &package_store::Installed,
-        source: Source,
-        replace: bool,
-    ) -> std::result::Result<(Option<Instance>, bool), RpcError> {
-        install_instance(&self.packages.store, id, before, source, replace)
-    }
     /// Journal the install and stop the running version; the tick activates
     /// the target and commits or restores. A target that is not `enabled`
     /// is committed without activating it (files only).
@@ -786,9 +759,9 @@ impl Host {
         // The replaced version's recording (keyed by its instance).
         if let Some(instance) = &before.instance {
             self.recordings_written();
-            checkpoint::remove(&self.activation_dir(), &instance.guid);
+            checkpoint::remove(&self.core.activation_dir(), &instance.guid);
         }
-        self.packages.store.prepare_with_receipt(
+        self.core.packages.store.prepare_with_receipt(
             &id,
             before.revision,
             &target,
@@ -798,7 +771,7 @@ impl Host {
         )?;
         // Its recording goes (an upgrade has a new digest: of no use).
         self.drop_recording(&id);
-        let running = self.running(&id).is_some() || self.parked_id(&id).is_some();
+        let running = self.core.running(&id).is_some() || self.parked_id(&id).is_some();
         let image = target.digest.clone();
         let fresh_data = fresh
             .then(|| process::data_root().map(|root| root.join(&target_guid)))
@@ -806,7 +779,7 @@ impl Host {
         let operation = request.clone();
         // In the table before its start: the supervisor's spawn of the
         // target reads it (`start_unit_process`).
-        self.packages.operations.edit().insert(
+        self.core.packages.operations.edit().insert(
             request.clone(),
             Operation {
                 id: request,
@@ -827,14 +800,14 @@ impl Host {
                 request: request_spec,
             },
         );
-        if let Some(op) = self.packages.operations.get(&operation) {
+        if let Some(op) = self.core.packages.operations.get(&operation) {
             let images = images_of(op);
-            self.packages.images.insert(id.clone(), images);
+            self.core.packages.images.insert(id.clone(), images);
         }
-        let unit = self.operation_unit(&id);
+        let unit = self.core.operation_unit(&id);
         // The target is not committed while it activates: no recording of
         // it, no classification (today's `lazy_key_of` is `None` for it).
-        self.supervisor.set_recordable(unit, false);
+        self.core.supervisor.set_recordable(unit, false);
         // `upgrade` for every install over a running (or parked) version
         // that runs on: an update, a reinstall of the same version, and a
         // `replace` from another source (`fresh` data) alike; the target
@@ -849,9 +822,9 @@ impl Host {
         // A target with nothing to stop first starts at the next tick
         // (`advance_package`), as today's `load_package` there; a parked
         // version only lets go of its entries now.
-        let process = self.running(&id).is_some();
+        let process = self.core.running(&id).is_some();
         if enabled {
-            self.supervisor.set_enabled(unit, true);
+            self.core.supervisor.set_enabled(unit, true);
         }
         let kind = if enabled && process {
             Some(JobKind::Restart {
@@ -872,14 +845,14 @@ impl Host {
         };
         let started = enabled && process;
         if let Some(kind) = kind {
-            let job = self.supervisor.enqueue_job(
+            let job = self.core.supervisor.enqueue_job(
                 unit,
                 kind,
                 JobMode::Replace,
                 Priority::Interactive,
                 Origin::PackageRpc,
             );
-            if let Some(op) = self.packages.operations.edit().get_mut(&operation) {
+            if let Some(op) = self.core.packages.operations.edit().get_mut(&operation) {
                 op.job = job.ok();
                 op.started = started;
             }
@@ -902,33 +875,39 @@ impl Host {
     /// it starts on its first use), starts one that was resident, and
     /// queues a first run without one (supervisor.md §4).
     pub(crate) fn load_installed(&mut self, id: &str) {
-        if self.running(id).is_some() || self.parked_id(id).is_some() {
+        if self.core.running(id).is_some() || self.parked_id(id).is_some() {
             return;
         }
-        let Some(record) = self.packages.store.record(id).cloned() else {
+        let Some(record) = self.core.packages.store.record(id).cloned() else {
             return;
         };
-        if self.packages.operations.values().any(|o| o.package == id)
-            || self.development.contains_key(id)
+        if self
+            .core
+            .packages
+            .operations
+            .values()
+            .any(|o| o.package == id)
+            || self.core.development.contains_key(id)
         {
             return;
         }
         // Its library copy could not be read at start: kept as it is, not
         // started (`runs_from`); the next start tries again.
-        if let Some(error) = self.packages.store.deferred().get(id) {
-            self.failures
+        if let Some(error) = self.core.packages.store.deferred().get(id) {
+            self.core
+                .failures
                 .edit()
                 .insert(id.to_owned(), deferred_failure(error));
             return;
         }
         let (Some(package), Some(instance)) =
-            (self.packages.runs_from(id, &record), record.instance)
+            (self.core.packages.runs_from(id, &record), record.instance)
         else {
             return;
         };
-        let disabled = self.packages.store.disabled().contains(id);
+        let disabled = self.core.packages.store.disabled().contains(id);
         let startable = package.is_ok() && check_reserved(id, Some(&instance)).is_ok();
-        let mut spec = self.unit_spec(id);
+        let mut spec = self.core.unit_spec(id);
         if disabled {
             spec = spec.disabled();
         }
@@ -938,29 +917,1122 @@ impl Host {
         }
         if !disabled
             && startable
-            && let Some(key) = self.checkpoint_key(id)
+            && let Some(key) = self.core.checkpoint_key(id)
         {
             self.recordings_written();
-            match checkpoint::read(&self.packages.store.activation_dir(), &key) {
+            match checkpoint::read(&self.core.packages.store.activation_dir(), &key) {
                 Some(recording) if recording.resident_at_ready => {
                     diag!("lazy: {id} starts: resident at its last ready");
                     spec = spec.checkpoint(true);
                 }
                 Some(recording) => {
                     spec = spec.checkpoint(false);
-                    self.packages.replays.insert(id.to_owned(), recording);
+                    self.core.packages.replays.insert(id.to_owned(), recording);
                 }
                 None => {}
             }
         }
-        self.supervisor.add_unit(spec);
+        self.core.supervisor.add_unit(spec);
         // Its kept trigger conditions (crate::triggers): evaluated when the
         // start-up mute ends.
         if !disabled {
-            self.triggers_load(id);
+            self.core.triggers_load(id);
         }
         self.supervisor_run();
-        self.packages.replays.remove(id);
+        self.core.packages.replays.remove(id);
+    }
+    /// The supervisor's spawn of plugin `id` as process `owner`
+    /// (`Action::Spawn`): a development load, a package operation's target
+    /// or the version it restores (`Restart{image}`), or the installed
+    /// package (today's `start_installed`, `start_stopped`, a wake).
+    /// `false`: its own process is created on the spawn thread
+    /// (`Event::Spawned`).
+    pub(crate) fn start_unit_process(
+        &mut self,
+        id: &str,
+        owner: u64,
+        image: Option<&str>,
+        development: bool,
+        deadline: u64,
+    ) -> Result<bool> {
+        if development {
+            let directory = self
+                .core
+                .dev_loading
+                .clone()
+                .or_else(|| {
+                    self.core
+                        .development
+                        .get(id)
+                        .map(|(directory, _)| directory.clone())
+                })
+                .ok_or_else(|| anyhow::anyhow!("no development load of {id}"))?;
+            return self
+                .core
+                .load_development_as(&directory, owner, deadline)
+                .map(|()| true);
+        }
+        if let Some(image) = image
+            && let Some(images) = self.core.packages.images.get(id)
+        {
+            let (_, directory, manifest, key) = images
+                .iter()
+                .find(|(digest, ..)| digest == image)
+                .cloned()
+                .ok_or_else(|| anyhow::anyhow!("the package {image} is not this operation's"))?;
+            return self.load_package_as(owner, &directory, &manifest, key, deadline);
+        }
+        self.start_package_as(id, owner, deadline)
+    }
+    /// Starts installed plugin `id` as process `owner`, as `start_installed`
+    /// would.
+    fn start_package_as(&mut self, id: &str, owner: u64, deadline: u64) -> Result<bool> {
+        let record = self.core.packages.store.get(id);
+        let instance = record
+            .instance
+            .clone()
+            .ok_or_else(|| anyhow::anyhow!("the installed package has no instance"))?;
+        let (directory, manifest) = self
+            .core
+            .packages
+            .runs_from(id, &record)
+            .ok_or_else(|| anyhow::anyhow!("not installed"))?
+            .map_err(anyhow::Error::msg)?;
+        check_reserved(id, Some(&instance)).map_err(|refusal| anyhow::anyhow!(refusal.message))?;
+        self.load_package_as(
+            owner,
+            &directory,
+            &manifest,
+            DataKey::Instance(instance.guid),
+            deadline,
+        )
+    }
+    /// Removes installed plugin `id`'s recording, if it has one.
+    pub(crate) fn drop_recording(&mut self, id: &str) {
+        if let Some(instance) = self.core.packages.store.get(id).instance {
+            self.recordings_written();
+            checkpoint::remove(&self.core.activation_dir(), &instance.guid);
+        }
+    }
+    /// `packages.list`: running plugins, installed packages and this run's
+    /// development loads, by id.
+    pub(crate) fn package_list(&mut self) -> Value {
+        let now = self.core.now_ms();
+        self.package_list_at(now)
+    }
+    /// [`Host::package_list`] as at `now` (the supervisor's clock): the
+    /// same `now` as [`Host::packages_key`]'s when they are compared.
+    pub(crate) fn package_list_at(&mut self, now: u64) -> Value {
+        let mut list = BTreeMap::<String, Value>::new();
+        self.core.supervisor.set_now(now);
+        let owners = self.core.plugins.keys().copied().collect::<Vec<_>>();
+        for owner in owners {
+            let plugin = &self.core.plugins[&owner];
+            let id = plugin.manifest.id.clone();
+            let stored = self.core.packages.store.get(&id);
+            let from_record = self
+                .core
+                .packages
+                .runs_from(&id, &stored)
+                .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
+            let (installed, instance) = listed_instance(
+                &plugin.directory,
+                from_record,
+                stored,
+                self.core.packages.store.pending_of(&id),
+            );
+            let warnings = self.core.warnings_of(owner);
+            // The supervisor's state of its unit, its activation read (supervisor.md §10).
+            let listed = self
+                .core
+                .supervisor
+                .by_id(&id)
+                .and_then(|unit| self.core.supervisor.list_state(unit));
+            let (state, error) = match listed {
+                Some(ListState::Starting) => ("starting", None),
+                Some(ListState::Failed(message)) => ("failed", Some(message)),
+                // Woken from idle (lazy activation): it was running all along.
+                Some(ListState::Running { .. })
+                    if self.core.supervisor.waking(Pid(owner)).is_some() =>
+                {
+                    ("running", None)
+                }
+                // Until the SDK passes `warnings` on (it keeps only the known
+                // fields), a running plugin's `error` carries them as text.
+                _ => ("running", self.core.warning_text(owner)),
+            };
+            let origin = if installed {
+                "installed"
+            } else {
+                "development"
+            };
+            // `process` (SDK 1.5.38): it has a process (`idle` below).
+            let process = (state == "running").then_some("running");
+            list.insert(
+                id.clone(),
+                json!({"id":id,"version":plugin.manifest.version,
+                "origin":origin,"state":state,"error":error,"process":process,
+                "directory":plugin.directory,
+                "builtin":instance.as_ref().is_some_and(|i| i.builtin),
+                "source":instance.map(|i| i.source),
+                "dataDirectory":plugin.data_directory(),"warnings":warnings,
+                "display":display(&plugin.manifest, plugin.catalog.as_deref())}),
+            );
+        }
+        let stopped = |disabled: bool, failure: Option<&String>| {
+            if disabled {
+                ("disabled", None)
+            } else if let Some(failure) = failure {
+                ("failed", Some(failure.clone()))
+            } else {
+                ("stopped", None)
+            }
+        };
+        // The catalog's records as they are (not a copy of it: `notify_tick`
+        // builds this list while plugins come and go, supervisor.md).
+        for (id, record) in self.core.packages.store.installed_records() {
+            if list.contains_key(id) {
+                continue;
+            }
+            let id = id.clone();
+            let Some(package) = self.core.packages.runs_from(&id, record) else {
+                continue;
+            };
+            // The supervisor's state of its unit (supervisor.md §10): a start it waits for
+            // (a first run waiting for a place, a reload or an enable
+            // waiting for the previous process) and a package operation
+            // count as starting; one waiting at start-up lists `stopped`.
+            let disabled = self.core.packages.store.disabled().contains(&id);
+            let parked = self
+                .parked_id(&id)
+                .and_then(|owner| self.on_demand.held(owner));
+            let listed = self
+                .core
+                .supervisor
+                .by_id(&id)
+                .and_then(|unit| self.core.supervisor.list_state(unit));
+            let (state, error) =
+                if self.core.operation_pending(&id) || listed == Some(ListState::Starting) {
+                    ("starting", None)
+                } else if let Some(parked) = parked {
+                    // Parked (lazy activation): it runs again on its first use;
+                    // `state` stays `running`, `process` says `idle`, and what
+                    // it was refused while it ran stays listed.
+                    ("running", parked.warning.clone())
+                } else if matches!(listed, Some(ListState::Running { .. })) {
+                    // Waiting to start again by itself after a crash
+                    // (`Activating{AutoRestart}`): running, no process.
+                    ("running", None)
+                } else {
+                    stopped(disabled, self.core.failures.get(&id))
+                };
+            let warnings = parked.map_or_else(Vec::new, |parked| parked.warnings.clone());
+            let data = record
+                .instance
+                .as_ref()
+                .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
+            let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
+            let source = record.instance.as_ref().map(|i| i.source.clone());
+            let process = ((self.parked_id(&id).is_some()
+                || matches!(listed, Some(ListState::Running { .. })))
+                && state == "running")
+                .then_some("idle");
+            let entry = match package {
+                Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
+                    "origin":"installed","state":state,"error":error,"process":process,
+                    "directory":directory,
+                    "builtin":builtin,"source":source,
+                    "dataDirectory":data,"warnings":warnings,
+                    "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
+                // A built-in whose copy in the installation failed its
+                // checks, or a package whose library copy could not be read
+                // at start (`Store::deferred`: the directory it names is
+                // another library's, not shown).
+                Err(failure) => {
+                    let (version, directory) = match self.core.packages.builtins.get(&id) {
+                        Some(entry) => (Some(entry.version.clone()), Some(entry.directory.clone())),
+                        None => (
+                            record
+                                .current
+                                .as_ref()
+                                .and_then(|c| c.manifest.version.clone()),
+                            None,
+                        ),
+                    };
+                    let state = if state == "disabled" { state } else { "failed" };
+                    json!({"id":id,"version":version,
+                        "origin":"installed","state":state,"error":failure,
+                        "directory":directory.unwrap_or_default(),
+                        "builtin":builtin,"source":source,
+                        "dataDirectory":data,"warnings":[],
+                        "display":{"name":null,"punchline":null,"description":null,"tags":[]}})
+                }
+            };
+            list.insert(id.clone(), entry);
+        }
+        // Installed records the library set aside at start, this one or an
+        // earlier one (`Store::set_aside_installed`): failed, with the
+        // reason, named, versioned and sourced from the record as read,
+        // until installed again or uninstalled (`uninstall_set_aside`).
+        let dormant = self.core.packages.store.dormant();
+        let aside = self.core.packages.store.set_aside_installed();
+        for (id, (entry, reason)) in aside {
+            if list.contains_key(&id) {
+                continue;
+            }
+            let error =
+                format!("the plugin library's record of this plugin was set aside: {reason}");
+            let (version, source, display) = set_aside_fields(entry);
+            // Its instance was retired with its data (`Store::screen`).
+            let data = entry["instance"]["guid"]
+                .as_str()
+                .filter(|guid| dormant.get(*guid).is_some_and(|d| d.id == id))
+                .and_then(|guid| self.data_directory_of(&DataKey::Instance(guid.to_owned())));
+            list.insert(
+                id.clone(),
+                json!({"id":id,"version":version,
+                    "origin":"installed","state":"failed","error":error,
+                    "directory":"",
+                    "builtin":false,"source":source,
+                    "dataDirectory":data,"warnings":[],
+                    "display":display}),
+            );
+        }
+        for (id, (directory, manifest)) in self.core.development.iter() {
+            if list.contains_key(id) {
+                continue;
+            }
+            let (state, error) = if self.core.package_job_busy(id) {
+                ("starting", None)
+            } else {
+                stopped(
+                    self.core.dev_disabled.contains(id),
+                    self.core.failures.get(id),
+                )
+            };
+            let data = self.data_directory_of(&DataKey::Development(id.clone()));
+            list.insert(
+                id.clone(),
+                json!({"id":id,"version":manifest.version,
+                "origin":"development","state":state,"error":error,
+                "directory":directory,
+                "builtin":false,"source":null,"dataDirectory":data,"warnings":[],
+                "display":display(manifest, crate::i18n::load(directory).as_deref())}),
+            );
+        }
+        Value::Array(list.into_values().collect())
+    }
+    /// `packages.setEnabled`: disabling stops it (and keeps it stopped across
+    /// launches when installed); enabling starts it again. Both are the
+    /// supervisor's jobs (`disable`, `enable`: `Stop{Disable}`,
+    /// `Start{Enable}`, which waits for the plugin's previous process).
+    fn set_enabled(
+        &mut self,
+        caller: u64,
+        id: &str,
+        enabled: bool,
+    ) -> std::result::Result<(), RpcError> {
+        if !enabled && self.core.plugins[&caller].manifest.id == id {
+            return Err(RpcError::invalid("a plugin cannot disable itself"));
+        }
+        let running = self.core.running(id);
+        if self.core.package_rpc_busy(id) {
+            return Err(busy());
+        }
+        let record = self.core.packages.store.get(id);
+        // User ruling 2026-10-26: users manage third-party plugins only;
+        // a built-in always runs (a development load of its id aside).
+        if !enabled
+            && record.instance.as_ref().is_some_and(|i| i.builtin)
+            && !self.core.development.contains_key(id)
+        {
+            return Err(RpcError::new(
+                "unsupported",
+                format!("{id} is a built-in plugin: built-in plugins cannot be disabled"),
+            ));
+        }
+        let installed = self.core.packages.runs_from(id, &record);
+        let reserved = check_reserved(id, record.instance.as_ref());
+        let key = record.instance.map(|i| DataKey::Instance(i.guid));
+        let development = self.core.development.get(id).cloned();
+        if installed.is_none() && development.is_none() {
+            return Err(RpcError::new("missing", format!("no plugin {id}")));
+        }
+        // A development load of the same id wins over the installed copy.
+        if installed.is_some() && development.is_none() {
+            self.core.packages.store.set_disabled(id, !enabled)?;
+        } else if enabled {
+            self.core.dev_disabled.edit().remove(id);
+        } else {
+            self.core.dev_disabled.edit().insert(id.into());
+        }
+        let unit = self.core.ensure_unit(id);
+        let now = self.core.now_ms();
+        self.core.supervisor.set_now(now);
+        if !enabled {
+            // Its process stops; in standby its recorded entries go and its
+            // recording stays (not replayed while it is disabled).
+            if self.core.supervisor.disable(unit).is_err() {
+                return Err(busy());
+            }
+            self.supervisor_run();
+            self.core.failures.edit().remove(id);
+            // The user switched it off: its session values go (a reload, an
+            // upgrade or a crash keeps them; session_storage.rs).
+            let stopped = match &development {
+                Some(_) => Some(DataKey::Development(id.into())),
+                None => key,
+            };
+            if let Some(stopped) = stopped {
+                self.core.session_storage.clear(&stopped);
+            }
+            // And its trigger conditions (events-and-triggers.md §4.10).
+            self.core.triggers_clear(id);
+            return Ok(());
+        }
+        if running.is_some() || self.parked_id(id).is_some() {
+            self.core.supervisor.set_enabled(unit, true);
+            return Ok(());
+        }
+        // Its previous process (parked, disabled or failed just now) still
+        // going: it starts once that is gone, never beside it on the same
+        // data, and is `busy` meanwhile; checked when it starts.
+        let waits = self
+            .core
+            .supervisor
+            .unit(unit)
+            .is_some_and(|u| u.stopping.is_some() || u.job.is_some());
+        if !waits {
+            self.core
+                .startable(id, installed, reserved, key, development.is_some())?;
+        }
+        if let Err(Busy) = self.core.supervisor.enable(unit) {
+            return Err(busy());
+        }
+        self.start_now(id)
+    }
+    /// `packages.reload { id }` (SDK 1.5.19, STORE-RELOAD-BUILTIN): stop the
+    /// running plugin and start it again from the same package and data, once
+    /// its process is gone (the supervisor's `Restart{fresh}`); a stopped or
+    /// failed one starts now. Built-ins included; the disabled flag is never
+    /// written, so a reload never leaves a plugin disabled. Same caller rules
+    /// as `setEnabled`: `plugins.manage`, never itself.
+    fn reload(&mut self, caller: u64, id: &str) -> std::result::Result<(), RpcError> {
+        if self.core.plugins[&caller].manifest.id == id {
+            return Err(RpcError::invalid("a plugin cannot reload itself"));
+        }
+        if self.core.package_rpc_busy(id) {
+            return Err(busy());
+        }
+        let record = self.core.packages.store.get(id);
+        let installed = self.core.packages.runs_from(id, &record);
+        let development = self.core.development.get(id).cloned();
+        if installed.is_none() && development.is_none() {
+            return Err(RpcError::new("missing", format!("no plugin {id}")));
+        }
+        let disabled = if development.is_some() {
+            self.core.dev_disabled.contains(id)
+        } else {
+            self.core.packages.store.disabled().contains(id)
+        };
+        if disabled {
+            return Err(RpcError::invalid(format!(
+                "{id} is disabled: enable it instead of reloading it"
+            )));
+        }
+        // Observed fresh: its recording goes, in standby or not.
+        self.drop_recording(id);
+        let unit = self.core.ensure_unit(id);
+        let now = self.core.now_ms();
+        self.core.supervisor.set_now(now);
+        let going = self.core.running(id).is_some()
+            || self
+                .core
+                .supervisor
+                .unit(unit)
+                .is_some_and(|u| u.stopping.is_some_and(|s| !s.done()));
+        if going {
+            // A built-in's files are checked again before it shares the
+            // runner (its start waits for the check too: `Activating{Verify}`).
+            if shared_runner::enabled() {
+                self.core.packages.verify(id);
+            }
+        } else {
+            let reserved = check_reserved(id, record.instance.as_ref());
+            let key = record.instance.map(|i| DataKey::Instance(i.guid));
+            self.core
+                .startable(id, installed, reserved, key, development.is_some())?;
+        }
+        if let Err(Busy) = self.core.supervisor.restart(unit, true, None) {
+            return Err(busy());
+        }
+        self.start_now(id)
+    }
+    /// `packages.uninstall { id, removeData, expectedRevision, requestId }`:
+    /// stop it, remove it from the library (one catalog replacement), and
+    /// delete its data directory once its process is gone when asked.
+    fn uninstall(&mut self, caller: u64, params: &Value) -> std::result::Result<Value, RpcError> {
+        let request = string(params, "requestId")?.to_owned();
+        if request.is_empty() || request.len() > 128 {
+            return Err(RpcError::invalid("requestId must contain 1..128 bytes"));
+        }
+        let spec = json!({"method":"packages.uninstall","params":params});
+        if let Some(receipt) = self.core.packages.receipts.get(&request) {
+            if receipt["request"] != spec {
+                return Err(RpcError::new(
+                    "conflict",
+                    "requestId was used with different arguments",
+                ));
+            }
+            return Ok(receipt.clone());
+        }
+        let id = string(params, "id")?.to_owned();
+        if self.core.plugins[&caller].manifest.id == id {
+            return Err(RpcError::invalid("a plugin cannot uninstall itself"));
+        }
+        let installed = self.core.packages.store.get(&id);
+        if installed.current.is_none()
+            && !self.core.development.contains_key(&id)
+            && self.core.running(&id).is_none()
+            && self
+                .core
+                .packages
+                .store
+                .set_aside_installed()
+                .contains_key(&id)
+        {
+            return self.uninstall_set_aside(&id, &request, spec, params, installed.revision);
+        }
+        uninstallable(
+            &id,
+            &installed,
+            self.core.development.contains_key(&id) || self.core.running(&id).is_some(),
+            params["expectedRevision"].as_u64(),
+        )?;
+        self.core.library_busy(None)?;
+        if self.core.package_rpc_busy(&id) {
+            return Err(busy());
+        }
+        let remove_data = params["removeData"] == true;
+        let data = remove_data
+            .then(|| {
+                installed
+                    .instance
+                    .as_ref()
+                    .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())))
+            })
+            .flatten();
+        let receipt =
+            json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
+        // Its recording goes at the request, not when the stop lands; so do
+        // its trigger conditions (events-and-triggers.md §4.10).
+        self.drop_recording(&id);
+        self.core.triggers_clear(&id);
+        // The supervisor stops it (`Stop{Uninstall, then: Removed}`); its
+        // data directory, resolved now, is deleted once no process of it
+        // may write it (`RemoveData`): one running, parked just now, or
+        // stopped otherwise and still going; at once without one.
+        match self.core.supervisor.by_id(&id) {
+            Some(unit) => {
+                if let Some(directory) = data {
+                    self.core
+                        .data_removals
+                        .entry(unit)
+                        .or_default()
+                        .push(directory);
+                }
+                let now = self.core.now_ms();
+                self.core.supervisor.set_now(now);
+                let _ = self.core.supervisor.enqueue_job(
+                    unit,
+                    JobKind::Stop {
+                        reason: crate::supervisor::StopReason::Uninstall,
+                        then: Then::Removed,
+                    },
+                    JobMode::Replace,
+                    Priority::Background,
+                    Origin::PackageRpc,
+                );
+                self.supervisor_run();
+            }
+            None => {
+                if let Some(directory) = data {
+                    let _ = std::fs::remove_dir_all(directory);
+                }
+            }
+        }
+        self.core
+            .packages
+            .store
+            .uninstall(&id, &request, receipt.clone(), !remove_data)?;
+        if let Some(current) = &installed.current {
+            self.core.discard(&current.digest);
+        }
+        self.core.packages.receipts = self.core.packages.store.operations();
+        self.core.failures.edit().remove(&id);
+        // "Don't ask again" for its commands goes too (Ask Vestra UX §4.7):
+        // a later install of the same id asks again.
+        crate::capabilities::forget_command_trust(self, &id);
+        // Session values go with every uninstall, whether or not the files do.
+        if let Some(instance) = &installed.instance {
+            self.core
+                .session_storage
+                .clear(&DataKey::Instance(instance.guid.clone()));
+            // Its source references go too, whether or not its files do
+            // (`media.sources`): another install starts without them.
+            let _ = self
+                .core
+                .backend
+                .commands
+                .send(crate::playback::backend::Command {
+                    reply: Reply { owner: 0, id: 0 },
+                    method: "owner.sourcesRevoked".into(),
+                    params: json!({"store": crate::playback::media_sources::store_key(
+                        &DataKey::Instance(instance.guid.clone())
+                    )}),
+                });
+        }
+        if remove_data && let Some(instance) = &installed.instance {
+            self.core
+                .purge_secrets(&DataKey::Instance(instance.guid.clone()));
+        }
+        self.core.purge_dropped_secrets();
+        Ok(receipt)
+    }
+    /// `packages.uninstall` of an installed record the library set aside
+    /// at start, this one or an earlier one (a package an older player
+    /// installed that this one refuses, such as a manifest with
+    /// `capabilities`). Forced (user ruling 2026-11-15): nothing of it runs,
+    /// so every record of it goes from `quarantine.json` and the id is free
+    /// at once; the package directories only those records referred to are
+    /// moved out of the library into its holding folder and deleted there
+    /// on the cleanup thread (`Library::hold`, `purge_held`). With
+    /// `removeData` its retired instance goes too: data directory, dormant
+    /// record, secrets and session values. What cannot be moved or deleted
+    /// is logged with its path and left, never in the way of an install.
+    fn uninstall_set_aside(
+        &mut self,
+        id: &str,
+        request: &str,
+        spec: Value,
+        params: &Value,
+        revision: u64,
+    ) -> std::result::Result<Value, RpcError> {
+        if params["expectedRevision"].as_u64() != Some(revision) {
+            return Err(RpcError::new(
+                "revisionConflict",
+                "installed revision changed",
+            ));
+        }
+        self.core.library_busy(None)?;
+        if self.core.package_rpc_busy(id) {
+            return Err(busy());
+        }
+        let guid = self
+            .core
+            .packages
+            .store
+            .set_aside_installed()
+            .get(id)
+            .and_then(|(entry, _)| entry["instance"]["guid"].as_str())
+            .filter(|guid| {
+                self.core
+                    .packages
+                    .store
+                    .dormant()
+                    .get(*guid)
+                    .is_some_and(|dormant| dormant.id == id)
+            })
+            .map(str::to_owned);
+        let receipt =
+            json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
+        let freed = self
+            .core
+            .packages
+            .store
+            .forget_set_aside(id, request, receipt.clone())?;
+        self.core.packages.receipts = self.core.packages.store.operations();
+        self.core.hold_freed(&freed);
+        self.core.failures.edit().remove(id);
+        crate::capabilities::forget_command_trust(self, id);
+        if let Some(guid) = guid {
+            let key = DataKey::Instance(guid.clone());
+            // As every uninstall: its session values and source references.
+            self.core.session_storage.clear(&key);
+            let _ = self
+                .core
+                .backend
+                .commands
+                .send(crate::playback::backend::Command {
+                    reply: Reply { owner: 0, id: 0 },
+                    method: "owner.sourcesRevoked".into(),
+                    params: json!({"store": crate::playback::media_sources::store_key(&key)}),
+                });
+            if params["removeData"] == true {
+                if let (Some(root), Some(directory)) =
+                    (process::data_root(), self.data_directory_of(&key))
+                {
+                    match crate::packages::safe_remove::remove_within(&root, &directory) {
+                        Ok(left) if left.is_empty() => {}
+                        Ok(left) => {
+                            diag!("uninstall {id}: data left in place: {}", left.join("; "))
+                        }
+                        Err(error) => diag!("uninstall {id}: data not removed: {error:#}"),
+                    }
+                }
+                self.core.packages.store.forget_dormant(&guid)?;
+                self.core.purge_secrets(&key);
+            }
+        }
+        self.core.purge_dropped_secrets();
+        Ok(receipt)
+    }
+    /// Loads the next installed plugins of the start order into the
+    /// supervisor, which starts them, until `START_BUDGET` of this tick is
+    /// spent (at least one). Starting a plugin spawns its Node process,
+    /// several milliseconds each on Windows; all of them in one tick held
+    /// the UI thread for 150 ms.
+    fn load_queued(&mut self) {
+        if self.core.packages.to_load.is_empty() {
+            return;
+        }
+        let began = std::time::Instant::now();
+        let mut started = 0;
+        // A built-in whose digest is still being checked stays in its place
+        // (loaded once the check is done, shared or alone, and third-party
+        // first runs still wait for it: `set_builtins_to_load`); the others
+        // pass it: a large package's first read can take seconds.
+        let mut at = 0;
+        while let Some(id) = self.core.packages.to_load.get(at).cloned() {
+            if self.core.packages.verifying(&id) {
+                at += 1;
+                continue;
+            }
+            self.core.packages.to_load.remove(at);
+            let builtins = self.core.builtins_to_load();
+            self.core.supervisor.set_builtins_to_load(builtins);
+            self.load_installed(&id);
+            started += 1;
+            if began.elapsed() >= START_BUDGET {
+                break;
+            }
+        }
+        let builtins = self.core.builtins_to_load();
+        self.core.supervisor.set_builtins_to_load(builtins);
+        if self.frame_log.is_some() {
+            diag!(
+                "vestra packages: {started} started in {:.1} ms, {} to go",
+                began.elapsed().as_secs_f64() * 1000.,
+                self.core.packages.to_load.len()
+            );
+        }
+    }
+    pub(crate) fn package_tick(&mut self) {
+        self.core.purge_dropped_secrets();
+        if !self.core.packages.booted {
+            self.core.packages.booted = true;
+            for recovery in self.core.packages.store.pending() {
+                let request = self
+                    .core
+                    .packages
+                    .receipts
+                    .get(&recovery.operation_id)
+                    .map(|v| v["request"].clone())
+                    .unwrap_or(Value::Null);
+                let result = json!({"operationId":recovery.operation_id,"packageId":recovery.id,"status":"restoring","request":request});
+                self.core.packages.receipts.remove(&recovery.operation_id);
+                let old_key = recovery
+                    .before
+                    .instance
+                    .as_ref()
+                    .map(|i| DataKey::Instance(i.guid.clone()));
+                let target_guid = recovery
+                    .instance
+                    .as_ref()
+                    .or(recovery.before.instance.as_ref())
+                    .map(|i| i.guid.clone())
+                    .unwrap_or_else(package_store::new_guid);
+                let fresh_data = recovery
+                    .instance
+                    .as_ref()
+                    .filter(|i| {
+                        old_key != Some(DataKey::Instance(i.guid.clone()))
+                            && !self.core.packages.store.dormant().contains_key(&i.guid)
+                    })
+                    .and_then(|i| process::data_root().map(|root| root.join(&i.guid)));
+                self.core.packages.operations.edit().insert(
+                    recovery.operation_id.clone(),
+                    Operation {
+                        id: recovery.operation_id,
+                        package: recovery.id,
+                        target: recovery.target,
+                        old: recovery.before.current,
+                        target_key: DataKey::Instance(target_guid),
+                        old_key,
+                        fresh_data,
+                        // Restored, never committed.
+                        enabled: false,
+                        phase: "restoring".into(),
+                        owner: None,
+                        job: None,
+                        started: false,
+                        cancel: false,
+                        failure: Some(
+                            "application stopped before commit; restoring last committed version"
+                                .into(),
+                        ),
+                        result,
+                        request,
+                    },
+                );
+            }
+            let recovering = self
+                .core
+                .packages
+                .operations
+                .values()
+                .map(|op| (op.package.clone(), images_of(op)))
+                .collect::<Vec<_>>();
+            self.core.packages.images.extend(recovering);
+            // The previous versions and built-in copies players up to 0.5
+            // kept, and any leftovers, go on the cleanup thread.
+            self.core.collect_garbage();
+            // Load committed packages and the built-ins independently of
+            // the authoring plugin: a few per tick (`START_BUDGET`), built-ins
+            // first (`start_order`); the supervisor starts them.
+            let builtins = &self.core.packages.builtins;
+            self.core.packages.to_load =
+                start_order(self.core.packages.store.installed_ids(), |id| {
+                    builtins.contains_key(id)
+                });
+            // The shared runner admits a built-in once its digest checked
+            // out, off this thread (`verify`).
+            if shared_runner::enabled() {
+                let ids = self
+                    .core
+                    .packages
+                    .builtins
+                    .keys()
+                    .cloned()
+                    .collect::<Vec<_>>();
+                for id in &ids {
+                    self.core.packages.verify(id);
+                }
+                if self
+                    .core
+                    .packages
+                    .builtins
+                    .values()
+                    .any(|b| b.digest.is_none())
+                {
+                    diag!("built-in plugins without digests run in their own processes");
+                }
+            }
+        }
+        self.core.packages.poll_verified();
+        self.core.verify_tick();
+        self.answer_validations();
+        self.shared_tick();
+        self.load_queued();
+        // The supervisor's jobs: starts whose previous process went, first
+        // runs whose place freed, due idle checks, classifications and
+        // "Starting…" timers.
+        self.supervisor_tick();
+        self.core.cleanup_tick();
+        let keys = self
+            .core
+            .packages
+            .operations
+            .iter()
+            .filter(|(_, op)| {
+                !matches!(
+                    op.phase.as_str(),
+                    "committed" | "failed" | "cancelled" | "failedDegraded"
+                )
+            })
+            .map(|(key, _)| key.clone())
+            .collect::<Vec<_>>();
+        for key in keys {
+            let mut op = self.core.packages.operations.edit().remove(&key).unwrap();
+            let result = self.advance_package(&mut op);
+            if let Err(error) = result {
+                op.phase = "failedDegraded".into();
+                op.result = json!({"operationId":op.id,"packageId":op.package,"status":"failedDegraded","message":error.to_string()});
+            }
+            op.result["request"] = op.request.clone();
+            if matches!(
+                op.phase.as_str(),
+                "committed" | "failed" | "cancelled" | "failedDegraded"
+            ) {
+                if let Err(error) = self.core.packages.store.save_operation(&op.id, &op.result) {
+                    diag!("operation receipt: {error}");
+                }
+                self.core
+                    .packages
+                    .receipts
+                    .insert(key.clone(), op.result.clone());
+            }
+            if matches!(
+                op.phase.as_str(),
+                "committed" | "failed" | "cancelled" | "failedDegraded"
+            ) {
+                self.core.packages.receipts = self.core.packages.store.operations();
+                self.core.packages.images.remove(&op.package);
+            } else {
+                self.core.packages.operations.edit().insert(key, op);
+            }
+        }
+    }
+    fn advance_package(&mut self, op: &mut Operation) -> Result<()> {
+        if matches!(
+            op.phase.as_str(),
+            "committed" | "failed" | "cancelled" | "failedDegraded"
+        ) {
+            return Ok(());
+        }
+        let stuck =
+            || anyhow::anyhow!("cleanup acknowledgment timed out; recovery remains pending");
+        let ended = self.core.operation_job(op);
+        if op.phase == "preparing" {
+            // Its previous process did not go within 20 s of the wait.
+            if matches!(&ended, Some(JobResult::Failed(text)) if text == STUCK_RELOAD) {
+                return Err(stuck());
+            }
+            if !op.cancel && !op.enabled {
+                // It stays (or becomes) disabled: its files are installed and
+                // nothing runs it, not even to check its activation; once the
+                // version it switched off is gone.
+                if ended.is_none() {
+                    return Ok(());
+                }
+                let was_enabled = !self.core.packages.store.disabled().contains(&op.package);
+                self.core.commit_operation(op, None)?;
+                // Switched off by this install: its session values go, as for
+                // `packages.setEnabled(false)`.
+                if was_enabled && let Some(key) = &op.old_key {
+                    self.core.session_storage.clear(key);
+                }
+                if was_enabled {
+                    let id = op.package.clone();
+                    self.core.triggers_clear(&id);
+                }
+                return Ok(());
+            }
+            // Its target starts once what it replaces is stopped (today's
+            // `load_package` in this tick), as the supervisor's
+            // `Restart{fresh, image}`.
+            if !op.cancel && !op.started {
+                if ended.is_none() {
+                    return Ok(());
+                }
+                let unit = self.core.ensure_unit(&op.package);
+                op.started = true;
+                op.job = self.operation_enqueue(
+                    unit,
+                    JobKind::Restart {
+                        fresh: true,
+                        image: Some(op.target.digest.clone()),
+                    },
+                );
+            }
+            let ended = self.core.operation_job(op);
+            // The supervisor started its target: its activation is watched.
+            if let Some(owner) = self.core.running(&op.package) {
+                op.owner = Some(owner);
+                op.phase = "activating".into();
+            } else if op.cancel {
+                op.phase = "restoring".into();
+                op.job = None;
+            } else {
+                match ended.clone() {
+                    None => return Ok(()),
+                    // Its process could not be created.
+                    Some(JobResult::Failed(text)) => op.failure = Some(text),
+                    Some(other) => op.failure = Some(format!("activation {other:?}")),
+                }
+                op.phase = "restoring".into();
+                op.job = None;
+            }
+        }
+        if op.phase == "activating" {
+            let owner = op.owner.unwrap();
+            let status = self.core.package_status(owner);
+            if op.cancel || !matches!(status.as_str(), "ready" | "pending") {
+                op.failure = Some(if op.cancel {
+                    "cancelled before commit".into()
+                } else {
+                    format!("activation {status}: {}", self.core.activation(owner)?)
+                });
+                // Cancelled: the version it replaced comes back (an
+                // `upgrade` in reverse), or, a first install, it goes (an
+                // uninstall), which stops it (`restoring`); else its
+                // activation failed and the supervisor stops it already.
+                op.owner = None;
+                op.phase = "restoring".into();
+                op.job = None;
+                return Ok(());
+            }
+            if status == "ready" {
+                return self.core.commit_operation(op, Some(owner));
+            }
+        }
+        if op.phase == "restoring" {
+            // The disabled flag is still the one from before the install: a
+            // package that was disabled is restored without running.
+            let stopped = self.core.packages.store.disabled().contains(&op.package);
+            let unit = self.core.ensure_unit(&op.package);
+            if let Some(old) = op.old.clone().filter(|_| !stopped) {
+                if op.job.is_none() && op.owner.is_none() {
+                    // The old version starts once its target's process is gone
+                    // (it stops it first when it still runs).
+                    let recordable = self.core.checkpoint_key(&op.package).is_some();
+                    self.core.supervisor.set_recordable(unit, recordable);
+                    self.core.supervisor.set_enabled(unit, true);
+                    op.job = self.operation_enqueue(
+                        unit,
+                        JobKind::Restart {
+                            fresh: false,
+                            image: Some(old.digest.clone()),
+                        },
+                    );
+                    return Ok(());
+                }
+                if op.owner.is_none() {
+                    match self.core.running(&op.package) {
+                        Some(owner) => op.owner = Some(owner),
+                        None => match self.core.operation_job(op) {
+                            None => return Ok(()),
+                            Some(JobResult::Failed(text)) if text == STUCK_RELOAD => {
+                                return Err(stuck());
+                            }
+                            Some(JobResult::Failed(text)) => anyhow::bail!("{text}"),
+                            Some(other) => anyhow::bail!(
+                                "old version recovery failed: {other:?}; recovery remains pending"
+                            ),
+                        },
+                    }
+                    return Ok(());
+                }
+                let status = self.core.package_status(op.owner.unwrap());
+                if status == "pending" {
+                    return Ok(());
+                }
+                anyhow::ensure!(
+                    status == "ready",
+                    "old version recovery failed: {status}; recovery remains pending"
+                );
+            } else {
+                // Nothing to restore: the target's process goes first (a
+                // first install's unit goes with it, as its record does).
+                if op.job.is_none() {
+                    let reason = match (op.cancel, op.old.is_some()) {
+                        (true, true) => crate::supervisor::StopReason::Upgrade,
+                        (true, false) => crate::supervisor::StopReason::Uninstall,
+                        (false, _) => crate::supervisor::StopReason::Failed,
+                    };
+                    let then = if op.old.is_some() {
+                        Then::Inactive
+                    } else {
+                        Then::Removed
+                    };
+                    op.job = self.operation_enqueue(unit, JobKind::Stop { reason, then });
+                }
+                match self.core.operation_job(op) {
+                    None => return Ok(()),
+                    Some(JobResult::Failed(text)) if text == STUCK_RELOAD => return Err(stuck()),
+                    Some(_) => {}
+                }
+                if op.old.is_some() {
+                    let recordable = self.core.checkpoint_key(&op.package).is_some();
+                    self.core.supervisor.set_recordable(unit, recordable);
+                }
+            }
+            op.phase = if op.cancel { "cancelled" } else { "failed" }.into();
+            // The new instance's data (it ran during activation) goes too.
+            if let Some(directory) = op.fresh_data.take() {
+                let _ = std::fs::remove_dir_all(directory);
+            }
+            op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"message":op.failure,"restored":op.old.is_some(),"owner":op.owner,"request":op.request});
+            self.core
+                .packages
+                .store
+                .abort_with_receipt(&op.package, &op.id, op.result.clone())?;
+            // The target staged for it is not kept.
+            let target = op.target.digest.clone();
+            self.core.discard(&target);
+            return Ok(());
+        }
+        op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"owner":op.owner,"cancelRequested":op.cancel});
+        Ok(())
+    }
+    /// A package operation's job on `unit`: it merges with what is
+    /// installed (`JobMode::Replace`; the operation is the busy RPC already),
+    /// and runs now.
+    fn operation_enqueue(
+        &mut self,
+        unit: UnitId,
+        kind: JobKind,
+    ) -> Option<crate::supervisor::JobId> {
+        let now = self.core.now_ms();
+        self.core.supervisor.set_now(now);
+        let job = self
+            .core
+            .supervisor
+            .enqueue_job(
+                unit,
+                kind,
+                JobMode::Replace,
+                Priority::Interactive,
+                Origin::PackageRpc,
+            )
+            .ok();
+        self.supervisor_run();
+        job
+    }
+}
+impl Core {
+    /// Where plugin `id`, about to run from `directory`, runs (doc/
+    /// architecture/README.md §2): in the shared runner only a
+    /// built-in by provenance — listed in `builtin.json`, running from the
+    /// installation's own directory, recorded as built-in in the catalog —
+    /// whose files still have the digest packaging recorded, unless
+    /// `VESTRA_SHARED=0`, the runner failed repeatedly this run, or a fault
+    /// was attributed to it. Never from a manifest field; development loads
+    /// (`Host::load`) never ask.
+    pub(crate) fn trust(&self, id: &str, directory: &Path) -> Trust {
+        trust_of(
+            id,
+            self.packages.builtins.get(id),
+            directory,
+            self.packages
+                .store
+                .get(id)
+                .instance
+                .is_some_and(|instance| instance.builtin),
+            shared_runner::enabled(),
+            &self.shared_policy,
+            self.packages.verified.get(id),
+        )
+    }
+    fn package_status(&mut self, owner: u64) -> String {
+        self.activation(owner)
+            .ok()
+            .and_then(|v| v["activation"]["status"].as_str().map(str::to_owned))
+            .unwrap_or_else(|| "unknown".into())
+    }
+    /// Which instance an install goes into (store proposal §1.3): the same
+    /// source upgrades, another source needs `replace` and reconnects to a
+    /// dormant instance of that source when there is one. Built-ins are
+    /// updated with the player only. `(instance, fresh)`: `fresh` when new
+    /// data starts.
+    fn install_instance(
+        &self,
+        id: &str,
+        before: &package_store::Installed,
+        source: Source,
+        replace: bool,
+    ) -> std::result::Result<(Option<Instance>, bool), RpcError> {
+        install_instance(&self.packages.store, id, before, source, replace)
     }
     /// The supervisor's spec of plugin `id` (`add_unit`), enabled, without a
     /// checkpoint: a development load of the id runs instead of the
@@ -1005,68 +2077,6 @@ impl Host {
     fn operation_unit(&mut self, id: &str) -> UnitId {
         let spec = self.unit_spec(id).disabled();
         self.supervisor.add_unit(spec)
-    }
-    /// The supervisor's spawn of plugin `id` as process `owner`
-    /// (`Action::Spawn`): a development load, a package operation's target
-    /// or the version it restores (`Restart{image}`), or the installed
-    /// package (today's `start_installed`, `start_stopped`, a wake).
-    /// `false`: its own process is created on the spawn thread
-    /// (`Event::Spawned`).
-    pub(crate) fn start_unit_process(
-        &mut self,
-        id: &str,
-        owner: u64,
-        image: Option<&str>,
-        development: bool,
-        deadline: u64,
-    ) -> Result<bool> {
-        if development {
-            let directory = self
-                .dev_loading
-                .clone()
-                .or_else(|| {
-                    self.development
-                        .get(id)
-                        .map(|(directory, _)| directory.clone())
-                })
-                .ok_or_else(|| anyhow::anyhow!("no development load of {id}"))?;
-            return self
-                .load_development_as(&directory, owner, deadline)
-                .map(|()| true);
-        }
-        if let Some(image) = image
-            && let Some(images) = self.packages.images.get(id)
-        {
-            let (_, directory, manifest, key) = images
-                .iter()
-                .find(|(digest, ..)| digest == image)
-                .cloned()
-                .ok_or_else(|| anyhow::anyhow!("the package {image} is not this operation's"))?;
-            return self.load_package_as(owner, &directory, &manifest, key, deadline);
-        }
-        self.start_package_as(id, owner, deadline)
-    }
-    /// Starts installed plugin `id` as process `owner`, as `start_installed`
-    /// would.
-    fn start_package_as(&mut self, id: &str, owner: u64, deadline: u64) -> Result<bool> {
-        let record = self.packages.store.get(id);
-        let instance = record
-            .instance
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("the installed package has no instance"))?;
-        let (directory, manifest) = self
-            .packages
-            .runs_from(id, &record)
-            .ok_or_else(|| anyhow::anyhow!("not installed"))?
-            .map_err(anyhow::Error::msg)?;
-        check_reserved(id, Some(&instance)).map_err(|refusal| anyhow::anyhow!(refusal.message))?;
-        self.load_package_as(
-            owner,
-            &directory,
-            &manifest,
-            DataKey::Instance(instance.guid),
-            deadline,
-        )
     }
     /// What the supervisor's `Replay` of `id` registers: the recording read
     /// at `load_installed`, the package and its recording key.
@@ -1136,13 +2146,6 @@ impl Host {
             digest,
             version,
         })
-    }
-    /// Removes installed plugin `id`'s recording, if it has one.
-    pub(crate) fn drop_recording(&mut self, id: &str) {
-        if let Some(instance) = self.packages.store.get(id).instance {
-            self.recordings_written();
-            checkpoint::remove(&self.activation_dir(), &instance.guid);
-        }
     }
     /// The directory recordings are kept in.
     pub(crate) fn activation_dir(&self) -> PathBuf {
@@ -1347,293 +2350,6 @@ impl Host {
                 )
         })
     }
-    /// `packages.list`: running plugins, installed packages and this run's
-    /// development loads, by id.
-    pub(crate) fn package_list(&mut self) -> Value {
-        let now = self.now_ms();
-        self.package_list_at(now)
-    }
-    /// [`Host::package_list`] as at `now` (the supervisor's clock): the
-    /// same `now` as [`Host::packages_key`]'s when they are compared.
-    pub(crate) fn package_list_at(&mut self, now: u64) -> Value {
-        let mut list = BTreeMap::<String, Value>::new();
-        self.supervisor.set_now(now);
-        let owners = self.plugins.keys().copied().collect::<Vec<_>>();
-        for owner in owners {
-            let plugin = &self.plugins[&owner];
-            let id = plugin.manifest.id.clone();
-            let stored = self.packages.store.get(&id);
-            let from_record = self
-                .packages
-                .runs_from(&id, &stored)
-                .is_some_and(|package| package.is_ok_and(|(dir, _)| dir == plugin.directory));
-            let (installed, instance) = listed_instance(
-                &plugin.directory,
-                from_record,
-                stored,
-                self.packages.store.pending_of(&id),
-            );
-            let warnings = self.warnings_of(owner);
-            // The supervisor's state of its unit, its activation read (supervisor.md §10).
-            let listed = self
-                .supervisor
-                .by_id(&id)
-                .and_then(|unit| self.supervisor.list_state(unit));
-            let (state, error) = match listed {
-                Some(ListState::Starting) => ("starting", None),
-                Some(ListState::Failed(message)) => ("failed", Some(message)),
-                // Woken from idle (lazy activation): it was running all along.
-                Some(ListState::Running { .. }) if self.supervisor.waking(Pid(owner)).is_some() => {
-                    ("running", None)
-                }
-                // Until the SDK passes `warnings` on (it keeps only the known
-                // fields), a running plugin's `error` carries them as text.
-                _ => ("running", self.warning_text(owner)),
-            };
-            let origin = if installed {
-                "installed"
-            } else {
-                "development"
-            };
-            // `process` (SDK 1.5.38): it has a process (`idle` below).
-            let process = (state == "running").then_some("running");
-            list.insert(
-                id.clone(),
-                json!({"id":id,"version":plugin.manifest.version,
-                "origin":origin,"state":state,"error":error,"process":process,
-                "directory":plugin.directory,
-                "builtin":instance.as_ref().is_some_and(|i| i.builtin),
-                "source":instance.map(|i| i.source),
-                "dataDirectory":plugin.data_directory(),"warnings":warnings,
-                "display":display(&plugin.manifest, plugin.catalog.as_deref())}),
-            );
-        }
-        let stopped = |disabled: bool, failure: Option<&String>| {
-            if disabled {
-                ("disabled", None)
-            } else if let Some(failure) = failure {
-                ("failed", Some(failure.clone()))
-            } else {
-                ("stopped", None)
-            }
-        };
-        // The catalog's records as they are (not a copy of it: `notify_tick`
-        // builds this list while plugins come and go, supervisor.md).
-        for (id, record) in self.packages.store.installed_records() {
-            if list.contains_key(id) {
-                continue;
-            }
-            let id = id.clone();
-            let Some(package) = self.packages.runs_from(&id, record) else {
-                continue;
-            };
-            // The supervisor's state of its unit (supervisor.md §10): a start it waits for
-            // (a first run waiting for a place, a reload or an enable
-            // waiting for the previous process) and a package operation
-            // count as starting; one waiting at start-up lists `stopped`.
-            let disabled = self.packages.store.disabled().contains(&id);
-            let parked = self
-                .parked_id(&id)
-                .and_then(|owner| self.on_demand.held(owner));
-            let listed = self
-                .supervisor
-                .by_id(&id)
-                .and_then(|unit| self.supervisor.list_state(unit));
-            let (state, error) =
-                if self.operation_pending(&id) || listed == Some(ListState::Starting) {
-                    ("starting", None)
-                } else if let Some(parked) = parked {
-                    // Parked (lazy activation): it runs again on its first use;
-                    // `state` stays `running`, `process` says `idle`, and what
-                    // it was refused while it ran stays listed.
-                    ("running", parked.warning.clone())
-                } else if matches!(listed, Some(ListState::Running { .. })) {
-                    // Waiting to start again by itself after a crash
-                    // (`Activating{AutoRestart}`): running, no process.
-                    ("running", None)
-                } else {
-                    stopped(disabled, self.failures.get(&id))
-                };
-            let warnings = parked.map_or_else(Vec::new, |parked| parked.warnings.clone());
-            let data = record
-                .instance
-                .as_ref()
-                .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())));
-            let builtin = record.instance.as_ref().is_some_and(|i| i.builtin);
-            let source = record.instance.as_ref().map(|i| i.source.clone());
-            let process = ((self.parked_id(&id).is_some()
-                || matches!(listed, Some(ListState::Running { .. })))
-                && state == "running")
-                .then_some("idle");
-            let entry = match package {
-                Ok((directory, manifest)) => json!({"id":id,"version":manifest.version,
-                    "origin":"installed","state":state,"error":error,"process":process,
-                    "directory":directory,
-                    "builtin":builtin,"source":source,
-                    "dataDirectory":data,"warnings":warnings,
-                    "display":display(&manifest, crate::i18n::load(&directory).as_deref())}),
-                // A built-in whose copy in the installation failed its
-                // checks, or a package whose library copy could not be read
-                // at start (`Store::deferred`: the directory it names is
-                // another library's, not shown).
-                Err(failure) => {
-                    let (version, directory) = match self.packages.builtins.get(&id) {
-                        Some(entry) => (Some(entry.version.clone()), Some(entry.directory.clone())),
-                        None => (
-                            record
-                                .current
-                                .as_ref()
-                                .and_then(|c| c.manifest.version.clone()),
-                            None,
-                        ),
-                    };
-                    let state = if state == "disabled" { state } else { "failed" };
-                    json!({"id":id,"version":version,
-                        "origin":"installed","state":state,"error":failure,
-                        "directory":directory.unwrap_or_default(),
-                        "builtin":builtin,"source":source,
-                        "dataDirectory":data,"warnings":[],
-                        "display":{"name":null,"punchline":null,"description":null,"tags":[]}})
-                }
-            };
-            list.insert(id.clone(), entry);
-        }
-        // Installed records the library set aside at start, this one or an
-        // earlier one (`Store::set_aside_installed`): failed, with the
-        // reason, named, versioned and sourced from the record as read,
-        // until installed again or uninstalled (`uninstall_set_aside`).
-        let dormant = self.packages.store.dormant();
-        let aside = self.packages.store.set_aside_installed();
-        for (id, (entry, reason)) in aside {
-            if list.contains_key(&id) {
-                continue;
-            }
-            let error =
-                format!("the plugin library's record of this plugin was set aside: {reason}");
-            let (version, source, display) = set_aside_fields(entry);
-            // Its instance was retired with its data (`Store::screen`).
-            let data = entry["instance"]["guid"]
-                .as_str()
-                .filter(|guid| dormant.get(*guid).is_some_and(|d| d.id == id))
-                .and_then(|guid| self.data_directory_of(&DataKey::Instance(guid.to_owned())));
-            list.insert(
-                id.clone(),
-                json!({"id":id,"version":version,
-                    "origin":"installed","state":"failed","error":error,
-                    "directory":"",
-                    "builtin":false,"source":source,
-                    "dataDirectory":data,"warnings":[],
-                    "display":display}),
-            );
-        }
-        for (id, (directory, manifest)) in self.development.iter() {
-            if list.contains_key(id) {
-                continue;
-            }
-            let (state, error) = if self.package_job_busy(id) {
-                ("starting", None)
-            } else {
-                stopped(self.dev_disabled.contains(id), self.failures.get(id))
-            };
-            let data = self.data_directory_of(&DataKey::Development(id.clone()));
-            list.insert(
-                id.clone(),
-                json!({"id":id,"version":manifest.version,
-                "origin":"development","state":state,"error":error,
-                "directory":directory,
-                "builtin":false,"source":null,"dataDirectory":data,"warnings":[],
-                "display":display(manifest, crate::i18n::load(directory).as_deref())}),
-            );
-        }
-        Value::Array(list.into_values().collect())
-    }
-    /// `packages.setEnabled`: disabling stops it (and keeps it stopped across
-    /// launches when installed); enabling starts it again. Both are the
-    /// supervisor's jobs (`disable`, `enable`: `Stop{Disable}`,
-    /// `Start{Enable}`, which waits for the plugin's previous process).
-    fn set_enabled(
-        &mut self,
-        caller: u64,
-        id: &str,
-        enabled: bool,
-    ) -> std::result::Result<(), RpcError> {
-        if !enabled && self.plugins[&caller].manifest.id == id {
-            return Err(RpcError::invalid("a plugin cannot disable itself"));
-        }
-        let running = self.running(id);
-        if self.package_rpc_busy(id) {
-            return Err(busy());
-        }
-        let record = self.packages.store.get(id);
-        // User ruling 2026-10-26: users manage third-party plugins only;
-        // a built-in always runs (a development load of its id aside).
-        if !enabled
-            && record.instance.as_ref().is_some_and(|i| i.builtin)
-            && !self.development.contains_key(id)
-        {
-            return Err(RpcError::new(
-                "unsupported",
-                format!("{id} is a built-in plugin: built-in plugins cannot be disabled"),
-            ));
-        }
-        let installed = self.packages.runs_from(id, &record);
-        let reserved = check_reserved(id, record.instance.as_ref());
-        let key = record.instance.map(|i| DataKey::Instance(i.guid));
-        let development = self.development.get(id).cloned();
-        if installed.is_none() && development.is_none() {
-            return Err(RpcError::new("missing", format!("no plugin {id}")));
-        }
-        // A development load of the same id wins over the installed copy.
-        if installed.is_some() && development.is_none() {
-            self.packages.store.set_disabled(id, !enabled)?;
-        } else if enabled {
-            self.dev_disabled.edit().remove(id);
-        } else {
-            self.dev_disabled.edit().insert(id.into());
-        }
-        let unit = self.ensure_unit(id);
-        let now = self.now_ms();
-        self.supervisor.set_now(now);
-        if !enabled {
-            // Its process stops; in standby its recorded entries go and its
-            // recording stays (not replayed while it is disabled).
-            if self.supervisor.disable(unit).is_err() {
-                return Err(busy());
-            }
-            self.supervisor_run();
-            self.failures.edit().remove(id);
-            // The user switched it off: its session values go (a reload, an
-            // upgrade or a crash keeps them; session_storage.rs).
-            let stopped = match &development {
-                Some(_) => Some(DataKey::Development(id.into())),
-                None => key,
-            };
-            if let Some(stopped) = stopped {
-                self.session_storage.clear(&stopped);
-            }
-            // And its trigger conditions (events-and-triggers.md §4.10).
-            self.triggers_clear(id);
-            return Ok(());
-        }
-        if running.is_some() || self.parked_id(id).is_some() {
-            self.supervisor.set_enabled(unit, true);
-            return Ok(());
-        }
-        // Its previous process (parked, disabled or failed just now) still
-        // going: it starts once that is gone, never beside it on the same
-        // data, and is `busy` meanwhile; checked when it starts.
-        let waits = self
-            .supervisor
-            .unit(unit)
-            .is_some_and(|u| u.stopping.is_some() || u.job.is_some());
-        if !waits {
-            self.startable(id, installed, reserved, key, development.is_some())?;
-        }
-        if let Err(Busy) = self.supervisor.enable(unit) {
-            return Err(busy());
-        }
-        self.start_now(id)
-    }
     /// What today's `start_stopped` checked before it started a stopped
     /// plugin (its development load, else its installed package), with the
     /// same replies; the supervisor's job starts it. The disabled flag is
@@ -1665,263 +2381,6 @@ impl Host {
             }
             (None, false) => Err(RpcError::new("missing", format!("no plugin {id}"))),
         }
-    }
-    /// `packages.reload { id }` (SDK 1.5.19, STORE-RELOAD-BUILTIN): stop the
-    /// running plugin and start it again from the same package and data, once
-    /// its process is gone (the supervisor's `Restart{fresh}`); a stopped or
-    /// failed one starts now. Built-ins included; the disabled flag is never
-    /// written, so a reload never leaves a plugin disabled. Same caller rules
-    /// as `setEnabled`: `plugins.manage`, never itself.
-    fn reload(&mut self, caller: u64, id: &str) -> std::result::Result<(), RpcError> {
-        if self.plugins[&caller].manifest.id == id {
-            return Err(RpcError::invalid("a plugin cannot reload itself"));
-        }
-        if self.package_rpc_busy(id) {
-            return Err(busy());
-        }
-        let record = self.packages.store.get(id);
-        let installed = self.packages.runs_from(id, &record);
-        let development = self.development.get(id).cloned();
-        if installed.is_none() && development.is_none() {
-            return Err(RpcError::new("missing", format!("no plugin {id}")));
-        }
-        let disabled = if development.is_some() {
-            self.dev_disabled.contains(id)
-        } else {
-            self.packages.store.disabled().contains(id)
-        };
-        if disabled {
-            return Err(RpcError::invalid(format!(
-                "{id} is disabled: enable it instead of reloading it"
-            )));
-        }
-        // Observed fresh: its recording goes, in standby or not.
-        self.drop_recording(id);
-        let unit = self.ensure_unit(id);
-        let now = self.now_ms();
-        self.supervisor.set_now(now);
-        let going = self.running(id).is_some()
-            || self
-                .supervisor
-                .unit(unit)
-                .is_some_and(|u| u.stopping.is_some_and(|s| !s.done()));
-        if going {
-            // A built-in's files are checked again before it shares the
-            // runner (its start waits for the check too: `Activating{Verify}`).
-            if shared_runner::enabled() {
-                self.packages.verify(id);
-            }
-        } else {
-            let reserved = check_reserved(id, record.instance.as_ref());
-            let key = record.instance.map(|i| DataKey::Instance(i.guid));
-            self.startable(id, installed, reserved, key, development.is_some())?;
-        }
-        if let Err(Busy) = self.supervisor.restart(unit, true, None) {
-            return Err(busy());
-        }
-        self.start_now(id)
-    }
-    /// `packages.uninstall { id, removeData, expectedRevision, requestId }`:
-    /// stop it, remove it from the library (one catalog replacement), and
-    /// delete its data directory once its process is gone when asked.
-    fn uninstall(&mut self, caller: u64, params: &Value) -> std::result::Result<Value, RpcError> {
-        let request = string(params, "requestId")?.to_owned();
-        if request.is_empty() || request.len() > 128 {
-            return Err(RpcError::invalid("requestId must contain 1..128 bytes"));
-        }
-        let spec = json!({"method":"packages.uninstall","params":params});
-        if let Some(receipt) = self.packages.receipts.get(&request) {
-            if receipt["request"] != spec {
-                return Err(RpcError::new(
-                    "conflict",
-                    "requestId was used with different arguments",
-                ));
-            }
-            return Ok(receipt.clone());
-        }
-        let id = string(params, "id")?.to_owned();
-        if self.plugins[&caller].manifest.id == id {
-            return Err(RpcError::invalid("a plugin cannot uninstall itself"));
-        }
-        let installed = self.packages.store.get(&id);
-        if installed.current.is_none()
-            && !self.development.contains_key(&id)
-            && self.running(&id).is_none()
-            && self.packages.store.set_aside_installed().contains_key(&id)
-        {
-            return self.uninstall_set_aside(&id, &request, spec, params, installed.revision);
-        }
-        uninstallable(
-            &id,
-            &installed,
-            self.development.contains_key(&id) || self.running(&id).is_some(),
-            params["expectedRevision"].as_u64(),
-        )?;
-        self.library_busy(None)?;
-        if self.package_rpc_busy(&id) {
-            return Err(busy());
-        }
-        let remove_data = params["removeData"] == true;
-        let data = remove_data
-            .then(|| {
-                installed
-                    .instance
-                    .as_ref()
-                    .and_then(|i| self.data_directory_of(&DataKey::Instance(i.guid.clone())))
-            })
-            .flatten();
-        let receipt =
-            json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
-        // Its recording goes at the request, not when the stop lands; so do
-        // its trigger conditions (events-and-triggers.md §4.10).
-        self.drop_recording(&id);
-        self.triggers_clear(&id);
-        // The supervisor stops it (`Stop{Uninstall, then: Removed}`); its
-        // data directory, resolved now, is deleted once no process of it
-        // may write it (`RemoveData`): one running, parked just now, or
-        // stopped otherwise and still going; at once without one.
-        match self.supervisor.by_id(&id) {
-            Some(unit) => {
-                if let Some(directory) = data {
-                    self.data_removals.entry(unit).or_default().push(directory);
-                }
-                let now = self.now_ms();
-                self.supervisor.set_now(now);
-                let _ = self.supervisor.enqueue_job(
-                    unit,
-                    JobKind::Stop {
-                        reason: crate::supervisor::StopReason::Uninstall,
-                        then: Then::Removed,
-                    },
-                    JobMode::Replace,
-                    Priority::Background,
-                    Origin::PackageRpc,
-                );
-                self.supervisor_run();
-            }
-            None => {
-                if let Some(directory) = data {
-                    let _ = std::fs::remove_dir_all(directory);
-                }
-            }
-        }
-        self.packages
-            .store
-            .uninstall(&id, &request, receipt.clone(), !remove_data)?;
-        if let Some(current) = &installed.current {
-            self.discard(&current.digest);
-        }
-        self.packages.receipts = self.packages.store.operations();
-        self.failures.edit().remove(&id);
-        // "Don't ask again" for its commands goes too (Ask Vestra UX §4.7):
-        // a later install of the same id asks again.
-        crate::capabilities::forget_command_trust(self, &id);
-        // Session values go with every uninstall, whether or not the files do.
-        if let Some(instance) = &installed.instance {
-            self.session_storage
-                .clear(&DataKey::Instance(instance.guid.clone()));
-            // Its source references go too, whether or not its files do
-            // (`media.sources`): another install starts without them.
-            let _ = self
-                .backend
-                .commands
-                .send(crate::playback::backend::Command {
-                    reply: Reply { owner: 0, id: 0 },
-                    method: "owner.sourcesRevoked".into(),
-                    params: json!({"store": crate::playback::media_sources::store_key(
-                        &DataKey::Instance(instance.guid.clone())
-                    )}),
-                });
-        }
-        if remove_data && let Some(instance) = &installed.instance {
-            self.purge_secrets(&DataKey::Instance(instance.guid.clone()));
-        }
-        self.purge_dropped_secrets();
-        Ok(receipt)
-    }
-    /// `packages.uninstall` of an installed record the library set aside
-    /// at start, this one or an earlier one (a package an older player
-    /// installed that this one refuses, such as a manifest with
-    /// `capabilities`). Forced (user ruling 2026-11-15): nothing of it runs,
-    /// so every record of it goes from `quarantine.json` and the id is free
-    /// at once; the package directories only those records referred to are
-    /// moved out of the library into its holding folder and deleted there
-    /// on the cleanup thread (`Library::hold`, `purge_held`). With
-    /// `removeData` its retired instance goes too: data directory, dormant
-    /// record, secrets and session values. What cannot be moved or deleted
-    /// is logged with its path and left, never in the way of an install.
-    fn uninstall_set_aside(
-        &mut self,
-        id: &str,
-        request: &str,
-        spec: Value,
-        params: &Value,
-        revision: u64,
-    ) -> std::result::Result<Value, RpcError> {
-        if params["expectedRevision"].as_u64() != Some(revision) {
-            return Err(RpcError::new(
-                "revisionConflict",
-                "installed revision changed",
-            ));
-        }
-        self.library_busy(None)?;
-        if self.package_rpc_busy(id) {
-            return Err(busy());
-        }
-        let guid = self
-            .packages
-            .store
-            .set_aside_installed()
-            .get(id)
-            .and_then(|(entry, _)| entry["instance"]["guid"].as_str())
-            .filter(|guid| {
-                self.packages
-                    .store
-                    .dormant()
-                    .get(*guid)
-                    .is_some_and(|dormant| dormant.id == id)
-            })
-            .map(str::to_owned);
-        let receipt =
-            json!({"operationId":request,"packageId":id,"status":"committed","request":spec});
-        let freed = self
-            .packages
-            .store
-            .forget_set_aside(id, request, receipt.clone())?;
-        self.packages.receipts = self.packages.store.operations();
-        self.hold_freed(&freed);
-        self.failures.edit().remove(id);
-        crate::capabilities::forget_command_trust(self, id);
-        if let Some(guid) = guid {
-            let key = DataKey::Instance(guid.clone());
-            // As every uninstall: its session values and source references.
-            self.session_storage.clear(&key);
-            let _ = self
-                .backend
-                .commands
-                .send(crate::playback::backend::Command {
-                    reply: Reply { owner: 0, id: 0 },
-                    method: "owner.sourcesRevoked".into(),
-                    params: json!({"store": crate::playback::media_sources::store_key(&key)}),
-                });
-            if params["removeData"] == true {
-                if let (Some(root), Some(directory)) =
-                    (process::data_root(), self.data_directory_of(&key))
-                {
-                    match crate::packages::safe_remove::remove_within(&root, &directory) {
-                        Ok(left) if left.is_empty() => {}
-                        Ok(left) => {
-                            diag!("uninstall {id}: data left in place: {}", left.join("; "))
-                        }
-                        Err(error) => diag!("uninstall {id}: data not removed: {error:#}"),
-                    }
-                }
-                self.packages.store.forget_dormant(&guid)?;
-                self.purge_secrets(&key);
-            }
-        }
-        self.purge_dropped_secrets();
-        Ok(receipt)
     }
     /// Package directories a record set aside no longer keeps (`freed`):
     /// out of the library now (`Library::hold`), deleted on the cleanup
@@ -1969,46 +2428,6 @@ impl Host {
     pub(crate) fn packages_started(&self) -> bool {
         self.packages.booted && self.packages.to_load.is_empty() && !self.supervisor.boot_pending()
     }
-    /// Loads the next installed plugins of the start order into the
-    /// supervisor, which starts them, until `START_BUDGET` of this tick is
-    /// spent (at least one). Starting a plugin spawns its Node process,
-    /// several milliseconds each on Windows; all of them in one tick held
-    /// the UI thread for 150 ms.
-    fn load_queued(&mut self) {
-        if self.packages.to_load.is_empty() {
-            return;
-        }
-        let began = std::time::Instant::now();
-        let mut started = 0;
-        // A built-in whose digest is still being checked stays in its place
-        // (loaded once the check is done, shared or alone, and third-party
-        // first runs still wait for it: `set_builtins_to_load`); the others
-        // pass it: a large package's first read can take seconds.
-        let mut at = 0;
-        while let Some(id) = self.packages.to_load.get(at).cloned() {
-            if self.packages.verifying(&id) {
-                at += 1;
-                continue;
-            }
-            self.packages.to_load.remove(at);
-            let builtins = self.builtins_to_load();
-            self.supervisor.set_builtins_to_load(builtins);
-            self.load_installed(&id);
-            started += 1;
-            if began.elapsed() >= START_BUDGET {
-                break;
-            }
-        }
-        let builtins = self.builtins_to_load();
-        self.supervisor.set_builtins_to_load(builtins);
-        if self.frame_log.is_some() {
-            diag!(
-                "vestra packages: {started} started in {:.1} ms, {} to go",
-                began.elapsed().as_secs_f64() * 1000.,
-                self.packages.to_load.len()
-            );
-        }
-    }
     /// Built-ins still to load (`to_load` keeps them first, so they are its
     /// front).
     fn builtins_to_load(&self) -> usize {
@@ -2018,326 +2437,6 @@ impl Host {
             .iter()
             .take_while(|id| builtins.contains_key(id.as_str()))
             .count()
-    }
-    pub(crate) fn package_tick(&mut self) {
-        self.purge_dropped_secrets();
-        if !self.packages.booted {
-            self.packages.booted = true;
-            for recovery in self.packages.store.pending() {
-                let request = self
-                    .packages
-                    .receipts
-                    .get(&recovery.operation_id)
-                    .map(|v| v["request"].clone())
-                    .unwrap_or(Value::Null);
-                let result = json!({"operationId":recovery.operation_id,"packageId":recovery.id,"status":"restoring","request":request});
-                self.packages.receipts.remove(&recovery.operation_id);
-                let old_key = recovery
-                    .before
-                    .instance
-                    .as_ref()
-                    .map(|i| DataKey::Instance(i.guid.clone()));
-                let target_guid = recovery
-                    .instance
-                    .as_ref()
-                    .or(recovery.before.instance.as_ref())
-                    .map(|i| i.guid.clone())
-                    .unwrap_or_else(package_store::new_guid);
-                let fresh_data = recovery
-                    .instance
-                    .as_ref()
-                    .filter(|i| {
-                        old_key != Some(DataKey::Instance(i.guid.clone()))
-                            && !self.packages.store.dormant().contains_key(&i.guid)
-                    })
-                    .and_then(|i| process::data_root().map(|root| root.join(&i.guid)));
-                self.packages.operations.edit().insert(
-                    recovery.operation_id.clone(),
-                    Operation {
-                        id: recovery.operation_id,
-                        package: recovery.id,
-                        target: recovery.target,
-                        old: recovery.before.current,
-                        target_key: DataKey::Instance(target_guid),
-                        old_key,
-                        fresh_data,
-                        // Restored, never committed.
-                        enabled: false,
-                        phase: "restoring".into(),
-                        owner: None,
-                        job: None,
-                        started: false,
-                        cancel: false,
-                        failure: Some(
-                            "application stopped before commit; restoring last committed version"
-                                .into(),
-                        ),
-                        result,
-                        request,
-                    },
-                );
-            }
-            let recovering = self
-                .packages
-                .operations
-                .values()
-                .map(|op| (op.package.clone(), images_of(op)))
-                .collect::<Vec<_>>();
-            self.packages.images.extend(recovering);
-            // The previous versions and built-in copies players up to 0.5
-            // kept, and any leftovers, go on the cleanup thread.
-            self.collect_garbage();
-            // Load committed packages and the built-ins independently of
-            // the authoring plugin: a few per tick (`START_BUDGET`), built-ins
-            // first (`start_order`); the supervisor starts them.
-            let builtins = &self.packages.builtins;
-            self.packages.to_load = start_order(self.packages.store.installed_ids(), |id| {
-                builtins.contains_key(id)
-            });
-            // The shared runner admits a built-in once its digest checked
-            // out, off this thread (`verify`).
-            if shared_runner::enabled() {
-                let ids = self.packages.builtins.keys().cloned().collect::<Vec<_>>();
-                for id in &ids {
-                    self.packages.verify(id);
-                }
-                if self.packages.builtins.values().any(|b| b.digest.is_none()) {
-                    diag!("built-in plugins without digests run in their own processes");
-                }
-            }
-        }
-        self.packages.poll_verified();
-        self.verify_tick();
-        self.answer_validations();
-        self.shared_tick();
-        self.load_queued();
-        // The supervisor's jobs: starts whose previous process went, first
-        // runs whose place freed, due idle checks, classifications and
-        // "Starting…" timers.
-        self.supervisor_tick();
-        self.cleanup_tick();
-        let keys = self
-            .packages
-            .operations
-            .iter()
-            .filter(|(_, op)| {
-                !matches!(
-                    op.phase.as_str(),
-                    "committed" | "failed" | "cancelled" | "failedDegraded"
-                )
-            })
-            .map(|(key, _)| key.clone())
-            .collect::<Vec<_>>();
-        for key in keys {
-            let mut op = self.packages.operations.edit().remove(&key).unwrap();
-            let result = self.advance_package(&mut op);
-            if let Err(error) = result {
-                op.phase = "failedDegraded".into();
-                op.result = json!({"operationId":op.id,"packageId":op.package,"status":"failedDegraded","message":error.to_string()});
-            }
-            op.result["request"] = op.request.clone();
-            if matches!(
-                op.phase.as_str(),
-                "committed" | "failed" | "cancelled" | "failedDegraded"
-            ) {
-                if let Err(error) = self.packages.store.save_operation(&op.id, &op.result) {
-                    diag!("operation receipt: {error}");
-                }
-                self.packages
-                    .receipts
-                    .insert(key.clone(), op.result.clone());
-            }
-            if matches!(
-                op.phase.as_str(),
-                "committed" | "failed" | "cancelled" | "failedDegraded"
-            ) {
-                self.packages.receipts = self.packages.store.operations();
-                self.packages.images.remove(&op.package);
-            } else {
-                self.packages.operations.edit().insert(key, op);
-            }
-        }
-    }
-    fn advance_package(&mut self, op: &mut Operation) -> Result<()> {
-        if matches!(
-            op.phase.as_str(),
-            "committed" | "failed" | "cancelled" | "failedDegraded"
-        ) {
-            return Ok(());
-        }
-        let stuck =
-            || anyhow::anyhow!("cleanup acknowledgment timed out; recovery remains pending");
-        let ended = self.operation_job(op);
-        if op.phase == "preparing" {
-            // Its previous process did not go within 20 s of the wait.
-            if matches!(&ended, Some(JobResult::Failed(text)) if text == STUCK_RELOAD) {
-                return Err(stuck());
-            }
-            if !op.cancel && !op.enabled {
-                // It stays (or becomes) disabled: its files are installed and
-                // nothing runs it, not even to check its activation; once the
-                // version it switched off is gone.
-                if ended.is_none() {
-                    return Ok(());
-                }
-                let was_enabled = !self.packages.store.disabled().contains(&op.package);
-                self.commit_operation(op, None)?;
-                // Switched off by this install: its session values go, as for
-                // `packages.setEnabled(false)`.
-                if was_enabled && let Some(key) = &op.old_key {
-                    self.session_storage.clear(key);
-                }
-                if was_enabled {
-                    let id = op.package.clone();
-                    self.triggers_clear(&id);
-                }
-                return Ok(());
-            }
-            // Its target starts once what it replaces is stopped (today's
-            // `load_package` in this tick), as the supervisor's
-            // `Restart{fresh, image}`.
-            if !op.cancel && !op.started {
-                if ended.is_none() {
-                    return Ok(());
-                }
-                let unit = self.ensure_unit(&op.package);
-                op.started = true;
-                op.job = self.operation_enqueue(
-                    unit,
-                    JobKind::Restart {
-                        fresh: true,
-                        image: Some(op.target.digest.clone()),
-                    },
-                );
-            }
-            let ended = self.operation_job(op);
-            // The supervisor started its target: its activation is watched.
-            if let Some(owner) = self.running(&op.package) {
-                op.owner = Some(owner);
-                op.phase = "activating".into();
-            } else if op.cancel {
-                op.phase = "restoring".into();
-                op.job = None;
-            } else {
-                match ended.clone() {
-                    None => return Ok(()),
-                    // Its process could not be created.
-                    Some(JobResult::Failed(text)) => op.failure = Some(text),
-                    Some(other) => op.failure = Some(format!("activation {other:?}")),
-                }
-                op.phase = "restoring".into();
-                op.job = None;
-            }
-        }
-        if op.phase == "activating" {
-            let owner = op.owner.unwrap();
-            let status = self.package_status(owner);
-            if op.cancel || !matches!(status.as_str(), "ready" | "pending") {
-                op.failure = Some(if op.cancel {
-                    "cancelled before commit".into()
-                } else {
-                    format!("activation {status}: {}", self.activation(owner)?)
-                });
-                // Cancelled: the version it replaced comes back (an
-                // `upgrade` in reverse), or, a first install, it goes (an
-                // uninstall), which stops it (`restoring`); else its
-                // activation failed and the supervisor stops it already.
-                op.owner = None;
-                op.phase = "restoring".into();
-                op.job = None;
-                return Ok(());
-            }
-            if status == "ready" {
-                return self.commit_operation(op, Some(owner));
-            }
-        }
-        if op.phase == "restoring" {
-            // The disabled flag is still the one from before the install: a
-            // package that was disabled is restored without running.
-            let stopped = self.packages.store.disabled().contains(&op.package);
-            let unit = self.ensure_unit(&op.package);
-            if let Some(old) = op.old.clone().filter(|_| !stopped) {
-                if op.job.is_none() && op.owner.is_none() {
-                    // The old version starts once its target's process is gone
-                    // (it stops it first when it still runs).
-                    let recordable = self.checkpoint_key(&op.package).is_some();
-                    self.supervisor.set_recordable(unit, recordable);
-                    self.supervisor.set_enabled(unit, true);
-                    op.job = self.operation_enqueue(
-                        unit,
-                        JobKind::Restart {
-                            fresh: false,
-                            image: Some(old.digest.clone()),
-                        },
-                    );
-                    return Ok(());
-                }
-                if op.owner.is_none() {
-                    match self.running(&op.package) {
-                        Some(owner) => op.owner = Some(owner),
-                        None => match self.operation_job(op) {
-                            None => return Ok(()),
-                            Some(JobResult::Failed(text)) if text == STUCK_RELOAD => {
-                                return Err(stuck());
-                            }
-                            Some(JobResult::Failed(text)) => anyhow::bail!("{text}"),
-                            Some(other) => anyhow::bail!(
-                                "old version recovery failed: {other:?}; recovery remains pending"
-                            ),
-                        },
-                    }
-                    return Ok(());
-                }
-                let status = self.package_status(op.owner.unwrap());
-                if status == "pending" {
-                    return Ok(());
-                }
-                anyhow::ensure!(
-                    status == "ready",
-                    "old version recovery failed: {status}; recovery remains pending"
-                );
-            } else {
-                // Nothing to restore: the target's process goes first (a
-                // first install's unit goes with it, as its record does).
-                if op.job.is_none() {
-                    let reason = match (op.cancel, op.old.is_some()) {
-                        (true, true) => crate::supervisor::StopReason::Upgrade,
-                        (true, false) => crate::supervisor::StopReason::Uninstall,
-                        (false, _) => crate::supervisor::StopReason::Failed,
-                    };
-                    let then = if op.old.is_some() {
-                        Then::Inactive
-                    } else {
-                        Then::Removed
-                    };
-                    op.job = self.operation_enqueue(unit, JobKind::Stop { reason, then });
-                }
-                match self.operation_job(op) {
-                    None => return Ok(()),
-                    Some(JobResult::Failed(text)) if text == STUCK_RELOAD => return Err(stuck()),
-                    Some(_) => {}
-                }
-                if op.old.is_some() {
-                    let recordable = self.checkpoint_key(&op.package).is_some();
-                    self.supervisor.set_recordable(unit, recordable);
-                }
-            }
-            op.phase = if op.cancel { "cancelled" } else { "failed" }.into();
-            // The new instance's data (it ran during activation) goes too.
-            if let Some(directory) = op.fresh_data.take() {
-                let _ = std::fs::remove_dir_all(directory);
-            }
-            op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"message":op.failure,"restored":op.old.is_some(),"owner":op.owner,"request":op.request});
-            self.packages
-                .store
-                .abort_with_receipt(&op.package, &op.id, op.result.clone())?;
-            // The target staged for it is not kept.
-            let target = op.target.digest.clone();
-            self.discard(&target);
-            return Ok(());
-        }
-        op.result = json!({"operationId":op.id,"packageId":op.package,"status":op.phase,"owner":op.owner,"cancelRequested":op.cancel});
-        Ok(())
     }
     /// The operation's job (`Operation.job`): `None` while it runs, else
     /// how it ended (`Done` when there is none: nothing to wait for).
@@ -2362,29 +2461,6 @@ impl Host {
                     JobResult::Failed("the wait's result is no longer known".into())
                 }),
         )
-    }
-    /// A package operation's job on `unit`: it merges with what is
-    /// installed (`JobMode::Replace`; the operation is the busy RPC already),
-    /// and runs now.
-    fn operation_enqueue(
-        &mut self,
-        unit: UnitId,
-        kind: JobKind,
-    ) -> Option<crate::supervisor::JobId> {
-        let now = self.now_ms();
-        self.supervisor.set_now(now);
-        let job = self
-            .supervisor
-            .enqueue_job(
-                unit,
-                kind,
-                JobMode::Replace,
-                Priority::Interactive,
-                Origin::PackageRpc,
-            )
-            .ok();
-        self.supervisor_run();
-        job
     }
     /// Commit `op` (its target activated as `owner`, or not activated at
     /// all when it stays disabled) with the disabled flag it decided.
@@ -2442,7 +2518,7 @@ impl Host {
 }
 
 /// Today's `busy` reply of a package RPC while another runs on the same
-/// plugin (`Host::package_rpc_busy`; the supervisor's `Busy`).
+/// plugin (`Core::package_rpc_busy`; the supervisor's `Busy`).
 fn busy() -> RpcError {
     RpcError::new("busy", crate::supervisor::Busy.to_string())
 }
@@ -2578,7 +2654,7 @@ fn deferred_failure(error: &str) -> String {
         .take(512)
         .collect()
 }
-/// `Host::trust` as a table: `builtin` is `id`'s `builtin.json` entry,
+/// `Core::trust` as a table: `builtin` is `id`'s `builtin.json` entry,
 /// `catalog_builtin` whether the catalog records its instance as built-in,
 /// `enabled` whether sharing is on (`VESTRA_SHARED`), `verified` its digest
 /// check.
@@ -2707,7 +2783,7 @@ mod builtin {
         pub manifest: std::result::Result<PackageManifest, String>,
         /// Its package digest as packaging recorded it (schema 3); the
         /// shared runner admits it only while its directory still has it
-        /// (`Host::trust`). `None` from a schema-2 list: its own process.
+        /// (`Core::trust`). `None` from a schema-2 list: its own process.
         pub digest: Option<String>,
     }
 

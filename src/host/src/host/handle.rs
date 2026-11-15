@@ -2,19 +2,6 @@
 use super::*;
 
 impl Host {
-    /// The prepared rows of the request `reply` answers (`Event::Prepared`),
-    /// taken: each request has one value.
-    pub(crate) fn take_prepared(
-        &mut self,
-        reply: &Reply,
-    ) -> Option<Box<crate::ui::ui_values::Prepared>> {
-        match &self.prepared {
-            Some((owner, id, _)) if *owner == reply.owner && *id == reply.id => {
-                self.prepared.take().map(|(_, _, prepared)| prepared)
-            }
-            _ => None,
-        }
-    }
     pub(crate) fn handle(&mut self, event: Event) {
         // What a process said before the Host has it (its spawn on the
         // spawn thread is not answered yet) waits for it (`worker.rs`).
@@ -27,23 +14,23 @@ impl Host {
         }
         match event {
             Event::Prepared(owner, message, prepared) => {
-                self.prepared = message["id"].as_u64().map(|id| (owner, id, prepared));
+                self.core.prepared = message["id"].as_u64().map(|id| (owner, id, prepared));
                 self.handle(Event::Request(owner, message));
-                self.prepared = None;
+                self.core.prepared = None;
             }
             Event::Request(owner, message) => {
-                if !self.plugins.contains_key(&owner) {
+                if !self.core.plugins.contains_key(&owner) {
                     return;
                 }
                 // On-demand start: a plugin that asks for something is in use.
-                let now = self.now_ms();
-                self.supervisor.touch(Pid(owner), now);
+                let now = self.core.now_ms();
+                self.core.supervisor.touch(Pid(owner), now);
                 if let Some(event) = message["event"].as_str() {
                     diag!("runtime {owner} {event}: {}", message["data"]);
-                    let now = self.now_ms();
+                    let now = self.core.now_ms();
                     let result = match event {
-                        "runtime.ready" => self.supervisor.activation_ready(Pid(owner), now),
-                        "runtime.failed" => self.supervisor.activation_failed(
+                        "runtime.ready" => self.core.supervisor.activation_ready(Pid(owner), now),
+                        "runtime.failed" => self.core.supervisor.activation_failed(
                             Pid(owner),
                             message["data"].to_string().chars().take(512).collect(),
                             now,
@@ -54,7 +41,7 @@ impl Host {
                         diag!("activation runtime event: {error}");
                     }
                     self.activation_tick();
-                    if event == "runtime.ready" && self.plugins.contains_key(&owner) {
+                    if event == "runtime.ready" && self.core.plugins.contains_key(&owner) {
                         self.unit_ready(owner);
                     }
                     return;
@@ -66,23 +53,26 @@ impl Host {
                             id: request.id,
                         };
                         if matches!(request.method.as_str(), "ui.open" | "ui.mount") {
-                            let now = self.now_ms();
+                            let now = self.core.now_ms();
                             if matches!(
-                                self.activation_status(owner, now),
+                                self.core.activation_status(owner, now),
                                 Ok(activation::Status::Pending { .. })
                             ) {
-                                if let Err(error) =
-                                    self.supervisor
-                                        .activation_ui_begin(Pid(owner), reply.id, now)
-                                {
+                                if let Err(error) = self.core.supervisor.activation_ui_begin(
+                                    Pid(owner),
+                                    reply.id,
+                                    now,
+                                ) {
                                     self.respond(
                                         reply,
                                         Err(RpcError::new("activation", error.to_string())),
                                     );
                                     return;
                                 }
-                                self.supervisor.activation_ui_wait(Pid(owner), reply.id);
-                                self.ui_begun(owner);
+                                self.core
+                                    .supervisor
+                                    .activation_ui_wait(Pid(owner), reply.id);
+                                self.core.ui_begun(owner);
                             }
                         }
                         // Built-in plugins claim panel slots, the sequence and resolvers first (slot_claims).
@@ -93,12 +83,13 @@ impl Host {
                                 | "sequence.set"
                                 | "sourceResolvers.register"
                                 | "sourceResolvers.unregister"
-                        ) && !self.headless
+                        ) && !self.core.headless
                         {
-                            let builtin = self.is_builtin(owner);
-                            let starting = self.builtins_starting();
-                            if self.held_mounts.holds(owner, builtin, starting) {
-                                self.held_mounts
+                            let builtin = self.core.is_builtin(owner);
+                            let starting = self.core.builtins_starting();
+                            if self.core.held_mounts.holds(owner, builtin, starting) {
+                                self.core
+                                    .held_mounts
                                     .hold(owner, (reply, request.method, request.params));
                                 return;
                             }
@@ -114,7 +105,7 @@ impl Host {
             #[cfg(feature = "producer-audio")]
             Event::PhysicalInput(generation, params) => {
                 if generation == self.shell_generation {
-                    self.physical_input(params);
+                    self.core.physical_input(params);
                 }
             }
             Event::WindowInput(generation, kind) => {
@@ -124,7 +115,7 @@ impl Host {
                 let _ = kind;
                 // Activity keeps the pointer and the popped-out sidebar; it
                 // never reveals the fullscreen bar (FS-BAR-1).
-                self.policy.activity(self.now_ms());
+                self.policy.activity(self.core.now_ms());
             }
             Event::MenuAction(generation, action) => {
                 if !self.window_generation_live(generation)
@@ -132,7 +123,7 @@ impl Host {
                 {
                     return;
                 }
-                self.policy.activity(self.now_ms());
+                self.policy.activity(self.core.now_ms());
                 if debug_menu()
                     && let MenuAction::Invoke(token) = &action
                 {
@@ -141,7 +132,8 @@ impl Host {
                 match action {
                     MenuAction::Reset => {
                         #[cfg(feature = "producer-audio")]
-                        self.physical_revoke(producer_input::RevokeReason::Menu);
+                        self.core
+                            .physical_revoke(producer_input::RevokeReason::Menu);
                         self.open_menu(generation, MenuMode::Main);
                     }
                     MenuAction::Back => {
@@ -160,7 +152,7 @@ impl Host {
                             diag!(
                                 "menu: hover level={level} token={token} now={now} open={:?} t={}",
                                 self.menu_path,
-                                self.now_ms()
+                                self.core.now_ms()
                             );
                         }
                         let Some(path) = menu::hover_target(&self.menu_path, level, &token) else {
@@ -174,7 +166,7 @@ impl Host {
                                 .then(|| self.menu_panels.get(level + 1).copied())
                                 .flatten();
                             let pointer = self.menu_pointer();
-                            let now = self.now_ms();
+                            let now = self.core.now_ms();
                             if let Some(path) =
                                 self.menu_aim
                                     .hover(&self.menu_path, path, pointer, submenu, now)
@@ -221,23 +213,30 @@ impl Host {
                 self.action_done(reply, &action, result)
             }
             Event::Reply(reply, mut result) => {
-                if self.source_state_replies.remove(&(reply.owner, reply.id))
+                if self
+                    .core
+                    .source_state_replies
+                    .remove(&(reply.owner, reply.id))
                     && let Ok(state) = &mut result
                 {
-                    self.patch_source(state);
+                    self.core.patch_source(state);
                 }
                 self.respond(reply, result)
             }
             Event::Broadcast(event, mut data) => {
                 if event == "source.state" {
-                    self.patch_source(&mut data);
-                    let previous = std::mem::replace(&mut self.last_source, data.clone());
+                    self.core.patch_source(&mut data);
+                    let previous = std::mem::replace(&mut self.core.last_source, data.clone());
                     // What a restart after a lost GPU device reopens.
                     *LAST_SOURCE
                         .lock()
                         .unwrap_or_else(std::sync::PoisonError::into_inner) = data.clone();
                     if previous["phase"] != data["phase"] {
-                        diag!("source: phase {} at +{} ms", data["phase"], self.now_ms());
+                        diag!(
+                            "source: phase {} at +{} ms",
+                            data["phase"],
+                            self.core.now_ms()
+                        );
                         input_trace::mark(&format!(
                             "host loop: source.state phase={}",
                             data["phase"]
@@ -249,10 +248,10 @@ impl Host {
                             data["paused"]
                         ));
                     }
-                    self.timeline_source(&previous, &data);
+                    self.core.timeline_source(&previous, &data);
                     self.backdrop_source();
                     self.update_title();
-                    self.core_action_states();
+                    self.core.core_action_states();
                     // The discrete source events this state adds, after it:
                     // a listener of both reads the state first.
                     let derived = crate::source_events::derive(&previous, &data);
@@ -261,14 +260,14 @@ impl Host {
                         diag!(
                             "source: {name} {} at +{} ms",
                             data["state"]["stamp"]["generation"],
-                            self.now_ms()
+                            self.core.now_ms()
                         );
                         self.broadcast(name, data);
                     }
                     return;
                 }
                 if event == "resolvers.fileTypes" {
-                    self.file_types = data["fileTypes"].clone();
+                    self.core.file_types = data["fileTypes"].clone();
                 }
                 self.broadcast(&event, data)
             }
@@ -277,8 +276,8 @@ impl Host {
                     return;
                 }
                 input_trace::mark(&format!("host loop: binding → {owner}/{id}"));
-                self.policy.activity(self.now_ms());
-                match self.commands.resolve_execution(owner, &id) {
+                self.policy.activity(self.core.now_ms());
+                match self.core.commands.resolve_execution(owner, &id) {
                     // A key never fails silently: the command's reason shows.
                     Err(commands::CommandError::Disabled {
                         reason: Some(reason),
@@ -297,7 +296,7 @@ impl Host {
                 }
                 self.policy.set_sidebar_width(width);
                 self.ui_state.state.sidebar = Some(ui_state::Sidebar { width });
-                self.ui_state.touch(self.now_ms());
+                self.ui_state.touch(self.core.now_ms());
             }
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
             Event::BarMore(generation, x, y) => self.bar_more(generation, x, y),
@@ -362,7 +361,7 @@ impl Host {
                 let mut slot = self.adjust_slot();
                 slot.width = self.policy.adjust_user_width();
                 self.ui_state.state.adjust_slot = Some(slot);
-                self.ui_state.touch(self.now_ms());
+                self.ui_state.touch(self.core.now_ms());
             }
             Event::AdjustDismiss(generation) => {
                 if generation == self.shell_generation {
@@ -402,7 +401,7 @@ impl Host {
             }
             Event::ReviewSheet(generation, action) => {
                 if generation == self.shell_generation {
-                    self.policy.activity(self.now_ms());
+                    self.policy.activity(self.core.now_ms());
                     self.review_action(&action);
                 }
             }
@@ -464,11 +463,11 @@ impl Host {
             Event::Settings(generation, index) => self.settings_event(generation, index),
             Event::SettingsChecked(serial, result) => self.settings_checked(serial, result),
             Event::CommandRunAnswered(reply, yes, remember) => {
-                self.policy.activity(self.now_ms());
+                self.policy.activity(self.core.now_ms());
                 crate::capabilities::command_run_answered(self, reply, yes, remember);
             }
             Event::ConfirmDone(reply, confirmed, checked) => {
-                self.policy.activity(self.now_ms());
+                self.policy.activity(self.core.now_ms());
                 self.dialog_busy = false;
                 self.confirm_open = false;
                 self.respond(reply, Ok(json!({"confirmed":confirmed,"checked":checked})));
@@ -479,7 +478,7 @@ impl Host {
                 }
             }
             Event::SourceLocated(reply, mut fields, path) => {
-                self.policy.activity(self.now_ms());
+                self.policy.activity(self.core.now_ms());
                 self.dialog_busy = false;
                 match path.as_deref().map(|path| path.to_str()) {
                     None => self.respond(reply, Ok(Value::Null)),
@@ -492,14 +491,15 @@ impl Host {
                     ),
                     Some(Some(path)) => {
                         fields["path"] = json!(path);
-                        let sent = self
-                            .backend
-                            .commands
-                            .send(crate::playback::backend::Command {
-                                reply: reply.clone(),
-                                method: "owner.sourceLocated".into(),
-                                params: fields,
-                            });
+                        let sent =
+                            self.core
+                                .backend
+                                .commands
+                                .send(crate::playback::backend::Command {
+                                    reply: reply.clone(),
+                                    method: "owner.sourceLocated".into(),
+                                    params: fields,
+                                });
                         if sent.is_err() {
                             self.respond(
                                 reply,
@@ -510,7 +510,7 @@ impl Host {
                 }
             }
             Event::DialogDone(reply, paths) => {
-                self.policy.activity(self.now_ms());
+                self.policy.activity(self.core.now_ms());
                 self.dialog_busy = false;
                 self.respond(
                     reply,
@@ -520,16 +520,21 @@ impl Host {
             Event::Exited(owner) => {
                 // Its stdout closed: its process is gone, so its stop sends
                 // no `runtime.stop`.
-                if let Some(plugin) = self.plugins.get_mut(&owner) {
+                if let Some(plugin) = self.core.plugins.get_mut(&owner) {
                     plugin.set_exited();
                 }
                 // Still running: the process ended without being stopped.
-                self.record_failure(owner, "plugin process exited");
+                self.core.record_failure(owner, "plugin process exited");
                 self.process_ended(owner, crate::supervisor::ExitCause::Exited, None)
             }
             Event::Runner(runner, message) => self.runner_event(runner, &message),
             Event::RunnerExited(runner) => {
-                if self.shared.as_ref().is_some_and(|s| s.link.id == runner) {
+                if self
+                    .core
+                    .shared
+                    .as_ref()
+                    .is_some_and(|s| s.link.id == runner)
+                {
                     self.restart_shared("the shared runner exited");
                 }
             }
@@ -538,24 +543,39 @@ impl Host {
             Event::Recorded(owner, serial, result) => self.recorded(owner, serial, result),
             Event::OutOfMemory(owner) => {
                 diag!("plugin {owner}: its JavaScript heap ran out of memory");
-                self.supervisor.process_out_of_memory(Pid(owner));
+                self.core.supervisor.process_out_of_memory(Pid(owner));
             }
             Event::BackendCleaned(owner) => self.unit_cleaned(owner),
             Event::RuntimeFault(owner, error) => {
                 diag!("plugin {owner}: {error}");
-                let now = self.now_ms();
-                let _ = self.supervisor.activation_failed(
+                let now = self.core.now_ms();
+                let _ = self.core.supervisor.activation_failed(
                     Pid(owner),
                     error.chars().take(512).collect(),
                     now,
                 );
-                self.record_failure(owner, &error);
+                self.core.record_failure(owner, &error);
                 self.process_ended(
                     owner,
                     crate::supervisor::ExitCause::Fault,
                     Some(error.chars().take(512).collect()),
                 );
             }
+        }
+    }
+}
+impl Core {
+    /// The prepared rows of the request `reply` answers (`Event::Prepared`),
+    /// taken: each request has one value.
+    pub(crate) fn take_prepared(
+        &mut self,
+        reply: &Reply,
+    ) -> Option<Box<crate::ui::ui_values::Prepared>> {
+        match &self.prepared {
+            Some((owner, id, _)) if *owner == reply.owner && *id == reply.id => {
+                self.prepared.take().map(|(_, _, prepared)| prepared)
+            }
+            _ => None,
         }
     }
 }

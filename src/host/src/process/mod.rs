@@ -1,11 +1,12 @@
 //! A plugin's host-side state and its runner: its own Node process
 //! (`runner.ts`, one JSONL pipe each way), or a member of the shared runner
 //! (`shared_runner.rs`) for the built-ins the host trusts
-//! (`Host::trust`).
+//! (`Core::trust`).
 pub(crate) mod reaper;
 pub(crate) mod runtime_paths;
 pub(crate) mod shared_runner;
 pub(crate) mod unanswered;
+pub(crate) mod wire_trace;
 
 use crate::host::Event;
 use crate::process::shared_runner::{Member, MemberStop, SharedRunner};
@@ -333,6 +334,8 @@ impl Plugin {
             bail!("invalid plugin id");
         }
         package_file(&directory, &manifest.entry)?;
+        // The wire trace's name for this process's lines (a test switch).
+        wire_trace::bind(generation, &manifest.id);
         let paths = crate::process::runtime_paths::get();
         // Per installed instance or development id (see `DataKey`).
         // Without one the SDK reports `unavailable`; loading continues.
@@ -557,6 +560,9 @@ fn own_process(
             }
             // One write per line: `to_writer` on the unbuffered pipe made a
             // system call per JSON token (stress measurement 2026-11-11).
+            // Traced (and numbered) before the write: the plugin's answer
+            // to this line must not come first (a test switch).
+            let traced = wire_trace::line(generation, wire_trace::Dir::Out, &message);
             let mut write = || -> Result<()> {
                 let mut line = serde_json::to_vec(&message)?;
                 line.push(b'\n');
@@ -565,6 +571,7 @@ fn own_process(
                 Ok(())
             };
             if let Err(error) = write() {
+                wire_trace::failed(traced);
                 let _ = write_events.send(Event::RuntimeFault(
                     generation,
                     format!("plugin stdin: {error}"),
@@ -692,6 +699,7 @@ fn read_plugin(
             Ok(0) | Err(_) => break,
             Ok(_) if !forwarding => {}
             Ok(_) if bytes.len() > MAX_MESSAGE_BYTES => {
+                wire_trace::invalid(generation, "oversize");
                 let _ = events.send(Event::RuntimeFault(
                     generation,
                     format!("protocol message exceeds {} MiB", MAX_MESSAGE_BYTES >> 20),
@@ -700,11 +708,13 @@ fn read_plugin(
             }
             Ok(_) => match serde_json::from_slice(&bytes) {
                 Ok(message) => {
+                    wire_trace::line(generation, wire_trace::Dir::In, &message);
                     if admit(&message, bytes.len()) {
                         forwarding = events.send(request(generation, message)).is_ok();
                     }
                 }
                 Err(e) => {
+                    wire_trace::invalid(generation, "unparsable");
                     let _ = events.send(Event::RuntimeFault(
                         generation,
                         format!("invalid protocol: {e}"),
