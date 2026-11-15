@@ -27,11 +27,21 @@ export const SPAN_DEBOUNCE_MS = 100;
  */
 export const MARK_TIP_BYTES = 512 * 1024;
 /**
- * A kind's tick commands, at most: a safety net under the player's 64 KiB per
- * string. It is not reached in practice: one tick per mark (≤ 4096) of at most
- * 10 bytes while the line is under 100000 physical px is 40 KiB.
+ * A kind's tick commands, at most, all its Paths together (the cap from when
+ * they were one Path, under the player's 64 KiB per string). It is not reached
+ * in practice: one tick per mark (≤ 4096) of at most 10 bytes while the line
+ * is under 100000 physical px is 40 KiB.
  */
 export const TICK_BYTES = 60 * 1024;
+/**
+ * At most this many ticks in one Path. As for the ranges (`RANGES_PER_PATH`),
+ * Slint 1.18's software renderer pays for a stroked Path about quadratically
+ * in its ticks: on a 3840 px line one Path of 1000 ticks took 41 ms a frame,
+ * 2000 took 250–270 ms and 3700 took 360–390 ms (player 0.9.0). In Paths of
+ * 50: 2.4, 9 and 12 ms; Paths of 25 or 100 were no faster at 3700 (15 and
+ * 14 ms) and Paths of 10 were twice as slow (scratch bench, release build).
+ */
+export const TICKS_PER_PATH = 50;
 
 const clamp01 = (value: number) => Math.min(1, Math.max(0, value));
 
@@ -71,20 +81,24 @@ export function sampled(marks: readonly TimelineMark[]): readonly TimelineMark[]
 export interface SeekMarks {
   /** Sorted by time: `at` the fraction of the duration (the bar's hover search), `tip` "Title  01:23". */
   rows: Json[];
-  /** One Path's commands per kind: a 1 physical px tick `M<x> 0V1` per distinct physical pixel column. */
-  chapterTicks: string;
-  bookmarkTicks: string;
-  markerTicks: string;
+  /**
+   * Each kind's 1 physical px ticks `M<x> 0V1`, one per distinct physical
+   * pixel column, in time order, as the commands of consecutive Paths of at
+   * most `TICKS_PER_PATH` ticks each (none: no Path).
+   */
+  chapterTicks: string[];
+  bookmarkTicks: string[];
+  markerTicks: string[];
   /** The seek line's span in physical px the ticks were built for: the Paths' `viewbox-width` (0: none yet). */
   tickSpan: number;
 }
 
-const NO_MARKS: SeekMarks = { rows: [], chapterTicks: "", bookmarkTicks: "", markerTicks: "", tickSpan: 0 };
+const NO_MARKS: SeekMarks = { rows: [], chapterTicks: [], bookmarkTicks: [], markerTicks: [], tickSpan: 0 };
 
 /**
  * B22: `timeline.marks` as the seek line shows them, sorted by time (as the
  * player merges them), at most MAX_MARKS: the hover rows, and the ticks as
- * one Path per kind (no element per mark).
+ * Paths of at most `TICKS_PER_PATH` per kind (no element per mark).
  *
  * `span` is the seek line's width less its two 4px insets in whole physical
  * pixels (`floor(span / 1phx)`), as the bar reports it (`spanChanged`; 0
@@ -125,28 +139,44 @@ export function seekMarks(marks: readonly TimelineMark[], duration: number | nul
   }
   return {
     rows,
-    chapterTicks: ticks.chapter.join(""),
-    bookmarkTicks: ticks.bookmark.join(""),
-    markerTicks: ticks.marker.join(""),
+    chapterTicks: paths(ticks.chapter, TICKS_PER_PATH),
+    bookmarkTicks: paths(ticks.bookmark, TICKS_PER_PATH),
+    markerTicks: paths(ticks.marker, TICKS_PER_PATH),
     tickSpan: drawn ? span : 0,
   };
 }
 
+/**
+ * At most this many rectangles in one Path. Slint 1.18's software renderer
+ * (the default on Windows) pays for a Path's fill about quadratically in its
+ * rectangles: on a 3840 px band, 1000 one-column rectangles took 40 ms a
+ * frame and 1920 took 145 ms in one Path (bench `range_band_frame_time`,
+ * player A5). Split, the cost is about linear: 1920 took 6.8 ms in Paths of
+ * 100, 4.5 ms in Paths of 50 and 4.0 ms in Paths of 25 (both styles full,
+ * 2 × 1920: 13.6, 9.1 and 8.3 ms). 50 is where halving again stops paying.
+ */
+export const RANGES_PER_PATH = 50;
+
 export interface SeekRanges {
-  /** One Path's commands per style: a filled rectangle `M<x0> 0H<x1>V1H<x0>Z` per run of physical px columns. */
-  selectionRanges: string;
-  regionRanges: string;
+  /**
+   * Each style's filled rectangles `M<x0> 0H<x1>V1H<x0>Z`, one per run of
+   * physical px columns, left to right, as the commands of consecutive Paths
+   * of at most `RANGES_PER_PATH` rectangles each (none: no Path).
+   */
+  selectionRanges: string[];
+  regionRanges: string[];
 }
 
-const NO_RANGES: SeekRanges = { selectionRanges: "", regionRanges: "" };
+const NO_RANGES: SeekRanges = { selectionRanges: [], regionRanges: [] };
 
 /**
- * `timeline.ranges` (player 0.7.6) as the seek line shows them: one filled
- * Path per style (no element per range), in the ticks' view box (`span`
- * physical px wide, 1 high). A range covers the columns `floor(start * span)`
- * up to `ceil(end * span)` (at least one, inside the line); the ranges of a
- * style that overlap or touch are drawn as one rectangle, so a column is
- * filled once whatever the overlap. Nothing without a known duration or
+ * `timeline.ranges` (player 0.7.6) as the seek line shows them: filled Paths
+ * per style (no element per range) of at most `RANGES_PER_PATH` rectangles,
+ * in the ticks' view box (`span` physical px wide, 1 high). A range covers
+ * the columns `floor(start * span)` up to `ceil(end * span)` (at least one,
+ * inside the line); the ranges of a style that overlap or touch are drawn as
+ * one rectangle, so a column is filled once whatever the overlap, and two
+ * Paths of a style never share a column. Nothing without a known duration or
  * before the bar reports its span (as the ticks).
  */
 export function seekRanges(ranges: readonly TimelineRange[], duration: number | null, span = 0): SeekRanges {
@@ -161,8 +191,18 @@ export function seekRanges(ranges: readonly TimelineRange[], duration: number | 
     if (last && x0 <= last[1]) last[1] = Math.max(last[1], x1);
     else style.push([x0, x1]);
   }
-  const path = (list: [number, number][]) => list.map(([x0, x1]) => `M${x0} 0H${x1}V1H${x0}Z`).join("");
-  return { selectionRanges: path(runs.selection!), regionRanges: path(runs.region!) };
+  const rects = (list: [number, number][]) => list.map(([x0, x1]) => `M${x0} 0H${x1}V1H${x0}Z`);
+  return {
+    selectionRanges: paths(rects(runs.selection!), RANGES_PER_PATH),
+    regionRanges: paths(rects(runs.region!), RANGES_PER_PATH),
+  };
+}
+
+/** The shapes' commands, in order, as the commands of Paths of at most `per` shapes each (none: no Path). */
+function paths(shapes: readonly string[], per: number): string[] {
+  const out: string[] = [];
+  for (let first = 0; first < shapes.length; first += per) out.push(shapes.slice(first, first + per).join(""));
+  return out;
 }
 
 /**
@@ -282,13 +322,13 @@ export function wireBar(
       hoverTime: settings.value.hoverTime,
       // I07: the picture box, and the sprite the bar crops the pointer's cell from (hover and drag).
       ...previewProps(thumbnails.active(state), thumbnails.preview, st.pointing),
-      // B22: everyone's marks, and the A-B loop (whoever set it).
+      // B22: everyone's marks (ticks: Paths of at most TICKS_PER_PATH per kind), and the A-B loop (whoever set it).
       marks: shown.rows,
       chapterTicks: shown.chapterTicks,
       bookmarkTicks: shown.bookmarkTicks,
       markerTicks: shown.markerTicks,
       tickSpan: shown.tickSpan,
-      // Timeline ranges (player 0.7.6), in the ticks' view box: one Path per style.
+      // Timeline ranges (player 0.7.6), in the ticks' view box: Paths of at most RANGES_PER_PATH rectangles per style.
       selectionRanges: spans.selectionRanges,
       regionRanges: spans.regionRanges,
       hasLoop: Boolean(state.loop && state.duration),

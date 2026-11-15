@@ -1,8 +1,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { isDeepStrictEqual } from "node:util";
 import { startPlugin, TestHost, UI_VALUE_LIMITS } from "@vestra-player/sdk/testing";
-import { jsonBytes, MARK_TIP_BYTES, MAX_MARKS, sampled, seekMarks, seekRanges, SPAN_DEBOUNCE_MS, TICK_BYTES } from "../bar.ts";
+import {
+  jsonBytes,
+  MARK_TIP_BYTES,
+  MAX_MARKS,
+  RANGES_PER_PATH,
+  sampled,
+  seekMarks,
+  seekRanges,
+  SPAN_DEBOUNCE_MS,
+  TICK_BYTES,
+  TICKS_PER_PATH,
+} from "../bar.ts";
 import activate from "../main.ts";
 import { eventually, until } from "./eventually.ts";
 
@@ -38,31 +50,31 @@ test("B22 the seek line gets everyone's marks as fractions with their time text;
     { at: 0.5, tip: "A  01:40" },
     { at: 0.75, tip: "02:30" },
   ]);
-  // No ticks until the bar reports its span; then one Path per kind, x the pixel column.
-  assert.equal(bar.props["chapter-ticks"], "");
+  // No ticks until the bar reports its span; then Paths per kind, x the pixel column.
+  assert.deepEqual(bar.props["chapter-ticks"], []);
   assert.equal(bar.props["tick-span"], 0);
   bar.emit("spanChanged", 400);
   await until(() => bar.props["tick-span"] === 400);
-  assert.equal(bar.props["chapter-ticks"], "M0 0V1M300 0V1");
-  assert.equal(bar.props["bookmark-ticks"], "M166 0V1");
-  assert.equal(bar.props["marker-ticks"], "M200 0V1");
+  assert.deepEqual(bar.props["chapter-ticks"], ["M0 0V1M300 0V1"]);
+  assert.deepEqual(bar.props["bookmark-ticks"], ["M166 0V1"]);
+  assert.deepEqual(bar.props["marker-ticks"], ["M200 0V1"]);
   // A resize: the ticks follow the new span (whole physical px) once the reports pause.
   bar.emit("spanChanged", 250.5);
   await until(() => bar.props["tick-span"] === 250);
-  assert.equal(bar.props["chapter-ticks"], "M0 0V1M187 0V1");
-  assert.equal(bar.props["bookmark-ticks"], "M103 0V1");
+  assert.deepEqual(bar.props["chapter-ticks"], ["M0 0V1M187 0V1"]);
+  assert.deepEqual(bar.props["bookmark-ticks"], ["M103 0V1"]);
   // The marks' publisher is disabled (its layer cleared): nothing of it stays.
   host.setTimelineLayer("vestra.marks", []);
   await until(() => (bar.props.marks as unknown[]).length === 1);
   // Properties are written one at a time, `marks` before the ticks: let the rest arrive.
   await host.settle();
-  assert.equal(bar.props["chapter-ticks"], "");
-  assert.equal(bar.props["bookmark-ticks"], "");
+  assert.deepEqual(bar.props["chapter-ticks"], []);
+  assert.deepEqual(bar.props["bookmark-ticks"], []);
   host.openElsewhere("/other.mkv");
   host.setSource({ duration: 50 });
   await until(() => (bar.props.marks as unknown[]).length === 0);
   await host.settle(); // the ticks come after `marks`
-  assert.equal(bar.props["marker-ticks"], "");
+  assert.deepEqual(bar.props["marker-ticks"], []);
   await stop();
 });
 
@@ -74,7 +86,7 @@ test("B22 span reports during a resize are debounced: the first at once, then th
   await until(() => (bar.props.marks as unknown[]).length === 1);
   bar.emit("spanChanged", 400);
   await until(() => bar.props["tick-span"] === 400);
-  const sent = () => host.mounted("bottom").props["bookmark-ticks"];
+  const sent = () => (host.mounted("bottom").props["bookmark-ticks"] as string[]).join("");
   assert.equal(sent(), "M200 0V1");
   // A drag of the window edge: reports in a burst, then half the debounce of
   // real time. Nothing is rebuilt before the pause has run its course; the
@@ -93,7 +105,7 @@ test("B22 span reports during a resize are debounced: the first at once, then th
 
 test("B22 marks need a known duration, stay inside the line, and are capped at the player's array rows", () => {
   const marks = [{ time: 5, kind: "chapter" as const, title: null, plugin: "x" }];
-  const none = { rows: [], chapterTicks: "", bookmarkTicks: "", markerTicks: "", tickSpan: 0 };
+  const none = { rows: [], chapterTicks: [], bookmarkTicks: [], markerTicks: [], tickSpan: 0 };
   assert.deepEqual(seekMarks(marks, null, 500), none);
   assert.deepEqual(seekMarks(marks, 0, 500), none);
   // Before the bar reports its span: the hover rows, no ticks.
@@ -101,7 +113,7 @@ test("B22 marks need a known duration, stay inside the line, and are capped at t
   assert.deepEqual(seekMarks([{ ...marks[0]!, time: 12 }], 10, 500), {
     ...none,
     rows: [{ at: 1, tip: "00:12" }],
-    chapterTicks: "M500 0V1",
+    chapterTicks: ["M500 0V1"],
     tickSpan: 500,
   });
   // The cap fits in one property value (rows; 1 + 3 values a row). It is the
@@ -111,7 +123,7 @@ test("B22 marks need a known duration, stay inside the line, and are capped at t
   const many = Array.from({ length: MAX_MARKS + 5 }, (_, i) => ({ ...marks[0]!, time: i }));
   const shown = seekMarks(many, 10_000, 100_000);
   assert.equal(shown.rows.length, MAX_MARKS);
-  assert.equal(shown.chapterTicks.match(/M/g)?.length, MAX_MARKS);
+  assert.equal(shown.chapterTicks.join("").match(/M/g)?.length, MAX_MARKS);
   // Past the cap the marks are sampled across the whole duration, not cut at the end.
   assert.deepEqual(shown.rows.at(-1), { at: (MAX_MARKS + 4) / 10_000, tip: "1:08:20" });
 });
@@ -156,9 +168,51 @@ test("B22 a kind's ticks in the same pixel column are drawn once; the hover rows
   // 0.3px apart on a 600px line: the same column.
   const shown = seekMarks([mark(1, "chapter"), mark(1.001, "chapter"), mark(1.002, "bookmark"), mark(2, "chapter")], 2, 600);
   assert.equal(shown.rows.length, 4);
-  assert.equal(shown.chapterTicks, "M300 0V1M600 0V1");
-  assert.equal(shown.bookmarkTicks, "M300 0V1");
-  assert.equal(shown.markerTicks, "");
+  assert.deepEqual(shown.chapterTicks, ["M300 0V1M600 0V1"]);
+  assert.deepEqual(shown.bookmarkTicks, ["M300 0V1"]);
+  assert.deepEqual(shown.markerTicks, []);
+});
+
+test("B22 ticks are Paths of at most 50 each, in time order, per kind (the software renderer's cost per Path is quadratic)", () => {
+  assert.equal(TICKS_PER_PATH, 50);
+  const per = TICKS_PER_PATH;
+  // A power of two, so that `time / duration * span` is exact.
+  const span = 4096;
+  const tick = (x: number) => `M${x} 0V1`;
+  for (const count of [0, 1, 50, 51, 100, 101, 1000, 2000]) {
+    // `count` chapters at the even columns and as many bookmarks at the odd ones (and one
+    // marker), interleaved by time as the player sends them.
+    const marks = [];
+    for (let i = 0; i < count; i++)
+      marks.push(
+        { time: 2 * i, kind: "chapter" as const, title: null, plugin: "x" },
+        { time: 2 * i + 1, kind: "bookmark" as const, title: null, plugin: "x" },
+      );
+    const shown = seekMarks(marks, span, span);
+    for (const [paths, first] of [
+      [shown.chapterTicks, 0],
+      [shown.bookmarkTicks, 1],
+    ] as const) {
+      // ceil(count / 50) Paths: all full but the last, none empty.
+      assert.equal(paths.length, Math.ceil(count / per), `${count} ticks`);
+      paths.forEach((path, n) => {
+        const ticks = path.match(/M\d+ 0V1/g) ?? [];
+        assert.equal(ticks.join(""), path);
+        assert.equal(ticks.length, n < paths.length - 1 ? per : count - per * n);
+      });
+      // Joined, the Paths are the one Path of before: every tick once, left to right.
+      assert.equal(paths.join(""), Array.from({ length: count }, (_, i) => tick(2 * i + first)).join(""));
+    }
+    assert.deepEqual(shown.markerTicks, []);
+    assert.equal(shown.rows.length, 2 * count);
+  }
+  // Marks in one column are one tick, counted once towards a Path's 50.
+  const dense = seekMarks(
+    Array.from({ length: 3 * per }, (_, i) => ({ time: Math.floor(i / 3), kind: "marker" as const, title: null, plugin: "x" })),
+    span,
+    span,
+  );
+  assert.deepEqual(dense.markerTicks, [Array.from({ length: per }, (_, i) => tick(i)).join("")]);
 });
 
 /**
@@ -214,7 +268,7 @@ test("B22 at 100/125/150/175/200% each tick fills one whole physical pixel colum
         const columns = Math.floor(span * s);
         const shown = seekMarks(times.map(mark), 1024, columns);
         assert.equal(shown.tickSpan, columns);
-        const xs = [...shown.markerTicks.matchAll(/M(\d+) 0V1/g)].map((m) => Number(m[1]));
+        const xs = [...shown.markerTicks.join("").matchAll(/M(\d+) 0V1/g)].map((m) => Number(m[1]));
         const wanted = new Set(times.map((t) => Math.floor(Math.min(1, t / 1024) * columns)));
         assert.equal(xs.length, wanted.size, `${where}: one tick per physical column`);
         for (const x of xs) {
@@ -238,12 +292,13 @@ test("B22 at 100/125/150/175/200% each tick fills one whole physical pixel colum
       }
 });
 
-test("B22 a kind's tick string stays under its cap however wide the line", () => {
+test("B22 a kind's tick commands stay under their cap however wide the line", () => {
   const many = Array.from({ length: MAX_MARKS }, (_, i) => ({ time: i, kind: "chapter" as const, title: null, plugin: "x" }));
   // Absurdly wide, so 4096 ticks of up to 18 bytes would pass the cap.
   const shown = seekMarks(many, MAX_MARKS, 1e12);
-  assert.ok(shown.chapterTicks.length > TICK_BYTES - 20, "the cap is reached");
-  assert.ok(shown.chapterTicks.length <= TICK_BYTES);
+  const all = shown.chapterTicks.join("");
+  assert.ok(all.length > TICK_BYTES - 20, "the cap is reached");
+  assert.ok(all.length <= TICK_BYTES);
   assert.ok(TICK_BYTES <= UI_VALUE_LIMITS.stringBytes);
   assert.equal(shown.rows.length, MAX_MARKS);
 });
@@ -295,8 +350,9 @@ test("B22 4096 marks with 100-character titles reach the bar within the player's
     );
   await until(() => (bar.props.marks as unknown[]).length === MAX_MARKS);
   for (const kind of ["chapter", "bookmark", "marker"]) {
-    const ticks = bar.props[`${kind}-ticks`] as string;
-    assert.ok(Buffer.byteLength(ticks) <= UI_VALUE_LIMITS.stringBytes, kind);
+    const ticks = bar.props[`${kind}-ticks`] as string[];
+    for (const path of ticks) assert.ok(Buffer.byteLength(path) <= UI_VALUE_LIMITS.stringBytes, kind);
+    assert.ok(ticks.length <= UI_VALUE_LIMITS.arrayRows, kind);
   }
   // The bar keeps updating (a refused write would leave the old values).
   host.setSource({ position: 125 });
@@ -318,13 +374,18 @@ test("B22 the A-B loop is drawn whoever set it, and goes with the source", async
   await stop();
 });
 
-test("B22 the bar draws marks as one Path per kind in Theme colours and finds the hovered one within 3px", () => {
+test("B22 the bar draws each kind's tick Paths (a MarkTicks each) in Theme colours and finds the hovered one within 3px", () => {
   const slint = readFileSync(new URL("../ui/bar.slint", import.meta.url), "utf8");
-  // No element per mark: three Paths take the plugin's commands.
+  // No element per mark: one MarkTicks per Path of the plugin's commands, the same colour for a kind's Paths.
   assert.doesNotMatch(slint, /for \w+ in PlaybackBridge\.marks/);
-  assert.match(slint, /commands: PlaybackBridge\.chapter-ticks;\s+stroke: Theme\.text-dim;/);
-  assert.match(slint, /commands: PlaybackBridge\.marker-ticks;\s+stroke: Theme\.playing;/);
-  assert.match(slint, /commands: PlaybackBridge\.bookmark-ticks;\s+stroke: Theme\.accent;/);
+  for (const kind of ["chapter", "bookmark", "marker"])
+    assert.match(slint, new RegExp(`in-out property <\\[string\\]> ${kind}-ticks;`));
+  assert.match(slint, /for chunk in PlaybackBridge\.chapter-ticks: MarkTicks \{[^}]*commands: chunk;\s+stroke: Theme\.text-dim;/);
+  assert.match(slint, /for chunk in PlaybackBridge\.marker-ticks: MarkTicks \{[^}]*commands: chunk;\s+stroke: Theme\.playing;/);
+  assert.match(slint, /for chunk in PlaybackBridge\.bookmark-ticks: MarkTicks \{[^}]*commands: chunk;\s+stroke: Theme\.accent;/);
+  // Chapters under markers under bookmarks.
+  const order = ["chapter", "marker", "bookmark"].map((kind) => slint.indexOf(`in PlaybackBridge.${kind}-ticks`));
+  assert.ok(order[0]! > 0 && order[0]! < order[1]! && order[1]! < order[2]!);
   // The geometry `drawnTick` models, in physical px: snapped origin, scale 1phx a unit, 1phx stroke.
   const geometry = [
     "private property <int> rows: Math.round(6px / 1phx);",
@@ -345,7 +406,7 @@ test("B22 the bar draws marks as one Path per kind in Theme colours and finds th
     assert.match(
       slint,
       new RegExp(
-        `origin-x: root\\.absolute-position\\.x;\\s+origin-y: root\\.absolute-position\\.y;\\s+inset-x: root\\.lead;\\s+inset-y: root\\.line-top;\\s+columns: root\\.columns;\\s+commands: PlaybackBridge\\.${kind}-ticks;`,
+        `in PlaybackBridge\\.${kind}-ticks: MarkTicks \\{\\s+origin-x: root\\.absolute-position\\.x;\\s+origin-y: root\\.absolute-position\\.y;\\s+inset-x: root\\.lead;\\s+inset-y: root\\.line-top;\\s+columns: root\\.columns;\\s+commands: chunk;`,
       ),
     );
   assert.match(slint, /left <= 3px/);
@@ -369,17 +430,17 @@ const range = (start: number, end: number, style: "selection" | "region", title:
 test("Ranges: one filled rectangle per run of physical columns, in the ticks' view box", () => {
   // 1000 s over 400 columns: 2.5 s a column.
   const shown = seekRanges([range(100, 200, "selection"), range(500, 750, "region")], 1000, 400);
-  assert.equal(shown.selectionRanges, "M40 0H80V1H40Z");
-  assert.equal(shown.regionRanges, "M200 0H300V1H200Z");
+  assert.deepEqual(shown.selectionRanges, ["M40 0H80V1H40Z"]);
+  assert.deepEqual(shown.regionRanges, ["M200 0H300V1H200Z"]);
   // Partial columns are covered (floor at the start, ceil at the end); a tiny range still gets a column.
-  assert.equal(seekRanges([range(101, 199, "selection")], 1000, 400).selectionRanges, "M40 0H80V1H40Z");
-  assert.equal(seekRanges([range(500, 500.1, "region")], 1000, 400).regionRanges, "M200 0H201V1H200Z");
+  assert.deepEqual(seekRanges([range(101, 199, "selection")], 1000, 400).selectionRanges, ["M40 0H80V1H40Z"]);
+  assert.deepEqual(seekRanges([range(500, 500.1, "region")], 1000, 400).regionRanges, ["M200 0H201V1H200Z"]);
   // A range at the very end stays inside the line; one past the duration is clamped.
-  assert.equal(seekRanges([range(999.9, 1000, "selection")], 1000, 400).selectionRanges, "M399 0H400V1H399Z");
-  assert.equal(seekRanges([range(900, 1200, "selection")], 1000, 400).selectionRanges, "M360 0H400V1H360Z");
+  assert.deepEqual(seekRanges([range(999.9, 1000, "selection")], 1000, 400).selectionRanges, ["M399 0H400V1H399Z"]);
+  assert.deepEqual(seekRanges([range(900, 1200, "selection")], 1000, 400).selectionRanges, ["M360 0H400V1H360Z"]);
 });
 
-test("Ranges: both styles have their own Path; overlapping or touching ranges of a style are one rectangle", () => {
+test("Ranges: both styles have their own Paths; overlapping or touching ranges of a style are one rectangle", () => {
   const shown = seekRanges(
     [
       range(300, 400, "selection"),
@@ -393,21 +454,58 @@ test("Ranges: both styles have their own Path; overlapping or touching ranges of
     100,
   );
   // Out of start order on input, still merged: 0–15 and 15–20 touch, 60–70 stands alone.
-  assert.equal(shown.regionRanges, "M0 0H20V1H0ZM60 0H70V1H60Z");
-  assert.equal(shown.selectionRanges, "M30 0H40V1H30Z");
+  assert.deepEqual(shown.regionRanges, ["M0 0H20V1H0ZM60 0H70V1H60Z"]);
+  assert.deepEqual(shown.selectionRanges, ["M30 0H40V1H30Z"]);
   // A style the bar does not know is not drawn.
   const unknown = {
     ...range(0, 500, "region"),
     style: "other",
   } as unknown as ReturnType<typeof range>;
   assert.deepEqual(seekRanges([unknown], 1000, 100), {
-    selectionRanges: "",
-    regionRanges: "",
+    selectionRanges: [],
+    regionRanges: [],
   });
 });
 
+test("Ranges: Paths of at most 50 rectangles each, in order, per style (the software renderer's cost per Path is quadratic)", () => {
+  assert.equal(RANGES_PER_PATH, 50);
+  const per = RANGES_PER_PATH;
+  // A power of two, so that `start / duration * span` is exact and each range stays one column.
+  const span = 4096;
+  const rect = (x: number) => `M${x} 0H${x + 1}V1H${x}Z`;
+  for (const count of [0, 1, 100, 101, 1000, 1920]) {
+    // `count` one-column selections at the even columns and as many regions at the odd ones,
+    // given last first and the styles interleaved: each style comes out sorted on its own.
+    const input = [];
+    for (let i = count - 1; i >= 0; i--)
+      input.push(range(2 * i, 2 * i + 1, "selection"), range(2 * i + 1, 2 * i + 2, "region"));
+    const shown = seekRanges(input, span, span);
+    for (const [paths, first] of [
+      [shown.selectionRanges, 0],
+      [shown.regionRanges, 1],
+    ] as const) {
+      // ceil(count / 50) Paths: all full but the last, none empty.
+      assert.equal(paths.length, Math.ceil(count / per), `${count} rectangles`);
+      paths.forEach((path, n) => {
+        const rects = path.match(/M\d+ 0H\d+V1H\d+Z/g) ?? [];
+        assert.equal(rects.join(""), path);
+        assert.equal(rects.length, n < paths.length - 1 ? per : count - per * n);
+      });
+      // Joined, the Paths are the one Path of before: every rectangle once, left to right.
+      assert.equal(paths.join(""), Array.from({ length: count }, (_, i) => rect(2 * i + first)).join(""));
+    }
+  }
+  // A run merged from several ranges is one rectangle, never cut between two Paths.
+  const merged = seekRanges(
+    Array.from({ length: 3 * per }, (_, i) => range(i, i + 1, "region")),
+    span,
+    span,
+  );
+  assert.deepEqual(merged, { selectionRanges: [], regionRanges: ["M0 0H150V1H0Z"] });
+});
+
 test("Ranges: none drawn without ranges, a known duration or the bar's span", () => {
-  const none = { selectionRanges: "", regionRanges: "" };
+  const none = { selectionRanges: [], regionRanges: [] };
   assert.deepEqual(seekRanges([], 1000, 400), none);
   assert.deepEqual(seekRanges([range(0, 10, "selection")], null, 400), none);
   assert.deepEqual(seekRanges([range(0, 10, "selection")], 0, 400), none);
@@ -418,45 +516,54 @@ test("Ranges: the bar follows everyone's ranges, and a new source clears them", 
   const host = withMedia(new TestHost(), "/movie.mkv", 200);
   const { stop } = await start(host);
   const bar = host.mounted("bottom");
-  assert.equal(bar.props["selection-ranges"], "");
-  assert.equal(bar.props["region-ranges"], "");
+  const is = (name: string, paths: string[]) => isDeepStrictEqual(bar.props[name], paths);
+  assert.deepEqual(bar.props["selection-ranges"], []);
+  assert.deepEqual(bar.props["region-ranges"], []);
   bar.emit("spanChanged", 400);
   await until(() => bar.props["tick-span"] === 400);
   // No marks at all: ranges alone are drawn.
   host.setTimelineRanges("vestra.capture", [{ start: 50, end: 100, style: "selection", title: "Clip" }]);
   host.setTimelineRanges("community.other", [{ start: 0, end: 20, style: "region" }]);
-  await until(() => bar.props["selection-ranges"] === "M100 0H200V1H100Z");
-  await until(() => bar.props["region-ranges"] === "M0 0H40V1H0Z");
+  await until(() => is("selection-ranges", ["M100 0H200V1H100Z"]));
+  await until(() => is("region-ranges", ["M0 0H40V1H0Z"]));
   // The publisher changes its ranges, then clears them.
   host.setTimelineRanges("vestra.capture", [{ start: 150, end: 200, style: "selection" }]);
-  await until(() => bar.props["selection-ranges"] === "M300 0H400V1H300Z");
+  await until(() => is("selection-ranges", ["M300 0H400V1H300Z"]));
   host.setTimelineRanges("vestra.capture", []);
-  await until(() => bar.props["selection-ranges"] === "");
-  assert.equal(bar.props["region-ranges"], "M0 0H40V1H0Z");
+  await until(() => is("selection-ranges", []));
+  assert.deepEqual(bar.props["region-ranges"], ["M0 0H40V1H0Z"]);
   // A resize rebuilds them for the new span.
   bar.emit("spanChanged", 200);
-  await until(() => bar.props["region-ranges"] === "M0 0H20V1H0Z");
+  await until(() => is("region-ranges", ["M0 0H20V1H0Z"]));
   // Another source clears every layer.
   host.setTimelineRanges("vestra.capture", [{ start: 50, end: 100, style: "selection" }]);
-  await until(() => bar.props["selection-ranges"] !== "");
+  await until(() => !is("selection-ranges", []));
   host.openElsewhere("/other.mkv");
   host.setSource({ duration: 50 });
-  await until(() => bar.props["selection-ranges"] === "" && bar.props["region-ranges"] === "");
+  await until(() => is("selection-ranges", []) && is("region-ranges", []));
   await stop();
 });
 
-test("Ranges: the bar draws them as one Path per style in Theme colours, between the line and the ticks", () => {
+test("Ranges: the bar draws each style's Paths (a RangeBand each) in Theme colours, between the line and the ticks", () => {
   const slint = readFileSync(new URL("../ui/bar.slint", import.meta.url), "utf8");
-  assert.doesNotMatch(slint, /for \w+ in PlaybackBridge\.\w+-ranges/);
-  assert.match(slint, /commands: PlaybackBridge\.region-ranges;\s+fill: Theme\.text-dim\.with-alpha\(0\.\d+\);/);
-  assert.match(slint, /commands: PlaybackBridge\.selection-ranges;\s+fill: Theme\.accent\.with-alpha\(0\.\d+\);/);
+  assert.match(slint, /in-out property <\[string\]> selection-ranges;/);
+  assert.match(slint, /in-out property <\[string\]> region-ranges;/);
+  // One RangeBand per Path, never per range: the same element, colour and place for all of a style's Paths.
+  assert.match(
+    slint,
+    /for chunk in PlaybackBridge\.region-ranges: RangeBand \{[^}]*commands: chunk;\s+fill: Theme\.text-dim\.with-alpha\(0\.35\);/,
+  );
+  assert.match(
+    slint,
+    /for chunk in PlaybackBridge\.selection-ranges: RangeBand \{[^}]*commands: chunk;\s+fill: Theme\.accent\.with-alpha\(0\.45\);/,
+  );
   const seekBar = slint.slice(slint.indexOf("component SeekBar"));
   const at = (text: string) => seekBar.indexOf(text);
   assert.ok(
-    at("background: PlaybackBridge.can-seek ? Theme.accent-fill") < at("commands: PlaybackBridge.region-ranges"),
+    at("background: PlaybackBridge.can-seek ? Theme.accent-fill") < at("in PlaybackBridge.region-ranges"),
   );
-  assert.ok(at("commands: PlaybackBridge.region-ranges") < at("commands: PlaybackBridge.selection-ranges"));
-  assert.ok(at("commands: PlaybackBridge.selection-ranges") < at("commands: PlaybackBridge.chapter-ticks"));
+  assert.ok(at("in PlaybackBridge.region-ranges") < at("in PlaybackBridge.selection-ranges"));
+  assert.ok(at("in PlaybackBridge.selection-ranges") < at("in PlaybackBridge.chapter-ticks"));
   // No stroke, so the view box fills the element: `columns` physical px over `columns` units, on whole pixels.
   const band = slint.slice(slint.indexOf("component RangeBand"), slint.indexOf("component SeekBar"));
   assert.doesNotMatch(band, /stroke(-width)?:/);
@@ -468,7 +575,10 @@ test("Ranges: the bar draws them as one Path per style in Theme colours, between
   ])
     assert.ok(band.includes(line), line);
   // A range alone (no marks) also asks for the span again when it was built for another one.
-  assert.match(slint, /stale-ticks: \(PlaybackBridge\.marks\.length > 0 \|\| PlaybackBridge\.selection-ranges != ""/);
+  assert.match(
+    slint,
+    /stale-ticks: \(PlaybackBridge\.marks\.length > 0 \|\| PlaybackBridge\.selection-ranges\.length > 0 \|\| PlaybackBridge\.region-ranges\.length > 0\)/,
+  );
 });
 
 // ------------------------------------------------------------------ A02

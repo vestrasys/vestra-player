@@ -3,7 +3,7 @@
 use super::{Call, Capability, Handled, Info, Recorded, plugin};
 use crate::{
     commands,
-    conditions::{Conditions, Facts},
+    conditions::Conditions,
     core_actions,
     host::{Host, Origin, Reply, RpcError, string},
     i18n, input_trace,
@@ -272,19 +272,15 @@ fn conditions(params: &Value) -> std::result::Result<Option<Conditions>, RpcErro
     Conditions::parse(&params["when"]).map_err(RpcError::invalid)
 }
 
-/// The player's state that conditions read, as it is now: the registry
-/// evaluates every condition again when it changed (`Host::broadcast` of
-/// `source.state`, `window.state` and `appearance.changed`), and before a
-/// command's conditions are first evaluated.
+/// The player's state that conditions read, as it is now (the same facts
+/// as a trigger's, `Host::condition_facts`, the primary subtitle track
+/// included): the registry evaluates every condition again when it changed
+/// (`Host::broadcast` of `source.state`, `window.state` and
+/// `appearance.changed`, and the playback worker's subtitle track,
+/// `Host::triggers_subtitle`), and before a command's conditions are first
+/// evaluated.
 pub(crate) fn refresh_conditions(host: &mut Host) {
-    let language = host.language_preference();
-    let facts = Facts::new(
-        &host.last_source,
-        &host.window_facts,
-        // The palette shown: a retired id saved earlier shows the default.
-        crate::ui::theme::known(host.theme()),
-        language.as_deref().unwrap_or(i18n::SYSTEM),
-    );
+    let facts = host.condition_facts();
     host.commands.set_facts(facts);
 }
 

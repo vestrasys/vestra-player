@@ -9,7 +9,8 @@ export type Why = () => string;
 /**
  * Events the player wakes a stopped plugin for: a listener of one does not keep
  * the plugin running. They follow deliberate changes (an install, a key edit,
- * the palette, a resolver), not playback.
+ * the palette, a resolver), not playback, or report one thing that happened
+ * to a source (it opened, became ready, ended), never its stream of states.
  */
 export declare const WAKE_EVENTS: readonly string[];
 /**
@@ -165,6 +166,16 @@ export declare class Connection {
      * (no `plugin.player.subscribe()`, or the service did not start).
      */
     hold(event: string, why?: Why): Disposable;
+    /**
+     * Hear `event` while followed, whether or not event delivery is on, and
+     * count it as listened to (`plugin.player.stream`, SDK 1.10.0): the group
+     * the caller started (a state copy's) is subscribed now if it waited for
+     * `plugin.player.subscribe()`, and only it. When the last follower ends,
+     * such a group waits again as before: its subscription at the player
+     * ends, and the copy stays as it was. Nothing when nothing started the
+     * group.
+     */
+    follow(event: string, why?: Why): Disposable;
     /**
      * Why the plugin listens to each event it really listens to (mirrors
      * left out), as the player's log says it: for {@link TestHost} and

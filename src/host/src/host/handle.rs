@@ -253,6 +253,19 @@ impl Host {
                     self.backdrop_source();
                     self.update_title();
                     self.core_action_states();
+                    // The discrete source events this state adds, after it:
+                    // a listener of both reads the state first.
+                    let derived = crate::source_events::derive(&previous, &data);
+                    self.broadcast(&event, data);
+                    for (name, data) in derived {
+                        diag!(
+                            "source: {name} {} at +{} ms",
+                            data["state"]["stamp"]["generation"],
+                            self.now_ms()
+                        );
+                        self.broadcast(name, data);
+                    }
+                    return;
                 }
                 if event == "resolvers.fileTypes" {
                     self.file_types = data["fileTypes"].clone();
@@ -289,6 +302,8 @@ impl Host {
             Event::BarButton(generation, token) => self.bar_click(generation, &token),
             Event::BarMore(generation, x, y) => self.bar_more(generation, x, y),
             Event::OwnerResources(owner, answer) => self.resources_answer(owner, &answer),
+            Event::Position(report) => self.triggers_position(report),
+            Event::SubtitleTrack(track) => self.triggers_subtitle(track),
             Event::PipReturn(generation) => {
                 if generation == self.shell_generation {
                     self.pip.restore();

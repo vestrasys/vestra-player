@@ -19,6 +19,7 @@ impl Host {
     pub(crate) fn shutdown_plugins(&mut self, budget: Duration) {
         let began = Instant::now();
         let deadline = began + budget;
+        self.quit_source_ended();
         self.probe_quit();
         // Nothing more is created; a process the spawn thread created and
         // the Host did not take yet (its `Event::Spawned` still queued)
@@ -83,6 +84,33 @@ impl Host {
                 " (some still going)"
             }
         );
+    }
+    /// The player quits with a source in playback: each running plugin that
+    /// listens to `source.ended` gets it with `reason: "quit"` and the
+    /// source's last state, ahead of its stop on the same pipe, so within
+    /// the quit's deadline (events-and-triggers.md §4.6). A plugin in
+    /// standby gets nothing: it is neither woken nor is the event kept
+    /// (§6, M5).
+    fn quit_source_ended(&mut self) {
+        let Some(data) = crate::source_events::at_quit(&self.last_source) else {
+            return;
+        };
+        let event = crate::source_events::ENDED;
+        let message = serde_json::json!({"event":event,"data":data});
+        let mut failed = Vec::new();
+        for (owner, plugin) in self
+            .plugins
+            .iter_mut()
+            .filter(|(_, plugin)| plugin.subscriptions.contains_key(event))
+        {
+            if let Err(error) = plugin.send(message.clone()) {
+                failed.push((*owner, error));
+            }
+        }
+        // A full queue: its stop follows anyway (the deadline kills it).
+        for (owner, error) in failed {
+            diag!("plugin {owner} quit: source.ended not sent: {error}");
+        }
     }
     /// A quit's stop of `owner` (the `Terminate` executor while quitting):
     /// its `runtime.stop` (\`quit\`), killed after `grace`; nothing else is

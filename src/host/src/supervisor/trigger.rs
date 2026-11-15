@@ -16,8 +16,10 @@ pub enum TriggerKind {
     /// `ui.callback`, a settings page shown: answered when it cannot be
     /// delivered.
     Interactive,
-    /// A wake-event broadcast, by event name: merged (newest wins),
-    /// dropped silently.
+    /// A wake-event broadcast, by its merge key: merged with a held one of
+    /// the same key (newest wins), dropped silently. The key is the event
+    /// name, or for a per-source event its name and source id
+    /// (`capabilities::wake_trigger`).
     Event(String),
     /// A message that follows a held trigger (`source.resolveCancel`): held
     /// only behind one, never starts anything.
@@ -159,6 +161,18 @@ mod tests {
         serde_json::json!({"event": event, "data": data})
     }
 
+    /// Per-source events (design §4.9): keyed by name and source id, two
+    /// sources in a row keep one each; the same source again, the newest.
+    #[test]
+    fn keyed_events_merge_only_with_their_own_key() {
+        let mut backlog = VecDeque::new();
+        hold(&mut backlog, Trigger::event("source.ready 1", 1));
+        hold(&mut backlog, Trigger::event("source.ended 1", 2));
+        hold(&mut backlog, Trigger::event("source.ready 2", 3));
+        assert!(hold(&mut backlog, Trigger::event("source.ready 2", 4)));
+        let payloads = backlog.iter().map(|t| t.payload).collect::<Vec<_>>();
+        assert_eq!(payloads, [1, 2, 4]);
+    }
     /// Formerly `lazy.rs`'s `held_events_keep_their_order_and_only_
     /// the_newest_of_each`: a woken plugin receives wake events in order,
     /// only the newest of each, after the trigger that came before them.

@@ -29,8 +29,10 @@ mod shell;
 pub(crate) mod stall;
 mod state;
 pub(crate) mod supervisor;
+mod triggers;
 mod video;
 mod window;
+pub(crate) use triggers::{TriggerState, wall_ms};
 
 use crate::packages::{manifest, package_manager};
 #[cfg(feature = "producer-audio")]
@@ -40,7 +42,7 @@ use crate::playback::{
     frame_pacing, render_target, video_click,
 };
 use crate::process::{Plugin, StopReason, shared_runner};
-use crate::supervisor::{Pid, Supervisor, Trigger, activation};
+use crate::supervisor::{Pid, Supervisor, activation};
 use crate::ui::{
     bar_buttons, composition, drops, menu, pip, settings_window, sidebar_tabs, slot_claims,
     ui_image, ui_state, ui_values, view, window_control, window_state,
@@ -585,6 +587,10 @@ pub(crate) struct Host {
     /// On-demand start: the Host's side of standby, wake and
     /// classification (`supervisor/`, supervisor.md §4).
     pub(crate) on_demand: supervisor::OnDemand,
+    /// Trigger conditions (`crate::triggers`, SDK 1.10.0) and what the
+    /// Host keeps beside them (`triggers.rs`).
+    pub(crate) triggers: crate::triggers::Triggers,
+    pub(crate) trigger_state: TriggerState,
     /// The plugin shaders' crash guard (`diagnostics.rs`).
     pub(crate) shader_guard: ShaderGuard,
     /// When the memory line last went to the host log (`diagnostics.rs`).

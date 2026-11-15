@@ -186,6 +186,10 @@ impl Registry {
         self.stamp.revision = revision;
         Ok(self.state())
     }
+    /// The primary track selected, without building a snapshot.
+    pub fn selected(&self) -> Option<&Track> {
+        self.selected.as_ref()
+    }
     pub fn state(&self) -> Snapshot {
         Snapshot {
             stamp: self.stamp,

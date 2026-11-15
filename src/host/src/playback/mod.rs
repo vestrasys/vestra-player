@@ -17,6 +17,7 @@ pub(crate) mod native_subtitle;
 pub(crate) mod offline_audio;
 pub(crate) mod offline_descriptor;
 pub(crate) mod plugin_files;
+pub(crate) mod position_model;
 pub(crate) mod processing;
 pub(crate) mod processing_live;
 pub mod processing_operations;

@@ -232,6 +232,17 @@ export function createWire(transport) {
             observeProperty: (name) => transport.request("mpv.observe", { name }),
             unobserveProperty: (name) => transport.request("mpv.unobserve", { name }),
         },
+        /**
+         * Trigger conditions (1.10.0, `plugin.trigger`): `set` hands one over
+         * (or replaces it), `off` removes it, `declare` names what `activate()`
+         * declared. Each `set` and `off` answers the condition's sequence
+         * number; the flips arrive as `triggers.fired` events.
+         */
+        triggers: {
+            set: (trigger, when) => transport.request("triggers.set", { trigger, when }),
+            off: (trigger, unhandled = false) => transport.request("triggers.off", unhandled ? { trigger, unhandled } : { trigger }),
+            declare: (names, unnamed) => transport.request("triggers.declare", { names, unnamed }),
+        },
         /** The system's secret store, per plugin (`secrets`). */
         secrets: {
             get: (name) => transport.request("secrets.get", { name }),

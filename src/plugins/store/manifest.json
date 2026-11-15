@@ -1,6 +1,6 @@
 {
   "id": "vestra.store",
-  "version": "0.2.20",
+  "version": "0.2.21",
   "apiVersion": "vestra/1",
   "entry": "main.ts",
   "name": "Plugin Store",

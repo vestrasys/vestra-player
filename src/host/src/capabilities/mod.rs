@@ -38,6 +38,7 @@ mod source_resolve;
 mod subtitles_control;
 mod subtitles_read;
 mod timeline_marks;
+mod triggers;
 mod ui_dialog;
 mod ui_drop;
 pub(crate) mod ui_mount;
@@ -56,7 +57,7 @@ pub(crate) use commands_run::{
     ask_again as ask_again_before_plugin_commands, forget_trust as forget_command_trust,
     shown_name,
 };
-pub(crate) use events::WAKE_EVENTS;
+pub(crate) use events::{SOURCE_EVENTS, WAKE_EVENTS, wake_trigger};
 pub(crate) use media_sources::locate_dialog;
 #[cfg(test)]
 pub(crate) use mpv::check as mpv_check;
@@ -237,6 +238,8 @@ pub static ALL: &[&dyn Capability] = &[
     &palette_lead::PaletteLead,
     // The mpv pass-through (SDK 1.8.0).
     &mpv::Mpv,
+    // Triggers (SDK 1.10.0).
+    &triggers::Triggers,
 ];
 
 /// Where a method goes: its owner (`None`: `uncapable`).

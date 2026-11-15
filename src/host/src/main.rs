@@ -27,9 +27,11 @@ pub mod playback;
 mod power;
 mod process;
 mod session_storage;
+mod source_events;
 mod supervisor;
 mod system;
 mod timeline;
+mod triggers;
 pub mod ui;
 mod version;
 
@@ -592,10 +594,14 @@ fn player() -> Result<()> {
         placements: view::Placements::default(),
         bar: bar_buttons::Strip::default(),
         on_demand,
+        triggers: Default::default(),
+        trigger_state: Default::default(),
         commands: commands::Registry::new(),
         shader_guard,
         memory_logged: None,
     };
+    // Kept trigger conditions: one file per installed instance.
+    host.triggers = triggers::Triggers::new(Some(host.triggers_dir()));
     // The interface language of this run (doc/architecture/i18n.md §2):
     // `VESTRA_LANGUAGE` (development and tests), else the saved choice, else
     // the system's languages. Headless runs ignore the system: English

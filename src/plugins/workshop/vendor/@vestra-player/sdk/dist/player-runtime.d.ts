@@ -20,6 +20,9 @@ export { COMMAND_RUN_LIMITS, PALETTE_LEAD_LIMITS, PALETTE_LEAD_STATES, } from ".
 export { MPV_LIMITS, MPV_RULES } from "./mpv.ts";
 export { OSD_LIMITS } from "./plugin/osd.ts";
 export { TIMELINE_LIMITS } from "./plugin/timeline.ts";
+export { TRIGGER_LIMITS } from "./plugin/triggers.ts";
+export { CONDITION_TABLE } from "./condition-table.ts";
+export { evaluateTruth } from "./plugin/when.ts";
 export { SECRET_LIMITS, SESSION_STORAGE_LIMITS } from "./plugin/services.ts";
 export { SUBTITLE_LIMITS } from "./plugin/subtitles.ts";
 export { VIDEO_PROCESSING_LIMITS } from "./processing.ts";

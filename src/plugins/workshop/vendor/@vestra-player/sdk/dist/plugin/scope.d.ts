@@ -2,7 +2,7 @@
 import type { MotionEngine } from "./types.ts";
 import type { Change } from "./passes.ts";
 import type { Runtime } from "./runtime.ts";
-import type { Disposable, DisposeInfo, Plugin, PluginError, Scope, StopReason } from "./types.ts";
+import type { Disposable, DisposeInfo, Plugin, PluginError, Scope, StopReason, Trigger } from "./types.ts";
 export declare class ScopeImpl implements Plugin {
     #private;
     readonly runtime: Runtime;
@@ -11,6 +11,8 @@ export declare class ScopeImpl implements Plugin {
     get dataDirectory(): string;
     get stopReason(): StopReason | undefined;
     get disposed(): boolean;
+    /** The plugin itself, not a scope made with `scope()`. */
+    get root(): boolean;
     /**
      * Start the SDK's copy that `event` keeps current (`plugin.commands.keys`,
      * `plugin.timeline`, `plugin.appearance`), for `player.on`; nothing for
@@ -60,6 +62,7 @@ export declare class ScopeImpl implements Plugin {
     readonly wire: import("./types.ts").Wire;
     get app(): import("./types.ts").App;
     scope(): Scope;
+    trigger(name?: string): Trigger;
     add<T extends Disposable>(item: T): T;
     /** Handles call this when disposed directly, so the scope forgets them. */
     forget(item: Disposable): void;
