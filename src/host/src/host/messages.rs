@@ -26,11 +26,27 @@
 //! order. The same rule holds on the core's side for the UI's snapshots
 //! ([`UiReport::replaces`]).
 //!
+//! **Window facts never go backwards.** Facts reach the core two ways: as
+//! the [`UiReport::WindowFacts`] snapshot and inside the handoff of a reply
+//! ([`UiReport::Answered`], [`UiReport::MountApplied`]), which is ordered
+//! and never collapses. In-place coalescing can therefore put a newer
+//! snapshot ahead of an older handoff (queue `[f1, Answered{h}]`, then `f3`
+//! overwrites `f1`: the core sees `f3`, then `h`). So every
+//! [`WindowFacts`] carries `seq`, from one counter on the UI side that
+//! advances for every facts value it sends; the core applies a facts value
+//! only when its `seq` is newer than the last one it applied, and
+//! otherwise skips the facts (the reply of a handoff is still sent, R13).
+//!
 //! **What is not here, and why.** The answers of the dialogs that already
 //! run on their own threads (`DialogDone`, `ConfirmDone`, `SourceLocated`)
 //! reach the core as today's [`Event`]s, not through the UI. The UI's own
 //! events (keys, clicks, callbacks: the 26 UI-originated [`Event`]
-//! variants) travel unchanged inside [`UiReport::Event`].
+//! variants) reach the core inside [`UiReport::Event`], as the same
+//! values. Not all of them are core work: some only change the interface
+//! (`PipReturn` restores the window from picture-in-picture,
+//! `SidebarResized` writes the policy's width and the interface state;
+//! host/handle.rs:294-311). Which ones the UI handles itself and which it
+//! forwards is decided per event in S2c/S2d; this type only carries them.
 
 // S2a: the message types exist before any caller (plan S2c/S2d); the
 // tests construct and match every variant but read no field.
@@ -81,11 +97,16 @@ pub(crate) enum UiCommand {
     /// `ui.menu`: a panel's context menu (row 44, note 7). Answered by the
     /// core at once; the UI drops it when its window generation is gone.
     PanelMenu(PanelMenu),
-    /// `ui.interaction`, `layout.set` (rows 43, 46). Answered by the core
-    /// at once (R5, K13).
+    /// `ui.interaction` (row 43, answered by the core at once, R5/K13),
+    /// `layout.set` (row 46, stream B, answered after the UI applied it,
+    /// R13), and the host's own column switches.
     Layout(LayoutOp),
     /// `palette.lead.set` / `.clear` (rows 97, 98).
     Lead(LeadOp),
+    /// The host's Command Palette command (`host/palette`, reached by a
+    /// key or a menu through `host_command`): open the palette in the main
+    /// window.
+    OpenPalette,
     /// A plugin stopped: its views, mounts, OSD buttons, floating window
     /// and shell properties go (K3; `stop_run`). `park`: it went to
     /// standby, its sidebar tabs stay as recorded placeholders.
@@ -198,12 +219,25 @@ pub(crate) enum WindowOp {
     /// `window.setAlwaysOnTop` (row 72): every ordinary window at the
     /// floating level, or not. Answered by the core at once.
     OnTop(bool),
-    /// `host.run fullscreen` (row 34, note 4): toggle the shell window.
-    Fullscreen,
+    /// The shell window in or out of fullscreen: `host.run fullscreen`
+    /// (row 34, note 4) and the host's `fullscreen`, `enter-fullscreen`,
+    /// `exit-fullscreen` commands (`window_command`).
+    Fullscreen(FullscreenChange),
     /// `OpenFiles` from another launch: the main window to the front.
     Raise,
-    /// `rendering.restart` (row 90): quit for the relaunch, after the reply.
+    /// The player ends its event loop: `rendering.restart` (row 90, after
+    /// the reply) and the host's `quit` command (`host_command`: the GPU
+    /// waits released, handoffs stopped, the interface state flushed).
     Quit,
+}
+
+/// See [`WindowOp::Fullscreen`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum FullscreenChange {
+    Enter,
+    Exit,
+    /// In when windowed, out when fullscreen.
+    Toggle,
 }
 
 pub(crate) enum DialogPurpose {
@@ -266,19 +300,28 @@ pub(crate) struct PanelMenu {
     pub(crate) params: Value,
 }
 
-/// A plugin's change to the panel layout. Ordered, not a snapshot: the
-/// panel policy is written by the UI as well (pointer bands, activity,
-/// tabs clicked), so a whole policy sent by the core would overwrite the
-/// UI's own writes. The UI reports the resulting layout with its window
-/// facts (R9).
+/// A change to the panel layout. Ordered, not a snapshot: the panel policy
+/// is written by the UI as well (pointer bands, activity, tabs clicked), so
+/// a whole policy sent by the core would overwrite the UI's own writes. The
+/// UI reports the resulting tab order with its window facts (R9).
 pub(crate) enum LayoutOp {
-    /// `ui.interaction`: the locks of panel `key`.
+    /// `ui.interaction` (row 43): the locks of panel `key`. The UI also
+    /// marks activity on the policy (`policy.activity`, ui_mount.rs:724).
     Locks {
         key: u64,
         locks: window_state::Locks,
     },
-    /// `layout.set`: the request's parameters, checked by the core.
-    Set { owner: u64, params: Value },
+    /// `layout.set` (row 46, stream B): the request's parameters, checked
+    /// by the core. Today it runs a layout pass before answering so that a
+    /// following `layout.state` sees the change (ui_mount.rs:888-889; the
+    /// SDK reads right after it): the UI answers with
+    /// [`UiReport::Answered`] whose handoff carries the facts after the
+    /// pass (R13).
+    Set { reply: Reply, params: Value },
+    /// The host's Sidebar and Adjustments commands (`host_command`,
+    /// `toggle_sidebar` / `toggle_adjust`): switch the column's current
+    /// panel on or off.
+    Toggle(crate::ui::sidebar_tabs::Column),
 }
 
 pub(crate) enum LeadOp {
@@ -305,9 +348,10 @@ pub(crate) enum UiReport {
     FrameShown(Instant),
     /// The UI's result of an ordered request with a reply: the view ops
     /// (rows 36–39), `ui.setMount` (41), `settings.set` / `.show` (83c,
-    /// 83d), picture-in-picture (74), and the errors of
-    /// `window.setVideoArea` (71). The core handles it in R13's order:
-    /// apply the `handoff`, send the reply, broadcast what changed.
+    /// 83d), picture-in-picture (74), `layout.set` (46), and the errors
+    /// of `window.setVideoArea` (71). The core handles it in R13's order:
+    /// apply the `handoff` (only if its `seq` is newer than the facts it
+    /// has, see the module doc), send the reply, broadcast what changed.
     Answered {
         reply: Reply,
         result: std::result::Result<Value, RpcError>,
@@ -316,6 +360,9 @@ pub(crate) enum UiReport {
     /// `window.setVideoArea` was fitted: the video size it waits for and
     /// the reply it will carry. The core keeps it with its deadline
     /// (request time + 1000 ms) and answers from [`Self::WindowFacts`].
+    /// On receipt it first checks the facts it already has: they may show
+    /// the size already (a fact that arrived before this report), and then
+    /// it answers at once instead of waiting out the deadline.
     AreaFitted {
         reply: Reply,
         video: (f64, f64),
@@ -339,6 +386,9 @@ pub(crate) enum UiReport {
 /// [`UiReport::Answered`] and [`UiReport::MountApplied`].
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) struct WindowFacts {
+    /// From one counter on the UI side, advanced for every facts value it
+    /// sends (snapshot or handoff): the core applies only a newer one.
+    pub(crate) seq: u64,
     /// Today's `window_facts` value, whole (size, fullscreen, focus, video
     /// area, slots, menu state).
     pub(crate) facts: Value,
@@ -353,7 +403,7 @@ pub(crate) struct WindowFacts {
     pub(crate) pip_supported: bool,
     pub(crate) pip_active: bool,
     /// The panel policy's tab order of the sidebar and the adjust column
-    /// (`layout.state`).
+    /// (`layout.state`; the layout part of R13's handoff).
     pub(crate) sidebar_panels: Vec<u64>,
     pub(crate) adjust_panels: Vec<u64>,
 }
@@ -457,6 +507,14 @@ impl UiCommand {
     }
 }
 
+impl WindowFacts {
+    /// Whether the core applies these facts, having applied `applied`
+    /// last (`None`: none yet): only a newer value (module doc).
+    pub(crate) fn newer_than(&self, applied: Option<u64>) -> bool {
+        applied.is_none_or(|seq| self.seq > seq)
+    }
+}
+
 impl UiReport {
     /// Whether this replaces `older` in a queue: both are UI facts of the
     /// same kind. `Answered`'s and `MountApplied`'s handoff facts are
@@ -493,6 +551,7 @@ mod tests {
 
     fn facts() -> Box<WindowFacts> {
         Box::new(WindowFacts {
+            seq: 1,
             facts: json!({"fullscreen":false}),
             shell: Some(1),
             menu_origin: true,
@@ -615,7 +674,9 @@ mod tests {
                 on: true,
             }),
             UiCommand::Window(WindowOp::OnTop(true)),
-            UiCommand::Window(WindowOp::Fullscreen),
+            UiCommand::Window(WindowOp::Fullscreen(FullscreenChange::Enter)),
+            UiCommand::Window(WindowOp::Fullscreen(FullscreenChange::Exit)),
+            UiCommand::Window(WindowOp::Fullscreen(FullscreenChange::Toggle)),
             UiCommand::Window(WindowOp::Raise),
             UiCommand::Window(WindowOp::Quit),
             UiCommand::Dialog(DialogRequest {
@@ -665,9 +726,12 @@ mod tests {
                 },
             }),
             UiCommand::Layout(LayoutOp::Set {
-                owner: 7,
+                reply: reply(15),
                 params: json!({"slot":"sidebar"}),
             }),
+            UiCommand::Layout(LayoutOp::Toggle(crate::ui::sidebar_tabs::Column::Sidebar)),
+            UiCommand::Layout(LayoutOp::Toggle(crate::ui::sidebar_tabs::Column::Adjust)),
+            UiCommand::OpenPalette,
             UiCommand::Lead(LeadOp::Set {
                 owner: 7,
                 params: json!({}),
@@ -795,7 +859,9 @@ mod tests {
                 WindowOp::VideoArea { .. } => "Window.VideoArea",
                 WindowOp::Pip { .. } => "Window.Pip",
                 WindowOp::OnTop(_) => "Window.OnTop",
-                WindowOp::Fullscreen => "Window.Fullscreen",
+                WindowOp::Fullscreen(FullscreenChange::Enter) => "Window.Fullscreen.Enter",
+                WindowOp::Fullscreen(FullscreenChange::Exit) => "Window.Fullscreen.Exit",
+                WindowOp::Fullscreen(FullscreenChange::Toggle) => "Window.Fullscreen.Toggle",
                 WindowOp::Raise => "Window.Raise",
                 WindowOp::Quit => "Window.Quit",
             },
@@ -816,11 +882,16 @@ mod tests {
             UiCommand::Layout(op) => match op {
                 LayoutOp::Locks { .. } => "Layout.Locks",
                 LayoutOp::Set { .. } => "Layout.Set",
+                LayoutOp::Toggle(crate::ui::sidebar_tabs::Column::Sidebar) => {
+                    "Layout.Toggle.Sidebar"
+                }
+                LayoutOp::Toggle(crate::ui::sidebar_tabs::Column::Adjust) => "Layout.Toggle.Adjust",
             },
             UiCommand::Lead(op) => match op {
                 LeadOp::Set { .. } => "Lead.Set",
                 LeadOp::Clear { .. } => "Lead.Clear",
             },
+            UiCommand::OpenPalette => "OpenPalette",
             UiCommand::RevokeOwner { .. } => "RevokeOwner",
             UiCommand::RekeyOwner { .. } => "RekeyOwner",
         }
@@ -845,7 +916,7 @@ mod tests {
         let names: Vec<_> = every_command().iter().map(command_name).collect();
         let unique: std::collections::BTreeSet<_> = names.iter().collect();
         assert_eq!(unique.len(), names.len(), "{names:?}");
-        assert_eq!(names.len(), 6 + 31);
+        assert_eq!(names.len(), 6 + 36);
     }
 
     #[test]
@@ -901,6 +972,21 @@ mod tests {
         let older = UiCommand::Snapshot(UiSnapshot::Theme("light".into()));
         let newer = UiCommand::Snapshot(UiSnapshot::Theme("dark".into()));
         assert!(newer.replaces(&older));
+    }
+
+    #[test]
+    fn facts_are_applied_only_when_newer() {
+        // [f1, Answered{h = 2}] with f3 coalesced over f1: f3, then h.
+        let (h, f3) = (
+            WindowFacts { seq: 2, ..*facts() },
+            WindowFacts { seq: 3, ..*facts() },
+        );
+        let mut applied = None;
+        assert!(f3.newer_than(applied));
+        applied = Some(f3.seq);
+        assert!(!h.newer_than(applied), "the older handoff is skipped");
+        assert!(!f3.newer_than(applied), "the same value again too");
+        assert!(WindowFacts { seq: 4, ..*facts() }.newer_than(applied));
     }
 
     #[test]
