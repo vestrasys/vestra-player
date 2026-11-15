@@ -36,9 +36,8 @@ impl Host {
     /// The host's own commands (`host_declarations`) and the core actions.
     pub(crate) fn register_host_commands(&mut self) -> Result<()> {
         for (id, declaration, state) in Self::host_declarations() {
-            self.input
-                .borrow_mut()
-                .table
+            self.core
+                .bindings_mut()
                 .declare(
                     bindings::HOST,
                     id,
@@ -164,9 +163,8 @@ impl Host {
         id: &str,
         declaration: commands::Declaration,
     ) -> Result<()> {
-        self.input
-            .borrow_mut()
-            .table
+        self.core
+            .bindings_mut()
             .declare(
                 bindings::HOST,
                 id,

@@ -505,7 +505,7 @@ pub(crate) fn forget_trust(host: &mut Host, id: &str) {
 /// One row of `commands.list` for a caller that trusts `trusted`.
 fn listed(host: &Host, trusted: &[String], item: &Item) -> Value {
     let (builtin, _, trusted) = judge(host, trusted, item.owner);
-    let keys = host.input.borrow().table.labels(item.owner, &item.id);
+    let keys = host.core.bindings().labels(item.owner, &item.id);
     let mut row = json!({
         "id": item.global,
         "label": item.label,
@@ -599,7 +599,7 @@ fn listed_command(items: &[Item], global: &str) -> Result<Item, RpcError> {
 /// The listed command with this global id, checked as the palette checks
 /// a row before running it.
 fn runnable(host: &Host, global: &str) -> Result<Item, RpcError> {
-    let item = listed_command(&host.palette_items(), global)?;
+    let item = listed_command(&host.listed_items(), global)?;
     if !item.enabled {
         let mut error = RpcError::new("disabled", format!("{} is disabled", item.label));
         if !item.reason.is_empty() {
@@ -719,7 +719,7 @@ fn run(host: &mut Host, reply: &Reply, params: &Value) -> Handled {
     // runs; an earlier step may enable a later one).
     let mut plan = vec![item.clone()];
     if let Some(then) = &then {
-        let items = host.palette_items();
+        let items = host.listed_items();
         for global in then {
             plan.push(listed_command(&items, global)?);
         }
@@ -924,7 +924,7 @@ impl Capability for CommandsRun {
     fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "commands.list" => {
-                let items = host.palette_items();
+                let items = host.listed_items();
                 // `dangerous` as this caller's runs judge it (H4).
                 let trusted = trusted_by(host, reply.owner);
                 let commands: Vec<Value> = items

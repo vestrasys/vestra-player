@@ -298,7 +298,7 @@ impl Host {
     /// The plugins' cells (the strip's, then the ones past eight), and the
     /// buttons not in the strip (owner, id, plugin id, where they went).
     fn bar_items(&self) -> (Vec<Item>, Vec<Item>, Vec<Dropped>) {
-        let buttons = self.core.commands.buttons();
+        let buttons = self.registry.buttons();
         let input = self.input.borrow();
         let items = |list: &[&commands::CommandSnapshot]| -> Vec<Item> {
             list.iter()
@@ -347,7 +347,7 @@ impl Host {
     /// The command palette's cell (`host/palette`): the magnifier (the ask
     /// bubble while a lead is set), always shown, right of `»`.
     fn palette_item(&self) -> Option<Item> {
-        let entry = self.core.commands.get(bindings::HOST, palette::PALETTE)?;
+        let entry = self.registry.get(bindings::HOST, palette::PALETTE)?;
         let mut label = label(entry.declaration.shown_title());
         let key = self
             .input
@@ -383,7 +383,7 @@ impl Host {
     /// icon, its on dot while the sidebar is wanted, at half opacity while it is
     /// wanted but the window is too narrow for it (G-18).
     fn sidebar_item(&self, sidebar: Option<window_state::Visibility>) -> Option<Item> {
-        let entry = self.core.commands.get(bindings::HOST, SIDEBAR)?;
+        let entry = self.registry.get(bindings::HOST, SIDEBAR)?;
         let label = label(entry.declaration.shown_title());
         let key = self.input.borrow().table.label(bindings::HOST, SIDEBAR);
         let dimmed = sidebar.is_some_and(|s| {
@@ -413,7 +413,7 @@ impl Host {
     /// sliders icon, its on dot while the column is wanted shown; disabled
     /// while no panel is in it.
     fn adjust_item(&self) -> Option<Item> {
-        let entry = self.core.commands.get(bindings::HOST, ADJUST)?;
+        let entry = self.registry.get(bindings::HOST, ADJUST)?;
         let label = label(entry.declaration.shown_title());
         let key = self.input.borrow().table.label(bindings::HOST, ADJUST);
         Some(Item {
@@ -441,10 +441,15 @@ impl Host {
         ),
     ) {
         let sidebar = columns.0;
+        // The strip reads the interface's copies of the tables (rule R8).
+        self.sync_tables();
         if !self.bar.begin(&self.bar_inputs(sidebar)) {
             return;
         }
+        // A write of the host's own commands to the core's registry; the
+        // strip then reads its new copy.
         self.sidebar_command_state();
+        self.sync_tables();
         let (buttons, overflow, dropped) = self.bar_items();
         for (owner, id, manifest, limit) in dropped {
             if self.bar.logged.insert((owner, id.clone())) && debug_bar() {
@@ -505,7 +510,7 @@ impl Host {
     /// What the strip depends on, at this tick.
     fn bar_inputs(&self, sidebar: Option<window_state::Visibility>) -> Inputs {
         Inputs {
-            commands: self.core.commands.revision(),
+            commands: self.registry.revision(),
             bindings: self.input.borrow().table.revision(),
             sidebar,
             slot: self.policy.sidebar_state(),

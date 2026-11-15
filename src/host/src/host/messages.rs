@@ -120,13 +120,16 @@ pub(crate) enum UiCommand {
 /// The core's tables and values the UI shows. Each is the whole value at
 /// one moment; a newer one replaces an older one (R3).
 pub(crate) enum UiSnapshot {
-    /// The command registry as menus, the palette, the bar and the tab keys
-    /// read it (rows 21, 31–33; R8). The registry already publishes this
-    /// type, shared (`commands::Registry::snapshot`); whether S2c widens it
-    /// is measured there (K11).
-    Registry(Arc<commands::MenuSnapshot>),
+    /// The command registry as menus, the palette, the bar, the tab keys
+    /// and the video click read it (rows 21, 31–33; R8): a copy of its
+    /// commands and held owners at one revision, with the menu tree built
+    /// from it once (`commands::Registry::view`). Plan step S2c(2) widened
+    /// it from the menu tree alone: the bar, the panel menus and the
+    /// palette read commands the tree leaves out. Copied once per revision
+    /// and shared (K11; `host/tables.rs`).
+    Registry(Arc<commands::View>),
     /// The binding table the key callbacks look up synchronously (rows 31,
-    /// 33, 76, 77; R8).
+    /// 33, 76, 77; R8). Copied once per change and shared.
     Bindings(Arc<bindings::Table>),
     /// The info panels of `osd.panel` (row 67), by owner.
     InfoPanels(Arc<BTreeMap<u64, String>>),
@@ -591,10 +594,7 @@ mod tests {
     /// One of each, in declaration order.
     fn every_snapshot() -> Vec<UiSnapshot> {
         vec![
-            UiSnapshot::Registry(Arc::new(commands::MenuSnapshot {
-                revision: 1,
-                roots: vec![],
-            })),
+            UiSnapshot::Registry(Arc::new(commands::Registry::new().view())),
             UiSnapshot::Bindings(Arc::new(bindings::Table::default())),
             UiSnapshot::InfoPanels(Arc::new(BTreeMap::from([(7, "info".into())]))),
             UiSnapshot::Theme("dark".into()),

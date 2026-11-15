@@ -6,7 +6,7 @@
 
 use std::collections::{BTreeMap, HashMap};
 use std::ops::Bound;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 
 use serde::{Deserialize, Serialize};
 
@@ -417,7 +417,10 @@ pub struct Registry {
     /// above and below it, without scanning every command.
     paths: BTreeMap<Vec<String>, Vec<CommandKey>>,
     /// The last [`Registry::snapshot`], valid while `revision` is its own.
-    menu: Mutex<Option<Arc<MenuSnapshot>>>,
+    /// The player builds its menu tree from a [`View`] (rule R8), once per
+    /// copy; the registry's own tree and cache are its tests'.
+    #[cfg(test)]
+    menu: std::sync::Mutex<Option<Arc<MenuSnapshot>>>,
     /// A test's registry total in place of [`Registry::MAX_COMMANDS`].
     #[cfg(test)]
     max_commands: Option<usize>,
@@ -1089,13 +1092,7 @@ impl Registry {
     /// The state `entry` shows: its own, or disabled with the reason
     /// while its owner is held (`set_held`).
     fn shown_state(&self, entry: &CommandSnapshot) -> Option<CommandState> {
-        let reason = self.held.get(&entry.key.owner)?;
-        Some(CommandState {
-            enabled: false,
-            busy: false,
-            reason: Some(reason.clone()),
-            ..entry.state.clone()
-        })
+        shown_state(&self.held, entry)
     }
 
     /// Remove one command (its owner disposed it); the local id is free again.
@@ -1178,14 +1175,24 @@ impl Registry {
     }
 
     pub fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot> {
-        self.commands.get(&CommandKey {
-            owner,
-            local_id: id.into(),
-        })
+        entry(&self.commands, owner, id)
     }
 
     pub fn revision(&self) -> u64 {
         self.revision
+    }
+
+    /// The read-only copy of what the interface reads of the registry
+    /// (rule R8 of doc/architecture/core-thread.md): the commands, the
+    /// held owners and the revision. Its menu tree is built when first
+    /// asked for ([`View::snapshot`]).
+    pub fn view(&self) -> View {
+        View {
+            revision: self.revision,
+            commands: self.commands.clone(),
+            held: self.held.clone(),
+            menu: OnceLock::new(),
+        }
     }
 
     /// What `bindings.list` shows of the registry changed when this moved
@@ -1197,16 +1204,7 @@ impl Registry {
     /// Every command as menus show it (a held owner's disabled with its
     /// reason), in registry order: what the command palette lists from.
     pub fn shown_entries(&self) -> Vec<CommandSnapshot> {
-        self.commands
-            .values()
-            .map(|entry| match self.shown_state(entry) {
-                Some(state) => CommandSnapshot {
-                    state,
-                    ..entry.clone()
-                },
-                None => entry.clone(),
-            })
-            .collect()
+        shown_entries(&self.commands, &self.held)
     }
 
     /// Disabled commands (owner, id → reason), for the key bindings to skip.
@@ -1227,7 +1225,9 @@ impl Registry {
 
     /// The menu tree, built once per revision: every change to what it
     /// shows advances the revision (the interface language is fixed for
-    /// the process, `i18n::init`).
+    /// the process, `i18n::init`). The player reads it from a [`View`]
+    /// (rule R8), which builds it with the same code; kept for the tests.
+    #[cfg(test)]
     pub fn snapshot(&self) -> Arc<MenuSnapshot> {
         let mut menu = self
             .menu
@@ -1236,30 +1236,7 @@ impl Registry {
         if let Some(snapshot) = menu.as_ref().filter(|menu| menu.revision == self.revision) {
             return Arc::clone(snapshot);
         }
-        // A held owner's entries show disabled with the reason
-        // (`set_held`): copies, few (one plugin's).
-        let held: Vec<CommandSnapshot> = self
-            .commands
-            .values()
-            .filter(|entry| !entry.declaration.path.is_empty())
-            .filter_map(|entry| {
-                self.shown_state(entry).map(|state| CommandSnapshot {
-                    state,
-                    ..entry.clone()
-                })
-            })
-            .collect();
-        let entries: Vec<_> = self
-            .commands
-            .values()
-            .filter(|entry| !entry.declaration.path.is_empty())
-            .filter(|entry| !self.held.contains_key(&entry.key.owner))
-            .chain(held.iter())
-            .collect();
-        let snapshot = Arc::new(MenuSnapshot {
-            revision: self.revision,
-            roots: tree(&entries, 0, false),
-        });
+        let snapshot = Arc::new(menu_snapshot(&self.commands, &self.held, self.revision));
         *menu = Some(Arc::clone(&snapshot));
         snapshot
     }
@@ -1268,70 +1245,232 @@ impl Registry {
     /// (the others are `dropped`, with the limit), ranked by (order,
     /// manifest id, sequence); the lowest [`Self::MAX_BUTTONS`] ranks are
     /// the strip's, the rest its `»` menu (`overflow`). Lower orders stay
-    /// in the strip longest (menu redesign step 3a).
+    /// in the strip longest (menu redesign step 3a). The player reads them
+    /// from a [`View`] (rule R8), with the same code; kept for the tests.
+    #[cfg(test)]
     pub fn buttons(&self) -> Buttons<'_> {
-        let mut per_owner: BTreeMap<OwnerGeneration, usize> = BTreeMap::new();
-        let mut result = Buttons::default();
-        let mut declared: Vec<_> = self
-            .commands
-            .values()
-            .filter(|entry| entry.declaration.button.is_some())
-            .collect();
-        declared.sort_by_key(|entry| entry.sequence);
-        let mut shown = Vec::new();
-        for entry in declared {
-            let count = per_owner.entry(entry.key.owner).or_default();
-            if *count < Self::MAX_BUTTONS_PER_OWNER {
-                *count += 1;
-                shown.push(entry);
-            } else {
-                result.dropped.push((entry, "one button per plugin"));
-            }
-        }
-        let rank = |entry: &CommandSnapshot| {
-            (
-                entry.declaration.button.as_ref().map_or(0, |b| b.order),
-                entry.manifest.clone(),
-                entry.sequence,
-            )
-        };
-        shown.sort_by_key(|entry| rank(entry));
-        // Past the limit the highest ranks go to `»`, as in a narrow window.
-        result.overflow = shown.split_off(shown.len().min(Self::MAX_BUTTONS));
-        result.shown = shown;
-        result
+        buttons(&self.commands)
     }
 
     /// Resolve immediately before dispatch, at the serial registry arbiter.
     /// A cached menu snapshot is never execution authority. Runtime liveness is
     /// checked again by the caller when routing to this exact owner generation.
     pub fn resolve_execution(&self, owner: OwnerGeneration, id: &str) -> Result<Execution> {
-        let key = CommandKey {
-            owner,
-            local_id: id.into(),
-        };
-        let entry = self.commands.get(&key).ok_or(CommandError::Missing(key))?;
-        if let Some(reason) = self.held.get(&owner) {
-            return Err(CommandError::Disabled {
-                reason: Some(reason.clone()),
-            });
-        }
-        if entry.state.busy {
-            return Err(CommandError::Busy {
-                reason: entry.state.reason.clone(),
-            });
-        }
-        if !entry.state.enabled {
-            return Err(CommandError::Disabled {
-                reason: entry.state.reason.clone(),
-            });
-        }
-        Ok(Execution {
-            owner,
-            local_id: id.into(),
-            revision: entry.revision,
-        })
+        resolve_execution(&self.commands, &self.held, owner, id)
     }
+}
+
+/// A read-only copy of what the interface reads of the [`Registry`]
+/// (rule R8 of doc/architecture/core-thread.md; plan step S2c): the core
+/// owns the registry and the interface holds the newest of these, replaced
+/// whole when the registry's revision moves (`Registry::view`). It answers
+/// as the registry did at that revision; its menu tree is built once, when
+/// first asked for.
+#[derive(Debug, Default)]
+pub struct View {
+    revision: u64,
+    commands: Commands,
+    held: Held,
+    menu: OnceLock<Arc<MenuSnapshot>>,
+}
+
+impl View {
+    /// The registry's revision this is a copy of ([`Registry::revision`]).
+    pub fn revision(&self) -> u64 {
+        self.revision
+    }
+
+    /// See [`Registry::get`].
+    pub fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot> {
+        entry(&self.commands, owner, id)
+    }
+
+    /// See [`Registry::shown_entries`].
+    pub fn shown_entries(&self) -> Vec<CommandSnapshot> {
+        shown_entries(&self.commands, &self.held)
+    }
+
+    /// See [`Registry::snapshot`]: built once for this copy.
+    pub fn snapshot(&self) -> Arc<MenuSnapshot> {
+        Arc::clone(
+            self.menu
+                .get_or_init(|| Arc::new(menu_snapshot(&self.commands, &self.held, self.revision))),
+        )
+    }
+
+    /// See [`Registry::buttons`].
+    pub fn buttons(&self) -> Buttons<'_> {
+        buttons(&self.commands)
+    }
+
+    /// An owner's entries in registration order, as
+    /// [`Registry::entries_of`] lists them.
+    pub fn entries_of(&self, owner: OwnerGeneration) -> Vec<&CommandSnapshot> {
+        let mut entries = self
+            .commands
+            .values()
+            .filter(|entry| entry.key.owner == owner)
+            .collect::<Vec<_>>();
+        entries.sort_by_key(|entry| entry.sequence);
+        entries
+    }
+
+    /// See [`Registry::resolve_execution`]: what the registry would answer
+    /// at this revision. Not execution authority (the registry is).
+    pub fn resolve_execution(&self, owner: OwnerGeneration, id: &str) -> Result<Execution> {
+        resolve_execution(&self.commands, &self.held, owner, id)
+    }
+}
+
+/// A command looked up by owner and local id, in the registry or in a
+/// [`View`] of it.
+pub trait Lookup {
+    fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot>;
+}
+
+impl Lookup for Registry {
+    fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot> {
+        entry(&self.commands, owner, id)
+    }
+}
+
+impl Lookup for View {
+    fn get(&self, owner: OwnerGeneration, id: &str) -> Option<&CommandSnapshot> {
+        entry(&self.commands, owner, id)
+    }
+}
+
+type Commands = BTreeMap<CommandKey, CommandSnapshot>;
+type Held = BTreeMap<OwnerGeneration, String>;
+
+fn entry<'a>(
+    commands: &'a Commands,
+    owner: OwnerGeneration,
+    id: &str,
+) -> Option<&'a CommandSnapshot> {
+    commands.get(&CommandKey {
+        owner,
+        local_id: id.into(),
+    })
+}
+
+/// The state `entry` shows: its own, or disabled with the reason while its
+/// owner is held (`Registry::set_held`).
+fn shown_state(held: &Held, entry: &CommandSnapshot) -> Option<CommandState> {
+    let reason = held.get(&entry.key.owner)?;
+    Some(CommandState {
+        enabled: false,
+        busy: false,
+        reason: Some(reason.clone()),
+        ..entry.state.clone()
+    })
+}
+
+/// See [`Registry::shown_entries`].
+fn shown_entries(commands: &Commands, held: &Held) -> Vec<CommandSnapshot> {
+    commands
+        .values()
+        .map(|entry| match shown_state(held, entry) {
+            Some(state) => CommandSnapshot {
+                state,
+                ..entry.clone()
+            },
+            None => entry.clone(),
+        })
+        .collect()
+}
+
+/// The menu tree of [`Registry::snapshot`].
+fn menu_snapshot(commands: &Commands, held: &Held, revision: u64) -> MenuSnapshot {
+    // A held owner's entries show disabled with the reason
+    // (`set_held`): copies, few (one plugin's).
+    let shown_held: Vec<CommandSnapshot> = commands
+        .values()
+        .filter(|entry| !entry.declaration.path.is_empty())
+        .filter_map(|entry| {
+            shown_state(held, entry).map(|state| CommandSnapshot {
+                state,
+                ..entry.clone()
+            })
+        })
+        .collect();
+    let entries: Vec<_> = commands
+        .values()
+        .filter(|entry| !entry.declaration.path.is_empty())
+        .filter(|entry| !held.contains_key(&entry.key.owner))
+        .chain(shown_held.iter())
+        .collect();
+    MenuSnapshot {
+        revision,
+        roots: tree(&entries, 0, false),
+    }
+}
+
+/// See [`Registry::buttons`].
+fn buttons(commands: &Commands) -> Buttons<'_> {
+    let mut per_owner: BTreeMap<OwnerGeneration, usize> = BTreeMap::new();
+    let mut result = Buttons::default();
+    let mut declared: Vec<_> = commands
+        .values()
+        .filter(|entry| entry.declaration.button.is_some())
+        .collect();
+    declared.sort_by_key(|entry| entry.sequence);
+    let mut shown = Vec::new();
+    for entry in declared {
+        let count = per_owner.entry(entry.key.owner).or_default();
+        if *count < Registry::MAX_BUTTONS_PER_OWNER {
+            *count += 1;
+            shown.push(entry);
+        } else {
+            result.dropped.push((entry, "one button per plugin"));
+        }
+    }
+    let rank = |entry: &CommandSnapshot| {
+        (
+            entry.declaration.button.as_ref().map_or(0, |b| b.order),
+            entry.manifest.clone(),
+            entry.sequence,
+        )
+    };
+    shown.sort_by_key(|entry| rank(entry));
+    // Past the limit the highest ranks go to `»`, as in a narrow window.
+    result.overflow = shown.split_off(shown.len().min(Registry::MAX_BUTTONS));
+    result.shown = shown;
+    result
+}
+
+/// See [`Registry::resolve_execution`].
+fn resolve_execution(
+    commands: &Commands,
+    held: &Held,
+    owner: OwnerGeneration,
+    id: &str,
+) -> Result<Execution> {
+    let key = CommandKey {
+        owner,
+        local_id: id.into(),
+    };
+    let entry = commands.get(&key).ok_or(CommandError::Missing(key))?;
+    if let Some(reason) = held.get(&owner) {
+        return Err(CommandError::Disabled {
+            reason: Some(reason.clone()),
+        });
+    }
+    if entry.state.busy {
+        return Err(CommandError::Busy {
+            reason: entry.state.reason.clone(),
+        });
+    }
+    if !entry.state.enabled {
+        return Err(CommandError::Disabled {
+            reason: entry.state.reason.clone(),
+        });
+    }
+    Ok(Execution {
+        owner,
+        local_id: id.into(),
+        revision: entry.revision,
+    })
 }
 
 type Rank<'a> = (i32, &'a str, u64);
