@@ -238,7 +238,7 @@ impl Host {
         if self.core.info_panels.remove(&owner).is_some() {
             self.info_panels_changed();
         }
-        self.power.remove_owner(owner);
+        self.core.power.remove_owner(owner);
         // Its timeline layer and window settings stay through a standby,
         // held under `owner` until it wakes (`rekey`) or its standby ends
         // (`revoke`); a stop after a fault, and every other stop, removes them.

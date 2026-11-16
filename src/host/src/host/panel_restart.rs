@@ -77,6 +77,15 @@ impl Restarts {
     pub(crate) fn waiting(&self, key: u64) -> bool {
         self.plugins.values().any(|r| r.keys.contains(&key))
     }
+    /// Every waiting panel with the line over it (what the interface keeps,
+    /// `PanelsOp::Restarting`).
+    pub(crate) fn lines(&self) -> BTreeMap<u64, String> {
+        self.plugins
+            .values()
+            .flat_map(|r| r.keys.iter())
+            .filter_map(|&key| Some((key, self.text_of(key)?.to_owned())))
+            .collect()
+    }
     /// The line over panel `key` while it waits.
     pub(crate) fn text_of(&self, key: u64) -> Option<&str> {
         self.plugins
@@ -170,7 +179,9 @@ pub(crate) fn coming(state: &crate::supervisor::UnitState, starts: bool) -> Comi
 
 impl Host {
     /// `stop_run` of a run that the supervisor restarts: its panels stay
-    /// (dimmed, with the line) instead of going. The keys kept.
+    /// (dimmed, with the line) instead of going. The keys kept. Core code
+    /// on the core's record (plan step S2f(2)); the interface draws the
+    /// lines (`PanelsOp::Restarting`).
     pub(crate) fn keep_panels(&mut self, owner: u64) -> BTreeSet<u64> {
         let Some(plugin) = self.core.plugins.get(&owner) else {
             return BTreeSet::new();
@@ -193,20 +204,26 @@ impl Host {
             "shell: {id} restarts after a fault; its {} panel(s) stay meanwhile",
             keys.len()
         );
-        self.restarts.keep(&id, owner, keys.clone(), text);
-        self.sync_restart_lines();
+        self.core.restarts.keep(&id, owner, keys.clone(), text);
+        self.restarts_changed(None, true);
         keys
     }
     /// Plugin `id`'s kept panels move to its run `to` (at its spawn, or at
     /// its first `ui.mount`, whichever comes first).
     pub(crate) fn adopt_panels(&mut self, id: &str, to: u64) {
-        if self.restarts.owner_of(id).is_none_or(|owner| owner == to) {
+        if self
+            .core
+            .restarts
+            .owner_of(id)
+            .is_none_or(|owner| owner == to)
+        {
             return;
         }
-        let from = self.restarts.owner_of(id).unwrap_or(to);
+        let from = self.core.restarts.owner_of(id).unwrap_or(to);
         // A key the new run holds already (it cannot, before its first
         // mount) would be overwritten: such a kept panel goes instead.
         let clashing = self
+            .core
             .restarts
             .plugins
             .get(id)
@@ -219,20 +236,56 @@ impl Host {
             })
             .unwrap_or_default();
         for key in clashing {
-            self.restarts.done(key);
+            self.core.restarts.done(key);
+            self.restarts_changed(None, false);
             self.drop_panels(from, vec![key]);
         }
-        let moves = self.restarts.move_to(id, to, |key| rekey_panel(key, to));
+        let moves = self
+            .core
+            .restarts
+            .move_to(id, to, |key| rekey_panel(key, to));
         if moves.is_empty() {
             return;
         }
+        self.restarts_changed(None, false);
         crate::capabilities::ui_mount::rekey_panels(self, from, to);
         diag!("shell: {id}'s kept panel(s) now belong to its restart (owner {from} → {to})");
     }
     /// Panel `key` was mounted again by its restarted run, or went: the
-    /// line goes.
+    /// line goes (`UiInput::PanelBack`, from the interface's batch).
     pub(crate) fn panel_back(&mut self, key: u64) {
-        if self.restarts.done(key) {
+        if self.core.restarts.done(key) {
+            self.restarts_changed(Some(key), true);
+        }
+    }
+    /// The core's record of the waiting panels changed (plan step S2f(2)):
+    /// the interface gets the lines whole (`PanelsOp::Restarting`), at the
+    /// point of the change, so its copy is the record wherever it reads it.
+    /// `back` and `redraw` as there; a copy that did not change and asks
+    /// for nothing is not sent.
+    fn restarts_changed(&mut self, back: Option<u64>, redraw: bool) {
+        let lines = self.core.restarts.lines();
+        if lines == self.core.restart_lines_sent && back.is_none() && !redraw {
+            return;
+        }
+        self.core.restart_lines_sent = lines.clone();
+        self.ui_command(super::messages::UiCommand::Panels(
+            super::messages::PanelsOp::Restarting {
+                lines,
+                back,
+                redraw,
+            },
+        ));
+    }
+    /// The interface's side of `PanelsOp::Restarting` (plan step S2f(2)).
+    pub(crate) fn restarting_command(
+        &mut self,
+        lines: BTreeMap<u64, String>,
+        back: Option<u64>,
+        redraw: bool,
+    ) {
+        self.restart_lines = lines;
+        if let Some(key) = back {
             // The line had the keys (a click on it): they go back to the
             // video, as when a column's tab goes (`sync_column`; the detached
             // window's own key scope there). Anywhere else (the video, the
@@ -244,8 +297,21 @@ impl Host {
                     let _ = window.invoke("focus-video", &[]);
                 }
             }
+        }
+        if redraw || back.is_some() {
             self.sync_restart_lines();
         }
+    }
+    /// Panel `key` waits for its plugin's restart, as the interface's copy
+    /// has it (`Host::restart_lines`).
+    pub(crate) fn restart_waiting(&self, key: u64) -> bool {
+        #[cfg(debug_assertions)]
+        debug_assert_eq!(
+            self.restart_lines,
+            self.core.restarts.lines(),
+            "the interface's restart lines are behind the core's record"
+        );
+        self.restart_lines.contains_key(&key)
     }
     /// The places (a window, its generation, a slot) whose container shows
     /// panel `key` (`None`: every place).
@@ -279,14 +345,15 @@ impl Host {
     /// tick from `sync_panels`, and at once when a wait starts or ends). A
     /// line that goes also forgets whether it had the keys
     /// (`<slot>-restarting-focused`): the overlay is gone, and a later
-    /// `panel_back` must not read a stale `true`.
+    /// `panel_back` must not read a stale `true`. From the interface's copy
+    /// of the lines (plan step S2f(2)).
     pub(crate) fn sync_restart_lines(&self) {
         for (window, generation, slot) in self.restart_places(None) {
             let text = self
                 .panels
                 .shown(generation, slot)
-                .and_then(|key| self.restarts.text_of(key))
-                .unwrap_or("");
+                .and_then(|key| self.restart_lines.get(&key))
+                .map_or("", String::as_str);
             let property = composition::restarting_property(slot);
             let value = SValue::String(text.into());
             if window.get_property(&property).ok().as_ref() == Some(&value) {
@@ -301,15 +368,27 @@ impl Host {
     }
     /// The kept panels follow their plugins' restarts (every tick): moved
     /// to a restarted run, done once mounted again, gone when no restart
-    /// comes or the restarted run did not mount them again in time.
+    /// comes or the restarted run did not mount them again in time. A core
+    /// step on the core's record, the supervisor, the runs and the mounts
+    /// (plan step S2f(2)), still called at its point of the windowed tick;
+    /// the interface's parts go as `PanelsOp` commands.
     pub(crate) fn panel_restart_tick(&mut self) {
-        if self.restarts.plugins.is_empty() {
+        if self.core.restarts.plugins.is_empty() {
             return;
         }
+        // A hand-over to the core (plan step S2f(1)).
+        self.report_ui_facts();
         let mounts = &self.core.mounts;
-        self.restarts.prune(|key| mounts.contains_key(&key));
+        self.core.restarts.prune(|key| mounts.contains_key(&key));
+        self.restarts_changed(None, false);
         let now = self.core.now_ms();
-        let ids = self.restarts.plugins.keys().cloned().collect::<Vec<_>>();
+        let ids = self
+            .core
+            .restarts
+            .plugins
+            .keys()
+            .cloned()
+            .collect::<Vec<_>>();
         for id in ids {
             let state = self.core.supervisor.by_id(&id).and_then(|unit| {
                 let u = self.core.supervisor.unit(unit)?;
@@ -326,7 +405,7 @@ impl Host {
                     if self.core.plugins.contains_key(&pid) {
                         self.adopt_panels(&id, pid);
                     }
-                    let Some(entry) = self.restarts.plugins.get_mut(&id) else {
+                    let Some(entry) = self.core.restarts.plugins.get_mut(&id) else {
                         continue;
                     };
                     if !ready || entry.owner != pid {
@@ -349,12 +428,18 @@ impl Host {
                         "shell: {id} restarted without mounting {} kept panel(s) again; removed",
                         stale.len()
                     );
+                    let mut released = Vec::new();
                     for &key in &stale {
-                        self.restarts.done(key);
+                        self.core.restarts.done(key);
                         if let Some(mount) = self.core.mounts.get(&key) {
-                            self.images
-                                .release_view(mount.plugin, mount_view(mount.spec.slot));
+                            released.push((mount.plugin, mount_view(mount.spec.slot)));
                         }
+                    }
+                    self.restarts_changed(None, false);
+                    if !released.is_empty() {
+                        self.ui_command(super::messages::UiCommand::Panels(
+                            super::messages::PanelsOp::ImagesReleased(released),
+                        ));
                     }
                     // Under the crashed run: the restarted one never mounted them
                     // and is told nothing of them (no `ui.preparing`).
@@ -369,16 +454,17 @@ impl Host {
     /// the wait ends; `stop_run` removes (or keeps as placeholders) its
     /// panels as any of its own.
     pub(crate) fn restart_over(&mut self, id: &str) {
-        if self.restarts.forget(id).is_some() {
-            self.sync_restart_lines();
+        if self.core.restarts.forget(id).is_some() {
+            self.restarts_changed(None, true);
         }
     }
     /// No restart of plugin `id` comes: its kept panels go, as a stopped
     /// plugin's do.
     pub(crate) fn give_up_panels(&mut self, id: &str) {
-        let Some(entry) = self.restarts.forget(id) else {
+        let Some(entry) = self.core.restarts.forget(id) else {
             return;
         };
+        self.restarts_changed(None, false);
         diag!(
             "shell: {id} does not restart; its {} kept panel(s) go",
             entry.keys.len()

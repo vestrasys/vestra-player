@@ -711,6 +711,7 @@ impl Host {
             }
             UiInput::ColumnCommands(states) => self.core.column_command_states(states),
             UiInput::MountTick => self.release_held_mounts(),
+            UiInput::PanelBack(key) => self.panel_back(key),
             UiInput::MountRetry(changes) => {
                 for change in changes.into_iter().rev() {
                     self.core.mount_queue.push_front(change);

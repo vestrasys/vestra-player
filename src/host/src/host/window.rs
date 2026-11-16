@@ -484,11 +484,14 @@ impl Host {
     pub(crate) fn ui_report(&mut self, report: UiReport) {
         // Plan step S2f(1): the interface's facts reach the core before
         // anything the core does for this report reads them.
-        if !matches!(report, UiReport::UiFacts(_)) {
+        // (Not for a shown frame: its handling reads none of them.)
+        if !matches!(report, UiReport::UiFacts(_) | UiReport::FrameShown(_)) {
             self.report_ui_facts();
         }
         match report {
             UiReport::UiFacts(facts) => self.core.ui_facts = *facts,
+            // Plan step S2f(2): a video frame was shown (`power_tick`).
+            UiReport::FrameShown(at) => self.core.last_frame = Some(at),
             UiReport::WindowFacts(facts) => {
                 // A value older than the one applied is skipped (module
                 // `messages`: a coalesced snapshot can overtake a handoff).

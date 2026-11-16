@@ -277,11 +277,12 @@ pub(crate) fn source_title(source: &Value) -> String {
     )
 }
 
-impl Host {
+impl Core {
     /// Keep the sleep assertion in line with what is playing: ready and not
-    /// paused (media or stream), video when a frame arrived within a second.
+    /// paused (media or stream), video when a frame arrived within a second
+    /// (`last_frame`, from `UiReport::FrameShown`; plan step S2f(2)).
     pub(crate) fn power_tick(&mut self) {
-        let source = &self.core.last_source;
+        let source = &self.last_source;
         let playback = power::Playback {
             playing: source["phase"] == "ready" && source["paused"] == false,
             video: self
@@ -292,6 +293,8 @@ impl Host {
             diag!("host.error power {error}");
         }
     }
+}
+impl Host {
     /// `window.setAlwaysOnTop`: every ordinary window of the application at
     /// the floating level, applied again when windows open or close; not
     /// while a system dialog is open (`window_control::floating`), and

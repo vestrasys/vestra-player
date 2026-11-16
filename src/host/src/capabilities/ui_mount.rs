@@ -216,6 +216,18 @@ impl Host {
     /// The interface's side of `UiCommand::Panels` (plan step S2d(3)).
     pub(crate) fn panels_command(&mut self, op: PanelsOp) {
         match op {
+            // Plan step S2f(2): the waiting panels' lines, and the images of
+            // kept panels that go.
+            PanelsOp::Restarting {
+                lines,
+                back,
+                redraw,
+            } => self.restarting_command(lines, back, redraw),
+            PanelsOp::ImagesReleased(views) => {
+                for (plugin, view) in views {
+                    self.images.release_view(plugin, view);
+                }
+            }
             PanelsOp::Gone(panels) => self.panels_gone(&panels),
             PanelsOp::PlaceholderGone(key) => {
                 self.policy.remove_owner(key);
@@ -342,7 +354,7 @@ fn panel_of(host: &Host, owner: u64, params: &Value) -> std::result::Result<Opti
         .core
         .mounts
         .values()
-        .filter(|m| m.plugin == owner && !m.recorded && !host.restarts.waiting(m.spec.owner))
+        .filter(|m| m.plugin == owner && !m.recorded && !host.core.restarts.waiting(m.spec.owner))
         .map(|m| m.spec.owner);
     match (keys.next(), keys.next()) {
         (key, None) => Ok(key),
@@ -457,7 +469,7 @@ fn mount(
     // One panel per slot and plugin; a placeholder tab of this plugin
     // (sidebar-tabs.md) is taken over by its woken run's mount, a panel
     // kept over its restart by its restarted run's (`panel_restart.rs`).
-    if host.core.mounts.get(&key).is_some_and(|m| !m.recorded) && !host.restarts.waiting(key) {
+    if host.core.mounts.get(&key).is_some_and(|m| !m.recorded) && !host.core.restarts.waiting(key) {
         return Err(RpcError::new(
             "conflict",
             "this plugin already has a panel in this slot",
@@ -668,7 +680,7 @@ pub(crate) fn write_mount(
         .core
         .mounts
         .get(&key)
-        .filter(|mount| !mount.recorded && !host.restarts.waiting(key))
+        .filter(|mount| !mount.recorded && !host.restart_waiting(key))
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?
         .spec
         .slot;
@@ -831,7 +843,7 @@ fn interaction(
         .core
         .mounts
         .get(&key)
-        .filter(|_| !host.restarts.waiting(key))
+        .filter(|_| !host.core.restarts.waiting(key))
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
     let boolean = |key: &str| {
         params[key]
@@ -919,7 +931,7 @@ fn menu(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<V
         .core
         .mounts
         .get(&key)
-        .filter(|_| !host.restarts.waiting(key))
+        .filter(|_| !host.core.restarts.waiting(key))
         .ok_or_else(|| RpcError::new("missing", "owner has no ready mount"))?;
     let items = params["items"]
         .as_array()

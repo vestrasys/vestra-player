@@ -281,7 +281,7 @@ impl Host {
         self.activation_tick();
         self.on_demand_tick();
         step("plugin activation");
-        self.power_tick();
+        self.core.power_tick();
         self.diagnostics_tick();
         step("power and diagnostics");
         self.package_tick();

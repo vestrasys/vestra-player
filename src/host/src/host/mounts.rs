@@ -296,7 +296,7 @@ impl Host {
             // A panel kept over its plugin's restart, mounted again (from
             // its compiled file when that did not change) or removed: its
             // restart line goes (`panel_restart.rs`).
-            if result.is_ok() && self.restarts.waiting(change.key) {
+            if result.is_ok() && self.restart_waiting(change.key) {
                 if let Some(mount) = &change.contribution {
                     diag!(
                         "shell: {} mounted its {} panel again after its restart ({})",
@@ -309,7 +309,7 @@ impl Host {
                         }
                     );
                 }
-                self.panel_back(change.key);
+                self.ui_report(UiReport::Input(messages::UiInput::PanelBack(change.key)));
             }
             let placeholders = change
                 .contribution
@@ -1136,7 +1136,7 @@ impl Host {
             }
             // Its process is gone: dropped, never held for the next run
             // (a stale click). The panel takes no pointer meanwhile.
-            if self.restarts.waiting(event.owner) {
+            if self.restart_waiting(event.owner) {
                 diag!(
                     "mount callback {} of a panel waiting for its plugin's restart: dropped",
                     event.callback

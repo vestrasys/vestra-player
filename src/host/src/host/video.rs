@@ -240,7 +240,8 @@ impl Host {
             .and_then(|feed| feed.put(frame.buffer.clone()));
         let image = slint::Image::from_rgb8(frame.buffer);
         self.last_image = Some(image.clone());
-        self.last_frame = Some(set);
+        // The core keeps the display awake from it (plan step S2f(2)).
+        self.ui_report(messages::UiReport::FrameShown(set));
         match texture {
             Some(texture) => {
                 // The reused texture is filled in place: set its image only
