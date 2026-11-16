@@ -1,6 +1,6 @@
 //! `clipboard`: reading and writing the system clipboard (crate::clipboard).
 use super::{Capability, Handled, Info, Recorded};
-use crate::host::{Host, Reply, RpcError};
+use crate::host::{Core, Reply, RpcError};
 use serde_json::Value;
 
 pub struct Clipboard;
@@ -20,12 +20,12 @@ impl Capability for Clipboard {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, _: &Reply, method: &str, params: &Value) -> Handled {
-        if host.core.headless {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, _: &Reply, method: &str, params: &Value) -> Handled {
+        if core.headless {
             return Err(RpcError::new(
                 "unavailable",
                 "the clipboard is unavailable in headless mode",

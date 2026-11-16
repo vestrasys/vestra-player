@@ -1,7 +1,7 @@
 //! `secrets`: sign-in details in the system keychain (system.rs,
 //! secret_index.rs).
 use super::{Capability, Handled, Info, Recorded};
-use crate::host::{Host, Reply};
+use crate::host::{Core, Reply};
 use serde_json::Value;
 
 pub struct Secrets;
@@ -17,11 +17,11 @@ impl Capability for Secrets {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-        host.core.system_dispatch(reply, method, params)
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
+        core.system_dispatch(reply, method, params)
     }
 }

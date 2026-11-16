@@ -630,7 +630,7 @@ impl Core {
     }
 }
 
-impl Host {
+impl Core {
     /// `settings.*` (rows 83a–83d; K7, plan step S2c(4)). The registry is
     /// the core's (`Core::settings`), the open options window the
     /// interface's (`Host::settings`, [`Options`]). `register` is answered
@@ -651,12 +651,11 @@ impl Host {
         match method {
             "settings.register" => {
                 let origin = self
-                    .core
                     .plugins
                     .get(&owner)
                     .map(process::Plugin::origin)
                     .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
-                let (page, refused) = self.core.settings_page(owner, &origin, params)?;
+                let (page, refused) = self.settings_page(owner, &origin, params)?;
                 // Row patches apply on the initial properties again (seq 0):
                 // the interface drops the page's write records (plan step
                 // S2c(6)).
@@ -666,7 +665,7 @@ impl Host {
                 });
                 // A woken plugin registers its recorded page again: the same
                 // files need no compile (the recording is of this package).
-                if let Some(before) = self.core.settings.reregister(&page, sent_page(params)) {
+                if let Some(before) = self.settings.reregister(&page, sent_page(params)) {
                     // The same source: an open window keeps its component
                     // and its native window; only what changed is written.
                     // What the window reports to the plugin (a value that
@@ -681,7 +680,7 @@ impl Host {
                         before: Box::new(before),
                         page: Box::new(page),
                     }));
-                    self.core.then(crate::host::outbox::Then::Registered {
+                    self.then(crate::host::outbox::Then::Registered {
                         reply: reply.clone(),
                         refused,
                     });
@@ -691,30 +690,24 @@ impl Host {
                 // registration instead of the shared window: on the
                 // `settings-check` thread (`spawn_checker`); the reply waits.
                 let checked = source(&[&page])?;
-                self.core
-                    .settings
-                    .sent
-                    .insert(page.serial, sent_page(params));
-                if !self.core.settings_queue_check(page.serial, checked.clone()) {
+                self.settings.sent.insert(page.serial, sent_page(params));
+                if !self.settings_queue_check(page.serial, checked.clone()) {
                     // No thread: compiled here, as before.
                     if let Err(error) = composition::build(checked, "OptionsWindow") {
-                        self.core.settings.forget_gone();
+                        self.settings.forget_gone();
                         return Err(RpcError::new("ui-prepare", format!("{error:#}")));
                     }
                     self.settings_add(page, refused);
                     return Ok(Some(Value::Null));
                 }
-                self.core
-                    .settings
-                    .checking
-                    .push((reply.clone(), page, refused));
+                self.settings.checking.push((reply.clone(), page, refused));
                 Ok(None)
             }
             "settings.unregister" => {
                 let id = params_page(params)?.to_owned();
                 // Still compiling: the registration ends with an error and the
                 // page is never added.
-                if let Some(pending) = self.core.settings_take_checking(owner, &id) {
+                if let Some(pending) = self.settings_take_checking(owner, &id) {
                     self.respond(
                         pending,
                         Err(RpcError::new(
@@ -723,7 +716,7 @@ impl Host {
                         )),
                     );
                 }
-                if self.core.settings_unregister(owner, &id) {
+                if self.settings_unregister(owner, &id) {
                     self.ui_command(UiCommand::Settings(SettingsOp::Removed { owner, id }));
                 }
                 Ok(Some(Value::Null))
@@ -731,11 +724,10 @@ impl Host {
             "settings.set" => {
                 // A large array converted on the reader thread (P3): its
                 // whole value was taken out of `params`.
-                let prepared = self.core.take_prepared(reply);
+                let prepared = self.take_prepared(reply);
                 let id = params_page(params)?;
                 string(params, "property")?;
-                self.core
-                    .settings
+                self.settings
                     .page(owner, id)
                     .ok_or_else(|| RpcError::new("missing", "page not registered"))?;
                 self.ui_command(UiCommand::Settings(SettingsOp::Set {
@@ -746,13 +738,12 @@ impl Host {
                 Ok(None)
             }
             "settings.show" => {
-                if self.core.headless {
+                if self.headless {
                     return Err(RpcError::new("unavailable", "no user interface"));
                 }
                 if !params["id"].is_null() {
                     let id = params_page(params)?;
-                    self.core
-                        .settings
+                    self.settings
                         .page(owner, id)
                         .ok_or_else(|| RpcError::invalid("not a settings page of this plugin"))?;
                 }
@@ -765,6 +756,8 @@ impl Host {
             _ => Err(RpcError::new("unsupported", "unknown settings method")),
         }
     }
+}
+impl Host {
     /// The interface's side of `UiCommand::Settings` (K7; plan step
     /// S2c(4)): the open options window follows the registry, and `set`
     /// and `show` are carried out and answered (`UiReport::Answered`).
@@ -1063,13 +1056,15 @@ impl Core {
     }
     /// Replays a recorded `settings.register` for a parked `owner`: the page
     /// is added as recorded, without a compile (it compiled when recorded,
-    /// and the recording is of this package). The page added.
-    fn settings_replay(
+    /// and the recording is of this package); an open window is rebuilt
+    /// (`SettingsOp::Added`). Plan step S2f(3): one core function (the
+    /// interface's wrapper of S2c(4) moved here).
+    pub(crate) fn settings_replay(
         &mut self,
         owner: u64,
         origin: &crate::host::Origin,
         params: &Value,
-    ) -> std::result::Result<Page, RpcError> {
+    ) -> std::result::Result<(), RpcError> {
         let (page, _) = self.settings_page(owner, origin, params)?;
         if self.settings.page(owner, &page.id).is_some() {
             return Err(RpcError::invalid(format!(
@@ -1080,23 +1075,11 @@ impl Core {
         self.settings.sent.insert(page.serial, sent_page(params));
         self.settings.recorded.insert(page.serial);
         self.settings.pages.push(page.clone());
-        Ok(page)
-    }
-}
-
-impl Host {
-    /// Replays a recorded `settings.register` for a parked `owner`
-    /// (`Core::settings_replay`); an open window is rebuilt.
-    pub(crate) fn settings_replay(
-        &mut self,
-        owner: u64,
-        origin: &crate::host::Origin,
-        params: &Value,
-    ) -> std::result::Result<(), RpcError> {
-        let page = self.core.settings_replay(owner, origin, params)?;
         self.ui_command(UiCommand::Settings(SettingsOp::Added(Box::new(page))));
         Ok(())
     }
+}
+impl Host {
     /// Open (or rebuild) the window, select the current page, bring it front.
     fn settings_open(&mut self) -> Result<()> {
         if self.settings.open.is_none() || self.settings.stale {
@@ -1366,12 +1349,14 @@ impl Host {
             }
         }
     }
+}
+impl Core {
     /// A checked page joins the core's registry (`Core::settings_insert`);
     /// an open window is rebuilt (`SettingsOp::Added`, where today's code
     /// marked it); its refused initial properties are reported.
     fn settings_add(&mut self, page: Page, refused: Vec<RpcError>) {
         let owner = page.owner;
-        self.core.settings_insert(page.clone());
+        self.settings_insert(page.clone());
         self.ui_command(UiCommand::Settings(SettingsOp::Added(Box::new(page))));
         self.report_refused(owner, refused);
     }
@@ -1383,7 +1368,6 @@ impl Host {
         result: std::result::Result<(), String>,
     ) {
         let Some(index) = self
-            .core
             .settings
             .checking
             .iter()
@@ -1391,9 +1375,9 @@ impl Host {
         else {
             return;
         };
-        let (reply, page, refused) = self.core.settings.checking.remove(index);
-        if !self.core.plugins.contains_key(&reply.owner) {
-            self.core.settings.forget_gone();
+        let (reply, page, refused) = self.settings.checking.remove(index);
+        if !self.plugins.contains_key(&reply.owner) {
+            self.settings.forget_gone();
             return;
         }
         match result {
@@ -1402,11 +1386,13 @@ impl Host {
                 self.respond(reply, Ok(Value::Null));
             }
             Err(message) => {
-                self.core.settings.forget_gone();
+                self.settings.forget_gone();
                 self.respond(reply, Err(RpcError::new("ui-prepare", message)))
             }
         }
     }
+}
+impl Host {
     /// Pages added or removed while the window is open: rebuild it.
     pub(crate) fn settings_tick(&mut self) {
         if self.settings.stale

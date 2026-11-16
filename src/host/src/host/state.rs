@@ -175,16 +175,16 @@ pub(crate) fn policy_slot(slot: composition::Slot) -> Option<window_state::Slot>
     }
 }
 
-impl Host {
+impl Core {
     /// Re-send the last source state with the current sequence flags.
     pub(crate) fn rebroadcast_source(&mut self) {
-        if self.core.last_source.is_object() {
-            let mut state = self.core.last_source.clone();
-            self.core.patch_source(&mut state);
-            self.core.last_source = state.clone();
+        if self.last_source.is_object() {
+            let mut state = self.last_source.clone();
+            self.patch_source(&mut state);
+            self.last_source = state.clone();
             self.source_shown();
             self.broadcast("source.state", state);
-            self.core.core_action_states();
+            self.core_action_states();
         }
     }
     /// The core's last `source.state` reaches the interface's copy
@@ -192,9 +192,11 @@ impl Host {
     /// the core replaced its own: what the interface reads from the source
     /// from here on is what the core has.
     pub(crate) fn source_shown(&mut self) {
-        let source = Arc::new(self.core.last_source.clone());
+        let source = Arc::new(self.last_source.clone());
         self.ui_command(UiCommand::Snapshot(UiSnapshot::LastSource(source)));
     }
+}
+impl Host {
     /// The interface's side of `UiSnapshot::Source` (plan step S2d(4)):
     /// what the core decided `source.state` shows.
     pub(crate) fn show_source(&mut self, shown: SourceShown) {
@@ -317,21 +319,23 @@ impl Host {
             }
         }
     }
+}
+impl Core {
     /// `{ fullscreen, maximized, videoArea, pictureInPicture }` of the main
     /// window (zero without one; `maximized` is false while fullscreen),
     /// with `appearance`, the file resolvers' extensions (`fileTypes`, from
     /// the `resolvers.fileTypes` event), `language` and `locale`.
     pub(crate) fn window_state(&self) -> Value {
         #[cfg(debug_assertions)]
-        self.core.check_settled(&[super::outbox::Fact::Pip]);
-        let facts = &self.core.window_facts;
+        self.check_settled(&[super::outbox::Fact::Pip]);
+        let facts = &self.window_facts;
         json!({"fullscreen":facts["fullscreen"] == true,
             "maximized":reported_maximized(facts),
             "videoArea":{"width":facts["videoArea"]["width"].as_f64().unwrap_or(0.),
                 "height":facts["videoArea"]["height"].as_f64().unwrap_or(0.)},
             "pictureInPicture":self.pip_state(),
-            "appearance":self.core.theme(),"fileTypes":self.core.file_types,
-            "language":self.core.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
+            "appearance":self.theme(),"fileTypes":self.file_types,
+            "language":self.language_preference().unwrap_or_else(|| i18n::SYSTEM.into()),
             "locale":i18n::locale()})
     }
     /// `WindowState.pictureInPicture`: offered here, and the window showing,
@@ -339,9 +343,11 @@ impl Host {
     /// (`UiFacts::pip`, plan step S2f(3)): the live state, not R13's
     /// handoff of the flag (S3a).
     pub(crate) fn pip_state(&self) -> Value {
-        let pip = &self.core.ui_facts.pip;
+        let pip = &self.ui_facts.pip;
         json!({"supported":pip.supported,"active":pip.active})
     }
+}
+impl Host {
     /// `WindowState.pictureInPicture` as the interface has it now: what the
     /// window tick measures into the window facts (the live state; the
     /// core's `pip_state` reads its copy, plan step S2f(3)).
@@ -359,6 +365,8 @@ impl Host {
             holder: self.pip.holder(),
         }
     }
+}
+impl Core {
     /// `window.setVideoArea { width, height }`: resize the window so the video
     /// column gets that size (bars added, fitted to the screen). Answered when
     /// the layout shows it, or after a second. Plan step S2d: the core
@@ -385,6 +393,8 @@ impl Host {
         }));
         Ok(())
     }
+}
+impl Host {
     /// The interface's side of `WindowOp::VideoArea` (plan step S2d): fit
     /// the main window and report the size the video waits for
     /// (`UiReport::AreaFitted`), or why it cannot (`UiReport::Answered`).
@@ -463,14 +473,18 @@ impl Host {
             json!({"width":fit.video.0,"height":fit.video.1,"clamped":fit.clamped}),
         ))
     }
+}
+impl Core {
     /// The core's side of `UiReport::VideoArea` (plan step S2d): answer the
     /// pending `window.setVideoArea` requests the laid-out `video` size
     /// shows, or whose deadline passed by `now`.
     pub(crate) fn answer_video_area(&mut self, video: (f64, f64), now: u64) {
-        for pending in self.core.due_area_replies(video, now) {
+        for pending in self.due_area_replies(video, now) {
             self.respond(pending.reply, Ok(pending.result));
         }
     }
+}
+impl Host {
     /// The window settings in effect reach the interface's copies
     /// (`Core::window_settings`; plan step S2c(7)), in place, right where
     /// it reads them (`apply_on_top`, `window_tick`), as the binding table
@@ -483,13 +497,17 @@ impl Host {
             self.report_ui_facts();
         }
     }
+}
+impl Core {
     /// The core's info panels changed (`osd.panel`, a plugin stopped): the
     /// interface shows its new copy (`UiSnapshot::InfoPanels`; plan step
     /// S2c(7)), in place.
     pub(crate) fn info_panels_changed(&mut self) {
-        let panels = Arc::new(self.core.info_panels.clone());
+        let panels = Arc::new(self.info_panels.clone());
         self.ui_command(UiCommand::Snapshot(UiSnapshot::InfoPanels(panels)));
     }
+}
+impl Host {
     pub(crate) fn show_info_panels(&self) {
         if let Some(shell) = &self.shell
             && let Ok(value) =
@@ -498,17 +516,15 @@ impl Host {
             let _ = shell.set_property("info-panels", value);
         }
     }
+}
+impl Core {
     /// Current layout of both positions, or `pending` until the shell is measured.
     pub(crate) fn layout_state(&self) -> std::result::Result<Value, RpcError> {
         #[cfg(debug_assertions)]
         {
-            self.check_ui_facts();
-            self.core
-                .check_settled(&[super::outbox::Fact::NoVideo, super::outbox::Fact::Tabs]);
+            self.check_settled(&[super::outbox::Fact::NoVideo, super::outbox::Fact::Tabs]);
         }
-        if self.core.window_facts["shellGeneration"].as_u64()
-            != Some(self.core.ui_facts.shell_generation)
-        {
+        if self.window_facts["shellGeneration"].as_u64() != Some(self.ui_facts.shell_generation) {
             return Err(RpcError::new(
                 "pending",
                 "current shell layout is not yet confirmed",
@@ -517,19 +533,16 @@ impl Host {
         // `panels`: the slot's panels in tab order (sidebar tabs); `owner`
         // is the current one's.
         let bottom = self
-            .core
             .mounts
             .values()
             .filter(|m| m.spec.slot == composition::Slot::Bottom)
             .map(|m| m.spec.owner)
             .collect::<Vec<_>>();
         // The tab orders from the core's copy (plan step S2c(5)).
-        #[cfg(debug_assertions)]
-        self.check_panel_tabs();
-        let sidebar = &self.core.panel_tabs.sidebar;
-        let adjust = &self.core.panel_tabs.adjust;
+        let sidebar = &self.panel_tabs.sidebar;
+        let adjust = &self.panel_tabs.adjust;
         let slot = |name: &str| {
-            let slot = &self.core.window_facts["slots"][name];
+            let slot = &self.window_facts["slots"][name];
             if slot.is_null() {
                 return Value::Null;
             }
@@ -540,16 +553,18 @@ impl Host {
             };
             let panels = owners
                 .iter()
-                .filter_map(|owner| self.core.mounts.get(owner))
+                .filter_map(|owner| self.mounts.get(owner))
                 .map(|m| json!({"owner":m.spec.owner,"plugin":m.manifest,"title":m.title}))
                 .collect::<Vec<_>>();
             json!({"owner":slot["owner"],"preferred":slot["preferred"],"effective":slot["effective"],
                 "reason":slot["reason"],"detached":slot["detached"],"panels":panels})
         };
         Ok(
-            json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"adjust":slot("adjust"),"backdrop":self.core.backdrop_state()}),
+            json!({"bottom":slot("bottom"),"sidebar":slot("sidebar"),"adjust":slot("adjust"),"backdrop":self.backdrop_state()}),
         )
     }
+}
+impl Host {
     /// `panels.backdrop.state`: `{ owner, effective }`, null without a backdrop.
     pub(crate) fn backdrop_state(&self) -> Value {
         self.core

@@ -261,62 +261,114 @@ impl Host {
         };
         drain(receiver, began, handled, |event| handle(self, event));
     }
-    /// The second half of the core's turn: its periodic steps, in their
-    /// order (activation, on-demand start, power, diagnostics, packages,
-    /// notifications, the timeline, files to open). With a window also the
-    /// two steps the windowed tick ran elsewhere before: the binding
-    /// table's disabled set (it followed the theme step) and the state
-    /// file's debounced write (at the end of the window tick). A headless
-    /// run never ran them and still does not. `turn` names the steps for
-    /// the windowed tick's record.
+    /// The second half of the core's turn: its periodic steps
+    /// ([`Core::STEPS`]), in their order, each followed by what it asked of
+    /// the interface (plan step S2f(3), `outbox.rs`). A headless run never
+    /// ran the windowed steps and still does not. `turn` names the steps
+    /// for the windowed tick's record.
     pub(crate) fn core_steps(&mut self, mut turn: Option<&mut super::stall::Turn>) {
         // The interface's facts as the core's steps read them (plan step
         // S2f(1)).
         self.report_ui_facts();
-        let mut step = |what: &'static str| {
-            if let Some(turn) = turn.as_deref_mut() {
+        #[cfg(debug_assertions)]
+        self.check_copies();
+        for step in Core::STEPS {
+            if step.windowed && self.core.headless {
+                break;
+            }
+            (step.run)(&mut self.core);
+            self.drain_outbox();
+            if let (Some(what), Some(turn)) = (step.ends, turn.as_deref_mut()) {
                 turn.step(what);
             }
-        };
-        // What each step asks of the interface is carried out before the
-        // next one (plan step S2f(3), `outbox.rs`).
-        self.activation_tick();
-        self.drain_outbox();
-        self.on_demand_tick();
-        self.drain_outbox();
-        step("plugin activation");
-        self.core.power_tick();
-        self.diagnostics_tick();
-        self.drain_outbox();
-        step("power and diagnostics");
-        self.package_tick();
-        self.drain_outbox();
-        step("packages");
-        self.notify_tick();
-        self.drain_outbox();
-        self.timeline_tick();
-        self.drain_outbox();
-        self.open_files_tick();
-        self.drain_outbox();
-        step("notifications, timeline, open files");
-        if self.core.headless {
-            return;
         }
+    }
+}
+
+/// One periodic step of the core ([`Core::STEPS`]).
+pub(crate) struct Step {
+    pub(crate) run: fn(&mut Core),
+    /// The windowed tick's record names the steps up to here so.
+    pub(crate) ends: Option<&'static str>,
+    /// Only with a window (the headless driver never ran it).
+    pub(crate) windowed: bool,
+}
+
+impl Core {
+    /// The second half of the core's turn (plan step S2e; S2f(3): `Core`
+    /// only): activation, on-demand start, power, diagnostics, packages,
+    /// notifications, the timeline, files to open; with a window also the
+    /// two steps the windowed tick ran elsewhere before (`window_steps`).
+    pub(crate) const STEPS: [Step; 10] = [
+        Step {
+            run: Core::activation_tick,
+            ends: None,
+            windowed: false,
+        },
+        Step {
+            run: Core::on_demand_tick,
+            ends: None,
+            windowed: false,
+        },
+        Step {
+            run: Core::on_demand_check,
+            ends: Some("plugin activation"),
+            windowed: false,
+        },
+        Step {
+            run: Core::power_tick,
+            ends: None,
+            windowed: false,
+        },
+        Step {
+            run: Core::diagnostics_tick,
+            ends: Some("power and diagnostics"),
+            windowed: false,
+        },
+        Step {
+            run: Core::package_tick,
+            ends: Some("packages"),
+            windowed: false,
+        },
+        Step {
+            run: Core::notify_tick,
+            ends: None,
+            windowed: false,
+        },
+        Step {
+            run: Core::timeline_tick,
+            ends: None,
+            windowed: false,
+        },
+        Step {
+            run: Core::open_files_tick,
+            ends: Some("notifications, timeline, open files"),
+            windowed: false,
+        },
+        Step {
+            run: Core::window_steps,
+            ends: Some("bindings and state file"),
+            windowed: true,
+        },
+    ];
+    /// The two windowed steps: the binding table follows the registry's
+    /// disabled commands (it followed the theme step), and the state file's
+    /// debounced write (at the end of the window tick before).
+    fn window_steps(&mut self) {
         // The binding table follows the registry's disabled commands (keys
         // bound to them pass on). Only a change is a write: the interface's
         // copy of the table is made again only then (`host/tables.rs`).
-        if self.core.commands.revision() != self.core.binding_revision {
-            self.core.binding_revision = self.core.commands.revision();
-            let disabled = self.core.commands.disabled();
-            if *self.core.bindings().disabled() != disabled {
-                self.core.bindings_mut().set_disabled(disabled);
+        if self.commands.revision() != self.binding_revision {
+            self.binding_revision = self.commands.revision();
+            let disabled = self.commands.disabled();
+            if *self.bindings().disabled() != disabled {
+                self.bindings_mut().set_disabled(disabled);
             }
         }
         // The state file is the core's to write (plan step S2c(7)), once a
         // second after its last change.
-        let now = self.core.now_ms();
-        self.core.ui_state.save_if_due(now);
-        step("bindings and state file");
+        let now = self.now_ms();
+        self.ui_state.save_if_due(now);
     }
 }
 #[cfg(test)]

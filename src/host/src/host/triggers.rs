@@ -31,25 +31,25 @@ pub(crate) struct TriggerState {
     pub muted: BTreeMap<String, Vec<(String, Value)>>,
 }
 
-impl Host {
+impl Core {
     /// The facts conditions read, now: a trigger's and a command's state
     /// (`capabilities::refresh_conditions`) read the same.
     pub(crate) fn condition_facts(&self) -> Facts {
-        let language = self.core.language_preference();
+        let language = self.language_preference();
         let mut facts = Facts::new(
-            &self.core.last_source,
-            &self.core.window_facts,
-            crate::ui::theme::known(self.core.theme()),
+            &self.last_source,
+            &self.window_facts,
+            crate::ui::theme::known(self.theme()),
             language.as_deref().unwrap_or(i18n::SYSTEM),
         );
-        facts.subtitle_track = self.core.trigger_state.subtitle.clone();
+        facts.subtitle_track = self.trigger_state.subtitle.clone();
         facts
     }
     /// `source.state`, `window.state` or `appearance.changed` was broadcast,
     /// or the subtitle track changed: the conditions that read what changed
     /// are evaluated.
     pub(crate) fn triggers_facts(&mut self) {
-        if self.core.triggers.is_empty() {
+        if self.triggers.is_empty() {
             return;
         }
         self.triggers_facts_now();
@@ -59,35 +59,29 @@ impl Host {
     /// list binds to the current source and T3 reads the state now.
     pub(crate) fn triggers_facts_now(&mut self) {
         let facts = self.condition_facts();
-        let source = self.core.last_source["stamp"]["generation"]
+        let source = self.last_source["stamp"]["generation"]
             .as_u64()
             .unwrap_or(0);
-        let position = self.core.last_source["position"].as_f64();
-        let out = self
-            .core
-            .triggers
-            .set_facts(facts, source, position, wall_ms());
+        let position = self.last_source["position"].as_f64();
+        let out = self.triggers.set_facts(facts, source, position, wall_ms());
         self.deliver_fired(out);
     }
     /// The playback worker's primary subtitle track changed: commands whose
     /// state reads it (`when.subtitleTrack`) follow it, as do triggers.
     pub(crate) fn triggers_subtitle(&mut self, track: Option<String>) {
-        self.core.trigger_state.subtitle = track;
+        self.trigger_state.subtitle = track;
         capabilities::refresh_conditions(self);
         self.triggers_facts();
     }
     /// The position model reported (`Event::Position`).
     pub(crate) fn triggers_position(&mut self, report: Report) {
-        self.core.trigger_state.serial = self.core.trigger_state.serial.max(report.serial);
-        let out = self.core.triggers.position(
-            report.source,
-            report.position,
-            report.continuous,
-            wall_ms(),
-        );
+        self.trigger_state.serial = self.trigger_state.serial.max(report.serial);
+        let out =
+            self.triggers
+                .position(report.source, report.position, report.continuous, wall_ms());
         // A report disarms the model until it has the next boundaries:
         // they go again, changed or not.
-        self.core.trigger_state.watch = (u64::MAX, Vec::new());
+        self.trigger_state.watch = (u64::MAX, Vec::new());
         self.deliver_fired(out);
     }
     /// Every UI tick: the time conditions whose bound the clock reached
@@ -95,13 +89,13 @@ impl Host {
     /// timer, and a changed system clock or a resume from sleep is seen at
     /// the next tick), the registry's diagnostic lines.
     pub(crate) fn triggers_tick(&mut self) {
-        for line in self.core.triggers.diagnostics() {
+        for line in self.triggers.diagnostics() {
             diag!("{line}");
         }
-        if self.core.triggers.is_empty() {
+        if self.triggers.is_empty() {
             return;
         }
-        let out = self.core.triggers.time(wall_ms());
+        let out = self.triggers.time(wall_ms());
         self.deliver_fired(out);
     }
     /// Delivers `out` (design §4.9), then hands over the boundaries. A
@@ -113,17 +107,14 @@ impl Host {
     pub(crate) fn deliver_fired(&mut self, out: Vec<Notification>) {
         for notification in out {
             let key = notification.merge_key();
-            let data = notification.data(&self.core.last_source);
+            let data = notification.data(&self.last_source);
             let message = json!({"event":triggers::EVENT,"data":data});
             match self.fire(&notification.plugin, key, message) {
-                Ok(()) => self.core.triggers.delivered(&notification.plugin, &data),
-                Err(why) => self
-                    .core
-                    .triggers
-                    .undelivered(&notification.plugin, &data, why),
+                Ok(()) => self.triggers.delivered(&notification.plugin, &data),
+                Err(why) => self.triggers.undelivered(&notification.plugin, &data, why),
             }
         }
-        self.core.sync_trigger_watch();
+        self.sync_trigger_watch();
     }
     /// One notification for `plugin`: to its process when it runs (the SDK
     /// holds one that comes before `activate()` declared its triggers; as a
@@ -133,42 +124,39 @@ impl Host {
     /// standby; a wake in standby; kept over the start-up mute. `Err`: it
     /// could not be delivered, and why.
     fn fire(&mut self, plugin: &str, key: String, message: Value) -> Result<(), &'static str> {
-        let now = self.core.now_ms();
-        self.core.supervisor.set_now(now);
-        let running = self.core.supervisor.process_of(plugin);
+        let now = self.now_ms();
+        self.supervisor.set_now(now);
+        let running = self.supervisor.process_of(plugin);
         if let Some(pid) = running
-            && self.core.plugins.contains_key(&pid.0)
-            && self.core.supervisor.waking(pid).is_none()
+            && self.plugins.contains_key(&pid.0)
+            && self.supervisor.waking(pid).is_none()
         {
-            self.core.supervisor.delivering(pid);
+            self.supervisor.delivering(pid);
             self.fire_to(pid, message);
             return Ok(());
         }
         // A start without its process yet holds it under the holder it
         // replaces, as `wake` does (`Supervisor::trigger_pid`).
         let pid = running
-            .or_else(|| self.core.supervisor.trigger_pid(plugin))
+            .or_else(|| self.supervisor.trigger_pid(plugin))
             .ok_or("it has no process to take it")?;
         let trigger = Trigger::event(key.clone(), message.clone());
-        match self.core.supervisor.wake(pid, &trigger) {
+        match self.supervisor.wake(pid, &trigger) {
             Delivery::Started => {
                 self.wake_started(pid.0);
                 Ok(())
             }
             Delivery::Held => Ok(()),
-            Delivery::Now if self.core.plugins.contains_key(&pid.0) => {
+            Delivery::Now if self.plugins.contains_key(&pid.0) => {
                 self.fire_to(pid, message);
                 Ok(())
             }
-            Delivery::Forward(to) if self.core.plugins.contains_key(&to.0) => {
+            Delivery::Forward(to) if self.plugins.contains_key(&to.0) => {
                 self.fire_to(to, message);
                 Ok(())
             }
-            Delivery::Dropped
-                if !self.core.on_demand.caught_up && self.core.supervisor.events_muted() =>
-            {
+            Delivery::Dropped if !self.on_demand.caught_up && self.supervisor.events_muted() => {
                 let held = self
-                    .core
                     .trigger_state
                     .muted
                     .entry(plugin.to_owned())
@@ -187,7 +175,6 @@ impl Host {
     /// fault, which evaluates its conditions again (T13).
     fn fire_to(&mut self, pid: Pid, message: Value) {
         let failed = self
-            .core
             .plugins
             .get_mut(&pid.0)
             .and_then(|p| p.send(message).err());
@@ -198,22 +185,22 @@ impl Host {
     /// The start-up mute ended (`wake_missed`): what is kept is evaluated
     /// once (T13), and what the mute kept is delivered.
     pub(crate) fn triggers_caught_up(&mut self) {
-        let muted = std::mem::take(&mut self.core.trigger_state.muted);
+        let muted = std::mem::take(&mut self.trigger_state.muted);
         for (plugin, held) in muted {
             for (key, message) in held {
                 let data = message["data"].clone();
                 // Counted as delivered when the mute kept it: a failure now
                 // takes back what the plugin was taken to have heard.
                 match self.fire(&plugin, key, message) {
-                    Ok(()) => self.core.triggers.delivered(&plugin, &data),
-                    Err(why) => self.core.triggers.undelivered_replay(&plugin, &data, why),
+                    Ok(()) => self.triggers.delivered(&plugin, &data),
+                    Err(why) => self.triggers.undelivered_replay(&plugin, &data, why),
                 }
             }
         }
-        if !self.core.triggers.is_empty() {
+        if !self.triggers.is_empty() {
             self.triggers_facts_now();
         }
-        let out = self.core.triggers.evaluate_all(wall_ms());
+        let out = self.triggers.evaluate_all(wall_ms());
         self.deliver_fired(out);
     }
     /// Run `owner` of plugin `id` stops for `reason`: after a fault,
@@ -224,12 +211,10 @@ impl Host {
     pub(crate) fn triggers_stopped(&mut self, id: &str, reason: StopReason) {
         match reason {
             StopReason::Failed => {
-                let out = self.core.triggers.fault(id, wall_ms());
+                let out = self.triggers.fault(id, wall_ms());
                 self.deliver_fired(out);
             }
-            StopReason::Reload if self.core.development.contains_key(id) => {
-                self.core.triggers.reloaded(id)
-            }
+            StopReason::Reload if self.development.contains_key(id) => self.triggers.reloaded(id),
             _ => {}
         }
     }

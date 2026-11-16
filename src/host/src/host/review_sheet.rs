@@ -464,7 +464,7 @@ impl Host {
         let (title, icon) = match self.core.lead.as_ref().filter(|lead| lead.owner == owner) {
             Some(lead) => (lead.row.title.clone(), lead.row.icon.clone()),
             None => (
-                crate::capabilities::shown_name(self, owner),
+                crate::capabilities::shown_name(&self.core, owner),
                 commands::ButtonIcon::Name("ai".into()),
             ),
         };

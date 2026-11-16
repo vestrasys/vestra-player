@@ -397,6 +397,8 @@ impl Host {
         let facts = self.window_facts.clone();
         Some(Box::new(self.window_facts_report(Some(&shell), facts)))
     }
+}
+impl Core {
     /// The core's side of `UiReport::MountPreparing` (R6): the changes left
     /// the batching queue, so their plugins hear `ui.preparing`
     /// (`phase: preparing`), in order.
@@ -424,7 +426,7 @@ impl Host {
             handoff,
             placeholders,
         } = applied;
-        let changed = handoff.is_some_and(|facts| self.core.apply_facts(*facts));
+        let changed = handoff.is_some_and(|facts| self.apply_facts(*facts));
         for (reply, key) in batch {
             let owner = reply.owner;
             if !placeholders.contains(&key) {
@@ -442,10 +444,12 @@ impl Host {
             }
         }
         if changed {
-            let facts = self.core.window_facts.clone();
+            let facts = self.window_facts.clone();
             self.broadcast("window.state", facts);
         }
     }
+}
+impl Host {
     /// A command of the core reaches the interface (rule R3), on this
     /// thread until plan step S3a. Plan step S2c(3):
     /// `ui.setMount`, answered from the interface's `UiReport::Answered`
@@ -462,14 +466,10 @@ impl Host {
     /// `CursorAutoHide`, `WindowOp::OnTop`); S2d(1): the view requests
     /// (`View`, `Host::view_command`), the video area and
     /// picture-in-picture (`WindowOp::VideoArea`, `WindowOp::Pip`;
-    /// `video_area_command`, `pip_command`). Plan step S2f(3): the command
-    /// goes into the core's outbox (`Core::ui_command`) and is carried out
-    /// where the driver drains it (`Host::drain_outbox`: after the event,
-    /// report or step that issued it), followed by the interface's facts.
-    pub(crate) fn ui_command(&mut self, command: UiCommand) {
-        self.core.ui_command(command);
-    }
-    /// The interface carries out one command of the core.
+    /// `video_area_command`, `pip_command`). Plan step S2f(3): the core puts
+    /// it into its outbox (`Core::ui_command`); the interface carries it
+    /// out here where the driver drains it (`Host::drain_outbox`: after the
+    /// event, report or step that issued it), followed by its facts.
     pub(crate) fn apply_ui_command(&mut self, command: UiCommand) {
         match command {
             UiCommand::Snapshot(UiSnapshot::LastSource(source)) => self.source = source,
@@ -1103,7 +1103,8 @@ impl Host {
             self.report_ui_error(panel_plugin(owner), &RpcError::new("ui", message));
         }
     }
-
+}
+impl Core {
     /// Initial properties `refuse_initial` left out: logged and reported
     /// to the plugin (`ui.error`, its `onError`).
     pub(crate) fn report_refused(&mut self, owner: u64, refused: Vec<RpcError>) {
@@ -1112,6 +1113,8 @@ impl Host {
             self.send(owner, ui_error(&error));
         }
     }
+}
+impl Host {
     /// A mount's properties converted for a new instance. They were checked
     /// when written, so a value that no longer converts is an image file
     /// removed since (or a document over the text total): it is left out (the

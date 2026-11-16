@@ -84,7 +84,7 @@ fn list<'a>(
     json!({"commands":commands,"orphans":orphans})
 }
 
-impl Host {
+impl Core {
     pub(super) fn bindings_dispatch(
         &mut self,
         method: &str,
@@ -101,23 +101,23 @@ impl Host {
                 }
                 let inputs = bindings::Table::canonical(&inputs).map_err(RpcError::invalid)?;
                 let key = format!("{plugin}/{command}");
-                if !self.core.bindings().declares(&plugin, &command)
-                    && !self.core.ui_state.state.bindings.contains_key(&key)
+                if !self.bindings().declares(&plugin, &command)
+                    && !self.ui_state.state.bindings.contains_key(&key)
                 {
                     return Err(RpcError::new("missing", format!("no command {key}")));
                 }
-                self.core.ui_state.state.bindings.insert(key, inputs);
+                self.ui_state.state.bindings.insert(key, inputs);
                 self.overlay_changed();
                 Ok(Value::Null)
             }
             "bindings.reset" => {
                 if params["plugin"].is_null() && params["command"].is_null() {
-                    self.core.ui_state.state.bindings.clear();
+                    self.ui_state.state.bindings.clear();
                 } else {
                     let (plugin, command) = reference(params)?;
                     let key = format!("{plugin}/{command}");
-                    if self.core.ui_state.state.bindings.remove(&key).is_none()
-                        && !self.core.bindings().declares(&plugin, &command)
+                    if self.ui_state.state.bindings.remove(&key).is_none()
+                        && !self.bindings().declares(&plugin, &command)
                     {
                         return Err(RpcError::new("missing", format!("no command {key}")));
                     }
@@ -130,56 +130,52 @@ impl Host {
     }
     /// The overlay is kept in the interface state file (debounced save).
     fn overlay_changed(&mut self) {
-        let overlay = self.core.ui_state.state.bindings.clone();
-        self.core.bindings_mut().set_overlay(overlay);
-        let now = self.core.now_ms();
-        self.core.ui_state.touch(now);
+        let overlay = self.ui_state.state.bindings.clone();
+        self.bindings_mut().set_overlay(overlay);
+        let now = self.now_ms();
+        self.ui_state.touch(now);
         // An open menu is the interface's (plan step S2f(1)).
         self.ui_command(crate::host::messages::UiCommand::RefreshMenu);
     }
     fn bindings_list(&self) -> Value {
-        let table = self.core.bindings();
+        let table = self.bindings();
         list(
             table,
-            |info| Some(&self.core.commands.get(info.owner, &info.id)?.declaration),
-            |manifest| self.core.panel_plugins.contains(manifest),
+            |info| Some(&self.commands.get(info.owner, &info.id)?.declaration),
+            |manifest| self.panel_plugins.contains(manifest),
         )
     }
     /// `bindings.changed` (declarations or overlay) and `packages.changed`
     /// (the plugin list) to the plugins that subscribed; at most every 200 ms.
     pub(super) fn notify_tick(&mut self) {
-        let now = self.core.now_ms();
-        if now < self.core.notified_at + 200 {
+        let now = self.now_ms();
+        if now < self.notified_at + 200 {
             return;
         }
-        self.core.notified_at = now;
+        self.notified_at = now;
         let (revision, key) = {
-            let table = self.core.bindings();
+            let table = self.bindings();
             (
                 table.revision(),
-                [
-                    table.listed_revision(),
-                    self.core.commands.listed_revision(),
-                ],
+                [table.listed_revision(), self.commands.listed_revision()],
             )
         };
-        if revision != self.core.bindings_sent {
-            self.core.bindings_sent = revision;
+        if revision != self.bindings_sent {
+            self.bindings_sent = revision;
             // Only a change of the list: a table rebuilt to the same list
             // (a plugin parked or woken under a new owner, lazy activation
             // §6.9) is not one, so it wakes no parked listener.
             if !self.listened("bindings.changed") {
-                self.core.bindings_list_sent = Value::Null;
+                self.bindings_list_sent = Value::Null;
             } else {
                 // Built and compared only when what it shows may have
                 // changed (supervisor.md): during a wake storm every
                 // woken plugin's commands move to its new owner, and the
                 // list took 3–6 ms to build each time.
-                let moved =
-                    key != self.core.bindings_seen || self.core.bindings_list_sent.is_null();
+                let moved = key != self.bindings_seen || self.bindings_list_sent.is_null();
                 if moved || cfg!(debug_assertions) {
                     let list = in_order(self.bindings_list());
-                    let same = list == self.core.bindings_list_sent;
+                    let same = list == self.bindings_list_sent;
                     // Debug builds (every test with the real player) build
                     // it anyway: unchanged sources must give the same list.
                     assert!(
@@ -188,16 +184,16 @@ impl Host {
                     );
                     if !same {
                         // The first list of a run is no change for a parked plugin.
-                        let first = self.core.bindings_list_sent.is_null();
-                        self.core.bindings_list_sent = list;
+                        let first = self.bindings_list_sent.is_null();
+                        self.bindings_list_sent = list;
                         self.announce("bindings.changed", Value::Null, first);
                     }
-                    self.core.bindings_seen = key;
+                    self.bindings_seen = key;
                 }
             }
         }
-        if revision != self.core.keys_checked {
-            self.core.keys_checked = revision;
+        if revision != self.keys_checked {
+            self.keys_checked = revision;
             self.push_command_keys();
         }
         if self.listened("packages.changed") {
@@ -206,13 +202,13 @@ impl Host {
             // 200 ms, also when nothing happened.
             // One clock reading for both: a start deadline passing between
             // two would change the list but not the key.
-            let now = self.core.now_ms();
+            let now = self.now_ms();
             let key = self.packages_key(now);
-            let moved = key.is_none() || key != self.core.packages_seen;
+            let moved = key.is_none() || key != self.packages_seen;
             if moved || cfg!(debug_assertions) {
                 let list = self.package_list_at(now);
                 // A park or a wake alone changes only `process`: no event (§5.3).
-                let same = same_but_process(&list, &self.core.packages_sent);
+                let same = same_but_process(&list, &self.packages_sent);
                 // Debug builds (every test with the real player) build it
                 // anyway: unchanged sources must give the same list.
                 assert!(
@@ -220,11 +216,11 @@ impl Host {
                     "packages.list changed while its sources did not: {key:?}"
                 );
                 if !same {
-                    let first = self.core.packages_sent.is_null();
-                    self.core.packages_sent = list.clone();
+                    let first = self.packages_sent.is_null();
+                    self.packages_sent = list.clone();
                     self.announce("packages.changed", list, first);
                 }
-                self.core.packages_seen = key;
+                self.packages_seen = key;
             }
         }
     }
@@ -237,23 +233,23 @@ impl Host {
     /// `process::data_root` and the interface language are fixed for the
     /// run.
     fn packages_key(&mut self, now: u64) -> Option<PackagesKey> {
-        if !self.core.development.is_empty() {
+        if !self.development.is_empty() {
             return None;
         }
-        self.core.supervisor.set_now(now);
-        let (store, operations) = self.core.packages.list_revision();
+        self.supervisor.set_now(now);
+        let (store, operations) = self.packages.list_revision();
         Some(PackagesKey {
             revisions: [
-                self.core.plugins_revision,
-                self.core.warnings.revision(),
-                self.core.failures.revision(),
-                self.core.dev_disabled.revision(),
-                self.core.development.revision(),
-                self.core.on_demand.held_revision(),
+                self.plugins_revision,
+                self.warnings.revision(),
+                self.failures.revision(),
+                self.dev_disabled.revision(),
+                self.development.revision(),
+                self.on_demand.held_revision(),
                 store,
                 operations,
             ],
-            units: self.core.supervisor.list_key(),
+            units: self.supervisor.list_key(),
         })
     }
     /// `commands.keys` (`plugin.commands.keys`, player 0.7.6): the current
@@ -265,7 +261,7 @@ impl Host {
     pub(crate) fn command_keys(&mut self, owner: u64) -> Value {
         let (manifest, keys) = self.keys_of(owner);
         if let Some(manifest) = manifest {
-            self.core.keys_sent.insert(manifest, keys.clone());
+            self.keys_sent.insert(manifest, keys.clone());
         }
         self.keys_data(keys)
     }
@@ -279,7 +275,7 @@ impl Host {
     /// notes a wake's; the event data.
     pub(crate) fn keys_woken(&mut self, owner: u64, keys: Value) -> Value {
         if let (Some(manifest), _) = self.keys_of(owner) {
-            self.core.keys_sent.insert(manifest, keys.clone());
+            self.keys_sent.insert(manifest, keys.clone());
         }
         self.keys_data(keys)
     }
@@ -287,14 +283,13 @@ impl Host {
     /// revision they are of (a larger one is newer: the SDK keeps the
     /// newest of an answer and an event that cross).
     fn keys_data(&self, keys: Value) -> Value {
-        json!({"keys":keys,"revision":self.core.bindings().revision()})
+        json!({"keys":keys,"revision":self.bindings().revision()})
     }
     /// `owner`'s manifest id (running or in standby) and its key labels
     /// (`labels_with_host`).
     fn keys_of(&self, owner: u64) -> (Option<String>, Value) {
-        let (declared_by, labels) = labels_with_host(self.core.bindings(), owner);
+        let (declared_by, labels) = labels_with_host(self.bindings(), owner);
         let manifest = self
-            .core
             .plugins
             .get(&owner)
             .map(|plugin| plugin.manifest.id.clone())
@@ -310,7 +305,6 @@ impl Host {
     /// them when it starts. What is sent where is `plan_keys`'s.
     fn push_command_keys(&mut self) {
         let running = self
-            .core
             .plugins
             .iter()
             .map(|(owner, plugin)| (*owner, plugin.subscriptions.contains_key(KEYS_EVENT)))
@@ -323,7 +317,7 @@ impl Host {
                 let (manifest, keys) = if subscribed {
                     self.keys_of(owner)
                 } else {
-                    let manifest = self.core.plugins.get(&owner).map(|p| p.manifest.id.clone());
+                    let manifest = self.plugins.get(&owner).map(|p| p.manifest.id.clone());
                     (manifest, Value::Null)
                 };
                 Some(KeysCandidate {
@@ -332,7 +326,6 @@ impl Host {
                     keys,
                     subscribed,
                     waking: self
-                        .core
                         .supervisor
                         .waking(crate::supervisor::Pid(owner))
                         .is_some(),
@@ -340,7 +333,6 @@ impl Host {
             })
             .collect::<Vec<_>>();
         let parked = self
-            .core
             .on_demand
             .wakes
             .iter()
@@ -360,7 +352,7 @@ impl Host {
                 })
             })
             .collect::<Vec<_>>();
-        for push in plan_keys(&running, &parked, &mut self.core.keys_sent) {
+        for push in plan_keys(&running, &parked, &mut self.keys_sent) {
             match push {
                 KeysPush::Send(owner, keys) => {
                     let data = self.keys_data(keys);
@@ -370,14 +362,13 @@ impl Host {
                     // A plugin waking for a wake event gets the held one
                     // first; a newer one waits behind it (as `broadcast`).
                     let data = self.keys_data(keys);
-                    let now = self.core.now_ms();
-                    self.core.supervisor.set_now(now);
+                    let now = self.now_ms();
+                    self.supervisor.set_now(now);
                     let trigger = crate::supervisor::Trigger::event(
                         KEYS_EVENT,
                         json!({"event":KEYS_EVENT,"data":data}),
                     );
-                    self.core
-                        .supervisor
+                    self.supervisor
                         .wake(crate::supervisor::Pid(owner), &trigger);
                 }
                 KeysPush::Wake(owner, keys) => {
@@ -389,18 +380,16 @@ impl Host {
     }
     /// Broadcast `event`; `first` (the first of a run) wakes no parked plugin.
     fn announce(&mut self, event: &str, data: Value, first: bool) {
-        self.core.on_demand.mute = first;
+        self.on_demand.mute = first;
         self.broadcast(event, data);
-        self.core.on_demand.mute = false;
+        self.on_demand.mute = false;
     }
     /// A running plugin subscribed to `event`, or a parked one is woken by it.
     fn listened(&self, event: &str) -> bool {
-        self.core
-            .plugins
+        self.plugins
             .values()
             .any(|plugin| plugin.subscriptions.contains_key(event))
             || self
-                .core
                 .on_demand
                 .wakes
                 .values()

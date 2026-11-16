@@ -3,7 +3,7 @@
 //! §4.3). Reading the state, `rendering.state`, needs no
 //! capability (uncapable.rs).
 use super::{Capability, Handled, Info, Recorded};
-use crate::host::{Host, Reply};
+use crate::host::{Core, Reply};
 use serde_json::Value;
 
 pub struct RenderingManage;
@@ -19,11 +19,11 @@ impl Capability for RenderingManage {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, _reply: &Reply, method: &str, params: &Value) -> Handled {
-        host.rendering_dispatch(method, params).map(Some)
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, _reply: &Reply, method: &str, params: &Value) -> Handled {
+        core.rendering_dispatch(method, params).map(Some)
     }
 }

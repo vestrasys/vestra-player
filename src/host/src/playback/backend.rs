@@ -101,6 +101,35 @@ pub struct Backend {
     worker: Option<thread::JoinHandle<()>>,
 }
 impl Backend {
+    /// Tests: a backend with no playback worker (no mpv): its commands
+    /// wait in the returned receiver (the core's unit tests, plan step
+    /// S2f(3)).
+    #[cfg(test)]
+    pub fn detached() -> (Self, mpsc::Receiver<Command>) {
+        let (sender, receiver) = mpsc::channel::<Command>();
+        let wake = Arc::new(Wake::default());
+        let (stop, _) = mpsc::channel();
+        let decision = crate::playback::render_mode::decide(
+            &Default::default(),
+            crate::playback::render_mode::Preference::Software,
+        );
+        let backend = Self {
+            commands: Commands {
+                sender,
+                wake: wake.clone(),
+            },
+            frame: FrameSlot::new(),
+            target: Arc::new(Shared::default()),
+            #[cfg(feature = "producer-audio")]
+            input: Arc::new(Mutex::new(None)),
+            render: crate::playback::renderer::Render::new(&decision),
+            versions: json!({}),
+            stop,
+            wake,
+            worker: None,
+        };
+        (backend, receiver)
+    }
     /// `render`: the start-up decision (`render_mode::decide`); GPU mode tries
     /// GPU rendering first.
     pub fn start(

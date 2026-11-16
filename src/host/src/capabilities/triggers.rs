@@ -5,7 +5,7 @@
 //! the Host (`crate::triggers`), outside the standby recording: holding one
 //! keeps no plugin running.
 use super::{Capability, Handled, Info, Recorded};
-use crate::host::{Host, Reply, RpcError};
+use crate::host::{Core, Reply, RpcError};
 use crate::triggers::{MAX_NAME, MAX_TRIGGERS, TriggerId};
 use serde_json::{Value, json};
 
@@ -28,22 +28,20 @@ impl Capability for Triggers {
         METHODS
     }
     /// Nothing: the conditions are kept apart from the recording.
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
-        let plugin = host
-            .core
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
+        let plugin = core
             .triggers_plugin(reply.owner)
             .ok_or_else(|| RpcError::new("unavailable", "the plugin does not run"))?;
         match method {
             "triggers.set" => {
                 let trigger = TriggerId::parse(&params["trigger"]).map_err(refused)?;
                 // Facts are not followed while nothing is kept: now.
-                host.triggers_facts_now();
-                let (seq, out) = host
-                    .core
+                core.triggers_facts_now();
+                let (seq, out) = core
                     .triggers
                     .set(
                         &plugin,
@@ -53,17 +51,17 @@ impl Capability for Triggers {
                         crate::host::wall_ms(),
                     )
                     .map_err(refused)?;
-                host.deliver_fired(out);
+                core.deliver_fired(out);
                 Ok(Some(json!({ "seq": seq })))
             }
             "triggers.off" => {
                 let trigger = TriggerId::parse(&params["trigger"]).map_err(refused)?;
                 let seq = if params["unhandled"] == true {
-                    host.core.triggers.unhandled(&plugin, &trigger)
+                    core.triggers.unhandled(&plugin, &trigger)
                 } else {
-                    host.core.triggers.off(&plugin, &trigger)
+                    core.triggers.off(&plugin, &trigger)
                 };
-                host.core.sync_trigger_watch();
+                core.sync_trigger_watch();
                 Ok(Some(json!({ "seq": seq })))
             }
             _ => {
@@ -91,17 +89,13 @@ impl Capability for Triggers {
                     .ok_or_else(|| {
                         RpcError::invalid(format!("unnamed is a count 0–{MAX_TRIGGERS}"))
                     })?;
-                host.core
-                    .triggers
+                core.triggers
                     .declare(&plugin, reply.owner, &names, unnamed as u32);
                 // What could not be delivered before fires again now that
                 // its triggers are declared; the removed conditions'
                 // boundaries go from the position model (`deliver_fired`).
-                let out = host
-                    .core
-                    .triggers
-                    .redeliver(&plugin, crate::host::wall_ms());
-                host.deliver_fired(out);
+                let out = core.triggers.redeliver(&plugin, crate::host::wall_ms());
+                core.deliver_fired(out);
                 Ok(Some(Value::Null))
             }
         }

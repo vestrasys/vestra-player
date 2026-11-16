@@ -13,19 +13,18 @@ pub(crate) const QUIT_BUDGET: Duration = Duration::from_secs(1);
 /// After a GPU device loss: the teardown has `EXIT_AFTER_LOOP` in all.
 pub(crate) const DEVICE_LOSS_BUDGET: Duration = Duration::from_millis(300);
 
-impl Host {
+impl Core {
     /// Stops every plugin process within `budget` and waits for them (at most
     /// `budget` and the reaper's last poll).
     pub(crate) fn shutdown_plugins(&mut self, budget: Duration) {
         let began = Instant::now();
         let deadline = began + budget;
-        self.core.quit_source_ended();
+        self.quit_source_ended();
         self.probe_quit();
         // Nothing more is created; a process the spawn thread created and
         // the Host did not take yet (its `Event::Spawned` still queued)
         // stops with the rest, within the same deadline.
         let created = self
-            .core
             .on_demand
             .spawner
             .as_ref()
@@ -35,12 +34,12 @@ impl Host {
             diag!("supervisor: plugin {owner} created as the player quits; stopped");
             plugin.set_stop_reason(StopReason::Quit);
             plugin.set_stop_wait(budget);
-            self.core.reaper.reap(owner, plugin);
+            self.reaper.reap(owner, plugin);
         }
-        let now = self.core.now_ms();
+        let now = self.now_ms();
         let budget_ms = u64::try_from(budget.as_millis()).unwrap_or(u64::MAX);
-        let actions = self.core.supervisor.shutdown(now, budget_ms);
-        let running = self.core.plugins.len();
+        let actions = self.supervisor.shutdown(now, budget_ms);
+        let running = self.plugins.len();
         // Checkpoints first, from the registrations as they are now.
         let (checkpoints, rest): (Vec<_>, Vec<_>) = actions
             .into_iter()
@@ -60,19 +59,19 @@ impl Host {
             self.quit_checkpoint(owner, resident);
         }
         // Stops from here on are the quit's: no UI cleanup, one deadline.
-        self.core.on_demand.quitting = true;
+        self.on_demand.quitting = true;
         // The shared runner stops all its members with one `runner.stop`.
-        if let Some(runner) = self.core.shared.take() {
-            runner.quit(budget, &self.core.reaper);
+        if let Some(runner) = self.shared.take() {
+            runner.quit(budget, &self.reaper);
         }
         self.supervisor_execute(rest);
         // Anything the core did not stop (none expected) stops all the same.
-        let left = self.core.plugins.keys().copied().collect::<Vec<_>>();
+        let left = self.plugins.keys().copied().collect::<Vec<_>>();
         for owner in left {
             diag!("supervisor: plugin {owner} stopped at quit without its unit");
-            self.core.quit_stop(owner, budget_ms);
+            self.quit_stop(owner, budget_ms);
         }
-        let done = self.core.reaper.finish_by(deadline);
+        let done = self.reaper.finish_by(deadline);
         // The reaper polls every 5 ms and a gone process's stderr is read
         // up to 100 ms (`process::STDERR_WAIT`).
         let waited = done.recv_timeout(budget + Duration::from_millis(200));
@@ -89,11 +88,11 @@ impl Host {
     /// A run's checkpoint at quit (today's `lazy_quit`): resident as such,
     /// a lazy one with its registrations as they are now.
     fn quit_checkpoint(&mut self, owner: u64, resident: bool) {
-        let Some(key) = self.core.checkpoint_key_of(owner) else {
+        let Some(key) = self.checkpoint_key_of(owner) else {
             return;
         };
-        let directory = self.core.activation_dir();
-        let id = self.core.plugin_id(owner);
+        let directory = self.activation_dir();
+        let id = self.plugin_id(owner);
         let (calls, resident) = if resident {
             if checkpoint::read(&directory, &key).is_some_and(|r| r.resident_at_ready) {
                 return;
@@ -101,7 +100,6 @@ impl Host {
             (Vec::new(), true)
         } else {
             let backend = self
-                .core
                 .on_demand
                 .answers
                 .get(&owner)
@@ -113,9 +111,9 @@ impl Host {
             // classification without an answer. The next start launches it,
             // and its ready classifies it again.
             let live = held_in_worker(&backend).is_some();
-            let unanswered = self.core.on_demand.refreshing.contains(&owner)
-                || self.core.on_demand.stale.contains(&owner);
-            if (live || unanswered) && !self.core.on_demand.probe.park_all {
+            let unanswered =
+                self.on_demand.refreshing.contains(&owner) || self.on_demand.stale.contains(&owner);
+            if (live || unanswered) && !self.on_demand.probe.park_all {
                 diag!("lazy: {id} holds something live in the playback worker at quit");
                 (Vec::new(), true)
             } else {

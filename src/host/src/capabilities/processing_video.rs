@@ -11,7 +11,7 @@
 //! runs, from files the plugin ships or made, and it is revoked when the
 //! plugin stops.
 use super::{Capability, Handled, Info, Recorded, forward, forward_media};
-use crate::host::{Host, Reply, RpcError};
+use crate::host::{Core, Reply, RpcError};
 use crate::playback::{plugin_files, video_shaders};
 use serde_json::{Value, json};
 
@@ -36,40 +36,40 @@ impl Capability for ProcessingVideo {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
             "processing.replace" => {
-                let params = lut_files(host, reply.owner, params)?;
-                forward(host, reply, method, &params)
+                let params = lut_files(core, reply.owner, params)?;
+                forward(core, reply, method, &params)
             }
-            "processing.operation" => forward(host, reply, method, params),
+            "processing.operation" => forward(core, reply, method, params),
             "video.shaders.set" => {
-                let params = shader_request(host, reply.owner, params)?;
+                let params = shader_request(core, reply.owner, params)?;
                 // The crash guard (`host/diagnostics.rs`): refused after a
                 // run that ended with plugin shaders on, else armed first.
                 let handle = format!("shaders:{}", params["id"].as_str().unwrap_or_default());
                 let files = params["paths"].as_array().map_or(0, Vec::len);
-                let seq = host.plugin_shaders(reply.owner, &handle, files)?;
-                forward_media(host, reply, method, &guard_seq(&params, Some(seq)))
+                let seq = core.plugin_shaders(reply.owner, &handle, files)?;
+                forward_media(core, reply, method, &guard_seq(&params, Some(seq)))
             }
             "video.render.set" => {
                 // Only a request that names `shaders` changes them (the
                 // values merge into the owner's render options).
                 let seq = match params["values"]["shaders"].as_array() {
-                    Some(list) => Some(host.plugin_shaders(reply.owner, "render", list.len())?),
+                    Some(list) => Some(core.plugin_shaders(reply.owner, "render", list.len())?),
                     None => None,
                 };
-                forward_media(host, reply, method, &guard_seq(params, seq))
+                forward_media(core, reply, method, &guard_seq(params, seq))
             }
             "video.render.release" => {
-                let seq = host.plugin_shaders(reply.owner, "render", 0)?;
-                forward_media(host, reply, method, &guard_seq(params, Some(seq)))
+                let seq = core.plugin_shaders(reply.owner, "render", 0)?;
+                forward_media(core, reply, method, &guard_seq(params, Some(seq)))
             }
-            _ => forward_media(host, reply, method, params),
+            _ => forward_media(core, reply, method, params),
         }
     }
 }
@@ -90,7 +90,7 @@ fn guard_seq(params: &Value, seq: Option<u64>) -> Value {
 
 /// A video change with its `lut3d` files resolved to their canonical paths
 /// (`plugin_files::lut`); anything else as sent (the worker validates it).
-fn lut_files(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcError> {
+fn lut_files(core: &Core, owner: u64, params: &Value) -> Result<Value, RpcError> {
     let has_lut = |params: &Value| {
         params["stage"] == "video"
             && params["nodes"]
@@ -100,7 +100,7 @@ fn lut_files(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcError>
     if !has_lut(params) {
         return Ok(params.clone());
     }
-    let roots = host.core.image_roots(owner);
+    let roots = core.image_roots(owner);
     let mut params = params.clone();
     if let Some(nodes) = params["nodes"].as_array_mut() {
         for node in nodes.iter_mut().filter(|n| n["kind"] == "lut3d") {
@@ -115,7 +115,7 @@ fn lut_files(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcError>
 /// `video.shaders.set { id, paths }` as the worker gets it: the files
 /// resolved (`plugin_files::shader`), with the plugin's manifest id and its
 /// place in the joined list (`install_rank`), which the plugin cannot set.
-fn shader_request(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcError> {
+fn shader_request(core: &Core, owner: u64, params: &Value) -> Result<Value, RpcError> {
     let id = params["id"]
         .as_str()
         .filter(|id| {
@@ -139,7 +139,7 @@ fn shader_request(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcE
             ),
         ));
     }
-    let roots = host.core.image_roots(owner);
+    let roots = core.image_roots(owner);
     let paths = list
         .iter()
         .map(|path| {
@@ -149,13 +149,12 @@ fn shader_request(host: &Host, owner: u64, params: &Value) -> Result<Value, RpcE
             plugin_files::shader(path, &roots)
         })
         .collect::<Result<Vec<_>, _>>()?;
-    let manifest = host
-        .core
+    let manifest = core
         .plugins
         .get(&owner)
         .map(|plugin| plugin.manifest.id.clone())
         .ok_or_else(|| RpcError::new("disabled", "plugin no longer running"))?;
-    let (tier, installed_at) = host.core.install_rank(owner);
+    let (tier, installed_at) = core.install_rank(owner);
     Ok(json!({"id":id,"paths":paths,"manifestId":manifest,"rank":[tier, installed_at]}))
 }
 

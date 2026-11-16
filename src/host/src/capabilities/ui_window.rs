@@ -11,7 +11,7 @@
 use super::{Capability, Handled, Info, Recorded, plugin};
 use crate::{
     host::{
-        Host, Reply, RpcError,
+        Core, Host, Reply, RpcError,
         messages::{UiCommand, UiReport, ViewKind, ViewOp},
         string,
     },
@@ -39,26 +39,24 @@ impl Capability for UiWindow {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, host: &Host, owner: u64, _: &Value) -> Recorded {
+    fn record(&self, core: &Core, owner: u64, _: &Value) -> Recorded {
         // The interface's fact (plan step S2f(3)).
         #[cfg(debug_assertions)]
         {
-            host.check_ui_facts();
-            host.core
-                .check_settled(&[crate::host::outbox::Fact::Views(owner)]);
+            core.check_settled(&[crate::host::outbox::Fact::Views(owner)]);
         }
-        if host.core.ui_facts.views.contains(&owner) {
+        if core.ui_facts.views.contains(&owner) {
             return Recorded::Live("an open window");
         }
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         let (id, kind) = match method {
-            "ui.open" => open_request(host, reply, params)?,
-            _ => change_request(host, reply, method, params)?,
+            "ui.open" => open_request(core, reply, params)?,
+            _ => change_request(core, reply, method, params)?,
         };
-        host.ui_command(UiCommand::View(ViewOp {
+        core.ui_command(UiCommand::View(ViewOp {
             reply: reply.clone(),
             id,
             kind,
@@ -307,11 +305,11 @@ fn show(
 /// before, and the open views are the interface's, so it goes as
 /// `ViewKind::Refused` and the interface answers.
 fn open_request(
-    host: &mut Host,
+    core: &mut Core,
     reply: &Reply,
     params: &Value,
 ) -> std::result::Result<(String, ViewKind), RpcError> {
-    if host.core.headless {
+    if core.headless {
         return Err(RpcError::new(
             "unavailable",
             "UI is unavailable in headless mode",
@@ -319,7 +317,7 @@ fn open_request(
     }
     let id = string(params, "id")?.to_owned();
     let checked = (|| -> std::result::Result<ViewKind, RpcError> {
-        let file = process::package_file(&plugin(host, reply)?.directory, string(params, "file")?)?;
+        let file = process::package_file(&plugin(core, reply)?.directory, string(params, "file")?)?;
         let properties: BTreeMap<String, Value> =
             serde_json::from_value(params.get("properties").cloned().unwrap_or(json!({})))
                 .map_err(|e| RpcError::invalid(e.to_string()))?;
@@ -341,7 +339,7 @@ fn open_request(
 /// converted, if any (`Event::Prepared`). Everything else reads the open
 /// view, the interface's.
 fn change_request(
-    host: &mut Host,
+    core: &mut Core,
     reply: &Reply,
     method: &str,
     params: &Value,
@@ -350,7 +348,7 @@ fn change_request(
     let kind = match method {
         "ui.set" => ViewKind::Set {
             params: params.clone(),
-            prepared: host.core.take_prepared(reply),
+            prepared: core.take_prepared(reply),
         },
         "ui.show" => ViewKind::Show {
             params: params.clone(),

@@ -54,11 +54,11 @@ impl OpenFiles {
     }
 }
 
-impl Host {
+impl Core {
     /// Files to open (maybe none); `front`: another launch asked, so the
     /// main window comes to the front.
     pub(super) fn open_files(&mut self, files: Vec<PathBuf>, front: bool) {
-        self.core.opens.push(files);
+        self.opens.push(files);
         if front {
             self.bring_to_front();
         }
@@ -76,47 +76,43 @@ impl Host {
     /// batching window holds (`Core::handed`); the interface's columns get
     /// it as `UiSnapshot::StartupSettled` when it turns true.
     pub(super) fn open_files_tick(&mut self) {
-        let before = self.core.startup_panels;
-        if !self.core.startup_panels && self.core.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
+        let before = self.startup_panels;
+        if !self.startup_panels && self.now_ms() >= SETTLE_LIMIT.as_millis() as u64 {
             // A start that never settles (a plugin retried after a crash)
             // keeps no later file waiting.
-            self.core.startup_panels = true;
+            self.startup_panels = true;
         }
-        if !self.core.startup_panels {
-            #[cfg(debug_assertions)]
-            self.check_handed();
-            self.core.startup_panels = self.core.mount_queue.is_empty()
-                && self.core.handed.is_none()
-                && self.core.held_mounts.is_empty()
+        if !self.startup_panels {
+            self.startup_panels = self.mount_queue.is_empty()
+                && self.handed.is_none()
+                && self.held_mounts.is_empty()
                 && self.startup_has_settled();
         }
-        if self.core.startup_panels != before {
+        if self.startup_panels != before {
             self.ui_command(UiCommand::Snapshot(UiSnapshot::StartupSettled(
-                self.core.startup_panels,
+                self.startup_panels,
             )));
         }
-        let settled = self.core.startup_panels
-            && self.core.packages_started()
-            && !self.core.builtin_first_run_queued()
-            && {
-                let now = self.core.now_ms();
-                let owners = self.core.plugins.keys().copied().collect::<Vec<_>>();
+        let settled =
+            self.startup_panels && self.packages_started() && !self.builtin_first_run_queued() && {
+                let now = self.now_ms();
+                let owners = self.plugins.keys().copied().collect::<Vec<_>>();
                 !owners.into_iter().any(|owner| {
                     matches!(
-                        self.core.activation_status(owner, now),
+                        self.activation_status(owner, now),
                         Ok(activation::Status::Pending { .. })
                     )
                 })
             };
-        let Some(files) = self.core.opens.due(settled) else {
+        let Some(files) = self.opens.due(settled) else {
             return;
         };
         diag!(
             "open: {} file(s) handed over at +{} ms",
             files.len(),
-            self.core.now_ms()
+            self.now_ms()
         );
-        let taken = self.core.drops.groups(&files);
+        let taken = self.drops.groups(&files);
         for path in &files {
             let text = path.to_string_lossy();
             if !taken

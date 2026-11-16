@@ -705,7 +705,7 @@ fn player() -> Result<()> {
         // first in `ja`, Korean in `ko`, Simplified Chinese otherwise).
         ui_fonts::install(i18n::locale());
     }
-    host.register_host_commands()?;
+    host.core.register_host_commands()?;
     // What the core asked of the interface is carried out after each of
     // the start's core calls (plan step S2f(3), `host/outbox.rs`).
     host.drain_outbox();
@@ -748,7 +748,7 @@ fn player() -> Result<()> {
         }
     }
     for directory in &directories {
-        host.load(directory, 120_000)?;
+        host.core.load(directory, 120_000)?;
         host.drain_outbox();
     }
     // A restart continues its first file where the replaced player was.
@@ -762,7 +762,7 @@ fn player() -> Result<()> {
     // A start with a file: CPU mode's Direct3D 12 windows count as started
     // only once its first picture was shown (the crash guard, below).
     let opened_at_start = !files.is_empty();
-    host.open_files(files, false);
+    host.core.open_files(files, false);
     host.drain_outbox();
     let start = Instant::now();
     if headless {
@@ -816,7 +816,7 @@ fn player() -> Result<()> {
         // What the last tick changed of the interface's facts first (plan
         // step S2f(1)).
         host.report_ui_facts();
-        host.shutdown_plugins(host::QUIT_BUDGET);
+        host.core.shutdown_plugins(host::QUIT_BUDGET);
         host.drain_outbox();
         stop_handoffs();
         host.core.shader_guard.quit();
@@ -999,7 +999,6 @@ fn player() -> Result<()> {
                     host.prepare_mount_tick();
                     turn.step("mounts");
                     host.panel_restart_tick();
-                    host.drain_outbox();
                     turn.step("panel restarts");
                     host.window_tick();
                     turn.step("window tick");
@@ -1121,7 +1120,7 @@ fn player() -> Result<()> {
         // What the last tick (drops, the options window) changed of the
         // interface's facts reaches the core first (plan step S2f(1)).
         host.borrow_mut().report_ui_facts();
-        host.borrow_mut().shutdown_plugins(budget);
+        host.borrow_mut().core.shutdown_plugins(budget);
         host.borrow_mut().drain_outbox();
         stop_handoffs();
         // Read now: only a loss that ended the loop restarts the player.

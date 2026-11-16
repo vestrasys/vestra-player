@@ -8,7 +8,7 @@
 use super::{Capability, Handled, Info, Recorded};
 use crate::{
     host::{
-        Event, Host, Reply, RpcError,
+        Core, Event, Host, Reply, RpcError,
         messages::{
             AskRequest, ConfirmRequest, ConfirmSheet, DialogPurpose, DialogRequest, ReviewKind,
             ReviewRequest, UiCommand, UiInput, UiReport,
@@ -35,41 +35,40 @@ impl Capability for UiDialog {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
     /// Where the user last acted for the plugin stays its origin when it
     /// wakes (`host/origins`): the click that woke it is recorded first.
-    fn rekey(&self, host: &mut Host, from: u64, to: u64) {
-        host.core.origins.rekey(from, to);
+    fn rekey(&self, core: &mut Core, from: u64, to: u64) {
+        core.origins.rekey(from, to);
     }
     /// A confirmation of a plugin that stopped leaves the sheet unanswered;
     /// its origin goes unless it only stands by.
     /// The sheet is the interface's (`UiCommand::DropConfirm`, plan step
     /// S2d(3)).
-    fn revoke(&self, host: &mut Host, owner: u64, keep_recorded: bool) {
-        host.ui_command(UiCommand::DropConfirm { owner });
+    fn revoke(&self, core: &mut Core, owner: u64, keep_recorded: bool) {
+        core.ui_command(UiCommand::DropConfirm { owner });
         // The interface drops the plugin's confirmation where the command
         // is carried out, after this turn's handler; the core's copy of
         // its facts drops it now, so what the core judges later in this
         // turn (`Busy::Dialog` of another plugin) reads it gone, as when the
         // command was carried out in place (plan step S2f(3)).
-        if host
-            .core
+        if core
             .ui_facts
             .sheet
             .is_some_and(|sheet| sheet.owner == owner && sheet.confirm)
         {
-            host.core.ui_facts.sheet = None;
+            core.ui_facts.sheet = None;
         }
         if !keep_recorded {
-            host.core.origins.forget(owner);
+            core.origins.forget(owner);
         }
     }
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         match method {
-            "dialogs.confirm" => ask(host, reply, params)?,
-            _ => open(host, reply, params)?,
+            "dialogs.confirm" => ask(core, reply, params)?,
+            _ => open(core, reply, params)?,
         }
         Ok(None)
     }
@@ -81,8 +80,8 @@ impl Capability for UiDialog {
 /// core admits it and chooses the window (plan step S2c(5)); the interface
 /// shows it (`UiCommand::Review` for the sheet, `UiCommand::Confirm` for a
 /// system dialog).
-fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
-    if host.core.headless {
+fn ask(core: &mut Core, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
+    if core.headless {
         return Err(RpcError::new(
             "unavailable",
             "native dialogs require a running native window",
@@ -91,17 +90,16 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     // The interface's facts from the core's copy (plan step S2f(1)).
     #[cfg(debug_assertions)]
     {
-        host.check_ui_facts();
-        host.core.check_settled(&[crate::host::outbox::Fact::Sheet]);
+        core.check_settled(&[crate::host::outbox::Fact::Sheet]);
     }
     // Refused while another waits; that one comes into view, so the wait
     // is never somewhere the user cannot see.
-    if host.core.dialog_busy {
-        host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
+    if core.dialog_busy {
+        core.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
-    if host.core.sheet_waiting() {
-        host.ui_command(crate::host::messages::UiCommand::ShowWaiting);
+    if core.sheet_waiting() {
+        core.ui_command(crate::host::messages::UiCommand::ShowWaiting);
         return Err(RpcError::new(
             "busy",
             "another confirmation is waiting for the user's answer",
@@ -122,7 +120,7 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
         } else {
             &Value::Null
         };
-        shown[field] = host.core.plugin_sentence(reply.owner, text, args)?.into();
+        shown[field] = core.plugin_sentence(reply.owner, text, args)?.into();
     }
     let options = confirm::parse(&shown)?;
     // The request box, should the sheet ask it: only for a request typed in
@@ -130,17 +128,16 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
     // acted for it there (not in its panel, say, while an older request's
     // ticket is still live) and that request is live. Reads nothing of the
     // interface, so the core takes it whichever window the dialog goes to.
-    let now = host.core.now_ms();
-    let request = host
-        .core
+    let now = core.now_ms();
+    let request = core
         .lead
         .as_ref()
         .filter(|lead| lead.owner == reply.owner)
-        .filter(|_| host.core.origins.get(reply.owner) == Some(&Origin::Lead))
-        .and_then(|_| host.core.command_runs.live_request(reply.owner, now));
+        .filter(|_| core.origins.get(reply.owner) == Some(&Origin::Lead))
+        .and_then(|_| core.command_runs.live_request(reply.owner, now));
     // Where it shows is the interface's choice, from its live windows and
     // focus (`Host::ask_command`, plan step S2f(3)).
-    host.ui_command(UiCommand::Ask(AskRequest {
+    core.ui_command(UiCommand::Ask(AskRequest {
         reply: reply.clone(),
         options,
         request,
@@ -151,14 +148,14 @@ fn ask(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<()
 /// `dialogs.open`: answered when the picker closes (`Event::DialogDone`).
 /// The core checks it and translates its texts; the interface creates the
 /// picker (`UiCommand::Dialog`, plan step S2c(5)).
-fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
-    if host.core.headless {
+fn open(core: &mut Core, reply: &Reply, params: &Value) -> std::result::Result<(), RpcError> {
+    if core.headless {
         return Err(RpcError::new(
             "unavailable",
             "native dialogs require a running native window",
         ));
     }
-    if host.core.dialog_busy {
+    if core.dialog_busy {
         return Err(RpcError::new("busy", "a native dialog is already open"));
     }
     let kind = string(params, "kind")?;
@@ -167,9 +164,7 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     }
     let title = match &params["title"] {
         Value::Null => i18n::tr("Select a path"),
-        title => host
-            .core
-            .plugin_sentence(reply.owner, title, &Value::Null)?,
+        title => core.plugin_sentence(reply.owner, title, &Value::Null)?,
     };
     if title.len() > 256 {
         return Err(RpcError::invalid("dialog title too long"));
@@ -178,8 +173,7 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     // translated, a path separator in the translation replaced.
     let name = match &params["fileName"] {
         name if i18n::text::is_text(name) => Some(
-            host.core
-                .plugin_sentence(reply.owner, name, &Value::Null)?
+            core.plugin_sentence(reply.owner, name, &Value::Null)?
                 .replace(['/', '\\'], "-"),
         ),
         name => name.as_str().map(str::to_owned),
@@ -191,14 +185,13 @@ fn open(host: &mut Host, reply: &Reply, params: &Value) -> std::result::Result<(
     }
     // Busy before it shows, as a confirmation: the interface then takes the
     // player off the floating level first (`Host::apply_on_top`).
-    host.core.dialog_busy = true;
+    core.dialog_busy = true;
     #[cfg(feature = "producer-audio")]
-    host.core
-        .physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
+    core.physical_revoke(crate::playback::producer_input::RevokeReason::Dialog);
     // Owned like a confirmation: the tool window the user acted in, else
     // the main window, as the interface chooses (`origins::dialog_place`;
     // `UiCommand::OpenDialog`, plan step S2f(3)).
-    host.ui_command(UiCommand::OpenDialog {
+    core.ui_command(UiCommand::OpenDialog {
         reply: reply.clone(),
         purpose: DialogPurpose::Open(json!({"kind":kind,"title":title,"fileName":name})),
     });

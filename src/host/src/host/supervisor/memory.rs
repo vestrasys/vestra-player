@@ -84,13 +84,13 @@ fn test_pressures(text: &str) -> Vec<(u64, Pressure)> {
     entries
 }
 
-impl Host {
+impl Core {
     /// Every host tick: every `POLL_MS` the
     /// system's pressure level (or the test switch's); a change goes to
     /// the core, which puts idle third-party plugins in standby for Low and
     /// Critical.
     pub(super) fn memory_tick(&mut self, now: u64) {
-        let memory = &mut self.core.on_demand.memory;
+        let memory = &mut self.on_demand.memory;
         let level = if memory.simulated {
             let due = memory.tests.iter().take_while(|(at, _)| *at <= now).count();
             match memory.tests.drain(..due).next_back() {
@@ -121,10 +121,10 @@ impl Host {
             } else {
                 ""
             },
-            self.core.supervisor.budget_count()
+            self.supervisor.budget_count()
         );
-        self.core.supervisor.set_now(now);
-        self.core.supervisor.memory_pressure(level);
+        self.supervisor.set_now(now);
+        self.supervisor.memory_pressure(level);
         self.supervisor_run();
     }
 }

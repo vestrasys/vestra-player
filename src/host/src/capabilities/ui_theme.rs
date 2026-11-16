@@ -1,6 +1,6 @@
 //! `ui.theme`: the player's palette and interface language (theme.rs).
 use super::{Capability, Handled, Info, Recorded};
-use crate::host::{Host, Reply};
+use crate::host::{Core, Reply};
 use serde_json::Value;
 
 pub struct UiTheme;
@@ -16,14 +16,14 @@ impl Capability for UiTheme {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, _: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, _: &Reply, method: &str, params: &Value) -> Handled {
         match method {
-            "appearance.set" => host.appearance_set(params),
-            _ => host.language_set(params),
+            "appearance.set" => core.appearance_set(params),
+            _ => core.language_set(params),
         }
         .map(Some)
     }

@@ -224,6 +224,8 @@ impl Host {
             }
         }
     }
+}
+impl Core {
     pub(crate) fn appearance_set(
         &mut self,
         params: &Value,
@@ -231,19 +233,19 @@ impl Host {
         // An id the player does not have selects the default (`known`):
         // plugins built for an older SDK may still send a retired palette.
         let theme = known(string(params, "theme")?);
-        if theme != self.core.theme() {
-            let language = self.core.language_preference();
-            self.core.ui_state.state.appearance = Some(ui_state::Appearance {
+        if theme != self.theme() {
+            let language = self.language_preference();
+            self.ui_state.state.appearance = Some(ui_state::Appearance {
                 theme: theme.into(),
                 language,
             });
-            let now = self.core.now_ms();
-            self.core.ui_state.touch(now);
+            let now = self.now_ms();
+            self.ui_state.touch(now);
             // The interface shows the new palette in place (plan step
             // S2c(7)), where it did before: every view, then the event.
             let shown = UiSnapshot::Theme(theme.into());
             self.ui_command(UiCommand::Snapshot(shown));
-            let language = self.core.language_preference();
+            let language = self.language_preference();
             let language = language.as_deref().unwrap_or(crate::i18n::SYSTEM);
             // `changed` (an additive field): what this event changed, so a
             // plugin woken by it can tell a palette change from a language
@@ -266,16 +268,16 @@ impl Host {
             )));
         }
         let language = (value != crate::i18n::SYSTEM).then(|| value.to_owned());
-        if language != self.core.language_preference() {
-            self.core.ui_state.state.appearance = Some(ui_state::Appearance {
-                theme: self.core.theme().into(),
+        if language != self.language_preference() {
+            self.ui_state.state.appearance = Some(ui_state::Appearance {
+                theme: self.theme().into(),
                 language,
             });
-            let now = self.core.now_ms();
-            self.core.ui_state.touch(now);
+            let now = self.now_ms();
+            self.ui_state.touch(now);
             self.broadcast(
                 "appearance.changed",
-                appearance_changed(self.core.theme(), value, "language"),
+                appearance_changed(self.theme(), value, "language"),
             );
         }
         Ok(Value::Null)

@@ -747,10 +747,10 @@ pub(crate) fn persist_shader_guard() {
     }
 }
 
-impl Host {
+impl Core {
     /// New frames presented so far.
     fn presented(&self) -> u64 {
-        self.core.backend.render.presentation.counts().1
+        self.backend.render.presentation.counts().1
     }
     /// Before a plugin shader list of `files` files goes to the worker
     /// (`capabilities::processing_video`): refused while this run keeps
@@ -764,36 +764,34 @@ impl Host {
         files: usize,
     ) -> std::result::Result<u64, RpcError> {
         let now = crate::playback::render_state::now();
-        if let Some(error) = self.core.shader_guard.refuse(files, now) {
+        if let Some(error) = self.shader_guard.refuse(files, now) {
             return Err(error);
         }
-        let seq = self.core.backend.render.number_shader_request();
-        if files > 0 && !self.core.backend.render.now().0 {
+        let seq = self.backend.render.number_shader_request();
+        if files > 0 && !self.backend.render.now().0 {
             return Ok(seq);
         }
         let plugin = self
-            .core
             .plugins
             .get(&owner)
             .map(|plugin| plugin.manifest.id.clone())
             .unwrap_or_else(|| format!("plugin {owner}"));
         let presented = self.presented();
-        self.core
-            .shader_guard
+        self.shader_guard
             .set(owner, handle, &plugin, files, presented, seq);
         Ok(seq)
     }
     /// A plugin stopped or was parked (its lists go with it).
     pub(crate) fn plugin_shaders_gone(&mut self, owner: u64) {
         let presented = self.presented();
-        self.core.shader_guard.owner_gone(owner, presented);
+        self.shader_guard.owner_gone(owner, presented);
     }
     /// Every tick: the shader guard, its OSD line, and the memory line every
     /// [`MEMORY_EVERY`] while the host log is open.
     pub(crate) fn diagnostics_tick(&mut self) {
         let now = Instant::now();
-        let source = &self.core.last_source;
-        let render = &self.core.backend.render;
+        let source = &self.last_source;
+        let render = &self.backend.render;
         let seen = Observed {
             playing: source["phase"] == "ready" && source["paused"] == false,
             video: source["hasVideo"] == true,
@@ -803,23 +801,18 @@ impl Host {
             requests: render.shader_requests(),
             progress: render.progress(),
         };
-        self.core.shader_guard.tick(seen, now);
-        if self
-            .core
-            .shader_guard
-            .take_osd(self.core.ui_facts.shell.is_some())
-        {
+        self.shader_guard.tick(seen, now);
+        if self.shader_guard.take_osd(self.ui_facts.shell.is_some()) {
             self.show_osd(&i18n::tr(
                 "Plugin shaders are off: the player ended unexpectedly while they were on",
             ));
         }
         if crate::diag::log_open()
             && self
-                .core
                 .memory_logged
                 .is_none_or(|at| now.saturating_duration_since(at) >= MEMORY_EVERY)
         {
-            self.core.memory_logged = Some(now);
+            self.memory_logged = Some(now);
             if let Some(status) = platform::memory_status() {
                 logged!("{}", crate::diag::memory_line(&status));
             }

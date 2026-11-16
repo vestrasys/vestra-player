@@ -2,7 +2,7 @@
 //! (binding_manager.rs). `events.subscribe` of `bindings.changed` asks for
 //! it too (events.rs).
 use super::{Capability, Handled, Info, Recorded};
-use crate::host::{Host, Reply};
+use crate::host::{Core, Reply};
 use serde_json::Value;
 
 pub struct BindingsManage;
@@ -18,11 +18,11 @@ impl Capability for BindingsManage {
     fn methods(&self) -> &'static [&'static str] {
         METHODS
     }
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, _: &Reply, method: &str, params: &Value) -> Handled {
-        host.bindings_dispatch(method, params).map(Some)
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, _: &Reply, method: &str, params: &Value) -> Handled {
+        core.bindings_dispatch(method, params).map(Some)
     }
 }

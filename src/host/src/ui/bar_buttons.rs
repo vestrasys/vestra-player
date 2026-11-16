@@ -654,6 +654,8 @@ impl Host {
             origin,
         }));
     }
+}
+impl Core {
     /// The core's part of a click on a cell (`UiInput::Command`, plan step
     /// S2f(1)): the window it came from is recorded, the command runs.
     pub(crate) fn bar_command(
@@ -663,7 +665,7 @@ impl Host {
         origin: Option<crate::host::origins::Origin>,
     ) {
         if let Some(origin) = origin {
-            self.core.act(owner, origin);
+            self.act(owner, origin);
         }
         if let Err(error) = self.execute_command(owner, id) {
             diag!("bar button execute: {error:?}");

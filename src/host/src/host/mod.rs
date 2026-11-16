@@ -1,10 +1,15 @@
-//! The `Host`: the UI thread's state (one per player), its events, the
-//! lifecycle of plugins, the dispatch of their requests and the window,
-//! menu, mount and input handling. Capabilities (`crate::capabilities`) and
-//! a few other modules add their own `impl Host` blocks. The state that
-//! never touches the interface is `Host::core` ([`Core`], with its own
-//! `impl Core` blocks beside them).
+//! The `Host` and its `Core`. The core ([`Core`], `Host::core`) is the
+//! state and the code that never touch the interface: the lifecycle of
+//! plugins, the dispatch of their requests (`crate::capabilities`), the
+//! supervisor, triggers, packages; its turn takes the core alone (plan step
+//! S2f(3): `Core::handle`, `Core::report`, `Core::STEPS`), and what it
+//! asks of the interface waits in its outbox (`outbox.rs`). The `Host` is
+//! the UI thread's state (one per player) around it: the window, menu,
+//! mount and input handling, and the driver's side of the turn (routing
+//! events, reporting the interface's facts, draining the outbox). Many
+//! files hold both, in `impl Host` and `impl Core` blocks side by side.
 mod actions;
+mod core_turn;
 pub(crate) use actions::migrate_fullscreen_escape;
 mod diagnostics;
 pub(crate) use diagnostics::{

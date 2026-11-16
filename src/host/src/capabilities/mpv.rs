@@ -16,7 +16,7 @@
 //! own state; they are no sandbox.
 use super::{Capability, Handled, Info, Recorded};
 use crate::{
-    host::{Host, Reply, RpcError},
+    host::{Core, Reply, RpcError},
     playback::{backend::Command, mpv_rules},
 };
 use serde_json::Value;
@@ -67,11 +67,11 @@ impl Capability for Mpv {
         METHODS
     }
     /// What it holds is in the playback worker (`owner.resources`).
-    fn record(&self, _: &Host, _: u64, _: &Value) -> Recorded {
+    fn record(&self, _: &Core, _: u64, _: &Value) -> Recorded {
         Recorded::Nothing
     }
-    fn rekey(&self, _: &mut Host, _: u64, _: u64) {}
-    fn handle(&self, host: &mut Host, reply: &Reply, method: &str, params: &Value) -> Handled {
+    fn rekey(&self, _: &mut Core, _: u64, _: u64) {}
+    fn handle(&self, core: &mut Core, reply: &Reply, method: &str, params: &Value) -> Handled {
         check(method, params)?;
         // Only the fields the worker reads, and whose request it is: the
         // worker names a filter label's holder by its manifest id.
@@ -81,9 +81,8 @@ impl Capability for Mpv {
                 forwarded.insert(key.into(), value.clone());
             }
         }
-        forwarded.insert("plugin".into(), host.core.plugin_id(reply.owner).into());
-        host.core
-            .backend
+        forwarded.insert("plugin".into(), core.plugin_id(reply.owner).into());
+        core.backend
             .commands
             .send(Command {
                 reply: reply.clone(),
@@ -91,7 +90,7 @@ impl Capability for Mpv {
                 params: forwarded.into(),
             })
             .map_err(|_| RpcError::new("backend", "playback worker stopped"))?;
-        host.worker_requested(reply.owner);
+        core.worker_requested(reply.owner);
         Ok(None)
     }
 }
